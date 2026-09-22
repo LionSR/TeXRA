@@ -5,6 +5,8 @@ import process from 'node:process';
 import { parseArgs as parseCittyArgs } from 'citty';
 import semver from 'semver';
 
+import { readJson } from './extension-package-utils.mjs';
+
 const MANIFEST_PATHS = [
   'package.json',
   'packages/agent/package.json',
@@ -163,10 +165,6 @@ function normalizeVersion(rawVersion) {
   return formatVersion(parseVersion(rawVersion, 'Version'));
 }
 
-function readManifest(manifestPath) {
-  return JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
-}
-
 function writeManifest(manifestPath, manifest) {
   fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
 }
@@ -181,7 +179,7 @@ function main() {
   const mismatches = [];
 
   for (const manifestPath of MANIFEST_PATHS) {
-    const manifest = readManifest(manifestPath);
+    const manifest = readJson(manifestPath);
 
     if (args.check) {
       if (manifest.version !== newVersion) {
