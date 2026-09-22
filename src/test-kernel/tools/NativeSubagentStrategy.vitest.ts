@@ -172,7 +172,7 @@ function mockLaunchPublishing(
   afterRun?: () => void,
 ): void {
   mocks.executeAgent.mockImplementationOnce(async (_config, _id, options) => {
-    publishRunHandle(options.onRun, handle);
+    Effect.runSync(options.onRun?.(handle) ?? Effect.void);
     afterRun?.();
     return toolUseTurnResult(outcome, CHILD_RUN_ID);
   });
