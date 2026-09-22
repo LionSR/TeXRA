@@ -167,10 +167,11 @@ already shipped, in smaller PRs that never came back to update this note:
   call `LATEX_TOOLS`-derived consumers make for it) — as designed, not left
   over: §2's own step 2 said `externalToolDefs` would "carr[y] no system
   LaTeX dependency except texcount" going in, because `texcount` is also a
-  registered agent tool (`tools: ['texcount']`) needing a Tools-dashboard
-  availability entry no other `LATEX_TOOLS` consumer needs. Both call sites
-  read the identical primitive, so there is no restated _list_ to drift,
-  only one boolean check reached from two registries for two purposes.
+  registered agent tool (`tools: ['texcount']`). Its definition is hidden from
+  the Tools dashboard (`hideFromDashboard: true`); LaTeX settings shows its
+  status instead. Both call sites read the identical primitive, so there is
+  no restated _list_ to drift, only one boolean check reached from two
+  registries for two purposes.
 
   Not one of §1's five, but flagged as a sixth un-consolidated spelling by an
   earlier pass of this note: `checkCoreDependencies`
