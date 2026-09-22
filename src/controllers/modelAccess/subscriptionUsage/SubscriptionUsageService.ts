@@ -5,7 +5,7 @@ import { settleFailure } from '@auth/authProgram';
 import { codexCoordinator, CodexAuthError } from '@auth/codex';
 import { createLog } from '@logger/logUtils';
 import { exposeApiKey, lookupApiKey } from '@model/apiProviders';
-import type { PlatformSecrets } from '@platform/secrets';
+import type { PlatformSecrets, SecretsFailed } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { CODING_PLAN_SUBSCRIPTIONS } from '@shared/codingPlanSubscriptions';
 import type {
@@ -189,7 +189,7 @@ export class SubscriptionUsageService {
   /** A coding-plan provider's API key, from secret storage or the environment. */
   private loadApiKey(
     provider: 'kimiCode' | 'glm',
-  ): Effect.Effect<string | undefined, unknown> {
+  ): Effect.Effect<string | undefined, SecretsFailed> {
     return Effect.map(lookupApiKey(this.secrets, provider), (key) =>
       key === undefined ? undefined : exposeApiKey(key),
     );
