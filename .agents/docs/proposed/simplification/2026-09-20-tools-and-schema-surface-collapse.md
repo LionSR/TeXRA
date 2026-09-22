@@ -109,7 +109,7 @@ folds.
 7. Move the module-global mutable ownership state into session- or
    process-scoped services, one PR per subsystem: the Lean server map in
    `leanServerRegistry.ts`, the agent-engine slot (#12888 admitted a
-   process tag on 2026-09-22), the inline-comment
+   process tag on 2026-09-22, now implemented), the inline-comment
    provider slot, the Codex config slots and the GitHub subscription
    bindings. The lazy memos of immutable tables (`registry.ts`), the
    class-shaped `toolAvailability` cache, the per-API rate limiters and the
@@ -224,9 +224,9 @@ already shipped, in smaller PRs that never came back to update this note:
 - **Step 7 (module-global state), partially.** The Lean server roster
   (`leanServerRegistry.ts`) is now a per-adapter factory
   (`createLeanServerRoster`) rather than a module map. GitHub subscription
-  bindings (`GitHubSubscriptions`) and the inline-comment provider
-  (`InlineComments`) are both `Context.Service` tags resolved from process
-  scope, not module slots.
+  bindings (`GitHubSubscriptions`), the inline-comment provider
+  (`InlineComments`), and the delegation agent engine (`AgentEngine`)
+  are `Context.Service` tags resolved from process scope, not module slots.
 
 ## 6. Still open
 
@@ -238,10 +238,6 @@ already shipped, in smaller PRs that never came back to update this note:
   (`RunView.statusDetail`); the real gap is narrower — one anomalous case
   (this process's own orphaned claim) the fold doesn't flag. See §5 Step 4
   for detail.
-- **Step 7, the agent-engine slot.** `src/tools/delegation/nativeSubagentStrategy.ts`
-  still holds `let agentEngine: AgentEngine | undefined;` at module scope —
-  present at the survey baseline; #12888 admitted its process-service replacement
-  on 2026-09-22. This row is historical until that change lands.
 - **Step 7, the remaining slots.** The Codex config module
   (`src/tools/codexConfig.ts`) now reads settings entirely through
   `StateStore`/`createEnumStateGetter`; its only module-level state is an

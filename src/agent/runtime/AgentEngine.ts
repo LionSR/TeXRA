@@ -10,4 +10,4 @@ export class AgentEngine extends Context.Service<
     readonly executeAgent: typeof executeAgent;
     readonly resumeToolUseFromResumeData: typeof resumeToolUseFromResumeData;
   }
->()('@texra/AgentEngine') {}
+>()('@texra/agent/AgentEngine') {}
