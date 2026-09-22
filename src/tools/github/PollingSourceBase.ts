@@ -267,6 +267,7 @@ export abstract class PollingSourceBase<
   disposeAll(): void {
     this.subscriptions.clear();
     this.stopPolling();
+    // runShutdown already closed admission before this notifies listeners.
     this.notifyKeysChanged();
   }
 
@@ -356,7 +357,6 @@ export abstract class PollingSourceBase<
   /**
    * Safe-parse a 200 payload, warning and skipping malformed data. A throw
    * would count as poll failure and eventually detach a reachable source;
-   * returning normally preserves the last-success clock. A 304 passes through.
    */
   protected validateOrSkip<T>(
     res: SuccessfulConditionalResponse<unknown>,

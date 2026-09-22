@@ -99,7 +99,7 @@ export class RunSubscriptionRegistry<K extends string, Input> {
     input: Input,
     session: SessionHandle,
   ): Effect.Effect<boolean, never, Secrets | AgentResume | Lifecycle> {
-    // The resume port is captured now: onEvent fires from the detached poll
+    // The resume port is captured now: onEvent fires from the source-owned poll
     // loop, whose context has no AgentResume.
     return Effect.flatMap(AgentResume, (agentResume) =>
       Effect.suspend(() => {
@@ -122,7 +122,7 @@ export class RunSubscriptionRegistry<K extends string, Input> {
           // Invoked synchronously on the emit turn (see PollEventListener):
           // capture the binding and its owner now — bind() reassigns the owner
           // on rebind, and the delivery belongs to the session the event came
-          // through. Only the delivery itself runs detached.
+          // through. Only the delivery itself runs in the source-owned FiberSet.
           const subscription = bound.get(key);
           if (!subscription) return Effect.void;
           const owner = subscription.owner;
