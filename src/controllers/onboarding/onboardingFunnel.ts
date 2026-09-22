@@ -103,17 +103,17 @@ interface OnboardingFunnelHost {
   /** The user-scoped flag store; onboarding is a fact about the user. */
   readonly flags: StateStore;
   /**
-   * Paint the derived state and take the arms this host answers — the
-   * extension selects the setup agent on its launcher, which the desktop and
-   * the CLI deliberately discard. Synchronous, so no other refresh can
-   * observe a half-applied transition.
+   * Paint the derived state and take the arms this host answers. The
+   * extension selects the setup agent on its launcher; the desktop discards
+   * that arm. The refresh waits for the host publication before another
+   * refresh can observe the transition.
    */
   readonly apply: (
     transition: OnboardingFunnelTransition & {
       /** This refresh moved the funnel state; the first one always does. */
       readonly changed: boolean;
     },
-  ) => void;
+  ) => Effect.Effect<void>;
 }
 
 /**
@@ -152,8 +152,8 @@ export class OnboardingFunnelRefresher {
         ...(yield* readOnboardingFlags(this.host.flags)),
       });
       const changed = this.current !== transition.state;
+      yield* this.host.apply({ ...transition, changed });
       this.current = transition.state;
-      this.host.apply({ ...transition, changed });
       if (transition.clearDeclined) {
         yield* setOnboardingDeclined(this.host.flags, false);
       }
@@ -170,7 +170,7 @@ export class OnboardingFunnelRefresher {
   );
 
   /** Ask for a refresh. The only failure is the flag write that clears a
-   *  stale skip; the credential probe cannot fail and `apply` is synchronous. */
+   *  stale skip; the credential probe and host publication cannot fail. */
   run(): Effect.Effect<
     void,
     StateReadFailed | StateWriteFailed,

@@ -184,7 +184,7 @@ describe('desktop preview host', () => {
             fileOptions: () => files.fileOptions().pipe(Effect.orDie),
             readRecentCommits: () =>
               Effect.succeed({ commits: [], isGitRepo: false }),
-            publish: () => {},
+            publish: () => Effect.void,
             onError: () => {},
           }),
           draftRequests,

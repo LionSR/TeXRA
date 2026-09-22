@@ -98,7 +98,7 @@ interface HostSnapshotSourceOptions {
     HostSnapshotReadFailed
   >;
   /** Write directly to the bridge's host snapshot, which its runs replay. */
-  publish(snapshot: HostSnapshot): void;
+  publish(snapshot: HostSnapshot): Effect.Effect<void>;
   onError(error: unknown): void;
 }
 
@@ -128,18 +128,21 @@ export interface HostSnapshotSource {
   /** The host's own banners changed (a key stored, a tool installed). */
   readonly refreshHostBanners: Effect.Effect<void, never, LanguageModel>;
   /** The workspace folders changed. */
-  refreshWorkspaceRoots(): void;
+  refreshWorkspaceRoots(): Effect.Effect<void>;
   /** The one recorder per process started or stopped. */
-  setRecording(recording: HostSnapshot['recording']): void;
+  setRecording(recording: HostSnapshot['recording']): Effect.Effect<void>;
   /** A run loaded an agent from the custom directory, under the category
    *  it was launched as: the banner's actions edit that catalog. */
-  showAgentConfigBanner(agentName: string, sessionType: SessionType): void;
+  showAgentConfigBanner(
+    agentName: string,
+    sessionType: SessionType,
+  ): Effect.Effect<void>;
   /** The user dismissed one of the dismissable banners. The login dismissal
    *  is the one that persists, so the caller runs the write it returns. */
   dismissBanner(
     banner: 'login' | 'gettingStarted' | 'dependency',
   ): Effect.Effect<void, StateWriteFailed>;
-  setOnboarding(state: HostSnapshot['onboarding']): void;
+  setOnboarding(state: HostSnapshot['onboarding']): Effect.Effect<void>;
 }
 
 /** The project's display record and the catalogs, assembled per session. */
@@ -175,7 +178,7 @@ export function createHostSnapshotSource(
   // two last a session.
   const dismissed = new Set<'gettingStarted' | 'dependency'>();
 
-  function publish(): void {
+  const publish = Effect.suspend(() =>
     options.publish({
       project: options.project,
       ...catalogs,
@@ -194,8 +197,8 @@ export function createHostSnapshotSource(
         login: !authenticated && !loginBannerDismissed,
       },
       onboarding,
-    });
-  }
+    }),
+  );
 
   const loadAgents = Effect.gen(function* () {
     catalogs = {
@@ -272,7 +275,7 @@ export function createHostSnapshotSource(
       for (const exit of settled) {
         if (Exit.isFailure(exit)) options.onError(Cause.squash(exit.cause));
       }
-      publish();
+      yield* publish;
     });
 
   const catalogLoads = [loadAgents, loadTeams, loadModels];
@@ -292,31 +295,30 @@ export function createHostSnapshotSource(
     refreshCommits: guarded(loadCommits),
     refreshAuth: guarded(loadAuth),
     refreshHostBanners: guarded(loadHostBanners),
-    refreshWorkspaceRoots: publish,
-    setRecording(next) {
-      recording = next;
-      publish();
-    },
-    showAgentConfigBanner(agentName, sessionType) {
-      agentConfig = {
-        visible: true,
-        agentName,
-        sessionType,
-        customDirSet: true,
-      };
-      publish();
-    },
+    refreshWorkspaceRoots: () => publish,
+    setRecording: (next) =>
+      Effect.sync(() => {
+        recording = next;
+      }).pipe(Effect.andThen(publish)),
+    showAgentConfigBanner: (agentName, sessionType) =>
+      Effect.sync(() => {
+        agentConfig = {
+          visible: true,
+          agentName,
+          sessionType,
+          customDirSet: true,
+        };
+      }).pipe(Effect.andThen(publish)),
     dismissBanner(banner) {
       // The non-login banners are this process's own record, so `dismissed`
       // takes them before `publish` hands the snapshot out. The login
       // dismissal is the one write that outlives the session, and it goes
       // back to the caller to run: its refusal is that request's failure
       // rather than a rejection nobody reads.
-      if (banner !== 'login') {
-        dismissed.add(banner);
-        publish();
-        return Effect.void;
-      }
+      if (banner !== 'login')
+        return Effect.sync(() => {
+          dismissed.add(banner);
+        }).pipe(Effect.andThen(publish));
       // Change the published view only after its durable dismissal commits.
       return Effect.gen(function* () {
         yield* options.stores.globalState.update(
@@ -324,13 +326,12 @@ export function createHostSnapshotSource(
           true,
         );
         loginBannerDismissed = true;
-        publish();
+        yield* publish;
       });
     },
-    setOnboarding(state) {
-      if (state === onboarding) return;
-      onboarding = state;
-      publish();
-    },
+    setOnboarding: (state) =>
+      Effect.sync(() => {
+        onboarding = state;
+      }).pipe(Effect.andThen(publish)),
   };
 }

@@ -1,8 +1,15 @@
-import { Effect } from 'effect';
+import { Deferred, Effect, Fiber } from 'effect';
 import { it } from '@effect/vitest';
 import { describe, expect } from 'vitest';
 
-import { planOnboardingFunnelTransition } from '@controllers/onboarding/onboardingFunnel';
+import {
+  OnboardingFunnelRefresher,
+  planOnboardingFunnelTransition,
+} from '@controllers/onboarding/onboardingFunnel';
+import {
+  LanguageModel,
+  UNAVAILABLE_LANGUAGE_MODEL_PORT,
+} from '@platform/languageModel';
 import type { OnboardingFunnelState } from '@shared/schemas';
 import { getDefaultTeamId } from '@shared/state/onboardingState';
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -135,5 +142,41 @@ describe('onboarding flags', () => {
           ),
         ).toBeUndefined();
       }),
+  );
+});
+
+describe('OnboardingFunnelRefresher', () => {
+  it.effect(
+    'waits for publication and retries a transition interrupted before it lands',
+    () =>
+      Effect.gen(function* () {
+        const entered = yield* Deferred.make<void>();
+        const release = yield* Deferred.make<void>();
+        const transitions: OnboardingFunnelTransition[] = [];
+        const refresher = new OnboardingFunnelRefresher({
+          hasCredential: () => Effect.succeed(true),
+          flags: new FakeStateStore(),
+          apply: (transition) =>
+            Effect.gen(function* () {
+              transitions.push(transition);
+              yield* Deferred.succeed(entered, undefined);
+              yield* Deferred.await(release);
+            }),
+        });
+
+        const first = yield* Effect.forkChild(refresher.run());
+        yield* Deferred.await(entered);
+        expect(refresher.state).toBeUndefined();
+        yield* Fiber.interrupt(first);
+        expect(refresher.state).toBeUndefined();
+
+        yield* Deferred.succeed(release, undefined);
+        yield* refresher.run();
+        expect(refresher.state).toBe('setup');
+        expect(transitions).toHaveLength(2);
+        expect(transitions[1]?.selectSetupAgent).toBe(true);
+      }).pipe(
+        Effect.provide(LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT)),
+      ),
   );
 });

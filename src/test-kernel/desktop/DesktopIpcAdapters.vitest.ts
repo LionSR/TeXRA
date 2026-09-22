@@ -294,7 +294,11 @@ describe('desktop IPC adapters', () => {
           }),
         );
         const funnelStates: string[] = [];
-        onboarding.onFunnelChange((state) => funnelStates.push(state));
+        onboarding.onFunnelChange((state) =>
+          Effect.sync(() => {
+            funnelStates.push(state);
+          }),
+        );
 
         // Fire them overlapping (no await between); the credential lands before
         // either probe resolves.

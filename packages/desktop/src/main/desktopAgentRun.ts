@@ -61,7 +61,7 @@ export interface DesktopAgentRunOptions {
   showAgentConfigBanner(data: {
     agentName: string;
     category: AgentCategory;
-  }): void;
+  }): Effect.Effect<void>;
   /** Select the run launched by this window. */
   onLaunched?: (runId: RunId) => void;
   /** The process runtime this window was handed; the run and its approval
