@@ -84,19 +84,33 @@ function decided(requestId: string): SessionEvent {
 function createTestHost() {
   const staging = Deferred.makeUnsafe<void>();
   const presentation = Deferred.makeUnsafe<void>();
+  const contextReady = Deferred.makeUnsafe<void>();
+  const previewPresented = Deferred.makeUnsafe<void>();
+  const decided = Deferred.makeUnsafe<void>();
+  const disposed = Deferred.makeUnsafe<void>();
   const preview = {
     originalPath: '/tmp/original.tex',
     proposedPath: '/tmp/proposed.tex',
-    present: vi.fn(() => Deferred.await(presentation)),
+    present: vi.fn(() => {
+      Deferred.doneUnsafe(previewPresented, Effect.void);
+      return Deferred.await(presentation);
+    }),
     showDiff: vi.fn(() => Effect.void),
     openProposed: vi.fn(() => Effect.void),
     readProposedContent: vi.fn(() => Effect.succeed('edited by the user')),
-    dispose: vi.fn(() => Effect.void),
+    dispose: vi.fn(() => {
+      Deferred.doneUnsafe(disposed, Effect.void);
+      return Effect.void;
+    }),
   } satisfies ToolEditPreview;
   let context: ToolEditPreviewContext | undefined;
   return {
     staging,
     presentation,
+    contextReady,
+    previewPresented,
+    decided,
+    disposed,
     preview,
     contextForRequest: (): ToolEditPreviewContext => {
       if (!context) throw new Error('stagePreview has not been called yet.');
@@ -108,12 +122,16 @@ function createTestHost() {
         previewContext: ToolEditPreviewContext,
       ) => {
         context = previewContext;
+        Deferred.doneUnsafe(contextReady, Effect.void);
         return Deferred.await(staging).pipe(Effect.as(preview));
       },
       revealApprovalSurface: () => Effect.void,
       openBuildDisplay: (() => Effect.void) as BuildDisplayFn,
       reportError: vi.fn(),
-      decide: vi.fn(() => Effect.void),
+      decide: vi.fn(() => {
+        Deferred.doneUnsafe(decided, Effect.void);
+        return Effect.void;
+      }),
     },
   };
 }
@@ -130,7 +148,7 @@ describe('tool edit approval controller', () => {
     const controller = createController(testHost.host);
 
     const presented = run(controller.present(approvalRequest()));
-    await vi.waitFor(() => testHost.contextForRequest());
+    await run(Deferred.await(testHost.contextReady));
     const requestId = testHost.contextForRequest().requestId;
     await run(testHost.contextForRequest().discard());
     expect(testHost.contextForRequest().isSettled()).toBe(true);
@@ -149,7 +167,7 @@ describe('tool edit approval controller', () => {
     const controller = createController(testHost.host);
 
     const presented = run(controller.present(approvalRequest()));
-    await vi.waitFor(() => testHost.contextForRequest());
+    await run(Deferred.await(testHost.contextReady));
     const requestId = testHost.contextForRequest().requestId;
 
     // The `request.opened` commit was refused while the host was still
@@ -178,16 +196,15 @@ describe('tool edit approval controller', () => {
     const controller = createController(testHost.host);
 
     const presented = run(controller.present(approvalRequest()));
-    await vi.waitFor(() => testHost.contextForRequest());
+    await run(Deferred.await(testHost.contextReady));
     const requestId = testHost.contextForRequest().requestId;
 
     // Staging finished, so the request is staged and the host is opening its
     // view on the staged files. A release now may not settle before that view
     // is open and closed again: closing it is what the release is for.
     Deferred.doneUnsafe(testHost.staging, Effect.void);
-    await vi.waitFor(() => {
-      expect(testHost.preview.present).toHaveBeenCalledOnce();
-    });
+    await run(Deferred.await(testHost.previewPresented));
+    expect(testHost.preview.present).toHaveBeenCalledOnce();
 
     let released = false;
     const release = run(controller.release(requestId)).then(() => {
@@ -248,18 +265,16 @@ describe('tool edit approval controller', () => {
     expect(testHost.preview.present).toHaveBeenCalled();
 
     await run(controller.handleAction({ requestId, action: 'approve' }));
-    await vi.waitFor(() => {
-      expect(testHost.host.decide).toHaveBeenCalledWith(RUN, requestId, {
-        action: 'approve',
-        content: 'edited by the user',
-      });
+    await run(Deferred.await(testHost.decided));
+    expect(testHost.host.decide).toHaveBeenCalledWith(RUN, requestId, {
+      action: 'approve',
+      content: 'edited by the user',
     });
 
     // The fold's answer releases the preview; nothing acts on it afterwards.
     await run(controller.handleSessionEvent(decided(requestId)));
-    await vi.waitFor(() => {
-      expect(testHost.preview.dispose).toHaveBeenCalledOnce();
-    });
+    await run(Deferred.await(testHost.disposed));
+    expect(testHost.preview.dispose).toHaveBeenCalledOnce();
 
     await run(controller.handleAction({ requestId, action: 'openDiff' }));
     await run(controller.handleAction({ requestId, action: 'reject' }));
@@ -276,9 +291,15 @@ describe('tool edit approval controller', () => {
     const builds: Deferred.Deferred<void, unknown>[] = [];
     // The host build is a program now, and its own settlement is what a
     // release waits for, so the event it records belongs inside it.
+    const firstBuildStarted = Deferred.makeUnsafe<void>();
+    const secondBuildStarted = Deferred.makeUnsafe<void>();
     const openBuildDisplay = vi.fn(() => {
       const build = Deferred.makeUnsafe<void, unknown>();
       builds.push(build);
+      Deferred.doneUnsafe(
+        builds.length === 1 ? firstBuildStarted : secondBuildStarted,
+        Effect.void,
+      );
       return Deferred.await(build).pipe(
         Effect.onExit((exit) =>
           Effect.sync(() => {
@@ -331,9 +352,8 @@ describe('tool edit approval controller', () => {
     await run(
       controller.handleAction({ requestId, action: 'previewProposed' }),
     );
-    await vi.waitFor(() => {
-      expect(openBuildDisplay).toHaveBeenCalledOnce();
-    });
+    await run(Deferred.await(firstBuildStarted));
+    expect(openBuildDisplay).toHaveBeenCalledOnce();
 
     // The build is still running, so a release may not settle yet: the
     // release deletes the temp files the build is reading.
@@ -368,9 +388,8 @@ describe('tool edit approval controller', () => {
         action: 'previewProposed',
       }),
     );
-    await vi.waitFor(() => {
-      expect(openBuildDisplay).toHaveBeenCalledTimes(2);
-    });
+    await run(Deferred.await(secondBuildStarted));
+    expect(openBuildDisplay).toHaveBeenCalledTimes(2);
 
     const secondRelease = run(controller.release(secondRequestId));
     Deferred.doneUnsafe(builds[1], Effect.fail(new Error('the build failed')));

@@ -112,6 +112,6 @@ describe('XaiSessionCoordinator', () => {
         expect(yield* coordinator.loadSession()).toBeNull();
         expect(yield* coordinator.getStatus()).toEqual({ signedIn: false });
         expect(logs.has('WARN', 'SubscriptionOAuth', warning)).toBe(true);
-      }).pipe(Effect.provide(effectDiagnosticsLayer)),
+      }).pipe(Effect.provide(effectDiagnosticsLayer('Trace'))),
   );
 });

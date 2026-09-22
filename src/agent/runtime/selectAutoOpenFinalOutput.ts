@@ -1,10 +1,7 @@
+import { Effect } from 'effect';
 import type { WorkflowFlowResult } from '@agent/runtime/AgentFlowResult';
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import {
-  finalWorkflowOutput,
-  RUN_OUTCOME,
-  type OutputFileSummary,
-} from '@shared/schemas';
+import { finalWorkflowOutput, RUN_OUTCOME } from '@shared/schemas';
 import { readSettingFrom } from '@utils/config/platformSettings';
 
 /**
@@ -28,11 +25,18 @@ import { readSettingFrom } from '@utils/config/platformSettings';
 export function selectAutoOpenFinalOutput(
   stores: SettingsStores,
   result: WorkflowFlowResult,
-): OutputFileSummary | undefined {
-  if (!readSettingFrom<boolean>(stores, 'texra.agentOutputs.autoOpenFinal')) {
-    return undefined;
-  }
-  if (result.outcome !== RUN_OUTCOME.COMPLETED) return undefined;
+) {
+  return Effect.gen(function* () {
+    if (
+      !(yield* readSettingFrom<boolean>(
+        stores,
+        'texra.agentOutputs.autoOpenFinal',
+      ))
+    ) {
+      return undefined;
+    }
+    if (result.outcome !== RUN_OUTCOME.COMPLETED) return undefined;
 
-  return finalWorkflowOutput(result.output.outputs);
+    return finalWorkflowOutput(result.output.outputs);
+  });
 }

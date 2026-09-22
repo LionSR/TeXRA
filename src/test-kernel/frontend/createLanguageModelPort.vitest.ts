@@ -191,7 +191,7 @@ describe('createLanguageModelPort', () => {
           yield* Effect.flip(
             createPort()
               .selectModels({ vendor: 'copilot' })
-              .pipe(Effect.provide(effectDiagnosticsLayer)),
+              .pipe(Effect.provide(effectDiagnosticsLayer('Trace'))),
           ),
         ).toBe(nativeError);
         expect(

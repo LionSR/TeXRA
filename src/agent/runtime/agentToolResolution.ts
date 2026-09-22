@@ -47,6 +47,7 @@ import {
   availableModelNamesFromOptions,
   readDelegationAnnotationState,
 } from '@tools/delegation/delegationAvailability';
+import { getDisabledToolIds } from '@utils/config/constants';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { ToolInjections } from './toolInjection';
 
@@ -130,7 +131,9 @@ export const resolveAgentTools = Effect.fn('resolveAgentTools')(function* ({
   delegationScope,
 }: ResolveAgentToolsInput) {
   const effectiveRegistry = registry ?? getDefaultToolRegistry();
-  const disabled = getDisabledToolNames(stores.globalState);
+  const disabled = getDisabledToolNames(
+    yield* getDisabledToolIds(stores.globalState),
+  );
   const unavailable = getUnavailableToolNamesCached();
   const runtimeUnavailable = new Set(runtimeUnavailableTools ?? []);
 
@@ -168,7 +171,7 @@ export const resolveAgentTools = Effect.fn('resolveAgentTools')(function* ({
     resolvedNames.add(name);
   }
   for (const injection of toolInjections.list()) {
-    if (!injection.shouldInject(stores)) continue;
+    if (!(yield* injection.shouldInject(stores))) continue;
     if (resolvedNames.has(injection.toolName)) continue;
     if (!passesRuntimeGates(injection.toolName)) continue;
     const tool = effectiveRegistry.get(injection.toolName);
@@ -187,7 +190,8 @@ export const resolveAgentTools = Effect.fn('resolveAgentTools')(function* ({
   // Both facts travel into the pure annotation mapping as data: the worktree
   // opt-in is read from the slots this resolution was given, and the run's
   // pinned delegation scope is already explicit data from AgentRun.
-  const annotationState = readDelegationAnnotationState(
+  if (availableModelNames === undefined) return resolved;
+  const annotationState = yield* readDelegationAnnotationState(
     stores,
     delegationScope,
   );

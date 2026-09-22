@@ -34,7 +34,7 @@ interface InitAgentOption {
   readonly name: string;
 }
 
-export function defaultInitAnswers(
+function defaultInitAnswers(
   agents: readonly InitAgentOption[],
   models: readonly CliModelAccess[],
 ): InitAnswers {
@@ -162,7 +162,7 @@ const runInit = Effect.fn('runInit')(function* (
 
   yield* loadAgents({ includeRemote: false });
   const agents = implicitDefaultToolUseAgents(
-    getVisibleAgents(services, AgentCategory.ToolUse),
+    yield* getVisibleAgents(services, AgentCategory.ToolUse),
   );
   const models = yield* getCliModelAccessList({ stores: services });
 

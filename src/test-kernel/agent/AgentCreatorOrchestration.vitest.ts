@@ -21,12 +21,14 @@ import {
   LanguageModel,
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
 } from '@platform/languageModel';
+import { AgentDirectories } from '@platform/interfaces';
 import { fakeStores } from '@test/support/FakePlatform';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import {
   nodePlatformLayer,
   unusedGlobalStorageFs,
 } from '@test/support/fsTestUtils';
+import { fakeHostAgentDirectories } from '@test/support/setupPlatform';
 
 const mocks = vi.hoisted(() => ({
   helperModel: vi.fn(),
@@ -85,6 +87,7 @@ const createAgent = (ui: AgentCreatorUI): Effect.Effect<void, unknown> =>
         testHttpClientLayer,
         unusedGlobalStorageFs(),
         LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT),
+        AgentDirectories.layer(fakeHostAgentDirectories),
       ),
     ),
   );

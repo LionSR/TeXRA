@@ -1,6 +1,8 @@
+import { Effect } from 'effect';
+import { it } from '@effect/vitest';
 // Suites for src/utils/config (platformSettings + providerConfig).
 
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, vi } from 'vitest';
 import { platform } from '@platform/platform';
 import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latexConfig';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
@@ -22,34 +24,55 @@ afterEach(() => {
 // ---------------------------------------------------------------------------
 
 describe('readSettingFrom', () => {
-  it('resolves the default from the catalog schema when the key is unset', async () => {
-    await installPlatform({});
-    expect(
-      readSettingFrom(testWorkspaceRoots(), WorkspaceStateKey.LATEX_FORMATTER),
-    ).toBe(LATEX_CONFIG_DEFAULTS.latexFormatter);
-    // A globalState-slot key resolves the same way.
-    expect(
-      readSettingFrom(testWorkspaceRoots(), GlobalStateKey.WEBSOCKET_OPENAI),
-    ).toBe(false);
-  });
+  it.effect(
+    'resolves the default from the catalog schema when the key is unset',
+    () =>
+      Effect.gen(function* () {
+        yield* Effect.promise(() => installPlatform({}));
+        expect(
+          yield* readSettingFrom(
+            testWorkspaceRoots(),
+            WorkspaceStateKey.LATEX_FORMATTER,
+          ),
+        ).toBe(LATEX_CONFIG_DEFAULTS.latexFormatter);
+        // A globalState-slot key resolves the same way.
+        expect(
+          yield* readSettingFrom(
+            testWorkspaceRoots(),
+            GlobalStateKey.WEBSOCKET_OPENAI,
+          ),
+        ).toBe(false);
+      }),
+  );
 
-  it('snaps a stored value that fails the schema back to the catalog default', async () => {
-    await installPlatform({
-      workspaceState: {
-        [WorkspaceStateKey.LATEX_FORMATTER]: 'not-a-formatter',
-      },
-    });
-    expect(
-      readSettingFrom(testWorkspaceRoots(), WorkspaceStateKey.LATEX_FORMATTER),
-    ).toBe(LATEX_CONFIG_DEFAULTS.latexFormatter);
-  });
+  it.effect(
+    'snaps a stored value that fails the schema back to the catalog default',
+    () =>
+      Effect.gen(function* () {
+        yield* Effect.promise(() =>
+          installPlatform({
+            workspaceState: {
+              [WorkspaceStateKey.LATEX_FORMATTER]: 'not-a-formatter',
+            },
+          }),
+        );
+        expect(
+          yield* readSettingFrom(
+            testWorkspaceRoots(),
+            WorkspaceStateKey.LATEX_FORMATTER,
+          ),
+        ).toBe(LATEX_CONFIG_DEFAULTS.latexFormatter);
+      }),
+  );
 
-  it('throws for a key with no catalog entry', async () => {
-    await installPlatform({});
-    expect(() =>
-      readSettingFrom(testWorkspaceRoots(), 'texra.not.a.catalog.key'),
-    ).toThrow(/no setting catalog entry/i);
-  });
+  it.effect('throws for a key with no catalog entry', () =>
+    Effect.gen(function* () {
+      yield* Effect.promise(() => installPlatform({}));
+      expect(() =>
+        readSettingFrom(testWorkspaceRoots(), 'texra.not.a.catalog.key'),
+      ).toThrow(/no setting catalog entry/i);
+    }),
+  );
 });
 
 // ---------------------------------------------------------------------------
@@ -57,25 +80,37 @@ describe('readSettingFrom', () => {
 // ---------------------------------------------------------------------------
 
 describe('getProviderEndpoint', () => {
-  it('returns the stored globalState value', async () => {
-    await installPlatform({
-      globalState: {
-        [GlobalStateKey.ENDPOINT_OPENAI]: 'https://example.test/v1',
-      },
-    });
-    expect(getProviderEndpoint(testWorkspaceRoots(), 'openai')).toBe(
-      'https://example.test/v1',
-    );
-  });
+  it.effect('returns the stored globalState value', () =>
+    Effect.gen(function* () {
+      yield* Effect.promise(() =>
+        installPlatform({
+          globalState: {
+            [GlobalStateKey.ENDPOINT_OPENAI]: 'https://example.test/v1',
+          },
+        }),
+      );
+      expect(yield* getProviderEndpoint(testWorkspaceRoots(), 'openai')).toBe(
+        'https://example.test/v1',
+      );
+    }),
+  );
 
-  it('snaps an invalid stored value back to the catalog default instead of leaking it through', async () => {
-    // Regression for #7873: the pre-fix local `read()` helper cast the raw
-    // stored value to `string` without validating it, so a corrupted
-    // non-string value flowed straight through. `readSettingFrom(testWorkspaceRoots(), )`
-    // validates against the entry's schema first.
-    await installPlatform({
-      globalState: { [GlobalStateKey.ENDPOINT_OPENAI]: 42 },
-    });
-    expect(getProviderEndpoint(testWorkspaceRoots(), 'openai')).toBe('');
-  });
+  it.effect(
+    'snaps an invalid stored value back to the catalog default instead of leaking it through',
+    () =>
+      Effect.gen(function* () {
+        // Regression for #7873: the pre-fix local `read()` helper cast the raw
+        // stored value to `string` without validating it, so a corrupted
+        // non-string value flowed straight through. `readSettingFrom(testWorkspaceRoots(), )`
+        // validates against the entry's schema first.
+        yield* Effect.promise(() =>
+          installPlatform({
+            globalState: { [GlobalStateKey.ENDPOINT_OPENAI]: 42 },
+          }),
+        );
+        expect(yield* getProviderEndpoint(testWorkspaceRoots(), 'openai')).toBe(
+          '',
+        );
+      }),
+  );
 });

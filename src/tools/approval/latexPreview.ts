@@ -15,7 +15,7 @@ import { sync as globSync } from 'glob';
 import { TEMP_EXTENSIONS } from '@housekeeping/constants';
 import { LaTeXdiffService } from '@latex/latexdiff';
 import { generateDiffFileName } from '@latex/latexdiff/diffFileNameManager';
-import { withLogChannel, withLogData } from '@logger/effectLog';
+import { withLogChannel } from '@logger/effectLog';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
   LATEXDIFF_TEMP_FILE_LOCATIONS,
@@ -104,7 +104,7 @@ const silentDelete = (
       Effect.catch((error) =>
         Effect.logDebug(`Failed to delete temp ${kind} ${targetPath}`).pipe(
           withLogChannel(CHANNEL),
-          withLogData(error),
+          Effect.annotateLogs({ data: error }),
         ),
       ),
     );
@@ -198,7 +198,7 @@ const readFileWithFallback = (
               `Failed to read ${uri.fsPath}; previewing held content (saved hand edits may be missing): ${toErrorMessage(error)}`,
             ).pipe(
               withLogChannel(CHANNEL),
-              withLogData(error),
+              Effect.annotateLogs({ data: error }),
               Effect.as(fallback),
             ),
       ),
@@ -220,7 +220,7 @@ const createTempFileWithCleanup = Effect.fn('createTempFileWithCleanup')(
       return yield* Effect.fail(new Error('No workspace folder open'));
     }
 
-    const location = readSettingFrom<
+    const location = yield* readSettingFrom<
       (typeof LATEXDIFF_TEMP_FILE_LOCATIONS)[number]
     >(entry.request.roots, 'texra.latexdiff.tempFileLocation');
 

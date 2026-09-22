@@ -237,6 +237,13 @@ const SessionViewSchema = z.object({
   /** The drained tail position, including rows no longer materialized.
    *  Listing and history rows never advance it. */
   cursor: CommitOrdinalSchema,
+  /**
+   * Transcript verbosity (`texra.logger.debugMode`), sampled by the process
+   * reader and carried with the replay — never stamped onto a row. The whole
+   * fold answers with the replay's value, so a settings flip takes effect on
+   * the next replay, not mid-fold.
+   */
+  debug: z.boolean(),
   /** One entry per subscribed aggregate: the highest seq the fold has
    *  retained for it (the subscription's `fromSeq` until a row folds).
    *  Created when the aggregate enters the subscription set, deleted with
@@ -258,15 +265,20 @@ export type SessionView = z.infer<typeof SessionViewSchema>;
 
 /**
  * The empty view a fold starts from: keyed by its session, its cursor at the
- * layer's tail anchor (PRD 7.2). Built once per fold fiber and never by an
- * input, since no arm carries a key.
+ * layer's tail anchor (PRD 7.2), and its initial verbosity flag. Built once
+ * per fold fiber; a replay's first input can replace it when policy changes.
  */
-export function emptySessionView(key: string, cursor = 0): SessionView {
+export function emptySessionView(
+  key: string,
+  cursor = 0,
+  debug = false,
+): SessionView {
   return {
     key,
     runs: new Map(),
     order: [],
     cursor,
+    debug,
     folded: new Map(),
     rollup: { running: 0, waiting: 0, interrupted: 0 },
     requests: [],

@@ -5,7 +5,7 @@ import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Effect, Fiber } from 'effect';
+import { Deferred, Effect, Fiber } from 'effect';
 import { beforeEach, describe, expect, vi } from 'vitest';
 
 const submitFollowUpMock = vi.hoisted(() => vi.fn());
@@ -20,11 +20,12 @@ import {
   type AppSignal,
   type AppSignalPayloads,
 } from '@eventBus/AppSignals';
-import { AgentResume } from '@platform/interfaces';
+import { AgentResume, Lifecycle } from '@platform/interfaces';
 import { Secrets } from '@platform/secrets';
 import type { RunId } from '@shared/schemas';
 import {
   fakeHostAgentResume,
+  fakeHostLifecycle,
   fakeHostSecrets,
 } from '@test/support/setupPlatform';
 import { testRuntime } from '@test/support/testProcessRuntime';
@@ -68,11 +69,23 @@ async function recordAppSignal<K extends AppSignal>(
 ): Promise<{
   readonly events: { event: K; payload: AppSignalPayloads[K] }[];
   readonly dispose: () => void;
+  /** An Effect that completes once `count` events have been delivered. */
+  readonly delivered: (count: number) => Effect.Effect<void>;
 }> {
   const events: { event: K; payload: AppSignalPayloads[K] }[] = [];
+  const waiters: Array<{ count: number; deferred: Deferred.Deferred<void> }> =
+    [];
+  const notify = () => {
+    for (const waiter of [...waiters]) {
+      if (events.length >= waiter.count) {
+        Deferred.doneUnsafe(waiter.deferred, Effect.void);
+      }
+    }
+  };
   const fiber = testRuntime().runFork(
     onAppSignal(event, (payload) => {
       events.push({ event, payload });
+      notify();
     }),
   );
   await testRuntime().runPromise(Effect.void);
@@ -81,6 +94,13 @@ async function recordAppSignal<K extends AppSignal>(
     dispose: () => {
       testRuntime().runFork(Fiber.interrupt(fiber));
     },
+    delivered: (count) =>
+      Effect.gen(function* () {
+        if (events.length >= count) return;
+        const deferred = yield* Deferred.make<void>();
+        waiters.push({ count, deferred });
+        yield* Deferred.await(deferred);
+      }),
   };
 }
 
@@ -203,27 +223,22 @@ describe('GitHub subscription app signals and follow-ups', () => {
         .pipe(
           Effect.provideService(Secrets, fakeHostSecrets),
           Effect.provideService(AgentResume, fakeHostAgentResume),
+          Effect.provideService(Lifecycle, fakeHostLifecycle),
         );
       // Delivery runs on the subscriber's fiber, so each publication lands a
       // turn after the call that made it.
-      yield* Effect.promise(() =>
-        vi.waitFor(() =>
-          expect(signal.events).toEqual([
-            { event: 'githubSubscriptionsChanged', payload: undefined },
-          ]),
-        ),
-      );
+      yield* signal.delivered(1);
+      expect(signal.events).toEqual([
+        { event: 'githubSubscriptionsChanged', payload: undefined },
+      ]);
 
       registry.unbind('stream-a' as RunId, 'owner/repo');
 
-      yield* Effect.promise(() =>
-        vi.waitFor(() =>
-          expect(signal.events).toEqual([
-            { event: 'githubSubscriptionsChanged', payload: undefined },
-            { event: 'githubSubscriptionsChanged', payload: undefined },
-          ]),
-        ),
-      );
+      yield* signal.delivered(2);
+      expect(signal.events).toEqual([
+        { event: 'githubSubscriptionsChanged', payload: undefined },
+        { event: 'githubSubscriptionsChanged', payload: undefined },
+      ]);
     }),
   );
 
@@ -244,14 +259,11 @@ describe('GitHub subscription app signals and follow-ups', () => {
 
       yield* new TestPollingSource().failWithAuthError(state);
 
-      yield* Effect.promise(() =>
-        vi.waitFor(() =>
-          expect(signal.events).toContainEqual({
-            event: 'githubTokenInvalid',
-            payload: { message: 'bad token' },
-          }),
-        ),
-      );
+      yield* signal.delivered(1);
+      expect(signal.events).toContainEqual({
+        event: 'githubTokenInvalid',
+        payload: { message: 'bad token' },
+      });
       expect(host.events).toEqual([]);
     }),
   );
@@ -272,6 +284,7 @@ describe('GitHub subscription app signals and follow-ups', () => {
           .pipe(
             Effect.provideService(Secrets, fakeHostSecrets),
             Effect.provideService(AgentResume, fakeHostAgentResume),
+            Effect.provideService(Lifecycle, fakeHostLifecycle),
           );
 
         yield* Effect.promise(() =>
@@ -305,12 +318,14 @@ describe('GitHub subscription app signals and follow-ups', () => {
           .pipe(
             Effect.provideService(Secrets, fakeHostSecrets),
             Effect.provideService(AgentResume, fakeHostAgentResume),
+            Effect.provideService(Lifecycle, fakeHostLifecycle),
           );
         yield* registry
           .bind(runId, 'owner/repo', secondSession)
           .pipe(
             Effect.provideService(Secrets, fakeHostSecrets),
             Effect.provideService(AgentResume, fakeHostAgentResume),
+            Effect.provideService(Lifecycle, fakeHostLifecycle),
           );
 
         yield* Effect.promise(() =>
@@ -354,6 +369,7 @@ describe('GitHub subscription app signals and follow-ups', () => {
           .pipe(
             Effect.provideService(Secrets, fakeHostSecrets),
             Effect.provideService(AgentResume, fakeHostAgentResume),
+            Effect.provideService(Lifecycle, fakeHostLifecycle),
           );
 
         // emit() awaits the delivery program, so the recovery has run by the

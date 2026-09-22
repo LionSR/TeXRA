@@ -4,6 +4,7 @@ import { Effect, FileSystem, Layer } from 'effect';
 import { beforeEach, describe, expect, vi } from 'vitest';
 
 // Local imports
+import { AgentDirectories } from '@platform/interfaces';
 import type { GlobalStorageFs } from '@platform/rootedFs';
 import { AgentCategory } from '@shared/schemas';
 import type { HostRequest } from '@shared/session/hostRequest';
@@ -13,6 +14,7 @@ import {
   unusedGlobalStorageFs,
 } from '@test/support/fsTestUtils';
 import { FakeStateStore } from '@test/support/FakePlatform';
+import { fakeHostAgentDirectories } from '@test/support/setupPlatform';
 
 /**
  * A program over the process's global storage view. Nothing under test here
@@ -20,16 +22,24 @@ import { FakeStateStore } from '@test/support/FakePlatform';
  * only satisfies the requirement the catalog readers name.
  */
 function onGlobalStorage<A, E>(
-  program: Effect.Effect<A, E, GlobalStorageFs | FileSystem.FileSystem>,
+  program: Effect.Effect<
+    A,
+    E,
+    GlobalStorageFs | FileSystem.FileSystem | AgentDirectories
+  >,
 ): Effect.Effect<A, E> {
   return Effect.provide(
     program,
-    Layer.merge(unusedGlobalStorageFs(), nodePlatformLayer),
+    Layer.mergeAll(
+      unusedGlobalStorageFs(),
+      nodePlatformLayer,
+      AgentDirectories.layer(fakeHostAgentDirectories),
+    ),
   );
 }
 
 const mocks = vi.hoisted(() => ({
-  createTeamCatalogPorts: vi.fn(() => ({ catalog: true })),
+  createTeamCatalogPorts: vi.fn(() => Effect.succeed({ catalog: true })),
   resolveTeamLaunch: vi.fn(),
 }));
 

@@ -1,15 +1,19 @@
-import { Effect, Layer } from 'effect';
+import { Effect } from 'effect';
 
 import { installProcessRuntime } from '@controllers/session/sessionLayer';
 import { globalDatabaseLayer } from '@controllers/session/Database';
+import { AppState, AgentDirectories } from '@platform/interfaces';
+import { UsageLog } from '@shared/usageLog';
 import { directLeanLanguageServices } from '@tools/lean/direct/directLspAdapter';
 import { initTestProcessRuntime } from './testProcessRuntime';
 import { createFakeWorkspaceRoots } from './FakePlatform';
 import {
+  fakeHostAgentDirectories,
   fakeHostAgentResume,
   fakeHostAppState,
   fakeHostAuth,
   fakeHostLanguageModel,
+  fakeHostLifecycle,
   fakeHostSecrets,
   fakeSetupPlatform,
 } from './setupPlatform';
@@ -54,17 +58,22 @@ initTestProcessRuntime(
     }),
     globalStorage,
     secrets: fakeHostSecrets,
-    appState: fakeHostAppState,
+    appState: AppState.layer(fakeHostAppState),
     // Suites swap the account plane with their host; the default host's
     // answers signed-out.
     auth: fakeHostAuth,
     languageModel: fakeHostLanguageModel,
     agentResume: fakeHostAgentResume,
+    agentDirectories: AgentDirectories.layer(fakeHostAgentDirectories),
+    lifecycle: fakeHostLifecycle,
     setup: fakeSetupPlatform,
     // The Node hosts' layer: inert until a Lean tool is invoked.
     lean: directLeanLanguageServices(),
     // The harness reports no usage; the telemetry suite starts its own.
-    usageLog: Layer.empty,
+    usageLog: UsageLog.disabled,
     globalDatabase: globalDatabaseLayer(globalStorage),
+    // The suite's captured entries are the assertion surface: emit every
+    // level the programs run and let each test filter what it reads.
+    minimumLogLevel: 'Trace',
   }),
 );

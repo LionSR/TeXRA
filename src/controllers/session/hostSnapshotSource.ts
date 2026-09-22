@@ -20,12 +20,16 @@ import {
   modelOptionsFrom,
   readModelAvailabilityInputs,
 } from '@model/computeModelOptions';
-import type { StateStore, StateWriteFailed } from '@platform/interfaces';
+import type {
+  AgentDirectories,
+  StateStore,
+  StateWriteFailed,
+} from '@platform/interfaces';
 import type { LanguageModel } from '@platform/languageModel';
 import type { GlobalStorageFs } from '@platform/rootedFs';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import type { FileOptions, SessionType } from '@shared/schemas';
+import { type FileOptions, type SessionType } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import type {
   HostSnapshot,
@@ -103,14 +107,18 @@ export interface HostSnapshotSource {
   readonly refresh: Effect.Effect<
     void,
     never,
-    GlobalStorageFs | LanguageModel | SupabaseAuth | FileSystem.FileSystem
+    | GlobalStorageFs
+    | LanguageModel
+    | SupabaseAuth
+    | FileSystem.FileSystem
+    | AgentDirectories
   >;
   /** The agent, team, and model catalogs changed (a roster edit, a
    *  credential, a sign-in). */
   readonly refreshCatalogs: Effect.Effect<
     void,
     never,
-    GlobalStorageFs | LanguageModel | FileSystem.FileSystem
+    GlobalStorageFs | LanguageModel | FileSystem.FileSystem | AgentDirectories
   >;
   /** The project's files changed on disk, or the surface asked for a relist. */
   readonly refreshFiles: Effect.Effect<void, never, FileSystem.FileSystem>;
@@ -157,6 +165,7 @@ export function createHostSnapshotSource(
     isGitRepo: false,
   };
   let authenticated = true;
+  let loginBannerDismissed = false;
   let apiKey: Banners['apiKey'] = { visible: false };
   let dependency: Banners['dependency'] = { visible: false };
   let recording: HostSnapshot['recording'] = null;
@@ -182,12 +191,7 @@ export function createHostSnapshotSource(
           visible: dependency.visible && !dismissed.has('dependency'),
         },
         gettingStarted: !hasInputFiles && !dismissed.has('gettingStarted'),
-        login:
-          !authenticated &&
-          !options.stores.globalState.get<boolean>(
-            GlobalStateKey.LOGIN_BANNER_DISMISSED,
-            false,
-          ),
+        login: !authenticated && !loginBannerDismissed,
       },
       onboarding,
     });
@@ -204,7 +208,7 @@ export function createHostSnapshotSource(
     catalogs = {
       ...catalogs,
       teamOptions: yield* loadTeamOptions(
-        createTeamCatalogPorts(options.stores.workspaceState),
+        yield* createTeamCatalogPorts(options.stores.workspaceState),
       ),
     };
   });
@@ -212,7 +216,7 @@ export function createHostSnapshotSource(
   const loadModels = Effect.gen(function* () {
     const inputs = yield* readModelAvailabilityInputs(
       { ...options.stores, secrets: options.secrets },
-      getEnabledModels(options.stores.globalState),
+      yield* getEnabledModels(options.stores.globalState),
     );
     catalogs = { ...catalogs, modelOptions: modelOptionsFrom(inputs) };
   });
@@ -227,6 +231,10 @@ export function createHostSnapshotSource(
   });
 
   const loadAuth = Effect.gen(function* () {
+    loginBannerDismissed = yield* options.stores.globalState.get<boolean>(
+      GlobalStateKey.LOGIN_BANNER_DISMISSED,
+      false,
+    );
     authenticated = yield* Effect.flatMap(
       SupabaseAuth,
       (auth) => auth.authenticated,
@@ -271,10 +279,14 @@ export function createHostSnapshotSource(
 
   return {
     refresh: guarded<
-      GlobalStorageFs | LanguageModel | SupabaseAuth | FileSystem.FileSystem
+      | GlobalStorageFs
+      | LanguageModel
+      | SupabaseAuth
+      | FileSystem.FileSystem
+      | AgentDirectories
     >(...catalogLoads, loadFiles, loadCommits, loadAuth, loadHostBanners),
     refreshCatalogs: guarded<
-      GlobalStorageFs | LanguageModel | FileSystem.FileSystem
+      GlobalStorageFs | LanguageModel | FileSystem.FileSystem | AgentDirectories
     >(...catalogLoads),
     refreshFiles: guarded(loadFiles),
     refreshCommits: guarded(loadCommits),
@@ -305,15 +317,13 @@ export function createHostSnapshotSource(
         publish();
         return Effect.void;
       }
-      // The login dismissal is read back out of the store by `publish`, so
-      // the publish has to run behind the write rather than beside it: the
-      // update is lazy, and a snapshot taken before it executes still reads
-      // the banner as undismissed.
+      // Change the published view only after its durable dismissal commits.
       return Effect.gen(function* () {
         yield* options.stores.globalState.update(
           GlobalStateKey.LOGIN_BANNER_DISMISSED,
           true,
         );
+        loginBannerDismissed = true;
         publish();
       });
     },

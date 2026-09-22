@@ -19,16 +19,16 @@
   "dependencies": {
     "@anthropic-ai/sdk": "0.126.0",
     "@google/genai": "2.23.0",
-    "openai": "7.10.0",
+    "openai": "7.20.0",
     "ws": "8.21.3"
   },
   "peerDependencies": {
-    "effect": "4.0.0-rc.115",
+    "effect": "4.0.0-rc.116",
     "zod": "4.4.3"
   },
   "devDependencies": {
     "@types/ws": "8.18.1",
-    "effect": "4.0.0-rc.115",
+    "effect": "4.0.0-rc.116",
     "zod": "4.4.3"
   }
 }

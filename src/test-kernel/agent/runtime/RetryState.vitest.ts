@@ -274,7 +274,6 @@ function agentRun(
 ): AgentRunShape {
   return {
     runId,
-    parentRunId: null,
     session,
     config: CONFIG,
     setting: SETTING,
@@ -300,6 +299,7 @@ function agentRun(
         runId,
         runStageId: undefined,
         config: testWorkspaceRoots().config,
+        usageLog: { log: () => {} },
       },
       { agentName: CONFIG.agent, agentCategory: SETTING.agentCategory },
     ),

@@ -47,7 +47,7 @@ function createService(customDirectory = ''): {
     channel: 'AgentDirectoryServiceTest',
     resourcesPath: RESOURCES_PATH,
     customDirectoryStore: {
-      get: () => customDirectory,
+      get: () => Effect.succeed(customDirectory),
     },
     issueReporter: reporter,
   });

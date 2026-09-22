@@ -22,9 +22,9 @@ const CHANNEL = 'FinalOutputOpener';
 export const openFinalOutputIfAvailable = (
   stores: SettingsStores,
   result: WorkflowFlowResult,
-): Effect.Effect<void> =>
+) =>
   Effect.gen(function* () {
-    const primary = selectAutoOpenFinalOutput(stores, result);
+    const primary = yield* selectAutoOpenFinalOutput(stores, result);
     if (!primary) return;
 
     const previewed = yield* Effect.result(

@@ -14,21 +14,18 @@ import * as vscode from 'vscode';
 import { formatLogData } from '@logger/formatLogData';
 import {
   LOG_CHANNEL,
-  LOG_DATA,
   entryChannel,
   entryMessage,
   type LogEntry,
   type LogSink,
 } from '@logger/logSink';
-import { isDebugModeEnabled } from '@logger/logUtils';
 
-/** Everything the channel itself does not already render. Entries carry the
- * `data` payload raw, so it is flattened here for display — and shown only in
- * debug mode, the same terms `createLog` writes it on. */
+/** Everything the channel itself does not already render. The `data` payload
+ * arrives already rendered and bounded by the write path, so this shows it on
+ * the entries the user's own channel-level filter let through. */
 function detail(entry: LogEntry): string {
-  const debugMode = isDebugModeEnabled();
   const extra = Object.entries(entry.annotations)
-    .filter(([key]) => key !== LOG_CHANNEL && (key !== LOG_DATA || debugMode))
+    .filter(([key]) => key !== LOG_CHANNEL)
     .map(([key, value]): [string, string] => [
       key,
       typeof value === 'string' ? value : formatLogData(value),

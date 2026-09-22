@@ -57,7 +57,7 @@ function listSkills(
     // helper. The text list is suppressed on a usage error with no skills
     // (nothing useful to show); the helper skips the write for the
     // resulting empty string.
-    const disabled = readDisabledSkills(roots);
+    const disabled = yield* readDisabledSkills(roots);
     const items = result.skills.map((entry) =>
       skillDisplayItem(entry, disabled),
     );

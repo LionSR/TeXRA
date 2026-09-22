@@ -46,6 +46,7 @@ import { ProgressWorkflowFileActionsController } from '@controllers/progressView
 import { ApiKeyPromptFailed } from '@controllers/progressView/ProgressApiKeyRetryController';
 import {
   fromHost,
+  hostFailure,
   type HostCallFailed,
 } from '@controllers/session/hostCallFailure';
 import {
@@ -74,7 +75,12 @@ import {
   modelOptionsFrom,
   readModelAvailabilityInputs,
 } from '@model/computeModelOptions';
-import type { StateStore, StateWriteFailed } from '@platform/interfaces';
+import type {
+  AgentDirectories,
+  StateStore,
+  StateReadFailed,
+  StateWriteFailed,
+} from '@platform/interfaces';
 import type { LanguageModel } from '@platform/languageModel';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import {
@@ -154,9 +160,10 @@ interface ExtensionHostRequestsOptions {
   showInSidebar(): Effect.Effect<void, HostRequestFailure, ProcessServices>;
   /** The onboarding funnel recomputes after an action that changes its
    *  inputs (a key stored, a sign-in, the setup assistant run). */
+  readonly refreshApiKeyStatus: Effect.Effect<void, Error, ProcessServices>;
   refreshOnboardingFunnel(): Effect.Effect<
     void,
-    StateWriteFailed,
+    StateReadFailed | StateWriteFailed,
     LanguageModel
   >;
 }
@@ -436,8 +443,8 @@ export function createExtensionHostRequests(
     request: Extract<HostRequest, { kind: 'launch' }>,
   ): Effect.Effect<
     void,
-    HostCallFailed | RequestRefusal,
-    GlobalStorageFs | FileSystem.FileSystem
+    HostCallFailed | RequestRefusal | StateReadFailed,
+    GlobalStorageFs | FileSystem.FileSystem | AgentDirectories
   > {
     return Effect.gen(function* () {
       const { launch: form } = request;
@@ -668,8 +675,8 @@ export function createExtensionHostRequests(
    *  four promises were. */
   const refreshAfterCredentialChange = Effect.all(
     [
-      fromHost('texra.refreshApiKeyStatus', () =>
-        vscode.commands.executeCommand('texra.refreshApiKeyStatus'),
+      options.refreshApiKeyStatus.pipe(
+        Effect.mapError((cause) => hostFailure('refreshApiKeyStatus', cause)),
       ),
       snapshot.refreshCatalogs,
       snapshot.refreshAuth,
@@ -730,16 +737,18 @@ export function createExtensionHostRequests(
         yield* refreshOnboardingFunnel;
       }),
     openApiKeyGuide: (provider) =>
-      Effect.asVoid(
-        fromHost('env.openExternal', () =>
+      Effect.gen(function* () {
+        const url = provider
+          ? yield* getProviderKeyUrl(session.roots, provider)
+          : undefined;
+        yield* fromHost('env.openExternal', () =>
           vscode.env.openExternal(
             vscode.Uri.parse(
-              (provider && getProviderKeyUrl(session.roots, provider)) ||
-                'https://texra.ai/guide/installation#setting-up-api-keys',
+              url || 'https://texra.ai/guide/installation#setting-up-api-keys',
             ),
           ),
-        ),
-      ),
+        );
+      }),
     openAgentSettings: (sessionType) =>
       commandVerb(
         'texra.showAgents',

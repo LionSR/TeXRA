@@ -516,9 +516,13 @@ describe('BashTool', () => {
           { success: false, exitCode: 1 },
         );
 
+        const followUpDelivered = Deferred.makeUnsafe<void>();
         const submitFollowUpSpy = vi
           .spyOn(toolUseFollowUp, 'submitFollowUp')
-          .mockReturnValue(Effect.succeed({ status: 'sent' }));
+          .mockImplementation(() => {
+            Deferred.doneUnsafe(followUpDelivered, Effect.void);
+            return Effect.succeed({ status: 'sent' });
+          });
 
         const parentRunId = startedParentRun();
         const parentLease = testDefaultSession().followUps.claimLive(
@@ -533,13 +537,10 @@ describe('BashTool', () => {
 
           // The background run delivers its result asynchronously as a follow-up
           // once the (mocked) process settles.
-          yield* Effect.promise(() =>
-            vi.waitFor(() => {
-              assert.ok(
-                submitFollowUpSpy.mock.calls.length > 0,
-                'Background bash should deliver a follow-up once the run completes',
-              );
-            }),
+          yield* Deferred.await(followUpDelivered);
+          assert.ok(
+            submitFollowUpSpy.mock.calls.length > 0,
+            'Background bash should deliver a follow-up once the run completes',
           );
         } finally {
           testDefaultSession().followUps.release(parentLease, 'terminal');
@@ -590,7 +591,11 @@ describe('BashTool', () => {
         );
 
         const parentRunId = startedParentRun();
-        const tryResumeRun = vi.fn().mockResolvedValue(true);
+        const parentWoken = Deferred.makeUnsafe<void>();
+        const tryResumeRun = vi.fn().mockImplementation(() => {
+          Deferred.doneUnsafe(parentWoken, Effect.void);
+          return Promise.resolve(true);
+        });
         yield* Effect.promise(() =>
           installPlatform(BASH_PLATFORM_OPTIONS, {
             agentResume: { tryResumeRun },
@@ -607,13 +612,10 @@ describe('BashTool', () => {
           // The background run's completion must queue the follow-up AND wake
           // the WAITING parent through the host resume port — not just queue it
           // for the parent to notice on its own.
-          yield* Effect.promise(() =>
-            vi.waitFor(() => {
-              assert.ok(
-                tryResumeRun.mock.calls.length > 0,
-                'Background bash completion should wake the WAITING parent run',
-              );
-            }),
+          yield* Deferred.await(parentWoken);
+          assert.ok(
+            tryResumeRun.mock.calls.length > 0,
+            'Background bash completion should wake the WAITING parent run',
           );
           assert.equal(tryResumeRun.mock.calls[0]?.[0], parentRunId);
         } finally {
@@ -653,7 +655,9 @@ describe('BashTool', () => {
         let releaseResume: (() => void) | undefined;
         let handleAtResumeTime: unknown;
         let runId = '' as RunId;
+        const wakeReached = Deferred.makeUnsafe<void>();
         const tryResumeRun = vi.fn().mockImplementation(async () => {
+          Deferred.doneUnsafe(wakeReached, Effect.void);
           handleAtResumeTime = testDefaultSession().runs.getHandle(runId);
           await new Promise<void>((resolve) => {
             releaseResume = resolve;
@@ -676,13 +680,10 @@ describe('BashTool', () => {
           assert.ok(launched.runId, 'Launch output should report a run id');
           runId = launched.runId;
 
-          yield* Effect.promise(() =>
-            vi.waitFor(() => {
-              assert.ok(
-                tryResumeRun.mock.calls.length > 0,
-                'Background bash completion should reach the wake step',
-              );
-            }),
+          yield* Deferred.await(wakeReached);
+          assert.ok(
+            tryResumeRun.mock.calls.length > 0,
+            'Background bash completion should reach the wake step',
           );
           // The wake step was reached — this run must already be untracked
           // (finalized), never still RUNNING, so a resumed parent that waits on

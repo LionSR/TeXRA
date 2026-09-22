@@ -17,7 +17,7 @@ import type {
   ToolEditPreview,
   ToolEditPreviewContext,
 } from '@controllers/approval/ToolEditApprovalController';
-import type { DiffSource } from '@hosts/uiHosts';
+import { NotificationFailed, type DiffSource } from '@hosts/uiHosts';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { BuildDisplayFn } from '@tools/approval/latexPreview';
 import { writeApprovalTempFiles } from '@tools/approval/tempFileManager';
@@ -108,7 +108,9 @@ export class DesktopToolEditApprovalHost implements ToolEditApprovalHost {
     // the report leaves a console trace instead of an unhandled rejection.
     this.options.runtime.runFork(
       this.options.ui.showErrorMessage(message).pipe(
-        Effect.catchTag('NotificationFailed', (failure) =>
+        // The handler's parameter names the channel's whole error type, so a
+        // second tag added here fails to compile instead of being dropped.
+        Effect.catch((failure: NotificationFailed) =>
           Effect.sync(() => {
             console.error(
               `Tool-edit error report could not be shown: ${failure.message}`,

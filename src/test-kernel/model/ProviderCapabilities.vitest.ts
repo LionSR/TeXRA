@@ -1,4 +1,5 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { it } from '@effect/vitest';
+import { afterEach, beforeEach, describe, expect } from 'vitest';
 import {
   DEFAULT_MODEL_CAPABILITIES,
   MODEL_CONFIGS,
@@ -7,6 +8,7 @@ import {
   type ModelConfig,
 } from 'llm-zoo';
 
+import { Effect } from 'effect';
 import { CODEX_SESSION_SECRET_KEY } from '@auth/codex/codexConstants';
 import type { CodexSession } from '@auth/codex/codexSessionTypes';
 import { installTexraAccountProbes } from '@controllers/modelAccess/installTexraAccountProbes';
@@ -15,7 +17,7 @@ import {
   resolveCodexSubscriptionCapabilities,
   codexBackendModelId,
 } from '@model/providerCapabilities';
-import type { LanguageModel } from '@platform/languageModel';
+import { withProcessServices } from '@platform/processRuntime';
 import { CHATGPT_CODEX_CONTEXT_WINDOW_SETTING } from '@shared/schemas';
 
 /** The default budget in tokens; the setting itself is stored in thousands. */
@@ -24,12 +26,6 @@ const DEFAULT_INPUT_LIMIT =
   CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.tokensPerUnit;
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { hostStores, installPlatform } from '@test/support/setupPlatform';
-import type { Effect } from 'effect';
-
-/** Run a subscription probe on the fake host's process runtime, which
- *  carries the `LanguageModel` service the probe's catalogue read yields. */
-const run = <A, E>(effect: Effect.Effect<A, E, LanguageModel>) =>
-  testRuntime().runPromise(effect);
 
 const gpt55Config: ModelConfig = {
   name: 'gpt55',
@@ -85,73 +81,98 @@ describe('provider capabilities', () => {
     }),
   );
 
-  it('resolves ChatGPT subscription profile from model routing context', () => {
-    const capabilities = resolveCodexSubscriptionCapabilities(
-      hostStores(),
-      gpt55Config,
-      false,
-    );
+  it.effect(
+    'resolves ChatGPT subscription profile from model routing context',
+    () =>
+      Effect.gen(function* () {
+        const capabilities = yield* resolveCodexSubscriptionCapabilities(
+          hostStores(),
+          gpt55Config,
+          false,
+        );
 
-    expect(capabilities).toMatchObject({
-      contextWindow: DEFAULT_INPUT_LIMIT + gpt55Config.maxOutputTokens,
-      inputTokenLimit: DEFAULT_INPUT_LIMIT,
-      inputPrice: 0,
-      outputPrice: 0,
-      usageRoute: 'chatgpt-subscription',
-    });
-  });
+        expect(capabilities).toMatchObject({
+          contextWindow: DEFAULT_INPUT_LIMIT + gpt55Config.maxOutputTokens,
+          inputTokenLimit: DEFAULT_INPUT_LIMIT,
+          inputPrice: 0,
+          outputPrice: 0,
+          usageRoute: 'chatgpt-subscription',
+        });
+      }),
+  );
 
-  it.each(['gpt56', 'gpt56-', 'gpt56--'] as const)(
+  it.effect.each(['gpt56', 'gpt56-', 'gpt56--'] as const)(
     'caps ChatGPT-subscription %s to the Codex 272k input / 400k context budget',
-    (id) => {
-      const model = MODEL_CONFIGS[id];
-      const capabilities = resolveCodexSubscriptionCapabilities(
-        hostStores(),
-        model,
-        false,
-      );
+    (id) =>
+      Effect.gen(function* () {
+        const model = MODEL_CONFIGS[id];
+        const capabilities = yield* resolveCodexSubscriptionCapabilities(
+          hostStores(),
+          model,
+          false,
+        );
 
-      expect(model.codexSubscription).toBe(true);
-      expect(capabilities).toMatchObject({
-        contextWindow: DEFAULT_INPUT_LIMIT + model.maxOutputTokens,
-        inputTokenLimit: DEFAULT_INPUT_LIMIT,
-      });
-    },
+        expect(model.codexSubscription).toBe(true);
+        expect(capabilities).toMatchObject({
+          contextWindow: DEFAULT_INPUT_LIMIT + model.maxOutputTokens,
+          inputTokenLimit: DEFAULT_INPUT_LIMIT,
+        });
+      }),
   );
 
   describe('context window override', () => {
     afterEach(() => installPlatform());
 
-    it('raises the subscription input and displayed context windows', async () => {
-      await installPlatform({
-        config: {
-          'texra.chatgptCodex.preferSubscription': true,
-          'texra.chatgptCodex.contextWindowK': 872,
-        },
-      });
+    it.effect(
+      'raises the subscription input and displayed context windows',
+      () =>
+        Effect.gen(function* () {
+          yield* Effect.promise(() =>
+            installPlatform({
+              config: {
+                'texra.chatgptCodex.preferSubscription': true,
+                'texra.chatgptCodex.contextWindowK': 872,
+              },
+            }),
+          );
 
-      expect(
-        resolveCodexSubscriptionCapabilities(hostStores(), gpt55Config, false),
-      ).toMatchObject({
-        inputTokenLimit: 872_000,
-        contextWindow: 1_000_000,
-      });
-    });
+          expect(
+            yield* resolveCodexSubscriptionCapabilities(
+              hostStores(),
+              gpt55Config,
+              false,
+            ),
+          ).toMatchObject({
+            inputTokenLimit: 872_000,
+            contextWindow: 1_000_000,
+          });
+        }),
+    );
 
-    it('falls back when the configured context window is out of range', async () => {
-      await installPlatform({
-        config: {
-          'texra.chatgptCodex.preferSubscription': true,
-          'texra.chatgptCodex.contextWindowK': 900,
-        },
-      });
+    it.effect(
+      'falls back when the configured context window is out of range',
+      () =>
+        Effect.gen(function* () {
+          yield* Effect.promise(() =>
+            installPlatform({
+              config: {
+                'texra.chatgptCodex.preferSubscription': true,
+                'texra.chatgptCodex.contextWindowK': 900,
+              },
+            }),
+          );
 
-      expect(
-        resolveCodexSubscriptionCapabilities(hostStores(), gpt55Config, false),
-      ).toMatchObject({
-        inputTokenLimit: DEFAULT_INPUT_LIMIT,
-      });
-    });
+          expect(
+            yield* resolveCodexSubscriptionCapabilities(
+              hostStores(),
+              gpt55Config,
+              false,
+            ),
+          ).toMatchObject({
+            inputTokenLimit: DEFAULT_INPUT_LIMIT,
+          });
+        }),
+    );
   });
 });
 
@@ -164,47 +185,75 @@ describe('ChatGPT subscription model routing', () => {
     );
   }
 
-  it('keeps eligible OpenAI models on the direct API route when the preference is off', async () => {
-    await installPlatform();
+  it.effect(
+    'keeps eligible OpenAI models on the direct API route when the preference is off',
+    () =>
+      Effect.gen(function* () {
+        yield* Effect.promise(() => installPlatform());
 
-    expect(subscriptionCapabilities(false)).toBeNull();
-  });
+        expect(yield* subscriptionCapabilities(false)).toBeNull();
+      }),
+  );
 
-  it('does not override OpenRouter routing', async () => {
-    await installSubscriptionPlatform({ useOpenRouter: true });
+  it.effect('does not override OpenRouter routing', () =>
+    Effect.gen(function* () {
+      yield* Effect.promise(() =>
+        installSubscriptionPlatform({ useOpenRouter: true }),
+      );
 
-    expect(subscriptionCapabilities(true)).toBeNull();
-    await expect(
-      run(isCodexSubscriptionActive(hostStores(), 'gpt55')),
-    ).resolves.toBe(false);
-  });
+      expect(yield* subscriptionCapabilities(true)).toBeNull();
+      expect(
+        yield* withProcessServices(
+          testRuntime(),
+          isCodexSubscriptionActive(hostStores(), 'gpt55'),
+        ),
+      ).toBe(false);
+    }),
+  );
 
-  it('routes an eligible direct OpenAI model through the preferred subscription', async () => {
-    await installSubscriptionPlatform();
+  it.effect(
+    'routes an eligible direct OpenAI model through the preferred subscription',
+    () =>
+      Effect.gen(function* () {
+        yield* Effect.promise(() => installSubscriptionPlatform());
 
-    expect(subscriptionCapabilities(false)).not.toBeNull();
-    await expect(
-      run(isCodexSubscriptionActive(hostStores(), 'gpt55')),
-    ).resolves.toBe(true);
-  });
+        expect(yield* subscriptionCapabilities(false)).not.toBeNull();
+        expect(
+          yield* withProcessServices(
+            testRuntime(),
+            isCodexSubscriptionActive(hostStores(), 'gpt55'),
+          ),
+        ).toBe(true);
+      }),
+  );
 
-  it('reports eligible models inactive while signed out', async () => {
-    await installSubscriptionPlatform({ signedIn: false });
+  it.effect('reports eligible models inactive while signed out', () =>
+    Effect.gen(function* () {
+      yield* Effect.promise(() =>
+        installSubscriptionPlatform({ signedIn: false }),
+      );
 
-    await expect(
-      run(isCodexSubscriptionActive(hostStores(), 'gpt55')),
-    ).resolves.toBe(false);
-  });
+      expect(
+        yield* withProcessServices(
+          testRuntime(),
+          isCodexSubscriptionActive(hostStores(), 'gpt55'),
+        ),
+      ).toBe(false);
+    }),
+  );
 
-  it('reports unknown model identifiers inactive', async () => {
-    await installSubscriptionPlatform();
+  it.effect('reports unknown model identifiers inactive', () =>
+    Effect.gen(function* () {
+      yield* Effect.promise(() => installSubscriptionPlatform());
 
-    await expect(
-      run(
-        isCodexSubscriptionActive(hostStores(), 'unknown-subscription-model'),
-      ),
-    ).resolves.toBe(false);
-  });
+      expect(
+        yield* withProcessServices(
+          testRuntime(),
+          isCodexSubscriptionActive(hostStores(), 'unknown-subscription-model'),
+        ),
+      ).toBe(false);
+    }),
+  );
 });
 
 describe('codexBackendModelId', () => {
@@ -223,8 +272,19 @@ describe('codexBackendModelId', () => {
   });
 
   it('strips the llm-zoo date pin', () => {
-    expect(codexBackendModelId({ fullName: 'gpt-5.5-2026-04-23' })).toBe(
-      'gpt-5.5',
-    );
+    expect(
+      codexBackendModelId({
+        name: 'not-a-registry-id',
+        fullName: 'gpt-5.5-2026-04-23',
+      }),
+    ).toBe('gpt-5.5');
+  });
+
+  // #12873: "Prefer short model names" rewrites `fullName` to `shortName`
+  // before the binding reaches here, so the slug must come from the registry.
+  it('ignores a fullName the short-name preference already swapped', () => {
+    expect(
+      codexBackendModelId({ ...MODEL_CONFIGS.gpt56, fullName: 'gpt-5.6' }),
+    ).toBe('gpt-5.6-sol');
   });
 });

@@ -3,6 +3,13 @@
 // contract lives in one place (`FakePlatform.ts`) rather than being re-rolled
 // per suite.
 
+import { Effect } from 'effect';
+import type {
+  ConfigProvider,
+  StateStore,
+  StateReadFailed,
+} from '@platform/interfaces';
+
 import type { SettingsStores } from '@shared/config/settingsAccess';
 
 import { FakeConfigProvider, FakeStateStore } from './FakePlatform';
@@ -34,8 +41,12 @@ const ABSENT = Symbol('absent');
  * assertions can distinguish "deleted" from "wrote the literal default".
  */
 export function isStored(
-  store: { get<T>(key: string, defaultValue?: T): T },
+  store: ConfigProvider | StateStore,
   key: string,
-): boolean {
-  return store.get<unknown>(key, ABSENT) !== ABSENT;
+): Effect.Effect<boolean, StateReadFailed> {
+  const read =
+    'inspect' in store
+      ? Effect.sync(() => store.get<unknown>(key, ABSENT))
+      : store.get<unknown>(key, ABSENT);
+  return Effect.map(read, (value) => value !== ABSENT);
 }

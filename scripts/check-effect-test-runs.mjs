@@ -42,14 +42,15 @@ const GUIDANCE =
   'AGENTS.md, "Effect-native tests": use it.effect with Effect.gen + yield*, or it.live when the body depends on real time';
 
 /**
- * The runs this gate counts, as declared in the pinned Effect version.
- * `runSync` is deliberately absent: a synchronous test body has nothing to
- * `yield*` and the rule names the Promise-returning runs, so a synchronous
- * `Effect.runSync` there is the documented form rather than debt.
+ * The runs this gate counts, as declared in the pinned Effect version. Every
+ * way a test body can execute a program is here, `runSync` included: the suite
+ * is converted, so a body that needs a run result `yield*`s it, and only hooks
+ * and non-test helpers keep a run.
  */
 const RUN_NAMES = new Set([
   'runPromise',
   'runPromiseExit',
+  'runSync',
   'runFork',
   'runCallback',
 ]);

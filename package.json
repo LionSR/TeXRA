@@ -64,7 +64,7 @@
   },
   "devDependencies": {
     "@effect/language-service": "^0.87.2",
-    "@effect/vitest": "4.0.0-rc.115",
+    "@effect/vitest": "4.0.0-rc.116",
     "@electron/asar": "^4.3.0",
     "@eslint/js": "^10.0.1",
     "@texra-ai/llm": "workspace:*",

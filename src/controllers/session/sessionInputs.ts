@@ -11,6 +11,7 @@ import { isDeepStrictEqual } from 'node:util';
 import { Effect, Layer, Stream, SubscriptionRef } from 'effect';
 
 import {
+  DEBUG_MODE_KEY,
   referencedAggregates,
   isDisplaySessionEvent,
   RunIdSchema,
@@ -21,12 +22,14 @@ import {
 } from '@shared/schemas';
 import { Database, type AggregateState } from '@shared/session/database';
 import { SessionInputs } from '@shared/session/sessionInputs';
+import { readConfigSettingFrom } from '@utils/config/platformSettings';
 import {
   LocalRuntimeSource,
   TextChunkSource,
   type InflightText,
   type InflightTextChunk,
 } from './sessionSources';
+import { WorkspaceRoots } from './WorkspaceRoots';
 
 export const sessionInputsLayer = Layer.effect(
   SessionInputs,
@@ -34,27 +37,47 @@ export const sessionInputsLayer = Layer.effect(
     const log = yield* Database;
     const local = yield* LocalRuntimeSource;
     const text = yield* TextChunkSource;
+    const roots = yield* WorkspaceRoots;
     return {
-      read: (aggregates, fromCommit) =>
+      read: (aggregates, fromCommit, previousDebug) =>
         Stream.unwrap(
           Effect.gen(function* () {
+            const debug = roots.config
+              ? readConfigSettingFrom<boolean>(roots.config, DEBUG_MODE_KEY)
+              : false;
+            const reset = debug !== previousDebug;
+            const effectiveAggregates = reset
+              ? aggregates.map((entry) => ({ ...entry, fromSeq: 0 }))
+              : aggregates;
+            const effectiveCommit = reset ? 0 : fromCommit;
             const anchor =
-              fromCommit === 0
+              effectiveCommit === 0
                 ? yield* log.currentCommit.pipe(Effect.orDie)
-                : fromCommit;
+                : effectiveCommit;
             const listing = (yield* log
               .readListing()
               .pipe(Effect.orDie)).filter(isDisplaySessionEvent);
-            let checked = new Set<AggregateId>(aggregates.map(({ id }) => id));
+            let checked = new Set<AggregateId>(
+              effectiveAggregates.map(({ id }) => id),
+            );
             for (const event of listing)
               for (const id of referencedAggregates(event)) checked.add(id);
-            const replay: FoldInput[] = listing.map((event) => ({
-              _tag: 'event',
-              read: 'listing',
-              event,
-            }));
-            replay.push({ _tag: 'subscriptions', set: [...aggregates] });
-            for (const aggregate of aggregates) {
+            const replay: FoldInput[] = [
+              {
+                _tag: 'debug',
+                enabled: debug,
+              },
+              ...listing.map((event) => ({
+                _tag: 'event' as const,
+                read: 'listing' as const,
+                event,
+              })),
+            ];
+            replay.push({
+              _tag: 'subscriptions',
+              set: [...effectiveAggregates],
+            });
+            for (const aggregate of effectiveAggregates) {
               const rows = yield* log
                 .readAggregate(aggregate.id, aggregate.fromSeq)
                 .pipe(Effect.orDie);
@@ -64,7 +87,7 @@ export const sessionInputsLayer = Layer.effect(
             }
             const replayState = yield* log
               .readInputBatch(
-                aggregates.map(({ id }) => id),
+                effectiveAggregates.map(({ id }) => id),
                 anchor,
                 [...checked],
               )
@@ -119,7 +142,7 @@ export const sessionInputsLayer = Layer.effect(
                         [
                           ...new Set([
                             ...checked,
-                            ...aggregates.map(({ id }) => id),
+                            ...effectiveAggregates.map(({ id }) => id),
                           ]),
                         ],
                       )

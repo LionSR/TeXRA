@@ -424,7 +424,6 @@ function agentRunTestLayer(init: LoopInit) {
       const scope = yield* Effect.scope;
       return {
         runId: init.runId,
-        parentRunId: null,
         session: init.session,
         config: AgentConfigSchema.parse({
           agent: 'correct',
@@ -457,6 +456,7 @@ function agentRunTestLayer(init: LoopInit) {
             runId: init.runId,
             runStageId: undefined,
             config: testWorkspaceRoots().config,
+            usageLog: { log: () => {} },
           },
           { agentName: 'correct', agentCategory: AgentCategory.Workflow },
         ),

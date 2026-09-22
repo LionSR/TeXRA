@@ -4,12 +4,13 @@
 // switch the live conversation to a compatible model for future turns.
 
 import { Box, Text } from 'ink';
+import { Effect } from 'effect';
 
 import {
   formatCliNoRunnableModelsMessage,
   getCliModelAccessList,
   modelSelectItemsForCli,
-  type CliModelAccess,
+  type CliModelPickerItem,
   type CliModelStores,
   type GetModelSwitchDisabledReason,
 } from '@cli/runtime/modelAccess';
@@ -59,21 +60,24 @@ export function modelListDescription({
 }
 
 export function ModelListForm(props: ModelListFormProps): React.JSX.Element {
-  const picker = useAsyncPickerForm<readonly CliModelAccess[], string>({
+  const picker = useAsyncPickerForm<readonly CliModelPickerItem[], string>({
     title: '/model',
     loadingLabel: 'Loading models...',
     load: () =>
       props.stores.runtime.runPromise(
-        getCliModelAccessList({ stores: props.stores }),
+        Effect.flatMap(
+          getCliModelAccessList({ stores: props.stores }),
+          (models) =>
+            modelSelectItemsForCli(
+              props.stores,
+              models,
+              props.getModelSwitchDisabledReason,
+            ),
+        ),
       ),
-    isEmpty: (models) => !models.some((model) => model.available),
+    isEmpty: (items) => items.length === 0,
     closeEmptyOnEnter: true,
-    items: (models) =>
-      modelSelectItemsForCli(
-        props.stores,
-        models,
-        props.getModelSwitchDisabledReason,
-      ),
+    items: (items) => items,
     selectable: props.selectable,
     onSelect: (value) => props.onSelect?.(value),
     onClose: props.onClose,

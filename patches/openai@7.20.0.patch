@@ -1,0 +1,299 @@
+diff --git a/internal/responses/response-accumulator.d.mts b/internal/responses/response-accumulator.d.mts
+index b8f366f177c64d50ac0a3eb44ed6e4af3f85430a..ee5790846a7ae27782da40996fcc6e435df76290 100644
+--- a/internal/responses/response-accumulator.d.mts
++++ b/internal/responses/response-accumulator.d.mts
+@@ -1,10 +1,15 @@
+ import type { Response, ResponseStreamEvent } from "../../resources/responses/responses.mjs";
+ import type { ResponseAccumulatorContext } from "./canonical-output-text.mjs";
++// Remove this compatibility type when the SDK supports response.metadata.
++type ResponseMetadataEvent = {
++  type: 'response.metadata';
++  [key: string]: unknown;
++};
+ interface ResponseKeepAliveEvent {
+     type: 'keepalive';
+     sequence_number: number;
+ }
+-type ResponseAccumulatorEvent = ResponseStreamEvent | ResponseKeepAliveEvent;
++type ResponseAccumulatorEvent = ResponseStreamEvent | ResponseKeepAliveEvent | ResponseMetadataEvent;
+ export declare function createResponseContext(): ResponseAccumulatorContext;
+ export declare function accumulateResponseWithContext(event: ResponseAccumulatorEvent, snapshot: Response | undefined, context: ResponseAccumulatorContext, rejectInvalidShellTargets?: boolean, onSanitizedEvent?: (event: ResponseStreamEvent) => void): Response;
+ export {};
+diff --git a/internal/responses/response-accumulator.d.ts b/internal/responses/response-accumulator.d.ts
+index 29fd796ad90832d62c1948889a5c76f2e85e087c..d5346530ff607bb9f05f3d0079d1e11bddb6cb97 100644
+--- a/internal/responses/response-accumulator.d.ts
++++ b/internal/responses/response-accumulator.d.ts
+@@ -1,10 +1,15 @@
+ import type { Response, ResponseStreamEvent } from "../../resources/responses/responses.js";
+ import type { ResponseAccumulatorContext } from "./canonical-output-text.js";
++// Remove this compatibility type when the SDK supports response.metadata.
++type ResponseMetadataEvent = {
++  type: 'response.metadata';
++  [key: string]: unknown;
++};
+ interface ResponseKeepAliveEvent {
+     type: 'keepalive';
+     sequence_number: number;
+ }
+-type ResponseAccumulatorEvent = ResponseStreamEvent | ResponseKeepAliveEvent;
++type ResponseAccumulatorEvent = ResponseStreamEvent | ResponseKeepAliveEvent | ResponseMetadataEvent;
+ export declare function createResponseContext(): ResponseAccumulatorContext;
+ export declare function accumulateResponseWithContext(event: ResponseAccumulatorEvent, snapshot: Response | undefined, context: ResponseAccumulatorContext, rejectInvalidShellTargets?: boolean, onSanitizedEvent?: (event: ResponseStreamEvent) => void): Response;
+ export {};
+diff --git a/internal/responses/response-accumulator.js b/internal/responses/response-accumulator.js
+index bc3223abc6d737dc905a638afd4d704d1bc994fa..baa1ec3e212ebc9d9b335d31a88de6c2e0b9197d 100644
+--- a/internal/responses/response-accumulator.js
++++ b/internal/responses/response-accumulator.js
+@@ -300,6 +300,7 @@ const supportedResponseEventTypes = createSupportedResponseEventTypes([
+     'response.mcp_list_tools.in_progress',
+     'response.mcp_list_tools.completed',
+     'response.mcp_list_tools.failed',
++    'response.metadata',
+     'keepalive',
+     'error',
+ ]);
+@@ -877,6 +878,7 @@ function isIgnoredResponseEvent(event) {
+         case 'response.mcp_list_tools.in_progress':
+         case 'response.mcp_list_tools.completed':
+         case 'response.mcp_list_tools.failed':
++        case 'response.metadata':
+         case 'keepalive':
+         case 'error': {
+             return true;
+@@ -891,7 +893,7 @@ function createResponseContext() {
+ }
+ function accumulateResponseWithContext(event, snapshot, context, rejectInvalidShellTargets = false, onSanitizedEvent) {
+     const dispatchEvent = sanitizeResponseEvent(event);
+-    if (onSanitizedEvent && dispatchEvent.type !== 'keepalive') {
++    if (onSanitizedEvent && dispatchEvent.type !== 'keepalive' && dispatchEvent.type !== 'response.metadata') {
+         onSanitizedEvent(dispatchEvent);
+     }
+     if (!snapshot) {
+diff --git a/internal/responses/response-accumulator.mjs b/internal/responses/response-accumulator.mjs
+index 47541c9ffc20e9853455b59bd3c35dfc5aed9383..ccc03ad3782f87cc8a5fe5e6af01e5c5b7fca52a 100644
+--- a/internal/responses/response-accumulator.mjs
++++ b/internal/responses/response-accumulator.mjs
+@@ -296,6 +296,7 @@ const supportedResponseEventTypes = createSupportedResponseEventTypes([
+     'response.mcp_list_tools.in_progress',
+     'response.mcp_list_tools.completed',
+     'response.mcp_list_tools.failed',
++    'response.metadata',
+     'keepalive',
+     'error',
+ ]);
+@@ -873,6 +874,7 @@ function isIgnoredResponseEvent(event) {
+         case 'response.mcp_list_tools.in_progress':
+         case 'response.mcp_list_tools.completed':
+         case 'response.mcp_list_tools.failed':
++        case 'response.metadata':
+         case 'keepalive':
+         case 'error': {
+             return true;
+@@ -887,7 +889,7 @@ export function createResponseContext() {
+ }
+ export function accumulateResponseWithContext(event, snapshot, context, rejectInvalidShellTargets = false, onSanitizedEvent) {
+     const dispatchEvent = sanitizeResponseEvent(event);
+-    if (onSanitizedEvent && dispatchEvent.type !== 'keepalive') {
++    if (onSanitizedEvent && dispatchEvent.type !== 'keepalive' && dispatchEvent.type !== 'response.metadata') {
+         onSanitizedEvent(dispatchEvent);
+     }
+     if (!snapshot) {
+diff --git a/lib/responses/ResponseAccumulator.d.mts b/lib/responses/ResponseAccumulator.d.mts
+index 85be10b50e285a31e3eb0613874fc533fb850170..ded1cadb3a57fb3e7a35d820a9c9d0f5a96865b2 100644
+--- a/lib/responses/ResponseAccumulator.d.mts
++++ b/lib/responses/ResponseAccumulator.d.mts
+@@ -1,4 +1,9 @@
+ import type { Response, ResponseStreamEvent } from "../../resources/responses/responses.mjs";
++// Remove this compatibility type when the SDK supports response.metadata.
++type ResponseMetadataEvent = {
++  type: 'response.metadata';
++  [key: string]: unknown;
++};
+ /** A transport keepalive event that leaves the accumulated response unchanged. */
+ type ResponseKeepAliveEvent = {
+     /** Identifies a non-content keepalive event emitted by the response transport. */
+@@ -13,6 +18,6 @@ type ResponseKeepAliveEvent = {
+  * in place, while response lifecycle events return a detached replacement. Event
+  * payloads are cloned, so retaining or replaying the raw events is safe.
+  */
+-export declare function accumulateResponse(event: ResponseStreamEvent | ResponseKeepAliveEvent, snapshot?: Response): Response;
++export declare function accumulateResponse(event: ResponseStreamEvent | ResponseKeepAliveEvent | ResponseMetadataEvent, snapshot?: Response): Response;
+ export {};
+ //# sourceMappingURL=ResponseAccumulator.d.mts.map
+\ No newline at end of file
+diff --git a/lib/responses/ResponseAccumulator.d.ts b/lib/responses/ResponseAccumulator.d.ts
+index e81a0a0c08e7c0eeea27b9837caa310e3b503ade..c4c79bbaf143e80cde37b4b1972ea415eb37525a 100644
+--- a/lib/responses/ResponseAccumulator.d.ts
++++ b/lib/responses/ResponseAccumulator.d.ts
+@@ -1,4 +1,9 @@
+ import type { Response, ResponseStreamEvent } from "../../resources/responses/responses.js";
++// Remove this compatibility type when the SDK supports response.metadata.
++type ResponseMetadataEvent = {
++  type: 'response.metadata';
++  [key: string]: unknown;
++};
+ /** A transport keepalive event that leaves the accumulated response unchanged. */
+ type ResponseKeepAliveEvent = {
+     /** Identifies a non-content keepalive event emitted by the response transport. */
+@@ -13,6 +18,6 @@ type ResponseKeepAliveEvent = {
+  * in place, while response lifecycle events return a detached replacement. Event
+  * payloads are cloned, so retaining or replaying the raw events is safe.
+  */
+-export declare function accumulateResponse(event: ResponseStreamEvent | ResponseKeepAliveEvent, snapshot?: Response): Response;
++export declare function accumulateResponse(event: ResponseStreamEvent | ResponseKeepAliveEvent | ResponseMetadataEvent, snapshot?: Response): Response;
+ export {};
+ //# sourceMappingURL=ResponseAccumulator.d.ts.map
+\ No newline at end of file
+diff --git a/src/internal/responses/response-accumulator.ts b/src/internal/responses/response-accumulator.ts
+index 7b7c895c07e9847ebf84cd875908623c79270fd1..d1ad3afa8241231bdd7dee61dcdea3de4979e412 100644
+--- a/src/internal/responses/response-accumulator.ts
++++ b/src/internal/responses/response-accumulator.ts
+@@ -11,12 +11,18 @@ import {
+   updateOutputText,
+ } from './canonical-output-text';
+ 
++// Remove this compatibility type when the SDK supports response.metadata.
++type ResponseMetadataEvent = {
++  type: 'response.metadata';
++  [key: string]: unknown;
++};
++
+ interface ResponseKeepAliveEvent {
+   type: 'keepalive';
+   sequence_number: number;
+ }
+ 
+-type ResponseAccumulatorEvent = ResponseStreamEvent | ResponseKeepAliveEvent;
++type ResponseAccumulatorEvent = ResponseStreamEvent | ResponseKeepAliveEvent | ResponseMetadataEvent;
+ type ResponseItemScopedEvent = Extract<ResponseAccumulatorEvent, { item_id: string; output_index: number }>;
+ type ResponseOutputItemEvent = Extract<
+   ResponseAccumulatorEvent,
+@@ -526,6 +532,7 @@ const supportedResponseEventTypes = createSupportedResponseEventTypes([
+   'response.mcp_list_tools.in_progress',
+   'response.mcp_list_tools.completed',
+   'response.mcp_list_tools.failed',
++  'response.metadata',
+   'keepalive',
+   'error',
+ ] as const);
+@@ -1185,6 +1192,7 @@ function isIgnoredResponseEvent(event: ResponseAccumulatorEvent): event is Respo
+     case 'response.mcp_list_tools.in_progress':
+     case 'response.mcp_list_tools.completed':
+     case 'response.mcp_list_tools.failed':
++    case 'response.metadata':
+     case 'keepalive':
+     case 'error': {
+       return true;
+@@ -1207,7 +1215,7 @@ export function accumulateResponseWithContext(
+   onSanitizedEvent?: (event: ResponseStreamEvent) => void,
+ ): Response {
+   const dispatchEvent = sanitizeResponseEvent(event);
+-  if (onSanitizedEvent && dispatchEvent.type !== 'keepalive') {
++  if (onSanitizedEvent && dispatchEvent.type !== 'keepalive' && dispatchEvent.type !== 'response.metadata') {
+     onSanitizedEvent(dispatchEvent);
+   }
+ 
+diff --git a/src/lib/responses/ResponseAccumulator.ts b/src/lib/responses/ResponseAccumulator.ts
+index 534b58405aee234942b241136d05719745d45c69..3c2c74db08fa3c9c6b91c44f2822b3b43359cbda 100644
+--- a/src/lib/responses/ResponseAccumulator.ts
++++ b/src/lib/responses/ResponseAccumulator.ts
+@@ -4,6 +4,12 @@ import {
+   createResponseContext,
+ } from '../../internal/responses/response-accumulator';
+ 
++// Remove this compatibility type when the SDK supports response.metadata.
++type ResponseMetadataEvent = {
++  type: 'response.metadata';
++  [key: string]: unknown;
++};
++
+ /** A transport keepalive event that leaves the accumulated response unchanged. */
+ type ResponseKeepAliveEvent = {
+   /** Identifies a non-content keepalive event emitted by the response transport. */
+@@ -20,7 +26,7 @@ type ResponseKeepAliveEvent = {
+  * payloads are cloned, so retaining or replaying the raw events is safe.
+  */
+ export function accumulateResponse(
+-  event: ResponseStreamEvent | ResponseKeepAliveEvent,
++  event: ResponseStreamEvent | ResponseKeepAliveEvent | ResponseMetadataEvent,
+   snapshot?: Response,
+ ): Response {
+   return accumulateResponseWithContext(event, snapshot, createResponseContext());
+diff --git a/core/streaming.js b/core/streaming.js
+index e77303371399b9b8061e55d6138aa4df35182825..ccc5608da2dc52a9cfb664600565b7472aaa233f 100644
+--- a/core/streaming.js
++++ b/core/streaming.js
+@@ -87,17 +87,11 @@ class Stream {
+             consumed = true;
+             let done = false;
+             let receivedCompletionSentinel = false;
+-            const messages = _iterSSEMessages(response, controller);
+-            const closeMessages = messages.return.bind(messages);
+-            messages.return = (value) => {
+-                // Abort before nested iterator cleanup can wait on the response body's cancellation.
+-                if (!receivedCompletionSentinel) {
+-                    controller.abort();
+-                }
+-                return closeMessages(value);
+-            };
++            // TeXRA patch: keep the pre-7.13.0 close-before-abort ordering so a
++            // body-cancel rejection during nested SSE cleanup stays observable
++            // to the caller instead of being swallowed after controller.abort().
+             try {
+-                for await (const sse of messages) {
++                for await (const sse of _iterSSEMessages(response, controller)) {
+                     if (sse.data === '[DONE]') {
+                         receivedCompletionSentinel = true;
+                         break;
+diff --git a/core/streaming.mjs b/core/streaming.mjs
+index 65a5031829d5089e4dbc7cca90605ae22898dff5..c1715e9c5098716fe8c233cc0830befe0c67b438 100644
+--- a/core/streaming.mjs
++++ b/core/streaming.mjs
+@@ -83,17 +83,11 @@ export class Stream {
+             consumed = true;
+             let done = false;
+             let receivedCompletionSentinel = false;
+-            const messages = _iterSSEMessages(response, controller);
+-            const closeMessages = messages.return.bind(messages);
+-            messages.return = (value) => {
+-                // Abort before nested iterator cleanup can wait on the response body's cancellation.
+-                if (!receivedCompletionSentinel) {
+-                    controller.abort();
+-                }
+-                return closeMessages(value);
+-            };
++            // TeXRA patch: keep the pre-7.13.0 close-before-abort ordering so a
++            // body-cancel rejection during nested SSE cleanup stays observable
++            // to the caller instead of being swallowed after controller.abort().
+             try {
+-                for await (const sse of messages) {
++                for await (const sse of _iterSSEMessages(response, controller)) {
+                     if (sse.data === '[DONE]') {
+                         receivedCompletionSentinel = true;
+                         break;
+diff --git a/src/core/streaming.ts b/src/core/streaming.ts
+index 1f7cd25898e3712d9706082ea85a83b8503002d6..351b514a369746b932d7d308b860f65b4a485c85 100644
+--- a/src/core/streaming.ts
++++ b/src/core/streaming.ts
+@@ -119,17 +119,11 @@ export class Stream<Item> implements AsyncIterable<Item> {
+       consumed = true;
+       let done = false;
+       let receivedCompletionSentinel = false;
+-      const messages = _iterSSEMessages(response, controller);
+-      const closeMessages = messages.return.bind(messages);
+-      messages.return = (value) => {
+-        // Abort before nested iterator cleanup can wait on the response body's cancellation.
+-        if (!receivedCompletionSentinel) {
+-          controller.abort();
+-        }
+-        return closeMessages(value);
+-      };
++      // TeXRA patch: keep the pre-7.13.0 close-before-abort ordering so a
++      // body-cancel rejection during nested SSE cleanup stays observable to
++      // the caller instead of being swallowed after controller.abort().
+       try {
+-        for await (const sse of messages) {
++        for await (const sse of _iterSSEMessages(response, controller)) {
+           if (sse.data === '[DONE]') {
+             receivedCompletionSentinel = true;
+             break;

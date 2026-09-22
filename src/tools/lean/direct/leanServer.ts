@@ -42,7 +42,7 @@ import {
   type ChildProcessSpawner,
 } from 'effect/unstable/process';
 
-import { withLogChannel, withLogData } from '@logger/effectLog';
+import { withLogChannel } from '@logger/effectLog';
 import { info, warn } from '@logger/logUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { DiagnosticSeverity } from '@utils/diagnostics/diagnosticFormatting';
@@ -596,7 +596,7 @@ function fileUriToPath(uri: string): Effect.Effect<string | null> {
     Effect.catch((error) =>
       Effect.logDebug(`Ignoring unmappable file URI ${uri}`).pipe(
         withLogChannel(LOG_CHANNEL),
-        withLogData(error),
+        Effect.annotateLogs({ data: error }),
         Effect.as(null),
       ),
     ),

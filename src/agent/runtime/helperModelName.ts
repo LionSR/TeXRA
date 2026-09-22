@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 import { getEnabledModels } from '@model/computeModelOptions';
 import { resolveEffectiveHelperModel } from '@model/helperModelSelection';
 import type { StateStore } from '@platform/interfaces';
@@ -15,9 +16,11 @@ import { GlobalStateKey } from '@shared/state/stateKeys';
  * service, or the store a host root threaded down), so the preference and the
  * enabled list are read from one store.
  */
-export function getHelperModelName(globalState: StateStore): string {
-  return resolveEffectiveHelperModel(
-    globalState.get<string>(GlobalStateKey.HELPER_MODEL),
-    getEnabledModels(globalState),
-  );
+export function getHelperModelName(globalState: StateStore) {
+  return Effect.gen(function* () {
+    return resolveEffectiveHelperModel(
+      yield* globalState.get<string>(GlobalStateKey.HELPER_MODEL),
+      yield* getEnabledModels(globalState),
+    );
+  });
 }

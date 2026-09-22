@@ -126,15 +126,16 @@ export function resolveKimiCodeRoutingFacts(
 > {
   return Effect.gen(function* () {
     const keySet = yield* hasUsableApiKey(secrets, 'kimiCode');
-    const preferKimiCode = yield* Effect.try({
-      try: () => getPreferKimiCode(stores),
-      catch: (cause) =>
-        new KimiCodeHostFactUnreadable({
-          message:
-            'Could not read the Kimi Code routing preference from the host.',
-          cause,
-        }),
-    });
+    const preferKimiCode = yield* getPreferKimiCode(stores).pipe(
+      Effect.mapError(
+        (cause) =>
+          new KimiCodeHostFactUnreadable({
+            message:
+              'Could not read the Kimi Code routing preference from the host.',
+            cause,
+          }),
+      ),
+    );
     return {
       useOpenRouter,
       keySet,

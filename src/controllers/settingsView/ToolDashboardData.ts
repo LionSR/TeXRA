@@ -209,7 +209,7 @@ export const buildToolDashboardItems = Effect.fn('buildToolDashboardItems')(
     const results =
       cachedResults ?? (yield* runExternalToolChecks(probeInputs));
 
-    const disabledIds = getDisabledToolIds(yield* AppState);
+    const disabledIds = yield* getDisabledToolIds(yield* AppState);
     const externalItems: ToolDashboardItem[] = [];
     for (const { id, tools, status, statusLabel, statusDetail } of results) {
       const def = findExternalToolDef(id);

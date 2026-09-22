@@ -18,7 +18,6 @@ import { getRunRecords } from '@agent/storage';
 import {
   AgentConfigSchema,
   attachTerminalResultToast,
-  describeFollowUpFailure,
   detachSubagentsOnStop,
   resumeRun,
   runAgent,
@@ -28,7 +27,7 @@ import {
   type SessionHandle,
 } from '@agent/runtime';
 import {
-  describeFollowUpFailure as describeFollowUpFailureReason,
+  describeFollowUpFailure,
   presentFollowUpResult,
   type FollowUpQueueInput,
   type FollowUpRecoveryLease,
@@ -393,20 +392,22 @@ export function createChatSessionController(
       'agent' | 'model' | 'cli' | 'delegationAgentScope'
     >,
     modelSource?: 'history',
-  ): void => {
-    const cliMultiAgentPresetId = config.cli?.multiAgentPresetId ?? undefined;
-    patchSessionMeta({
-      agent: config.agent,
-      model: config.model,
-      ...(modelSource ? { modelSource } : {}),
-      teamName: readCliMultiAgentPresetName(
+  ) =>
+    Effect.gen(function* () {
+      const cliMultiAgentPresetId = config.cli?.multiAgentPresetId ?? undefined;
+      const teamName = yield* readCliMultiAgentPresetName(
         runtimeSession.roots.workspaceState,
         cliMultiAgentPresetId,
-      ),
-      cliMultiAgentPresetId,
-      delegationAgentScope: config.delegationAgentScope ?? undefined,
+      );
+      patchSessionMeta({
+        agent: config.agent,
+        model: config.model,
+        ...(modelSource ? { modelSource } : {}),
+        teamName,
+        cliMultiAgentPresetId,
+        delegationAgentScope: config.delegationAgentScope ?? undefined,
+      });
     });
-  };
 
   const supersedeInterruptedRecovery = ():
     SupersededInterruptedRecovery | undefined => {
@@ -503,16 +504,17 @@ export function createChatSessionController(
     const runId = session.runId;
     if (!runId || !runViewOf(currentView(), runId)) return;
     session.interruptedRunId = runId;
-    // Ctrl-C is a configured stop surface: the user stopped the root run, so
-    // the detach-on-stop toggle decides whether active subagents survive it.
-    // `stopRun` below is the other gesture and answers deliberately
-    // differently.
+    // Ctrl-C honors the configured child-detach policy.
     runtime.runFork(
-      request({
-        kind: 'run.stop',
-        runId,
-        detachActiveChildren: detachSubagentsOnStop(runtimeSession.roots),
-      }),
+      Effect.flatMap(
+        detachSubagentsOnStop(runtimeSession.roots),
+        (detachActiveChildren) =>
+          request({
+            kind: 'run.stop',
+            runId,
+            detachActiveChildren,
+          }),
+      ),
     );
   };
 
@@ -623,7 +625,6 @@ export function createChatSessionController(
 
   const startRootRun = (config: AgentConfigPayload): void => {
     void supersedeInterruptedRecovery();
-    adoptRunConfig(config);
     const { approvalsUnavailable, finalize } = setupRunHost();
     const runId = generateRunId();
 
@@ -638,53 +639,50 @@ export function createChatSessionController(
     session.runId = runId;
     runtime.runFork(
       recoverRun(
-        Effect.try(() => AgentConfigSchema.parse(config)).pipe(
-          Effect.flatMap((registeredConfig) =>
-            runAgent(
-              { kind: 'fresh', config: registeredConfig, runId },
-              {
-                session: runtimeSession,
-                enforceCategory: true,
-                approvalPromptsUnavailable: approvalsUnavailable,
-                onApprovalPolicyDenial: () =>
-                  warnApprovalDenied(
-                    runtimeSession,
-                    sessionContext,
-                    'Tool or edit approval',
-                    runId,
-                  ),
-                runtimeUnavailableTools: getDefaultUnavailableToolNames('cli'),
-                onRunResolved: (resolvedRunId) => {
-                  // Each chat round mints a fresh root run id, so
-                  // bash/tool-edit/super-YOLO bypass, which is
-                  // keyed per stream, would otherwise reset every round even
-                  // though the user is continuing the same conversation. Link the
-                  // new round's stream to the previous one so bypass resolution
-                  // (see `registerRunParent`) falls through to whatever the
-                  // prior round had, unless this round sets its own explicit value.
-                  const previousRootRunId = rootRunId.get();
-                  if (
-                    previousRootRunId &&
-                    previousRootRunId !== resolvedRunId
-                  ) {
-                    runtimeSession.approvals.registerRunParent(
-                      resolvedRunId,
-                      previousRootRunId,
-                    );
-                  }
-                  rootRunId.set(resolvedRunId);
-                  moveLocalTranscriptToRun(resolvedRunId);
-                  focusRun(resolvedRunId);
-                  if (session.stopRequested) interruptActiveRun();
-                },
+        Effect.gen(function* () {
+          yield* adoptRunConfig(config);
+          const registeredConfig = yield* Effect.try(() =>
+            AgentConfigSchema.parse(config),
+          );
+          const result = yield* runAgent(
+            { kind: 'fresh', config: registeredConfig, runId },
+            {
+              session: runtimeSession,
+              enforceCategory: true,
+              approvalPromptsUnavailable: approvalsUnavailable,
+              onApprovalPolicyDenial: () =>
+                warnApprovalDenied(
+                  runtimeSession,
+                  sessionContext,
+                  'Tool or edit approval',
+                  runId,
+                ),
+              runtimeUnavailableTools: getDefaultUnavailableToolNames('cli'),
+              onRunResolved: (resolvedRunId) => {
+                // Each chat round mints a fresh root run id, so
+                // bash/tool-edit/super-YOLO bypass, which is
+                // keyed per stream, would otherwise reset every round even
+                // though the user is continuing the same conversation. Link the
+                // new round's stream to the previous one so bypass resolution
+                // (see `registerRunParent`) falls through to whatever the
+                // prior round had, unless this round sets its own explicit value.
+                const previousRootRunId = rootRunId.get();
+                if (previousRootRunId && previousRootRunId !== resolvedRunId) {
+                  runtimeSession.approvals.registerRunParent(
+                    resolvedRunId,
+                    previousRootRunId,
+                  );
+                }
+                rootRunId.set(resolvedRunId);
+                moveLocalTranscriptToRun(resolvedRunId);
+                focusRun(resolvedRunId);
+                if (session.stopRequested) interruptActiveRun();
               },
-            ),
-          ),
-          Effect.map((result) => {
-            session.runExitCode = runOutcomeExitCode(result.outcome);
-            notify('agentFinished');
-          }),
-        ),
+            },
+          );
+          session.runExitCode = runOutcomeExitCode(result.outcome);
+          notify('agentFinished');
+        }),
         reportRunFailure,
       ).pipe(
         Effect.ensuring(Effect.sync(finalize)),
@@ -800,7 +798,7 @@ export function createChatSessionController(
         // this returns, rather than starting an agent the user cancelled.
         const adoptResumedRun = Effect.fn('adoptResumedRun')(function* () {
           yield* setCliHelperModel(stores.globalState, config.model);
-          adoptRunConfig(config, 'history');
+          yield* adoptRunConfig(config, 'history');
           clearLocalTranscript();
           followUpQueue.clear();
           session.runId = id;
@@ -971,7 +969,7 @@ export function createChatSessionController(
           runId,
         )?.parentId;
 
-        adoptRunConfig(config, 'history');
+        yield* adoptRunConfig(config, 'history');
 
         const runHost = setupRunHost();
         finalize = runHost.finalize;
@@ -1384,7 +1382,7 @@ export function createChatSessionController(
           } else {
             requestDraftRestore(line, images);
             setTransientNotice(
-              `${outcome.refused ?? describeFollowUpFailureReason('not_resumable')} The message has been restored to the input.`,
+              `${outcome.refused ?? describeFollowUpFailure('not_resumable')} The message has been restored to the input.`,
               { ttlMs: Infinity },
             );
             if (followUpTarget === session.runId) {

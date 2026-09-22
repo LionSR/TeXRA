@@ -60,9 +60,9 @@ vi.mock('@agent/runtime/childRunLoop', () => ({
 }));
 
 vi.mock('@tools/codexConfig', () => ({
-  getCodexSandboxMode: () => 'workspace-write',
-  getCodexApprovalPolicy: () => 'on-request',
-  getCodexCliReasoningEffort: () => 'high',
+  getCodexSandboxMode: () => Effect.succeed('workspace-write'),
+  getCodexApprovalPolicy: () => Effect.succeed('on-request'),
+  getCodexCliReasoningEffort: () => Effect.succeed('high'),
   codexBinarySupportsXhigh: async () => false,
   CODEX_CLI_MODEL: 'gpt-5.2-codex',
 }));

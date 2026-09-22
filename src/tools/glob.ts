@@ -57,7 +57,7 @@ const runGlob = Effect.fn('GlobTool.execute')(function* (
   input: GlobInput,
 ): Effect.fn.Return<ToolResult, unknown, FileSystem.FileSystem> {
   const root = ports.toolRoot();
-  const { path, display } = resolveAndFormat(
+  const { path, display } = yield* resolveAndFormat(
     ports.settings,
     ports.workspaceRoot,
     input.path ?? undefined,
@@ -97,22 +97,22 @@ const runGlob = Effect.fn('GlobTool.execute')(function* (
   const statMatch = Effect.fn('GlobTool.statMatch')(function* (
     match: string,
   ): Effect.fn.Return<GlobMatchInfo | null, unknown> {
-    const resolved = yield* Effect.try({
-      try: () =>
-        resolveWorkspaceRelativePath(
-          ports.settings,
-          ports.workspaceRoot,
-          // posix.join, not path.join: the base and the match are both
-          // POSIX-normalized, and path.join would reintroduce backslashes
-          // on Windows. `|| '.'` keeps an empty base a relative join.
-          nodePath.posix.join(path.relative || '.', match),
-          root,
-        ),
-      catch: (err) =>
-        new ToolError(
-          `Match resolved outside the working directory: ${match} (${toErrorMessage(err)})`,
-        ),
-    });
+    const resolved = yield* resolveWorkspaceRelativePath(
+      ports.settings,
+      ports.workspaceRoot,
+      // posix.join, not path.join: the base and the match are both
+      // POSIX-normalized, and path.join would reintroduce backslashes
+      // on Windows. `|| '.'` keeps an empty base a relative join.
+      nodePath.posix.join(path.relative || '.', match),
+      root,
+    ).pipe(
+      Effect.mapError(
+        (err) =>
+          new ToolError(
+            `Match resolved outside the working directory: ${match} (${toErrorMessage(err)})`,
+          ),
+      ),
+    );
 
     const relativePath = resolved.relative;
     if (

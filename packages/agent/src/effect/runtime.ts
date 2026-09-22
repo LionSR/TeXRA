@@ -32,13 +32,14 @@ import {
   installProcessRuntime,
 } from '@controllers/session/sessionLayer';
 import { globalDatabaseLayer } from '@controllers/session/Database';
-import { setDebugModeConfig } from '@logger/logUtils';
+import { AppState, AgentDirectories } from '@platform/interfaces';
 import { initPlatform, tryPlatform, type Platform } from '@platform/platform';
 import type { AgentResumePort } from '@platform/interfaces';
 import type { LanguageModelPort } from '@platform/languageModel';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { nodeProcesses } from '@platform/defaults/nodeProcesses';
+import { UsageLog } from '@shared/usageLog';
 import { directLeanLanguageServices } from '@tools/lean/direct/directLspAdapter';
 import {
   SetupCommandFailed,
@@ -185,12 +186,14 @@ export function composeProcess(platform: AgentPlatform): ProcessHold {
   }
   const processServices = {
     secrets: platform.secrets,
-    appState: platform.roots.globalState,
+    appState: AppState.layer(platform.roots.globalState),
     // The package has no TeXRA account plane of its own: every probe answers
     // signed-out, as the uninitialized facade did for an embedder.
     auth: unavailableSupabaseAuth(),
     languageModel: platform.languageModel,
     agentResume: platform.agentResume,
+    agentDirectories: AgentDirectories.layer(platform.agentDirectories),
+    lifecycle: platform.lifecycle,
     setup: PACKAGE_SETUP,
   };
   // The owner carries the runtime it runs on, so a composition beside a host
@@ -201,9 +204,6 @@ export function composeProcess(platform: AgentPlatform): ProcessHold {
     // The process-wide installations, once for the life of the process.
     if (!active) {
       initPlatform(platform);
-      // The logger's process-wide debug-mode read, over this embedder's
-      // configuration.
-      setDebugModeConfig(platform.roots.config);
     }
     // The identity stays a pending read -- the package's composition root is
     // synchronous, so it hands the program over rather than a value, and the
@@ -217,10 +217,13 @@ export function composeProcess(platform: AgentPlatform): ProcessHold {
       lean: directLeanLanguageServices(),
       // An embedder reports no usage: the package has no version or editor of
       // its own to stamp entries with, and no account plane to send them on.
-      usageLog: Layer.empty,
+      usageLog: UsageLog.disabled,
       // The embedder's global root is a root like any host's: one handle for
       // the life of the runtime this composition installs.
       globalDatabase: globalDatabaseLayer(platform.roots.globalStorage),
+      // An embedder's console has no live level filter of its own, so the
+      // package speaks at the informational level rather than flooding it.
+      minimumLogLevel: 'Info',
     });
     installedHere = true;
   }

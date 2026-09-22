@@ -1,6 +1,6 @@
 import { Effect, SubscriptionRef } from 'effect';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { withLogChannel, withLogData } from '@logger/effectLog';
+import { withLogChannel } from '@logger/effectLog';
 import {
   aggregateTarget,
   type SessionEvent,
@@ -49,7 +49,10 @@ export const sweepLeftoverRuns = Effect.fn('sweepLeftoverRuns')(function* (
         Effect.catch((error) =>
           Effect.logWarning(
             'A background shell was retained because automatic deletion was refused.',
-          ).pipe(withLogData({ runId, error }), withLogChannel(CHANNEL)),
+          ).pipe(
+            Effect.annotateLogs({ data: { runId, error } }),
+            withLogChannel(CHANNEL),
+          ),
         ),
       );
   }

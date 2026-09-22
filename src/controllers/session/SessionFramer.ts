@@ -85,6 +85,7 @@ function cutFrame(
   const chunks = new Map<string, TextChunk>();
   let local: LocalRuntimeState | null = null;
   let host: HostSnapshot | null = null;
+  let debug: boolean | null = null;
   let replayComplete = false;
   let existence: ExistenceReconciliation | null = null;
   let drained = drainedBefore;
@@ -118,6 +119,9 @@ function cutFrame(
       case 'host':
         host = item.host;
         break;
+      case 'debug':
+        debug = item.enabled;
+        break;
       case 'replay.complete':
         replayComplete = true;
         existence = item.existence;
@@ -137,6 +141,7 @@ function cutFrame(
     chunks: [...chunks.values()],
     local,
     host,
+    debug,
     replayComplete,
     existence,
   };
@@ -164,7 +169,7 @@ export function frameSubscription(
           ? (yield* SubscriptionRef.get(source.view)).cursor
           : subscribe.cursor;
       const inputs = source
-        .inputs(subscribe.aggregates, tailFrom)
+        .inputs(subscribe.aggregates, tailFrom, subscribe.debug)
         .pipe(
           Stream.flatMap((batch) =>
             Stream.fromIterable(batch).pipe(

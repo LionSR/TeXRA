@@ -14,6 +14,7 @@ import {
   type TeamRosterApplicationDeps,
 } from '@common/teams/TeamRosterApplication';
 import type { MessageHost } from '@hosts/uiHosts';
+import type { StateReadFailed } from '@platform/interfaces';
 import { assertNever } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { formatResultCount } from '@utils/text/stringUtils';
@@ -22,7 +23,7 @@ type SettingsTeamRosterCatalog = TeamRosterApplicationDeps['catalog'] & {
   getPresetToolUseRoot(
     toolUseAgents: string[],
     presetId?: string,
-  ): string | undefined;
+  ): Effect.Effect<string | undefined, StateReadFailed>;
 };
 
 interface SettingsTeamRosterPresentation extends Pick<
@@ -89,10 +90,11 @@ export function applySettingsTeamRoster<R = never>(
         );
         return;
       case 'applied': {
-        const selectedToolUseAgent = options.catalog.getPresetToolUseRoot(
-          result.preset.agents.toolUse,
-          result.preset.id,
-        );
+        const selectedToolUseAgent =
+          yield* options.catalog.getPresetToolUseRoot(
+            result.preset.agents.toolUse,
+            result.preset.id,
+          );
         yield* options.refreshAfterApply(selectedToolUseAgent).pipe(
           Effect.mapError(
             (cause) =>

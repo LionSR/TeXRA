@@ -7,7 +7,7 @@ import { Effect, FileSystem } from 'effect';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 
 // Local imports
-import { withLogChannel, withLogData } from '@logger/effectLog';
+import { withLogChannel } from '@logger/effectLog';
 import { createLog } from '@logger/logUtils';
 import { AgentResume } from '@platform/interfaces';
 import type { AcceptCopyMeta, RunId } from '@shared/schemas';
@@ -171,7 +171,7 @@ export class ProgressWorkflowFileActionsController {
               Effect.logDebug(
                 `Could not read current content of ${file} before accept`,
               ).pipe(
-                withLogData(error),
+                Effect.annotateLogs({ data: error }),
                 withLogChannel(CHANNEL),
                 Effect.as(undefined),
               ),

@@ -45,7 +45,7 @@ import {
 } from '@agent/runtime/toolInjection';
 import { EditorModel } from '@agent/runtime/run/modelBinding';
 import { createSessionApprovals } from '@agent/runtime/runApprovalQueue';
-import { makeParkedRuns, RunRegistry } from '@agent/runtime/runRegistry';
+import { RunRegistry } from '@agent/runtime/runRegistry';
 import { runLedgerLayer } from '@agent/runtime/RunLedger';
 import { sessionEventsLayer, tailFrom } from '@agent/runtime/SessionEvents';
 import { ModelRetryGate } from '@agent/runtime/ModelRetryGate';
@@ -58,17 +58,24 @@ import {
   type SessionGraph,
 } from '@agent/runtime/sessionGraph';
 import { SupabaseAuth, type SupabaseAuthShape } from '@auth/SupabaseAuth';
-import { withLogChannel, withLogData } from '@logger/effectLog';
-import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
+import { withLogChannel } from '@logger/effectLog';
+import {
+  effectDiagnosticsLayer,
+  type MinimumLogLevel,
+} from '@logger/effectDiagnostics';
 import {
   withForkFailureReporting,
   type ProcessRuntime,
 } from '@platform/processRuntime';
 import {
+  AgentDirectories,
   AgentResume,
   AppState,
+  Lifecycle,
+  ToolMissingReporter,
   type AgentResumePort,
-  type StateStore,
+  type LifecycleHost,
+  type ToolMissingHandler,
 } from '@platform/interfaces';
 import { LanguageModel, type LanguageModelPort } from '@platform/languageModel';
 import { globalStorageFsLayer } from '@platform/rootedFs';
@@ -79,6 +86,7 @@ import { RunLedger } from '@shared/session/runLedger';
 import {
   aggregateId as qualifyAggregateId,
   aggregateTarget,
+  DEBUG_MODE_KEY,
   isDisplaySessionEvent,
   ownerIdentity,
   TOOL_CALL_STATUS,
@@ -95,11 +103,13 @@ import { SessionInputs } from '@shared/session/sessionInputs';
 
 import {
   Database,
+  ProjectDatabases,
   type DatabaseOpenFailed,
   type DatabaseReadFailed,
   type GlobalDatabase,
   type SessionOpenError,
 } from '@shared/session/database';
+import type { UsageLog } from '@shared/usageLog';
 import { releaseRunResources } from '@tools/approval';
 import { InlineComments } from '@tools/comment/InlineCommentTool';
 import type { InlineCommentProvider } from '@tools/comment/InlineCommentTool';
@@ -107,9 +117,11 @@ import { gitHubSubscriptionsLayer } from '@tools/github/subscriptionRegistries';
 import type { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import { SetupPlatform, type SetupPlatformShape } from '@tools/setup/platform';
 import { StreamLogStore } from '@transcript/StreamLogStore';
+import { readConfigSettingFrom } from '@utils/config/platformSettings';
 import { inquiryRecordsLayer } from './inquiryRecords';
 import { updateCheckRecordsLayer } from './updateCheckRecords';
 import { databaseLayer } from './Database';
+import { projectDatabaseLayer } from './projectDatabase';
 import { collectPendingDeletions } from './deletionCleanup';
 import { sessionRequests } from './SessionRequests';
 import { sweepLeftoverRuns } from './sweepLeftoverRuns';
@@ -313,9 +325,8 @@ const sessionHandleLayer = (
           Stream.runHead,
           Effect.raceFirst(
             Deferred.await(tailEnded).pipe(
-              // Invariant: the tail outlives every publication it settles.
-              // A wait on a tail that ended can never be answered, so it
-              // dies, with the read failure that ended the tail, if any.
+              // The tail outlives every publication it settles; if it ends,
+              // pending waits die with its read failure.
               Effect.orDie,
               Effect.andThen(
                 Effect.die(
@@ -339,13 +350,9 @@ const sessionHandleLayer = (
           : settleTo(last.commit).pipe(Effect.as(rows));
       };
       const now = () => SubscriptionRef.getUnsafe(eventLog.observedCommit);
-      const parkedRuns = yield* makeParkedRuns();
       const graph = (session: SessionHandle): SessionGraph => {
-        // The session's approval state, built here rather than by the handle
-        // so that its runs and its request handler share the one instance and
-        // the session's scope owns it. The authority publishes a stream's full
-        // policy snapshot on every effective bypass change, as does
-        // `SessionHandle.setApprovalPolicy` when the policy half moves.
+        // The session scope owns one approval state shared by its runs and
+        // request handler. Effective changes publish the full policy snapshot.
         const approvals = createSessionApprovals((runId) =>
           session.publishApprovalPolicy(runId),
         );
@@ -444,7 +451,10 @@ const sessionHandleLayer = (
                     Effect.catch((error) =>
                       Effect.logWarning(
                         'Registration claims were not released after its settle failed.',
-                      ).pipe(withLogData(error), withLogChannel(CHANNEL)),
+                      ).pipe(
+                        Effect.annotateLogs({ data: error }),
+                        withLogChannel(CHANNEL),
+                      ),
                     ),
                   ),
                 ),
@@ -482,7 +492,6 @@ const sessionHandleLayer = (
             finalizeRun: (input) => finalizeRun(session, input),
             acquireRunClaim: (runId) =>
               session.acquireClaims(qualifyAggregateId('run', runId)),
-            parked: parkedRuns,
           }),
           // The session's requests: the approval state above and the handler
           // that admits on the root graph's log.
@@ -495,10 +504,8 @@ const sessionHandleLayer = (
             agentResume,
           ),
           now,
-          // The teardown runs at once, before the release: an entry another
-          // open or close is still borrowing is released only when that borrow
-          // ends, and the session refuses new runs from the moment it is asked
-          // to close. A teardown failure still releases the entry.
+          // Teardown immediately refuses new runs; release waits for borrowers.
+          // A teardown failure still releases the entry.
           close: () =>
             unwindSession(session).pipe(Effect.ensuring(release(key))),
         };
@@ -517,6 +524,7 @@ const sessionHandleLayer = (
       const transcripts = StreamLogStore.open(
         eventLog,
         key.open.transcriptMode,
+        readConfigSettingFrom<boolean>(key.open.roots.config, DEBUG_MODE_KEY),
       );
       // The gate's probe fibers and waiting calls end with this scope, after
       // the handle below has unwound its runs.
@@ -539,10 +547,8 @@ const sessionHandleLayer = (
         }),
         (session) =>
           unwindSession(session).pipe(
-            // Settlement reports what the session's own publications left
-            // behind. The release still has to finish, so that report is logged
-            // here rather than escaping `Scope.close` and failing the
-            // `invalidate` or `close` that asked for it.
+            // Log settlement residue here so release still finishes instead of
+            // failing the `invalidate` or `close` that asked for it.
             Effect.ensuring(
               session
                 .settlePublications()
@@ -550,7 +556,10 @@ const sessionHandleLayer = (
                   Effect.catch((error) =>
                     Effect.logWarning(
                       `Session ${key.storage} left a failed publication behind as it closed.`,
-                    ).pipe(withLogData(error), withLogChannel(CHANNEL)),
+                    ).pipe(
+                      Effect.annotateLogs({ data: error }),
+                      withLogChannel(CHANNEL),
+                    ),
                   ),
                 ),
             ),
@@ -621,7 +630,7 @@ const sessionHandleLayer = (
         Effect.tapError((error) =>
           Effect.logError(
             `Session ${key.storage} stopped delivering committed rows: the log could not be read.`,
-          ).pipe(withLogData(error), withLogChannel(CHANNEL)),
+          ).pipe(Effect.annotateLogs({ data: error }), withLogChannel(CHANNEL)),
         ),
         Effect.onExit((exit) => Deferred.done(tailEnded, exit)),
         Effect.forkIn(consumerScope),
@@ -636,14 +645,14 @@ const sessionHandleLayer = (
         Effect.tapError((error) =>
           Effect.logError(
             `Session ${key.storage} stopped delivering folded rows: the log could not be read.`,
-          ).pipe(withLogData(error), withLogChannel(CHANNEL)),
+          ).pipe(Effect.annotateLogs({ data: error }), withLogChannel(CHANNEL)),
         ),
         Effect.forkIn(consumerScope),
       );
       yield* sweepLeftoverRuns(session, initialListing).pipe(
         Effect.catch((error) =>
           Effect.logWarning('Background-shell cleanup failed.').pipe(
-            withLogData(error),
+            Effect.annotateLogs({ data: error }),
             withLogChannel(CHANNEL),
           ),
         ),
@@ -654,7 +663,7 @@ const sessionHandleLayer = (
         Effect.catch((error) =>
           Effect.logWarning(
             'Deletion records could not be read; cleanup remains pending.',
-          ).pipe(withLogData(error), withLogChannel(CHANNEL)),
+          ).pipe(Effect.annotateLogs({ data: error }), withLogChannel(CHANNEL)),
         ),
         Effect.repeat({ schedule: Schedule.spaced('30 seconds') }),
         Effect.forkScoped,
@@ -666,17 +675,24 @@ const sessionHandleLayer = (
 /** The runtime graph of one root (PRD 7.3): the root-scoped services the
  *  handle is built over. */
 const sessionGraphLayer = (key: SessionKey) => {
+  const database: Layer.Layer<
+    Database,
+    DatabaseOpenFailed,
+    ProjectDatabases | ProcessIdentity | WorkspaceRoots
+  > =
+    key.open.transcriptMode?.kind === 'ephemeral'
+      ? databaseLayer('ephemeral')
+      : Layer.effect(
+          Database,
+          Effect.flatMap(ProjectDatabases, (databases) =>
+            RcMap.get(databases, key.storage),
+          ),
+        );
   return ownerLiveness.pipe(
     Layer.provideMerge(SessionViewService.layer),
     Layer.provideMerge(sessionInputsLayer),
     Layer.provideMerge(runLedgerLayer),
-    Layer.provideMerge(
-      sessionEventsLayer.pipe(
-        Layer.provideMerge(
-          databaseLayer(key.open.transcriptMode?.kind ?? 'persistent'),
-        ),
-      ),
-    ),
+    Layer.provideMerge(sessionEventsLayer.pipe(Layer.provideMerge(database))),
     Layer.provideMerge(
       Layer.mergeAll(
         LocalRuntimeSource.layer,
@@ -692,11 +708,10 @@ const sessionGraphLayer = (key: SessionKey) => {
  * The complete session of one root: the handle over the root's graph, the
  * handle alone being the entry's service. `Layer.fresh`: the layer map builds
  * every key's entry through one memo map, and layers memoize by reference, so
- * without it the root-scoped layers would be built once and every root on the
- * process would share one log and one fold. The `fresh` covers the sources and
- * the database and nothing above them: every process service the entry reads —
- * the identity first among them, a real effect — comes from the runtime's own
- * context, built once for the process.
+ * without it every root would share one log and one fold. The graph's sources
+ * and ephemeral database are fresh; a persistent graph retains its database
+ * from `ProjectDatabases`, shared with the project's application state. That
+ * resource family and the process identity come from the runtime's context.
  */
 const sessionLayer = (
   key: SessionKey,
@@ -773,7 +788,7 @@ const unopenedEntry =
     Effect.logWarning(
       `Session ${key.storage} failed to open; it holds no session.`,
     ).pipe(
-      withLogData(error),
+      Effect.annotateLogs({ data: error }),
       withLogChannel(CHANNEL),
       Effect.as(Option.none()),
     );
@@ -939,18 +954,12 @@ const closeSession = (root: string) =>
  * Effect, on the opener's own fiber; its one synchronous face, `current`,
  * reads the held map and runs nothing.
  *
- * The process services (injection plan §3.1, the one process provide point)
- * are merged here from what the root hands over: `Secrets` and `AppState` over
- * the root's own stores, which every root now opens before it calls this — the
- * desktop and CLI roots open theirs on a bootstrap run rather than on the
- * runtime they are about to install, so both arrive as values (the CLI's
- * secrets-only `clone` entry hands over a store that refuses instead of
- * opening one); `SupabaseAuth` over the root's account plane; `LanguageModel`
- * over the root's editor language-model bridge
- * (`UNAVAILABLE_LANGUAGE_MODEL_PORT` where the host has none); `AgentResume`
- * over the root's own resume port; `SetupPlatform` over the root's
- * host-varying setup capabilities; and `ToolInjections` over
- * `AGENT_TOOL_INJECTIONS`, the same list for every host.
+ * Host values and resource-owning layers are composed here once. Secrets and
+ * identity resolve at bootstrap; AppState is acquired in the process scope,
+ * and the agent-directory layer captures it before serving any reads. Hosts
+ * with externally owned stores supply them through AppState.layer. A CLI
+ * entry without application state supplies a refusing store and database.
+
  */
 interface ProcessRuntimeOptions {
   readonly processStart: Effect.Effect<string | undefined>;
@@ -963,12 +972,32 @@ interface ProcessRuntimeOptions {
    */
   readonly agentResume: AgentResumePort;
   /**
-   * The root's global state store, opened before this install and served as
-   * `AppState`. Every entry has one: an entry that serves no application state
-   * (the CLI's platform-less `clone`, whose storage root may be read-only)
-   * passes a store that refuses, so absent state is loud, not missing.
+   * The host's agent-directory layer, which can capture AppState at construction
+   * without exposing that dependency in its readers.
    */
-  readonly appState: StateStore;
+  readonly agentDirectories: Layer.Layer<AgentDirectories, never, AppState>;
+  /**
+   * The root's shutdown lifecycle, served as `Lifecycle`: the same host every
+   * entry drains on shutdown. A subscriber that must register a cleanup reads
+   * it from context rather than from the process platform.
+   */
+  readonly lifecycle: LifecycleHost;
+  /**
+   * The host's tool-missing reporter, served as `ToolMissingReporter`. Optional
+   * because only the VS Code host has a UI for it; an absent reporter serves
+   * the no-op, so a missing-tool probe still answers without surfacing.
+   */
+  readonly toolMissingReporter?: ToolMissingHandler;
+  /**
+   * The host's global application-state layer, acquired in this runtime's scope.
+   * A platform-less CLI entry supplies its refusing store through AppState.layer
+   * so it creates no storage on a possibly read-only root.
+   */
+  readonly appState: Layer.Layer<
+    AppState,
+    DatabaseOpenFailed,
+    GlobalDatabase | ProcessIdentity
+  >;
   /**
    * The root's account plane, served as `SupabaseAuth`. Every shipped host
    * builds one from its secrets; a composition with no TeXRA account plane (the
@@ -1005,16 +1034,16 @@ interface ProcessRuntimeOptions {
   readonly lean: Layer.Layer<
     LeanLanguageServices,
     never,
-    FileSystem.FileSystem | Path.Path
+    FileSystem.FileSystem | Path.Path | AppState
   >;
   /**
    * The host's usage log (`usageLogLayer`), stamped with its version and
    * editor. Built with this runtime and drained when it is disposed, so no root
-   * brackets the sender itself; `Layer.empty` reports no usage at all. Passed
+   * brackets the sender itself; `UsageLog.disabled` reports no usage. Passed
    * as a layer for the reason `lean` is: no reach into telemetry from here.
    */
   readonly usageLog: Layer.Layer<
-    never,
+    UsageLog,
     never,
     HttpClient.HttpClient | SupabaseAuth
   >;
@@ -1033,6 +1062,17 @@ interface ProcessRuntimeOptions {
     DatabaseOpenFailed,
     ProcessIdentity
   >;
+  /**
+   * The runtime's emission threshold for Effect diagnostics, from facts the
+   * composition root holds that cannot change mid-process: the surface kind
+   * (the extension's `LogOutputChannel` filters for itself, so it passes
+   * `'Trace'`; the desktop's rotated log file passes `'Debug'`) or the CLI's
+   * `--quiet` / `--verbose` argv. The reference it feeds is fiberCached and
+   * read before any logger runs, which is exactly why a live user setting
+   * must arrive by another road (the transcript fold's `debug` flag) and not
+   * here.
+   */
+  readonly minimumLogLevel: MinimumLogLevel;
 }
 
 export function installProcessRuntime({
@@ -1043,12 +1083,16 @@ export function installProcessRuntime({
   auth,
   languageModel,
   agentResume,
+  agentDirectories,
+  lifecycle,
+  toolMissingReporter,
   setup,
   editorModel,
   inlineComments,
   lean,
   usageLog,
   globalDatabase: globalDatabaseOption,
+  minimumLogLevel,
 }: ProcessRuntimeOptions): ProcessRuntime {
   // Non-failing by contract: `nodeProcesses.selfIdentity()` reports an
   // unreadable identity as undefined, and a root that already read one hands
@@ -1070,10 +1114,14 @@ export function installProcessRuntime({
     inquiryRecordsLayer,
     updateCheckRecordsLayer,
     Secrets.layer(secrets),
-    AppState.layer(appState),
     SupabaseAuth.layer(auth),
     LanguageModel.layer(languageModel),
     AgentResume.layer(agentResume),
+    agentDirectories,
+    Lifecycle.layer(lifecycle),
+    toolMissingReporter === undefined
+      ? Layer.empty
+      : ToolMissingReporter.layer(toolMissingReporter),
     SetupPlatform.layer(setup),
     ToolInjections.layer(AGENT_TOOL_INJECTIONS),
     // Built with this runtime: a replacement starts with empty tables.
@@ -1084,7 +1132,10 @@ export function installProcessRuntime({
     inlineComments === undefined
       ? Layer.empty
       : Layer.succeed(InlineComments)(inlineComments),
-  ).pipe(Layer.provideMerge(identity));
+  ).pipe(
+    Layer.provideMerge(appState.pipe(Layer.orDie)),
+    Layer.provideMerge(identity),
+  );
   // The map's services on the caller's own fiber: an Effect-native opener (the
   // SDK) runs these where it stands, so the owner adds no run site of its own.
   // Supply only the owned session family: the caller retains its tracer,
@@ -1104,24 +1155,23 @@ export function installProcessRuntime({
   const runtime = withForkFailureReporting(
     ManagedRuntime.make(
       Sessions.layer(held, release).pipe(
+        Layer.provideMerge(projectDatabaseLayer),
         // The usage log's own lifetime: its sender and ticker run as long as
         // this runtime does, and its finalizer drains the queue while the
         // account plane below is still up. Ahead of `services` in the chain so
         // that plane and the HTTP client reach it.
         Layer.provideMerge(usageLog),
-        Layer.provideMerge(services),
-        // The Lean pool is one per process — its servers are shared across
-        // roots — as is the cross-workspace storage view below it: every
-        // session shares that root, so nothing below resolves a global-storage
-        // path against a root of its own.
+        // The editor's Lean port also reads this process's AppState.
         Layer.provideMerge(lean),
+        Layer.provideMerge(services),
+        // Every session shares this process's global-storage view.
         Layer.provideMerge(globalStorageFsLayer(globalStorage)),
         // The records' handle on that same root, for the same reason: one
         // connection and one change poll per process, outside the entry.
         Layer.provideMerge(globalDatabase),
         Layer.provideMerge(
           Layer.mergeAll(
-            effectDiagnosticsLayer,
+            effectDiagnosticsLayer(minimumLogLevel),
             FetchHttpClient.layer,
             // The standard library's filesystem and path services, provided
             // once per process here rather than by each program that needs

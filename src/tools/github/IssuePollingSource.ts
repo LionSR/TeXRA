@@ -16,7 +16,7 @@
 
 import { Effect } from 'effect';
 
-import type { Disposable } from '@platform/interfaces';
+import type { Disposable, Lifecycle } from '@platform/interfaces';
 import type { Secrets } from '@platform/secrets';
 import {
   formatIssueClosed,
@@ -95,7 +95,7 @@ class IssuePollingSource extends PollingSourceBase<string, SubscriptionState> {
   subscribe(
     issue: IssueKey,
     onEvent: PollEventListener,
-  ): Effect.Effect<Disposable, never, Secrets> {
+  ): Effect.Effect<Disposable, never, Secrets | Lifecycle> {
     const key = issueKeyToString(issue);
     return this.register(key, () => createInitialState(issue), onEvent);
   }

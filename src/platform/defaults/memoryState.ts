@@ -8,9 +8,11 @@ import type { StateStore, StateWriteFailed } from '../interfaces';
 export class MemoryStateStore implements StateStore {
   private readonly values = new Map<string, unknown>();
 
-  get<T>(key: string, defaultValue?: T): T {
-    const value = this.values.get(key);
-    return value === undefined ? (defaultValue as T) : (value as T);
+  get<T>(key: string, defaultValue?: T): Effect.Effect<T> {
+    return Effect.sync(() => {
+      const value = this.values.get(key);
+      return value === undefined ? (defaultValue as T) : (value as T);
+    });
   }
 
   /** A map write cannot fail, so the port's error channel stays empty. */

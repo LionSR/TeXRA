@@ -55,20 +55,22 @@ const guardRefusal = Effect.fn('toolUse.guard')(function* (
   // Resolution and the read-only-root check both reject with a `ToolError`
   // the dispatcher reports to the model, so they stay a failure rather than
   // becoming a defect.
-  yield* Effect.try({
-    try: () => {
-      for (const target of guard.writes?.(input) ?? []) {
-        const { path, display } = resolveAndFormat(
-          call.roots,
-          call.roots.workspace,
-          target,
-          call.workingDirectory,
-        );
-        assertWritable(path, display);
-      }
-    },
+  const targets = yield* Effect.try({
+    try: () => guard.writes?.(input) ?? [],
     catch: (error) => error,
   });
+  for (const target of targets) {
+    const { path, display } = yield* resolveAndFormat(
+      call.roots,
+      call.roots.workspace,
+      target,
+      call.workingDirectory,
+    );
+    yield* Effect.try({
+      try: () => assertWritable(path, display),
+      catch: (error) => error,
+    });
+  }
 
   if (!guard.bash) return undefined;
   const command = yield* guard.bash(input);

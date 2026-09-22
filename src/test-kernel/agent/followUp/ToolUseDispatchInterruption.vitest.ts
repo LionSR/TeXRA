@@ -223,7 +223,6 @@ function agentRunTestLayer(init: HarnessInit) {
       const logger = new TraceEmitter();
       return {
         runId: init.runId,
-        parentRunId: null,
         session: init.session,
         config: AgentConfigSchema.parse({
           agent: 'chat',
@@ -256,6 +255,7 @@ function agentRunTestLayer(init: HarnessInit) {
             runId: init.runId,
             runStageId: undefined,
             config: testWorkspaceRoots().config,
+            usageLog: { log: () => {} },
           },
           { agentName: 'chat', agentCategory: AgentCategory.ToolUse },
         ),

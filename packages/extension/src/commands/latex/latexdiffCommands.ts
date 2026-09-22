@@ -59,13 +59,10 @@ type LatexdiffTool = 'latexdiff' | 'latexdiff-vc';
 /**
  * Run a latexdiff command body, skipping it when the tool is missing and
  * reporting any failure under `errorMessage`. Every command in this file goes
- * through here.
- *
- * This is the file's one terminal boundary: `catchCause` answers a typed
- * failure and a defect alike — as the `try`/`catch` it replaces answered a
- * rejection and a thrown value alike — and `Cause.squash` hands
- * `showLoggedErrorMessage` the same value the `catch` clause bound, so the
- * message the user sees is unchanged.
+ * through here, and this is the file's one terminal boundary: `catchCause`
+ * answers a typed failure and a defect alike, and `Cause.squash` hands
+ * `showLoggedErrorMessage` the value either produced. An interrupt is
+ * neither: a shutdown mid-run is re-raised, not shown as a failure (#12841).
  */
 const withLatexdiffTool = <E, R>(
   tool: LatexdiffTool,
@@ -81,20 +78,23 @@ const withLatexdiffTool = <E, R>(
     yield* action;
   }).pipe(
     Effect.catchCause((cause) =>
-      showLoggedErrorMessage(CHANNEL, errorMessage, Cause.squash(cause)).pipe(
-        Effect.asVoid,
-      ),
+      Cause.hasInterruptsOnly(cause)
+        ? Effect.interrupt
+        : showLoggedErrorMessage(
+            CHANNEL,
+            errorMessage,
+            Cause.squash(cause),
+          ).pipe(Effect.asVoid),
     ),
   );
 
 type MarkupItem = vscode.QuickPickItem & { value: MathMarkupOption };
 
-// Returns undefined when the user cancels, logging the cancellation so callers
-// only need to bail out.
+// Returns undefined when the user cancels, logging it so callers just bail.
 const promptForLatexdiffMathMarkup = Effect.fnUntraced(function* (
   session: SessionHandle,
 ) {
-  const configuredMode = session.roots.workspaceState.get<string>(
+  const configuredMode = yield* session.roots.workspaceState.get<string>(
     WorkspaceStateKey.LATEXDIFF_MATH_MARKUP,
     DEFAULT_MATH_MARKUP,
   );
@@ -423,7 +423,7 @@ const handleRunLatexdiff = Effect.fnUntraced(function* (
       log.info(`Running latexdiff with math markup mode: ${mathMarkup}`);
 
       const generateBetweenRoundDiffs =
-        session.roots.workspaceState.get<boolean>(
+        yield* session.roots.workspaceState.get<boolean>(
           WorkspaceStateKey.LATEXDIFF_BETWEEN_ROUNDS,
           LATEX_CONFIG_DEFAULTS.latexdiffBetweenRounds,
         );

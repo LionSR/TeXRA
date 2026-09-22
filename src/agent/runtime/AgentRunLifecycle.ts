@@ -37,8 +37,6 @@ import { RunHandle, type AgentRunHandle } from './RunHandle';
 import { Runs } from './runRegistry';
 import {
   buildTerminalFlowResult,
-  isWaitingFlowResult,
-  type AgentRuntimeFlowResult,
   type AgentFlowResult,
 } from './AgentFlowResult';
 import { RunArtifactDrainError, type SessionHandle } from './SessionHandle';
@@ -48,7 +46,7 @@ import type { AgentRunServices } from './toolInjection';
 const logger = createChannelTrace('agentRunLifecycle');
 
 export interface RunFlowLifecycleOptions {
-  /** The launching run: the parent edge on the handle; a child may park at WAITING. */
+  /** The launching run: the parent edge on the live handle. */
   parentRunId?: RunId;
   /**
    * Reported to the delegation chain through the terminal `deliver` hook, so
@@ -63,13 +61,11 @@ export interface RunFlowLifecycleOptions {
   onRun?: (handle: AgentRunHandle) => Effect.Effect<void, Error>;
   /**
    * Run-end side effect supplied by the composition layer. The lifecycle owns
-   * *when* it fires (terminal completion/failure, and the parked fiber's
-   * termination for a later kill) and the guard rails (skipped while a run is
-   * parked, logged rather than rethrown), but not *what* it does.
+   * its terminal timing and logs failures without replacing the run result.
    * Kept injected so this module does not statically reach tool-domain
    * services such as the Lean language adapter.
    */
-  onRunEnd?: (runId: RunId) => Effect.Effect<void, unknown, AgentRunServices>;
+  onRunEnd?: (runId: RunId) => Effect.Effect<void, never, AgentRunServices>;
 }
 
 interface FinalizeRunTerminalParams {
@@ -129,8 +125,7 @@ interface FinalizeRunTerminalResult {
  * inside the drain that attests it. Exactly-once per handle: the claim below
  * flips synchronously in the same tick as the check, so a second call cannot
  * win — the catch arm after the success arm finalized, a concurrent finalize
- * racing across an await point, or the stop that ends a run parked at
- * WAITING, which runs this same program on the parked fiber.
+ * racing across an await point, or a stop while the run waits for input.
  */
 export const finalizeRunTerminal = Effect.fn('finalizeRunTerminal')(function* (
   params: FinalizeRunTerminalParams,
@@ -340,15 +335,9 @@ function withResolvedOutcome(
 export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
   function* <R>(
     ctx: AgentLaunchContext,
-    runner: (
-      handle: RunHandle,
-    ) => Effect.Effect<AgentRuntimeFlowResult, Error, R>,
+    runner: (handle: RunHandle) => Effect.Effect<AgentFlowResult, Error, R>,
     options?: RunFlowLifecycleOptions,
-  ): Effect.fn.Return<
-    AgentRuntimeFlowResult,
-    Error,
-    R | AppState | AgentRunServices
-  > {
+  ): Effect.fn.Return<AgentFlowResult, Error, R | AppState | AgentRunServices> {
     const { runId, session } = ctx;
     const runs = yield* Runs;
     const agentIdentifier = ctx.config.agent;
@@ -374,7 +363,6 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
     runs.track(handle);
     // A claim moved out from under this run is not watched: the next append
     // refuses with `DatabaseNotOwner` and the run aborts dirty.
-    let suspended = false;
     // Expose the live handle to the launcher (F-2). Guarded: neither a synchronous
     // throw nor an async rejection from a consumer callback may abort the run.
     if (options?.onRun) {
@@ -507,9 +495,7 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
       return yield* Effect.fail(finalizedFailure);
     });
     /**
-     * Invoke the composition-supplied run-end hook when the run genuinely ends.
-     * The lifecycle owns the guard rails: a parked run reaches it only from
-     * the termination a later kill actually runs.
+     * Invoke the composition-supplied hook once the live run ends.
      */
     const runOnRunEnd = Effect.gen(function* () {
       if (!options?.onRunEnd) return;
@@ -547,84 +533,6 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
       const result = yield* Effect.suspend(() => runner(handle)).pipe(
         Effect.ensuring(Effect.sync(detachRunInterrupt)),
       );
-      if (isWaitingFlowResult(result)) {
-        suspended = true;
-        logger.debug(`Task suspended with outcome: ${result.outcome}`);
-        // The handle stays tracked (correct for resume) and so does the run:
-        // this generation parks as a fiber on the run's own stop latch rather
-        // than leaving a teardown behind for someone else to invoke (issue
-        // #7287). A resumed generation interrupts that fiber where it waits,
-        // so the termination below runs only for a stop, never for a run that
-        // started again. The park outlives this scope on the session's own
-        // parked-fiber map, and the fiber inherits this one's context, so the
-        // termination below names the services it needs instead of carrying a
-        // copy of them.
-        yield* runs.park(
-          handle,
-          ctx.stopped,
-          // A stop woke the park, so the run ends here, on the fiber that
-          // still holds its teardown. Its trace went with the generation's
-          // scope, so the stage close publishes through the session, and no
-          // usage totals ride the row: a suspended flow has no live monitor to
-          // read. The rest is the ordinary terminal path under the same
-          // exactly-once claim, so one `run.end` row closes this run.
-          Effect.gen(function* () {
-            session.followUps.terminalize(runId);
-            // The run's trace detached with its scope, so the stage close is
-            // committed through the session. It and the terminal row are
-            // independent durable facts; the row gets its own chance to land.
-            const stageId = ctx.parentStage.id;
-            if (stageId !== undefined)
-              yield* session
-                .commitRunEvent(runId, {
-                  type: 'stage.end',
-                  id: stageId,
-                  status: RUN_OUTCOME.CANCELLED,
-                })
-                .pipe(
-                  Effect.catch((error) =>
-                    Effect.sync(() => {
-                      logger.warn('Waiting-run stage close failed', {
-                        data: { runId, error },
-                      });
-                    }),
-                  ),
-                );
-            // A resumed generation replaced this registration while the stop
-            // was landing: the run started again, and the terminal is its.
-            if (runs.getHandle(runId) !== handle) return;
-            // A root's claim is this generation's to drop whether or not the
-            // row landed: the resume that would have taken it over is not
-            // coming. The terminal failure is re-raised after the release.
-            const finalized = yield* Effect.exit(
-              finalizeRunTerminal({
-                session,
-                handle,
-                outcome: RUN_OUTCOME.CANCELLED,
-                output: emptyRunEndOutput(handle.category),
-              }),
-            );
-            if (!handle.isChild) yield* session.releaseRunLease(runId);
-            yield* finalized;
-          }).pipe(
-            // The run ends here, so the run-end hook fires here.
-            Effect.ensuring(runOnRunEnd),
-            // Only the stop that woke this fiber awaits it, so a failure is
-            // loud here or nowhere, and the run leaves the registry either
-            // way.
-            Effect.catchCause((cause) =>
-              Effect.sync(() => {
-                logger.warn('Waiting-run termination failed', {
-                  data: { runId, error: Cause.squash(cause) },
-                });
-                runs.untrackIfCurrent(handle);
-              }),
-            ),
-            Effect.uninterruptible,
-          ),
-        );
-        return result;
-      }
       // Provider/runtime failures carry structured error metadata and use the
       // classified failure path. A domain failure may report FAILED without this
       // field and is finalized below as an outcome-only terminal result.
@@ -656,11 +564,10 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
         const globalState = yield* AppState;
         // Best-effort by contract: the flag is a funnel input, so a refused
         // write is logged and the run still completes.
-        yield* (
-          getFirstRunDone(globalState)
-            ? Effect.void
-            : setFirstRunDone(globalState, true)
-        ).pipe(
+        yield* getFirstRunDone(globalState).pipe(
+          Effect.flatMap((done) =>
+            done ? Effect.void : setFirstRunDone(globalState, true),
+          ),
           Effect.catch((error) =>
             Effect.sync(() =>
               logger.warn('Failed to record the first completed run', {
@@ -682,18 +589,14 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
         return finalizeFailedRun(err, undefined);
       }),
       Effect.onInterrupt(() =>
-        // The Promise flow has joined its actual abort above. Complete the
+        // The run has joined its interrupted children. Complete the
         // owned terminal result before cleanup while retaining interruption.
         finalizeTerminal({ outcome: RUN_OUTCOME.CANCELLED }).pipe(Effect.orDie),
       ),
       Effect.ensuring(
         Effect.gen(function* () {
           detachRunInterrupt();
-          // The run-end hook (Lean servers attributed to this run, and
-          // whatever else the composition layer ends) fires when the run
-          // genuinely ends. A WAITING park is not a run end, so its return
-          // leaves the hook to the termination a later stop runs.
-          if (!suspended) yield* runOnRunEnd;
+          yield* runOnRunEnd;
         }),
       ),
     );

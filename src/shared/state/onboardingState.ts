@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 /**
  * User-scoped onboarding state shared by every host.
  *
@@ -9,7 +10,6 @@
 import type { StateStore, StateWriteFailed } from '@platform/interfaces';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { isNonEmptyString } from '@utils/text/stringUtils';
-import type { Effect } from 'effect';
 
 export function setOnboardingDeclined(
   state: StateStore,
@@ -18,10 +18,15 @@ export function setOnboardingDeclined(
   return state.update(GlobalStateKey.ONBOARDING_DECLINED, declined);
 }
 
-export function getFirstRunDone(state: StateStore): boolean {
-  return (
-    state.get<boolean>(GlobalStateKey.ONBOARDING_FIRST_RUN_DONE, false) === true
-  );
+export function getFirstRunDone(state: StateStore) {
+  return Effect.gen(function* () {
+    return (
+      (yield* state.get<boolean>(
+        GlobalStateKey.ONBOARDING_FIRST_RUN_DONE,
+        false,
+      )) === true
+    );
+  });
 }
 
 export function setFirstRunDone(
@@ -32,9 +37,13 @@ export function setFirstRunDone(
 }
 
 /** User-level default team id, written by the setup agent's `apply_team`. */
-export function getDefaultTeamId(state: StateStore): string | undefined {
-  const value = state.get<string>(GlobalStateKey.ONBOARDING_DEFAULT_TEAM_ID);
-  return isNonEmptyString(value) ? value : undefined;
+export function getDefaultTeamId(state: StateStore) {
+  return Effect.gen(function* () {
+    const value = yield* state.get<string>(
+      GlobalStateKey.ONBOARDING_DEFAULT_TEAM_ID,
+    );
+    return isNonEmptyString(value) ? value : undefined;
+  });
 }
 
 export function setDefaultTeamId(
@@ -51,15 +60,15 @@ export function clearDefaultTeamId(
   return state.update(GlobalStateKey.ONBOARDING_DEFAULT_TEAM_ID, undefined);
 }
 
-export function readOnboardingFlags(state: StateStore): {
-  /** The user saw the credential picker and chose "Skip for now". */
-  declined: boolean;
-  /** A run has completed or the setup agent handed off. */
-  firstRunDone: boolean;
-} {
-  return {
-    declined:
-      state.get<boolean>(GlobalStateKey.ONBOARDING_DECLINED, false) === true,
-    firstRunDone: getFirstRunDone(state),
-  };
+export function readOnboardingFlags(state: StateStore) {
+  return Effect.gen(function* () {
+    return {
+      declined:
+        (yield* state.get<boolean>(
+          GlobalStateKey.ONBOARDING_DECLINED,
+          false,
+        )) === true,
+      firstRunDone: yield* getFirstRunDone(state),
+    };
+  });
 }

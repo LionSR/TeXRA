@@ -21,11 +21,13 @@ import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { registerAgentDirectoryRoots } from '@frontend/setup';
 import * as logger from '@logger/logUtils';
 import {
+  AgentDirectories,
   AgentDirectoriesFailed,
   type AgentDirectoriesPort,
 } from '@platform/interfaces';
 import type { GlobalStorageFs } from '@platform/rootedFs';
 import { AgentCategory } from '@shared/schemas';
+import { FakeStateStore } from '@test/support/FakePlatform';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { REPO_ROOT } from '@test/support/repoScan';
@@ -42,11 +44,19 @@ import type * as vscode from 'vscode';
  * reads the view the readers name in their requirements.
  */
 function onGlobalStorage<A, E>(
-  program: Effect.Effect<A, E, GlobalStorageFs | FileSystem.FileSystem>,
+  program: Effect.Effect<
+    A,
+    E,
+    GlobalStorageFs | FileSystem.FileSystem | AgentDirectories
+  >,
 ): Effect.Effect<A, E> {
   return Effect.provide(
     program,
-    Layer.merge(unusedGlobalStorageFs(), nodePlatformLayer),
+    Layer.mergeAll(
+      unusedGlobalStorageFs(),
+      nodePlatformLayer,
+      AgentDirectories.layer(mutableAgentDirectories),
+    ),
   );
 }
 
@@ -132,11 +142,7 @@ function remoteAgentFixture(id: string, name: string, description: string) {
 describe('agent registry', () => {
   const extensionPath = resolve(REPO_ROOT, 'packages/extension');
   const resourcesPath = resolve(extensionPath, 'resources');
-  const globalState = {
-    keys: () => [],
-    get: (_key: string, defaultValue?: unknown) => defaultValue,
-    update: async () => {},
-  } as unknown as vscode.Memento;
+  const globalState = new FakeStateStore();
 
   beforeEach(() => {
     listRemoteAgents.mockImplementation(() =>
@@ -456,7 +462,9 @@ describe('agent registry', () => {
       Effect.gen(function* () {
         yield* onGlobalStorage(refresh({ includeRemote: false }));
         expect(
-          getVisibleAgents(hostStores(), 'toolUse').map((agent) => agent.name),
+          (yield* getVisibleAgents(hostStores(), 'toolUse')).map(
+            (agent) => agent.name,
+          ),
         ).not.toContain('orchestrator');
 
         const options = yield* onGlobalStorage(

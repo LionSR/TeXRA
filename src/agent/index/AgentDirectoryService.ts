@@ -11,6 +11,7 @@ import { createLog } from '@logger/logUtils';
 import {
   AgentDirectoriesFailed,
   type AgentDirectoriesPort,
+  type StateReadFailed,
 } from '@platform/interfaces';
 import { GlobalStorageFs } from '@platform/rootedFs';
 import type { AgentSource } from '@shared/schemas';
@@ -22,7 +23,7 @@ import {
 } from './BundledAgentDirectories';
 
 interface CustomAgentDirectoryStore {
-  get(): string | undefined;
+  get(): Effect.Effect<string | undefined, StateReadFailed>;
 }
 
 type AgentDirectoryDocsId = 'custom-agents';
@@ -34,10 +35,7 @@ export interface AgentDirectoryEntry {
 }
 
 export interface AgentDirectoryIssueReporter {
-  report(
-    message: string,
-    docsId: AgentDirectoryDocsId,
-  ): Effect.Effect<void, unknown>;
+  report(message: string, docsId: AgentDirectoryDocsId): Effect.Effect<void>;
 }
 
 export interface AgentDirectoryServiceOptions {
@@ -74,7 +72,16 @@ export class AgentDirectoryService {
   > {
     return Effect.gen({ self: this }, function* () {
       const configuredPath = (
-        this.options.customDirectoryStore.get() ?? ''
+        (yield* this.options.customDirectoryStore.get().pipe(
+          Effect.mapError(
+            (cause) =>
+              new AgentDirectoriesFailed({
+                source: 'custom',
+                message: cause.message,
+                cause,
+              }),
+          ),
+        )) ?? ''
       ).trim();
 
       const resolvedPath =
@@ -211,15 +218,13 @@ export class AgentDirectoryService {
     });
   }
 
-  /** The issue reporter is a host push; its own failure is still a failed
-   *  resolution, as the reported program's is. */
+  /** The issue reporter is a host push with a never error channel, so
+   *  reporting an issue cannot fail the resolution that raised it. */
   private reportIssue(
     message: string,
     docsId: AgentDirectoryDocsId,
-  ): Effect.Effect<void, AgentDirectoriesFailed> {
-    return this.options.issueReporter
-      .report(message, docsId)
-      .pipe(Effect.mapError(this.failure(message)));
+  ): Effect.Effect<void> {
+    return this.options.issueReporter.report(message, docsId);
   }
 
   /** This file's one failure shape, from whatever cause raised it. */

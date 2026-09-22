@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 
 import { it } from '@effect/vitest';
-import { Effect, Fiber, FileSystem } from 'effect';
+import { Deferred, Effect, Fiber, FileSystem } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 import { withProcessServices } from '@platform/processRuntime';
@@ -45,7 +45,8 @@ vi.mock('vscode', () => ({
   Uri: { file: (path: string) => ({ fsPath: path }) },
 }));
 
-vi.mock('@agent/index', () => ({
+vi.mock('@agent/index', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agent/index')>()),
   getAgent: mocks.getAgent,
   loadAgents: vi.fn(),
   refresh: vi.fn(),
@@ -55,13 +56,6 @@ vi.mock('@agent/remote/remoteAgentConfigClient', () => ({
 }));
 vi.mock('@common/teams/TeamRosterApplication', () => ({
   applyTeamRosterWithPreflight: vi.fn(),
-}));
-vi.mock('@controllers/settingsView/SettingsAgentControllerFactory', () => ({
-  createSettingsAgentControllers: () => ({
-    catalog: {},
-    directory: {},
-    roster: {},
-  }),
 }));
 vi.mock('@controllers/settingsView/SettingsTeamRosterController', () => ({
   applySettingsTeamRoster: mocks.applySettingsTeamRoster,
@@ -103,10 +97,10 @@ function createHandlers(): AgentHandlers {
       },
       withActiveWebview: vi.fn(() => Effect.void),
       postMessageToActiveWebview: vi.fn(() => Effect.void),
-      run: (program) => testRuntime().runPromise(program),
     },
     mocks.refreshAfterAgentMutation,
     installedHost().roots,
+    () => Effect.void,
   );
 }
 
@@ -189,7 +183,11 @@ describe('AgentHandlers custom-agent file actions', () => {
             resolveConfirmation = resolve;
           },
         );
-        mocks.showWarningMessage.mockReturnValueOnce(pendingConfirmation);
+        const warned = Deferred.makeUnsafe<void>();
+        mocks.showWarningMessage.mockImplementationOnce(() => {
+          Deferred.doneUnsafe(warned, Effect.void);
+          return pendingConfirmation;
+        });
         const handlers = createHandlers();
 
         const first = yield* Effect.forkChild(
@@ -199,11 +197,8 @@ describe('AgentHandlers custom-agent file actions', () => {
           ),
           { startImmediately: true },
         );
-        yield* Effect.promise(() =>
-          vi.waitFor(() =>
-            expect(mocks.showWarningMessage).toHaveBeenCalledTimes(1),
-          ),
-        );
+        yield* Deferred.await(warned);
+        expect(mocks.showWarningMessage).toHaveBeenCalledTimes(1);
 
         yield* withProcessServices(
           testRuntime(),

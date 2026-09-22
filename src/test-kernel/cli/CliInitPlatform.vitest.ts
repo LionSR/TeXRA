@@ -4,7 +4,9 @@ import { Effect, Scope } from 'effect';
 import { beforeEach, describe, expect, vi } from 'vitest';
 
 // Local imports
+import { installedProcessRuntime } from '@agent/runtime';
 import { initCliPlatform } from '@cli/runtime/initPlatform';
+import { disposeProcessRuntime } from '@controllers/session/sessionLayer';
 import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
 import { StateWriteFailed } from '@platform/interfaces';
 import { withProcessServices } from '@platform/processRuntime';
@@ -118,8 +120,6 @@ vi.mock('@logger/logUtils', () => ({
   debug: vi.fn(),
   error: vi.fn(),
   info: vi.fn(),
-  isDebugModeEnabled: vi.fn(() => false),
-  setDebugModeConfig: vi.fn(),
   warn: vi.fn(),
 }));
 
@@ -176,7 +176,7 @@ vi.mock('@cli/runtime/cliStateStores', () => ({
 // installs the runtime that serves it: this suite runs that real install, so
 // the open is what it stubs.
 vi.mock('@controllers/session/appStateStore', () => ({
-  openAppStateStore: vi.fn(() => Effect.succeed(mocks.cliGlobalState)),
+  appStateStoreFromDatabase: vi.fn(() => mocks.cliGlobalState),
 }));
 
 vi.mock('@cli/runtime/cliSecrets', () => ({
@@ -191,6 +191,7 @@ function cliContext(
     resourcesPath: '/tmp/resources',
     version: '0.0.0-test',
     quietLogs: true,
+    minimumLogLevel: 'Info',
     skillSourceOptions: {},
     // The provider the startup read opens and this init installs as the
     // roots' config, handed over rather than opened a second time here.
@@ -202,7 +203,12 @@ function cliContext(
 function stubGlobalState(
   get: (key: string, defaultValue: unknown) => unknown = (_key, def) => def,
 ) {
-  return { get: vi.fn(get), update: vi.fn(() => Effect.void) };
+  return {
+    get: vi.fn((key: string, defaultValue: unknown) =>
+      Effect.sync(() => get(key, defaultValue)),
+    ),
+    update: vi.fn(() => Effect.void),
+  };
 }
 
 /**
@@ -233,13 +239,21 @@ function withFreshSignalCapture<E>(
   });
 }
 
+/** Disposes whichever process runtime an earlier case installed, so the
+ *  CLI init below builds its own runtime (and its own lifecycle/setup) instead
+ *  of joining the test kernel's session-graph runtime. */
+const disposeInstalledRuntime: Effect.Effect<void> = Effect.suspend(() => {
+  const runtime = installedProcessRuntime();
+  return runtime ? disposeProcessRuntime(runtime) : Effect.void;
+});
+
 describe('CLI platform init', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.shutdownHandlers.length = 0;
     mocks.cliGlobalState.get.mockReset();
-    mocks.cliGlobalState.get.mockImplementation(
-      (_key, defaultValue) => defaultValue,
+    mocks.cliGlobalState.get.mockImplementation((_key, defaultValue) =>
+      Effect.succeed(defaultValue),
     );
     mocks.cliGlobalState.update.mockReset();
     // The store's write is an Effect the callers compose, so the double's
@@ -318,6 +332,7 @@ describe('CLI platform init', () => {
       // session is built after it, not on a runtime an earlier case's shutdown
       // disposed.
       mocks.tryPlatform.mockReturnValueOnce(undefined);
+      yield* disposeInstalledRuntime;
       yield* initCliPlatform(cliContext({ installSignalHandlers: false }));
       const session = createTestSession();
       const interruptCodex = vi
@@ -353,7 +368,9 @@ describe('CLI platform init', () => {
         );
 
         // The runtime this root installed, as it hands it back: the root's own
-        // local, not a process-wide read.
+        // local, not a process-wide read. Disposing the kernel's runtime first
+        // makes this init the one that installs the CLI runtime.
+        yield* disposeInstalledRuntime;
         const { runtime } = yield* initCliPlatform(cliContext());
 
         const setup = yield* withProcessServices(

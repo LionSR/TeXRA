@@ -100,6 +100,11 @@ class ExecutionsReadFailed extends Data.TaggedError('ExecutionsReadFailed')<{
   readonly cause: unknown;
 }> {}
 
+/** Re-tag any collaborator rejection as {@link ExecutionsReadFailed}. */
+const readFailed = Effect.mapError(
+  (cause: unknown) => new ExecutionsReadFailed({ cause }),
+);
+
 interface RunToolContext {
   readonly session: SessionHandle;
   readonly runId: RunId | undefined;
@@ -502,10 +507,10 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       // Only block kills when the toggle is disabled (the guard above has
       // already narrowed `target` to an owned RunHandle).
       if (
-        !readSettingFrom<boolean>(
+        !(yield* readSettingFrom<boolean>(
           context.session.roots,
           GlobalStateKey.ALLOW_ORCHESTRATOR_KILL,
-        )
+        ))
       ) {
         return yield* Effect.fail(
           new ToolError(
@@ -514,9 +519,12 @@ Delegated subagent and workflow results are delivered automatically as follow-up
         );
       }
 
+      const detachActiveChildren = yield* detachSubagentsOnStop(
+        context.session.roots,
+      );
       const success = yield* Effect.suspend(() => {
         const stop = runs.kill(runId, {
-          detachActiveChildren: detachSubagentsOnStop(context.session.roots),
+          detachActiveChildren,
         });
         // Asked after the settlement: a detaching stop interrupts the run
         // only once its children have left it, so that is when it knows
@@ -655,7 +663,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     const conversationResult = yield* readCompletedRunConversation(
       runId,
       context.session,
-    ).pipe(Effect.mapError((cause) => new ExecutionsReadFailed({ cause })));
+    ).pipe(readFailed);
     const { conversation, source } = conversationResult;
 
     if (!conversation) {
@@ -729,7 +737,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       // transcript is read from the same rows.
       const entries = yield* context.session.transcripts
         .readEntries(runId)
-        .pipe(Effect.mapError((cause) => new ExecutionsReadFailed({ cause })));
+        .pipe(readFailed);
 
       const { lines, chars } = projectProcessOutput(entries);
       // The row above was read before the transcript, and a command that
@@ -804,7 +812,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     runId: RunId,
   ) {
     const files = yield* listRunGeneratedFiles(runId, context.session).pipe(
-      Effect.mapError((cause) => new ExecutionsReadFailed({ cause })),
+      readFailed,
     );
     if (files.length === 0) {
       return executed('No files generated for this run.');
@@ -829,7 +837,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       context.session.roots.storage,
       runId,
       filePath,
-    ).pipe(Effect.mapError((cause) => new ExecutionsReadFailed({ cause })));
+    ).pipe(readFailed);
     if (!fullPath) {
       return yield* Effect.fail(
         new ToolError(`File not found: ${displayPath}`),
@@ -852,7 +860,7 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       { concurrency: 2 },
     );
     const entries = yield* listRunWorkspaceFiles(record, paths).pipe(
-      Effect.mapError((cause) => new ExecutionsReadFailed({ cause })),
+      readFailed,
     );
 
     if (entries.length === 0) {
@@ -946,8 +954,7 @@ const readFileContent = Effect.fn('ExecutionsTool.readFileContent')(function* (
     viewRange: [number, number] | undefined;
   },
 ) {
-  const failed = (cause: unknown) => new ExecutionsReadFailed({ cause });
-  const stats = yield* fs.stat(fullPath).pipe(Effect.mapError(failed));
+  const stats = yield* fs.stat(fullPath).pipe(readFailed);
   // A symlink to a directory counts, which is what the bitmask probe this
   // replaced answered for: the standard `stat` follows the link.
   if (stats.type === 'Directory') {
@@ -958,9 +965,7 @@ const readFileContent = Effect.fn('ExecutionsTool.readFileContent')(function* (
     );
   }
 
-  const content = yield* readNormalizedFile(fs, fullPath).pipe(
-    Effect.mapError(failed),
-  );
+  const content = yield* readNormalizedFile(fs, fullPath).pipe(readFailed);
   return formatFileView({
     path: resultPath,
     lines: splitContentLines(content),

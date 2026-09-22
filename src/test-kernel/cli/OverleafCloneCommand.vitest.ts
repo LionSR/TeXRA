@@ -144,10 +144,10 @@ describe('CLI Overleaf clone command', () => {
     expect(result.exitCode).toBe(CliExitCode.Success);
     // The platform-less handoff itself: clone opens no global state store and
     // no global-root handle, so it holds the event loop open past nothing.
-    expect(mocks.installCliProcessRuntime).toHaveBeenCalledWith(
-      undefined,
-      NO_PLATFORM_INSTALL,
-    );
+    expect(mocks.installCliProcessRuntime).toHaveBeenCalledWith(undefined, {
+      ...NO_PLATFORM_INSTALL,
+      minimumLogLevel: 'Info',
+    });
     expect(mocks.getSecret).toHaveBeenCalledWith('overleaf.gitToken');
     expect(mocks.execa).toHaveBeenCalledWith(
       'git',

@@ -95,7 +95,7 @@ describe('applyHelperModelPreference', () => {
     },
   ])('keeps the selected model when $scenario', ({ helper }) =>
     Effect.gen(function* () {
-      getHelperModelName.mockReturnValue(helper);
+      getHelperModelName.mockReturnValue(Effect.succeed(helper));
 
       const result = yield* resolve(configFor('opus', 'toolUse'));
 
@@ -110,7 +110,7 @@ describe('applyHelperModelPreference', () => {
       Effect.gen(function* () {
         // A workflow agent doesn't use the tool-use flow, so a
         // non-function-calling helper is fine.
-        getHelperModelName.mockReturnValue('chatonly');
+        getHelperModelName.mockReturnValue(Effect.succeed('chatonly'));
         modelUnavailableReasonFrom.mockReturnValue(undefined);
 
         const result = yield* resolve(configFor('opus', 'workflow'));
@@ -126,7 +126,7 @@ describe('applyHelperModelPreference', () => {
     'falls back to the selected model when the helper model is unavailable',
     () =>
       Effect.gen(function* () {
-        getHelperModelName.mockReturnValue('deepseek');
+        getHelperModelName.mockReturnValue(Effect.succeed('deepseek'));
         modelUnavailableReasonFrom.mockReturnValue('No API key configured.');
 
         const result = yield* resolve(configFor('opus'));

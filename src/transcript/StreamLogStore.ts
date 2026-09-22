@@ -69,6 +69,7 @@ function applyEvent(
   log: StreamLog,
   fold: ReturnType<typeof createTranscriptFold>,
   event: SessionEvent,
+  debug: boolean,
 ): void {
   if (event.type === 'run.activate') fold.status(RUN_PHASE.RUNNING);
   else if (event.type === 'flow.step') {
@@ -83,11 +84,14 @@ function applyEvent(
     fold.record(event, {
       at: event.at,
       id: JSON.stringify([event.aggregateId, event.seq]),
-      debug: event.transcriptDebug ?? false,
+      debug,
     });
 }
 
-function foldEntries(events: readonly SessionEvent[]):
+function foldEntries(
+  events: readonly SessionEvent[],
+  debug: boolean,
+):
   | {
       readonly log: StreamLog;
       readonly fold: ReturnType<typeof createTranscriptFold>;
@@ -99,7 +103,7 @@ function foldEntries(events: readonly SessionEvent[]):
   }
   const log = new StreamLog();
   const fold = createTranscriptFold(log);
-  for (const event of events) applyEvent(log, fold, event);
+  for (const event of events) applyEvent(log, fold, event, debug);
   log.drainEmission();
   return { log, fold };
 }
@@ -115,6 +119,9 @@ export class StreamLogStore {
   private constructor(
     readonly mode: StreamLogStoreMode,
     private readonly database: TranscriptDatabase,
+    /** Transcript verbosity, read once from the caller's config authority:
+     *  the same flag the session view fold holds, never a row's property. */
+    private readonly debug: boolean,
   ) {}
 
   /** The root's resident transcript cache. It holds nothing until a run is
@@ -122,8 +129,9 @@ export class StreamLogStore {
   static open(
     database: TranscriptDatabase,
     mode: StreamLogStoreMode = { kind: 'persistent' },
+    debug = false,
   ): StreamLogStore {
-    return new StreamLogStore(mode, database);
+    return new StreamLogStore(mode, database, debug);
   }
 
   /** The run's cached transcript, or undefined when nothing holds one. */
@@ -135,7 +143,11 @@ export class StreamLogStore {
   readEntries(runId: RunId) {
     return this.database
       .readAggregate(aggregateId('run', runId), 0)
-      .pipe(Effect.map((events) => foldEntries(events)?.log.toJSON() ?? []));
+      .pipe(
+        Effect.map(
+          (events) => foldEntries(events, this.debug)?.log.toJSON() ?? [],
+        ),
+      );
   }
 
   /** The run aggregate's committed events; empty when the run never existed
@@ -208,7 +220,7 @@ export class StreamLogStore {
     }
     const cached = this.runs.get(target.id);
     if (cached === undefined) return;
-    applyEvent(cached.log, cached.fold, event);
+    applyEvent(cached.log, cached.fold, event, this.debug);
     // Nothing here reads the log's change buffers; drain them so they do not
     // grow with the resident log.
     cached.log.drainEmission();
@@ -220,6 +232,7 @@ export class StreamLogStore {
       if (this.runs.get(runId)?.hydrated === true) return;
       const seed = foldEntries(
         yield* this.database.readAggregate(aggregateId('run', runId), 0),
+        this.debug,
       );
       const cached = this.runs.get(runId);
       if (cached === undefined) {

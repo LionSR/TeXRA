@@ -10,7 +10,7 @@
  * (`runRegistry.ts`) is what hosts call.
  */
 
-import { Deferred, Effect, Fiber } from 'effect';
+import { Deferred, Effect } from 'effect';
 
 import {
   aggregateId as qualifyAggregateId,
@@ -43,8 +43,7 @@ export class RunStopper {
   ) {}
 
   /**
-   * Terminate a run via its handle, or, for a native child loop between turns
-   * (an activation with no turn handle), interrupt the loop itself. A
+   * Terminate a run's live handle and its child delivery activation. A
    * cascading stop is admitted synchronously and a detaching one with its
    * settlement ({@link RunStop.accepted}); either way the caller executes the
    * returned settlement at its Effect boundary before releasing ownership.
@@ -106,7 +105,7 @@ export class RunStopper {
    * Fails when the run's terminal row could not be written: the run is still
    * in flight, and a caller that reported the stop done would be lying.
    *
-   * A stop of a run no handle here owns writes that row from outside the run,
+   * A stop of a run no handle or child driver owns writes from outside the run,
    * so the run's claim fences the whole gesture, descendant sweep included:
    * taken first, a refusal leaves the descendants running instead of severing
    * them and then reporting the stop unavailable. A locally owned run is
@@ -116,7 +115,8 @@ export class RunStopper {
     runId: RunId,
     options: RunStopOptions = {},
   ): Effect.Effect<void, Error> {
-    if (this.roster.handle(runId)) return this.applyStop(runId, options);
+    if (this.roster.handle(runId) || this.roster.activation(runId))
+      return this.applyStop(runId, options);
     return Effect.acquireUseRelease(
       this.acquireRunClaim(runId),
       () => this.applyStop(runId, options),
@@ -212,7 +212,7 @@ export class RunStopper {
 
   /**
    * Apply one stop: the descendant policy the caller declared, the root
-   * handle's own termination, and — when no live handle took it — the
+   * handle or child driver's termination, and — when neither took it — the
    * terminal row an ownerless stop must write itself. A detaching policy is
    * the whole first step: the children leave the parent, durably and then
    * locally, before anything interrupts it, because a child completing while
@@ -244,7 +244,7 @@ export class RunStopper {
               this.interruptActiveChildren(runId, visited, true, settlements);
             }
 
-            const stopped = rootHandle
+            let stopped = rootHandle
               ? this.terminate(
                   rootHandle,
                   visited,
@@ -252,10 +252,15 @@ export class RunStopper {
                   settlements,
                 )
               : false;
-            // `terminate()` already finalizes a run it owned; an ownerless (or
-            // already-untracked) run still needs the `run.end` row, which is the
-            // run's terminal fact: without the finalize below the fold, history
-            // and every other host would keep the stopped run in flight.
+            if (!rootHandle) {
+              const activation = this.roster.activation(runId);
+              if (activation) {
+                activation.interrupt();
+                stopped = true;
+              }
+            }
+            // A reached handle or child driver owns terminal finalization.
+            // Only an ownerless stop needs to write the terminal fact here.
             const all: Effect.Effect<void, Error>[] = stopped
               ? settlements
               : [...settlements, this.finalizeOwnerlessStop(runId)];
@@ -301,7 +306,7 @@ export class RunStopper {
    * every later one). The scan itself runs here, at the fold, where the row
    * that closed the window reads its children; the settlements it collects
    * are composed, never run: the caller executes the returned program on the
-   * runtime that delivered the fold, and forks the parked-child teardowns it
+   * runtime that delivered the fold, and forks the child teardowns it
    * collects, which cannot fail (their recovery is logged inside).
    */
   sweepChildrenOfFoldedStop(runId: RunId): Effect.Effect<void> {
@@ -321,8 +326,8 @@ export class RunStopper {
     cascadeChildren: boolean,
     settlements: Effect.Effect<void, Error>[],
   ): void {
-    // A loop between turns has no handle to interrupt; a loop inside a turn
-    // also gets its turn handle terminated below. The activation is keyed
+    // Preparation and final delivery outlive the engine handle; stop their
+    // activation as well as the live run below. The activation is keyed
     // apart from the handle so each is interrupted once per stop.
     for (const activation of this.roster.activeChildActivations(parentRunId)) {
       const key = `activation:${activation.runId}`;
@@ -353,7 +358,7 @@ export class RunStopper {
     // to the parent as a completed one.
     const activation = this.roster.activation(handle.runId);
     let activationInterrupted = false;
-    if (activation && !activation.isDetached()) {
+    if (activation && activation.parent.current !== null) {
       const key = `activation:${activation.runId}`;
       if (!visited.has(key)) {
         visited.add(key);
@@ -362,17 +367,6 @@ export class RunStopper {
       }
     }
     const interrupted = handle.interrupt();
-    // A run parked at WAITING is stopped by completing the latch its fiber
-    // waits on: that fiber writes the run's terminal row through the same path
-    // a running generation takes, and this stop settles when it does. Read
-    // after `interrupt()`, whose handler may be a resume's launch stop rather
-    // than this run's, so the parked run is ended here either way.
-    const parked = this.roster.parkedRun(handle.runId);
-    if (parked) {
-      Deferred.doneUnsafe(parked.stopped, Effect.void);
-      settlements.push(Fiber.await(parked.fiber).pipe(Effect.asVoid));
-      return true;
-    }
     // The loop's own interrupt already carried the stop into the turn: the
     // native-subagent strategy links the loop signal to this handle, so
     // aborting the loop spends the handle's interrupt target before we reach

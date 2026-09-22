@@ -127,6 +127,7 @@ import {
   type ReflectionFlowState,
   type ReflectionSnapshotPatch,
 } from './rows';
+import { alreadyOpenedMessage, recordServedUsage } from './loopScaffold';
 import { recordHalt, runStopError } from './runExit';
 import type { HttpClient } from 'effect/unstable/http';
 import type { BoundModel } from '../run/modelBinding';
@@ -337,16 +338,16 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     });
 
   /** Disabling rejection is an explicit acceptance decision. */
-  const normalizeCompileRejectionPolicy = (): void => {
+  const normalizeCompileRejectionPolicy = Effect.fn(function* () {
     if (
-      getRejectOnCompileFailure() ||
+      (yield* getRejectOnCompileFailure()) ||
       (!flow.unresolvedCompileRejection && !flow.compileFailureContext)
     ) {
       return;
     }
     delete flow.unresolvedCompileRejection;
     delete flow.compileFailureContext;
-  };
+  });
   const terminalCompileRejection = (): boolean =>
     flow.unresolvedCompileRejection === true &&
     flow.currentRound + 1 >= flow.totalRounds;
@@ -976,7 +977,10 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     }
     if (
       endTurn &&
-      readSettingFrom<boolean>(roots, WorkspaceStateKey.WORKFLOW_AUTO_OPEN_PDF)
+      (yield* readSettingFrom<boolean>(
+        roots,
+        WorkspaceStateKey.WORKFLOW_AUTO_OPEN_PDF,
+      ))
     ) {
       // A failed compile opens its log; a clean round opens what it produced.
       const locationsToOpen =
@@ -1007,7 +1011,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
       }).pipe(recoverWarn('Validate expected outputs'));
     }
     if (result.compileResult) {
-      const compileFailureContext = getRejectOnCompileFailure()
+      const compileFailureContext = (yield* getRejectOnCompileFailure())
         ? formatCompileFailureRoundContext(result.compileResult)
         : undefined;
       if (compileFailureContext) {
@@ -1146,15 +1150,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
                   outcome.responseTimeMs,
               },
             };
-            // Priced against the binding that served the round: a manual
-            // retry may have rebound the model inside the invoker.
-            const served = yield* SynchronizedRef.get(run.model);
-            yield* Effect.sync(() =>
-              run.usageMonitor.recordUsage(
-                usageSnapshot(state, outcome.usage),
-                served,
-              ),
-            );
+            yield* recordServedUsage(run, usageSnapshot(state, outcome.usage));
           }
           state = yield* processResponse(state);
         }
@@ -1181,11 +1177,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     } else {
       if (!start.resume && loaded.phase !== null) {
         // A fresh launch onto a non-empty aggregate is refused (#11313).
-        return yield* Effect.fail(
-          new Error(
-            `Run ${runId} already has ledger state; resume it instead.`,
-          ),
-        );
+        return yield* Effect.fail(new Error(alreadyOpenedMessage(runId)));
       }
       yield* restore(loaded);
       state = yield* commit(loaded);
@@ -1207,7 +1199,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
           }),
         ),
       );
-    normalizeCompileRejectionPolicy();
+    yield* normalizeCompileRejectionPolicy();
 
     /**
      * Advance onto the next round: reset the per-round flow facts and
@@ -1246,7 +1238,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
       current: RunState,
       roundEnded: boolean,
     ): Effect.fn.Return<LoopExit, Error> {
-      normalizeCompileRejectionPolicy();
+      yield* normalizeCompileRejectionPolicy();
       const outcome = resolveOutcome();
       const state = yield* commit(
         yield* ledger.appendBatch(runId, current, [

@@ -1,5 +1,5 @@
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, Exit, Scope } from 'effect';
 
 // Local imports
 import {
@@ -9,7 +9,6 @@ import {
   tryDefaultSession,
   type SessionHandle,
 } from '@agent/runtime';
-import { createPlatformAgentDirectories } from '@agent/index';
 import type { SupabaseSessionLog } from '@auth/SupabaseSession';
 import { bootstrapHost } from '@controllers/hostBootstrap';
 import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
@@ -17,7 +16,9 @@ import { consoleLogSink, setLogSink, silentLogSink } from '@logger/logSink';
 import { initPlatform, tryPlatform, type Platform } from '@platform/platform';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
+  AgentDirectories,
   AppState,
+  Lifecycle,
   type LifecycleHost,
   type StateStore,
   type StateWriteFailed,
@@ -28,7 +29,6 @@ import {
   withProcessServices,
   type ProcessRuntime,
 } from '@platform/processRuntime';
-import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { createNodeWorkspaceRoots } from '@platform/defaults/nodeHost';
 import { DEFAULT_NODE_STORAGE_ROOT } from '@platform/defaults/nodeStorage';
 import { resolveGlobalStoragePath } from '@platform/defaults/workspaceStorage';
@@ -131,13 +131,6 @@ function logAt(
 ): void {
   if (quietPlatformLogs) return;
   writeTextStderr(`[${level}] [${channel}] ${message}`);
-}
-
-// A shutdown-handler failure is actionable degradation by the same rule, so it
-// bypasses quietLogs too — every CLI command passes quietLogs:true, and routing
-// this through logAt would make the cross-host parity below unreachable.
-function showLifecycleError(message: string): void {
-  writeTextStderr(`[error] [cli.lifecycle] ${message}`);
 }
 
 const cliPlatformLog: SupabaseSessionLog = {
@@ -261,7 +254,8 @@ let installedRoots: WorkspaceRoots | undefined;
  * installed at all (the TUI harness).
  */
 export function initCliPlatform(
-  context: CliPlatformInitOptions & Pick<CliContext, 'quietLogs'>,
+  context: CliPlatformInitOptions &
+    Pick<CliContext, 'quietLogs' | 'minimumLogLevel'>,
 ): Effect.Effect<CliPlatformServices, Error> {
   return Effect.gen(function* () {
     quietPlatformLogs = context.quietLogs;
@@ -279,7 +273,11 @@ export function initCliPlatform(
     // init finds it installed; each then adopts that one rather than building a
     // second and leaving the first undisposed.
     const runtime = yield* Effect.tryPromise({
-      try: () => installCliProcessRuntime(context.storageRoot),
+      try: () =>
+        installCliProcessRuntime(context.storageRoot, {
+          resourcesPath: context.resourcesPath,
+          minimumLogLevel: context.minimumLogLevel,
+        }),
       catch: ensureError,
     });
 
@@ -304,111 +302,113 @@ export function initCliPlatform(
         const installed = tryPlatform();
         if (installed) return { globalState, platform: installed };
 
-        const stateStores = yield* openCliWorkspaceState({
-          storageRoot: context.storageRoot,
-          workspacePath: context.cwd,
-        });
-        // Same severity and wording as the extension/desktop hosts: a shutdown
-        // handler failure is an error everywhere, not a warning in one host.
-        const lifecycle = createLifecycleHost({
-          onError: (phase, error) => {
-            showLifecycleError(
-              `Lifecycle ${phase} handler failed: ${toErrorMessage(error)}`,
-            );
-          },
-        });
-        const agentDirectories = createPlatformAgentDirectories({
-          channel: 'cli',
-          // Built-in agents are read straight out of the CLI package's shipped
-          // `dist/resources`, never copied into the shared `~/.texra` root.
-          resourcesPath: context.resourcesPath,
-          customDirectoryStore: { get: () => undefined },
-        });
-        const cliSecrets = getCliSecrets(context.storageRoot);
-        const platform: Platform = { lifecycle, agentDirectories };
-        // One process, one project: the process roots are the `--cwd` workspace,
-        // over the config provider the startup read already opened — the project
-        // `.texra/config.json` (or the internal workspace store, when that file
-        // cannot be read or its directory written) layered over the user-level
-        // `~/.texra/v1/global-storage/config.json`. One provider per process is
-        // what keeps a value `texra config` writes readable at the next startup.
-        const roots = createNodeWorkspaceRoots({
-          workspacePath: context.cwd,
-          storage: stateStores.storage.getStoragePath(),
-          globalStorage: stateStores.storage.getGlobalStoragePath(),
-          config: context.config,
-          workspaceState: stateStores.workspaceState,
-          globalState,
-        });
-        // The one open of the process session, over the roots published below,
-        // memoized so the first entry point that needs a session opens it and
-        // every later one gets the same handle; an entry that needs none never
-        // opens one. The latex text connector asks a helper model how to join
-        // two strings; that model is resolved against the stores this root
-        // opened.
-        const openSession = yield* Effect.cached(
-          initializeDefaultSession({
+        const projectScope = yield* Scope.make();
+        const closeProject = Scope.close(projectScope, Exit.void);
+        return yield* Effect.gen(function* () {
+          const stateStores = yield* openCliWorkspaceState({
+            storageRoot: context.storageRoot,
+            workspacePath: context.cwd,
+          }).pipe(Scope.provide(projectScope));
+          // The process lifecycle and agent directories are the values the
+          // runtime install built before the platform init: the platform
+          // publishes the same instances, so nothing here re-enters the ambient
+          // locator or builds a second copy beside the runtime's.
+          const lifecycle = yield* Lifecycle;
+          const agentDirectories = yield* AgentDirectories;
+          const cliSecrets = getCliSecrets(context.storageRoot);
+          const platform: Platform = { lifecycle, agentDirectories };
+          // One process, one project: the process roots are the `--cwd` workspace,
+          // over the config provider the startup read already opened — the project
+          // `.texra/config.json` (or the internal workspace store, when that file
+          // cannot be read or its directory written) layered over the user-level
+          // `~/.texra/v1/global-storage/config.json`. One provider per process is
+          // what keeps a value `texra config` writes readable at the next startup.
+          const roots = createNodeWorkspaceRoots({
+            workspacePath: context.cwd,
+            storage: stateStores.storage.getStoragePath(),
+            globalStorage: stateStores.storage.getGlobalStoragePath(),
+            config: context.config,
+            workspaceState: stateStores.workspaceState,
+            globalState,
+          });
+          // The one open of the process session, over the roots published below,
+          // memoized so the first entry point that needs a session opens it and
+          // every later one gets the same handle; an entry that needs none never
+          // opens one. The latex text connector asks a helper model how to join
+          // two strings; that model is resolved against the stores this root
+          // opened.
+          const openSession = yield* Effect.cached(
+            Effect.acquireRelease(
+              initializeDefaultSession({
+                roots,
+                responseTextProcessing: createTexraResponseTextProcessing(
+                  createAgentResponseTextConnector({
+                    ...roots,
+                    secrets: cliSecrets,
+                  }),
+                ),
+              }),
+              () => teardownDefaultSession(),
+            ).pipe(
+              Scope.provide(projectScope),
+              Effect.tap((session) =>
+                Effect.sync(() => {
+                  const cleared = session.storeCleared;
+                  if (cleared) {
+                    writeTextStderr(sessionStoreClearedMessage(cleared));
+                  }
+                }),
+              ),
+            ),
+          );
+
+          // Everything this process installs once beside its platform, in the
+          // order the shared bootstrap owns for all three hosts. Before
+          // `initPlatform` below, not after: its one fallible step (the
+          // first-install tool seed) must fail while the platform is still
+          // private, as the seed did when this body owned it.
+          yield* bootstrapHost({
+            host: 'cli',
             roots,
-            responseTextProcessing: createTexraResponseTextProcessing(
-              createAgentResponseTextConnector({
-                ...roots,
-                secrets: cliSecrets,
-              }),
-            ),
-          }).pipe(
-            Effect.tap((session) =>
-              Effect.sync(() => {
-                const cleared = session.storeCleared;
-                if (cleared) {
-                  writeTextStderr(sessionStoreClearedMessage(cleared));
-                }
-              }),
-            ),
+            secrets: cliSecrets,
+            skills: {
+              resourcesPath: context.resourcesPath,
+              skillSourceOptions: context.skillSourceOptions,
+            },
+          });
+
+          // Kill agent-spawned OS children before the process dies, exactly as the
+          // extension and desktop hosts do. Background `bash` runs are spawned
+          // `detached` (their own process group, see execUtils) so they survive
+          // `texra` exiting and can never deliver their follow-up result — without
+          // this drain they are orphaned. The usage log is drained later still,
+          // by the runtime disposal these handlers end with.
+          registerRuntimeShutdownHandlers(lifecycle, {
+            // The session is opened lazily (`sessionOpen`); a process that never
+            // asked for one has nothing to flush.
+            flushArtifacts: Effect.suspend(() => {
+              const session = tryDefaultSession();
+              return session ? session.settlePublications() : Effect.void;
+            }),
+            afterRunSettlement: [
+              closeProject,
+              flushNdjsonStdout(),
+              disposeCliProcessRuntime,
+            ],
+          });
+
+          initPlatform(platform);
+          installedRoots = roots;
+          sessionOpen = openSession;
+          if (context.installSignalHandlers !== false) {
+            installCliShutdownSignalHandlers(lifecycle);
+          }
+          return { globalState, platform };
+        }).pipe(
+          Effect.onExit((exit) =>
+            Exit.isFailure(exit) ? closeProject : Effect.void,
           ),
         );
-
-        // Everything this process installs once beside its platform, in the
-        // order the shared bootstrap owns for all three hosts. Before
-        // `initPlatform` below, not after: its one fallible step (the
-        // first-install tool seed) must fail while the platform is still
-        // private, as the seed did when this body owned it.
-        yield* bootstrapHost({
-          host: 'cli',
-          roots,
-          secrets: cliSecrets,
-          skills: {
-            resourcesPath: context.resourcesPath,
-            skillSourceOptions: context.skillSourceOptions,
-          },
-        });
-
-        // Kill agent-spawned OS children before the process dies, exactly as the
-        // extension and desktop hosts do. Background `bash` runs are spawned
-        // `detached` (their own process group, see execUtils) so they survive
-        // `texra` exiting and can never deliver their follow-up result — without
-        // this drain they are orphaned. The usage log is drained later still,
-        // by the runtime disposal these handlers end with.
-        registerRuntimeShutdownHandlers(lifecycle, {
-          // The session is opened lazily (`sessionOpen`); a process that never
-          // asked for one has nothing to flush.
-          flushArtifacts: Effect.suspend(() => {
-            const session = tryDefaultSession();
-            return session ? session.settlePublications() : Effect.void;
-          }),
-          afterRunSettlement: [
-            teardownDefaultSession(),
-            flushNdjsonStdout(),
-            disposeCliProcessRuntime,
-          ],
-        });
-
-        initPlatform(platform);
-        installedRoots = roots;
-        sessionOpen = openSession;
-        if (context.installSignalHandlers !== false) {
-          installCliShutdownSignalHandlers(lifecycle);
-        }
-        return { globalState, platform };
       }),
     ).pipe(Effect.onError(() => disposeCliProcessRuntime));
 

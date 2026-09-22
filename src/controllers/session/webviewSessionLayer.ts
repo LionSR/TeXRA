@@ -39,7 +39,8 @@ const webviewSessionLayer = (key: string) =>
           Layer.effect(
             SessionInputs,
             Effect.map(SessionFrames, (frames) => ({
-              read: (aggregates) => frames.inputs(aggregates),
+              read: (aggregates, _fromCommit, previousDebug) =>
+                frames.inputs(aggregates, previousDebug),
             })),
           ),
           TranscriptSubscriptions.layer,

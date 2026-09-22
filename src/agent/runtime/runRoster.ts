@@ -4,7 +4,7 @@
  * One roster per session is the single in-process authority for "is a
  * generation of this run live here" ({@link RunRoster.isLive}, the one
  * admission): the tracked handle, the native child loop's activation, the
- * fiber a WAITING generation parked on, the run's serial lifecycle lane and
+ * the run's serial lifecycle lane and
  * the generations holding it are fields of one entry, so admission, stop and
  * deletion all answer from the same record. The registry (`runRegistry.ts`)
  * owns the session-facing surface, the stopper (`runStopping.ts`) what a stop
@@ -25,7 +25,7 @@ import type { RunId } from '@shared/schemas';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
 import { RunChangeListeners } from './runChangeListeners';
 import type { RunHandle } from './RunHandle';
-import type { ChildRunActivation, ParkedRun } from './runRegistryTypes';
+import type { ChildRunActivation } from './runRegistryTypes';
 
 /** A generation, a hold or a retained owner already has the run here: the one
  *  refusal for that fact. Hosts word it from `message`; a resume reads the tag
@@ -43,7 +43,6 @@ export class RunLive extends Data.TaggedError('RunLive')<{
 interface RunEntry {
   handle?: RunHandle;
   activation?: ChildRunActivation;
-  parked?: ParkedRun;
   /** The run's hand-off chain while a fiber holds or waits on it. */
   lane?: PerKeyLane;
   /** Generations of this run holding or waiting on that lane; an inactive-run
@@ -94,9 +93,12 @@ export class RunRoster {
 
   /** Drop an entry that records nothing: the run is not here any more. */
   private prune(runId: RunId, entry: RunEntry): void {
-    if (entry.handle ?? entry.activation ?? entry.parked ?? entry.lane) return;
+    if (entry.handle ?? entry.activation ?? entry.lane) return;
     if (entry.launches > 0 || entry.generations.size > 0) return;
-    if (this.entries.get(runId) === entry) this.entries.delete(runId);
+    if (this.entries.get(runId) === entry) {
+      this.entries.delete(runId);
+      this.notifyWaiters(runId);
+    }
   }
 
   // ---------------------------------------------------------------- handles
@@ -113,7 +115,12 @@ export class RunRoster {
   }
 
   setHandle(handle: RunHandle): void {
-    this.entryFor(handle.runId).handle = handle;
+    const entry = this.entryFor(handle.runId);
+    handle.parentState =
+      entry.activation?.parent ??
+      entry.handle?.parentState ??
+      handle.parentState;
+    entry.handle = handle;
   }
 
   /** Remove a run handle and notify waiters; a run with no handle still
@@ -142,7 +149,9 @@ export class RunRoster {
 
   /** Retain a native child loop's lineage. */
   addActivation(activation: ChildRunActivation): void {
-    this.entryFor(activation.runId).activation = activation;
+    const entry = this.entryFor(activation.runId);
+    activation.parent = entry.handle?.parentState ?? activation.parent;
+    entry.activation = activation;
   }
 
   removeActivation(runId: RunId, expected: ChildRunActivation): void {
@@ -159,8 +168,7 @@ export class RunRoster {
       const activation = entry.activation;
       if (
         activation !== undefined &&
-        activation.parentRunId === parentRunId &&
-        !activation.isDetached()
+        activation.parent.current === parentRunId
       ) {
         yield activation;
       }
@@ -168,7 +176,7 @@ export class RunRoster {
   }
 
   /** The children one parent's detach covers. A Set, not an array: a child
-   *  detached mid-turn has both a per-turn handle and a ChildRunActivation
+   *  detached mid-turn has both a live handle and a ChildRunActivation
    *  under one runId, so both loops reach it and it is severed once. */
   childRunIds(parentRunId: RunId): readonly RunId[] {
     const childRunIds = new Set<RunId>();
@@ -191,11 +199,9 @@ export class RunRoster {
   ): void {
     for (const childRunId of childRunIds) {
       const entry = this.entries.get(childRunId);
-      const activation = entry?.activation;
-      if (activation?.parentRunId === parentRunId) activation.detach();
+      const parent = entry?.activation?.parent ?? entry?.handle?.parentState;
+      if (parent?.current === parentRunId) parent.current = null;
       this.approvals.detachRunFromParent(childRunId);
-      const handle = entry?.handle;
-      if (handle?.isOwnedBy(parentRunId) === true) handle.detach();
     }
   }
 
@@ -213,15 +219,14 @@ export class RunRoster {
   /** Whether a child may be admitted under `parentRunId` now. A begun stop of
    *  the parent refuses a new child ({@link beginStop}); a child this roster
    *  already holds is not a new admission — a native child's activation and
-   *  its turn handles re-enter while the detach runs. */
+   *  its live handles re-enter while the detach runs. */
   admitsChild(parentRunId: RunId, childRunId: RunId): boolean {
     return !this.isStopping(parentRunId) || this.isRetained(childRunId);
   }
 
-  /** Every run live in this session: the tracked handles and the native child
-   *  loops retained between turns, whose activation is their only record. What
-   *  a close stops and waits on, so a child with a final delivery to do is
-   *  never left running under a released session. */
+  /** Runs with a live interrupt target: tracked handles and native child
+   *  activations. A lane still releasing resources can outlive both; the
+   *  drain waits for its entry without trying to stop it again. */
   activeIds(): RunId[] {
     const ids: RunId[] = [];
     for (const [runId, entry] of this.entries)
@@ -232,54 +237,11 @@ export class RunRoster {
 
   // ----------------------------------------------------------------- parking
 
-  setParked(runId: RunId, parked: ParkedRun): void {
-    this.entryFor(runId).parked = parked;
-    parked.fiber.addObserver(() => {
-      const entry = this.entries.get(runId);
-      if (entry?.parked !== parked) return;
-      entry.parked = undefined;
-      this.prune(runId, entry);
-    });
-  }
-
-  parkedRun(runId: RunId): ParkedRun | undefined {
-    return this.entries.get(runId)?.parked;
-  }
-
-  isParked(runId: RunId): boolean {
-    return this.entries.get(runId)?.parked !== undefined;
-  }
-
-  /** Drop the park record for `runId` and hand it back, so the caller decides
-   *  whether the fiber is interrupted (a resume) or woken (a stop). */
-  takeParked(runId: RunId): ParkedRun | undefined {
-    const entry = this.entries.get(runId);
-    const parked = entry?.parked;
-    if (entry && parked) {
-      entry.parked = undefined;
-      this.prune(runId, entry);
-    }
-    return parked;
-  }
-
-  // --------------------------------------------------------------- lifecycle
-
-  /** Whether a generation of `runId` is live here, read off the one entry: a
-   *  launch on its lane, a generation still unwinding, a caller holding it
-   *  against local ownership ({@link holdInactive}), or a turn whose tool-use
-   *  flow is attached. A second generation is refused on it rather than
-   *  queued; an inactive-run step holds the lane without being one, so a
-   *  launch queues behind a deletion. A parked turn is none of them until a
-   *  stop wakes it: a resume supersedes the fiber where it waits, but a woken
-   *  park is the run unwinding, still owing its terminal row and its claim.
-   *  Local ownership, never the durable phase: a crash leaves the phase
-   *  RUNNING, and an orphaned run in that phase is what a resume takes over. */
+  /** Whether this process holds a live generation of the run. */
   isLive(runId: RunId): boolean {
     const entry = this.entries.get(runId);
     if (entry === undefined) return false;
     if (entry.generations.size > 0 || entry.launches > 0) return true;
-    if (entry.parked !== undefined)
-      return Deferred.isDoneUnsafe(entry.parked.stopped);
     return entry.handle?.getToolUseFlow() !== undefined;
   }
 
@@ -399,8 +361,8 @@ export class RunRoster {
     return this.listeners.waitForAnyChange(runIds);
   }
 
-  /** Resolve once every run this roster holds has left it: the drain a session
-   *  close and a project close both wait on, over {@link activeIds}.
+  /** Resolve once every owner has left: handles, child activations, lanes and
+   *  scoped holds. Terminal handle removal can precede a lane's final writes.
    *  Interrupting the waiting fiber — what a close budget does — detaches the
    *  listeners with it. The re-check arm is load-bearing: `raceAllFirst`
    *  starts its arms in order, so the wait registers first and the re-check
@@ -410,12 +372,12 @@ export class RunRoster {
   awaitDrained(): Effect.Effect<void> {
     return Effect.gen({ self: this }, function* () {
       for (;;) {
-        const active = this.activeIds();
+        const active = [...this.entries.keys()];
         if (active.length === 0) return;
         yield* Effect.raceAllFirst([
           this.waitForAnyChange(active).pipe(Effect.asVoid),
           Effect.suspend(() =>
-            this.activeIds().length === 0 ? Effect.void : Effect.never,
+            this.entries.size === 0 ? Effect.void : Effect.never,
           ),
         ]);
       }
@@ -487,11 +449,7 @@ export class RunRoster {
       Deferred.doneUnsafe(refusal, Effect.fail(disposal));
     }
     this.waiting.clear();
-    const tracked: RunId[] = [];
-    for (const [runId, entry] of this.entries) {
-      entry.parked?.fiber.interruptUnsafe();
-      if (entry.handle !== undefined) tracked.push(runId);
-    }
+    const tracked = [...this.entries.keys()];
     this.entries.clear();
     for (const runId of tracked) this.notifyWaiters(runId);
     this.stopping.clear();

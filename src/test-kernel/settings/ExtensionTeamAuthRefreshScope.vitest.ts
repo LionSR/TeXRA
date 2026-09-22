@@ -35,25 +35,26 @@ describe('extension team auth catalog refresh scope', () => {
         const result = yield* withAgentCatalogAuthRefreshDeferred(
           applyTeamRosterWithPreflight('remote-team', {
             catalog: {
-              resolvePreset: () => ({
-                ok: true,
-                preset,
-                resolution: refreshed
-                  ? {
-                      keys: {
-                        workflow: [],
-                        toolUse: ['remote:orchestrator'],
+              resolvePreset: () =>
+                Effect.succeed({
+                  ok: true,
+                  preset,
+                  resolution: refreshed
+                    ? {
+                        keys: {
+                          workflow: [],
+                          toolUse: ['remote:orchestrator'],
+                        },
+                        unresolvedNames: [],
+                      }
+                    : {
+                        keys: {
+                          workflow: [],
+                          toolUse: [],
+                        },
+                        unresolvedNames: ['orchestrator'],
                       },
-                      unresolvedNames: [],
-                    }
-                  : {
-                      keys: {
-                        workflow: [],
-                        toolUse: [],
-                      },
-                      unresolvedNames: ['orchestrator'],
-                    },
-              }),
+                }),
               commitPreset,
             },
             loadLocalCatalog: () => Effect.void,

@@ -12,7 +12,6 @@ import path from 'node:path';
 
 import { Effect, FileSystem } from 'effect';
 
-import type { AgentFlowResult } from '@agent/runtime/AgentFlowResult';
 import { normalizeProviderError } from '@common/errors/sdkError/providerErrorFormat';
 import { withLogChannel } from '@logger/effectLog';
 import { createLog } from '@logger/logUtils';
@@ -418,7 +417,7 @@ export const buildSubagentResult = Effect.fn(
 )(function* (
   runId: RunId,
   agentName: string,
-  result: AgentFlowResult,
+  output: RunEndOutput,
   options: {
     readonly startedAt: number;
     /** Storage root of the launching session: where this run's diffs land. */
@@ -427,16 +426,13 @@ export const buildSubagentResult = Effect.fn(
 ): Effect.fn.Return<SubagentResultMeta, never, FileSystem.FileSystem> {
   let diffInfos: Map<string, DiffFileInfo> | undefined;
   let diffsUnavailable: string | undefined;
-  if (
-    result.output.category === 'workflow' &&
-    result.output.outputs.length > 0
-  ) {
+  if (output.category === 'workflow' && output.outputs.length > 0) {
     // Diff computation failure is non-fatal: deliver without diffs, but tell
     // the orchestrator to read the output files directly.
     diffInfos = yield* computeAndWriteWorkflowDiffs(
       options.storageRoot,
       runId,
-      result.output.outputs,
+      output.outputs,
     ).pipe(
       Effect.catch((err) =>
         Effect.sync(() => {
@@ -451,13 +447,13 @@ export const buildSubagentResult = Effect.fn(
   }
 
   const wallTimeMs = Date.now() - options.startedAt;
-  const output: RunEndOutput =
-    result.output.category === 'workflow'
+  const enriched: RunEndOutput =
+    output.category === 'workflow'
       ? {
-          ...result.output,
+          ...output,
           ...(diffInfos
             ? {
-                diffs: result.output.outputs.flatMap((file) => {
+                diffs: output.outputs.flatMap((file) => {
                   const diff = diffInfos.get(file.absolutePath);
                   return diff ? [{ path: file.absolutePath, ...diff }] : [];
                 }),
@@ -465,6 +461,6 @@ export const buildSubagentResult = Effect.fn(
             : {}),
           ...(diffsUnavailable !== undefined ? { diffsUnavailable } : {}),
         }
-      : result.output;
-  return buildSubagentResultMeta(agentName, output, wallTimeMs);
+      : output;
+  return buildSubagentResultMeta(agentName, enriched, wallTimeMs);
 });

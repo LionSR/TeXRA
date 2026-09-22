@@ -1,11 +1,14 @@
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Effect, Fiber } from 'effect';
+import { Effect, Fiber, FileSystem } from 'effect';
 import { beforeEach, describe, expect, vi } from 'vitest';
 
 // Type imports
 import type { AgentDirectoryEntry } from '@agent/index';
 import { withProcessServices } from '@platform/processRuntime';
+import { buildCustomAgentDirMessage } from '@shared/settingsView/handlers/agentSelectionHandlers';
+import { GlobalStateKey } from '@shared/state/stateKeys';
+import { FakeStateStore } from '@test/support/FakePlatform';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import type * as vscode from 'vscode';
@@ -15,12 +18,18 @@ const EXTERNAL_SECOND = '/external/second';
 
 const mocks = vi.hoisted(() => ({
   getAllLocal: vi.fn<() => Promise<unknown[]>>(),
+  selectFolder: vi.fn(() => Effect.succeed<string | null>(null)),
   liveWatcherDirectories: new Set<string>(),
   watchedDirectories: [] as string[],
   /** Directory listings keyed by fsPath, standing in for the disk. */
   tree: new Map<string, [string, number][]>(),
-  /** Reads parked until the test releases them, keyed by fsPath. */
-  heldReads: new Map<string, { promise: Promise<void> }>(),
+  /** Reads parked until the test releases them, keyed by fsPath. `onReached`
+   *  fires the moment the mock consumes the parked read (so a test can await
+   *  that instead of polling the map), before the read parks on `promise`. */
+  heldReads: new Map<
+    string,
+    { promise: Promise<void>; onReached?: () => void }
+  >(),
   createHandlers: new Map<string, (uri: { fsPath: string }) => void>(),
 }));
 
@@ -42,6 +51,7 @@ vi.mock('vscode', () => ({
         const held = mocks.heldReads.get(uri.fsPath);
         if (held) {
           mocks.heldReads.delete(uri.fsPath);
+          held.onReached?.();
           await held.promise;
         }
         return entries;
@@ -83,10 +93,15 @@ vi.mock('node:fs/promises', async (importOriginal) => ({
 vi.mock('@agent/index/platformAgentDirectories', () => ({
   // The service's readers, `Effect`s like the ones `AgentDirectoryService`
   // answers with: the rebuild under test composes them.
-  createPlatformAgentDirectories: () => ({
+  createPlatformAgentDirectories: (options: {
+    customDirectoryStore: { get(): Effect.Effect<string | undefined> };
+  }) => ({
     builtIn: () => Effect.succeed('/agents/builtin'),
     builtInToolUse: () => Effect.succeed('/agents/toolUse'),
-    custom: () => Effect.succeed('/agents/custom'),
+    custom: () =>
+      options.customDirectoryStore
+        .get()
+        .pipe(Effect.map((value) => value || '/agents/custom')),
     getDirectory: () => Effect.succeed(undefined),
     getAllLocal: () => Effect.promise(() => mocks.getAllLocal()),
   }),
@@ -97,7 +112,7 @@ vi.mock('@frontend/ui/errorHandlingUtils', () => ({
 }));
 
 vi.mock('@frontend/ui/dialogs', () => ({
-  selectFolder: vi.fn(),
+  selectFolder: mocks.selectFolder,
 }));
 
 vi.mock('@logger/logUtils', () => ({
@@ -138,17 +153,6 @@ function fireCreate(watchedDirectory: string, createdPath: string): void {
   handler({ fsPath: createdPath });
 }
 
-/**
- * The manager now takes the extension's global-state memento at
- * `initialize()`. This suite mocks the directory service that reads it, so
- * only the shape has to be there.
- */
-const globalState = {
-  keys: () => [],
-  get: (_key: string, defaultValue?: unknown) => defaultValue,
-  update: async () => {},
-} as unknown as vscode.Memento;
-
 /** Lets every queued rebuild run to completion. */
 async function settle(): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, 0));
@@ -166,13 +170,60 @@ describe('agent directory watcher rebuilds', () => {
     mocks.heldReads.clear();
     mocks.createHandlers.clear();
     mocks.getAllLocal.mockReset();
-    agentDirectories.initialize(globalState, '/resources', testRuntime());
+    mocks.selectFolder.mockReturnValue(Effect.succeed(null));
+    agentDirectories.initialize(
+      new FakeStateStore(),
+      '/resources',
+      testRuntime(),
+    );
   });
 
   function subscribe(): vscode.Disposable {
     subscription = agentDirectories.watchAgentDirectories(() => {});
     return subscription;
   }
+
+  it.effect(
+    'shares directory selection and reset with the settings state store',
+    () =>
+      Effect.gen(function* () {
+        const globalState = new FakeStateStore();
+        agentDirectories.initialize(globalState, '/resources', testRuntime());
+        mocks.selectFolder.mockReturnValue(Effect.succeed(EXTERNAL_FIRST));
+        yield* agentDirectories
+          .promptCustom()
+          .pipe(
+            Effect.provide(
+              FileSystem.layerNoop({ makeDirectory: () => Effect.void }),
+            ),
+          );
+        expect(yield* globalState.get(GlobalStateKey.CUSTOM_AGENT_DIR)).toBe(
+          EXTERNAL_FIRST,
+        );
+        expect(
+          yield* withProcessServices(
+            testRuntime(),
+            buildCustomAgentDirMessage(globalState, agentDirectories.custom()),
+          ),
+        ).toEqual({
+          command: 'updateCustomAgentDir',
+          path: EXTERNAL_FIRST,
+          isDefault: false,
+        });
+
+        yield* globalState.update(GlobalStateKey.CUSTOM_AGENT_DIR, undefined);
+        expect(
+          yield* withProcessServices(
+            testRuntime(),
+            buildCustomAgentDirMessage(globalState, agentDirectories.custom()),
+          ),
+        ).toEqual({
+          command: 'updateCustomAgentDir',
+          path: '/agents/custom',
+          isDefault: true,
+        });
+      }),
+  );
 
   /** Parks the first directory read; later reads return `subsequent`. */
   function parkFirstRead(
@@ -271,16 +322,18 @@ describe('agent directory watcher rebuilds', () => {
 
   it('disposes watchers built after the last subscription is removed', async () => {
     const scan = createDeferred<void>();
+    const readReached = createDeferred<void>();
     mocks.getAllLocal.mockResolvedValue([
       { directory: EXTERNAL_FIRST, source: 'custom' },
     ]);
     mocks.tree.set(EXTERNAL_FIRST, []);
-    mocks.heldReads.set(EXTERNAL_FIRST, scan);
+    mocks.heldReads.set(EXTERNAL_FIRST, {
+      promise: scan.promise,
+      onReached: () => readReached.resolve(),
+    });
 
     const handle = subscribe();
-    await vi.waitFor(() => {
-      expect(mocks.heldReads.has(EXTERNAL_FIRST)).toBe(false);
-    });
+    await readReached.promise;
 
     handle.dispose();
     subscription = undefined;

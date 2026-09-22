@@ -1,5 +1,5 @@
 import { it } from '@effect/vitest';
-import { Effect } from 'effect';
+import { Deferred, Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
@@ -16,6 +16,7 @@ import { HOMEBREW_INSTALL_COMMAND } from '@shared/constants/latexToolchain';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { assertSupported, isUnsupported } from '@shared/utils/dispatcher';
 import { testRuntime } from '@test/support/testProcessRuntime';
+import { createDeferred } from '@test/support/asyncTestUtils';
 import { FakeConfigProvider, FakeStateStore } from '@test/support/FakePlatform';
 import type { ToolProbeInputs } from '@tools/externalToolDefs';
 import type { ExternalToolCheckResult } from '@tools/toolAvailability';
@@ -124,7 +125,13 @@ function installDefaultToolDataDoubles(): void {
   }));
 }
 
-function createFixture(overrides: Partial<ControllerOptions> = {}) {
+function createFixture(
+  overrides: Partial<ControllerOptions> = {},
+  hooks: {
+    onPost?: (message: unknown, posted: unknown[]) => void;
+    onErrorReport?: (error: unknown, reportedErrors: unknown[]) => void;
+  } = {},
+) {
   const posted: unknown[] = [];
   const reportedErrors: unknown[] = [];
   const commands: string[] = [];
@@ -132,13 +139,19 @@ function createFixture(overrides: Partial<ControllerOptions> = {}) {
   const globalState = overrides.globalState ?? new FakeStateStore();
   const workspaceState = overrides.workspaceState ?? new FakeStateStore();
   const controller = new DefaultDesktopToolingSettingsController({
-    onError: (error) => reportedErrors.push(error),
+    onError: (error) => {
+      reportedErrors.push(error);
+      hooks.onErrorReport?.(error, reportedErrors);
+    },
     config: new FakeConfigProvider(),
     globalState,
     workspaceState,
     workspaceRoot: undefined,
     renderer: {
-      postToRenderer: (message) => posted.push(message),
+      postToRenderer: (message) => {
+        posted.push(message);
+        hooks.onPost?.(message, posted);
+      },
     },
     navigation: {
       openExternal: async (url) => {
@@ -205,9 +218,18 @@ describe('DefaultDesktopToolingSettingsController', () => {
         await refreshPending;
         emitAppSignal('toolAvailabilityChanged', undefined);
       });
-      const { controller, posted } = createFixture();
+      const repainted = Deferred.makeUnsafe<void>();
+      const { controller, posted } = createFixture(
+        {},
+        {
+          onPost: (_message, posted) => {
+            if (posted.length === 4)
+              Deferred.doneUnsafe(repainted, Effect.void);
+          },
+        },
+      );
 
-      controller.postLatexConfigValues();
+      yield* controller.postLatexConfigValues();
       yield* withProcessServices(testRuntime(), controller.postStartupData());
 
       const startup = posted.map(commandOf);
@@ -226,14 +248,10 @@ describe('DefaultDesktopToolingSettingsController', () => {
       expect(buildInputs).toEqual([undefined]);
 
       finishRefresh?.();
-      yield* Effect.promise(() =>
-        vi.waitFor(() => {
-          const repainted = posted.map(commandOf);
-          expect(repainted).toHaveLength(4);
-          expect(repainted.at(-1)).toBe(
-            SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD,
-          );
-        }),
+      yield* Deferred.await(repainted);
+      expect(posted.map(commandOf)).toHaveLength(4);
+      expect(posted.map(commandOf).at(-1)).toBe(
+        SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD,
       );
     }),
   );
@@ -244,178 +262,252 @@ describe('DefaultDesktopToolingSettingsController', () => {
       Effect.gen(function* () {
         const refreshError = new Error('tool probe failed');
         toolData.refreshAvailability.mockRejectedValue(refreshError);
-        const { controller, reportedErrors } = createFixture();
+        const errorReported = Deferred.makeUnsafe<void>();
+        const { controller, reportedErrors } = createFixture(
+          {},
+          {
+            onErrorReport: (_error, reportedErrors) => {
+              if (reportedErrors.length === 1) {
+                Deferred.doneUnsafe(errorReported, Effect.void);
+              }
+            },
+          },
+        );
 
         yield* withProcessServices(testRuntime(), controller.postStartupData());
 
-        yield* Effect.promise(() =>
-          vi.waitFor(() => {
-            expect(reportedErrors).toEqual([refreshError]);
+        yield* Deferred.await(errorReported);
+        expect(reportedErrors).toEqual([refreshError]);
+      }),
+  );
+
+  it.effect(
+    'persists a toggle before refreshing caches and posting cached data',
+    () =>
+      Effect.gen(function* () {
+        const events: string[] = [];
+        const cachedResults: ExternalToolCheckResult[] = [];
+        const globalState = spyOnUpdate(new FakeStateStore(), () =>
+          events.push('state:update'),
+        );
+        toolData.buildItems.mockImplementation(async (_host, results) => {
+          expect(results).toBe(cachedResults);
+          events.push('dashboard:build');
+          return [DASHBOARD_ITEM];
+        });
+        toolData.lastCheckResults.mockImplementation(() => {
+          events.push('dashboard:cached');
+          return cachedResults;
+        });
+        const posted = createDeferred();
+        const { controller } = createFixture({
+          globalState,
+          renderer: {
+            postToRenderer: () => {
+              events.push('renderer:post');
+              posted.resolve();
+            },
+          },
+        });
+
+        yield* withProcessServices(
+          testRuntime(),
+          assertSupported(controller.toolHandlers.toggleTool)({
+            command: SETTINGS_VIEW_COMMANDS.TOGGLE_TOOL,
+            toolId: 'zotero',
+            enabled: false,
           }),
+        );
+
+        expect(
+          yield* withProcessServices(
+            testRuntime(),
+            globalState.get(GlobalStateKey.DISABLED_TOOLS),
+          ),
+        ).toEqual(['zotero']);
+        // The repaint the toggle's re-probe triggers runs on the subscriber's own
+        // fiber, so the order below settles a turn after the toggle resolves.
+        yield* Effect.promise(() => posted.promise);
+        expect(events).toEqual([
+          'state:update',
+          'dashboard:cached',
+          'dashboard:build',
+          'renderer:post',
+        ]);
+      }),
+  );
+
+  it.effect(
+    'completes a fresh availability check before rebuilding the dashboard',
+    () =>
+      Effect.gen(function* () {
+        const events: string[] = [];
+        toolData.buildItems.mockImplementation(async () => {
+          events.push('dashboard:build');
+          return [DASHBOARD_ITEM];
+        });
+        toolData.lastCheckResults.mockImplementation(() => {
+          events.push('dashboard:cached');
+          return [];
+        });
+        toolData.refreshAvailability.mockImplementation(async () => {
+          events.push('dashboard:refresh');
+          emitAppSignal('toolAvailabilityChanged', undefined);
+        });
+        const posted = createDeferred();
+        const { controller } = createFixture({
+          renderer: {
+            postToRenderer: () => {
+              events.push('renderer:post');
+              posted.resolve();
+            },
+          },
+        });
+
+        yield* withProcessServices(
+          testRuntime(),
+          assertSupported(controller.toolHandlers.recheckToolStatus)({
+            command: SETTINGS_VIEW_COMMANDS.RECHECK_TOOL_STATUS,
+          }),
+        );
+        yield* Effect.promise(() => posted.promise);
+        expect(events).toContain('renderer:post');
+
+        expect(events).toEqual([
+          'dashboard:refresh',
+          'dashboard:cached',
+          'dashboard:build',
+          'renderer:post',
+        ]);
+      }),
+  );
+
+  it.effect(
+    'runs planned tool commands and fails when a plan produced none',
+    () =>
+      Effect.gen(function* () {
+        const plans: ToolTerminalAction[] = [
+          {
+            kind: 'terminal',
+            name: 'TeXRA: OpenAI Codex CLI',
+            command: 'npm install codex',
+          },
+          { kind: 'none', reason: 'missingCommand' },
+        ];
+        toolData.buildItems.mockResolvedValue([]);
+        toolData.planTerminalAction.mockImplementation(
+          () => plans.shift() as ToolTerminalAction,
+        );
+        const { controller, commands } = createFixture();
+
+        yield* withProcessServices(
+          testRuntime(),
+          assertSupported(controller.toolHandlers.runToolCommand)({
+            command: SETTINGS_VIEW_COMMANDS.RUN_TOOL_COMMAND,
+            toolId: 'codex',
+            kind: 'install',
+          }),
+        );
+        const error = yield* Effect.flip(
+          withProcessServices(
+            testRuntime(),
+            assertSupported(controller.toolHandlers.runToolCommand)({
+              command: SETTINGS_VIEW_COMMANDS.RUN_TOOL_COMMAND,
+              toolId: 'codex',
+              kind: 'auth',
+            }),
+          ),
+        );
+
+        expect(toolData.planTerminalAction).toHaveBeenNthCalledWith(1, {
+          toolId: 'codex',
+          commandKind: 'install',
+        });
+        expect(toolData.planTerminalAction).toHaveBeenNthCalledWith(2, {
+          toolId: 'codex',
+          commandKind: 'auth',
+        });
+        expect(commands).toEqual(['npm install codex']);
+        expect(error.message).toBe(
+          'No auth command for tool "codex" (missingCommand)',
         );
       }),
   );
 
-  it('persists a toggle before refreshing caches and posting cached data', async () => {
-    const events: string[] = [];
-    const cachedResults: ExternalToolCheckResult[] = [];
-    const globalState = spyOnUpdate(new FakeStateStore(), () =>
-      events.push('state:update'),
-    );
-    toolData.buildItems.mockImplementation(async (_host, results) => {
-      expect(results).toBe(cachedResults);
-      events.push('dashboard:build');
-      return [DASHBOARD_ITEM];
-    });
-    toolData.lastCheckResults.mockImplementation(() => {
-      events.push('dashboard:cached');
-      return cachedResults;
-    });
-    const { controller } = createFixture({
-      globalState,
-      renderer: {
-        postToRenderer: () => events.push('renderer:post'),
-      },
-    });
+  it.effect('runs only allowlisted LaTeX installation commands', () =>
+    Effect.gen(function* () {
+      const { controller, commands } = createFixture();
 
-    await assertSupported(controller.toolHandlers.toggleTool)({
-      command: SETTINGS_VIEW_COMMANDS.TOGGLE_TOOL,
-      toolId: 'zotero',
-      enabled: false,
-    });
+      yield* withProcessServices(
+        testRuntime(),
+        assertSupported(controller.latexHandlers.runInstallCommand)({
+          command: SETTINGS_VIEW_COMMANDS.RUN_INSTALL_COMMAND,
+          installCommand: HOMEBREW_INSTALL_COMMAND,
+        }),
+      );
+      const error = yield* Effect.flip(
+        withProcessServices(
+          testRuntime(),
+          assertSupported(controller.latexHandlers.runInstallCommand)({
+            command: SETTINGS_VIEW_COMMANDS.RUN_INSTALL_COMMAND,
+            installCommand: 'echo not-allowlisted',
+          }),
+        ),
+      );
+      expect(error.message).toBe(
+        'Rejected unknown install command: echo not-allowlisted',
+      );
 
-    expect(globalState.get(GlobalStateKey.DISABLED_TOOLS)).toEqual(['zotero']);
-    // The repaint the toggle's re-probe triggers runs on the subscriber's own
-    // fiber, so the order below settles a turn after the toggle resolves.
-    await vi.waitFor(() =>
-      expect(events).toEqual([
-        'state:update',
-        'dashboard:cached',
-        'dashboard:build',
-        'renderer:post',
-      ]),
-    );
-  });
+      expect(commands).toEqual([HOMEBREW_INSTALL_COMMAND]);
+    }),
+  );
 
-  it('completes a fresh availability check before rebuilding the dashboard', async () => {
-    const events: string[] = [];
-    toolData.buildItems.mockImplementation(async () => {
-      events.push('dashboard:build');
-      return [DASHBOARD_ITEM];
-    });
-    toolData.lastCheckResults.mockImplementation(() => {
-      events.push('dashboard:cached');
-      return [];
-    });
-    toolData.refreshAvailability.mockImplementation(async () => {
-      events.push('dashboard:refresh');
-      emitAppSignal('toolAvailabilityChanged', undefined);
-    });
-    const { controller } = createFixture({
-      renderer: {
-        postToRenderer: () => events.push('renderer:post'),
-      },
-    });
+  it.effect(
+    'declares extension installs unsupported and strips their dashboard affordance',
+    () =>
+      Effect.gen(function* () {
+        toolData.buildItems.mockResolvedValue([
+          {
+            ...DASHBOARD_ITEM,
+            installActions: [
+              { kind: 'extension', extensionId: 'leanprover.lean4' },
+            ],
+          },
+        ]);
+        const repainted = createDeferred();
+        const { controller, posted } = createFixture(
+          {},
+          {
+            onPost: (_message, posted) => {
+              const last = posted.at(-1) as { command?: string } | undefined;
+              if (
+                last?.command === SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD
+              ) {
+                repainted.resolve();
+              }
+            },
+          },
+        );
 
-    await assertSupported(controller.toolHandlers.recheckToolStatus)({
-      command: SETTINGS_VIEW_COMMANDS.RECHECK_TOOL_STATUS,
-    });
-    await vi.waitFor(() => {
-      expect(events).toContain('renderer:post');
-    });
+        expect(
+          isUnsupported(controller.toolHandlers.installToolExtension),
+        ).toBe(true);
+        expect(
+          isUnsupported(controller.latexHandlers.installLatexWorkshop),
+        ).toBe(true);
 
-    expect(events).toEqual([
-      'dashboard:refresh',
-      'dashboard:cached',
-      'dashboard:build',
-      'renderer:post',
-    ]);
-  });
+        yield* withProcessServices(
+          testRuntime(),
+          assertSupported(controller.toolHandlers.recheckToolStatus)({
+            command: SETTINGS_VIEW_COMMANDS.RECHECK_TOOL_STATUS,
+          }),
+        );
 
-  it('runs planned tool commands and reports why a plan produced none', async () => {
-    const plans: ToolTerminalAction[] = [
-      {
-        kind: 'terminal',
-        name: 'TeXRA: OpenAI Codex CLI',
-        command: 'npm install codex',
-      },
-      { kind: 'none', reason: 'missingCommand' },
-    ];
-    toolData.buildItems.mockResolvedValue([]);
-    toolData.planTerminalAction.mockImplementation(
-      () => plans.shift() as ToolTerminalAction,
-    );
-    const { controller, commands, reportedErrors } = createFixture();
-
-    await assertSupported(controller.toolHandlers.runToolCommand)({
-      command: SETTINGS_VIEW_COMMANDS.RUN_TOOL_COMMAND,
-      toolId: 'codex',
-      kind: 'install',
-    });
-    await assertSupported(controller.toolHandlers.runToolCommand)({
-      command: SETTINGS_VIEW_COMMANDS.RUN_TOOL_COMMAND,
-      toolId: 'codex',
-      kind: 'auth',
-    });
-
-    expect(toolData.planTerminalAction).toHaveBeenNthCalledWith(1, {
-      toolId: 'codex',
-      commandKind: 'install',
-    });
-    expect(toolData.planTerminalAction).toHaveBeenNthCalledWith(2, {
-      toolId: 'codex',
-      commandKind: 'auth',
-    });
-    expect(commands).toEqual(['npm install codex']);
-    expect(reportedErrors.map((error) => (error as Error).message)).toEqual([
-      'No auth command for tool "codex" (missingCommand)',
-    ]);
-  });
-
-  it('runs only allowlisted LaTeX installation commands', async () => {
-    const { controller, commands } = createFixture();
-
-    await assertSupported(controller.latexHandlers.runInstallCommand)({
-      command: SETTINGS_VIEW_COMMANDS.RUN_INSTALL_COMMAND,
-      installCommand: HOMEBREW_INSTALL_COMMAND,
-    });
-    await expect(
-      assertSupported(controller.latexHandlers.runInstallCommand)({
-        command: SETTINGS_VIEW_COMMANDS.RUN_INSTALL_COMMAND,
-        installCommand: 'echo not-allowlisted',
+        yield* Effect.promise(() => repainted.promise);
+        expect(posted.at(-1)).toEqual({
+          command: SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD,
+          items: [DASHBOARD_ITEM],
+        });
       }),
-    ).rejects.toThrow('Rejected unknown install command: echo not-allowlisted');
-
-    expect(commands).toEqual([HOMEBREW_INSTALL_COMMAND]);
-  });
-
-  it('declares extension installs unsupported and strips their dashboard affordance', async () => {
-    toolData.buildItems.mockResolvedValue([
-      {
-        ...DASHBOARD_ITEM,
-        installActions: [
-          { kind: 'extension', extensionId: 'leanprover.lean4' },
-        ],
-      },
-    ]);
-    const { controller, posted } = createFixture();
-
-    expect(isUnsupported(controller.toolHandlers.installToolExtension)).toBe(
-      true,
-    );
-    expect(isUnsupported(controller.latexHandlers.installLatexWorkshop)).toBe(
-      true,
-    );
-
-    await assertSupported(controller.toolHandlers.recheckToolStatus)({
-      command: SETTINGS_VIEW_COMMANDS.RECHECK_TOOL_STATUS,
-    });
-
-    await vi.waitFor(() => {
-      expect(posted.at(-1)).toEqual({
-        command: SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD,
-        items: [DASHBOARD_ITEM],
-      });
-    });
-  });
+  );
 });

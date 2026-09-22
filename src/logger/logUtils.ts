@@ -10,7 +10,6 @@
  * deleted with the last caller that cannot yield an Effect.
  */
 // Local imports
-import { formatLogData } from '@logger/formatLogData';
 import * as loggerSelf from '@logger/logUtils';
 import {
   LOG_CHANNEL,
@@ -33,46 +32,12 @@ const ENTRY_LEVEL: Record<LogLevel, string> = {
 };
 
 /**
- * The one configuration read this module makes, as the port its consumer
- * declares: a `ConfigProvider` satisfies it structurally, and the logger keeps
- * no import of `@platform` for it — the logger subsystem depends on no host.
- */
-export interface DebugModeConfig {
-  get(path: string, defaultValue: boolean): boolean;
-}
-
-/**
- * The configuration `texra.logger.debugMode` is read from: process-wide, like
- * the sink in `@logger/logSink`, because a log line has no session to take a
- * provider from. Installed by the composition root beside its sink; absent
- * until then, so startup reporting that precedes the host's configuration
- * logs as if debug mode were off rather than reaching for an ambient record.
- */
-let debugModeConfig: DebugModeConfig | undefined;
-
-/** Install (or, with `null`, uninstall) the configuration `isDebugModeEnabled`
- *  reads. A composition root calls this once, with its own workspace roots'
- *  provider. */
-export function setDebugModeConfig(config: DebugModeConfig | null): void {
-  debugModeConfig = config ?? undefined;
-}
-
-/**
- * Single owner of the `texra.logger.debugMode` setting (config key + default).
- * Gates the verbose data annotation below, the transcript recorder's `verbose`
- * flag, and the webview debug-mode delivery, so the key and its default live in
- * one place. Read on each call, so a host that changes the setting while it
- * runs takes effect at the next entry.
- */
-export function isDebugModeEnabled(): boolean {
-  return debugModeConfig?.get('texra.logger.debugMode', false) ?? false;
-}
-
-/**
  * Build one entry and hand it to the host sink. Single emission point for both
  * the functional logger API and channel writers. `fiberId` and `spans` are
  * empty because this path has no fiber to read them from — that identity
- * arrives only with `Effect.log*`.
+ * arrives only with `Effect.log*`. The `data` payload rides the entry raw;
+ * the write path in `@logger/logSink` renders and bounds it once, for every
+ * producer.
  */
 function writeLine(
   level: LogLevel,
@@ -81,8 +46,8 @@ function writeLine(
   data: unknown,
 ): void {
   const annotations: Record<string, unknown> = { [LOG_CHANNEL]: channel };
-  if (data != null && isDebugModeEnabled()) {
-    annotations[LOG_DATA] = formatLogData(data);
+  if (data != null) {
+    annotations[LOG_DATA] = data;
   }
   const entry: LogEntry = {
     level: ENTRY_LEVEL[level],

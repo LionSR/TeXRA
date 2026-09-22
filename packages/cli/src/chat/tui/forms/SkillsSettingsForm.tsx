@@ -1,4 +1,5 @@
 import { Text } from 'ink';
+import { Cause, Effect } from 'effect';
 
 import type { ProcessRuntime } from '@platform/processRuntime';
 import {
@@ -52,25 +53,27 @@ async function loadSkillsSettings(
   workspaceRoot: string | undefined,
   runtime: ProcessRuntime,
 ): Promise<SkillsSettingsData> {
-  const disabledNames = readSetting(
-    requireSetting(WorkspaceStateKey.DISABLED_SKILLS),
-    stores,
-    'cli',
-  ) as string[];
-  const disabledScopes = readSetting(
-    requireSetting(WorkspaceStateKey.DISABLED_SKILL_SOURCES),
-    stores,
-    'cli',
-  ) as ActiveSkillSourceScope[];
-  const result = await runtime.runPromise(
-    loadRuntimeSkillDisplay(workspaceRoot, stores),
+  return runtime.runPromise(
+    Effect.gen(function* () {
+      const disabledNames = (yield* readSetting(
+        requireSetting(WorkspaceStateKey.DISABLED_SKILLS),
+        stores,
+        'cli',
+      )) as string[];
+      const disabledScopes = (yield* readSetting(
+        requireSetting(WorkspaceStateKey.DISABLED_SKILL_SOURCES),
+        stores,
+        'cli',
+      )) as ActiveSkillSourceScope[];
+      const result = yield* loadRuntimeSkillDisplay(workspaceRoot, stores);
+      return {
+        skills: result.skills,
+        disabledNames,
+        disabledScopes,
+        issueCount: result.issues.length,
+      };
+    }),
   );
-  return {
-    skills: result.skills,
-    disabledNames,
-    disabledScopes,
-    issueCount: result.issues.length,
-  };
 }
 
 function toggleDisabled<T>(
@@ -126,20 +129,29 @@ export function SkillsSettingsForm(
           toggle.kind === 'source' ? data.disabledScopes : data.disabledNames;
         const value = toggle.kind === 'source' ? toggle.scope : toggle.name;
         const next = toggleDisabled(current, value, current.includes(value));
-        void props.runtime
-          .runPromise(
-            applyStateSettingUpdate(key, next, {
-              host: 'cli',
-              stores: props.stores,
-            }),
-          )
-          .then((result) => {
-            if (result.kind !== 'applied') {
-              throw new Error(`Could not update skills (${result.kind}).`);
-            }
-            reload();
-          })
-          .catch((error: unknown) => setTransientNotice(toErrorMessage(error)));
+        props.runtime.runFork(
+          applyStateSettingUpdate(key, next, {
+            host: 'cli',
+            stores: props.stores,
+          }).pipe(
+            Effect.flatMap((result) =>
+              Effect.sync(() => {
+                if (result.kind !== 'applied') {
+                  setTransientNotice(
+                    `Could not update skills (${result.kind}).`,
+                  );
+                } else {
+                  reload();
+                }
+              }),
+            ),
+            Effect.catchCause((cause) =>
+              Effect.sync(() =>
+                setTransientNotice(toErrorMessage(Cause.squash(cause))),
+              ),
+            ),
+          ),
+        );
       }}
       onCancel={props.onClose}
     />

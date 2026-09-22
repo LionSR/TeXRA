@@ -9,6 +9,7 @@ import { runCli } from '@cli/commands/root';
 import { NO_PLATFORM_INSTALL } from '@cli/runtime/cliProcessRuntime';
 import { defaultBranch } from '@cli/runtime/gitOps';
 import { CliExitCode } from '@cli/runtime/exitCodes';
+import { createDeferred } from '@test/support/asyncTestUtils';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 import { parseGitHubSlug } from '@tools/github/githubSlug';
 
@@ -101,7 +102,7 @@ describe('install-github-action command', () => {
     // and no global-root handle for a command that disposes neither.
     expect(browserMocks.installCliProcessRuntime).toHaveBeenCalledWith(
       undefined,
-      NO_PLATFORM_INSTALL,
+      { ...NO_PLATFORM_INSTALL, minimumLogLevel: 'Info' },
     );
     expect(git(repo, 'show', '--name-only', '--format=', 'HEAD')).toBe(
       '.github/workflows/texra-code-review.yml',
@@ -145,17 +146,16 @@ describe('install-github-action command', () => {
       'https://github.com/example/project.git',
     );
     let rejectBrowser: ((error: Error) => void) | undefined;
-    browserMocks.tryOpenBrowser.mockImplementationOnce(
-      () =>
-        new Promise<boolean>((_resolve, reject) => {
-          rejectBrowser = reject;
-        }),
-    );
+    const opened = createDeferred();
+    browserMocks.tryOpenBrowser.mockImplementationOnce(() => {
+      opened.resolve();
+      return new Promise<boolean>((_resolve, reject) => {
+        rejectBrowser = reject;
+      });
+    });
 
     const install = runInstall(repo);
-    await vi.waitFor(() =>
-      expect(browserMocks.tryOpenBrowser).toHaveBeenCalledOnce(),
-    );
+    await opened.promise;
     expect(git(repo, 'branch', '--show-current')).toBe('main');
 
     rejectBrowser?.(new Error('installer interrupted'));

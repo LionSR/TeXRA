@@ -29,6 +29,7 @@ import { COMMIT_HASH_PATTERN } from '@utils/git/commitHashPattern';
 import { COMMIT_LABEL_FORMAT } from '@utils/git/commitLogFormat';
 import { readRecentCommitLabels } from '@utils/git/repositoryOverview';
 import { executeCommandSync } from '@utils/system/execCore';
+import { getGitAuthorEnv } from '@utils/system/gitAuthorEnv';
 import { makeMachineGitEnv } from '@utils/system/gitEnv';
 import { isGitRepository } from '@utils/git/isGitRepository';
 
@@ -63,7 +64,7 @@ export function registerGitCommands(
     {
       id: 'texra.findCommitInHistory',
       handler: (commitHash: string, rootPath?: string) =>
-        findCommitInHistory(session, commitHash, rootPath),
+        runtime.runPromise(findCommitInHistory(session, commitHash, rootPath)),
     },
   ]);
 }
@@ -71,7 +72,7 @@ export function registerGitCommands(
 const getRecentCommits = Effect.fn('gitCommands.getRecentCommits')(function* (
   session: SessionHandle,
   rootPath?: string,
-): Effect.fn.Return<string[] | null> {
+): Effect.fn.Return<string[] | null, Error> {
   const workspacePath = rootPath ?? session.roots.workspace;
   if (
     !workspacePath ||
@@ -82,7 +83,7 @@ const getRecentCommits = Effect.fn('gitCommands.getRecentCommits')(function* (
 
   // The catalog row owns the range and the default: a corrupt persisted value
   // warns once through readSetting and resolves to 20 instead of throwing.
-  const numberOfCommits = readSettingFrom<number>(
+  const numberOfCommits = yield* readSettingFrom<number>(
     session.roots,
     'texra.git.numberOfCommitsToShow',
   );
@@ -107,40 +108,43 @@ function findCommitInHistory(
   session: SessionHandle,
   commitHash: string,
   rootPath?: string,
-): string | null {
-  if (typeof commitHash !== 'string') {
-    return null;
-  }
+) {
+  return Effect.gen(function* () {
+    if (typeof commitHash !== 'string') {
+      return null;
+    }
 
-  const sanitizedCommit = commitHash.trim();
-  if (!COMMIT_HASH_PATTERN.test(sanitizedCommit)) {
-    return null;
-  }
+    const sanitizedCommit = commitHash.trim();
+    if (!COMMIT_HASH_PATTERN.test(sanitizedCommit)) {
+      return null;
+    }
 
-  const workspacePath = rootPath ?? session.roots.workspace;
-  if (!workspacePath) {
-    return null;
-  }
+    const workspacePath = rootPath ?? session.roots.workspace;
+    if (!workspacePath) {
+      return null;
+    }
 
-  const verifyResult = executeCommandSync(
-    ['git', 'rev-parse', '--verify', `${sanitizedCommit}^{commit}`],
-    { cwd: workspacePath, settings: session.roots },
-  );
+    const env = yield* getGitAuthorEnv(session.roots);
+    const verifyResult = executeCommandSync(
+      ['git', 'rev-parse', '--verify', `${sanitizedCommit}^{commit}`],
+      { cwd: workspacePath, env },
+    );
 
-  if (!verifyResult.success) {
-    return null;
-  }
+    if (!verifyResult.success) {
+      return null;
+    }
 
-  const labelResult = executeCommandSync(
-    ['git', 'show', '-s', `--format=${COMMIT_LABEL_FORMAT}`, sanitizedCommit],
-    { cwd: workspacePath, settings: session.roots },
-  );
+    const labelResult = executeCommandSync(
+      ['git', 'show', '-s', `--format=${COMMIT_LABEL_FORMAT}`, sanitizedCommit],
+      { cwd: workspacePath, env },
+    );
 
-  if (!labelResult.success) {
-    return sanitizedCommit;
-  }
+    if (!labelResult.success) {
+      return sanitizedCommit;
+    }
 
-  return labelResult.stdout;
+    return labelResult.stdout;
+  });
 }
 
 function promptInput(
@@ -193,7 +197,6 @@ async function promptGitMissing(): Promise<void> {
     // read.
     executeCommandSync([option.tool, '--version'], {
       cwd: process.cwd(),
-      settings: undefined,
     }).success
       ? option.command
       : null;
@@ -268,7 +271,6 @@ function buildOverleafClonePorts(
         () =>
           executeCommandSync(['git', '--version'], {
             cwd: process.cwd(),
-            settings: undefined,
           }).success,
       ),
     showGitMissing: () => Effect.promise(() => promptGitMissing()),

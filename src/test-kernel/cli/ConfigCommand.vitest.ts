@@ -78,14 +78,16 @@ describe('CLI config command', () => {
     mocks.installCliProcessRuntime.mockImplementation(async () =>
       testRuntime(),
     );
-    mocks.getVisibleAgents.mockReturnValue([
-      {
-        category: 'toolUse',
-        source: 'builtInToolUse',
-        name: 'assistant',
-        path: '/agents/assistant.yaml',
-      },
-    ]);
+    mocks.getVisibleAgents.mockReturnValue(
+      Effect.succeed([
+        {
+          category: 'toolUse',
+          source: 'builtInToolUse',
+          name: 'assistant',
+          path: '/agents/assistant.yaml',
+        },
+      ]),
+    );
     mocks.readCliAgentRoster.mockResolvedValue({
       selection: { kind: 'all' },
       effectiveSelection: { kind: 'all' },

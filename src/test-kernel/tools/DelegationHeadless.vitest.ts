@@ -18,7 +18,7 @@ import type { RunHandle } from '@agent/runtime/RunHandle';
 import { Runs } from '@agent/runtime/runRegistry';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
-  RUN_PHASE,
+  RUN_OUTCOME,
   AgentCategory,
   agentMatchesIdentifier,
 } from '@shared/schemas';
@@ -243,7 +243,7 @@ function answerOpenedRequests(
  *  is created and disposed per case. */
 function delegateWithProposalDecision(
   decision: RequestDecision,
-  options: { expectLaunch?: boolean } = {},
+  options: { launchSignal?: Deferred.Deferred<void> } = {},
 ) {
   return Effect.scoped(
     Effect.gen(function* () {
@@ -260,10 +260,8 @@ function delegateWithProposalDecision(
       // A detached child commits its `child.turn` row before its first turn
       // runs, so the launch is not observable the moment the tool returns and
       // the session must not be disposed out from under it.
-      if (options.expectLaunch) {
-        yield* Effect.promise(() =>
-          vi.waitFor(() => expect(mocks.executeAgent).toHaveBeenCalled()),
-        );
+      if (options.launchSignal) {
+        yield* Deferred.await(options.launchSignal);
       }
       yield* waitForChildrenEffect(session);
       return result;
@@ -345,10 +343,9 @@ function mockExecuteAgentErrorOnce(
 }
 
 /**
- * One-shot executeAgent mock that tracks a live child handle and returns the
- * WAITING result the child-run loop delivers from.
+ * One-shot executeAgent mock that tracks the handle used for delivery routing.
  */
-function mockWaitingChildOnce(
+function mockTrackedChildOnce(
   options: {
     memoryMisses?: ReadonlyArray<{ path: string; reason: string }>;
     afterRun?: (handle: RunHandle) => Promise<void>;
@@ -366,7 +363,7 @@ function mockWaitingChildOnce(
       Effect.runSync(runOptions.onRun?.(handle) ?? Effect.void);
       await options.afterRun?.(handle);
       return {
-        outcome: RUN_PHASE.WAITING,
+        outcome: RUN_OUTCOME.COMPLETED,
         output: {
           category: 'toolUse',
           response: 'The proof is correct.',
@@ -410,8 +407,7 @@ function memoryChildRecords() {
 /**
  * Write the `run.end` fact production's `executeAgent` commits through
  * `runFlowWithLifecycle`: the flow's outcome, usage and output, plus the
- * classified error it reported. A single-cycle WAITING turn is an invariant
- * violation that the same lifecycle ends as FAILED, and a drain that rolled
+ * classified error it reported. A drain that rolled
  * this run's queued facts back is the row's outcome and its `artifact-drain`
  * kind, whatever the flow reported.
  */
@@ -430,8 +426,7 @@ function recordTerminalFact(
     output?: unknown;
   } | null;
   if (!store.recordRunEnd || !flow?.outcome) return;
-  const reported = flow.outcome === RUN_PHASE.WAITING ? 'failed' : flow.outcome;
-  const outcome = drainFailure === undefined ? reported : 'failed';
+  const outcome = drainFailure === undefined ? flow.outcome : 'failed';
   const flowError =
     outcome === 'failed' && reportedError !== undefined
       ? { kind: 'unexpected', message: toErrorMessage(reportedError) }
@@ -511,20 +506,22 @@ describe('headless delegation', () => {
           },
           catch: ensureError,
         }),
-      resumeToolUseTurn: (...args) =>
+      resumeToolUseFromResumeData: (...args) =>
         Effect.tryPromise({
           try: () => mocks.resumeToolUseTurn(...args),
           catch: ensureError,
         }),
     });
-    mocks.getVisibleAgents.mockReturnValue([
-      {
-        name: 'review',
-        source: 'builtInToolUse',
-        description: 'Review work.',
-        tools: [],
-      },
-    ]);
+    mocks.getVisibleAgents.mockReturnValue(
+      Effect.succeed([
+        {
+          name: 'review',
+          source: 'builtInToolUse',
+          description: 'Review work.',
+          tools: [],
+        },
+      ]),
+    );
     mocks.readModelAvailabilityInputs.mockReturnValue(
       Effect.succeed([
         {
@@ -814,49 +811,6 @@ describe('headless delegation', () => {
   );
 
   it.effect(
-    'persists a cost-bearing WAITING result as a durable single-cycle failure',
-    () =>
-      Effect.gen(function* () {
-        const onCost = vi.fn();
-        mocks.executeAgent.mockResolvedValueOnce({
-          outcome: RUN_PHASE.WAITING,
-          runId: IN_BAND_RUN_ID,
-          output: {
-            category: 'toolUse',
-            response: 'Waiting for clarification.',
-            files: [],
-          },
-          usage: { totalCost: 0.73 },
-        });
-
-        const error = yield* Effect.flip(
-          runInBand(delegationOptions({ onCost })),
-        );
-        expect(error.message).toContain(
-          `Single-cycle subagent ${IN_BAND_RUN_ID} unexpectedly suspended.`,
-        );
-        expect(mocks.executeAgent).toHaveBeenCalledWith(
-          expect.any(Object),
-          IN_BAND_RUN_ID,
-          expect.objectContaining({
-            parentRunId: IN_BAND_PARENT_RUN_ID,
-            stopAfterCycle: true,
-          }),
-        );
-        expect(onCost).toHaveBeenCalledOnce();
-        expect(onCost).toHaveBeenCalledWith(0.73);
-        expect(mocks.writeResultMeta).toHaveBeenCalledOnce();
-        expect(mocks.writeResultMeta).toHaveBeenCalledWith(
-          expect.objectContaining({
-            output: expect.objectContaining({
-              response: 'Waiting for clarification.',
-            }),
-          }),
-        );
-      }),
-  );
-
-  it.effect(
     'does not return a typed result when its durable manifest cannot be written',
     () =>
       Effect.gen(function* () {
@@ -1110,7 +1064,10 @@ describe('headless delegation', () => {
 
   it.effect('rolls up failed async subagent cost from the error callback', () =>
     Effect.gen(function* () {
-      const recordSubagentCost = vi.fn();
+      const costRecorded = Deferred.makeUnsafe<void>();
+      const recordSubagentCost = vi.fn(() => {
+        Deferred.doneUnsafe(costRecorded, Effect.void);
+      });
       mockExecuteAgentErrorOnce(0.31);
 
       const result = yield* callDelegateReview(
@@ -1118,11 +1075,8 @@ describe('headless delegation', () => {
       );
 
       expect(result.summary).toBe("Launched 'review' (async)");
-      yield* Effect.promise(() =>
-        vi.waitFor(() => {
-          expect(recordSubagentCost).toHaveBeenCalledTimes(1);
-        }),
-      );
+      yield* Deferred.await(costRecorded);
+      expect(recordSubagentCost).toHaveBeenCalledTimes(1);
       expect(recordSubagentCost).toHaveBeenCalledWith(0.31);
     }),
   );
@@ -1237,9 +1191,23 @@ describe('headless delegation', () => {
         ]),
       );
 
+      const launched = Deferred.makeUnsafe<void>();
+      mocks.executeAgent.mockImplementationOnce(async () => {
+        Deferred.doneUnsafe(launched, Effect.void);
+        return {
+          outcome: 'completed',
+          runId: CHILD_RUN_ID,
+          output: {
+            category: 'toolUse',
+            response: 'The proof is correct.',
+            files: [],
+          },
+        };
+      });
+
       const result = yield* delegateWithProposalDecision(
         { action: 'approve', model: 'gpt5' },
-        { expectLaunch: true },
+        { launchSignal: launched },
       );
 
       expect(result.status).toBe('executed');
@@ -1260,22 +1228,24 @@ describe('headless delegation', () => {
       Effect.gen(function* () {
         // The mocked `executeAgent` is the child-run loop's `launch` turn, and the
         // WAITING result it returns is what the loop's single delivery site sees.
-        mockWaitingChildOnce({
+        mockTrackedChildOnce({
           memoryMisses: [
             { path: '/memories/missing.md', reason: 'not found & unreadable' },
           ],
         });
 
+        const reportWritten = Deferred.makeUnsafe<void>();
+        mocks.writeReport.mockImplementationOnce(() => {
+          Deferred.doneUnsafe(reportWritten, Effect.void);
+        });
+
         yield* callDelegateReview(parentRunContext({ runId: PARENT_RUN_ID }));
 
-        yield* Effect.promise(() =>
-          vi.waitFor(() => {
-            expect(mocks.writeReport).toHaveBeenCalledWith(
-              expect.stringContaining(
-                '<memory-miss path="/memories/missing.md" reason="not found &amp; unreadable" />',
-              ),
-            );
-          }),
+        yield* Deferred.await(reportWritten);
+        expect(mocks.writeReport).toHaveBeenCalledWith(
+          expect.stringContaining(
+            '<memory-miss path="/memories/missing.md" reason="not found &amp; unreadable" />',
+          ),
         );
       }),
   );
@@ -1286,7 +1256,7 @@ describe('headless delegation', () => {
       Effect.gen(function* () {
         let capturedHandle: RunHandle | undefined;
 
-        mockWaitingChildOnce({
+        mockTrackedChildOnce({
           // Detach happens between the loop capturing the handle (onRun) and the
           // loop delivering this turn's result (after the mock resolves) — the
           // same ordering a real stop-with-detach produces mid-turn.
@@ -1298,14 +1268,16 @@ describe('headless delegation', () => {
           },
         });
 
+        const reportWritten = Deferred.makeUnsafe<void>();
+        mocks.writeReport.mockImplementationOnce(() => {
+          Deferred.doneUnsafe(reportWritten, Effect.void);
+        });
+
         yield* callDelegateReview(parentRunContext({ runId: PARENT_RUN_ID }));
 
-        yield* Effect.promise(() =>
-          vi.waitFor(() => {
-            expect(mocks.writeReport).toHaveBeenCalledWith(
-              expect.stringContaining('The proof is correct.'),
-            );
-          }),
+        yield* Deferred.await(reportWritten);
+        expect(mocks.writeReport).toHaveBeenCalledWith(
+          expect.stringContaining('The proof is correct.'),
         );
         expect(capturedHandle?.deliveryTarget).toBeUndefined();
         expect(

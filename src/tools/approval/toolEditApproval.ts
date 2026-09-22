@@ -5,7 +5,7 @@ import { Cause, Effect, FileSystem } from 'effect';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { ToolCall } from '@agent/runtime/ToolCall';
 import { isLatexFile } from '@common/files/fileTypeUtils';
-import { withLogChannel, withLogData } from '@logger/effectLog';
+import { withLogChannel } from '@logger/effectLog';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { WorkspaceFs } from '@platform/rootedFs';
 import {
@@ -206,7 +206,7 @@ export const requestToolEditApproval = Effect.fn('requestToolEditApproval')(
     request: Omit<ToolEditApprovalRequest, 'permission' | 'roots'>,
   ): Effect.fn.Return<ToolEditApprovalResult, Error, ToolCall> {
     const call = yield* ToolCall;
-    const approvalsEnabled = readSettingFrom<boolean>(
+    const approvalsEnabled = yield* readSettingFrom<boolean>(
       call.roots,
       TOOL_EDIT_APPROVAL_CONFIG_KEY,
     );
@@ -292,7 +292,7 @@ export const requestToolEditApproval = Effect.fn('requestToolEditApproval')(
                       Effect.logWarning(
                         `Failed to release the tool-edit preview staged for request ${permission.requestId}`,
                       ).pipe(
-                        withLogData(Cause.squash(cause)),
+                        Effect.annotateLogs({ data: Cause.squash(cause) }),
                         withLogChannel(CHANNEL),
                       ),
                     ),

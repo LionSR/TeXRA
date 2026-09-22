@@ -212,11 +212,13 @@ describe('PRPollingSource annotation pagination', () => {
 // ---------------------------------------------------------------------------
 
 describe('AnnotationFetchBudget', () => {
-  it('does not stall refills after the clock moves backward', () => {
-    const budget = new AnnotationFetchBudget(1, 1000);
+  it.effect('does not stall refills after the clock moves backward', () =>
+    Effect.gen(function* () {
+      const budget = new AnnotationFetchBudget(1, 1000);
 
-    expect(Effect.runSync(budget.tryClaim(1000))).toBe(true);
-    expect(Effect.runSync(budget.tryClaim(900))).toBe(false);
-    expect(Effect.runSync(budget.tryClaim(1900))).toBe(true);
-  });
+      expect(yield* budget.tryClaim(1000)).toBe(true);
+      expect(yield* budget.tryClaim(900)).toBe(false);
+      expect(yield* budget.tryClaim(1900)).toBe(true);
+    }),
+  );
 });

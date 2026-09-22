@@ -23,7 +23,7 @@ import {
   Stream,
 } from 'effect';
 
-import { withLogChannel, withLogData } from '@logger/effectLog';
+import { withLogChannel } from '@logger/effectLog';
 import { MEMORY_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import { StorageFs } from '@platform/rootedFs';
 import type { MemoryViewItem } from '@shared/settingsView/settingsViewMessages';
@@ -171,7 +171,11 @@ const readMemoryMeta = Effect.fn('memoryFileSystem.readMemoryMeta')(
       Effect.catch((cause) =>
         Effect.logDebug(
           `Skipping attribution for unreadable memory file ${storagePath}`,
-        ).pipe(withLogChannel(CHANNEL), withLogData(cause), Effect.as(null)),
+        ).pipe(
+          withLogChannel(CHANNEL),
+          Effect.annotateLogs({ data: cause }),
+          Effect.as(null),
+        ),
       ),
     ),
 );

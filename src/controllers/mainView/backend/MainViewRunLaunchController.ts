@@ -26,7 +26,11 @@ import { createTeamCatalogPorts } from '@controllers/mainView/teamCatalogPorts';
 // Local imports - shared types and errors
 import type { MessageHost } from '@hosts/uiHosts';
 import { withLogChannel } from '@logger/effectLog';
-import type { StateStore } from '@platform/interfaces';
+import type {
+  AgentDirectories,
+  StateReadFailed,
+  StateStore,
+} from '@platform/interfaces';
 import type { GlobalStorageFs } from '@platform/rootedFs';
 import {
   AgentCategory,
@@ -135,8 +139,8 @@ export function prepareSurfaceLaunch(
   storageRoot: string,
 ): Effect.Effect<
   ValidatedRunRequest,
-  Rejected | Cancelled,
-  GlobalStorageFs | FileSystem.FileSystem
+  Rejected | Cancelled | StateReadFailed,
+  GlobalStorageFs | FileSystem.FileSystem | AgentDirectories
 > {
   return Effect.gen(function* () {
     let preparation: LaunchPreparation;
@@ -164,7 +168,7 @@ export function prepareSurfaceLaunch(
         return yield* new Rejected({ reason: TEAM_SELECTION_REQUIRED_MESSAGE });
       const resolution = yield* resolveTeamLaunch({
         teamId,
-        ...createTeamCatalogPorts(workspaceState),
+        ...(yield* createTeamCatalogPorts(workspaceState)),
         choose: (unavailableNames) =>
           host.chooseTeamAvailability(unavailableNames),
         signIn: host.signInForRemoteAgentCatalog,

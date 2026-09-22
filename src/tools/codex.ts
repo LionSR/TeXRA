@@ -434,18 +434,18 @@ const createCodexThread = Effect.fn('codex.createCodexThread')(function* (
       : {};
   // Probe Extra High support only when that tier is selected so other
   // efforts do not wait on a slow or hung Codex binary.
-  const requestedEffort = config.getCodexCliReasoningEffort(
+  const requestedEffort = yield* config.getCodexCliReasoningEffort(
     roots.workspaceState,
     true,
   );
   const threadOptions: ThreadOptions = {
     ...workspace,
     sandboxMode,
-    approvalPolicy: config.getCodexApprovalPolicy(roots.workspaceState),
+    approvalPolicy: yield* config.getCodexApprovalPolicy(roots.workspaceState),
     model: config.CODEX_CLI_MODEL,
     modelReasoningEffort:
       requestedEffort === 'xhigh'
-        ? config.getCodexCliReasoningEffort(
+        ? yield* config.getCodexCliReasoningEffort(
             roots.workspaceState,
             yield* config.codexBinarySupportsXhigh(codexPath),
           )

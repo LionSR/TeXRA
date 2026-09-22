@@ -37,7 +37,7 @@
 import { Effect, Exit } from 'effect';
 import { LRUCache } from 'lru-cache';
 
-import type { Disposable } from '@platform/interfaces';
+import type { Disposable, Lifecycle } from '@platform/interfaces';
 import type { Secrets } from '@platform/secrets';
 import { shouldDropBotEvent } from './botFilter';
 import {
@@ -172,7 +172,7 @@ class RepoPollingSource extends PollingSourceBase<RepoKey, SubscriptionState> {
   subscribe(
     input: RepoSubscribeInput,
     onEvent: PollEventListener,
-  ): Effect.Effect<Disposable, never, Secrets> {
+  ): Effect.Effect<Disposable, never, Secrets | Lifecycle> {
     const key = repoKeyToString(input);
     return this.register(key, () => createInitialState(input), onEvent);
   }

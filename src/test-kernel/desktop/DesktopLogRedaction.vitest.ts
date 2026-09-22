@@ -86,8 +86,8 @@ describe('desktop log redaction', () => {
   });
 });
 
-// A `withLogData` payload reaches `redactDisplayValue` raw, before any sink
-// renders it. An `Error`'s fields are non-enumerable, so the walk must flatten
+// A raw `data` payload reaches `redactDisplayValue` before any sink renders
+// it. An `Error`'s fields are non-enumerable, so the walk must flatten
 // it or the render at the sink would show `{}` where the error was.
 describe('redactDisplayValue over raw log payloads', () => {
   it('flattens an Error, cause chain included, and scrubs it like any payload', () => {

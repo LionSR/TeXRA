@@ -207,7 +207,7 @@ export const compileLatex2Pdf = Effect.fn('compileLatex2Pdf')(function* (
     const tikzInputDirectory = roots.config.get<string>(
       'texra.latex.tikzInputDirectory',
     );
-    const includeWorkspace = readSettingFrom<boolean>(
+    const includeWorkspace = yield* readSettingFrom<boolean>(
       roots,
       'texra.latex.includeWorkspaceInTexinputs',
     );
@@ -297,6 +297,7 @@ export const compileLatex2Pdf = Effect.fn('compileLatex2Pdf')(function* (
   return yield* compile.pipe(
     Effect.catchTags({
       PlatformError: (error) => failed(error.message),
+      StateReadFailed: (error) => failed(error.message),
       LatexCompilerNotRun: (error) => failed(toErrorMessage(error.cause)),
     }),
   );

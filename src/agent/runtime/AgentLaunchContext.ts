@@ -27,7 +27,7 @@ import {
   hasErrorPresentationClaimed,
 } from '@common/errors/sdkError/errorMetadata';
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
-import { withLogChannel, withLogData } from '@logger/effectLog';
+import { withLogChannel } from '@logger/effectLog';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import { resolveRuntimeModelConfig } from '@model/runtimeModelRegistry';
 import { AppState } from '@platform/interfaces';
@@ -45,6 +45,7 @@ import {
   INSTRUCTION_ACTION,
   RUN_OUTCOME,
 } from '@shared/schemas';
+import { UsageLog } from '@shared/usageLog';
 import { createRunTrace, type RunTrace } from '@transcript';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -60,11 +61,8 @@ import type {
 const CHANNEL = 'AgentLaunchContext';
 
 /**
- * The run's own facts, declared once on {@link AgentRunShape}: the launch
- * resolves them and the run's `AgentRun` service carries them for the rest of
- * the run's life, so neither side can drift from the other. The run narrows
- * `setting` to its resolved tool list; every other fact reaches the service
- * exactly as the launch resolved it.
+ * The launch facts carried by {@link AgentRunShape}. The run narrows `setting`
+ * to its resolved tool list; every other fact reaches it unchanged.
  */
 type LaunchResolvedRunFacts = Pick<
   AgentRunShape,
@@ -278,16 +276,12 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
     yield* failIfLaunchStopped(input.stopped);
     const fullConfig = input.config;
     const interactions = input.session.interactions;
-    // Resolve by the source the delegation captured at validation time, so launch
-    // lands on the exact entry validation/display resolved. When no source is
-    // pinned (direct launches, restored records), resolution falls to the
-    // category-scoped rule validation uses; never blind name resolution.
     // Single launch resolution rule (see resolveAgentForLaunch): exact
     // (source, name) when the delegation pinned one, else the same visible-set
     // resolver validation uses, else the full set for internal agents. Never
     // blind source-priority on a bare name, so launch can't diverge from
     // what was validated.
-    const resolved = resolveAgentForLaunch(
+    const resolved = yield* resolveAgentForLaunch(
       input.session.roots,
       fullConfig.agentCategory,
       fullConfig.agent,
@@ -389,7 +383,7 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
   ): Effect.fn.Return<
     AgentLaunchContext,
     Error,
-    Secrets | AppState | FileSystem.FileSystem | Scope.Scope
+    Secrets | AppState | UsageLog | FileSystem.FileSystem | Scope.Scope
   > {
     yield* failIfLaunchStopped(input.stopped);
     const { config, setting, prompt, agentEntry, modelConfig } =
@@ -549,6 +543,7 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
         runId,
         runStageId: parentStage.id,
         config: session.roots.config,
+        usageLog: yield* UsageLog,
       },
       {
         agentName: config.agent,
@@ -621,7 +616,10 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
           if (!finalization.ok)
             yield* Effect.logWarning(
               'Failed to persist the launch failure',
-            ).pipe(withLogData(finalization.error), withLogChannel(CHANNEL));
+            ).pipe(
+              Effect.annotateLogs({ data: finalization.error }),
+              withLogChannel(CHANNEL),
+            );
         }),
       ),
     );

@@ -370,6 +370,11 @@ function installResumeRunStore(
  * object swaps just that surface in. `sessionStub` is a bare mock, so the
  * override map is untyped here exactly as the returned session is.
  */
+/** The session's view ref, as a value the harness can install. The run lives
+ *  in this helper; a test body composes with `yield*` instead. */
+const installableViewRef = () =>
+  Effect.runSync(SubscriptionRef.make(currentView()));
+
 function installSession(overrides: Record<string, unknown> = {}): void {
   const runs = {
     getActiveIds: mocks.getActiveRunIds,
@@ -602,10 +607,10 @@ describe('createChatSessionController', () => {
     // blanket `false` is not a valid persisted value for
     // AGENT_ROSTER_SELECTION, which agent resolution now reads.
     mocks.workspaceGet.mockImplementation(
-      (_key: unknown, defaultValue?: unknown) => defaultValue,
+      (_key: unknown, defaultValue?: unknown) => Effect.succeed(defaultValue),
     );
     mocks.globalGet.mockImplementation(
-      (_key: unknown, defaultValue?: unknown) => defaultValue,
+      (_key: unknown, defaultValue?: unknown) => Effect.succeed(defaultValue),
     );
     // The helper-model write is an Effect now, so the stubs are too.
     mocks.setCliHelperModel.mockReturnValue(Effect.void);
@@ -634,12 +639,17 @@ describe('createChatSessionController', () => {
 
   it('does not surface an intentional stop as an error', async () => {
     const run = createDeferred<never>();
+    const executed = createDeferred();
     const session = makeSession();
-    mocks.executeAgent.mockReturnValueOnce(run.promise);
+    mocks.executeAgent.mockImplementationOnce(() => {
+      executed.resolve();
+      return run.promise;
+    });
     const ctrl = createChatSessionController(makeInit({ session }));
 
     ctrl.startRootRun(makeRunRequest('Check the draft.'));
-    await vi.waitFor(() => expect(mocks.executeAgent).toHaveBeenCalledOnce());
+    await executed.promise;
+    expect(mocks.executeAgent).toHaveBeenCalledOnce();
     ctrl.stop();
     run.reject(new Error('run stopped'));
     await awaitRunSettled(session);
@@ -655,7 +665,7 @@ describe('createChatSessionController', () => {
     holdRun('a11111' as RunId);
     const ctrl = createChatSessionController(makeInit({ session }));
 
-    mocks.globalGet.mockReturnValue(true);
+    mocks.globalGet.mockReturnValue(Effect.succeed(true));
     ctrl.stop();
 
     expect(mocks.globalGet).toHaveBeenCalledWith(
@@ -850,13 +860,18 @@ describe('createChatSessionController', () => {
     const runA =
       createDeferred<ToolUseRunResult<typeof RUN_OUTCOME.CANCELLED>>();
     const runB = createDeferred<ToolUseRunResult<typeof RUN_OUTCOME.FAILED>>();
+    const runAgentCalledTwice = createDeferred();
     mocks.runAgent
       .mockReturnValueOnce(
         Effect.tryPromise({ try: () => runA.promise, catch: ensureError }),
       )
-      .mockReturnValueOnce(
-        Effect.tryPromise({ try: () => runB.promise, catch: ensureError }),
-      );
+      .mockImplementationOnce(() => {
+        runAgentCalledTwice.resolve();
+        return Effect.tryPromise({
+          try: () => runB.promise,
+          catch: ensureError,
+        });
+      });
 
     const session = makeSession();
     const ctrl = createChatSessionController(makeInit({ session }));
@@ -874,11 +889,24 @@ describe('createChatSessionController', () => {
 
     expect(resultPresenters).toHaveLength(0);
 
+    const presenterAdded = createDeferred();
+    mocks.attachTerminalResultToast.mockImplementationOnce(() => {
+      const host =
+        mocks.attachTerminalResultToast.mock.calls.length === 1 ? hostA : hostB;
+      const present = (message: string) =>
+        host.emit('requestShowError', { message });
+      resultPresenters.add(present);
+      presenterAdded.resolve();
+      return () => resultPresenters.delete(present);
+    });
+
     ctrl.startRootRun(config);
-    await vi.waitFor(() => expect(mocks.runAgent).toHaveBeenCalledTimes(2));
+    await runAgentCalledTwice.promise;
+    expect(mocks.runAgent).toHaveBeenCalledTimes(2);
     expect(mocks.attachTerminalResultToast).toHaveBeenCalledTimes(2);
     expect(session.runCompleted).toBe(false);
-    await vi.waitFor(() => expect(resultPresenters).toHaveLength(1));
+    await presenterAdded.promise;
+    expect(resultPresenters).toHaveLength(1);
     for (const present of resultPresenters) present('Failure B');
     runB.resolve({
       category: 'toolUse',
@@ -1082,6 +1110,12 @@ describe('createChatSessionController', () => {
   it('transfers an admitted interruption batch to manual resume', async () => {
     const teardown = pendingRunClaim();
     const { ctrl } = makeInterruptedController(teardown.settled, true);
+    const manualResumed = createDeferred();
+    const baseResumeRun = mocks.resumeRun.getMockImplementation();
+    mocks.resumeRun.mockImplementation((...args: unknown[]) => {
+      if (args[0] === 'aaaaaa') manualResumed.resolve();
+      return baseResumeRun!(...args);
+    });
     const admission = ctrl.admitInterruptedFollowUp({
       text: 'Preserve this accepted message.',
     });
@@ -1093,13 +1127,12 @@ describe('createChatSessionController', () => {
 
     await manualResume;
     await expect(awaitAdmission(admission.completion)).resolves.toBe(true);
-    await vi.waitFor(() =>
-      expect(mocks.resumeRun).toHaveBeenCalledWith(
-        'aaaaaa',
-        expect.objectContaining({
-          extraFollowUps: [{ text: 'Preserve this accepted message.' }],
-        }),
-      ),
+    await manualResumed.promise;
+    expect(mocks.resumeRun).toHaveBeenCalledWith(
+      'aaaaaa',
+      expect.objectContaining({
+        extraFollowUps: [{ text: 'Preserve this accepted message.' }],
+      }),
     );
   });
 
@@ -1215,25 +1248,29 @@ describe('createChatSessionController', () => {
     // re-read at adoption the user's Ctrl-C would leave no recoverable
     // conversation, and any stale run it did find would be the wrong one.
     const resumeReached = createDeferred<void>();
+    const resumeStarted = createDeferred();
     const session = makeSession({
       runId: 'd00001' as RunId,
       runCompleted: true,
     });
     mocks.resumeRun.mockImplementationOnce(
-      (_id: RunId, options: ResumeRunOptions) =>
-        Effect.gen(function* () {
+      (_id: RunId, options: ResumeRunOptions) => {
+        resumeStarted.resolve();
+        return Effect.gen(function* () {
           yield* Effect.promise(() => resumeReached.promise);
           if (options.onResumeResolved) yield* options.onResumeResolved();
           return options.isCancellationRequested?.()
             ? { failed: 'not_resumable' as const }
             : STARTED;
-        }),
+        });
+      },
     );
     const ctrl = createChatSessionController(makeInit({ session }));
 
     holdRun('aaaaaa' as RunId);
     const resumed = runResume(ctrl, 'aaaaaa' as RunId);
-    await vi.waitFor(() => expect(mocks.resumeRun).toHaveBeenCalledOnce());
+    await resumeStarted.promise;
+    expect(mocks.resumeRun).toHaveBeenCalledOnce();
     ctrl.stop();
     expect(session.interruptedRunId).toBeUndefined();
 
@@ -1299,13 +1336,21 @@ describe('createChatSessionController', () => {
           }),
         );
 
+        const defectReported = Deferred.makeUnsafe<void>();
+        const baseReportDefect =
+          mocks.reportRequestDefect.getMockImplementation();
+        mocks.reportRequestDefect.mockImplementationOnce(
+          (...args: unknown[]) => {
+            Deferred.doneUnsafe(defectReported, Effect.void);
+            return baseReportDefect!(...args);
+          },
+        );
+
         yield* ctrl.submit('Deliver this if you can.');
 
-        yield* Effect.promise(() =>
-          vi.waitFor(() =>
-            expect(mocks.reportRequestDefect).toHaveBeenCalledOnce(),
-          ),
-        );
+        yield* Deferred.await(defectReported);
+        yield* Effect.yieldNow;
+        expect(mocks.reportRequestDefect).toHaveBeenCalledOnce();
         expect(transientNotice.get()?.text).toContain(
           'The request failed inside TeXRA',
         );
@@ -1323,7 +1368,7 @@ describe('createChatSessionController', () => {
     // "the conversation ended", not a failure that escapes the delivery and
     // skips both restore branches.
     installSession({
-      view: Effect.runSync(SubscriptionRef.make(currentView())),
+      view: installableViewRef(),
     });
     const session = makeSession({
       runId: 'a11111' as RunId,
@@ -1347,15 +1392,19 @@ describe('createChatSessionController', () => {
 
   it('forwards a stop issued during manual resume helper-model setup', async () => {
     const helperModel = createDeferred<void>();
-    mocks.setCliHelperModel.mockReturnValueOnce(
-      Effect.tryPromise(() => helperModel.promise),
-    );
+    const helperModelStarted = createDeferred();
+    mocks.setCliHelperModel.mockImplementationOnce(() => {
+      helperModelStarted.resolve();
+      return Effect.tryPromise(() => helperModel.promise);
+    });
 
     const session = makeSession({ runCompleted: true });
     const ctrl = createChatSessionController(makeInit({ session }));
+    const resumeCalled = createDeferred();
     mocks.resumeRun.mockImplementationOnce(
-      (_id: RunId, options: ResumeRunOptions) =>
-        Effect.gen(function* () {
+      (_id: RunId, options: ResumeRunOptions) => {
+        resumeCalled.resolve();
+        return Effect.gen(function* () {
           if (options.onResumeResolved) yield* options.onResumeResolved();
           return {
             ...STARTED,
@@ -1363,28 +1412,27 @@ describe('createChatSessionController', () => {
               ? RUN_OUTCOME.CANCELLED
               : RUN_OUTCOME.COMPLETED,
           };
-        }),
+        });
+      },
     );
 
     const resumeStarted = runResume(ctrl, 'aaaaaa' as RunId);
-    await vi.waitFor(() =>
-      expect(mocks.setCliHelperModel).toHaveBeenCalledWith(
-        expect.anything(),
-        'demo-model',
-      ),
+    await helperModelStarted.promise;
+    expect(mocks.setCliHelperModel).toHaveBeenCalledWith(
+      expect.anything(),
+      'demo-model',
     );
 
     ctrl.stop();
     helperModel.resolve(undefined);
 
     await resumeStarted;
-    await vi.waitFor(() =>
-      expect(mocks.resumeRun).toHaveBeenCalledWith(
-        'aaaaaa',
-        expect.objectContaining({
-          isCancellationRequested: expect.any(Function),
-        }),
-      ),
+    await resumeCalled.promise;
+    expect(mocks.resumeRun).toHaveBeenCalledWith(
+      'aaaaaa',
+      expect.objectContaining({
+        isCancellationRequested: expect.any(Function),
+      }),
     );
     const resumeOptions = mocks.resumeRun.mock.calls[0]?.[1] as
       { readonly isCancellationRequested?: () => boolean } | undefined;
@@ -1651,9 +1699,11 @@ describe('createChatSessionController', () => {
   it('stops batching once ordinary follow-up routing is ready', async () => {
     const resume = createDeferred<typeof STARTED>();
     const { ctrl } = makeInterruptedController(Effect.void, true);
+    const resumeCalled = createDeferred();
     mocks.resumeRun.mockImplementationOnce(
-      (_id: RunId, options: ResumeRunOptions) =>
-        Effect.tryPromise({
+      (_id: RunId, options: ResumeRunOptions) => {
+        resumeCalled.resolve();
+        return Effect.tryPromise({
           try: async () => {
             options.onFollowUpQueueReady?.({
               runId: '7e5701' as RunId,
@@ -1662,13 +1712,15 @@ describe('createChatSessionController', () => {
             return resume.promise;
           },
           catch: ensureError,
-        }),
+        });
+      },
     );
 
     const first = ctrl.admitInterruptedFollowUp({ text: 'Resume now.' });
     expect(first.kind).toBe('accepted');
     if (first.kind !== 'accepted') return;
-    await vi.waitFor(() => expect(mocks.resumeRun).toHaveBeenCalledOnce());
+    await resumeCalled.promise;
+    expect(mocks.resumeRun).toHaveBeenCalledOnce();
 
     expect(ctrl.admitInterruptedFollowUp({ text: 'Route normally.' })).toEqual({
       kind: 'not_interrupted',
@@ -1751,11 +1803,13 @@ describe('createChatSessionController', () => {
 
   it('does not auto-resume after stop during helper-model setup', async () => {
     const helperModel = createDeferred<void>();
+    const helperModelStarted = createDeferred();
     const session = makeSession({ runCompleted: true });
     const config = makeResumeConfig();
-    mocks.setCliHelperModel.mockReturnValueOnce(
-      Effect.tryPromise(() => helperModel.promise),
-    );
+    mocks.setCliHelperModel.mockImplementationOnce(() => {
+      helperModelStarted.resolve();
+      return Effect.tryPromise(() => helperModel.promise);
+    });
     mocks.resumeRun.mockImplementationOnce(
       (_id: RunId, options: ResumeRunOptions) =>
         Effect.tryPromise({
@@ -1769,11 +1823,10 @@ describe('createChatSessionController', () => {
     const ctrl = createChatSessionController(makeInit({ session }));
 
     const resumed = runTryResume(ctrl, 'a11111' as RunId);
-    await vi.waitFor(() =>
-      expect(mocks.setCliHelperModel).toHaveBeenCalledWith(
-        expect.anything(),
-        config.model,
-      ),
+    await helperModelStarted.promise;
+    expect(mocks.setCliHelperModel).toHaveBeenCalledWith(
+      expect.anything(),
+      config.model,
     );
     ctrl.stop();
     helperModel.resolve(undefined);

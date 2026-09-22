@@ -1,8 +1,8 @@
 import { Effect, FileSystem } from 'effect';
 
-import { withLogChannel, withLogData } from '@logger/effectLog';
+import { withLogChannel } from '@logger/effectLog';
 import { filterNotNull } from '@utils/core';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { getPromptFileName } from '@utils/prompt';
 
 import { readNormalizedFile } from './fsDurability';
@@ -33,10 +33,15 @@ export const setVarFromFile = Effect.fn('varsUtils.setVarFromFile')(function* (
   workspaceRoot: string | undefined,
 ): Effect.fn.Return<FileVarValue | null, never, FileSystem.FileSystem> {
   const fs = yield* FileSystem.FileSystem;
-  return yield* readNormalizedFile(
-    fs,
-    workspaceAbsolutePath(workspaceRoot, filePath),
-  ).pipe(
+  // The resolution is inside the Effect, not an argument evaluated before it:
+  // `workspaceAbsolutePath` throws for a relative path with no workspace root
+  // open, and outside the Effect that throw is a defect the `Effect.catch`
+  // below never sees (#12803).
+  return yield* Effect.try({
+    try: () => workspaceAbsolutePath(workspaceRoot, filePath),
+    catch: ensureError,
+  }).pipe(
+    Effect.flatMap((absolute) => readNormalizedFile(fs, absolute)),
     Effect.map((content) => ({ file: filePath, content })),
     Effect.catch((error) =>
       // The variable is simply absent from the prompt after this, so a
@@ -44,7 +49,11 @@ export const setVarFromFile = Effect.fn('varsUtils.setVarFromFile')(function* (
       // absence.
       Effect.logWarning(
         `Failed to read ${varName} from file ${filePath}: ${toErrorMessage(error)}`,
-      ).pipe(withLogChannel(CHANNEL), withLogData(error), Effect.as(null)),
+      ).pipe(
+        withLogChannel(CHANNEL),
+        Effect.annotateLogs({ data: error }),
+        Effect.as(null),
+      ),
     ),
   );
 });
@@ -90,7 +99,15 @@ export const getXmlFormatFromReadableFiles = Effect.fn(
   const reads = yield* Effect.forEach(
     files,
     (file) =>
-      readNormalizedFile(fs, workspaceAbsolutePath(workspaceRoot, file)).pipe(
+      // Resolved inside the Effect: with no workspace root open a relative
+      // entry makes `workspaceAbsolutePath` throw, and as an argument that
+      // throw escaped the per-file `Effect.catch` as a defect and failed the
+      // whole batch instead of skipping the one file (#12803).
+      Effect.try({
+        try: () => workspaceAbsolutePath(workspaceRoot, file),
+        catch: ensureError,
+      }).pipe(
+        Effect.flatMap((absolute) => readNormalizedFile(fs, absolute)),
         Effect.map((content) => ({
           document: {
             file,

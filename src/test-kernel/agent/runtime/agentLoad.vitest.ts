@@ -20,12 +20,16 @@ import {
   validateAgentYamlContent,
 } from '@agent/runtime/agentLoad';
 import {
+  AgentDirectories,
   AgentDirectoriesFailed,
   type AgentDirectoriesPort,
 } from '@platform/interfaces';
 import type { GlobalStorageFs } from '@platform/rootedFs';
 import { AgentCategory } from '@shared/schemas';
-import { installPlatform } from '@test/support/setupPlatform';
+import {
+  fakeHostAgentDirectories,
+  installPlatform,
+} from '@test/support/setupPlatform';
 import {
   nodePlatformLayer,
   unusedGlobalStorageFs,
@@ -38,11 +42,19 @@ import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
  * only satisfies the requirement the catalog readers name.
  */
 function onGlobalStorage<A, E>(
-  program: Effect.Effect<A, E, GlobalStorageFs | FileSystem.FileSystem>,
+  program: Effect.Effect<
+    A,
+    E,
+    GlobalStorageFs | FileSystem.FileSystem | AgentDirectories
+  >,
 ): Effect.Effect<A, E> {
   return Effect.provide(
     program,
-    Layer.merge(unusedGlobalStorageFs(), nodePlatformLayer),
+    Layer.mergeAll(
+      unusedGlobalStorageFs(),
+      nodePlatformLayer,
+      AgentDirectories.layer(fakeHostAgentDirectories),
+    ),
   );
 }
 

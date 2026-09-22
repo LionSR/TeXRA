@@ -1,11 +1,12 @@
 import { it } from '@effect/vitest';
-import { Effect, Exit, Layer, Scope } from 'effect';
+import { Context, Effect, Exit, Layer, Scope } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi, type Mock } from 'vitest';
 
+import { SupabaseAuth } from '@auth/SupabaseAuth';
 import * as logger from '@logger/logUtils';
 import { AgentCategory, TELEMETRY_ENABLED_KEY } from '@shared/schemas';
+import { UsageLog } from '@shared/usageLog';
 import {
-  UsageLogService,
   usageLogLayer,
   type UsageLogOptions,
 } from '@telemetry/UsageLogService';
@@ -16,7 +17,10 @@ import {
   createFakePlatform,
   FakeScopedConfigProvider,
 } from '@test/support/FakePlatform';
-import { jsonResponse } from '@test/support/fetchTestUtils';
+import {
+  jsonResponse,
+  testHttpClientLayer,
+} from '@test/support/fetchTestUtils';
 import { fakeSupabaseAuth } from '@test/support/fakeSupabaseAuth';
 import { installHostAuth, setupPlatform } from '@test/support/setupPlatform';
 
@@ -77,6 +81,7 @@ describe('UsageLogService', () => {
   // owns one scope in its place, and closing it is what the host's runtime
   // disposal does.
   let lifetime: Scope.Closeable | undefined;
+  let usageLog: UsageLog['Service'];
 
   const stopUsageLog = async (): Promise<void> => {
     const scope = lifetime;
@@ -90,7 +95,7 @@ describe('UsageLogService', () => {
   ): Promise<void> => {
     await stopUsageLog();
     lifetime = scope ?? Scope.makeUnsafe();
-    await testRuntime().runPromise(
+    const context = await testRuntime().runPromise(
       Scope.provide(
         Layer.build(
           usageLogLayer({ version: undefined, editorType: undefined, config }),
@@ -98,6 +103,7 @@ describe('UsageLogService', () => {
         lifetime,
       ),
     );
+    usageLog = Context.get(context, UsageLog);
   };
 
   beforeEach(async () => {
@@ -128,10 +134,10 @@ describe('UsageLogService', () => {
       }
     });
 
-    UsageLogService.log(usageEntry('first'), testWorkspaceRoots().config);
+    usageLog.log(usageEntry('first'), testWorkspaceRoots().config);
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
 
-    UsageLogService.log(usageEntry('second'), testWorkspaceRoots().config);
+    usageLog.log(usageEntry('second'), testWorkspaceRoots().config);
     expect(fetchMock).toHaveBeenCalledTimes(1);
 
     releaseFirstFetch();
@@ -153,10 +159,10 @@ describe('UsageLogService', () => {
       if (callCount === 2) await secondFetchReleased;
     });
 
-    UsageLogService.log(usageEntry('first'), testWorkspaceRoots().config);
+    usageLog.log(usageEntry('first'), testWorkspaceRoots().config);
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
 
-    UsageLogService.log(usageEntry('second'), testWorkspaceRoots().config);
+    usageLog.log(usageEntry('second'), testWorkspaceRoots().config);
     const disposal = stopUsageLog();
 
     releaseFirstFetch();
@@ -193,7 +199,7 @@ describe('UsageLogService', () => {
       await fetchReleased;
     });
 
-    UsageLogService.log(usageEntry('timer'), testWorkspaceRoots().config);
+    usageLog.log(usageEntry('timer'), testWorkspaceRoots().config);
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
 
@@ -211,7 +217,7 @@ describe('UsageLogService', () => {
     await expect(disposal).resolves.toBeUndefined();
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(batches.map(batchModels)).toEqual([['timer']]);
-    UsageLogService.log(usageEntry('after-close'), testWorkspaceRoots().config);
+    usageLog.log(usageEntry('after-close'), testWorkspaceRoots().config);
     await vi.advanceTimersByTimeAsync(100);
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
@@ -244,7 +250,7 @@ describe('UsageLogService', () => {
       await fetchReleased;
     });
 
-    UsageLogService.log(usageEntry('slow'), testWorkspaceRoots().config);
+    usageLog.log(usageEntry('slow'), testWorkspaceRoots().config);
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
 
     const disposal = stopUsageLog();
@@ -286,7 +292,7 @@ describe('UsageLogService', () => {
 
     const { batches, fetchMock } = stubBatchFetch();
 
-    UsageLogService.log(usageEntry('first'), testWorkspaceRoots().config);
+    usageLog.log(usageEntry('first'), testWorkspaceRoots().config);
     await vi.advanceTimersByTimeAsync(0);
 
     expect(fetchMock).not.toHaveBeenCalled();
@@ -314,7 +320,7 @@ describe('UsageLogService', () => {
       return jsonResponse(firstFailure);
     });
 
-    UsageLogService.log(usageEntry('first'), testWorkspaceRoots().config);
+    usageLog.log(usageEntry('first'), testWorkspaceRoots().config);
     await vi.advanceTimersByTimeAsync(0);
     expect(fetchMock).toHaveBeenCalledTimes(1);
     await vi.advanceTimersByTimeAsync(60_000);
@@ -341,10 +347,10 @@ describe('UsageLogService', () => {
       });
     });
 
-    UsageLogService.log(usageEntry('invalid'), testWorkspaceRoots().config);
+    usageLog.log(usageEntry('invalid'), testWorkspaceRoots().config);
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
 
-    UsageLogService.log(usageEntry('valid'), testWorkspaceRoots().config);
+    usageLog.log(usageEntry('valid'), testWorkspaceRoots().config);
     releaseRejection();
 
     await vi.advanceTimersByTimeAsync(0);
@@ -370,10 +376,10 @@ describe('UsageLogService', () => {
       }
     });
 
-    UsageLogService.log(usageEntry('first'), testWorkspaceRoots().config);
+    usageLog.log(usageEntry('first'), testWorkspaceRoots().config);
     await vi.advanceTimersByTimeAsync(0);
 
-    UsageLogService.log(usageEntry('second'), testWorkspaceRoots().config);
+    usageLog.log(usageEntry('second'), testWorkspaceRoots().config);
     await vi.advanceTimersByTimeAsync(0);
 
     expect(fetchMock).toHaveBeenCalledTimes(3);
@@ -397,7 +403,7 @@ describe('UsageLogService', () => {
     async function expectNoOptionalUsageSent(): Promise<void> {
       const { batches, fetchMock } = stubBatchFetch();
 
-      UsageLogService.log(usageEntry('optional'), testWorkspaceRoots().config);
+      usageLog.log(usageEntry('optional'), testWorkspaceRoots().config);
       await vi.advanceTimersByTimeAsync(0);
 
       expect(fetchMock).not.toHaveBeenCalled();
@@ -459,10 +465,7 @@ describe('UsageLogService', () => {
 
         const { batches, fetchMock } = stubBatchFetch();
 
-        UsageLogService.log(
-          usageEntry('before-opt-out'),
-          testWorkspaceRoots().config,
-        );
+        usageLog.log(usageEntry('before-opt-out'), testWorkspaceRoots().config);
         yield* testWorkspaceRoots().config.update(
           TELEMETRY_ENABLED_KEY,
           false,
@@ -487,7 +490,7 @@ describe('UsageLogService', () => {
 
         const { batches, fetchMock } = stubBatchFetch();
 
-        UsageLogService.log(usageEntry('dropped'), testWorkspaceRoots().config);
+        usageLog.log(usageEntry('dropped'), testWorkspaceRoots().config);
         yield* Effect.promise(() => vi.advanceTimersByTimeAsync(0));
         expect(fetchMock).not.toHaveBeenCalled();
 
@@ -496,7 +499,7 @@ describe('UsageLogService', () => {
           true,
           'global',
         );
-        UsageLogService.log(usageEntry('sent'), testWorkspaceRoots().config);
+        usageLog.log(usageEntry('sent'), testWorkspaceRoots().config);
         yield* Effect.promise(() => vi.advanceTimersByTimeAsync(0));
 
         expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -523,7 +526,7 @@ describe('UsageLogService', () => {
 
         const { batches, fetchMock } = stubBatchFetch();
 
-        UsageLogService.log(
+        usageLog.log(
           { ...usageEntry('hosted'), usageRoute },
           testWorkspaceRoots().config,
         );
@@ -545,11 +548,11 @@ describe('UsageLogService', () => {
 
           const { batches, fetchMock } = stubBatchFetch();
 
-          UsageLogService.log(
+          usageLog.log(
             { ...usageEntry('byok'), usageRoute: 'api-key' },
             testWorkspaceRoots().config,
           );
-          UsageLogService.log(
+          usageLog.log(
             { ...usageEntry('hosted'), usageRoute: 'chatgpt-subscription' },
             testWorkspaceRoots().config,
           );
@@ -584,10 +587,7 @@ describe('UsageLogService', () => {
 
           const { batches, fetchMock } = stubBatchFetch();
 
-          UsageLogService.log(
-            usageEntry('optional'),
-            testWorkspaceRoots().config,
-          );
+          usageLog.log(usageEntry('optional'), testWorkspaceRoots().config);
 
           yield* testWorkspaceRoots().config.update(
             TELEMETRY_ENABLED_KEY,
@@ -635,10 +635,7 @@ describe('UsageLogService', () => {
 
         const { batches, fetchMock } = stubBatchFetch();
 
-        UsageLogService.log(
-          usageEntry('optional'),
-          testWorkspaceRoots().config,
-        );
+        usageLog.log(usageEntry('optional'), testWorkspaceRoots().config);
         yield* Effect.promise(() => vi.advanceTimersByTimeAsync(0));
 
         expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -654,7 +651,7 @@ describe('UsageLogService', () => {
 
       const { batches, fetchMock } = stubBatchFetch();
 
-      UsageLogService.log(
+      usageLog.log(
         { ...usageEntry('hosted'), usageRoute: 'chatgpt-subscription' },
         testWorkspaceRoots().config,
       );
@@ -679,10 +676,7 @@ describe('UsageLogService', () => {
 
           const { batches, fetchMock } = stubBatchFetch();
 
-          UsageLogService.log(
-            usageEntry('optional'),
-            testWorkspaceRoots().config,
-          );
+          usageLog.log(usageEntry('optional'), testWorkspaceRoots().config);
           yield* Effect.promise(() => vi.advanceTimersByTimeAsync(0));
 
           expect(fetchMock).not.toHaveBeenCalled();
@@ -708,10 +702,7 @@ describe('UsageLogService', () => {
 
           const { batches, fetchMock } = stubBatchFetch();
 
-          UsageLogService.log(
-            usageEntry('optional'),
-            testWorkspaceRoots().config,
-          );
+          usageLog.log(usageEntry('optional'), testWorkspaceRoots().config);
           yield* Effect.promise(() => vi.advanceTimersByTimeAsync(0));
 
           expect(fetchMock).not.toHaveBeenCalled();
@@ -720,3 +711,35 @@ describe('UsageLogService', () => {
     );
   });
 });
+
+it.live('does not carry unsent usage into a new logger lifetime', () =>
+  Effect.gen(function* () {
+    const { batches } = stubBatchFetch();
+    const record = (model: string, accessToken: string | null) =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          const context = yield* Layer.build(
+            usageLogLayer({
+              version: undefined,
+              editorType: undefined,
+              config: { batchSize: 100 },
+            }),
+          );
+          Context.get(context, UsageLog).log(
+            usageEntry(model),
+            testWorkspaceRoots().config,
+          );
+        }),
+      ).pipe(
+        Effect.provideService(
+          SupabaseAuth,
+          fakeSupabaseAuth({ accessToken: Effect.succeed(accessToken) }),
+        ),
+        Effect.provide(testHttpClientLayer),
+      );
+
+    yield* record('unsent', null);
+    yield* record('fresh', 'token');
+    expect(batches.map(batchModels)).toEqual([['fresh']]);
+  }).pipe(Effect.ensuring(Effect.sync(() => vi.unstubAllGlobals()))),
+);

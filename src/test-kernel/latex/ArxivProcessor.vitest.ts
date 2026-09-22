@@ -98,18 +98,15 @@ function sourceResponse(status = 200): Response {
 }
 
 describe('arXiv processor logger channel', () => {
-  /**
-   * Debug mode on: the Effect logger drops `Debug` entries otherwise, and
-   * these assertions are about which channel an entry lands on, not that gate.
-   */
-  const withDebugPlatform = Effect.promise(() =>
-    installPlatform({ config: { 'texra.logger.debugMode': true } }),
-  ).pipe(Effect.asVoid);
+  const withDebugPlatform = Effect.promise(() => installPlatform()).pipe(
+    Effect.asVoid,
+  );
 
   /** The logger production installs, so entries reach the captured sink. */
   const withDiagnostics = <A, E, R>(
     self: Effect.Effect<A, E, R>,
-  ): Effect.Effect<A, E, R> => Effect.provide(self, effectDiagnosticsLayer);
+  ): Effect.Effect<A, E, R> =>
+    Effect.provide(self, effectDiagnosticsLayer('Trace'));
 
   // #7347 renamed the exported singleton to PascalCase and accidentally
   // changed the channel string too. It is rendered as the `[channel]` prefix

@@ -142,7 +142,7 @@ const resolvePdfLocation = Effect.fn('OpenPdfTool.resolvePdfLocation')(
       return ports.runStorageLocation;
     }
 
-    const resolved = resolveWorkspaceRelativePath(
+    const resolved = yield* resolveWorkspaceRelativePath(
       ports.settings,
       ports.workspaceRoot,
       trimmed,

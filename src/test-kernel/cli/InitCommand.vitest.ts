@@ -43,7 +43,7 @@ vi.mock('@cli/runtime/modelAccess', async (importOriginal) => {
 });
 
 import { runCli } from '@cli/commands/root';
-import { defaultInitAnswers, initCommand } from '@cli/commands/init';
+import { initCommand } from '@cli/commands/init';
 import {
   initWizardDefaultAgentIndex,
   initWizardModelSelectItems,
@@ -96,9 +96,11 @@ describe('CLI init command', () => {
       .mockReturnValue(Effect.succeed([modelAccess('deepseekproT')]));
     mocks.getVisibleAgents
       .mockReset()
-      .mockReturnValue([
-        { name: 'assistant', category: AgentCategory.ToolUse },
-      ]);
+      .mockReturnValue(
+        Effect.succeed([
+          { name: 'assistant', category: AgentCategory.ToolUse },
+        ]),
+      );
     // The command threads the stores this call hands back into the model
     // access list, so the mock returns the pair a real init would.
     mocks.initCliPlatform.mockReset().mockReturnValue(

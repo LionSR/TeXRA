@@ -1,15 +1,12 @@
+import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, vi } from 'vitest';
 
 import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
 import { setLogSink, type LogEntry } from '@logger/logSink';
 import * as logger from '@logger/logUtils';
 
 const SECRET = 'sk-proj-redaction-example-1234567890abcdef';
-
-function enableDebugLogging(): void {
-  logger.setDebugModeConfig({ get: () => true });
-}
 
 /** Install a capturing sink and return the entries it receives. */
 function captureEntries(options?: { trusted: boolean }): LogEntry[] {
@@ -18,7 +15,7 @@ function captureEntries(options?: { trusted: boolean }): LogEntry[] {
   return entries;
 }
 
-/** The payload annotation a debug-mode entry carries, if any. */
+/** The payload annotation an entry carries, rendered by the write path. */
 function payloadOf(entry: LogEntry | undefined): string {
   return String(entry?.annotations['data'] ?? '');
 }
@@ -26,12 +23,10 @@ function payloadOf(entry: LogEntry | undefined): string {
 describe('logUtils', () => {
   afterEach(() => {
     vi.restoreAllMocks();
-    logger.setDebugModeConfig(null);
     setLogSink(null);
   });
 
-  it('keeps pre-platform error logging on the non-debug path', () => {
-    logger.setDebugModeConfig(null);
+  it('keeps pre-platform error logging working', () => {
     const entries = captureEntries();
 
     expect(() =>
@@ -73,8 +68,7 @@ describe('logUtils', () => {
     expect(output).toContain('Authorization: Bearer [redacted]');
   });
 
-  it('redacts serialized debug data before sending it to the sink', () => {
-    enableDebugLogging();
+  it('redacts the rendered payload before sending it to the sink', () => {
     const entries = captureEntries();
 
     logger.debug('test', 'request metadata', {
@@ -97,39 +91,57 @@ describe('logUtils', () => {
     expect(payload).toContain('"requestId": "visible-request-id"');
   });
 
-  it('routes native Effect logs and nested spans through the redacting sink', () => {
-    enableDebugLogging();
+  it('redacts a long secret before truncating its rendered payload', () => {
     const entries = captureEntries();
-    const operation = Effect.fn('model.request')(function* () {
-      yield* Effect.annotateCurrentSpan('runId', 'run-42');
-      yield* Effect.annotateCurrentSpan('authorization', `Bearer ${SECRET}`);
-      yield* Effect.logWarning('provider warning').pipe(
-        Effect.annotateLogs({ runId: 'run-42', apiKey: SECRET }),
-      );
+    const password = `visible-secret-prefix-${'x'.repeat(3_000)}`;
+
+    logger.debug('test', 'long request metadata', {
+      data: { password },
     });
 
-    Effect.runSync(
-      operation().pipe(
-        Effect.withSpan('session.run'),
-        Effect.provide(effectDiagnosticsLayer),
-      ),
-    );
-
-    const warning = entries.find((entry) => entry.level === 'WARN');
-    expect(warning?.message).toBe('provider warning');
-    // Identity rides the entry's annotations, not a channel argument. A tracer
-    // span does not attribute a log entry: `spans` reads `CurrentLogSpans`.
-    expect(warning?.annotations['runId']).toBe('run-42');
-    const output = JSON.stringify(entries);
-    expect(output).toContain('[redacted]');
-    expect(output).not.toContain(SECRET);
-
-    logger.setDebugModeConfig(null);
-    entries.length = 0;
-    Effect.runSync(operation().pipe(Effect.provide(effectDiagnosticsLayer)));
-    expect(entries).toHaveLength(1);
-    expect(entries[0]?.message).toBe('provider warning');
+    const payload = payloadOf(entries[0]);
+    expect(payload).not.toContain('visible-secret-prefix');
+    expect(payload).toContain('"password": "[redacted]"');
   });
+
+  it.effect(
+    'routes native Effect logs and nested spans through the redacting sink',
+    () =>
+      Effect.gen(function* () {
+        const entries = captureEntries();
+        const operation = Effect.fn('model.request')(function* () {
+          yield* Effect.annotateCurrentSpan('runId', 'run-42');
+          yield* Effect.annotateCurrentSpan(
+            'authorization',
+            `Bearer ${SECRET}`,
+          );
+          yield* Effect.logWarning('provider warning').pipe(
+            Effect.annotateLogs({ runId: 'run-42', apiKey: SECRET }),
+          );
+        });
+
+        yield* operation().pipe(
+          Effect.withSpan('session.run'),
+          Effect.provide(effectDiagnosticsLayer('Trace')),
+        );
+
+        const warning = entries.find((entry) => entry.level === 'WARN');
+        expect(warning?.message).toBe('provider warning');
+        // Identity rides the entry's annotations, not a channel argument. A tracer
+        // span does not attribute a log entry: `spans` reads `CurrentLogSpans`.
+        expect(warning?.annotations['runId']).toBe('run-42');
+        const output = JSON.stringify(entries);
+        expect(output).toContain('[redacted]');
+        expect(output).not.toContain(SECRET);
+
+        // The emission threshold is the only filter: a warning clears an
+        // informational floor without any producer-side gate.
+        entries.length = 0;
+        yield* operation().pipe(Effect.provide(effectDiagnosticsLayer('Info')));
+        expect(entries).toHaveLength(1);
+        expect(entries[0]?.message).toBe('provider warning');
+      }),
+  );
 
   it('disposes a replaced sink exactly once', () => {
     const dispose = vi.fn();

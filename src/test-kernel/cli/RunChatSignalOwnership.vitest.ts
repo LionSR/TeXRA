@@ -258,7 +258,7 @@ async function stubAgentRegistry(): Promise<() => void> {
   const agents = await import('@agent/index');
   const spies = [
     vi.spyOn(agents, 'loadAgents').mockReturnValue(Effect.void),
-    vi.spyOn(agents, 'getVisibleAgents').mockReturnValue([]),
+    vi.spyOn(agents, 'getVisibleAgents').mockReturnValue(Effect.succeed([])),
   ];
   return () => {
     for (const spy of spies) spy.mockRestore();
@@ -313,7 +313,7 @@ describe('runChat signal ownership wiring', () => {
       model: 'gpt-test',
       modelSource: 'default',
     });
-    mocks.chatToolUseAgentUsageError.mockReturnValue(undefined);
+    mocks.chatToolUseAgentUsageError.mockReturnValue(Effect.succeed(undefined));
     mocks.selectCliRunnableModel.mockReturnValue(
       Effect.succeed({ model: 'gpt-test' }),
     );
@@ -393,8 +393,10 @@ describe('runChat signal ownership wiring', () => {
     process.on('newListener', observeNewListener);
     mocks.supportsTerminalJobControl.mockReturnValue(true);
     const kill = vi.spyOn(process, 'kill').mockReturnValue(true);
+    const exitCalled = createDeferred();
     const exit = vi.spyOn(process, 'exit').mockImplementation(((code) => {
       mocks.callOrder.push(`process.exit:${code}`);
+      exitCalled.resolve();
       return undefined as never;
     }) as typeof process.exit);
 
@@ -448,13 +450,17 @@ describe('runChat signal ownership wiring', () => {
       });
       expect(mocks.terminalTitleResume).toHaveBeenCalledTimes(1);
 
+      const submitted = createDeferred();
+      mocks.submit.mockImplementationOnce(async () => {
+        submitted.resolve();
+        return undefined;
+      });
       submit.current?.('check the ordinary case', []);
-      await vi.waitFor(() =>
-        expect(mocks.submit).toHaveBeenCalledWith(
-          'check the ordinary case',
-          [],
-          undefined,
-        ),
+      await submitted.promise;
+      expect(mocks.submit).toHaveBeenCalledWith(
+        'check the ordinary case',
+        [],
+        undefined,
       );
 
       mocks.callOrder.length = 0;
@@ -478,7 +484,8 @@ describe('runChat signal ownership wiring', () => {
       await expect(runPromise).resolves.toEqual({
         exitCode: CliExitCode.Success,
       });
-      await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(143));
+      await exitCalled.promise;
+      expect(exit).toHaveBeenCalledWith(143);
       for (const signal of targetSignals) {
         expect(process.listeners(signal)).toEqual(
           baselineListeners.get(signal) ?? [],
@@ -502,14 +509,21 @@ describe('runChat signal ownership wiring', () => {
   it('releases only the current conversation on /clear and preserves history', async () => {
     const exitTui = createDeferred();
     mocks.waitUntilExit.mockReturnValue(exitTui.promise);
+    const controllerCreated = createDeferred();
+    const baseCreateController =
+      mocks.createChatSessionController.getMockImplementation();
+    mocks.createChatSessionController.mockImplementationOnce(
+      (...args: unknown[]) => {
+        controllerCreated.resolve();
+        return baseCreateController?.(...args);
+      },
+    );
     const restoreAgentRegistry = await stubAgentRegistry();
     const { runChat } = await import('@cli/chat/tui/runChatTui');
     const runPromise = runChat(INTERACTIVE_CONTEXT, {});
 
     try {
-      await vi.waitFor(() =>
-        expect(mocks.createChatSessionController).toHaveBeenCalled(),
-      );
+      await controllerCreated.promise;
       const session = testDefaultSession();
       const ownRoot = 'c1ea40007007' as RunId;
       const history = 'c1ea4041570f' as RunId;

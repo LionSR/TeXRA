@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 // Third-party imports
 
 // Local imports - formatter implementations
@@ -8,7 +9,7 @@ import { readSettingFrom } from '@utils/config/platformSettings';
 // Local file imports
 import { LATEXINDENT_CONFIG_KEY, runLatexIndent } from './latexindentpt';
 import { TEXFMT_CONFIG_KEY, runTexFmt } from './texfmt';
-import type { Effect, FileSystem } from 'effect';
+import type { FileSystem } from 'effect';
 
 interface LatexFormatterDefinition {
   /** Setting value that selects this formatter. */
@@ -57,20 +58,21 @@ const LATEX_FORMATTERS: Record<string, LatexFormatterDefinition> = {
  * config-file path come from that project rather than from whichever roots
  * the calling context happens to carry.
  */
-export function resolveLatexFormatter(
-  stores: SettingsStores,
-): LatexFormatter | null {
-  const formatter = readSettingFrom<string>(
-    stores,
-    WorkspaceStateKey.LATEX_FORMATTER,
-  );
-  if (formatter === 'none') {
-    return null;
-  }
-  const selected = LATEX_FORMATTERS[formatter] ?? LATEX_FORMATTERS.latexindent;
-  return {
-    ...selected,
-    configPath: stores.config.get(selected.configKey, ''),
-    settings: stores,
-  };
+export function resolveLatexFormatter(stores: SettingsStores) {
+  return Effect.gen(function* () {
+    const formatter = yield* readSettingFrom<string>(
+      stores,
+      WorkspaceStateKey.LATEX_FORMATTER,
+    );
+    if (formatter === 'none') {
+      return null;
+    }
+    const selected =
+      LATEX_FORMATTERS[formatter] ?? LATEX_FORMATTERS.latexindent;
+    return {
+      ...selected,
+      configPath: stores.config.get(selected.configKey, ''),
+      settings: stores,
+    };
+  });
 }

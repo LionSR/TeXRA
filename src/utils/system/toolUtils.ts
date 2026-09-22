@@ -2,13 +2,13 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, Option } from 'effect';
 import { execa } from 'execa';
 import { parse as shellParse } from 'shell-quote';
 
 // Local imports
 import { createLog } from '@logger/logUtils';
-import { platform } from '@platform/platform';
+import { ToolMissingReporter } from '@platform/interfaces';
 import type { ExecResult } from '@shared/schemas';
 import {
   PDFLATEX_INSTALL_GUIDE,
@@ -44,22 +44,32 @@ interface ToolConfig {
 /**
  * Hand the missing-tool message to the host, whose handler is the one foreign
  * edge here. A handler that rejects is reported rather than dropped: the probe
- * itself succeeded, so the caller still gets its answer.
+ * itself succeeded, so the caller still gets its answer. The reporter is the
+ * process's optional `ToolMissingReporter` service; the composition root omits
+ * it where no host UI exists, so an absent port reads as silence.
  */
 function reportMissingTool(
   message: string,
   openDocsCommand?: string,
 ): Effect.Effect<void> {
-  return Effect.tryPromise({
-    try: async () => {
-      await platform().toolMissingHandler?.(message, openDocsCommand);
-    },
-    catch: ensureError,
-  }).pipe(
-    Effect.catch((err) =>
-      Effect.sync(() => {
-        log.error(`Failed to report missing tool: ${toErrorMessage(err)}`);
-      }),
+  return Effect.serviceOption(ToolMissingReporter).pipe(
+    Effect.flatMap((reportMissing) =>
+      Option.isNone(reportMissing)
+        ? Effect.void
+        : Effect.tryPromise({
+            try: async () => {
+              await reportMissing.value(message, openDocsCommand);
+            },
+            catch: ensureError,
+          }).pipe(
+            Effect.catch((err) =>
+              Effect.sync(() => {
+                log.error(
+                  `Failed to report missing tool: ${toErrorMessage(err)}`,
+                );
+              }),
+            ),
+          ),
     ),
   );
 }
@@ -469,7 +479,6 @@ export function hasPackageManager(name: SystemPackageManager): boolean {
   // reaching for a workspace it does not need.
   const available = executeCommandSync([name, '--version'], {
     cwd: process.cwd(),
-    settings: undefined,
   }).success;
   packageManagerAvailability.set(name, available);
   log.debug(

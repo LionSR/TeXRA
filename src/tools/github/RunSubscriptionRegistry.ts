@@ -19,7 +19,11 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 
 import { emitAppSignal } from '@eventBus/AppSignals';
 import { createLog } from '@logger/logUtils';
-import { AgentResume, type Disposable } from '@platform/interfaces';
+import {
+  AgentResume,
+  type Disposable,
+  type Lifecycle,
+} from '@platform/interfaces';
 import type { Secrets } from '@platform/secrets';
 import type { RunId } from '@shared/schemas';
 
@@ -34,7 +38,7 @@ interface PollingSourceLike<K extends string, Input> {
   subscribe(
     input: Input,
     onEvent: PollEventListener,
-  ): Effect.Effect<Disposable, never, Secrets>;
+  ): Effect.Effect<Disposable, never, Secrets | Lifecycle>;
   updateSubscription?(input: Input, onEvent: PollEventListener): void;
   activeKeys(): readonly K[];
   onKeysChanged(listener: (keys: readonly K[]) => void): Disposable;
@@ -94,7 +98,7 @@ export class RunSubscriptionRegistry<K extends string, Input> {
     runId: RunId,
     input: Input,
     session: SessionHandle,
-  ): Effect.Effect<boolean, never, Secrets | AgentResume> {
+  ): Effect.Effect<boolean, never, Secrets | AgentResume | Lifecycle> {
     // The resume port is captured now: onEvent fires from the detached poll
     // loop, whose context has no AgentResume.
     return Effect.flatMap(AgentResume, (agentResume) =>

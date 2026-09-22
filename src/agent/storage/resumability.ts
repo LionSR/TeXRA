@@ -1,7 +1,7 @@
 import { Effect } from 'effect';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { withLogChannel, withLogData } from '@logger/effectLog';
+import { withLogChannel } from '@logger/effectLog';
 import { type FlowSnapshotPayload, type RunId } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -86,7 +86,11 @@ export const checkpointExists = Effect.fn('checkpointExists')(function* (
     Effect.catch((error) =>
       Effect.logWarning(
         `Could not read the checkpoint of ${runId}: ${toErrorMessage(error)}`,
-      ).pipe(withLogData(error), withLogChannel(CHANNEL), Effect.as(false)),
+      ).pipe(
+        Effect.annotateLogs({ data: error }),
+        withLogChannel(CHANNEL),
+        Effect.as(false),
+      ),
     ),
   );
 });

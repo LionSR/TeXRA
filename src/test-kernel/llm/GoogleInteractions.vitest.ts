@@ -12,6 +12,7 @@ import {
 } from '@texra-ai/llm/google-interactions';
 import { admittedFingerprint } from '@texra-ai/llm/prefix-fingerprint';
 import { RemoteOperationSchema } from '@texra-ai/llm/turn';
+import { createDeferred } from '@test/support/asyncTestUtils';
 import type { ModelError, TurnRequest, TurnResult } from '@texra-ai/llm/turn';
 
 function model(
@@ -33,14 +34,6 @@ function model(
     },
     { apiKey: 'synthetic-key' },
   );
-}
-
-function gate() {
-  let release!: () => void;
-  const promise = new Promise<void>((resolve) => {
-    release = resolve;
-  });
-  return { promise, release };
 }
 
 function backgroundFixture() {
@@ -649,9 +642,9 @@ describe('canonical Google Interactions protocol', () => {
         const { turn, background, operation } = yield* backgroundFixture();
         const timedOut =
           kind === 'deadline' || kind === 'deadline-cleanup-failure';
-        const entered = gate();
-        const aborted = gate();
-        const released = gate();
+        const entered = createDeferred();
+        const aborted = createDeferred();
+        const released = createDeferred();
         const failure = new Error('Late background body failure');
         fetchModel.mockImplementation(async (input) => {
           const request = input as Request;
@@ -663,7 +656,7 @@ describe('canonical Google Interactions protocol', () => {
                   signal.addEventListener(
                     'abort',
                     () => {
-                      aborted.release();
+                      aborted.resolve();
                       void released.promise.then(() =>
                         controller.error(
                           kind === 'deadline'
@@ -676,7 +669,7 @@ describe('canonical Google Interactions protocol', () => {
                   );
                 },
                 pull() {
-                  entered.release();
+                  entered.resolve();
                 },
               },
               { highWaterMark: 0 },
@@ -708,7 +701,7 @@ describe('canonical Google Interactions protocol', () => {
           : yield* Fiber.interrupt(fiber).pipe(Effect.forkChild);
         yield* Effect.promise(() => aborted.promise);
         expect(finished).toBe(false);
-        released.release();
+        released.resolve();
         yield* Fiber.join(interruption);
         const exit = yield* Fiber.await(fiber);
         assert(exit._tag === 'Failure');
@@ -880,9 +873,9 @@ describe('canonical Google Interactions protocol', () => {
     'aborts and joins the complete Google count promise during %s',
     (phase) =>
       Effect.gen(function* () {
-        const entered = gate();
-        const aborted = gate();
-        const released = gate();
+        const entered = createDeferred();
+        const aborted = createDeferred();
+        const released = createDeferred();
         const failure = new Error('Late count read failure');
         fetchModel.mockImplementation(async (_url, init) => {
           assert(init?.signal);
@@ -892,14 +885,14 @@ describe('canonical Google Interactions protocol', () => {
               signal.addEventListener(
                 'abort',
                 () => {
-                  aborted.release();
+                  aborted.resolve();
                   void released.promise.then(() =>
                     reject(new DOMException('Aborted', 'AbortError')),
                   );
                 },
                 { once: true },
               );
-              entered.release();
+              entered.resolve();
             });
           return new Response(
             new ReadableStream<Uint8Array>(
@@ -908,7 +901,7 @@ describe('canonical Google Interactions protocol', () => {
                   signal.addEventListener(
                     'abort',
                     () => {
-                      aborted.release();
+                      aborted.resolve();
                       void released.promise.then(() =>
                         controller.error(
                           phase === 'late-body-failure'
@@ -921,7 +914,7 @@ describe('canonical Google Interactions protocol', () => {
                   );
                 },
                 pull() {
-                  entered.release();
+                  entered.resolve();
                 },
               },
               { highWaterMark: 0 },
@@ -951,7 +944,7 @@ describe('canonical Google Interactions protocol', () => {
         );
         yield* Effect.promise(() => aborted.promise);
         expect(finished).toBe(false);
-        released.release();
+        released.resolve();
         yield* Fiber.join(interruption);
         const exit = yield* Fiber.await(fiber);
         assert(exit._tag === 'Failure');

@@ -6,6 +6,7 @@ import { CliExitCode } from '@cli/runtime/exitCodes';
 import { DisposableStore } from '@platform/disposable';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import type { RunId } from '@shared/schemas';
+import { createDeferred } from '@test/support/asyncTestUtils';
 import { bindTestSessionView } from './fixtures/sessionViewFixture';
 
 const mocks = vi.hoisted(() => ({
@@ -60,14 +61,20 @@ describe('chat TUI session exit controller', () => {
     const session = new TuiSession();
     session.runId = 'exec-flush-warning' as RunId;
     session.runExitCode = CliExitCode.Success;
+    const exitCalled = createDeferred();
     const exit = vi.spyOn(process, 'exit').mockImplementation((() => {
+      exitCalled.resolve();
       return undefined as never;
     }) as typeof process.exit);
     let finishStderrWrite: (() => void) | undefined;
     const stderrWrite = new Promise<void>((resolve) => {
       finishStderrWrite = resolve;
     });
-    mocks.writeTextStderrAndWait.mockReturnValue(stderrWrite);
+    const stderrWaitCalled = createDeferred();
+    mocks.writeTextStderrAndWait.mockImplementationOnce(() => {
+      stderrWaitCalled.resolve();
+      return stderrWrite;
+    });
     const controller = createSessionExitController({
       ink: {
         clear: vi.fn(),
@@ -98,9 +105,8 @@ describe('chat TUI session exit controller', () => {
 
     try {
       controller.handleSigint();
-      await vi.waitFor(() =>
-        expect(mocks.writeTextStderrAndWait).toHaveBeenCalledOnce(),
-      );
+      await stderrWaitCalled.promise;
+      expect(mocks.writeTextStderrAndWait).toHaveBeenCalledOnce();
 
       expect(mocks.writeTextStdout).toHaveBeenCalledWith(
         expect.stringContaining('texra resume exec-flush-warning'),
@@ -114,9 +120,8 @@ describe('chat TUI session exit controller', () => {
       expect(exit).not.toHaveBeenCalled();
 
       finishStderrWrite?.();
-      await vi.waitFor(() =>
-        expect(exit).toHaveBeenCalledWith(CliExitCode.Success),
-      );
+      await exitCalled.promise;
+      expect(exit).toHaveBeenCalledWith(CliExitCode.Success);
     } finally {
       exit.mockRestore();
     }

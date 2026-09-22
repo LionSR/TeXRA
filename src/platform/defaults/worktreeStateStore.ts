@@ -5,7 +5,11 @@ import { Effect } from 'effect';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 
 // Local imports - platform
-import type { StateStore, StateWriteFailed } from '../interfaces';
+import type {
+  StateReadFailed,
+  StateStore,
+  StateWriteFailed,
+} from '../interfaces';
 
 /**
  * WorkspaceStateKeys that represent repository-level configuration rather
@@ -46,7 +50,7 @@ export class WorktreeStateStore implements StateStore {
     private readonly sharedKeys: ReadonlySet<string> = WORKTREE_SHARED_KEYS,
   ) {}
 
-  get<T>(key: string, defaultValue?: T): T {
+  get<T>(key: string, defaultValue?: T): Effect.Effect<T, StateReadFailed> {
     const shared = this.sharedKeys.has(key);
     const store = shared ? this.globalState : this.workspaceState;
     return store.get<T>(

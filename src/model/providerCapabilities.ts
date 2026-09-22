@@ -19,7 +19,10 @@ import type { SettingsStores } from '@shared/config/settingsAccess';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 
-import { resolveRuntimeModelConfig } from './runtimeModelRegistry';
+import {
+  getRuntimeModelConfig,
+  resolveRuntimeModelConfig,
+} from './runtimeModelRegistry';
 
 export interface ProviderCapabilityProfile {
   readonly contextWindow: number;
@@ -52,10 +55,19 @@ const CODEX_MODEL_DATE_PIN = /-\d{4}-\d{2}-\d{2}$/;
  * account.` — a message that reads as a subscription problem and sends users
  * to check their plan, when the id was simply not a model.
  */
-export function codexBackendModelId(config: {
-  readonly fullName: string;
-}): string {
-  return config.fullName.replace(CODEX_MODEL_DATE_PIN, '');
+export function codexBackendModelId(
+  config: Pick<ModelConfig, 'name' | 'fullName'>,
+): string {
+  // The canonical registry `fullName`, not the caller's. A bound config has
+  // already been through `withShortModelName`, which overwrites `fullName`
+  // with `shortName` when "Prefer short model names" is on — reinstating the
+  // exact `gpt-5.6` this function exists to never send (#12873). `name` is
+  // the persisted registry id and is not rewritten anywhere on this path, so
+  // it is the one field that still identifies the model. A config the
+  // registry does not know (a runtime-discovered entry) has no canonical name
+  // to read, so its own `fullName` is the only answer available.
+  const canonical = getRuntimeModelConfig(config.name)?.fullName;
+  return (canonical ?? config.fullName).replace(CODEX_MODEL_DATE_PIN, '');
 }
 
 /**
@@ -88,11 +100,9 @@ function isCodexSubscriptionEligible(model: ModelConfig): boolean {
 }
 
 /** Resolve the active ChatGPT-subscription (Codex) provider profile. */
-function resolveCodexSubscriptionProfile({
-  stores,
-  model,
-  useOpenRouter,
-}: ProviderCapabilityKey): ProviderCapabilityProfile | null {
+const resolveCodexSubscriptionProfile = Effect.fn(
+  'resolveCodexSubscriptionProfile',
+)(function* ({ stores, model, useOpenRouter }: ProviderCapabilityKey) {
   if (useOpenRouter) return null;
   if (model.provider !== ModelProvider.OPENAI) return null;
   if (model.openRouterOnly) return null;
@@ -100,10 +110,10 @@ function resolveCodexSubscriptionProfile({
   // The setting is stored in thousands of tokens; this is its only reader,
   // so the unit conversion lives here and nowhere else.
   const inputTokenLimit = Math.min(
-    readSettingFrom<number>(
+    (yield* readSettingFrom<number>(
       stores,
       CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.configKey,
-    ) * CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.tokensPerUnit,
+    )) * CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.tokensPerUnit,
     model.contextWindow,
   );
   const contextWindow = Math.min(
@@ -114,26 +124,28 @@ function resolveCodexSubscriptionProfile({
   return {
     ...zeroCostAccessOverrides(contextWindow),
     inputTokenLimit,
-    usageRoute: 'chatgpt-subscription',
+    usageRoute: 'chatgpt-subscription' as const,
   };
-}
+});
 
 /**
  * Resolve ChatGPT-subscription capabilities for a model, or null when the
  * subscription preference is off or the model is not Codex-eligible.
  */
-export function resolveCodexSubscriptionCapabilities(
+export const resolveCodexSubscriptionCapabilities = Effect.fn(
+  'resolveCodexSubscriptionCapabilities',
+)(function* (
   stores: SettingsStores,
   config: ModelConfig,
   useOpenRouter: boolean,
-): ProviderCapabilityProfile | null {
+) {
   if (!isPreferCodexSubscription(stores)) return null;
-  return resolveCodexSubscriptionProfile({
+  return yield* resolveCodexSubscriptionProfile({
     stores,
     model: config,
     useOpenRouter,
   });
-}
+});
 
 /**
  * Shared signed-in-subscription probe: resolve the model config, ask the
@@ -153,15 +165,15 @@ const signedInSubscriptionUsageRoute = Effect.fn(
     stores: SettingsStores,
     config: ModelConfig,
     useOpenRouter: boolean,
-  ) => ProviderCapabilityProfile | null,
+  ) => Effect.Effect<ProviderCapabilityProfile | null, Error>,
   isSignedIn: () => Effect.Effect<boolean>,
 ): Effect.fn.Return<UsageRoute | undefined, Error, LanguageModel> {
   const config = yield* resolveRuntimeModelConfig(modelId);
   if (!config) return undefined;
-  const capabilities = resolveCapabilities(
+  const capabilities = yield* resolveCapabilities(
     stores,
     config,
-    getUseOpenRouter(stores),
+    yield* getUseOpenRouter(stores),
   );
   if (!capabilities) return undefined;
   const signedIn = yield* isSignedIn();
@@ -214,20 +226,23 @@ export const isCodexSubscriptionActive = Effect.fn(
  * xAI-eligible. All non-OpenRouter-only xAI registry models qualify; the OAuth
  * token hits the same `api.x.ai` surface as an API key.
  */
-export function resolveXaiSubscriptionCapabilities(
-  stores: SettingsStores,
-  config: ModelConfig,
-  useOpenRouter: boolean,
-): ProviderCapabilityProfile | null {
-  if (!isPreferXaiSubscription(stores)) return null;
-  if (useOpenRouter) return null;
-  if (config.provider !== ModelProvider.XAI) return null;
-  if (config.openRouterOnly) return null;
-  return {
-    ...zeroCostAccessOverrides(config.contextWindow),
-    usageRoute: 'xai-subscription',
-  };
-}
+export const resolveXaiSubscriptionCapabilities = Effect.fn(
+  'resolveXaiSubscriptionCapabilities',
+)((stores: SettingsStores, config: ModelConfig, useOpenRouter: boolean) =>
+  Effect.sync((): ProviderCapabilityProfile | null => {
+    if (
+      !isPreferXaiSubscription(stores) ||
+      useOpenRouter ||
+      config.provider !== ModelProvider.XAI ||
+      config.openRouterOnly
+    )
+      return null;
+    return {
+      ...zeroCostAccessOverrides(config.contextWindow),
+      usageRoute: 'xai-subscription',
+    };
+  }),
+);
 
 /** Whether the model currently routes through a signed-in Grok subscription. */
 export const isXaiSubscriptionActive = Effect.fn(

@@ -2,6 +2,7 @@ import { Effect } from 'effect';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { LifecycleHost } from '@platform/interfaces';
+import { createDeferred } from '@test/support/asyncTestUtils';
 
 const mocks = vi.hoisted(() => ({
   flushNdjsonStdout: vi.fn<() => Effect.Effect<void>>(),
@@ -127,6 +128,7 @@ describe('CLI platform signal handlers', () => {
     vi.resetModules();
     const order: string[] = [];
     const stderrCallbacks: Array<(error?: Error | null) => void> = [];
+    const secondWriteCaptured = createDeferred();
     const stderrWrite = vi.spyOn(process.stderr, 'write').mockImplementation(((
       ...args: unknown[]
     ) => {
@@ -134,7 +136,10 @@ describe('CLI platform signal handlers', () => {
         (arg): arg is (error?: Error | null) => void =>
           typeof arg === 'function',
       );
-      if (callback) stderrCallbacks.push(callback);
+      if (callback) {
+        stderrCallbacks.push(callback);
+        if (stderrCallbacks.length === 2) secondWriteCaptured.resolve();
+      }
       return true;
     }) as typeof process.stderr.write);
     mocks.flushNdjsonStdout.mockImplementation(() =>
@@ -156,7 +161,7 @@ describe('CLI platform signal handlers', () => {
     ).then(() => {
       resolved = true;
     });
-    await vi.waitFor(() => expect(stderrCallbacks).toHaveLength(2));
+    await secondWriteCaptured.promise;
 
     expect(stderrWrite.mock.calls.map(([text]) => text)).toEqual([
       'lifecycle diagnostic\n',

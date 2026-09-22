@@ -12,7 +12,7 @@ import { z } from 'zod';
 
 // Local imports
 import { normaliseArxivIdentifier } from '@latex/arxivIdentifier';
-import { withLogChannel, withLogData } from '@logger/effectLog';
+import { withLogChannel } from '@logger/effectLog';
 import { requireNonEmptyString } from '@tools/utils';
 import { ARXIV_CONSTANTS } from '@tools/citation/constants';
 import { rateLimitedApiCall } from '@tools/support/rateLimiter';
@@ -98,7 +98,11 @@ const searchArxiv = Effect.fn('ArxivSearchTool.execute')(function* (
       Effect.catch((error) =>
         Effect.logWarning(
           `Ignoring invalid arxiv category filter "${trimmed}"`,
-        ).pipe(withLogChannel(CHANNEL), withLogData(error), Effect.as(null)),
+        ).pipe(
+          withLogChannel(CHANNEL),
+          Effect.annotateLogs({ data: error }),
+          Effect.as(null),
+        ),
       ),
     );
     if (filter != null) categoryFilters.push(filter);

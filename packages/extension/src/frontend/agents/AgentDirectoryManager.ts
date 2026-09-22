@@ -3,7 +3,7 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect, FileSystem } from 'effect';
+import { Effect, FileSystem, type PlatformError } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
@@ -15,10 +15,14 @@ import {
   createPlatformAgentDirectories,
 } from '@agent/index';
 import { showLoggedMessageWithDocs } from '@frontend/ui/errorHandlingUtils';
-import { selectFolder } from '@frontend/ui/dialogs';
+import { type OpenDialogFailed, selectFolder } from '@frontend/ui/dialogs';
 import { withLogChannel } from '@logger/effectLog';
 import { createLog } from '@logger/logUtils';
-import type { AgentDirectoriesFailed } from '@platform/interfaces';
+import {
+  type AgentDirectoriesFailed,
+  type StateWriteFailed,
+  type StateStore,
+} from '@platform/interfaces';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { GlobalStorageFs } from '@platform/rootedFs';
 import { AGENT_SOURCE } from '@shared/schemas';
@@ -35,7 +39,7 @@ const AGENT_WATCHER_REBUILD_LANE = 'agent-watcher-rebuild';
  *  one guard covers both. */
 interface AgentDirectoryHost {
   readonly directories: AgentDirectoryService;
-  readonly globalState: vscode.Memento;
+  readonly globalState: StateStore;
   /** The host entry's process runtime, handed down with the two services. */
   readonly runtime: ProcessRuntime;
 }
@@ -50,7 +54,7 @@ class AgentDirectoryManager {
   private readonly watcherRebuildLanes = new Map<string, PerKeyLane>();
 
   initialize(
-    globalState: vscode.Memento,
+    globalState: StateStore,
     resourcesPath: string,
     runtime: ProcessRuntime,
   ): void {
@@ -122,7 +126,7 @@ class AgentDirectoryManager {
 
   promptCustom(): Effect.Effect<
     string | undefined,
-    unknown,
+    OpenDialogFailed | PlatformError.PlatformError | StateWriteFailed,
     FileSystem.FileSystem
   > {
     return Effect.gen({ self: this }, function* () {
@@ -139,15 +143,10 @@ class AgentDirectoryManager {
       const fs = yield* FileSystem.FileSystem;
       yield* fs.makeDirectory(selectedPath, { recursive: true });
 
-      yield* Effect.tryPromise({
-        try: async () => {
-          await this.getHost().globalState.update(
-            GlobalStateKey.CUSTOM_AGENT_DIR,
-            selectedPath,
-          );
-        },
-        catch: (cause: unknown) => cause,
-      });
+      yield* this.getHost().globalState.update(
+        GlobalStateKey.CUSTOM_AGENT_DIR,
+        selectedPath,
+      );
 
       return selectedPath;
     });

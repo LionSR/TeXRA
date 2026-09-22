@@ -68,6 +68,30 @@ Two further corrections that do not belong to a single section:
   fallback. Rebuild `packages/agent` before reading `dist/types` as evidence
   of the SDK's surface, and before the Tier-1 manifest is pinned against it.
 
+## Corrections (2026-09-21)
+
+Written back from the refreshed audit
+[2026-09-21-ownership-audits-12424-12425](./2026-09-21-ownership-audits-12424-12425.md),
+re-measured against `main` at `6eb322f83e`. Where this document's §4B/§4C
+prose disagrees with that audit, the audit governs. Sections 2, 3 and 4A/4D
+are unaffected. In brief:
+
+- **§4B: the `tryDefaultSession` fallback survives at the CLI composition
+  root.** The correction above retired the `currentSession`/`defaultSession`
+  spellings; the mechanism itself is still reached lazily by the CLI's
+  setting slots (`tryDefaultSession()?.roots`,
+  `packages/cli/src/runtime/initPlatform.ts:426`) and by
+  `CliPlatformServices.session` (`:447`). #12975 (#12421) retired the ambient
+  `platform()` readers, not this fallback. The §4B acceptance — "the ambient
+  session fallback is removed in the same change" — stays open for these two
+  sites.
+- **§4C: one internal Promise adapter remains in the account path.**
+  `AuthNotifier.showSignInPrompt` is TeXRA's own interface returning
+  `Promise<void>`, converted back into an Effect through `callPort`
+  (`packages/extension/src/frontend/auth/SupabaseAuthProvider.ts:47-50`,
+  `:293`; implementation `packages/extension/src/extension.ts:459`). The §4C
+  acceptance — no internal Promise method — stays open for this seam.
+
 ## 2. Established work and remaining evidence
 
 The old flow engine and model-handler hierarchy are retired. The production

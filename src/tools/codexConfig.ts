@@ -2,7 +2,8 @@ import { Effect } from 'effect';
 import { z } from 'zod';
 
 // Local imports - agent config
-import { withLogChannel, withLogData } from '@logger/effectLog';
+import { withLogChannel } from '@logger/effectLog';
+import type { StateReadFailed } from '@platform/interfaces';
 import type { StateStore } from '@platform/interfaces';
 import type { CodexReasoningEffort } from '@shared/schemas';
 import {
@@ -67,11 +68,13 @@ export function toCodexCliReasoningEffort(
 export function getCodexCliReasoningEffort(
   workspaceState: StateStore,
   supportsXhigh = false,
-): CodexCliReasoningEffort {
-  return toCodexCliReasoningEffort(
-    getCodexReasoningEffort(workspaceState),
-    supportsXhigh,
-  );
+) {
+  return Effect.gen(function* () {
+    return toCodexCliReasoningEffort(
+      yield* getCodexReasoningEffort(workspaceState),
+      supportsXhigh,
+    );
+  });
 }
 
 // ============================================================================
@@ -83,7 +86,7 @@ export function getCodexCliReasoningEffort(
 // with the Codex union — a schema value the SDK doesn't accept fails here.
 export const getCodexApprovalPolicy: (
   workspaceState: StateStore,
-) => ApprovalMode = createEnumStateGetter(
+) => Effect.Effect<ApprovalMode, StateReadFailed> = createEnumStateGetter(
   WorkspaceStateKey.CODEX_APPROVAL_POLICY,
   CODEX_APPROVAL_POLICY_DEFAULT,
   parseCodexApprovalPolicy,
@@ -95,12 +98,13 @@ export const getCodexApprovalPolicy: (
 
 // As above: the SDK-typed return annotation is the alignment guard between the
 // persisted schema values and the Codex sandbox union.
-export const getCodexSandboxMode: (workspaceState: StateStore) => SandboxMode =
-  createEnumStateGetter(
-    WorkspaceStateKey.CODEX_SANDBOX_MODE,
-    CODEX_SANDBOX_MODE_DEFAULT,
-    parseCodexSandboxMode,
-  );
+export const getCodexSandboxMode: (
+  workspaceState: StateStore,
+) => Effect.Effect<SandboxMode, StateReadFailed> = createEnumStateGetter(
+  WorkspaceStateKey.CODEX_SANDBOX_MODE,
+  CODEX_SANDBOX_MODE_DEFAULT,
+  parseCodexSandboxMode,
+);
 
 // ============================================================================
 // Extra High capability probe
@@ -163,11 +167,13 @@ const probeXhighSupport = Effect.fn('codexConfig.probeXhighSupport')(function* (
     yield* Effect.logWarning(
       'Codex xhigh capability probe failed; not caching the result',
     ).pipe(
-      withLogData({
-        binaryPath,
-        timedOut: result.timedOut,
-        exitCode: result.exitCode,
-        stderr: result.stderr,
+      Effect.annotateLogs({
+        data: {
+          binaryPath,
+          timedOut: result.timedOut,
+          exitCode: result.exitCode,
+          stderr: result.stderr,
+        },
       }),
       withLogChannel(CHANNEL),
     );
@@ -181,7 +187,10 @@ const probeXhighSupport = Effect.fn('codexConfig.probeXhighSupport')(function* (
   if (supported == null) {
     yield* Effect.logWarning(
       'Codex xhigh capability probe returned unreadable catalog',
-    ).pipe(withLogData({ binaryPath }), withLogChannel(CHANNEL));
+    ).pipe(
+      Effect.annotateLogs({ data: { binaryPath } }),
+      withLogChannel(CHANNEL),
+    );
     return false;
   }
   codexXhighSupportByBinary.set(binaryPath, supported);

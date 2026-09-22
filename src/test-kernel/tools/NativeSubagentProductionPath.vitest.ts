@@ -1,7 +1,7 @@
 import { writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
-import { Effect, Fiber, Layer, Stream } from 'effect';
+import { Deferred, Effect, Fiber, Layer, Stream } from 'effect';
 
 /**
  * Production-shaped regression for #9531. Agent registration, launch, child
@@ -59,11 +59,13 @@ import {
 // Local imports - shared/runtime boundaries
 import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import {
+  AgentDirectories,
   AgentResume,
   AgentResumeFailed,
   type RecoveryContinuation,
 } from '@platform/interfaces';
 import type { Platform } from '@platform/platform';
+import { withProcessServices } from '@platform/processRuntime';
 import {
   RUN_OUTCOME,
   RUN_PHASE,
@@ -80,6 +82,7 @@ import {
   useTempDirs,
 } from '@test/support/tempDirPlatform';
 import {
+  fakeHostAgentDirectories,
   fakeHostAgentResume,
   setupPlatform,
   type FakeHost,
@@ -104,8 +107,7 @@ const tempDirs = useTempDirs();
 let session: SessionHandle;
 let childId: RunId | undefined;
 let resumedRuns: RunId[];
-let completedResumes: RunId[];
-
+let parentFiber: Fiber.Fiber<unknown, Error> | undefined;
 interface ScriptedTurn {
   readonly text: string;
 }
@@ -209,15 +211,24 @@ function scriptedBoundModel(
   hangGate?: Promise<unknown>,
 ): BoundModel {
   const origin = scriptedOrigin(config.fullName);
+  let progressOnly = false;
   const model: Model = {
     prepareTurn: (request) => {
+      const latest = request.messages.at(-1);
+      const text = latest ? messageText(latest) : '';
+      progressOnly =
+        config.name === PARENT_MODEL &&
+        text.includes('<subagent-progress') &&
+        !text.includes('<subagent-result');
       observed.push({ model: config.name, messages: request.messages });
       return Effect.succeed(preparedTurn(origin));
     },
     streamTurn: () =>
       Stream.unwrap(
         Effect.gen(function* () {
-          const turn = turns.shift();
+          const turn = progressOnly
+            ? { text: 'Parent noted progress.' }
+            : turns.shift();
           if (turn === 'hang') {
             yield* Effect.tryPromise({
               try: () => hangGate ?? new Promise(() => {}),
@@ -296,7 +307,6 @@ function resumePersistedRun(
             ),
         }),
       );
-      completedResumes.push(runId);
       return 'started' in resumed && resumed.delivered;
     },
     catch: (cause) =>
@@ -380,10 +390,26 @@ function interruptActiveRuns(session: SessionHandle): void {
   }
 }
 
-async function waitForCompletedResumes(count: number): Promise<void> {
-  await vi.waitFor(() => expect(completedResumes).toHaveLength(count), {
-    timeout: 10_000,
-  });
+function waitForParentTurns(count: number): Effect.Effect<void> {
+  return Effect.promise(() =>
+    vi.waitFor(
+      async () => {
+        await Effect.runPromise(session.settlePublications(PARENT_RUN_ID));
+        const transcript = await Effect.runPromise(
+          readCompletedRunConversation(PARENT_RUN_ID, session),
+        );
+        expect(
+          transcript.conversation?.filter(
+            (row) =>
+              row.kind === 'assistant-text' &&
+              row.text !== 'Parent noted progress.',
+          ),
+        ).toHaveLength(count + 1);
+        expect(session.runView(PARENT_RUN_ID)?.status).toBe(RUN_PHASE.WAITING);
+      },
+      { timeout: 20_000 },
+    ),
+  );
 }
 
 /**
@@ -490,21 +516,17 @@ async function launchWaitingChild(options: {
       parentRunId: OUTER_RUN_ID,
     }),
   );
-  await expect(
-    testRuntime().runPromise(
-      prepareAgentDefinition({ config: parentConfig, session }).pipe(
-        Effect.flatMap((definition) =>
-          executeAgent(definition, PARENT_RUN_ID, {
-            session,
-            parentRunId: OUTER_RUN_ID,
-          }),
-        ),
+  parentFiber = testRuntime().runFork(
+    prepareAgentDefinition({ config: parentConfig, session }).pipe(
+      Effect.flatMap((definition) =>
+        executeAgent(definition, PARENT_RUN_ID, {
+          session,
+          parentRunId: OUTER_RUN_ID,
+        }),
       ),
     ),
-  ).resolves.toMatchObject({
-    outcome: RUN_PHASE.WAITING,
-    output: { response: 'Parent ready.' },
-  });
+  );
+  await Effect.runPromise(waitForParentTurns(0));
 
   const parentContext: ParentDelegationContext = {
     runId: PARENT_RUN_ID,
@@ -558,7 +580,11 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
     await Effect.runPromise(
       Effect.provide(
         refresh({ includeRemote: false }),
-        Layer.merge(unusedGlobalStorageFs(), nodePlatformLayer),
+        Layer.mergeAll(
+          unusedGlobalStorageFs(),
+          nodePlatformLayer,
+          AgentDirectories.layer(fakeHostAgentDirectories),
+        ),
       ),
     );
     // The process session over a persistent store: one session per root,
@@ -571,11 +597,12 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
     await Effect.runPromise(session.settlePublications());
     childId = undefined;
     resumedRuns = [];
-    completedResumes = [];
+    parentFiber = undefined;
   });
 
   afterEach(async () => {
     interruptActiveRuns(session);
+    if (parentFiber) await Effect.runPromise(Fiber.await(parentFiber));
     if (childId) await waitForClaimRelease(childId);
     await Effect.runPromise(session.releaseRunLease(PARENT_RUN_ID));
     await Effect.runPromise(teardownDefaultSession());
@@ -583,7 +610,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
   });
 
   it.live(
-    'resumes one persisted child through the real queue and archives both turns once',
+    'keeps one native run and model binding across both delivered turns',
     () =>
       Effect.gen(function* () {
         const parentTurns = [
@@ -598,7 +625,12 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
           );
 
         yield* Effect.promise(() => waitForPersistedResult(runId, 'Result A.'));
-        yield* Effect.promise(() => waitForCompletedResumes(1));
+        const firstHandle = session.runs.getHandle(runId);
+        const initialBindings = modelBindingMocks.bindModel.mock.calls.length;
+        yield* waitForParentTurns(1);
+        const budget = yield* session.runs.childRunBudget(1);
+        expect(yield* budget.takeIfAvailable(1)).toBe(true);
+        yield* budget.release(1);
 
         const resumed = yield* Effect.promise(() =>
           queueSecondAssertionFollowUp(parentContext, runId),
@@ -606,9 +638,13 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         expect(resumed.summary).toContain('Follow-up queued');
 
         yield* Effect.promise(() => waitForPersistedResult(runId, 'Result B.'));
-        yield* Effect.promise(() => waitForCompletedResumes(2));
+        yield* waitForParentTurns(2);
+        expect(session.runs.getHandle(runId)).toBe(firstHandle);
+        expect(modelBindingMocks.bindModel).toHaveBeenCalledTimes(
+          initialBindings,
+        );
 
-        // The resumed turn asks the model with the follow-up as its last message
+        // The next turn asks the model with the follow-up as its last message
         // and turn 1's answer still in the history it carries.
         const childResumeRequest = observedRequests.find(
           ({ model, messages }) => {
@@ -657,9 +693,110 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
             { kind: 'assistant-text', text: 'Parent received result B.' },
           ]),
         );
-        expect(resumedRuns).toEqual([PARENT_RUN_ID, PARENT_RUN_ID]);
-        expect(completedResumes).toEqual([PARENT_RUN_ID, PARENT_RUN_ID]);
+        expect(resumedRuns).toEqual([]);
         expect(parentTurns).toHaveLength(0);
+        yield* session.runs.kill(runId).settlement;
+        yield* Effect.promise(() => waitForClaimRelease(runId));
+        yield* waitForParentTurns(2);
+        const afterStop = yield* readCompletedRunConversation(
+          PARENT_RUN_ID,
+          session,
+        );
+        expect(
+          JSON.stringify(afterStop.conversation).match(/Result B\./g),
+        ).toHaveLength(1);
+        childTurns.push({ text: 'Recovered result C.' });
+        parentTurns.push({ text: 'Parent received recovered result C.' });
+        const recovered = yield* Effect.forkChild(
+          withProcessServices(
+            testRuntime(),
+            resumeRun(runId, {
+              session,
+              extraFollowUps: [
+                { text: 'Continue after restart.', origin: 'user' },
+              ],
+              executeWorkflow: () =>
+                Effect.fail(new Error('Expected a tool-use child.')),
+            }),
+          ),
+        );
+        yield* Effect.promise(() =>
+          waitForPersistedResult(runId, 'Recovered result C.'),
+        );
+        yield* waitForParentTurns(3);
+        expect(
+          yield* Fiber.join(recovered).pipe(Effect.timeout('5 seconds')),
+        ).toEqual({
+          started: true,
+          delivered: true,
+          outcome: RUN_PHASE.WAITING,
+        });
+        const recoveredHandle = session.runs.getHandle(runId);
+        expect(recoveredHandle).toBeDefined();
+        expect(session.followUps.hasLiveOwner(runId)).toBe(true);
+        childTurns.push({ text: 'Recovered result D.' });
+        parentTurns.push({ text: 'Parent received recovered result D.' });
+        yield* submitFollowUp(runId, 'Continue in the recovered run.', {
+          session,
+        }).pipe(Effect.provide(AgentResume.layer(fakeHostAgentResume)));
+        yield* Effect.promise(() =>
+          waitForPersistedResult(runId, 'Recovered result D.'),
+        );
+        yield* waitForParentTurns(4);
+        expect(session.runs.getHandle(runId)).toBe(recoveredHandle);
+        yield* session.runs.kill(runId).settlement;
+        yield* Effect.promise(() => waitForClaimRelease(runId));
+
+        // An already idle saved run needs no new input or model turn to
+        // acknowledge recovery, and its live driver still owns later input.
+        expect(
+          yield* withProcessServices(
+            testRuntime(),
+            resumeRun(runId, {
+              session,
+              executeWorkflow: () =>
+                Effect.fail(new Error('Expected a tool-use child.')),
+            }),
+          ).pipe(Effect.timeout('5 seconds')),
+        ).toEqual({
+          started: true,
+          delivered: true,
+          outcome: RUN_PHASE.WAITING,
+        });
+        expect(session.runs.getHandle(runId)).toBeDefined();
+        yield* session.viewChanges.pipe(
+          Stream.filter(
+            (view) => view.runs.get(runId)?.status === RUN_PHASE.WAITING,
+          ),
+          Stream.runHead,
+          Effect.timeout('5 seconds'),
+        );
+        expect((yield* readChildTurnState(session, runId)).active).toBeNull();
+        expect(childTurns).toHaveLength(0);
+        yield* session.runs.kill(runId).settlement;
+        yield* Effect.promise(() => waitForClaimRelease(runId));
+        modelBindingMocks.bindModel.mockReturnValueOnce(
+          Effect.fail(new Error('Recovered model binding failed.')),
+        );
+        parentTurns.push({ text: 'Parent received failed recovery.' });
+        expect(
+          yield* withProcessServices(
+            testRuntime(),
+            resumeRun(runId, {
+              session,
+              extraFollowUps: [
+                { text: 'Keep this unconsumed input.', origin: 'user' },
+              ],
+              executeWorkflow: () =>
+                Effect.fail(new Error('Expected a tool-use child.')),
+            }),
+          ),
+        ).toEqual({
+          started: true,
+          delivered: false,
+          outcome: RUN_OUTCOME.FAILED,
+        });
+        yield* waitForParentTurns(5);
       }),
     60_000,
   );
@@ -681,7 +818,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         );
 
         yield* Effect.promise(() => waitForPersistedResult(runId, 'Result A.'));
-        yield* Effect.promise(() => waitForCompletedResumes(1));
+        yield* waitForParentTurns(1);
 
         const resumed = yield* Effect.promise(() =>
           queueSecondAssertionFollowUp(parentContext, runId),
@@ -710,7 +847,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
             { timeout: 10_000 },
           ),
         );
-        yield* Effect.promise(() => waitForCompletedResumes(2));
+        yield* waitForParentTurns(2);
 
         yield* session.settlePublications();
         const archivedChild = yield* readCompletedRunConversation(
@@ -738,8 +875,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         );
         const parentText = JSON.stringify(archivedParent.conversation);
         expect(parentText.match(/Result A\./g)).toHaveLength(1);
-        expect(resumedRuns).toEqual([PARENT_RUN_ID, PARENT_RUN_ID]);
-        expect(completedResumes).toEqual([PARENT_RUN_ID, PARENT_RUN_ID]);
+        expect(resumedRuns).toEqual([]);
         expect(parentTurns).toHaveLength(0);
       }),
     60_000,
@@ -762,7 +898,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         );
 
         yield* Effect.promise(() => waitForPersistedResult(runId, 'Result A.'));
-        yield* Effect.promise(() => waitForCompletedResumes(1));
+        yield* waitForParentTurns(1);
 
         // Submit two follow-ups concurrently, before the child drains the queue.
         // The resumed child takes the whole queued batch and runs one turn
@@ -786,7 +922,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         expect(second.status).toBe('executed');
 
         yield* Effect.promise(() => waitForPersistedResult(runId, 'Result B.'));
-        yield* Effect.promise(() => waitForCompletedResumes(2));
+        yield* waitForParentTurns(2);
 
         // The child transcript has turn 1 (Result A) and the batch turn (Result B),
         // with BOTH follow-up instructions recorded as user messages in the batch.
@@ -809,8 +945,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         const parentText = JSON.stringify(archivedParent.conversation);
         expect(parentText.match(/Result A\./g)).toHaveLength(1);
         expect(parentText.match(/Result B\./g)).toHaveLength(1);
-        expect(resumedRuns).toEqual([PARENT_RUN_ID, PARENT_RUN_ID]);
-        expect(completedResumes).toEqual([PARENT_RUN_ID, PARENT_RUN_ID]);
+        expect(resumedRuns).toEqual([]);
         expect(parentTurns).toHaveLength(0);
       }),
     60_000,
@@ -831,7 +966,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
           }),
         );
         yield* Effect.promise(() => waitForPersistedResult(runId, 'Result A.'));
-        yield* Effect.promise(() => waitForCompletedResumes(1));
+        yield* waitForParentTurns(1);
 
         // The loop minted a stable logical identity for turn 1's delivery.
         const turnState = yield* readChildTurnState(session, runId);
@@ -861,8 +996,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
             .conversation,
         );
         expect(afterReplay.match(/Result A\./g)).toHaveLength(1);
-        expect(resumedRuns).toEqual([PARENT_RUN_ID]);
-        expect(completedResumes).toEqual([PARENT_RUN_ID]);
+        expect(resumedRuns).toEqual([]);
 
         // A distinct delivery identity with identical text is a distinct turn.
         yield* submitFollowUp(
@@ -874,14 +1008,14 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
           },
           { session },
         ).pipe(Effect.provideService(AgentResume, fakeHostAgentResume));
-        yield* Effect.promise(() => waitForCompletedResumes(2));
+        yield* waitForParentTurns(2);
         yield* session.settlePublications();
         const afterDistinct = JSON.stringify(
           (yield* readCompletedRunConversation(PARENT_RUN_ID, session))
             .conversation,
         );
         expect(afterDistinct.match(/Result A\./g)).toHaveLength(2);
-        expect(resumedRuns).toEqual([PARENT_RUN_ID, PARENT_RUN_ID]);
+        expect(resumedRuns).toEqual([]);
       }),
     30_000,
   );
@@ -906,7 +1040,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
           }),
         );
         yield* Effect.promise(() => waitForPersistedResult(runId, 'Result A.'));
-        yield* Effect.promise(() => waitForCompletedResumes(1));
+        yield* waitForParentTurns(1);
 
         const completed1 = (yield* readChildTurnState(session, runId))
           .lastCompleted;

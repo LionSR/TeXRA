@@ -12,7 +12,6 @@ import {
   RetryErrorInfoSchema,
   RunEndSchema,
   RunIdSchema,
-  RUN_PHASE,
   ToolUseRunEndOutputSchema,
   WorkflowRunEndOutputSchema,
 } from '@shared/schemas';
@@ -44,27 +43,6 @@ export const ToolUseFlowResultSchema = AgentFlowResultSchema.extend({
 });
 
 export type ToolUseFlowResult = z.infer<typeof ToolUseFlowResultSchema>;
-
-// A suspension is not a terminal fact, so it can never carry a failure: a flow
-// that recorded an error ends the run instead of parking it.
-const WaitingToolUseFlowResultSchema = ToolUseFlowResultSchema.omit({
-  error: true,
-}).extend({
-  outcome: z.literal(RUN_PHASE.WAITING),
-});
-
-export type WaitingToolUseFlowResult = z.infer<
-  typeof WaitingToolUseFlowResultSchema
->;
-
-/** Runtime flow results include the non-terminal WAITING state. */
-export type AgentRuntimeFlowResult = AgentFlowResult | WaitingToolUseFlowResult;
-
-export function isWaitingFlowResult(
-  result: AgentRuntimeFlowResult,
-): result is WaitingToolUseFlowResult {
-  return result.outcome === RUN_PHASE.WAITING;
-}
 
 /** The report of a run that ended before its flow produced an output. */
 export function buildTerminalFlowResult(

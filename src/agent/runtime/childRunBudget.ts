@@ -1,3 +1,5 @@
+import * as os from 'node:os';
+import { Effect } from 'effect';
 /**
  * One child-run concurrency budget per session: the cap on concurrently live
  * native child model conversations, one semaphore held by the session's runs
@@ -11,7 +13,6 @@
  * budget starts as soon as a slot frees, and a queued turn cancelled before
  * its slot never starts fresh model work.
  */
-import * as os from 'node:os';
 
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import {
@@ -33,10 +34,10 @@ import type { SessionHandle } from './SessionHandle';
  * read it here. Resolved host-side because `src/shared` is loaded by the settings
  * webview and must stay free of `node:os`.
  */
-export function resolveChildRunConcurrencyBudget(
-  stores: SettingsStores,
-): number {
-  const configured = readSettingFrom<number>(
+export const resolveChildRunConcurrencyBudget = Effect.fn(
+  'resolveChildRunConcurrencyBudget',
+)(function* (stores: SettingsStores) {
+  const configured = yield* readSettingFrom<number>(
     stores,
     CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
   );
@@ -47,13 +48,18 @@ export function resolveChildRunConcurrencyBudget(
     CHILD_RUN_CONCURRENCY_BUDGET_SETTING.max,
     Math.max(1, os.availableParallelism()),
   );
-}
+});
 
 /**
  * The session's shared child-run budget at the configured value, read in the
  * session's scope: the session's runs hold the one semaphore
  * (`RunRegistry.childRunBudget`) and re-pin it here on every launch.
  */
-export function childRunBudgetFor(session: SessionHandle, runs: RunRegistry) {
-  return runs.childRunBudget(resolveChildRunConcurrencyBudget(session.roots));
-}
+export const childRunBudgetFor = Effect.fn('childRunBudgetFor')(function* (
+  session: SessionHandle,
+  runs: RunRegistry,
+) {
+  return yield* runs.childRunBudget(
+    yield* resolveChildRunConcurrencyBudget(session.roots),
+  );
+});

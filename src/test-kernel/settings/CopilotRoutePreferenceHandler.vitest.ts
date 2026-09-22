@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   canSendRequest: vi.fn(),
   sendRequest: vi.fn(),
   safeExecuteCommand: vi.fn(() => Effect.succeed(undefined)),
+  refreshCatalogs: vi.fn(() => Effect.void),
   // The real writer hands back a program, not a promise.
   setCopilotRoutePreference: vi.fn(() => Effect.void),
   showLoggedErrorMessage: vi.fn<
@@ -116,7 +117,7 @@ async function installModels(...models: readonly LanguageModelInfo[]) {
 }
 
 type RefreshSurface = {
-  sendModelSelectionData(webview: vscode.Webview): Promise<void>;
+  sendModelSelectionData(webview: vscode.Webview): Effect.Effect<void>;
 };
 
 const subscriptions: vscode.Disposable[] = [];
@@ -135,11 +136,16 @@ function createHandler(): SettingsViewMessageHandler {
     secrets,
     testRuntime(),
     testDefaultSession(),
+    {
+      refreshCatalogs: mocks.refreshCatalogs,
+      refreshApiKeyStatus: Effect.void,
+      refreshOnboardingFunnel: () => Effect.void,
+    },
   );
   vi.spyOn(
     handler as unknown as RefreshSurface,
     'sendModelSelectionData',
-  ).mockResolvedValue(undefined);
+  ).mockReturnValue(Effect.void);
   return handler;
 }
 
@@ -156,9 +162,11 @@ async function requestModelAccess(handler = createHandler()): Promise<void> {
   vi.spyOn(
     handler as unknown as RefreshSurface,
     'sendModelSelectionData',
-  ).mockImplementation(async () => {
-    refreshed.resolve();
-  });
+  ).mockImplementation(() =>
+    Effect.sync(() => {
+      refreshed.resolve();
+    }),
+  );
   await handler.handleMessage(
     {
       command: SETTINGS_VIEW_COMMANDS.REQUEST_MODEL_ACCESS,
@@ -227,11 +235,7 @@ describe('Copilot route preference handler', () => {
           expect.anything(),
         );
       }
-      expect(mocks.safeExecuteCommand).toHaveBeenCalledWith(
-        'texra.refreshAllOptions',
-        [],
-        'SettingsView',
-      );
+      expect(mocks.refreshCatalogs).toHaveBeenCalled();
     },
   );
 
@@ -418,10 +422,7 @@ describe('Copilot route preference handler', () => {
     'observes complete native consumption and release for %s',
     async (scenario) => {
       await installModels({ ...GEMINI_PRO, access: 'consent-required' });
-      const controller = new AbortController();
-      const deadline = vi
-        .spyOn(AbortSignal, 'timeout')
-        .mockReturnValue(controller.signal);
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
       const pending =
         createDeferred<IteratorResult<vscode.LanguageModelTextPart>>();
       const started = createDeferred<void>();
@@ -455,10 +456,9 @@ describe('Copilot route preference handler', () => {
         settled = true;
       });
       await started.promise;
-      expect(deadline).toHaveBeenCalledWith(120_000);
       expect(mocks.setCopilotRoutePreference).not.toHaveBeenCalled();
       if (scenario.startsWith('deadline')) {
-        controller.abort();
+        await vi.advanceTimersByTimeAsync(120_000);
         await vi.waitFor(() =>
           expect(token?.isCancellationRequested).toBe(true),
         );
@@ -468,6 +468,7 @@ describe('Copilot route preference handler', () => {
         pending.reject(denial);
       }
       await request;
+      vi.useRealTimers();
       expect(close).toHaveBeenCalledOnce();
       expect(mocks.setCopilotRoutePreference).not.toHaveBeenCalled();
       if (scenario === 'denied') {
@@ -485,7 +486,7 @@ describe('Copilot route preference handler', () => {
         }
         const cause = reported.cause;
         if (scenario === 'deadline') {
-          expect(reported.message).toBe(
+          expect(reported.message).toContain(
             'The Copilot access request was cancelled.',
           );
           expect(Cause.hasInterruptsOnly(cause)).toBe(true);
@@ -506,11 +507,7 @@ describe('Copilot route preference handler', () => {
           ).toBe(true);
         }
       }
-      expect(mocks.safeExecuteCommand).toHaveBeenCalledWith(
-        'texra.refreshAllOptions',
-        [],
-        'SettingsView',
-      );
+      expect(mocks.refreshCatalogs).toHaveBeenCalled();
     },
   );
 

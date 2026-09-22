@@ -24,7 +24,7 @@ import * as path from 'node:path';
 import { Effect } from 'effect';
 
 import { isModuleNotFoundError } from '@common/errors';
-import type { StateStore } from '@platform/interfaces';
+import type { StateStore, StateReadFailed } from '@platform/interfaces';
 import { ensureError } from '@utils/errors/errorMessage';
 import { IS_WINDOWS } from '@utils/system/platformPaths';
 
@@ -186,9 +186,9 @@ export const getCodexConfig = Effect.promise(
 export const codexSandboxMode = (
   input: { readonly sandbox_mode?: SandboxMode | null },
   workspaceState: StateStore,
-): Effect.Effect<SandboxMode> =>
-  Effect.map(getCodexConfig, (config) =>
+): Effect.Effect<SandboxMode, StateReadFailed> =>
+  Effect.flatMap(getCodexConfig, (config) =>
     input.sandbox_mode == null
       ? config.getCodexSandboxMode(workspaceState)
-      : input.sandbox_mode,
+      : Effect.succeed(input.sandbox_mode),
   );

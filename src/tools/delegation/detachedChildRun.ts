@@ -98,7 +98,7 @@ export type DetachedChildRunInput<
         ) => Effect.Effect<DetachedChildRunLaunch<TTurn, R>, Error, R | Runs>;
       }
     | {
-        /** Native strategies let `executeAgent` own handle creation for every turn. */
+        /** Native strategies let `executeAgent` own one handle for the native lifetime. */
         readonly createChildRun?: undefined;
         /**
          * Build the strategy (and any attempt-scoped setup) inside the owned-run
@@ -123,7 +123,7 @@ export function startDetachedChildRunLoop<TTurn, R = never>(
 ): Effect.Effect<
   {
     childRunId: RunId;
-    completion: Fiber.Fiber<void, Error>;
+    completion: Fiber.Fiber<TTurn | undefined, Error>;
   },
   Error,
   R | Runs | AgentResume

@@ -26,10 +26,8 @@ import treeKill from 'tree-kill';
 
 // Internal imports
 import { createLog } from '@logger/logUtils';
-import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { ExecResult } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { getGitAuthorEnv } from '@utils/system/gitAuthorEnv';
 import { IS_WINDOWS, withExtendedPath } from '@utils/system/platformPaths';
 
 export const CHANNEL = 'execUtils';
@@ -73,7 +71,7 @@ export function normalizeEncoding(
 
 export function commandEnv(
   workspacePath: string,
-  settings: SettingsStores | undefined,
+  authorEnv: Record<string, string | undefined> | undefined,
   envOverrides?: Record<string, string>,
 ): Record<string, string | undefined> {
   // withExtendedPath, not a bare `env.PATH =`: on Windows the copy of
@@ -82,7 +80,7 @@ export function commandEnv(
   // the shell actually resolves against is then undefined.
   const env = withExtendedPath({
     ...process.env,
-    ...getGitAuthorEnv(settings),
+    ...authorEnv,
     ...envOverrides,
   });
 
@@ -218,8 +216,6 @@ export function executeCommandSync(
     timeout?: number;
     /** See `ExecuteCommandBaseOptions.cwd`. */
     cwd: string;
-    /** See `ExecuteCommandBaseOptions.settings`. */
-    settings: SettingsStores | undefined;
     /** Skip wrapper logging (pre-platform CLI callers whose sink is the console). */
     quiet?: boolean;
   },
@@ -229,7 +225,7 @@ export function executeCommandSync(
     const workspacePath = options.cwd;
     const execaOptions: SyncOptions = {
       cwd: workspacePath,
-      env: commandEnv(workspacePath, options.settings, options.env),
+      env: commandEnv(workspacePath, undefined, options.env),
       encoding: normalizeEncoding(options.encoding),
       timeout: options.timeout,
       reject: false,

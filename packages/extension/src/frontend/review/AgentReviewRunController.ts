@@ -135,19 +135,19 @@ export class AgentReviewRunController {
     const handle = run.handle;
     if (!handle) return Effect.void;
     if (run.session.runs.getHandle(handle.runId) !== handle) return Effect.void;
-    return run.session.runs
-      .stopAgentRun(handle.runId, {
-        detachActiveChildren: detachSubagentsOnStop(run.session.roots),
-      })
-      .pipe(
-        Effect.catch((error) =>
-          showLoggedErrorMessage(
-            CHANNEL,
-            'The agent review run could not be stopped',
-            error,
-          ),
+    return Effect.flatMap(
+      detachSubagentsOnStop(run.session.roots),
+      (detachActiveChildren) =>
+        run.session.runs.stopAgentRun(handle.runId, { detachActiveChildren }),
+    ).pipe(
+      Effect.catch((error) =>
+        showLoggedErrorMessage(
+          CHANNEL,
+          'The agent review run could not be stopped',
+          error,
         ),
-        Effect.asVoid,
-      );
+      ),
+      Effect.asVoid,
+    );
   }
 }

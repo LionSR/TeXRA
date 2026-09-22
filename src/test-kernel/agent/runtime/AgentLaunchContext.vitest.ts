@@ -1,6 +1,6 @@
 import { it } from '@effect/vitest';
 import { Cause, Effect, Exit, Layer } from 'effect';
-import { assert, describe, expect, vi } from 'vitest';
+import { assert, beforeEach, describe, expect, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   resolve: vi.fn(),
@@ -113,6 +113,10 @@ const triggerQueuedMissingAgentFailure = (session: SessionHandle) =>
     expect(hasErrorPresentationClaimed(thrown)).toBe(true);
     return session;
   });
+
+beforeEach(() => {
+  mocks.resolve.mockReturnValue(Effect.succeed(undefined));
+});
 
 describe('AgentLaunchContext', () => {
   it.effect(
@@ -231,7 +235,9 @@ describe('AgentLaunchContext', () => {
         yield* Effect.addFinalizer(() => session.dispose());
         yield* session.interactions.use(recording.interactions);
 
-        mocks.resolve.mockReturnValueOnce({ path: '/agents/chat.yaml' });
+        mocks.resolve.mockReturnValueOnce(
+          Effect.succeed({ path: '/agents/chat.yaml' }),
+        );
         mocks.load.mockReturnValueOnce(
           Effect.succeed([{ agentCategory: AgentCategory.ToolUse }, {}]),
         );
@@ -288,7 +294,9 @@ describe('AgentLaunchContext', () => {
           Effect.sync(detachToast).pipe(Effect.andThen(session.dispose())),
         );
         publishTestRunStart(session, EXECUTION_ID);
-        mocks.resolve.mockReturnValueOnce({ path: '/agents/chat.yaml' });
+        mocks.resolve.mockReturnValueOnce(
+          Effect.succeed({ path: '/agents/chat.yaml' }),
+        );
         mocks.load.mockReturnValueOnce(
           Effect.succeed([{ agentCategory: AgentCategory.ToolUse }, {}]),
         );
@@ -327,7 +335,9 @@ describe('AgentLaunchContext', () => {
         yield* Effect.addFinalizer(() => session.dispose());
         const batches = vi.spyOn(session, 'commitRegistration');
         const recording = recordSessionEvents(session);
-        mocks.resolve.mockReturnValueOnce({ path: '/agents/chat.yaml' });
+        mocks.resolve.mockReturnValueOnce(
+          Effect.succeed({ path: '/agents/chat.yaml' }),
+        );
         mocks.load.mockReturnValueOnce(
           Effect.succeed([{ agentCategory: AgentCategory.ToolUse }, {}]),
         );
@@ -401,7 +411,9 @@ describe('AgentLaunchContext', () => {
         const rawDispose = vi.fn(() => order.push('raw-trace'));
         const trace = { ...noopTrace, subscribe: vi.fn(() => detachTrace) };
         trace.openStage = vi.fn(() => stage);
-        mocks.resolve.mockReturnValueOnce({ path: '/agents/chat.yaml' });
+        mocks.resolve.mockReturnValueOnce(
+          Effect.succeed({ path: '/agents/chat.yaml' }),
+        );
         mocks.load.mockReturnValueOnce(
           Effect.succeed([{ agentCategory: AgentCategory.ToolUse }, {}]),
         );

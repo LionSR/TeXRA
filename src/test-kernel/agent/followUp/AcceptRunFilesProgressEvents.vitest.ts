@@ -1,7 +1,7 @@
 import '@test/support/sessionGraphTestSetup';
 
 import * as path from 'node:path';
-import { Effect, FileSystem } from 'effect';
+import { Deferred, Effect, FileSystem } from 'effect';
 import { it } from '@effect/vitest';
 // Test composition imports
 
@@ -224,16 +224,22 @@ function runAccept(
  * the tool publishes: a subscription only receives what is published after
  * it exists.
  */
-function recordWrittenFiles(): Effect.Effect<string[][]> {
+function recordWrittenFiles(): Effect.Effect<{
+  written: string[][];
+  /** Completes when the next `workspaceFilesWritten` payload is delivered. */
+  delivered: Effect.Effect<void>;
+}> {
   return Effect.gen(function* () {
     const written: string[][] = [];
+    const delivered = yield* Deferred.make<void>();
     yield* Effect.forkChild(
       onAppSignal('workspaceFilesWritten', ({ absolutePaths }) => {
         written.push(absolutePaths);
+        Deferred.doneUnsafe(delivered, Effect.void);
       }),
     );
     yield* Effect.yieldNow;
-    return written;
+    return { written, delivered: Deferred.await(delivered) };
   });
 }
 
@@ -265,7 +271,7 @@ describe('accept_run_files progress events', () => {
       const explicit = createRecordingHost();
       const tool = new AcceptRunFilesTool();
       const tracker = new FileInteractionState();
-      const written = yield* recordWrittenFiles();
+      const { written, delivered } = yield* recordWrittenFiles();
 
       setRunStorageEntries({
         [`executions/${runId}/output.tex`]: 'File',
@@ -283,11 +289,8 @@ describe('accept_run_files progress events', () => {
       expect(result.status).toBe('executed');
       expect(explicit.events).toEqual([]);
       // Delivery runs on the recorder's own fiber, a turn after the publish.
-      yield* Effect.promise(() =>
-        vi.waitFor(() =>
-          expect(written).toEqual([[path.join(workspacePath, 'paper.tex')]]),
-        ),
-      );
+      yield* delivered;
+      expect(written).toEqual([[path.join(workspacePath, 'paper.tex')]]);
       expect(tracker.hasRead('paper.tex')).toBe(true);
     }).pipe(Effect.provide(nativeToolTestLayer())),
   );
@@ -436,7 +439,7 @@ describe('accept_run_files progress events', () => {
         );
         let approvalOriginal = '';
         let approvalProposed = '';
-        const written = yield* recordWrittenFiles();
+        const { written, delivered } = yield* recordWrittenFiles();
 
         setRunStorageEntries({}, projectRoots.storage);
         workspaceReads.set('draft.tex', {
@@ -477,15 +480,12 @@ describe('accept_run_files progress events', () => {
 
         expect(result.status).toBe('executed');
         // Delivery runs on the recorder's own fiber, a turn after the publish.
-        yield* Effect.promise(() =>
-          vi.waitFor(() =>
-            expect({ approvalOriginal, approvalProposed, written }).toEqual({
-              approvalOriginal: 'original project',
-              approvalProposed: 'proposed project',
-              written: [[path.join(projectRoots.workspace, 'paper.tex')]],
-            }),
-          ),
-        );
+        yield* delivered;
+        expect({ approvalOriginal, approvalProposed, written }).toEqual({
+          approvalOriginal: 'original project',
+          approvalProposed: 'proposed project',
+          written: [[path.join(projectRoots.workspace, 'paper.tex')]],
+        });
       }).pipe(Effect.provide(nativeToolTestLayer())),
   );
 

@@ -2,18 +2,9 @@ import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { describe, expect, vi } from 'vitest';
 
-const mocks = vi.hoisted(() => ({
-  // Composed by the refresh tail, so the double answers with an Effect.
-  safeExecuteCommand: vi.fn(() => Effect.succeed(undefined)),
-}));
-vi.mock('@frontend/system/commandUtils', () => ({
-  safeExecuteCommand: mocks.safeExecuteCommand,
-}));
-
 import { SettingsViewMessageHandler } from '@settingsView/SettingsViewMessageHandler';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { SubscriptionUsageProvider } from '@shared/schemas';
-import { testRuntime } from '@test/support/testProcessRuntime';
 import type * as vscode from 'vscode';
 
 interface Harness {
@@ -49,7 +40,11 @@ function createHarness(activeView = true) {
   ) as Harness;
   Reflect.set(handler, 'viewName', 'SettingsView');
   Reflect.set(handler, 'subscriptionUsage', usage);
-  Reflect.set(handler, 'runtime', testRuntime());
+  Reflect.set(handler, 'progressView', {
+    refreshApiKeyStatus: Effect.void,
+    refreshOnboardingFunnel: () => Effect.void,
+    refreshCatalogs: () => Effect.void,
+  });
   // A bare `vi.fn()` would be yielded as an `Effect` and fail at runtime.
   Reflect.set(
     handler,

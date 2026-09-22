@@ -1,5 +1,6 @@
 import { it } from '@effect/vitest';
 import { Effect, Fiber, FileSystem, type Path } from 'effect';
+import { TestClock } from 'effect/testing';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 import type { SessionHandle } from '@agent/runtime';
@@ -127,7 +128,6 @@ const workspaceTex = {
 
 describe('openBuildDisplayIfTex viewer delivery', () => {
   beforeEach(() => {
-    vi.useFakeTimers();
     vi.clearAllMocks();
     mocks.exists.mockResolvedValue(true);
     mocks.isLatexFile.mockReturnValue(true);
@@ -139,10 +139,9 @@ describe('openBuildDisplayIfTex viewer delivery', () => {
 
   afterEach(() => {
     setLogSink(null);
-    vi.useRealTimers();
   });
 
-  it.live('reports non-delivery when the PDF viewer open rejects', () =>
+  it.effect('reports non-delivery when the PDF viewer open rejects', () =>
     Effect.gen(function* () {
       const logs = captureLogEntries();
       mocks.executeCommand.mockImplementation(async (command: string) => {
@@ -154,17 +153,15 @@ describe('openBuildDisplayIfTex viewer delivery', () => {
 
       const delivery = yield* Effect.forkChild(
         withHostFs(openBuildDisplayIfTex(session, workspaceTex)).pipe(
-          Effect.provide(effectDiagnosticsLayer),
+          Effect.provide(effectDiagnosticsLayer('Trace')),
         ),
         { startImmediately: true },
       );
-      // Flush the setup chain (exists -> openTextDocument -> showTextDocument ->
-      // latex-workshop.build) before advancing the clock so the viewer-open timer
-      // is actually registered when the 5s advance runs (#10555).
-      yield* Effect.promise(() => vi.advanceTimersByTimeAsync(0));
-      yield* Effect.promise(() =>
-        vi.advanceTimersByTimeAsync(LATEX_VIEWER_OPEN_DELAY_MS),
-      );
+      // `TestClock.adjust` drains the forked fiber's setup chain (exists ->
+      // openTextDocument -> showTextDocument -> latex-workshop.build) before
+      // moving the clock, so the viewer-open sleep is registered by the time
+      // the delay elapses (#10555).
+      yield* TestClock.adjust(LATEX_VIEWER_OPEN_DELAY_MS);
 
       expect(yield* Fiber.join(delivery)).toBe(false);
       expect(logs.has('WARN', 'OpenBuildUtils', 'Viewer display failed')).toBe(
@@ -173,7 +170,7 @@ describe('openBuildDisplayIfTex viewer delivery', () => {
     }),
   );
 
-  it.live(
+  it.effect(
     'reports delivery only once the viewer-open command has settled',
     () =>
       Effect.gen(function* () {
@@ -186,15 +183,13 @@ describe('openBuildDisplayIfTex viewer delivery', () => {
           settled = true;
         });
 
-        // Flush the setup chain first so the `settled` boundary is measured against
-        // the viewer-open timer rather than against the pending setup microtasks.
-        yield* Effect.promise(() => vi.advanceTimersByTimeAsync(0));
-        yield* Effect.promise(() =>
-          vi.advanceTimersByTimeAsync(LATEX_VIEWER_OPEN_DELAY_MS - 1),
-        );
+        // The adjustment drains the setup chain first, so the `settled`
+        // boundary is measured against the viewer-open timer rather than
+        // against the pending setup promises.
+        yield* TestClock.adjust(LATEX_VIEWER_OPEN_DELAY_MS - 1);
         expect(settled).toBe(false);
 
-        yield* Effect.promise(() => vi.advanceTimersByTimeAsync(1));
+        yield* TestClock.adjust(1);
         expect(yield* Fiber.join(delivery)).toBe(true);
         expect(mocks.executeCommand).toHaveBeenCalledWith(
           'latex-workshop.view',
@@ -202,7 +197,7 @@ describe('openBuildDisplayIfTex viewer delivery', () => {
       }),
   );
 
-  it.live(
+  it.effect(
     'keeps workspace LaTeX Workshop build failures out of the delivery boolean',
     () =>
       Effect.gen(function* () {
@@ -217,10 +212,7 @@ describe('openBuildDisplayIfTex viewer delivery', () => {
           withHostFs(openBuildDisplayIfTex(session, workspaceTex)),
           { startImmediately: true },
         );
-        yield* Effect.promise(() => vi.advanceTimersByTimeAsync(0));
-        yield* Effect.promise(() =>
-          vi.advanceTimersByTimeAsync(LATEX_VIEWER_OPEN_DELAY_MS),
-        );
+        yield* TestClock.adjust(LATEX_VIEWER_OPEN_DELAY_MS);
 
         expect(yield* Fiber.join(delivery)).toBe(true);
         expect(mocks.warn).toHaveBeenCalledWith(
@@ -230,7 +222,7 @@ describe('openBuildDisplayIfTex viewer delivery', () => {
       }),
   );
 
-  it.live(
+  it.effect(
     'settles the delivery promise when the viewer-open command throws synchronously',
     () =>
       Effect.gen(function* () {
@@ -247,14 +239,11 @@ describe('openBuildDisplayIfTex viewer delivery', () => {
 
         const delivery = yield* Effect.forkChild(
           withHostFs(openBuildDisplayIfTex(session, workspaceTex)).pipe(
-            Effect.provide(effectDiagnosticsLayer),
+            Effect.provide(effectDiagnosticsLayer('Trace')),
           ),
           { startImmediately: true },
         );
-        yield* Effect.promise(() => vi.advanceTimersByTimeAsync(0));
-        yield* Effect.promise(() =>
-          vi.advanceTimersByTimeAsync(LATEX_VIEWER_OPEN_DELAY_MS),
-        );
+        yield* TestClock.adjust(LATEX_VIEWER_OPEN_DELAY_MS);
 
         expect(yield* Fiber.join(delivery)).toBe(false);
         expect(
@@ -263,7 +252,7 @@ describe('openBuildDisplayIfTex viewer delivery', () => {
       }),
   );
 
-  it.live(
+  it.effect(
     'keeps viewer delivery true when the refresh command throws synchronously',
     () =>
       Effect.gen(function* () {
@@ -280,17 +269,12 @@ describe('openBuildDisplayIfTex viewer delivery', () => {
 
         const delivery = yield* Effect.forkChild(
           withHostFs(openBuildDisplayIfTex(session, workspaceTex)).pipe(
-            Effect.provide(effectDiagnosticsLayer),
+            Effect.provide(effectDiagnosticsLayer('Trace')),
           ),
           { startImmediately: true },
         );
-        yield* Effect.promise(() => vi.advanceTimersByTimeAsync(0));
-        yield* Effect.promise(() =>
-          vi.advanceTimersByTimeAsync(LATEX_VIEWER_OPEN_DELAY_MS),
-        );
-        yield* Effect.promise(() =>
-          vi.advanceTimersByTimeAsync(LATEX_VIEWER_REFRESH_DELAY_MS),
-        );
+        yield* TestClock.adjust(LATEX_VIEWER_OPEN_DELAY_MS);
+        yield* TestClock.adjust(LATEX_VIEWER_REFRESH_DELAY_MS);
 
         expect(yield* Fiber.join(delivery)).toBe(true);
         expect(
@@ -318,7 +302,7 @@ describe('openBuildDisplayIfTex viewer delivery', () => {
       }),
   );
 
-  it.live('reports external compile failure as not viewer-ready', () =>
+  it.effect('reports external compile failure as not viewer-ready', () =>
     Effect.gen(function* () {
       mocks.compileLatex2Pdf.mockReturnValue(
         Effect.succeed({ ok: false, logTail: 'compilation failed' }),
@@ -332,16 +316,14 @@ describe('openBuildDisplayIfTex viewer delivery', () => {
         prepareBuildDisplay(session, externalTex, { scheduleViewer: false }),
       );
       expect(ready).toBe(false);
-      yield* Effect.promise(() =>
-        vi.advanceTimersByTimeAsync(LATEX_VIEWER_OPEN_DELAY_MS),
-      );
+      yield* TestClock.adjust(LATEX_VIEWER_OPEN_DELAY_MS);
       expect(mocks.executeCommand).not.toHaveBeenCalledWith(
         'latex-workshop.view',
       );
     }),
   );
 
-  it.live(
+  it.effect(
     'keeps the final viewer schedulable when a later prepare rejects',
     () =>
       Effect.gen(function* () {
@@ -387,9 +369,7 @@ describe('openBuildDisplayIfTex viewer delivery', () => {
         yield* Effect.forkChild(withHostFs(scheduleViewerDisplay), {
           startImmediately: true,
         });
-        yield* Effect.promise(() =>
-          vi.advanceTimersByTimeAsync(LATEX_VIEWER_OPEN_DELAY_MS),
-        );
+        yield* TestClock.adjust(LATEX_VIEWER_OPEN_DELAY_MS);
 
         const viewerIndexes = order
           .map((entry, index) => (entry === 'latex-workshop.view' ? index : -1))
@@ -398,7 +378,7 @@ describe('openBuildDisplayIfTex viewer delivery', () => {
       }),
   );
 
-  it.live(
+  it.effect(
     'keeps final-result viewer delivery deterministic across sequential latexdiff results',
     () =>
       Effect.gen(function* () {
@@ -448,9 +428,7 @@ describe('openBuildDisplayIfTex viewer delivery', () => {
         yield* Effect.forkChild(withHostFs(scheduleViewerDisplay), {
           startImmediately: true,
         });
-        yield* Effect.promise(() =>
-          vi.advanceTimersByTimeAsync(LATEX_VIEWER_OPEN_DELAY_MS),
-        );
+        yield* TestClock.adjust(LATEX_VIEWER_OPEN_DELAY_MS);
 
         const viewerIndexes = order
           .map((entry, index) => (entry === 'latex-workshop.view' ? index : -1))

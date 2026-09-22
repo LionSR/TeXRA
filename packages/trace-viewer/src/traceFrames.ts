@@ -114,6 +114,7 @@ export function traceFrame(
     chunks: [],
     local: { self: [], dead: [], unreadable: [] },
     host: traceHost(trace),
+    debug: subscribe.debug,
     replayComplete: true,
     existence: {
       checkedAggregateIds,

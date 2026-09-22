@@ -29,6 +29,7 @@ import {
   xaiAccountLabel,
   xaiCoordinator,
 } from '@auth/xai';
+import type { AuthPortError } from '@auth/authProgram';
 import { codexAccountLabel } from '@auth/codex/codexSessionTypes';
 import { LoopbackTransportUnavailableError } from '@auth/oauth/loopbackLogin';
 import type { SubscriptionSessionStatus } from '@auth/oauth/SubscriptionOAuthCoordinator';
@@ -85,7 +86,7 @@ export interface SubscriptionSignInPresenter {
    * reached at all, which is what lets `'auto'` fall back to the device-code
    * transport.
    */
-  presentSignInUrl(url: string): Effect.Effect<void, unknown>;
+  presentSignInUrl(url: string): Effect.Effect<void, Error>;
 }
 
 /** A signed-in (or known-signed-out) subscription account, host-neutral. */
@@ -134,7 +135,7 @@ export interface SubscriptionProvider {
    * The sign-out program. A host runs it at its own edge; a failure is the
    * provider's own auth error or the secret store's rejection.
    */
-  signOut(secrets: PlatformSecrets): Effect.Effect<void, unknown>;
+  signOut(secrets: PlatformSecrets): Effect.Effect<void, AuthPortError>;
   /**
    * The signed-in status. Infallible: an unreadable store reports
    * signed-out, with the cause logged by the probe.
@@ -165,7 +166,7 @@ interface SubscriptionProviderBindings<Coordinator, Session> {
   readonly copyTarget: string;
   readonly modelFamily: string;
   readonly coordinator: (secrets: PlatformSecrets) => Coordinator & {
-    signOut(): Effect.Effect<void, unknown>;
+    signOut(): Effect.Effect<void, AuthPortError>;
   };
   readonly getStatus: (
     secrets: PlatformSecrets,
@@ -176,7 +177,7 @@ interface SubscriptionProviderBindings<Coordinator, Session> {
   }) => Effect.Effect<Session, unknown, HttpClient.HttpClient>;
   readonly loginWithLoopback: (options: {
     coordinator: Coordinator;
-    openBrowser: (url: string) => Effect.Effect<void, unknown>;
+    openBrowser: (url: string) => Effect.Effect<void, Error>;
   }) => Effect.Effect<Session, unknown, HttpClient.HttpClient>;
   readonly accountLabel: (
     account:

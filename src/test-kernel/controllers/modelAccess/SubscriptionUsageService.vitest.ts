@@ -21,6 +21,7 @@ import {
 } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { testRuntime } from '@test/support/testProcessRuntime';
+import { createDeferred } from '@test/support/asyncTestUtils';
 import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 import type { HttpClient } from 'effect/unstable/http';
@@ -581,20 +582,22 @@ describe('SubscriptionUsageService', () => {
     'serves concurrent GLM region requests from independent cache keys: China=%s',
     async (initialUseChina, olderUrl, newerUrl) => {
       const responses = new Map<string, (response: Response) => void>();
-      const http = vi.fn<UsageFetch>(
-        (url) =>
-          new Promise<Response>((resolve) => {
-            responses.set(String(url), resolve);
-          }),
-      );
+      const firstRequest = createDeferred<void>();
+      const secondRequest = createDeferred<void>();
+      const http = vi.fn<UsageFetch>((url) => {
+        (responses.size === 0 ? firstRequest : secondRequest).resolve();
+        return new Promise<Response>((resolve) => {
+          responses.set(String(url), resolve);
+        });
+      });
       const region = glmRegionStores(initialUseChina);
       const service = makeService({ stores: region.stores });
 
       const olderRequest = runUsage(service.getUsage('glmCodingPlan'), http);
-      await vi.waitFor(() => expect(http).toHaveBeenCalledTimes(1));
+      await firstRequest.promise;
       region.setRegion(!initialUseChina);
       const newerRequest = runUsage(service.getUsage('glmCodingPlan'), http);
-      await vi.waitFor(() => expect(http).toHaveBeenCalledTimes(2));
+      await secondRequest.promise;
 
       responses.get(newerUrl)?.(
         jsonResponse({
@@ -842,19 +845,22 @@ describe('SubscriptionUsageService', () => {
   // stale result never enters the cache — later callers see new-account usage.
   it('keeps an invalidated in-flight snapshot out of the cache', async () => {
     const responses: Array<(response: Response) => void> = [];
+    const firstRequest = createDeferred<void>();
+    const secondRequest = createDeferred<void>();
     const http = vi.fn<UsageFetch>(
       () =>
         new Promise<Response>((resolve) => {
+          (responses.length === 0 ? firstRequest : secondRequest).resolve();
           responses.push(resolve);
         }),
     );
     const service = makeService();
 
     const oldAccountRequest = runUsage(service.getUsage('kimiCode'), http);
-    await vi.waitFor(() => expect(responses).toHaveLength(1));
+    await firstRequest.promise;
     service.invalidate('kimiCode');
     const newAccountRequest = runUsage(service.getUsage('kimiCode'), http);
-    await vi.waitFor(() => expect(responses).toHaveLength(2));
+    await secondRequest.promise;
 
     responses[0]?.(jsonResponse({ usage: { limit: 100, remaining: 90 } }));
     responses[1]?.(jsonResponse({ usage: { limit: 100, remaining: 20 } }));
@@ -878,15 +884,19 @@ describe('SubscriptionUsageService', () => {
   it('deduplicates concurrent requests for the same provider', async () => {
     stubCodexSession();
     let resolveResponse: ((response: Response) => void) | undefined;
+    const requested = createDeferred<void>();
     const response = new Promise<Response>((resolve) => {
       resolveResponse = resolve;
     });
-    const http = vi.fn<UsageFetch>(() => response);
+    const http = vi.fn<UsageFetch>(() => {
+      requested.resolve();
+      return response;
+    });
     const service = makeService();
 
     const first = runUsage(service.getUsage('chatgpt'), http);
     const second = runUsage(service.getUsage('chatgpt'), http);
-    await vi.waitFor(() => expect(http).toHaveBeenCalledTimes(1));
+    await requested.promise;
     resolveResponse?.(
       jsonResponse({
         rate_limit: { primary_window: { used_percent: 10 } },

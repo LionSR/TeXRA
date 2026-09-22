@@ -16,7 +16,9 @@ const REPORT_MESSAGE = 'Unhandled failure in forked fiber';
 function makeReportingRuntime() {
   return Effect.acquireRelease(
     Effect.sync(() =>
-      withForkFailureReporting(ManagedRuntime.make(effectDiagnosticsLayer)),
+      withForkFailureReporting(
+        ManagedRuntime.make(effectDiagnosticsLayer('Trace')),
+      ),
     ),
     (runtime) => Effect.promise(() => runtime.dispose()),
   );

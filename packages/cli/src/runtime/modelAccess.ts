@@ -69,18 +69,7 @@ const CLI_MODEL_FALLBACK_MODE_BY_REASON = {
   'access-list-default': 'silent',
 } satisfies Record<RunModelDecisionReason, CliModelFallbackMode>;
 
-/**
- * `stores` is the secret store and global state the availability computation
- * reads. Callers hold them already (the CLI composition root's
- * `CliPlatformServices`, or the `Secrets` / `AppState` services), so nothing
- * here looks a host up.
- */
-/**
- * The stores availability is computed from, plus the process runtime. Every
- * read here is an Effect a caller yields, so the runtime travels with the
- * stores for the two surfaces that are themselves the boundary — the citty
- * command actions and the Ink form load — rather than for this module.
- */
+/** Stores and runtime held by command actions and form loaders. */
 export type CliModelStores = ModelOptionStores & {
   readonly runtime: ProcessRuntime;
 };
@@ -163,53 +152,60 @@ function formatModelAccessStatus(model: ModelOptionData): string {
 export function formatModelStatusForCli(
   stores: SettingsStores,
   model: CliModelAccess,
-): string {
-  if (model.model.provider === 'kimiCode') return 'api: Kimi Code subscription';
-  if (
-    model.model.provider === 'glm' &&
-    model.model.availability === 'provider-key'
-  ) {
-    const config = getRuntimeModelConfig(model.model.value);
-    if (config) {
-      const route = resolveGlmRoute({
-        stores,
-        baseUrl: config.baseUrl,
-        useOpenRouter: shouldRouteModelThroughOpenRouter(
-          config,
-          getUseOpenRouter(stores),
-        ),
-      });
-      if (route.route === 'official-coding-plan') {
-        return 'api: GLM Coding Plan';
+) {
+  return Effect.gen(function* () {
+    if (model.model.provider === 'kimiCode')
+      return 'api: Kimi Code subscription';
+    if (
+      model.model.provider === 'glm' &&
+      model.model.availability === 'provider-key'
+    ) {
+      const config = getRuntimeModelConfig(model.model.value);
+      if (config) {
+        const route = yield* resolveGlmRoute({
+          stores,
+          baseUrl: config.baseUrl,
+          useOpenRouter: shouldRouteModelThroughOpenRouter(
+            config,
+            yield* getUseOpenRouter(stores),
+          ),
+        });
+        if (route.route === 'official-coding-plan') {
+          return 'api: GLM Coding Plan';
+        }
       }
     }
-  }
-  return `api: ${model.status}`;
+    return `api: ${model.status}`;
+  });
 }
 
 // Reason a given model id cannot be switched to right now, or undefined if it can.
 export type GetModelSwitchDisabledReason = (
   model: string,
-) => string | undefined;
+) => Effect.Effect<string | undefined, Error>;
 
 export function modelSelectItemsForCli(
   stores: SettingsStores,
   models: readonly CliModelAccess[],
   getModelSwitchDisabledReason?: GetModelSwitchDisabledReason,
-): readonly CliModelPickerItem[] {
-  return runnableCliModelAccessEntries(models).map((model) => {
-    const disabledReason = getModelSwitchDisabledReason?.(model.model.value);
-    const access = formatModelStatusForCli(stores, model);
-    const status = model.model.reasoning
-      ? `${access} · reasoning setting: ${model.model.reasoning}`
-      : access;
-    return {
-      value: model.model.value,
-      label: model.model.label || model.model.value,
-      description: disabledReason ? `${disabledReason}; ${status}` : status,
-      disabled: disabledReason != null,
-    };
-  });
+) {
+  return Effect.forEach(runnableCliModelAccessEntries(models), (model) =>
+    Effect.gen(function* () {
+      const disabledReason = getModelSwitchDisabledReason
+        ? yield* getModelSwitchDisabledReason(model.model.value)
+        : undefined;
+      const access = yield* formatModelStatusForCli(stores, model);
+      const status = model.model.reasoning
+        ? `${access} · reasoning setting: ${model.model.reasoning}`
+        : access;
+      return {
+        value: model.model.value,
+        label: model.model.label || model.model.value,
+        description: disabledReason ? `${disabledReason}; ${status}` : status,
+        disabled: disabledReason != null,
+      } satisfies CliModelPickerItem;
+    }),
+  );
 }
 
 function toCliModelAccess(model: ModelOptionData): CliModelAccess {

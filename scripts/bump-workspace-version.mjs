@@ -5,6 +5,8 @@ import process from 'node:process';
 import { parseArgs as parseCittyArgs } from 'citty';
 import semver from 'semver';
 
+import { readJson } from './extension-package-utils.mjs';
+
 const MANIFEST_PATHS = [
   'package.json',
   'packages/agent/package.json',
@@ -27,7 +29,9 @@ const RELEASE_TAG_PREFIX = /^(?:cli-v|v)/;
 const PRERELEASE_ID = 'preview';
 
 // Release trains use patch values 0 through 10; after .10, development moves
-// to the next minor train.
+// to the next minor train. From 1.0 on that rollover must land on an even
+// minor: odd minors are the Marketplace pre-release numbers of the previous
+// train (see release.yml's publish gate), so a 1.x rollover skips one.
 const MAX_PATCH_VERSION = 10;
 
 const ARGS_DEF = {
@@ -146,9 +150,11 @@ function nextWorkspaceVersion(rawVersion) {
   }
 
   if (version.patch >= MAX_PATCH_VERSION) {
+    // Stable tags from 1.0 are even-minor only (release.yml refuses odd-minor
+    // stable versions), so the rollover steps over the pre-release minor.
     return formatVersion({
       major: version.major,
-      minor: version.minor + 1,
+      minor: version.minor + (version.major >= 1 ? 2 : 1),
       patch: 0,
     });
   }
@@ -161,10 +167,6 @@ function nextWorkspaceVersion(rawVersion) {
 
 function normalizeVersion(rawVersion) {
   return formatVersion(parseVersion(rawVersion, 'Version'));
-}
-
-function readManifest(manifestPath) {
-  return JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
 }
 
 function writeManifest(manifestPath, manifest) {
@@ -181,7 +183,7 @@ function main() {
   const mismatches = [];
 
   for (const manifestPath of MANIFEST_PATHS) {
-    const manifest = readManifest(manifestPath);
+    const manifest = readJson(manifestPath);
 
     if (args.check) {
       if (manifest.version !== newVersion) {

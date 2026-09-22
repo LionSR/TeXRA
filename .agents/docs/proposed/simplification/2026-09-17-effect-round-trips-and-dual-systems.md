@@ -576,14 +576,15 @@ affected lane.
   resolution on interrupt. The owner ruled on 2026-09-19 that restoring the old
   semantics, which would mean restoring a Promise face, is declined; the entry
   in the architecture rulings ledger is the closed record.
-- **The shared `MessageHandler` dispatcher contract stays Promise-shaped**
-  (2026-09-19). `src/shared/utils/dispatcher.ts` is the R1 host entry for every
-  webview message on both graphical hosts and types the webview frontends as
-  well, each registry arm runs exactly one program, and nothing lifts a
-  dispatcher result back into Effect. Retyping the handler would move about
-  twenty runs one frame up without deleting any, and would carry the contract
-  change into a browser bundle for no gain. It is not a round trip; the
-  architecture rulings ledger holds the closed record.
+- **The shared `MessageHandler` Promise-shape requirement was revised**
+  (2026-09-22, #13009). The original 2026-09-19 ruling rejected a parallel
+  dispatcher, not the complete replacement now authorized by the owner:
+  backend handlers compose Effects and each native host message executes
+  once; the shared frontend dispatcher keeps synchronous state handlers.
+  The [revised ruling](../../implemented/architecture/2026-08-01-architecture-rulings-ledger.md#settings-dispatch-has-one-native-execution-boundary-revised-2026-09-22)
+  records both graphical hosts, remaining browser consumers and failure
+  handling. The old backend dispatcher and per-arm runners must retire in
+  the same change; retaining both remains forbidden.
 - **The desktop OAuth callback deadline starts when the wait program runs**
   (2026-09-19, #12826). `waitForCompletion` still installs its `Deferred` and
   the attempt's settle hook where the attempt is claimed, so an early callback

@@ -3,7 +3,7 @@ import '@test/support/sessionGraphTestSetup';
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Effect, Fiber } from 'effect';
+import { Deferred, Effect, Fiber } from 'effect';
 import { describe, expect, onTestFinished, vi } from 'vitest';
 
 // Local imports
@@ -48,13 +48,10 @@ describe('desktop agent run completion hook', () => {
       const session = createTestSession();
       const onRunCompleted = vi.fn();
       const host = createStubDesktopAgentRunHost();
-      let resolveLaunch!: () => void;
-      const launchSettled = new Promise<void>((resolve) => {
-        resolveLaunch = resolve;
-      });
+      const launchSettled = yield* Deferred.make<void>();
       const launch = vi
         .spyOn(DesktopAgentLaunch, 'launchDesktopAgent')
-        .mockReturnValue(Effect.promise(() => launchSettled));
+        .mockReturnValue(Deferred.await(launchSettled));
       onTestFinished(() => {
         launch.mockRestore();
       });
@@ -91,7 +88,7 @@ describe('desktop agent run completion hook', () => {
       yield* session.settlePublications();
       expect(onRunCompleted).not.toHaveBeenCalled();
 
-      resolveLaunch();
+      yield* Deferred.succeed(launchSettled, undefined);
       yield* Fiber.join(fiber);
       expect(onRunCompleted).toHaveBeenCalledOnce();
     }),

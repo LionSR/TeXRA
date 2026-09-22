@@ -66,12 +66,17 @@ import {
   LATEX_CONFIG_KEYS,
 } from '@shared/constants/latexConfig';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
+import {
+  FakeScopedConfigProvider,
+  FakeStateStore,
+} from '@test/support/FakePlatform';
 import { REPO_ROOT } from '@test/support/repoScan';
 import { installPlatform } from '@test/support/setupPlatform';
 import {
   isStored,
   makeFakeSettingsStores,
 } from '@test/support/settingsStoresFake';
+import { readSettingFrom } from '@utils/config/platformSettings';
 
 const VALID_STORES: ReadonlySet<SettingStore> = new Set<SettingStore>([
   'config',
@@ -279,55 +284,66 @@ describe('catalog-derived settings snapshots', () => {
   // backend read, and the row list are the same thing. Adding a row to a
   // snapshot must reach the wire without another edit, and the arm's
   // `strictObject` must accept exactly what the builder produces.
-  it("puts exactly the snapshot's catalog rows on the wire", () => {
-    const { stores } = makeFakeSettingsStores();
+  it.effect("puts exactly the snapshot's catalog rows on the wire", () =>
+    Effect.gen(function* () {
+      const { stores } = makeFakeSettingsStores();
 
-    const derivedSnapshots = {
-      approval: true,
-      'git-author': true,
-      skills: true,
-      telemetry: true,
-      'multi-agent': true,
-      latex: true,
-      memory: true,
-    } satisfies Record<DerivedSettingsSnapshot, true>;
-    for (const snapshot of Object.keys(
-      derivedSnapshots,
-    ) as DerivedSettingsSnapshot[]) {
-      const message = buildSettingsSnapshotMessage(snapshot, stores, 'vscode');
-      assert.ok(
-        Object.keys(message.values).length > 0,
-        `${snapshot} carries no rows`,
-      );
-      assert.deepEqual(
-        Object.keys(message.values).sort(),
-        settingsViewSnapshotEntries(snapshot)
-          .map((entry) => entry.key)
-          .sort(),
-        `${snapshot} payload keys`,
-      );
-      assert.equal(
-        dispatchSettingsViewOutbound(message, {
-          [message.command]: () => {},
-        } as never),
-        true,
-        `${snapshot} arm rejected its own builder output`,
-      );
-
-      for (const omittedKey of Object.keys(message.values)) {
-        const partialValues = Object.fromEntries(
-          Object.entries(message.values).filter(([key]) => key !== omittedKey),
+      const derivedSnapshots = {
+        approval: true,
+        'git-author': true,
+        skills: true,
+        telemetry: true,
+        'multi-agent': true,
+        latex: true,
+        memory: true,
+      } satisfies Record<DerivedSettingsSnapshot, true>;
+      for (const snapshot of Object.keys(
+        derivedSnapshots,
+      ) as DerivedSettingsSnapshot[]) {
+        const message = yield* buildSettingsSnapshotMessage(
+          snapshot,
+          stores,
+          'vscode',
+        );
+        assert.ok(
+          Object.keys(message.values).length > 0,
+          `${snapshot} carries no rows`,
+        );
+        assert.deepEqual(
+          Object.keys(message.values).sort(),
+          settingsViewSnapshotEntries(snapshot)
+            .map((entry) => entry.key)
+            .sort(),
+          `${snapshot} payload keys`,
         );
         assert.equal(
-          dispatchSettingsViewOutbound({ ...message, values: partialValues }, {
+          dispatchSettingsViewOutbound(message, {
             [message.command]: () => {},
           } as never),
-          false,
-          `${snapshot} arm accepted missing key ${omittedKey}`,
+          true,
+          `${snapshot} arm rejected its own builder output`,
         );
+
+        for (const omittedKey of Object.keys(message.values)) {
+          const partialValues = Object.fromEntries(
+            Object.entries(message.values).filter(
+              ([key]) => key !== omittedKey,
+            ),
+          );
+          assert.equal(
+            dispatchSettingsViewOutbound(
+              { ...message, values: partialValues },
+              {
+                [message.command]: () => {},
+              } as never,
+            ),
+            false,
+            `${snapshot} arm accepted missing key ${omittedKey}`,
+          );
+        }
       }
-    }
-  });
+    }),
+  );
 
   it.effect(
     'builds the LaTeX message from validated catalog values and defaults',
@@ -353,7 +369,7 @@ describe('catalog-derived settings snapshots', () => {
         );
 
         try {
-          const message = buildSettingsSnapshotMessage(
+          const message = yield* buildSettingsSnapshotMessage(
             'latex',
             stores,
             'desktop',
@@ -432,41 +448,41 @@ describe('knownKeys derivation', () => {
 });
 
 describe('settingsAccess', () => {
-  async function assertResetRestoresDefault(options: {
+  const assertResetRestoresDefault = Effect.fn(function* (options: {
     key: string;
     host: SettingHost;
     storeName: 'config' | 'workspaceState';
     expectedDefault: unknown;
-  }): Promise<void> {
+  }) {
     const fake = makeFakeSettingsStores();
     const entry = entryByKey(options.key);
     const store = fake[options.storeName];
-    await Effect.runPromise(
-      writeSetting(entry, false, fake.stores, options.host),
-    );
-    assert.equal(isStored(store, entry.key), true);
-    await Effect.runPromise(resetSetting(entry, fake.stores, options.host));
-    assert.equal(isStored(store, entry.key), false);
+    yield* writeSetting(entry, false, fake.stores, options.host);
+    assert.equal(yield* isStored(store, entry.key), true);
+    yield* resetSetting(entry, fake.stores, options.host);
+    assert.equal(yield* isStored(store, entry.key), false);
     assert.equal(
-      readSetting(entry, fake.stores, options.host),
+      yield* readSetting(entry, fake.stores, options.host),
       options.expectedDefault,
     );
-  }
-
-  it('reads the default when the key is absent', () => {
-    const { stores } = makeFakeSettingsStores();
-    const entry = entryByKey(WorkspaceStateKey.GIT_MARK_COMMITS);
-    assert.equal(readSetting(entry, stores, 'vscode'), true);
   });
+
+  it.effect('reads the default when the key is absent', () =>
+    Effect.gen(function* () {
+      const { stores } = makeFakeSettingsStores();
+      const entry = entryByKey(WorkspaceStateKey.GIT_MARK_COMMITS);
+      assert.equal(yield* readSetting(entry, stores, 'vscode'), true);
+    }),
+  );
 
   it.effect('routes extension writes to the canonical store', () =>
     Effect.gen(function* () {
       const { stores, config, workspaceState } = makeFakeSettingsStores();
       const entry = entryByKey(WorkspaceStateKey.GIT_MARK_COMMITS);
       yield* writeSetting(entry, false, stores, 'vscode');
-      assert.equal(isStored(workspaceState, entry.key), true);
-      assert.equal(isStored(config, entry.key), false);
-      assert.equal(readSetting(entry, stores, 'vscode'), false);
+      assert.equal(yield* isStored(workspaceState, entry.key), true);
+      assert.equal(yield* isStored(config, entry.key), false);
+      assert.equal(yield* readSetting(entry, stores, 'vscode'), false);
     }),
   );
 
@@ -475,14 +491,14 @@ describe('settingsAccess', () => {
       const { stores, config, workspaceState } = makeFakeSettingsStores();
       const entry = entryByKey(WorkspaceStateKey.GIT_MARK_COMMITS);
       yield* writeSetting(entry, false, stores, 'cli');
-      assert.equal(isStored(config, entry.key), true);
-      assert.equal(isStored(workspaceState, entry.key), false);
+      assert.equal(yield* isStored(config, entry.key), true);
+      assert.equal(yield* isStored(workspaceState, entry.key), false);
       // The config write used the default 'workspace' target.
       assert.deepEqual(config.inspect(entry.key), {
         globalValue: undefined,
         workspaceValue: false,
       });
-      assert.equal(readSetting(entry, stores, 'cli'), false);
+      assert.equal(yield* readSetting(entry, stores, 'cli'), false);
     }),
   );
 
@@ -506,10 +522,10 @@ describe('settingsAccess', () => {
       const { stores, config, globalState } = makeFakeSettingsStores();
       const entry = entryByKey(GlobalStateKey.ENDPOINT_GOOGLE);
       yield* writeSetting(entry, 'https://example.invalid/v1', stores, 'cli');
-      assert.equal(isStored(globalState, entry.key), true);
-      assert.equal(isStored(config, entry.key), false);
+      assert.equal(yield* isStored(globalState, entry.key), true);
+      assert.equal(yield* isStored(config, entry.key), false);
       assert.equal(
-        readSetting(entry, stores, 'cli'),
+        yield* readSetting(entry, stores, 'cli'),
         'https://example.invalid/v1',
       );
     }),
@@ -528,27 +544,23 @@ describe('settingsAccess', () => {
 
   it.effect('reset deletes the key so the default reappears', () =>
     Effect.gen(function* () {
-      yield* Effect.promise(() =>
-        assertResetRestoresDefault({
-          key: WorkspaceStateKey.LATEXDIFF_CHANGES_ONLY,
-          host: 'vscode',
-          storeName: 'workspaceState',
-          expectedDefault: LATEX_CONFIG_DEFAULTS.latexdiffChangesOnly,
-        }),
-      );
+      yield* assertResetRestoresDefault({
+        key: WorkspaceStateKey.LATEXDIFF_CHANGES_ONLY,
+        host: 'vscode',
+        storeName: 'workspaceState',
+        expectedDefault: LATEX_CONFIG_DEFAULTS.latexdiffChangesOnly,
+      });
     }),
   );
 
   it.effect('reset deletes a config-slot (ConfigProvider) key too', () =>
     Effect.gen(function* () {
-      yield* Effect.promise(() =>
-        assertResetRestoresDefault({
-          key: WorkspaceStateKey.GIT_MARK_COMMITS,
-          host: 'cli',
-          storeName: 'config',
-          expectedDefault: true,
-        }),
-      );
+      yield* assertResetRestoresDefault({
+        key: WorkspaceStateKey.GIT_MARK_COMMITS,
+        host: 'cli',
+        storeName: 'config',
+        expectedDefault: true,
+      });
     }),
   );
 
@@ -560,45 +572,88 @@ describe('settingsAccess', () => {
   // keep: the *merged* config scope, validated against the row's own schema.
   // A `configTarget: 'global'` on either row breaks the workspace-override
   // case; dropping the row's bounds breaks the out-of-range case.
-  it('resolves reliability rows on the merged scope, bounded by their schema', async () => {
-    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
-    const reliabilityRows = [
-      {
-        setting: MODEL_COMPACTION_THRESHOLD_SETTING,
-        inRange: 40,
-        outOfRange: 101,
-      },
-      { setting: MODEL_RETRY_MAX_ATTEMPTS_SETTING, inRange: 4, outOfRange: 6 },
-    ];
-    try {
-      for (const { setting, inRange, outOfRange } of reliabilityRows) {
-        const entry = settingsViewSettingByKey(setting.configKey);
-        assert.ok(entry, `missing settings-view row ${setting.configKey}`);
-        assert.equal(
-          entry.configTarget,
-          undefined,
-          `${setting.configKey} must not narrow itself to one config scope`,
-        );
-        const cases = [
-          [undefined, setting.defaultValue],
-          [inRange, inRange],
-          [outOfRange, setting.defaultValue],
-        ] as const;
-        for (const [stored, expected] of cases) {
-          const { stores, config } = makeFakeSettingsStores();
-          if (stored !== undefined) config.set(setting.configKey, stored);
-          await installPlatform({}, { config });
-          assert.equal(
-            readSetting(entry, stores, 'vscode'),
-            expected,
-            `${setting.configKey} stored=${String(stored)}`,
-          );
+  it.effect(
+    'resolves reliability rows on the merged scope, bounded by their schema',
+    () =>
+      Effect.gen(function* () {
+        const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+        const reliabilityRows = [
+          {
+            setting: MODEL_COMPACTION_THRESHOLD_SETTING,
+            inRange: 40,
+            outOfRange: 101,
+          },
+          {
+            setting: MODEL_RETRY_MAX_ATTEMPTS_SETTING,
+            inRange: 4,
+            outOfRange: 6,
+          },
+        ];
+        try {
+          for (const { setting, inRange, outOfRange } of reliabilityRows) {
+            const entry = settingsViewSettingByKey(setting.configKey);
+            assert.ok(entry, `missing settings-view row ${setting.configKey}`);
+            assert.equal(
+              entry.configTarget,
+              undefined,
+              `${setting.configKey} must not narrow itself to one config scope`,
+            );
+            const cases = [
+              [undefined, setting.defaultValue],
+              [inRange, inRange],
+              [outOfRange, setting.defaultValue],
+            ] as const;
+            for (const [stored, expected] of cases) {
+              const { stores, config } = makeFakeSettingsStores();
+              if (stored !== undefined) config.set(setting.configKey, stored);
+              yield* Effect.promise(() => installPlatform({}, { config }));
+              assert.equal(
+                yield* readSetting(entry, stores, 'vscode'),
+                expected,
+                `${setting.configKey} stored=${String(stored)}`,
+              );
+            }
+          }
+        } finally {
+          warn.mockRestore();
         }
-      }
-    } finally {
-      warn.mockRestore();
-    }
-  });
+      }),
+  );
+
+  // #12710: the five Models-tab provider toggles declare `configTarget:
+  // 'global'`, so `readSetting` resolves them on the global scope alone. The
+  // run now reads them through the same catalog reader (`readSettingFrom` in
+  // `src/agent/runtime/run/modelBinding.ts`), where it used to read the
+  // merged config and could therefore honor a workspace override the tab had
+  // no way to show. One scope, one answer, both sides.
+  it.effect(
+    'resolves the Models-tab provider toggles on the global scope alone',
+    () =>
+      Effect.gen(function* () {
+        const rows = [
+          'texra.model.gpt5ReasoningSummary',
+          'texra.model.useGoogleInteractionsServerState',
+          'texra.model.useGoogleBackgroundResponses',
+          'texra.model.useBackgroundResponses',
+          'texra.model.openaiParallelToolCalls',
+        ];
+        for (const key of rows) {
+          const entry = settingByKey(key);
+          assert.ok(entry, `missing catalog entry ${key}`);
+          assert.equal(entry.configTarget, 'global', `${key} configTarget`);
+          const config = new FakeScopedConfigProvider();
+          config.seedGlobal(key, true);
+          config.seedWorkspace(key, false);
+          const stores = {
+            config,
+            workspaceState: new FakeStateStore(),
+            globalState: new FakeStateStore(),
+          };
+          assert.equal(yield* readSetting(entry, stores, 'vscode'), true, key);
+          assert.equal(yield* readSettingFrom<boolean>(stores, key), true, key);
+        }
+      }),
+  );
 
   it.effect(
     'falls back to the default for a stored value that no longer validates',
@@ -610,7 +665,7 @@ describe('settingsAccess', () => {
         yield* workspaceState.update(entry.key, 'stale-bogus-value');
         try {
           assert.equal(
-            readSetting(entry, stores, 'vscode'),
+            yield* readSetting(entry, stores, 'vscode'),
             LATEX_CONFIG_DEFAULTS.latexFormatter,
           );
           assert.equal(warn.mock.calls.length, 1);

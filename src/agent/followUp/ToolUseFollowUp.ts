@@ -6,7 +6,7 @@ import {
   type RunClassification,
 } from '@agent/runtime/runClassification';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { withLogChannel, withLogData } from '@logger/effectLog';
+import { withLogChannel } from '@logger/effectLog';
 import { createLog } from '@logger/logUtils';
 import { AgentResume } from '@platform/interfaces';
 import { ownerPid, type RunId } from '@shared/schemas';
@@ -309,7 +309,7 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
     }).pipe(
       Effect.catch((error) =>
         Effect.logWarning(`onAdmitted callback failed for run ${runId}`).pipe(
-          withLogData({ runId, error: String(error) }),
+          Effect.annotateLogs({ data: { runId, error: String(error) } }),
           withLogChannel(CHANNEL),
         ),
       ),
