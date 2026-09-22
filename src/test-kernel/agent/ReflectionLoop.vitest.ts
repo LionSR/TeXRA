@@ -1186,30 +1186,18 @@ describe('an interrupted reflection run', () => {
   /**
    * C15: a crash between the committed response row and the round's raw
    * output write. The response is paid for and durable, so resume reprocesses
-   * it. The recorded byte offset prevents a duplicate append and repairs
-   * different-length debris, but equal-length conflicting bytes are
-   * indistinguishable from the completed write.
+   * it. The reprocessed cycle writes its own path wholesale, keyed by the
+   * folded continuationIndex, so debris a crash left in the cycle file or in
+   * the canonical output is rewritten from the coordinate, never reconciled
+   * by length.
    */
   it.effect.each([
-    { name: 'missing file', seed: null, expected: 'round 0 output' },
-    {
-      name: 'completed write',
-      seed: 'round 0 output',
-      expected: 'round 0 output',
-    },
-    {
-      name: 'different-length debris',
-      seed: 'stale bytes from the crash',
-      expected: 'round 0 output',
-    },
-    {
-      name: 'same-length debris',
-      seed: 'stale 0 output',
-      expected: 'stale 0 output',
-    },
+    { name: 'missing file', seed: null },
+    { name: 'canonical debris', seed: 'canonical' },
+    { name: 'cycle debris', seed: 'cycle' },
   ])(
-    'reconciles a reprocessed response by the recorded output byte length ($name)',
-    ({ seed, expected }) =>
+    'rewrites a reprocessed response from its coordinate ($name)',
+    ({ seed }) =>
       Effect.gen(function* () {
         const session = yield* createProcessSession();
         const runId = startedRun(session);
@@ -1218,22 +1206,28 @@ describe('an interrupted reflection run', () => {
           0,
           'afterResponse',
         );
-        // The response row is committed and no snapshot has recorded a
-        // write: the offset resume reconciles against is zero.
+        // The response row is committed; its cycle file is not yet written.
         expect(halted.lastTurn).not.toBeNull();
-        expect(flowOf(halted).rawOutputBytes).toBe(0);
-        const path = flowOf(halted).outputLocation?.absolutePath;
-        if (path === undefined) throw new Error('The round has no output.');
+        const canonical = flowOf(halted).outputLocation?.absolutePath;
+        if (canonical === undefined) {
+          throw new Error('The round has no output.');
+        }
         yield* Effect.promise(async () => {
           if (seed === null) return;
-          await mkdir(dirname(path), { recursive: true });
-          await writeFile(path, seed);
+          const target =
+            seed === 'canonical'
+              ? canonical
+              : canonical.replace('output.xml', 'output.c0.xml');
+          await mkdir(dirname(target), { recursive: true });
+          await writeFile(target, 'stale bytes from the crash');
         });
 
         yield* runLoop({ runId, session, rounds: 1, resume: true });
 
-        const content = yield* Effect.promise(() => readFile(path, 'utf-8'));
-        expect(content).toBe(expected);
+        const content = yield* Effect.promise(() =>
+          readFile(canonical, 'utf-8'),
+        );
+        expect(content).toBe('round 0 output');
       }),
   );
 });

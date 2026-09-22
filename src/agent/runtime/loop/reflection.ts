@@ -29,7 +29,6 @@
  */
 import { dirname } from 'node:path';
 import {
-  ByteSize,
   Cause,
   Effect,
   Exit,
@@ -81,8 +80,10 @@ import { getTeXCountStats } from '@latex/texcount';
 import type { WorkspaceFs } from '@platform/rootedFs';
 import type { LanguageModel } from '@platform/languageModel';
 import {
+  WORKFLOW_OUTPUT_BASENAME,
   WORKFLOW_RAW_OUTPUT_EXT,
   workflowOutputPath,
+  workflowOutputRoundDir,
 } from '@shared/constants/workflowOutput';
 import { deriveRunOutcome } from '@shared/runs/runStatus';
 import {
@@ -140,9 +141,6 @@ const K_SLICE = 200;
 const CONTINUE_LIMIT = 10;
 const INPUT_TOKEN_LIMIT = 1500000;
 const OUTPUT_TOKEN_LIMIT_FACTOR = 2.5;
-
-/** Decodes the raw-output bytes a resumed run reads back at a byte offset. */
-const utf8 = new TextDecoder();
 
 interface ReflectionStart {
   /** The caller launched this as a resume; the ledger decides what it is. */
@@ -384,7 +382,6 @@ export const runReflection = Effect.fn('reflection.run')(function* (
   const restore = Effect.fn('reflection.restore')(function* (
     state: RunState,
   ): Effect.fn.Return<void, Error, FileSystem.FileSystem> {
-    const fs = yield* FileSystem.FileSystem;
     const persisted = familyState(state, 'reflection');
     if (persisted === null) {
       return yield* Effect.die(
@@ -397,24 +394,18 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     flow = { ...persisted, totalRounds };
     workspace = AgentWorkspaceState.fromSnapshot(persisted.workspaceSnapshot);
     outputState.rounds = roundsFromPersisted(persisted.roundOutputs);
-    // Mid-round, the raw output file holds the text every earlier response
-    // cycle produced; the next connector and continuation prompt read its tail.
+    // Mid-round, the cycle files hold the text every earlier response cycle
+    // produced; the next connector and continuation prompt read their tail.
+    // `continuationIndex` is folded state, so no directory enumeration is
+    // needed to find them.
     if (
-      persisted.outputLocation !== null &&
-      (state.phase === 'model.ready' ||
-        state.phase === 'model.submitted' ||
-        state.phase === 'response.ready')
+      state.phase === 'model.ready' ||
+      state.phase === 'model.submitted' ||
+      state.phase === 'response.ready'
     ) {
-      const path = persisted.outputLocation.absolutePath;
-      const content = yield* fs.readFile(path).pipe(
-        Effect.map((bytes) =>
-          utf8.decode(bytes.subarray(0, persisted.rawOutputBytes ?? 0)),
-        ),
-        // A raw output file the resume finds gone contributes no text; the
-        // round rebuilds it from the rows that follow. Any other failure to
-        // read it — permissions, a directory, I/O — still fails the resume
-        // rather than quietly continuing without the earlier responses.
-        Effect.catchIf(isAbsentFsPath, () => Effect.succeed('')),
+      const content = yield* readRawOutput(
+        state.round,
+        state.continuationIndex,
       );
       workspace.assembly.accumulatedOutput = content;
       workspace.assembly.lastResponse = content;
@@ -438,7 +429,6 @@ export const runReflection = Effect.fn('reflection.run')(function* (
       ...flow,
       outputLocation: outputLocationFor(round),
       endTurn: false,
-      rawOutputBytes: 0,
     };
     const files = filesForRound(round);
     const content: InputPart[] = [];
@@ -553,64 +543,40 @@ export const runReflection = Effect.fn('reflection.run')(function* (
   });
 
   /**
-   * Append this cycle's text to the round's raw output file at the byte
-   * offset the last processed response left. A replayed response completes
-   * a partial write or skips one already complete; conflicting content is
-   * rewritten from the offset and said so.
+   * The raw output of one response cycle, keyed by the folded
+   * `continuationIndex`: a re-entry at the same cycle rewrites the same path
+   * with the same bytes, so the write is idempotent by coordinate and needs
+   * no byte-offset bookkeeping.
    */
-  const writeOutputFragment = (
-    location: AgentFileLocation,
-    fragment: string,
-  ): Effect.Effect<void, Error, FileSystem.FileSystem> =>
+  const cycleLocationFor = (
+    round: number,
+    continuationIndex: number,
+  ): AgentFileLocation =>
+    fileService.createLocation(
+      `${workflowOutputRoundDir(round)}/${WORKFLOW_OUTPUT_BASENAME}.c${continuationIndex}.${WORKFLOW_RAW_OUTPUT_EXT}`,
+    ) as AgentFileLocation;
+
+  /**
+   * The round's accumulated raw output: its cycle files read back in index
+   * order, cycles `0 .. count - 1`. A cycle that produced no text left no
+   * file; a file the resume finds gone contributes no text, and the round
+   * rebuilds it from the rows that follow. Any other read failure —
+   * permissions, a directory, I/O — still fails rather than quietly
+   * continuing without the earlier responses.
+   */
+  const readRawOutput = (
+    round: number,
+    count: number,
+  ): Effect.Effect<string, Error, FileSystem.FileSystem> =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
-      const path = location.absolutePath;
-      const expected = flow.rawOutputBytes ?? 0;
-      const fragmentBytes = Buffer.byteLength(fragment);
-      yield* fs.makeDirectory(dirname(path), { recursive: true });
-      // A `ByteSize` is a branded bigint: the comparisons below are against
-      // byte counts of a raw output, which no file reaches unsafely.
-      const actual = yield* fs.stat(path).pipe(
-        Effect.map((info) => ByteSize.toNumberUnsafe(info.size)),
-        // No file yet is the same as an empty one: both mean "write it".
-        Effect.catchIf(isAbsentFsPath, () => Effect.succeed(0)),
-      );
-      if (actual === expected + fragmentBytes && expected + fragmentBytes > 0) {
-        logger.debug(
-          'Raw output already holds this response; not appending twice.',
-        );
-      } else if (actual === expected) {
-        if (actual > 0) {
-          logger.debug(`Appending to existing file: ${path}`);
-          yield* fs.writeFileString(path, fragment, { flag: 'a' });
-        } else {
-          logger.debug(`Creating new file: ${path}`);
-          yield* fs.writeFileString(path, fragment);
-        }
-      } else {
-        logger.warn(
-          `Raw output ${path} is ${actual} bytes where ${expected} were recorded; rewriting from the recorded offset.`,
-        );
-        const existing = yield* fs
-          .readFile(path)
-          .pipe(
-            Effect.catchIf(isAbsentFsPath, () =>
-              Effect.succeed(Buffer.alloc(0)),
-            ),
-          );
-        // The rewrite is byte-for-byte what the create and append paths above
-        // would have left: the recorded offset counts bytes of the fragment, so
-        // normalizing line endings here would put the file below its own count
-        // and make every later cycle take this branch again.
-        yield* fs.writeFileString(
-          path,
-          Buffer.concat([
-            existing.subarray(0, Math.min(expected, existing.length)),
-            Buffer.from(fragment),
-          ]).toString('utf8'),
-        );
+      let raw = '';
+      for (let index = 0; index < count; index++) {
+        raw += yield* fs
+          .readFileString(cycleLocationFor(round, index).absolutePath)
+          .pipe(Effect.catchIf(isAbsentFsPath, () => Effect.succeed('')));
       }
-      flow = { ...flow, rawOutputBytes: expected + fragmentBytes };
+      return raw;
     });
 
   /**
@@ -627,8 +593,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     FileSystem.FileSystem | HttpClient.HttpClient
   > {
     const turn = initial.lastTurn;
-    const location = flow.outputLocation;
-    if (turn === null || location === null) {
+    if (turn === null) {
       return yield* Effect.die(
         new Error('A response is processed only after its row and its round.'),
       );
@@ -705,8 +670,14 @@ export const runReflection = Effect.fn('reflection.run')(function* (
           workspace.assembly.lastResponse.slice(-K_SLICE),
           text.slice(0, K_SLICE),
         );
-      yield* writeOutputFragment(
-        location,
+      const fs = yield* FileSystem.FileSystem;
+      const cyclePath = cycleLocationFor(
+        initial.round,
+        initial.continuationIndex,
+      ).absolutePath;
+      yield* fs.makeDirectory(dirname(cyclePath), { recursive: true });
+      yield* fs.writeFileString(
+        cyclePath,
         workspace.assembly.accumulatedOutput ? connector + text : text,
       );
       workspace.assembly.lastResponse = text;
@@ -1013,6 +984,15 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     if (location === null) {
       return yield* Effect.die(new Error('Output needs the round location.'));
     }
+    // The canonical raw output the pipeline reads is the round's cycle files
+    // concatenated in index order; re-entry rewrites it whole from the same
+    // coordinates.
+    const fs = yield* FileSystem.FileSystem;
+    const raw = yield* readRawOutput(round, state.continuationIndex + 1);
+    yield* fs.makeDirectory(dirname(location.absolutePath), {
+      recursive: true,
+    });
+    yield* fs.writeFileString(location.absolutePath, raw);
     const endTurn = flow.endTurn;
     const result = yield* processOutput(round, location, endTurn).pipe(
       // The pipeline's own steps recover what they can; anything that still
@@ -1173,7 +1153,6 @@ export const runReflection = Effect.fn('reflection.run')(function* (
           currentRound: flow.currentRound + 1,
           endTurn: false,
           outputLocation: null,
-          rawOutputBytes: 0,
         };
         workspace = AgentWorkspaceState.create();
         return yield* cell.append([
