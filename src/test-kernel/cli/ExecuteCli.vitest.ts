@@ -70,30 +70,28 @@ async function installStoragePlatform(): Promise<void> {
   await installFakeHost(await createTempDirPlatform('texra-run-', tempDirs));
 }
 
-vi.mock('@agent/runtime/runAgent', async () => {
-  const { Effect } = await import('effect');
-  return {
-    runAgent: (...args: unknown[]) =>
-      Effect.tryPromise({
-        try: () => mocks.runAgent(...args),
-        catch: (error) => error,
-      }),
-  };
-});
-
-vi.mock('@agent/storage', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agent/storage')>()),
-  deriveResumability: (...args: unknown[]) =>
+/**
+ * The agent boundary `executeCliRequest` runs through, injected through its
+ * own options seam: the launch, the terminal-status drain, and the
+ * resumability read all land in the suite's mock bag.
+ */
+const agentRunsFake = {
+  launch: (...args: unknown[]) =>
     Effect.tryPromise({
-      try: () => mocks.deriveResumability(...args),
+      try: () => mocks.runAgent(...args),
       catch: (error) => error,
     }),
-  finalizeRun: (_session: unknown, input: unknown) =>
+  finalize: (_session: unknown, input: unknown) =>
     Effect.tryPromise({
       try: () => mocks.finalizeRun(input),
       catch: (error) => error,
     }),
-}));
+  resumability: (...args: unknown[]) =>
+    Effect.tryPromise({
+      try: () => mocks.deriveResumability(...args),
+      catch: (error) => error,
+    }),
+} as NonNullable<Parameters<typeof executeCliRequest>[2]['agentRuns']>;
 
 vi.mock('@cli/runtime/cliPresentationHost', () => ({
   createCliRuntimeHost: mocks.createCliRuntimeHost,
@@ -195,6 +193,7 @@ async function loadExecuteCli() {
           session: Effect.succeed(testDefaultSession()),
           runtime: testRuntime(),
           lifecycle: installedHost().platform.lifecycle,
+          agentRuns: agentRunsFake,
           ...options,
         }),
         fakeProcessServices(),
@@ -211,6 +210,7 @@ async function loadExecuteCli() {
           session: Effect.succeed(testDefaultSession()),
           runtime: testRuntime(),
           lifecycle: installedHost().platform.lifecycle,
+          agentRuns: agentRunsFake,
           ...options,
         }),
         fakeProcessServices(),
@@ -227,6 +227,7 @@ async function loadExecuteCli() {
           session: Effect.succeed(testDefaultSession()),
           runtime: testRuntime(),
           lifecycle: installedHost().platform.lifecycle,
+          agentRuns: agentRunsFake,
           ...options,
         }),
         fakeProcessServices(),
@@ -668,14 +669,15 @@ describe('executeCliRequest', () => {
         // An unclassified failure (e.g. registerRun disk I/O,
         // workspaceState.update) is genuinely unexpected — it must keep
         // propagating so bin/texra.ts's crash handler reports it, instead of
-        // being swallowed into a bare non-zero exit with no stderr.
-        const runtime = yield* Effect.promise(() => import('@agent/runtime'));
-        vi.spyOn(runtime, 'runAgent').mockReturnValueOnce(
-          Effect.die(new Error('disk full')),
-        );
+        // being swallowed into a bare non-zero exit with no stderr. The defect
+        // enters through the injected launch stand-in.
+        const defectLaunch: typeof agentRunsFake = {
+          ...agentRunsFake,
+          launch: () => Effect.die(new Error('disk full')),
+        };
 
         const error = yield* Effect.flip(
-          executeCliRequest(request, cliContext()),
+          executeCliRequest(request, cliContext(), { agentRuns: defectLaunch }),
         );
         expect(error.message).toContain('disk full');
 
