@@ -31,7 +31,7 @@
     "@openai/codex-sdk": "^0.155.1",
     "@playwright/test": "^1.63.0",
     "@typescript/native": "npm:typescript@^7.0.2",
-    "electron": "^44.4.2",
+    "electron": "^44.4.3",
     "electron-builder": "^26.15.3",
     "esbuild": "^0.28.2",
     "fix-path": "^5.0.0",
