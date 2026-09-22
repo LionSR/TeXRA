@@ -5,10 +5,11 @@
  * the CLI's console). Both diagnostic producers write the same entry through
  * it — `Effect.log*` via the logger layer in `@logger/effectDiagnostics`, and
  * the channel-keyed writers in `@logger/logUtils` that pre-Effect subsystems
- * still call. Neither producer formats: severity, timestamp, identity, and
- * payload stay separate fields the whole way, so a host renders them with its
- * own facilities instead of a downstream reader parsing them back out of a
- * line of text.
+ * still call. Neither producer decides presentation: severity, timestamp,
+ * identity, and payload stay separate fields the whole way, and the write
+ * path below renders the one field that is not already a string — the `data`
+ * payload — once, before redaction, bounded, so a host renders its entries
+ * with its own facilities instead of parsing them back out of a line of text.
  *
  * Entries are secret-redacted here, once, before any host sees them. A host
  * may opt out only for a local operator terminal whose output is neither
@@ -18,6 +19,7 @@
 import { Logger } from 'effect';
 
 // Local imports
+import { formatLogData } from '@logger/formatLogData';
 import { redactDisplayValue, redactSecrets } from '@logger/redaction';
 
 /**
@@ -31,9 +33,17 @@ export type LogEntry = ReturnType<typeof Logger.formatStructured.log>;
 /** Annotation naming the logical channel an entry belongs to. */
 export const LOG_CHANNEL = 'channel';
 
-/** Annotation carrying a debug payload. `withLogData` attaches the value raw,
- * so the sinks that render annotations decide whether a surface shows it. */
+/**
+ * Annotation carrying a debug payload. Producers attach the value raw
+ * (`Effect.annotateLogs(self, { data })`, or the channel writers' `{ data }`
+ * option); the write path below renders it once, for every host surface, so
+ * no producer decides how much detail a surface shows.
+ */
 export const LOG_DATA = 'data';
+
+/** The rendered payload bound: one bound, at the one owner of rendering, so
+ * an always-attached payload cannot flood a host surface. */
+const MAX_LOG_DATA_LENGTH = 2_000;
 
 export interface LogSink {
   write(entry: LogEntry): void;
@@ -71,6 +81,35 @@ function redactEntry(entry: LogEntry): LogEntry {
     message: redactDisplayValue(entry.message),
     cause: entry.cause === undefined ? undefined : redactSecrets(entry.cause),
     annotations: redactDisplayValue(entry.annotations),
+  };
+}
+
+/**
+ * Render the `data` payload before redaction, once, on the write path: the
+ * order is load-bearing, because `redactDisplayValue` walks objects
+ * recursively while `formatLogData` renders a cycle as `"[Circular]"`, so
+ * the string the redactor sees is both finite and secret-redactable. A
+ * producer that attached `null`/`undefined` (the raw combinator skips
+ * nothing) leaves the annotation here rather than rendering "null"; a
+ * present payload is bounded to one line's worth of detail.
+ */
+function renderLogData(entry: LogEntry): LogEntry {
+  const data = entry.annotations[LOG_DATA];
+  if (data == null) {
+    if (!(LOG_DATA in entry.annotations)) return entry;
+    const { [LOG_DATA]: _dropped, ...annotations } = entry.annotations;
+    return { ...entry, annotations };
+  }
+  const rendered = formatLogData(data);
+  return {
+    ...entry,
+    annotations: {
+      ...entry.annotations,
+      [LOG_DATA]:
+        rendered.length <= MAX_LOG_DATA_LENGTH
+          ? rendered
+          : `${rendered.slice(0, MAX_LOG_DATA_LENGTH)}… [truncated]`,
+    },
   };
 }
 
@@ -130,5 +169,6 @@ export function setLogSink(
 
 /** Write one entry to the installed sink. */
 export function writeLogEntry(entry: LogEntry): void {
-  sink.write(sinkTrusted ? entry : redactEntry(entry));
+  const rendered = renderLogData(entry);
+  sink.write(sinkTrusted ? rendered : redactEntry(rendered));
 }

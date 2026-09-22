@@ -5,6 +5,7 @@ import { Effect, Result } from 'effect';
 
 import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
 import { safeParseJson } from '@common/parsing/safeParseJson';
+import type { MinimumLogLevel } from '@logger/effectDiagnostics';
 import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
 import type { ConfigProvider } from '@platform/interfaces';
 import {
@@ -46,6 +47,14 @@ export interface CliContext {
   readonly outputFormat: CliOutputFormat;
   readonly approvalPolicy: TexraApprovalPolicy;
   readonly quietLogs: boolean;
+  /**
+   * The diagnostics emission threshold this process's runtime builds with,
+   * decided once from argv — `--quiet` is `None`, `--verbose` is `Debug`,
+   * otherwise `Info` — because a terminal is the one surface with no live
+   * level filter of its own. A flag is exactly the kind of fact a
+   * layer-build capture is for: it cannot change mid-process.
+   */
+  readonly minimumLogLevel: MinimumLogLevel;
   readonly renderRunProgress?: boolean;
   readonly stdoutIsTty: boolean;
   readonly termIsDumb: boolean;
@@ -263,6 +272,7 @@ export function formatCrashReportLine(
 export interface CliGlobalArgs {
   readonly print?: boolean;
   readonly quiet?: boolean;
+  readonly verbose?: boolean;
   readonly cwd?: string;
   readonly outputFormat?: CliOutputFormat;
   readonly approvalPolicy?: TexraApprovalPolicy;
@@ -430,6 +440,11 @@ export const buildCliContext = Effect.fn('cliContext.buildCliContext')(
       outputFormat,
       approvalPolicy,
       quietLogs: init.globalArgs.quiet === true,
+      minimumLogLevel: init.globalArgs.quiet
+        ? 'None'
+        : init.globalArgs.verbose
+          ? 'Debug'
+          : 'Info',
       stdoutIsTty: ambient.stdoutIsTty,
       termIsDumb: ambient.termIsDumb === true,
       stderrIsTty: ambient.stderrIsTty,

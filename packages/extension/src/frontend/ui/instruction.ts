@@ -4,7 +4,7 @@ import * as vscode from 'vscode';
 
 // Local imports
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
-import { withLogChannel, withLogData } from '@logger/effectLog';
+import { withLogChannel } from '@logger/effectLog';
 import type { StateStore, StateWriteFailed } from '@platform/interfaces';
 import { INSTRUCTION_PREFIX } from '@shared/state/stateKeys';
 
@@ -61,7 +61,7 @@ export function showInstructionWithSuppress(
     return settle.pipe(
       Effect.catchCause((cause) =>
         Effect.logWarning(`Failed to settle instruction "${key}"`).pipe(
-          withLogData(Cause.squash(cause)),
+          Effect.annotateLogs({ data: Cause.squash(cause) }),
           withLogChannel(CHANNEL),
         ),
       ),

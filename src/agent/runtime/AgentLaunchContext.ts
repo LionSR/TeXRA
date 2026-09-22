@@ -27,7 +27,7 @@ import {
   hasErrorPresentationClaimed,
 } from '@common/errors/sdkError/errorMetadata';
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
-import { withLogChannel, withLogData } from '@logger/effectLog';
+import { withLogChannel } from '@logger/effectLog';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import { resolveRuntimeModelConfig } from '@model/runtimeModelRegistry';
 import { AppState } from '@platform/interfaces';
@@ -621,7 +621,7 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
           if (!finalization.ok)
             yield* Effect.logWarning(
               'Failed to persist the launch failure',
-            ).pipe(withLogData(finalization.error), withLogChannel(CHANNEL));
+            ).pipe(Effect.annotateLogs({ data: finalization.error }), withLogChannel(CHANNEL));
         }),
       ),
     );

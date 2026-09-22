@@ -26,7 +26,7 @@ import {
 } from '@agent/core/definition/AgentConfig';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { MessageHost, NotificationFailed } from '@hosts/uiHosts';
-import { withLogChannel, withLogData } from '@logger/effectLog';
+import { withLogChannel } from '@logger/effectLog';
 import { createLog } from '@logger/logUtils';
 import type { ApiProvider } from '@model/apiProviders';
 import {
@@ -359,7 +359,7 @@ export const createHostRunActions = (
       (cause: unknown): Effect.Effect<boolean> =>
         Effect.logWarning(
           `Retry request ${requestId} of run ${runId} could not be settled`,
-        ).pipe(withLogData(cause), withLogChannel(CHANNEL), Effect.as(false));
+        ).pipe(Effect.annotateLogs({ data: cause }), withLogChannel(CHANNEL), Effect.as(false));
 
     const settleRetry = (
       runId: RunId,
@@ -565,7 +565,7 @@ export const createHostRunActions = (
                 yield* Effect.logWarning(
                   `Failed to submit follow-up for stream ${runId}: ${message}`,
                 ).pipe(
-                  withLogData({ runId, error: message }),
+                  Effect.annotateLogs({ data: { runId, error: message } }),
                   withLogChannel(CHANNEL),
                 );
                 yield* present(`Could not send the follow-up: ${message}`);

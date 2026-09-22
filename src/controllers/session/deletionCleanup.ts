@@ -7,7 +7,7 @@ import { Effect, type Context } from 'effect';
 
 import { isFileNotFoundError } from '@common/errors';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
-import { withLogChannel, withLogData } from '@logger/effectLog';
+import { withLogChannel } from '@logger/effectLog';
 import { createLog } from '@logger/logUtils';
 import type { RunId } from '@shared/schemas';
 import type { Database } from '@shared/session/database';
@@ -86,7 +86,7 @@ export const collectPendingDeletions = Effect.fn('collectPendingDeletions')(
           Effect.catch((error) =>
             Effect.logWarning(
               `Deletion cleanup remains pending for ${event.aggregateId}`,
-            ).pipe(withLogData(error), withLogChannel(CHANNEL)),
+            ).pipe(Effect.annotateLogs({ data: error }), withLogChannel(CHANNEL)),
           ),
         );
     }

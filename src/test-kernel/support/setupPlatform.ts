@@ -378,7 +378,6 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
   const [
     { initPlatform },
     { initTestWorkspaceRoots },
-    { setDebugModeConfig },
     { initTestProcessRuntime, tryTestProcessRuntime },
     { Layer, ManagedRuntime },
     { testHttpClientLayer },
@@ -391,7 +390,6 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
   ] = await Promise.all([
     import('@platform/platform'),
     import('@test/support/testWorkspaceRoots'),
-    import('@logger/logUtils'),
     import('./testProcessRuntime'),
     import('effect'),
     import('@test/support/fetchTestUtils'),
@@ -445,9 +443,6 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
   );
   initPlatform(host.platform);
   initTestWorkspaceRoots(host.roots);
-  // The logger's process-wide debug-mode read, over this fake host's
-  // configuration, as a composition root installs it.
-  setDebugModeConfig(host.roots.config);
   // A bare process runtime for the Promise-facing boundaries that run
   // fibers (the loopback sign-in). The session graph family is not installed
   // here: `sessionGraphTestSetup` loads the graph's production modules, and

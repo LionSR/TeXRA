@@ -19,7 +19,7 @@ import { Deferred, Effect } from 'effect';
 
 // Local imports
 import { emitAppSignal } from '@eventBus/AppSignals';
-import { withLogChannel, withLogData } from '@logger/effectLog';
+import { withLogChannel } from '@logger/effectLog';
 import type { StateStore } from '@platform/interfaces';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { RegisteredToolName } from '@tools/registry';
@@ -216,7 +216,7 @@ const probeToolGroup = Effect.fn('probeToolGroup')(function* (
   }).pipe(
     Effect.catch((error) =>
       Effect.logWarning(`Availability probe failed for ${name}`).pipe(
-        withLogData(error),
+        Effect.annotateLogs({ data: error }),
         withLogChannel(CHANNEL),
         Effect.as({
           failure: { error },
@@ -270,7 +270,7 @@ function resolveOptionalStatus(
   return getStatus(probeResult).pipe(
     Effect.catch((error) =>
       Effect.logWarning(`Failed to resolve ${field} for ${toolName}`).pipe(
-        withLogData(error),
+        Effect.annotateLogs({ data: error }),
         withLogChannel(CHANNEL),
         Effect.as(undefined),
       ),

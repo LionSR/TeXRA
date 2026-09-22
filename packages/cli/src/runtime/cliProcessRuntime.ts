@@ -51,6 +51,7 @@ import { createPlatformAgentDirectories } from '@agent/index';
 import { SignInFailed } from '@common/errors/signInFailed';
 import { openAppStateStore } from '@controllers/session/appStateStore';
 import { globalDatabaseLayer } from '@controllers/session/Database';
+import type { MinimumLogLevel } from '@logger/effectDiagnostics';
 import {
   disposeProcessRuntime,
   installProcessRuntime,
@@ -194,8 +195,9 @@ export const NO_PLATFORM_INSTALL: CliProcessRuntimeInstall = Object.freeze({
  * loudly, and a CLI process runs exactly one command.
  */
 export function installCliProcessRuntime(
-  storageRoot?: string,
-  options?: CliProcessRuntimeInstall,
+  storageRoot: string | undefined,
+  options: CliProcessRuntimeInstall | undefined,
+  minimumLogLevel: MinimumLogLevel,
 ): Promise<ProcessRuntime> {
   const current = installedProcessRuntime();
   if (current) {
@@ -304,6 +306,9 @@ export function installCliProcessRuntime(
       // closed with it — or clone's refusal, which opens nothing.
       globalDatabase:
         options?.globalDatabase ?? globalDatabaseLayer(globalStoragePath),
+      // The emission threshold the entry's argv chose: a terminal has no
+      // live level filter of its own, so `--quiet`/`--verbose` decide here.
+      minimumLogLevel,
     });
     // The output plane runs its Effects on this runtime from here on; the
     // disposal below hands it back the no-runtime state.

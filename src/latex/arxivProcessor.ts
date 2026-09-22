@@ -19,7 +19,7 @@ import {
 import { StatusCodes } from 'http-status-codes';
 import * as tar from 'tar';
 
-import { withLogChannel, withLogData } from '@logger/effectLog';
+import { withLogChannel } from '@logger/effectLog';
 import { randomizedExponentialBackoff } from '@utils/core/backoffSchedule';
 import { isTransientHttpStatus } from '@utils/core/httpStatus';
 import {
@@ -248,7 +248,7 @@ class ArxivSourceProcessor {
     }).pipe(
       Effect.catch((error) =>
         Effect.logDebug(`Failed to clean up ${description} ${target}`).pipe(
-          withLogData(error),
+          Effect.annotateLogs({ data: error }),
         ),
       ),
       withLogChannel(ARXIV_CHANNEL),
@@ -376,10 +376,10 @@ class ArxivSourceProcessor {
             Effect.logDebug(
               'Ignoring malformed Content-Disposition header from arXiv source download',
             ).pipe(
-              withLogData({
+              Effect.annotateLogs({ data: {
                 header: disposition,
                 error: toErrorMessage(error),
-              }),
+              } }),
               Effect.as(undefined),
             ),
           ),

@@ -8,7 +8,7 @@ import type { SessionHandle } from '@agent/runtime';
 import { isLatexFile } from '@common/files/fileTypeUtils';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import { compileLatex2Pdf } from '@latex/texTools';
-import { withLogChannel, withLogData } from '@logger/effectLog';
+import { withLogChannel } from '@logger/effectLog';
 import { createLog } from '@logger/logUtils';
 import { withSessionFs } from '@platform/rootedFs';
 import type { FileLocation } from '@shared/schemas';
@@ -272,7 +272,7 @@ const prepareLatexBuild = (
       yield* Effect.logWarning(
         `Internal LaTeX compilation failed for ${uri.fsPath}:\n${compiled.logTail}`,
       ).pipe(
-        withLogData({ sourceFile: uri.fsPath, logTail: compiled.logTail }),
+        Effect.annotateLogs({ data: { sourceFile: uri.fsPath, logTail: compiled.logTail } }),
         withLogChannel(CHANNEL),
       );
       return false;

@@ -212,7 +212,7 @@ describe('compileLatex2Pdf logger seam', () => {
         const logs = captureLogEntries();
 
         const result = yield* compile().pipe(
-          Effect.provide(effectDiagnosticsLayer),
+          Effect.provide(effectDiagnosticsLayer('Trace')),
         );
 
         expect(result.ok).toBe(true);

@@ -129,6 +129,7 @@ export function defineCliCommand<const A extends ArgsDef, E>(
           options.install === 'noPlatform'
             ? NO_PLATFORM_INSTALL
             : { resourcesPath: context.resourcesPath },
+          context.minimumLogLevel,
         );
         return runtime.runPromise(program);
       };

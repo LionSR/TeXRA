@@ -44,7 +44,7 @@ const withPlatform = (
 /** The logger production installs, so entries reach the captured sink. */
 const withDiagnostics = <A, E, R>(
   self: Effect.Effect<A, E, R>,
-): Effect.Effect<A, E, R> => Effect.provide(self, effectDiagnosticsLayer);
+): Effect.Effect<A, E, R> => Effect.provide(self, effectDiagnosticsLayer('Trace'));
 
 /**
  * A `FileSystem` that reports every path as present and fails every read with

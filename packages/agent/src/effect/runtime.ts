@@ -32,7 +32,6 @@ import {
   installProcessRuntime,
 } from '@controllers/session/sessionLayer';
 import { globalDatabaseLayer } from '@controllers/session/Database';
-import { setDebugModeConfig } from '@logger/logUtils';
 import { initPlatform, tryPlatform, type Platform } from '@platform/platform';
 import type { AgentResumePort } from '@platform/interfaces';
 import type { LanguageModelPort } from '@platform/languageModel';
@@ -203,9 +202,6 @@ export function composeProcess(platform: AgentPlatform): ProcessHold {
     // The process-wide installations, once for the life of the process.
     if (!active) {
       initPlatform(platform);
-      // The logger's process-wide debug-mode read, over this embedder's
-      // configuration.
-      setDebugModeConfig(platform.roots.config);
     }
     // The identity stays a pending read -- the package's composition root is
     // synchronous, so it hands the program over rather than a value, and the
@@ -223,6 +219,11 @@ export function composeProcess(platform: AgentPlatform): ProcessHold {
       // The embedder's global root is a root like any host's: one handle for
       // the life of the runtime this composition installs.
       globalDatabase: globalDatabaseLayer(platform.roots.globalStorage),
+      // An embedder's console has no live level filter of its own, so the
+      // package speaks at the informational level rather than flooding it;
+      // an embedder that wants the debug tier wraps its program in its own
+      // logger.
+      minimumLogLevel: 'Info',
     });
     installedHere = true;
   }

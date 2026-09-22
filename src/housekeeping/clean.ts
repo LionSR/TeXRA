@@ -3,7 +3,7 @@ import { Effect } from 'effect';
 import { glob } from 'glob';
 
 // Internal imports
-import { withLogChannel, withLogData } from '@logger/effectLog';
+import { withLogChannel } from '@logger/effectLog';
 import { WorkspaceFs } from '@platform/rootedFs';
 import { EXCLUDED_DIRS } from '@shared/constants/latexTiming';
 
@@ -50,7 +50,7 @@ export const runCleanBuild = Effect.gen(function* () {
       ),
       Effect.catch((error) =>
         Effect.logError(`Error removing build directory ${dir}`).pipe(
-          withLogData(error),
+          Effect.annotateLogs({ data: error }),
           withLogChannel(CHANNEL),
         ),
       ),

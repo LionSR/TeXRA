@@ -20,7 +20,7 @@ import {
 } from 'effect';
 
 import type { AgentEvent } from '@agent/trace';
-import { withLogChannel, withLogData } from '@logger/effectLog';
+import { withLogChannel } from '@logger/effectLog';
 import { createLog } from '@logger/logUtils';
 import {
   aggregateId as qualifyAggregateId,
@@ -161,7 +161,7 @@ export const sessionEventsLayer = Layer.effect(
             ? Effect.void
             : Effect.logWarning(
                 'Session publisher ended abnormally on close',
-              ).pipe(withLogData(Cause.squash(cause)), withLogChannel(CHANNEL)),
+              ).pipe(Effect.annotateLogs({ data: Cause.squash(cause) }), withLogChannel(CHANNEL)),
         ),
       ),
     );
@@ -209,7 +209,7 @@ export const sessionEventsLayer = Layer.effect(
             Effect.map(() => committed),
             Effect.tapCause((cause) =>
               Effect.logError('Session publication failed').pipe(
-                withLogData(cause),
+                Effect.annotateLogs({ data: cause }),
                 withLogChannel(CHANNEL),
               ),
             ),

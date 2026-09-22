@@ -72,7 +72,7 @@ function runDescription(
       Effect.provide(testHttpClientLayer),
       // The failure is reported with `Effect.logWarning`, so the host sink a
       // test captures is reached through the logger layer production installs.
-      Effect.provide(effectDiagnosticsLayer),
+      Effect.provide(effectDiagnosticsLayer('Trace')),
     ),
   );
 }

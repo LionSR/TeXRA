@@ -1,6 +1,6 @@
 import { Cause, Effect, Exit } from 'effect';
 import type { ReviewIssueReport } from '@agent/review/reviewIssues';
-import { withLogChannel, withLogData } from '@logger/effectLog';
+import { withLogChannel } from '@logger/effectLog';
 import { createLog } from '@logger/logUtils';
 import type { FileLocation } from '@shared/schemas';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
@@ -170,7 +170,7 @@ function presentOn<K extends RuntimePresentationEvent>(
       presented.pipe(
         Effect.catchCause((cause) =>
           Effect.logWarning('A host presentation notice failed').pipe(
-            withLogData({ event, cause: Cause.squash(cause) }),
+            Effect.annotateLogs({ data: { event, cause: Cause.squash(cause) } }),
             withLogChannel(CHANNEL),
           ),
         ),
@@ -239,7 +239,7 @@ export class SessionHostInteractions implements HostInteractions {
             : Effect.logWarning(
                 'Presentation emit failed; showing the generic error',
               ).pipe(
-                withLogData(failure.cause),
+                Effect.annotateLogs({ data: failure.cause }),
                 withLogChannel(CHANNEL),
                 Effect.andThen(
                   presentOn(interactions, 'requestShowError', {
@@ -255,7 +255,7 @@ export class SessionHostInteractions implements HostInteractions {
         return present(active.interactions).pipe(
           Effect.catch((failure) =>
             Effect.logWarning('Live presentation emit failed').pipe(
-              withLogData(failure.cause),
+              Effect.annotateLogs({ data: failure.cause }),
               withLogChannel(CHANNEL),
             ),
           ),
@@ -378,7 +378,7 @@ export class SessionHostInteractions implements HostInteractions {
           Effect.catch((failure) =>
             Effect.logWarning(
               'Failed to replay a session presentation notice',
-            ).pipe(withLogData(failure.cause), withLogChannel(CHANNEL)),
+            ).pipe(Effect.annotateLogs({ data: failure.cause }), withLogChannel(CHANNEL)),
           ),
         );
       }

@@ -31,7 +31,6 @@
 import { Effect } from 'effect';
 
 // Local imports
-import { setDebugModeConfig } from '@logger/logUtils';
 import {
   initializeNodeRuntimeSkills,
   type NodeRuntimeSkillOptions,
@@ -53,9 +52,8 @@ export interface HostBootstrapInit {
    */
   readonly host: SettingHost;
   /**
-   * The process roots the root just built: the config provider the debug-mode
-   * read is taken over, and the global state store the first-install seed
-   * writes to.
+   * The process roots the root just built: the global state store the
+   * first-install seed writes to.
    */
   readonly roots: WorkspaceRoots;
   /**
@@ -82,8 +80,6 @@ export const bootstrapHost = Effect.fn('bootstrapHost')(function* (
   // happen until a session is open.
   installLongRunningModelDispatcher();
   initProcessSettingHost(init.host);
-  // The logger's process-wide debug-mode read, over this host's configuration.
-  setDebugModeConfig(init.roots.config);
   // TeXRA's account plane (ChatGPT / Grok sign-in). Without this the model
   // layer is bring-your-own-key. See installTexraAccountProbes.
   installTexraAccountProbes(init.secrets);

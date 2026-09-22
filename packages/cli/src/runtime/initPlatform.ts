@@ -254,7 +254,8 @@ let installedRoots: WorkspaceRoots | undefined;
  * installed at all (the TUI harness).
  */
 export function initCliPlatform(
-  context: CliPlatformInitOptions & Pick<CliContext, 'quietLogs'>,
+  context: CliPlatformInitOptions &
+    Pick<CliContext, 'quietLogs' | 'minimumLogLevel'>,
 ): Effect.Effect<CliPlatformServices, Error> {
   return Effect.gen(function* () {
     quietPlatformLogs = context.quietLogs;
@@ -273,9 +274,13 @@ export function initCliPlatform(
     // second and leaving the first undisposed.
     const runtime = yield* Effect.tryPromise({
       try: () =>
-        installCliProcessRuntime(context.storageRoot, {
-          resourcesPath: context.resourcesPath,
-        }),
+        installCliProcessRuntime(
+          context.storageRoot,
+          {
+            resourcesPath: context.resourcesPath,
+          },
+          context.minimumLogLevel,
+        ),
       catch: ensureError,
     });
 

@@ -70,7 +70,7 @@ import { createVsCodeLogSink } from '@frontend/vscode/vscodeLogSink';
 import { VscodeSecrets } from '@frontend/vscode/vscodeSecrets';
 import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
-import { withLogChannel, withLogData } from '@logger/effectLog';
+import { withLogChannel } from '@logger/effectLog';
 import * as logger from '@logger/logUtils';
 import { setLogSink } from '@logger/logSink';
 import { formatFatalErrorDetail } from '@logger/redaction';
@@ -278,6 +278,9 @@ async function initVscodePlatform(
     // threads, the update check and the CLI-shared input history read
     // through it for as long as this runtime lives.
     globalDatabase: globalDatabaseLayer(storage.getGlobalStoragePath()),
+    // The Output channel filters for itself (its own level selector and the
+    // Output view's filter), so the runtime emits everything it is handed.
+    minimumLogLevel: 'Trace',
   });
   // Recorded the moment it exists: every step below runs on it and can fail,
   // and `shutdownExtension` is what disposes it when activation does.
@@ -536,11 +539,11 @@ export async function activate(context: vscode.ExtensionContext) {
                 Effect.logError(
                   'Extension cleanup after failed activation failed',
                 ).pipe(
-                  withLogData(Cause.squash(cause)),
+                  Effect.annotateLogs({ data: Cause.squash(cause) }),
                   withLogChannel(EXTENSION_CHANNEL),
                   // No runtime exists to hold the diagnostics layer yet, so
                   // the entry needs it provided to reach the host's sink.
-                  Effect.provide(effectDiagnosticsLayer),
+                  Effect.provide(effectDiagnosticsLayer('Trace')),
                 ),
               ),
             ),

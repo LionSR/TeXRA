@@ -1,24 +1,40 @@
 /** Effect diagnostics use the host's existing, secret-redacting log sink. */
 // Third-party imports
-import { Exit, Layer, Logger, Option, References, Tracer } from 'effect';
+import { Exit, Layer, Logger, References, Tracer } from 'effect';
 
 // Local imports
-import { createLog, isDebugModeEnabled } from '@logger/logUtils';
 import { writeLogEntry } from '@logger/logSink';
 
-const log = createLog('Effect');
 const MAX_SPAN_ATTRIBUTES = 32;
 const MAX_ATTRIBUTE_LENGTH = 512;
 
 /**
+ * The emission threshold a host builds its runtime with, from facts that
+ * cannot change mid-process: the surface kind (the extension's
+ * `LogOutputChannel` filters for itself, so it takes `Trace`; the desktop's
+ * rotated log file takes `Debug`) or a CLI flag (`--quiet` / `--verbose`).
+ * A live user setting must never be routed here — the reference is
+ * fiberCached and read before any logger runs, so it would freeze the
+ * setting for a whole session.
+ */
+export type MinimumLogLevel =
+  | 'Trace'
+  | 'Debug'
+  | 'Info'
+  | 'Warn'
+  | 'Error'
+  | 'Fatal'
+  | 'None';
+
+/**
  * Route native log levels through the shared host sink. `formatStructured`
  * already carries level, timestamp, fiber, cause, annotations, and spans, so
- * the entry needs no adaptation and nothing is flattened into a message.
+ * the entry needs no adaptation and nothing is flattened into a message. The
+ * host's choice of {@link MinimumLogLevel} is the only filter: nothing here
+ * drops a level the runtime admitted.
  */
 const diagnosticLogger = Logger.make<unknown, void>((options) => {
   if (options.logLevel === 'None') return;
-  const verbose = options.logLevel === 'Debug' || options.logLevel === 'Trace';
-  if (verbose && !isDebugModeEnabled()) return;
   writeLogEntry(Logger.formatStructured.log(options));
 });
 
@@ -50,30 +66,23 @@ class DiagnosticSpan extends Tracer.NativeSpan {
   override end(endTime: bigint, exit: Exit.Exit<unknown, unknown>): void {
     if (this.status._tag === 'Ended') return;
     super.end(endTime, exit);
-    if (!this.sampled || !isDebugModeEnabled()) return;
-    log.debug(`${this.name}: ${exit._tag}`, {
-      data: {
-        traceId: this.traceId,
-        spanId: this.spanId,
-        parentSpanId: Option.getOrUndefined(this.parent)?.spanId,
-        durationMs: Number(endTime - this.startTime) / 1_000_000,
-        attributes: Object.fromEntries(this.attributes),
-      },
-    });
   }
 }
 
 /**
- * Local diagnostics for the process runtime. Successful and failed spans are
- * emitted only in debug mode; no exporter or retained collection is installed.
- * Callers can still provide their own Tracer on an individual Effect.
+ * Local diagnostics for a process runtime, at the emission threshold the
+ * composition root chose. No exporter or retained collection is installed;
+ * callers can still provide their own Tracer on an individual Effect.
  */
-export const effectDiagnosticsLayer = Layer.mergeAll(
-  Logger.layer([diagnosticLogger]),
-  Layer.succeed(References.MinimumLogLevel)('Trace'),
-  Layer.succeed(Tracer.Tracer)(
-    Tracer.make({
-      span: (options) => new DiagnosticSpan({ ...options, links: [] }),
-    }),
-  ),
-);
+export const effectDiagnosticsLayer = (
+  minimumLogLevel: MinimumLogLevel,
+): Layer.Layer<never> =>
+  Layer.mergeAll(
+    Logger.layer([diagnosticLogger]),
+    Layer.succeed(References.MinimumLogLevel)(minimumLogLevel),
+    Layer.succeed(Tracer.Tracer)(
+      Tracer.make({
+        span: (options) => new DiagnosticSpan({ ...options, links: [] }),
+      }),
+    ),
+  );

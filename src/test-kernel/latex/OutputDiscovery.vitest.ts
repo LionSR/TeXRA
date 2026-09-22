@@ -195,7 +195,7 @@ describe('outputDiscovery diagnostics', () => {
       undefined,
       'test',
     ).pipe(
-      Effect.provide(effectDiagnosticsLayer),
+      Effect.provide(effectDiagnosticsLayer('Trace')),
       Effect.provide(nodePlatformLayer),
     );
 

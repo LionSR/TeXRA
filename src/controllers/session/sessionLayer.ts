@@ -58,8 +58,11 @@ import {
   type SessionGraph,
 } from '@agent/runtime/sessionGraph';
 import { SupabaseAuth, type SupabaseAuthShape } from '@auth/SupabaseAuth';
-import { withLogChannel, withLogData } from '@logger/effectLog';
-import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
+import { withLogChannel } from '@logger/effectLog';
+import {
+  effectDiagnosticsLayer,
+  type MinimumLogLevel,
+} from '@logger/effectDiagnostics';
 import {
   withForkFailureReporting,
   type ProcessRuntime,
@@ -451,7 +454,7 @@ const sessionHandleLayer = (
                     Effect.catch((error) =>
                       Effect.logWarning(
                         'Registration claims were not released after its settle failed.',
-                      ).pipe(withLogData(error), withLogChannel(CHANNEL)),
+                      ).pipe(Effect.annotateLogs({ data: error }), withLogChannel(CHANNEL)),
                     ),
                   ),
                 ),
@@ -558,7 +561,7 @@ const sessionHandleLayer = (
                   Effect.catch((error) =>
                     Effect.logWarning(
                       `Session ${key.storage} left a failed publication behind as it closed.`,
-                    ).pipe(withLogData(error), withLogChannel(CHANNEL)),
+                    ).pipe(Effect.annotateLogs({ data: error }), withLogChannel(CHANNEL)),
                   ),
                 ),
             ),
@@ -629,7 +632,7 @@ const sessionHandleLayer = (
         Effect.tapError((error) =>
           Effect.logError(
             `Session ${key.storage} stopped delivering committed rows: the log could not be read.`,
-          ).pipe(withLogData(error), withLogChannel(CHANNEL)),
+          ).pipe(Effect.annotateLogs({ data: error }), withLogChannel(CHANNEL)),
         ),
         Effect.onExit((exit) => Deferred.done(tailEnded, exit)),
         Effect.forkIn(consumerScope),
@@ -644,14 +647,14 @@ const sessionHandleLayer = (
         Effect.tapError((error) =>
           Effect.logError(
             `Session ${key.storage} stopped delivering folded rows: the log could not be read.`,
-          ).pipe(withLogData(error), withLogChannel(CHANNEL)),
+          ).pipe(Effect.annotateLogs({ data: error }), withLogChannel(CHANNEL)),
         ),
         Effect.forkIn(consumerScope),
       );
       yield* sweepLeftoverRuns(session, initialListing).pipe(
         Effect.catch((error) =>
           Effect.logWarning('Background-shell cleanup failed.').pipe(
-            withLogData(error),
+            Effect.annotateLogs({ data: error }),
             withLogChannel(CHANNEL),
           ),
         ),
@@ -662,7 +665,7 @@ const sessionHandleLayer = (
         Effect.catch((error) =>
           Effect.logWarning(
             'Deletion records could not be read; cleanup remains pending.',
-          ).pipe(withLogData(error), withLogChannel(CHANNEL)),
+          ).pipe(Effect.annotateLogs({ data: error }), withLogChannel(CHANNEL)),
         ),
         Effect.repeat({ schedule: Schedule.spaced('30 seconds') }),
         Effect.forkScoped,
@@ -781,7 +784,7 @@ const unopenedEntry =
     Effect.logWarning(
       `Session ${key.storage} failed to open; it holds no session.`,
     ).pipe(
-      withLogData(error),
+      Effect.annotateLogs({ data: error }),
       withLogChannel(CHANNEL),
       Effect.as(Option.none()),
     );
@@ -1059,6 +1062,17 @@ interface ProcessRuntimeOptions {
     DatabaseOpenFailed,
     ProcessIdentity
   >;
+  /**
+   * The runtime's emission threshold for Effect diagnostics, from facts the
+   * composition root holds that cannot change mid-process: the surface kind
+   * (the extension's `LogOutputChannel` filters for itself, so it passes
+   * `'Trace'`; the desktop's rotated log file passes `'Debug'`) or the CLI's
+   * `--quiet` / `--verbose` argv. The reference it feeds is fiberCached and
+   * read before any logger runs, which is exactly why a live user setting
+   * must arrive by another road (the transcript fold's `debug` flag) and not
+   * here.
+   */
+  readonly minimumLogLevel: MinimumLogLevel;
 }
 
 export function installProcessRuntime({
@@ -1078,6 +1092,7 @@ export function installProcessRuntime({
   lean,
   usageLog,
   globalDatabase: globalDatabaseOption,
+  minimumLogLevel,
 }: ProcessRuntimeOptions): ProcessRuntime {
   // Non-failing by contract: `nodeProcesses.selfIdentity()` reports an
   // unreadable identity as undefined, and a root that already read one hands
@@ -1155,7 +1170,7 @@ export function installProcessRuntime({
         Layer.provideMerge(globalDatabase),
         Layer.provideMerge(
           Layer.mergeAll(
-            effectDiagnosticsLayer,
+            effectDiagnosticsLayer(minimumLogLevel),
             FetchHttpClient.layer,
             // The standard library's filesystem and path services, provided
             // once per process here rather than by each program that needs

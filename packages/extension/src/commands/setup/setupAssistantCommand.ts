@@ -15,7 +15,7 @@ import {
   SETUP_INSTRUCTION,
 } from '@controllers/onboarding/setupLaunch';
 import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
-import { withLogChannel, withLogData } from '@logger/effectLog';
+import { withLogChannel } from '@logger/effectLog';
 import { createLog } from '@logger/logUtils';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import type { StateStore, StateWriteFailed } from '@platform/interfaces';
@@ -98,7 +98,7 @@ function withOpenRouterFlagOn<A, E, R>(
         .pipe(
           Effect.catch((error: StateWriteFailed) =>
             Effect.logError('Failed to restore useOpenRouter flag.').pipe(
-              withLogData(error),
+              Effect.annotateLogs({ data: error }),
               withLogChannel(CHANNEL),
             ),
           ),

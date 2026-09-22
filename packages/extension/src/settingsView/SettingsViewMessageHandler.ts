@@ -42,7 +42,7 @@ import {
 import { subscribeAppSignal } from '@frontend/events/appSignalSubscriptions';
 import { subscribeGoalStateChanges } from '@frontend/events/runFactSubscriptions';
 import { NotificationFailed } from '@hosts/uiHosts';
-import { withLogChannel, withLogData } from '@logger/effectLog';
+import { withLogChannel } from '@logger/effectLog';
 import { createLog, type Log } from '@logger/logUtils';
 import {
   modelOptionsFrom,
@@ -560,7 +560,7 @@ export class SettingsViewMessageHandler {
       notice.pipe(
         Effect.catchTag('NotificationFailed', (failure) =>
           Effect.logError('Failed to display message notification').pipe(
-            withLogData(failure.cause),
+            Effect.annotateLogs({ data: failure.cause }),
             withLogChannel(this.channel),
           ),
         ),

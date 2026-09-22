@@ -24,7 +24,7 @@ import { Effect } from 'effect';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { deriveResumability } from '@agent/storage/resumability';
-import { withLogChannel, withLogData } from '@logger/effectLog';
+import { withLogChannel } from '@logger/effectLog';
 import type { OwnerId, RunId } from '@shared/schemas';
 import { claimStanding } from '@shared/session/database';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -68,7 +68,7 @@ export const classifyRun = Effect.fn('classifyRun')(function* (
     const error = claimResult.failure;
     const cause = `claim unreadable (${toErrorMessage(error)})`;
     yield* Effect.logWarning(`Cannot classify ${runId}: ${cause}`).pipe(
-      withLogData(error),
+      Effect.annotateLogs({ data: error }),
       withLogChannel(CHANNEL),
     );
     return { kind: 'unclassified', cause };

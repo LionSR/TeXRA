@@ -39,7 +39,7 @@ import type { AgentEvent, AgentTrace, ResultEvent } from '@agent/trace';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import { finalizeRun } from '@agent/storage/runLifecycle';
 import type { ResponseTextProcessing } from '@latex/texraResponseTextProcessing';
-import { withLogChannel, withLogData } from '@logger/effectLog';
+import { withLogChannel } from '@logger/effectLog';
 import { redactSecrets } from '@logger/redaction';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
@@ -508,7 +508,7 @@ export class SessionHandle {
       for (const error of failures)
         yield* Effect.logWarning(
           `Run ${runId}: claim release also failed`,
-        ).pipe(withLogData(error), withLogChannel(CHANNEL));
+        ).pipe(Effect.annotateLogs({ data: error }), withLogChannel(CHANNEL));
       if (primary !== undefined)
         return yield* Effect.fail(ensureError(primary));
     });
@@ -759,7 +759,7 @@ export class SessionHandle {
           Effect.logWarning(
             `Request ${requestId} closed without a decision`,
           ).pipe(
-            withLogData(cause),
+            Effect.annotateLogs({ data: cause }),
             withLogChannel(CHANNEL),
             Effect.as({
               action: 'cancel',
@@ -1007,7 +1007,7 @@ export class SessionHandle {
       job(append).pipe(
         Effect.tapCause((cause) =>
           Effect.logError('Session publication failed').pipe(
-            withLogData(cause),
+            Effect.annotateLogs({ data: cause }),
             withLogChannel(CHANNEL),
             Effect.ignoreCause,
           ),
@@ -1104,7 +1104,7 @@ export class SessionHandle {
       // still propagates.
       Effect.catchDefect((defect) =>
         Effect.logWarning('Session publications could not be settled').pipe(
-          withLogData(defect),
+          Effect.annotateLogs({ data: defect }),
           withLogChannel(CHANNEL),
           Effect.andThen(Effect.fail(ensureError(defect))),
         ),
@@ -1139,7 +1139,7 @@ export class SessionHandle {
             Effect.suspend(() => listener({ ...event, runId: target.id })).pipe(
               Effect.catchCause((cause) =>
                 Effect.logWarning('Session result listener threw').pipe(
-                  withLogData(Cause.squash(cause)),
+                  Effect.annotateLogs({ data: Cause.squash(cause) }),
                   withLogChannel(CHANNEL),
                 ),
               ),
@@ -1433,7 +1433,7 @@ export const settleLiveSessionRuns: Effect.Effect<void> = Effect.gen(
             ? Effect.interrupt
             : Effect.logWarning(
                 `Failed to settle run ${runId} at host exit; a later launch classifies it from its checkpoint`,
-              ).pipe(withLogData(Cause.squash(cause)), withLogChannel(CHANNEL)),
+              ).pipe(Effect.annotateLogs({ data: Cause.squash(cause) }), withLogChannel(CHANNEL)),
         ),
       );
     }

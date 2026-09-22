@@ -10,7 +10,7 @@ import {
   type SessionHandle,
 } from '@agent/runtime';
 import { openFinalOutputIfAvailable } from '@frontend/agents/finalOutputOpener';
-import { withLogChannel, withLogData } from '@logger/effectLog';
+import { withLogChannel } from '@logger/effectLog';
 import type { ProcessServices } from '@platform/processRuntime';
 import { presentLaunchedProgressRun } from '@progressView/progressNavigation';
 import { ModelCompatibilityKeySchema, RunIdSchema } from '@shared/schemas';
@@ -69,7 +69,7 @@ export const runExecuteCommand = Effect.fn('runExecuteCommand')(function* (
     if (error instanceof ZodError) {
       const message = `Invalid agent configuration. ${z.prettifyError(error)}`;
       yield* Effect.logWarning(message).pipe(
-        withLogData(error),
+        Effect.annotateLogs({ data: error }),
         withLogChannel(CHANNEL),
       );
       void vscode.window.showErrorMessage(message);

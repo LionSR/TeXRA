@@ -222,7 +222,7 @@ describe('runLatexdiffForRun diagnostics', () => {
         logs.has('DEBUG', 'test', 'Using run-dir scan outputs from run abc123'),
       ).toBe(true);
     }).pipe(
-      Effect.provide(effectDiagnosticsLayer),
+      Effect.provide(effectDiagnosticsLayer('Trace')),
       Effect.provide(nodePlatformLayer),
     ),
   );

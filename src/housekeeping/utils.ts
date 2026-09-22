@@ -6,7 +6,7 @@ import { Data, Effect, FileSystem } from 'effect';
 import { globIterate } from 'glob';
 
 // Local imports
-import { withLogChannel, withLogData } from '@logger/effectLog';
+import { withLogChannel } from '@logger/effectLog';
 import { createLog } from '@logger/logUtils';
 import { relativeToRoot } from '@platform/defaults/nodeWorkspace';
 import type { FileOpResult } from '@shared/schemas';
@@ -25,7 +25,7 @@ const log = createLog(CHANNEL);
  */
 export const asErrorResult = (operation: string) => (error: unknown) =>
   Effect.logError(`${operation} failed`).pipe(
-    withLogData(error),
+    Effect.annotateLogs({ data: error }),
     withLogChannel(CHANNEL),
     Effect.as<FileOpResult>({ status: 'error', error: toErrorMessage(error) }),
   );

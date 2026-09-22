@@ -8,7 +8,7 @@ import * as path from 'node:path';
 
 import { Effect, FileSystem } from 'effect';
 
-import { withLogChannel, withLogData } from '@logger/effectLog';
+import { withLogChannel } from '@logger/effectLog';
 import { ensureError } from '@utils/errors/errorMessage';
 import { pathExists } from '@utils/files/fsDurability';
 import { ensureExtension, joinLatexPath } from '@utils/core/pathCore';
@@ -81,7 +81,7 @@ export const resolveLatexDir = Effect.fn('latex.resolveLatexDir')(function* (
     Effect.logDebug(
       `realPath failed for ${absolutePath}; falling back to literal dirname`,
     ).pipe(
-      withLogData(error),
+      Effect.annotateLogs({ data: error }),
       withLogChannel(CHANNEL),
       Effect.as(absolutePath),
     ),

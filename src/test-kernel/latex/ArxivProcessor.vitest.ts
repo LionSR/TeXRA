@@ -109,7 +109,7 @@ describe('arXiv processor logger channel', () => {
   /** The logger production installs, so entries reach the captured sink. */
   const withDiagnostics = <A, E, R>(
     self: Effect.Effect<A, E, R>,
-  ): Effect.Effect<A, E, R> => Effect.provide(self, effectDiagnosticsLayer);
+  ): Effect.Effect<A, E, R> => Effect.provide(self, effectDiagnosticsLayer('Trace'));
 
   // #7347 renamed the exported singleton to PascalCase and accidentally
   // changed the channel string too. It is rendered as the `[channel]` prefix

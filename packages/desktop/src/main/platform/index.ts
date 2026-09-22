@@ -217,6 +217,9 @@ export async function initializeElectronPlatform(
     // The process's one handle on that same global root, which the desktop's
     // remembered projects and its update check read through.
     globalDatabase: globalDatabaseLayer(storage.getGlobalStoragePath()),
+    // The rotated log file is the artefact attached to a bug report, so it
+    // keeps debug entries; rotation already bounds its size.
+    minimumLogLevel: 'Debug',
   });
 
   repairLaunchPath();

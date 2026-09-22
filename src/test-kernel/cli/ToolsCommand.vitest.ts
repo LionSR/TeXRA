@@ -2,7 +2,7 @@ import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { setLogSink } from '@logger/logSink';
-import { createLog, setDebugModeConfig } from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 import { FakeStateStore } from '@test/support/FakePlatform';
@@ -81,9 +81,8 @@ describe('CLI tools command', () => {
   afterEach(() => {
     // `defineCliCommand` installs a sink for every command it runs, and this
     // file mocks out the init that would replace it, so the process-wide sink
-    // and debug-mode config are this suite's to hand back.
+    // is this suite's to hand back.
     setLogSink(null);
-    setDebugModeConfig(null);
     stdoutSpy.mockRestore();
     stderrSpy.mockRestore();
   });
@@ -136,9 +135,8 @@ describe('CLI tools command', () => {
     // platform init that used to be the first thing to install a sink — and
     // the console fallback covering that window sent DEBUG to stdout, so the
     // first line of an NDJSON run was not a record and the stream would not
-    // parse. Debug mode is on because it decides how much such a line
-    // carries, never whether it is written.
-    setDebugModeConfig({ get: () => true });
+    // parse. The channel writer emits unconditionally now: no gate decides
+    // whether such a line is written.
     mocks.installCliProcessRuntime.mockImplementation(async () => {
       createLog('UsageLogService').debug('UsageLogService started');
       return testRuntime();
