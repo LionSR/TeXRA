@@ -72,6 +72,7 @@ import {
   toolUseFlowState,
   type ToolUseFlowState,
 } from './rows';
+import { alreadyOpenedMessage, recordServedUsage } from './loopScaffold';
 import { recordHalt, runStopError } from './runExit';
 import { dispatchPendingResponse, type TurnContext } from './toolUseDispatch';
 import type { HttpClient } from 'effect/unstable/http';
@@ -666,15 +667,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         }
         lastError = undefined;
         totalResponseTimeMs += outcome.responseTimeMs;
-        // Priced against the binding that served the round: a manual retry
-        // may have rebound the model inside the invoker.
-        const served = yield* SynchronizedRef.get(run.model);
-        yield* Effect.sync(() =>
-          run.usageMonitor.recordUsage(
-            usageSnapshot(state, outcome.usage),
-            served,
-          ),
-        );
+        yield* recordServedUsage(run, usageSnapshot(state, outcome.usage));
         if (outcome.text) response = outcome.text;
         if (state.pendingResponse !== null) continue;
         // A text-only response: the same policy the resume path replays.
@@ -714,11 +707,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     } else {
       if (!start.resume && loaded.phase !== null) {
         // A fresh launch onto a non-empty aggregate is refused (#11313).
-        return yield* Effect.fail(
-          new Error(
-            `Run ${runId} already has ledger state; resume it instead.`,
-          ),
-        );
+        return yield* Effect.fail(new Error(alreadyOpenedMessage(runId)));
       }
       restore(loaded);
       state = yield* commit(loaded);
