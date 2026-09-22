@@ -363,8 +363,14 @@ const executeInBand = Effect.fn('executeInBand')(
     options.signal?.throwIfAborted();
     return completed;
   },
-  Effect.uninterruptible,
-  Effect.catchCause((cause) => Effect.fail(ensureError(Cause.squash(cause)))),
+  // Interruptible: the registration is one durable commit and the detached
+  // loop owns the child from its first tick, so an interruption lands in the
+  // join or the read-back and leaves the same rows a crash would.
+  Effect.catchCause((cause) =>
+    Cause.hasInterruptsOnly(cause)
+      ? Effect.failCause(cause)
+      : Effect.fail(ensureError(Cause.squash(cause))),
+  ),
 );
 
 /**
@@ -402,8 +408,11 @@ export const executeSubagentInBand = Effect.fn('executeSubagentInBand')(
     );
     return { runId: completed.runId, result: completed.result };
   },
-  Effect.uninterruptible,
-  Effect.catchCause((cause) => Effect.fail(ensureError(Cause.squash(cause)))),
+  Effect.catchCause((cause) =>
+    Cause.hasInterruptsOnly(cause)
+      ? Effect.failCause(cause)
+      : Effect.fail(ensureError(Cause.squash(cause))),
+  ),
 );
 
 /** Run one child and return its XML delivery alongside the typed result. */
