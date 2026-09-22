@@ -47,7 +47,7 @@ import { type InputPart, mediaInputParts } from './run/mediaInput';
 import {
   appendRow,
   rowAggregate,
-  runtimeSnapshotRow,
+  snapshotRow,
   stepRow,
   type Message,
 } from './loop/rows';
@@ -192,7 +192,7 @@ export const followUpsLayer: Layer.Layer<
             // The input that recovers a failed run clears the error fact in
             // the same transaction, so a resume taken between this batch and
             // the next turn's snapshot does not read the run as still failed.
-            runtimeSnapshotRow(runId, state, { lastError: null }),
+            snapshotRow(runId, state, { runtime: { lastError: null } }),
             stepRow(runId, state, 'turn.ready'),
           ]),
         ),

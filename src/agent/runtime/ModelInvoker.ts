@@ -94,7 +94,7 @@ import {
   redactedForFact,
   retryRow,
   rowAggregate,
-  runtimeSnapshotRow,
+  snapshotRow,
   stepRow,
 } from './loop/rows';
 import type { HttpClient } from 'effect/unstable/http';
@@ -291,7 +291,7 @@ export const modelInvokerLayer = (): Layer.Layer<
         runtime: Partial<Pick<SnapshotRuntime, 'lastError' | 'declinedRoutes'>>,
       ): readonly RunLedgerDraft[] => [
         retryRow(runId, permit),
-        runtimeSnapshotRow(runId, state, runtime),
+        snapshotRow(runId, state, { runtime }),
       ];
 
       /** Recheck the binding's background policy against live session settings. */

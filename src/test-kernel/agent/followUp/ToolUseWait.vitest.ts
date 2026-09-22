@@ -20,7 +20,6 @@ import { turnText } from '@agent/runtime/run/turnText';
 import {
   appendRow,
   rowAggregate,
-  runtimeSnapshotRow,
   snapshotRow,
   stepRow,
 } from '@agent/runtime/loop/rows';
@@ -155,9 +154,11 @@ function invokerLayer(script: readonly ScriptedTurn[], seen: InvokeRequest[]) {
               // The runtime snapshot the invoker writes on a failed attempt:
               // the error a resumed run reads back off the fold.
               const failed = yield* ledger.appendBatch(run.runId, state, [
-                runtimeSnapshotRow(run.runId, state, {
-                  lastError: scripted.failWith,
-                  declinedRoutes: [],
+                snapshotRow(run.runId, state, {
+                  runtime: {
+                    lastError: scripted.failWith,
+                    declinedRoutes: [],
+                  },
                 }),
               ]);
               return {
@@ -449,7 +450,10 @@ const seedCommittedResponse = Effect.fn('test.seedCommittedResponse')(
       snapshotRow(runId, fresh, {
         phase: 'model.ready',
         turn: 1,
-        state: { shouldSkipCycle: false, stateSlices: null },
+        state: {
+          family: 'toolUse',
+          state: { shouldSkipCycle: false, stateSlices: null },
+        },
       }),
     ]);
     const invocation = { invocationId: randomUUID(), attempt: 1 };

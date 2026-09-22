@@ -73,11 +73,11 @@ import {
   appendRow,
   bindingRow,
   displayRow,
+  familyState,
   redactedForFact,
   rowAggregate,
   snapshotRow,
   stepRow,
-  toolUseFlowState,
   type Message,
 } from './rows';
 import type { InvokeError } from '../ModelInvoker';
@@ -303,7 +303,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
    * call the resume will not run again whose effects on the run are gone.
    */
   const workspaceMutation = (state: RunState): readonly StateOperation[] => {
-    const flow = toolUseFlowState(state);
+    const flow = familyState(state, 'toolUse');
     if (flow === null || flow.stateSlices === null) return [];
     return [
       {
@@ -964,26 +964,24 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     );
   }
   const group: Message = { role: 'tool', results };
-  const flow = toolUseFlowState(settledState);
+  const flow = familyState(settledState, 'toolUse');
   if (flow === null) {
     return yield* Effect.die(new Error('Delivery needs an opened run.'));
   }
+  const stateSlices =
+    flow.stateSlices === null
+      ? null
+      : {
+          ...flow.stateSlices,
+          workspaceSnapshot: turn.workspace.toSnapshot({
+            excludeAssemblyStrings: true,
+          }),
+        };
   const delivered = yield* ledger.appendBatch(runId, settledState, [
     appendRow(runId, [group], responseId),
     snapshotRow(runId, settledState, {
       phase: 'results.ready',
-      state: {
-        ...flow,
-        stateSlices:
-          flow.stateSlices === null
-            ? null
-            : {
-                ...flow.stateSlices,
-                workspaceSnapshot: turn.workspace.toSnapshot({
-                  excludeAssemblyStrings: true,
-                }),
-              },
-      },
+      state: { family: 'toolUse', state: { ...flow, stateSlices } },
     }),
     stepRow(runId, settledState, 'results.ready'),
   ]);

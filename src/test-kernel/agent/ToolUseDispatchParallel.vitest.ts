@@ -51,9 +51,9 @@ import type {
 import { dispatchPendingResponse } from '@agent/runtime/loop/toolUseDispatch';
 import {
   appendRow,
+  familyState,
   rowAggregate,
   snapshotRow,
-  toolUseFlowState,
   type ToolUseFlowState,
 } from '@agent/runtime/loop/rows';
 import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
@@ -342,8 +342,11 @@ const openDispatch = Effect.fn('openDispatch')(function* (
     snapshotRow(runId, freshState(), {
       phase: 'initial',
       state: {
-        shouldSkipCycle: false,
-        stateSlices: options.stateSlices ?? null,
+        family: 'toolUse',
+        state: {
+          shouldSkipCycle: false,
+          stateSlices: options.stateSlices ?? null,
+        },
       },
     }),
   ]);
@@ -765,7 +768,7 @@ describe('tool-use dispatch', () => {
       ]);
       // No delivery ran, so this workspace can only have come from the
       // settlement's own state operation.
-      const slices = toolUseFlowState(folded!)?.stateSlices;
+      const slices = familyState(folded!, 'toolUse')?.stateSlices;
       expect(slices?.workspaceSnapshot.interactions.edits).toEqual([
         { path: 'notes.tex', added: 3, removed: 1 },
       ]);

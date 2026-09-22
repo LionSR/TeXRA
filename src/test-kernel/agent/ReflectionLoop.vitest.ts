@@ -24,9 +24,9 @@ import {
 } from '@agent/core/definition/AgentDataclass';
 import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
 import {
-  reflectionFlowState,
+  familyState,
   rowAggregate,
-  runtimeSnapshotRow,
+  snapshotRow,
   stepRow,
 } from '@agent/runtime/loop/rows';
 import { runReflection } from '@agent/runtime/loop/reflection';
@@ -51,6 +51,7 @@ import {
   type RunId,
 } from '@shared/schemas';
 import { RunLedger } from '@shared/session/runLedger';
+import { Runs } from '@agent/runtime/runRegistry';
 import type { RunState } from '@shared/session/runStateFold';
 import { StreamLog } from '@shared/session/traceEntries';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
@@ -356,9 +357,11 @@ function invokerLayer(init: LoopInit, requests: InvokeRequest[]) {
             if (init.beforeResponse) yield* init.beforeResponse(request.round);
             if ('failWith' in turnScript) {
               const failed = yield* ledger.appendBatch(run.runId, state, [
-                runtimeSnapshotRow(run.runId, state, {
-                  lastError: turnScript.failWith,
-                  declinedRoutes: [],
+                snapshotRow(run.runId, state, {
+                  runtime: {
+                    lastError: turnScript.failWith,
+                    declinedRoutes: [],
+                  },
                 }),
               ]);
               return {
@@ -473,6 +476,7 @@ function loopProgram(init: LoopInit, requests: InvokeRequest[]) {
       invokerLayer(init, requests).pipe(
         Layer.provideMerge(agentRunTestLayer(init)),
         Layer.provideMerge(Layer.succeed(RunLedger)(init.session.ledger)),
+        Layer.provideMerge(Layer.succeed(Runs)(init.session.runs)),
         Layer.provideMerge(rootedFsLayer(init.session.roots)),
         Layer.provideMerge(
           LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT),
@@ -578,7 +582,7 @@ function userTexts(state: RunState): string[] {
 
 /** The persisted reflection state of a folded run. */
 function flowOf(state: RunState) {
-  const flow = reflectionFlowState(state);
+  const flow = familyState(state, 'reflection');
   if (flow === null) throw new Error('The run persisted no reflection state.');
   return flow;
 }

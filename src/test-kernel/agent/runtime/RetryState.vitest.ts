@@ -369,7 +369,10 @@ const openRun = Effect.fn('openRun')(function* (
     ]),
     snapshotRow(runId, freshState(), {
       phase: 'initial',
-      state: { shouldSkipCycle: false, stateSlices: null },
+      state: {
+        family: 'toolUse',
+        state: { shouldSkipCycle: false, stateSlices: null },
+      },
     }),
   ]);
   const bound = yield* SynchronizedRef.make(boundModel(model, overrides));

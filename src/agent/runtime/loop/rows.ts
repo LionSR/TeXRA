@@ -13,6 +13,7 @@ import {
   type FlowSnapshotPayload,
   type PendingRetry,
   type PermissionPayload,
+  type RunFamily,
   type RunId,
   type RunLoopPhase,
   type RunOutcome,
@@ -25,11 +26,6 @@ import type { z } from 'zod';
 
 export type Message = z.infer<typeof MessageSchema>;
 
-/** Why a run the ledger holds no rows for cannot be continued. Both run
- *  programs refuse a resume with it. */
-export const NOT_RESUMABLE_MESSAGE =
-  'This run was recorded before the run ledger and is not resumable under this release, and a request it left pending (an approval, a retry, a question) is not resumable either. Start a new run instead.';
-
 type ToolUseSnapshot = Extract<FlowSnapshotPayload, { family: 'toolUse' }>;
 type ReflectionSnapshot = Extract<
   FlowSnapshotPayload,
@@ -39,20 +35,24 @@ export type ToolUseFlowState = ToolUseSnapshot['state'];
 export type ReflectionFlowState = ReflectionSnapshot['state'];
 
 /** The family state a snapshot carries, keyed by its family. */
-type FamilyState =
+export type FamilyState =
   | { readonly family: 'toolUse'; readonly state: ToolUseFlowState }
   | { readonly family: 'reflection'; readonly state: ReflectionFlowState };
 
-/** The tool-use family state of a folded run, or null before its opening. */
-export function toolUseFlowState(state: RunState): ToolUseFlowState | null {
-  return state.flow?.family === 'toolUse' ? state.flow.state : null;
-}
-
-/** The reflection family state of a folded run, or null before its opening. */
-export function reflectionFlowState(
+/** The family state of a folded run, or null before its opening. */
+export function familyState(
   state: RunState,
-): ReflectionFlowState | null {
-  return state.flow?.family === 'reflection' ? state.flow.state : null;
+  family: 'toolUse',
+): ToolUseFlowState | null;
+export function familyState(
+  state: RunState,
+  family: 'reflection',
+): ReflectionFlowState | null;
+export function familyState(
+  state: RunState,
+  family: RunFamily,
+): ToolUseFlowState | ReflectionFlowState | null {
+  return state.flow?.family === family ? state.flow.state : null;
 }
 
 export function rowAggregate(runId: RunId) {
@@ -124,8 +124,9 @@ export function appendRow(
   };
 }
 
-interface SnapshotCoordinates {
-  readonly phase: RunLoopPhase;
+export interface SnapshotPatch {
+  /** Defaults to the folded phase: the runtime-only case. */
+  readonly phase?: RunLoopPhase;
   readonly round?: number;
   readonly turn?: number;
   readonly continuationIndex?: number;
@@ -135,35 +136,42 @@ interface SnapshotCoordinates {
       'modelId' | 'modelCompatibilityKey' | 'lastError' | 'declinedRoutes'
     >
   >;
+  /** Defaults to the family state the run last wrote. */
+  readonly state?: FamilyState;
 }
 
-interface SnapshotPatch extends SnapshotCoordinates {
-  readonly state: ToolUseFlowState;
-}
-
-export interface ReflectionSnapshotPatch extends SnapshotCoordinates {
-  readonly state: ReflectionFlowState;
-}
-
-function buildSnapshot(
+/**
+ * The one `flow.snapshot` constructor, for either family. Coordinates and
+ * runtime fields come from the folded state unless the patch moves them; the
+ * family state is the one the run last wrote unless the patch rewrites it.
+ */
+export function snapshotRow(
   runId: RunId,
   state: RunState,
-  patch: SnapshotCoordinates,
-  flow: FamilyState,
+  patch: SnapshotPatch,
 ): RunLedgerDraft {
+  if (
+    state.family !== null &&
+    patch.state !== undefined &&
+    state.family !== patch.state.family
+  ) {
+    throw new Error("A snapshot's family is the run's.");
+  }
+  const flow = patch.state ?? state.flow;
+  const phase = patch.phase ?? state.phase;
+  if (flow === null || phase === null) {
+    throw new Error('A flow.snapshot presupposes an opened run.');
+  }
   // A snapshot's model id is a required durable fact (resume and every
   // listing read it back); no caller may reach here without one, so refuse
   // at the constructor rather than let `appendBatch` reject the batch on a
   // schema refinement far from whatever lost the binding.
-  const modelId =
-    patch.runtime?.modelId ??
-    state.modelId ??
-    (flow.family === 'toolUse' ? flow.state.modelId : undefined);
+  const modelId = patch.runtime?.modelId ?? state.modelId;
   if (modelId === undefined || modelId === null || modelId === '') {
     throw new Error('A flow.snapshot presupposes a bound model id.');
   }
   const runtime: SnapshotRuntime = {
-    phase: patch.phase,
+    phase,
     round: patch.round ?? state.round,
     turn: patch.turn ?? state.turn,
     continuationIndex: patch.continuationIndex ?? state.continuationIndex,
@@ -183,54 +191,6 @@ function buildSnapshot(
     aggregateId: rowAggregate(runId),
     payload: { ...flow, runtime },
   };
-}
-
-/**
- * A `flow.snapshot` for the tool-use family. Coordinates and runtime fields
- * come from the folded state unless the patch moves them.
- */
-export function snapshotRow(
-  runId: RunId,
-  state: RunState,
-  patch: SnapshotPatch,
-): RunLedgerDraft {
-  return buildSnapshot(runId, state, patch, {
-    family: 'toolUse',
-    state: patch.state,
-  });
-}
-
-/** A `flow.snapshot` for the reflection family. */
-export function reflectionSnapshotRow(
-  runId: RunId,
-  state: RunState,
-  patch: ReflectionSnapshotPatch,
-): RunLedgerDraft {
-  return buildSnapshot(runId, state, patch, {
-    family: 'reflection',
-    state: patch.state,
-  });
-}
-
-/**
- * A snapshot that moves only runtime fields (the last error, the model
- * binding, the declined routes) on the family state the run last wrote, for
- * either family: what the invoker commits inside its admission protocol.
- */
-export function runtimeSnapshotRow(
-  runId: RunId,
-  state: RunState,
-  runtime: NonNullable<SnapshotCoordinates['runtime']>,
-): RunLedgerDraft {
-  if (state.flow === null || state.phase === null) {
-    throw new Error('A runtime snapshot presupposes an opened run.');
-  }
-  return buildSnapshot(
-    runId,
-    state,
-    { phase: state.phase, runtime },
-    state.flow,
-  );
 }
 
 /**
