@@ -9,6 +9,7 @@ catalog:
   '@cantoo/pdf-lib': '^2.9.2'
   '@date-fns/tz': '^1.5.0'
   '@effect/platform-node': '4.0.0-rc.116'
+  '@effect/platform-node-shared': '4.0.0-rc.116'
   '@effect/sql-sqlite-node': '4.0.0-rc.116'
   '@google/genai': '^2.23.0'
   '@jamesgopsill/crossref-client': '^1.1.0'
@@ -95,9 +96,11 @@ patchedDependencies:
 # reviewed bumps land immediately.
 minimumReleaseAge: 0
 
-# `@effect/platform-node` depends on `@effect/platform-node-shared` through a
-# caret (`^4.0.0-rc.116`), so a newer RC published upstream floats in and peer-
-# requires the matching `effect` RC — two RC lines in one process, which the
-# SDK's single-`effect`-copy rule forbids. Pin it to the catalog's RC.
+# `@effect/platform-node` reaches `@effect/platform-node-shared` through a caret,
+# so once a newer RC is published upstream it floats in and peer-requires that
+# newer `effect` — two RC lines in one process, which the SDK's
+# single-`effect`-copy rule forbids. Hold it to the catalog's RC. It reads
+# `catalog:` rather than a literal so the one catalog entry moves the whole
+# effect line at once and this pin cannot drift behind it.
 overrides:
-  '@effect/platform-node-shared': '4.0.0-rc.116'
+  '@effect/platform-node-shared': 'catalog:'

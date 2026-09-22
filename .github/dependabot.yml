@@ -24,10 +24,26 @@ updates:
           - '>= 4.5.0, < 4.6.0'
     # Aggregate routine updates into as few PRs as possible: one grouped PR for
     # all production minor/patch bumps, one for all dev minor/patch bumps. Major
-    # bumps stay individual (reviewed one at a time). Replaces the old narrow
-    # eslint/prettier-only group, which the development-dependencies group now
-    # subsumes.
+    # bumps stay individual (reviewed one at a time), except for the effect
+    # group below. Replaces the old narrow eslint/prettier-only group, which the
+    # development-dependencies group now subsumes.
+    #
+    # A dependency joins the first group it matches, so effect comes first.
     groups:
+      # The effect packages only resolve as one commit: the pnpm catalog pins
+      # them to a single RC, the SDK peer-pins `effect` exactly, and mixing two
+      # RC lines in one process breaks Streams, Fibers and Context. Split PRs
+      # are individually unmergeable, which is how rc.116 arrived as three.
+      #
+      # Deliberately unrestricted: no `dependency-type` (the RC line spans
+      # production `effect` and dev `@effect/vitest`) and no `update-types` (an
+      # rc.N -> rc.N+1 bump leaves the 4.0.0 version core untouched, so it
+      # counts as neither minor nor patch and would otherwise escape grouping
+      # entirely).
+      effect:
+        patterns:
+          - 'effect'
+          - '@effect/*'
       production-dependencies:
         dependency-type: 'production'
         update-types:
