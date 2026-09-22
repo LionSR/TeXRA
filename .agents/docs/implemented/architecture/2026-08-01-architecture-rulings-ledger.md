@@ -531,7 +531,13 @@ a fallback.
   `texra.logger.debugMode` key and default, now over a `ConfigProvider` the
   composition root installs (`setDebugModeConfig`), read per entry as before;
   a process whose root has not installed one logs as if debug mode were off,
-  which is exactly what the absent-roots branch did.
+  which is exactly what the absent-roots branch did. **(Superseded
+  2026-09-21 by the synchronous-facades design: the producer-side gate that
+  read the setting is deleted, so `setDebugModeConfig` and the module slot
+  went with it and no ambient carrier was substituted — the setting is read
+  at transcript-fold time from the roots the view's owner already holds, and
+  each host's log surface owns its own level. This satisfies the entry's
+  Forbids clause by leaving nothing to carry.)**
 - `processSettingsStores` is deleted. The CLI answers catalog rows from the
   roots its own init built, and a process whose platform another root
   installed without publishing roots is a composition defect that fails loudly

@@ -41,6 +41,13 @@ All notable changes to this project will be documented in this file.
 - **TeXRA no longer uses Pandoc** — the reasoning scratchpad is rendered by
   TeXRA's own Markdown conversion on every machine, so installing Pandoc no
   longer changes how it looks and TeXRA never asks for it.
+- **The Debug mode setting no longer widens the log output** —
+  `texra.logger.debugMode` now governs transcript verbosity and payload
+  detail only. What the log surface shows is owned by the surface: the VS
+  Code Output channel's own level filter, and the desktop log file, which
+  keeps debug entries. The CLI, the one surface with no level filter, gains
+  a `--verbose` flag for debug-level diagnostics (`--quiet` already silences
+  them).
 
 ### Bug Fixes
 
