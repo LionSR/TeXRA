@@ -301,64 +301,72 @@ describe('native agent launch activation', () => {
   // which the Effect driver never resumes after a failed `yield*` — the
   // run-failure path left executeAgent with the write still in flight and
   // auto-supervision interrupted the fiber before it could commit.
-  it.effect('joins the session description fiber on the run-failure path', () =>
-    Effect.gen(function* () {
-      const gate = yield* Deferred.make<string>();
-      const descriptionStarted = yield* Deferred.make<void>();
-      mocks.helperModel.mockImplementationOnce(() =>
-        Effect.succeed({} as BoundModel),
-      );
-      mocks.helperCompletion.mockImplementationOnce(() =>
-        Deferred.succeed(descriptionStarted, undefined).pipe(
-          Effect.andThen(Deferred.await(gate)),
-        ),
-      );
-      // Fail the run only once the description fiber is parked on its gate,
-      // so both sides settle deterministically.
-      mocks.runFlowWithLifecycle.mockImplementationOnce(() =>
-        Deferred.await(descriptionStarted).pipe(
-          Effect.andThen(Effect.fail(RUN_FAILURE)),
-        ),
-      );
-      mocks.resolve.mockReturnValueOnce({ path: '/agents/chat.yaml' });
-      mocks.load.mockReturnValueOnce(
-        Effect.succeed([{ agentCategory: AgentCategory.ToolUse }, {}]),
-      );
-      mocks.createTrace.mockReturnValueOnce({
-        trace: new TraceEmitter(),
-        dispose: vi.fn(),
-      });
-      mocks.buildVars.mockReturnValueOnce(Effect.succeed({}));
-
-      const session = createTestSession();
-      yield* Effect.addFinalizer(() => session.dispose());
-      const described = AgentConfigSchema.parse({
-        agent: 'chat',
-        model: 'gpt55',
-        agentCategory: AgentCategory.ToolUse,
-        instruction: 'Fix grammar.',
-      });
-      yield* registerRun(session, DESCRIPTION_RUN_ID, described, 'chat', {
-        identity: { kind: 'agent', agent: 'chat' },
-      });
-      const failure = yield* Effect.forkChild(
-        Effect.flip(
-          prepareAgentDefinition({ config: described, session }).pipe(
-            Effect.flatMap((definition) =>
-              executeAgent(definition, DESCRIPTION_RUN_ID, { session }),
-            ),
-            Effect.provide(fakeProcessServices()),
+  it.effect(
+    'joins the session description fiber on the run-failure path',
+    () =>
+      Effect.gen(function* () {
+        const gate = yield* Deferred.make<string>();
+        const descriptionStarted = yield* Deferred.make<void>();
+        mocks.helperModel.mockImplementationOnce(() =>
+          Effect.succeed({} as BoundModel),
+        );
+        mocks.helperCompletion.mockImplementationOnce(() =>
+          Deferred.succeed(descriptionStarted, undefined).pipe(
+            Effect.andThen(Deferred.await(gate)),
           ),
-        ),
-      );
+        );
+        // Fail the run only once the description fiber is parked on its gate,
+        // so both sides settle deterministically.
+        mocks.runFlowWithLifecycle.mockImplementationOnce(() =>
+          Deferred.await(descriptionStarted).pipe(
+            Effect.andThen(Effect.fail(RUN_FAILURE)),
+          ),
+        );
+        mocks.resolve.mockReturnValueOnce({ path: '/agents/chat.yaml' });
+        mocks.load.mockReturnValueOnce(
+          Effect.succeed([{ agentCategory: AgentCategory.ToolUse }, {}]),
+        );
+        mocks.createTrace.mockReturnValueOnce({
+          trace: new TraceEmitter(),
+          dispose: vi.fn(),
+        });
+        mocks.buildVars.mockReturnValueOnce(Effect.succeed({}));
 
-      yield* Deferred.await(descriptionStarted);
-      yield* Deferred.succeed(gate, 'Fixing grammar in the introduction');
-      expect(yield* Fiber.join(failure)).toBe(RUN_FAILURE);
-      const view = yield* session.readView([DESCRIPTION_RUN_ID]);
-      expect(view.runs.get(DESCRIPTION_RUN_ID)?.description).toBe(
-        'Fixing grammar in the introduction',
-      );
-    }),
+        const session = createTestSession();
+        yield* Effect.addFinalizer(() => session.dispose());
+        const described = AgentConfigSchema.parse({
+          agent: 'chat',
+          model: 'gpt55',
+          agentCategory: AgentCategory.ToolUse,
+          instruction: 'Fix grammar.',
+        });
+        yield* registerRun(session, DESCRIPTION_RUN_ID, described, 'chat', {
+          identity: { kind: 'agent', agent: 'chat' },
+        });
+        const failure = yield* Effect.forkChild(
+          Effect.flip(
+            prepareAgentDefinition({ config: described, session }).pipe(
+              Effect.flatMap((definition) =>
+                executeAgent(definition, DESCRIPTION_RUN_ID, { session }),
+              ),
+              Effect.provide(fakeProcessServices()),
+            ),
+          ),
+        );
+
+        yield* Deferred.await(descriptionStarted);
+        yield* Deferred.succeed(gate, 'Fixing grammar in the introduction');
+        expect(yield* Fiber.join(failure)).toBe(RUN_FAILURE);
+        const view = yield* session.readView([DESCRIPTION_RUN_ID]);
+        expect(view.runs.get(DESCRIPTION_RUN_ID)?.description).toBe(
+          'Fixing grammar in the introduction',
+        );
+      }),
+    // This case parks on a Deferred that a *forked* fiber completes, so it is
+    // the first casualty of a contended machine: under heavy parallel load the
+    // fork's own scheduling has exceeded the suite's 10s kernel timeout while
+    // the assertions below were still sound. Give this one case room; the
+    // assertion is unchanged, so a genuinely broken join still fails here.
+    { timeout: 30_000 },
   );
 });
