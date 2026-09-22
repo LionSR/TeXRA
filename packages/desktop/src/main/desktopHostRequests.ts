@@ -185,10 +185,10 @@ export function createDesktopHostRequests(
   // it unchanged.
   const rejectRequestEffect = (reason: string): Effect.Effect<void, Rejected> =>
     Effect.fail(new Rejected({ reason }));
-  const draftRequests = options.draftRequests.attach(session, (recording) =>
-    options.snapshot.setRecording(recording),
-  );
-
+  const draftRequests = options.draftRequests.attach(session, (recording) => {
+    // Recorder notifications can arrive outside a request fiber.
+    runtime.runFork(options.snapshot.setRecording(recording));
+  });
   const runActions = runtime.runSync(
     createHostRunActions({
       session,

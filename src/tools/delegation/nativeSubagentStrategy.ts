@@ -148,7 +148,6 @@ export function createNativeSubagentStrategy(
   const config = params.definition
     ? params.definition.config
     : params.resume.identity.agentConfig;
-  let runHandle: AgentRunHandle | undefined;
   // Captured for the turn currently in flight; read once the call resolves.
   // `executeAgent` never rejects for a
   // subagent's own application-level failure (runFlowWithLifecycle returns a
@@ -161,10 +160,6 @@ export function createNativeSubagentStrategy(
   // already-built result manifest is still available for persistence.
   let cachedBuilt: SubagentResultMeta | undefined;
   let cachedDelivery: string | undefined;
-
-  const resolveDeliveryTarget = (): RunId | undefined => {
-    return runHandle ? runHandle.deliveryTarget : params.parentRunId;
-  };
 
   const runNative = Effect.fn('nativeSubagent.runTurn')(function* (
     ports: ChildRunPorts,
@@ -181,7 +176,6 @@ export function createNativeSubagentStrategy(
     return yield* call((handle) =>
       Effect.sync(() => {
         detachAbort();
-        runHandle = handle;
         detachAbort = bindAbortSignals([params.signal, signal], handle);
       }),
     ).pipe(
@@ -293,8 +287,6 @@ export function createNativeSubagentStrategy(
       params.runMode !== 'single-cycle' &&
       turn.outcome === RUN_OUTCOME.CANCELLED,
     isTurnError: () => lastErr !== undefined,
-
-    resolveDeliveryTarget,
 
     formatDelivery: Effect.fn('nativeSubagent.formatDelivery')(function* (
       turn: AgentFlowResult,

@@ -49,7 +49,9 @@ export const AUTH_URI_HANDLER_NOT_INITIALIZED =
 interface AuthNotifier {
   showError(message: string): void;
   showInfo(message: string): void;
-  showSignInPrompt(reason: 'expired' | 'invalid'): Promise<void>;
+  showSignInPrompt(
+    reason: 'expired' | 'invalid',
+  ): Effect.Effect<void, AuthPortError>;
 }
 
 /**
@@ -291,9 +293,8 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
       // global signOut here: an OAuth callback may have installed a replacement
       // while validation was in flight, and signOut would target that newer
       // client state. The conditional local clear below is generation-safe.
-      const cleared = yield* this.clearLocalSessionIfCurrent(session);
-      if (cleared) {
-        yield* callPort(() => this.notifier.showSignInPrompt(reason));
+      if (yield* this.clearLocalSessionIfCurrent(session)) {
+        yield* this.notifier.showSignInPrompt(reason);
       }
     });
   }

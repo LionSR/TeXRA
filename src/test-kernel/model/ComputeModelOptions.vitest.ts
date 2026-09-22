@@ -342,7 +342,7 @@ describe('model availability', () => {
         // the rows are built, so a credential change mid-render cannot split
         // one computation across two views of the host.
         //
-        // `gpt56` is preferred through Copilot with no route discovered, which
+        // `gpt56-` is preferred through Copilot with no route discovered, which
         // is the case whose sentence used to be worded at finish time out of
         // the live preference and catalogue: it is the arm that can leak a host
         // read past this boundary, so it is the one the counting store watches.
@@ -350,7 +350,7 @@ describe('model availability', () => {
         const secretReads = vi.spyOn(secrets, 'get');
         const globalState = new CountingStateStore({
           [GlobalStateKey.MODEL_SELECTION]: onlyEnabled(['gpt55']),
-          [GlobalStateKey.COPILOT_ROUTE_MODELS]: ['gpt56'],
+          [GlobalStateKey.COPILOT_ROUTE_MODELS]: ['gpt56-'],
         });
         yield* Effect.promise(() =>
           installPlatform({}, { secrets, globalState }),
@@ -359,14 +359,14 @@ describe('model availability', () => {
 
         const inputs = yield* availabilityInputs(hostStores(), [
           'gpt55',
-          'gpt56',
+          'gpt56-',
         ]);
         const readsAfterInputs = secretReads.mock.calls.length;
         const preferenceReadsAfterInputs = globalState.copilotPreferenceReads;
 
         const rows = modelOptionsFrom(inputs);
         const available = modelUnavailableReasonFrom(inputs, 'gpt55');
-        const copilot = modelUnavailableReasonFrom(inputs, 'gpt56');
+        const copilot = modelUnavailableReasonFrom(inputs, 'gpt56-');
 
         expect(rows.map((row) => row.availability)).toEqual([
           'provider-key',
@@ -374,7 +374,7 @@ describe('model availability', () => {
         ]);
         expect(available).toBeNull();
         expect(copilot).toBe(
-          'VS Code does not currently offer "gpt56" through Copilot.',
+          'VS Code does not currently offer "gpt56-" through Copilot.',
         );
         expect(secretReads.mock.calls).toHaveLength(readsAfterInputs);
         expect(globalState.copilotPreferenceReads).toBe(

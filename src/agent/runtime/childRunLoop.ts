@@ -9,7 +9,11 @@ import { createChannelTrace } from '@agent/trace';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { finalizeRunTerminal } from '@agent/runtime/AgentRunLifecycle';
 import { childRunBudgetFor } from '@agent/runtime/childRunBudget';
-import type { RunHandle, RunInterruptHandler } from '@agent/runtime/RunHandle';
+import type {
+  RunHandle,
+  RunInterruptHandler,
+  RunParent,
+} from '@agent/runtime/RunHandle';
 import { Runs } from '@agent/runtime/runRegistry';
 import { RunInput, type QueuedFollowUp } from '@agent/followUp/RunInput';
 import type {
@@ -251,14 +255,6 @@ export interface ChildRunStrategy<TTurn, R = never> {
      */
     error?: unknown,
   ): Effect.Effect<ResultMeta | undefined, Error, R>;
-
-  /**
-   * Where a turn's delivery should be sent. Native strategies track their
-   * per-turn handle directly. Child-stream loops omit this and the driver reads
-   * their persistent handle's live `deliveryTarget`, which goes `undefined`
-   * once the child is detached from its orchestrator.
-   */
-  resolveDeliveryTarget?(): RunId | undefined;
 
   /**
    * Release provider-owned registry entries. The loop calls this exactly once,
@@ -535,21 +531,6 @@ function commitPark(
 }
 
 /**
- * Where this turn's output goes. Native strategies resolve their per-turn
- * handle; child-stream loops receive their persistent handle's live target.
- * Either may return `undefined` after detachment, which must skip delivery
- * entirely rather than silently falling back to the old parent.
- */
-function resolveDeliveryTarget<TTurn, R>(
-  strategy: ChildRunStrategy<TTurn, R>,
-  resolveChildRunTarget: () => RunId | undefined,
-): RunId | undefined {
-  return strategy.resolveDeliveryTarget
-    ? strategy.resolveDeliveryTarget()
-    : resolveChildRunTarget();
-}
-
-/**
  * A turn's parent-follow-up enqueue, still pending its wake step. Waking can
  * await the resumed parent's entire turn (`agentResume.tryResumeRun` → …
  * → `resumeToolUseFromResumeData`), so callers that are about to finalize this
@@ -559,7 +540,7 @@ function resolveDeliveryTarget<TTurn, R>(
  * another turn (no finalize pending) may wake immediately.
  */
 interface PendingChildDelivery {
-  readonly resolveTargetRunId: () => RunId | undefined;
+  readonly parent: RunParent;
   readonly followUp: FollowUpQueueInput;
   /**
    * The parent follow-up row is already durable. A recovery lease means this
@@ -609,7 +590,7 @@ const deliverTurn = Effect.fn('childRunLoop.deliverTurn')(function* <
   isError: boolean;
   finalizing: boolean;
   prepareParentDelivery?: () => boolean;
-  resolveDefaultDeliveryTarget: () => RunId | undefined;
+  parent: RunParent;
   onTurnSettled?: ChildRunLoopParams<TTurn>['onTurnSettled'];
 }): Effect.fn.Return<PendingChildDelivery | undefined, Error, R> {
   const {
@@ -622,7 +603,7 @@ const deliverTurn = Effect.fn('childRunLoop.deliverTurn')(function* <
     wallTimeMs,
     isError,
     prepareParentDelivery,
-    resolveDefaultDeliveryTarget,
+    parent,
   } = params;
   const delivered = turn != null && !isError;
   const msg = delivered
@@ -646,8 +627,6 @@ const deliverTurn = Effect.fn('childRunLoop.deliverTurn')(function* <
   const persisted = yield* Effect.exit(
     persistChildRunDelivery(params.session, runId, msg, resultMeta),
   );
-  const resolveTargetRunId = (): RunId | undefined =>
-    resolveDeliveryTarget(strategy, resolveDefaultDeliveryTarget);
   const followUp: FollowUpQueueInput = {
     text: msg,
     origin: 'subagent_result',
@@ -655,7 +634,7 @@ const deliverTurn = Effect.fn('childRunLoop.deliverTurn')(function* <
   };
   let pending: PendingChildDelivery | undefined;
   if (Exit.isSuccess(persisted) && strategy.deliveryMode !== 'persistOnly') {
-    const targetRunId = resolveTargetRunId();
+    const targetRunId = parent.current ?? undefined;
     if (!targetRunId) {
       warnDetachedChildDelivery(logger, runId);
     } else if (prepareParentDelivery?.() !== false) {
@@ -687,7 +666,7 @@ const deliverTurn = Effect.fn('childRunLoop.deliverTurn')(function* <
         );
       } else {
         pending = {
-          resolveTargetRunId,
+          parent,
           followUp,
           ...(submitted.kind === 'queued' && submitted.lease
             ? { recovery: submitted.lease }
@@ -735,7 +714,7 @@ const submitPendingDelivery = Effect.fn('submitPendingDelivery')(function* (
   logger: AgentTrace,
 ): Effect.fn.Return<void, Error, AgentResume> {
   if (!pending) return;
-  const targetRunId = pending.resolveTargetRunId();
+  const targetRunId = pending.parent.current ?? undefined;
   if (!targetRunId) {
     warnDetachedChildDelivery(logger, runId);
     return;
@@ -993,10 +972,7 @@ export function startChildRunLoop<TTurn, R = never>(
         }
         if (strategy.deliveryMode === 'persistOnly' || parent.current === null)
           return;
-        const targetRunId = resolveDeliveryTarget(
-          strategy,
-          () => parent.current ?? undefined,
-        );
+        const targetRunId = parent.current ?? undefined;
         if (!targetRunId) return;
         // The target and the admission are decided where the progress is
         // reported; the queued effect writes the row, and nothing is queued
@@ -1149,8 +1125,7 @@ export function startChildRunLoop<TTurn, R = never>(
                   session: runSession,
                   strategy,
                   runId,
-                  resolveDefaultDeliveryTarget: () =>
-                    parent.current ?? undefined,
+                  parent,
                   logger,
                   turn,
                   turnKey,

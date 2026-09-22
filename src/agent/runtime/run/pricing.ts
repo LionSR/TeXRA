@@ -29,12 +29,13 @@ const perMillion = (tokens: number, price: number): number =>
  * xAI pricing the llm-zoo catalog cannot express: per-model long-context
  * tiers and the documented cached-token rate, keyed by catalog `fullName`.
  * Source: the models catalog embedded in docs.x.ai, verified 2026-08-14.
- * llm-zoo has no tier field (still true at 1.28.0) and its xAI entries
- * inherit the default `cacheDiscountFactor` of 1, which would zero the
- * cache rebate, so both live here until the catalog carries them (#10073).
+ * llm-zoo has no tier field (still true at 1.37.0), and before 1.37.0 its
+ * xAI entries inherited the default `cacheDiscountFactor` of 1, which would
+ * zero the cache rebate, so both live here until the catalog carries them
+ * (#10073).
  * Rates are USD per 1M tokens.
  */
-const XAI_DOCUMENTED_PRICING: Readonly<
+type DocumentedTierPricing = Readonly<
   Record<
     string,
     {
@@ -44,7 +45,9 @@ const XAI_DOCUMENTED_PRICING: Readonly<
       readonly cacheDiscountFactor: number;
     }
   >
-> = {
+>;
+
+const XAI_DOCUMENTED_PRICING: DocumentedTierPricing = {
   'grok-4.3': {
     thresholdTokens: 200_000,
     inputPrice: 2.5,
@@ -62,6 +65,40 @@ const XAI_DOCUMENTED_PRICING: Readonly<
     inputPrice: 4,
     outputPrice: 12,
     cacheDiscountFactor: 0.25,
+  },
+  'grok-4.7': {
+    thresholdTokens: 200_000,
+    inputPrice: 4,
+    outputPrice: 12,
+    cacheDiscountFactor: 0.25,
+  },
+};
+
+/**
+ * OpenAI's long-context tier for the GPT-6 family, keyed by catalog
+ * `fullName`: a prompt over 272K input tokens bills the whole request at 2x
+ * input and cached input and 1.5x output (developers.openai.com pricing).
+ * Cached input doubles with input, so the cache discount keeps its catalog
+ * ratio. llm-zoo has no tier field (#10073).
+ */
+const OPENAI_DOCUMENTED_PRICING: DocumentedTierPricing = {
+  'gpt-6-astra': {
+    thresholdTokens: 272_001,
+    inputPrice: 20,
+    outputPrice: 75,
+    cacheDiscountFactor: 0.1,
+  },
+  'gpt-6-sol': {
+    thresholdTokens: 272_001,
+    inputPrice: 4,
+    outputPrice: 15,
+    cacheDiscountFactor: 0.1,
+  },
+  'gpt-6-luna': {
+    thresholdTokens: 272_001,
+    inputPrice: 0.2,
+    outputPrice: 0.75,
+    cacheDiscountFactor: 0.1,
   },
 };
 
@@ -108,10 +145,10 @@ function warnOnMissingXaiTier(config: ModelConfig, logger: AgentTrace): void {
  * the run records tokens without spend; an API-key route bills the registry's
  * rates for the bound model.
  *
- * xAI is the one provider whose rates are not flat: once a request's whole
- * prompt — cached tokens included — reaches the model's documented threshold,
- * every token of that request bills at the tier, output included, so the
- * complete tuple switches and the rebate below follows it.
+ * xAI and OpenAI's GPT-6 family have rates that are not flat: once a
+ * request's whole prompt — cached tokens included — reaches the model's
+ * documented threshold, every token of that request bills at the tier, output
+ * included, so the complete tuple switches and the rebate below follows it.
  */
 function turnRates(
   bound: BoundModel,
@@ -126,12 +163,30 @@ function turnRates(
     outputPrice: config.outputPrice,
     cacheDiscountFactor: config.capabilities.cacheDiscountFactor,
   };
+  if (config.provider === ModelProvider.OPENAI) {
+    const documented = OPENAI_DOCUMENTED_PRICING[config.fullName];
+    return documented === undefined
+      ? base
+      : tieredRates(base, documented, promptTokens);
+  }
   if (config.provider !== ModelProvider.XAI) return base;
   const documented = XAI_DOCUMENTED_PRICING[config.fullName];
   if (documented === undefined) {
     warnOnMissingXaiTier(config, logger);
     return base;
   }
+  return tieredRates(base, documented, promptTokens);
+}
+
+/**
+ * The documented tier's full tuple once the prompt reaches its threshold;
+ * below it, the catalog rates with the documented cache discount.
+ */
+function tieredRates(
+  base: TurnRates,
+  documented: DocumentedTierPricing[string],
+  promptTokens: number,
+): TurnRates {
   const { cacheDiscountFactor } = documented;
   return promptTokens >= documented.thresholdTokens
     ? {
@@ -144,15 +199,16 @@ function turnRates(
 
 /**
  * Anthropic bills cache reads and writes as separate token classes on top
- * of the uncached input: reads at a tenth of the input rate, five-minute
- * writes at 1.25x and one-hour writes at 2x.
+ * of the uncached input: reads at the model's cache discount (0.1x on most
+ * models, 0.05x on Opus 5.5, 0.025x on Fable/Mythos 5.1), five-minute writes
+ * at 1.25x and one-hour writes at 2x.
  */
 function anthropicCost(
   usage: TurnUsage,
   provider: Extract<TurnUsage['providerUsage'], { kind: 'anthropic' }>,
   rates: TurnRates,
 ): number {
-  const { inputPrice, outputPrice } = rates;
+  const { inputPrice, outputPrice, cacheDiscountFactor } = rates;
   const uncached = provider.uncachedInputTokens ?? usage.inputTokens ?? 0;
   const cached = usage.cachedInputTokens ?? 0;
   const write5m =
@@ -169,7 +225,7 @@ function anthropicCost(
   );
   return (
     perMillion(uncached, inputPrice) +
-    perMillion(cached, inputPrice * 0.1) +
+    perMillion(cached, inputPrice * cacheDiscountFactor) +
     perMillion(write5m + unclassified, inputPrice * 1.25) +
     perMillion(write1h, inputPrice * 2) +
     perMillion(usage.outputTokens ?? 0, outputPrice)

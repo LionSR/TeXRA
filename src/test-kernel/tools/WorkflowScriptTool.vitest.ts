@@ -811,7 +811,6 @@ return null`;
 
       const loopParams = mocks.startChildRunLoop.mock.calls[0]?.[0];
       expect(loopParams.strategy.deliveryMode).toBe('persistOnly');
-      expect(loopParams.strategy.resolveDeliveryTarget).toBeUndefined();
       expect(result).toMatchObject({
         status: 'executed',
         summary: "Completed workflow script 'tool-test'",

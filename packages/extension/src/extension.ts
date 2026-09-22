@@ -13,6 +13,7 @@ import {
   teardownDefaultSession,
   type SessionHandle,
 } from '@agent/runtime';
+import { callPort } from '@auth/authProgram';
 import { AUTH_COMMANDS, AUTH_PROVIDER_ID } from '@auth/constants';
 import { setRuntimeExtensionId } from '@auth/config';
 import {
@@ -127,8 +128,6 @@ import { registerCommands } from './commands';
 
 const EXTENSION_CHANNEL = 'extension';
 const log = logger.createLog(EXTENSION_CHANNEL);
-
-const authLog = logger.createLog('SupabaseAuthProvider');
 
 /** The TeXRA account provider and its URI handler could not be registered. */
 class SupabaseAuthRegistrationFailed extends Data.TaggedError(
@@ -480,25 +479,17 @@ function registerSupabaseAuth(
           {
             showError: (msg) => void vscode.window.showErrorMessage(msg),
             showInfo: (msg) => void vscode.window.showInformationMessage(msg),
-            showSignInPrompt: async (reason) => {
-              const message =
-                reason === 'expired'
-                  ? 'Your TeXRA session has expired. Please sign in again to access AI models and remote agents.'
-                  : 'Your TeXRA session is no longer valid. Please sign in again to access AI models and remote agents.';
-              const action = await vscode.window.showWarningMessage(
-                message,
-                'Sign In',
-              );
-              if (action === 'Sign In') {
-                await vscode.commands
-                  .executeCommand('texra.auth.signIn')
-                  .then(undefined, (err: unknown) =>
-                    authLog.error(
-                      `Failed to trigger sign-in: ${toErrorMessage(err)}`,
-                    ),
-                  );
-              }
-            },
+            showSignInPrompt: (reason) =>
+              callPort(async () => {
+                const action = await vscode.window.showWarningMessage(
+                  reason === 'expired'
+                    ? 'Your TeXRA session has expired. Please sign in again to access AI models and remote agents.'
+                    : 'Your TeXRA session is no longer valid. Please sign in again to access AI models and remote agents.',
+                  'Sign In',
+                );
+                if (action !== 'Sign In') return;
+                await vscode.commands.executeCommand('texra.auth.signIn');
+              }),
           },
           secrets,
           runtime,

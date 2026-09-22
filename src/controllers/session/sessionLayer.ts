@@ -1036,10 +1036,9 @@ interface ProcessRuntimeOptions {
     FileSystem.FileSystem | Path.Path | AppState
   >;
   /**
-   * The host's usage log (`usageLogLayer`), stamped with its version and
-   * editor. Built with this runtime and drained when it is disposed, so no root
-   * brackets the sender itself; `UsageLog.disabled` reports no usage. Passed
-   * as a layer for the reason `lean` is: no reach into telemetry from here.
+   * The host's usage layer owns its version-stamped sender and final drain.
+   * `UsageLog.disabled` reports no usage. The host supplies the layer so this
+   * composition does not reach into telemetry.
    */
   readonly usageLog: Layer.Layer<
     UsageLog,
