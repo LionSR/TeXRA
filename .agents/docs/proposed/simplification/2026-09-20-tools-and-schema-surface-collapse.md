@@ -134,3 +134,106 @@ decisions for the owner; neither is fixed by a refactor.
 - The tool-call path has five layers; `core/define.ts` stays (step 6).
 - `src/tools` has no module-level mutable ownership state; the surviving
   memo caches are listed by name in the ledger.
+
+## 5. Landed
+
+Re-checked against the current tree (2026-09-22). Most of the plan above has
+already shipped, in smaller PRs that never came back to update this note:
+
+- **Step 1 (barrel).** The UI toolkit (`wa/`, `styles/`, `transcript/`,
+  `markdown/`, `copy/`) moved out to `src/ui/`, as CLAUDE.md now documents.
+  `stateSettings.ts`, `settingsViewMessages.ts`, `memoryViewMessages.ts` and
+  `profileViewMessages.ts` are no longer exported from
+  `src/shared/schemas/index.ts` — they live in `src/shared/state/` and
+  `src/shared/settingsView/` as standalone modules. `stateSettings.ts` has
+  around two dozen importers tree-wide (backend config plumbing, the CLI's
+  own settings forms, tests), but no webview other than the settings view
+  frontend (`LaTeXTab.ts`, `GitTab.ts`, `AIAgentsTab.ts`, `settingsState.ts`,
+  `stateSettingRows.ts`) is among them — the first Acceptance bullet, as
+  written, holds. `src/shared/schemas/` is down to ~6.9k lines
+  (from the ~9.5k cited above); `mainView/` and `progressView/` remain, as
+  wire-contract state for those views rather than settings surface.
+- **Step 2 (LaTeX/image probe), for the four spellings this note named.**
+  One catalog, `LATEX_TOOLS` in `@shared/constants/latexToolchain`, consumed
+  by `@latex/latexToolchain`, `@tools/setup/toolProbing`,
+  `@controllers/settingsView/LatexToolingController` and the CLI doctor
+  (`@latex/latexToolchain` → `probeLatexToolchain`) — the four spellings §1's
+  Findings listed are one now. No "kept in sync" comment remains anywhere in
+  the tree. The per-consumer roles (doctor required/optional, probe
+  required/image, `drivesCompile`) landed as designed, including the stated
+  `latexmk` residual. Not consolidated, and not one of the four this note
+  named: `checkCoreDependencies` (`src/utils/system/checkCoreDependencies.ts`)
+  still hardcodes its own `['latexindent', 'perl', 'gs']` list rather than
+  reading `LATEX_TOOLS`/`PROBED_LATEX_TOOLS` (it does read `IMAGE_LATEX_TOOLS`
+  for the image half). It backs the progress view's dependency banner
+  (`ProgressViewProvider.ts`, `extensionHostRequests.ts`) — a fifth surface
+  this note's original survey missed, so the catalog can still drift from
+  what that banner shows.
+- **Step 3 (rows).** `sessionEvent.ts` has a single `run.fact` row
+  (discriminated by `fact.key`) and a single `state.value.set` row;
+  `updateTodos`/`updatePlan`/`addOutputFiles`/`updateMissingOutputs`/
+  `updateCompileFailures` and the three singleton record types no longer
+  exist as separate schema arms. `runFactEvents.ts` is gone.
+  `src/agent/storage/runRecords.ts` has no restated latest-row readers.
+- **Step 4 (`ExecutionsTool`), mostly.** Its own module docstring now states
+  the invariant directly: "every fact about a run... is read off the session
+  fold (`SessionView`)... this surface never resolves liveness, parentage or
+  a task list a second time." One documented exception the docstring doesn't
+  cover: `/report` and `/result` (`showReport`/`showResultMeta`,
+  `ExecutionsTool.ts:559-596`) call `turnAttributionNote`, which calls
+  `resolveRunLiveness` (`executions/runLiveness.ts`) — a second liveness read
+  against `Runs`, the run-end row and claim ownership, not the fold. Its own
+  docstring says why: a single-run read needs the unsettled/interrupted
+  _reason_ string the fold doesn't carry, and a listing surface reads the
+  fold "instead" because it "has already decided all of this for every run
+  at once." Whether that split is the intended design or an un-migrated
+  residual is not settled by this note; recorded here so a future audit
+  doesn't take the docstring's "never... a second time" as covering this
+  path too.
+- **Step 5 (replacement categories).** `NON_REGEX_REPLACEMENT_CATEGORIES` /
+  `REGEX_REPLACEMENT_CATEGORIES` in
+  `@shared/constants/replacementCategories` are the one declaration;
+  `@replacement/engine` keys its rule tables off them so a name with no
+  rules fails to typecheck, exactly as proposed.
+- **Step 6.** The `execute` forwarder inlined (#12891, as already noted
+  above); `core/define.ts` stays, per the ruling already recorded in this
+  step.
+- **Step 7 (module-global state), partially.** The Lean server roster
+  (`leanServerRegistry.ts`) is now a per-adapter factory
+  (`createLeanServerRoster`) rather than a module map. GitHub subscription
+  bindings (`GitHubSubscriptions`) and the inline-comment provider
+  (`InlineComments`) are both `Context.Service` tags resolved from process
+  scope, not module slots.
+
+## 6. Still open
+
+- **Step 2, `checkCoreDependencies`.** A fifth (not one of the original
+  four-named) spelling of the LaTeX/image probe list, hardcoded rather than
+  reading `LATEX_TOOLS`, backing the progress view's dependency banner. See
+  §5 Step 2 for detail and evidence.
+- **Step 4, the turn-attribution liveness read.** `/report` and `/result`
+  resolve a run's liveness a second time via `resolveRunLiveness` rather than
+  reading it off `SessionView`, contradicting the "never... a second time"
+  reading of the module docstring if taken to cover every codepath. See §5
+  Step 4 for detail, including the design rationale that may make this
+  intentional rather than a residual.
+- **Step 7, the agent-engine slot.** `src/tools/delegation/nativeSubagentStrategy.ts`
+  still holds `let agentEngine: AgentEngine | undefined;` at module scope —
+  unchanged, and still correctly gated on the #12888 ruling as stated above.
+- **Step 7, the remaining slots.** The Codex config module
+  (`src/tools/codexConfig.ts`) now reads settings entirely through
+  `StateStore`/`createEnumStateGetter`; its only module-level state is an
+  xhigh-capability probe cache keyed by binary path
+  (`codexXhighSupportByBinary`, `codexXhighProbeLanes`), which reads as the
+  kind of lazy memo of an immutable fact this step's own carve-out says
+  should stay, not the mutable "config slot" this step meant to move. Not
+  independently reverified this pass: `registry.ts`'s memo cache and
+  `support/rateLimiter.ts` staying as intentional (they were already ruled
+  to stay); whether the service-scope ledger lists the survivors by name;
+  the tool-call-path's five-layer count and the setup/GitHub-polling
+  feature-scope questions in §3, which are unchanged product questions, not
+  layering.
+- Steps 1–6 above are re-verified against the tree but not exhaustively —
+  e.g. the exact "400 to 600 lines" / "250 to 400 lines" savings estimates
+  in §2 were not re-measured, only the structural claims (one spelling, no
+  duplicate schema arms, one reader).
