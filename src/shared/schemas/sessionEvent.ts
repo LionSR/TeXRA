@@ -772,6 +772,7 @@ export type ExistenceReconciliation = z.infer<
 const FoldInputSchema = z.discriminatedUnion('_tag', [
   FoldEventSchema,
   TextChunkSchema,
+  z.object({ _tag: z.literal('debug'), enabled: z.boolean() }),
   z.object({ _tag: z.literal('local'), local: LocalRuntimeStateSchema }),
   z.object({
     _tag: z.literal('subscriptions'),

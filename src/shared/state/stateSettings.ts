@@ -73,13 +73,8 @@ const DEFAULT_GIT_WORKTREE_SUPPORT = false;
  */
 export const DEFAULT_TOOL_PATH_PROTECTION_ENABLED = true;
 
-// ============================================================================
-// The one setting row
-// ============================================================================
-
 /**
- * Host-neutral catalog for every TeXRA setting a host can store, honor, or
- * render.
+ * Host-neutral catalog for every TeXRA setting a host can store, honor, or render.
  *
  * One row carries the catalog facts that used to be answered in six places:
  *
@@ -683,8 +678,12 @@ const CORE_SETTING_ROWS: Record<
   'logger.debugMode': {
     schema: z.boolean().prefault(false),
     description:
-      'Show the transcript\'s verbose tier: debug-level rows and their payload detail. The log surfaces filter themselves (the Output view\'s own level filter, the desktop log file, the CLI\'s --verbose/--quiet).',
-    honoredBy: everyHost('src/shared/session/sessionFold.ts'),
+      "Show the transcript's verbose tier: debug-level rows and their payload detail. The log surfaces filter themselves (the Output view's own level filter, the desktop log file, the CLI's --verbose/--quiet).",
+    honoredBy: {
+      vscode: { reader: 'src/controllers/session/hostSnapshotSource.ts' },
+      desktop: { reader: 'src/controllers/session/sessionInputs.ts' },
+      cli: { reader: 'src/controllers/session/sessionInputs.ts' },
+    },
   },
   'telemetry.enabled': {
     schema: z.boolean().prefault(TELEMETRY_ENABLED_DEFAULT),
@@ -1562,17 +1561,17 @@ export function settingEnumChoices<T extends string = string>(
   }));
 }
 
-/** Whether a setting's schema is a boolean (used to classify edit affordance). */
+/** Whether the setting uses a boolean edit affordance. */
 export function settingIsBoolean(entry: StateSettingEntry): boolean {
   return settingSchemaWithoutPrefault(entry) instanceof z.ZodBoolean;
 }
 
-/** Whether a setting's schema is a string (free-text edit affordance). */
+/** Whether the setting uses a free-text edit affordance. */
 export function settingIsString(entry: StateSettingEntry): boolean {
   return settingSchemaWithoutPrefault(entry) instanceof z.ZodString;
 }
 
-/** Whether a setting's schema is a number (numeric free-text edit affordance). */
+/** Whether the setting uses a numeric edit affordance. */
 export function settingIsNumber(entry: StateSettingEntry): boolean {
   return settingSchemaWithoutPrefault(entry) instanceof z.ZodNumber;
 }

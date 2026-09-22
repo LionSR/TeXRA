@@ -274,13 +274,10 @@ export function initCliPlatform(
     // second and leaving the first undisposed.
     const runtime = yield* Effect.tryPromise({
       try: () =>
-        installCliProcessRuntime(
-          context.storageRoot,
-          {
-            resourcesPath: context.resourcesPath,
-          },
-          context.minimumLogLevel,
-        ),
+        installCliProcessRuntime(context.storageRoot, {
+          resourcesPath: context.resourcesPath,
+          minimumLogLevel: context.minimumLogLevel,
+        }),
       catch: ensureError,
     });
 

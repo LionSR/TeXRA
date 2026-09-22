@@ -91,6 +91,19 @@ describe('logUtils', () => {
     expect(payload).toContain('"requestId": "visible-request-id"');
   });
 
+  it('redacts a long secret before truncating its rendered payload', () => {
+    const entries = captureEntries();
+    const password = `visible-secret-prefix-${'x'.repeat(3_000)}`;
+
+    logger.debug('test', 'long request metadata', {
+      data: { password },
+    });
+
+    const payload = payloadOf(entries[0]);
+    expect(payload).not.toContain('visible-secret-prefix');
+    expect(payload).toContain('"password": "[redacted]"');
+  });
+
   it.effect(
     'routes native Effect logs and nested spans through the redacting sink',
     () =>
@@ -124,9 +137,7 @@ describe('logUtils', () => {
         // The emission threshold is the only filter: a warning clears an
         // informational floor without any producer-side gate.
         entries.length = 0;
-        yield* operation().pipe(
-          Effect.provide(effectDiagnosticsLayer('Info')),
-        );
+        yield* operation().pipe(Effect.provide(effectDiagnosticsLayer('Info')));
         expect(entries).toHaveLength(1);
         expect(entries[0]?.message).toBe('provider warning');
       }),

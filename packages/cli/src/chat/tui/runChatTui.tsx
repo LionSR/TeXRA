@@ -153,24 +153,16 @@ export async function runChat(
     return { exitCode: CliExitCode.Usage };
   }
 
-  // The platform's own SIGINT/SIGTERM handler stays live through onboarding
-  // and model resolution below, this function does not suppress it (it never
-  // passes `installSignalHandlers: false`). Once Ink actually mounts (below),
-  // handOffCliShutdownSignalHandlers() removes it immediately before this
-  // function installs its own process.on pair, so exactly one owner is ever
-  // registered for a given signal; see `initCliPlatform`'s doc comment for
-  // the full handoff design.
+  // The platform owns signals until Ink mounts. The handoff then removes its
+  // handlers before this function installs its pair; see `initCliPlatform`.
   //
   // The entry's runtime, in a local: the chat is the first thing that opens
   // the process session, and the Effects below settle on the same runtime.
   // The init and that first session open are one program on it.
-  const runtime = await installCliProcessRuntime(
-    context.storageRoot,
-    {
-      resourcesPath: context.resourcesPath,
-    },
-    context.minimumLogLevel,
-  );
+  const runtime = await installCliProcessRuntime(context.storageRoot, {
+    resourcesPath: context.resourcesPath,
+    minimumLogLevel: context.minimumLogLevel,
+  });
   const { services, runtimeSession } = await runtime.runPromise(
     Effect.gen(function* () {
       const built = yield* initCliPlatform({ ...context, quietLogs: true });

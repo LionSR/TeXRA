@@ -208,13 +208,30 @@ export class SessionFrames extends Context.Service<
           Stream.suspend(() =>
             Stream.fromQueue(current.queue).pipe(
               Stream.mapAccum(
-                () => ({
-                  pending: [
-                    { _tag: 'subscriptions', set: [...aggregates] },
-                  ] as FoldInput[],
-                  complete: false,
-                }),
+                () => {
+                  const initialHost = SubscriptionRef.getUnsafe(host);
+                  return {
+                    pending: [
+                      ...(initialHost
+                        ? [
+                            {
+                              _tag: 'debug' as const,
+                              enabled: initialHost.debugMode,
+                            },
+                          ]
+                        : []),
+                      { _tag: 'subscriptions', set: [...aggregates] },
+                    ] as FoldInput[],
+                    complete: false,
+                  };
+                },
                 (state, frame) => {
+                  if (!state.complete && frame.host) {
+                    state.pending.push({
+                      _tag: 'debug',
+                      enabled: frame.host.debugMode,
+                    });
+                  }
                   state.pending.push(...frame.events, ...frame.chunks);
                   if (frame.local)
                     state.pending.push({ _tag: 'local', local: frame.local });
@@ -247,8 +264,8 @@ export class SessionFrames extends Context.Service<
         feed: (frame) =>
           Effect.gen(function* () {
             if (frame.generation !== current.generation) return;
-            yield* Queue.offer(current.queue, frame);
             if (frame.host) yield* SubscriptionRef.set(host, frame.host);
+            yield* Queue.offer(current.queue, frame);
           }),
       };
     }),

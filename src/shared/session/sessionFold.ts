@@ -157,10 +157,6 @@ const WORKFLOW_DASHBOARD_KINDS = new Set<TranscriptRowKind>([
 /** Residency cap on one run model's dashboard rows (PRD 5.2). */
 const MAX_RUN_MODEL_DASHBOARD_ROWS = 2_000;
 
-// ---------------------------------------------------------------------------
-// Entry
-// ---------------------------------------------------------------------------
-
 /** One input, or a frame of them (the transport's unit, 7.4 and 8.1) or a
  *  replay: every input in order, with each touched workflow board's run
  *  model derived once at the end instead of once per event. */
@@ -192,6 +188,10 @@ function foldWith(
   // are shared with the previous value until this call first writes one.
   const next: SessionView = { ...view };
   switch (input._tag) {
+    case 'debug':
+      if (next.debug === input.enabled) return view;
+      next.debug = input.enabled;
+      return next;
     case 'event': {
       if (input.read === 'listing') {
         sessionIndexesOf(next).listed.add(input.event.aggregateId);

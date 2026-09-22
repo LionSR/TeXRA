@@ -45,9 +45,8 @@ All notable changes to this project will be documented in this file.
   `texra.logger.debugMode` now governs transcript verbosity and payload
   detail only. What the log surface shows is owned by the surface: the VS
   Code Output channel's own level filter, and the desktop log file, which
-  keeps debug entries. The CLI, the one surface with no level filter, gains
-  a `--verbose` flag for debug-level diagnostics (`--quiet` already silences
-  them).
+  keeps debug entries. The CLI gains a `--verbose` flag for additional debug
+  diagnostics; `--quiet` suppresses diagnostics.
 
 ### Bug Fixes
 

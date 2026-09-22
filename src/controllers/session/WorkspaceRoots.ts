@@ -8,10 +8,9 @@
  * context, which is why the process ever had an async-local carrier to retire
  * (#12421): Effect's scheduler drains many fibers' continuations in one turn,
  * so ambient state bleeds across fibers. The storage root is the one fact
- * every graph has; the config provider rides along for the one read a
- * process-side fold makes of its workspace (transcript verbosity), and a
- * webview has no config provider to give, so its view folds without the
- * debug tier.
+ * every graph has; the config provider rides along for the process reader's
+ * fold-time transcript-verbosity input. A webview has no config provider;
+ * its host snapshot supplies the corresponding input before replay.
  */
 import { Context } from 'effect';
 
@@ -22,7 +21,7 @@ export class WorkspaceRoots extends Context.Service<
   /** The storage root of `@platform/workspaceRoots`, as a plain string: a
    *  webview's graph must not name the host module, which reaches Node. The
    *  config provider is the process session's own; a webview's graph has
-   *  none. */
+   *  none and receives verbosity through its host snapshot. */
   {
     readonly storage: string;
     readonly config?: ConfigProvider;

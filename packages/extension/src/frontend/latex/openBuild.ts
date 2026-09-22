@@ -265,14 +265,14 @@ const prepareLatexBuild = (
       }),
     );
     if (!compiled.ok) {
-      // Include the tail in the visible message itself, not just `data` —
-      // writeLine only shows `data` when texra.logger.debugMode is on
-      // (default off), and this failure's whole point is to be visible
-      // without needing to enable debug logging.
+      // Include the tail in the visible message itself, not just structured
+      // data, because this failure must be visible at the default log level.
       yield* Effect.logWarning(
         `Internal LaTeX compilation failed for ${uri.fsPath}:\n${compiled.logTail}`,
       ).pipe(
-        Effect.annotateLogs({ data: { sourceFile: uri.fsPath, logTail: compiled.logTail } }),
+        Effect.annotateLogs({
+          data: { sourceFile: uri.fsPath, logTail: compiled.logTail },
+        }),
         withLogChannel(CHANNEL),
       );
       return false;

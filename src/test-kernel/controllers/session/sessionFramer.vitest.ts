@@ -42,7 +42,10 @@ import {
 import { Database } from '@shared/session/database';
 import { SessionInputs } from '@shared/session/sessionInputs';
 import { ProcessIdentity, SessionEvents } from '@shared/session/sessionEvents';
-import type { HostSnapshot } from '@shared/session/hostSnapshot';
+import {
+  emptyHostSnapshot,
+  type HostSnapshot,
+} from '@shared/session/hostSnapshot';
 import type { EventsFrame, Subscribe } from '@shared/session/sessionFrames';
 import type { SessionView } from '@shared/session/sessionView';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
@@ -61,6 +64,15 @@ const KEY = '/workspace/framing';
 const RUN = 'ab12cd' as RunId;
 const SECOND = 'dec0de' as RunId;
 const PORT = 'sidebar';
+const DEBUG_HOST: HostSnapshot = {
+  ...emptyHostSnapshot({
+    key: KEY,
+    name: 'Framing',
+    initials: 'FR',
+    subtitle: KEY,
+  }),
+  debugMode: true,
+};
 
 const runStart: SessionEventDraft = {
   type: 'run.start',
@@ -388,7 +400,9 @@ describe('session framer', () => {
           chunks.ref,
           new Map([[`${RUN}/row-1`, textTail('Hello')]]),
         );
-        const host = yield* SubscriptionRef.make<HostSnapshot | null>(null);
+        const host = yield* SubscriptionRef.make<HostSnapshot | null>(
+          DEBUG_HOST,
+        );
         const webview = yield* WebviewSessions.open(KEY);
         const { frames, view } = webview;
         const shell = webview.subscriptions;
@@ -456,6 +470,7 @@ describe('session framer', () => {
           (v) => v.runs.get(RUN)?.status === RUN_PHASE.RUNNING,
         );
         const folded = yield* SubscriptionRef.get(view.ref);
+        expect(folded.debug).toBe(true);
         expect(drawn(folded)).toEqual(
           drawn(yield* SubscriptionRef.get(runtimeView.ref)),
         );

@@ -433,6 +433,9 @@ export const buildCliContext = Effect.fn('cliContext.buildCliContext')(
         config,
         CLI_OUTPUT_FORMAT_CONFIG_KEY,
       );
+    let minimumLogLevel: MinimumLogLevel = 'Info';
+    if (init.globalArgs.quiet) minimumLogLevel = 'None';
+    else if (init.globalArgs.verbose) minimumLogLevel = 'Debug';
     return {
       storageRoot: init.storageRoot,
       cwd,
@@ -440,11 +443,7 @@ export const buildCliContext = Effect.fn('cliContext.buildCliContext')(
       outputFormat,
       approvalPolicy,
       quietLogs: init.globalArgs.quiet === true,
-      minimumLogLevel: init.globalArgs.quiet
-        ? 'None'
-        : init.globalArgs.verbose
-          ? 'Debug'
-          : 'Info',
+      minimumLogLevel,
       stdoutIsTty: ambient.stdoutIsTty,
       termIsDumb: ambient.termIsDumb === true,
       stderrIsTty: ambient.stderrIsTty,

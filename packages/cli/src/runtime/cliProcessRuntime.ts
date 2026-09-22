@@ -51,11 +51,11 @@ import { createPlatformAgentDirectories } from '@agent/index';
 import { SignInFailed } from '@common/errors/signInFailed';
 import { openAppStateStore } from '@controllers/session/appStateStore';
 import { globalDatabaseLayer } from '@controllers/session/Database';
-import type { MinimumLogLevel } from '@logger/effectDiagnostics';
 import {
   disposeProcessRuntime,
   installProcessRuntime,
 } from '@controllers/session/sessionLayer';
+import type { MinimumLogLevel } from '@logger/effectDiagnostics';
 import { StateWriteFailed, type StateStore } from '@platform/interfaces';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { UNAVAILABLE_LANGUAGE_MODEL_PORT } from '@platform/languageModel';
@@ -147,6 +147,8 @@ const refusingGlobalDatabase: Layer.Layer<GlobalDatabase> = Layer.succeed(
 interface CliProcessRuntimeInstall {
   readonly appState?: StateStore;
   readonly globalDatabase?: Layer.Layer<GlobalDatabase>;
+  /** The argv-selected diagnostics floor for this process runtime. */
+  readonly minimumLogLevel?: MinimumLogLevel;
   /**
    * The packaged resources root the CLI's built-in agent directories resolve
    * against. Absent only for the platform-less entries, which load no agents.
@@ -195,9 +197,8 @@ export const NO_PLATFORM_INSTALL: CliProcessRuntimeInstall = Object.freeze({
  * loudly, and a CLI process runs exactly one command.
  */
 export function installCliProcessRuntime(
-  storageRoot: string | undefined,
-  options: CliProcessRuntimeInstall | undefined,
-  minimumLogLevel: MinimumLogLevel,
+  storageRoot?: string,
+  options?: CliProcessRuntimeInstall,
 ): Promise<ProcessRuntime> {
   const current = installedProcessRuntime();
   if (current) {
@@ -308,7 +309,7 @@ export function installCliProcessRuntime(
         options?.globalDatabase ?? globalDatabaseLayer(globalStoragePath),
       // The emission threshold the entry's argv chose: a terminal has no
       // live level filter of its own, so `--quiet`/`--verbose` decide here.
-      minimumLogLevel,
+      minimumLogLevel: options?.minimumLogLevel ?? 'Info',
     });
     // The output plane runs its Effects on this runtime from here on; the
     // disposal below hands it back the no-runtime state.

@@ -8,7 +8,7 @@
  * still call. Neither producer decides presentation: severity, timestamp,
  * identity, and payload stay separate fields the whole way, and the write
  * path below renders the one field that is not already a string — the `data`
- * payload — once, before redaction, bounded, so a host renders its entries
+ * payload — once, before redaction, then bounds the redacted value, so a host renders its entries
  * with its own facilities instead of parsing them back out of a line of text.
  *
  * Entries are secret-redacted here, once, before any host sees them. A host
@@ -91,7 +91,7 @@ function redactEntry(entry: LogEntry): LogEntry {
  * the string the redactor sees is both finite and secret-redactable. A
  * producer that attached `null`/`undefined` (the raw combinator skips
  * nothing) leaves the annotation here rather than rendering "null"; a
- * present payload is bounded to one line's worth of detail.
+ * present payload is left complete for the redactor to inspect.
  */
 function renderLogData(entry: LogEntry): LogEntry {
   const data = entry.annotations[LOG_DATA];
@@ -105,10 +105,22 @@ function renderLogData(entry: LogEntry): LogEntry {
     ...entry,
     annotations: {
       ...entry.annotations,
-      [LOG_DATA]:
-        rendered.length <= MAX_LOG_DATA_LENGTH
-          ? rendered
-          : `${rendered.slice(0, MAX_LOG_DATA_LENGTH)}… [truncated]`,
+      [LOG_DATA]: rendered,
+    },
+  };
+}
+
+/** Bound the already-redacted payload so truncation cannot split a secret
+ * field before the redactor has seen its closing quote. */
+function truncateLogData(entry: LogEntry): LogEntry {
+  const data = entry.annotations[LOG_DATA];
+  if (typeof data !== 'string' || data.length <= MAX_LOG_DATA_LENGTH)
+    return entry;
+  return {
+    ...entry,
+    annotations: {
+      ...entry.annotations,
+      [LOG_DATA]: `${data.slice(0, MAX_LOG_DATA_LENGTH)}… [truncated]`,
     },
   };
 }
@@ -170,5 +182,5 @@ export function setLogSink(
 /** Write one entry to the installed sink. */
 export function writeLogEntry(entry: LogEntry): void {
   const rendered = renderLogData(entry);
-  sink.write(sinkTrusted ? rendered : redactEntry(rendered));
+  sink.write(truncateLogData(sinkTrusted ? rendered : redactEntry(rendered)));
 }

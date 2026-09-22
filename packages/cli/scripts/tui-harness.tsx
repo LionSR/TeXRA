@@ -321,11 +321,9 @@ if (SHOW_PROJECT_SKILL) {
 
 const HARNESS_STORAGE_ROOT = path.join(HARNESS_CWD, '.texra-storage');
 const HARNESS_PLATFORM_SERVICES = await (
-  await installCliProcessRuntime(
-    HARNESS_STORAGE_ROOT,
-    undefined,
-    HARNESS_CLI_CONTEXT.minimumLogLevel,
-  )
+  await installCliProcessRuntime(HARNESS_STORAGE_ROOT, {
+    minimumLogLevel: HARNESS_CLI_CONTEXT.minimumLogLevel,
+  })
 ).runPromise(
   initCliPlatform({
     // The same provider the harness context resolves its rows through,

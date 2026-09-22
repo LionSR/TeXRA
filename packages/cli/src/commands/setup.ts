@@ -51,13 +51,10 @@ export async function runSetup(context: CliContext): Promise<number> {
   // the picker is skipped — credentials-only (re)configuration is
   // `texra login`'s job under the new vocabulary. The init, the read and the
   // picker it may open are one program on the root's runtime.
-  const runtime = await installCliProcessRuntime(
-    context.storageRoot,
-    {
-      resourcesPath: context.resourcesPath,
-    },
-    context.minimumLogLevel,
-  );
+  const runtime = await installCliProcessRuntime(context.storageRoot, {
+    resourcesPath: context.resourcesPath,
+    minimumLogLevel: context.minimumLogLevel,
+  });
   const credentialed = await runtime.runPromise(
     Effect.gen(function* () {
       const services = yield* initCliPlatform({ ...context, quietLogs: true });

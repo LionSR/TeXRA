@@ -27,24 +27,20 @@ vi.mock('@utils/system/toolUtils', async (importOriginal) => {
 
 /**
  * The fake platform, with debug mode on: the Effect logger drops `Debug`
- * entries otherwise, and these assertions are about which channel an entry
- * lands on, not about that gate.
+ * entries, and these assertions verify which channel receives them.
  */
 const withPlatform = (
   files: Record<string, string> = {},
 ): Effect.Effect<void> =>
   Effect.promise(() =>
-    installPlatform({
-      workspacePath: fakePath('workspace'),
-      config: { 'texra.logger.debugMode': true },
-      files,
-    }),
+    installPlatform({ workspacePath: fakePath('workspace'), files }),
   ).pipe(Effect.asVoid);
 
 /** The logger production installs, so entries reach the captured sink. */
 const withDiagnostics = <A, E, R>(
   self: Effect.Effect<A, E, R>,
-): Effect.Effect<A, E, R> => Effect.provide(self, effectDiagnosticsLayer('Trace'));
+): Effect.Effect<A, E, R> =>
+  Effect.provide(self, effectDiagnosticsLayer('Trace'));
 
 /**
  * A `FileSystem` that reports every path as present and fails every read with

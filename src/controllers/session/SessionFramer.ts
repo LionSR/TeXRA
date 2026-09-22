@@ -68,7 +68,7 @@ export interface FramerSource {
 }
 
 type FrameItem =
-  | Exclude<FoldInput, { _tag: 'subscriptions' }>
+  | Exclude<FoldInput, { _tag: 'subscriptions' | 'debug' }>
   | { readonly _tag: 'host'; readonly host: HostSnapshot };
 
 /** One frame from the items of one window: chunks merged per row where
@@ -171,17 +171,27 @@ export function frameSubscription(
               Stream.filter(
                 (
                   input,
-                ): input is Exclude<FoldInput, { _tag: 'subscriptions' }> =>
-                  input._tag !== 'subscriptions',
+                ): input is Exclude<
+                  FoldInput,
+                  { _tag: 'subscriptions' | 'debug' }
+                > => input._tag !== 'subscriptions' && input._tag !== 'debug',
               ),
             ),
           ),
         );
+      const initialHost = yield* SubscriptionRef.get(host);
       const hosts = SubscriptionRef.changes(host).pipe(
         Stream.filter((value): value is HostSnapshot => value !== null),
         Stream.map((value): FrameItem => ({ _tag: 'host', host: value })),
       );
-      return Stream.merge(inputs, hosts).pipe(
+      const merged = Stream.merge(inputs, hosts);
+      const ordered = initialHost
+        ? Stream.concat(
+            Stream.make({ _tag: 'host', host: initialHost } as FrameItem),
+            merged,
+          )
+        : merged;
+      return ordered.pipe(
         Stream.groupedWithin(FRAME_ROWS, FRAME_WINDOW),
         Stream.buffer({ capacity: FRAME_BUFFER, strategy: 'suspend' }),
         Stream.mapAccum(

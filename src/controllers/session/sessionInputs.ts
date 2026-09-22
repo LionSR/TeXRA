@@ -11,6 +11,7 @@ import { isDeepStrictEqual } from 'node:util';
 import { Effect, Layer, Stream, SubscriptionRef } from 'effect';
 
 import {
+  DEBUG_MODE_KEY,
   referencedAggregates,
   isDisplaySessionEvent,
   RunIdSchema,
@@ -27,6 +28,7 @@ import {
   type InflightText,
   type InflightTextChunk,
 } from './sessionSources';
+import { WorkspaceRoots } from './WorkspaceRoots';
 
 export const sessionInputsLayer = Layer.effect(
   SessionInputs,
@@ -34,6 +36,7 @@ export const sessionInputsLayer = Layer.effect(
     const log = yield* Database;
     const local = yield* LocalRuntimeSource;
     const text = yield* TextChunkSource;
+    const roots = yield* WorkspaceRoots;
     return {
       read: (aggregates, fromCommit) =>
         Stream.unwrap(
@@ -48,11 +51,17 @@ export const sessionInputsLayer = Layer.effect(
             let checked = new Set<AggregateId>(aggregates.map(({ id }) => id));
             for (const event of listing)
               for (const id of referencedAggregates(event)) checked.add(id);
-            const replay: FoldInput[] = listing.map((event) => ({
-              _tag: 'event',
-              read: 'listing',
-              event,
-            }));
+            const replay: FoldInput[] = [
+              {
+                _tag: 'debug',
+                enabled: roots.config?.get(DEBUG_MODE_KEY, false) ?? false,
+              },
+              ...listing.map((event) => ({
+                _tag: 'event' as const,
+                read: 'listing' as const,
+                event,
+              })),
+            ];
             replay.push({ _tag: 'subscriptions', set: [...aggregates] });
             for (const aggregate of aggregates) {
               const rows = yield* log
