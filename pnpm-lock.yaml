@@ -76,8 +76,8 @@ catalogs:
       specifier: ^1.0.5
       version: 1.0.5
     effect:
-      specifier: 4.0.0-rc.115
-      version: 4.0.0-rc.115
+      specifier: 4.0.0-rc.116
+      version: 4.0.0-rc.116
     esbuild:
       specifier: ^0.28.2
       version: 0.28.2
@@ -212,10 +212,10 @@ importers:
         version: 1.5.0
       '@effect/platform-node':
         specifier: 'catalog:'
-        version: 4.0.0-rc.115(effect@4.0.0-rc.115)(redis@6.2.1(@opentelemetry/api@1.9.1))
+        version: 4.0.0-rc.115(effect@4.0.0-rc.116)(redis@6.2.1(@opentelemetry/api@1.9.1))
       '@effect/sql-sqlite-node':
         specifier: 'catalog:'
-        version: 4.0.0-rc.115(effect@4.0.0-rc.115)
+        version: 4.0.0-rc.115(effect@4.0.0-rc.116)
       '@fortawesome/free-solid-svg-icons':
         specifier: ^7.3.1
         version: 7.3.1
@@ -278,7 +278,7 @@ importers:
         version: 1.0.5
       effect:
         specifier: 'catalog:'
-        version: 4.0.0-rc.115
+        version: 4.0.0-rc.116
       escape-string-regexp:
         specifier: 'catalog:'
         version: 5.0.0
@@ -423,7 +423,7 @@ importers:
         version: 0.87.2
       '@effect/vitest':
         specifier: 4.0.0-rc.115
-        version: 4.0.0-rc.115(effect@4.0.0-rc.115)(vitest@5.0.1(@opentelemetry/api@1.9.1)(@types/node@22.19.17)(jsdom@30.1.0(@noble/hashes@2.2.0))(vite@8.3.0(@types/node@22.19.17)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.48.0)(yaml@2.9.1)))
+        version: 4.0.0-rc.115(effect@4.0.0-rc.116)(vitest@5.0.1(@opentelemetry/api@1.9.1)(@types/node@22.19.17)(jsdom@30.1.0(@noble/hashes@2.2.0))(vite@8.3.0(@types/node@22.19.17)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.48.0)(yaml@2.9.1)))
       '@electron/asar':
         specifier: ^4.3.0
         version: 4.3.0
@@ -534,10 +534,10 @@ importers:
         version: 1.5.0
       '@effect/platform-node':
         specifier: 'catalog:'
-        version: 4.0.0-rc.115(effect@4.0.0-rc.115)(redis@6.2.1(@opentelemetry/api@1.9.1))
+        version: 4.0.0-rc.115(effect@4.0.0-rc.116)(redis@6.2.1(@opentelemetry/api@1.9.1))
       '@effect/sql-sqlite-node':
         specifier: 'catalog:'
-        version: 4.0.0-rc.115(effect@4.0.0-rc.115)
+        version: 4.0.0-rc.115(effect@4.0.0-rc.116)
       '@google/genai':
         specifier: 'catalog:'
         version: 2.23.0(@modelcontextprotocol/sdk@1.30.0(supports-color@10.2.2)(zod@4.4.3))(supports-color@10.2.2)
@@ -694,7 +694,7 @@ importers:
         version: typescript@7.0.2
       effect:
         specifier: 'catalog:'
-        version: 4.0.0-rc.115
+        version: 4.0.0-rc.116
       esbuild:
         specifier: 'catalog:'
         version: 0.28.2
@@ -3501,6 +3501,9 @@ packages:
 
   effect@4.0.0-rc.115:
     resolution: {integrity: sha512-ogYulZ5ffeOzrJqQrG0XOkDO5lKn2s9KNHhoxJy/6wKUkF0i12dlVXWA9TgsgQ+zV/JzizyG0+XMPepZEQX6vw==}
+
+  effect@4.0.0-rc.116:
+    resolution: {integrity: sha512-nawqJHSjHV8XIBRZNZ+D7cLZpN3kkSjzy6aiT9ofKENsl7xAMFKEoDa0itN5JFl3GUQ1PIN1T1HNlva5+xyO/A==}
 
   ejs@3.1.10:
     resolution: {integrity: sha512-UeJmFfOrAQS8OJWPZ4qtgHyWExa088/MtK5UEyoJGFH67cDEXkZSviOiKRCZ4Xij0zxI3JECgYs3oKx+AizQBA==}
@@ -6348,32 +6351,32 @@ snapshots:
 
   '@effect/language-service@0.87.2': {}
 
-  '@effect/platform-node-shared@4.0.0-rc.115(effect@4.0.0-rc.115)':
+  '@effect/platform-node-shared@4.0.0-rc.115(effect@4.0.0-rc.116)':
     dependencies:
       '@types/ws': 8.18.1
-      effect: 4.0.0-rc.115
+      effect: 4.0.0-rc.116
       ws: 8.21.3
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
 
-  '@effect/platform-node@4.0.0-rc.115(effect@4.0.0-rc.115)(redis@6.2.1(@opentelemetry/api@1.9.1))':
+  '@effect/platform-node@4.0.0-rc.115(effect@4.0.0-rc.116)(redis@6.2.1(@opentelemetry/api@1.9.1))':
     dependencies:
-      '@effect/platform-node-shared': 4.0.0-rc.115(effect@4.0.0-rc.115)
-      effect: 4.0.0-rc.115
+      '@effect/platform-node-shared': 4.0.0-rc.115(effect@4.0.0-rc.116)
+      effect: 4.0.0-rc.116
       redis: 6.2.1(@opentelemetry/api@1.9.1)
       undici: 8.10.2
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
 
-  '@effect/sql-sqlite-node@4.0.0-rc.115(effect@4.0.0-rc.115)':
+  '@effect/sql-sqlite-node@4.0.0-rc.115(effect@4.0.0-rc.116)':
     dependencies:
-      effect: 4.0.0-rc.115
+      effect: 4.0.0-rc.116
 
-  '@effect/vitest@4.0.0-rc.115(effect@4.0.0-rc.115)(vitest@5.0.1(@opentelemetry/api@1.9.1)(@types/node@22.19.17)(jsdom@30.1.0(@noble/hashes@2.2.0))(vite@8.3.0(@types/node@22.19.17)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.48.0)(yaml@2.9.1)))':
+  '@effect/vitest@4.0.0-rc.115(effect@4.0.0-rc.116)(vitest@5.0.1(@opentelemetry/api@1.9.1)(@types/node@22.19.17)(jsdom@30.1.0(@noble/hashes@2.2.0))(vite@8.3.0(@types/node@22.19.17)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.48.0)(yaml@2.9.1)))':
     dependencies:
-      effect: 4.0.0-rc.115
+      effect: 4.0.0-rc.116
       vitest: 5.0.1(@opentelemetry/api@1.9.1)(@types/node@22.19.17)(jsdom@30.1.0(@noble/hashes@2.2.0))(vite@8.3.0(@types/node@22.19.17)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.48.0)(yaml@2.9.1))
 
   '@electron-internal/extract-zip@1.0.5': {}
@@ -8329,6 +8332,8 @@ snapshots:
   ee-first@1.1.1: {}
 
   effect@4.0.0-rc.115: {}
+
+  effect@4.0.0-rc.116: {}
 
   ejs@3.1.10:
     dependencies:
