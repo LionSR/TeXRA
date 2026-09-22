@@ -178,21 +178,20 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     this.onboardingFunnel = new OnboardingFunnelRefresher({
       hasCredential: () => hasAnyUsableSetupCredential(session.roots, secrets),
       flags: globalState,
-      apply: (transition) => {
-        this.snapshot.setOnboarding(transition.state);
-        if (!transition.selectSetupAgent) return;
-        // Resolve the qualified registry key so the dropdown matches by
-        // value; the plain name still resolves by label if the registry
-        // isn't loaded.
-        const entry = getAgent('setup', AgentCategory.ToolUse);
-        this.surfaceAction({
-          kind: 'launch',
-          patch: {
-            sessionType: 'toolUse',
-            agent: { toolUse: entry ? agentKeyOf(entry) : 'setup' },
-          },
-        });
-      },
+      apply: (transition) =>
+        Effect.gen({ self: this }, function* () {
+          yield* this.snapshot.setOnboarding(transition.state);
+          if (!transition.selectSetupAgent) return;
+          // Resolve the registry key so the dropdown matches by value.
+          const entry = getAgent('setup', AgentCategory.ToolUse);
+          this.surfaceAction({
+            kind: 'launch',
+            patch: {
+              sessionType: 'toolUse',
+              agent: { toolUse: entry ? agentKeyOf(entry) : 'setup' },
+            },
+          });
+        }),
     });
 
     // Install the recipient before host requests publish the recorder's state.
@@ -275,9 +274,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       onError: (error) => {
         this.logger.error('Host snapshot refresh failed', { data: error });
       },
-      publish: (snapshot) => {
-        this.runtime.runFork(this.bridge.setHost(snapshot));
-      },
+      publish: (snapshot) => this.bridge.setHost(snapshot),
     });
     const storageRoot = context.storageUri ?? context.globalStorageUri;
     // The tool-edit preview: staged copies of the original and proposed
@@ -457,8 +454,11 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     // storage root never moves under a live window (#11432).
     this.disposables.push(
       vscode.workspace.onDidChangeWorkspaceFolders(() => {
-        this.snapshot.refreshWorkspaceRoots();
-        void this.runtime.runPromise(this.snapshot.refreshFiles);
+        void this.runtime.runPromise(
+          this.snapshot
+            .refreshWorkspaceRoots()
+            .pipe(Effect.andThen(this.snapshot.refreshFiles)),
+        );
       }),
     );
     // Watch exactly the categories the launcher file lists are built from
@@ -538,8 +538,8 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   public showAgentConfigBanner(
     agentName: string,
     sessionType: SessionType,
-  ): void {
-    this.snapshot.showAgentConfigBanner(agentName, sessionType);
+  ): Effect.Effect<void> {
+    return this.snapshot.showAgentConfigBanner(agentName, sessionType);
   }
 
   /** Recompute the user-scoped funnel; the shared refresher owns the loop. */
