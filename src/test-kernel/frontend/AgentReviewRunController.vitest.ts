@@ -1,6 +1,7 @@
+import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 // Third-party imports
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, vi } from 'vitest';
 
 // Local imports
 import type { AgentRunHandle } from '@agent/runtime/RunHandle';
@@ -109,38 +110,44 @@ describe('AgentReviewRunController', () => {
     expect(controller.collection).toBeUndefined();
   });
 
-  it('discards a running review without releasing the slot', () => {
-    const controller = new AgentReviewRunController();
-    const harness = createRunHarness();
-    const run = startBoundRun(controller, harness, 'review-a' as RunId);
-    controller.collect(run, reviewCollection('src/a.ts'));
+  it.effect('discards a running review without releasing the slot', () =>
+    Effect.gen(function* () {
+      const controller = new AgentReviewRunController();
+      const harness = createRunHarness();
+      const run = startBoundRun(controller, harness, 'review-a' as RunId);
+      controller.collect(run, reviewCollection('src/a.ts'));
 
-    Effect.runSync(controller.discard());
+      yield* controller.discard();
 
-    expect(harness.stopAgentRun).toHaveBeenCalledOnce();
-    // The run settles on its own schedule, so the slot stays claimed
-    // while its results and any further reports are dropped.
-    expect(controller.isActive).toBe(true);
-    expect(controller.isCurrent(run)).toBe(false);
-    expect(controller.collection).toBeUndefined();
+      expect(harness.stopAgentRun).toHaveBeenCalledOnce();
+      // The run settles on its own schedule, so the slot stays claimed
+      // while its results and any further reports are dropped.
+      expect(controller.isActive).toBe(true);
+      expect(controller.isCurrent(run)).toBe(false);
+      expect(controller.collection).toBeUndefined();
 
-    controller.collect(run, reviewCollection('src/b.ts'));
-    expect(controller.collection).toBeUndefined();
+      controller.collect(run, reviewCollection('src/b.ts'));
+      expect(controller.collection).toBeUndefined();
 
-    expect(controller.finish(run)).toBe(true);
-    expect(controller.isActive).toBe(false);
-  });
+      expect(controller.finish(run)).toBe(true);
+      expect(controller.isActive).toBe(false);
+    }),
+  );
 
-  it('leaves a later run current after an earlier one was discarded', () => {
-    const controller = new AgentReviewRunController();
-    const first = createRunHarness();
-    const runA = startBoundRun(controller, first, 'review-a' as RunId);
-    Effect.runSync(controller.discard());
-    expect(controller.finish(runA)).toBe(true);
+  it.effect(
+    'leaves a later run current after an earlier one was discarded',
+    () =>
+      Effect.gen(function* () {
+        const controller = new AgentReviewRunController();
+        const first = createRunHarness();
+        const runA = startBoundRun(controller, first, 'review-a' as RunId);
+        yield* controller.discard();
+        expect(controller.finish(runA)).toBe(true);
 
-    const second = createRunHarness();
-    const runB = controller.start(second.session);
-    expect(controller.isCurrent(runB)).toBe(true);
-    expect(controller.isCurrent(runA)).toBe(false);
-  });
+        const second = createRunHarness();
+        const runB = controller.start(second.session);
+        expect(controller.isCurrent(runB)).toBe(true);
+        expect(controller.isCurrent(runA)).toBe(false);
+      }),
+  );
 });
