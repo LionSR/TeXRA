@@ -456,6 +456,7 @@ function agentRunTestLayer(init: LoopInit) {
             runId: init.runId,
             runStageId: undefined,
             config: testWorkspaceRoots().config,
+            usageLog: { log: () => {} },
           },
           { agentName: 'correct', agentCategory: AgentCategory.Workflow },
         ),

@@ -10,7 +10,6 @@ import {
   type NormalizedUsage,
   type RunId,
 } from '@shared/schemas';
-import { UsageLogService } from '@telemetry/UsageLogService';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 
 // Local file imports
@@ -51,18 +50,21 @@ function createMonitorWithEvents() {
   const logger = new TraceEmitter();
   const runId = 'usage-last-totals' as RunId;
   const recorded = recordTraceEvents(logger);
+  const log = vi.fn();
   const monitor = new UsageMonitor(
     {
       logger,
       runId,
       runStageId: undefined,
       config: testWorkspaceRoots().config,
+      usageLog: { log },
     },
     { agentName: 'assistant', agentCategory: AgentCategory.ToolUse },
   );
   return {
     monitor,
     logger,
+    log,
     events: recorded.events,
     dispose: () => {},
   };
@@ -119,8 +121,7 @@ describe('UsageMonitor', () => {
   });
 
   it('publishes the run total on every usage row while billing the round', async () => {
-    await withMonitor(async ({ monitor, events }) => {
-      const log = vi.spyOn(UsageLogService, 'log').mockImplementation(() => {});
+    await withMonitor(async ({ monitor, events, log }) => {
       const state = AgentRunStateSnapshotSchema.parse({});
       const round = {
         inputTokens: 100,
@@ -151,8 +152,7 @@ describe('UsageMonitor', () => {
   });
 
   it('does not replay prior usage during a usage-less tool-use continuation', async () => {
-    await withMonitor(async ({ monitor, events }) => {
-      const log = vi.spyOn(UsageLogService, 'log').mockImplementation(() => {});
+    await withMonitor(async ({ monitor, events, log }) => {
       const state = AgentRunStateSnapshotSchema.parse({});
       const usage = {
         inputTokens: 10,
@@ -179,8 +179,7 @@ describe('UsageMonitor', () => {
   });
 
   it('bills a round against the model the run switched to', async () => {
-    await withMonitor(async ({ monitor }) => {
-      const log = vi.spyOn(UsageLogService, 'log').mockImplementation(() => {});
+    await withMonitor(async ({ monitor, log }) => {
       const switched = {
         config: { ...testModelInfo.config, fullName: 'Switched Model' },
       };
@@ -205,9 +204,8 @@ describe('UsageMonitor', () => {
   });
 
   it('uses the normalized provider for backend usage accounting', async () => {
-    await withMonitor(async ({ logger, monitor }) => {
+    await withMonitor(async ({ logger, monitor, log }) => {
       const warn = vi.spyOn(logger, 'warn');
-      const log = vi.spyOn(UsageLogService, 'log').mockImplementation(() => {});
       const other = {
         config: { ...testModelInfo.config, provider: ModelProvider.OTHERS },
       };

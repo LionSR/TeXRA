@@ -90,6 +90,7 @@ export function createTestLaunchContext({
         runId,
         runStageId: undefined,
         config: testWorkspaceRoots().config,
+        usageLog: { log: () => {} },
       },
       { agentName: config.agent, agentCategory: setting.agentCategory },
     ),

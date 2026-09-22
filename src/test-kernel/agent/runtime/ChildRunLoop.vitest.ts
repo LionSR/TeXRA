@@ -700,10 +700,8 @@ describe('childRunLoop E2E fixtures', () => {
 
           const releaseNativeChild = session.runs.reserveChildActivation({
             runId: 'da7a01' as RunId,
-            parentRunId: PARENT_RUN_ID,
+            parent: { current: PARENT_RUN_ID },
             interrupt: vi.fn(),
-            detach: vi.fn(),
-            isDetached: () => false,
           });
           try {
             expect(

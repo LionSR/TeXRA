@@ -115,7 +115,12 @@ export class RunRoster {
   }
 
   setHandle(handle: RunHandle): void {
-    this.entryFor(handle.runId).handle = handle;
+    const entry = this.entryFor(handle.runId);
+    handle.parentState =
+      entry.activation?.parent ??
+      entry.handle?.parentState ??
+      handle.parentState;
+    entry.handle = handle;
   }
 
   /** Remove a run handle and notify waiters; a run with no handle still
@@ -144,7 +149,9 @@ export class RunRoster {
 
   /** Retain a native child loop's lineage. */
   addActivation(activation: ChildRunActivation): void {
-    this.entryFor(activation.runId).activation = activation;
+    const entry = this.entryFor(activation.runId);
+    activation.parent = entry.handle?.parentState ?? activation.parent;
+    entry.activation = activation;
   }
 
   removeActivation(runId: RunId, expected: ChildRunActivation): void {
@@ -161,8 +168,7 @@ export class RunRoster {
       const activation = entry.activation;
       if (
         activation !== undefined &&
-        activation.parentRunId === parentRunId &&
-        !activation.isDetached()
+        activation.parent.current === parentRunId
       ) {
         yield activation;
       }
@@ -193,11 +199,9 @@ export class RunRoster {
   ): void {
     for (const childRunId of childRunIds) {
       const entry = this.entries.get(childRunId);
-      const activation = entry?.activation;
-      if (activation?.parentRunId === parentRunId) activation.detach();
+      const parent = entry?.activation?.parent ?? entry?.handle?.parentState;
+      if (parent?.current === parentRunId) parent.current = null;
       this.approvals.detachRunFromParent(childRunId);
-      const handle = entry?.handle;
-      if (handle?.isOwnedBy(parentRunId) === true) handle.detach();
     }
   }
 
