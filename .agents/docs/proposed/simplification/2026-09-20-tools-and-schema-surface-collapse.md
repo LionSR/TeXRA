@@ -184,7 +184,7 @@ already shipped, in smaller PRs that never came back to update this note:
   `resolveRunLiveness` (`executions/runLiveness.ts`) — a second liveness read
   against `Runs`, the run-end row and claim ownership, not the fold. Its own
   docstring says why: a single-run read needs the unsettled/interrupted
-  *reason* string the fold doesn't carry, and a listing surface reads the
+  _reason_ string the fold doesn't carry, and a listing surface reads the
   fold "instead" because it "has already decided all of this for every run
   at once." Whether that split is the intended design or an un-migrated
   residual is not settled by this note; recorded here so a future audit
