@@ -11,21 +11,45 @@
  *   - Extension reuses a persistent storage directory and unlinks the
  *     individual files (via the returned `cleanup`) once done.
  *
- * Why `node:fs/promises` and not an Effect `FileSystem`: the diff editor
- * reads these files itself, so what is staged must be the caller's raw bytes,
- * and the staging happens on the Promise tier of a host's approval flow —
- * there is no fiber here to take the service from.
+ * The diff editor reads these files itself, so the host stages the caller's
+ * raw bytes through Node's filesystem. Promise rejections are tagged at this
+ * boundary; the approval controller runs the resulting Effect on its fiber.
  */
 
 import { unlink, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
-import { Effect } from 'effect';
+import { Data, Effect } from 'effect';
 
 import { withLogChannel } from '@logger/effectLog';
 import { generateShortId } from '@utils/core';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'approval.tempFiles';
+
+/** A staged diff side could not be written to the host filesystem. */
+export class ApprovalTempWriteFailed extends Data.TaggedError(
+  'ApprovalTempWriteFailed',
+)<{
+  readonly side: 'original' | 'proposed';
+  readonly message: string;
+  readonly cause: unknown;
+}> {}
+
+const writeSide = (
+  side: 'original' | 'proposed',
+  filePath: string,
+  content: string,
+): Effect.Effect<void, ApprovalTempWriteFailed> =>
+  Effect.tryPromise({
+    try: () => writeFile(filePath, content, 'utf8'),
+    catch: (cause) =>
+      new ApprovalTempWriteFailed({
+        side,
+        message: toErrorMessage(cause),
+        cause,
+      }),
+  });
 
 export interface ApprovalTempFiles {
   readonly originalPath: string;
@@ -67,7 +91,7 @@ const removeTempFile = (target: string): Effect.Effect<void> =>
 export const writeApprovalTempFiles = Effect.fn('writeApprovalTempFiles')(
   function* (
     input: WriteApprovalTempFilesInput,
-  ): Effect.fn.Return<ApprovalTempFiles, unknown> {
+  ): Effect.fn.Return<ApprovalTempFiles, ApprovalTempWriteFailed> {
     const { directory, targetPath, originalContent, proposedContent } = input;
     const ext = path.extname(targetPath) || '.txt';
     const originalPath = path.join(
@@ -84,14 +108,8 @@ export const writeApprovalTempFiles = Effect.fn('writeApprovalTempFiles')(
     // success to salvage.
     yield* Effect.all(
       [
-        Effect.tryPromise({
-          try: () => writeFile(originalPath, originalContent, 'utf8'),
-          catch: (error) => error,
-        }),
-        Effect.tryPromise({
-          try: () => writeFile(proposedPath, proposedContent, 'utf8'),
-          catch: (error) => error,
-        }),
+        writeSide('original', originalPath, originalContent),
+        writeSide('proposed', proposedPath, proposedContent),
       ],
       { concurrency: 'unbounded' },
     );
