@@ -2,24 +2,21 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 
 import { Effect } from 'effect';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   getCliModelAccessList: vi.fn(),
-  getVisibleAgents: vi.fn(),
   initCliPlatform: vi.fn(),
   installCliProcessRuntime: vi.fn(),
-  loadAgents: vi.fn(),
 }));
-
-vi.mock('@agent/index', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@agent/index')>();
-  return {
-    ...actual,
-    getVisibleAgents: mocks.getVisibleAgents,
-    loadAgents: mocks.loadAgents,
-  };
-});
 
 vi.mock('@cli/runtime/initPlatform', () => ({
   initCliPlatform: mocks.initCliPlatform,
@@ -49,10 +46,10 @@ import {
   initWizardModelSelectItems,
 } from '@cli/init/runInitWizard';
 import type { CliModelAccess } from '@cli/runtime/modelAccess';
-import { AgentCategory } from '@shared/schemas';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
-import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';
+import { REPO_ROOT } from '@test/support/repoScan';
+import { installedHost, setupPlatform } from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
 function modelAccess(
@@ -82,38 +79,71 @@ function expectUnavailableDefaultRecovery(output: string): void {
 
 const tempDirs = useTempDirs();
 
+// The init command picks its default agent from the real catalog: the
+// installed host's agent directories are the bundled resources, with an empty
+// custom dir standing in for a workspace without custom agents.
+let customAgentsDir: string;
+
+/** The real agent directories the installed host serves. */
+const bundledAgentDirectories = () => ({
+  custom: () => Effect.succeed(customAgentsDir),
+  builtIn: () =>
+    Effect.succeed(path.join(REPO_ROOT, 'packages/extension/resources/agents')),
+  builtInToolUse: () =>
+    Effect.succeed(
+      path.join(REPO_ROOT, 'packages/extension/resources/tool_use_agents'),
+    ),
+});
+
+beforeAll(async () => {
+  customAgentsDir = await makeTempDir('texra-init-agents-', tempDirs);
+  // Preload the catalog cache (module-level) so the command's own
+  // `loadAgents({ includeRemote: false })` is a silent cache hit: the one
+  // real scan logs an info line that the output-shape tests would otherwise
+  // read as stderr noise.
+  const { refresh } = await import('@agent/index/agentRegistry');
+  const { AgentDirectories } = await import('@platform/interfaces');
+  await testRuntime().runPromise(
+    refresh({ includeRemote: false }).pipe(
+      Effect.provideService(AgentDirectories, bundledAgentDirectories()),
+    ),
+  );
+});
+
+setupPlatform(
+  {},
+  {
+    agentDirectories: bundledAgentDirectories(),
+  },
+);
+
 describe('CLI init command', () => {
   let stdout = '';
   let stderr = '';
   let stdoutSpy: ReturnType<typeof vi.spyOn>;
   let stderrSpy: ReturnType<typeof vi.spyOn>;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     stdout = '';
     stderr = '';
     mocks.getCliModelAccessList
       .mockReset()
       .mockReturnValue(Effect.succeed([modelAccess('deepseekproT')]));
-    mocks.getVisibleAgents
-      .mockReset()
-      .mockReturnValue(
-        Effect.succeed([
-          { name: 'assistant', category: AgentCategory.ToolUse },
-        ]),
-      );
     // The command threads the stores this call hands back into the model
-    // access list, so the mock returns the pair a real init would.
+    // access list and the roster's visibility read, so the mock returns the
+    // installed host's own stores.
+    const host = installedHost();
     mocks.initCliPlatform.mockReset().mockReturnValue(
       Effect.succeed({
-        secrets: new FakeSecrets(),
-        globalState: new FakeStateStore(),
+        secrets: host.secrets,
+        globalState: host.roots.globalState,
+        workspaceState: host.roots.workspaceState,
         runtime: testRuntime(),
       }),
     );
     mocks.installCliProcessRuntime
       .mockReset()
       .mockImplementation(async () => testRuntime());
-    mocks.loadAgents.mockReset().mockReturnValue(Effect.void);
     stdoutSpy = spyOnStreamWrite(process.stdout, (chunk) => {
       stdout += chunk;
     });

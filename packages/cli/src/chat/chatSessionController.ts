@@ -182,9 +182,7 @@ const settleClaimOnExit =
   <R>(program: Effect.Effect<A, E, R>): Effect.Effect<A, E, R> =>
     program.pipe(
       Effect.onExit((exit) =>
-        Effect.sync(() => {
-          Deferred.doneUnsafe(claim, exit);
-        }),
+        Effect.sync(() => Deferred.doneUnsafe(claim, exit)),
       ),
     );
 
@@ -292,6 +290,15 @@ export interface ChatSessionControllerInit {
    *  here: the controller lives for the length of the chat session, and its
    *  Promise-facing methods are that session's run edge. */
   readonly runtime: ProcessRuntime;
+  /** The agent run boundary the controller drives. Composition leaves it
+   *  unset and gets the agent runtime's own; a test harness injects its
+   *  stand-ins here rather than mocking agent modules. */
+  readonly agentRuns?: {
+    readonly launch: typeof runAgent;
+    readonly resume: typeof resumeRun;
+    readonly attachResultToast: typeof attachTerminalResultToast;
+    readonly records: typeof getRunRecords;
+  };
 }
 
 interface PreparedChatInstruction {
@@ -355,6 +362,13 @@ export function createChatSessionController(
     stores,
     runtime,
   } = init;
+  const agentRuns = {
+    launch: runAgent,
+    resume: resumeRun,
+    attachResultToast: attachTerminalResultToast,
+    records: getRunRecords,
+    ...init.agentRuns,
+  };
   let interruptedContinuation: InterruptedContinuationBatch | undefined;
   let pendingInterruptedFollowUps: InterruptedFollowUp[] = [];
   const pendingSkillActivations = new Map<string, string>();
@@ -603,7 +617,7 @@ export function createChatSessionController(
     readonly approvalsUnavailable: boolean;
     readonly finalize: () => void;
   } => {
-    const detachResultToast = attachTerminalResultToast(
+    const detachResultToast = agentRuns.attachResultToast(
       runtimeSession,
       runtimeSession.interactions,
     );
@@ -644,7 +658,7 @@ export function createChatSessionController(
           const registeredConfig = yield* Effect.try(() =>
             AgentConfigSchema.parse(config),
           );
-          const result = yield* runAgent(
+          const result = yield* agentRuns.launch(
             { kind: 'fresh', config: registeredConfig, runId },
             {
               session: runtimeSession,
@@ -705,28 +719,20 @@ export function createChatSessionController(
   //    rehydration (fire-and-forget, per the interface docstring); the port
   //    awaits its deferred so its caller reads a boolean, and classifies a
   //    defect into `AgentResumeFailed` for the caller's retry decision.
-  //  - Recovery transfer. A manual resume supersedes unconditionally in its
-  //    synchronous prologue, seeds the batch into `resumeRun` as
-  //    `extraFollowUps`, and restores it whenever the stream queue never took
-  //    over. A wake supersedes only when the caller passed no queue-ready
-  //    callback, writes the batch through `submitBatch` before resuming, and
-  //    restores only when that one write fails or is refused. Two protocols,
-  //    two restore predicates.
+  //  - Recovery transfer. A manual resume supersedes unconditionally, seeds
+  //    the batch as `extraFollowUps`, and restores it whenever the queue never
+  //    took over. A wake supersedes only with no queue-ready callback, writes
+  //    the batch through `submitBatch`, and restores only when that one write
+  //    fails or is refused. Two protocols, two restore predicates.
   //  - Adoption point. Config is adopted inside `onResumeResolved`, which
-  //    `resumeRun` calls after it claims ownership and only once the saved
-  //    state loaded, so a row advertised from its checkpoint `stat` alone can
-  //    still be refused into the chat the user is looking at. A wake adopts
+  //    `resumeRun` calls only once the saved state loaded; a wake adopts
   //    before the call and leaves the local transcript alone.
-  //  - Refusals. A manual resume names its reason in the transcript (missing
-  //    run, workflow category, lost recovery claim) and leaves the exit code
-  //    untouched; a wake answers `false` silently and has no category check.
-  // Unifying them takes one knob per bullet, and those knobs would sit on the
-  // `handBackUnusedRecovery` / `restoreInterruptedRecovery` pairing, where a
-  // double hand-back or a missed restore silently loses the follow-ups typed
-  // during an interruption. The shared parts are already named helpers
-  // (`setupRunHost`, `toolUseResumeOptions`, `settleResumedTurn`,
-  // `recoverRun`, the two lease helpers above); what is left here genuinely
-  // differs. Don't merge these two bodies.
+  //  - Refusals. A manual resume names its reason in the transcript; a wake
+  //    answers `false` silently and has no category check.
+  // Unifying them takes one knob per bullet on the `handBackUnusedRecovery` /
+  // `restoreInterruptedRecovery` pairing, where a double hand-back or a missed
+  // restore silently loses the follow-ups typed during an interruption. Don't
+  // merge these two bodies.
   const resume = (id: RunId): Effect.Effect<void, unknown> =>
     // `Effect.suspend` is what keeps the claim handshake synchronous: its
     // body is this program's first step, so the availability check and the
@@ -761,7 +767,7 @@ export function createChatSessionController(
         // The durable record carries the config the TUI adopts before the run.
         // Workflow runs resume headless through `texra resume`, not inside a
         // chat.
-        const store = getRunRecords(runtimeSession, id);
+        const store = agentRuns.records(runtimeSession, id);
         const [config, exists] = yield* Effect.all([
           store.readConfig(),
           store.exists(),
@@ -787,15 +793,12 @@ export function createChatSessionController(
 
         const { approvalsUnavailable, finalize } = setupRunHost();
 
-        // Adopting the resumed stream is the mutation a refusal must not cost.
-        // A history row is advertised from its checkpoint file alone (one
-        // `stat`, no parse), so a run whose saved state cannot be loaded is
-        // offered and refused; `resumeRun` calls this only once that state
-        // loaded, so the refusal reaches the chat the user is looking at
-        // instead of a cleared transcript switched onto a dead stream. A Ctrl-C
-        // during the steps below lands as `session.stopRequested` and is
-        // honored by `isCancellationRequested`, which `resumeRun` re-reads once
-        // this returns, rather than starting an agent the user cancelled.
+        // Adopting the resumed stream is the mutation a refusal must not cost:
+        // `resumeRun` calls this only once the saved state loaded, so the
+        // refusal reaches the chat the user is looking at instead of a cleared
+        // transcript switched onto a dead stream. A Ctrl-C during the steps
+        // below lands as `session.stopRequested`, which `resumeRun` re-reads
+        // once this returns, rather than starting an agent the user cancelled.
         const adoptResumedRun = Effect.fn('adoptResumedRun')(function* () {
           yield* setCliHelperModel(stores.globalState, config.model);
           yield* adoptRunConfig(config, 'history');
@@ -803,16 +806,12 @@ export function createChatSessionController(
           followUpQueue.clear();
           session.runId = id;
           rootRunId.set(id);
-          // The session held no stream until the line above: `markRunPending`,
-          // inside the synchronous slot claim at the top of `resume`, dropped
-          // the pre-resume one, so a Ctrl-C in the window before adoption could
-          // not fabricate an interrupted marker on a stream this resume is
-          // leaving behind. It also found nothing to interrupt, so re-read the
-          // request here, the way `startRootRun`'s `onRunResolved` does -
-          // and let it land on the run the user asked to continue. `resumeRun`
-          // re-reads `isCancellationRequested` once this hook returns, so the
-          // stop still refuses the launch; this only decides which stream it
-          // marks recoverable.
+          // The pre-resume stream was dropped by the synchronous slot claim
+          // above, so a Ctrl-C before adoption had nothing to interrupt;
+          // re-read the request here and let it land on the run the user
+          // asked to continue. `resumeRun` re-reads `isCancellationRequested`
+          // once this hook returns, so the stop still refuses the launch; this
+          // only decides which stream it marks recoverable.
           if (session.stopRequested) interruptActiveRun();
 
           yield* runtimeSession.transcripts.ensureLoaded(id);
@@ -832,7 +831,7 @@ export function createChatSessionController(
         runtime.runFork(
           Effect.gen(function* () {
             recoveryHandedOff = true;
-            const result = yield* resumeRun(id, {
+            const result = yield* agentRuns.resume(id, {
               ...toolUseResumeOptions(id, approvalsUnavailable),
               recovery,
               extraFollowUps: supersededRecovery?.followUps,
@@ -960,7 +959,9 @@ export function createChatSessionController(
           }
         }
 
-        const config = yield* getRunRecords(runtimeSession, runId).readConfig();
+        const config = yield* agentRuns
+          .records(runtimeSession, runId)
+          .readConfig();
         if (!config) return false;
         if (isCancellationRequested()) return false;
         // The parent edge as the fold holds it, read cold: a resume at
@@ -996,7 +997,7 @@ export function createChatSessionController(
           ),
         );
         recoveryHandedOff = true;
-        const result = yield* resumeRun(runId, {
+        const result = yield* agentRuns.resume(runId, {
           ...toolUseResumeOptions(runId, approvalsUnavailable),
           recovery,
           extraFollowUps: options.extraFollowUps,
