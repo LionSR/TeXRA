@@ -29,9 +29,10 @@ const perMillion = (tokens: number, price: number): number =>
  * xAI pricing the llm-zoo catalog cannot express: per-model long-context
  * tiers and the documented cached-token rate, keyed by catalog `fullName`.
  * Source: the models catalog embedded in docs.x.ai, verified 2026-08-14.
- * llm-zoo has no tier field (still true at 1.28.0) and its xAI entries
- * inherit the default `cacheDiscountFactor` of 1, which would zero the
- * cache rebate, so both live here until the catalog carries them (#10073).
+ * llm-zoo has no tier field (still true at 1.37.0), and before 1.37.0 its
+ * xAI entries inherited the default `cacheDiscountFactor` of 1, which would
+ * zero the cache rebate, so both live here until the catalog carries them
+ * (#10073).
  * Rates are USD per 1M tokens.
  */
 const XAI_DOCUMENTED_PRICING: Readonly<
@@ -150,15 +151,16 @@ function turnRates(
 
 /**
  * Anthropic bills cache reads and writes as separate token classes on top
- * of the uncached input: reads at a tenth of the input rate, five-minute
- * writes at 1.25x and one-hour writes at 2x.
+ * of the uncached input: reads at the model's cache discount (0.1x on most
+ * models, 0.05x on Opus 5.5, 0.025x on Fable/Mythos 5.1), five-minute writes
+ * at 1.25x and one-hour writes at 2x.
  */
 function anthropicCost(
   usage: TurnUsage,
   provider: Extract<TurnUsage['providerUsage'], { kind: 'anthropic' }>,
   rates: TurnRates,
 ): number {
-  const { inputPrice, outputPrice } = rates;
+  const { inputPrice, outputPrice, cacheDiscountFactor } = rates;
   const uncached = provider.uncachedInputTokens ?? usage.inputTokens ?? 0;
   const cached = usage.cachedInputTokens ?? 0;
   const write5m =
@@ -175,7 +177,7 @@ function anthropicCost(
   );
   return (
     perMillion(uncached, inputPrice) +
-    perMillion(cached, inputPrice * 0.1) +
+    perMillion(cached, inputPrice * cacheDiscountFactor) +
     perMillion(write5m + unclassified, inputPrice * 1.25) +
     perMillion(write1h, inputPrice * 2) +
     perMillion(usage.outputTokens ?? 0, outputPrice)
