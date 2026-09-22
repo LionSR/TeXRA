@@ -1,4 +1,4 @@
-import { Effect, Result } from 'effect';
+import { Effect, Fiber, Result } from 'effect';
 
 /**
  * The one resume entry point. Every host continues a persisted run through
@@ -6,8 +6,8 @@ import { Effect, Result } from 'effect';
  * `texra resume`, and the implicit follow-up wake. It resolves persisted
  * state, claims the stream's follow-up recovery lease, and launches the run
  * as a generation on its run lane (`resumeToolUseFromResumeData` for
- * tool-use, the host's workflow launcher for workflows). The native child
- * loop keeps the unlaned `resumeToolUseTurn`: it already holds the lane.
+ * tool-use, the host's workflow launcher for workflows). Recovered children
+ * use the same continuous delivery driver as newly launched children.
  */
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
@@ -18,7 +18,7 @@ import type {
   FollowUpQueueInput,
   FollowUpRecoveryLease,
 } from '@agent/followUp/ToolUseFollowUpQueueManager';
-import { getRunRecords } from '@agent/storage/runRecords';
+import { getRunRecords, persistedParentRunId } from '@agent/storage/runRecords';
 import { withLogChannel, withLogData } from '@logger/effectLog';
 import type { RecoveryContinuation } from '@platform/interfaces';
 import type { ProcessServices } from '@platform/processRuntime';
@@ -26,6 +26,7 @@ import {
   aggregateId,
   AgentCategory,
   ownerPid,
+  USER_FOLLOW_UP_SUPPORT,
   type ModelCompatibilityKey,
   type RunId,
 } from '@shared/schemas';
@@ -37,18 +38,17 @@ import {
 } from '@shared/session/database';
 import { RunLedgerRefused } from '@shared/session/runLedger';
 import { foldRunState } from '@shared/session/runStateFold';
+import { createNativeSubagentStrategy } from '@tools/delegation/nativeSubagentStrategy';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
-import {
-  isWaitingFlowResult,
-  type AgentRuntimeFlowResult,
-} from './AgentFlowResult';
+import { type AgentFlowResult } from './AgentFlowResult';
 import {
   ResumeSessionUnavailableError,
   resumeToolUseFromResumeData,
   type SubagentRunOptions,
 } from './executeAgent';
 import { classifyRun } from './runClassification';
+import { startChildRunLoop } from './childRunLoop';
 import { Runs } from './runRegistry';
 import { RunLive } from './runRoster';
 import {
@@ -58,23 +58,12 @@ import {
 import type { SessionHandle } from './SessionHandle';
 import type { AgentRunServices } from './toolInjection';
 
-/**
- * `started` once the resumed generation has settled (a tool-use turn parked
- * at WAITING or finished; a workflow run returned). `delivered` is false when
- * that generation returned with input still in its queue: the follow-ups
- * stay queued on the run's rows and await delivery, so a follow-up wake
- * reports them as queued while an explicit resume settles the turn it just
- * ran. `outcome` carries the resumed tool-use run's
- * raw result (terminal or WAITING), absent on the workflow path and when the
- * run never returned one. A refusal carries the reason a host words with
- * `describeFollowUpFailure`. Unexpected failures (storage errors, the run
- * itself failing) reach the caller's failure channel.
- */
+/** A settled resume reports whether it consumed the admitted input. Unexpected failures fail the Effect. */
 export type ResumeRunResult =
   | {
       readonly started: true;
       readonly delivered: boolean;
-      readonly outcome?: AgentRuntimeFlowResult['outcome'];
+      readonly outcome?: AgentFlowResult['outcome'];
     }
   | { readonly failed: FollowUpFailureReason };
 
@@ -357,20 +346,7 @@ const releaseUnstartedRecovery = Effect.fn('releaseUnstartedRecovery')(
   },
 );
 
-/**
- * The expected launch failures a host words; anything else fails.
- *
- * `RunLive` is the run lane's own refusal: a generation of this run is already
- * live in this process, so the launch was refused where the lane is claimed
- * rather than by a read of the same fact taken earlier on this path.
- *
- * A refusal is also the one moment this process learns, for the run the user
- * just asked to open, that another live TeXRA process holds it. That fact is
- * recorded on the stream so every surface renders it read-only with the same
- * copy until this stream is opened successfully — after the boot-time repair
- * pass is gone, an open-for-write and a sidecar hydration are the only two
- * producers of it.
- */
+/** Classify the expected launch refusals; unexpected failures propagate. */
 function refusalFor(
   error: unknown,
   session: SessionHandle,
@@ -416,7 +392,7 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
   const runId = resume.runId;
   const followUps = session.followUps;
 
-  // A stop already reached the parked generation this resume would replace:
+  // A stop already reached the generation this resume would replace:
   // the run is ending, and a resume over it would revive what that stop is
   // settling.
   if ((yield* Runs).getHandle(resume.runId)?.stopRequested === true) {
@@ -426,7 +402,7 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
 
   let cancelledAtFlowAttachment = false;
   let refusedElsewhere = false;
-  let runResult: AgentRuntimeFlowResult | undefined;
+  let runResult: AgentFlowResult | undefined;
   let undelivered = false;
   const resumed = yield* Effect.result(
     Effect.gen(function* () {
@@ -449,7 +425,7 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
         try: () => options.onFollowUpQueueReady?.(queueLease),
         catch: ensureError,
       });
-      return yield* resumeToolUseFromResumeData(resume, {
+      const launchOptions = {
         session,
         approvalPromptsUnavailable: options.approvalPromptsUnavailable,
         onApprovalPolicyDenial: options.onApprovalPolicyDenial,
@@ -458,7 +434,29 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
         onCancellationAtFlowAttachment: () => {
           cancelledAtFlowAttachment = true;
         },
+      };
+      const parentRunId = yield* persistedParentRunId(session, runId);
+      if (parentRunId === undefined)
+        return yield* resumeToolUseFromResumeData(resume, launchOptions);
+      const completion = yield* startChildRunLoop({
+        session,
+        runId,
+        parentRunId,
+        queueLease,
+        agentName: resume.agentConfig.agent,
+        budgeted: true,
+        strategy: createNativeSubagentStrategy({
+          ...launchOptions,
+          runId,
+          parentRunId,
+          agentName: resume.agentConfig.agent,
+          startedAt: Date.now(),
+          workingDirectory: resume.agentConfig.workingDirectory ?? undefined,
+          userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
+          resume: { identity: resume, options: launchOptions },
+        }),
       });
+      return yield* Fiber.join(completion);
     }),
   ).pipe(
     Effect.tap((result) =>
@@ -471,9 +469,7 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
         undelivered = followUps.hasQueued(queueLease);
         followUps.release(
           queueLease,
-          !runResult || isWaitingFlowResult(runResult) || undelivered
-            ? 'recoverable'
-            : 'terminal',
+          !runResult || undelivered ? 'recoverable' : 'terminal',
         );
       }),
     ),

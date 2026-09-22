@@ -1,5 +1,5 @@
 /** Application state reads its root's SQLite authority on every operation. */
-import { Context, Effect, Layer } from 'effect';
+import { Context, Effect, Layer, RcMap } from 'effect';
 
 import {
   StateReadFailed,
@@ -11,7 +11,7 @@ import {
   aggregateId,
   type PersistedJsonValue,
 } from '@shared/schemas';
-import { Database } from '@shared/session/database';
+import { Database, ProjectDatabases } from '@shared/session/database';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -75,7 +75,8 @@ export function appStateStoreFromDatabase(
   };
 }
 
-/** Acquire a database for the caller's process or project scope. */
+/** Acquire independent profile state in the caller's scope. Project state
+ *  instead borrows the connection its session graph shares below. */
 export const openAppStateStore = Effect.fn('appStateStore.openAppStateStore')(
   function* (storage: string) {
     const context = yield* Layer.build(
@@ -86,3 +87,11 @@ export const openAppStateStore = Effect.fn('appStateStore.openAppStateStore')(
     return appStateStoreFromDatabase(storage, Context.get(context, Database));
   },
 );
+
+/** Retain the project's persistent database for the caller's project scope. */
+export const openProjectStateStore = Effect.fn(
+  'appStateStore.openProjectStateStore',
+)(function* (storage: string) {
+  const database = yield* RcMap.get(yield* ProjectDatabases, storage);
+  return appStateStoreFromDatabase(storage, database);
+});

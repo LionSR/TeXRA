@@ -10,7 +10,7 @@
  * (`runRegistry.ts`) is what hosts call.
  */
 
-import { Deferred, Effect, Fiber } from 'effect';
+import { Deferred, Effect } from 'effect';
 
 import {
   aggregateId as qualifyAggregateId,
@@ -43,8 +43,7 @@ export class RunStopper {
   ) {}
 
   /**
-   * Terminate a run via its handle, or, for a native child loop between turns
-   * (an activation with no turn handle), interrupt the loop itself. A
+   * Terminate a run's live handle and its child delivery activation. A
    * cascading stop is admitted synchronously and a detaching one with its
    * settlement ({@link RunStop.accepted}); either way the caller executes the
    * returned settlement at its Effect boundary before releasing ownership.
@@ -301,7 +300,7 @@ export class RunStopper {
    * every later one). The scan itself runs here, at the fold, where the row
    * that closed the window reads its children; the settlements it collects
    * are composed, never run: the caller executes the returned program on the
-   * runtime that delivered the fold, and forks the parked-child teardowns it
+   * runtime that delivered the fold, and forks the child teardowns it
    * collects, which cannot fail (their recovery is logged inside).
    */
   sweepChildrenOfFoldedStop(runId: RunId): Effect.Effect<void> {
@@ -321,8 +320,8 @@ export class RunStopper {
     cascadeChildren: boolean,
     settlements: Effect.Effect<void, Error>[],
   ): void {
-    // A loop between turns has no handle to interrupt; a loop inside a turn
-    // also gets its turn handle terminated below. The activation is keyed
+    // Preparation and final delivery outlive the engine handle; stop their
+    // activation as well as the live run below. The activation is keyed
     // apart from the handle so each is interrupted once per stop.
     for (const activation of this.roster.activeChildActivations(parentRunId)) {
       const key = `activation:${activation.runId}`;
@@ -362,17 +361,6 @@ export class RunStopper {
       }
     }
     const interrupted = handle.interrupt();
-    // A run parked at WAITING is stopped by completing the latch its fiber
-    // waits on: that fiber writes the run's terminal row through the same path
-    // a running generation takes, and this stop settles when it does. Read
-    // after `interrupt()`, whose handler may be a resume's launch stop rather
-    // than this run's, so the parked run is ended here either way.
-    const parked = this.roster.parkedRun(handle.runId);
-    if (parked) {
-      Deferred.doneUnsafe(parked.stopped, Effect.void);
-      settlements.push(Fiber.await(parked.fiber).pipe(Effect.asVoid));
-      return true;
-    }
     // The loop's own interrupt already carried the stop into the turn: the
     // native-subagent strategy links the loop signal to this handle, so
     // aborting the loop spends the handle's interrupt target before we reach

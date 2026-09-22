@@ -14,7 +14,6 @@ import {
 } from '@agent/runtime/AgentRunLifecycle';
 import {
   type ToolUseFlowResult,
-  type WaitingToolUseFlowResult,
   type WorkflowFlowResult,
 } from '@agent/runtime/AgentFlowResult';
 import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
@@ -143,31 +142,6 @@ function workflowResult(runId: RunId, outcome: RunOutcome): WorkflowFlowResult {
   };
 }
 
-function waitingResult(runId: RunId): WaitingToolUseFlowResult {
-  return {
-    outcome: RUN_PHASE.WAITING,
-    runId,
-    output: { ...EMPTY_TOOL_USE_OUTPUT, files: [] },
-  };
-}
-
-/**
- * Returns the suspended handle for a run that reported WAITING.
- *
- * The fake runners below report the WAITING outcome without writing the
- * loop's own `flow.step` park, so the folded phase never reaches WAITING
- * here — which is the point: the handle's own suspension is what makes a
- * stop tear the run down.
- */
-function takeWaitingHandle(runId: RunId): RunHandle {
-  const handle = testDefaultSession().runs.getHandle(runId);
-  expect(handle).toBeInstanceOf(RunHandle);
-  if (!(handle instanceof RunHandle)) {
-    throw new Error('Expected a suspended agent run handle.');
-  }
-  return handle;
-}
-
 /** Gate the next finalizeRun call on an explicit release. */
 const parkNextFinalize = Effect.gen(function* () {
   const started = yield* Deferred.make<void>();
@@ -210,31 +184,6 @@ function runFlow(...args: Parameters<typeof runFlowWithLifecycle<never>>) {
 }
 
 describe('runFlowWithLifecycle', () => {
-  // The run's category reaches the handle and the terminal `result` through
-  // the one descriptor the lifecycle builds, so a workflow run reports
-  // `workflow` on both without either side re-deriving the string.
-
-  it.effect(
-    'does not stop the Lean servers when a tool-use run parks at WAITING',
-    () =>
-      Effect.gen(function* () {
-        const { runId, ctx } = lifecycleFixture();
-        const stopSessionsForRun = vi.fn((_runId: RunId) => Effect.void);
-
-        const result = yield* runFlow(
-          ctx,
-          () => Effect.succeed(waitingResult(runId)),
-          { onRunEnd: stopSessionsForRun },
-        );
-
-        // WAITING is a suspension, not a terminal run end: the server must
-        // survive the parked run so a resume reuses it instead of paying a cold
-        // spawn.
-        expect(result.outcome).toBe(RUN_PHASE.WAITING);
-        expect(stopSessionsForRun).not.toHaveBeenCalled();
-      }),
-  );
-
   // A completed session marks first-run onboarding done, except for the
   // built-in setup agent, which must leave the flag untouched.
   const onboardingCases = [
@@ -316,32 +265,6 @@ describe('runFlowWithLifecycle', () => {
         expect(result.outcome).toBe(RUN_OUTCOME.FAILED);
         expect(onError).toHaveBeenCalledOnce();
         expect(testDefaultSession().runs.getHandle(runId)).toBeUndefined();
-      }),
-  );
-
-  it.effect(
-    'keeps native subagent WAITING results registered and nonterminal',
-    () =>
-      Effect.gen(function* () {
-        const { runId, ctx } = lifecycleFixture();
-        yield* Effect.addFinalizer(() =>
-          Effect.sync(() => testDefaultSession().runs.untrack(runId)),
-        );
-        const onError = vi.fn();
-
-        const result = yield* runFlow(
-          ctx,
-          () => Effect.sync(() => waitingResult(runId)),
-          {
-            parentRunId: PARENT_RUN_ID,
-            onError,
-          },
-        );
-
-        expect(result.outcome).toBe(RUN_PHASE.WAITING);
-        expect(storageMocks.finalizeRun).not.toHaveBeenCalled();
-        expect(onError).not.toHaveBeenCalled();
-        expect(testDefaultSession().runs.getHandle(runId)).toBeDefined();
       }),
   );
 
@@ -533,126 +456,6 @@ describe('runFlowWithLifecycle', () => {
         expect(onError).toHaveBeenCalledOnce();
         expect(onError.mock.calls[0][1]).toEqual(result);
       }),
-  );
-
-  it.effect(
-    'lets a stop/kill tear down a subagent suspended at WAITING (issue #7287)',
-    () =>
-      Effect.gen(function* () {
-        const { runId, ctx } = lifecycleFixture();
-        const parentStageId = seedOpenRunGroup(ctx, runId);
-        const recorded = recordSessionEvents(ctx.session, {
-          aggregateId: qualifyAggregateId('run', runId),
-        });
-        const followUpsTerminalize = vi.spyOn(
-          ctx.session.followUps,
-          'terminalize',
-        );
-
-        try {
-          const result = yield* runFlow(
-            ctx,
-            () => Effect.succeed(waitingResult(runId)),
-            { parentRunId: PARENT_RUN_ID },
-          );
-
-          expect(result.outcome).toBe(RUN_PHASE.WAITING);
-          expect(testDefaultSession().runs.getHandle(runId)).toBeDefined();
-          expect(followUpsTerminalize).not.toHaveBeenCalled();
-          expect(storageMocks.finalizeRun).not.toHaveBeenCalled();
-
-          takeWaitingHandle(runId);
-
-          // The tool-use loop's finally detaches this run's interrupt handler but
-          // preserves the follow-up queue for WAITING — it does not dispose the
-          // session — by the time a native subagent suspends at WAITING (not
-          // reproduced by this fake runner, but true in production — see
-          // loop/toolUse.ts). With no interrupt target left, `runs.kill()`
-          // falls back to the teardown the WAITING branch parked and tears the
-          // run down.
-          const stop = testDefaultSession().runs.kill(runId);
-          expect(stop.accepted()).toBe(true);
-          yield* stop.settlement;
-
-          expect(testDefaultSession().runs.getHandle(runId)).toBeUndefined();
-          expect(followUpsTerminalize).toHaveBeenCalledWith(runId);
-          // The bypassed runFlowWithLifecycle can't write the terminal row, so
-          // terminateWaitingHandle must — session subscribers would otherwise
-          // miss the stop entirely. The settlement runs that write in this fiber,
-          // so the call is a fact as soon as it returns.
-          expect(storageMocks.finalizeRun).toHaveBeenCalledWith(
-            testDefaultSession(),
-            {
-              runId,
-              outcome: RUN_OUTCOME.CANCELLED,
-              output: EMPTY_TOOL_USE_OUTPUT,
-            },
-          );
-          // The detached trace cannot publish this close. The suspended owner
-          // must append it to the same session event stream before releasing.
-          yield* ctx.session.settlePublications();
-          expect(
-            eventsOfType(
-              yield* Effect.promise(() => recorded.read()),
-              'stage.end',
-            ),
-          ).toContainEqual(
-            expect.objectContaining({
-              id: parentStageId,
-              status: RUN_OUTCOME.CANCELLED,
-            }),
-          );
-        } finally {
-          testDefaultSession().runs.untrack(runId);
-        }
-      }),
-  );
-
-  it.effect('runs run-end cleanup when waiting stage publication fails', () =>
-    Effect.gen(function* () {
-      const { runId, ctx } = lifecycleFixture();
-      const stopSessionsForRun = vi.fn((_runId: RunId) => Effect.void);
-      seedOpenRunGroup(ctx, runId);
-      yield* ctx.session.settlePublications();
-      vi.spyOn(ctx.session, 'commitRunEvent').mockReturnValueOnce(
-        Effect.fail(
-          new DatabaseWriteFailed({
-            path: 'session.db',
-            cause: new Error('stage publication failed'),
-          }),
-        ),
-      );
-
-      try {
-        const result = yield* runFlow(
-          ctx,
-          () => Effect.succeed(waitingResult(runId)),
-          { onRunEnd: stopSessionsForRun },
-        );
-        expect(result.outcome).toBe(RUN_PHASE.WAITING);
-        takeWaitingHandle(runId);
-
-        const stop = testDefaultSession().runs.kill(runId);
-
-        expect(stop.accepted()).toBe(true);
-
-        yield* stop.settlement;
-
-        expect(stopSessionsForRun).toHaveBeenCalledWith(runId);
-        // The stage close and the terminal row are independent durable facts:
-        // a lost close must not cost the row a stopped run is read by.
-        expect(storageMocks.finalizeRun).toHaveBeenCalledWith(
-          testDefaultSession(),
-          {
-            runId,
-            outcome: RUN_OUTCOME.CANCELLED,
-            output: EMPTY_TOOL_USE_OUTPUT,
-          },
-        );
-      } finally {
-        testDefaultSession().runs.untrack(runId);
-      }
-    }),
   );
 
   it.effect(

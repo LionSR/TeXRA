@@ -5,6 +5,7 @@ import {
   type Effect,
   type SubscriptionRef,
   type Result,
+  type RcMap,
 } from 'effect';
 import { z } from 'zod';
 import { AggregateIdSchema, OwnerIdSchema } from '@shared/schemas';
@@ -328,3 +329,11 @@ export class GlobalDatabase extends Context.Service<
     | 'updateInquiryRecord'
   >
 >()('@texra/session/GlobalDatabase') {}
+
+/** Persistent project connections, retained by project and session scopes.
+ *  The last borrower releases the connection; an ephemeral transcript never
+ *  substitutes its in-memory database for this persistent application state. */
+export class ProjectDatabases extends Context.Service<
+  ProjectDatabases,
+  RcMap.RcMap<string, Database['Service'], DatabaseOpenFailed>
+>()('@texra/session/ProjectDatabases') {}

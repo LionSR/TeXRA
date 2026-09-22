@@ -14,8 +14,8 @@
  * message is that merge, done once, where the row is written. The
  * provider-visible difference is the message count of a multi-item batch.
  *
- * A native child loop owns continuation across all of its turns; its inner
- * one-cycle loop reads that owner's queue without becoming a second consumer.
+ * A native child's delivery driver owns continuation while this service
+ * reads its input in the same live run, without a second queue consumer.
  */
 import {
   Cause,
@@ -72,8 +72,6 @@ export class FollowUps extends Context.Service<
     readonly appendSynthetic: (text: string) => void;
     /** Block for the next batch; null when the queue was taken away. */
     readonly wait: Effect.Effect<FollowUpBatch | null>;
-    /** Take a queued batch without blocking; null when none is queued. */
-    readonly drain: Effect.Effect<FollowUpBatch | null>;
     /** Release the lease: keep the run recoverable, or end it. */
     readonly release: (next: 'recoverable' | 'terminal') => void;
     /**
@@ -222,7 +220,6 @@ export const followUpsLayer: Layer.Layer<
         input.wake(text);
       },
       wait: Effect.map(input.take, taken),
-      drain: Effect.map(input.poll, taken),
       release: (next) => {
         if (lease) manager.release(lease, next);
       },

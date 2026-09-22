@@ -4,20 +4,13 @@
  * The session-facing surface: admission, the launch-time bookkeeping a
  * `track` does, the projections hosts read, and the stop gestures they call.
  * What this process holds for a run — its handle, its child activation, the
- * fiber a WAITING generation parked on, its lifecycle lane and the
+ * its lifecycle lane and the
  * generations holding it — is one entry in `runRoster.ts`, the single
  * in-process liveness authority; what a stop does with those records lives in
  * `runStopping.ts`.
  */
 
-import {
-  Context,
-  Deferred,
-  Effect,
-  FiberMap,
-  Semaphore,
-  type Scope,
-} from 'effect';
+import { Context, Effect, Semaphore, type Scope } from 'effect';
 
 import {
   RUN_PHASE,
@@ -44,21 +37,6 @@ import type {
 } from './runRegistryTypes';
 
 /**
- * The owner of a session's parked fibers, for the caller's scope.
- *
- * A run that reaches WAITING keeps the fiber holding its teardown
- * ({@link RunRegistry.park}); the map owns that fiber, so a park the session
- * never woke ends when the session's scope closes instead of outliving it as
- * a daemon. It is made here rather than by the registry's constructor because
- * `FiberMap.make` needs a scope and the registry is a value.
- */
-export const makeParkedRuns = (): Effect.Effect<
-  FiberMap.FiberMap<RunId>,
-  never,
-  Scope.Scope
-> => FiberMap.make<RunId>();
-
-/**
  * Session-owned registry of active runs and their change listeners. One
  * instance belongs to each session, built by the session layer in that
  * session's scope and provided as {@link Runs}.
@@ -70,15 +48,12 @@ export class RunRegistry {
   private readonly roster: RunRoster;
   private readonly stopper: RunStopper;
   private readonly runView: RunRegistryInit['runView'];
-  /** The session-scoped owner of every parked fiber ({@link park}). */
-  private readonly parked: RunRegistryInit['parked'];
   /** The session's child-run concurrency budget, made on first use
    *  ({@link childRunBudget}). */
   private budget: Semaphore.Semaphore | undefined;
 
   constructor(options: RunRegistryInit) {
     this.runView = options.runView;
-    this.parked = options.parked;
     this.roster = new RunRoster(options.approvals);
     this.stopper = new RunStopper(
       this.roster,
@@ -188,44 +163,6 @@ export class RunRegistry {
     });
   }
 
-  /**
-   * Park `handle`'s run on its own stop latch: the generation that reached
-   * WAITING stays here as a fiber holding the run's teardown, instead of
-   * leaving it behind for someone else to invoke. Completing the latch
-   * (`RunStopper.terminate`) runs `termination`, the run's own terminal path;
-   * interrupting the fiber where it waits ({@link track}, {@link dispose})
-   * ends the park alone. The fiber leaves the roster when it ends.
-   *
-   * The fiber belongs to the session's parked-fiber map, whose scope is the
-   * session's, so the park outlives the generation's own scope without
-   * becoming a daemon nobody owns. It also inherits the parking fiber's
-   * context, which is why `termination` names the services it needs rather
-   * than arriving pre-provided from a copy the caller took.
-   */
-  park<R>(
-    handle: RunHandle,
-    stopped: Deferred.Deferred<void>,
-    termination: Effect.Effect<void, never, R>,
-  ): Effect.Effect<void, never, R> {
-    const runId = handle.runId;
-    return FiberMap.run(
-      this.parked,
-      runId,
-    )(Deferred.await(stopped).pipe(Effect.andThen(termination))).pipe(
-      Effect.tap((fiber) =>
-        Effect.sync(() => {
-          this.roster.setParked(runId, { fiber, stopped });
-        }),
-      ),
-      Effect.asVoid,
-    );
-  }
-
-  /** Whether a generation of `runId` is parked at WAITING ({@link park}). */
-  isParked(runId: RunId): boolean {
-    return this.roster.isParked(runId);
-  }
-
   /** Register a run handle. */
   track(handle: RunHandle): void {
     this.assertActive();
@@ -242,11 +179,6 @@ export class RunRegistry {
     // swaps the handles is what stops a handle built before a `run.detach`
     // from restoring the edge that row removed.
     if (activation?.isDetached() || previous?.parent === null) handle.detach();
-    // This registration is the run starting again, so the generation parked at
-    // WAITING is over: its fiber is interrupted where it waits and its
-    // termination never runs. A stop that already woke that fiber is past
-    // interrupting, so it crosses the handoff with the registration instead.
-    this.roster.takeParked(handle.runId)?.fiber.interruptUnsafe();
     if (previous?.stopRequested === true) handle.interrupt();
     this.roster.setHandle(handle);
     this.roster.notifyWaiters(handle.runId);
@@ -279,7 +211,7 @@ export class RunRegistry {
    * ({@link RunStopper.assertStopNotFolded}). Who is admissible during a stop
    * is the roster's ({@link RunRoster.admitsChild}): a child this registry
    * already holds is not an admission — a native child's activation and every
-   * turn handle it tracks re-enter here while the detach runs, and those are
+   * live handle it tracks re-enter here while the detach runs, and those are
    * the children the stop is severing, not new ones — so it takes no
    * folded-stop refusal either.
    */
@@ -424,7 +356,7 @@ export class RunRegistry {
 
   /**
    * Every run live in this session: the tracked handles and the native child
-   * loops retained between turns, whose activation is the only record of them.
+   * activations still preparing or delivering outside their engine handle.
    * This is what a close stops and waits on, so a child with a final delivery
    * to do is never left running under a released session.
    */
@@ -477,7 +409,7 @@ export class RunRegistry {
 
 /**
  * The session's runs (system design §2.1, §7.11): run admission and lanes,
- * the live handles, the parked fibers and the child roster of one session.
+ * the live handles, the child roster of one session.
  * Built by the session layer in the session's scope and disposed when that
  * scope closes (`sessionLayer.ts`); the session record carries the same value
  * (`SessionHandle.runs`) for a host that holds the session. Effect code below

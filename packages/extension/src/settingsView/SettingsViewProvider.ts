@@ -18,6 +18,7 @@ import { DisposableStore } from '@platform/disposable';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import type { StateStore } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
+import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { AgentCategory } from '@shared/schemas';
 import type { SettingsTabPanelName } from '@shared/settingsView/settingsViewMessages';
@@ -38,6 +39,7 @@ export class SettingsViewProvider {
     secrets: PlatformSecrets,
     private readonly runtime: ProcessRuntime,
     session: SessionHandle,
+    progressView: ProgressViewProvider,
   ) {
     this.contentProvider = new BundledViewContentProvider(
       context,
@@ -50,6 +52,7 @@ export class SettingsViewProvider {
       secrets,
       runtime,
       session,
+      progressView,
     );
 
     // Listen for auth state changes to refresh all data

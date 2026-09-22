@@ -767,7 +767,7 @@ describe('childRunLoop E2E fixtures', () => {
                 createTerminalStrategy('Retry attempt'),
               ),
             ),
-          ).toBeUndefined();
+          ).toEqual({ kind: 'terminal', value: 'done' });
           expect(admissions).toEqual(['duplicate', 'duplicate']);
           const delivered = yield* queuedFollowUps(session, PARENT_RUN_ID);
           expect(delivered.map((item) => item.text)).toEqual([
@@ -1057,20 +1057,19 @@ describe('childRunLoop E2E fixtures', () => {
   );
 
   it.effect(
-    'stop between turns settles the ghost handle when terminal metadata fails',
+    'stops a waiting child and releases its handle when terminal metadata fails',
     () =>
       Effect.gen(function* () {
-        // Regression: for a native strategy (no ChildRun — each turn owns its
-        // own RunHandle via runFlowWithLifecycle, not the loop), a
-        // stop landing BETWEEN turns interrupts the loop through the run handle
-        // and transitions the stream to CANCELLED — but assumes a live flow will
-        // notice and self-finalize.
-        // Nothing is running here (the loop is just blocked on a queue wait), so
-        // without the loop's own finalize-on-interrupt fallback, the most
-        // recently tracked handle for this stream — still WAITING, still
-        // resumable-looking — would never settle or untrack.
         const runId = loopRunId();
         const { strategy, resolveTurn } = createFakeStrategy();
+        const childRun = yield* createChildRun(session, runId, PARENT_RUN_ID, {
+          run: { kind: 'agent', agent: 'fake-cli', tool: 'codex' },
+          userFollowUpSupport: 'terminalBacked',
+          description: 'Keep an agent-CLI child running',
+          config: childRunConfig,
+        }).pipe(Effect.provideService(Runs, session.runs));
+        trackedRunIds.add(runId);
+        const handle = session.runs.getHandle(runId)!;
         const delivered = yield* Deferred.make<void>();
         mocks.submitFollowUp.mockImplementation(() =>
           Effect.as(Deferred.succeed(delivered, undefined), { status: 'sent' }),
@@ -1083,13 +1082,9 @@ describe('childRunLoop E2E fixtures', () => {
           }),
         );
 
-        const loop = yield* startLoop(runId, strategy);
+        const loop = yield* startLoop(runId, strategy, { childRun });
 
         expect(session.followUps.hasLiveOwner(runId)).toBe(true);
-
-        // Mirrors what a real native turn's runFlowWithLifecycle does: track a
-        // fresh handle for this run once the turn suspends.
-        const handle = trackChildHandle(runId, PARENT_RUN_ID);
 
         yield* resolveTurn(1, { kind: 'interim', value: 'first' });
         yield* Deferred.await(delivered);
@@ -1103,8 +1098,7 @@ describe('childRunLoop E2E fixtures', () => {
         yield* Fiber.join(loop);
         expect(session.followUps.hasLiveOwner(runId)).toBe(false);
 
-        // Untracked: no longer resumable — a later delegate_agent(execution_id=…)
-        // would correctly report "not found" instead of finding a ghost handle.
+        // Metadata failure must not retain the child handle or queue ownership.
         expect(session.runs.getHandle(runId)).toBeUndefined();
         // The loop routes the cancellation through the durable outcome's only
         // writer; the interim result envelope is left exactly as its turn wrote
@@ -1519,7 +1513,10 @@ describe('childRunLoop E2E fixtures', () => {
         recordCost,
       });
 
-      expect(yield* Fiber.join(loop)).toBeUndefined();
+      expect(yield* Fiber.join(loop)).toEqual({
+        kind: 'terminal',
+        value: 'done',
+      });
       expect(recordCost).toHaveBeenCalledOnce();
       expect(recordCost.mock.calls[0]?.[0]).toBeCloseTo(0.95);
     }),
@@ -1544,7 +1541,10 @@ describe('childRunLoop E2E fixtures', () => {
 
       // The cost observer is forked with `startImmediately` inside the
       // terminal block, so its thunk has already run when the loop exits.
-      expect(yield* Fiber.join(loop)).toBeUndefined();
+      expect(yield* Fiber.join(loop)).toEqual({
+        kind: 'terminal',
+        value: 'done',
+      });
       expect(recordCost).toHaveBeenCalledOnce();
       expect(mocks.submitFollowUp).toHaveBeenCalledOnce();
     }),

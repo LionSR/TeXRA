@@ -46,6 +46,7 @@ import { ProgressWorkflowFileActionsController } from '@controllers/progressView
 import { ApiKeyPromptFailed } from '@controllers/progressView/ProgressApiKeyRetryController';
 import {
   fromHost,
+  hostFailure,
   type HostCallFailed,
 } from '@controllers/session/hostCallFailure';
 import {
@@ -159,6 +160,7 @@ interface ExtensionHostRequestsOptions {
   showInSidebar(): Effect.Effect<void, HostRequestFailure, ProcessServices>;
   /** The onboarding funnel recomputes after an action that changes its
    *  inputs (a key stored, a sign-in, the setup assistant run). */
+  readonly refreshApiKeyStatus: Effect.Effect<void, Error, ProcessServices>;
   refreshOnboardingFunnel(): Effect.Effect<
     void,
     StateReadFailed | StateWriteFailed,
@@ -673,8 +675,8 @@ export function createExtensionHostRequests(
    *  four promises were. */
   const refreshAfterCredentialChange = Effect.all(
     [
-      fromHost('texra.refreshApiKeyStatus', () =>
-        vscode.commands.executeCommand('texra.refreshApiKeyStatus'),
+      options.refreshApiKeyStatus.pipe(
+        Effect.mapError((cause) => hostFailure('refreshApiKeyStatus', cause)),
       ),
       snapshot.refreshCatalogs,
       snapshot.refreshAuth,

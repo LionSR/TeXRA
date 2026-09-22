@@ -6,13 +6,13 @@
  */
 import { Effect } from 'effect';
 import * as vscode from 'vscode';
+import type { SettingsViewInboundHandlerRegistry } from '@controllers/settingsView/settingsViewDispatch';
 
 import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   SETTINGS_VIEW_CMD,
   type SettingsMessageFor,
-  type SettingsViewInboundHandlerRegistry,
 } from '@shared/settingsView/settingsViewMessages';
 import {
   LATEX_WORKSHOP_EXT_ID,
@@ -165,11 +165,9 @@ export class LatexSettingsHandlers {
     // Each arm is a settings-view message, so its program settles on the
     // view's boundary here rather than in the view's own registry.
     this.handlers = {
-      applyLatexSettings: (message) =>
-        ctx.run(this.handleApplyLatexSettings(message)),
-      installLatexWorkshop: () => ctx.run(this.handleInstallLatexWorkshop()),
-      runInstallCommand: (message) =>
-        ctx.run(this.handleRunInstallCommand(message)),
+      applyLatexSettings: (message) => this.handleApplyLatexSettings(message),
+      installLatexWorkshop: () => this.handleInstallLatexWorkshop(),
+      runInstallCommand: (message) => this.handleRunInstallCommand(message),
     };
   }
 

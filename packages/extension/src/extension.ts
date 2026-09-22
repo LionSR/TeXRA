@@ -781,6 +781,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
     secrets,
     runtime,
     runtimeSession,
+    Effect.suspend(() => apiKeyStatusRefresh()),
   );
   await runtime.runPromise(progressViewProvider.initialize());
 

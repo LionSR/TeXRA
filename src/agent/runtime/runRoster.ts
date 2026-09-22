@@ -4,7 +4,7 @@
  * One roster per session is the single in-process authority for "is a
  * generation of this run live here" ({@link RunRoster.isLive}, the one
  * admission): the tracked handle, the native child loop's activation, the
- * fiber a WAITING generation parked on, the run's serial lifecycle lane and
+ * the run's serial lifecycle lane and
  * the generations holding it are fields of one entry, so admission, stop and
  * deletion all answer from the same record. The registry (`runRegistry.ts`)
  * owns the session-facing surface, the stopper (`runStopping.ts`) what a stop
@@ -25,7 +25,7 @@ import type { RunId } from '@shared/schemas';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
 import { RunChangeListeners } from './runChangeListeners';
 import type { RunHandle } from './RunHandle';
-import type { ChildRunActivation, ParkedRun } from './runRegistryTypes';
+import type { ChildRunActivation } from './runRegistryTypes';
 
 /** A generation, a hold or a retained owner already has the run here: the one
  *  refusal for that fact. Hosts word it from `message`; a resume reads the tag
@@ -43,7 +43,6 @@ export class RunLive extends Data.TaggedError('RunLive')<{
 interface RunEntry {
   handle?: RunHandle;
   activation?: ChildRunActivation;
-  parked?: ParkedRun;
   /** The run's hand-off chain while a fiber holds or waits on it. */
   lane?: PerKeyLane;
   /** Generations of this run holding or waiting on that lane; an inactive-run
@@ -94,7 +93,7 @@ export class RunRoster {
 
   /** Drop an entry that records nothing: the run is not here any more. */
   private prune(runId: RunId, entry: RunEntry): void {
-    if (entry.handle ?? entry.activation ?? entry.parked ?? entry.lane) return;
+    if (entry.handle ?? entry.activation ?? entry.lane) return;
     if (entry.launches > 0 || entry.generations.size > 0) return;
     if (this.entries.get(runId) === entry) this.entries.delete(runId);
   }
@@ -168,7 +167,7 @@ export class RunRoster {
   }
 
   /** The children one parent's detach covers. A Set, not an array: a child
-   *  detached mid-turn has both a per-turn handle and a ChildRunActivation
+   *  detached mid-turn has both a live handle and a ChildRunActivation
    *  under one runId, so both loops reach it and it is severed once. */
   childRunIds(parentRunId: RunId): readonly RunId[] {
     const childRunIds = new Set<RunId>();
@@ -213,13 +212,13 @@ export class RunRoster {
   /** Whether a child may be admitted under `parentRunId` now. A begun stop of
    *  the parent refuses a new child ({@link beginStop}); a child this roster
    *  already holds is not a new admission — a native child's activation and
-   *  its turn handles re-enter while the detach runs. */
+   *  its live handles re-enter while the detach runs. */
   admitsChild(parentRunId: RunId, childRunId: RunId): boolean {
     return !this.isStopping(parentRunId) || this.isRetained(childRunId);
   }
 
   /** Every run live in this session: the tracked handles and the native child
-   *  loops retained between turns, whose activation is their only record. What
+   *  activations preparing or delivering without an engine handle. What
    *  a close stops and waits on, so a child with a final delivery to do is
    *  never left running under a released session. */
   activeIds(): RunId[] {
@@ -232,54 +231,11 @@ export class RunRoster {
 
   // ----------------------------------------------------------------- parking
 
-  setParked(runId: RunId, parked: ParkedRun): void {
-    this.entryFor(runId).parked = parked;
-    parked.fiber.addObserver(() => {
-      const entry = this.entries.get(runId);
-      if (entry?.parked !== parked) return;
-      entry.parked = undefined;
-      this.prune(runId, entry);
-    });
-  }
-
-  parkedRun(runId: RunId): ParkedRun | undefined {
-    return this.entries.get(runId)?.parked;
-  }
-
-  isParked(runId: RunId): boolean {
-    return this.entries.get(runId)?.parked !== undefined;
-  }
-
-  /** Drop the park record for `runId` and hand it back, so the caller decides
-   *  whether the fiber is interrupted (a resume) or woken (a stop). */
-  takeParked(runId: RunId): ParkedRun | undefined {
-    const entry = this.entries.get(runId);
-    const parked = entry?.parked;
-    if (entry && parked) {
-      entry.parked = undefined;
-      this.prune(runId, entry);
-    }
-    return parked;
-  }
-
-  // --------------------------------------------------------------- lifecycle
-
-  /** Whether a generation of `runId` is live here, read off the one entry: a
-   *  launch on its lane, a generation still unwinding, a caller holding it
-   *  against local ownership ({@link holdInactive}), or a turn whose tool-use
-   *  flow is attached. A second generation is refused on it rather than
-   *  queued; an inactive-run step holds the lane without being one, so a
-   *  launch queues behind a deletion. A parked turn is none of them until a
-   *  stop wakes it: a resume supersedes the fiber where it waits, but a woken
-   *  park is the run unwinding, still owing its terminal row and its claim.
-   *  Local ownership, never the durable phase: a crash leaves the phase
-   *  RUNNING, and an orphaned run in that phase is what a resume takes over. */
+  /** Whether this process holds a live generation of the run. */
   isLive(runId: RunId): boolean {
     const entry = this.entries.get(runId);
     if (entry === undefined) return false;
     if (entry.generations.size > 0 || entry.launches > 0) return true;
-    if (entry.parked !== undefined)
-      return Deferred.isDoneUnsafe(entry.parked.stopped);
     return entry.handle?.getToolUseFlow() !== undefined;
   }
 
@@ -489,7 +445,6 @@ export class RunRoster {
     this.waiting.clear();
     const tracked: RunId[] = [];
     for (const [runId, entry] of this.entries) {
-      entry.parked?.fiber.interruptUnsafe();
       if (entry.handle !== undefined) tracked.push(runId);
     }
     this.entries.clear();

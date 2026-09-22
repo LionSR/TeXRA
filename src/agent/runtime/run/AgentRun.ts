@@ -90,8 +90,6 @@ interface RunCallbacks {
 
 export interface AgentRunShape {
   readonly runId: RunId;
-  /** The launching run, or null for a root. */
-  readonly parentRunId: RunId | null;
   readonly session: SessionHandle;
   readonly config: AgentConfig;
   /** The setting with the run's resolved tool list; the loop of the run's
@@ -159,7 +157,6 @@ export class AgentRun extends Context.Service<AgentRun, AgentRunShape>()(
 ) {}
 
 interface AgentRunLayerInput {
-  readonly parentRunId: RunId | null;
   /** Caller-supplied tools available only to this run. */
   readonly tools?: readonly ITool[];
   readonly callbacks: RunCallbacks;
@@ -301,7 +298,6 @@ export const agentRunLayer = (
 
       return {
         runId,
-        parentRunId: input.parentRunId,
         session,
         config,
         setting: { ...setting, tools: resolvedTools },

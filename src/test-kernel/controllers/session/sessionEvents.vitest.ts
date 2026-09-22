@@ -71,6 +71,7 @@ import {
   databaseLayer,
   globalDatabaseLayer,
 } from '@controllers/session/Database';
+import { openProjectStateStore } from '@controllers/session/appStateStore';
 import { collectPendingDeletions } from '@controllers/session/deletionCleanup';
 import { sessionRequests } from '@controllers/session/SessionRequests';
 import {
@@ -81,6 +82,7 @@ import {
 import { SessionViewService } from '@controllers/session/SessionView';
 import { sessionInputsLayer } from '@controllers/session/sessionInputs';
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
+import { withProcessServices } from '@platform/processRuntime';
 import { SHUTDOWN_PHASE_DEADLINE_MS } from '@platform/defaults/lifecycleHost';
 import {
   aggregateId as qualifyAggregateId,
@@ -101,6 +103,7 @@ import type { RunLedgerDraft } from '@shared/session/runStateFold';
 import { ProcessIdentity, SessionEvents } from '@shared/session/sessionEvents';
 import { DownMessageSchema } from '@shared/session/sessionFrames';
 import type { SessionView } from '@shared/session/sessionView';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import { testRunHandle } from '@test/support/runHandleFixtures';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import { identityReads } from '@test/support/sessionGraphTestSetup';
@@ -734,6 +737,65 @@ describe('Sessions owner', () => {
   const track = (session: SessionHandle, runId: RunId) =>
     session.runs.track(testRunHandle({ runId, agent: 'chat' }));
 
+  it.live(
+    'shares the project database with its session until the project closes',
+    () =>
+      withProcessServices(
+        testRuntime(),
+        Effect.scoped(
+          Effect.gen(function* () {
+            const storage = yield* Effect.acquireRelease(
+              Effect.sync(() =>
+                mkdtempSync(join(tmpdir(), 'texra-project-owned-')),
+              ),
+              (root) =>
+                Effect.sync(() =>
+                  rmSync(root, { recursive: true, force: true }),
+                ),
+            );
+            const opened = vi.spyOn(SqlDriver, 'make');
+            yield* Effect.addFinalizer(() =>
+              Effect.sync(() => opened.mockRestore()),
+            );
+            const projectScope = yield* Scope.make();
+            yield* Effect.addFinalizer(() =>
+              Scope.close(projectScope, Exit.void),
+            );
+            const state = yield* openProjectStateStore(storage).pipe(
+              Scope.provide(projectScope),
+            );
+            yield* state.update('shared', 'before session');
+            const session = yield* Effect.acquireRelease(
+              openSessionEffect({
+                roots: {
+                  ...createFakeWorkspaceRoots({ storagePath: storage }),
+                  workspaceState: state,
+                },
+              }),
+              (session) => session.dispose(),
+            );
+            expect(
+              opened.mock.calls.filter(
+                ([options]) =>
+                  options.filename ===
+                  join(realpathSync.native(storage), 'texra.db'),
+              ),
+            ).toHaveLength(1);
+            yield* session.dispose();
+            // Closing the graph releases its borrow, never the still-open project's state.
+            yield* state.update('shared', 'after session');
+            expect(yield* state.get('shared')).toBe('after session');
+            yield* Scope.close(projectScope, Exit.void);
+            expect((yield* Effect.flip(state.get('shared')))._tag).toBe(
+              'StateReadFailed',
+            );
+            const reopened = yield* openProjectStateStore(storage);
+            expect(yield* reopened.get('shared')).toBe('after session');
+          }),
+        ),
+      ),
+  );
+
   it.live('builds the process-wide Lean layer once, not per session', () =>
     Effect.gen(function* () {
       // Each root's entry is built fresh over the root-scoped layers; the
@@ -1026,47 +1088,6 @@ describe('Sessions owner', () => {
           session.now(),
         );
         expect(isLive(session)).toBe(false);
-      }),
-  );
-
-  it.effect(
-    'close retains the session until an untracked waiting generation finishes its owned teardown',
-    () =>
-      Effect.gen(function* () {
-        const root = '/workspace/owner/waiting-teardown';
-        const session = yield* open(root);
-        const handle = testRunHandle({
-          runId: RunIdSchema.parse('aa0004'),
-          agent: 'chat',
-        });
-        const release = yield* Deferred.make<void>();
-        const untracked = yield* Deferred.make<void>();
-        const parkStopped = yield* Deferred.make<void>();
-        session.runs.track(handle);
-        yield* session.runs.park(
-          handle,
-          parkStopped,
-          Effect.gen(function* () {
-            session.runs.untrack(handle.runId);
-            yield* Deferred.succeed(untracked, undefined);
-            yield* Deferred.await(release);
-          }),
-        );
-        const closing = yield* Effect.forkChild(closeSession(root));
-        yield* Deferred.await(untracked);
-        expect(session.runs.getActiveIds()).toEqual([]);
-        yield* TestClock.adjust(`${SHUTDOWN_PHASE_DEADLINE_MS} millis`);
-        expect(yield* Fiber.join(closing)).toEqual({
-          settled: false,
-          abandoned: [],
-        });
-        expect(isLive(session)).toBe(true);
-        yield* Deferred.succeed(release, undefined);
-        // The release runs detached on the session owner (RcMap.invalidate):
-        // no settle covers it.
-        yield* Effect.promise(() =>
-          vi.waitFor(() => expect(isLive(session)).toBe(false)),
-        );
       }),
   );
 

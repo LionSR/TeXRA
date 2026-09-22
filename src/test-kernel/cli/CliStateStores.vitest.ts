@@ -8,6 +8,7 @@ import { describe, expect } from 'vitest';
 
 // Local imports
 import { openCliWorkspaceState } from '@cli/runtime/cliStateStores';
+import { projectDatabaseLayer } from '@controllers/session/projectDatabase';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
@@ -50,6 +51,7 @@ describe('CLI state stores', () => {
       ).toEqual([preset]);
     }).pipe(
       Effect.scoped,
+      Effect.provide(projectDatabaseLayer),
       Effect.provide(
         ProcessIdentity.layer('["test-host",4242,"cli-state-test"]'),
       ),

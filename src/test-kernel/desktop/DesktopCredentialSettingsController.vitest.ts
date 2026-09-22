@@ -262,13 +262,16 @@ describe('DefaultDesktopCredentialSettingsController', () => {
         createFixture({ secrets, confirmResult: false }),
       );
 
-      yield* Effect.promise(async () => {
-        await assertSupported(
-          fixture.controller.profileHandlers.removeProviderKey,
-        )({
-          command: SETTINGS_VIEW_COMMANDS.REMOVE_PROVIDER_KEY,
-          provider: 'openai',
-        });
+      yield* Effect.gen(function* () {
+        yield* withProcessServices(
+          testRuntime(),
+          assertSupported(fixture.controller.profileHandlers.removeProviderKey)(
+            {
+              command: SETTINGS_VIEW_COMMANDS.REMOVE_PROVIDER_KEY,
+              provider: 'openai',
+            },
+          ),
+        );
       });
 
       expect(fixture.confirms).toEqual([
@@ -290,13 +293,14 @@ describe('DefaultDesktopCredentialSettingsController', () => {
           }),
         );
 
-        yield* Effect.promise(async () => {
-          await assertSupported(
-            fixture.controller.profileHandlers.setProviderKey,
-          )({
-            command: SETTINGS_VIEW_COMMANDS.SET_PROVIDER_KEY,
-            provider: 'google',
-          });
+        yield* Effect.gen(function* () {
+          yield* withProcessServices(
+            testRuntime(),
+            assertSupported(fixture.controller.profileHandlers.setProviderKey)({
+              command: SETTINGS_VIEW_COMMANDS.SET_PROVIDER_KEY,
+              provider: 'google',
+            }),
+          );
         });
 
         expect(yield* fixture.secrets.get('apiKey.google')).toBe(
@@ -334,23 +338,27 @@ describe('DefaultDesktopCredentialSettingsController', () => {
         }),
       );
 
-      yield* Effect.promise(async () => {
-        await assertSupported(
-          fixture.controller.profileHandlers.setProviderKey,
-        )({
-          command: SETTINGS_VIEW_COMMANDS.SET_PROVIDER_KEY,
-          provider: 'openai',
-        });
+      yield* Effect.gen(function* () {
+        yield* withProcessServices(
+          testRuntime(),
+          assertSupported(fixture.controller.profileHandlers.setProviderKey)({
+            command: SETTINGS_VIEW_COMMANDS.SET_PROVIDER_KEY,
+            provider: 'openai',
+          }),
+        );
       });
       expect(yield* secrets.get(secretName)).toBe('replacement');
 
-      yield* Effect.promise(async () => {
-        await assertSupported(
-          fixture.controller.profileHandlers.removeProviderKey,
-        )({
-          command: SETTINGS_VIEW_COMMANDS.REMOVE_PROVIDER_KEY,
-          provider: 'openai',
-        });
+      yield* Effect.gen(function* () {
+        yield* withProcessServices(
+          testRuntime(),
+          assertSupported(fixture.controller.profileHandlers.removeProviderKey)(
+            {
+              command: SETTINGS_VIEW_COMMANDS.REMOVE_PROVIDER_KEY,
+              provider: 'openai',
+            },
+          ),
+        );
       });
       expect(deleteSpy).toHaveBeenCalledExactlyOnceWith(secretName);
       expect(yield* secrets.get(secretName)).toBeUndefined();
@@ -360,52 +368,65 @@ describe('DefaultDesktopCredentialSettingsController', () => {
     }),
   );
 
-  it.each([
-    ['kimiCode', 'kimiCode'],
-    ['glm', 'glmCodingPlan'],
+  it.effect.each([
+    { provider: 'kimiCode', usageProvider: 'kimiCode' },
+    { provider: 'glm', usageProvider: 'glmCodingPlan' },
   ] as const)(
-    'invalidates and refreshes %s subscription usage after a key change',
-    async (provider, usageProvider) => {
-      const fixture = await createFixture({ promptInput: 'new-secret' });
+    'invalidates and refreshes $provider subscription usage after a key change',
+    ({ provider, usageProvider }) =>
+      Effect.gen(function* () {
+        const fixture = yield* Effect.promise(() =>
+          createFixture({ promptInput: 'new-secret' }),
+        );
 
-      await assertSupported(fixture.controller.profileHandlers.setProviderKey)({
-        command: SETTINGS_VIEW_COMMANDS.SET_PROVIDER_KEY,
-        provider,
-      });
+        yield* withProcessServices(
+          testRuntime(),
+          assertSupported(fixture.controller.profileHandlers.setProviderKey)({
+            command: SETTINGS_VIEW_COMMANDS.SET_PROVIDER_KEY,
+            provider,
+          }),
+        );
 
-      expect(fixture.subscriptionUsage.invalidate).toHaveBeenCalledWith(
-        usageProvider,
-      );
-      expect(fixture.subscriptionUsage.getAllUsage).toHaveBeenCalledOnce();
-      expect(fixture.posted).toContainEqual(
-        expect.objectContaining({
-          command: SETTINGS_VIEW_COMMANDS.UPDATE_SUBSCRIPTION_USAGE,
-        }),
-      );
-      expect(JSON.stringify(fixture.posted)).not.toContain('new-secret');
-    },
+        expect(fixture.subscriptionUsage.invalidate).toHaveBeenCalledWith(
+          usageProvider,
+        );
+        expect(fixture.subscriptionUsage.getAllUsage).toHaveBeenCalledOnce();
+        expect(fixture.posted).toContainEqual(
+          expect.objectContaining({
+            command: SETTINGS_VIEW_COMMANDS.UPDATE_SUBSCRIPTION_USAGE,
+          }),
+        );
+        expect(JSON.stringify(fixture.posted)).not.toContain('new-secret');
+      }),
   );
 
   // Provider toggles are written by the shared catalog path
   // (`UPDATE_STATE_SETTING`); this pins the desktop refresh that path triggers.
 
-  it('warns when a more specific setting overrides the requested subscription toggle', async () => {
-    const fixture = await createFixture();
-    codexMocks.setPreferSubscription.mockReturnValueOnce(
-      Effect.succeed({ effective: false }),
-    );
+  it.effect(
+    'warns when a more specific setting overrides the requested subscription toggle',
+    () =>
+      Effect.gen(function* () {
+        const fixture = yield* Effect.promise(() => createFixture());
+        codexMocks.setPreferSubscription.mockReturnValueOnce(
+          Effect.succeed({ effective: false }),
+        );
 
-    await assertSupported(
-      fixture.controller.chatGptHandlers.setChatGptPreferSubscription,
-    )({
-      command: SETTINGS_VIEW_COMMANDS.SET_CHATGPT_PREFER_SUBSCRIPTION,
-      enabled: true,
-    });
-    expect(fixture.warnings).toEqual([
-      'A more specific setting still keeps ChatGPT subscription disabled.',
-    ]);
-    expect(fixture.infos).toEqual([]);
-  });
+        yield* withProcessServices(
+          testRuntime(),
+          assertSupported(
+            fixture.controller.chatGptHandlers.setChatGptPreferSubscription,
+          )({
+            command: SETTINGS_VIEW_COMMANDS.SET_CHATGPT_PREFER_SUBSCRIPTION,
+            enabled: true,
+          }),
+        );
+        expect(fixture.warnings).toEqual([
+          'A more specific setting still keeps ChatGPT subscription disabled.',
+        ]);
+        expect(fixture.infos).toEqual([]);
+      }),
+  );
 
   it.effect(
     'refreshes ChatGPT preferences and reports authentication outcomes',
@@ -413,13 +434,16 @@ describe('DefaultDesktopCredentialSettingsController', () => {
       Effect.gen(function* () {
         const fixture = yield* Effect.promise(() => createFixture());
 
-        yield* Effect.promise(async () => {
-          await assertSupported(
-            fixture.controller.chatGptHandlers.setChatGptPreferSubscription,
-          )({
-            command: SETTINGS_VIEW_COMMANDS.SET_CHATGPT_PREFER_SUBSCRIPTION,
-            enabled: true,
-          });
+        yield* Effect.gen(function* () {
+          yield* withProcessServices(
+            testRuntime(),
+            assertSupported(
+              fixture.controller.chatGptHandlers.setChatGptPreferSubscription,
+            )({
+              command: SETTINGS_VIEW_COMMANDS.SET_CHATGPT_PREFER_SUBSCRIPTION,
+              enabled: true,
+            }),
+          );
         });
         // The stores travel with the write; the assertion pins the value.
         expect(codexMocks.setPreferSubscription).toHaveBeenCalledWith(
@@ -449,12 +473,13 @@ describe('DefaultDesktopCredentialSettingsController', () => {
           'Signed in with ChatGPT as user@example.com.',
         );
 
-        yield* Effect.promise(async () => {
-          await assertSupported(
-            fixture.controller.chatGptHandlers.signOutChatGpt,
-          )({
-            command: SETTINGS_VIEW_COMMANDS.SIGN_OUT_CHATGPT,
-          });
+        yield* Effect.gen(function* () {
+          yield* withProcessServices(
+            testRuntime(),
+            assertSupported(fixture.controller.chatGptHandlers.signOutChatGpt)({
+              command: SETTINGS_VIEW_COMMANDS.SIGN_OUT_CHATGPT,
+            }),
+          );
         });
         expect(codexMocks.signOut).toHaveBeenCalledOnce();
         expect(fixture.infos).toContain('Signed out of ChatGPT.');

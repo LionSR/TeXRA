@@ -290,6 +290,7 @@ describe('claude_agent tool launch and resume fallback', () => {
         yield* loopParams.strategy.launch(
           fakePorts(),
           new AbortController().signal,
+          { run: (operation) => operation, complete: () => Effect.void },
         );
 
         expect(mocks.query).toHaveBeenCalledTimes(1);
@@ -329,6 +330,7 @@ describe('claude_agent tool launch and resume fallback', () => {
       const turn = yield* captured.strategy.launch(
         fakePorts(),
         new AbortController().signal,
+        { run: (operation) => operation, complete: () => Effect.void },
       );
       if (!turn) throw new Error('Expected a Claude turn result');
       captured.strategy?.publishUsage?.(turn);
@@ -600,6 +602,7 @@ describe('claude_agent tool launch and resume fallback', () => {
         const firstTurn = yield* captured.strategy.launch(
           ports,
           new AbortController().signal,
+          { run: (operation) => operation, complete: () => Effect.void },
         );
         if (!firstTurn) throw new Error('Expected a Claude fork turn');
         captured.strategy?.onTurnSuccess?.(firstTurn, {
@@ -679,6 +682,7 @@ describe('claude_agent tool launch and resume fallback', () => {
       const firstTurn = yield* captured.strategy.launch(
         ports,
         new AbortController().signal,
+        { run: (operation) => operation, complete: () => Effect.void },
       );
       expect(firstTurn).toMatchObject({
         isError: true,

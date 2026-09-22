@@ -42,9 +42,6 @@ import {
   type RunFlowLifecycleOptions,
 } from './AgentRunLifecycle';
 import {
-  isWaitingFlowResult,
-  type AgentRuntimeFlowResult,
-  type WaitingToolUseFlowResult,
   type AgentFlowResult,
   type WorkflowFlowResult,
 } from './AgentFlowResult';
@@ -112,7 +109,6 @@ function runLayerFor(
   return modelInvokerLayer().pipe(
     Layer.provideMerge(
       agentRunLayer(ctx, {
-        parentRunId: shared.parentRunId ?? null,
         tools: shared.tools,
         onApprovalPolicyDenial: shared.onApprovalPolicyDenial,
         callbacks: {
@@ -152,14 +148,14 @@ function runLayerFor(
  */
 function runUntilStopped<R>(
   ctx: AgentLaunchContext,
-  program: Effect.Effect<AgentRuntimeFlowResult, Error, R>,
-): Effect.Effect<AgentRuntimeFlowResult, Error, R> {
+  program: Effect.Effect<AgentFlowResult, Error, R>,
+): Effect.Effect<AgentFlowResult, Error, R> {
   const { runId } = ctx;
   return Effect.raceFirst(
     program.pipe(Effect.map((result) => ({ kind: 'result' as const, result }))),
     Deferred.await(ctx.stopped).pipe(Effect.as({ kind: 'stopped' as const })),
   ).pipe(
-    Effect.map((winner): AgentRuntimeFlowResult => {
+    Effect.map((winner): AgentFlowResult => {
       if (winner.kind === 'result') return winner.result;
       return {
         outcome: RUN_OUTCOME.CANCELLED,
@@ -188,9 +184,36 @@ function launchToolUseRun(
   handle: RunHandle,
   shared: SubagentRunOptions,
   variant: ToolUseLaunchVariant,
-): Effect.Effect<AgentRuntimeFlowResult, Error, AgentRunServices> {
+): Effect.Effect<AgentFlowResult, Error, AgentRunServices> {
   const { runId } = ctx;
+  const toResult = (
+    result: Effect.Success<ReturnType<typeof runToolUse>>,
+  ): AgentFlowResult => ({
+    outcome: result.outcome,
+    output: {
+      category: 'toolUse',
+      response: result.response,
+      files: [...result.files],
+      ...(result.structured !== undefined
+        ? { structured: result.structured }
+        : {}),
+    },
+    runId,
+    usage: result.usage,
+    ...(result.error ? { error: result.error } : {}),
+    ...(ctx.attachedMemoryMisses.length
+      ? { memoryMisses: ctx.attachedMemoryMisses }
+      : {}),
+  });
   const program = runToolUse({
+    ...(shared.turns
+      ? {
+          turns: {
+            run: shared.turns.run,
+            complete: (result) => shared.turns!.complete(toResult(result)),
+          },
+        }
+      : {}),
     resume: variant.kind === 'resume',
     attachment: {
       attach: (flowContext) => {
@@ -216,23 +239,7 @@ function launchToolUseRun(
         ),
       ),
     ),
-    Effect.map((result): AgentRuntimeFlowResult => ({
-      outcome: result.outcome,
-      output: {
-        category: 'toolUse',
-        response: result.response,
-        files: [...result.files],
-        ...(result.structured !== undefined
-          ? { structured: result.structured }
-          : {}),
-      },
-      runId,
-      usage: result.usage,
-      ...(result.error ? { error: result.error } : {}),
-      ...(ctx.attachedMemoryMisses?.length
-        ? { memoryMisses: ctx.attachedMemoryMisses }
-        : {}),
-    })),
+    Effect.map(toResult),
   );
   return runUntilStopped(ctx, program);
 }
@@ -245,7 +252,7 @@ function launchToolUseRun(
 function launchReflectionRun(
   ctx: AgentLaunchContext,
   options: ExecuteAgentOptions,
-): Effect.Effect<AgentRuntimeFlowResult, Error, AgentRunServices> {
+): Effect.Effect<AgentFlowResult, Error, AgentRunServices> {
   const { runId } = ctx;
   const program = runReflection({ resume: options.resumed === true }).pipe(
     Effect.provide(runLayerFor(ctx, options, undefined)),
@@ -279,7 +286,10 @@ function launchReflectionRun(
       }),
     ),
   );
-  return runUntilStopped(ctx, program);
+  return runUntilStopped(
+    ctx,
+    options.turns ? options.turns.run(program) : program,
+  );
 }
 
 /**
@@ -338,12 +348,16 @@ function buildFallbackNotification(config: AgentConfig): FallbackNotification {
  * under a different name.
  */
 export interface SubagentRunOptions {
+  /** Child accounting and delivery at each completed native turn. */
+  readonly turns?: import('./childRunLoop').ChildRunTurns<
+    AgentFlowResult,
+    AgentRunServices
+  >;
   /** Run-scoped tools added to tool-use agents without mutating the default registry. */
   readonly tools?: readonly ITool[];
   /**
    * The launching run, for a delegated child: the parent edge on the handle,
-   * the subagent prompt, and the licence to park at WAITING for the child
-   * loop. A fresh launch takes it from the caller; a resume ignores it and
+   * the subagent prompt. A fresh launch takes it from the caller; a resume ignores it and
    * reads the persisted `run.start`.
    */
   parentRunId?: RunId;
@@ -423,34 +437,6 @@ export interface ExecuteAgentOptions extends SubagentRunOptions {
   ownApiKeyFallback?: boolean;
 }
 
-// A WAITING result is reachable only for a child: `{ kind: 'waiting' }` is
-// minted solely behind the tool-use loop's `parentRunId` check, which is the
-// parent edge, so a caller that names a parent admits WAITING and one that
-// names none never sees it. Resume paths need no flag at all — whether a
-// resumed run is a child comes from the persisted `run.start`, so
-// `resumeToolUseFromResumeData` always admits WAITING and callers narrow with
-// `isWaitingFlowResult`.
-export function executeAgent(
-  definition: PreparedAgentDefinition,
-  runId: RunId,
-  options: ExecuteAgentOptions & {
-    parentRunId: RunId;
-    session: SessionHandle;
-  },
-): Effect.Effect<
-  AgentFlowResult | WaitingToolUseFlowResult,
-  Error,
-  ProcessServices
->;
-export function executeAgent(
-  definition: PreparedAgentDefinition,
-  runId: RunId,
-  options: ExecuteAgentOptions & {
-    parentRunId?: undefined;
-    session: SessionHandle;
-  },
-): Effect.Effect<AgentFlowResult, Error, ProcessServices>;
-
 /**
  * Low-level run runner for an already-registered run. Fresh
  * launches should use `runAgent()` or call `registerRun()` first so the
@@ -462,7 +448,7 @@ export function executeAgent(
   definition: PreparedAgentDefinition,
   runId: RunId,
   options: ExecuteAgentOptions & { session: SessionHandle },
-): Effect.Effect<AgentRuntimeFlowResult, Error, ProcessServices> {
+): Effect.Effect<AgentFlowResult, Error, ProcessServices> {
   return Effect.gen(function* () {
     // A resumed run's parentage is its handle's, never the caller's word: no
     // resume caller can name one (`RunAgentOptions` has no parent field), so
@@ -582,15 +568,6 @@ export function executeAgent(
             resumedHandle ? resumedHandle.deliveryTarget : options.parentRunId,
           ),
         );
-        // The overload the caller chose is what admits WAITING, so this
-        // assertion reads the caller's own parent, not the lineage: no
-        // resume caller names one, and reading a parent off the ledger
-        // must not retype a result the caller was promised is terminal.
-        if (isWaitingFlowResult(result) && !options.parentRunId) {
-          throw new Error(
-            'executeAgent received a non-terminal WAITING result for a non-subagent run.',
-          );
-        }
         return result;
       }).pipe(Effect.ensuring(Fiber.join(sessionDescription)));
     });
@@ -621,10 +598,8 @@ export interface ResumeToolUseFromResumeDataOptions extends SubagentRunOptions {
 }
 
 /**
- * Resume a persisted tool-use session at its WAITING cursor. Whether the run
- * is a child — and can therefore legitimately resolve WAITING again — is its
- * persisted parent edge (`run.start.parent`, minus a `run.detach`), never
- * the caller's word.
+ * Resume one live tool-use scope from its durable cursor. Lineage comes from
+ * `run.start.parent`, minus any committed `run.detach`.
  */
 const resumeToolUseWithOwnedLease = Effect.fn('resumeToolUseWithOwnedLease')(
   function* (
@@ -692,6 +667,8 @@ const resumeToolUseWithOwnedLease = Effect.fn('resumeToolUseWithOwnedLease')(
         }),
       ),
     );
+    // A recovered child driver owns delivery and releases the claim afterwards.
+    if (options.turns) return yield* outcome;
     if (Exit.isFailure(outcome)) {
       const released = yield* Effect.exit(
         runSession.releaseRunLease(resume.runId),
@@ -706,26 +683,14 @@ const resumeToolUseWithOwnedLease = Effect.fn('resumeToolUseWithOwnedLease')(
       }
       return yield* Effect.failCause(outcome.cause);
     }
-    // A WAITING result retains ownership for the next resumed turn.
-    if (!isWaitingFlowResult(outcome.value)) {
-      yield* runSession.releaseRunLease(resume.runId);
-    }
+    yield* runSession.releaseRunLease(resume.runId);
     return outcome.value;
   },
   Effect.uninterruptible,
 );
 
-/**
- * One resumed turn of a persisted tool-use session: claim its run lease,
- * reload the persisted snapshot under that lease, and run. Whether the run is
- * a child — and can therefore legitimately resolve WAITING again — is its
- * persisted parent edge, never the caller's word.
- *
- * This is the inner, unserialized turn: a native child loop runs it for every
- * turn inside the child's own generation, which already holds the child's
- * run lane. Hosts resume through {@link resumeToolUseFromResumeData}.
- */
-const resumeToolUseTurn = Effect.fn('resumeToolUseTurn')(function* (
+/** Acquire a recovered run and reload its cursor before starting its live scope. */
+const resumeToolUse = Effect.fn('resumeToolUse')(function* (
   identity: ResumeTurnIdentity,
   options: ResumeToolUseFromResumeDataOptions & { session: SessionHandle },
 ) {
@@ -764,11 +729,14 @@ const resumeToolUseTurn = Effect.fn('resumeToolUseTurn')(function* (
 export function resumeToolUseFromResumeData(
   identity: ResumeTurnIdentity,
   options: ResumeToolUseFromResumeDataOptions & { session: SessionHandle },
-): Effect.Effect<AgentRuntimeFlowResult, Error, ProcessServices> {
+): Effect.Effect<AgentFlowResult, Error, ProcessServices> {
   const { runs } = options.session;
-  return runs
-    .launchRun(identity.runId, resumeToolUseTurn(identity, options))
-    .pipe(Effect.provideService(Runs, runs));
+  // A recovered child's continuous driver already holds this run lane.
+  // Standalone host roots acquire it here; neither path launches a second owner.
+  const program = resumeToolUse(identity, options);
+  return (
+    options.turns ? program : runs.launchRun(identity.runId, program)
+  ).pipe(Effect.provideService(Runs, runs));
 }
 
 // Close the delegation recursion: the delegation tools drive child runs
@@ -777,5 +745,5 @@ export function resumeToolUseFromResumeData(
 // flow drivers statically import the tool registry that includes those tools.
 provideAgentEngine({
   executeAgent,
-  resumeToolUseTurn,
+  resumeToolUseFromResumeData,
 });

@@ -4,7 +4,7 @@ import { type MessageHost, NotificationFailed } from '@hosts/uiHosts';
 import type { AgentDirectoriesFailed } from '@platform/interfaces';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { GlobalStorageFs } from '@platform/rootedFs';
-import type { ProcessIdentity } from '@shared/session/sessionEvents';
+import type { ProjectDatabases } from '@shared/session/database';
 import type { AgentCategory } from '@shared/schemas';
 import type { SettingsTabPanelName } from '@shared/settingsView/settingsViewMessages';
 import {
@@ -59,7 +59,7 @@ interface DesktopShellActionFactoryOptions extends Pick<
   openWorkspaceFolder(): Effect.Effect<
     void,
     unknown,
-    FileSystem.FileSystem | Path.Path | ProcessIdentity
+    FileSystem.FileSystem | Path.Path | ProjectDatabases
   >;
   signIn(): Effect.Effect<void, unknown>;
   onAsyncError: (error: unknown) => void;
@@ -95,7 +95,7 @@ export function createDesktopShellActions(
     program: Effect.Effect<
       void,
       ShellActionFailed | NotificationFailed,
-      GlobalStorageFs | FileSystem.FileSystem | Path.Path | ProcessIdentity
+      GlobalStorageFs | FileSystem.FileSystem | Path.Path | ProjectDatabases
     >,
   ): void {
     options.runtime.runFork(

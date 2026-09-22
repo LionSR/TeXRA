@@ -1254,7 +1254,6 @@ function createWindow(options: {
       installDesktopWindowTitle(window, project.session, project.root, runtime),
     );
     const agentSettingsController = new DefaultDesktopAgentSettingsController({
-      runtime,
       workspaceState: project.roots.workspaceState,
       globalState: options.globalState,
       registry: {
@@ -1907,7 +1906,6 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
           // The sessions after the process stores above them, settled before
           // the runtime they run on goes.
           Effect.suspend(() => projects.dispose()),
-          platformInit.closeProcessState,
           disposeProcessRuntime(runtime),
         ],
       });
@@ -1926,6 +1924,7 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
           projects = yield* openDesktopProjectRegistry({
             dataRoot: platformInit.dataRoot,
             processRoots: platformInit.processRoots,
+            processScope: platformInit.processScope,
             globalConfigStore: platformInit.globalConfigStore,
             records: projectRecords,
             warn,

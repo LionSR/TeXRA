@@ -300,13 +300,13 @@ export function initCliPlatform(
         const installed = tryPlatform();
         if (installed) return { globalState, platform: installed };
 
-        const workspaceScope = yield* Scope.make();
-        const closeWorkspace = Scope.close(workspaceScope, Exit.void);
+        const projectScope = yield* Scope.make();
+        const closeProject = Scope.close(projectScope, Exit.void);
         return yield* Effect.gen(function* () {
           const stateStores = yield* openCliWorkspaceState({
             storageRoot: context.storageRoot,
             workspacePath: context.cwd,
-          }).pipe(Scope.provide(workspaceScope));
+          }).pipe(Scope.provide(projectScope));
           // The process lifecycle and agent directories are the values the
           // runtime install built before the platform init: the platform
           // publishes the same instances, so nothing here re-enters the ambient
@@ -336,15 +336,19 @@ export function initCliPlatform(
           // two strings; that model is resolved against the stores this root
           // opened.
           const openSession = yield* Effect.cached(
-            initializeDefaultSession({
-              roots,
-              responseTextProcessing: createTexraResponseTextProcessing(
-                createAgentResponseTextConnector({
-                  ...roots,
-                  secrets: cliSecrets,
-                }),
-              ),
-            }).pipe(
+            Effect.acquireRelease(
+              initializeDefaultSession({
+                roots,
+                responseTextProcessing: createTexraResponseTextProcessing(
+                  createAgentResponseTextConnector({
+                    ...roots,
+                    secrets: cliSecrets,
+                  }),
+                ),
+              }),
+              () => teardownDefaultSession(),
+            ).pipe(
+              Scope.provide(projectScope),
               Effect.tap((session) =>
                 Effect.sync(() => {
                   const cleared = session.storeCleared;
@@ -385,8 +389,7 @@ export function initCliPlatform(
               return session ? session.settlePublications() : Effect.void;
             }),
             afterRunSettlement: [
-              teardownDefaultSession(),
-              closeWorkspace,
+              closeProject,
               flushNdjsonStdout(),
               disposeCliProcessRuntime,
             ],
@@ -401,7 +404,7 @@ export function initCliPlatform(
           return { globalState, platform };
         }).pipe(
           Effect.onExit((exit) =>
-            Exit.isFailure(exit) ? closeWorkspace : Effect.void,
+            Exit.isFailure(exit) ? closeProject : Effect.void,
           ),
         );
       }),

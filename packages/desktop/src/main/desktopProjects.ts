@@ -13,7 +13,7 @@ import {
   type SessionHandle,
 } from '@agent/runtime';
 import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
-import { openAppStateStore } from '@controllers/session/appStateStore';
+import { openProjectStateStore } from '@controllers/session/appStateStore';
 import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import type { PlatformSecrets } from '@platform/secrets';
@@ -27,7 +27,7 @@ import {
   TEXRA_APPROVAL_POLICY_CONFIG_KEY,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
-import type { ProcessIdentity } from '@shared/session/sessionEvents';
+import type { ProjectDatabases } from '@shared/session/database';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { readSettingFrom } from '@utils/config/platformSettings';
@@ -52,6 +52,8 @@ interface DesktopProjectRegistryOptions {
   readonly dataRoot: string;
   /** Roots of the no-workspace session; the process roots. */
   readonly processRoots: WorkspaceRoots;
+  /** The fallback project owns its state and session through this one scope. */
+  readonly processScope: Scope.Closeable;
   /**
    * The one store over the global config file, shared by every project's
    * config provider: a `JsonStore` serves reads from its own open-time view,
@@ -80,7 +82,7 @@ export interface DesktopProjectRegistry {
   ): Effect.Effect<
     DesktopProject,
     Error,
-    FileSystem.FileSystem | Path.Path | ProcessIdentity
+    FileSystem.FileSystem | Path.Path | ProjectDatabases
   >;
   /** Open projects in the order they were opened; the no-workspace session is not one. */
   list(): readonly DesktopProject[];
@@ -197,34 +199,36 @@ function openProjectSession(
   root: string | undefined,
   roots: WorkspaceRoots,
   secrets: PlatformSecrets,
-): Effect.Effect<DesktopProject, Error> {
+): Effect.Effect<DesktopProject, Error, Scope.Scope> {
   return Effect.gen(function* () {
-    const session = yield* openSessionEffect({
-      roots,
-      responseTextProcessing: createTexraResponseTextProcessing(
-        // This project's own roots, plus the process secret store — not the
-        // process-level stores, which carry no workspace config layer and so
-        // answered every project with the global value (#12773). Taking
-        // `secrets` alone rather than a whole `ModelOptionStores` is what
-        // makes the wrong pair unrepresentable here.
-        createAgentResponseTextConnector({ ...roots, secrets }),
-      ),
-    });
-    return yield* Effect.gen(function* () {
-      session.setApprovalPolicy(
-        yield* readSettingFrom<TexraApprovalPolicy>(
-          roots,
-          TEXRA_APPROVAL_POLICY_CONFIG_KEY,
-        ),
-      );
-      return {
-        key: roots.storage,
-        root,
+    const scope = yield* Scope.Scope;
+    const session = yield* Effect.acquireRelease(
+      openSessionEffect({
         roots,
-        session,
-        dispose: () => session.dispose(),
-      };
-    }).pipe(Effect.onError(() => session.dispose()));
+        responseTextProcessing: createTexraResponseTextProcessing(
+          // This project's own roots, plus the process secret store — not the
+          // process-level stores, which carry no workspace config layer and so
+          // answered every project with the global value (#12773). Taking
+          // `secrets` alone rather than a whole `ModelOptionStores` is what
+          // makes the wrong pair unrepresentable here.
+          createAgentResponseTextConnector({ ...roots, secrets }),
+        ),
+      }),
+      (session) => session.dispose(),
+    );
+    session.setApprovalPolicy(
+      yield* readSettingFrom<TexraApprovalPolicy>(
+        roots,
+        TEXRA_APPROVAL_POLICY_CONFIG_KEY,
+      ),
+    );
+    return {
+      key: roots.storage,
+      root,
+      roots,
+      session,
+      dispose: () => Scope.close(scope, Exit.void),
+    };
   });
 }
 
@@ -246,6 +250,9 @@ export function openDesktopProjectRegistry(
         undefined,
         options.processRoots,
         options.stores.secrets,
+      ).pipe(
+        Scope.provide(options.processScope),
+        Effect.onError(() => Scope.close(options.processScope, Exit.void)),
       ),
     );
     const notify = () => {
@@ -276,11 +283,11 @@ export function openDesktopProjectRegistry(
             root,
           );
           const storage = storageProvider.getStoragePath();
-          const stateScope = yield* Scope.make();
+          const projectScope = yield* Scope.make();
           return yield* Effect.gen(function* () {
             const [workspaceState, workspaceConfig] = yield* Effect.all(
               [
-                openAppStateStore(storage).pipe(Scope.provide(stateScope)),
+                openProjectStateStore(storage),
                 openTexraWorkspaceConfigStore(storage, root, options.warn),
               ],
               { concurrency: 'unbounded' },
@@ -302,11 +309,6 @@ export function openDesktopProjectRegistry(
               openProjectSession(root, roots, options.stores.secrets).pipe(
                 Effect.tap((project) =>
                   Effect.sync(() => {
-                    const disposeSession = project.dispose;
-                    project.dispose = () =>
-                      disposeSession().pipe(
-                        Effect.ensuring(Scope.close(stateScope, Exit.void)),
-                      );
                     projects.set(root, project);
                     notify();
                   }).pipe(withPerKeyLane(lanes, selection)),
@@ -314,10 +316,11 @@ export function openDesktopProjectRegistry(
               ),
             );
           }).pipe(
+            Scope.provide(projectScope),
             Effect.onError(() =>
               projects.has(root)
                 ? Effect.void
-                : Scope.close(stateScope, Exit.void),
+                : Scope.close(projectScope, Exit.void),
             ),
           );
         }).pipe(withPerKeyLane(lanes, root), Effect.mapError(ensureError));

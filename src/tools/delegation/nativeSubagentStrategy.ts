@@ -1,44 +1,14 @@
 /**
- * Native child-run strategy over the shared `childRunLoop`, for both agent
- * categories — a native (in-process TeXRA agent) subagent is launched the
- * same way whether it is `toolUse` or `workflow`; only its result shape and
- * whether it ever produces a WAITING turn differ, and both of those are
- * already category-derived data rather than category-specific code paths.
- *
- * `launch` is the standard native child-run primitive. Both detached
- * delegation (through `childRunLoop`) and durable in-band workflow calls invoke
- * it, so launch options, progress, stream identity, approval inheritance,
- * cancellation, failure capture, and cost observation cannot drift between
- * those callers. `runTurn` is every following interactive turn: name the run
- * and the config it runs under, and let `resumeToolUseTurn` read the
- * persisted cursor once under the run lease and drive it to the next
- * WAITING/terminal boundary, with the batch already
- * consumed by `childRunLoop`. `runTurn` is unreachable for a workflow child —
- * a workflow flow never produces a WAITING result, so `isTerminal` is always
- * true on its first (and only) turn, and `childRunLoop.ts`'s loop breaks on a
- * terminal turn before ever consulting `runTurn`.
- * The subagent WAITING admission is likewise inert for workflow —
- * `isWaitingFlowResult` requires `category === 'toolUse'`, so a workflow
- * result can never satisfy it. Delivery choreography (format/persist/
- * manifest/deliver), duplicate-delivery prevention (there is exactly one
- * delivery site — the loop), and WAITING-cleanup registration all live in the
- * loop; this strategy owns only what is specific to a native subagent:
- * launching, resuming (tool-use only), and formatting its result shape.
+ * Native children keep one engine scope and report each completed turn to the
+ * shared child-run driver. The driver owns admission, accounting and delivery;
+ * this strategy owns native launch options and result formatting.
  */
 
 import { Effect } from 'effect';
 
-import { getRunRecords } from '@agent/storage';
-import {
-  isWaitingFlowResult,
-  type AgentFlowResult,
-  type AgentRuntimeFlowResult,
-} from '@agent/runtime/AgentFlowResult';
-import type {
-  ResumeToolUseFromResumeDataOptions,
-  ResumeTurnIdentity,
-} from '@agent/runtime/executeAgent';
+import { type AgentFlowResult } from '@agent/runtime/AgentFlowResult';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import type { ExecuteAgentOptions } from '@agent/runtime/executeAgent';
 import type { AgentRunServices } from '@agent/runtime/toolInjection';
 import type { AgentRunHandle } from '@agent/runtime/RunHandle';
 import type {
@@ -64,7 +34,7 @@ import {
 } from './subagentResults';
 
 /**
- * The two engine entry points a native child run needs. Provided by
+ * The engine entry point a native child run needs. Provided by
  * `@agent/runtime/executeAgent` at its module load rather than imported: a
  * static import here would close the
  * registry -> DelegationTools -> proposalFlow -> subagentRun ->
@@ -74,16 +44,7 @@ import {
  */
 export interface AgentEngine {
   readonly executeAgent: typeof import('@agent/runtime/executeAgent').executeAgent;
-  /**
-   * The unlaned turn (`executeAgent`'s `resumeToolUseTurn`): a child loop
-   * already holds its run's lane, so the laned
-   * `resumeToolUseFromResumeData` would park the turn behind the loop's own
-   * generation.
-   */
-  readonly resumeToolUseTurn: (
-    identity: ResumeTurnIdentity,
-    options: ResumeToolUseFromResumeDataOptions & { session: SessionHandle },
-  ) => Effect.Effect<AgentRuntimeFlowResult, Error, AgentRunServices>;
+  readonly resumeToolUseFromResumeData: typeof import('@agent/runtime/executeAgent').resumeToolUseFromResumeData;
 }
 
 let agentEngine: AgentEngine | undefined;
@@ -136,8 +97,7 @@ export interface ChildRunLaunchOptions {
   readonly onRunResolved?: (runId: RunId) => void;
 }
 
-interface NativeSubagentStrategyParams extends ChildRunLaunchOptions {
-  readonly definition: PreparedAgentDefinition;
+interface NativeSubagentStrategyBase extends ChildRunLaunchOptions {
   readonly runId: RunId;
   readonly startedAt: number;
   readonly workingDirectory?: string;
@@ -153,17 +113,17 @@ interface NativeSubagentStrategyParams extends ChildRunLaunchOptions {
   readonly userFollowUpSupport: UserFollowUpSupport;
 }
 
-/**
- * Fold a WAITING turn into the shape `formatSubagentDelivery` expects — for
- * the orchestrator, a suspended turn reads as a completed cycle.
- */
-function toDeliveryResult(
-  turn: AgentRuntimeFlowResult,
-  runId: RunId,
-): AgentFlowResult {
-  if (!isWaitingFlowResult(turn)) return turn;
-  return { ...turn, outcome: RUN_OUTCOME.COMPLETED, runId };
-}
+type NativeSubagentStrategyParams = NativeSubagentStrategyBase &
+  (
+    | { readonly definition: PreparedAgentDefinition; readonly resume?: never }
+    | {
+        readonly definition?: never;
+        readonly resume: {
+          readonly identity: import('@agent/runtime/executeAgent').ResumeTurnIdentity;
+          readonly options: import('@agent/runtime/executeAgent').ResumeToolUseFromResumeDataOptions;
+        };
+      }
+  );
 
 /** Bind every distinct caller/turn cancellation source to one live run handle. */
 function bindAbortSignals(
@@ -184,10 +144,13 @@ function bindAbortSignals(
 
 export function createNativeSubagentStrategy(
   params: NativeSubagentStrategyParams,
-): ChildRunStrategy<AgentRuntimeFlowResult, AgentRunServices> {
+): ChildRunStrategy<AgentFlowResult, AgentRunServices> {
+  const config = params.definition
+    ? params.definition.config
+    : params.resume.identity.agentConfig;
   let runHandle: AgentRunHandle | undefined;
   // Captured for the turn currently in flight; read once the call resolves.
-  // `executeAgent`/`resumeToolUseTurn` never reject for a
+  // `executeAgent` never rejects for a
   // subagent's own application-level failure (runFlowWithLifecycle returns a
   // terminal failed result instead) — the real underlying error is only
   // observable through this callback.
@@ -199,15 +162,16 @@ export function createNativeSubagentStrategy(
   let cachedBuilt: SubagentResultMeta | undefined;
   let cachedDelivery: string | undefined;
 
-  const resolveDeliveryTarget = (): RunId | undefined =>
-    runHandle ? runHandle.deliveryTarget : params.parentRunId;
+  const resolveDeliveryTarget = (): RunId | undefined => {
+    return runHandle ? runHandle.deliveryTarget : params.parentRunId;
+  };
 
   const runNative = Effect.fn('nativeSubagent.runTurn')(function* (
     ports: ChildRunPorts,
     signal: AbortSignal,
     call: (
       onRun: (handle: AgentRunHandle) => Effect.Effect<void>,
-    ) => Effect.Effect<AgentRuntimeFlowResult, Error, AgentRunServices>,
+    ) => Effect.Effect<AgentFlowResult, Error, AgentRunServices>,
   ) {
     lastErr = undefined;
     lastResult = undefined;
@@ -223,7 +187,9 @@ export function createNativeSubagentStrategy(
     ).pipe(
       Effect.tap((result) =>
         Effect.sync(() => {
-          lastResult = toDeliveryResult(result, params.runId);
+          lastResult = result;
+          cachedBuilt = undefined;
+          cachedDelivery = undefined;
           ports.recordCost(result.usage?.totalCost);
         }),
       ),
@@ -232,14 +198,13 @@ export function createNativeSubagentStrategy(
   });
 
   const buildResult = Effect.fn('nativeSubagent.buildResult')(function* (
-    turn: AgentRuntimeFlowResult,
+    turn: AgentFlowResult,
   ) {
     if (!cachedBuilt) {
-      const result = toDeliveryResult(turn, params.runId);
       cachedBuilt = yield* buildSubagentResult(
         params.runId,
         params.agentName,
-        result,
+        turn.output,
         {
           startedAt: params.startedAt,
           storageRoot: params.session.roots.storage,
@@ -257,7 +222,7 @@ export function createNativeSubagentStrategy(
     // record. Keep it category-derived so a failed workflow subagent's record
     // never reads "tool-use".
     stageLabel:
-      params.definition.config.agentCategory === AgentCategory.ToolUse
+      config.agentCategory === AgentCategory.ToolUse
         ? 'Native tool-use subagent'
         : 'Native workflow subagent',
 
@@ -267,10 +232,14 @@ export function createNativeSubagentStrategy(
       deliveryMode: 'persistOnly' as const,
     }),
 
-    launch: (ports, signal) =>
+    continuous: true,
+    launch: (ports, signal, turns) =>
       runNative(ports, signal, (onRun) =>
         Effect.gen(function* () {
-          const executeOptions = {
+          const executeOptions: ExecuteAgentOptions & {
+            session: SessionHandle;
+          } = {
+            ...params.resume?.options,
             session: params.session,
             approvalPromptsUnavailable: params.approvalPromptsUnavailable,
             onApprovalPolicyDenial: params.onApprovalPolicyDenial,
@@ -282,93 +251,57 @@ export function createNativeSubagentStrategy(
               lastErr = err;
             },
             onRun,
+            turns: {
+              run: (operation) =>
+                Effect.suspend(() => {
+                  lastErr = undefined;
+                  return turns.run(operation);
+                }),
+              complete: (turn: AgentFlowResult) =>
+                Effect.gen(function* () {
+                  lastResult = turn;
+                  cachedBuilt = undefined;
+                  cachedDelivery = undefined;
+                  ports.recordCost(turn.usage?.totalCost);
+                  yield* turns.complete(turn);
+                }),
+            },
           };
+          if (params.resume)
+            return yield* engine().resumeToolUseFromResumeData(
+              params.resume.identity,
+              executeOptions,
+            );
           const turn = yield* engine().executeAgent(
             params.definition,
             params.runId,
             {
               ...executeOptions,
-              // This strategy only ever launches child runs: naming the parent
-              // is what admits the WAITING result it consumes as a loop turn.
+              // The live handle owns this edge, including a later detach.
               parentRunId: params.parentRunId,
               ...(params.runMode === 'single-cycle'
                 ? { stopAfterCycle: true }
                 : {}),
             },
           );
-          // A single-cycle run must end its cycle: a WAITING turn here is an
-          // invariant violation, surfaced loudly as this turn's failure rather
-          // than parked on a queue no follow-up will ever reach. Record the
-          // turn's facts first so the failure meta and the parent's cost
-          // accounting keep what the run actually spent.
-          if (params.runMode === 'single-cycle' && isWaitingFlowResult(turn)) {
-            lastResult = toDeliveryResult(turn, params.runId);
-            ports.recordCost(turn.usage?.totalCost);
-            return yield* Effect.fail(
-              new Error(
-                `Single-cycle subagent ${params.runId} unexpectedly suspended.`,
-              ),
-            );
-          }
           return turn;
         }),
       ),
 
-    // The resumed flow takes and consumes the queued batch itself, from the
-    // queue this child's loop owns; the loop hands a native child none.
-    runTurn: (_followUps, ports, signal) =>
-      runNative(ports, signal, (onRun) =>
-        Effect.gen(function* () {
-          const runId = runHandle?.runId;
-          if (!runId) {
-            return yield* Effect.fail(
-              new Error(
-                `Native subagent ${params.runId} has no live stream to resume.`,
-              ),
-            );
-          }
-          const agentConfig = yield* getRunRecords(
-            params.session,
-            params.runId,
-          ).readConfig();
-          if (!agentConfig)
-            return yield* Effect.fail(
-              new Error(
-                `Native subagent ${params.runId} has no persisted config to resume.`,
-              ),
-            );
-          // The snapshot is read once, inside the turn and under its run
-          // lease: a run whose snapshot is gone by then refuses there, with
-          // `ResumeSessionUnavailableError`.
-          return yield* engine().resumeToolUseTurn(
-            { runId: params.runId, agentConfig },
-            {
-              session: params.session,
-              approvalPromptsUnavailable: params.approvalPromptsUnavailable,
-              onApprovalPolicyDenial: params.onApprovalPolicyDenial,
-              runtimeUnavailableTools: params.runtimeUnavailableTools,
-              onProgress: (update) => ports.notify(update),
-              onRunError: (err) => {
-                lastErr = err;
-              },
-              onRun,
-            },
-          );
-        }),
-      ),
-
-    isTerminal: (turn) => !isWaitingFlowResult(turn),
+    isTerminal: () => true,
+    isTurnInterrupted: (turn) =>
+      params.runMode !== 'single-cycle' &&
+      turn.outcome === RUN_OUTCOME.CANCELLED,
     isTurnError: () => lastErr !== undefined,
 
     resolveDeliveryTarget,
 
     formatDelivery: Effect.fn('nativeSubagent.formatDelivery')(function* (
-      turn: AgentRuntimeFlowResult,
+      turn: AgentFlowResult,
     ) {
       if (cachedDelivery === undefined) {
         const built = yield* buildResult(turn);
         if (params.resultOnly) return '';
-        const delivered = toDeliveryResult(turn, params.runId);
         // The formatter is the one fallible step left here, and its throw is
         // this turn's failure — not a defect — exactly as it was when the
         // loop adopted this method's rejected promise.
@@ -376,10 +309,10 @@ export function createNativeSubagentStrategy(
           try: () =>
             formatSubagentDelivery(
               params.agentName,
-              { outcome: delivered.outcome, output: built.output },
+              { outcome: turn.outcome, output: built.output },
               {
                 runId: params.runId,
-                memoryMisses: delivered.memoryMisses,
+                memoryMisses: turn.memoryMisses,
                 wallTimeMs: built.wallTimeMs,
                 workingDirectory: params.workingDirectory,
               },
@@ -393,7 +326,7 @@ export function createNativeSubagentStrategy(
     formatError: (turn, err) => {
       if (params.resultOnly) return '';
       const wallTimeMs = Date.now() - params.startedAt;
-      const result = turn ? toDeliveryResult(turn, params.runId) : lastResult;
+      const result = turn ?? lastResult;
       return formatSubagentError(
         params.runId,
         params.agentName,
@@ -412,13 +345,10 @@ export function createNativeSubagentStrategy(
           // Overwrite any interim success manifest from an earlier turn: the
           // failed run's own output, or its category's empty one when the
           // turn produced none.
-          const result = turn
-            ? toDeliveryResult(turn, params.runId)
-            : lastResult;
+          const result = turn ?? lastResult;
           return buildSubagentResultMeta(
             params.agentName,
-            result?.output ??
-              emptyRunEndOutput(params.definition.config.agentCategory),
+            result?.output ?? emptyRunEndOutput(config.agentCategory),
             Date.now() - params.startedAt,
           );
         }

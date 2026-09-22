@@ -931,10 +931,3 @@ export type SettingsViewInboundMessage = z.infer<
 export type SettingsMessageFor<
   C extends SettingsViewInboundMessage['command'],
 > = Extract<SettingsViewInboundMessage, { command: C }>;
-
-export type SettingsViewInboundHandlerRegistry =
-  HandlerRegistry<SettingsViewInboundMessage>;
-
-export const dispatchSettingsViewInbound = createDispatcher(
-  SettingsViewInboundMessageSchema,
-);

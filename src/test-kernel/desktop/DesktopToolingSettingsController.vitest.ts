@@ -281,7 +281,7 @@ describe('DefaultDesktopToolingSettingsController', () => {
       }),
   );
 
-  it.live(
+  it.effect(
     'persists a toggle before refreshing caches and posting cached data',
     () =>
       Effect.gen(function* () {
@@ -310,7 +310,8 @@ describe('DefaultDesktopToolingSettingsController', () => {
           },
         });
 
-        yield* Effect.promise(async () =>
+        yield* withProcessServices(
+          testRuntime(),
           assertSupported(controller.toolHandlers.toggleTool)({
             command: SETTINGS_VIEW_COMMANDS.TOGGLE_TOOL,
             toolId: 'zotero',
@@ -336,138 +337,177 @@ describe('DefaultDesktopToolingSettingsController', () => {
       }),
   );
 
-  it('completes a fresh availability check before rebuilding the dashboard', async () => {
-    const events: string[] = [];
-    toolData.buildItems.mockImplementation(async () => {
-      events.push('dashboard:build');
-      return [DASHBOARD_ITEM];
-    });
-    toolData.lastCheckResults.mockImplementation(() => {
-      events.push('dashboard:cached');
-      return [];
-    });
-    toolData.refreshAvailability.mockImplementation(async () => {
-      events.push('dashboard:refresh');
-      emitAppSignal('toolAvailabilityChanged', undefined);
-    });
-    const posted = createDeferred();
-    const { controller } = createFixture({
-      renderer: {
-        postToRenderer: () => {
-          events.push('renderer:post');
-          posted.resolve();
-        },
-      },
-    });
+  it.effect(
+    'completes a fresh availability check before rebuilding the dashboard',
+    () =>
+      Effect.gen(function* () {
+        const events: string[] = [];
+        toolData.buildItems.mockImplementation(async () => {
+          events.push('dashboard:build');
+          return [DASHBOARD_ITEM];
+        });
+        toolData.lastCheckResults.mockImplementation(() => {
+          events.push('dashboard:cached');
+          return [];
+        });
+        toolData.refreshAvailability.mockImplementation(async () => {
+          events.push('dashboard:refresh');
+          emitAppSignal('toolAvailabilityChanged', undefined);
+        });
+        const posted = createDeferred();
+        const { controller } = createFixture({
+          renderer: {
+            postToRenderer: () => {
+              events.push('renderer:post');
+              posted.resolve();
+            },
+          },
+        });
 
-    await assertSupported(controller.toolHandlers.recheckToolStatus)({
-      command: SETTINGS_VIEW_COMMANDS.RECHECK_TOOL_STATUS,
-    });
-    await posted.promise;
-    expect(events).toContain('renderer:post');
+        yield* withProcessServices(
+          testRuntime(),
+          assertSupported(controller.toolHandlers.recheckToolStatus)({
+            command: SETTINGS_VIEW_COMMANDS.RECHECK_TOOL_STATUS,
+          }),
+        );
+        yield* Effect.promise(() => posted.promise);
+        expect(events).toContain('renderer:post');
 
-    expect(events).toEqual([
-      'dashboard:refresh',
-      'dashboard:cached',
-      'dashboard:build',
-      'renderer:post',
-    ]);
-  });
-
-  it('runs planned tool commands and reports why a plan produced none', async () => {
-    const plans: ToolTerminalAction[] = [
-      {
-        kind: 'terminal',
-        name: 'TeXRA: OpenAI Codex CLI',
-        command: 'npm install codex',
-      },
-      { kind: 'none', reason: 'missingCommand' },
-    ];
-    toolData.buildItems.mockResolvedValue([]);
-    toolData.planTerminalAction.mockImplementation(
-      () => plans.shift() as ToolTerminalAction,
-    );
-    const { controller, commands, reportedErrors } = createFixture();
-
-    await assertSupported(controller.toolHandlers.runToolCommand)({
-      command: SETTINGS_VIEW_COMMANDS.RUN_TOOL_COMMAND,
-      toolId: 'codex',
-      kind: 'install',
-    });
-    await assertSupported(controller.toolHandlers.runToolCommand)({
-      command: SETTINGS_VIEW_COMMANDS.RUN_TOOL_COMMAND,
-      toolId: 'codex',
-      kind: 'auth',
-    });
-
-    expect(toolData.planTerminalAction).toHaveBeenNthCalledWith(1, {
-      toolId: 'codex',
-      commandKind: 'install',
-    });
-    expect(toolData.planTerminalAction).toHaveBeenNthCalledWith(2, {
-      toolId: 'codex',
-      commandKind: 'auth',
-    });
-    expect(commands).toEqual(['npm install codex']);
-    expect(reportedErrors.map((error) => (error as Error).message)).toEqual([
-      'No auth command for tool "codex" (missingCommand)',
-    ]);
-  });
-
-  it('runs only allowlisted LaTeX installation commands', async () => {
-    const { controller, commands } = createFixture();
-
-    await assertSupported(controller.latexHandlers.runInstallCommand)({
-      command: SETTINGS_VIEW_COMMANDS.RUN_INSTALL_COMMAND,
-      installCommand: HOMEBREW_INSTALL_COMMAND,
-    });
-    await expect(
-      assertSupported(controller.latexHandlers.runInstallCommand)({
-        command: SETTINGS_VIEW_COMMANDS.RUN_INSTALL_COMMAND,
-        installCommand: 'echo not-allowlisted',
+        expect(events).toEqual([
+          'dashboard:refresh',
+          'dashboard:cached',
+          'dashboard:build',
+          'renderer:post',
+        ]);
       }),
-    ).rejects.toThrow('Rejected unknown install command: echo not-allowlisted');
+  );
 
-    expect(commands).toEqual([HOMEBREW_INSTALL_COMMAND]);
-  });
+  it.effect(
+    'runs planned tool commands and fails when a plan produced none',
+    () =>
+      Effect.gen(function* () {
+        const plans: ToolTerminalAction[] = [
+          {
+            kind: 'terminal',
+            name: 'TeXRA: OpenAI Codex CLI',
+            command: 'npm install codex',
+          },
+          { kind: 'none', reason: 'missingCommand' },
+        ];
+        toolData.buildItems.mockResolvedValue([]);
+        toolData.planTerminalAction.mockImplementation(
+          () => plans.shift() as ToolTerminalAction,
+        );
+        const { controller, commands } = createFixture();
 
-  it('declares extension installs unsupported and strips their dashboard affordance', async () => {
-    toolData.buildItems.mockResolvedValue([
-      {
-        ...DASHBOARD_ITEM,
-        installActions: [
-          { kind: 'extension', extensionId: 'leanprover.lean4' },
-        ],
-      },
-    ]);
-    const repainted = createDeferred();
-    const { controller, posted } = createFixture(
-      {},
-      {
-        onPost: (_message, posted) => {
-          const last = posted.at(-1) as { command?: string } | undefined;
-          if (last?.command === SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD) {
-            repainted.resolve();
-          }
-        },
-      },
-    );
+        yield* withProcessServices(
+          testRuntime(),
+          assertSupported(controller.toolHandlers.runToolCommand)({
+            command: SETTINGS_VIEW_COMMANDS.RUN_TOOL_COMMAND,
+            toolId: 'codex',
+            kind: 'install',
+          }),
+        );
+        const error = yield* Effect.flip(
+          withProcessServices(
+            testRuntime(),
+            assertSupported(controller.toolHandlers.runToolCommand)({
+              command: SETTINGS_VIEW_COMMANDS.RUN_TOOL_COMMAND,
+              toolId: 'codex',
+              kind: 'auth',
+            }),
+          ),
+        );
 
-    expect(isUnsupported(controller.toolHandlers.installToolExtension)).toBe(
-      true,
-    );
-    expect(isUnsupported(controller.latexHandlers.installLatexWorkshop)).toBe(
-      true,
-    );
+        expect(toolData.planTerminalAction).toHaveBeenNthCalledWith(1, {
+          toolId: 'codex',
+          commandKind: 'install',
+        });
+        expect(toolData.planTerminalAction).toHaveBeenNthCalledWith(2, {
+          toolId: 'codex',
+          commandKind: 'auth',
+        });
+        expect(commands).toEqual(['npm install codex']);
+        expect(error.message).toBe(
+          'No auth command for tool "codex" (missingCommand)',
+        );
+      }),
+  );
 
-    await assertSupported(controller.toolHandlers.recheckToolStatus)({
-      command: SETTINGS_VIEW_COMMANDS.RECHECK_TOOL_STATUS,
-    });
+  it.effect('runs only allowlisted LaTeX installation commands', () =>
+    Effect.gen(function* () {
+      const { controller, commands } = createFixture();
 
-    await repainted.promise;
-    expect(posted.at(-1)).toEqual({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD,
-      items: [DASHBOARD_ITEM],
-    });
-  });
+      yield* withProcessServices(
+        testRuntime(),
+        assertSupported(controller.latexHandlers.runInstallCommand)({
+          command: SETTINGS_VIEW_COMMANDS.RUN_INSTALL_COMMAND,
+          installCommand: HOMEBREW_INSTALL_COMMAND,
+        }),
+      );
+      const error = yield* Effect.flip(
+        withProcessServices(
+          testRuntime(),
+          assertSupported(controller.latexHandlers.runInstallCommand)({
+            command: SETTINGS_VIEW_COMMANDS.RUN_INSTALL_COMMAND,
+            installCommand: 'echo not-allowlisted',
+          }),
+        ),
+      );
+      expect(error.message).toBe(
+        'Rejected unknown install command: echo not-allowlisted',
+      );
+
+      expect(commands).toEqual([HOMEBREW_INSTALL_COMMAND]);
+    }),
+  );
+
+  it.effect(
+    'declares extension installs unsupported and strips their dashboard affordance',
+    () =>
+      Effect.gen(function* () {
+        toolData.buildItems.mockResolvedValue([
+          {
+            ...DASHBOARD_ITEM,
+            installActions: [
+              { kind: 'extension', extensionId: 'leanprover.lean4' },
+            ],
+          },
+        ]);
+        const repainted = createDeferred();
+        const { controller, posted } = createFixture(
+          {},
+          {
+            onPost: (_message, posted) => {
+              const last = posted.at(-1) as { command?: string } | undefined;
+              if (
+                last?.command === SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD
+              ) {
+                repainted.resolve();
+              }
+            },
+          },
+        );
+
+        expect(
+          isUnsupported(controller.toolHandlers.installToolExtension),
+        ).toBe(true);
+        expect(
+          isUnsupported(controller.latexHandlers.installLatexWorkshop),
+        ).toBe(true);
+
+        yield* withProcessServices(
+          testRuntime(),
+          assertSupported(controller.toolHandlers.recheckToolStatus)({
+            command: SETTINGS_VIEW_COMMANDS.RECHECK_TOOL_STATUS,
+          }),
+        );
+
+        yield* Effect.promise(() => repainted.promise);
+        expect(posted.at(-1)).toEqual({
+          command: SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD,
+          items: [DASHBOARD_ITEM],
+        });
+      }),
+  );
 });

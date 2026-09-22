@@ -133,7 +133,10 @@ function launchStrategy(
   signal = new AbortController().signal,
 ) {
   return strategy
-    .launch(ports, signal)
+    .launch(ports, signal, {
+      run: (operation) => operation,
+      complete: () => Effect.void,
+    })
     .pipe(Effect.provide(nativeToolTestLayer()));
 }
 

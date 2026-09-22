@@ -150,7 +150,7 @@ const taken = (
       lease,
     )!;
     input.seed(seed);
-    const batch = yield* input.poll;
+    const batch = input.hasQueued() ? yield* input.take : null;
     return batch === null || batch.synthetic
       ? []
       : batch.followUps.map((followUp) => followUp.content.text);
@@ -872,7 +872,7 @@ describe('ToolUseFollowUpQueue delivery identity (#9531)', () => {
           }),
         ).toEqual({ kind: 'queued' });
         expect(queued(id)).toEqual(['child result']);
-        expect(yield* input.poll).toBeNull();
+        expect(input.hasQueued()).toBe(false);
 
         expect(yield* followUps.submit(id, delivery, 'recoverable')).toEqual({
           kind: 'duplicate',
