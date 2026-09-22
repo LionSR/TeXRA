@@ -36,27 +36,21 @@ import type { LanguageModel } from '@platform/languageModel';
 import type { StorageFs, WorkspaceFs } from '@platform/rootedFs';
 import { hasDelegationTool } from '@shared/constants/delegationTools';
 import {
-  AgentRunStateSnapshotSchema,
   EMPTY_RUN_USAGE_TOTALS,
   RUN_OUTCOME,
   type JsonValue,
-  type NormalizedUsage,
   type RetryErrorInfo,
   type RunOutcome,
   type RunUsageTotals,
 } from '@shared/schemas';
 import { RunLedger } from '@shared/session/runLedger';
-import { freshRunState, type RunState } from '@shared/session/runStateFold';
+import type { RunState } from '@shared/session/runStateFold';
 import { goalOf, pauseGoal, setGoalSessionAutoApproval } from '@tools/goal';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 
 import { AgentRun } from '../run/AgentRun';
 import { compactIfNeeded } from '../run/compaction';
-import {
-  bindModel,
-  releaseBindingUploads,
-  type BoundModel,
-} from '../run/modelBinding';
+import { bindModel, releaseBindingUploads } from '../run/modelBinding';
 import { mediaInputParts, type InputPart } from '../run/mediaInput';
 import { toolDefinitionsFor } from '../run/tools';
 import { FollowUps, type ConsumedFollowUps } from '../FollowUps';
@@ -71,7 +65,12 @@ import {
   toolUseFlowState,
   type ToolUseFlowState,
 } from './rows';
-import { alreadyOpenedMessage, recordServedUsage } from './loopScaffold';
+import {
+  alreadyOpenedMessage,
+  freshProgramState,
+  recordServedUsage,
+  usageSnapshot,
+} from './runProgram';
 import { recordHalt, runStopError } from './runExit';
 import { dispatchPendingResponse, type TurnContext } from './toolUseDispatch';
 import type { HttpClient } from 'effect/unstable/http';
@@ -397,7 +396,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     if (userRequest) content.push({ kind: 'text', text: userRequest });
     userChannels[USER_VAR_MODEL] = bound.modelId;
     workspace = AgentWorkspaceState.create();
-    const openedAt = fresh(bound);
+    const openedAt = freshProgramState('toolUse', bound, run);
     const opened = yield* ledger.appendBatch(runId, null, [
       appendRow(runId, [{ role: 'user', content }]),
       snapshotRow(runId, openedAt, {
@@ -411,17 +410,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     ]);
     run.callbacks.onProgress?.({ kind: 'started' });
     return yield* commit(opened);
-  });
-
-  /** The state a fresh run's opening snapshot is authored against. */
-  const fresh = (bound: BoundModel): RunState => ({
-    ...freshRunState(0),
-    family: 'toolUse',
-    modelId: bound.modelId,
-    modelCompatibilityKey: bound.compatibilityKey,
-    // The launch's own-API-key choice enters the ledger with the opening
-    // snapshot, so every later binding and every resume reads it back.
-    declinedRoutes: run.declinedRoutes,
   });
 
   const restore = (state: RunState): void => {
@@ -447,16 +435,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     readonly outcome: 'completed' | 'failed' | 'cancelled';
   };
   type LoopExit = { readonly state: RunState; readonly outcome: RunOutcome };
-  const usageSnapshot = (
-    state: RunState,
-    latestUsage: NormalizedUsage | null,
-  ) =>
-    AgentRunStateSnapshotSchema.parse({
-      totalRounds: state.round,
-      totalResponseTimeMs,
-      usageAccumulator: { totals: state.usage, latestUsage },
-    });
-
   const runTurn = Effect.fn('toolUse.turn')(function* (
     initial: RunState,
   ): Effect.fn.Return<
@@ -672,7 +650,10 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         }
         lastError = undefined;
         totalResponseTimeMs += outcome.responseTimeMs;
-        yield* recordServedUsage(run, usageSnapshot(state, outcome.usage));
+        yield* recordServedUsage(
+          run,
+          usageSnapshot(state, state.round, totalResponseTimeMs, outcome.usage),
+        );
         if (outcome.text) response = outcome.text;
         if (state.pendingResponse !== null) continue;
         // A text-only response: the same policy the resume path replays.
