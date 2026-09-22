@@ -208,15 +208,13 @@ export class AgentDirectoryService {
     });
   }
 
-  /** The issue reporter is a host push; its own failure is still a failed
-   *  resolution, as the reported program's is. */
+  /** The issue reporter is a host push with a never error channel, so
+   *  reporting an issue cannot fail the resolution that raised it. */
   private reportIssue(
     message: string,
     docsId: AgentDirectoryDocsId,
-  ): Effect.Effect<void, AgentDirectoriesFailed> {
-    return this.options.issueReporter
-      .report(message, docsId)
-      .pipe(Effect.mapError(this.failure(message)));
+  ): Effect.Effect<void> {
+    return this.options.issueReporter.report(message, docsId);
   }
 
   /** This file's one failure shape, from whatever cause raised it. */
