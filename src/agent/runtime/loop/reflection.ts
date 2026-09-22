@@ -757,7 +757,11 @@ export const runReflection = Effect.fn('reflection.run')(function* (
           // snapshot is what records that.
           runtime: { lastError: null },
         }),
-        stepRow(runId, { ...base, continuationIndex: next }, 'response.processed'),
+        stepRow(
+          runId,
+          { ...base, continuationIndex: next },
+          'response.processed',
+        ),
       ]);
       return continued;
     }

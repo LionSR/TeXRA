@@ -30,10 +30,10 @@ import {
 } from '@shared/session/runStateFold';
 import { ensureError } from '@utils/errors/errorMessage';
 
-import type { FollowUps } from '../FollowUps';
 import { AgentRun, type AgentRunShape } from '../run/AgentRun';
 import { Runs } from '../runRegistry';
 import { haltedStepRow } from './rows';
+import type { FollowUps } from '../FollowUps';
 
 /**
  * The run's one state holder and its only ledger writer. Seeded with the
@@ -278,11 +278,13 @@ export const stagedBy =
       (stage, exit) =>
         Effect.sync(() =>
           stage.end(
-            Exit.isSuccess(exit)
-              ? outcomeOf(exit.value)
-              : Cause.hasInterruptsOnly(exit.cause)
-                ? RUN_OUTCOME.CANCELLED
-                : RUN_OUTCOME.FAILED,
+            Exit.match(exit, {
+              onSuccess: outcomeOf,
+              onFailure: (cause) =>
+                Cause.hasInterruptsOnly(cause)
+                  ? RUN_OUTCOME.CANCELLED
+                  : RUN_OUTCOME.FAILED,
+            }),
           ),
         ),
     );

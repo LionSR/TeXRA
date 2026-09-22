@@ -37,6 +37,7 @@ import { turnText } from '@agent/runtime/run/turnText';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { UsageMonitor } from '@agent/runtime/UsageMonitor';
 import { TraceEmitter } from '@agent/trace';
+import { Runs } from '@agent/runtime/runRegistry';
 import {
   LanguageModel,
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
@@ -51,7 +52,6 @@ import {
   type RunId,
 } from '@shared/schemas';
 import { RunLedger } from '@shared/session/runLedger';
-import { Runs } from '@agent/runtime/runRegistry';
 import type { RunState } from '@shared/session/runStateFold';
 import { StreamLog } from '@shared/session/traceEntries';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';

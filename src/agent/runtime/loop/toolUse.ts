@@ -179,10 +179,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         : {}),
     };
   };
-  const snapshot = (
-    state: RunState,
-    patch: Omit<SnapshotPatch, 'state'>,
-  ) =>
+  const snapshot = (state: RunState, patch: Omit<SnapshotPatch, 'state'>) =>
     snapshotRow(runId, state, {
       ...patch,
       state: { family: 'toolUse', state: flowState(state) },
@@ -328,11 +325,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   // -------------------------------------------------------------- opening
   const openFresh = Effect.fn('toolUse.open')(function* (
     opening: RunState,
-  ): Effect.fn.Return<
-    RunState,
-    Error,
-    ProcessServices
-  > {
+  ): Effect.fn.Return<RunState, Error, ProcessServices> {
     const bound = yield* SynchronizedRef.get(run.model);
     const resolvedToolNames = run.setting.tools.map((tool) => tool.name);
     const promptVars = {

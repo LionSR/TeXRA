@@ -24,7 +24,7 @@ Mirrors of durable facts, which are the reason the pairs exist at all: `let last
 Two correctness holes, both reachable:
 
 - The state cell is written outside any uninterruptible region. `rg -c "ledger.appendBatch"` gives 7 in toolUse.ts and 7 in reflection.ts; of those 14, exactly one is wrapped (reflection.ts:1125). ModelInvoker wraps 7 of its 8 (536, 596, 727, 1025, 1108, 1126, 1241) and toolUseDispatch 1 of its 2 (283). So an interrupt delivered between a durably committed batch and `Ref.set(latest, next)` leaves the finalizer holding a state behind the rows; its `appendBatch(runId, staleState, [halted])` then folds a `halted` step onto a state missing rows already committed and is refused, and that refusal is swallowed into `logger.warn('Failed to record the run halt')` (toolUse.ts:899-906, reflection.ts:1328-1335). That is exactly the failure the comment at toolUse.ts:879-885 records as already fixed once, reachable one level down.
-- Both verdict ladders branch on `Cause.hasInterrupts` (toolUse.ts:921, reflection.ts:1336). Effect's own doc at node_modules/effect/src/Cause.ts:1053 says `hasInterruptsOnly` is "`true` only when *all* reasons are interrupts", and :1049-1050 shows `hasInterrupts(Cause.fail("error"))` is false but any interrupt riding alongside a real failure makes it true. So a run that failed and was then interrupted while unwinding is recorded CANCELLED.
+- Both verdict ladders branch on `Cause.hasInterrupts` (toolUse.ts:921, reflection.ts:1336). Effect's own doc at node_modules/effect/src/Cause.ts:1053 says `hasInterruptsOnly` is "`true` only when _all_ reasons are interrupts", and :1049-1050 shows `hasInterrupts(Cause.fail("error"))` is false but any interrupt riding alongside a real failure makes it true. So a run that failed and was then interrupted while unwinding is recorded CANCELLED.
 
 And two durability defects the crash lens found, both confirmed:
 
@@ -82,7 +82,11 @@ Every `state = yield* commit(yield* ledger.appendBatch(runId, state, rows))` bec
 ```ts
 export type RunEntry =
   /** No opening row yet. `loaded` may still carry queued follow-up rows. */
-  | { readonly _tag: 'fresh'; readonly loaded: RunState | null; readonly opening: RunState }
+  | {
+      readonly _tag: 'fresh';
+      readonly loaded: RunState | null;
+      readonly opening: RunState;
+    }
   | { readonly _tag: 'restored'; readonly loaded: RunState };
 
 export const loadRun: (
@@ -103,7 +107,10 @@ Give both loops the same exit value, so the release needs no `outcomeOf` lambda 
 ```ts
 /** What a run program returns. `outcome: null` is a park: the launch ended
  *  without ending the run, so no `halted` step is written. */
-export type RunExit = { readonly state: RunState; readonly outcome: RunOutcome | null };
+export type RunExit = {
+  readonly state: RunState;
+  readonly outcome: RunOutcome | null;
+};
 ```
 
 Tool-use's `LoopExit` waiting arm becomes `outcome: null`; reflection's is already `RunOutcome`. The verdict is then one total `Exit.match`:
@@ -113,7 +120,9 @@ const runVerdict = (exit: Exit.Exit<RunExit, Error>): RunOutcome | null =>
   Exit.match(exit, {
     onSuccess: (value) => value.outcome,
     onFailure: (cause) =>
-      Cause.hasInterruptsOnly(cause) ? RUN_OUTCOME.CANCELLED : RUN_OUTCOME.FAILED,
+      Cause.hasInterruptsOnly(cause)
+        ? RUN_OUTCOME.CANCELLED
+        : RUN_OUTCOME.FAILED,
   });
 
 /** The exit protocol: the halt row and, where a family holds one, the input
@@ -125,7 +134,9 @@ export const settleRun: (
   /** The family's input lease, or null. Typed data, not a service lookup:
    *  a missing FollowUps must not leak a lease with nothing saying so. */
   lease: FollowUps | null,
-) => (exit: Exit.Exit<RunExit, Error>) => Effect.Effect<void, never, RunLedger | Runs>;
+) => (
+  exit: Exit.Exit<RunExit, Error>,
+) => Effect.Effect<void, never, RunLedger | Runs>;
 ```
 
 Its body: `const outcome = runVerdict(exit); if (outcome !== null) { const state = yield* cell.current; yield* cell.append([haltedStepRow(runId, state, outcome)]).pipe(Effect.catch(warn)); } lease?.release(outcome === RUN_OUTCOME.COMPLETED && !runs.hasActiveChildren(runId) ? 'terminal' : 'recoverable')`.
@@ -161,24 +172,30 @@ Tool-use:
 const enter = Effect.gen(function* () {
   const entry = yield* loadRun(runId, 'toolUse', start.resume);
   followUps.seed(entry.loaded);
-  const opened = entry._tag === 'fresh'
-    ? yield* openFresh(entry.opening)
-    : (restore(entry.loaded), entry.loaded);
+  const opened =
+    entry._tag === 'fresh'
+      ? yield* openFresh(entry.opening)
+      : (restore(entry.loaded), entry.loaded);
   return yield* makeRunCell(runId, opened);
 });
 
-return yield* Effect.acquireUseRelease(
-  Effect.sync(attach),
-  () => Effect.acquireUseRelease(enter, loopBody, (cell, exit) =>
-    settleRun(cell, logger, followUps)(exit)),
-  () => Effect.sync(detach),
-).pipe(
-  Effect.map((loop) =>
-    loop.outcome === null
-      ? result(RUN_PHASE.WAITING, loop.state)
-      : result(loop.outcome, loop.state),
-  ),
-  Effect.catchCause(stoppedBy(logger, `Tool-use run ${runId}`)),
+return (
+  yield *
+  Effect.acquireUseRelease(
+    Effect.sync(attach),
+    () =>
+      Effect.acquireUseRelease(enter, loopBody, (cell, exit) =>
+        settleRun(cell, logger, followUps)(exit),
+      ),
+    () => Effect.sync(detach),
+  ).pipe(
+    Effect.map((loop) =>
+      loop.outcome === null
+        ? result(RUN_PHASE.WAITING, loop.state)
+        : result(loop.outcome, loop.state),
+    ),
+    Effect.catchCause(stoppedBy(logger, `Tool-use run ${runId}`)),
+  )
 );
 ```
 
@@ -206,11 +223,16 @@ export function snapshotRow(
     readonly round?: number;
     readonly turn?: number;
     readonly continuationIndex?: number;
-    readonly runtime?: Partial<Pick<SnapshotRuntime, 'modelId' | 'modelCompatibilityKey' | 'lastError' | 'declinedRoutes'>>;
+    readonly runtime?: Partial<
+      Pick<
+        SnapshotRuntime,
+        'modelId' | 'modelCompatibilityKey' | 'lastError' | 'declinedRoutes'
+      >
+    >;
     /** Defaults to the family state the run last wrote. */
     readonly state?: FamilyState;
   },
-): RunLedgerDraft
+): RunLedgerDraft;
 ```
 
 with a one-line correlation guard the two-wrapper design never had: `if (state.family !== null && patch.state !== undefined && state.family !== patch.state.family) throw new Error("A snapshot's family is the run's.")`. The `flow.state.modelId` term of the model-id fallback (rows.ts:165-168) goes with the field it reads, leaving `patch.runtime?.modelId ?? state.modelId`. `toolUseFlowState` / `reflectionFlowState` (rows.ts:45-54) collapse to one `familyState(state, family)`. `NOT_RESUMABLE_MESSAGE` moves to `runProgram.ts` with its only callers.
@@ -221,7 +243,7 @@ Both loops' local `snapshot()` closures (toolUse.ts:187-196, reflection.ts:314-3
 
 ## 4. Reflection output as rows: a folded `run.fact`, not a new row type
 
-**Do not add `output.produced`.** The task premise says the cold listing keeps `MAX(seq)` per `(aggregate_id, type)`, but Database.ts:162 is `const LISTING_GROUP = \`aggregate_id, type, json_extract(data, '$.fact.key')\``, used by the listing query at :167 and the run-record query at :363, and `listingKeyOf` mirrors it at sessionEvent.ts:694-698 with the comment "one `run.fact` family's newest row never suppresses another's". The discriminator-aware grouping the design is being asked to work around already exists and already serves these three families. `sessionFold.ts:1467-1481` already folds all three maps off that row, each row replacing the view's whole map. And 7543bdc755 (#12912, "one run.fact row, one stored-value row, a park row") is the owner's own consolidation of five row types into that one keyed row; re-splitting it needs new evidence and there is none.
+**Do not add `output.produced`.** The task premise says the cold listing keeps `MAX(seq)` per `(aggregate_id, type)`, but Database.ts:162 is `const LISTING_GROUP = \`aggregate_id, type, json_extract(data, '$.fact.key')\``, used by the listing query at :167 and the run-record query at :363, and `listingKeyOf`mirrors it at sessionEvent.ts:694-698 with the comment "one`run.fact`family's newest row never suppresses another's". The discriminator-aware grouping the design is being asked to work around already exists and already serves these three families.`sessionFold.ts:1467-1481` already folds all three maps off that row, each row replacing the view's whole map. And 7543bdc755 (#12912, "one run.fact row, one stored-value row, a park row") is the owner's own consolidation of five row types into that one keyed row; re-splitting it needs new evidence and there is none.
 
 What is broken is the channel and the fold, not the vocabulary:
 
@@ -237,11 +259,14 @@ type RunFactDraft = Extract<SessionEventDraft, { type: 'run.fact' }>;
  *  authored mid-turn by a tool through the trace (toolUse.ts:475, 479;
  *  src/tools/codex.ts) and have no batch to ride, so they are not here. */
 export type OutputFactDraft = Omit<RunFactDraft, 'fact'> & {
-  readonly fact: Extract<RunFact, { key: 'outputFiles' | 'compileFailures' | 'missingOutputs' }>;
+  readonly fact: Extract<
+    RunFact,
+    { key: 'outputFiles' | 'compileFailures' | 'missingOutputs' }
+  >;
 };
 ```
 
-Written as `Extract<SessionEventDraft, { type: 'run.fact'; fact: { key: ... } }>` this resolves to `never`: the draft is declared `durable('run.fact', { fact: RunFactSchema })` (sessionEvent.ts:348) with `RunFactSchema` a five-arm discriminated union (rowValues.ts:29-44), so the member's `fact` property is the whole union and is not assignable to the three-arm narrowing, and `Extract` distributes over union *members*, not over a property inside one. `Omit` plus an explicit property is the working spelling.
+Written as `Extract<SessionEventDraft, { type: 'run.fact'; fact: { key: ... } }>` this resolves to `never`: the draft is declared `durable('run.fact', { fact: RunFactSchema })` (sessionEvent.ts:348) with `RunFactSchema` a five-arm discriminated union (rowValues.ts:29-44), so the member's `fact` property is the whole union and is not assignable to the three-arm narrowing, and `Extract` distributes over union _members_, not over a property inside one. `Omit` plus an explicit property is the working spelling.
 
 `RunLedgerDraft` (runStateFold.ts:70-87 on main, :67 on tranche-4) becomes its existing `Extract<...>` union `| OutputFactDraft`. Its header already says it is "an explicit list narrowed from `SessionEventDraft`, never `SessionEventDraft` itself", so a narrowed arm is the shape that comment describes, and the compiler now enforces which writer owns which family.
 
@@ -264,6 +289,7 @@ Keep the `emitCompileFailures` gate (reflection.ts:852, 887, 903, 940, 961). It 
 The test is one-run-model R1 (2026-09-10-one-run-model.md:73-86): "a derived value has exactly one fold; nothing derived is persisted and nothing persisted is derived ... A snapshot that carries a fact no row carries is not a checkpoint, it is a second store ... that gap closes by giving those facts rows." Applied to `FlowSnapshotPayload.state`:
 
 Dead or duplicated, delete outright:
+
 - `shouldSkipCycle` (runFlowState.ts:296): sole production writer `shouldSkipCycle: false` at toolUse.ts:164, zero production readers (ten kernel fixtures only).
 - `modelId` / `modelCompatibilityKey` on the tool-use arm (runFlowState.ts:292-295): duplicates of the required `runtime.modelId` / `runtime.modelCompatibilityKey`; `modelId`'s only reader is the third term of the fallback at rows.ts:168, which §3 removes.
 - `modelCompatibilityKey` on the reflection arm (runFlowState.ts:326): reflection's `flow` literal (reflection.ts:300-308) never sets it.
@@ -271,6 +297,7 @@ Dead or duplicated, delete outright:
 - `currentRound` (runFlowState.ts:311): duplicates `runtime.round`. Its one reader outside the loop is `snapshotHoldsTerminalCompileRejection` (packages/cli/src/runtime/toolUseResumeData.ts:44-47), which reads `snapshot.runtime.round` instead. **`totalRounds` stays**: it is the round budget, no row carries it, and that same CLI reader needs it.
 
 Derivable, recompute:
+
 - `outputLocation` (runFlowState.ts:315): `outputLocationFor(round)` is pure over `workflowOutputPath({ ext, round })` (reflection.ts:260-263).
 - `endTurn` (runFlowState.ts:322): computed at reflection.ts:756 as `finish === 'stop' || finish === 'stop-sequence'` from `finishReasonOf(state.lastTurn)`, and `lastTurn` is folded.
 - `roundOutputs` (runFlowState.ts:319): §4.
@@ -304,7 +331,7 @@ The residual process-local facts after this design, named so they are not redisc
 - Effect.acquireUseRelease(acquire, use, release) as the run: verified verbatim at node_modules/effect/dist/internal/effect.js:1872 and node_modules/effect/src/internal/effect.ts:4346-4358 as uninterruptibleMask(restore => flatMap(acquire, a => onExitPrimitive(suspend(() => restore(use(a))), exit => release(a, exit), true))). Gives an uninterruptible acquire, an uninterruptible release holding the body's TYPED Exit, and release-only-if-acquired, which is what deletes the `state === null || state.phase === null` guard both halts repeat (toolUse.ts:892-894, reflection.ts:1320-1322) and the hand-written Effect.uninterruptible wrapping both finalizers (toolUse.ts:887, reflection.ts:1316).
 - Effect.acquireUseRelease again, at turn/round scale, for the trace stage. NOT Effect.scoped + Effect.acquireRelease: a Scope's finalizer receives Exit<unknown, unknown>, which is exactly why reflection keeps `let roundOutcome` (reflection.ts:1062) and prefers it over the exit at :1077-1084, and why toolUse uses try/finally with `let stageOutcome` (toolUse.ts:484, 687-690). The typed exit deletes both mutables. Answer to 'a Scope per turn': no, the turn owns no other releasable resource.
 - Ref (one per run, inside RunCell) with the read-append-write as ONE Effect.uninterruptible region: Ref.get(ref).pipe(Effect.flatMap(s => ledger.appendBatch(runId, s, rows)), Effect.tap(next => Ref.set(ref, next)), Effect.uninterruptible). NOT SynchronizedRef: one fiber owns a run, so a lock is bought against no contention. This closes the stale-cell window (13 of the 14 loop appendBatch sites are unwrapped today) and subsumes the nine hand-written wrappers at ModelInvoker.ts:536,596,727,1025,1108,1126,1241, toolUseDispatch.ts:283 and reflection.ts:1125.
-- Exit.match for the verdict, with Cause.hasInterruptsOnly (node_modules/effect/src/Cause.ts:624) NOT Cause.hasInterrupts (:1060). Effect's own doc at :1053 says hasInterruptsOnly is true 'only when *all* reasons are interrupts'; both loops use the wider predicate today (toolUse.ts:921, reflection.ts:1336), so a run that failed and was then interrupted while unwinding is recorded CANCELLED.
+- Exit.match for the verdict, with Cause.hasInterruptsOnly (node_modules/effect/src/Cause.ts:624) NOT Cause.hasInterrupts (:1060). Effect's own doc at :1053 says hasInterruptsOnly is true 'only when _all_ reasons are interrupts'; both loops use the wider predicate today (toolUse.ts:921, reflection.ts:1336), so a run that failed and was then interrupted while unwinding is recorded CANCELLED.
 - A discriminated union (RunEntry: 'fresh' | 'restored', both arms carrying `loaded`) as the shared entry contract, and a shared RunExit whose `outcome: RunOutcome | null` makes the park a value rather than a verdict callback. Data, not a record of open/restore/seed/verdict hooks: CLAUDE.md forbids a services bag, and a hook record is one in costume.
 - Effect.gen + for(;;) as the loop. Effect.iterate, Effect.loop and Effect.tailRec are all `undefined` in the installed effect 4.0.0-rc.115 (probed); Effect.whileLoop takes a state-free LazyArg<boolean> predicate and a void-returning step, so threading RunState through it needs an external mutable cell, which is what this design deletes.
 - REJECTED: Stream.unfold. A stream's completion carries no value, so the exit verdict would be reconstructed outside it; nothing consumes turns as elements; it adds a channel, a sink and a drain over a loop whose state already lives in the ledger, and deletes nothing.
@@ -365,7 +392,7 @@ The residual process-local facts after this design, named so they are not redisc
 2. PR-B, the raw output becomes idempotent by coordinate. Write each response cycle to its own path keyed by the folded continuationIndex; concatenate in index order at the head of produceOutput into the canonical outputLocationFor(round); delete writeOutputFragment's stat/compare/rewrite ladder and the offset read-back in restore; stop writing flow.rawOutputBytes (the field is already .optional() at runFlowState.ts:339, so not writing it is legal and needs no bump; it is deleted in PR-C). Confirm nothing in the CLI or desktop surfaces a per-round raw path by name before landing, since this changes the on-disk layout under .texra.
    files: src/agent/runtime/loop/reflection.ts
 3. PR-C, the persisted vocabulary shrink and reflection output as rows. This PR carries the single format bump. (a) Add RunUsageTotals.totalResponseTimeMs and fold it from each response row; delete AgentRunStateSnapshotSchema, PersistedUsageAccumulatorSchema, LedgerRunStateSnapshotSchema, both .extend splices, both usageSnapshot closures and both accumulators; change UsageMonitor.recordUsage to take RunState. (b) Delete the twelve dead or derivable snapshot fields listed in the deletes; keep totalRounds; recompute outputLocation, endTurn and currentRound; fix packages/cli/src/runtime/toolUseResumeData.ts:46 to read snapshot.runtime.round. (c) Add OutputFactDraft to RunLedgerDraft, remove 'run.fact' from IGNORED_ROW_TYPES, add the latest-wins fold arm in runRows.ts and RunState.output; make publishOutput, produceOutput and publishMissingOutputs return drafts that enterRound and finish put at the head of their batch; keep the emitCompileFailures gate; hydrate outputState.rounds from state.output in restore; delete roundsToPersisted/roundsFromPersisted and RoundOutput.rawOutput. (d) Add 'context-window' to ModelCompactionPayloadSchema.cause and fold RunState.overflowRecoveredAtRound, replacing reflection's process-local contextWindowRecoveryAttempted. (e) Bump SESSION_EVENT_FORMAT once and regenerate the fingerprint snapshot. Test churn is fixture edits across roughly a dozen kernel suites (sessionFold, ResumeCommand, HistoryStatus, ToolUseResumeData, ExecuteCli, WorkflowRunCommand, SessionResumeRetrieval, completedRunArchive, ExecutionsToolResumability, ToolUseDispatchParallel, sessionEvents, followUp/ToolUseWait); edit them, do not add files. [FORMAT BUMP]
-   files: src/shared/schemas/usage.ts, src/shared/schemas/runFlowState.ts, src/shared/schemas/runLedgerEvent.ts, src/shared/schemas/output.ts, src/shared/schemas/sessionEvent.ts, src/shared/session/runRows.ts, src/shared/session/runStateFold.ts, src/shared/session/sessionFold.ts, src/agent/runtime/UsageMonitor.ts, src/agent/runtime/loop/reflection.ts, src/agent/runtime/loop/toolUse.ts, src/agent/runtime/loop/rows.ts, src/agent/runtime/run/compaction.ts, src/agent/implementations/flows/reflection/output/outputState.ts, src/agent/implementations/flows/reflection/output/outputFileExtraction.ts, src/agent/implementations/flows/reflection/output/roundSummary.ts, src/agent/runtime/executeAgent.ts, packages/cli/src/runtime/toolUseResumeData.ts, src/test-kernel/schemas/__snapshots__/sessionEventFormat.json
+   files: src/shared/schemas/usage.ts, src/shared/schemas/runFlowState.ts, src/shared/schemas/runLedgerEvent.ts, src/shared/schemas/output.ts, src/shared/schemas/sessionEvent.ts, src/shared/session/runRows.ts, src/shared/session/runStateFold.ts, src/shared/session/sessionFold.ts, src/agent/runtime/UsageMonitor.ts, src/agent/runtime/loop/reflection.ts, src/agent/runtime/loop/toolUse.ts, src/agent/runtime/loop/rows.ts, src/agent/runtime/run/compaction.ts, src/agent/implementations/flows/reflection/output/outputState.ts, src/agent/implementations/flows/reflection/output/outputFileExtraction.ts, src/agent/implementations/flows/reflection/output/roundSummary.ts, src/agent/runtime/executeAgent.ts, packages/cli/src/runtime/toolUseResumeData.ts, src/test-kernel/schemas/**snapshots**/sessionEventFormat.json
 4. PR-D, the cell reaches the run services. Thread RunCell into ModelInvoker (invoke drops its state parameter) and toolUseDispatch (dispatchPendingResponse likewise), and delete the nine hand-written Effect.uninterruptible(appendBatch(...)) wrappers at ModelInvoker.ts:536, 596, 727, 1025, 1108, 1126, 1241, toolUseDispatch.ts:283 and reflection.ts:1125, which RunCell.append subsumes. This changes two public signatures with two callers each, so it stays its own PR.
    files: src/agent/runtime/ModelInvoker.ts, src/agent/runtime/loop/toolUseDispatch.ts, src/agent/runtime/loop/toolUse.ts, src/agent/runtime/loop/reflection.ts, src/agent/runtime/loop/runProgram.ts
 
@@ -398,25 +425,25 @@ ADJUST, do not stop. The tranche-4 lane (int/snapshot-and-one-fold-0921d) is cor
 
 ## Acceptance
 
-- rg -n "Ref.make<RunState" src/agent/runtime/loop/toolUse.ts src/agent/runtime/loop/reflection.ts  ->  0 hits (the cell lives once, in runProgram.ts)
-- rg -n "Cause.hasInterrupts\b" src/agent/runtime/loop/  ->  0 hits; rg -n "hasInterruptsOnly" src/agent/runtime/loop/runProgram.ts  ->  at least 1
-- rg -c "ledger.appendBatch" src/agent/runtime/loop/toolUse.ts src/agent/runtime/loop/reflection.ts  ->  1 each (openFresh's opening batch only; every other write is cell.append)
-- rg -n "Effect.uninterruptible" src/agent/runtime/ModelInvoker.ts src/agent/runtime/loop/toolUseDispatch.ts src/agent/runtime/loop/reflection.ts src/agent/runtime/loop/toolUse.ts  ->  0 hits after PR-D; the only Effect.uninterruptible in the run path is inside RunCell.append
-- rg -n "state === null \|\| state.phase === null" src/agent/runtime/loop/  ->  0 hits (acquire's postcondition replaced the guard)
-- rg -n "stageOutcome|roundOutcome" src/agent/runtime/loop/  ->  0 hits; rg -n "} finally {" src/agent/runtime/loop/toolUse.ts  ->  0 hits
-- rg -n "reflectionSnapshotRow|runtimeSnapshotRow|toolUseFlowState|reflectionFlowState" src packages  ->  0 hits (one snapshotRow, one familyState)
-- rg -n "const coordinates" src/agent/runtime/loop/reflection.ts  ->  0 hits
-- rg -n "logger.emit\(\{" -A2 src/agent/runtime/loop/reflection.ts | rg "run.fact"  ->  0 hits; rg -n "trace.emit" src/agent/implementations/flows/reflection/output/outputState.ts  ->  0 hits
-- rg -n "'run.fact': true" src/shared/session/runStateFold.ts  ->  0 hits; rg -n "run.fact" src/shared/session/runRows.ts  ->  at least 1
-- rg -n "shouldSkipCycle|continueRounds|roundOutputs|rawOutputBytes|currentRound|outputLocation:|endTurn:|runStateSnapshot" src/shared/schemas/runFlowState.ts  ->  0 hits; rg -n "totalRounds" src/shared/schemas/runFlowState.ts  ->  1 hit (the reflection round budget)
-- rg -n "AgentRunStateSnapshotSchema|PersistedUsageAccumulatorSchema|LedgerRunStateSnapshotSchema" src packages  ->  0 hits
-- rg -n "totalResponseTimeMs" src/shared/schemas/usage.ts  ->  1 hit; rg -n "let totalResponseTimeMs" src/agent/runtime/loop/  ->  0 hits
-- rg -n "roundsToPersisted|roundsFromPersisted" src packages  ->  0 hits; rg -n "rawOutput\b" src/shared/schemas/output.ts  ->  0 hits
-- rg -n "contextWindowRecoveryAttempted" src  ->  0 hits; rg -n "'context-window'" src/shared/schemas/runLedgerEvent.ts src/agent/runtime/run/compaction.ts  ->  at least 2
-- rg -n "toolUseFlowState\(state\); *$" -A1 src/agent/runtime/loop/toolUse.ts  ->  no `if (flow === null) return;` remains; rg -n "resume it as one" src/agent/runtime/loop/runProgram.ts  ->  1 hit, shared by both families
-- rg -n "state.currentRound" packages/cli/src/runtime/toolUseResumeData.ts  ->  0 hits; rg -n "snapshot.runtime.round" packages/cli/src/runtime/toolUseResumeData.ts  ->  1 hit
-- git log --oneline -- src/shared/schemas/sessionEvent.ts | rg -c "SESSION_EVENT_FORMAT" across the stack  ->  exactly one bump commit for PR-A..PR-D combined
-- rg -n "exitProtocol" src  ->  0 hits; rg -n "coordinatesOf" src  ->  0 hits
+- rg -n "Ref.make<RunState" src/agent/runtime/loop/toolUse.ts src/agent/runtime/loop/reflection.ts -> 0 hits (the cell lives once, in runProgram.ts)
+- rg -n "Cause.hasInterrupts\b" src/agent/runtime/loop/ -> 0 hits; rg -n "hasInterruptsOnly" src/agent/runtime/loop/runProgram.ts -> at least 1
+- rg -c "ledger.appendBatch" src/agent/runtime/loop/toolUse.ts src/agent/runtime/loop/reflection.ts -> 1 each (openFresh's opening batch only; every other write is cell.append)
+- rg -n "Effect.uninterruptible" src/agent/runtime/ModelInvoker.ts src/agent/runtime/loop/toolUseDispatch.ts src/agent/runtime/loop/reflection.ts src/agent/runtime/loop/toolUse.ts -> 0 hits after PR-D; the only Effect.uninterruptible in the run path is inside RunCell.append
+- rg -n "state === null \|\| state.phase === null" src/agent/runtime/loop/ -> 0 hits (acquire's postcondition replaced the guard)
+- rg -n "stageOutcome|roundOutcome" src/agent/runtime/loop/ -> 0 hits; rg -n "} finally {" src/agent/runtime/loop/toolUse.ts -> 0 hits
+- rg -n "reflectionSnapshotRow|runtimeSnapshotRow|toolUseFlowState|reflectionFlowState" src packages -> 0 hits (one snapshotRow, one familyState)
+- rg -n "const coordinates" src/agent/runtime/loop/reflection.ts -> 0 hits
+- rg -n "logger.emit\(\{" -A2 src/agent/runtime/loop/reflection.ts | rg "run.fact" -> 0 hits; rg -n "trace.emit" src/agent/implementations/flows/reflection/output/outputState.ts -> 0 hits
+- rg -n "'run.fact': true" src/shared/session/runStateFold.ts -> 0 hits; rg -n "run.fact" src/shared/session/runRows.ts -> at least 1
+- rg -n "shouldSkipCycle|continueRounds|roundOutputs|rawOutputBytes|currentRound|outputLocation:|endTurn:|runStateSnapshot" src/shared/schemas/runFlowState.ts -> 0 hits; rg -n "totalRounds" src/shared/schemas/runFlowState.ts -> 1 hit (the reflection round budget)
+- rg -n "AgentRunStateSnapshotSchema|PersistedUsageAccumulatorSchema|LedgerRunStateSnapshotSchema" src packages -> 0 hits
+- rg -n "totalResponseTimeMs" src/shared/schemas/usage.ts -> 1 hit; rg -n "let totalResponseTimeMs" src/agent/runtime/loop/ -> 0 hits
+- rg -n "roundsToPersisted|roundsFromPersisted" src packages -> 0 hits; rg -n "rawOutput\b" src/shared/schemas/output.ts -> 0 hits
+- rg -n "contextWindowRecoveryAttempted" src -> 0 hits; rg -n "'context-window'" src/shared/schemas/runLedgerEvent.ts src/agent/runtime/run/compaction.ts -> at least 2
+- rg -n "toolUseFlowState\(state\); *$" -A1 src/agent/runtime/loop/toolUse.ts -> no `if (flow === null) return;` remains; rg -n "resume it as one" src/agent/runtime/loop/runProgram.ts -> 1 hit, shared by both families
+- rg -n "state.currentRound" packages/cli/src/runtime/toolUseResumeData.ts -> 0 hits; rg -n "snapshot.runtime.round" packages/cli/src/runtime/toolUseResumeData.ts -> 1 hit
+- git log --oneline -- src/shared/schemas/sessionEvent.ts | rg -c "SESSION_EVENT_FORMAT" across the stack -> exactly one bump commit for PR-A..PR-D combined
+- rg -n "exitProtocol" src -> 0 hits; rg -n "coordinatesOf" src -> 0 hits
 - npm run check:dead-code-ratchet passes with runProgram.ts's six exports each having two consumers in the same PR
 
 ## Open questions for owner
