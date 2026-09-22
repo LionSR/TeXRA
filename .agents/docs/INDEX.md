@@ -8,26 +8,27 @@ live in the
 and are not re-litigated; a proposal that contradicts a ruling cites the
 ruling and argues against it explicitly.
 
-| Topic                                     | Authoritative note                                                                                                 |
-| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| Settled questions, all topics             | [architecture rulings ledger](./implemented/architecture/2026-08-01-architecture-rulings-ledger.md)                |
-| Effect runtime: work order and gates      | [effect runtime delivery plan](./proposed/architecture/2026-09-06-effect-runtime-delivery-plan.md)                 |
-| Finishing the Effect-native cutover       | [effect-native completion protocol](./proposed/architecture/2026-09-15-effect-native-completion-protocol.md)       |
-| The run model: one run, one ledger        | [one run model](./implemented/architecture/2026-09-10-one-run-model.md)                                            |
-| Run state the hosts render                | [one view state, three renderers](./implemented/architecture/2026-09-03-one-view-state-three-renderers.md)         |
-| Errors, failure ownership, event channels | [error pipeline and ownership](./implemented/architecture/2026-06-10-error-pipeline-and-ownership.md)              |
-| Liveness and single ownership of a run    | [single owner liveness and one fold](./proposed/architecture/2026-09-20-single-owner-liveness-and-one-fold.md)     |
-| The `@texra-ai/agent` public surface      | [agent SDK tier-1 manifest](./proposed/architecture/2026-09-10-agent-sdk-tier-1-manifest.md)                       |
-| Standing SDK-readiness re-verification    | [2026-09-17 re-verification](./implemented/simplification/2026-09-17-agent-sdk-readiness-reverify.md)              |
-| `packages/llm`                            | [LLM package hardening](./proposed/architecture/2026-09-20-llm-package-hardening.md)                               |
-| Observability and the trace plane         | [observability plane](./proposed/architecture/2026-09-09-observability-plane.md)                                   |
-| Host layers and cross-host duplication    | [host layer collapse](./proposed/simplification/2026-09-20-host-layer-collapse.md)                                 |
-| Dual systems and Promise/Effect seams     | [effect round trips and dual systems](./proposed/simplification/2026-09-17-effect-round-trips-and-dual-systems.md) |
-| Which Effect facility replaces what       | [effect facility adoption](./proposed/simplification/2026-09-20-effect-facility-adoption.md)                       |
-| Test estate, tiers and the registry       | [shared module registry](./proposed/testing/2026-09-10-shared-module-registry.md)                                  |
-| What the repo owes an autonomous agent    | [agent-refactorability gates](./proposed/process/2026-09-20-agent-refactorability-gates.md)                        |
-| State of the tree after the refactors     | [post-refactor architecture survey](./proposed/architecture/2026-09-20-post-refactor-architecture-survey.md)       |
-| Shipping 1.0                              | [TeXRA 1.0 implementation plan](./proposed/architecture/2026-09-09-texra-1-0-implementation-plan.md)               |
+| Topic                                     | Authoritative note                                                                                                                                                                                                |
+| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Settled questions, all topics             | [architecture rulings ledger](./implemented/architecture/2026-08-01-architecture-rulings-ledger.md)                                                                                                               |
+| Effect runtime: work order and gates      | [effect runtime delivery plan](./proposed/architecture/2026-09-06-effect-runtime-delivery-plan.md)                                                                                                                |
+| Finishing the Effect-native cutover       | [effect-native completion protocol](./proposed/architecture/2026-09-15-effect-native-completion-protocol.md); [refreshed audits (2026-09-21)](./proposed/architecture/2026-09-21-ownership-audits-12424-12425.md) |
+| The run model: one run, one ledger        | [one run model](./implemented/architecture/2026-09-10-one-run-model.md)                                                                                                                                           |
+| Run state the hosts render                | [one view state, three renderers](./implemented/architecture/2026-09-03-one-view-state-three-renderers.md)                                                                                                        |
+| Errors, failure ownership, event channels | [error pipeline and ownership](./implemented/architecture/2026-06-10-error-pipeline-and-ownership.md)                                                                                                             |
+| Liveness and single ownership of a run    | [single owner liveness and one fold](./proposed/architecture/2026-09-20-single-owner-liveness-and-one-fold.md)                                                                                                    |
+| The `@texra-ai/agent` public surface      | [agent SDK tier-1 manifest](./proposed/architecture/2026-09-10-agent-sdk-tier-1-manifest.md)                                                                                                                      |
+| Standing SDK-readiness re-verification    | [2026-09-17 re-verification](./implemented/simplification/2026-09-17-agent-sdk-readiness-reverify.md)                                                                                                             |
+| `packages/llm`                            | [LLM package hardening](./proposed/architecture/2026-09-20-llm-package-hardening.md)                                                                                                                              |
+| Observability and the trace plane         | [observability plane](./proposed/architecture/2026-09-09-observability-plane.md)                                                                                                                                  |
+| Host layers and cross-host duplication    | [host layer collapse](./proposed/simplification/2026-09-20-host-layer-collapse.md)                                                                                                                                |
+| Dual systems and Promise/Effect seams     | [effect round trips and dual systems](./proposed/simplification/2026-09-17-effect-round-trips-and-dual-systems.md)                                                                                                |
+| Which Effect facility replaces what       | [effect facility adoption](./proposed/simplification/2026-09-20-effect-facility-adoption.md)                                                                                                                      |
+| Test estate, tiers and the registry       | [shared module registry](./proposed/testing/2026-09-10-shared-module-registry.md)                                                                                                                                 |
+| What the repo owes an autonomous agent    | [agent-refactorability gates](./proposed/process/2026-09-20-agent-refactorability-gates.md)                                                                                                                       |
+| State of the tree after the refactors     | [post-refactor architecture survey](./proposed/architecture/2026-09-20-post-refactor-architecture-survey.md)                                                                                                      |
+| Shipping 1.0                              | [TeXRA 1.0 implementation plan](./proposed/architecture/2026-09-09-texra-1-0-implementation-plan.md)                                                                                                              |
+| Runtime performance budgets               | [runtime performance measurement record](./proposed/process/2026-09-21-runtime-performance-measurement-record.md)                                                                                                 |
 
 A topic missing from this table has no owner yet: the tree and `git log` are
 the index for everything else, as they always were. Adding a row is how a note
