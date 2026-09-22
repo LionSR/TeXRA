@@ -161,8 +161,9 @@ const failIfAborted = (signal: AbortSignal | undefined) =>
 
 /**
  * Fail with an `AbortError` once a launch's stop latch has been completed.
- * A launch prepares uninterruptibly, so every acquisition settles before its
- * cleanup; these checks between its steps are where a stop ends it.
+ * Each acquisition settles atomically inside its own `acquireRelease`, so
+ * these checks between steps are where a stop ends the launch: after the
+ * acquisition whose cleanup owns whatever came before it.
  */
 export const failIfLaunchStopped = (
   stopped: Deferred.Deferred<void> | undefined,
@@ -406,25 +407,33 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
       secrets: yield* Secrets,
     };
 
-    const residency = yield* session.transcripts.acquireRunResidency(runId);
-    const rawRunTrace = createRunTrace(residency);
-    // The composed trace enters the store BEFORE session attachment, so a
-    // failed attachment still disposes the raw trace through the store.
-    const attachment: { detach?: () => void } = {};
-    const runTrace: RunTrace = {
-      trace: rawRunTrace.trace,
-      dispose: () => {
-        try {
-          attachment.detach?.();
-        } finally {
-          rawRunTrace.dispose();
-        }
-      },
-    };
+    // The residency, the trace store and its disposal are one atomic
+    // acquisition: an interruption cannot slip between them and strand an
+    // unowned trace, which is what the launch's old region mask stood in for.
     // The run's scope owns the trace: its subscribers (channel sink +
     // transcript recorder) are dropped when the run ends, and when a launch
     // that never became a run unwinds.
-    yield* Effect.addFinalizer(() => Effect.sync(() => runTrace.dispose()));
+    const { runTrace, rawRunTrace, attachment } = yield* Effect.acquireRelease(
+      Effect.gen(function* () {
+        const residency = yield* session.transcripts.acquireRunResidency(runId);
+        const rawRunTrace = createRunTrace(residency);
+        // The composed trace enters the store BEFORE session attachment, so a
+        // failed attachment still disposes the raw trace through the store.
+        const attachment: { detach?: () => void } = {};
+        const runTrace: RunTrace = {
+          trace: rawRunTrace.trace,
+          dispose: () => {
+            try {
+              attachment.detach?.();
+            } finally {
+              rawRunTrace.dispose();
+            }
+          },
+        };
+        return { runTrace, rawRunTrace, attachment };
+      }),
+      ({ runTrace }) => Effect.sync(() => runTrace.dispose()),
+    );
     yield* failIfLaunchStopped(input.stopped);
     attachment.detach = session.attachRunTrace(rawRunTrace.trace, runId);
 
@@ -439,14 +448,18 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
     // the run's own fibers queued, and their loss is the terminal drain's to
     // report on the row it decides.
     if (input.resumed) {
-      yield* session.commit([
-        {
-          type: 'run.activate',
-          aggregateId: qualifyAggregateId('run', runId),
-          category: setting.agentCategory,
-          isRemote,
-        },
-      ]);
+      // A durable append: uninterruptible, like every row commit, so a stop
+      // lands either before this activation or after it, never inside it.
+      yield* Effect.uninterruptible(
+        session.commit([
+          {
+            type: 'run.activate',
+            aggregateId: qualifyAggregateId('run', runId),
+            category: setting.agentCategory,
+            isRemote,
+          },
+        ]),
+      );
     }
 
     input.onRunResolved?.(runId, runTrace.trace);
@@ -464,18 +477,21 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
     const initialMediaMayBeInserted =
       config.mediaFiles.length > 0 && supportsMediaInMessage;
 
-    const parentStage = beginRunStage(
-      agentLogger,
-      `Run: ${config.agent}`,
-      initialMediaMayBeInserted ? undefined : initialInstruction,
-    );
-    // A scope that closes in failure before the run's terminal row closed
-    // this stage leaves it open in the transcript; `end` is idempotent, so a
-    // run that already published its verdict keeps it.
-    yield* Effect.addFinalizer((exit) =>
-      Exit.isSuccess(exit)
-        ? Effect.void
-        : Effect.sync(() => parentStage.end(RUN_OUTCOME.FAILED)),
+    const parentStage = yield* Effect.acquireRelease(
+      Effect.sync(() =>
+        beginRunStage(
+          agentLogger,
+          `Run: ${config.agent}`,
+          initialMediaMayBeInserted ? undefined : initialInstruction,
+        ),
+      ),
+      // A scope that closes in failure before the run's terminal row closed
+      // this stage leaves it open in the transcript; `end` is idempotent, so a
+      // run that already published its verdict keeps it.
+      (stage, exit) =>
+        Exit.isSuccess(exit)
+          ? Effect.void
+          : Effect.sync(() => stage.end(RUN_OUTCOME.FAILED)),
     );
 
     // Tell the user when attached images will be dropped because the chosen model
@@ -624,7 +640,8 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
       ),
     );
   },
-  // The launch's stop latch owns cancellation. Let each acquisition settle
-  // before cleanup so a late Promise cannot create an unowned resource.
-  Effect.uninterruptible,
+  // Interruptible: every acquisition above settles atomically inside its own
+  // `acquireRelease`, so an interruption lands between steps and the scope's
+  // finalizers release whatever was acquired — the guarantee the old region
+  // mask bought at the cost of suppressing every stop.
 );

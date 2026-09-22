@@ -865,9 +865,14 @@ export function startChildRunLoop<TTurn, R = never>(
     let queueLease: FollowUpConsumerLease | undefined;
     let detachLoopInterrupt: (() => void) | undefined;
     let sessionStage: StageHandle | undefined;
+    // Set once the setup's compensation has run (either early-fail path or
+    // the launch's exit finalizer), so it never runs twice.
+    let setupUnwound = false;
     // Unwind setup and lane refusals before the run body takes ownership.
     const unwindSetup = (error: unknown): Effect.Effect<Error> =>
-      Effect.gen(function* () {
+      Effect.suspend(() => {
+        setupUnwound = true;
+        return Effect.gen(function* () {
         const cleanupErrors: unknown[] = [];
         const cleanups = [
           () => sessionStage?.end(RUN_OUTCOME.FAILED),
@@ -890,6 +895,7 @@ export function startChildRunLoop<TTurn, R = never>(
             `Child run ${runId} setup failed and rollback was incomplete`,
           ),
         );
+        });
       });
 
     const created = yield* RunInput.make;
@@ -1008,50 +1014,39 @@ export function startChildRunLoop<TTurn, R = never>(
     // Terminal delivery wakes only after the child's finalization and claim
     // release. Interim delivery wakes immediately, while the child stays live.
     let pendingDelivery: PendingChildDelivery | undefined;
-    // Acquire the concurrency slot only while a turn runs.
+    // Acquire the concurrency slot only while a turn runs. No mask inside
+    // the permit: an interrupted turn releases its slot, and the loop's own
+    // signal — not the permit's retention — is what aborts the turn's work.
     const gateTurn = (
       base: (signal: AbortSignal) => Effect.Effect<TTurn, Error, R>,
     ): ((signal: AbortSignal) => Effect.Effect<TTurn, Error, R>) =>
-      budget === undefined
-        ? base
-        : (signal) =>
-            Effect.raceFirst(
-              budget.withPermit(Effect.uninterruptible(base(signal))),
-              onceAborted(signal, () =>
-                Effect.fail(
-                  new Error(
-                    'Child run turn cancelled while awaiting a concurrency slot.',
-                  ),
-                ),
-              ),
-            ).pipe(Effect.interruptible);
+      budget === undefined ? base : (signal) => budget.withPermit(base(signal));
 
     let runStarted = false;
     const run = Effect.gen(function* () {
       runStarted = true;
       let turnIndex = 0;
       let result: TTurn | undefined;
-      const body = yield* Effect.exit(
-        Effect.scoped(
-          Effect.gen(function* () {
-            if (params.queueLease) {
-              // Only this lane's driver can adopt recovery; its terminal
-              // cleanup releases the DB claim after final delivery preparation.
-              yield* runSession.acquireClaims(aggregateId('run', runId));
-              queueLease = runSession.followUps.claimChildRun(
-                runId,
-                params.queueLease,
+      yield* Effect.scoped(
+        Effect.gen(function* () {
+          if (params.queueLease) {
+            // Only this lane's driver can adopt recovery; its terminal
+            // cleanup releases the DB claim after final delivery preparation.
+            yield* runSession.acquireClaims(aggregateId('run', runId));
+            queueLease = runSession.followUps.claimChildRun(
+              runId,
+              params.queueLease,
+            );
+            if (!queueLease)
+              return yield* Effect.fail(
+                new Error(`Child recovery ownership was lost for ${runId}.`),
               );
-              if (!queueLease)
-                return yield* Effect.fail(
-                  new Error(`Child recovery ownership was lost for ${runId}.`),
-                );
-              input = runSession.followUps.attachInput(
-                runId,
-                created,
-                queueLease,
-              )!;
-            }
+            input = runSession.followUps.attachInput(
+              runId,
+              created,
+              queueLease,
+            )!;
+          }
             const runNotice = (notice: Effect.Effect<void, Error>) =>
               notice.pipe(
                 Effect.catch((error) =>
@@ -1259,124 +1254,179 @@ export function startChildRunLoop<TTurn, R = never>(
           }),
         ),
       );
-      if (Exit.isFailure(body)) {
-        const error = Cause.squash(body.cause);
-        sawTurnFailure = true;
-        lastTurnErr ??= error;
-        // A lost aggregate claim: this process no longer owns the run, so
-        // the loop stops rather than continue under it.
-        if (error instanceof DatabaseNotOwner) loop.interrupt();
-      }
-
-      const terminal = yield* Effect.exit(
-        Effect.gen(function* () {
-          detachLoopInterrupt?.();
-          let terminationCause: ChildLoopTerminationCause = 'terminal';
-          if (loop.isInterrupted()) terminationCause = 'interrupted';
-          else if (sawTurnFailure) terminationCause = 'turn_failed';
-          emitTurnDiagnostic(logger, 'loop.terminated', {
-            runId,
-            queueOwner: queueLease,
-            interruptionCause: terminationCause,
-          });
-          if (queueLease) runSession.followUps.release(queueLease, 'terminal');
-          releaseSessionOwnershipOnce();
-          yield* Effect.forkDetach(
-            Effect.try({
-              try: () => params.recordCost?.(bestCostUsd),
-              catch: ensureError,
-            }).pipe(
-              Effect.catch((error) =>
-                Effect.sync(() => {
-                  logger.warn('Child cost observer failed', { data: error });
-                }),
-              ),
-            ),
-            { startImmediately: true },
-          );
-
-          const outcome = deriveRunOutcome({
-            failed: sawTurnFailure,
-            cancelled: loop.isInterrupted(),
-          });
-          if (childRun) {
-            yield* childRun.finalize({
-              outcome,
-              error: lastTurnErr,
-              stage: sessionStage,
-              ...(strategy.autoCloseChildRun === true && {
-                autoClose: true,
-              }),
-            });
-          } else {
-            // Startup may fail before the engine owns terminal finalization.
-            const handle = runs.getHandle(runId);
-            if (handle) {
-              yield* finalizeRunTerminal({
-                session: runSession,
-                handle,
-                outcome,
-                error:
-                  sawTurnFailure && lastTurnErr !== undefined
-                    ? {
-                        kind: classifyAgentError(lastTurnErr),
-                        message: toErrorMessage(lastTurnErr),
-                      }
-                    : undefined,
-              });
-            } else if (
-              (loop.isInterrupted() || sawTurnFailure) &&
-              (yield* runSession.ownsRun(runId))
-            ) {
-              // Failure or cancellation can precede the engine's first handle.
-              const finalized = yield* finalizeRun(runSession, {
-                runId,
-                outcome,
-                keepExistingOutcome: true,
-              });
-              if (!finalized.ok)
-                return yield* Effect.fail(ensureError(finalized.error));
-            }
-          }
-        }),
-      );
-      const released = yield* Effect.exit(runSession.releaseRunLease(runId));
-      if (Exit.isFailure(released)) {
-        logger.warn('Failed to persist final child-run artifacts', {
-          data: { runId, error: Cause.squash(released.cause) },
-        });
-      }
-      // The parent may immediately read this child; release its claim first.
-      const delivery = yield* Effect.exit(
-        submitPendingDelivery(pendingDelivery, runSession, runId, logger),
-      );
-      const activation = yield* Effect.exit(
-        Effect.sync(releaseChildActivation),
-      );
-      const failures = [body, terminal, released, delivery, activation].flatMap(
-        (exit) => (Exit.isFailure(exit) ? [Cause.squash(exit.cause)] : []),
-      );
-      if (failures.length > 0) {
-        return yield* Effect.fail(
-          ensureError(aggregateError(failures, 'Child run and cleanup failed')),
-        );
-      }
       return result;
-    }).pipe(Effect.uninterruptible);
-    return yield* Effect.forkDetach(
-      runs.launchRun(runId, run).pipe(
-        Effect.catchCause((cause) =>
+    }).pipe(
+      // The loop's terminal, in the toolUse exit-protocol pattern: it hangs
+      // off `onExit` and runs uninterruptibly, so a stop — the loop's own
+      // signal, or the run fiber's interruption reaching the loop — lands
+      // before it or after it, never inside, and the queue lease, the
+      // terminal row, the claim release and the final delivery settle
+      // atomically on every exit.
+      Effect.onExit((body) =>
+        Effect.uninterruptible(
           Effect.gen(function* () {
-            const error = runStarted
-              ? ensureError(Cause.squash(cause))
-              : yield* unwindSetup(Cause.squash(cause));
-            return yield* Effect.fail(error);
+            // The loop's stop: its own signal, or the run fiber's
+            // interruption reaching the loop here.
+            const stopped =
+              loop.isInterrupted() ||
+              (Exit.isFailure(body) && Cause.hasInterrupts(body.cause));
+            if (Exit.isFailure(body) && !Cause.hasInterruptsOnly(body.cause)) {
+              const error = Cause.squash(body.cause);
+              sawTurnFailure = true;
+              lastTurnErr ??= error;
+              // A lost aggregate claim: this process no longer owns the run,
+              // so the loop stops rather than continue under it.
+              if (error instanceof DatabaseNotOwner) loop.interrupt();
+            }
+
+            const terminal = yield* Effect.exit(
+              Effect.gen(function* () {
+                detachLoopInterrupt?.();
+                let terminationCause: ChildLoopTerminationCause = 'terminal';
+                if (stopped) terminationCause = 'interrupted';
+                else if (sawTurnFailure) terminationCause = 'turn_failed';
+                emitTurnDiagnostic(logger, 'loop.terminated', {
+                  runId,
+                  queueOwner: queueLease,
+                  interruptionCause: terminationCause,
+                });
+                if (queueLease)
+                  runSession.followUps.release(queueLease, 'terminal');
+                releaseSessionOwnershipOnce();
+                yield* Effect.forkDetach(
+                  Effect.try({
+                    try: () => params.recordCost?.(bestCostUsd),
+                    catch: ensureError,
+                  }).pipe(
+                    Effect.catch((error) =>
+                      Effect.sync(() => {
+                        logger.warn('Child cost observer failed', {
+                          data: error,
+                        });
+                      }),
+                    ),
+                  ),
+                  { startImmediately: true },
+                );
+
+                const outcome = deriveRunOutcome({
+                  failed: sawTurnFailure,
+                  cancelled: stopped,
+                });
+                if (childRun) {
+                  yield* childRun.finalize({
+                    outcome,
+                    error: lastTurnErr,
+                    stage: sessionStage,
+                    ...(strategy.autoCloseChildRun === true && {
+                      autoClose: true,
+                    }),
+                  });
+                } else {
+                  // Startup may fail before the engine owns terminal finalization.
+                  const handle = runs.getHandle(runId);
+                  if (handle) {
+                    yield* finalizeRunTerminal({
+                      session: runSession,
+                      handle,
+                      outcome,
+                      error:
+                        sawTurnFailure && lastTurnErr !== undefined
+                          ? {
+                              kind: classifyAgentError(lastTurnErr),
+                              message: toErrorMessage(lastTurnErr),
+                            }
+                          : undefined,
+                    });
+                  } else if (
+                    (stopped || sawTurnFailure) &&
+                    (yield* runSession.ownsRun(runId))
+                  ) {
+                    // Failure or cancellation can precede the engine's first handle.
+                    const finalized = yield* finalizeRun(runSession, {
+                      runId,
+                      outcome,
+                      keepExistingOutcome: true,
+                    });
+                    if (!finalized.ok)
+                      return yield* Effect.fail(ensureError(finalized.error));
+                  }
+                }
+              }),
+            );
+            const released = yield* Effect.exit(
+              runSession.releaseRunLease(runId),
+            );
+            if (Exit.isFailure(released)) {
+              logger.warn('Failed to persist final child-run artifacts', {
+                data: { runId, error: Cause.squash(released.cause) },
+              });
+            }
+            // The parent may immediately read this child; release its claim first.
+            const delivery = yield* Effect.exit(
+              submitPendingDelivery(pendingDelivery, runSession, runId, logger),
+            );
+            const activation = yield* Effect.exit(
+              Effect.sync(releaseChildActivation),
+            );
+            const failures = [
+              terminal,
+              released,
+              delivery,
+              activation,
+            ].flatMap((exit) =>
+              Exit.isFailure(exit) ? [Cause.squash(exit.cause)] : [],
+            );
+            // The body's own failure or interruption propagates past this
+            // finalizer as itself; only the cleanup's failures join it.
+            if (failures.length > 0) {
+              return yield* Effect.fail(
+                ensureError(
+                  aggregateError(failures, 'Child run and cleanup failed'),
+                ),
+              );
+            }
           }),
         ),
       ),
     );
+    // The daemon owns settlement from its first tick; an unwind of the
+    // launch fiber before this point still owns the setup it acquired.
+    let forked = false;
+    return yield* Effect.forkDetach(
+      Effect.suspend(() => {
+        forked = true;
+        return runs.launchRun(runId, run).pipe(
+          Effect.catchCause((cause) =>
+            Cause.hasInterruptsOnly(cause)
+              ? Effect.failCause(cause)
+              : Effect.gen(function* () {
+                  const error = runStarted
+                    ? ensureError(Cause.squash(cause))
+                    : yield* unwindSetup(Cause.squash(cause));
+                  return yield* Effect.fail(error);
+                }),
+          ),
+        );
+      }),
+    );
   }).pipe(
-    Effect.catchCause((cause) => Effect.fail(ensureError(Cause.squash(cause)))),
-    Effect.uninterruptible,
+    Effect.onExit((exit) => {
+      if (Exit.isSuccess(exit) || forked || setupUnwound) return Effect.void;
+      // The handoff never happened: the setup this launch acquired unwinds
+      // here, atomically, rather than leaking the queue lease, the
+      // activation and the stage.
+      return Effect.uninterruptible(
+        Effect.gen(function* () {
+          const error = yield* unwindSetup(Cause.squash(exit.cause));
+          return yield* Effect.fail(error);
+        }),
+      );
+    }),
+    Effect.catchCause((cause) =>
+      Cause.hasInterruptsOnly(cause)
+        ? Effect.failCause(cause)
+        : Effect.fail(ensureError(Cause.squash(cause))),
+    ),
   );
 }

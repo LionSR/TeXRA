@@ -1,6 +1,6 @@
 import * as path from 'node:path';
 
-import { Cause, Deferred, Effect, Exit, Fiber, Layer } from 'effect';
+import { Deferred, Effect, Fiber, Layer } from 'effect';
 
 import { logConversationProgress, type AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
@@ -29,7 +29,6 @@ import { emptyRunEndOutput } from '@shared/schemas';
 import type { RunState } from '@shared/session/runStateFold';
 import { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import { ensureRunDirUnder } from '@utils/files/runStorageFs';
-import { ensureError } from '@utils/errors/errorMessage';
 
 import {
   buildAgentLaunchContext,
@@ -567,9 +566,10 @@ export function executeAgent(
     });
   }).pipe(
     // The run's scope: the launch acquires the run trace into it and the
-    // finalizer drops its subscribers once the run has ended.
+    // finalizer drops its subscribers once the run has ended. No mask: the
+    // launch's acquisitions settle atomically (`acquireRelease`), so an
+    // interruption lands between steps and this scope's finalizers run.
     Effect.scoped,
-    Effect.uninterruptible,
     Effect.provideService(Runs, options.session.runs),
   );
 }
@@ -603,12 +603,11 @@ const resumeToolUseWithOwnedLease = Effect.fn('resumeToolUseWithOwnedLease')(
     options: ResumeToolUseFromResumeDataOptions & { session: SessionHandle },
   ) {
     const runSession = options.session;
-    // Every exit escapes this scope, and the release is outside it. Both
-    // orders matter: the launch's finalizers compensate through the run's
-    // own claim - the stage's FAILED close is an append - so a scope that
-    // unwound after `releaseRunLease` would have its compensation refused
-    // `DatabaseNotOwner`, and a failure captured inside the scope would
-    // close it successfully, so the exit-aware finalizer would never fire.
+    // Every exit escapes this scope before the claim's release runs (the
+    // scope `resumeToolUse` closes around this call): the launch's finalizers
+    // compensate through the run's own claim - the stage's FAILED close is an
+    // append - so a release that ran before them would have their
+    // compensation refused `DatabaseNotOwner`.
     const outcome = yield* Effect.exit(
       Effect.scoped(
         Effect.gen(function* () {
@@ -664,26 +663,11 @@ const resumeToolUseWithOwnedLease = Effect.fn('resumeToolUseWithOwnedLease')(
         }),
       ),
     );
-    // A recovered child driver owns delivery and releases the claim afterwards.
-    if (options.turns) return yield* outcome;
-    if (Exit.isFailure(outcome)) {
-      const released = yield* Effect.exit(
-        runSession.releaseRunLease(resume.runId),
-      );
-      if (Exit.isFailure(released)) {
-        return yield* Effect.fail(
-          new AggregateError(
-            [Cause.squash(outcome.cause), Cause.squash(released.cause)],
-            `Run ${resume.runId} failed and its final artifacts could not be persisted`,
-          ),
-        );
-      }
-      return yield* Effect.failCause(outcome.cause);
-    }
-    yield* runSession.releaseRunLease(resume.runId);
-    return outcome.value;
+    // The claim's release is no longer this function's: it rides the scope
+    // `resumeToolUse` closes around this call, and for a recovered child the
+    // driver owns delivery and releases afterwards.
+    return yield* outcome;
   },
-  Effect.uninterruptible,
 );
 
 /** Acquire a recovered run and reload its cursor before starting its live scope. */
@@ -692,36 +676,37 @@ const resumeToolUse = Effect.fn('resumeToolUse')(function* (
   options: ResumeToolUseFromResumeDataOptions & { session: SessionHandle },
 ) {
   const session = options.session;
-  const rollback = options.turns
-    ? Effect.void
-    : yield* acquireResumedRunOwnership(session, identity.runId);
-  const retrieval = yield* Effect.exit(
-    retrieveSessionResumeData(
-      identity.runId,
-      identity.agentConfig,
-      session,
-    ).pipe(
-      Effect.flatMap((retrieved) =>
-        retrieved?.type === 'toolUse'
-          ? Effect.succeed(retrieved)
-          : Effect.fail(new ResumeSessionUnavailableError(identity.runId)),
-      ),
-    ),
+  // The claim's lifetime is the whole resume, as one `acquireRelease`:
+  // acquired before the cursor read so no concurrent owner mutates the run
+  // between the read and the launch, released when this scope closes — after
+  // the launch's own scope and its compensating finalizers, never before
+  // them, and on every exit the old rollback/release pair covered.
+  return yield* Effect.scoped(
+    Effect.gen(function* () {
+      // A recovered child's continuous driver holds the claim already; a
+      // standalone resume takes it here.
+      if (!options.turns) {
+        yield* Effect.acquireRelease(acquireResumedRunOwnership(
+          session,
+          identity.runId,
+        ), () => session.releaseRunLease(identity.runId));
+      }
+      const retrieved = yield* retrieveSessionResumeData(
+        identity.runId,
+        identity.agentConfig,
+        session,
+      ).pipe(
+        Effect.flatMap((retrieved) =>
+          retrieved?.type === 'toolUse'
+            ? Effect.succeed(retrieved)
+            : Effect.fail(new ResumeSessionUnavailableError(identity.runId)),
+        ),
+      );
+      // The launched turn owns the run from here, including setup failures.
+      return yield* resumeToolUseWithOwnedLease(retrieved, options);
+    }),
   );
-  if (Exit.isFailure(retrieval)) {
-    const released = yield* Effect.exit(rollback);
-    return yield* Effect.fail(
-      Exit.isFailure(released)
-        ? new AggregateError(
-            [Cause.squash(retrieval.cause), Cause.squash(released.cause)],
-            `Resume retrieval and admission rollback failed for ${identity.runId}`,
-          )
-        : ensureError(Cause.squash(retrieval.cause)),
-    );
-  }
-  // The launched turn owns release from here, including setup failures.
-  return yield* resumeToolUseWithOwnedLease(retrieval.value, options);
-}, Effect.uninterruptible);
+});
 
 /** Resume after the previous generation and its teardown have settled, on
  *  the `Runs` of `options.session`. */
