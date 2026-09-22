@@ -28,7 +28,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 const CHANNEL = 'approval.tempFiles';
 
 /** A staged diff side could not be written to the host filesystem. */
-export class ApprovalTempWriteFailed extends Data.TaggedError(
+class ApprovalTempWriteFailed extends Data.TaggedError(
   'ApprovalTempWriteFailed',
 )<{
   readonly side: 'original' | 'proposed';
