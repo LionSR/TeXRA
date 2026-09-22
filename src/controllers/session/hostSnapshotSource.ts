@@ -331,7 +331,9 @@ export function createHostSnapshotSource(
     },
     setOnboarding: (state) =>
       Effect.sync(() => {
+        if (state === onboarding) return false;
         onboarding = state;
-      }).pipe(Effect.andThen(publish)),
+        return true;
+      }).pipe(Effect.flatMap((changed) => (changed ? publish : Effect.void))),
   };
 }
