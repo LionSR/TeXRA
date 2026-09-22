@@ -56,7 +56,7 @@ supports reasoning effort up to Max.
 Note its long-context pricing: prompts above 272K input tokens bill at 2x input/cache and 1.5x
 output for the full request.
 
-GPT-6 Sol (`gpt6-`) and GPT-6 Luna (`gpt6--`) bring Astra's advances to faster, cheaper models, priced at half of GPT-5.6's promotional rates. Both take reasoning effort up to Max and use the same long-context pricing as Astra.
+GPT-6 Sol (`gpt6-`) and GPT-6 Luna (`gpt6--`) bring Astra's advances to faster, cheaper models: Sol costs $2 / $10 per 1M tokens (half of GPT-5.6 Sol) and Luna $0.10 / $0.50 (half of GPT-5.6 Luna on input, less than half on output). Both take reasoning effort up to Max and use the same long-context pricing as Astra.
 
 GPT-6 Sol and Luna supersede GPT-5.6 Sol (`gpt56`) and Luna (`gpt56--`), which are now
 deprecated. TeXRA pins the [Codex integration](./agent-integrations.md#openai-codex) to `gpt-5.5`.
