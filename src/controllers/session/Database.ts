@@ -24,7 +24,6 @@ import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import * as SqliteClient from '@effect/sql-sqlite-node/SqliteClient';
 import * as SqlClient from 'effect/unstable/sql/SqlClient';
-import type { SqlError } from 'effect/unstable/sql/SqlError';
 import * as Reactivity from 'effect/unstable/reactivity/Reactivity';
 import {
   Cause,
@@ -81,6 +80,7 @@ import {
 } from '@shared/session/database';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { localDatabasePath } from './localDatabasePath';
+import type { SqlError } from 'effect/unstable/sql/SqlError';
 /** The database file of a session root, beside the stores it replaces. */
 const SESSION_DATABASE_FILE = 'texra.db';
 const CHANNEL = 'sessionDatabase';

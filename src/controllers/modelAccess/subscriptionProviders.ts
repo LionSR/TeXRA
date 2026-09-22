@@ -29,7 +29,7 @@ import {
   xaiAccountLabel,
   xaiCoordinator,
 } from '@auth/xai';
-import { AuthPortError } from '@auth/authProgram';
+import type { AuthPortError } from '@auth/authProgram';
 import { codexAccountLabel } from '@auth/codex/codexSessionTypes';
 import { LoopbackTransportUnavailableError } from '@auth/oauth/loopbackLogin';
 import type { SubscriptionSessionStatus } from '@auth/oauth/SubscriptionOAuthCoordinator';
