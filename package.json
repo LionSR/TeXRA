@@ -84,7 +84,7 @@
     "@typescript/native": "catalog:",
     "citty": "^0.2.2",
     "esbuild": "catalog:",
-    "eslint": "^10.10.0",
+    "eslint": "^10.11.0",
     "eslint-plugin-import-x": "^4.17.1",
     "eslint-plugin-unicorn": "^75.0.0",
     "globals": "^17.12.0",
