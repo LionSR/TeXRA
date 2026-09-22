@@ -28,7 +28,6 @@ import {
   type SessionHandle,
 } from '@agent/runtime';
 import {
-  describeFollowUpFailure as describeFollowUpFailureReason,
   presentFollowUpResult,
   type FollowUpQueueInput,
   type FollowUpRecoveryLease,
@@ -1384,7 +1383,7 @@ export function createChatSessionController(
           } else {
             requestDraftRestore(line, images);
             setTransientNotice(
-              `${outcome.refused ?? describeFollowUpFailureReason('not_resumable')} The message has been restored to the input.`,
+              `${outcome.refused ?? describeFollowUpFailure('not_resumable')} The message has been restored to the input.`,
               { ttlMs: Infinity },
             );
             if (followUpTarget === session.runId) {
