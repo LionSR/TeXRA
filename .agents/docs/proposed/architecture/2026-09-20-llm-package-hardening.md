@@ -14,9 +14,8 @@ substantially executed and moved to `implemented/` with this note.
 ## 0. Landed since this note was written (2026-09-21)
 
 Re-derived against `main` at `068c5f5d33` and, for the split, rebased onto
-`08ee302ea6`. Four of the five changes below are
-done; the fifth needs an owner decision and is the only thing this note still
-asks for.
+`08ee302ea6`. All five changes below are closed: four by landing, and the
+fifth — hosted tools — by ruling rather than implementation.
 
 - **Change 1, the live tier — landed (#12919).** `packages/llm/vitest.live.config.mjs`
   and `packages/llm/test-live/` hold eleven `*.live.ts` suites, one per HTTP
@@ -39,8 +38,13 @@ asks for.
 - **Change 5, the README — landed (2026-09-21).** `packages/llm/README.md` now
   describes the tree, the two test tiers and the remaining caveats as they are,
   and the two 09-06 design documents had already moved to `implemented/`.
-- **Change 2 is the open item.** It is a capability decision, not cleanup: see
-  [§5](#5-what-is-still-open).
+- **Change 2, hosted tools — closed by ruling (2026-09-22).** The decision is
+  the note's second option: 1.0 ships without provider-hosted tools, the local
+  `web_search` and `web_fetch` tools are the one system for web search and
+  fetch, and the dead accounting arms are deleted. The ruling, its evidence
+  and its forbids live in the
+  [rulings ledger](../../implemented/architecture/2026-08-01-architecture-rulings-ledger.md);
+  see [§5](#5-how-change-2-closed) for how it closed.
 
 ## 1. What is done
 
@@ -55,12 +59,12 @@ route, helper, tool-use and reflection call goes through `ModelInvoker`.
 
 ## 2. What is not
 
-| Gap                                             | Evidence                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Hosted tools regressed                          | OpenAI web search and Anthropic search and fetch worked on the deleted handlers; the codecs fail explicitly (`anthropicMessages.ts:680`, "Anthropic hosted-tool accounting is not supported by this codec", beside the unsettled-content arm at `:708`), and on the Responses side a `web_search_call` item has no arm at all: it fails the output-item schema as a generic parse error (`openaiResponsesCodec.ts:35`, `"The response snapshot is malformed or unsupported."` at `:539`). The 2026-09-07 comparison required closing this before retiring the routes. It is the one change left, and it is an owner decision |
-| Unimplemented, and documented as such           | assistant media output, Responses service-tier billing accounting, native provider compaction, OpenRouter continuation and token estimation                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| No bounded-memory or bounded-stop-latency claim | the SSE parser's event-size cap is disabled (`maxEventSize: Number.POSITIVE_INFINITY`) and cleanup joins foreign finalizers; the live tier cannot settle either claim, so both stay disclaimed rather than asserted                                                                                                                                                                                                                                                                                                                                                                                                          |
-| The kernel tiers are synthetic by construction  | `src/test-kernel/llm/` is ~9.7k lines of fixture suites: they pin lowering, decoding, ordering and every explicit failure, and they stay hermetic and free. Wire behaviour is `test-live/`'s subject, not theirs                                                                                                                                                                                                                                                                                                                                                                                                             |
+| Gap                                             | Evidence                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Hosted tools regressed                          | Closed by ruling (2026-09-22, the rulings ledger): 1.0 ships without provider-hosted tools — the local `web_search` and `web_fetch` tools are the one system for web search and fetch. The two dead accounting arms in the Anthropic codec are deleted, so the codecs stop advertising a capability they refuse; hosted blocks still fail the event schema as malformed output, and the `pause_turn` arm keeps naming the boundary a future lane would have to implement |
+| Unimplemented, and documented as such           | assistant media output, Responses service-tier billing accounting, native provider compaction, OpenRouter continuation and token estimation                                                                                                                                                                                                                                                                                                                              |
+| No bounded-memory or bounded-stop-latency claim | the SSE parser's event-size cap is disabled (`maxEventSize: Number.POSITIVE_INFINITY`) and cleanup joins foreign finalizers; the live tier cannot settle either claim, so both stay disclaimed rather than asserted                                                                                                                                                                                                                                                      |
+| The kernel tiers are synthetic by construction  | `src/test-kernel/llm/` is ~9.7k lines of fixture suites: they pin lowering, decoding, ordering and every explicit failure, and they stay hermetic and free. Wire behaviour is `test-live/`'s subject, not theirs                                                                                                                                                                                                                                                         |
 
 ## 3. Changes
 
@@ -75,11 +79,15 @@ route, helper, tool-use and reflection call goes through `ModelInvoker`.
    supports it, and the explicit unsupported failure where it does not (the
    OpenAI Chat codec rejects `turn.continuation` by contract). Runs in CI only
    on a labelled job with secrets; runs locally when keys exist.
-2. **Restore hosted tools or decide explicitly — open.** Either implement
-   `web_search` on Responses and search/fetch on Anthropic inside the codecs,
-   with their usage accounting, or record in the rulings ledger that 1.0
-   ships without them and remove the dead enum arms. Do not leave the
-   explicit failure as the resting state.
+2. **Hosted tools — closed by ruling (2026-09-22).** The second of the two
+   options this change named is the one taken: the rulings ledger records
+   that 1.0 ships without provider-hosted tools (the local `web_search` and
+   `web_fetch` tools are the one system for web search and fetch), and the
+   dead accounting arms are deleted, so the codecs stop advertising a
+   capability they refuse. Hosted blocks still fail the event schema as
+   malformed output, `pause_turn` keeps naming the continuation seam, and a
+   future lane must bring the usage accounting and that continuation protocol
+   together. See [§5](#5-how-change-2-closed).
 3. **Split the oversized sources — landed (2026-09-21).** Along the study's
    lines: `turn.ts` over `protocol.ts`, `message.ts`, `errors.ts` and
    `transport.ts`, with the request, configuration, result and event contract
@@ -102,30 +110,34 @@ route, helper, tool-use and reflection call goes through `ModelInvoker`.
 
 - `packages/llm` has a `live` Vitest project with one suite per HTTP
   protocol; `vscode-lm` has a live check in the extension-host job. **Met.**
-- No `unsupported hosted` failure path remains, or a ruling names it. **Open**
-  — change 2.
+- No `unsupported hosted` failure path remains, or a ruling names it. **Met
+  by ruling** — the ledger's 2026-09-22 entry names it: 1.0 ships without
+  provider-hosted tools, the dead accounting arms are deleted, and the
+  `pause_turn` arm stays the explicitly named boundary.
 - No file in `packages/llm/src` exceeds 1 500 lines. **Met** (largest: 1 413).
 - No `@llm/*` alias in `tsconfig.json`; every consumer imports
   `@texra-ai/llm/<subpath>` and the resolver enforces the `exports` map.
   **Met.**
 
-## 5. What is still open
+## 5. How change 2 closed
 
-**Hosted tools (change 2), and nothing else.** `anthropicMessages.ts:680`
-still answers a hosted-tool result with an explicit failure, and the OpenAI
-Responses side has no `web_search`. Two ways to close it, both of which this
-note asked for and neither of which has been taken:
+**By ruling, on 2026-09-22 — nothing in this note is open any more.** The
+ruling
+([rulings ledger](../../implemented/architecture/2026-08-01-architecture-rulings-ledger.md))
+takes this note's on-file recommendation, its option 2: 1.0 ships without
+provider-hosted tools, because the run's local `web_search` and `web_fetch`
+tools already are the one system for web search and fetch and a hosted
+execution of the same capability would be a second system. The two dead
+accounting arms are deleted from the Anthropic codec; a stream that carries
+hosted execution still fails loudly (the hosted blocks fail the event schema
+as malformed output), and the `pause_turn` arm keeps naming the boundary.
 
-1. Implement them in the codecs, accounting their usage like every other
-   provider-side tool, and cover the round trip in the live tier.
-2. Record a ruling that 1.0 ships without hosted tools, and delete the dead
-   arms (`anthropicMessages.ts:680` and `:708`) so the codecs stop advertising
-   a capability they refuse.
-
-The recommendation on file is the second: it is deletion-shaped, it removes an
-explicit failure path from the codecs' resting state, and the capability can
-return with the accounting it needs. It is a capability decision, so it is the
-owner's to make; nothing else in this note depends on it.
+A bare codec restore was refused on one further ground the ruling records:
+Anthropic pauses hosted execution on large result sets, so `web_search`
+without a continuation protocol breaks in practice, and that continuation is
+a runtime-loop seam, not a codec patch. The next lane's spec, if one opens,
+is both halves together: usage accounting folded through `providerUsage` and
+the `pause_turn` continuation protocol.
 
 The §2 caveats stay deliberate and are not open work: unsupported content
 fails explicitly, the two performance claims stay unclaimed, and the kernel
