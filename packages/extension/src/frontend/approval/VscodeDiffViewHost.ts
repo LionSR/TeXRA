@@ -17,7 +17,7 @@ import { firstEventOrTimeout } from '../vscode/vscodeEventWait';
  * The failure of a `vscode.*` call this host lifted through `fromHost`: the
  * host's own refusal, tagged with the capability that raised it.
  */
-export type EditorCallFailed = HostCallFailed | RequestRefusal;
+type EditorCallFailed = HostCallFailed | RequestRefusal;
 
 /**
  * The file URI a tab input surfaces, or null when the tab shows no single
@@ -87,10 +87,7 @@ export class VscodeDiffViewHost implements DiffViewHost {
     });
   }
 
-  revealFirstChange(
-    session: DiffSession,
-    line: number,
-  ): Effect.Effect<void, EditorCallFailed> {
+  revealFirstChange(session: DiffSession, line: number): Effect.Effect<void> {
     return Effect.suspend(() => {
       const targetUri = this.toUri(session.proposed).toString();
       const position = new vscode.Position(line, 0);
