@@ -70,5 +70,8 @@ initTestProcessRuntime(
     // The harness reports no usage; the telemetry suite starts its own.
     usageLog: Layer.empty,
     globalDatabase: globalDatabaseLayer(globalStorage),
+    // The suite's captured entries are the assertion surface: emit every
+    // level the programs run and let each test filter what it reads.
+    minimumLogLevel: 'Trace',
   }),
 );
