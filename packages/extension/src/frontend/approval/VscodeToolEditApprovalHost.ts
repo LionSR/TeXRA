@@ -126,16 +126,7 @@ class VscodeToolEditPreview implements ToolEditPreview {
   present(): Effect.Effect<void, HostRequestFailure> {
     return this.openDiff().pipe(
       Effect.andThen(Effect.sync(() => this.watchForTabClose())),
-      Effect.andThen(
-        // A reveal that failed under a request that settled meanwhile is not
-        // a presentation failure: the diff opened, and nobody is left to look
-        // at the caret.
-        this.revealFirstChange().pipe(
-          Effect.catch((error) =>
-            this.context.isSettled() ? Effect.void : Effect.fail(error),
-          ),
-        ),
-      ),
+      Effect.andThen(this.revealFirstChange()),
     );
   }
 
