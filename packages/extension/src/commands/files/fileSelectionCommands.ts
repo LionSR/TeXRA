@@ -20,8 +20,8 @@ interface PickerOptions {
 }
 
 /** Run a dialog, announce what was picked, and report failures once. */
-function announceSelection(
-  select: Effect.Effect<string[] | null, unknown>,
+function announceSelection<E>(
+  select: Effect.Effect<string[] | null, E>,
 ): Effect.Effect<string[] | null> {
   return select.pipe(
     Effect.map((result) => {
