@@ -11,7 +11,7 @@ import {
   noActiveGitHubSubscriptionMessage,
   unsubscribeGitHubKey,
 } from '@controllers/settingsView/githubSubscriptions';
-import { PromptFailed, type MessageHost } from '@hosts/uiHosts';
+import { catchNotice, PromptFailed, type MessageHost } from '@hosts/uiHosts';
 import type { StateStore } from '@platform/interfaces';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import { StorageFs, withSessionFs } from '@platform/rootedFs';
@@ -151,7 +151,7 @@ export function createDesktopSettingsIpc(
     }
     runtime.runFork(
       options.ui.showInfoMessage(error.reason).pipe(
-        Effect.catchTag('NotificationFailed', (failure) =>
+        catchNotice((failure) =>
           Effect.sync(() => {
             options.ui.onError(failure.cause);
           }),
