@@ -58,7 +58,7 @@ export function listCliEnabledModelCatalog(
 
 /**
  * Enable or disable one model from a CLI argument, resolving common spellings
- * (`grok-4.5` → `grok45`) before handing the id to the shared writer.
+ * (`grok-4.7` → `grok47`) before handing the id to the shared writer.
  *
  * One program: the caller runs it on the process runtime, so this refusal and
  * the writer's own invariant refusals land in the same channel — the

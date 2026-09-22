@@ -21,10 +21,10 @@ describe('CLI enabled models catalog', () => {
     Effect.gen(function* () {
       yield* state.update(GlobalStateKey.MODEL_SELECTION, {
         enabledExtras: [],
-        disabledDefaults: ['grok45'],
+        disabledDefaults: ['grok47'],
       });
-      const result = yield* setCliModelEnabled(state, 'grok-4.5', true);
-      expect(result.model).toBe('grok45');
+      const result = yield* setCliModelEnabled(state, 'grok-4.7', true);
+      expect(result.model).toBe('grok47');
       expect(result.enabled).toBe(true);
       expect(result.list).toEqual(DEFAULT_MODELS);
     }),
@@ -43,10 +43,10 @@ describe('CLI enabled models catalog', () => {
     Effect.gen(function* () {
       yield* state.update(GlobalStateKey.MODEL_SELECTION, {
         enabledExtras: [],
-        disabledDefaults: ['grok45'],
+        disabledDefaults: ['grok47'],
       });
       const catalog = listCliEnabledModelCatalog(state);
-      expect(catalog.find((row) => row.id === 'grok45')?.enabled).toBe(false);
+      expect(catalog.find((row) => row.id === 'grok47')?.enabled).toBe(false);
       expect(catalog.find((row) => row.id === 'deepseekproT')?.enabled).toBe(
         true,
       );

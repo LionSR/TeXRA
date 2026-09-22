@@ -589,7 +589,7 @@ export type DisplaySessionEvent = z.infer<typeof DisplaySessionEventSchema>;
  * with any change to the stored shape of `SessionEventSchema`, which
  * `sessionEventFormat.vitest.ts` pins.
  */
-export const SESSION_EVENT_FORMAT = 8;
+export const SESSION_EVENT_FORMAT = 9;
 
 export const SessionEventSchema = z.discriminatedUnion('type', [
   ...DisplaySessionEventSchema.options,

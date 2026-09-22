@@ -65,10 +65,10 @@ const GEMINI_PRO: LanguageModelInfo = {
   access: 'allowed',
 };
 
-const GPT_56: LanguageModelInfo = {
-  id: 'gpt-5.6',
-  name: 'GPT-5.6',
-  family: 'gpt-5.6',
+const GPT_56_TERRA: LanguageModelInfo = {
+  id: 'gpt-5.6-terra',
+  name: 'GPT-5.6 Terra',
+  family: 'gpt-5.6-terra',
   vendor: 'copilot',
   version: '2026-07',
   maxInputTokens: 128_000,
@@ -210,7 +210,7 @@ describe('runtime model registry', () => {
     'reports the direct fallback for a base model and a legacy copilot id',
     () =>
       Effect.gen(function* () {
-        yield* Effect.promise(() => installModels(GEMINI_PRO, GPT_56));
+        yield* Effect.promise(() => installModels(GEMINI_PRO, GPT_56_TERRA));
         yield* withProcessServices(
           testRuntime(),
           refreshRuntimeModelRegistry(),
@@ -224,8 +224,8 @@ describe('runtime model registry', () => {
           model: 'gemini31p',
           provider: 'openRouter',
         });
-        expect(getRuntimeModelDirectFallback('gpt56', false)).toEqual({
-          model: 'gpt56',
+        expect(getRuntimeModelDirectFallback('gpt56-', false)).toEqual({
+          model: 'gpt56-',
           provider: 'openai',
         });
       }),
@@ -240,7 +240,7 @@ describe('runtime model registry', () => {
           installPlatform(
             {
               globalState: {
-                [GlobalStateKey.COPILOT_ROUTE_MODELS]: ['gemini31p', 'gpt56'],
+                [GlobalStateKey.COPILOT_ROUTE_MODELS]: ['gemini31p', 'gpt56-'],
               },
             },
             { languageModel: port },
@@ -256,7 +256,7 @@ describe('runtime model registry', () => {
           copilotRouteUnavailableReason('gemini31p', globalState),
         ).toBeUndefined();
         // A preference for a model the editor does not offer cannot route.
-        expect(copilotRouteUnavailableReason('gpt56', globalState)).toMatch(
+        expect(copilotRouteUnavailableReason('gpt56-', globalState)).toMatch(
           /does not currently/,
         );
 
@@ -311,14 +311,14 @@ describe('runtime model registry', () => {
         // stale enough that the next refresh re-probes the (new) port.
         expect(copilotRouteForModel('gemini31p')).toBeUndefined();
 
-        const port = yield* Effect.promise(() => installModels(GPT_56));
+        const port = yield* Effect.promise(() => installModels(GPT_56_TERRA));
         yield* withProcessServices(
           testRuntime(),
           refreshRuntimeModelRegistry(),
         );
 
         expect(port.selectModels).toHaveBeenCalledWith({ vendor: 'copilot' });
-        expect(copilotRouteForModel('gpt56')).toBeDefined();
+        expect(copilotRouteForModel('gpt56-')).toBeDefined();
       }),
   );
 
@@ -404,7 +404,7 @@ describe('Copilot route in model pickers', () => {
 
   it.effect('never appends route rows to the visible model list', () =>
     Effect.gen(function* () {
-      const port = languageModelPort([GEMINI_PRO, GPT_56]);
+      const port = languageModelPort([GEMINI_PRO, GPT_56_TERRA]);
       yield* Effect.promise(() =>
         installPlatform(
           {

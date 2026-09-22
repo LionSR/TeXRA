@@ -264,7 +264,7 @@ const modelsEnableCommand = defineCliCommand({
     id: {
       type: 'positional',
       required: true,
-      description: 'Model id (e.g. grok45, deepseekproT)',
+      description: 'Model id (e.g. grok47, deepseekproT)',
     },
   },
   run: (context, ctx) => setModelEnabled(context, ctx.args.id, true),
