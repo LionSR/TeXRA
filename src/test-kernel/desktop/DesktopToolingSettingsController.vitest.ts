@@ -1,5 +1,5 @@
 import { it } from '@effect/vitest';
-import { Effect } from 'effect';
+import { Deferred, Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
@@ -16,6 +16,7 @@ import { HOMEBREW_INSTALL_COMMAND } from '@shared/constants/latexToolchain';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { assertSupported, isUnsupported } from '@shared/utils/dispatcher';
 import { testRuntime } from '@test/support/testProcessRuntime';
+import { createDeferred } from '@test/support/asyncTestUtils';
 import { FakeConfigProvider, FakeStateStore } from '@test/support/FakePlatform';
 import type { ToolProbeInputs } from '@tools/externalToolDefs';
 import type { ExternalToolCheckResult } from '@tools/toolAvailability';
@@ -124,7 +125,13 @@ function installDefaultToolDataDoubles(): void {
   }));
 }
 
-function createFixture(overrides: Partial<ControllerOptions> = {}) {
+function createFixture(
+  overrides: Partial<ControllerOptions> = {},
+  hooks: {
+    onPost?: (message: unknown, posted: unknown[]) => void;
+    onErrorReport?: (error: unknown, reportedErrors: unknown[]) => void;
+  } = {},
+) {
   const posted: unknown[] = [];
   const reportedErrors: unknown[] = [];
   const commands: string[] = [];
@@ -132,13 +139,19 @@ function createFixture(overrides: Partial<ControllerOptions> = {}) {
   const globalState = overrides.globalState ?? new FakeStateStore();
   const workspaceState = overrides.workspaceState ?? new FakeStateStore();
   const controller = new DefaultDesktopToolingSettingsController({
-    onError: (error) => reportedErrors.push(error),
+    onError: (error) => {
+      reportedErrors.push(error);
+      hooks.onErrorReport?.(error, reportedErrors);
+    },
     config: new FakeConfigProvider(),
     globalState,
     workspaceState,
     workspaceRoot: undefined,
     renderer: {
-      postToRenderer: (message) => posted.push(message),
+      postToRenderer: (message) => {
+        posted.push(message);
+        hooks.onPost?.(message, posted);
+      },
     },
     navigation: {
       openExternal: async (url) => {
@@ -205,7 +218,16 @@ describe('DefaultDesktopToolingSettingsController', () => {
         await refreshPending;
         emitAppSignal('toolAvailabilityChanged', undefined);
       });
-      const { controller, posted } = createFixture();
+      const repainted = Deferred.makeUnsafe<void>();
+      const { controller, posted } = createFixture(
+        {},
+        {
+          onPost: (_message, posted) => {
+            if (posted.length === 4)
+              Deferred.doneUnsafe(repainted, Effect.void);
+          },
+        },
+      );
 
       controller.postLatexConfigValues();
       yield* withProcessServices(testRuntime(), controller.postStartupData());
@@ -226,14 +248,10 @@ describe('DefaultDesktopToolingSettingsController', () => {
       expect(buildInputs).toEqual([undefined]);
 
       finishRefresh?.();
-      yield* Effect.promise(() =>
-        vi.waitFor(() => {
-          const repainted = posted.map(commandOf);
-          expect(repainted).toHaveLength(4);
-          expect(repainted.at(-1)).toBe(
-            SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD,
-          );
-        }),
+      yield* Deferred.await(repainted);
+      expect(posted.map(commandOf)).toHaveLength(4);
+      expect(posted.map(commandOf).at(-1)).toBe(
+        SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD,
       );
     }),
   );
@@ -244,15 +262,22 @@ describe('DefaultDesktopToolingSettingsController', () => {
       Effect.gen(function* () {
         const refreshError = new Error('tool probe failed');
         toolData.refreshAvailability.mockRejectedValue(refreshError);
-        const { controller, reportedErrors } = createFixture();
+        const errorReported = Deferred.makeUnsafe<void>();
+        const { controller, reportedErrors } = createFixture(
+          {},
+          {
+            onErrorReport: (_error, reportedErrors) => {
+              if (reportedErrors.length === 1) {
+                Deferred.doneUnsafe(errorReported, Effect.void);
+              }
+            },
+          },
+        );
 
         yield* withProcessServices(testRuntime(), controller.postStartupData());
 
-        yield* Effect.promise(() =>
-          vi.waitFor(() => {
-            expect(reportedErrors).toEqual([refreshError]);
-          }),
-        );
+        yield* Deferred.await(errorReported);
+        expect(reportedErrors).toEqual([refreshError]);
       }),
   );
 
@@ -271,10 +296,14 @@ describe('DefaultDesktopToolingSettingsController', () => {
       events.push('dashboard:cached');
       return cachedResults;
     });
+    const posted = createDeferred();
     const { controller } = createFixture({
       globalState,
       renderer: {
-        postToRenderer: () => events.push('renderer:post'),
+        postToRenderer: () => {
+          events.push('renderer:post');
+          posted.resolve();
+        },
       },
     });
 
@@ -287,14 +316,13 @@ describe('DefaultDesktopToolingSettingsController', () => {
     expect(globalState.get(GlobalStateKey.DISABLED_TOOLS)).toEqual(['zotero']);
     // The repaint the toggle's re-probe triggers runs on the subscriber's own
     // fiber, so the order below settles a turn after the toggle resolves.
-    await vi.waitFor(() =>
-      expect(events).toEqual([
-        'state:update',
-        'dashboard:cached',
-        'dashboard:build',
-        'renderer:post',
-      ]),
-    );
+    await posted.promise;
+    expect(events).toEqual([
+      'state:update',
+      'dashboard:cached',
+      'dashboard:build',
+      'renderer:post',
+    ]);
   });
 
   it('completes a fresh availability check before rebuilding the dashboard', async () => {
@@ -311,18 +339,21 @@ describe('DefaultDesktopToolingSettingsController', () => {
       events.push('dashboard:refresh');
       emitAppSignal('toolAvailabilityChanged', undefined);
     });
+    const posted = createDeferred();
     const { controller } = createFixture({
       renderer: {
-        postToRenderer: () => events.push('renderer:post'),
+        postToRenderer: () => {
+          events.push('renderer:post');
+          posted.resolve();
+        },
       },
     });
 
     await assertSupported(controller.toolHandlers.recheckToolStatus)({
       command: SETTINGS_VIEW_COMMANDS.RECHECK_TOOL_STATUS,
     });
-    await vi.waitFor(() => {
-      expect(events).toContain('renderer:post');
-    });
+    await posted.promise;
+    expect(events).toContain('renderer:post');
 
     expect(events).toEqual([
       'dashboard:refresh',
@@ -398,7 +429,18 @@ describe('DefaultDesktopToolingSettingsController', () => {
         ],
       },
     ]);
-    const { controller, posted } = createFixture();
+    const repainted = createDeferred();
+    const { controller, posted } = createFixture(
+      {},
+      {
+        onPost: (_message, posted) => {
+          const last = posted.at(-1) as { command?: string } | undefined;
+          if (last?.command === SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD) {
+            repainted.resolve();
+          }
+        },
+      },
+    );
 
     expect(isUnsupported(controller.toolHandlers.installToolExtension)).toBe(
       true,
@@ -411,11 +453,10 @@ describe('DefaultDesktopToolingSettingsController', () => {
       command: SETTINGS_VIEW_COMMANDS.RECHECK_TOOL_STATUS,
     });
 
-    await vi.waitFor(() => {
-      expect(posted.at(-1)).toEqual({
-        command: SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD,
-        items: [DASHBOARD_ITEM],
-      });
+    await repainted.promise;
+    expect(posted.at(-1)).toEqual({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD,
+      items: [DASHBOARD_ITEM],
     });
   });
 });

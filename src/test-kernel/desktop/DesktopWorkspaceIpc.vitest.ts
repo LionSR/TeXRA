@@ -9,7 +9,7 @@ import {
 import { join } from 'node:path';
 
 import { it } from '@effect/vitest';
-import { Effect } from 'effect';
+import { Deferred, Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 import {
@@ -22,6 +22,7 @@ import type { DesktopBrowserViews } from '@desktop/main/desktopBrowserViews';
 import type { DesktopPtyHost } from '@desktop/main/desktopPtyHost';
 import { emitAppSignal } from '@eventBus/AppSignals';
 import { testRuntime } from '@test/support/testProcessRuntime';
+import { createDeferred } from '@test/support/asyncTestUtils';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
 let fixtureRoot = '';
@@ -83,6 +84,19 @@ function createIpc(
 
 const liveWorkspaceIpcs: ReturnType<typeof createDesktopWorkspaceIpc>[] = [];
 
+/** Resolve the returned promise the next time `mock` is called with an
+ *  argument matching `predicate`. The mock's own return stays undefined. */
+function nextCall(
+  mock: ReturnType<typeof vi.fn>,
+  predicate: (arg: unknown) => boolean,
+): Promise<void> {
+  const called = createDeferred();
+  mock.mockImplementationOnce((arg: unknown) => {
+    if (predicate(arg)) called.resolve();
+  });
+  return called.promise;
+}
+
 describe('desktop workspace IPC', () => {
   const tempDirs = useTempDirs();
 
@@ -121,7 +135,15 @@ describe('desktop workspace IPC', () => {
     'tells the renderer to re-list only when a write lands inside the workspace',
     () =>
       Effect.gen(function* () {
-        const postToRenderer = vi.fn();
+        const filesChanged = Deferred.makeUnsafe<void>();
+        const postToRenderer = vi.fn((message) => {
+          if (
+            (message as { command?: string }).command ===
+            DESKTOP_WORKSPACE_COMMANDS.FILES_CHANGED
+          ) {
+            Deferred.doneUnsafe(filesChanged, Effect.void);
+          }
+        });
         createIpc(postToRenderer);
         // The IPC's subscription registers on its own fiber of this runtime;
         // let it reach the hub before publishing, or the writes below reach
@@ -138,13 +160,10 @@ describe('desktop workspace IPC', () => {
           absolutePaths: [externalPath, join(workspacePath, 'paper.tex')],
         });
 
-        yield* Effect.promise(() =>
-          vi.waitFor(() =>
-            expect(postToRenderer).toHaveBeenCalledExactlyOnceWith({
-              command: DESKTOP_WORKSPACE_COMMANDS.FILES_CHANGED,
-            }),
-          ),
-        );
+        yield* Deferred.await(filesChanged);
+        expect(postToRenderer).toHaveBeenCalledExactlyOnceWith({
+          command: DESKTOP_WORKSPACE_COMMANDS.FILES_CHANGED,
+        });
       }),
   );
 
@@ -152,38 +171,50 @@ describe('desktop workspace IPC', () => {
     const postToRenderer = vi.fn();
     const ipc = createIpc(postToRenderer);
 
+    const rootListed = nextCall(
+      postToRenderer,
+      (message) =>
+        (message as { command?: string }).command ===
+          DESKTOP_WORKSPACE_COMMANDS.FILES_LISTED &&
+        (message as { directory?: string }).directory === '',
+    );
     ipc.handleMessage({
       command: DESKTOP_WORKSPACE_COMMANDS.LIST_FILES,
       requestId: REQUEST_ID,
     });
-    await vi.waitFor(() =>
-      expect(postToRenderer).toHaveBeenCalledWith({
-        command: DESKTOP_WORKSPACE_COMMANDS.FILES_LISTED,
-        requestId: REQUEST_ID,
-        directory: '',
-        files: [
-          { path: 'paper.tex', isDirectory: false },
-          { path: 'src', isDirectory: true },
-        ],
-      }),
-    );
+    await rootListed;
+    expect(postToRenderer).toHaveBeenCalledWith({
+      command: DESKTOP_WORKSPACE_COMMANDS.FILES_LISTED,
+      requestId: REQUEST_ID,
+      directory: '',
+      files: [
+        { path: 'paper.tex', isDirectory: false },
+        { path: 'src', isDirectory: true },
+      ],
+    });
 
+    const srcListed = nextCall(
+      postToRenderer,
+      (message) =>
+        (message as { command?: string }).command ===
+          DESKTOP_WORKSPACE_COMMANDS.FILES_LISTED &&
+        (message as { directory?: string }).directory === 'src',
+    );
     ipc.handleMessage({
       command: DESKTOP_WORKSPACE_COMMANDS.LIST_FILES,
       requestId: REQUEST_ID,
       directory: 'src',
     });
-    await vi.waitFor(() =>
-      expect(postToRenderer).toHaveBeenCalledWith({
-        command: DESKTOP_WORKSPACE_COMMANDS.FILES_LISTED,
-        requestId: REQUEST_ID,
-        directory: 'src',
-        files: [
-          { path: 'src/deep', isDirectory: true },
-          { path: 'src/index.ts', isDirectory: false },
-        ],
-      }),
-    );
+    await srcListed;
+    expect(postToRenderer).toHaveBeenCalledWith({
+      command: DESKTOP_WORKSPACE_COMMANDS.FILES_LISTED,
+      requestId: REQUEST_ID,
+      directory: 'src',
+      files: [
+        { path: 'src/deep', isDirectory: true },
+        { path: 'src/index.ts', isDirectory: false },
+      ],
+    });
     expect(postToRenderer).not.toHaveBeenCalledWith(
       expect.objectContaining({
         files: expect.arrayContaining([
@@ -198,19 +229,25 @@ describe('desktop workspace IPC', () => {
     const onAsyncError = vi.fn();
     const ipc = createIpc(postToRenderer, { onAsyncError });
 
+    const fileRead = nextCall(
+      postToRenderer,
+      (message) =>
+        (message as { command?: string }).command ===
+          DESKTOP_WORKSPACE_COMMANDS.FILE_READ &&
+        (message as { path?: string }).path === 'paper.tex',
+    );
     ipc.handleMessage({
       command: DESKTOP_WORKSPACE_COMMANDS.READ_FILE,
       requestId: REQUEST_ID,
       path: 'paper.tex',
     });
-    await vi.waitFor(() =>
-      expect(postToRenderer).toHaveBeenCalledWith({
-        command: DESKTOP_WORKSPACE_COMMANDS.FILE_READ,
-        requestId: REQUEST_ID,
-        path: 'paper.tex',
-        contents: 'inside',
-      }),
-    );
+    await fileRead;
+    expect(postToRenderer).toHaveBeenCalledWith({
+      command: DESKTOP_WORKSPACE_COMMANDS.FILE_READ,
+      requestId: REQUEST_ID,
+      path: 'paper.tex',
+      contents: 'inside',
+    });
 
     ipc.handleMessage({
       command: DESKTOP_WORKSPACE_COMMANDS.READ_FILE,
@@ -230,7 +267,12 @@ describe('desktop workspace IPC', () => {
       contents: 'created outside',
     });
 
-    await vi.waitFor(() => expect(onAsyncError).toHaveBeenCalledTimes(3));
+    const asyncErrorsReported = createDeferred();
+    onAsyncError.mockImplementation(() => {
+      if (onAsyncError.mock.calls.length === 3) asyncErrorsReported.resolve();
+    });
+    await asyncErrorsReported.promise;
+    expect(onAsyncError).toHaveBeenCalledTimes(3);
     expect(postToRenderer).not.toHaveBeenCalledWith(
       expect.objectContaining({
         command: DESKTOP_WORKSPACE_COMMANDS.FILE_READ,
@@ -258,19 +300,25 @@ describe('desktop workspace IPC', () => {
         Buffer.from('hi', 'utf8'),
       ]),
     );
+    const bomRead = nextCall(
+      postToRenderer,
+      (message) =>
+        (message as { command?: string }).command ===
+          DESKTOP_WORKSPACE_COMMANDS.FILE_READ &&
+        (message as { path?: string }).path === 'bom.tex',
+    );
     ipc.handleMessage({
       command: DESKTOP_WORKSPACE_COMMANDS.READ_FILE,
       requestId: REQUEST_ID,
       path: 'bom.tex',
     });
-    await vi.waitFor(() =>
-      expect(postToRenderer).toHaveBeenCalledWith(
-        expect.objectContaining({
-          command: DESKTOP_WORKSPACE_COMMANDS.FILE_READ,
-          path: 'bom.tex',
-          contents: '\uFEFFhi',
-        }),
-      ),
+    await bomRead;
+    expect(postToRenderer).toHaveBeenCalledWith(
+      expect.objectContaining({
+        command: DESKTOP_WORKSPACE_COMMANDS.FILE_READ,
+        path: 'bom.tex',
+        contents: '\uFEFFhi',
+      }),
     );
   });
 
@@ -279,6 +327,13 @@ describe('desktop workspace IPC', () => {
     const ipc = createIpc(postToRenderer);
     rmSync(join(workspacePath, 'paper.tex'));
 
+    const fileWritten = nextCall(
+      postToRenderer,
+      (message) =>
+        (message as { command?: string }).command ===
+          DESKTOP_WORKSPACE_COMMANDS.FILE_WRITTEN &&
+        (message as { path?: string }).path === 'paper.tex',
+    );
     ipc.handleMessage({
       command: DESKTOP_WORKSPACE_COMMANDS.WRITE_FILE,
       requestId: REQUEST_ID,
@@ -286,13 +341,12 @@ describe('desktop workspace IPC', () => {
       contents: 'recovered buffer',
     });
 
-    await vi.waitFor(() =>
-      expect(postToRenderer).toHaveBeenCalledWith({
-        command: DESKTOP_WORKSPACE_COMMANDS.FILE_WRITTEN,
-        requestId: REQUEST_ID,
-        path: 'paper.tex',
-      }),
-    );
+    await fileWritten;
+    expect(postToRenderer).toHaveBeenCalledWith({
+      command: DESKTOP_WORKSPACE_COMMANDS.FILE_WRITTEN,
+      requestId: REQUEST_ID,
+      path: 'paper.tex',
+    });
     expect(readFileSync(join(workspacePath, 'paper.tex'), 'utf8')).toBe(
       'recovered buffer',
     );
@@ -303,6 +357,13 @@ describe('desktop workspace IPC', () => {
     const ipc = createIpc(postToRenderer);
     rmSync(join(workspacePath, 'src'), { recursive: true });
 
+    const fileError = nextCall(
+      postToRenderer,
+      (message) =>
+        (message as { command?: string }).command ===
+          DESKTOP_WORKSPACE_COMMANDS.FILE_ERROR &&
+        (message as { path?: string }).path === 'src/index.ts',
+    );
     ipc.handleMessage({
       command: DESKTOP_WORKSPACE_COMMANDS.WRITE_FILE,
       requestId: REQUEST_ID,
@@ -310,15 +371,14 @@ describe('desktop workspace IPC', () => {
       contents: 'unrecoverable buffer',
     });
 
-    await vi.waitFor(() =>
-      expect(postToRenderer).toHaveBeenCalledWith({
-        command: DESKTOP_WORKSPACE_COMMANDS.FILE_ERROR,
-        requestId: REQUEST_ID,
-        path: 'src/index.ts',
-        message:
-          'The file cannot be recreated because its parent folder no longer exists.',
-      }),
-    );
+    await fileError;
+    expect(postToRenderer).toHaveBeenCalledWith({
+      command: DESKTOP_WORKSPACE_COMMANDS.FILE_ERROR,
+      requestId: REQUEST_ID,
+      path: 'src/index.ts',
+      message:
+        'The file cannot be recreated because its parent folder no longer exists.',
+    });
   });
 
   it('accepts no editor dirty-state mirror from the renderer', () => {
@@ -354,15 +414,20 @@ describe('desktop workspace IPC', () => {
       onAsyncError,
     });
 
+    const environmentPosted = nextCall(
+      postToRenderer,
+      (message) =>
+        (message as { command?: string }).command ===
+        DESKTOP_WORKSPACE_COMMANDS.ENVIRONMENT_STATE,
+    );
     success.handleMessage({
       command: DESKTOP_WORKSPACE_COMMANDS.ENVIRONMENT_REQUEST,
     });
-    await vi.waitFor(() =>
-      expect(postToRenderer).toHaveBeenCalledWith({
-        command: DESKTOP_WORKSPACE_COMMANDS.ENVIRONMENT_STATE,
-        environment,
-      }),
-    );
+    await environmentPosted;
+    expect(postToRenderer).toHaveBeenCalledWith({
+      command: DESKTOP_WORKSPACE_COMMANDS.ENVIRONMENT_STATE,
+      environment,
+    });
 
     const failure = new Error('git unavailable');
     const failed = createIpc(postToRenderer, {
@@ -371,18 +436,22 @@ describe('desktop workspace IPC', () => {
       },
       onAsyncError,
     });
+    const hostCallFailed = nextCall(
+      onAsyncError,
+      (error) =>
+        (error as { _tag?: string })._tag === 'WorkspaceHostCallFailed',
+    );
     failed.handleMessage({
       command: DESKTOP_WORKSPACE_COMMANDS.ENVIRONMENT_REQUEST,
     });
 
-    await vi.waitFor(() =>
-      expect(onAsyncError).toHaveBeenCalledWith(
-        expect.objectContaining({
-          _tag: 'WorkspaceHostCallFailed',
-          member: 'getEnvironmentSummary',
-          cause: failure,
-        }),
-      ),
+    await hostCallFailed;
+    expect(onAsyncError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        _tag: 'WorkspaceHostCallFailed',
+        member: 'getEnvironmentSummary',
+        cause: failure,
+      }),
     );
     expect(postToRenderer).toHaveBeenLastCalledWith({
       command: DESKTOP_WORKSPACE_COMMANDS.ENVIRONMENT_STATE,
@@ -402,6 +471,10 @@ describe('desktop workspace IPC', () => {
       ptyHost: { create, get: vi.fn(() => undefined), disposeAll: vi.fn() },
     });
 
+    const commandWritten = nextCall(
+      write,
+      (text) => text === 'brew install ghostscript\r',
+    );
     expect(
       ipc.handleMessage({
         command: DESKTOP_WORKSPACE_COMMANDS.TERMINAL_START,
@@ -412,9 +485,8 @@ describe('desktop workspace IPC', () => {
       }),
     ).toBe(true);
 
-    await vi.waitFor(() =>
-      expect(write).toHaveBeenCalledWith('brew install ghostscript\r'),
-    );
+    await commandWritten;
+    expect(write).toHaveBeenCalledWith('brew install ghostscript\r');
     expect(create).toHaveBeenCalledWith({
       id: 'workbench:terminal:1',
       cols: 80,

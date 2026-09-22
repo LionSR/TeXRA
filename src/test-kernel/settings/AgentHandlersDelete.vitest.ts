@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 
 import { it } from '@effect/vitest';
-import { Effect, Fiber, FileSystem } from 'effect';
+import { Deferred, Effect, Fiber, FileSystem } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 import { withProcessServices } from '@platform/processRuntime';
@@ -189,7 +189,11 @@ describe('AgentHandlers custom-agent file actions', () => {
             resolveConfirmation = resolve;
           },
         );
-        mocks.showWarningMessage.mockReturnValueOnce(pendingConfirmation);
+        const warned = Deferred.makeUnsafe<void>();
+        mocks.showWarningMessage.mockImplementationOnce(() => {
+          Deferred.doneUnsafe(warned, Effect.void);
+          return pendingConfirmation;
+        });
         const handlers = createHandlers();
 
         const first = yield* Effect.forkChild(
@@ -199,11 +203,8 @@ describe('AgentHandlers custom-agent file actions', () => {
           ),
           { startImmediately: true },
         );
-        yield* Effect.promise(() =>
-          vi.waitFor(() =>
-            expect(mocks.showWarningMessage).toHaveBeenCalledTimes(1),
-          ),
-        );
+        yield* Deferred.await(warned);
+        expect(mocks.showWarningMessage).toHaveBeenCalledTimes(1);
 
         yield* withProcessServices(
           testRuntime(),

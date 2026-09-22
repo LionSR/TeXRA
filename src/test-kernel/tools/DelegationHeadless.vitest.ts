@@ -243,7 +243,7 @@ function answerOpenedRequests(
  *  is created and disposed per case. */
 function delegateWithProposalDecision(
   decision: RequestDecision,
-  options: { expectLaunch?: boolean } = {},
+  options: { launchSignal?: Deferred.Deferred<void> } = {},
 ) {
   return Effect.scoped(
     Effect.gen(function* () {
@@ -260,10 +260,8 @@ function delegateWithProposalDecision(
       // A detached child commits its `child.turn` row before its first turn
       // runs, so the launch is not observable the moment the tool returns and
       // the session must not be disposed out from under it.
-      if (options.expectLaunch) {
-        yield* Effect.promise(() =>
-          vi.waitFor(() => expect(mocks.executeAgent).toHaveBeenCalled()),
-        );
+      if (options.launchSignal) {
+        yield* Deferred.await(options.launchSignal);
       }
       yield* waitForChildrenEffect(session);
       return result;
@@ -1110,7 +1108,10 @@ describe('headless delegation', () => {
 
   it.effect('rolls up failed async subagent cost from the error callback', () =>
     Effect.gen(function* () {
-      const recordSubagentCost = vi.fn();
+      const costRecorded = Deferred.makeUnsafe<void>();
+      const recordSubagentCost = vi.fn(() => {
+        Deferred.doneUnsafe(costRecorded, Effect.void);
+      });
       mockExecuteAgentErrorOnce(0.31);
 
       const result = yield* callDelegateReview(
@@ -1118,11 +1119,8 @@ describe('headless delegation', () => {
       );
 
       expect(result.summary).toBe("Launched 'review' (async)");
-      yield* Effect.promise(() =>
-        vi.waitFor(() => {
-          expect(recordSubagentCost).toHaveBeenCalledTimes(1);
-        }),
-      );
+      yield* Deferred.await(costRecorded);
+      expect(recordSubagentCost).toHaveBeenCalledTimes(1);
       expect(recordSubagentCost).toHaveBeenCalledWith(0.31);
     }),
   );
@@ -1237,9 +1235,23 @@ describe('headless delegation', () => {
         ]),
       );
 
+      const launched = Deferred.makeUnsafe<void>();
+      mocks.executeAgent.mockImplementationOnce(async () => {
+        Deferred.doneUnsafe(launched, Effect.void);
+        return {
+          outcome: 'completed',
+          runId: CHILD_RUN_ID,
+          output: {
+            category: 'toolUse',
+            response: 'The proof is correct.',
+            files: [],
+          },
+        };
+      });
+
       const result = yield* delegateWithProposalDecision(
         { action: 'approve', model: 'gpt5' },
-        { expectLaunch: true },
+        { launchSignal: launched },
       );
 
       expect(result.status).toBe('executed');
@@ -1266,16 +1278,18 @@ describe('headless delegation', () => {
           ],
         });
 
+        const reportWritten = Deferred.makeUnsafe<void>();
+        mocks.writeReport.mockImplementationOnce(() => {
+          Deferred.doneUnsafe(reportWritten, Effect.void);
+        });
+
         yield* callDelegateReview(parentRunContext({ runId: PARENT_RUN_ID }));
 
-        yield* Effect.promise(() =>
-          vi.waitFor(() => {
-            expect(mocks.writeReport).toHaveBeenCalledWith(
-              expect.stringContaining(
-                '<memory-miss path="/memories/missing.md" reason="not found &amp; unreadable" />',
-              ),
-            );
-          }),
+        yield* Deferred.await(reportWritten);
+        expect(mocks.writeReport).toHaveBeenCalledWith(
+          expect.stringContaining(
+            '<memory-miss path="/memories/missing.md" reason="not found &amp; unreadable" />',
+          ),
         );
       }),
   );
@@ -1298,14 +1312,16 @@ describe('headless delegation', () => {
           },
         });
 
+        const reportWritten = Deferred.makeUnsafe<void>();
+        mocks.writeReport.mockImplementationOnce(() => {
+          Deferred.doneUnsafe(reportWritten, Effect.void);
+        });
+
         yield* callDelegateReview(parentRunContext({ runId: PARENT_RUN_ID }));
 
-        yield* Effect.promise(() =>
-          vi.waitFor(() => {
-            expect(mocks.writeReport).toHaveBeenCalledWith(
-              expect.stringContaining('The proof is correct.'),
-            );
-          }),
+        yield* Deferred.await(reportWritten);
+        expect(mocks.writeReport).toHaveBeenCalledWith(
+          expect.stringContaining('The proof is correct.'),
         );
         expect(capturedHandle?.deliveryTarget).toBeUndefined();
         expect(
