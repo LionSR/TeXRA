@@ -8,8 +8,8 @@ catalog:
   '@anthropic-ai/sdk': '^0.125.0'
   '@cantoo/pdf-lib': '^2.9.2'
   '@date-fns/tz': '^1.5.0'
-  '@effect/platform-node': '4.0.0-rc.115'
-  '@effect/sql-sqlite-node': '4.0.0-rc.115'
+  '@effect/platform-node': '4.0.0-rc.116'
+  '@effect/sql-sqlite-node': '4.0.0-rc.116'
   '@google/genai': '^2.23.0'
   '@jamesgopsill/crossref-client': '^1.1.0'
   '@jitl/quickjs-wasmfile-release-sync': '0.32.0'
@@ -27,7 +27,7 @@ catalog:
   date-fns: '^4.4.0'
   diff: '^9.0.0'
   diff-match-patch: '^1.0.5'
-  effect: '4.0.0-rc.115'
+  effect: '4.0.0-rc.116'
   esbuild: '^0.28.2'
   escape-string-regexp: '^5.0.0'
   execa: '^10.0.1'
@@ -94,3 +94,10 @@ patchedDependencies:
 # until they aged out, forcing a per-package allowlist. Disable it repo-wide so
 # reviewed bumps land immediately.
 minimumReleaseAge: 0
+
+# `@effect/platform-node` depends on `@effect/platform-node-shared` through a
+# caret (`^4.0.0-rc.116`), so a newer RC published upstream floats in and peer-
+# requires the matching `effect` RC — two RC lines in one process, which the
+# SDK's single-`effect`-copy rule forbids. Pin it to the catalog's RC.
+overrides:
+  '@effect/platform-node-shared': '4.0.0-rc.116'
