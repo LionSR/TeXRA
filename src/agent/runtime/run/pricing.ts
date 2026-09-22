@@ -63,6 +63,12 @@ const XAI_DOCUMENTED_PRICING: Readonly<
     outputPrice: 12,
     cacheDiscountFactor: 0.25,
   },
+  'grok-4.7': {
+    thresholdTokens: 200_000,
+    inputPrice: 4,
+    outputPrice: 12,
+    cacheDiscountFactor: 0.25,
+  },
 };
 
 /** Lowest documented threshold; the drift tripwire's reference. */

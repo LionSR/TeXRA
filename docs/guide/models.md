@@ -21,20 +21,23 @@ TeXRA connects directly to frontier reasoning models from leading providers—in
 
 ## Anthropic models
 
-| Model ID   | Use Case                                  | Cost | Speed  |
-| :--------- | :---------------------------------------- | :--- | :----- |
-| `fable51`  | Most capable, always-on adaptive thinking | $$$$ | Slow   |
-| `opus5T`   | Top-tier reasoning, long-horizon work     | $$$$ | Slow   |
-| `opus5`    | Most capable for agentic coding           | $$$$ | Slow   |
-| `sonnet5T` | All-rounder with reasoning                | $$$  | Medium |
-| `sonnet5`  | Strong all-rounder                        | $$$  | Medium |
-| `haiku45T` | Fast with reasoning                       | $$   | Fast   |
-| `haiku45`  | Fast responses                            | $$   | Fast   |
+| Model ID   | Use Case                                      | Cost | Speed  |
+| :--------- | :-------------------------------------------- | :--- | :----- |
+| `fable51`  | Most capable, always-on adaptive thinking     | $$$$ | Slow   |
+| `opus55`   | Long-running agentic work, always-on thinking | $$$  | Medium |
+| `opus5T`   | Top-tier reasoning, long-horizon work         | $$$$ | Slow   |
+| `opus5`    | Most capable for agentic coding               | $$$$ | Slow   |
+| `sonnet5T` | All-rounder with reasoning                    | $$$  | Medium |
+| `sonnet5`  | Strong all-rounder                            | $$$  | Medium |
+| `haiku45T` | Fast with reasoning                           | $$   | Fast   |
+| `haiku45`  | Fast responses                                | $$   | Fast   |
 
-Fable 5.1, Opus 5, and Sonnet 5 (and the older Opus 4.6 to 4.8 and Sonnet 4.6) include the full 1M context window at standard pricing, with no opt-in or
+Fable 5.1, Opus 5.5, Opus 5, and Sonnet 5 (and the older Opus 4.6 to 4.8 and Sonnet 4.6) include the full 1M context window at standard pricing, with no opt-in or
 beta header required. Haiku 4.5, Opus 4.5, and Sonnet 4.5 use a 200K context window.
 
 Claude Fable 5.1 (`fable51`) is Anthropic's most capable model. Thinking is always on (adaptive, with summarized reasoning), so there is no separate `T` variant. It supports the full reasoning-effort range up to Extra High and the top Max tier, and is eligible for context compaction in tool-use mode.
+
+Claude Opus 5.5 (`opus55`) is built for long-running agentic coding and knowledge work at $4 / $20 per 1M tokens, below Opus 5. Like Fable 5.1, thinking is always on, so there is no separate `T` variant. Its default effort is Medium, and it accepts the full range up to Max.
 
 Claude Opus 5 uses adaptive thinking only (extended thinking with a manual `budget_tokens` is no longer accepted). TeXRA's reasoning-effort selector maps to Anthropic's effort levels automatically: pick `opus5T` with Extra High (or the top Max tier) effort for the strongest agentic coding and long-horizon tasks. Opus 5 also supports high-resolution images for better figure, chart, and screenshot understanding. TeXRA downscales images above `texra.maxImageDimension` (default 2000px) before sending, so raise that setting to send higher-resolution figures.
 
@@ -43,6 +46,8 @@ Claude Opus 5 uses adaptive thinking only (extended thinking with a manual `budg
 | Model ID    | Use Case                       | Cost | Speed  |
 | :---------- | :----------------------------- | :--- | :----- |
 | `gpt6`      | Most capable, 1M context       | $$$$ | Fast   |
+| `gpt6-`     | GPT-6 Sol, agentic coding      | $$$  | Fast   |
+| `gpt6--`    | GPT-6 Luna, budget reasoning   | $    | Fast   |
 | `gpt56pro`  | Pro reasoning mode, 1M context | $$$$ | Slow   |
 | `gpt56`     | Flagship reasoning, 1M context | $$$$ | Medium |
 | `gpt56fast` | Flagship, fast variant         | $$$$ | Fast   |
@@ -54,6 +59,8 @@ available in the API and in Codex for Pro, Enterprise, and Business Premium subs
 supports reasoning effort up to Max.
 Note its long-context pricing: prompts above 272K input tokens bill at 2x input/cache and 1.5x
 output for the full request.
+
+GPT-6 Sol (`gpt6-`) and GPT-6 Luna (`gpt6--`) bring Astra's advances to faster, cheaper models, priced at half of GPT-5.6's promotional rates. Both take reasoning effort up to Max and use the same long-context pricing as Astra.
 
 GPT-5.6 Sol (`gpt56`) is OpenAI's current flagship reasoning model; TeXRA pins the
 [Codex integration](./agent-integrations.md#openai-codex) to `gpt-5.5`. GPT-5.6 Pro (`gpt56pro`)
@@ -145,6 +152,7 @@ developers.
 
 | Model ID | Use Case           | Cost | Speed  |
 | :------- | :----------------- | :--- | :----- |
+| `grok47` | Reasoning + vision | $$$  | Medium |
 | `grok45` | Reasoning + vision | $$$  | Medium |
 
 ## Choosing a model
