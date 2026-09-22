@@ -80,6 +80,7 @@ import {
 } from '@shared/session/database';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { localDatabasePath } from './localDatabasePath';
+import type { SqlError } from 'effect/unstable/sql/SqlError';
 /** The database file of a session root, beside the stores it replaces. */
 const SESSION_DATABASE_FILE = 'texra.db';
 const CHANNEL = 'sessionDatabase';
@@ -303,15 +304,15 @@ export const databaseLayer = (
         new DatabaseWriteFailed({ path, cause });
       const readFailed = (cause: unknown): DatabaseReadFailed =>
         new DatabaseReadFailed({ path, cause });
-      const query = <A>(
-        read: Effect.Effect<A, unknown>,
+      const query = <A, E>(
+        read: Effect.Effect<A, E>,
       ): Effect.Effect<A, DatabaseReadFailed> =>
         read.pipe(mapDatabaseFailure(readFailed));
       /** The rows a read statement returns, decoded as ledger events. */
       const decodedRows = (
         statement: string,
         params: Parameters<typeof sql.unsafe>[1],
-      ): Effect.Effect<SessionEvent[], unknown> =>
+      ): Effect.Effect<SessionEvent[], SqlError> =>
         sql
           .unsafe<Record<string, unknown>>(statement, params)
           .pipe(Effect.map((rows) => rows.map(decodeEvent)));
@@ -477,15 +478,15 @@ export const databaseLayer = (
         });
       const readTransaction = transactions('read');
       const writeTransaction = transactions('write');
-      const transaction = <A, E>(
+      const transaction = <A, E, EBody>(
         mode: 'read' | 'write',
-        body: Effect.Effect<A, unknown>,
+        body: Effect.Effect<A, EBody>,
         failed: (cause: unknown) => E,
       ) =>
         (mode === 'read' ? readTransaction(body) : writeTransaction(body)).pipe(
           mapDatabaseFailure(failed),
         );
-      const transact = <A>(body: Effect.Effect<A, unknown>) =>
+      const transact = <A, E>(body: Effect.Effect<A, E>) =>
         transaction('write', body, writeFailed);
       const historyRows = Effect.gen(function* () {
         return (yield* sql.unsafe<Record<string, unknown>>(
@@ -1463,8 +1464,8 @@ const verifyPragma = Effect.fnUntraced(function* (
 
 /** Preserve interruption and each SQL/validation failure at the database boundary. */
 function mapDatabaseFailure<E>(failed: (cause: unknown) => E) {
-  return <A, R>(
-    operation: Effect.Effect<A, unknown, R>,
+  return <A, EOp, R>(
+    operation: Effect.Effect<A, EOp, R>,
   ): Effect.Effect<A, E, R> =>
     operation.pipe(
       Effect.catchCause((cause) =>
