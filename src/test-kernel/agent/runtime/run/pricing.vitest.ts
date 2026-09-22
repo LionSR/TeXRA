@@ -113,3 +113,31 @@ describe('priceTurnUsage on an Anthropic turn', () => {
     expect(priced?.cacheCreationTokens).toBe(breakdown.cacheCreationTokens);
   });
 });
+
+describe('priceTurnUsage on a GPT-6 turn', () => {
+  const boundSol: BoundModel = {
+    ...boundAnthropic,
+    config: buildTestModelConfig({
+      fullName: 'gpt-6-sol',
+      inputPrice: 2,
+      outputPrice: 10,
+      capabilities: { cacheDiscountFactor: 0.1 },
+    }),
+  };
+  const usageAt = (inputTokens: number): TurnResult['usage'] => ({
+    inputTokens,
+    outputTokens: 1000,
+    totalTokens: inputTokens + 1000,
+    cachedInputTokens: 0,
+    reasoningTokens: null,
+    providerUsage: undefined,
+  });
+
+  it('bills the whole request at the long-context tier above 272K', () => {
+    const below = priceTurnUsage(boundSol, usageAt(272_000 - 1), 1, noopTrace);
+    const above = priceTurnUsage(boundSol, usageAt(300_000), 1, noopTrace);
+
+    expect(below?.cost).toBeCloseTo((271_999 * 2 + 1000 * 10) / 1e6, 12);
+    expect(above?.cost).toBeCloseTo((300_000 * 4 + 1000 * 15) / 1e6, 12);
+  });
+});

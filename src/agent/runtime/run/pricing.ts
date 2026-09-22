@@ -35,7 +35,7 @@ const perMillion = (tokens: number, price: number): number =>
  * (#10073).
  * Rates are USD per 1M tokens.
  */
-const XAI_DOCUMENTED_PRICING: Readonly<
+type DocumentedTierPricing = Readonly<
   Record<
     string,
     {
@@ -45,7 +45,9 @@ const XAI_DOCUMENTED_PRICING: Readonly<
       readonly cacheDiscountFactor: number;
     }
   >
-> = {
+>;
+
+const XAI_DOCUMENTED_PRICING: DocumentedTierPricing = {
   'grok-4.3': {
     thresholdTokens: 200_000,
     inputPrice: 2.5,
@@ -69,6 +71,34 @@ const XAI_DOCUMENTED_PRICING: Readonly<
     inputPrice: 4,
     outputPrice: 12,
     cacheDiscountFactor: 0.25,
+  },
+};
+
+/**
+ * OpenAI's long-context tier for the GPT-6 family, keyed by catalog
+ * `fullName`: a prompt over 272K input tokens bills the whole request at 2x
+ * input and cached input and 1.5x output (developers.openai.com pricing).
+ * Cached input doubles with input, so the cache discount keeps its catalog
+ * ratio. llm-zoo has no tier field (#10073).
+ */
+const OPENAI_DOCUMENTED_PRICING: DocumentedTierPricing = {
+  'gpt-6-astra': {
+    thresholdTokens: 272_000,
+    inputPrice: 20,
+    outputPrice: 75,
+    cacheDiscountFactor: 0.1,
+  },
+  'gpt-6-sol': {
+    thresholdTokens: 272_000,
+    inputPrice: 4,
+    outputPrice: 15,
+    cacheDiscountFactor: 0.1,
+  },
+  'gpt-6-luna': {
+    thresholdTokens: 272_000,
+    inputPrice: 0.2,
+    outputPrice: 0.75,
+    cacheDiscountFactor: 0.1,
   },
 };
 
@@ -115,10 +145,10 @@ function warnOnMissingXaiTier(config: ModelConfig, logger: AgentTrace): void {
  * the run records tokens without spend; an API-key route bills the registry's
  * rates for the bound model.
  *
- * xAI is the one provider whose rates are not flat: once a request's whole
- * prompt — cached tokens included — reaches the model's documented threshold,
- * every token of that request bills at the tier, output included, so the
- * complete tuple switches and the rebate below follows it.
+ * xAI and OpenAI's GPT-6 family have rates that are not flat: once a
+ * request's whole prompt — cached tokens included — reaches the model's
+ * documented threshold, every token of that request bills at the tier, output
+ * included, so the complete tuple switches and the rebate below follows it.
  */
 function turnRates(
   bound: BoundModel,
@@ -133,12 +163,30 @@ function turnRates(
     outputPrice: config.outputPrice,
     cacheDiscountFactor: config.capabilities.cacheDiscountFactor,
   };
+  if (config.provider === ModelProvider.OPENAI) {
+    const documented = OPENAI_DOCUMENTED_PRICING[config.fullName];
+    return documented === undefined
+      ? base
+      : tieredRates(base, documented, promptTokens);
+  }
   if (config.provider !== ModelProvider.XAI) return base;
   const documented = XAI_DOCUMENTED_PRICING[config.fullName];
   if (documented === undefined) {
     warnOnMissingXaiTier(config, logger);
     return base;
   }
+  return tieredRates(base, documented, promptTokens);
+}
+
+/**
+ * The documented tier's full tuple once the prompt reaches its threshold;
+ * below it, the catalog rates with the documented cache discount.
+ */
+function tieredRates(
+  base: TurnRates,
+  documented: DocumentedTierPricing[string],
+  promptTokens: number,
+): TurnRates {
   const { cacheDiscountFactor } = documented;
   return promptTokens >= documented.thresholdTokens
     ? {
