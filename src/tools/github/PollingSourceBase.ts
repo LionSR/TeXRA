@@ -1,20 +1,7 @@
 /**
- * Shared lifecycle, error handling, and timer management for the GitHub
- * polling sources.
- *
- * Subclasses implement only `pollOne()` — the actual endpoints to hit and
- * per-tick state to mutate — plus the error-formatting hook that names the
- * subscription type. Everything around it
- * (subscribe/unsubscribe, change-listener fan-out, the poll loop,
- * classification of GitHub errors into auth /
- * permanent / rate-limit / transient, jittered exponential backoff, and the
- * 24 h detach gate) lives here once.
- *
- * The subscribe path is Effect-typed end to end (`register` →
- * `RunSubscriptionRegistry.bind` → the tool's `execute()` runs it, R1);
- * this module holds no `Effect.run*` call. Listener fan-out returns delivery
- * programs that the emit turn forks detached ({@link PollEventListener}), so
- * a slow listener never stalls a poll round.
+ * Shared subscription, polling, error and lifetime policy for GitHub sources.
+ * A source owns its poll fibers and admitted deliveries until process shutdown;
+ * callers run the Effect subscribe path, so this module needs no runner.
  */
 
 import {
@@ -25,7 +12,9 @@ import {
   Duration,
   Effect,
   Exit,
+  FiberSet,
   Schedule,
+  Scope,
 } from 'effect';
 
 import { createChannelTrace, type AgentTrace } from '@agent/trace';
@@ -56,12 +45,8 @@ import type { GhUser } from './prTypes';
 import type { ZodType } from 'zod';
 
 /**
- * A subscription event listener. The poller invokes it synchronously on the
- * emitting turn — so any state the delivery depends on is captured with the
- * emit, not with a later scheduler turn — and forks the returned program
- * detached, the fire-and-forget shape the old `(text) => void` Promise
- * listeners had. The program must recover its own failures and defects;
- * `emitToListener` guards only the synchronous invocation itself.
+ * Called on the emitting turn to capture the binding and owner before detach.
+ * Its returned delivery runs independently; it must recover its own failures.
  */
 export type PollEventListener = (text: string) => Effect.Effect<void>;
 
@@ -223,6 +208,13 @@ export abstract class PollingSourceBase<
   >();
   /** The stop request for the owned poll loop; absent while it is stopped. */
   private pollLoopStop: Deferred.Deferred<void> | undefined;
+  private lifetime:
+    | {
+        pollScope: Scope.Closeable;
+        deliveryScope: Scope.Closeable;
+        deliveries: FiberSet.FiberSet<void>;
+      }
+    | undefined;
   private shutdownRegistration: Disposable | undefined;
   private shutdownLifecycle: LifecycleHost | undefined;
 
@@ -275,10 +267,6 @@ export abstract class PollingSourceBase<
   disposeAll(): void {
     this.subscriptions.clear();
     this.stopPolling();
-    // Release before notifying: a synchronous listener may re-subscribe, and
-    // that fresh subscription must register with the active lifecycle. The
-    // disposable's dispose is idempotent and never re-enters disposeAll.
-    this.clearShutdownRegistration();
     this.notifyKeysChanged();
   }
 
@@ -287,38 +275,44 @@ export abstract class PollingSourceBase<
    * `initState()` if absent (enforcing the max-concurrent cap), adds the
    * listener, and returns the Disposable that removes only this listener.
    *
-   * The returned Effect is run by the caller's boundary (the subscription
-   * tool's `execute()`): the map mutation happens in the run's synchronous
-   * prelude, and starting the poll loop is forking a daemon fiber of the
-   * runtime that runs it — so this module holds no `Effect.run*` call of its
-   * own (R1). The max-concurrent throw stays a defect: it reaches the tool as
-   * the same plain `Error` it always was.
+   * The caller runs this Effect. Its short critical section commits the
+   * binding and starts the source-owned poller together. A capacity refusal
+   * remains the same plain Error defect the tool already reports.
    */
   protected register(
     key: K,
     initState: () => S,
     onEvent: PollEventListener,
   ): Effect.Effect<Disposable, never, Secrets | Lifecycle> {
-    return Effect.suspend(() => {
-      let state = this.subscriptions.get(key);
-      const created = !state;
-      if (!state) {
-        if (this.subscriptions.size >= this.config.maxConcurrent) {
-          throw new Error(
-            `Too many active ${this.config.name} subscriptions (max ${this.config.maxConcurrent}). Unsubscribe from one before adding another.`,
-          );
-        }
-        state = initState();
-        this.subscriptions.set(key, state);
-        this.logger.info(`Subscribed to ${key}`);
-      }
-      state.listeners.add(onEvent);
-      if (created) this.notifyKeysChanged();
-      const disposable: Disposable = {
-        dispose: () => this.removeListener(key, onEvent),
-      };
-      return this.ensurePolling().pipe(Effect.as(disposable));
-    });
+    return Effect.uninterruptible(
+      Effect.flatMap(Lifecycle, (lifecycle) =>
+        Effect.suspend(() => {
+          if (lifecycle.shutdownRan) {
+            throw new Error(
+              `Cannot subscribe to ${this.config.name} after shutdown`,
+            );
+          }
+          let state = this.subscriptions.get(key);
+          const created = !state;
+          if (!state) {
+            if (this.subscriptions.size >= this.config.maxConcurrent) {
+              throw new Error(
+                `Too many active ${this.config.name} subscriptions (max ${this.config.maxConcurrent}). Unsubscribe from one before adding another.`,
+              );
+            }
+            state = initState();
+            this.subscriptions.set(key, state);
+            this.logger.info(`Subscribed to ${key}`);
+          }
+          state.listeners.add(onEvent);
+          if (created) this.notifyKeysChanged();
+          const disposable: Disposable = {
+            dispose: () => this.removeListener(key, onEvent),
+          };
+          return this.ensurePolling(lifecycle).pipe(Effect.as(disposable));
+        }),
+      ),
+    );
   }
 
   /** Emit a text message to every listener attached to a subscription. */
@@ -335,17 +329,21 @@ export abstract class PollingSourceBase<
    * subclasses that build per-listener text (e.g. annotation filtering) route
    * through here instead of calling the listener directly.
    *
-   * The listener is invoked on the emit turn — its capture (which binding,
-   * which owner) happens before any later detach can re-key the maps — and
-   * its delivery program is forked as a daemon, so a slow or hanging delivery
-   * never stalls the poll round. A synchronous throw while building the
-   * program is the defect the old try/catch logged as 'Listener threw'.
+   * Capture before detach can re-key the maps; the source's delivery set owns
+   * the resulting fiber. Direct hook calls without a subscription use the
+   * caller's child scope. A throwing listener is logged here.
    */
   protected emitToListener(
     listener: PollEventListener,
     text: string,
   ): Effect.Effect<void> {
-    return Effect.suspend(() => Effect.forkDetach(listener(text))).pipe(
+    return Effect.suspend(() => {
+      const delivery = listener(text);
+      const deliveries = this.lifetime?.deliveries;
+      return deliveries
+        ? FiberSet.run(deliveries, delivery)
+        : Effect.forkChild(delivery);
+    }).pipe(
       Effect.asVoid,
       Effect.catchDefect((defect) =>
         Effect.sync(() => {
@@ -356,16 +354,9 @@ export abstract class PollingSourceBase<
   }
 
   /**
-   * Validate a 200-path payload without ever throwing. The policy behind every
-   * poller's use of this helper: a throw on the 200 path is a defect — pollOne
-   * runs inside pollEntry, whose catchDefect routes a throw to handleFailure
-   * and bumps consecutiveFailures every tick without advancing lastSuccessAt,
-   * so a persistently-odd-but-200 payload would trip the 24 h detach gate and
-   * unilaterally detach a live subscription. Validation is therefore always
-   * safeParse + warn + skip: returning normally lets pollEntry reset
-   * lastSuccessAt/consecutiveFailures, and the caller's per-site skip
-   * semantics decide what part of the tick is skipped. A 304 passes through
-   * untouched.
+   * Safe-parse a 200 payload, warning and skipping malformed data. A throw
+   * would count as poll failure and eventually detach a reachable source;
+   * returning normally preserves the last-success clock. A 304 passes through.
    */
   protected validateOrSkip<T>(
     res: SuccessfulConditionalResponse<unknown>,
@@ -480,33 +471,20 @@ export abstract class PollingSourceBase<
   }
 
   /**
-   * Start the poll loop if it is not already running: one detached fiber that
-   * runs a round and then repeats on `Schedule.fixed(pollIntervalMs)`.
-   * `Effect.repeat` evaluates the round once before the schedule steps, so
-   * first-subscribe polls immediately instead of waiting a full interval, and
-   * a single sequential fiber makes overlapping rounds impossible — the
-   * in-flight guard the `setInterval` cadence needed is gone with it. A round
-   * that outruns the interval is followed immediately by the next one, as the
-   * interval's skip-then-fire behaviour did.
-   *
-   * The fiber is forked detached (into the global scope) by the returned
-   * Effect, so it roots at the runtime that runs the subscribe path — the
-   * tool boundary's process runtime in production (R1). It lives until
-   * `stopPolling` completes its stop Deferred (last unsubscribe,
-   * `disposeAll`) or the runtime itself shuts down.
-   *
-   * The loop sleeps on {@link unrefSleepClock}: a polling timer must never
-   * keep a host process alive on its own. Its readings are the ambient
-   * clock's, so `Clock.currentTimeMillis` inside a round is unaffected.
+   * One sequential loop per active source, immediate first round then fixed
+   * cadence. The process scope owns it; last unsubscribe signals its stop.
+   * {@link unrefSleepClock} keeps an idle timer from holding the process open.
    */
-  private ensurePolling(): Effect.Effect<void, never, Secrets | Lifecycle> {
-    return Effect.flatMap(Lifecycle, (lifecycle) =>
-      Effect.suspend(() => {
-        this.registerShutdownIfNeeded(lifecycle);
-        if (this.pollLoopStop) return Effect.void;
+  private ensurePolling(
+    lifecycle: LifecycleHost,
+  ): Effect.Effect<void, never, Secrets> {
+    return Effect.uninterruptible(
+      Effect.gen({ self: this }, function* () {
+        const lifetime = yield* this.ensureLifetime(lifecycle);
+        if (this.pollLoopStop) return;
         const stop = Deferred.makeUnsafe<void>();
         this.pollLoopStop = stop;
-        return Effect.forkDetach(
+        return yield* Effect.forkIn(
           Effect.raceFirst(this.pollLoopProgram(), Deferred.await(stop)).pipe(
             Effect.ensuring(
               Effect.sync(() => {
@@ -515,9 +493,26 @@ export abstract class PollingSourceBase<
               }),
             ),
           ),
+          lifetime.pollScope,
         ).pipe(Effect.asVoid);
       }),
     );
+  }
+
+  /** One process-lifetime owner shared by poll rounds and admitted deliveries. */
+  private ensureLifetime(lifecycle: LifecycleHost) {
+    return Effect.gen({ self: this }, function* () {
+      if (!this.lifetime) {
+        const pollScope = yield* Scope.make();
+        const deliveryScope = yield* Scope.make();
+        const deliveries = yield* FiberSet.make<void>().pipe(
+          Effect.provideService(Scope.Scope, deliveryScope),
+        );
+        this.lifetime = { pollScope, deliveryScope, deliveries };
+      }
+      this.registerShutdownIfNeeded(lifecycle);
+      return this.lifetime;
+    });
   }
 
   private readonly pollLoopProgram = Effect.fn('PollingSourceBase.pollLoop')(
@@ -566,23 +561,28 @@ export abstract class PollingSourceBase<
   );
 
   /**
-   * Register `disposeAll` with the process shutdown lifecycle exactly once per
-   * lifecycle instance. Runs on the first subscription; the lifecycle comes
-   * from the process's `Lifecycle` service, so a caller's runtime provides it
-   * rather than this reading the ambient platform locator.
-   *
-   * Re-checked on every subscribe, so a lifecycle replacement (extension
-   * reactivation or test-harness reinstall) is picked up on the next
-   * subscription. A live poller whose lifecycle is replaced without a
-   * subsequent subscribe is intentionally not self-healed: no production host
-   * installs a new lifecycle while the previous one is still live.
+   * One process shutdown hook stops polling before draining already-admitted
+   * deliveries. A later subscription may rebind a replacement lifecycle.
    */
   private registerShutdownIfNeeded(lifecycle: LifecycleHost): void {
     if (this.shutdownLifecycle === lifecycle) return;
     this.clearShutdownRegistration();
+    const lifetime = this.lifetime!;
     this.shutdownRegistration = lifecycle.onShutdown(
       SHUTDOWN_PHASE.ON,
-      Effect.sync(() => this.disposeAll()),
+      Effect.gen({ self: this }, function* () {
+        this.disposeAll();
+        yield* Scope.close(lifetime.pollScope, Exit.void);
+        yield* FiberSet.awaitEmpty(lifetime.deliveries);
+      }).pipe(
+        Effect.ensuring(Scope.close(lifetime.deliveryScope, Exit.void)),
+        Effect.ensuring(
+          Effect.sync(() => {
+            if (this.lifetime === lifetime) this.lifetime = undefined;
+            this.clearShutdownRegistration();
+          }),
+        ),
+      ),
     );
     this.shutdownLifecycle = lifecycle;
   }

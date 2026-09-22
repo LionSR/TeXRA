@@ -1,13 +1,19 @@
 // Third-party imports
-import { Effect } from 'effect';
-import { describe, expect, it, vi } from 'vitest';
+import { it } from '@effect/vitest';
+import { Deferred, Effect, Fiber } from 'effect';
+import { describe, expect, vi } from 'vitest';
 import { z, type ZodType } from 'zod';
 
+import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
+import { Lifecycle } from '@platform/interfaces';
+import { Secrets } from '@platform/secrets';
+import { FakeSecrets } from '@test/support/FakePlatform';
 // Local imports - tools
 import { getNewestTimestamp } from '@tools/github/githubPaths';
 import {
   DedupedResource,
   PollingSourceBase,
+  createBasePollState,
   type BasePollSubscriptionState,
   type PollHookRejected,
 } from '@tools/github/PollingSourceBase';
@@ -43,6 +49,15 @@ class TestPollingSource extends PollingSourceBase<
 
   setWarnForTest(warn: typeof this.logger.warn): void {
     this.logger.warn = warn;
+  }
+
+  subscribeForTest(listener: (text: string) => Effect.Effect<void>) {
+    return this.register('key', createBasePollState, listener);
+  }
+
+  emitForTest(text: string): Effect.Effect<void> {
+    const state = this.getSubscriptionState('key');
+    return state ? this.emit(state, text) : Effect.void;
   }
 
   protected pollOne(): Effect.Effect<void, PollHookRejected> {
@@ -135,4 +150,43 @@ describe('PollingSourceBase.validateOrSkip', () => {
       data: expect.any(z.ZodError),
     });
   });
+});
+
+describe('PollingSourceBase lifetime', () => {
+  it.live('drains admitted delivery after the last listener unbinds', () =>
+    Effect.gen(function* () {
+      const lifecycle = createLifecycleHost();
+      const source = new TestPollingSource();
+      const started = yield* Deferred.make<void>();
+      const release = yield* Deferred.make<void>();
+      yield* Effect.addFinalizer(() =>
+        Deferred.succeed(release, undefined).pipe(
+          Effect.andThen(lifecycle.runShutdown),
+        ),
+      );
+
+      const disposable = yield* source
+        .subscribeForTest(() =>
+          Deferred.succeed(started, undefined).pipe(
+            Effect.andThen(Deferred.await(release)),
+          ),
+        )
+        .pipe(
+          Effect.provideService(Lifecycle, lifecycle),
+          Effect.provideService(Secrets, new FakeSecrets()),
+        );
+
+      yield* source.emitForTest('event');
+      yield* Deferred.await(started);
+      disposable.dispose();
+      expect(source.activeKeys()).toEqual([]);
+
+      const shutdown = yield* Effect.forkChild(lifecycle.runShutdown);
+      yield* Effect.yieldNow;
+      expect(shutdown.pollUnsafe()).toBeUndefined();
+
+      yield* Deferred.succeed(release, undefined);
+      yield* Fiber.join(shutdown);
+    }),
+  );
 });
