@@ -639,58 +639,50 @@ export function createChatSessionController(
     session.runId = runId;
     runtime.runFork(
       recoverRun(
-        adoptRunConfig(config).pipe(
-          Effect.flatMap(() =>
-            Effect.try(() => AgentConfigSchema.parse(config)).pipe(
-              Effect.flatMap((registeredConfig) =>
-                runAgent(
-                  { kind: 'fresh', config: registeredConfig, runId },
-                  {
-                    session: runtimeSession,
-                    enforceCategory: true,
-                    approvalPromptsUnavailable: approvalsUnavailable,
-                    onApprovalPolicyDenial: () =>
-                      warnApprovalDenied(
-                        runtimeSession,
-                        sessionContext,
-                        'Tool or edit approval',
-                        runId,
-                      ),
-                    runtimeUnavailableTools:
-                      getDefaultUnavailableToolNames('cli'),
-                    onRunResolved: (resolvedRunId) => {
-                      // Each chat round mints a fresh root run id, so
-                      // bash/tool-edit/super-YOLO bypass, which is
-                      // keyed per stream, would otherwise reset every round even
-                      // though the user is continuing the same conversation. Link the
-                      // new round's stream to the previous one so bypass resolution
-                      // (see `registerRunParent`) falls through to whatever the
-                      // prior round had, unless this round sets its own explicit value.
-                      const previousRootRunId = rootRunId.get();
-                      if (
-                        previousRootRunId &&
-                        previousRootRunId !== resolvedRunId
-                      ) {
-                        runtimeSession.approvals.registerRunParent(
-                          resolvedRunId,
-                          previousRootRunId,
-                        );
-                      }
-                      rootRunId.set(resolvedRunId);
-                      moveLocalTranscriptToRun(resolvedRunId);
-                      focusRun(resolvedRunId);
-                      if (session.stopRequested) interruptActiveRun();
-                    },
-                  },
+        Effect.gen(function* () {
+          yield* adoptRunConfig(config);
+          const registeredConfig = yield* Effect.try(() =>
+            AgentConfigSchema.parse(config),
+          );
+          const result = yield* runAgent(
+            { kind: 'fresh', config: registeredConfig, runId },
+            {
+              session: runtimeSession,
+              enforceCategory: true,
+              approvalPromptsUnavailable: approvalsUnavailable,
+              onApprovalPolicyDenial: () =>
+                warnApprovalDenied(
+                  runtimeSession,
+                  sessionContext,
+                  'Tool or edit approval',
+                  runId,
                 ),
-              ),
-              Effect.map((result) => {
-                session.runExitCode = runOutcomeExitCode(result.outcome);
-                notify('agentFinished');
-              }),
-            ),
-          ),
-        ),
+              runtimeUnavailableTools: getDefaultUnavailableToolNames('cli'),
+              onRunResolved: (resolvedRunId) => {
+                // Each chat round mints a fresh root run id, so
+                // bash/tool-edit/super-YOLO bypass, which is
+                // keyed per stream, would otherwise reset every round even
+                // though the user is continuing the same conversation. Link the
+                // new round's stream to the previous one so bypass resolution
+                // (see `registerRunParent`) falls through to whatever the
+                // prior round had, unless this round sets its own explicit value.
+                const previousRootRunId = rootRunId.get();
+                if (previousRootRunId && previousRootRunId !== resolvedRunId) {
+                  runtimeSession.approvals.registerRunParent(
+                    resolvedRunId,
+                    previousRootRunId,
+                  );
+                }
+                rootRunId.set(resolvedRunId);
+                moveLocalTranscriptToRun(resolvedRunId);
+                focusRun(resolvedRunId);
+                if (session.stopRequested) interruptActiveRun();
+              },
+            },
+          );
+          session.runExitCode = runOutcomeExitCode(result.outcome);
+          notify('agentFinished');
+        }),
         reportRunFailure,
       ).pipe(
         Effect.ensuring(Effect.sync(finalize)),
