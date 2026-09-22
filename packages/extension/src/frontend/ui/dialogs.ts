@@ -2,7 +2,7 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect } from 'effect';
+import { Data, Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports - utilities
@@ -16,6 +16,17 @@ type TeamAvailabilityChoice =
   TeamAvailabilityPrompt['actions'][number]['choice'];
 
 const CHANNEL = 'dialogs';
+
+/**
+ * VS Code would not show its open dialog: `showOpenDialog` rejects only when
+ * the host's own dialog machinery faults, which is the one failure either
+ * picker below can raise. `member` names which picker asked.
+ */
+export class OpenDialogFailed extends Data.TaggedError('OpenDialogFailed')<{
+  readonly member: 'selectFiles' | 'selectFolder';
+  readonly message: string;
+  readonly cause: unknown;
+}> {}
 
 interface FileDialogOptions {
   /** Whether multiple files can be selected */
@@ -48,7 +59,7 @@ function computeDefaultUri({
  */
 export function selectFiles(
   options: FileDialogOptions,
-): Effect.Effect<string[] | null, unknown> {
+): Effect.Effect<string[] | null, OpenDialogFailed> {
   return Effect.gen(function* () {
     const defaultUri = computeDefaultUri(options);
     if (!defaultUri) {
@@ -71,7 +82,12 @@ export function selectFiles(
           defaultUri,
           filters: options.filters,
         }),
-      catch: (cause: unknown) => cause,
+      catch: (cause) =>
+        new OpenDialogFailed({
+          member: 'selectFiles',
+          message: toErrorMessage(cause),
+          cause,
+        }),
     });
 
     if (!fileUris?.length) {
@@ -140,7 +156,7 @@ interface FolderDialogOptions {
  */
 export function selectFolder(
   options: FolderDialogOptions,
-): Effect.Effect<string | null, unknown> {
+): Effect.Effect<string | null, OpenDialogFailed> {
   return Effect.tryPromise({
     try: async () =>
       vscode.window.showOpenDialog({
@@ -150,6 +166,11 @@ export function selectFolder(
         openLabel: options.openLabel,
         title: options.title,
       }),
-    catch: (cause: unknown) => cause,
+    catch: (cause) =>
+      new OpenDialogFailed({
+        member: 'selectFolder',
+        message: toErrorMessage(cause),
+        cause,
+      }),
   }).pipe(Effect.map((folders) => folders?.[0]?.fsPath ?? null));
 }

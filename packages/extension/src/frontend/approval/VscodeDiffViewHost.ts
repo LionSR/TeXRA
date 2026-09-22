@@ -3,10 +3,21 @@ import { readFile } from 'node:fs/promises';
 import { Effect, Option } from 'effect';
 import * as vscode from 'vscode';
 
+import {
+  fromHost,
+  type HostCallFailed,
+} from '@controllers/session/hostCallFailure';
 import { type DiffSource, type DiffViewHost } from '@hosts/uiHosts';
+import type { RequestRefusal } from '@shared/session/requestErrors';
 import { REVEAL_TIMEOUT_MS } from '@tools/approval/toolEditApproval';
 
 import { firstEventOrTimeout } from '../vscode/vscodeEventWait';
+
+/**
+ * The failure of a `vscode.*` call this host lifted through `fromHost`: the
+ * host's own refusal, tagged with the capability that raised it.
+ */
+type EditorCallFailed = HostCallFailed | RequestRefusal;
 
 /**
  * The file URI a tab input surfaces, or null when the tab shows no single
@@ -19,17 +30,6 @@ export function tabInputFileUri(tab: vscode.Tab): vscode.Uri | null {
   if (input instanceof vscode.TabInputTextDiff) return input.modified;
   return null;
 }
-
-/**
- * An editor promise lifted where it is raised: the refusal reaches the caller
- * as the value the editor threw, which is what the `await` this replaced
- * handed over. Shared with the tool-edit approval host, which lifts the same
- * `vscode.*` surface beside this one.
- */
-export const fromEditor = <A>(
-  call: () => PromiseLike<A>,
-): Effect.Effect<A, unknown> =>
-  Effect.tryPromise({ try: call, catch: (error) => error });
 
 /**
  * The two sides and the title one open diff was shown under. Only this host
@@ -47,8 +47,8 @@ export class VscodeDiffViewHost implements DiffViewHost {
     original: DiffSource,
     proposed: DiffSource,
     title: string,
-  ): Effect.Effect<void, unknown> {
-    return fromEditor(() =>
+  ): Effect.Effect<void, EditorCallFailed> {
+    return fromHost('vscode.diff', () =>
       vscode.commands.executeCommand(
         'vscode.diff',
         this.toUri(original),
@@ -59,7 +59,7 @@ export class VscodeDiffViewHost implements DiffViewHost {
     ).pipe(Effect.asVoid);
   }
 
-  closeDiff(session: DiffSession): Effect.Effect<void, unknown> {
+  closeDiff(session: DiffSession): Effect.Effect<void, EditorCallFailed> {
     return Effect.suspend(() => {
       const originalUri = this.toUri(session.original).toString();
       const proposedUri = this.toUri(session.proposed).toString();
@@ -81,16 +81,13 @@ export class VscodeDiffViewHost implements DiffViewHost {
         });
 
       if (tabsToClose.length === 0) return Effect.void;
-      return fromEditor(() => vscode.window.tabGroups.close(tabsToClose)).pipe(
-        Effect.asVoid,
-      );
+      return fromHost('tabGroups.close', () =>
+        vscode.window.tabGroups.close(tabsToClose),
+      ).pipe(Effect.asVoid);
     });
   }
 
-  revealFirstChange(
-    session: DiffSession,
-    line: number,
-  ): Effect.Effect<void, unknown> {
+  revealFirstChange(session: DiffSession, line: number): Effect.Effect<void> {
     return Effect.suspend(() => {
       const targetUri = this.toUri(session.proposed).toString();
       const position = new vscode.Position(line, 0);
@@ -137,7 +134,9 @@ export class VscodeDiffViewHost implements DiffViewHost {
     });
   }
 
-  readProposedContent(session: DiffSession): Effect.Effect<string, unknown> {
+  readProposedContent(
+    session: DiffSession,
+  ): Effect.Effect<string, EditorCallFailed> {
     return Effect.suspend(() => {
       const proposedUri = this.toUri(session.proposed);
       const openDocument = vscode.workspace.textDocuments.find(
@@ -145,7 +144,9 @@ export class VscodeDiffViewHost implements DiffViewHost {
       );
       return openDocument
         ? Effect.succeed(openDocument.getText())
-        : fromEditor(() => readFile(proposedUri.fsPath, 'utf8'));
+        : fromHost('readProposedContent', () =>
+            readFile(proposedUri.fsPath, 'utf8'),
+          );
     });
   }
 

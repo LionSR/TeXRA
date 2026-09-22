@@ -3,7 +3,7 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect, FileSystem } from 'effect';
+import { Effect, FileSystem, type PlatformError } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
@@ -15,10 +15,13 @@ import {
   createPlatformAgentDirectories,
 } from '@agent/index';
 import { showLoggedMessageWithDocs } from '@frontend/ui/errorHandlingUtils';
-import { selectFolder } from '@frontend/ui/dialogs';
+import { type OpenDialogFailed, selectFolder } from '@frontend/ui/dialogs';
 import { withLogChannel } from '@logger/effectLog';
 import { createLog } from '@logger/logUtils';
-import type { AgentDirectoriesFailed } from '@platform/interfaces';
+import {
+  type AgentDirectoriesFailed,
+  StateWriteFailed,
+} from '@platform/interfaces';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { GlobalStorageFs } from '@platform/rootedFs';
 import { AGENT_SOURCE } from '@shared/schemas';
@@ -122,7 +125,7 @@ class AgentDirectoryManager {
 
   promptCustom(): Effect.Effect<
     string | undefined,
-    unknown,
+    OpenDialogFailed | PlatformError.PlatformError | StateWriteFailed,
     FileSystem.FileSystem
   > {
     return Effect.gen({ self: this }, function* () {
@@ -139,14 +142,11 @@ class AgentDirectoryManager {
       const fs = yield* FileSystem.FileSystem;
       yield* fs.makeDirectory(selectedPath, { recursive: true });
 
+      const key = GlobalStateKey.CUSTOM_AGENT_DIR;
       yield* Effect.tryPromise({
-        try: async () => {
-          await this.getHost().globalState.update(
-            GlobalStateKey.CUSTOM_AGENT_DIR,
-            selectedPath,
-          );
-        },
-        catch: (cause: unknown) => cause,
+        try: () => this.getHost().globalState.update(key, selectedPath),
+        catch: (cause) =>
+          new StateWriteFailed({ key, message: toErrorMessage(cause), cause }),
       });
 
       return selectedPath;

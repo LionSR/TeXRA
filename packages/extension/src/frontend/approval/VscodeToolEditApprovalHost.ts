@@ -18,8 +18,8 @@ import type {
   ToolEditPreview,
   ToolEditPreviewContext,
 } from '@controllers/approval/ToolEditApprovalController';
+import { fromHost } from '@controllers/session/hostCallFailure';
 import {
-  fromEditor,
   tabInputFileUri,
   VscodeDiffViewHost,
   type DiffSession,
@@ -56,7 +56,7 @@ export class VscodeToolEditApprovalHost implements ToolEditApprovalHost {
     request: ToolEditApprovalRequest,
     context: ToolEditPreviewContext,
   ): Effect.Effect<ToolEditPreview, unknown> {
-    return fromEditor(() =>
+    return fromHost('stagePreview.mkdir', () =>
       mkdir(this.storageDirectory, { recursive: true }),
     ).pipe(
       Effect.andThen(
@@ -84,7 +84,7 @@ export class VscodeToolEditApprovalHost implements ToolEditApprovalHost {
     // A failure here reaches the controller's action wrapper, which reports
     // it through `reportError`. Swallowing it left the diff tab open with no
     // approve/reject surface and no visible cause.
-    return fromEditor(() =>
+    return fromHost('texra.showProgressView', () =>
       vscode.commands.executeCommand('texra.showProgressView'),
     ).pipe(Effect.asVoid);
   }
@@ -151,7 +151,7 @@ class VscodeToolEditPreview implements ToolEditPreview {
   }
 
   openProposed(): Effect.Effect<void, unknown> {
-    return fromEditor(() =>
+    return fromHost('showTextDocument', () =>
       vscode.window.showTextDocument(
         vscode.Uri.file(this.staged.proposedPath),
         { preview: true, preserveFocus: true },
