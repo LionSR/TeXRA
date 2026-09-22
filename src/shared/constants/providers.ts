@@ -228,7 +228,7 @@ export const DEFAULT_HELPER_MODEL = 'deepseek41';
  * so a change here propagates to all three instead of drifting per call site.
  * `DEFAULT_MODELS` leads with this model, so it must not be a Gemini id.
  */
-export const DEFAULT_AGENT_MODEL = 'gpt56';
+export const DEFAULT_AGENT_MODEL = 'gpt6-';
 
 /**
  * Zod schema for one provider control rendered in the Models tab (without its

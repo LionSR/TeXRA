@@ -400,8 +400,8 @@ List the models TeXRA knows about, and manage which ones appear in the
 texra models list
 texra models show deepseekproT
 texra models enabled
-texra models enable grok46
-texra models disable grok46
+texra models enable grok47
+texra models disable grok47
 ```
 
 Inspect the notes agents have stored for this workspace (see
