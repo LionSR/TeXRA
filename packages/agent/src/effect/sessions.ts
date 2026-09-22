@@ -19,12 +19,8 @@ import type {
   TranscriptView as RuntimeTranscriptView,
 } from '@shared/session/sessionView';
 
-import {
-  PlatformConflict,
-  type LaunchError,
-  type RunFailure,
-} from './errors.js';
-import { composeProcess, type AgentPlatform } from './runtime.js';
+import { acquireProcess, type AgentPlatform } from './runtime.js';
+import type { PlatformConflict, LaunchError, RunFailure } from './errors.js';
 
 /**
  * A runtime value as the embedder may hold it: read-only all the way down,
@@ -145,27 +141,11 @@ export class Sessions extends Context.Service<
    * session owner, with this scope as the lifetime of the hold it takes on
    * that composition. A second, different platform in a process this package
    * already composed fails with {@link PlatformConflict}; anything else
-   * `composeProcess` throws is a defect.
+   * composition throws is a defect. Acquisition waits for a retiring runtime.
    */
   static layer(
     platform: AgentPlatform,
   ): Layer.Layer<Sessions, PlatformConflict> {
-    return Layer.effect(
-      Sessions,
-      Effect.gen(function* () {
-        const hold = yield* Effect.try({
-          try: () => composeProcess(platform),
-          catch: (thrown) => thrown,
-        }).pipe(
-          Effect.catch((thrown) =>
-            thrown instanceof PlatformConflict
-              ? Effect.fail(thrown)
-              : Effect.die(thrown),
-          ),
-        );
-        yield* Effect.addFinalizer(() => hold.release);
-        return hold.sessions;
-      }),
-    );
+    return Layer.effect(Sessions, acquireProcess(platform));
   }
 }

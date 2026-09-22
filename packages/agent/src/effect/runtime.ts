@@ -1,15 +1,13 @@
 /**
  * The process `@texra-ai/agent` composes, as an Effect service.
  *
- * {@link composeProcess} is the package's composition root: the platform,
+ * {@link acquireProcess} is the package's composition root: the platform,
  * the process workspace roots, the node agent runtime, and the one Effect
- * runtime that holds the session owner. It is synchronous and idempotent by
- * design — everything from the platform check to the owner's registration
- * of a root happens before the first yield of a run, so a close issued the
- * moment a launch returns settles that launch too.
+ * runtime that holds the session owner. Acquisition waits for any previous
+ * composition's retirement before borrowing or building that installation.
  *
  * That composition is one installation, however many callers reach it, so
- * it is held rather than owned: every {@link composeProcess} returns a
+ * it is held rather than owned: every {@link acquireProcess} takes a
  * {@link ProcessHold} on it, and the last hold to be released is what closes
  * the owner's sessions and disposes the runtime under them.
  *
@@ -18,7 +16,7 @@
  * of its hold. The root entry (`packages/agent/src/index.ts`) re-exports
  * these services as the package's surface.
  */
-import { Effect, Layer, type Context } from 'effect';
+import { Effect, Layer, Semaphore, type Context, type Scope } from 'effect';
 
 import {
   closeSession as closeOwnedSession,
@@ -118,8 +116,7 @@ const PACKAGE_SETUP: SetupPlatformShape = {
 
 /** One composition's hold on the composed process: what it reads, and the
  *  end of its claim on what it found or installed. */
-export interface ProcessHold {
-  readonly runtime: AgentRuntime;
+interface ProcessHold {
   readonly sessions: Context.Service.Shape<typeof Sessions>;
   /**
    * End this hold (R6). The last hold to end closes every session the owner
@@ -162,21 +159,48 @@ let holds = 0;
  */
 let installedHere = false;
 
+/** A new hold must wait for the last hold's full session and runtime teardown. */
+const processChanges = Semaphore.makeUnsafe(1);
+
+/** Acquire and register one hold atomically; its scope owns the release. */
+export const acquireProcess = (
+  platform: AgentPlatform,
+): Effect.Effect<
+  Context.Service.Shape<typeof Sessions>,
+  PlatformConflict,
+  Scope.Scope
+> =>
+  Effect.acquireRelease(
+    processChanges.withPermit(
+      Effect.try({
+        try: () => composeProcess(platform),
+        catch: (thrown) => thrown,
+      }).pipe(
+        Effect.catch((thrown) =>
+          thrown instanceof PlatformConflict
+            ? Effect.fail(thrown)
+            : Effect.die(thrown),
+        ),
+      ),
+    ),
+    (hold) => processChanges.withPermit(hold.release),
+  ).pipe(Effect.map((hold) => hold.sessions));
+
 /**
  * Compose the process, or take a hold on the one already composed.
  * Synchronous and idempotent: a run beside a host that already ran its own
  * composition root (the same platform object) reuses all four
  * installations, its session included, and nothing here is installed twice.
  *
- * Every call takes a hold, and every hold is ended by exactly one
- * {@link releaseProcess}. That is what makes the Effect surface usable more
- * than once per process and safe to use twice at once: each scope holds the
+ * Every call takes a hold, ended by its scope's finalizer. This makes the
+ * Effect surface usable more than once per process and safe to use twice
+ * at once: each scope holds the
  * composition it found, and the last one out ends it.
  *
  * Throws {@link PlatformConflict} when a second, different platform reaches
  * a process the package already composed.
  */
-export function composeProcess(platform: AgentPlatform): ProcessHold {
+function composeProcess(platform: AgentPlatform): ProcessHold {
   const active = tryPlatform();
   if (active && active !== platform) {
     throw new PlatformConflict({
@@ -236,7 +260,6 @@ export function composeProcess(platform: AgentPlatform): ProcessHold {
   holds += 1;
   let held = true;
   return {
-    runtime,
     sessions,
     release: Effect.suspend(() => {
       if (!held) return Effect.void;
