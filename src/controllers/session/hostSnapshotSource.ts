@@ -169,6 +169,7 @@ export function createHostSnapshotSource(
     isGitRepo: false,
   };
   let authenticated = true;
+  let loginBannerDismissed = false;
   let apiKey: Banners['apiKey'] = { visible: false };
   let dependency: Banners['dependency'] = { visible: false };
   let recording: HostSnapshot['recording'] = null;
@@ -195,12 +196,7 @@ export function createHostSnapshotSource(
           visible: dependency.visible && !dismissed.has('dependency'),
         },
         gettingStarted: !hasInputFiles && !dismissed.has('gettingStarted'),
-        login:
-          !authenticated &&
-          !options.stores.globalState.get<boolean>(
-            GlobalStateKey.LOGIN_BANNER_DISMISSED,
-            false,
-          ),
+        login: !authenticated && !loginBannerDismissed,
       },
       onboarding,
     });
@@ -217,7 +213,7 @@ export function createHostSnapshotSource(
     catalogs = {
       ...catalogs,
       teamOptions: yield* loadTeamOptions(
-        createTeamCatalogPorts(options.stores.workspaceState),
+        yield* createTeamCatalogPorts(options.stores.workspaceState),
       ),
     };
   });
@@ -225,7 +221,7 @@ export function createHostSnapshotSource(
   const loadModels = Effect.gen(function* () {
     const inputs = yield* readModelAvailabilityInputs(
       { ...options.stores, secrets: options.secrets },
-      getEnabledModels(options.stores.globalState),
+      yield* getEnabledModels(options.stores.globalState),
     );
     catalogs = { ...catalogs, modelOptions: modelOptionsFrom(inputs) };
   });
@@ -240,6 +236,10 @@ export function createHostSnapshotSource(
   });
 
   const loadAuth = Effect.gen(function* () {
+    loginBannerDismissed = yield* options.stores.globalState.get<boolean>(
+      GlobalStateKey.LOGIN_BANNER_DISMISSED,
+      false,
+    );
     authenticated = yield* Effect.flatMap(
       SupabaseAuth,
       (auth) => auth.authenticated,
@@ -322,15 +322,13 @@ export function createHostSnapshotSource(
         publish();
         return Effect.void;
       }
-      // The login dismissal is read back out of the store by `publish`, so
-      // the publish has to run behind the write rather than beside it: the
-      // update is lazy, and a snapshot taken before it executes still reads
-      // the banner as undismissed.
+      // Change the published view only after its durable dismissal commits.
       return Effect.gen(function* () {
         yield* options.stores.globalState.update(
           GlobalStateKey.LOGIN_BANNER_DISMISSED,
           true,
         );
+        loginBannerDismissed = true;
         publish();
       });
     },

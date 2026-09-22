@@ -1,4 +1,8 @@
-import type { ConfigTarget, ConfigWriteFailed } from '@platform/interfaces';
+import type {
+  ConfigTarget,
+  ConfigWriteFailed,
+  StateReadFailed,
+} from '@platform/interfaces';
 import { settingByKey, type SettingHost } from '@shared/state/stateSettings';
 import {
   readSetting,
@@ -35,8 +39,15 @@ export function initProcessSettingHost(host: SettingHost): void {
  * are passed directly, and the value answers for that project rather than for
  * whichever roots the calling fiber happens to carry.
  */
-export function readSettingFrom<T>(stores: SettingsStores, key: string): T {
-  return readSetting(requireEntry(key), stores, processSettingHost) as T;
+export function readSettingFrom<T>(
+  stores: SettingsStores,
+  key: string,
+): Effect.Effect<T, StateReadFailed> {
+  return readSetting(
+    requireEntry(key),
+    stores,
+    processSettingHost,
+  ) as Effect.Effect<T, StateReadFailed>;
 }
 
 /**

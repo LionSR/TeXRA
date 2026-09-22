@@ -1,3 +1,7 @@
+// Third-party imports
+import { Effect } from 'effect';
+
+// Local imports
 import type { AgentEntry } from '@agent/index';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import {
@@ -53,23 +57,27 @@ const MULTI_AGENT_LOGIN_HINT = `Hint: ${RESEARCHER_ACCESS.label} sign-in may loa
  * the surface that opened it (a command's installed roots, the chat session's
  * roots) rather than being read off the calling context.
  */
-export function readCliMultiAgentPresets(
-  workspaceState: StateStore,
-): TeamPreset[] {
-  const customRaw = workspaceState.get<unknown>(
-    WorkspaceStateKey.CUSTOM_AGENT_PRESETS,
-  );
-  return teamPresets(customRaw);
+export function readCliMultiAgentPresets(workspaceState: StateStore) {
+  return Effect.gen(function* () {
+    const customRaw = yield* workspaceState.get<unknown>(
+      WorkspaceStateKey.CUSTOM_AGENT_PRESETS,
+    );
+    return teamPresets(customRaw);
+  });
 }
 
 /** Resolve the current display name for a persisted team identity. */
 export function readCliMultiAgentPresetName(
   workspaceState: StateStore,
   presetId: string | undefined,
-): string | undefined {
-  if (!presetId) return undefined;
-  return findTeamPreset(readCliMultiAgentPresets(workspaceState), presetId)
-    ?.name;
+) {
+  return Effect.gen(function* () {
+    if (!presetId) return undefined;
+    return findTeamPreset(
+      yield* readCliMultiAgentPresets(workspaceState),
+      presetId,
+    )?.name;
+  });
 }
 
 function cliMultiAgentPresetAvailabilityParts(

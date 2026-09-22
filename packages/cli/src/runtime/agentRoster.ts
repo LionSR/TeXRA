@@ -3,7 +3,6 @@ import { Effect } from 'effect';
 import { createWorkspaceAgentRosterController, loadAgents } from '@agent/index';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import {
-  byCategory,
   type AgentRosterCategorySelection,
   type AgentRosterSelection,
   type ByCategory,
@@ -11,8 +10,10 @@ import {
 import { cliCommandDefaults } from './cliConfig';
 
 /** The roster controller's own snapshot shape — derived, never restated. */
-type AgentRosterSnapshot = ReturnType<
-  ReturnType<typeof createWorkspaceAgentRosterController>['snapshot']
+type AgentRosterSnapshot = Effect.Success<
+  ReturnType<
+    ReturnType<typeof createWorkspaceAgentRosterController>['snapshot']
+  >
 >;
 
 /** The roster snapshot plus the two facts only the CLI resolves. */
@@ -31,11 +32,12 @@ export const readCliAgentRoster = Effect.fn('readCliAgentRoster')(function* (
   yield* loadAgents({ includeRemote: false });
   const roster = createWorkspaceAgentRosterController(roots);
   return {
-    ...roster.snapshot(),
+    ...(yield* roster.snapshot()),
     defaultChatAgent: cliCommandDefaults(roots, 'chat').agent,
-    agentKeys: byCategory(
-      (category) => roster.getEnabledAgentKeys(category) ?? 'all',
-    ),
+    agentKeys: {
+      workflow: (yield* roster.getEnabledAgentKeys('workflow')) ?? 'all',
+      toolUse: (yield* roster.getEnabledAgentKeys('toolUse')) ?? 'all',
+    },
   } satisfies CliAgentRosterRecord;
 });
 

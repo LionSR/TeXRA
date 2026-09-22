@@ -1,3 +1,5 @@
+import { Effect } from 'effect';
+import type { StateReadFailed } from '@platform/interfaces';
 /**
  * Agent selection / custom-directory / mode-preset outbound message builders.
  *
@@ -8,7 +10,6 @@
  * the controller classes themselves) so this file stays free of `@controllers/*`
  * imports, per `SharedSettingsViewBoundary.vitest.ts`.
  */
-import { Effect } from 'effect';
 
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { AgentModePreset, ByCategory } from '@shared/schemas';
@@ -21,18 +22,21 @@ import type {
 } from '@shared/settingsView/settingsViewMessages';
 
 export interface AgentSelectionPorts {
-  buildSelectionItems(): ByCategory<AgentSelectionItem[]>;
+  buildSelectionItems(): Effect.Effect<
+    ByCategory<AgentSelectionItem[]>,
+    StateReadFailed
+  >;
   getCustomAgentScanIssues(): readonly AgentScanIssue[];
 }
 
-export function buildAgentSelectionMessage(
-  ports: AgentSelectionPorts,
-): UpdateAgentSelectionMessage {
-  return {
-    command: SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SELECTION,
-    agents: ports.buildSelectionItems(),
-    customAgentIssues: [...ports.getCustomAgentScanIssues()],
-  };
+export function buildAgentSelectionMessage(ports: AgentSelectionPorts) {
+  return Effect.gen(function* () {
+    return {
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SELECTION,
+      agents: yield* ports.buildSelectionItems(),
+      customAgentIssues: [...ports.getCustomAgentScanIssues()],
+    };
+  });
 }
 
 /** The status reader is the directory controller's Effect; its failure stays
@@ -55,18 +59,18 @@ export function buildCustomAgentDirMessage<E, R = never>(
 }
 
 export interface AgentModePresetsPorts {
-  getCustomPresets(): AgentModePreset[];
+  getCustomPresets(): Effect.Effect<AgentModePreset[], StateReadFailed>;
   getOrchestratorAgentNames(): string[];
-  getActiveTeamId(): string | null;
+  getActiveTeamId(): Effect.Effect<string | null, StateReadFailed>;
 }
 
-export function buildAgentModePresetsMessage(
-  ports: AgentModePresetsPorts,
-): UpdateAgentModePresetsMessage {
-  return {
-    command: SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_MODE_PRESETS,
-    customPresets: ports.getCustomPresets(),
-    orchestratorAgents: ports.getOrchestratorAgentNames(),
-    activePresetId: ports.getActiveTeamId(),
-  };
+export function buildAgentModePresetsMessage(ports: AgentModePresetsPorts) {
+  return Effect.gen(function* () {
+    return {
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_MODE_PRESETS,
+      customPresets: yield* ports.getCustomPresets(),
+      orchestratorAgents: ports.getOrchestratorAgentNames(),
+      activePresetId: yield* ports.getActiveTeamId(),
+    };
+  });
 }

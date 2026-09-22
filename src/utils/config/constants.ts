@@ -1,8 +1,8 @@
+import { Effect } from 'effect';
 // Local imports
 
-import type { StateStore, StateWriteFailed } from '@platform/interfaces';
+import type { StateStore } from '@platform/interfaces';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import type { Effect } from 'effect';
 
 // Time constants
 export const REFRESH_THRESHOLD_MS = 200;
@@ -27,9 +27,11 @@ export const DEBOUNCE_OPTIONS_MS = 300; // Dropdown options refresh
  * service, or the store a host root threaded down), so the read and the
  * matching write hit the same store.
  */
-export function getDisabledToolIds(store: StateStore): ReadonlySet<string> {
-  const raw = store.get<string[]>(GlobalStateKey.DISABLED_TOOLS, []);
-  return new Set(raw);
+export function getDisabledToolIds(store: StateStore) {
+  return Effect.gen(function* () {
+    const raw = yield* store.get<string[]>(GlobalStateKey.DISABLED_TOOLS, []);
+    return new Set(raw);
+  });
 }
 
 /** Toggle a tool group's enabled/disabled state. */
@@ -37,12 +39,14 @@ export function setToolEnabled(
   toolId: string,
   enabled: boolean,
   store: StateStore,
-): Effect.Effect<void, StateWriteFailed> {
-  const set = new Set(getDisabledToolIds(store));
-  if (enabled) {
-    set.delete(toolId);
-  } else {
-    set.add(toolId);
-  }
-  return store.update(GlobalStateKey.DISABLED_TOOLS, [...set]);
+) {
+  return Effect.gen(function* () {
+    const set = new Set(yield* getDisabledToolIds(store));
+    if (enabled) {
+      set.delete(toolId);
+    } else {
+      set.add(toolId);
+    }
+    return yield* store.update(GlobalStateKey.DISABLED_TOOLS, [...set]);
+  });
 }

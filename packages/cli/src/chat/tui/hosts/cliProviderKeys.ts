@@ -16,7 +16,10 @@ import { Effect } from 'effect';
 // Local imports - CLI runtime
 import { cliExternalOpener } from '@cli/runtime/hosts/cliExternalOpener';
 // Local imports - controllers
-import { SettingsProfileKeyController } from '@controllers/settingsView/SettingsProfileKeyController';
+import {
+  ProviderKeyActionFailed,
+  SettingsProfileKeyController,
+} from '@controllers/settingsView/SettingsProfileKeyController';
 // Local imports - hosts
 import { PromptFailed, type PromptHost } from '@hosts/uiHosts';
 // Local imports - model
@@ -31,26 +34,13 @@ import {
   getProviderDisplayName,
   getProviderKeyUrl,
 } from '@utils/config/providerConfig';
+
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { bumpCodexPreferenceVersion } from '../state/cliState';
 import { tuiUi } from './tuiUiHost';
 
-/**
- * Write one provider key through the prompt surface the caller is on, and
- * fail with what the write could not do.
- *
- * {@link SettingsProfileKeyController} reports a failed key action instead of
- * raising it: every graphical caller of it is a message handler with nowhere
- * to put an error. The CLI's key forms do have somewhere — they show the
- * failure in place so the user can retype the key without losing the screen —
- * so the report is relayed back out here rather than swallowed, and this
- * program keeps the failure channel those forms already match on.
- *
- * The cache drop is this host's `refreshAfterKeyChange`, exactly as it is the
- * other two hosts': one CLI site, reached by every surface, instead of a copy
- * beside each write.
- */
+/** Write through the calling surface; failures stay in the Effect channel. */
 const commitProviderApiKeyVia = Effect.fn('commitProviderApiKeyVia')(function* (
   prompt: Pick<PromptHost, 'input' | 'info' | 'confirm'>,
   secrets: PlatformSecrets,
@@ -58,7 +48,6 @@ const commitProviderApiKeyVia = Effect.fn('commitProviderApiKeyVia')(function* (
   provider: ApiProvider,
   key: string,
 ) {
-  let reported: Error | undefined;
   const controller = new SettingsProfileKeyController({
     secrets,
     prompt,
@@ -74,13 +63,16 @@ const commitProviderApiKeyVia = Effect.fn('commitProviderApiKeyVia')(function* (
         invalidateApiKeyCache();
         bumpCodexPreferenceVersion();
       }),
-    reportFailure: (message, error) =>
-      Effect.sync(() => {
-        reported = new Error(`${message}: ${toErrorMessage(error)}`);
-      }),
   });
-  yield* controller.commitProviderKey(provider, key);
-  if (reported) yield* Effect.fail(reported);
+  yield* controller.commitProviderKey(provider, key).pipe(
+    Effect.mapError((error) =>
+      error instanceof ProviderKeyActionFailed
+        ? new Error(`${error.message}: ${toErrorMessage(error.cause)}`, {
+            cause: error,
+          })
+        : error,
+    ),
+  );
 });
 
 /**
@@ -160,7 +152,7 @@ export const promptForCliProviderApiKey = Effect.fn(
   stores: SettingsStores,
   provider: ApiProvider,
 ) {
-  const label = getProviderDisplayName(
+  const label = yield* getProviderDisplayName(
     stores,
     provider,
     providerDisplayName(provider),

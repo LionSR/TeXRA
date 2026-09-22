@@ -176,7 +176,7 @@ vi.mock('@cli/runtime/cliStateStores', () => ({
 // installs the runtime that serves it: this suite runs that real install, so
 // the open is what it stubs.
 vi.mock('@controllers/session/appStateStore', () => ({
-  openAppStateStore: vi.fn(() => Effect.succeed(mocks.cliGlobalState)),
+  appStateStoreFromDatabase: vi.fn(() => mocks.cliGlobalState),
 }));
 
 vi.mock('@cli/runtime/cliSecrets', () => ({
@@ -203,7 +203,12 @@ function cliContext(
 function stubGlobalState(
   get: (key: string, defaultValue: unknown) => unknown = (_key, def) => def,
 ) {
-  return { get: vi.fn(get), update: vi.fn(() => Effect.void) };
+  return {
+    get: vi.fn((key: string, defaultValue: unknown) =>
+      Effect.sync(() => get(key, defaultValue)),
+    ),
+    update: vi.fn(() => Effect.void),
+  };
 }
 
 /**
@@ -247,8 +252,8 @@ describe('CLI platform init', () => {
     vi.clearAllMocks();
     mocks.shutdownHandlers.length = 0;
     mocks.cliGlobalState.get.mockReset();
-    mocks.cliGlobalState.get.mockImplementation(
-      (_key, defaultValue) => defaultValue,
+    mocks.cliGlobalState.get.mockImplementation((_key, defaultValue) =>
+      Effect.succeed(defaultValue),
     );
     mocks.cliGlobalState.update.mockReset();
     // The store's write is an Effect the callers compose, so the double's

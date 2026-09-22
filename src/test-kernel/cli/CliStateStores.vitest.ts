@@ -8,13 +8,15 @@ import { describe, expect } from 'vitest';
 
 // Local imports
 import { openCliWorkspaceState } from '@cli/runtime/cliStateStores';
+import { projectDatabaseLayer } from '@controllers/session/projectDatabase';
+import { ProcessIdentity } from '@shared/session/sessionEvents';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
 describe('CLI state stores', () => {
   const tempDirs = useTempDirs();
 
-  it.effect('persists workspace state across store instances', () =>
+  it.live('persists workspace state across store instances', () =>
     Effect.gen(function* () {
       const root = yield* Effect.promise(() =>
         makeTempDir('texra-cli-state-', tempDirs),
@@ -43,8 +45,16 @@ describe('CLI state stores', () => {
       });
 
       expect(
-        second.workspaceState.get(WorkspaceStateKey.CUSTOM_AGENT_PRESETS),
+        yield* second.workspaceState.get(
+          WorkspaceStateKey.CUSTOM_AGENT_PRESETS,
+        ),
       ).toEqual([preset]);
-    }),
+    }).pipe(
+      Effect.scoped,
+      Effect.provide(projectDatabaseLayer),
+      Effect.provide(
+        ProcessIdentity.layer('["test-host",4242,"cli-state-test"]'),
+      ),
+    ),
   );
 });

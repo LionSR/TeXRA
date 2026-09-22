@@ -60,14 +60,6 @@ export function maybeSaveDebugObject({
   context,
   fileOptions = {},
 }: SaveDebugParams): Effect.Effect<void, never, FileSystem.FileSystem> {
-  // `texra.debug.saveModelIO` is the one setting covering request messages,
-  // responses, and the final input prompt.
-  if (
-    !readSettingFrom<boolean>(context.roots, 'texra.debug.saveModelIO') ||
-    context.isRemote
-  )
-    return Effect.void;
-
   const { logger, modelName, runId, roots } = context;
   const { baseName = objectType, continuationCount } = fileOptions;
 
@@ -87,6 +79,14 @@ export function maybeSaveDebugObject({
     });
 
   return Effect.gen(function* () {
+    if (
+      context.isRemote ||
+      !(yield* readSettingFrom<boolean>(
+        context.roots,
+        'texra.debug.saveModelIO',
+      ))
+    )
+      return;
     const fs = yield* FileSystem.FileSystem;
     const filePath = runId
       ? path.join(roots.storage, resolveRunStoragePath(runId, debugFileName))

@@ -56,8 +56,8 @@ export type PersistedJsonValue = z.infer<typeof PersistedJsonValueSchema>;
  * state key, the desktop profile's remembered projects, one global inquiry
  * thread, and the update check. `key` is the aggregate kind the value lives
  * on, so an inquiry record cannot be committed under the update-check
- * aggregate. `{ kind: 'undefined' }` on the `app-state` arm is the delete,
- * the `vscode.Memento` contract every host's store mirrors.
+ * aggregate. `{ kind: 'undefined' }` on the `app-state` arm deletes the
+ * value, so subsequent reads use the caller's default.
  */
 export const StoredValueSchema = z.discriminatedUnion('key', [
   z.object({ key: z.literal('app-state'), value: PersistedJsonValueSchema }),

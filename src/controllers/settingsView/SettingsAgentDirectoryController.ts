@@ -8,6 +8,7 @@ import { Effect, FileSystem } from 'effect';
 import type {
   AgentDirectoriesFailed,
   StateWriteFailed,
+  StateReadFailed,
 } from '@platform/interfaces';
 import type { GlobalStorageFs } from '@platform/rootedFs';
 
@@ -21,11 +22,11 @@ interface SettingsAgentDirectoryEntry {
 }
 
 interface SettingsAgentDirectoryState {
-  getConfiguredCustomDir(): string | undefined;
+  getConfiguredCustomDir(): Effect.Effect<string | undefined, StateReadFailed>;
   setConfiguredCustomDir(path: string): Effect.Effect<void, StateWriteFailed>;
   getCustomDir(): Effect.Effect<
     string,
-    AgentDirectoriesFailed,
+    AgentDirectoriesFailed | StateReadFailed,
     GlobalStorageFs | FileSystem.FileSystem
   >;
   getSourceDir(
@@ -65,12 +66,12 @@ export class SettingsAgentDirectoryController {
 
   getCustomDirStatus(): Effect.Effect<
     SettingsCustomAgentDirStatus,
-    AgentDirectoriesFailed,
+    AgentDirectoriesFailed | StateReadFailed,
     GlobalStorageFs | FileSystem.FileSystem
   > {
     return Effect.gen({ self: this }, function* () {
       const configuredPath =
-        this.deps.state.getConfiguredCustomDir()?.trim() ?? '';
+        (yield* this.deps.state.getConfiguredCustomDir())?.trim() ?? '';
       return {
         path: yield* this.deps.state.getCustomDir(),
         isDefault: configuredPath === '',

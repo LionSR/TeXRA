@@ -72,7 +72,7 @@ export class DiffCommandExecutor {
     private readonly roots: WorkspaceRoots,
   ) {}
 
-  private setting<T>(key: string): T {
+  private setting<T>(key: string) {
     return readSettingFrom<T>(this.roots, key);
   }
 
@@ -125,19 +125,21 @@ export class DiffCommandExecutor {
     editedFile: string,
     useFlatten = true,
     options?: DiffExecutionOptions,
-  ): string[] {
-    const { mathMarkup, pictureEnvs, subtype } =
-      this.getLatexdiffConfig(options);
-    return [
-      'latexdiff',
-      ...(useFlatten ? ['--flatten'] : []),
-      '--encoding=utf8',
-      '-c',
-      `PICTUREENV=${pictureEnvs}`,
-      ...this.markupFlags(mathMarkup, subtype),
-      inputFile,
-      editedFile,
-    ];
+  ) {
+    return Effect.gen({ self: this }, function* () {
+      const { mathMarkup, pictureEnvs, subtype } =
+        yield* this.getLatexdiffConfig(options);
+      return [
+        'latexdiff',
+        ...(useFlatten ? ['--flatten'] : []),
+        '--encoding=utf8',
+        '-c',
+        `PICTUREENV=${pictureEnvs}`,
+        ...this.markupFlags(mathMarkup, subtype),
+        inputFile,
+        editedFile,
+      ];
+    });
   }
 
   private buildLatexdiffVcCommand(
@@ -145,22 +147,24 @@ export class DiffCommandExecutor {
     commitHash: string,
     useFlatten = true,
     options?: DiffExecutionOptions,
-  ): string[] {
-    const { mathMarkup, pictureEnvs, subtype } =
-      this.getLatexdiffConfig(options);
-    return [
-      'latexdiff-vc',
-      '--encoding=utf8',
-      '-c',
-      `PICTUREENV=${pictureEnvs}`,
-      '--force',
-      ...(useFlatten ? ['--flatten'] : []),
-      '--git',
-      ...this.markupFlags(mathMarkup, subtype),
-      '-r',
-      commitHash,
-      inputFile,
-    ];
+  ) {
+    return Effect.gen({ self: this }, function* () {
+      const { mathMarkup, pictureEnvs, subtype } =
+        yield* this.getLatexdiffConfig(options);
+      return [
+        'latexdiff-vc',
+        '--encoding=utf8',
+        '-c',
+        `PICTUREENV=${pictureEnvs}`,
+        '--force',
+        ...(useFlatten ? ['--flatten'] : []),
+        '--git',
+        ...this.markupFlags(mathMarkup, subtype),
+        '-r',
+        commitHash,
+        inputFile,
+      ];
+    });
   }
 
   /**
@@ -169,7 +173,7 @@ export class DiffCommandExecutor {
    * `executeCommand` kills the process group from its own finalizer.
    */
   private executeWithFallback(
-    commandBuilder: (useFlatten: boolean) => string[],
+    commandBuilder: (useFlatten: boolean) => Effect.Effect<string[], Error>,
     commandType: string,
     cwd: string | undefined,
   ): Effect.Effect<ExecResult, Error> {
@@ -180,7 +184,7 @@ export class DiffCommandExecutor {
       // diff also matters because `LaTeXdiffService` is constructed at module
       // scope (before `initPlatform()` runs); a value captured at construction
       // would permanently freeze at whatever the default was at activation-zero.
-      const timeoutMs = this.setting<number>(
+      const timeoutMs = yield* this.setting<number>(
         WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS,
       );
       const execOptions: CommandExecOptions = {
@@ -190,7 +194,7 @@ export class DiffCommandExecutor {
       };
 
       yield* Effect.logDebug(`Attempting ${commandType} with --flatten flag`);
-      const result = yield* this.exec(commandBuilder(true), execOptions);
+      const result = yield* this.exec(yield* commandBuilder(true), execOptions);
 
       if (result.success) {
         yield* Effect.logDebug(
@@ -236,7 +240,7 @@ export class DiffCommandExecutor {
   }
 
   private retryWithoutFlatten(
-    commandBuilder: (useFlatten: boolean) => string[],
+    commandBuilder: (useFlatten: boolean) => Effect.Effect<string[], Error>,
     commandType: string,
     execOptions: CommandExecOptions,
   ): Effect.Effect<ExecResult, Error> {
@@ -246,7 +250,10 @@ export class DiffCommandExecutor {
       );
       yield* Effect.logDebug(`Retrying ${commandType} without --flatten flag`);
 
-      const result = yield* this.exec(commandBuilder(false), execOptions);
+      const result = yield* this.exec(
+        yield* commandBuilder(false),
+        execOptions,
+      );
 
       if (result.timedOut) {
         return yield* Effect.fail(
@@ -277,24 +284,24 @@ export class DiffCommandExecutor {
     );
   }
 
-  private getLatexdiffConfig(options?: DiffExecutionOptions): {
-    mathMarkup: MathMarkupOption;
-    pictureEnvs: string;
-    subtype?: string;
-  } {
-    const changesOnly = this.setting<boolean>(
-      WorkspaceStateKey.LATEXDIFF_CHANGES_ONLY,
-    );
+  private getLatexdiffConfig(options?: DiffExecutionOptions) {
+    return Effect.gen({ self: this }, function* () {
+      const changesOnly = yield* this.setting<boolean>(
+        WorkspaceStateKey.LATEXDIFF_CHANGES_ONLY,
+      );
 
-    return {
-      mathMarkup:
-        options?.mathMarkup ??
-        this.setting<MathMarkupOption>(WorkspaceStateKey.LATEXDIFF_MATH_MARKUP),
-      pictureEnvs: LATEXDIFF_PICTURE_ENVIRONMENTS,
-      subtype: resolveLatexdiffSubtype({
-        subtype: options?.subtype,
-        changesOnly,
-      }),
-    };
+      return {
+        mathMarkup:
+          options?.mathMarkup ??
+          (yield* this.setting<MathMarkupOption>(
+            WorkspaceStateKey.LATEXDIFF_MATH_MARKUP,
+          )),
+        pictureEnvs: LATEXDIFF_PICTURE_ENVIRONMENTS,
+        subtype: resolveLatexdiffSubtype({
+          subtype: options?.subtype,
+          changesOnly,
+        }),
+      };
+    });
   }
 }

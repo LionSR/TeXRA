@@ -47,7 +47,9 @@ interface AgentControllerFactoryOptions extends SettingsStatePorts {
     GlobalStorageFs | FileSystem.FileSystem
   >;
   readonly getAgents?: (category: AgentCategory) => AgentEntry[];
-  readonly getVisibleAgents?: (category: AgentCategory) => AgentEntry[];
+  readonly getVisibleAgents?: (
+    category: AgentCategory,
+  ) => ReturnType<typeof getVisibleRegistryAgents>;
 }
 
 export interface SettingsAgentControllers {

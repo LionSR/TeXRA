@@ -223,7 +223,6 @@ function agentRunTestLayer(init: HarnessInit) {
       const logger = new TraceEmitter();
       return {
         runId: init.runId,
-        parentRunId: null,
         session: init.session,
         config: AgentConfigSchema.parse({
           agent: 'chat',

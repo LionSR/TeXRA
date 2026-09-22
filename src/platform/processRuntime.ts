@@ -21,7 +21,11 @@ import {
 } from 'effect';
 import type { ToolInjections } from '@agent/runtime/toolInjection';
 import type { SupabaseAuth } from '@auth/SupabaseAuth';
-import type { GlobalDatabase } from '@shared/session/database';
+import type { ProcessIdentity } from '@shared/session/sessionEvents';
+import type {
+  GlobalDatabase,
+  ProjectDatabases,
+} from '@shared/session/database';
 import type { UpdateCheckRecords } from '@shared/session/updateCheckRecords';
 import type { InquiryRecords } from '@shared/session/inquiryRecords';
 import type { GitHubSubscriptions } from '@tools/github/subscriptionBindings';
@@ -49,15 +53,19 @@ import type { Secrets } from './secrets';
  * them from context instead of building a Node layer of its own, and
  * `GlobalStorageFs`, the cross-workspace storage view every session of the
  * process shares, `GlobalDatabase`, that same root's one database handle,
- * which the records above and the CLI's input history read through, and
+ * which the records above and the CLI's input history read through,
+ * `ProjectDatabases`, whose project-scoped borrows share each persistent
+ * connection between application state and a session graph, and
  * `GitHubSubscriptions`, the run-ownership tables the subscription tool and
  * the settings Git tab share.
  */
 export type ProcessServices =
+  | ProcessIdentity
   | FileSystem.FileSystem
   | Path.Path
   | GlobalStorageFs
   | GlobalDatabase
+  | ProjectDatabases
   | HttpClient.HttpClient
   | InquiryRecords
   | UpdateCheckRecords

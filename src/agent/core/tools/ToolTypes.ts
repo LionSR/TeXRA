@@ -28,7 +28,7 @@ export interface ToolGuard<T, R = never> {
    * An Effect because the spelling can depend on settings the prompt must
    * show (a Codex sandbox mode, a Claude permission mode).
    */
-  readonly bash?: (input: T) => Effect.Effect<string, never, R>;
+  readonly bash?: (input: T) => Effect.Effect<string, Error, R>;
   /**
    * Where the approved command actually runs, when that is not the call's own
    * directory. Omitted: the call's working directory, else the workspace,

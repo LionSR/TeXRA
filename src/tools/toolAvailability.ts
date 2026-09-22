@@ -29,7 +29,6 @@ import {
   type ToolProbeInputs,
   type ToolProbeServices,
 } from '@tools/externalToolDefs';
-import { getDisabledToolIds } from '@utils/config/constants';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'toolAvailability';
@@ -56,9 +55,8 @@ export interface ExternalToolCheckResult {
 
 /** The disabled tool names, from the process global state the caller holds. */
 export function getDisabledToolNames(
-  globalState: StateStore,
+  disabledIds: ReadonlySet<string>,
 ): ReadonlySet<string> {
-  const disabledIds = getDisabledToolIds(globalState);
   return new Set<string>(
     EXTERNAL_TOOL_DEFS.filter((def) => disabledIds.has(def.id)).flatMap(
       (def) => def.tools,
@@ -80,7 +78,9 @@ export function getDisabledToolNames(
  */
 export const seedDisabledToolDefaults = Effect.fn('seedDisabledToolDefaults')(
   function* (state: StateStore) {
-    const disabledTools = state.get<string[]>(GlobalStateKey.DISABLED_TOOLS);
+    const disabledTools = yield* state.get<string[]>(
+      GlobalStateKey.DISABLED_TOOLS,
+    );
     if (disabledTools !== undefined) return;
 
     const defaults = EXTERNAL_TOOL_DEFS.filter((def) => def.toggleable).map(

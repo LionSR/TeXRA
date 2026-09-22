@@ -1,21 +1,26 @@
 /**
  * The durable boundary of host and application state: what a reopened store
  * reads back from the root's database, and what a second writer on the same
- * database does to it. Everything above the port is the unchanged
- * `StateStore` surface, so this suite pins the persistence, not the callers.
+ * database does to a live reader, and when its owner's scope releases it.
  */
 import { it } from '@effect/vitest';
-import { Effect } from 'effect';
+import { Effect, Exit, Scope } from 'effect';
 import { describe, expect } from 'vitest';
 
 import { openAppStateStore } from '@controllers/session/appStateStore';
+import { processOwnerId } from '@platform/defaults/nodeProcesses';
+import { ProcessIdentity } from '@shared/session/sessionEvents';
+
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
 describe('application state on SQLite', () => {
   const tempDirs = useTempDirs();
-  const openStore = (storage: string) => openAppStateStore(storage);
+  const openStore = (storage: string) =>
+    openAppStateStore(storage).pipe(
+      Effect.provide(ProcessIdentity.layer(processOwnerId('app-state-test'))),
+    );
 
-  it.effect('reads back the latest value of each key after reopening', () =>
+  it.live('reads back the latest value of each key after reopening', () =>
     Effect.gen(function* () {
       const storage = yield* Effect.promise(() =>
         makeTempDir('texra-app-state-', tempDirs),
@@ -28,13 +33,13 @@ describe('application state on SQLite', () => {
       yield* first.update('texra.dropped', undefined);
 
       const reopened = yield* openStore(storage);
-      expect(reopened.get('texra.modelSelection')).toEqual(['b']);
-      expect(reopened.get('goals:index')).toEqual({ open: 1 });
-      expect(reopened.get('texra.dropped', 'default')).toBe('default');
+      expect(yield* reopened.get('texra.modelSelection')).toEqual(['b']);
+      expect(yield* reopened.get('goals:index')).toEqual({ open: 1 });
+      expect(yield* reopened.get('texra.dropped', 'default')).toBe('default');
     }),
   );
 
-  it.effect('keeps both writers when two stores share one database', () =>
+  it.live('keeps both writers when two stores share one database', () =>
     Effect.gen(function* () {
       const storage = yield* Effect.promise(() =>
         makeTempDir('texra-app-state-', tempDirs),
@@ -47,23 +52,46 @@ describe('application state on SQLite', () => {
       yield* two.update('texra.glm.codingPlan', false);
       yield* one.update('texra.memory.enabled', true);
 
-      const reopened = yield* openStore(storage);
-      expect(reopened.get('texra.useOpenRouter')).toBe(true);
-      expect(reopened.get('texra.glm.codingPlan')).toBe(false);
-      expect(reopened.get('texra.memory.enabled')).toBe(true);
+      expect(yield* two.get('texra.useOpenRouter')).toBe(true);
+      expect(yield* one.get('texra.glm.codingPlan')).toBe(false);
+      expect(yield* two.get('texra.memory.enabled')).toBe(true);
+      yield* two.update('texra.useOpenRouter', undefined);
+      expect(yield* one.get('texra.useOpenRouter', 'absent')).toBe('absent');
     }),
   );
 
-  it.effect('fails the caller when a value is not JSON', () =>
+  it.live('fails the caller when a value is not JSON', () =>
     Effect.gen(function* () {
       const storage = yield* Effect.promise(() =>
         makeTempDir('texra-app-state-', tempDirs),
       );
       const store = yield* openStore(storage);
+      yield* store.update('texra.customAgentPresets', ['valid']);
       const failure = yield* Effect.flip(
-        store.set('texra.customAgentPresets', () => undefined),
+        store.update('texra.customAgentPresets', () => undefined),
       );
+      expect(failure._tag).toBe('StateWriteFailed');
       expect(failure.message).toContain('not JSON');
+      expect(yield* store.get('texra.customAgentPresets')).toEqual(['valid']);
     }),
+  );
+  it.live(
+    'releases the connection with its owner and reports failed reads',
+    () =>
+      Effect.gen(function* () {
+        const storage = yield* Effect.promise(() =>
+          makeTempDir('texra-app-state-', tempDirs),
+        );
+        const scope = yield* Scope.make();
+        yield* Effect.addFinalizer(() => Scope.close(scope, Exit.void));
+        const store = yield* Scope.provide(openStore(storage), scope);
+        yield* store.update('value', 1);
+        yield* Scope.close(scope, Exit.void);
+        const failure = yield* Effect.flip(store.get('value'));
+        expect(failure._tag).toBe('StateReadFailed');
+        expect(failure.key).toBe('value');
+        const reopened = yield* openStore(storage);
+        expect(yield* reopened.get('value')).toBe(1);
+      }),
   );
 });

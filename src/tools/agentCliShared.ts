@@ -384,8 +384,8 @@ const withAgentCliRun = Effect.fn('agentCliShared.withAgentCliRun')(function* <
 export const agentCliApprovalCommand = (
   agentName: string,
   prompt: string,
-  mode: (workspaceState: StateStore) => Effect.Effect<string>,
-): Effect.Effect<string, never, ToolCall> =>
+  mode: (workspaceState: StateStore) => Effect.Effect<string, Error>,
+): Effect.Effect<string, Error, ToolCall> =>
   Effect.gen(function* () {
     const { roots } = yield* ToolCall;
     const resolved = yield* mode(roots.workspaceState);

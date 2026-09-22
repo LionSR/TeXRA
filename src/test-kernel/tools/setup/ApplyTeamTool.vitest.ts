@@ -32,7 +32,7 @@ import type { SetupPlatformShape } from '@tools/setup/platform';
 // Local file imports
 import { createFakeSetupPlatform } from './fixtures';
 
-function workspaceRoster(): AgentRosterSelection | undefined {
+function workspaceRoster() {
   return testWorkspaceRoots().workspaceState.get<AgentRosterSelection>(
     WorkspaceStateKey.AGENT_ROSTER_SELECTION,
   );
@@ -46,10 +46,10 @@ function applyTeam(
     .pipe(Effect.provide(nativeToolTestLayer()));
 }
 
-function expectNoTeamState(): void {
-  expect(workspaceRoster()).toBeUndefined();
-  expect(getDefaultTeamId(hostStores().globalState)).toBeUndefined();
-}
+const expectNoTeamState = Effect.gen(function* () {
+  expect(yield* workspaceRoster()).toBeUndefined();
+  expect(yield* getDefaultTeamId(hostStores().globalState)).toBeUndefined();
+});
 
 /**
  * The installed fake host's setup sign-in: a suite-level double the host is
@@ -130,7 +130,10 @@ describe('apply_team', () => {
         });
 
         expect(result.status).toBe('executed');
-        expect(workspaceRoster()).toEqual({ kind: 'team', teamId: 'starter' });
+        expect(yield* workspaceRoster()).toEqual({
+          kind: 'team',
+          teamId: 'starter',
+        });
       }),
   );
 
@@ -140,13 +143,15 @@ describe('apply_team', () => {
         teamId: 'starter',
         unavailableAction: 'continue',
       });
-      expect(getDefaultTeamId(hostStores().globalState)).toBe('starter');
+      expect(yield* getDefaultTeamId(hostStores().globalState)).toBe('starter');
 
       yield* applyTeam({
         teamId: 'physicist',
         unavailableAction: 'continue',
       });
-      expect(getDefaultTeamId(hostStores().globalState)).toBe('physicist');
+      expect(yield* getDefaultTeamId(hostStores().globalState)).toBe(
+        'physicist',
+      );
     }),
   );
 
@@ -155,7 +160,7 @@ describe('apply_team', () => {
       const result = yield* applyTeam({ teamId: 'astrologer' });
 
       expect(result.status).toBe('error');
-      expectNoTeamState();
+      yield* expectNoTeamState;
     }),
   );
 
@@ -165,7 +170,7 @@ describe('apply_team', () => {
 
       expect(result.status).toBe('executed');
       expect(result.output).toMatch(/Sign in to TeXRA/);
-      expectNoTeamState();
+      yield* expectNoTeamState;
     }),
   );
 
@@ -178,7 +183,7 @@ describe('apply_team', () => {
         });
 
         expect(result.status).toBe('executed');
-        expect(workspaceRoster()).toEqual({
+        expect(yield* workspaceRoster()).toEqual({
           kind: 'team',
           teamId: 'software-engineer',
         });
@@ -196,7 +201,7 @@ describe('apply_team', () => {
       expect(result.output).toMatch(
         /No roster or default-team state was written/,
       );
-      expectNoTeamState();
+      yield* expectNoTeamState;
     }),
   );
 
@@ -213,8 +218,13 @@ describe('apply_team', () => {
 
         expect(result.status).toBe('executed');
         expect(result.summary).toMatch(/Applied the Starter roster/);
-        expect(workspaceRoster()).toEqual({ kind: 'team', teamId: 'starter' });
-        expect(getDefaultTeamId(hostStores().globalState)).toBe('starter');
+        expect(yield* workspaceRoster()).toEqual({
+          kind: 'team',
+          teamId: 'starter',
+        });
+        expect(yield* getDefaultTeamId(hostStores().globalState)).toBe(
+          'starter',
+        );
       }),
   );
 
@@ -236,7 +246,7 @@ describe('apply_team', () => {
           'error',
           expect.stringContaining('still unavailable after refreshing'),
         );
-        expect(workspaceRoster()).toBeUndefined();
+        expect(yield* workspaceRoster()).toBeUndefined();
       }),
   );
 });

@@ -1,4 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { it } from '@effect/vitest';
+import { Effect } from 'effect';
+import { describe, expect } from 'vitest';
 import { MODEL_CONFIGS, ModelProvider } from 'llm-zoo';
 
 import { resolveModelCompatibilityKey } from '@agent/runtime/modelRoutes';
@@ -63,30 +65,44 @@ describe('Kimi Code routing', () => {
     ).toBe(false);
   });
 
-  it('uses the shared Kimi handler', () => {
-    expect(
-      resolveModelCompatibilityKey(
-        MODEL_CONFIGS.kimiCoding,
-        globalState,
-        false,
-      ),
-    ).toBe('Kimi');
-  });
+  it.effect('uses the shared Kimi handler', () =>
+    Effect.gen(function* () {
+      expect(
+        yield* resolveModelCompatibilityKey(
+          MODEL_CONFIGS.kimiCoding,
+          globalState,
+          false,
+        ),
+      ).toBe('Kimi');
+    }),
+  );
 
-  it('routes dual-backend kimi3 through OpenRouter when the toggle is on', () => {
-    // The factory's Kimi Code reroute is guarded on compat key
-    // 'Kimi'. Because kimi3 carries an openrouterFullName, an
-    // OpenRouter-enabled session persists as 'OpenRouterNative'
-    // instead — so a resumed 'Kimi' kimi3 was, by construction, a
-    // direct (non-OpenRouter) session, which is why the resume path's
-    // useOpenRouter=false is correct.
-    expect(
-      resolveModelCompatibilityKey(MODEL_CONFIGS.kimi3, globalState, false),
-    ).toBe('Kimi');
-    expect(
-      resolveModelCompatibilityKey(MODEL_CONFIGS.kimi3, globalState, true),
-    ).toBe('OpenRouterNative');
-  });
+  it.effect(
+    'routes dual-backend kimi3 through OpenRouter when the toggle is on',
+    () =>
+      Effect.gen(function* () {
+        // The factory's Kimi Code reroute is guarded on compat key
+        // 'Kimi'. Because kimi3 carries an openrouterFullName, an
+        // OpenRouter-enabled session persists as 'OpenRouterNative'
+        // instead — so a resumed 'Kimi' kimi3 was, by construction, a
+        // direct (non-OpenRouter) session, which is why the resume path's
+        // useOpenRouter=false is correct.
+        expect(
+          yield* resolveModelCompatibilityKey(
+            MODEL_CONFIGS.kimi3,
+            globalState,
+            false,
+          ),
+        ).toBe('Kimi');
+        expect(
+          yield* resolveModelCompatibilityKey(
+            MODEL_CONFIGS.kimi3,
+            globalState,
+            true,
+          ),
+        ).toBe('OpenRouterNative');
+      }),
+  );
 
   it('does not divert other moonshot models off their normal routes', () => {
     expect(resolveModelApiKeyProvider(MODEL_CONFIGS.kimi25T, false)).toBe(

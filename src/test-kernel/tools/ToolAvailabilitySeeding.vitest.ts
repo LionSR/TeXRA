@@ -54,7 +54,7 @@ describe('seedDisabledToolDefaults', () => {
         yield* seedDisabledToolDefaults(hostStores().globalState);
 
         expect(
-          hostStores().globalState.get(GlobalStateKey.DISABLED_TOOLS),
+          yield* hostStores().globalState.get(GlobalStateKey.DISABLED_TOOLS),
         ).toEqual(EXPECTED_DEFAULTS);
       }),
   );
@@ -72,7 +72,7 @@ describe('seedDisabledToolDefaults', () => {
         yield* seedDisabledToolDefaults(hostStores().globalState);
 
         expect(
-          hostStores().globalState.get(GlobalStateKey.DISABLED_TOOLS),
+          yield* hostStores().globalState.get(GlobalStateKey.DISABLED_TOOLS),
         ).toEqual([]);
       }),
   );

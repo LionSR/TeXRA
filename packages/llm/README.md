@@ -91,10 +91,13 @@ re-export are the subpath entries, whose published names are contract.
 Unsupported content fails explicitly; no protocol silently discards reasoning,
 media or evidence it cannot represent. The current explicit failures:
 
-- Hosted tools. OpenAI Responses `web_search` and Anthropic search and fetch
-  are not implemented in the codecs — Anthropic's rejects hosted-tool
-  accounting by name. These worked on the deleted model handlers; restoring
-  them or ruling them out of 1.0 is the hardening note's second change.
+- Hosted tools, ruled out of 1.0
+  ([the ruling](../../.agents/docs/implemented/architecture/2026-08-01-architecture-rulings-ledger.md)):
+  the run's local `web_search` and `web_fetch` tools are the one system for
+  web search and fetch, and the codecs request no provider-hosted tool. A
+  stream that carries hosted execution still fails explicitly — the hosted
+  blocks fail the event schema as malformed output, and a paused hosted turn
+  fails by name as the boundary a future lane would have to implement.
 - Assistant media output, Responses service-tier billing accounting, native
   provider compaction, and OpenRouter continuation and token estimation.
 - Streaming reconnection and managed-agent execution for background work.

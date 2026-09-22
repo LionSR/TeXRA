@@ -52,8 +52,6 @@ function createProfileKeyController(
       ),
     getProviderKeyUrl: (provider) => getProviderKeyUrl(stores, provider),
     refreshAfterKeyChange,
-    reportFailure: (message, error) =>
-      showLoggedErrorMessage(CHANNEL, message, error).pipe(Effect.asVoid),
   });
 }
 
@@ -62,8 +60,8 @@ function createProfileKeyController(
  * portal without closing the input box, so the user can paste straight away.
  */
 async function promptForApiKey(
-  stores: SettingsStores,
   provider: ApiProvider,
+  keyUrl: string | undefined,
 ): Promise<string | undefined> {
   const ib = vscode.window.createInputBox();
   ib.title = `Set ${provider} API key`;
@@ -79,7 +77,6 @@ async function promptForApiKey(
   ib.buttons = [getKeyButton];
   ib.onDidTriggerButton((button) => {
     if (button === getKeyButton) {
-      const keyUrl = getProviderKeyUrl(stores, provider);
       if (keyUrl) void vscode.env.openExternal(vscode.Uri.parse(keyUrl));
     }
   });
@@ -143,16 +140,19 @@ export function setApiKey(
 
       if (!target) return;
 
+      const keyUrl = yield* getProviderKeyUrl(stores, target);
       const apiKey = yield* Effect.promise(() =>
-        promptForApiKey(stores, target),
+        promptForApiKey(target, keyUrl),
       );
       if (!apiKey) return;
 
-      yield* createProfileKeyController(
-        stores,
-        secrets,
-        refreshAfterKeyChange,
-      ).commitProviderKey(target, apiKey);
+      yield* createProfileKeyController(stores, secrets, refreshAfterKeyChange)
+        .commitProviderKey(target, apiKey)
+        .pipe(
+          Effect.catchTag('ProviderKeyActionFailed', (error) =>
+            showLoggedErrorMessage(CHANNEL, error.message, error.cause),
+          ),
+        );
     }),
   );
 }
@@ -179,10 +179,12 @@ export function removeApiKey(
       return;
     }
 
-    yield* createProfileKeyController(
-      stores,
-      secrets,
-      refreshAfterKeyChange,
-    ).removeProviderKey(provider);
+    yield* createProfileKeyController(stores, secrets, refreshAfterKeyChange)
+      .removeProviderKey(provider)
+      .pipe(
+        Effect.catchTag('ProviderKeyActionFailed', (error) =>
+          showLoggedErrorMessage(CHANNEL, error.message, error.cause),
+        ),
+      );
   });
 }

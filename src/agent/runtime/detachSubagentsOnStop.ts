@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { readSettingFrom } from '@utils/config/platformSettings';
@@ -34,9 +35,11 @@ import { readSettingFrom } from '@utils/config/platformSettings';
  *
  * The platform must be initialized before a run can be stopped or killed.
  */
-export function detachSubagentsOnStop(settings: SettingsStores): boolean {
-  return readSettingFrom<boolean>(
-    settings,
-    GlobalStateKey.DETACH_SUBAGENTS_ON_STOP,
-  );
-}
+export const detachSubagentsOnStop = Effect.fn('detachSubagentsOnStop')(
+  function* (settings: SettingsStores) {
+    return yield* readSettingFrom<boolean>(
+      settings,
+      GlobalStateKey.DETACH_SUBAGENTS_ON_STOP,
+    );
+  },
+);

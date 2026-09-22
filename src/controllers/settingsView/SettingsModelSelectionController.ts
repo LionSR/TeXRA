@@ -21,7 +21,7 @@ import {
   setModelEnabled,
   type ModelOptionStores,
 } from '@model/computeModelOptions';
-import { StateWriteFailed } from '@platform/interfaces';
+import { StateReadFailed, StateWriteFailed } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
@@ -58,7 +58,10 @@ interface SettingsModelSelectionControllerDeps<R> {
     never,
     R
   >;
-  getPreferredCopilotRouteModels?: () => readonly string[];
+  getPreferredCopilotRouteModels?: () => Effect.Effect<
+    readonly string[],
+    StateReadFailed
+  >;
   /**
    * Resolve availability-decorated options for the given models, reading the
    * shared availability inputs and finishing them with `modelOptionsFrom` —
@@ -85,22 +88,24 @@ export class SettingsModelSelectionController<R = never> {
 
   buildSelectionData(): Effect.Effect<SettingsModelSelectionData, Error, R> {
     return Effect.gen({ self: this }, function* () {
-      const visibleModels = getEnabledModels(this.deps.stores.globalState);
+      const visibleModels = yield* getEnabledModels(
+        this.deps.stores.globalState,
+      );
       const routes = yield* this.deps.copilotRoutes;
       const preferredModels = new Set(
-        this.deps.getPreferredCopilotRouteModels?.() ??
+        yield* this.deps.getPreferredCopilotRouteModels?.() ??
           preferredCopilotRouteModels(this.deps.stores.globalState),
       );
       const models = yield* this.buildSelectionItems(routes, preferredModels);
       return {
         models,
         helperModel: resolveEffectiveHelperModel(
-          this.deps.stores.globalState.get<string | undefined>(
+          yield* this.deps.stores.globalState.get<string | undefined>(
             GlobalStateKey.HELPER_MODEL,
           ),
           visibleModels,
         ),
-        preferShortModelNames: this.deps.stores.globalState.get<boolean>(
+        preferShortModelNames: yield* this.deps.stores.globalState.get<boolean>(
           GlobalStateKey.PREFER_SHORT_MODEL_NAMES,
           false,
         ),
@@ -144,7 +149,7 @@ export class SettingsModelSelectionController<R = never> {
   setModelEnabled(input: {
     modelName: string;
     enabled: boolean;
-  }): Effect.Effect<void, StateWriteFailed> {
+  }): Effect.Effect<void, StateReadFailed | StateWriteFailed> {
     return setModelEnabled({
       model: input.modelName,
       enabled: input.enabled,
@@ -155,25 +160,27 @@ export class SettingsModelSelectionController<R = never> {
   setReasoningLevel(input: {
     modelName: string;
     level: ReasoningEffort | null;
-  }): Effect.Effect<void, StateWriteFailed> {
-    // The stored override record as written, so a rewrite carries every entry
-    // back to storage. Reads that need the effort go through
-    // `reasoningEffortOverrides`.
-    const overrides = {
-      ...this.deps.stores.globalState.get<Record<string, string>>(
+  }): Effect.Effect<void, StateReadFailed | StateWriteFailed> {
+    return Effect.gen({ self: this }, function* () {
+      // The stored override record as written, so a rewrite carries every entry
+      // back to storage. Reads that need the effort go through
+      // `reasoningEffortOverrides`.
+      const overrides = {
+        ...(yield* this.deps.stores.globalState.get<Record<string, string>>(
+          GlobalStateKey.REASONING_LEVELS,
+          {},
+        )),
+      };
+      if (input.level == null) {
+        delete overrides[input.modelName];
+      } else {
+        overrides[input.modelName] = input.level;
+      }
+      yield* this.deps.stores.globalState.update(
         GlobalStateKey.REASONING_LEVELS,
-        {},
-      ),
-    };
-    if (input.level == null) {
-      delete overrides[input.modelName];
-    } else {
-      overrides[input.modelName] = input.level;
-    }
-    return this.deps.stores.globalState.update(
-      GlobalStateKey.REASONING_LEVELS,
-      overrides,
-    );
+        overrides,
+      );
+    });
   }
 
   private buildSelectionItems(
@@ -182,9 +189,9 @@ export class SettingsModelSelectionController<R = never> {
   ): Effect.Effect<ModelSelectionItem[], Error, R> {
     return Effect.gen({ self: this }, function* () {
       const enabledSet = new Set(
-        getEnabledModels(this.deps.stores.globalState),
+        yield* getEnabledModels(this.deps.stores.globalState),
       );
-      const reasoningOverrides = reasoningEffortOverrides(
+      const reasoningOverrides = yield* reasoningEffortOverrides(
         this.deps.stores.globalState,
       );
 

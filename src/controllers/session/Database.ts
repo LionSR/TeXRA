@@ -241,16 +241,6 @@ ON CONFLICT(aggregate_id) DO UPDATE SET seq = event_sequence.seq + 1
 WHERE event_sequence.owner_id = excluded.owner_id AND event_sequence.closed = 0
 RETURNING seq
 `;
-/**
- * Every application-state aggregate's latest row: one state key per
- * aggregate, so the store's whole open-time snapshot is one join against the
- * `(aggregate_id, seq)` index.
- */
-const APP_STATE_ROWS = `SELECT ${EVENT_COLUMNS} FROM event e
-JOIN (SELECT aggregate_id, MAX(seq) AS seq FROM event
-  WHERE type = 'state.value.set.1' AND json_extract(data, '$.state.key') = 'app-state'
-  GROUP BY aggregate_id)
-  latest USING (aggregate_id, seq)`;
 /** Insert one row and read back the ordinal SQLite assigned it. */
 const INSERT_EVENT = `
 INSERT INTO event (aggregate_id, seq, type, owner_id, at, data)
@@ -836,19 +826,16 @@ export const databaseLayer = (
             [id],
           )
           .pipe(Effect.map((rows) => rows[0]));
-      const readAppState = Effect.gen(function* () {
-        const rows = yield* sql.unsafe<Record<string, unknown>>(
-          APP_STATE_ROWS,
-          [],
+      const readAppStateKey = (key: string) =>
+        latestEventRow(qualifyAggregateId('app-state', key)).pipe(
+          Effect.map((row): JsonValue | undefined => {
+            if (!row) return undefined;
+            const { state } = storedValue(row, 'app-state');
+            return state.value.kind === 'undefined'
+              ? undefined
+              : state.value.value;
+          }),
         );
-        const values = new Map<string, JsonValue>();
-        for (const row of rows) {
-          const { aggregateId, state } = storedValue(row, 'app-state');
-          if (state.value.kind === 'undefined') continue;
-          values.set(aggregateTarget(aggregateId).id, state.value.value);
-        }
-        return values;
-      });
       const readUpdateCheck = (host: string) =>
         latestEventRow(qualifyAggregateId('update-check', host)).pipe(
           Effect.map((r) =>
@@ -893,7 +880,7 @@ export const databaseLayer = (
               return event;
             }),
           ),
-        readAppState: () => query(readAppState),
+        readAppStateKey: (key) => query(readAppStateKey(key)),
         readUpdateCheck: (host) => query(readUpdateCheck(host)),
         recordUpdateCheck: (host, change) =>
           transact(

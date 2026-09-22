@@ -19,6 +19,7 @@ import {
   startCompactionActivity,
   type AgentTrace,
 } from '@agent/trace';
+import type { StateReadFailed } from '@platform/interfaces';
 import { roundedUtilizationPercent } from '@shared/runs/contextUtilization';
 import {
   MODEL_COMPACTION_THRESHOLD_SETTING,
@@ -161,9 +162,12 @@ interface CompactionInput {
 export const compactIfNeeded = Effect.fn('compaction.check')(function* (
   state: RunState,
   input: CompactionInput,
-): Effect.fn.Return<RunState, RunLedgerRefused | DatabaseWriteFailed> {
+): Effect.fn.Return<
+  RunState,
+  RunLedgerRefused | DatabaseWriteFailed | StateReadFailed
+> {
   const { runId, ledger, logger, bound, force } = input;
-  const percent = readSettingFrom<number>(
+  const percent = yield* readSettingFrom<number>(
     input.stores,
     MODEL_COMPACTION_THRESHOLD_SETTING.configKey,
   );

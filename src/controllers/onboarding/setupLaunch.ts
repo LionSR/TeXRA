@@ -19,6 +19,7 @@ import {
   setupCredentialProbeFailed,
   setupSubscriptionModel,
 } from '@model/setupCredentialAccess';
+import type { StateReadFailed } from '@platform/interfaces';
 import type { LanguageModel } from '@platform/languageModel';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
@@ -90,9 +91,9 @@ export function resolveSetupLaunchModel(
   stores: SettingsStores,
   secrets: PlatformSecrets,
   includeAccessListFallback: boolean,
-): Effect.Effect<SetupModelResolution | null, never, LanguageModel> {
+): Effect.Effect<SetupModelResolution | null, StateReadFailed, LanguageModel> {
   return Effect.gen(function* () {
-    const useOpenRouter = getUseOpenRouter(stores);
+    const useOpenRouter = yield* getUseOpenRouter(stores);
     const hasOpenRouterKey = yield* probeSetupCredential(
       hasUsableApiKey(secrets, 'openRouter').pipe(
         Effect.mapError(setupCredentialProbeFailed('OpenRouter API key')),

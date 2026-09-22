@@ -5,7 +5,11 @@ import * as vscode from 'vscode';
 // Local imports
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import { withLogChannel } from '@logger/effectLog';
-import type { StateStore, StateWriteFailed } from '@platform/interfaces';
+import type {
+  StateStore,
+  StateReadFailed,
+  StateWriteFailed,
+} from '@platform/interfaces';
 import { INSTRUCTION_PREFIX } from '@shared/state/stateKeys';
 
 const NEVER_REMIND = 'Never remind again';
@@ -37,12 +41,12 @@ export function showInstructionWithSuppress(
   actions: { title: string; callback: () => Effect.Effect<void> }[] = [],
   showSuppress = true,
   options: { deferDismissal?: boolean } = {},
-): Effect.Effect<void, StateWriteFailed> {
-  return Effect.suspend(() => {
+): Effect.Effect<void, StateReadFailed | StateWriteFailed> {
+  return Effect.gen(function* () {
     const stateKey = `${INSTRUCTION_PREFIX}${key}`;
 
-    if (showSuppress && store.get<boolean>(stateKey)) {
-      return Effect.void;
+    if (showSuppress && (yield* store.get<boolean>(stateKey))) {
+      return;
     }
 
     const buttons = actions.map((a) => a.title);
@@ -57,8 +61,8 @@ export function showInstructionWithSuppress(
       ),
     );
 
-    if (!options.deferDismissal) return settle;
-    return settle.pipe(
+    if (!options.deferDismissal) return yield* settle;
+    return yield* settle.pipe(
       Effect.catchCause((cause) =>
         Effect.logWarning(`Failed to settle instruction "${key}"`).pipe(
           Effect.annotateLogs({ data: Cause.squash(cause) }),
@@ -84,7 +88,7 @@ export function promptExtensionInstall(
     extensionId: string;
     channel: string;
   },
-): Effect.Effect<void, StateWriteFailed> {
+): Effect.Effect<void, StateReadFailed | StateWriteFailed> {
   return showInstructionWithSuppress(store, opts.suppressKey, opts.message, [
     {
       title: 'Install',

@@ -15,7 +15,7 @@ import {
   type TeamRosterCatalog,
   type TeamRosterPresetResolution,
 } from '@common/teams/TeamRoster';
-import type { StateWriteFailed } from '@platform/interfaces';
+import type { StateWriteFailed, StateReadFailed } from '@platform/interfaces';
 import {
   AGENT_CATEGORIES,
   AGENT_MODE_PRESETS_BY_ID,
@@ -45,11 +45,13 @@ interface SettingsAgentCatalogEntry {
 }
 
 export interface SettingsAgentCatalogState {
-  getEnabledAgentKeys(category: AgentCategory): string[] | undefined;
+  getEnabledAgentKeys(
+    category: AgentCategory,
+  ): Effect.Effect<string[] | undefined, StateReadFailed>;
   setEnabledAgentKeys(
     category: AgentCategory,
     enabledKeys: string[],
-  ): Effect.Effect<void, StateWriteFailed>;
+  ): Effect.Effect<void, StateWriteFailed | StateReadFailed>;
   /**
    * The roster refuses an unknown team in its own right, so the port carries
    * that failure beside the write's: `commitPreset` below maps every error it
@@ -57,15 +59,22 @@ export interface SettingsAgentCatalogState {
    */
   setTeamRoster(
     preset: AgentModePreset,
-  ): Effect.Effect<void, StateWriteFailed | InvalidAgentTeamError>;
+  ): Effect.Effect<
+    void,
+    StateWriteFailed | StateReadFailed | InvalidAgentTeamError
+  >;
   getAgents(category: AgentCategory): SettingsAgentCatalogEntry[];
-  getVisibleAgents(category: AgentCategory): SettingsAgentCatalogEntry[];
-  getCustomPresetsRaw(): unknown;
-  setCustomPresets(presets: unknown[]): Effect.Effect<void, StateWriteFailed>;
+  getVisibleAgents(
+    category: AgentCategory,
+  ): Effect.Effect<SettingsAgentCatalogEntry[], StateReadFailed>;
+  getCustomPresetsRaw(): Effect.Effect<unknown, StateReadFailed>;
+  setCustomPresets(
+    presets: unknown[],
+  ): Effect.Effect<void, StateWriteFailed | StateReadFailed>;
   removeCustomPreset(
     presetId: string,
     remaining: unknown[],
-  ): Effect.Effect<void, StateWriteFailed>;
+  ): Effect.Effect<void, StateWriteFailed | StateReadFailed>;
 }
 
 interface SettingsAgentCatalogControllerDeps {
@@ -76,24 +85,38 @@ interface SettingsAgentCatalogControllerDeps {
 export class SettingsAgentCatalogController implements TeamRosterCatalog {
   constructor(private readonly deps: SettingsAgentCatalogControllerDeps) {}
 
-  buildSelectionItems(): ByCategory<AgentSelectionItem[]> {
-    return byCategory((category) => this.buildCategorySelectionItems(category));
+  buildSelectionItems() {
+    return Effect.gen({ self: this }, function* () {
+      return yield* Effect.all(
+        byCategory((category) => this.buildCategorySelectionItems(category)),
+      );
+    });
   }
 
-  getCustomPresets(): AgentModePreset[] {
-    return parseAgentModePresets(this.deps.state.getCustomPresetsRaw());
+  getCustomPresets() {
+    return Effect.gen({ self: this }, function* () {
+      return parseAgentModePresets(
+        yield* this.deps.state.getCustomPresetsRaw(),
+      );
+    });
   }
 
   /** Returns raw records so catalog writes preserve unparsed data. */
-  private getCustomPresetRecords(): unknown[] {
-    const raw = this.deps.state.getCustomPresetsRaw();
-    return Array.isArray(raw) ? raw : [];
+  private getCustomPresetRecords() {
+    return Effect.gen({ self: this }, function* () {
+      const raw = yield* this.deps.state.getCustomPresetsRaw();
+      return Array.isArray(raw) ? raw : [];
+    });
   }
 
-  getCustomPreset(presetId: string): AgentModePreset | null {
-    return (
-      this.getCustomPresets().find((preset) => preset.id === presetId) ?? null
-    );
+  getCustomPreset(presetId: string) {
+    return Effect.gen({ self: this }, function* () {
+      return (
+        (yield* this.getCustomPresets()).find(
+          (preset) => preset.id === presetId,
+        ) ?? null
+      );
+    });
   }
 
   getOrchestratorAgentNames(): string[] {
@@ -120,49 +143,52 @@ export class SettingsAgentCatalogController implements TeamRosterCatalog {
    * `planTeamRun` picks for that team at launch. Ad-hoc member lists without
    * a resolvable id keep custom-preset semantics.
    */
-  getPresetToolUseRoot(
-    toolUseAgents: string[],
-    presetId?: string,
-  ): string | undefined {
-    const knownPreset = presetId
-      ? findTeamPreset(
-          teamPresets(this.deps.state.getCustomPresetsRaw()),
-          presetId,
-        )
-      : undefined;
-    const preset: TeamPreset = knownPreset ?? {
-      id: 'settings-preview',
-      name: 'Settings preview',
-      description: '',
-      icon: 'bookmark',
-      agents: { workflow: [], toolUse: toolUseAgents },
-      texraHostedAgents: [],
-      source: 'custom',
-    };
-    const catalogAgents = this.deps.state.getAgents('toolUse');
-    return planTeamRun(preset, {
-      agents: {
-        workflow: [],
-        toolUse: [
-          ...catalogAgents,
-          ...this.synthesizedBuiltInRootEntries(
-            preset.agents.toolUse,
-            catalogAgents,
-          ),
-        ],
-      },
-    }).rootAgent?.name;
+  getPresetToolUseRoot(toolUseAgents: string[], presetId?: string) {
+    return Effect.gen({ self: this }, function* () {
+      const knownPreset = presetId
+        ? findTeamPreset(
+            teamPresets(yield* this.deps.state.getCustomPresetsRaw()),
+            presetId,
+          )
+        : undefined;
+      const preset: TeamPreset = knownPreset ?? {
+        id: 'settings-preview',
+        name: 'Settings preview',
+        description: '',
+        icon: 'bookmark',
+        agents: { workflow: [], toolUse: toolUseAgents },
+        texraHostedAgents: [],
+        source: 'custom',
+      };
+      const catalogAgents = this.deps.state.getAgents('toolUse');
+      return planTeamRun(preset, {
+        agents: {
+          workflow: [],
+          toolUse: [
+            ...catalogAgents,
+            ...this.synthesizedBuiltInRootEntries(
+              preset.agents.toolUse,
+              catalogAgents,
+            ),
+          ],
+        },
+      }).rootAgent?.name;
+    });
   }
 
-  resolvePreset(presetId: string): TeamRosterPresetResolution {
-    const preset =
-      AGENT_MODE_PRESETS_BY_ID.get(presetId) ?? this.getCustomPreset(presetId);
-    if (!preset) return { ok: false, reason: 'unknownPreset' };
-    return {
-      ok: true,
-      preset,
-      resolution: resolveTeamRoster(this.deps.state, preset),
-    };
+  resolvePreset(presetId: string) {
+    return Effect.gen({ self: this }, function* () {
+      const preset =
+        AGENT_MODE_PRESETS_BY_ID.get(presetId) ??
+        (yield* this.getCustomPreset(presetId));
+      if (!preset)
+        return { ok: false as const, reason: 'unknownPreset' as const };
+      return {
+        ok: true as const,
+        preset,
+        resolution: resolveTeamRoster(this.deps.state, preset),
+      };
+    });
   }
 
   /** The team port's own failure: this is `TeamRosterCatalog.commitPreset`. */
@@ -181,48 +207,50 @@ export class SettingsAgentCatalogController implements TeamRosterCatalog {
     );
   }
 
-  saveCurrentPreset(
-    name: string,
-  ): Effect.Effect<AgentModePreset, StateWriteFailed> {
-    const trimmedName = name.trim();
-    const visible = byCategory((category) =>
-      this.deps.state.getVisibleAgents(category),
-    );
-    const agents = byCategory((category) =>
-      visible[category].map((entry) => entry.name),
-    );
-    const preset: AgentModePreset = {
-      id: `custom-${this.deps.now?.() ?? Date.now()}`,
-      name: trimmedName,
-      description: `Custom team: ${[...agents.toolUse, ...agents.workflow].join(', ')}`,
-      icon: 'bookmark',
-      agents,
-      texraHostedAgents: AGENT_CATEGORIES.flatMap((category) =>
-        visible[category]
-          .filter((entry) => entry.source === 'remote')
-          .map((entry) => entry.name),
-      ),
-    };
+  saveCurrentPreset(name: string) {
+    return Effect.gen({ self: this }, function* () {
+      const trimmedName = name.trim();
+      const visible = yield* Effect.all(
+        byCategory((category) => this.deps.state.getVisibleAgents(category)),
+      );
+      const agents = byCategory((category) =>
+        visible[category].map((entry) => entry.name),
+      );
+      const preset: AgentModePreset = {
+        id: `custom-${this.deps.now?.() ?? Date.now()}`,
+        name: trimmedName,
+        description: `Custom team: ${[...agents.toolUse, ...agents.workflow].join(', ')}`,
+        icon: 'bookmark',
+        agents,
+        texraHostedAgents: AGENT_CATEGORIES.flatMap((category) =>
+          visible[category]
+            .filter((entry) => entry.source === 'remote')
+            .map((entry) => entry.name),
+        ),
+      };
 
-    return this.deps.state
-      .setCustomPresets([...this.getCustomPresetRecords(), preset])
-      .pipe(Effect.as(preset));
+      return yield* this.deps.state
+        .setCustomPresets([...(yield* this.getCustomPresetRecords()), preset])
+        .pipe(Effect.as(preset));
+    });
   }
 
-  deleteCustomPreset(
-    presetId: string,
-  ): Effect.Effect<AgentModePreset | null, StateWriteFailed> {
-    const records = this.getCustomPresetRecords();
-    const presets = parseAgentModePresets(records);
-    const target = presets.find((preset) => preset.id === presetId);
-    if (!target) return Effect.succeed(null);
+  deleteCustomPreset(presetId: string) {
+    return Effect.gen({ self: this }, function* () {
+      const records = yield* this.getCustomPresetRecords();
+      const presets = parseAgentModePresets(records);
+      const target = presets.find((preset) => preset.id === presetId);
+      if (!target) return null;
 
-    return this.deps.state
-      .removeCustomPreset(
-        presetId,
-        records.filter((record) => !isObject(record) || record.id !== presetId),
-      )
-      .pipe(Effect.as(target));
+      return yield* this.deps.state
+        .removeCustomPreset(
+          presetId,
+          records.filter(
+            (record) => !isObject(record) || record.id !== presetId,
+          ),
+        )
+        .pipe(Effect.as(target));
+    });
   }
 
   /**
@@ -236,39 +264,44 @@ export class SettingsAgentCatalogController implements TeamRosterCatalog {
     category: AgentCategory;
     source: AgentSource;
     enabled: boolean;
-  }): Effect.Effect<void, StateWriteFailed> {
-    const allAgents = this.deps.state.getAgents(input.category);
-    const targetKeys = new Set(
-      allAgents
-        .filter((entry) => entry.source === input.source)
-        .map((entry) => agentKeyOf(entry)),
-    );
+  }) {
+    return Effect.gen({ self: this }, function* () {
+      const allAgents = this.deps.state.getAgents(input.category);
+      const targetKeys = new Set(
+        allAgents
+          .filter((entry) => entry.source === input.source)
+          .map((entry) => agentKeyOf(entry)),
+      );
 
-    const current =
-      this.deps.state.getEnabledAgentKeys(input.category) ??
-      allAgents.map((entry) => agentKeyOf(entry));
+      const current =
+        (yield* this.deps.state.getEnabledAgentKeys(input.category)) ??
+        allAgents.map((entry) => agentKeyOf(entry));
 
-    const updated = input.enabled
-      ? [...new Set([...current, ...targetKeys])]
-      : current.filter((key) => !targetKeys.has(key));
+      const updated = input.enabled
+        ? [...new Set([...current, ...targetKeys])]
+        : current.filter((key) => !targetKeys.has(key));
 
-    if (
-      updated.length === current.length &&
-      updated.every((key, index) => key === current[index])
-    ) {
-      return Effect.void;
-    }
-    return this.deps.state.setEnabledAgentKeys(input.category, updated);
+      if (
+        updated.length === current.length &&
+        updated.every((key, index) => key === current[index])
+      ) {
+        return;
+      }
+      return yield* this.deps.state.setEnabledAgentKeys(
+        input.category,
+        updated,
+      );
+    });
   }
 
-  private buildCategorySelectionItems(
-    category: AgentCategory,
-  ): AgentSelectionItem[] {
-    const enabledKeys = this.deps.state.getEnabledAgentKeys(category);
-    return this.deps.state
-      .getAgents(category)
-      .map((entry) => this.toSelectionItem(entry, enabledKeys))
-      .sort(byName);
+  private buildCategorySelectionItems(category: AgentCategory) {
+    return Effect.gen({ self: this }, function* () {
+      const enabledKeys = yield* this.deps.state.getEnabledAgentKeys(category);
+      return this.deps.state
+        .getAgents(category)
+        .map((entry) => this.toSelectionItem(entry, enabledKeys))
+        .sort(byName);
+    });
   }
 
   private toSelectionItem(

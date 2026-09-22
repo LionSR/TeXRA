@@ -253,7 +253,6 @@ function agentRun(
   });
   return {
     runId,
-    parentRunId: null,
     session,
     config,
     setting,

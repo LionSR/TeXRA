@@ -3,6 +3,7 @@ import { Data, Effect } from 'effect';
 
 // Local imports
 import { LoopbackTransportUnavailableError } from '@auth/oauth/loopbackLogin';
+import type { SettingsViewInboundHandlerRegistry } from '@controllers/settingsView/settingsViewDispatch';
 import { subscriptionAuthStatus } from '@controllers/modelAccess/subscriptionAuthStatus';
 import {
   subscriptionProvider,
@@ -11,7 +12,10 @@ import {
   type SubscriptionSignInPresenter,
 } from '@controllers/modelAccess/subscriptionProviders';
 import { SubscriptionUsageService } from '@controllers/modelAccess/subscriptionUsage/SubscriptionUsageService';
-import { SettingsProfileKeyController } from '@controllers/settingsView/SettingsProfileKeyController';
+import {
+  ProviderKeyActionFailed,
+  SettingsProfileKeyController,
+} from '@controllers/settingsView/SettingsProfileKeyController';
 import { SettingsProfileController } from '@controllers/settingsView/SettingsProfileController';
 import { SettingsModelSelectionController } from '@controllers/settingsView/SettingsModelSelectionController';
 import type {
@@ -40,16 +44,13 @@ import {
   codingPlanForUsageSetting,
 } from '@shared/codingPlanSubscriptions';
 import { type SubscriptionUsageProvider } from '@shared/schemas';
-import {
-  type SettingsViewInboundHandlerRegistry,
-  type UpdateSubscriptionAuthStatusMessage,
-} from '@shared/settingsView/settingsViewMessages';
+import { type UpdateSubscriptionAuthStatusMessage } from '@shared/settingsView/settingsViewMessages';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { SettingsStatePorts } from '@shared/settingsView/types';
 import { ACCOUNT_OUTCOME } from '@ui/copy/accountAuth';
 import { getProviderKeyUrl } from '@utils/config/providerConfig';
 import { allSettledVoid } from '@utils/core/allSettledVoid';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 /**
  * A sign-in presenter (the device-code dialog, the browser-opened notice)
@@ -258,59 +259,61 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
         getProviderKeyUrl(options.stores, provider),
       refreshAfterKeyChange: (provider) =>
         this.refreshAfterProviderKeyChange(provider),
-      reportFailure: (message, error) =>
-        Effect.gen({ self: this }, function* () {
-          yield* options.notifications.showErrorMessage(
-            `${message}: ${toErrorMessage(error)}`,
-          );
-          options.onError(error);
-          yield* this.postProfileData();
-        }).pipe(Effect.orDie),
     });
     this.profileHandlers = {
       // The settings view's Sign in button is a host entry, so the sign-in
       // program settles here.
-      signIn: () => options.runtime.runPromise(options.auth.signIn()),
-      signOut: () => options.auth.signOut(),
+      signIn: () => options.auth.signIn().pipe(Effect.mapError(ensureError)),
+      signOut: () =>
+        Effect.tryPromise({
+          try: () => options.auth.signOut(),
+          catch: ensureError,
+        }),
       setProviderKey: (message) =>
-        options.runtime.runPromise(
-          this.profileKeyController.setProviderKey(message.provider),
-        ),
+        this.profileKeyController
+          .setProviderKey(message.provider)
+          .pipe(
+            Effect.catchTag('ProviderKeyActionFailed', (error) =>
+              this.reportKeyFailure(error),
+            ),
+          ),
       removeProviderKey: (message) =>
-        options.runtime.runPromise(
-          this.profileKeyController.removeProviderKey(message.provider),
-        ),
+        this.profileKeyController
+          .removeProviderKey(message.provider)
+          .pipe(
+            Effect.catchTag('ProviderKeyActionFailed', (error) =>
+              this.reportKeyFailure(error),
+            ),
+          ),
       openProviderKeyUrl: (message) =>
-        options.runtime.runPromise(
-          this.profileKeyController.openProviderKeyUrl(message.provider),
-        ),
+        this.profileKeyController.openProviderKeyUrl(message.provider),
       openExternalUrl: (message) =>
-        options.runtime.runPromise(
-          options.externalOpener.openExternal(message.url),
-        ),
+        options.externalOpener.openExternal(message.url),
     };
     // Each arm is a settings-view message, so the subscription programs settle
     // here exactly as the profile arms above do.
     this.chatGptHandlers = {
-      signInChatGpt: () =>
-        options.runtime.runPromise(this.signInSubscription('chatgpt')),
-      signOutChatGpt: () =>
-        options.runtime.runPromise(this.signOutSubscription('chatgpt')),
+      signInChatGpt: () => this.signInSubscription('chatgpt'),
+      signOutChatGpt: () => this.signOutSubscription('chatgpt'),
       setChatGptPreferSubscription: (message) =>
-        options.runtime.runPromise(
-          this.setSubscriptionPreference('chatgpt', message.enabled),
-        ),
+        this.setSubscriptionPreference('chatgpt', message.enabled),
     };
     this.grokHandlers = {
-      signInGrok: () =>
-        options.runtime.runPromise(this.signInSubscription('grok')),
-      signOutGrok: () =>
-        options.runtime.runPromise(this.signOutSubscription('grok')),
+      signInGrok: () => this.signInSubscription('grok'),
+      signOutGrok: () => this.signOutSubscription('grok'),
       setGrokPreferSubscription: (message) =>
-        options.runtime.runPromise(
-          this.setSubscriptionPreference('grok', message.enabled),
-        ),
+        this.setSubscriptionPreference('grok', message.enabled),
     };
+  }
+
+  private reportKeyFailure(error: ProviderKeyActionFailed) {
+    return Effect.gen({ self: this }, function* () {
+      yield* this.options.notifications.showErrorMessage(
+        `${error.message}: ${toErrorMessage(error.cause)}`,
+      );
+      this.options.onError(error.cause);
+      yield* this.postProfileData();
+    });
   }
 
   postStartupData() {
@@ -362,7 +365,7 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
     present: () => void | Promise<void>,
   ): void {
     const options = this.options;
-    void options.runtime.runPromise(
+    options.runtime.runFork(
       Effect.tryPromise({
         try: async () => {
           await present();
@@ -465,11 +468,6 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
         options.notifications
           .showErrorMessage(buildErrorMessage(provider, failure.cause))
           .pipe(
-            // A dialog that fails reaches the caller with the dialog's own
-            // rejection, as the bare `await` did.
-            Effect.catchTag('NotificationFailed', (notice) =>
-              Effect.fail(notice.cause),
-            ),
             Effect.flatMap(() =>
               Effect.sync(() => {
                 options.onError(failure.cause);

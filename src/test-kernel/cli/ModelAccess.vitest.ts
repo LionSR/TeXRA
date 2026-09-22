@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Effect } from 'effect';
+import { it as effectIt } from '@effect/vitest';
 
 import {
   findCliModelAccessEntry,
@@ -60,29 +61,25 @@ const routingSettings = new FakeStateStore();
 
 setupPlatform({}, { globalState: routingSettings });
 
-async function seedGlmRouting(settings: {
+function seedGlmRouting(settings: {
   readonly codingPlan?: boolean;
   readonly providerEndpoint?: string;
   readonly useOpenRouter?: boolean;
-}): Promise<void> {
-  await Effect.runPromise(
+}) {
+  return Effect.all([
     routingSettings.update(
       GlobalStateKey.GLM_CODING_PLAN,
       settings.codingPlan ?? false,
     ),
-  );
-  await Effect.runPromise(
     routingSettings.update(
       GlobalStateKey.ENDPOINT_GLM,
       settings.providerEndpoint ?? '',
     ),
-  );
-  await Effect.runPromise(
     routingSettings.update(
       GlobalStateKey.USE_OPENROUTER,
       settings.useOpenRouter ?? false,
     ),
-  );
+  ]).pipe(Effect.asVoid);
 }
 
 function model(
@@ -173,7 +170,7 @@ function expectModelOptionsRequested(models: string[]): void {
 describe('CLI model access resolution', () => {
   beforeEach(async () => {
     readModelAvailabilityInputsMock.mockReset();
-    await seedGlmRouting({});
+    await Effect.runPromise(seedGlmRouting({}));
   });
 
   it('keeps the requested model when it is currently runnable', async () => {
@@ -274,7 +271,7 @@ describe('CLI model access resolution', () => {
     status: 'api key set',
   });
 
-  it.each([
+  effectIt.effect.each([
     {
       name: 'prefixes a provider-key status with the api label',
       entry: DEEPSEEK_PROVIDER_KEY_ENTRY,
@@ -346,119 +343,130 @@ describe('CLI model access resolution', () => {
     },
   ])(
     'formats model picker status: $name',
-    async ({
-      entry,
-      expected,
-      codingPlan,
-      providerEndpoint,
-      useOpenRouter,
-    }) => {
-      await seedGlmRouting({ codingPlan, providerEndpoint, useOpenRouter });
-      expect(formatModelStatusForCli(hostStores(), entry)).toBe(expected);
-    },
+    ({ entry, expected, codingPlan, providerEndpoint, useOpenRouter }) =>
+      Effect.gen(function* () {
+        yield* seedGlmRouting({ codingPlan, providerEndpoint, useOpenRouter });
+        expect(yield* formatModelStatusForCli(hostStores(), entry)).toBe(
+          expected,
+        );
+      }),
   );
 
-  it('builds model picker rows from the access-list source of truth', () => {
-    const rows = modelSelectItemsForCli(hostStores(), [
-      model('deepseekT', {
-        model: modelOption('deepseekT', {
-          label: 'DeepSeek',
-          reasoning: 'Default (High)',
-          availability: 'provider-key',
-        }),
-        status: 'api key set',
-      }),
-      model('openrouterOnlyT', {
-        model: modelOption('openrouterOnlyT', {
-          label: 'OpenRouter Only',
-          availability: 'openrouter-key',
-        }),
-        status: 'openrouter key',
-      }),
-      model('gemini31p', {
-        available: false,
-        model: modelOption('gemini31p', {
-          label: 'Gemini',
-          availability: 'missing-key',
-        }),
-        status: 'missing api key',
-      }),
-    ]);
-
-    expect(rows.map((row) => row.value)).toEqual([
-      'deepseekT',
-      'openrouterOnlyT',
-    ]);
-    expect(rows.map((row) => row.description)).toEqual([
-      'api: api key set · reasoning setting: Default (High)',
-      'api: openrouter key',
-    ]);
-  });
-
-  it('marks runnable model picker rows disabled when a live chat cannot switch formats', () => {
-    expect(
-      modelSelectItemsForCli(
-        hostStores(),
-        [
-          model('sonnet46T', {
-            model: modelOption('sonnet46T', {
-              label: 'Sonnet',
-              reasoning: 'Low',
+  effectIt.effect(
+    'builds model picker rows from the access-list source of truth',
+    () =>
+      Effect.gen(function* () {
+        const rows = yield* modelSelectItemsForCli(hostStores(), [
+          model('deepseekT', {
+            model: modelOption('deepseekT', {
+              label: 'DeepSeek',
+              reasoning: 'Default (High)',
               availability: 'provider-key',
             }),
             status: 'api key set',
           }),
-          model('gpt55', {
-            model: modelOption('gpt55', {
-              label: 'GPT-5.5',
-              availability: 'provider-key',
+          model('openrouterOnlyT', {
+            model: modelOption('openrouterOnlyT', {
+              label: 'OpenRouter Only',
+              availability: 'openrouter-key',
             }),
-            status: 'api key set',
+            status: 'openrouter key',
           }),
-        ],
-        (candidate) =>
-          candidate === 'sonnet46T'
-            ? 'different conversation format; start new chat'
-            : undefined,
-      ),
-    ).toEqual([
-      {
-        value: 'sonnet46T',
-        label: 'Sonnet',
-        description:
-          'different conversation format; start new chat; api: api key set · reasoning setting: Low',
-        disabled: true,
-      },
-      {
-        value: 'gpt55',
-        label: 'GPT-5.5',
-        description: 'api: api key set',
-        disabled: false,
-      },
-    ]);
-  });
+          model('gemini31p', {
+            available: false,
+            model: modelOption('gemini31p', {
+              label: 'Gemini',
+              availability: 'missing-key',
+            }),
+            status: 'missing api key',
+          }),
+        ]);
 
-  it('treats filtered-empty model picker rows as non-actionable', () => {
-    expect(
-      modelSelectItemsForCli(hostStores(), [
-        model('deepseekT', {
-          available: false,
-          model: modelOption('deepseekT', {
-            availability: 'provider-key',
-          }),
-          status: 'api key set',
-        }),
-        model('gemini31p', {
-          available: false,
-          model: modelOption('gemini31p', {
-            availability: 'missing-key',
-          }),
-          status: 'missing api key',
-        }),
-        missingKeyModel('opus48T'),
-      ]),
-    ).toEqual([]);
-  });
+        expect(rows.map((row) => row.value)).toEqual([
+          'deepseekT',
+          'openrouterOnlyT',
+        ]);
+        expect(rows.map((row) => row.description)).toEqual([
+          'api: api key set · reasoning setting: Default (High)',
+          'api: openrouter key',
+        ]);
+      }),
+  );
+
+  effectIt.effect(
+    'marks runnable model picker rows disabled when a live chat cannot switch formats',
+    () =>
+      Effect.gen(function* () {
+        expect(
+          yield* modelSelectItemsForCli(
+            hostStores(),
+            [
+              model('sonnet46T', {
+                model: modelOption('sonnet46T', {
+                  label: 'Sonnet',
+                  reasoning: 'Low',
+                  availability: 'provider-key',
+                }),
+                status: 'api key set',
+              }),
+              model('gpt55', {
+                model: modelOption('gpt55', {
+                  label: 'GPT-5.5',
+                  availability: 'provider-key',
+                }),
+                status: 'api key set',
+              }),
+            ],
+            (candidate) =>
+              Effect.succeed(
+                candidate === 'sonnet46T'
+                  ? 'different conversation format; start new chat'
+                  : undefined,
+              ),
+          ),
+        ).toEqual([
+          {
+            value: 'sonnet46T',
+            label: 'Sonnet',
+            description:
+              'different conversation format; start new chat; api: api key set · reasoning setting: Low',
+            disabled: true,
+          },
+          {
+            value: 'gpt55',
+            label: 'GPT-5.5',
+            description: 'api: api key set',
+            disabled: false,
+          },
+        ]);
+      }),
+  );
+
+  effectIt.effect(
+    'treats filtered-empty model picker rows as non-actionable',
+    () =>
+      Effect.gen(function* () {
+        expect(
+          yield* modelSelectItemsForCli(hostStores(), [
+            model('deepseekT', {
+              available: false,
+              model: modelOption('deepseekT', {
+                availability: 'provider-key',
+              }),
+              status: 'api key set',
+            }),
+            model('gemini31p', {
+              available: false,
+              model: modelOption('gemini31p', {
+                availability: 'missing-key',
+              }),
+              status: 'missing api key',
+            }),
+            missingKeyModel('opus48T'),
+          ]),
+        ).toEqual([]);
+      }),
+  );
 
   it('keeps defaults for omitted and nullish recovery actions', () => {
     expect(formatCliNoAvailableModelsRecovery()).toBe(

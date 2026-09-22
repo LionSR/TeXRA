@@ -1711,9 +1711,11 @@ registerBuiltinSlashCommands({
   canSelectAgent: () => !rootRunPending.get(),
   canSelectModel: () => CAN_SELECT_MODEL,
   getModelSwitchDisabledReason: (model) =>
-    DISABLED_MODEL_SWITCHES.has(model)
-      ? DISABLED_MODEL_SWITCH_REASON
-      : undefined,
+    Effect.succeed(
+      DISABLED_MODEL_SWITCHES.has(model)
+        ? DISABLED_MODEL_SWITCH_REASON
+        : undefined,
+    ),
   getApprovalPolicy: () => harnessRuntimeSession.approvalPolicy,
   onApprovalPolicySelect: setHarnessApprovalPolicy,
   onModelSelect: (model) =>

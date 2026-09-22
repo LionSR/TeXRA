@@ -37,16 +37,15 @@ interface DiagnosticsPorts extends WorkspacePathPorts {
 }
 
 /** Resolve an input path to an absolute path against the active working directory. */
-function resolveAbsolutePath(
-  filePath: string,
-  ports: WorkspacePathPorts,
-): string {
-  return resolveWorkspaceRelativePath(
-    ports.settings,
-    ports.workspaceRoot,
-    filePath,
-    ports.toolRoot(),
-  ).absolute;
+function resolveAbsolutePath(filePath: string, ports: WorkspacePathPorts) {
+  return Effect.gen(function* () {
+    return (yield* resolveWorkspaceRelativePath(
+      ports.settings,
+      ports.workspaceRoot,
+      filePath,
+      ports.toolRoot(),
+    )).absolute;
+  });
 }
 
 const DiagnosticsPathSchema = z
@@ -134,9 +133,9 @@ export class DiagnosticsTool extends defineTool({
   )(function* (
     ports: DiagnosticsPorts,
     input: Extract<DiagnosticsInput, { command: 'list' | 'count' }>,
-  ): Effect.fn.Return<ToolResult, ToolError> {
+  ): Effect.fn.Return<ToolResult, Error> {
     const { command, path } = input;
-    const diagnosticsPath = resolveAbsolutePath(path, ports);
+    const diagnosticsPath = yield* resolveAbsolutePath(path, ports);
     const linter = ports.readDiagnostics;
     if (!linter) {
       return yield* Effect.fail(
@@ -194,7 +193,7 @@ export class DiagnosticsTool extends defineTool({
     function* (
       ports: DiagnosticsPorts,
       input: Extract<DiagnosticsInput, { command: 'add' }>,
-    ): Effect.fn.Return<ToolResult, ToolError> {
+    ): Effect.fn.Return<ToolResult, Error> {
       const { path, line, message, severity, confidence } = input;
       const addCriticismSink = ports.addCriticism;
       if (!addCriticismSink) {
@@ -207,9 +206,9 @@ export class DiagnosticsTool extends defineTool({
 
       // Path resolution shares the sink's failure report: both are the "add"
       // command failing before it could annotate anything.
+      const absolutePath = yield* resolveAbsolutePath(path, ports);
       const added = yield* Effect.try({
         try: () => {
-          const absolutePath = resolveAbsolutePath(path, ports);
           return {
             absolutePath,
             result: addCriticismSink({

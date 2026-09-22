@@ -1,12 +1,13 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join, relative } from 'node:path';
-import { Cause, Effect, Exit, FileSystem, Layer } from 'effect';
+import { Cause, Effect, Exit, FileSystem, Layer, Scope } from 'effect';
 import { it as effectIt } from '@effect/vitest';
 
 import { describe, expect, it, vi } from 'vitest';
 import * as agentRuntime from '@agent/runtime';
 import { globalDatabaseLayer } from '@controllers/session/Database';
+import { projectDatabaseLayer } from '@controllers/session/projectDatabase';
 import { openDesktopProjectRegistry } from '@desktop/main/desktopProjects.js';
 import { openDesktopProjectRecords } from '@desktop/main/desktopProjectRecords.js';
 import { JsonStore } from '@platform/defaults/jsonStore';
@@ -92,7 +93,11 @@ describe('desktop composition root and launch environment', () => {
           expect(yield* reopened.read).toEqual(['/first']);
           expect(yield* fs.readFileString(oldState)).toBe(previous);
         }),
-      ).pipe(Effect.provide(nodePlatformLayer)),
+      ).pipe(
+        Effect.provide(nodePlatformLayer),
+        Effect.provide(projectDatabaseLayer),
+        Effect.provide(ProcessIdentity.layer(processOwnerId(undefined))),
+      ),
   );
 
   effectIt.live(
@@ -130,6 +135,7 @@ describe('desktop composition root and launch environment', () => {
           const registry = yield* openDesktopProjectRegistry({
             dataRoot: profile,
             processRoots: host.roots,
+            processScope: yield* Scope.make(),
             globalConfigStore: config,
             records,
             stores: { ...host.roots, secrets: host.secrets },
@@ -142,6 +148,7 @@ describe('desktop composition root and launch environment', () => {
           const project = yield* registry.open(root);
           yield* registry.activate(project.root);
           const remembered = yield* records.read;
+          yield* project.roots.workspaceState.update('scope-test', 'live');
           const disposed = vi.spyOn(project, 'dispose');
           const failure = new Error('Unable to save project closure');
           vi.spyOn(records, 'forget').mockReturnValueOnce(Effect.fail(failure));
@@ -151,14 +158,32 @@ describe('desktop composition root and launch environment', () => {
           expect(registry.list()).toContain(project);
           expect(registry.active()).toBe(project);
           expect(disposed).not.toHaveBeenCalled();
+          expect(yield* project.roots.workspaceState.get('scope-test')).toBe(
+            'live',
+          );
           expect(yield* records.read).toEqual(remembered);
           yield* registry.close(project.root!);
           expect(registry.list()).not.toContain(project);
           expect(disposed).toHaveBeenCalledOnce();
+          expect(
+            Exit.isFailure(
+              yield* Effect.exit(
+                project.roots.workspaceState.get('scope-test'),
+              ),
+            ),
+          ).toBe(true);
           expect(registry.active()).toBe(successor);
           expect(yield* records.read).toEqual([successor.root]);
+          const reopened = yield* registry.open(root);
+          expect(yield* reopened.roots.workspaceState.get('scope-test')).toBe(
+            'live',
+          );
         }),
-      ).pipe(Effect.provide(nodePlatformLayer)),
+      ).pipe(
+        Effect.provide(nodePlatformLayer),
+        Effect.provide(projectDatabaseLayer),
+        Effect.provide(ProcessIdentity.layer(processOwnerId(undefined))),
+      ),
   );
 
   effectIt.live('releases every project when one project disposal fails', () =>
@@ -198,6 +223,7 @@ describe('desktop composition root and launch environment', () => {
         const registry = yield* openDesktopProjectRegistry({
           dataRoot: profile,
           processRoots: host.roots,
+          processScope: yield* Scope.make(),
           globalConfigStore: config,
           records,
           stores: { ...host.roots, secrets: host.secrets },
@@ -238,7 +264,11 @@ describe('desktop composition root and launch environment', () => {
         expect(disposed).toEqual(['second', 'first', 'fallback']);
         expect(registry.list()).toEqual([]);
       }),
-    ).pipe(Effect.provide(nodePlatformLayer)),
+    ).pipe(
+      Effect.provide(nodePlatformLayer),
+      Effect.provide(projectDatabaseLayer),
+      Effect.provide(ProcessIdentity.layer(processOwnerId(undefined))),
+    ),
   );
 
   it('keeps platform initialization in the Electron composition root', async () => {

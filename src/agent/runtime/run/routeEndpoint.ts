@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 /**
  * The endpoint of one model route, resolved as an explicit URL. The package
  * binds a model to a stated deployment endpoint (it never falls back to an
@@ -11,6 +12,7 @@ import { ModelProvider, type ModelConfig } from 'llm-zoo';
 import { resolveGlmRoute } from '@model/glmRouting';
 import { OPENROUTER_BASE_URL } from '@model/openRouterEndpoint';
 import { normalizeProviderEndpoint } from '@model/providerEndpoint';
+import type { StateReadFailed } from '@platform/interfaces';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { DeclinableUsageRoute, UsageRoute } from '@shared/schemas';
 import {
@@ -31,7 +33,9 @@ export const OPENAI_DEFAULT_ENDPOINT = 'https://api.openai.com/v1';
  */
 const BASE_URLS: Record<
   ModelProvider,
-  string | ((stores: SettingsStores) => string) | null
+  | string
+  | ((stores: SettingsStores) => Effect.Effect<string, StateReadFailed>)
+  | null
 > = {
   [ModelProvider.GOOGLE]: 'https://generativelanguage.googleapis.com',
   [ModelProvider.OPENAI]: OPENAI_DEFAULT_ENDPOINT,
@@ -42,16 +46,27 @@ const BASE_URLS: Record<
   // platform-specific. Kimi Code models never reach here: their coding
   // baseUrl wins as the per-model override.
   [ModelProvider.MOONSHOT]: (stores) =>
-    `https://${useChinaRegion(stores, 'moonshot') ? 'api.moonshot.cn' : 'api.moonshot.ai'}/v1`,
+    useChinaRegion(stores, 'moonshot').pipe(
+      Effect.map(
+        (china) =>
+          `https://${china ? 'api.moonshot.cn' : 'api.moonshot.ai'}/v1`,
+      ),
+    ),
   [ModelProvider.DASHSCOPE]: (stores) =>
-    `https://${
-      useChinaRegion(stores, 'dashscope')
-        ? 'dashscope.aliyuncs.com'
-        : 'dashscope-intl.aliyuncs.com'
-    }/compatible-mode/v1`,
+    useChinaRegion(stores, 'dashscope').pipe(
+      Effect.map(
+        (china) =>
+          `https://${china ? 'dashscope.aliyuncs.com' : 'dashscope-intl.aliyuncs.com'}/compatible-mode/v1`,
+      ),
+    ),
   // China: api.minimaxi.com (note the extra 'i'), International: api.minimax.io
   [ModelProvider.MINIMAX]: (stores) =>
-    `https://${useChinaRegion(stores, 'minimax') ? 'api.minimaxi.com' : 'api.minimax.io'}/v1`,
+    useChinaRegion(stores, 'minimax').pipe(
+      Effect.map(
+        (china) =>
+          `https://${china ? 'api.minimaxi.com' : 'api.minimax.io'}/v1`,
+      ),
+    ),
   // Resolved by `resolveGlmRoute`, which carries the usage classification.
   [ModelProvider.GLM]: null,
   [ModelProvider.META]: 'https://api.meta.ai/v1',
@@ -69,30 +84,33 @@ export function resolveRouteEndpoint(
   config: Pick<ModelConfig, 'name' | 'provider' | 'baseUrl'>,
   useOpenRouter: boolean,
   declinedRoutes?: readonly DeclinableUsageRoute[],
-): RouteEndpoint {
-  if (config.provider === ModelProvider.GLM) {
-    const route = resolveGlmRoute({
-      stores,
-      baseUrl: config.baseUrl,
-      useOpenRouter,
-      declinedRoutes,
-    });
-    return route.route === 'official-coding-plan'
-      ? { baseUrl: route.baseUrl, usageRoute: route.usageRoute }
-      : { baseUrl: route.baseUrl };
-  }
-  if (config.baseUrl) return { baseUrl: config.baseUrl };
-  if (useOpenRouter) return { baseUrl: OPENROUTER_BASE_URL };
-  const customUrl = getProviderEndpoint(stores, config.provider);
-  if (customUrl) {
-    return { baseUrl: `https://${normalizeProviderEndpoint(customUrl)}` };
-  }
-  const baseUrl = BASE_URLS[config.provider];
-  const resolved = typeof baseUrl === 'function' ? baseUrl(stores) : baseUrl;
-  if (resolved === null) {
-    throw new Error(
-      `Model ${config.name} has no HTTP endpoint for provider ${config.provider}.`,
-    );
-  }
-  return { baseUrl: resolved };
+) {
+  return Effect.gen(function* () {
+    if (config.provider === ModelProvider.GLM) {
+      const route = yield* resolveGlmRoute({
+        stores,
+        baseUrl: config.baseUrl,
+        useOpenRouter,
+        declinedRoutes,
+      });
+      return route.route === 'official-coding-plan'
+        ? { baseUrl: route.baseUrl, usageRoute: route.usageRoute }
+        : { baseUrl: route.baseUrl };
+    }
+    if (config.baseUrl) return { baseUrl: config.baseUrl };
+    if (useOpenRouter) return { baseUrl: OPENROUTER_BASE_URL };
+    const customUrl = yield* getProviderEndpoint(stores, config.provider);
+    if (customUrl) {
+      return { baseUrl: `https://${normalizeProviderEndpoint(customUrl)}` };
+    }
+    const baseUrl = BASE_URLS[config.provider];
+    const resolved =
+      typeof baseUrl === 'function' ? yield* baseUrl(stores) : baseUrl;
+    if (resolved === null) {
+      throw new Error(
+        `Model ${config.name} has no HTTP endpoint for provider ${config.provider}.`,
+      );
+    }
+    return { baseUrl: resolved };
+  });
 }

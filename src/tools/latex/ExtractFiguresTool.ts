@@ -52,15 +52,17 @@ const extractFigures = Effect.fn('ExtractLatexFiguresTool.execute')(function* ({
       describe: () => `Figure referenced by ${display}`,
     });
 
-  const formattedList = limitedPaths.map((figurePath) => {
-    const { display: figureDisplay } = resolveAndFormat(
-      call.roots,
-      call.roots.workspace,
-      figurePath,
-      call.workingDirectory,
-    );
-    return `- ${figureDisplay}`;
-  });
+  const formattedList = yield* Effect.forEach(limitedPaths, (figurePath) =>
+    Effect.gen(function* () {
+      const { display: figureDisplay } = yield* resolveAndFormat(
+        call.roots,
+        call.roots.workspace,
+        figurePath,
+        call.workingDirectory,
+      );
+      return `- ${figureDisplay}`;
+    }),
+  );
   const header = `Figures referenced in ${display}`;
   const output = formatToolOutput(header, formattedList);
   const summary = `Found ${formatResultCount(uniqueFigures.length, 'figure file')} in ${display}.`;

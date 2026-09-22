@@ -12,7 +12,7 @@ import { oauthSubscriptionUsageRoute } from '@model/providerCapabilities';
 import { resolveRuntimeModelConfig } from '@model/runtimeModelRegistry';
 import type { LanguageModel } from '@platform/languageModel';
 import type { PlatformSecrets } from '@platform/secrets';
-import type { ConfigWriteFailed } from '@platform/interfaces';
+import type { ConfigWriteFailed, StateReadFailed } from '@platform/interfaces';
 import {
   CODING_PLAN_SUBSCRIPTIONS,
   type CodingPlanSubscription,
@@ -39,7 +39,9 @@ export interface ModelSubscriptionStores extends SettingsStores {
 
 export interface CodingPlanSubscriptionRuntime {
   readonly descriptor: CodingPlanSubscription;
-  readonly getEnabled: (stores: SettingsStores) => boolean;
+  readonly getEnabled: (
+    stores: SettingsStores,
+  ) => Effect.Effect<boolean, StateReadFailed>;
   /**
    * Persist the toggle through the shared config write path. An `Effect`, like
    * every other write of a catalog-backed setting, so the caller's program
@@ -59,12 +61,12 @@ function isGlmCodingPlanActive(
     const config = yield* resolveRuntimeModelConfig(modelId);
     if (config?.provider !== ModelProvider.GLM) return false;
 
-    const route = resolveGlmRoute({
+    const route = yield* resolveGlmRoute({
       stores,
       baseUrl: config.baseUrl,
       useOpenRouter: shouldRouteModelThroughOpenRouter(
         config,
-        getUseOpenRouter(stores),
+        yield* getUseOpenRouter(stores),
       ),
     });
     if (route.route !== 'official-coding-plan') return false;
@@ -90,7 +92,7 @@ function isKimiCodeSubscriptionActive(
       yield* resolveKimiCodeRoutingFacts(
         stores,
         stores.secrets,
-        getUseOpenRouter(stores),
+        yield* getUseOpenRouter(stores),
       ),
     );
   });

@@ -37,7 +37,7 @@ describe('onboarding decline flag', () => {
       const state = new MemoryStateStore();
       yield* state.update(ONBOARDING_DECLINED_KEY, 'yes');
 
-      expect(readOnboardingFlags(state).declined).toBe(false);
+      expect((yield* readOnboardingFlags(state)).declined).toBe(false);
     }),
   );
 });

@@ -225,11 +225,15 @@ export class ToolUseFollowUpQueue {
     return this.claim(entry, runId, kind);
   }
 
-  /**
-   * Begin a separately authorized child run. The caller must already own the
-   * run lease.
-   */
-  claimChildRun(runId: RunId): FollowUpConsumerLease | undefined {
+  /** Claim a DB-owned child, transferring an exact recovery capability if supplied. */
+  claimChildRun(
+    runId: RunId,
+    recovery?: FollowUpRecoveryLease,
+  ): FollowUpConsumerLease | undefined {
+    if (recovery) {
+      if (recovery.runId !== runId || !this.useRecovery(recovery)) return;
+      this.entries.get(runId)!.owner = undefined;
+    }
     return this.claimLive(runId, 'child');
   }
 
@@ -322,13 +326,9 @@ export class ToolUseFollowUpQueue {
   }
 
   /**
-   * Attach a consumer's input queue to the run's current owner and return the
-   * queue it consumes: `lease`'s own entry, or, without a lease, the entry a
-   * child or recovery owner holds (an inner loop reads the queue its outer
-   * owner consumes). A queue already attached for this owner wins, so every
-   * consumer of one generation reads one queue. `undefined` when there is no
-   * such owner. The consumer that attaches runs the run under its own run
-   * lease, so it adopts any claim an admission took for the owner.
+   * Attach to this lease, or to an enclosing child/recovery owner. Existing
+   * input wins so every consumer of one generation reads one queue. Attachment
+   * adopts the admission's claim; the caller must hold the run's DB lease.
    */
   attachInput(
     runId: RunId,
@@ -499,7 +499,9 @@ export class ToolUseFollowUpQueue {
       // re-submits once its own ordering allows, and the offer happens then.
       const liveOfferDeferred =
         options?.liveOffer === 'deferred' &&
-        (owner?.kind === 'flow' || owner?.kind === 'child');
+        (owner?.kind === 'flow' ||
+          owner?.kind === 'child' ||
+          (owner?.kind === 'recovery' && admitted.input !== undefined));
       if (current && queued.length > 0) {
         if (owner === undefined && admission === 'recoverable') {
           lease = this.claim(admitted, runId, 'recovery');

@@ -7,6 +7,7 @@ import type { RunRequest } from '@agent/core/state/runRequests';
 import { detectGeneratedLatexdiffArtifact } from '@latex/latexdiff/diffFileNameManager';
 import type { ModelHostFactUnreadable } from '@model/computeModelOptions';
 import { decideRunModel } from '@model/runModelDecision';
+import type { StateReadFailed } from '@platform/interfaces';
 import {
   AgentCategory,
   fileLocationAddressPath,
@@ -65,7 +66,7 @@ export class CompileFixerPlanFailed extends Data.TaggedError(
 interface ProgressFollowUpControllerDeps {
   loadModelOptions(): Effect.Effect<
     readonly ProgressFollowUpModelOption[],
-    ModelHostFactUnreadable
+    ModelHostFactUnreadable | StateReadFailed
   >;
   state: ProgressFollowUpState;
   workspace: ProgressFollowUpWorkspace;
@@ -108,7 +109,7 @@ export class ProgressFollowUpController {
     runConfig: AgentConfig | undefined,
   ): Effect.Effect<
     ProgressFollowUpPlan,
-    CompileFixerPlanFailed | ModelHostFactUnreadable
+    CompileFixerPlanFailed | ModelHostFactUnreadable | StateReadFailed
   > {
     return this.deps.loadModelOptions().pipe(
       Effect.flatMap((modelOptions) => {

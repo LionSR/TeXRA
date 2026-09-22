@@ -30,6 +30,8 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { bumpCodexPreferenceVersion } from '../state/cliState';
 import { AgentRosterForm } from './AgentRosterForm';
 import { ConfigForm } from './ConfigForm';
+import { useAsyncListForm } from './_shared/useAsyncListForm';
+import { renderAsyncListFormTransient } from './_shared/FormFrame';
 import {
   formatGitHubTokenSummary,
   GitHubTokenForm,
@@ -216,6 +218,23 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
     onErrorRef: onError,
   });
 
+  const settings = useAsyncListForm<Record<string, unknown>>({
+    load: () =>
+      runtime.runPromise(
+        Effect.map(
+          Effect.forEach(CLI_STATE_SETTINGS, (entry) =>
+            Effect.map(
+              readSetting(entry, stores, 'cli'),
+              (value) => [entry.key, value] as const,
+            ),
+          ),
+          Object.fromEntries,
+        ),
+      ),
+    onClose: props.onClose,
+    onError: props.onError,
+  });
+
   // The one CLI write path for a `/config` row: the same
   // `applyStateSettingUpdate` the extension and desktop settings views call, so
   // a row that carries a live side effect (approval policy) cannot be persisted
@@ -258,16 +277,25 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
             ),
           );
       }
+      settings.reload();
       if (entry.onWrite?.invalidatesModelOptions) {
         bumpCodexPreferenceVersion();
       }
     });
 
+  const transient = renderAsyncListFormTransient({
+    loading: settings.data === undefined && settings.loading,
+    error: settings.error,
+    title: '/config',
+    loadingLabel: 'Loading settings...',
+  });
+  if (transient) return transient;
+
   return (
     <ConfigForm
       availableRows={props.availableRows}
       entries={CLI_STATE_SETTINGS}
-      readValue={(entry) => readSetting(entry, stores, 'cli')}
+      readValue={(entry) => settings.data?.[entry.key]}
       writeValue={(entry, value) => applyUpdate(entry, value)}
       resetValue={(entry) => applyUpdate(entry, null)}
       runtime={runtime}
