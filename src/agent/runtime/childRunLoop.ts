@@ -9,8 +9,7 @@ import { createChannelTrace } from '@agent/trace';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { finalizeRunTerminal } from '@agent/runtime/AgentRunLifecycle';
 import { childRunBudgetFor } from '@agent/runtime/childRunBudget';
-import type { RunHandle, RunInterruptHandler } from '@agent/runtime/RunHandle';
-import { Runs } from '@agent/runtime/runRegistry';
+import { Runs, type RunRegistry } from '@agent/runtime/runRegistry';
 import { RunInput, type QueuedFollowUp } from '@agent/followUp/RunInput';
 import type {
   FollowUpConsumerLease,
@@ -135,11 +134,12 @@ export interface ChildRunStrategy<TTurn, R = never> {
   readonly stageLabel: string;
 
   /**
-   * This child's turns drive a live OS process, so the loop's interrupt
-   * handler tears one down. Shutdown drain reads it off the handle to reach a
-   * leaked process (`RunRegistry.killBackgroundProcesses`) without
+   * This child's turns drive a live OS process, so a stop tears one down.
+   * Shutdown drain reads the kill hook the loop registers on the run handle
+   * (`RunHandle.backgroundProcess`, drained by
+   * `RunRegistry.killBackgroundProcesses`) to reach a leaked process without
    * disturbing agent children that are deliberately left running for restart
-   * recovery; see `RunInterruptHandler.ownsBackgroundProcess`.
+   * recovery.
    */
   readonly ownsBackgroundProcess?: boolean;
 
@@ -321,28 +321,35 @@ export interface ChildRunLoopParams<TTurn, R = never> {
 }
 
 /**
- * Agent-CLI interrupt handler spanning active turns and idle queue waits.
- * Follow-ups join its queue; flow-only controls such as compaction ignore it.
+ * The child loop's stop, registered on the run's roster activation for the
+ * loop's whole lifetime, so the stop button always finds a live target;
+ * including the inter-turn WAITING gap, when no flow-owned context is
+ * attached. Follow-ups join its queue; flow-only controls such as compaction
+ * ignore it.
  *
- * A running turn and the between-turn wait are reached through `signal`
- * alone: every strategy binds the turn it launches to it, a native turn's
- * flow subscribes to its own run signal downstream of that binding, and the
- * loop races its queue wait against it.
+ * A process child's turns are reached through `signal` alone: every strategy
+ * binds the turn it launches to it (`execa`'s `cancelSignal`, the Codex SDK,
+ * the Claude Agent SDK), and the loop races its queue wait against it. The
+ * loop's own fiber is never the stop target — a stopped turn's settlement,
+ * parent delivery and finalization all run after the abort (the ruled
+ * permanent resident, architecture rulings ledger 2026-08-01). A native
+ * child has no foreign process: its in-flight turn is this session's own run
+ * program, so its stop ALSO interrupts the run fiber the turn runs on.
  */
-class ChildRunInterruptible implements RunInterruptHandler {
+class ChildRunInterruptible {
   private readonly controller = new AbortController();
 
   constructor(
-    /**
-     * Only a strategy that declares `ownsBackgroundProcess` sets this: a
-     * loop-level handler for an agent child must stay invisible to shutdown
-     * drain so restart recovery still finds it (#8155).
-     */
-    readonly ownsBackgroundProcess: boolean,
+    private readonly runs: RunRegistry,
+    private readonly runId: RunId,
+    /** A native child's turns run on the run's fiber; a process child's loop
+     *  fiber must survive the stop to deliver and finalize. */
+    private readonly interruptsRunFiber: boolean,
   ) {}
 
   interrupt(): void {
     this.controller.abort();
+    if (this.interruptsRunFiber) this.runs.interrupt(this.runId);
   }
 
   isInterrupted(): boolean {
@@ -860,23 +867,26 @@ export function startChildRunLoop<TTurn, R = never>(
     const { childRun, parentRunId, runId, agentName, strategy } = params;
     // Native runs own their trace; driver diagnostics use a channel trace.
     const logger = childRun?.logger ?? createChannelTrace('childRunLoop');
-    const loop = new ChildRunInterruptible(
-      strategy.ownsBackgroundProcess === true,
-    );
-    // Retain native lineage through launch and final delivery, outside the
-    // engine handle's lifetime. Process children have their stream already.
+    const loop = new ChildRunInterruptible(runs, runId, childRun === undefined);
+    // Every child loop reserves its stop target on the run's roster entry for
+    // the loop's whole life: a run stop must reach the loop's own signal,
+    // never interrupt the loop's fiber — a stopped turn's settlement, parent
+    // delivery and finalization all run after the abort. Only a native child
+    // also retains a terminal parent's continuation (its delivery
+    // reservation); a process child's reservation would make a terminal
+    // parent look recoverable after it can no longer accept either user
+    // input or the child's result.
     let activationDetached = false;
-    const releaseChildActivation = childRun
-      ? () => undefined
-      : runs.reserveChildActivation({
-          runId,
-          parentRunId,
-          interrupt: () => loop.interrupt(),
-          detach: () => {
-            activationDetached = true;
-          },
-          isDetached: () => activationDetached,
-        });
+    const releaseChildActivation = runs.reserveChildActivation({
+      runId,
+      parentRunId,
+      retainsTerminalParent: childRun === undefined,
+      interrupt: () => loop.interrupt(),
+      detach: () => {
+        activationDetached = true;
+      },
+      isDetached: () => activationDetached,
+    });
     let sessionOwnershipReleased = false;
     const releaseSessionOwnershipOnce = (): void => {
       if (sessionOwnershipReleased) return;
@@ -886,7 +896,6 @@ export function startChildRunLoop<TTurn, R = never>(
 
     let input!: RunInput;
     let queueLease: FollowUpConsumerLease | undefined;
-    let detachLoopInterrupt: (() => void) | undefined;
     let sessionStage: StageHandle | undefined;
     // Set once the setup's compensation has run (either early-fail path or
     // the launch's exit finalizer), so it never runs twice.
@@ -899,7 +908,6 @@ export function startChildRunLoop<TTurn, R = never>(
         const cleanupErrors: unknown[] = [];
         const cleanups = [
           () => sessionStage?.end(RUN_OUTCOME.FAILED),
-          () => detachLoopInterrupt?.(),
           () => {
             if (queueLease)
               runSession.followUps.release(queueLease, 'terminal');
@@ -968,10 +976,13 @@ export function startChildRunLoop<TTurn, R = never>(
               folded.success?.followUpIds,
             );
           }
-          if (!strategy.continuous) {
-            detachLoopInterrupt = runs
-              .getHandle(runId)
-              ?.attachInterruptHandler(loop);
+          if (strategy.ownsBackgroundProcess === true) {
+            // The one handle slot shutdown drain reads (#8155): kill the
+            // leaked OS process without touching the loop that reports it.
+            const handle = runs.getHandle(runId);
+            if (handle) {
+              handle.backgroundProcess = { kill: () => loop.interrupt() };
+            }
           }
           sessionStage = childRun
             ? logger.openStage(strategy.stageLabel)
@@ -1281,7 +1292,6 @@ export function startChildRunLoop<TTurn, R = never>(
               runner = (signal) => nextRunTurn(prompts, ports, signal);
             }
           }),
-        ),
       );
       return result;
     }).pipe(
@@ -1310,7 +1320,6 @@ export function startChildRunLoop<TTurn, R = never>(
 
             const terminal = yield* Effect.exit(
               Effect.gen(function* () {
-                detachLoopInterrupt?.();
                 let terminationCause: ChildLoopTerminationCause = 'terminal';
                 if (stopped) terminationCause = 'interrupted';
                 else if (sawTurnFailure) terminationCause = 'turn_failed';
@@ -1356,6 +1365,7 @@ export function startChildRunLoop<TTurn, R = never>(
                   const handle = runs.getHandle(runId);
                   if (handle) {
                     yield* finalizeRunTerminal({
+                      stopped,
                       session: runSession,
                       handle,
                       outcome,

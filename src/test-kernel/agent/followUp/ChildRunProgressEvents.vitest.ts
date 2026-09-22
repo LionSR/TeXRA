@@ -573,10 +573,13 @@ describe('child run progress events', () => {
       }).pipe(Effect.provideService(AgentResume, fakeHostAgentResume)),
   );
 
-  // The child reports its own exit and nothing else: a stop that already
-  // reached the handle outranks it, and `finalizeRunTerminal` resolves the
-  // run's terminal outcome from that stop rather than from the failure the
-  // child reports.
+  // A stopped child ends cancelled: the loop observes its own stop (its
+  // signal, or the run fiber's interruption for a native child) and derives
+  // the verdict BEFORE this port is called, so a stop outranks the failure
+  // the child's process reported first. That precedence race is covered in
+  // ChildRunLoop.vitest ('lets a stop landing after a turn failure win the
+  // terminal outcome'); what lands here is the loop's derived verdict,
+  // through the hub.
   it.effect(
     'settles a stopped child loop as cancelled from the stop that landed',
     () =>
@@ -584,11 +587,11 @@ describe('child run progress events', () => {
         const childRun = yield* Effect.promise(() =>
           startCodexChild(stoppedRunId, 'Run a stopped Codex child loop'),
         );
-        const handle = testDefaultSession().runs.getHandle(stoppedRunId);
-        expect(handle).toBeDefined();
-        handle?.interrupt();
+        expect(
+          testDefaultSession().runs.getHandle(stoppedRunId),
+        ).toBeDefined();
 
-        yield* childRun.finalize({ outcome: RUN_OUTCOME.FAILED });
+        yield* childRun.finalize({ outcome: RUN_OUTCOME.CANCELLED });
 
         expect(testDefaultSession().runView(stoppedRunId)?.status).toBe(
           RUN_PHASE.CANCELLED,

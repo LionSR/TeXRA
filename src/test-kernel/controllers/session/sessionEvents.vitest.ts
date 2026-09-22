@@ -1083,6 +1083,7 @@ describe('Sessions owner', () => {
         releaseChild = session.runs.reserveChildActivation({
           runId: RunIdSchema.parse('aa0002'),
           parentRunId: settled,
+          retainsTerminalParent: true,
           interrupt,
           detach: () => {},
           isDetached: () => true,

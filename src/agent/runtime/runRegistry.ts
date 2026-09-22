@@ -190,7 +190,6 @@ export class RunRegistry {
     // swaps the handles is what stops a handle built before a `run.detach`
     // from restoring the edge that row removed.
     if (activation?.isDetached() || previous?.parent === null) handle.detach();
-    if (previous?.stopRequested === true) handle.interrupt();
     this.roster.setHandle(handle);
     this.roster.notifyWaiters(handle.runId);
   }
@@ -318,7 +317,7 @@ export class RunRegistry {
       // terminal parent's continuation. A child-run handle is lifecycle
       // ownership, not authority to revive a parent that already finished.
       for (const activation of this.roster.activeChildActivations(runId)) {
-        return { kind: 'queue' };
+        if (activation.retainsTerminalParent) return { kind: 'queue' };
       }
       return { kind: 'no_session', runStatus: status };
     }
@@ -375,17 +374,15 @@ export class RunRegistry {
     return this.roster.activeIds();
   }
 
-  /**
-   * Kill only background OS processes (bash, codex) without touching agent run
-   * status. Agent runs are left in RUNNING: whether one is resumable is
-   * decided from its durable facts, never from a phase a later pass rewrites.
-   * `interruptBackgroundProcess()` fires only for a handle whose interrupt
-   * handler declares itself as owning a live background process, leaving every
-   * other `RunHandle` untouched (#8155).
+  /** Kill the background OS process of every run whose child loop declared
+   *  one (`RunHandle.backgroundProcess`), leaving every other run untouched
+   *  (#8155): an agent run is deliberately left running for restart recovery,
+   *  and its status is rewritten from its durable facts, never from a phase a
+   *  later pass rewrites.
    */
   killBackgroundProcesses(): void {
     for (const handle of this.roster.allHandles()) {
-      handle.interruptBackgroundProcess();
+      handle.backgroundProcess?.kill();
     }
   }
 

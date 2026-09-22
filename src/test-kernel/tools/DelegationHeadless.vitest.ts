@@ -2,7 +2,7 @@
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Deferred, Effect, Fiber, Stream } from 'effect';
+import { Cause, Deferred, Effect, Exit, Fiber, Stream } from 'effect';
 import {
   afterEach,
   beforeEach,
@@ -282,9 +282,7 @@ let inBandSession: SessionHandle;
 type PreparedInBandSubagentOptions = Effect.Success<
   ReturnType<Parameters<typeof executeSubagentInBandEffect>[0]['prepare']>
 >;
-type InBandSubagentRunOptions = PreparedInBandSubagentOptions & {
-  signal?: AbortSignal;
-};
+type InBandSubagentRunOptions = PreparedInBandSubagentOptions;
 
 /** The in-band delegation options shared by nearly every case (fields vary). */
 function delegationOptions(
@@ -308,12 +306,11 @@ function runInBand(
   options: InBandSubagentRunOptions,
   runId: RunId = IN_BAND_RUN_ID,
 ) {
-  const { signal, ...prepared } = options;
+  const prepared = options;
   return executeSubagentInBandEffect({
     runId,
     parentRunId: prepared.parentRunId,
     session: prepared.session,
-    signal,
     prepare: () => Effect.succeed(prepared),
   }).pipe(
     Effect.provide(fakeProcessServices()),
@@ -573,14 +570,13 @@ describe('headless delegation', () => {
             model: 'deepseekT',
           },
         });
-        const { signal, ...prepared } = options;
+        const prepared = options;
         const run = () =>
           Effect.provide(
             executeSubagentInBandEffect({
               runId: IN_BAND_RUN_ID,
               parentRunId: prepared.parentRunId,
               session: prepared.session,
-              signal,
               prepare: () => Effect.succeed(prepared),
             }).pipe(Effect.provideService(Runs, prepared.session.runs)),
             fakeProcessServices(),
@@ -861,61 +857,62 @@ describe('headless delegation', () => {
       }),
   );
 
-  it.effect('interrupts the live child when the in-band caller aborts', () =>
-    Effect.gen(function* () {
-      const controller = new AbortController();
-      const onCost = vi.fn();
-      const ready = yield* Deferred.make<void>();
-      let childInterrupted!: () => void;
-      const interrupted = new Promise<void>((resolve) => {
-        childInterrupted = resolve;
-      });
-      const interrupt = vi.fn(() => {
-        childInterrupted();
-        return true;
-      });
-      mocks.executeAgent.mockImplementationOnce(
-        async (_config, _id, options) => {
-          await Effect.runPromise(
-            options.onRun?.({ interrupt } as never) ?? Effect.void,
-          );
+  it.effect(
+    'a caller stop leaves the detached in-band child to finish its own record',
+    () =>
+      Effect.gen(function* () {
+        const onCost = vi.fn();
+        const ready = yield* Deferred.make<void>();
+        let finishChild!: () => void;
+        const childGate = new Promise<void>((resolve) => {
+          finishChild = resolve;
+        });
+        mocks.executeAgent.mockImplementationOnce(async () => {
           Deferred.doneUnsafe(ready, Effect.void);
-          await interrupted;
+          await childGate;
           return {
-            outcome: 'cancelled',
+            outcome: 'completed',
             runId: CHILD_RUN_ID,
-            output: { category: 'toolUse', response: '', files: [] },
+            output: { category: 'toolUse', response: 'done', files: [] },
           };
-        },
-      );
+        });
 
-      const running = yield* Effect.forkChild(
-        Effect.flip(
-          runInBand(delegationOptions({ signal: controller.signal, onCost })),
-        ),
-      );
-      yield* Deferred.await(ready);
-      controller.abort(new Error('Workflow stopped.'));
+        const running = yield* Effect.forkChild(
+          runInBand(delegationOptions({ onCost })),
+        );
+        yield* Deferred.await(ready);
+        // The caller's stop is its fiber's interruption; the detached child
+        // loop is not the caller's to tear down.
+        yield* Fiber.interrupt(running);
+        const exit = yield* Fiber.await(running);
+        expect(Exit.isFailure(exit) && Cause.hasInterrupts(exit.cause)).toBe(
+          true,
+        );
 
-      const error = yield* Fiber.join(running);
-      expect(error.message).toContain('Workflow stopped.');
-      expect(interrupt).toHaveBeenCalledOnce();
-      expect(onCost).toHaveBeenCalledOnce();
-      expect(mocks.writeResultMeta).toHaveBeenCalledOnce();
-      expect(mocks.writeResultMeta).toHaveBeenLastCalledWith(
-        expect.objectContaining({
-          producer: 'subagent',
-          output: expect.objectContaining({ response: '' }),
-        }),
-      );
-    }),
+        // The child finishes on its own lease and commits its own record,
+        // cost included.
+        finishChild();
+        yield* Effect.promise(() =>
+          vi.waitFor(() =>
+            expect(mocks.writeResultMeta).toHaveBeenCalledOnce(),
+          ),
+        );
+        expect(mocks.writeResultMeta).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            producer: 'subagent',
+            output: expect.objectContaining({ response: 'done' }),
+          }),
+        );
+        yield* Effect.promise(() =>
+          vi.waitFor(() => expect(onCost).toHaveBeenCalledOnce()),
+        );
+      }),
   );
 
   it.effect(
-    'keeps the completed child result when cancellation arrives during persistence',
+    'keeps the completed child result when the caller stops during persistence',
     () =>
       Effect.gen(function* () {
-        const controller = new AbortController();
         const persisting = yield* Deferred.make<void>();
         let finishPersistence!: () => void;
         const persistencePending = new Promise<void>((resolve) => {
@@ -927,17 +924,24 @@ describe('headless delegation', () => {
         });
 
         const running = yield* Effect.forkChild(
-          Effect.flip(
-            runInBand(delegationOptions({ signal: controller.signal })),
-          ),
+          runInBand(delegationOptions()),
         );
         yield* Deferred.await(persisting);
-        controller.abort(new Error('Workflow stopped after child completion.'));
+        // The caller's stop interrupts its own await, never the child's
+        // persistence: the detached loop owns that record.
+        yield* Fiber.interrupt(running);
+        const exit = yield* Fiber.await(running);
+        expect(Exit.isFailure(exit) && Cause.hasInterrupts(exit.cause)).toBe(
+          true,
+        );
         finishPersistence();
 
-        const error = yield* Fiber.join(running);
-        expect(error.message).toContain(
-          'Workflow stopped after child completion.',
+        yield* Effect.promise(() =>
+          vi.waitFor(() =>
+            expect(
+              inBandSession.runs.getHandle(IN_BAND_RUN_ID),
+            ).toBeUndefined(),
+          ),
         );
         expect(mocks.writeResultMeta).toHaveBeenCalledOnce();
         expect(mocks.writeResultMeta).toHaveBeenCalledWith(
@@ -948,22 +952,6 @@ describe('headless delegation', () => {
             }),
           }),
         );
-      }),
-  );
-
-  it.effect(
-    'does not register a child when the in-band caller is already aborted',
-    () =>
-      Effect.gen(function* () {
-        const controller = new AbortController();
-        controller.abort(new Error('Workflow already stopped.'));
-
-        const error = yield* Effect.flip(
-          runInBand(delegationOptions({ signal: controller.signal })),
-        );
-        expect(error.message).toContain('Workflow already stopped.');
-        expect(mocks.registerRun).not.toHaveBeenCalled();
-        expect(mocks.executeAgent).not.toHaveBeenCalled();
       }),
   );
 

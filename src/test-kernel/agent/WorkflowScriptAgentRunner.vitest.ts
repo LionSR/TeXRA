@@ -622,7 +622,6 @@ describe('createWorkflowScriptAgentRunner', () => {
         expect.objectContaining({
           runId: expect.stringMatching(/^[a-f0-9]{24}$/),
           parentRunId: runId,
-          signal: call.signal,
           prepare: expect.any(Function),
         }),
       );

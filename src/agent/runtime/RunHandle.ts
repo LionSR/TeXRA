@@ -2,8 +2,10 @@
  * Live run handle and terminal settlement.
  *
  * A handle owns one run's identity, its parent edge, its live control
- * surfaces (interrupt, tool-use flow, run lease), and its exactly-once
- * terminal settlement. Termination policy lives with the owning registry.
+ * surfaces (the tool-use flow, the run lease), and its exactly-once
+ * terminal settlement. A run's stop is its fiber's interruption
+ * (`RunRegistry.interrupt`), never a call on this handle. Termination
+ * policy lives with the owning registry.
  */
 
 import type { AgentTrace } from '@agent/trace';
@@ -39,20 +41,6 @@ export interface RunFacts {
   readonly category: AgentCategory;
 }
 
-/** Live run-owned capability that can receive a user stop request. */
-export interface RunInterruptHandler {
-  interrupt(): void;
-  /**
-   * True when `interrupt()` tears down a live background OS process (e.g. a
-   * background bash child), as opposed to merely cancelling an in-flight
-   * agent turn or a resumable native-subagent loop. Shutdown drain reads this
-   * to reach a leaked background process (see
-   * `RunRegistry.killBackgroundProcesses`) without disturbing agent
-   * runs that are intentionally left running for restart recovery.
-   */
-  readonly ownsBackgroundProcess?: boolean;
-}
-
 /**
  * The projection of the flow's {@link ToolUseFlowContext} that a run handle
  * retains for its lifetime.
@@ -62,14 +50,8 @@ export interface RunInterruptHandler {
  * instead of silently diverging: every member is picked through from the flow
  * context's own type. The loop's context is deliberately richer (it owns the
  * run's `FollowUps` lease and the bound model); the handle keeps only what a
- * consumer of an attached run needs.
- *
- * {@link RunHandle.interrupt} falls back to this context's
- * `interrupt()` when no explicit {@link RunInterruptHandler} is
- * attached. Native child-run strategies use it to delegate a
- * child-run-loop-level interrupt into an in-flight tool-use turn. A live
- * `flowContext` is attached via `attachToolUseFlow` for the duration of one
- * turn and knows how to cancel the in-progress model/tool round.
+ * consumer of an attached run needs. A live `flowContext` is attached via
+ * `attachToolUseFlow` for the duration of one turn.
  */
 export type LiveToolUseFlowContext = Pick<
   ToolUseFlowContext,
@@ -101,18 +83,18 @@ export class RunHandle<
    * and caller ownership can never disagree.
    */
   private _parent: RunId | null;
-  private interruptHandler?: RunInterruptHandler;
   private toolUseFlowContext?: LiveToolUseFlowContext;
 
   /** Whether a caller has claimed the run's exactly-once terminal outcome. */
   private terminalClaimed = false;
   /**
-   * Whether a stop reached this handle. Stop precedence reads it: a stop
-   * that landed before the run's own exit outranks the report the flow makes
-   * of that exit, so the `run.end` row says cancelled. In-process only; the
-   * durable verdict is the row.
+   * The background OS process this run owns, when a strategy declared one
+   * (a background bash child): the narrow survivor of the interrupt-handler
+   * slot, read only by `RunRegistry.killBackgroundProcesses` to reach a
+   * leaked process at shutdown WITHOUT ending agent runs (#8155) — the
+   * opposite contract of a run stop, which is the run fiber's interruption.
    */
-  private stopped = false;
+  backgroundProcess?: { kill(): void };
 
   constructor(
     /**
@@ -209,41 +191,6 @@ export class RunHandle<
     return this.toolUseFlowContext;
   }
 
-  attachInterruptHandler(handler: RunInterruptHandler): () => void {
-    this.interruptHandler = handler;
-    return () => {
-      if (this.interruptHandler === handler) this.interruptHandler = undefined;
-    };
-  }
-
-  /** True once a stop reached this handle, whether or not a program was
-   *  there to interrupt. */
-  get stopRequested(): boolean {
-    return this.stopped;
-  }
-
-  interrupt(): boolean {
-    this.stopped = true;
-    const handler = this.interruptHandler ?? this.toolUseFlowContext;
-    if (handler === undefined) return false;
-    handler.interrupt();
-    return true;
-  }
-
-  /**
-   * Interrupt this handle's attached background OS process, if any — the
-   * case shutdown drain needs, distinct from `interrupt()`'s general stop
-   * (which also covers a loop-level or in-flight-turn interrupt handler that
-   * must stay untouched on shutdown so restart recovery can find it). Only a
-   * child-run loop whose strategy declares `ownsBackgroundProcess` sets this —
-   * background bash is the one that does. Returns whether a background-process
-   * interrupt handler was attached and interrupted.
-   */
-  interruptBackgroundProcess(): boolean {
-    if (this.interruptHandler?.ownsBackgroundProcess !== true) return false;
-    this.interruptHandler.interrupt();
-    return true;
-  }
 }
 
 /**
@@ -261,5 +208,4 @@ export type AgentRunHandle = Pick<
   | 'startedAt'
   | 'trace'
   | 'deliveryTarget'
-  | 'interrupt'
 >;

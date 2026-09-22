@@ -23,7 +23,6 @@ import {
   type RunId,
   type UserFollowUpSupport,
 } from '@shared/schemas';
-import { onAbort, unique } from '@utils/core';
 import { ensureError } from '@utils/errors/errorMessage';
 import {
   buildSubagentResult,
@@ -91,8 +90,6 @@ export interface ChildRunLaunchOptions {
   readonly approvalPromptsUnavailable?: boolean;
   readonly onApprovalPolicyDenial?: () => void;
   readonly runtimeUnavailableTools?: readonly string[];
-  /** Caller cancellation for a durable in-band launch. */
-  readonly signal?: AbortSignal;
   /** Fires with the resolved child run id — the caller inherits approvals onto it. */
   readonly onRunResolved?: (runId: RunId) => void;
 }
@@ -125,23 +122,6 @@ type NativeSubagentStrategyParams = NativeSubagentStrategyBase &
       }
   );
 
-/** Bind every distinct caller/turn cancellation source to one live run handle. */
-function bindAbortSignals(
-  signals: readonly (AbortSignal | undefined)[],
-  handle: AgentRunHandle,
-): () => void {
-  // One listener per source, no `AbortSignal.any`: a composite built on the
-  // parent run's signal stays reachable from it (listener and all) until it
-  // aborts, which for a long-lived parent is never — one retained turn per
-  // subagent (see `linkAbortSignals`).
-  const detachers = unique(
-    signals.filter((signal): signal is AbortSignal => signal !== undefined),
-  ).map((signal) => onAbort(signal, () => handle.interrupt()));
-  return () => {
-    for (const detach of detachers) detach();
-  };
-}
-
 export function createNativeSubagentStrategy(
   params: NativeSubagentStrategyParams,
 ): ChildRunStrategy<AgentFlowResult, AgentRunServices> {
@@ -168,7 +148,6 @@ export function createNativeSubagentStrategy(
 
   const runNative = Effect.fn('nativeSubagent.runTurn')(function* (
     ports: ChildRunPorts,
-    signal: AbortSignal,
     call: (
       onRun: (handle: AgentRunHandle) => Effect.Effect<void>,
     ) => Effect.Effect<AgentFlowResult, Error, AgentRunServices>,
@@ -177,12 +156,9 @@ export function createNativeSubagentStrategy(
     lastResult = undefined;
     cachedBuilt = undefined;
     cachedDelivery = undefined;
-    let detachAbort = (): void => {};
     return yield* call((handle) =>
       Effect.sync(() => {
-        detachAbort();
         runHandle = handle;
-        detachAbort = bindAbortSignals([params.signal, signal], handle);
       }),
     ).pipe(
       Effect.tap((result) =>
@@ -193,7 +169,6 @@ export function createNativeSubagentStrategy(
           ports.recordCost(result.usage?.totalCost);
         }),
       ),
-      Effect.ensuring(Effect.sync(() => detachAbort())),
     );
   });
 
@@ -233,8 +208,8 @@ export function createNativeSubagentStrategy(
     }),
 
     continuous: true,
-    launch: (ports, signal, turns) =>
-      runNative(ports, signal, (onRun) =>
+    launch: (ports, _signal, turns) =>
+      runNative(ports, (onRun) =>
         Effect.gen(function* () {
           const executeOptions: ExecuteAgentOptions & {
             session: SessionHandle;

@@ -24,7 +24,10 @@ import {
   fakeProcessServices,
   installPlatform,
 } from '@test/support/setupPlatform';
-import { testRunHandle } from '@test/support/runHandleFixtures';
+import {
+  admitInterruptibleRun,
+  testRunHandle,
+} from '@test/support/runHandleFixtures';
 import {
   createTestSession,
   publishTestRunStart,
@@ -214,7 +217,7 @@ describe('session isolation', () => {
       }),
   );
 
-  it.effect('a handle interrupt target lands in the run session only', () =>
+  it.effect('a run stop lands in the run session only', () =>
     Effect.gen(function* () {
       const sessionB = createTestSession();
       yield* Effect.addFinalizer(() => sessionB.dispose());
@@ -224,8 +227,8 @@ describe('session isolation', () => {
         runId,
         agent: 'assistant',
       });
-      handle.attachInterruptHandler({ interrupt });
       sessionB.runs.track(handle);
+      admitInterruptibleRun(sessionB.runs, runId, interrupt);
 
       const stop = sessionB.runs.kill(runId);
       expect(stop.accepted()).toBe(true);

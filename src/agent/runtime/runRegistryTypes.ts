@@ -45,11 +45,12 @@ export interface RunStopOptions {
 }
 
 /**
- * A native child loop's lineage for the loop's whole life: from the
+ * A child loop's stop target and lineage for the loop's whole life: from the
  * synchronous launch until its final result has reached the parent, including
- * preparation before the engine tracks its handle and terminal delivery after it. The parent counts
- * it as an active child throughout, so its continuation stays recoverable
- * until the last delivery landed. Child-run loops use their run handle.
+ * preparation before the engine tracks its handle and terminal delivery after
+ * it. Every child loop carries one so the run's stop
+ * (`RunRegistry.interrupt`) always finds a live target, including the
+ * inter-turn gap when no flow context is attached.
  */
 export interface ChildRunActivation {
   readonly runId: RunId;
@@ -57,6 +58,15 @@ export interface ChildRunActivation {
   readonly interrupt: () => void;
   readonly detach: () => void;
   readonly isDetached: () => boolean;
+  /**
+   * A native child (true) counts as its parent's active child until the last
+   * delivery landed, so a terminal parent's continuation stays recoverable
+   * (`RunRegistry.getToolUseFollowUpTarget` queues a follow-up into it). A
+   * process child (false) must not: its reservation would make a terminal
+   * parent look recoverable after it can no longer accept either user input
+   * or the child's result.
+   */
+  readonly retainsTerminalParent: boolean;
 }
 
 /**

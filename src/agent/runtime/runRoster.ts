@@ -269,7 +269,7 @@ export class RunRoster {
     return ids;
   }
 
-  // ----------------------------------------------------------------- parking
+  // ---------------------------------------------------------------- liveness
 
   /** Whether this process holds a live generation of the run: the fiber
    *  running it, a launch admitted for it, or a live tool-use flow on its
@@ -370,8 +370,8 @@ export class RunRoster {
           return Effect.gen({ self: this }, function* () {
             // The claim gates the hold itself: a run another owner holds is
             // refused here, synchronously with the admission.
-            const releaseClaim = self.claimRun
-              ? yield* self.claimRun(runId)
+            const releaseClaim = this.claimRun
+              ? yield* this.claimRun(runId)
               : undefined;
             const latch = yield* Latch.make(false);
             const fiber = yield* Effect.forkChild(
@@ -384,10 +384,13 @@ export class RunRoster {
               ),
             );
             this.setFiber(runId, fiber);
-            return latch;
+            return { latch, fiber };
           });
         }),
-        (latch) => Latch.open(latch),
+        // The release is the hold's whole unwinding: the DB claim the fiber
+        // carries has landed before the caller's scope closes.
+        ({ latch, fiber }) =>
+          Latch.open(latch).pipe(Effect.andThen(Fiber.join(fiber))),
       ),
     );
   }

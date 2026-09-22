@@ -1,6 +1,6 @@
 import * as path from 'node:path';
 
-import { Cause, Deferred, Effect, Exit, FileSystem, Scope } from 'effect';
+import { Cause, Effect, Exit, FileSystem, Scope } from 'effect';
 import { ZodError } from 'zod';
 import { ModelProvider, type ModelConfig } from 'llm-zoo';
 
@@ -82,7 +82,6 @@ type LaunchResolvedRunFacts = Pick<
   | 'userVarChannels'
   | 'initialUserMessageForTranscript'
   | 'usageMonitor'
-  | 'interrupt'
 >;
 
 export interface AgentLaunchContext extends LaunchResolvedRunFacts {
@@ -107,15 +106,6 @@ export interface AgentLaunchContext extends LaunchResolvedRunFacts {
   /** Description from the exact registry entry selected for this launch. */
   readonly resolvedAgentDescription?: string;
   readonly attachedMemoryMisses: AttachedMemoryMiss[];
-  /**
-   * The run's one stop: {@link AgentRunShape.interrupt} completes it — a host
-   * kill through the run handle, the live tool-use flow context, or the launch
-   * handle's interrupt — and so does `RunRegistry.terminate`, which wakes a run
-   * parked at WAITING on this same latch. No other route stops a run. The
-   * runner races it once, at the boundary that owns the run's program, so a
-   * stop reaches the loop as a fiber interruption recorded by its finalizers.
-   */
-  readonly stopped: Deferred.Deferred<void>;
 }
 
 interface AgentLaunchInput {
@@ -144,37 +134,9 @@ interface AgentLaunchInput {
   /** This launch is the user's own-API-key fallback for a quota-exhausted
    *  retry: it declines the Copilot route and every subscription route. */
   ownApiKeyFallback?: boolean;
-  /**
-   * The launch's stop latch, adopted as the run's own
-   * {@link AgentLaunchContext.stopped}: once completed, assembly fails at its
-   * next step and the run it has already assembled is stopped.
-   */
-  stopped?: Deferred.Deferred<void>;
   /** Immutable per-run tool policy carried on the launch context for cycle flows. */
   toolPolicy?: ToolPolicy;
 }
-
-/** Fail the effect with an `Error` when the launch signal has aborted. */
-const failIfAborted = (signal: AbortSignal | undefined) =>
-  Effect.try({
-    try: () => signal?.throwIfAborted(),
-    catch: ensureError,
-  });
-
-/**
- * Fail with an `AbortError` once a launch's stop latch has been completed.
- * Each acquisition settles atomically inside its own `acquireRelease`, so
- * these checks between steps are where a stop ends the launch: after the
- * acquisition whose cleanup owns whatever came before it.
- */
-export const failIfLaunchStopped = (
-  stopped: Deferred.Deferred<void> | undefined,
-): Effect.Effect<void, Error> =>
-  Effect.suspend(() =>
-    stopped !== undefined && Deferred.isDoneUnsafe(stopped)
-      ? Effect.fail(new DOMException('The launch was stopped.', 'AbortError'))
-      : Effect.void,
-  );
 
 /**
  * Present a launch error through its targeted host notice (replayed if no
@@ -269,14 +231,9 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
     input: {
       config: AgentConfig;
       enforceCategory?: boolean;
-      signal?: AbortSignal;
-      /** The launch handle's stop latch; checked between async steps. */
-      stopped?: Deferred.Deferred<void>;
       suppressErrorNotification?: boolean;
     } & { session: SessionHandle },
   ) {
-    yield* failIfAborted(input.signal);
-    yield* failIfLaunchStopped(input.stopped);
     const fullConfig = input.config;
     const interactions = input.session.interactions;
     // Resolve by the source the delegation captured at validation time, so launch
@@ -305,8 +262,6 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
           category: fullConfig.agentCategory,
         },
       ));
-    yield* failIfAborted(input.signal);
-    yield* failIfLaunchStopped(input.stopped);
     // `loadAgentSettingAndPrompts` already fills the built-in tool-use category
     // default before parsing, and `AgentSettingSchema` prefaults `agentCategory`
     // (to Workflow when absent), so `setting.agentCategory` is always populated
@@ -314,8 +269,6 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
     // nothing from the run's ALS frame (absolute paths, the registry cache, the
     // remote fetch), so it yields directly rather than entering `runInSession`.
     const [setting, prompt] = yield* loadAgentSettingAndPrompts(agentEntry);
-    yield* failIfAborted(input.signal);
-    yield* failIfLaunchStopped(input.stopped);
 
     // Block category mismatch: prevent launching a tool-use agent as a workflow
     // (or vice versa). Source-pinned resolution already guarantees launch lands on
@@ -346,8 +299,6 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
       fullConfig.model,
       interactions,
     );
-    yield* failIfAborted(input.signal);
-    yield* failIfLaunchStopped(input.stopped);
 
     const config: AgentConfig = {
       ...fullConfig,
@@ -392,7 +343,6 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
     Error,
     Secrets | AppState | FileSystem.FileSystem | Scope.Scope
   > {
-    yield* failIfLaunchStopped(input.stopped);
     const { config, setting, prompt, agentEntry, modelConfig } =
       input.definition;
 
@@ -404,7 +354,6 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
       input.modelCompatibilityKey ??
       (yield* inferLaunchModelCompatibilityKey(runId, session)) ??
       null;
-    yield* failIfLaunchStopped(input.stopped);
     // The run's model is bound from the stores the launch already has: the
     // session's own setting slots, so routing and the provider switches
     // answer for this run's workspace, and the process secret store.
@@ -440,12 +389,10 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
       }),
       ({ runTrace }) => Effect.sync(() => runTrace.dispose()),
     );
-    yield* failIfLaunchStopped(input.stopped);
     attachment.detach = session.attachRunTrace(rawRunTrace.trace, runId);
 
     const agentLogger = runTrace.trace;
 
-    yield* failIfLaunchStopped(input.stopped);
     const isRemote = isRemoteAgent(config.agent);
     // Registration committed creation, configuration and initial activation,
     // each awaited; a resumed turn appends only its new activation, awaited
@@ -513,14 +460,6 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
 
     const agentPath = path.dirname(agentEntry.path);
     const workingDirectory = config.workingDirectory?.trim() || undefined;
-    // The run's one stop. `interrupt()` completes it; the runner races it and
-    // the program is interrupted from it. A launch that already owns a stop
-    // hands it in, so a stop that landed while the launch prepared is this
-    // run's stop too.
-    const stopped = input.stopped ?? Deferred.makeUnsafe<void>();
-    const stopRun = () => {
-      Deferred.doneUnsafe(stopped, Effect.void);
-    };
     const buildVars = (stageId?: string) =>
       buildUserVars(
         config,
@@ -554,7 +493,6 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
         ),
       );
     });
-    yield* failIfLaunchStopped(input.stopped);
 
     const userVarChannels: UserVariableChannels = { ...baseVars };
     const attachedMemoryMisses = baseVars.ATTACHED_MEMORY_MISSES;
@@ -598,8 +536,6 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
       userVarChannels,
       attachedMemoryMisses,
       usageMonitor,
-      interrupt: stopRun,
-      stopped,
       initialUserMessageForTranscript: initialMediaMayBeInserted
         ? initialInstruction
         : undefined,
@@ -615,7 +551,6 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
 /** Resolve the context of a run already admitted and created by registration. */
 export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
   function* (input: AgentLaunchInput & { session: SessionHandle }) {
-    yield* failIfLaunchStopped(input.stopped);
     const { session: launchSession, runId } = input;
     const { config } = input.definition;
 

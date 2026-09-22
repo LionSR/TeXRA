@@ -1,5 +1,4 @@
 // Third-party imports
-import { Deferred, Effect } from 'effect';
 import { ModelProvider } from 'llm-zoo';
 
 // Local imports
@@ -61,7 +60,6 @@ export function createTestLaunchContext({
   category = AgentCategory.ToolUse,
   logger = noopTrace,
 }: TestLaunchContextInit): AgentLaunchContext {
-  const stopped = Deferred.makeUnsafe<void>();
   const config = AgentConfigSchema.parse({
     agent,
     model: 'test-model',
@@ -95,9 +93,5 @@ export function createTestLaunchContext({
     ),
     modelConfig: buildTestModelConfig(),
     modelCompatibilityKey: null,
-    interrupt: () => {
-      Deferred.doneUnsafe(stopped, Effect.void);
-    },
-    stopped,
   };
 }

@@ -7,6 +7,7 @@ import { describe, expect, vi } from 'vitest';
 import type { RunRegistry } from '@agent/runtime/runRegistry';
 import type { RunId } from '@shared/schemas';
 import {
+  admitInterruptibleRun,
   testRunHandle,
   testRunRegistry,
 } from '@test/support/runHandleFixtures';
@@ -111,9 +112,9 @@ describe('AgentCliSessionRegistry', () => {
 
   it('interrupts an in-flight loop without promoting its reserved resume id', () => {
     const runId = 'run-in-flight' as RunId;
-    const interrupt = vi.fn();
+    const interrupt = vi.fn(() => true);
     const registry = new AgentCliSessionRegistry({
-      getHandle: () => ({ interrupt }),
+      interrupt,
     } as unknown as RunRegistry);
     const releaseClaim = registry.claim('reserved-session');
 
@@ -129,39 +130,47 @@ describe('AgentCliSessionRegistry', () => {
     releaseClaim?.();
   });
 
-  it('interrupts each child through the session run registry', () => {
-    const runs = testRunRegistry();
-    const registry = new AgentCliSessionRegistry(runs);
-    const interruptA = vi.fn();
-    const interruptB = vi.fn();
+  it.effect('interrupts each child through the session run registry', () =>
+    Effect.gen(function* () {
+      const runs = testRunRegistry();
+      const registry = new AgentCliSessionRegistry(runs);
+      const interruptA = vi.fn();
+      const interruptB = vi.fn();
 
-    const handleA = testRunHandle({
-      runId: 'run-a' as RunId,
-      parent: 'parent-a' as RunId,
-      agent: 'codex',
-    });
-    handleA.attachInterruptHandler({ interrupt: interruptA });
-    runs.track(handleA);
-    const handleB = testRunHandle({
-      runId: 'run-b' as RunId,
-      parent: 'parent-b' as RunId,
-      agent: 'claude',
-    });
-    handleB.attachInterruptHandler({ interrupt: interruptB });
-    runs.track(handleB);
+      runs.track(
+        testRunHandle({
+          runId: 'run-a' as RunId,
+          parent: 'parent-a' as RunId,
+          agent: 'codex',
+        }),
+      );
+      const fiberA = admitInterruptibleRun(runs, 'run-a' as RunId, interruptA);
+      runs.track(
+        testRunHandle({
+          runId: 'run-b' as RunId,
+          parent: 'parent-b' as RunId,
+          agent: 'claude',
+        }),
+      );
+      const fiberB = admitInterruptibleRun(runs, 'run-b' as RunId, interruptB);
 
-    try {
-      registry.claim('pending-session');
-      registry.register('session-a', { runId: 'run-a' as RunId });
-      registry.register('session-b', { runId: 'run-b' as RunId });
+      try {
+        registry.claim('pending-session');
+        registry.register('session-a', { runId: 'run-a' as RunId });
+        registry.register('session-b', { runId: 'run-b' as RunId });
 
-      registry.interruptAll();
+        registry.interruptAll();
+        // The stop lands through each run's generation fiber; the spy has
+        // observably landed once that fiber's unwinding completes.
+        yield* Fiber.await(fiberA);
+        yield* Fiber.await(fiberB);
 
-      expect(interruptA).toHaveBeenCalledOnce();
-      expect(interruptB).toHaveBeenCalledOnce();
-    } finally {
-      registry.release('pending-session');
-      runs.dispose();
-    }
-  });
+        expect(interruptA).toHaveBeenCalledOnce();
+        expect(interruptB).toHaveBeenCalledOnce();
+      } finally {
+        registry.release('pending-session');
+        runs.dispose();
+      }
+    }),
+  );
 });

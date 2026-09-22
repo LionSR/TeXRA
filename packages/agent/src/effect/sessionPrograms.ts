@@ -37,7 +37,6 @@ import {
   listSessions as listOwnedSessions,
   openSessionEffect,
   runAgent as runValidatedAgent,
-  type AgentRunHandle as RuntimeAgentRunHandle,
   type SessionHandle as RuntimeSessionHandle,
 } from '@agent/runtime';
 import type { AgentEvent } from '@agent/trace';
@@ -223,7 +222,7 @@ function admitInput(
 /**
  * Start one run on `session` and hand back the {@link Run} once it exists
  * there. The launch is the runtime's `runAgent`: an interruption before
- * admission ends it through the live handle's `interrupt`.
+ * admission ends it through the run fiber's own interrupt.
  *
  * The handoff is all-or-nothing, which is what lets a caller treat the
  * `Run` as the only handle on the run: this either returns one, or it ends
@@ -243,7 +242,6 @@ function start(
     const runId = generateRunId();
     const trace = yield* Queue.unbounded<AgentEvent, RunFailure | Cause.Done>();
     const admitted = yield* Deferred.make<void, RunFailure>();
-    let handle: RuntimeAgentRunHandle | undefined;
     let detach: (() => void) | undefined;
     let reading = false;
     let buffered = 0;
@@ -283,12 +281,7 @@ function start(
     // outside the mask covers the rest, the boundary included: an interrupt
     // that lands while the tail runs is raised the moment the mask lifts,
     // with a `Run` built that reaches no one.
-    const interruptLaunch = ():
-      Pick<RuntimeAgentRunHandle, 'interrupt'> | undefined => {
-      const current = handle ?? session.runs.getHandle(runId);
-      current?.interrupt();
-      return current;
-    };
+    const interruptLaunch = (): boolean => session.runs.interrupt(runId);
     const spawned: Fiber.Fiber<unknown, unknown>[] = [];
     return yield* Effect.uninterruptibleMask((restore) =>
       Effect.gen(function* () {
@@ -297,10 +290,6 @@ function start(
             { kind: 'fresh', config, runId },
             {
               approvalPromptsUnavailable: true,
-              onRun: (live) =>
-                Effect.sync(() => {
-                  handle = live;
-                }),
               onRunResolved: (_, runTrace) => {
                 detach = runTrace.subscribe((event) => {
                   if (!reading && (buffered += 1) > TRACE_HANDOVER_EVENTS) {

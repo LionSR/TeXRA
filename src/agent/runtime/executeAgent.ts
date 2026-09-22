@@ -1,6 +1,6 @@
 import * as path from 'node:path';
 
-import { Deferred, Effect, Fiber, Layer } from 'effect';
+import { Effect, Fiber, Layer } from 'effect';
 
 import { logConversationProgress, type AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
@@ -20,12 +20,10 @@ import {
 } from '@shared/schemas';
 import {
   AgentCategory,
-  RUN_OUTCOME,
   roundOutputsToCompileFailureSummaries,
   roundOutputsToOutputSummaries,
 } from '@shared/schemas';
 import { RunLedger } from '@shared/session/runLedger';
-import { emptyRunEndOutput } from '@shared/schemas';
 import type { RunState } from '@shared/session/runStateFold';
 import { provideAgentEngine } from '@tools/delegation/nativeSubagentStrategy';
 import { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
@@ -136,40 +134,6 @@ function runLayerFor(
 }
 
 /**
- * The one boundary that races the run's stop. `ctx.stopped` is completed by
- * every stop entry (a host kill through the run handle, the live tool-use
- * flow context, the launch handle's interrupt before the run has a handle of
- * its own); winning it interrupts the program's fiber, whose masked exit
- * protocol records the halt before this returns, and reports the cancelled
- * shell result of the run's category.
- * The loop reads the fiber's own interruption (`Effect.abortSignal`) for the
- * provider request and the tool bodies that still need a signal, so no run
- * signal exists beside the stop.
- */
-function runUntilStopped<R>(
-  ctx: AgentLaunchContext,
-  program: Effect.Effect<AgentFlowResult, Error, R>,
-): Effect.Effect<AgentFlowResult, Error, R> {
-  const { runId } = ctx;
-  return Effect.raceFirst(
-    program.pipe(Effect.map((result) => ({ kind: 'result' as const, result }))),
-    Deferred.await(ctx.stopped).pipe(Effect.as({ kind: 'stopped' as const })),
-  ).pipe(
-    Effect.map((winner): AgentFlowResult => {
-      if (winner.kind === 'result') return winner.result;
-      return {
-        outcome: RUN_OUTCOME.CANCELLED,
-        output: emptyRunEndOutput(ctx.setting.agentCategory),
-        runId,
-        ...(ctx.attachedMemoryMisses?.length
-          ? { memoryMisses: ctx.attachedMemoryMisses }
-          : {}),
-      };
-    }),
-  );
-}
-
-/**
  * Run the tool-use loop for a single agent run, fresh or resumed.
  *
  * Owns all tool-use-specific wiring: progress counters, follow-up queuing, and
@@ -235,7 +199,7 @@ function launchToolUseRun(
     ),
     Effect.map(toResult),
   );
-  return runUntilStopped(ctx, program);
+  return program;
 }
 
 /**
@@ -280,10 +244,7 @@ function launchReflectionRun(
       }),
     ),
   );
-  return runUntilStopped(
-    ctx,
-    options.turns ? options.turns.run(program) : program,
-  );
+  return options.turns ? options.turns.run(program) : program;
 }
 
 /**
@@ -401,12 +362,6 @@ export interface ExecuteAgentOptions extends SubagentRunOptions {
     agentDefaultOutputFiles: readonly string[],
   ) => Effect.Effect<RunOutcome | void, Error>;
   /**
-   * The stop latch of a launch that owns a stop before the run has a handle
-   * of its own (`runAgent`'s launch handle): launch assembly fails at its
-   * next step once it is completed, and the run adopts it as its one stop.
-   */
-  launchStopped?: Deferred.Deferred<void>;
-  /**
    * The run's `run.start` was committed by an earlier activation (a resume).
    * That row is also where this run's parent edge comes from: `runAgent`
    * reads it onto the run's handle before this launch prepares, and a
@@ -444,27 +399,12 @@ export function executeAgent(
   options: ExecuteAgentOptions & { session: SessionHandle },
 ): Effect.Effect<AgentFlowResult, Error, ProcessServices> {
   return Effect.gen(function* () {
-    // A resumed run's parentage is its handle's, never the caller's word: no
-    // resume caller can name one (`RunAgentOptions` has no parent field), so
-    // reading the caller's option here would relaunch a resumed child as a
-    // root run, forcing the progress view open, toasting its failure, and
-    // shaping its result as a root's. `runAgent` put the persisted edge on
-    // that handle before this launch began preparing, which is what lets the
-    // parent's stop reach the child meanwhile: a stop that detaches severs
-    // this very handle. The edge is deliberately not copied out here: it is
-    // mutable for exactly as long as this preparation runs, so the run reads
-    // it off its own lifecycle handle below, after the registry has carried
-    // it across the replacement.
-    const resumedHandle = options.resumed
-      ? options.session.runs.getHandle(runId)
-      : undefined;
-    if (options.resumed && !resumedHandle) {
-      return yield* Effect.fail(
-        new Error(
-          `Cannot resume run ${runId}: no registered handle carries its lineage.`,
-        ),
-      );
-    }
+    // A resumed run's parentage is the persisted `run.start`, re-read by its
+    // launcher inside the owned launch and handed in as `parentRunId` —
+    // `runAgent` after its ownership re-read, `resumeToolUseWithOwnedLease`
+    // from the same persisted read — never a caller's own word about which
+    // run launched it. A detach another host committed while the launch
+    // prepared has folded by then, so the edge arrives already severed.
     const ctx = yield* buildAgentLaunchContext({
       definition,
       runId,
@@ -473,7 +413,6 @@ export function executeAgent(
       session: options.session,
       modelCompatibilityKey: options.modelCompatibilityKey,
       ownApiKeyFallback: options.ownApiKeyFallback,
-      stopped: options.launchStopped,
       toolPolicy: {
         approvalPromptsUnavailable: options.approvalPromptsUnavailable,
         runtimeUnavailableTools: options.runtimeUnavailableTools,
@@ -487,17 +426,15 @@ export function executeAgent(
       // Start description generation concurrently with the run, but join it
       // before the owner can release its run lease. This prevents the
       // metadata write from recreating a run deleted by another host.
-      // The run's stop interrupts it, as it interrupts the run.
+      // A child of the run's fiber, so the run's stop interrupts it, as it
+      // interrupts the run.
       const sessionDescription = yield* Effect.forkChild(
-        Effect.raceFirst(
-          generateSessionDescription(
-            runId,
-            config,
-            ctx.resolvedAgentDescription,
-            runSession,
-            ctx.stores,
-          ),
-          Deferred.await(ctx.stopped),
+        generateSessionDescription(
+          runId,
+          config,
+          ctx.resolvedAgentDescription,
+          runSession,
+          ctx.stores,
         ),
       );
       // The join is `ensuring`, not a generator `finally`: the driver skips
@@ -553,14 +490,10 @@ export function executeAgent(
                 parentRunId,
               });
             }),
-          // The edge the lifecycle's handle is born with, read as late
-          // as that handle is built. A detach landing even after this
-          // read still stands: `RunRegistry.track` carries the
-          // registration's sever onto the replacement.
-          buildLifecycleOptions(
-            options,
-            resumedHandle ? resumedHandle.deliveryTarget : options.parentRunId,
-          ),
+          // The edge the lifecycle's handle is born with: the caller's own
+          // parent for a fresh child, the persisted `run.start` edge for a
+          // resume, both carried in as `parentRunId`.
+          buildLifecycleOptions(options, options.parentRunId),
         );
         return result;
       }).pipe(Effect.ensuring(Fiber.join(sessionDescription)));

@@ -360,8 +360,9 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
   const runId = resume.runId;
   const followUps = session.followUps;
 
-  // Do not revive a generation while its stop is settling.
-  if ((yield* Runs).getHandle(resume.runId)?.stopRequested === true) {
+  // Do not revive a generation while its stop is settling: a live roster
+  // entry is a run whose fiber has not settled yet.
+  if ((yield* Runs).isLive(resume.runId)) {
     followUps.release(queueLease, 'recoverable');
     return REFUSED;
   }

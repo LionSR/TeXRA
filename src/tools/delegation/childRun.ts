@@ -221,9 +221,10 @@ const finalizeChildRun = Effect.fn('finalizeChildRun')(function* (
       if (errorMessage) {
         logger.error(errorMessage);
       }
-      // What the child saw, in the shared vocabulary. The run phase decides
-      // which of this and an already-landed stop is the run's terminal fact;
-      // that resolution lives in `finalizeRunTerminal`.
+      // What the child saw, in the shared vocabulary. Which of this and an
+      // already-landed stop is the run's terminal fact is decided upstream:
+      // the loop derives the outcome from its own interrupted signal, and
+      // `finalizeRunTerminal` applies that stop precedence.
       outcome = options.outcome;
       error = failed
         ? {

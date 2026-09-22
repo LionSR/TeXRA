@@ -145,12 +145,6 @@ export interface AgentRunShape {
   readonly pendingModelSwitch: { value: string | null };
   readonly usageMonitor: UsageMonitor;
   readonly callbacks: RunCallbacks;
-  /**
-   * The run's one stop: completes the launch context's stop latch, so the
-   * boundary that owns the run's program interrupts it. The run's
-   * `AbortSignal` is aborted from that interruption, not from here.
-   */
-  readonly interrupt: () => void;
 }
 
 export class AgentRun extends Context.Service<AgentRun, AgentRunShape>()(
@@ -322,7 +316,6 @@ export const agentRunLayer = (
         pendingModelSwitch,
         usageMonitor: ctx.usageMonitor,
         callbacks: input.callbacks,
-        interrupt: ctx.interrupt,
       };
     }),
   );
