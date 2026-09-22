@@ -7,7 +7,6 @@ import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 // Shared mock registrations must evaluate before anything that loads
 // the mocked modules — keep these imports immediately after the vitest
 // import (enforced by architecture/supportMockImportOrder.vitest.ts).
-import { agentCatalogMock } from '@test/support/agentCatalogMock';
 import { cliInitPlatformMock } from '@test/support/cliInitPlatformMock';
 import { cliLogSinksMock } from '@test/support/cliLogSinksMock';
 
@@ -765,9 +764,8 @@ describe('CLI run command, workflow agents', () => {
 
   // Issue #12162: a remote agent's catalog listing carries no
   // `defaultOutputFiles`, so only the definition the launch loads declares
-  // them — and the launch hands them to output finalization. The catalog
-  // entry here is the listing a refresh between launch and finalization would
-  // leave behind: the declared name still decides.
+  // them — and the launch hands them to output finalization, as the stub
+  // here does: the declared name still decides.
   it.effect('expects the output files the launched definition declares', () =>
     withTempDirEffect('texra-workflow-', (root) =>
       Effect.gen(function* () {
@@ -782,14 +780,6 @@ describe('CLI run command, workflow agents', () => {
           }),
           true,
           ['slides.tex'],
-        );
-        agentCatalogMock.resolveAgentForLaunch.mockReturnValue(
-          Effect.succeed({
-            name: 'polish',
-            source: 'remote',
-            path: '',
-            category: AgentCategory.Workflow,
-          }),
         );
 
         const exitCode = yield* workflowProgram(
