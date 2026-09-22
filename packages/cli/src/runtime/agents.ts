@@ -107,20 +107,22 @@ export function resolveCliAgentInCategory(
   stores: AgentRosterStores,
   identifier: string,
   category: AgentCategory,
-): AgentEntry | undefined {
-  const name = agentName(identifier);
-  const pinned = AgentSourceSchema.safeParse(
-    identifier === name
-      ? undefined
-      : identifier.slice(0, identifier.length - name.length - 1),
-  );
-  const entry = resolveAgentForLaunch(
-    stores,
-    category,
-    identifier,
-    pinned.success ? pinned.data : undefined,
-  );
-  return entry?.category === category ? entry : undefined;
+) {
+  return Effect.gen(function* () {
+    const name = agentName(identifier);
+    const pinned = AgentSourceSchema.safeParse(
+      identifier === name
+        ? undefined
+        : identifier.slice(0, identifier.length - name.length - 1),
+    );
+    const entry = yield* resolveAgentForLaunch(
+      stores,
+      category,
+      identifier,
+      pinned.success ? pinned.data : undefined,
+    );
+    return entry?.category === category ? entry : undefined;
+  });
 }
 
 /**
@@ -135,21 +137,24 @@ export function checkCliAgentLaunch(
   name: string,
   agent: AgentEntry | undefined,
   mode: CliAgentLaunchMode,
-): AgentEntry | CliUsageError {
-  const target = CLI_AGENT_LAUNCH_TARGETS[mode];
-  if (agent?.category === target.requiredCategory) return agent;
+) {
+  return Effect.gen(function* () {
+    const target = CLI_AGENT_LAUNCH_TARGETS[mode];
+    if (agent?.category === target.requiredCategory) return agent;
 
-  // Category-scoped resolution yields nothing for a wrong-category name, so
-  // probe the other category to keep telling "wrong kind of agent" apart from
-  // "no such agent".
-  const otherCategory =
-    target.requiredCategory === AgentCategory.ToolUse
-      ? AgentCategory.Workflow
-      : AgentCategory.ToolUse;
-  const found = agent ?? resolveCliAgentInCategory(stores, name, otherCategory);
-  return new CliUsageError(
-    found ? target.mismatch(name, found.category) : target.missing(name),
-  );
+    // Category-scoped resolution yields nothing for a wrong-category name, so
+    // probe the other category to keep telling "wrong kind of agent" apart from
+    // "no such agent".
+    const otherCategory =
+      target.requiredCategory === AgentCategory.ToolUse
+        ? AgentCategory.Workflow
+        : AgentCategory.ToolUse;
+    const found =
+      agent ?? (yield* resolveCliAgentInCategory(stores, name, otherCategory));
+    return new CliUsageError(
+      found ? target.mismatch(name, found.category) : target.missing(name),
+    );
+  });
 }
 
 /**
@@ -175,7 +180,7 @@ export function resolveCliAgent(
 ) {
   return Effect.gen(function* () {
     yield* loadAgents({ includeRemote: false });
-    const agent = lookupCliAgent(stores, name, lookupCategory);
+    const agent = yield* lookupCliAgent(stores, name, lookupCategory);
 
     // Keep the local hit only when a remote-inclusive reload could not change
     // it: a source-qualified name already pins its tier, and a signed-out
@@ -190,7 +195,7 @@ export function resolveCliAgent(
     }
 
     yield* loadAgents();
-    return lookupCliAgent(stores, name, lookupCategory);
+    return yield* lookupCliAgent(stores, name, lookupCategory);
   });
 }
 
@@ -198,10 +203,10 @@ function lookupCliAgent(
   stores: AgentRosterStores,
   identifier: string,
   category: AgentCategory | undefined,
-): AgentEntry | undefined {
+) {
   return category
     ? resolveCliAgentInCategory(stores, identifier, category)
-    : getAgent(identifier);
+    : Effect.succeed(getAgent(identifier));
 }
 
 /**
@@ -227,7 +232,7 @@ export function resolveCliRunAgent(stores: AgentRosterStores, name: string) {
     // before the remote-inclusive reload only for a source-qualified name (which
     // pins one cache key, so it cannot also hit here) or a signed-out session
     // (which has no remote catalog to add).
-    const toolUse = resolveCliAgentInCategory(
+    const toolUse = yield* resolveCliAgentInCategory(
       stores,
       name,
       AgentCategory.ToolUse,
@@ -270,7 +275,7 @@ export function resolveCliLaunchAgent(
       name,
       target.requiredCategory,
     );
-    const agent = checkCliAgentLaunch(stores, name, resolved, mode);
+    const agent = yield* checkCliAgentLaunch(stores, name, resolved, mode);
     return agent instanceof CliUsageError ? yield* Effect.fail(agent) : agent;
   });
 }
@@ -283,14 +288,14 @@ export function loadCliAgentList(
   return Effect.gen(function* () {
     yield* loadAgents(includeHidden ? undefined : { includeRemote: false });
 
-    const agents = collectCliAgents(
+    const agents = yield* collectCliAgents(
       stores,
       includeHidden ? 'all' : 'visible',
       options.category,
     );
     const hiddenCount = includeHidden
       ? 0
-      : collectCliAgents(stores, 'all', options.category).length -
+      : (yield* collectCliAgents(stores, 'all', options.category)).length -
         agents.length;
 
     return { agents, hiddenCount } satisfies CliAgentListResult;
@@ -388,11 +393,14 @@ function collectCliAgents(
   stores: AgentRosterStores,
   source: 'all' | 'visible',
   categoryFilter?: AgentCategory,
-): AgentEntry[] {
+) {
   const categories = categoryFilter ? [categoryFilter] : AGENT_CATEGORIES;
-  return categories.flatMap((category) =>
-    source === 'visible'
-      ? getVisibleAgents(stores, category)
-      : getAgentsByCategory(category),
+  return Effect.map(
+    Effect.forEach(categories, (category) =>
+      source === 'visible'
+        ? getVisibleAgents(stores, category)
+        : Effect.succeed(getAgentsByCategory(category)),
+    ),
+    (groups) => groups.flat(),
   );
 }

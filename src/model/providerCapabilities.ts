@@ -100,11 +100,9 @@ function isCodexSubscriptionEligible(model: ModelConfig): boolean {
 }
 
 /** Resolve the active ChatGPT-subscription (Codex) provider profile. */
-function resolveCodexSubscriptionProfile({
-  stores,
-  model,
-  useOpenRouter,
-}: ProviderCapabilityKey): ProviderCapabilityProfile | null {
+const resolveCodexSubscriptionProfile = Effect.fn(
+  'resolveCodexSubscriptionProfile',
+)(function* ({ stores, model, useOpenRouter }: ProviderCapabilityKey) {
   if (useOpenRouter) return null;
   if (model.provider !== ModelProvider.OPENAI) return null;
   if (model.openRouterOnly) return null;
@@ -112,10 +110,10 @@ function resolveCodexSubscriptionProfile({
   // The setting is stored in thousands of tokens; this is its only reader,
   // so the unit conversion lives here and nowhere else.
   const inputTokenLimit = Math.min(
-    readSettingFrom<number>(
+    (yield* readSettingFrom<number>(
       stores,
       CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.configKey,
-    ) * CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.tokensPerUnit,
+    )) * CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.tokensPerUnit,
     model.contextWindow,
   );
   const contextWindow = Math.min(
@@ -126,26 +124,28 @@ function resolveCodexSubscriptionProfile({
   return {
     ...zeroCostAccessOverrides(contextWindow),
     inputTokenLimit,
-    usageRoute: 'chatgpt-subscription',
+    usageRoute: 'chatgpt-subscription' as const,
   };
-}
+});
 
 /**
  * Resolve ChatGPT-subscription capabilities for a model, or null when the
  * subscription preference is off or the model is not Codex-eligible.
  */
-export function resolveCodexSubscriptionCapabilities(
+export const resolveCodexSubscriptionCapabilities = Effect.fn(
+  'resolveCodexSubscriptionCapabilities',
+)(function* (
   stores: SettingsStores,
   config: ModelConfig,
   useOpenRouter: boolean,
-): ProviderCapabilityProfile | null {
+) {
   if (!isPreferCodexSubscription(stores)) return null;
-  return resolveCodexSubscriptionProfile({
+  return yield* resolveCodexSubscriptionProfile({
     stores,
     model: config,
     useOpenRouter,
   });
-}
+});
 
 /**
  * Shared signed-in-subscription probe: resolve the model config, ask the
@@ -165,15 +165,15 @@ const signedInSubscriptionUsageRoute = Effect.fn(
     stores: SettingsStores,
     config: ModelConfig,
     useOpenRouter: boolean,
-  ) => ProviderCapabilityProfile | null,
+  ) => Effect.Effect<ProviderCapabilityProfile | null, Error>,
   isSignedIn: () => Effect.Effect<boolean>,
 ): Effect.fn.Return<UsageRoute | undefined, Error, LanguageModel> {
   const config = yield* resolveRuntimeModelConfig(modelId);
   if (!config) return undefined;
-  const capabilities = resolveCapabilities(
+  const capabilities = yield* resolveCapabilities(
     stores,
     config,
-    getUseOpenRouter(stores),
+    yield* getUseOpenRouter(stores),
   );
   if (!capabilities) return undefined;
   const signedIn = yield* isSignedIn();
@@ -226,20 +226,23 @@ export const isCodexSubscriptionActive = Effect.fn(
  * xAI-eligible. All non-OpenRouter-only xAI registry models qualify; the OAuth
  * token hits the same `api.x.ai` surface as an API key.
  */
-export function resolveXaiSubscriptionCapabilities(
-  stores: SettingsStores,
-  config: ModelConfig,
-  useOpenRouter: boolean,
-): ProviderCapabilityProfile | null {
-  if (!isPreferXaiSubscription(stores)) return null;
-  if (useOpenRouter) return null;
-  if (config.provider !== ModelProvider.XAI) return null;
-  if (config.openRouterOnly) return null;
-  return {
-    ...zeroCostAccessOverrides(config.contextWindow),
-    usageRoute: 'xai-subscription',
-  };
-}
+export const resolveXaiSubscriptionCapabilities = Effect.fn(
+  'resolveXaiSubscriptionCapabilities',
+)((stores: SettingsStores, config: ModelConfig, useOpenRouter: boolean) =>
+  Effect.sync((): ProviderCapabilityProfile | null => {
+    if (
+      !isPreferXaiSubscription(stores) ||
+      useOpenRouter ||
+      config.provider !== ModelProvider.XAI ||
+      config.openRouterOnly
+    )
+      return null;
+    return {
+      ...zeroCostAccessOverrides(config.contextWindow),
+      usageRoute: 'xai-subscription',
+    };
+  }),
+);
 
 /** Whether the model currently routes through a signed-in Grok subscription. */
 export const isXaiSubscriptionActive = Effect.fn(

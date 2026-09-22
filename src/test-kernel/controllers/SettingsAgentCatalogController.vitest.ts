@@ -5,21 +5,27 @@ import { Effect } from 'effect';
 
 import { describe, expect } from 'vitest';
 
+import { AgentRosterController } from '@agent/roster/AgentRosterController';
 import {
   findTeamPreset,
   planTeamRun,
   teamPresets,
 } from '@common/teams/TeamPlan';
+import { SettingsAgentCatalogController } from '@controllers/settingsView/SettingsAgentCatalogController';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
-  SettingsAgentCatalogController,
-  type SettingsAgentCatalogState,
-} from '@controllers/settingsView/SettingsAgentCatalogController';
-import { AGENT_MODE_PRESETS_BY_ID } from '@shared/schemas';
+  AGENT_MODE_PRESETS_BY_ID,
+  agentKeyOf,
+  agentMatchesIdentifier,
+  byCategory,
+  parseAgentModePresets,
+} from '@shared/schemas';
 import type { AgentCategory, AgentModePreset } from '@shared/schemas';
+import { FakeStateStore } from '@test/support/FakePlatform';
 
-/** The entry is file-local; derive it from the exported catalog state port. */
+/** The catalog consumes the native roster and the same entry lookup. */
 type SettingsAgentCatalogEntry = ReturnType<
-  SettingsAgentCatalogState['getAgents']
+  ConstructorParameters<typeof SettingsAgentCatalogController>[0]['getAgents']
 >[0];
 
 const AGENTS: Record<AgentCategory, SettingsAgentCatalogEntry[]> = {
@@ -74,108 +80,112 @@ function createController(options?: {
   visible?: Partial<Record<AgentCategory, SettingsAgentCatalogEntry[]>>;
   customPresets?: unknown;
   now?: number;
-}): {
-  controller: SettingsAgentCatalogController;
-  enabled: Partial<Record<AgentCategory, string[] | undefined>>;
-  committedTeams: string[];
-  customPresets: unknown[];
-} {
-  const enabled = { ...(options?.enabled ?? {}) };
-  const committedTeams: string[] = [];
-  let customPresetsRaw: unknown = options?.customPresets ?? [];
+}) {
+  const workspaceState = new FakeStateStore({
+    [WorkspaceStateKey.CUSTOM_AGENT_PRESETS]: options?.customPresets ?? [],
+    ...(options?.enabled || options?.visible
+      ? {
+          [WorkspaceStateKey.AGENT_ROSTER_SELECTION]: {
+            kind: 'custom',
+            agentKeys: byCategory(
+              (category) =>
+                options.visible?.[category]?.map(agentKeyOf) ??
+                options.enabled?.[category] ??
+                'all',
+            ),
+          },
+        }
+      : {}),
+  });
+  const getAgents = (category: AgentCategory) =>
+    options?.agents?.[category] ?? AGENTS[category];
+  const roster = new AgentRosterController({
+    workspaceState,
+    globalState: new FakeStateStore(),
+    getAgents,
+    resolveAgent: (category, identifier) =>
+      getAgents(category).find((entry) =>
+        agentMatchesIdentifier(entry, identifier),
+      ),
+    getPresets: () =>
+      workspaceState
+        .get(WorkspaceStateKey.CUSTOM_AGENT_PRESETS, [])
+        .pipe(Effect.map(parseAgentModePresets)),
+  });
   return {
     controller: new SettingsAgentCatalogController({
+      workspaceState,
+      roster,
+      getAgents,
       now: () => options?.now ?? 123,
-      state: {
-        getEnabledAgentKeys: (category) => enabled[category],
-        setEnabledAgentKeys: (category, enabledKeys) =>
-          Effect.sync(() => {
-            enabled[category] = enabledKeys;
-          }),
-        setTeamRoster: (preset) =>
-          Effect.sync(() => {
-            committedTeams.push(preset.id);
-          }),
-        getAgents: (category) =>
-          options?.agents?.[category] ?? AGENTS[category],
-        getVisibleAgents: (category) =>
-          options?.visible?.[category] ??
-          options?.agents?.[category] ??
-          AGENTS[category],
-        getCustomPresetsRaw: () => customPresetsRaw,
-        setCustomPresets: (presets) =>
-          Effect.sync(() => {
-            customPresetsRaw = presets;
-          }),
-        removeCustomPreset: (_presetId, remaining) =>
-          Effect.sync(() => {
-            customPresetsRaw = remaining;
-          }),
-      },
     }),
-    enabled,
-    committedTeams,
-    get customPresets() {
-      return Array.isArray(customPresetsRaw) ? customPresetsRaw : [];
-    },
+    workspaceState,
+    customPresets: workspaceState.get<unknown[]>(
+      WorkspaceStateKey.CUSTOM_AGENT_PRESETS,
+      [],
+    ),
   };
 }
 
 describe('SettingsAgentCatalogController', () => {
-  it('builds sorted selection items with never-configured and legacy enabled state', () => {
-    const { controller } = createController({
-      enabled: {
-        toolUse: ['customTool'],
-      },
-    });
+  it.effect(
+    'builds sorted selection items with never-configured and legacy enabled state',
+    () =>
+      Effect.gen(function* () {
+        const { controller } = createController({
+          enabled: {
+            toolUse: ['customTool'],
+          },
+        });
 
-    assert.deepEqual(controller.buildSelectionItems(), {
-      workflow: [
-        {
-          name: 'correct',
-          source: 'builtInWorkflow',
-          category: 'workflow',
-          description: undefined,
-          hasPath: true,
-          filePath: '/agents/correct.yaml',
-          tools: undefined,
-          enabled: true,
-        },
-        {
-          name: 'writer',
-          source: 'remote',
-          category: 'workflow',
-          description: 'Remote writer',
-          hasPath: false,
-          filePath: undefined,
-          tools: undefined,
-          enabled: true,
-        },
-      ],
-      toolUse: [
-        {
-          name: 'customTool',
-          source: 'custom',
-          category: 'toolUse',
-          description: undefined,
-          hasPath: true,
-          filePath: '/custom/customTool.yaml',
-          tools: undefined,
-          enabled: true,
-        },
-        {
-          name: 'review',
-          source: 'builtInToolUse',
-          category: 'toolUse',
-          description: undefined,
-          hasPath: true,
-          filePath: '/tools/review.yaml',
-          tools: ['grep'],
-          enabled: false,
-        },
-      ],
-    });
-  });
+        assert.deepEqual(yield* controller.buildSelectionItems(), {
+          workflow: [
+            {
+              name: 'correct',
+              source: 'builtInWorkflow',
+              category: 'workflow',
+              description: undefined,
+              hasPath: true,
+              filePath: '/agents/correct.yaml',
+              tools: undefined,
+              enabled: true,
+            },
+            {
+              name: 'writer',
+              source: 'remote',
+              category: 'workflow',
+              description: 'Remote writer',
+              hasPath: false,
+              filePath: undefined,
+              tools: undefined,
+              enabled: true,
+            },
+          ],
+          toolUse: [
+            {
+              name: 'customTool',
+              source: 'custom',
+              category: 'toolUse',
+              description: undefined,
+              hasPath: true,
+              filePath: '/custom/customTool.yaml',
+              tools: undefined,
+              enabled: true,
+            },
+            {
+              name: 'review',
+              source: 'builtInToolUse',
+              category: 'toolUse',
+              description: undefined,
+              hasPath: true,
+              filePath: '/tools/review.yaml',
+              tools: ['grep'],
+              enabled: false,
+            },
+          ],
+        });
+      }),
+  );
 
   it.effect(
     'resolves preset members to canonical keys and commits the team symbolically',
@@ -192,11 +202,11 @@ describe('SettingsAgentCatalogController', () => {
           },
           texraHostedAgents: [],
         };
-        const { controller, enabled, committedTeams } = createController({
+        const { controller, workspaceState } = createController({
           customPresets: [persistedPreset],
         });
 
-        const resolved = controller.resolvePreset('custom-team');
+        const resolved = yield* controller.resolvePreset('custom-team');
         expect(resolved.ok).toBe(true);
         if (!resolved.ok) throw new Error('expected the preset to resolve');
         expect(resolved.preset).toStrictEqual({
@@ -213,9 +223,10 @@ describe('SettingsAgentCatalogController', () => {
 
         // The commit stores the team reference, not a frozen key snapshot: the
         // roster re-resolves it against the catalog on every read.
-        assert.deepEqual(committedTeams, ['custom-team']);
-        assert.deepEqual(enabled.workflow, undefined);
-        assert.deepEqual(enabled.toolUse, undefined);
+        assert.deepEqual(
+          yield* workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION),
+          { kind: 'team', teamId: 'custom-team' },
+        );
       }),
   );
 
@@ -254,116 +265,144 @@ describe('SettingsAgentCatalogController', () => {
     ]);
   });
 
-  it('selects preset roots without matching arbitrary orchestrator substrings', () => {
-    const { controller } = createController();
+  it.effect(
+    'selects preset roots without matching arbitrary orchestrator substrings',
+    () =>
+      Effect.gen(function* () {
+        const { controller } = createController();
 
-    assert.equal(
-      controller.getPresetToolUseRoot([
-        'nonOrchestratorHelper',
-        'engineer',
-        'leanOrchestrator',
-      ]),
-      'engineer',
-    );
-    assert.equal(
-      controller.getPresetToolUseRoot([
-        'nonOrchestratorHelper',
-        'leanOrchestrator',
-      ]),
-      'leanOrchestrator',
-    );
-  });
+        assert.equal(
+          yield* controller.getPresetToolUseRoot([
+            'nonOrchestratorHelper',
+            'engineer',
+            'leanOrchestrator',
+          ]),
+          'engineer',
+        );
+        assert.equal(
+          yield* controller.getPresetToolUseRoot([
+            'nonOrchestratorHelper',
+            'leanOrchestrator',
+          ]),
+          'leanOrchestrator',
+        );
+      }),
+  );
 
-  it('previews a built-in team with the root planTeamRun picks for it', () => {
-    const delegatingLean: SettingsAgentCatalogEntry = {
-      source: 'remote',
-      name: 'lean',
-      category: 'toolUse',
-      tools: ['delegate_agent'],
-    };
-    const { controller } = createController({
-      agents: { toolUse: [delegatingLean] },
-    });
-    const mathematician = AGENT_MODE_PRESETS_BY_ID.get('mathematician');
-    assert.ok(mathematician);
+  it.effect(
+    'previews a built-in team with the root planTeamRun picks for it',
+    () =>
+      Effect.gen(function* () {
+        const delegatingLean: SettingsAgentCatalogEntry = {
+          source: 'remote',
+          name: 'lean',
+          category: 'toolUse',
+          tools: ['delegate_agent'],
+        };
+        const { controller } = createController({
+          agents: { toolUse: [delegatingLean] },
+        });
+        const mathematician = AGENT_MODE_PRESETS_BY_ID.get('mathematician');
+        assert.ok(mathematician);
 
-    const preview = controller.getPresetToolUseRoot(
-      mathematician.agents.toolUse,
-      mathematician.id,
-    );
+        const preview = yield* controller.getPresetToolUseRoot(
+          mathematician.agents.toolUse,
+          mathematician.id,
+        );
 
-    // Built-in semantics search only the built-in root names, so the
-    // delegating 'lean' member earlier in preset order must not win.
-    assert.equal(preview, 'orchestrator');
-    const realPreset = findTeamPreset(teamPresets([]), mathematician.id);
-    assert.ok(realPreset);
-    assert.equal(
-      preview,
-      planTeamRun(realPreset, {
-        agents: {
-          workflow: [],
-          toolUse: [
-            delegatingLean,
-            // Stand-in for the controller's synthesized built-in root entry.
-            {
-              source: 'builtInToolUse',
-              name: 'orchestrator',
-              category: 'toolUse',
-              tools: ['delegate_agent'],
+        // Built-in semantics search only the built-in root names, so the
+        // delegating 'lean' member earlier in preset order must not win.
+        assert.equal(preview, 'orchestrator');
+        const realPreset = findTeamPreset(teamPresets([]), mathematician.id);
+        assert.ok(realPreset);
+        assert.equal(
+          preview,
+          planTeamRun(realPreset, {
+            agents: {
+              workflow: [],
+              toolUse: [
+                delegatingLean,
+                // Stand-in for the controller's synthesized built-in root entry.
+                {
+                  source: 'builtInToolUse',
+                  name: 'orchestrator',
+                  category: 'toolUse',
+                  tools: ['delegate_agent'],
+                },
+              ],
             },
-          ],
-        },
-      }).rootAgent?.name,
-    );
-    // The same member list previewed ad-hoc keeps custom semantics and
-    // picks the preset-order-first delegating member instead.
-    assert.equal(
-      controller.getPresetToolUseRoot(mathematician.agents.toolUse),
-      'lean',
-    );
-  });
+          }).rootAgent?.name,
+        );
+        // The same member list previewed ad-hoc keeps custom semantics and
+        // picks the preset-order-first delegating member instead.
+        assert.equal(
+          yield* controller.getPresetToolUseRoot(mathematician.agents.toolUse),
+          'lean',
+        );
+      }),
+  );
 
-  it('keeps custom root semantics when a custom team is previewed by id', () => {
-    const customPreset = {
-      id: 'custom-team',
-      name: 'Custom Team',
-      description: 'test',
-      icon: 'bookmark',
-      agents: {
-        workflow: [],
-        toolUse: ['teamLead', 'orchestrator'],
-      },
-      texraHostedAgents: [],
-    };
-    const { controller } = createController({
-      agents: {
-        toolUse: [
+  it.effect(
+    'keeps custom root semantics when a custom team is previewed by id',
+    () =>
+      Effect.gen(function* () {
+        const customPreset = {
+          id: 'custom-team',
+          name: 'Custom Team',
+          description: 'test',
+          icon: 'bookmark',
+          agents: {
+            workflow: [],
+            toolUse: ['teamLead', 'orchestrator'],
+          },
+          texraHostedAgents: [],
+        };
+        const { controller } = createController({
+          agents: {
+            toolUse: [
+              {
+                source: 'custom',
+                name: 'teamLead',
+                category: 'toolUse',
+                tools: ['delegate_agent'],
+              },
+            ],
+          },
+          customPresets: [customPreset],
+        });
+
+        // Preset order wins for custom teams, even over the built-in root the
+        // member list names (synthesized because the catalog lacks it).
+        assert.equal(
+          yield* controller.getPresetToolUseRoot(
+            customPreset.agents.toolUse,
+            'custom-team',
+          ),
+          'teamLead',
+        );
+      }),
+  );
+
+  it.effect('drops only invalid custom presets', () =>
+    Effect.gen(function* () {
+      const { controller } = createController({
+        customPresets: [
+          MALFORMED_PRESET,
           {
-            source: 'custom',
-            name: 'teamLead',
-            category: 'toolUse',
-            tools: ['delegate_agent'],
+            id: 'custom-team',
+            name: 'Custom Team',
+            description: 'test',
+            icon: 'bookmark',
+            agents: {
+              workflow: [],
+              toolUse: ['review'],
+            },
+            texraHostedAgents: [],
           },
         ],
-      },
-      customPresets: [customPreset],
-    });
+      });
 
-    // Preset order wins for custom teams, even over the built-in root the
-    // member list names (synthesized because the catalog lacks it).
-    assert.equal(
-      controller.getPresetToolUseRoot(
-        customPreset.agents.toolUse,
-        'custom-team',
-      ),
-      'teamLead',
-    );
-  });
-
-  it('drops only invalid custom presets', () => {
-    const { controller } = createController({
-      customPresets: [
-        MALFORMED_PRESET,
+      assert.deepEqual(yield* controller.getCustomPresets(), [
         {
           id: 'custom-team',
           name: 'Custom Team',
@@ -375,23 +414,9 @@ describe('SettingsAgentCatalogController', () => {
           },
           texraHostedAgents: [],
         },
-      ],
-    });
-
-    assert.deepEqual(controller.getCustomPresets(), [
-      {
-        id: 'custom-team',
-        name: 'Custom Team',
-        description: 'test',
-        icon: 'bookmark',
-        agents: {
-          workflow: [],
-          toolUse: ['review'],
-        },
-        texraHostedAgents: [],
-      },
-    ]);
-  });
+      ]);
+    }),
+  );
 
   it.effect('saves the currently visible agents as a custom preset', () =>
     Effect.gen(function* () {
@@ -417,7 +442,7 @@ describe('SettingsAgentCatalogController', () => {
           texraHostedAgents: [],
         },
       );
-      assert.equal(state.customPresets.length, 1);
+      assert.equal((yield* state.customPresets).length, 1);
     }),
   );
 
@@ -431,12 +456,12 @@ describe('SettingsAgentCatalogController', () => {
 
         yield* state.controller.saveCurrentPreset('New Team');
 
-        assert.deepEqual(state.customPresets.slice(0, 2), [
+        assert.deepEqual((yield* state.customPresets).slice(0, 2), [
           LEGACY_ICON_PRESET,
           MALFORMED_PRESET,
         ]);
         assert.equal(
-          (state.customPresets[2] as AgentModePreset | undefined)?.id,
+          ((yield* state.customPresets)[2] as AgentModePreset | undefined)?.id,
           'custom-123',
         );
       }),
@@ -461,7 +486,7 @@ describe('SettingsAgentCatalogController', () => {
         yield* state.controller.deleteCustomPreset('custom-team'),
         preset,
       );
-      assert.deepEqual(state.customPresets, []);
+      assert.deepEqual(yield* state.customPresets, []);
       assert.equal(yield* state.controller.deleteCustomPreset('missing'), null);
     }),
   );
@@ -487,7 +512,7 @@ describe('SettingsAgentCatalogController', () => {
         yield* state.controller.deleteCustomPreset(target.id),
         target,
       );
-      assert.deepEqual(state.customPresets, [
+      assert.deepEqual(yield* state.customPresets, [
         LEGACY_ICON_PRESET,
         MALFORMED_PRESET,
       ]);

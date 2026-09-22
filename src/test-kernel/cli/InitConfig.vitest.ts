@@ -85,16 +85,16 @@ describe('setWorkspaceCliChatAgent', () => {
           testWorkspaceRoots(),
           'builtInToolUse:review',
         );
-        expect(chatSection()).toEqual({
+        expect(yield* chatSection()).toEqual({
           agent: 'builtInToolUse:review',
           model: 'deepseekT',
         });
-        expect(readSettingFrom(testWorkspaceRoots(), 'texra.model')).toBe(
-          'deepseekT',
-        );
+        expect(
+          yield* readSettingFrom(testWorkspaceRoots(), 'texra.model'),
+        ).toBe('deepseekT');
 
         yield* setWorkspaceCliChatAgent(testWorkspaceRoots(), undefined);
-        expect(chatSection()).toEqual({ model: 'deepseekT' });
+        expect(yield* chatSection()).toEqual({ model: 'deepseekT' });
       }),
   );
 

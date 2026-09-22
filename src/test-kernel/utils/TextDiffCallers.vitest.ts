@@ -68,24 +68,20 @@ describe('shared text-diff caller fixtures', () => {
         runId,
         'workflow-subagent',
         {
-          runId,
-          outcome: RUN_OUTCOME.COMPLETED,
-          output: {
-            category: 'workflow',
-            outputs: [
-              {
-                round: 0,
-                relativePath: 'section/paper.tex',
-                absolutePath,
-                location: 'workspace',
-                originalPath,
-                added: 2,
-                removed: 1,
-              },
-            ],
-            compileFailures: [],
-            diffs: [],
-          },
+          category: 'workflow',
+          outputs: [
+            {
+              round: 0,
+              relativePath: 'section/paper.tex',
+              absolutePath,
+              location: 'workspace',
+              originalPath,
+              added: 2,
+              removed: 1,
+            },
+          ],
+          compileFailures: [],
+          diffs: [],
         },
         { startedAt: Date.now(), storageRoot },
       );

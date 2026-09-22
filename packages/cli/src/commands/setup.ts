@@ -53,6 +53,7 @@ export async function runSetup(context: CliContext): Promise<number> {
   // picker it may open are one program on the root's runtime.
   const runtime = await installCliProcessRuntime(context.storageRoot, {
     resourcesPath: context.resourcesPath,
+    minimumLogLevel: context.minimumLogLevel,
   });
   const credentialed = await runtime.runPromise(
     Effect.gen(function* () {

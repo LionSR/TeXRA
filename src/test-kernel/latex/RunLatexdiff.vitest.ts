@@ -195,9 +195,7 @@ describe('runLatexdiffForRun', () => {
 describe('runLatexdiffForRun diagnostics', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
-    // Debug mode on: the Effect logger drops `Debug` entries otherwise, and
-    // this assertion is about the channel, not that gate.
-    await installPlatform({ config: { 'texra.logger.debugMode': true } });
+    await installPlatform();
     mocks.runLatexdiffFromMetadata.mockReturnValue(
       Effect.succeed(EMPTY_OUTCOME),
     );
@@ -222,7 +220,7 @@ describe('runLatexdiffForRun diagnostics', () => {
         logs.has('DEBUG', 'test', 'Using run-dir scan outputs from run abc123'),
       ).toBe(true);
     }).pipe(
-      Effect.provide(effectDiagnosticsLayer),
+      Effect.provide(effectDiagnosticsLayer('Trace')),
       Effect.provide(nodePlatformLayer),
     ),
   );

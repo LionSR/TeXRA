@@ -23,7 +23,7 @@ import {
   FOLLOW_UP_WAKE_FAILED_MESSAGE,
   submitFollowUp,
 } from '@agent/followUp/ToolUseFollowUp';
-import { withLogChannel, withLogData } from '@logger/effectLog';
+import { withLogChannel } from '@logger/effectLog';
 import { AgentResume } from '@platform/interfaces';
 import type { RunId } from '@shared/schemas';
 import {
@@ -139,7 +139,7 @@ Optional auto-attach from the input LaTeX:
         'delegate_workflow',
         yield* ToolCall,
       );
-      const agent = requireVisibleAgent(
+      const agent = yield* requireVisibleAgent(
         call.roots,
         'workflow',
         input.agent,
@@ -263,7 +263,7 @@ Git worktree support: resolved from the active workspace at runtime.`,
       // The `working_directory` opt-in, over this call's project: the schema
       // parses the path, the session it runs on says whether worktrees are
       // enabled for it.
-      const disabled = rejectDisabledWorktreeDirectory(
+      const disabled = yield* rejectDisabledWorktreeDirectory(
         call.roots,
         input.working_directory ?? undefined,
       );
@@ -281,7 +281,7 @@ Git worktree support: resolved from the active workspace at runtime.`,
       // New-delegation path: the schema's refine() guarantees exactly one of
       // agent/execution_id is set, so agent is defined here — refine() doesn't
       // narrow types, hence the assertion.
-      const agent = requireVisibleAgent(
+      const agent = yield* requireVisibleAgent(
         call.roots,
         'toolUse',
         input.agent!,
@@ -386,7 +386,10 @@ Git worktree support: resolved from the active workspace at runtime.`,
             Effect.catch((error) =>
               Effect.logWarning(
                 'Could not deliver the subagent wake failure.',
-              ).pipe(withLogData(error), withLogChannel(CHANNEL)),
+              ).pipe(
+                Effect.annotateLogs({ data: error }),
+                withLogChannel(CHANNEL),
+              ),
             ),
           ),
         );

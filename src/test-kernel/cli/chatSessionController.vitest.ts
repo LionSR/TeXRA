@@ -607,10 +607,10 @@ describe('createChatSessionController', () => {
     // blanket `false` is not a valid persisted value for
     // AGENT_ROSTER_SELECTION, which agent resolution now reads.
     mocks.workspaceGet.mockImplementation(
-      (_key: unknown, defaultValue?: unknown) => defaultValue,
+      (_key: unknown, defaultValue?: unknown) => Effect.succeed(defaultValue),
     );
     mocks.globalGet.mockImplementation(
-      (_key: unknown, defaultValue?: unknown) => defaultValue,
+      (_key: unknown, defaultValue?: unknown) => Effect.succeed(defaultValue),
     );
     // The helper-model write is an Effect now, so the stubs are too.
     mocks.setCliHelperModel.mockReturnValue(Effect.void);
@@ -665,7 +665,7 @@ describe('createChatSessionController', () => {
     holdRun('a11111' as RunId);
     const ctrl = createChatSessionController(makeInit({ session }));
 
-    mocks.globalGet.mockReturnValue(true);
+    mocks.globalGet.mockReturnValue(Effect.succeed(true));
     ctrl.stop();
 
     expect(mocks.globalGet).toHaveBeenCalledWith(

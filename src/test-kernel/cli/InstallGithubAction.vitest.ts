@@ -102,7 +102,7 @@ describe('install-github-action command', () => {
     // and no global-root handle for a command that disposes neither.
     expect(browserMocks.installCliProcessRuntime).toHaveBeenCalledWith(
       undefined,
-      NO_PLATFORM_INSTALL,
+      { ...NO_PLATFORM_INSTALL, minimumLogLevel: 'Info' },
     );
     expect(git(repo, 'show', '--name-only', '--format=', 'HEAD')).toBe(
       '.github/workflows/texra-code-review.yml',

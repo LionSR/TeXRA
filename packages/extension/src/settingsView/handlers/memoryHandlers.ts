@@ -9,6 +9,7 @@ import { Cause, Data, Effect, Exit } from 'effect';
 import * as vscode from 'vscode';
 
 import type { SessionHandle } from '@agent/runtime';
+import type { SettingsViewInboundHandlerRegistry } from '@controllers/settingsView/settingsViewDispatch';
 import { SettingsMemoryController } from '@controllers/settingsView/SettingsMemoryController';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
@@ -18,7 +19,6 @@ import { StorageFs, withSessionFs } from '@platform/rootedFs';
 import {
   SETTINGS_VIEW_CMD,
   type SettingsMessageFor,
-  type SettingsViewInboundHandlerRegistry,
 } from '@shared/settingsView/settingsViewMessages';
 import { hasExtension } from '@utils/core/pathCore';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -59,17 +59,14 @@ export class MemoryHandlers {
     // Each arm is a settings-view message, so its program settles on the
     // view's boundary here rather than in the view's own registry.
     this.handlers = {
-      getMemoryData: () =>
-        ctx.run(ctx.withActiveWebview((w) => this.sendMemoryData(w))),
-      getMemoryPreview: (message) =>
-        ctx.run(this.handleGetMemoryPreview(message)),
-      openMemoryFile: (message) => ctx.run(this.handleOpenMemoryFile(message)),
-      openMemoryFolder: () => ctx.run(this.handleOpenMemoryFolder()),
-      deleteMemory: (message) => ctx.run(this.handleDeleteMemory(message)),
-      pinMemory: (message) =>
-        ctx.run(this.setMemoryPinned(message.storagePath, true)),
+      getMemoryData: () => ctx.withActiveWebview((w) => this.sendMemoryData(w)),
+      getMemoryPreview: (message) => this.handleGetMemoryPreview(message),
+      openMemoryFile: (message) => this.handleOpenMemoryFile(message),
+      openMemoryFolder: () => this.handleOpenMemoryFolder(),
+      deleteMemory: (message) => this.handleDeleteMemory(message),
+      pinMemory: (message) => this.setMemoryPinned(message.storagePath, true),
       unpinMemory: (message) =>
-        ctx.run(this.setMemoryPinned(message.storagePath, false)),
+        this.setMemoryPinned(message.storagePath, false),
     };
   }
 

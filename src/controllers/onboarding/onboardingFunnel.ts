@@ -21,7 +21,11 @@
 
 import { Effect, Semaphore } from 'effect';
 
-import type { StateStore, StateWriteFailed } from '@platform/interfaces';
+import type {
+  StateStore,
+  StateReadFailed,
+  StateWriteFailed,
+} from '@platform/interfaces';
 import type { LanguageModel } from '@platform/languageModel';
 import type { OnboardingFunnelState } from '@shared/schemas';
 import {
@@ -145,7 +149,7 @@ export class OnboardingFunnelRefresher {
       const hasCredential = yield* this.host.hasCredential();
       const transition = planOnboardingFunnelTransition(this.current, {
         hasCredential,
-        ...readOnboardingFlags(this.host.flags),
+        ...(yield* readOnboardingFlags(this.host.flags)),
       });
       const changed = this.current !== transition.state;
       this.current = transition.state;
@@ -167,7 +171,11 @@ export class OnboardingFunnelRefresher {
 
   /** Ask for a refresh. The only failure is the flag write that clears a
    *  stale skip; the credential probe cannot fail and `apply` is synchronous. */
-  run(): Effect.Effect<void, StateWriteFailed, LanguageModel> {
+  run(): Effect.Effect<
+    void,
+    StateReadFailed | StateWriteFailed,
+    LanguageModel
+  > {
     return Effect.suspend(() => {
       this.rerunRequested = true;
       return this.lane.withPermit(this.drain());

@@ -253,16 +253,16 @@ describe('runtime model registry', () => {
         );
         const { globalState } = installedHost().roots;
         expect(
-          copilotRouteUnavailableReason('gemini31p', globalState),
+          yield* copilotRouteUnavailableReason('gemini31p', globalState),
         ).toBeUndefined();
         // A preference for a model the editor does not offer cannot route.
-        expect(copilotRouteUnavailableReason('gpt56-', globalState)).toMatch(
-          /does not currently/,
-        );
+        expect(
+          yield* copilotRouteUnavailableReason('gpt56-', globalState),
+        ).toMatch(/does not currently/);
 
         yield* setCopilotRoutePreference('gemini31p', false, globalState);
         expect(
-          copilotRouteUnavailableReason('gemini31p', globalState),
+          yield* copilotRouteUnavailableReason('gemini31p', globalState),
         ).toBeUndefined();
       }),
   );

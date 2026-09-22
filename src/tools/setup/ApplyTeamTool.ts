@@ -86,18 +86,19 @@ const applyTeam = Effect.fn('ApplyTeamTool.execute')(function* (
   // through this tool's adapter — the Settings "apply team" action commits
   // only the roster, since it has no notion of a fresh-workspace default.
   const catalog: TeamRosterCatalog = {
-    resolvePreset: (presetId) => {
-      const preset =
-        presetId === STARTER_AGENT_MODE_PRESET.id
-          ? STARTER_AGENT_MODE_PRESET
-          : AGENT_MODE_PRESETS_BY_ID.get(presetId);
-      if (!preset) return { ok: false, reason: 'unknownPreset' };
-      return {
-        ok: true,
-        preset,
-        resolution: resolveTeamRoster(state, preset),
-      };
-    },
+    resolvePreset: (presetId) =>
+      Effect.sync(() => {
+        const preset =
+          presetId === STARTER_AGENT_MODE_PRESET.id
+            ? STARTER_AGENT_MODE_PRESET
+            : AGENT_MODE_PRESETS_BY_ID.get(presetId);
+        if (!preset) return { ok: false, reason: 'unknownPreset' };
+        return {
+          ok: true,
+          preset,
+          resolution: resolveTeamRoster(state, preset),
+        };
+      }),
     commitPreset: (preset) =>
       Effect.gen(function* () {
         yield* roster.setTeam(preset.id);

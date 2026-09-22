@@ -1,5 +1,7 @@
 import { strict as assert } from 'node:assert';
-import { describe, it } from 'vitest';
+import { Effect } from 'effect';
+import { it } from '@effect/vitest';
+import { describe } from 'vitest';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
 import {
@@ -18,37 +20,43 @@ import { hostStores, setupPlatform } from '@test/support/setupPlatform';
 describe('SETUP_MODEL_BY_PROVIDER', () => {
   setupPlatform({ config: { 'texra.chatgptCodex.preferSubscription': true } });
 
-  it('pins every provider to a live, non-deprecated, directly reachable model', () => {
-    for (const [provider, model] of Object.entries(SETUP_MODEL_BY_PROVIDER)) {
-      const config = MODEL_CONFIGS[model];
-      assert.ok(config, `${provider} pins unknown model "${model}"`);
-      assert.equal(
-        config.retired ?? false,
-        false,
-        `${provider}: "${model}" is retired`,
-      );
-      assert.equal(
-        config.deprecated ?? false,
-        false,
-        `${provider}: "${model}" is deprecated`,
-      );
-      assert.equal(
-        config.openRouterOnly ?? false,
-        false,
-        `${provider}: "${model}" is OpenRouter-only`,
-      );
-    }
-    // CHATGPT_SETUP_MODEL feeds isCodexSubscriptionActive, which accepts only
-    // Codex-eligible model ids.
-    assert.equal(CHATGPT_SETUP_MODEL, SETUP_MODEL_BY_PROVIDER.openai);
-    assert.ok(
-      resolveCodexSubscriptionCapabilities(
-        hostStores(),
-        MODEL_CONFIGS[CHATGPT_SETUP_MODEL],
-        false,
-      ),
-    );
-  });
+  it.effect(
+    'pins every provider to a live, non-deprecated, directly reachable model',
+    () =>
+      Effect.gen(function* () {
+        for (const [provider, model] of Object.entries(
+          SETUP_MODEL_BY_PROVIDER,
+        )) {
+          const config = MODEL_CONFIGS[model];
+          assert.ok(config, `${provider} pins unknown model "${model}"`);
+          assert.equal(
+            config.retired ?? false,
+            false,
+            `${provider}: "${model}" is retired`,
+          );
+          assert.equal(
+            config.deprecated ?? false,
+            false,
+            `${provider}: "${model}" is deprecated`,
+          );
+          assert.equal(
+            config.openRouterOnly ?? false,
+            false,
+            `${provider}: "${model}" is OpenRouter-only`,
+          );
+        }
+        // CHATGPT_SETUP_MODEL feeds isCodexSubscriptionActive, which accepts only
+        // Codex-eligible model ids.
+        assert.equal(CHATGPT_SETUP_MODEL, SETUP_MODEL_BY_PROVIDER.openai);
+        assert.ok(
+          yield* resolveCodexSubscriptionCapabilities(
+            hostStores(),
+            MODEL_CONFIGS[CHATGPT_SETUP_MODEL],
+            false,
+          ),
+        );
+      }),
+  );
 
   it('covers every non-OpenRouter direct-key API provider', () => {
     for (const provider of API_PROVIDERS) {

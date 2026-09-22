@@ -114,7 +114,6 @@ describe('run-scoped tool resolution', () => {
             ).pipe(
               Layer.provideMerge(
                 agentRunLayer(ctx, {
-                  parentRunId: null,
                   // Run-scoped tools, one of them shadowing a registered tool.
                   tools: [tool('bash'), tool('second')],
                   callbacks: { onModelChanged: () => {} },

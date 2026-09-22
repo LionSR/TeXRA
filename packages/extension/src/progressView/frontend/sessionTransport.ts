@@ -190,6 +190,7 @@ export function installWebviewTransport(): WebviewTransport {
         kind: 'subscribe',
         session: session.key,
         generation: session.generation,
+        debug: session.view$.get().debug,
         cursor: session.view$.get().cursor,
         aggregates,
       };

@@ -258,7 +258,7 @@ async function stubAgentRegistry(): Promise<() => void> {
   const agents = await import('@agent/index');
   const spies = [
     vi.spyOn(agents, 'loadAgents').mockReturnValue(Effect.void),
-    vi.spyOn(agents, 'getVisibleAgents').mockReturnValue([]),
+    vi.spyOn(agents, 'getVisibleAgents').mockReturnValue(Effect.succeed([])),
   ];
   return () => {
     for (const spy of spies) spy.mockRestore();
@@ -313,7 +313,7 @@ describe('runChat signal ownership wiring', () => {
       model: 'gpt-test',
       modelSource: 'default',
     });
-    mocks.chatToolUseAgentUsageError.mockReturnValue(undefined);
+    mocks.chatToolUseAgentUsageError.mockReturnValue(Effect.succeed(undefined));
     mocks.selectCliRunnableModel.mockReturnValue(
       Effect.succeed({ model: 'gpt-test' }),
     );

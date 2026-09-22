@@ -5,7 +5,7 @@ import * as path from 'node:path';
 import { Effect, FileSystem } from 'effect';
 
 // Local imports - log
-import { withLogChannel, withLogData } from '@logger/effectLog';
+import { withLogChannel } from '@logger/effectLog';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { FileLocation } from '@shared/schemas';
 import { renderPrompt } from '@utils/prompt';
@@ -156,9 +156,11 @@ const compile = Effect.fn('TikzPictureManager.compile')(function* (
         yield* Effect.logWarning(
           `Failed to compile TikZ picture ${texLocation.absolutePath}:\n${compiled.logTail}`,
         ).pipe(
-          withLogData({
-            texFile: texLocation.absolutePath,
-            logTail: compiled.logTail,
+          Effect.annotateLogs({
+            data: {
+              texFile: texLocation.absolutePath,
+              logTail: compiled.logTail,
+            },
           }),
           withLogChannel(CHANNEL),
         );

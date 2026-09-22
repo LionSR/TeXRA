@@ -101,12 +101,14 @@ function shouldUseResponsesAPI(
  * (no caching) so a mid-session settings change is honored on the next
  * binding, matching the other `globalState` reads in this module.
  */
-function getPreferShortModelNames(globalState: StateStore): boolean {
-  return globalState.get<boolean>(
-    GlobalStateKey.PREFER_SHORT_MODEL_NAMES,
-    false,
-  );
-}
+const getPreferShortModelNames = Effect.fn('getPreferShortModelNames')(
+  function* (globalState: StateStore) {
+    return yield* globalState.get<boolean>(
+      GlobalStateKey.PREFER_SHORT_MODEL_NAMES,
+      false,
+    );
+  },
+);
 
 /** The API-key credential and endpoint of one model route, resolved together. */
 export interface ApiKeyRouteCredential {
@@ -205,11 +207,11 @@ export const resolveSubscriptionCredential = Effect.fn(
     // The capability read consults the subscription preference and
     // context-window setting of the workspace the caller handed in; a host
     // read that throws stays in the typed channel.
-    const profile = yield* Effect.try({
-      try: () =>
-        resolveCodexSubscriptionCapabilities(stores, config, useOpenRouter),
-      catch: ensureError,
-    });
+    const profile = yield* resolveCodexSubscriptionCapabilities(
+      stores,
+      config,
+      useOpenRouter,
+    );
     if (profile === null) return null;
     const signedIn = yield* isCodexSignedIn();
     if (!signedIn) {
@@ -258,11 +260,11 @@ export const resolveSubscriptionCredential = Effect.fn(
   }
   if (config.provider === ModelProvider.XAI) {
     if (declinedRoutes.includes('xai-subscription')) return null;
-    const profile = yield* Effect.try({
-      try: () =>
-        resolveXaiSubscriptionCapabilities(stores, config, useOpenRouter),
-      catch: ensureError,
-    });
+    const profile = yield* resolveXaiSubscriptionCapabilities(
+      stores,
+      config,
+      useOpenRouter,
+    );
     if (profile === null) return null;
     const signedIn = yield* isXaiSignedIn();
     if (!signedIn) {
@@ -344,11 +346,12 @@ export const resolveRouteCredential = Effect.fn('resolveRouteCredential')(
       },
       onSuccess: exposeApiKey,
     });
-    const endpoint = yield* Effect.try({
-      try: () =>
-        resolveRouteEndpoint(stores, config, useOpenRouter, declinedRoutes),
-      catch: ensureError,
-    });
+    const endpoint = yield* resolveRouteEndpoint(
+      stores,
+      config,
+      useOpenRouter,
+      declinedRoutes,
+    );
     return {
       apiKey,
       endpoint: endpoint.baseUrl,
@@ -368,13 +371,13 @@ export const resolveRouteCredential = Effect.fn('resolveRouteCredential')(
  * to the bound config, not only to the route decision, so the request carries
  * the identifier the preference promises.
  */
-export function withShortModelName(
+export const withShortModelName = Effect.fn('withShortModelName')(function* (
   config: ModelConfig,
   globalState: StateStore,
-): ModelConfig {
+) {
   const resolved = applyShortModelNamePreference(
     config,
-    getPreferShortModelNames(globalState),
+    yield* getPreferShortModelNames(globalState),
   );
   if (resolved !== config) {
     log.debug(
@@ -382,7 +385,7 @@ export function withShortModelName(
     );
   }
   return resolved;
-}
+});
 
 function applyShortModelNamePreference(
   config: ModelConfig,
@@ -398,12 +401,14 @@ function applyShortModelNamePreference(
 }
 
 /** Returns the conversation-history format this model binds under. */
-export function resolveModelCompatibilityKey(
+export const resolveModelCompatibilityKey = Effect.fn(
+  'resolveModelCompatibilityKey',
+)(function* (
   originalConfig: ModelConfig,
   globalState: StateStore,
   useOpenRouter: boolean,
   ownApiKeyFallback = false,
-): ModelCompatibilityKey | undefined {
+) {
   if (shouldUseInternalValidationModel()) {
     return 'Validation';
   }
@@ -416,13 +421,14 @@ export function resolveModelCompatibilityKey(
   // silently consuming a provider key or subscription (#9635).
   if (
     !ownApiKeyFallback &&
-    prefersCopilotRoute(originalConfig.name, globalState)
+    (yield* prefersCopilotRoute(originalConfig.name, globalState))
   ) {
-    const unavailableReason = copilotRouteUnavailableReason(
+    const unavailableReason = yield* copilotRouteUnavailableReason(
       originalConfig.name,
       globalState,
     );
-    if (unavailableReason) throw new AgentError(unavailableReason);
+    if (unavailableReason)
+      return yield* Effect.fail(new AgentError(unavailableReason));
     return 'VscodeLm';
   }
   if (originalConfig.provider === ModelProvider.COPILOT) {
@@ -433,7 +439,7 @@ export function resolveModelCompatibilityKey(
   // `bindModel` path can hand this its own resolved config.
   const config = applyShortModelNamePreference(
     originalConfig,
-    getPreferShortModelNames(globalState),
+    yield* getPreferShortModelNames(globalState),
   );
   if (shouldUseResponsesAPI(config, useOpenRouter)) {
     return 'OpenAIResponse';
@@ -442,7 +448,7 @@ export function resolveModelCompatibilityKey(
     return 'OpenRouterNative';
   }
   return providerCompatibilityKey(config.provider);
-}
+});
 
 /**
  * Guarded route-table read. The table is exhaustive over `ModelProvider`, so a

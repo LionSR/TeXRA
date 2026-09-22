@@ -5,7 +5,7 @@
 
 import { stat } from 'node:fs/promises';
 
-import { Data, Effect, type FileSystem, type Path } from 'effect';
+import { Data, Effect, Exit, Scope, type FileSystem, type Path } from 'effect';
 
 import {
   createAgentResponseTextConnector,
@@ -13,7 +13,7 @@ import {
   type SessionHandle,
 } from '@agent/runtime';
 import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
-import { openAppStateStore } from '@controllers/session/appStateStore';
+import { openProjectStateStore } from '@controllers/session/appStateStore';
 import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import type { PlatformSecrets } from '@platform/secrets';
@@ -27,6 +27,7 @@ import {
   TEXRA_APPROVAL_POLICY_CONFIG_KEY,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
+import type { ProjectDatabases } from '@shared/session/database';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { readSettingFrom } from '@utils/config/platformSettings';
@@ -51,6 +52,8 @@ interface DesktopProjectRegistryOptions {
   readonly dataRoot: string;
   /** Roots of the no-workspace session; the process roots. */
   readonly processRoots: WorkspaceRoots;
+  /** The fallback project owns its state and session through this one scope. */
+  readonly processScope: Scope.Closeable;
   /**
    * The one store over the global config file, shared by every project's
    * config provider: a `JsonStore` serves reads from its own open-time view,
@@ -76,7 +79,11 @@ export interface DesktopProjectRegistry {
    */
   open(
     root: string,
-  ): Effect.Effect<DesktopProject, Error, FileSystem.FileSystem | Path.Path>;
+  ): Effect.Effect<
+    DesktopProject,
+    Error,
+    FileSystem.FileSystem | Path.Path | ProjectDatabases
+  >;
   /** Open projects in the order they were opened; the no-workspace session is not one. */
   list(): readonly DesktopProject[];
   /** The project the window shows: the active folder, else the no-workspace session. */
@@ -192,37 +199,36 @@ function openProjectSession(
   root: string | undefined,
   roots: WorkspaceRoots,
   secrets: PlatformSecrets,
-): Effect.Effect<DesktopProject, Error> {
+): Effect.Effect<DesktopProject, Error, Scope.Scope> {
   return Effect.gen(function* () {
-    const session = yield* openSessionEffect({
-      roots,
-      responseTextProcessing: createTexraResponseTextProcessing(
-        // This project's own roots, plus the process secret store — not the
-        // process-level stores, which carry no workspace config layer and so
-        // answered every project with the global value (#12773). Taking
-        // `secrets` alone rather than a whole `ModelOptionStores` is what
-        // makes the wrong pair unrepresentable here.
-        createAgentResponseTextConnector({ ...roots, secrets }),
+    const scope = yield* Scope.Scope;
+    const session = yield* Effect.acquireRelease(
+      openSessionEffect({
+        roots,
+        responseTextProcessing: createTexraResponseTextProcessing(
+          // This project's own roots, plus the process secret store — not the
+          // process-level stores, which carry no workspace config layer and so
+          // answered every project with the global value (#12773). Taking
+          // `secrets` alone rather than a whole `ModelOptionStores` is what
+          // makes the wrong pair unrepresentable here.
+          createAgentResponseTextConnector({ ...roots, secrets }),
+        ),
+      }),
+      (session) => session.dispose(),
+    );
+    session.setApprovalPolicy(
+      yield* readSettingFrom<TexraApprovalPolicy>(
+        roots,
+        TEXRA_APPROVAL_POLICY_CONFIG_KEY,
       ),
-    });
-    return yield* Effect.try({
-      try: () => {
-        session.setApprovalPolicy(
-          readSettingFrom<TexraApprovalPolicy>(
-            roots,
-            TEXRA_APPROVAL_POLICY_CONFIG_KEY,
-          ),
-        );
-        return {
-          key: roots.storage,
-          root,
-          roots,
-          session,
-          dispose: () => session.dispose(),
-        };
-      },
-      catch: ensureError,
-    }).pipe(Effect.onError(() => session.dispose()));
+    );
+    return {
+      key: roots.storage,
+      root,
+      roots,
+      session,
+      dispose: () => Scope.close(scope, Exit.void),
+    };
   });
 }
 
@@ -244,6 +250,9 @@ export function openDesktopProjectRegistry(
         undefined,
         options.processRoots,
         options.stores.secrets,
+      ).pipe(
+        Scope.provide(options.processScope),
+        Effect.onError(() => Scope.close(options.processScope, Exit.void)),
       ),
     );
     const notify = () => {
@@ -274,34 +283,44 @@ export function openDesktopProjectRegistry(
             root,
           );
           const storage = storageProvider.getStoragePath();
-          const [workspaceState, workspaceConfig] = yield* Effect.all(
-            [
-              openAppStateStore(storage),
-              openTexraWorkspaceConfigStore(storage, root, options.warn),
-            ],
-            { concurrency: 'unbounded' },
-          );
-          const roots = createNodeWorkspaceRoots({
-            workspacePath: root,
-            storage,
-            globalStorage: storageProvider.getGlobalStoragePath(),
-            config: {
-              workspace: workspaceConfig,
-              global: options.globalConfigStore,
-            },
-            workspaceState,
-            globalState: options.stores.globalState,
-          });
-          // Acquire the session and install its registry owner before
-          // interruption can leave this operation.
-          return yield* Effect.uninterruptible(
-            openProjectSession(root, roots, options.stores.secrets).pipe(
-              Effect.tap((project) =>
-                Effect.sync(() => {
-                  projects.set(root, project);
-                  notify();
-                }).pipe(withPerKeyLane(lanes, selection)),
+          const projectScope = yield* Scope.make();
+          return yield* Effect.gen(function* () {
+            const [workspaceState, workspaceConfig] = yield* Effect.all(
+              [
+                openProjectStateStore(storage),
+                openTexraWorkspaceConfigStore(storage, root, options.warn),
+              ],
+              { concurrency: 'unbounded' },
+            );
+            const roots = createNodeWorkspaceRoots({
+              workspacePath: root,
+              storage,
+              globalStorage: storageProvider.getGlobalStoragePath(),
+              config: {
+                workspace: workspaceConfig,
+                global: options.globalConfigStore,
+              },
+              workspaceState,
+              globalState: options.stores.globalState,
+            });
+            // Acquire the session and install its registry owner before
+            // interruption can leave this operation.
+            return yield* Effect.uninterruptible(
+              openProjectSession(root, roots, options.stores.secrets).pipe(
+                Effect.tap((project) =>
+                  Effect.sync(() => {
+                    projects.set(root, project);
+                    notify();
+                  }).pipe(withPerKeyLane(lanes, selection)),
+                ),
               ),
+            );
+          }).pipe(
+            Scope.provide(projectScope),
+            Effect.onError(() =>
+              projects.has(root)
+                ? Effect.void
+                : Scope.close(projectScope, Exit.void),
             ),
           );
         }).pipe(withPerKeyLane(lanes, root), Effect.mapError(ensureError));

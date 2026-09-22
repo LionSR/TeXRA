@@ -8,7 +8,6 @@ import {
   type SessionHandle,
   type SessionHandleInit,
 } from '@agent/runtime/SessionHandle';
-import { isDebugModeEnabled } from '@logger/logUtils';
 import { aggregateId, type RunId, type RunPhase } from '@shared/schemas';
 import { isTranscriptEvent } from '@shared/schemas';
 import type { SessionOpenError } from '@shared/session/database';
@@ -131,7 +130,7 @@ export function attachTestTranscriptFold(
     fold.record(event, {
       at: seq,
       id: JSON.stringify([runId, seq]),
-      debug: isDebugModeEnabled(),
+      debug: false,
     });
   });
   return {

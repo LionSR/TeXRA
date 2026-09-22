@@ -80,7 +80,7 @@ describe('StreamLogStore event reads', () => {
             fold.record(row, {
               at: row.at,
               id: JSON.stringify([row.aggregateId, row.seq]),
-              debug: row.transcriptDebug ?? false,
+              debug: false,
             });
         }
         expect(yield* store.readEntries(RUN)).toEqual(live.toJSON());

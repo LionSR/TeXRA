@@ -10,7 +10,6 @@
     { "from": "agent", "to": "replacement", "kind": "value" },
     { "from": "agent", "to": "shared", "kind": "value" },
     { "from": "agent", "to": "skills", "kind": "value" },
-    { "from": "agent", "to": "telemetry", "kind": "value" },
     { "from": "agent", "to": "tools", "kind": "value" },
     { "from": "agent", "to": "transcript", "kind": "value" },
     { "from": "agent", "to": "ui", "kind": "value" },

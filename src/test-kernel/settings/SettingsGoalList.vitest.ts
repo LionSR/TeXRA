@@ -48,6 +48,11 @@ function createHandler(): SettingsViewMessageHandler {
     secrets,
     testRuntime(),
     testDefaultSession(),
+    {
+      refreshCatalogs: () => Effect.void,
+      refreshApiKeyStatus: Effect.void,
+      refreshOnboardingFunnel: () => Effect.void,
+    },
   );
 }
 

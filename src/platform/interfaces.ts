@@ -93,16 +93,14 @@ export interface ConfigProvider {
 // State
 // ---------------------------------------------------------------------------
 
-/**
- * A state write the store refused: the host's own `Memento` rejection on the
- * extension, and the shared `JsonStore`'s filesystem or not-JSON failure on
- * the desktop, the CLI and the agent package.
- *
- * {@link StateStore.update} raises it as the failure of the write itself, for
- * the same reason {@link ConfigWriteFailed} exists: the writes travel with the
- * config slots beside them, so a caller inside a program composes the write
- * rather than adopting a rejection it cannot type.
- */
+/** An authoritative state read failed; absence is a successful read. */
+export class StateReadFailed extends Data.TaggedError('StateReadFailed')<{
+  readonly key: string;
+  readonly message: string;
+  readonly cause: unknown;
+}> {}
+
+/** A host or database refused an application-state write. */
 export class StateWriteFailed extends Data.TaggedError('StateWriteFailed')<{
   readonly key: string;
   readonly message: string;
@@ -110,28 +108,19 @@ export class StateWriteFailed extends Data.TaggedError('StateWriteFailed')<{
 }> {}
 
 /**
- * Platform key-value state store interface.
- *
- * `get` keeps `vscode.Memento`'s synchronous shape. `update` does not: it is
- * an `Effect` so it composes directly into the caller's program, for the same
- * reason {@link ConfigProvider.update} is one. An implementation wrapping a
- * host `Memento`, whose own `update` is a `PromiseLike`, is the one place that
- * adopts the promise and raises {@link StateWriteFailed} for it.
+ * Application state read from its authority when the Effect executes.
+ * Updates finish after commit. Separate reads and updates are not an atomic
+ * read-modify-write operation; defaults apply only to absent keys.
  */
 export interface StateStore {
-  get<T>(key: string, defaultValue?: T): T;
+  get<T>(key: string, defaultValue?: T): Effect.Effect<T, StateReadFailed>;
   update(key: string, value: unknown): Effect.Effect<void, StateWriteFailed>;
 }
 
 /**
- * The process's global state store as an Effect service
- * (`@texra/platform/AppState`, injection plan §5 row 2), provided once by the
- * composition root through `installProcessRuntime`.
- *
- * `layer` takes the store itself, for the same reason `Secrets.layer` does:
- * every root opens its state store before installing the runtime that serves
- * it, so the service is that store rather than a thunk resolved per member
- * call.
+ * Global application state, provided by the process's composition layer.
+ * Hosts supplying an existing store use `layer`; SQLite hosts acquire their
+ * store in the runtime's scope, sharing the global database where appropriate.
  */
 export class AppState extends Context.Service<AppState, StateStore>()(
   '@texra/platform/AppState',

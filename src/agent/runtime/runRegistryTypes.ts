@@ -15,8 +15,8 @@ import type {
 } from '@agent/storage/runLifecycle';
 import type { RunId, SessionEventDraft, RunPhase } from '@shared/schemas';
 import type { RunView } from '@shared/session/sessionView';
-import type { Deferred, Effect, Fiber, FiberMap } from 'effect';
-import type { LiveToolUseFlowContext } from './RunHandle';
+import type { Effect } from 'effect';
+import type { LiveToolUseFlowContext, RunParent } from './RunHandle';
 
 /**
  * Child policy shared by `kill()` and `stopAgentRun()`. The caller owns the
@@ -46,28 +46,15 @@ export interface RunStopOptions {
 
 /**
  * A native child loop's lineage for the loop's whole life: from the
- * synchronous start of the loop, across every turn handle it tracks and
- * untracks, until its final result has reached the parent. The parent counts
+ * synchronous launch until its final result has reached the parent, including
+ * preparation before the engine tracks its handle and terminal delivery after it. The parent counts
  * it as an active child throughout, so its continuation stays recoverable
  * until the last delivery landed. Child-run loops use their run handle.
  */
 export interface ChildRunActivation {
   readonly runId: RunId;
-  readonly parentRunId: RunId;
+  parent: RunParent;
   readonly interrupt: () => void;
-  readonly detach: () => void;
-  readonly isDetached: () => boolean;
-}
-
-/**
- * A run parked at WAITING: the fiber its generation stayed on, inside the
- * scope that holds the run's teardown. Completing the latch ends the run
- * through the lifecycle's terminal path; interrupting the fiber where it
- * waits ends the park alone, which is what a resumed generation does.
- */
-export interface ParkedRun {
-  readonly fiber: Fiber.Fiber<void>;
-  readonly stopped: Deferred.Deferred<void>;
 }
 
 /**
@@ -129,12 +116,4 @@ export interface RunRegistryInit {
   readonly acquireRunClaim: (
     runId: RunId,
   ) => Effect.Effect<Effect.Effect<void, Error>, Error>;
-  /**
-   * The session's one owner of parked fibers, made in the session's scope
-   * (`sessionLayer.ts`) because `FiberMap.make` needs one. A run that parks at
-   * WAITING keeps its fiber here, so the park outlives the generation's own
-   * scope without becoming a daemon nobody owns: the session's scope closing
-   * is what interrupts every fiber still in it.
-   */
-  readonly parked: FiberMap.FiberMap<RunId>;
 }

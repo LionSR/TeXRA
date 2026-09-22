@@ -1,4 +1,5 @@
 import { Effect } from 'effect';
+import type { SettingsViewInboundHandlerRegistry } from '@controllers/settingsView/settingsViewDispatch';
 
 import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
 import {
@@ -9,7 +10,6 @@ import type { ConfigProvider } from '@platform/interfaces';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type {
-  SettingsViewInboundHandlerRegistry,
   ToolCommandKind,
   ToolDashboardItem,
 } from '@shared/settingsView/settingsViewMessages';
@@ -21,6 +21,7 @@ import {
   getLastCheckResults,
   refreshToolAvailability,
 } from '@tools/toolAvailability';
+import { ensureError } from '@utils/errors/errorMessage';
 import { setToolEnabled } from '@utils/config/constants';
 
 import { subscribeDesktopAppSignal } from './desktopAppSignalSubscription.js';
@@ -65,7 +66,7 @@ interface DefaultDesktopToolingSettingsControllerOptions extends SettingsStatePo
 export interface DesktopToolingSettingsController {
   readonly toolHandlers: DesktopToolHandlers;
   readonly latexHandlers: DesktopLatexHandlers;
-  postLatexConfigValues(): void;
+  postLatexConfigValues(): Effect.Effect<void, Error>;
   postStartupData(): Effect.Effect<void, Error, ProcessServices>;
   /**
    * Releases the app-signal subscription. Scoped to the window that built this
@@ -87,15 +88,14 @@ export class DefaultDesktopToolingSettingsController implements DesktopToolingSe
   ) {
     this.toolHandlers = {
       openToolInstallUrl: (message) =>
-        options.navigation.openExternal(message.url),
+        Effect.tryPromise({
+          try: () => options.navigation.openExternal(message.url),
+          catch: ensureError,
+        }),
       installToolExtension: unsupported(NO_EXTENSION_HOSTING),
       // Each arm is a settings-view message, so its program settles here.
-      recheckToolStatus: () =>
-        options.runtime.runPromise(refreshToolAvailability(this.probeInputs)),
-      toggleTool: (message) =>
-        options.runtime.runPromise(
-          this.toggleTool(message.toolId, message.enabled),
-        ),
+      recheckToolStatus: () => refreshToolAvailability(this.probeInputs),
+      toggleTool: (message) => this.toggleTool(message.toolId, message.enabled),
       runToolCommand: (message) => this.runToolCommand(message),
     };
     this.latexHandlers = {
@@ -126,8 +126,8 @@ export class DefaultDesktopToolingSettingsController implements DesktopToolingSe
     this.unsubscribeToolAvailability();
   }
 
-  postLatexConfigValues(): void {
-    this.options.renderer.postToRenderer(
+  postLatexConfigValues(): Effect.Effect<void, Error> {
+    return Effect.map(
       buildSettingsSnapshotMessage(
         'latex',
         {
@@ -137,6 +137,7 @@ export class DefaultDesktopToolingSettingsController implements DesktopToolingSe
         },
         'desktop',
       ),
+      (message) => this.options.renderer.postToRenderer(message),
     );
   }
 
@@ -217,30 +218,37 @@ export class DefaultDesktopToolingSettingsController implements DesktopToolingSe
     );
   }
 
-  private async runToolCommand(input: {
-    toolId: string;
-    kind: ToolCommandKind;
-  }): Promise<void> {
-    const action = planToolTerminalAction({
-      toolId: input.toolId,
-      commandKind: input.kind,
+  private runToolCommand(input: { toolId: string; kind: ToolCommandKind }) {
+    return Effect.suspend(() => {
+      const action = planToolTerminalAction({
+        toolId: input.toolId,
+        commandKind: input.kind,
+      });
+      if (action.kind === 'none') {
+        return Effect.fail(
+          new Error(
+            `No ${input.kind} command for tool "${input.toolId}" (${action.reason})`,
+          ),
+        );
+      }
+      return Effect.tryPromise({
+        try: () => this.options.commands.run(action.command),
+        catch: ensureError,
+      });
     });
-    if (action.kind === 'none') {
-      this.options.onError(
-        new Error(
-          `No ${input.kind} command for tool "${input.toolId}" (${action.reason})`,
-        ),
-      );
-      return;
-    }
-    await this.options.commands.run(action.command);
   }
 
-  private async runLatexInstallCommand(command: string): Promise<void> {
-    if (!this.options.latexToolingController.isAllowedInstallCommand(command)) {
-      throw new Error(`Rejected unknown install command: ${command}`);
-    }
-    await this.options.commands.run(command);
+  private runLatexInstallCommand(command: string) {
+    return Effect.suspend(() =>
+      this.options.latexToolingController.isAllowedInstallCommand(command)
+        ? Effect.tryPromise({
+            try: () => this.options.commands.run(command),
+            catch: ensureError,
+          })
+        : Effect.fail(
+            new Error(`Rejected unknown install command: ${command}`),
+          ),
+    );
   }
 }
 

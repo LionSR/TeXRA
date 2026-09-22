@@ -192,9 +192,6 @@ const UpdateSettingsSnapshotMessageSchema = z.discriminatedUnion('snapshot', [
   ...otherDerivedSnapshots.map(snapshotMessage),
 ]);
 
-/** A catalog-derived snapshot payload, keyed by canonical `texra.*` key. */
-export type SettingsSnapshotValues = Readonly<Record<string, unknown>>;
-
 // ============================================================
 // Agent selection data schema
 // ============================================================
@@ -934,10 +931,3 @@ export type SettingsViewInboundMessage = z.infer<
 export type SettingsMessageFor<
   C extends SettingsViewInboundMessage['command'],
 > = Extract<SettingsViewInboundMessage, { command: C }>;
-
-export type SettingsViewInboundHandlerRegistry =
-  HandlerRegistry<SettingsViewInboundMessage>;
-
-export const dispatchSettingsViewInbound = createDispatcher(
-  SettingsViewInboundMessageSchema,
-);

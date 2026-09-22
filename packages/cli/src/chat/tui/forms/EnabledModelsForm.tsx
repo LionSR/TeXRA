@@ -45,7 +45,9 @@ export function EnabledModelsForm(
       title="/models"
       compactTitle="/models · Enable models that appear in pickers."
       loadingLabel="Loading models..."
-      load={async () => listCliEnabledModelCatalog(props.state)}
+      load={() =>
+        props.runtime.runPromise(listCliEnabledModelCatalog(props.state))
+      }
       items={(models) =>
         models.map((model) => ({
           value: model.id,

@@ -20,7 +20,7 @@ import { Cause, Effect } from 'effect';
 import { z } from 'zod';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { ToolCall } from '@agent/runtime/ToolCall';
-import { withLogChannel, withLogData } from '@logger/effectLog';
+import { withLogChannel } from '@logger/effectLog';
 import {
   type InquiryThreadRecord,
   aggregateId as qualifyAggregateId,
@@ -252,7 +252,7 @@ export class ExternalInquiryTool extends defineTool({
       yield* Effect.logInfo(
         `Inquiry dispatch [${input.thread_id ?? 'new'}]`,
       ).pipe(
-        withLogData(input.question.slice(0, 100)),
+        Effect.annotateLogs({ data: input.question.slice(0, 100) }),
         withLogChannel(CHANNEL),
       );
 
@@ -336,7 +336,7 @@ export class ExternalInquiryTool extends defineTool({
                 Effect.logWarning(
                   `Inquiry thread ${manifest.threadId} stays open after its request failed to open`,
                 ).pipe(
-                  withLogData(Cause.squash(cause)),
+                  Effect.annotateLogs({ data: Cause.squash(cause) }),
                   withLogChannel(CHANNEL),
                 ),
               ),

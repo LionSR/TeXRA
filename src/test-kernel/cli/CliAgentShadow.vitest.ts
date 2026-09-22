@@ -3,7 +3,8 @@ import { writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
 // Third-party imports
-import { Effect } from 'effect';
+import { Deferred, Effect, Fiber } from 'effect';
+import { it as effectIt } from '@effect/vitest';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 // Local imports
@@ -20,6 +21,7 @@ import {
   resolveCliAgentInCategory,
   resolveCliRunAgent,
 } from '@cli/runtime/agents';
+import { TuiSession } from '@cli/chat/tui/state/sessionRunState';
 import { AgentDirectories } from '@platform/interfaces';
 import type { ProcessServices } from '@platform/processRuntime';
 import { GlobalStorageFs } from '@platform/rootedFs';
@@ -115,47 +117,69 @@ describe('CLI agent validation with a shadowed name', () => {
     await cleanupTempDirs(tempDirs);
   });
 
-  it('validates the shadowed name against the tool-use entry launch will run', () => {
-    const entry = resolveCliAgentInCategory(
-      hostStores(),
-      'assistant',
-      AgentCategory.ToolUse,
-    );
+  effectIt.effect(
+    'validates the shadowed name against the tool-use entry launch will run',
+    () =>
+      Effect.gen(function* () {
+        const entry = yield* resolveCliAgentInCategory(
+          hostStores(),
+          'assistant',
+          AgentCategory.ToolUse,
+        );
 
-    expect(entry?.source).toBe('builtInToolUse');
-    expect(entry?.category).toBe(AgentCategory.ToolUse);
-    expect(checkCliAgentLaunch(hostStores(), 'assistant', entry, 'chat')).toBe(
-      entry,
-    );
-    expect(
-      chatToolUseAgentUsageError(hostStores(), 'assistant'),
-    ).toBeUndefined();
-  });
+        expect(entry?.source).toBe('builtInToolUse');
+        expect(entry?.category).toBe(AgentCategory.ToolUse);
+        expect(
+          yield* checkCliAgentLaunch(hostStores(), 'assistant', entry, 'chat'),
+        ).toBe(entry);
+        expect(
+          yield* chatToolUseAgentUsageError(hostStores(), 'assistant'),
+        ).toBeUndefined();
+      }),
+  );
 
-  it('reads delegation support off the tool-use entry, not the shadow', () => {
-    expect(
-      resolveCliAgentInCategory(
-        hostStores(),
-        'assistant',
-        AgentCategory.Workflow,
-      )?.source,
-    ).toBe('custom');
-  });
+  effectIt.effect(
+    'reads delegation support off the tool-use entry, not the shadow',
+    () =>
+      Effect.gen(function* () {
+        expect(
+          (yield* resolveCliAgentInCategory(
+            hostStores(),
+            'assistant',
+            AgentCategory.Workflow,
+          ))?.source,
+        ).toBe('custom');
+      }),
+  );
 
-  it('still reports the category mismatch for a workflow-only agent', () => {
-    expect(
-      resolveCliAgentInCategory(hostStores(), 'polish', AgentCategory.ToolUse),
-    ).toBeUndefined();
-    expect(chatToolUseAgentUsageError(hostStores(), 'polish')).toContain(
-      'Agent "polish" is a workflow agent; `texra chat` only handles tool-use agents.',
-    );
-  });
+  effectIt.effect(
+    'still reports the category mismatch for a workflow-only agent',
+    () =>
+      Effect.gen(function* () {
+        expect(
+          yield* resolveCliAgentInCategory(
+            hostStores(),
+            'polish',
+            AgentCategory.ToolUse,
+          ),
+        ).toBeUndefined();
+        expect(
+          yield* chatToolUseAgentUsageError(hostStores(), 'polish'),
+        ).toContain(
+          'Agent "polish" is a workflow agent; `texra chat` only handles tool-use agents.',
+        );
+      }),
+  );
 
-  it('reports an unknown name as missing rather than mismatched', () => {
-    expect(chatToolUseAgentUsageError(hostStores(), 'no-such-agent')).toContain(
-      'Tool-use agent not found: no-such-agent.',
-    );
-  });
+  effectIt.effect(
+    'reports an unknown name as missing rather than mismatched',
+    () =>
+      Effect.gen(function* () {
+        expect(
+          yield* chatToolUseAgentUsageError(hostStores(), 'no-such-agent'),
+        ).toContain('Tool-use agent not found: no-such-agent.');
+      }),
+  );
 
   // `texra run` serves both categories, so a shadowed name has two candidate
   // run shapes. Picking one silently would change what an existing invocation
@@ -201,52 +225,97 @@ describe('CLI agent validation with a shadowed name', () => {
     expect(names).toContain('polish');
   });
 
-  it('resolves a source-qualified identifier to that exact source', () => {
-    expect(
-      resolveCliAgentInCategory(
-        hostStores(),
-        'builtInToolUse:assistant',
-        AgentCategory.ToolUse,
-      )?.source,
-    ).toBe('builtInToolUse');
-    // The workflow shadow's own key stays out of the tool-use category.
-    expect(
-      resolveCliAgentInCategory(
-        hostStores(),
-        'custom:assistant',
-        AgentCategory.ToolUse,
-      ),
-    ).toBeUndefined();
-  });
+  effectIt.effect(
+    'resolves a source-qualified identifier to that exact source',
+    () =>
+      Effect.gen(function* () {
+        expect(
+          (yield* resolveCliAgentInCategory(
+            hostStores(),
+            'builtInToolUse:assistant',
+            AgentCategory.ToolUse,
+          ))?.source,
+        ).toBe('builtInToolUse');
+        // The workflow shadow's own key stays out of the tool-use category.
+        expect(
+          yield* resolveCliAgentInCategory(
+            hostStores(),
+            'custom:assistant',
+            AgentCategory.ToolUse,
+          ),
+        ).toBeUndefined();
+      }),
+  );
 
   // Changing the root agent explicitly is a departure from a team preset, so
   // the selection drops the team slots rather than leaving a preset name
   // pointing at an agent the user replaced.
-  it('leaves team mode when the root agent is changed explicitly', () => {
-    patchSessionMeta({
-      teamName: 'Physicist',
-      cliMultiAgentPresetId: 'physicist',
-      delegationAgentScope: {
-        workflow: ['builtInWorkflow:polish'],
-        toolUse: ['builtInToolUse:assistant'],
-      },
-    });
-    const context = {
-      // The roster slots only gate visibility, which this registry leaves
-      // unconfigured, so empty chat slots resolve the same names as the host.
-      stores: makeFakeSettingsStores().stores,
-      session: {
-        runSettled: undefined,
-        runCompleted: false,
-        stopRequested: false,
-      },
-    } as Parameters<typeof applyInitialCliAgentSelection>[1];
+  effectIt.effect(
+    'leaves team mode when the root agent is changed explicitly',
+    () =>
+      Effect.gen(function* () {
+        patchSessionMeta({
+          teamName: 'Physicist',
+          cliMultiAgentPresetId: 'physicist',
+          delegationAgentScope: {
+            workflow: ['builtInWorkflow:polish'],
+            toolUse: ['builtInToolUse:assistant'],
+          },
+        });
+        const context = {
+          // The roster slots only gate visibility, which this registry leaves
+          // unconfigured, so empty chat slots resolve the same names as the host.
+          stores: makeFakeSettingsStores().stores,
+          session: {
+            runSettled: undefined,
+            runCompleted: false,
+            stopRequested: false,
+          },
+        } as Parameters<typeof applyInitialCliAgentSelection>[1];
 
-    applyInitialCliAgentSelection('assistant', context);
+        yield* applyInitialCliAgentSelection('assistant', context);
 
-    expect(sessionMeta.get()).toMatchObject({ agent: 'assistant' });
-    expect(sessionMeta.get().teamName).toBeUndefined();
-    expect(sessionMeta.get().cliMultiAgentPresetId).toBeUndefined();
-    expect(sessionMeta.get().delegationAgentScope).toBeUndefined();
-  });
+        expect(sessionMeta.get()).toMatchObject({ agent: 'assistant' });
+        expect(sessionMeta.get().teamName).toBeUndefined();
+        expect(sessionMeta.get().cliMultiAgentPresetId).toBeUndefined();
+        expect(sessionMeta.get().delegationAgentScope).toBeUndefined();
+      }),
+  );
+  effectIt.effect(
+    'preserves the launched agent when selection validation is pending',
+    () =>
+      Effect.gen(function* () {
+        const entered = yield* Deferred.make<void>();
+        const release = yield* Deferred.make<void>();
+        const { stores } = makeFakeSettingsStores();
+        const delayedState = {
+          ...stores.globalState,
+          get: <T>(key: string, defaultValue?: T) =>
+            Effect.gen(function* () {
+              yield* Deferred.succeed(entered, undefined);
+              yield* Deferred.await(release);
+              return yield* stores.globalState.get<T>(key, defaultValue);
+            }),
+          update: stores.globalState.update.bind(stores.globalState),
+        };
+        const session = new TuiSession();
+        patchSessionMeta({ agent: 'launched-agent', teamName: 'Physicist' });
+        const context = {
+          stores: { ...stores, globalState: delayedState },
+          session,
+        } as Parameters<typeof applyInitialCliAgentSelection>[1];
+        const selection = yield* Effect.forkChild(
+          applyInitialCliAgentSelection('assistant', context),
+        );
+        yield* Deferred.await(entered);
+        session.markRunPending(Effect.never);
+        yield* Deferred.succeed(release, undefined);
+        yield* Fiber.join(selection);
+        expect(sessionMeta.get()).toMatchObject({
+          agent: 'launched-agent',
+          teamName: 'Physicist',
+        });
+        session.clearRunState();
+      }),
+  );
 });

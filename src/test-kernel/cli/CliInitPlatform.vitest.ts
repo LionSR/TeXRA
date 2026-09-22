@@ -120,8 +120,6 @@ vi.mock('@logger/logUtils', () => ({
   debug: vi.fn(),
   error: vi.fn(),
   info: vi.fn(),
-  isDebugModeEnabled: vi.fn(() => false),
-  setDebugModeConfig: vi.fn(),
   warn: vi.fn(),
 }));
 
@@ -178,7 +176,7 @@ vi.mock('@cli/runtime/cliStateStores', () => ({
 // installs the runtime that serves it: this suite runs that real install, so
 // the open is what it stubs.
 vi.mock('@controllers/session/appStateStore', () => ({
-  openAppStateStore: vi.fn(() => Effect.succeed(mocks.cliGlobalState)),
+  appStateStoreFromDatabase: vi.fn(() => mocks.cliGlobalState),
 }));
 
 vi.mock('@cli/runtime/cliSecrets', () => ({
@@ -193,6 +191,7 @@ function cliContext(
     resourcesPath: '/tmp/resources',
     version: '0.0.0-test',
     quietLogs: true,
+    minimumLogLevel: 'Info',
     skillSourceOptions: {},
     // The provider the startup read opens and this init installs as the
     // roots' config, handed over rather than opened a second time here.
@@ -204,7 +203,12 @@ function cliContext(
 function stubGlobalState(
   get: (key: string, defaultValue: unknown) => unknown = (_key, def) => def,
 ) {
-  return { get: vi.fn(get), update: vi.fn(() => Effect.void) };
+  return {
+    get: vi.fn((key: string, defaultValue: unknown) =>
+      Effect.sync(() => get(key, defaultValue)),
+    ),
+    update: vi.fn(() => Effect.void),
+  };
 }
 
 /**
@@ -248,8 +252,8 @@ describe('CLI platform init', () => {
     vi.clearAllMocks();
     mocks.shutdownHandlers.length = 0;
     mocks.cliGlobalState.get.mockReset();
-    mocks.cliGlobalState.get.mockImplementation(
-      (_key, defaultValue) => defaultValue,
+    mocks.cliGlobalState.get.mockImplementation((_key, defaultValue) =>
+      Effect.succeed(defaultValue),
     );
     mocks.cliGlobalState.update.mockReset();
     // The store's write is an Effect the callers compose, so the double's

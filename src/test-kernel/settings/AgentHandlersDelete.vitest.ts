@@ -45,7 +45,8 @@ vi.mock('vscode', () => ({
   Uri: { file: (path: string) => ({ fsPath: path }) },
 }));
 
-vi.mock('@agent/index', () => ({
+vi.mock('@agent/index', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agent/index')>()),
   getAgent: mocks.getAgent,
   loadAgents: vi.fn(),
   refresh: vi.fn(),
@@ -55,13 +56,6 @@ vi.mock('@agent/remote/remoteAgentConfigClient', () => ({
 }));
 vi.mock('@common/teams/TeamRosterApplication', () => ({
   applyTeamRosterWithPreflight: vi.fn(),
-}));
-vi.mock('@controllers/settingsView/SettingsAgentControllerFactory', () => ({
-  createSettingsAgentControllers: () => ({
-    catalog: {},
-    directory: {},
-    roster: {},
-  }),
 }));
 vi.mock('@controllers/settingsView/SettingsTeamRosterController', () => ({
   applySettingsTeamRoster: mocks.applySettingsTeamRoster,
@@ -103,10 +97,10 @@ function createHandlers(): AgentHandlers {
       },
       withActiveWebview: vi.fn(() => Effect.void),
       postMessageToActiveWebview: vi.fn(() => Effect.void),
-      run: (program) => testRuntime().runPromise(program),
     },
     mocks.refreshAfterAgentMutation,
     installedHost().roots,
+    () => Effect.void,
   );
 }
 

@@ -84,8 +84,8 @@ describe('tool-use follow-up progress events', () => {
     handle.attachToolUseFlow({
       ownerSession: owner,
       requestImmediateCompaction: () => {},
-      modelSwitchDisabledReason: () => undefined,
-      switchModel: async () => {},
+      modelSwitchDisabledReason: () => Effect.succeed(undefined),
+      switchModel: () => Effect.void,
       interrupt: () => {},
     });
     owner.runs.track(handle);
@@ -116,7 +116,7 @@ describe('tool-use follow-up progress events', () => {
           lease,
         )!;
         input.seed([]);
-        expect(yield* input.poll).toMatchObject({
+        expect(yield* input.take).toMatchObject({
           followUps: [{ content: { text: 'please continue', origin: 'user' } }],
         });
         expect(sent.sent).toEqual([runId]);

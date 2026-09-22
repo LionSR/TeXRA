@@ -185,8 +185,8 @@ function listEnabledModels(context: CliContext) {
   return Effect.gen(function* () {
     const services = yield* initModelCommandPlatform(context);
     if ('exitCode' in services) return services.exitCode;
-    const catalog = listCliEnabledModelCatalog(services.globalState);
-    const enabled = getEnabledModels(services.globalState);
+    const catalog = yield* listCliEnabledModelCatalog(services.globalState);
+    const enabled = yield* getEnabledModels(services.globalState);
     emitCliResult(
       context,
       {

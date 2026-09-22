@@ -94,7 +94,7 @@ type MarkupItem = vscode.QuickPickItem & { value: MathMarkupOption };
 const promptForLatexdiffMathMarkup = Effect.fnUntraced(function* (
   session: SessionHandle,
 ) {
-  const configuredMode = session.roots.workspaceState.get<string>(
+  const configuredMode = yield* session.roots.workspaceState.get<string>(
     WorkspaceStateKey.LATEXDIFF_MATH_MARKUP,
     DEFAULT_MATH_MARKUP,
   );
@@ -423,7 +423,7 @@ const handleRunLatexdiff = Effect.fnUntraced(function* (
       log.info(`Running latexdiff with math markup mode: ${mathMarkup}`);
 
       const generateBetweenRoundDiffs =
-        session.roots.workspaceState.get<boolean>(
+        yield* session.roots.workspaceState.get<boolean>(
           WorkspaceStateKey.LATEXDIFF_BETWEEN_ROUNDS,
           LATEX_CONFIG_DEFAULTS.latexdiffBetweenRounds,
         );

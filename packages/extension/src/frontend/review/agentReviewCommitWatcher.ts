@@ -16,10 +16,11 @@ import type { SessionHandle } from '@agent/runtime';
 import { getGitAPI, type GitRepository } from '@frontend/git/gitExtensionTypes';
 import { createLog } from '@logger/logUtils';
 import type { ProcessRuntime } from '@platform/processRuntime';
+import { readConfigSetting } from '@shared/config/settingsAccess';
+import { settingByKey } from '@shared/state/stateSettings';
 import { createFlushableDebounce } from '@utils/core';
 import { isPathWithin } from '@utils/core/pathCore';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { readSettingFrom } from '@utils/config/platformSettings';
 
 import { AgentReviewService } from './AgentReviewService';
 
@@ -48,7 +49,10 @@ function watchRepository(
   // Read from the watched session's own configuration, not the roots the
   // calling context carries: the watcher outlives the call that registered it.
   const runOnCommit = () =>
-    readSettingFrom<boolean>(session.roots, 'texra.agentReview.runOnCommit');
+    readConfigSetting(
+      settingByKey('texra.agentReview.runOnCommit')!,
+      session.roots.config,
+    );
 
   let lastName = repository.state.HEAD?.name;
   let lastCommit = repository.state.HEAD?.commit;

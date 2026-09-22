@@ -9,6 +9,22 @@ Continues the 2026-09-09
 note, of whose 19 steps 3 have landed; this note re-costs the open ones and
 adds the two it excluded (auth and the settings registries).
 
+### Dispatcher decision update — 2026-09-22
+
+The owner's [#13009 clarification](https://github.com/LionSR/TeXRA/pull/13009#issuecomment-5779248081)
+revises the shared-contract ruling: one backend Effect registry, executed at
+each native host message entry, may replace the old Promise dispatcher and
+per-arm runners together. The shared browser dispatcher continues to apply
+synchronous state updates. The
+[ruling's consumer and failure audit](../../implemented/architecture/2026-08-01-architecture-rulings-ledger.md#settings-dispatch-has-one-native-execution-boundary-revised-2026-09-22)
+is part of this decision.
+
+This supersedes #12880's instruction to preserve each Promise registry arm
+and #12884's instruction to remove the controller-local settings-dispatch
+slice unless re-ruled. The explicit re-ruling is now recorded; #13009 still
+owes its implementation checks. This does not mark catalog-derived settings
+registries, unrelated host-collapse work, or either tracker complete.
+
 ## 1. Finding
 
 The three hosts total 117k lines, but 29k of the extension is the webview UI

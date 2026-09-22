@@ -34,7 +34,7 @@ describe('applyStateSettingUpdate', () => {
           },
         });
         expect(
-          fake.globalState.get(GlobalStateKey.DETACH_SUBAGENTS_ON_STOP),
+          yield* fake.globalState.get(GlobalStateKey.DETACH_SUBAGENTS_ON_STOP),
         ).toBe(true);
 
         expect(
@@ -65,7 +65,7 @@ describe('applyStateSettingUpdate', () => {
         ports,
       );
       expect(
-        isStored(fake.workspaceState, WorkspaceStateKey.LATEX_FORMATTER),
+        yield* isStored(fake.workspaceState, WorkspaceStateKey.LATEX_FORMATTER),
       ).toBe(true);
 
       expect(
@@ -82,7 +82,7 @@ describe('applyStateSettingUpdate', () => {
         },
       });
       expect(
-        isStored(fake.workspaceState, WorkspaceStateKey.LATEX_FORMATTER),
+        yield* isStored(fake.workspaceState, WorkspaceStateKey.LATEX_FORMATTER),
       ).toBe(false);
 
       // A value-less message is a no-op: the catalog schemas `.prefault()`, so

@@ -17,7 +17,7 @@
 // that mocks it.
 import * as NodeFileSystem from '@effect/platform-node/NodeFileSystem';
 import * as NodePath from '@effect/platform-node/NodePath';
-import { Effect } from 'effect';
+import { Effect, RcMap } from 'effect';
 import { afterEach, beforeEach } from 'vitest';
 
 import type { ToolInjections } from '@agent/runtime/toolInjection';
@@ -42,9 +42,17 @@ import type { Platform } from '@platform/platform';
 import { globalStorageFsLayer } from '@platform/rootedFs';
 import type { PlatformSecrets, Secrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
-import { GlobalDatabase } from '@shared/session/database';
+import { processOwnerId } from '@platform/defaults/nodeProcesses';
+import { ProcessIdentity } from '@shared/session/sessionEvents';
+import {
+  GlobalDatabase,
+  ProjectDatabases,
+  type Database,
+  type DatabaseOpenFailed,
+} from '@shared/session/database';
 import { UpdateCheckRecords } from '@shared/session/updateCheckRecords';
 import { InquiryRecords } from '@shared/session/inquiryRecords';
+import { UsageLog } from '@shared/usageLog';
 import { GitHubSubscriptions } from '@tools/github/subscriptionBindings';
 import {
   LeanLanguageServices,
@@ -246,8 +254,10 @@ export const fakeHostSecrets: PlatformSecrets = {
 };
 
 export const fakeHostAppState: StateStore = {
-  get: <T>(key: string, defaultValue?: T): T =>
-    installedHost().roots.globalState.get<T>(key, defaultValue),
+  get: <T>(key: string, defaultValue?: T) =>
+    Effect.suspend(() =>
+      installedHost().roots.globalState.get<T>(key, defaultValue),
+    ),
   update: (key, value) => installedHost().roots.globalState.update(key, value),
 };
 
@@ -378,7 +388,6 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
   const [
     { initPlatform },
     { initTestWorkspaceRoots },
-    { setDebugModeConfig },
     { initTestProcessRuntime, tryTestProcessRuntime },
     { Layer, ManagedRuntime },
     { testHttpClientLayer },
@@ -391,7 +400,6 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
   ] = await Promise.all([
     import('@platform/platform'),
     import('@test/support/testWorkspaceRoots'),
-    import('@logger/logUtils'),
     import('./testProcessRuntime'),
     import('effect'),
     import('@test/support/fetchTestUtils'),
@@ -409,6 +417,8 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
   // `testRuntime().runSync` callers, so a lazily imported (asynchronous)
   // layer here fails every one of them.
   processServices ??= Layer.mergeAll(
+    UsageLog.disabled,
+    ProcessIdentity.layer(processOwnerId('test')),
     testHttpClientLayer,
     // The same standard-library filesystem and path services the process
     // roots provide, over the real temp roots the harness runs on.
@@ -418,6 +428,19 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     // The records above are mocked, so the bare runtime's global-root handle
     // is too: a suite that reads it provides its own innermost.
     Layer.mock(GlobalDatabase, {}),
+    Layer.effect(
+      ProjectDatabases,
+      RcMap.make({
+        lookup: (
+          storage: string,
+        ): Effect.Effect<Database['Service'], DatabaseOpenFailed> =>
+          Effect.die(
+            new Error(
+              `No project database for ${storage}: provide projectDatabaseLayer.`,
+            ),
+          ),
+      }),
+    ),
     Layer.mock(InquiryRecords, {}),
     // A suite that exercises a Lean tool provides its own port innermost.
     // The run-end stop is absent, as on a host whose Lean integration owns
@@ -445,9 +468,6 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
   );
   initPlatform(host.platform);
   initTestWorkspaceRoots(host.roots);
-  // The logger's process-wide debug-mode read, over this fake host's
-  // configuration, as a composition root installs it.
-  setDebugModeConfig(host.roots.config);
   // A bare process runtime for the Promise-facing boundaries that run
   // fibers (the loopback sign-in). The session graph family is not installed
   // here: `sessionGraphTestSetup` loads the graph's production modules, and

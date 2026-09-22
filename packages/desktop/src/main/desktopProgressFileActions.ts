@@ -23,7 +23,7 @@ import type {
   DiffProgressReporter,
   DiffRunOutcome,
 } from '@latex/latexdiff/types';
-import type { StateStore } from '@platform/interfaces';
+import type { StateStore, StateReadFailed } from '@platform/interfaces';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import type { OutputFileInfo, ReadonlyRoundIndexed } from '@shared/schemas';
 import type { Rejected } from '@shared/session/requestErrors';
@@ -129,12 +129,12 @@ export class DesktopProgressFileActions {
   runMergeFile(
     baseFile: string,
     editedFile: string,
-  ): Effect.Effect<void, Rejected> {
+  ): Effect.Effect<void, Rejected | StateReadFailed> {
     return Effect.gen({ self: this }, function* () {
       const validation = validateRunRequest({
         config: {
           agent: 'merge',
-          model: getHelperModelName(this.host.globalState),
+          model: yield* getHelperModelName(this.host.globalState),
           inputFiles: [baseFile],
           editedFile,
         },

@@ -34,28 +34,28 @@
  * never wait on it and `initCliPlatform`'s open of the default session is
  * the first thing built on the runtime.
  *
- * The process services every entry provides the same way, and every one of
- * them is a value this function already holds when it installs: `Secrets`
- * over the one `CliSecrets` of this storage root, `AppState` over the global
- * state store opened here, before the install (the refusing store for the two
- * entries that bring no platform up), and `SetupPlatform` over the CLI's
- * sign-in. The
- * global store is served by the runtime as `AppState`, so `initCliPlatform`
- * opens only the workspace scope and no entry has to discover a store some
- * other entry opened.
+ * AppState is built from the runtime's GlobalDatabase layer, sharing its
+ * scoped connection. Platform-less entries provide refusing services instead.
+ * initCliPlatform reads that AppState and opens only the workspace scope.
  */
 import { Effect, Layer } from 'effect';
 
 import { installedProcessRuntime } from '@agent/runtime';
 import { createPlatformAgentDirectories } from '@agent/index';
 import { SignInFailed } from '@common/errors/signInFailed';
-import { openAppStateStore } from '@controllers/session/appStateStore';
+import { appStateStoreFromDatabase } from '@controllers/session/appStateStore';
 import { globalDatabaseLayer } from '@controllers/session/Database';
 import {
   disposeProcessRuntime,
   installProcessRuntime,
 } from '@controllers/session/sessionLayer';
-import { StateWriteFailed, type StateStore } from '@platform/interfaces';
+import type { MinimumLogLevel } from '@logger/effectDiagnostics';
+import {
+  AgentDirectories,
+  AppState,
+  StateWriteFailed,
+  type StateStore,
+} from '@platform/interfaces';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { UNAVAILABLE_LANGUAGE_MODEL_PORT } from '@platform/languageModel';
 import {
@@ -92,9 +92,8 @@ const NO_PLATFORM_APP_STATE =
  * as no store at all.
  */
 const refusingStateStore: StateStore = Object.freeze({
-  get<T>(key: string): T {
-    throw new Error(`${NO_PLATFORM_APP_STATE} "${key}" cannot be read.`);
-  },
+  get: (key: string) =>
+    Effect.die(new Error(`${NO_PLATFORM_APP_STATE} "${key}" cannot be read.`)),
   update: (key: string) =>
     Effect.fail(
       new StateWriteFailed({
@@ -128,6 +127,7 @@ const refusingGlobalDatabase: Layer.Layer<GlobalDatabase> = Layer.succeed(
   GlobalDatabase,
 )({
   appendAll: () => refuseGlobalRecord('appendAll'),
+  readAppStateKey: () => refuseGlobalRecord('readAppStateKey'),
   readInputHistory: () => refuseGlobalRecord('readInputHistory'),
   appendInputHistory: () => refuseGlobalRecord('appendInputHistory'),
   readDesktopProjects: () => refuseGlobalRecord('readDesktopProjects'),
@@ -146,6 +146,8 @@ const refusingGlobalDatabase: Layer.Layer<GlobalDatabase> = Layer.succeed(
 interface CliProcessRuntimeInstall {
   readonly appState?: StateStore;
   readonly globalDatabase?: Layer.Layer<GlobalDatabase>;
+  /** The argv-selected diagnostics floor for this process runtime. */
+  readonly minimumLogLevel?: MinimumLogLevel;
   /**
    * The packaged resources root the CLI's built-in agent directories resolve
    * against. Absent only for the platform-less entries, which load no agents.
@@ -206,30 +208,22 @@ export function installCliProcessRuntime(
   }
   if (pending) return pending;
   pending = (async () => {
-    // The process identity and the state store this entry provides both exist
-    // before the runtime that serves them, so both resolve on one bootstrap
-    // run here rather than on a runtime that does not exist yet. Opening the
-    // store needs the filesystem and nothing else — it provides its own
-    // database layer — and nothing in either path logs or traces through
-    // Effect, so running them off the process runtime's diagnostics layer
-    // changes no output.
-    const { processStart, globalStoragePath, globalState } =
-      await Effect.runPromise(
-        Effect.gen(function* () {
-          const processStart = yield* nodeProcesses.selfIdentity();
-          // The global root resolves here, at install, with the pure
-          // calculator: the directory is the state store's and the global
-          // database's to create when they open below, and clone — whose
-          // storage root may be read-only, and which runs no records
-          // operation — must not create it at all.
-          const globalStoragePath = resolveGlobalStoragePath(
-            storageRoot ?? DEFAULT_NODE_STORAGE_ROOT,
-          );
-          const globalState =
-            options?.appState ?? (yield* openAppStateStore(globalStoragePath));
-          return { processStart, globalStoragePath, globalState };
-        }).pipe(Effect.provide(nodeFileServices)),
-      );
+    // Resolve process identity before installing. The runtime owns database
+    // acquisition and the AppState layer built from its global handle.
+    const { processStart, globalStoragePath } = await Effect.runPromise(
+      Effect.gen(function* () {
+        const processStart = yield* nodeProcesses.selfIdentity();
+        // The global root resolves here, at install, with the pure
+        // calculator: the directory is the state store's and the global
+        // database's to create when they open below, and clone — whose
+        // storage root may be read-only, and which runs no records
+        // operation — must not create it at all.
+        const globalStoragePath = resolveGlobalStoragePath(
+          storageRoot ?? DEFAULT_NODE_STORAGE_ROOT,
+        );
+        return { processStart, globalStoragePath };
+      }).pipe(Effect.provide(nodeFileServices)),
+    );
     const version = await readCliVersion();
     const secrets = getCliSecrets(storageRoot);
     // The account plane is built beside the runtime that serves it; the CLI's
@@ -252,13 +246,20 @@ export function installCliProcessRuntime(
     const agentDirectories = createPlatformAgentDirectories({
       channel: 'cli',
       resourcesPath: options?.resourcesPath ?? '',
-      customDirectoryStore: { get: () => undefined },
+      customDirectoryStore: { get: () => Effect.succeed(undefined) },
     });
     const runtime: ProcessRuntime = installProcessRuntime({
       processStart: Effect.succeed(processStart),
       globalStorage: globalStoragePath,
       secrets,
-      appState: globalState,
+      appState: options?.appState
+        ? AppState.layer(options.appState)
+        : Layer.effect(
+            AppState,
+            Effect.map(GlobalDatabase, (database) =>
+              appStateStoreFromDatabase(globalStoragePath, database),
+            ),
+          ),
       auth,
       // A terminal has no editor language models; the CLI's platform installs
       // the same port.
@@ -267,7 +268,7 @@ export function installCliProcessRuntime(
       // wires: it forwards to the chat TUI's handler whenever one is
       // mounted, whichever entry installed this runtime.
       agentResume: cliAgentResume,
-      agentDirectories,
+      agentDirectories: AgentDirectories.layer(agentDirectories),
       lifecycle,
       setup: {
         host: 'cli',
@@ -304,6 +305,7 @@ export function installCliProcessRuntime(
       // closed with it — or clone's refusal, which opens nothing.
       globalDatabase:
         options?.globalDatabase ?? globalDatabaseLayer(globalStoragePath),
+      minimumLogLevel: options?.minimumLogLevel ?? 'Info',
     });
     // The output plane runs its Effects on this runtime from here on; the
     // disposal below hands it back the no-runtime state.

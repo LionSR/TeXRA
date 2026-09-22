@@ -571,7 +571,7 @@ export function registerBuiltinSlashCommands(options: {
     category: 'configuration',
     echo: 'ifPersists',
     handler: (remainder, context) =>
-      Effect.sync(() => applyInitialCliAgentSelection(remainder, context)),
+      applyInitialCliAgentSelection(remainder, context),
     formComponent: AgentListFormAdapter,
   });
   registerSlashCommand({

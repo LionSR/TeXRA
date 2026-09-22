@@ -334,16 +334,16 @@ beforeEach(async () => {
   mocks.startChildRunLoop.mockReturnValue(Effect.forkDetach(Effect.void));
   mocks.requireWorkflowOrToolUseAgent.mockImplementation((_stores, name) => {
     if (name === 'missing-agent') {
-      throw new Error(
-        "Unknown workflow agent 'missing-agent'. Available: correct",
+      return Effect.fail(
+        new Error("Unknown workflow agent 'missing-agent'. Available: correct"),
       );
     }
-    return {
+    return Effect.succeed({
       name,
       source: 'builtInWorkflow',
       category: 'workflow',
       path: `/agents/${name}.yaml`,
-    };
+    });
   });
   mocks.createChildRun.mockImplementation((_session: unknown, runId: RunId) =>
     Effect.sync(() => {

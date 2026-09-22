@@ -8,8 +8,7 @@
  * `resume:` option (or via streaming-input on the live session). With
  * fork_session, it instead starts a new session from the selected session's
  * state. Each turn's result is delivered back to the parent's follow-up
- * queue, so the orchestrator sees responses uniformly whether it or the user
- * drove the turn.
+ * queue for both orchestrator-initiated and user-initiated turns.
  *
  * Authentication: the SDK spawns the Claude Code CLI as a subprocess, which
  * picks up whichever auth the user has configured:
@@ -19,8 +18,7 @@
  *   - OAuth session from `claude login` (Pro/Max subscription)
  *   - Bedrock / Vertex (configured via CLI/env vars)
  *
- * Requires the native `claude` CLI binary — gated by the availability check
- * in externalToolDefs.ts.
+ * Requires the native `claude` CLI, checked in externalToolDefs.ts.
  */
 
 // Third-party imports
@@ -572,8 +570,10 @@ export class ClaudeAgentTool extends defineTool({
       input,
       workspaceState,
     );
-    const model = input.model ?? config.getClaudeAgentModel(workspaceState);
-    const effort = input.effort ?? config.getClaudeAgentEffort(workspaceState);
+    const model =
+      input.model ?? (yield* config.getClaudeAgentModel(workspaceState));
+    const effort =
+      input.effort ?? (yield* config.getClaudeAgentEffort(workspaceState));
     const sessionId = input.session_id ?? undefined;
     const isFork = input.fork_session === true;
 

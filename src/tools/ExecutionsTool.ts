@@ -507,10 +507,10 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       // Only block kills when the toggle is disabled (the guard above has
       // already narrowed `target` to an owned RunHandle).
       if (
-        !readSettingFrom<boolean>(
+        !(yield* readSettingFrom<boolean>(
           context.session.roots,
           GlobalStateKey.ALLOW_ORCHESTRATOR_KILL,
-        )
+        ))
       ) {
         return yield* Effect.fail(
           new ToolError(
@@ -519,9 +519,12 @@ Delegated subagent and workflow results are delivered automatically as follow-up
         );
       }
 
+      const detachActiveChildren = yield* detachSubagentsOnStop(
+        context.session.roots,
+      );
       const success = yield* Effect.suspend(() => {
         const stop = runs.kill(runId, {
-          detachActiveChildren: detachSubagentsOnStop(context.session.roots),
+          detachActiveChildren,
         });
         // Asked after the settlement: a detaching stop interrupts the run
         // only once its children have left it, so that is when it knows

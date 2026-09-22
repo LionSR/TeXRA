@@ -3,6 +3,7 @@
 // shared runtime formatter instead of duplicating skill wiring in the UI layer.
 
 import { Text } from 'ink';
+import { Effect } from 'effect';
 
 import type { SelectItem } from '@cli/tui/ui/Select';
 import type { ProcessRuntime } from '@platform/processRuntime';
@@ -58,9 +59,8 @@ export function formatSkillActivationPrompt(skill: SourcedSkill): string {
 
 export function skillSelectItemsForTui(
   skills: readonly SourcedSkill[],
-  stores: SettingsStores,
+  disabled: Effect.Success<ReturnType<typeof readDisabledSkills>>,
 ): SelectItem<SkillActivation>[] {
-  const disabled = readDisabledSkills(stores);
   return skills.map((skill) => {
     const item = skillDisplayItem(skill, disabled);
     return {
@@ -87,15 +87,29 @@ function skillIssueSummaryDetail(
 
 export function SkillsListForm(props: SkillsListFormProps): React.JSX.Element {
   return (
-    <AsyncListForm<DiscoverSkillSourcesResult, SkillActivation>
+    <AsyncListForm<
+      DiscoverSkillSourcesResult & {
+        disabled: Effect.Success<ReturnType<typeof readDisabledSkills>>;
+      },
+      SkillActivation
+    >
       title="/skills"
       loadingLabel="Loading skills..."
       load={() =>
         props.runtime.runPromise(
-          loadEnabledRuntimeSkills(props.workspaceRoot, props.stores),
+          Effect.gen(function* () {
+            const result = yield* loadEnabledRuntimeSkills(
+              props.workspaceRoot,
+              props.stores,
+            );
+            return {
+              ...result,
+              disabled: yield* readDisabledSkills(props.stores),
+            };
+          }),
         )
       }
-      items={(result) => skillSelectItemsForTui(result.skills, props.stores)}
+      items={(result) => skillSelectItemsForTui(result.skills, result.disabled)}
       isEmpty={(result) => result.skills.length === 0}
       availableRows={props.availableRows}
       description={<Text dimColor>Select a skill to activate it.</Text>}

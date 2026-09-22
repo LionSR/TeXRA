@@ -132,7 +132,7 @@ export class ReadFileTool extends defineTool({
     if (signal.aborted) {
       return yield* Effect.fail(new ToolError('Cancelled before execution.'));
     }
-    const { path: resolved, display: displayPath } = resolveAndFormat(
+    const { path: resolved, display: displayPath } = yield* resolveAndFormat(
       call.roots,
       call.roots.workspace,
       input.path,

@@ -162,10 +162,7 @@ export const maybeRunCliOnboarding = Effect.fn('maybeRunCliOnboarding')(
     // already-credentialed launch clears a stale skip (the PRD's "configuring a
     // credential clears the flag") even when firstRunDone is also true, which
     // `transition.clearDeclined` captures directly.
-    const flags = yield* Effect.try({
-      try: () => readOnboardingFlags(globalState),
-      catch: ensureError,
-    });
+    const flags = yield* readOnboardingFlags(globalState);
     const transition = planOnboardingFunnelTransition(undefined, {
       hasCredential,
       ...flags,

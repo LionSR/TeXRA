@@ -136,9 +136,14 @@ describe('sessionFold', () => {
       type: 'log',
       level: 'debug',
       message: 'Captured debug detail.',
-      transcriptDebug: true,
     });
-    const initial = () => foldAll([tail(start), subscribe(CHILD), alive]);
+    // A verbose view: transcript verbosity is the view's own flag, read from
+    // its config authority at open — never a property of a row.
+    const initial = () =>
+      foldAll(
+        [tail(start), subscribe(CHILD), alive],
+        emptySessionView('paper', 0, true),
+      );
     const live = foldAll(
       [
         tail(stage),
@@ -182,9 +187,10 @@ describe('sessionFold', () => {
       type: 'log',
       level: 'debug',
       message: 'Hidden debug detail.',
-      transcriptDebug: false,
     });
-    const filtered = fold(live, tail(hidden));
+    // The same rows on a quiet view: the debug row is dropped, its cursor
+    // still advances.
+    const filtered = fold({ ...live, debug: false }, tail(hidden));
     expect(filtered.runs).toBe(live.runs);
     expect(filtered.folded.get(qualifyAggregateId('run', CHILD))).toBe(
       hidden.seq,

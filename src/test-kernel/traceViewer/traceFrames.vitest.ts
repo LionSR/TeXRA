@@ -31,6 +31,7 @@ function foldTrace(trace: TraceDocument) {
     kind: 'subscribe',
     session: 'trace',
     generation: 1,
+    debug: false,
     cursor: 0,
     aggregates: [{ id: AGGREGATE, fromSeq: 0 }],
   });

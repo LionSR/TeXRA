@@ -26,11 +26,11 @@ import { AgentCategory } from '@shared/schemas';
 
 export function handleIndentTeX(
   session: SessionHandle,
-): Effect.Effect<void, never, ProcessServices> {
+): Effect.Effect<void, Error, ProcessServices> {
   return Effect.gen(function* () {
     const result = yield* indentLatexFilesInDirectory(
       session.roots.workspace,
-      resolveLatexFormatter(session.roots),
+      yield* resolveLatexFormatter(session.roots),
     );
     switch (result.status) {
       case 'missing-config':
@@ -63,7 +63,7 @@ export function handleIndentTeX(
 
 export function handleFixCompilation(
   session: SessionHandle,
-): Effect.Effect<void, never, ProcessServices> {
+): Effect.Effect<void, Error, ProcessServices> {
   return runGuardedLatexCommand(
     session,
     {
@@ -104,7 +104,7 @@ export function handleFixCompilation(
 
 export function handleIndentCurrentTeX(
   session: SessionHandle,
-): Effect.Effect<void, never, ProcessServices> {
+): Effect.Effect<void, Error, ProcessServices> {
   return runGuardedLatexCommand(
     session,
     {
@@ -122,7 +122,7 @@ export function handleIndentCurrentTeX(
         // The directory indent command treats a disabled formatter as a silent
         // no-op (`case 'disabled': break`). The single-file command is an
         // explicit user action, so it notifies instead of succeeding quietly.
-        const formatter = resolveLatexFormatter(session.roots);
+        const formatter = yield* resolveLatexFormatter(session.roots);
         if (!formatter) {
           yield* showLoggedInfoMessage(
             CHANNEL,
@@ -153,7 +153,7 @@ export function handleIndentCurrentTeX(
 
 export function handleGetTeXCount(
   session: SessionHandle,
-): Effect.Effect<void, never, ProcessServices> {
+): Effect.Effect<void, Error, ProcessServices> {
   return runGuardedLatexCommand(
     session,
     {

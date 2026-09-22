@@ -55,7 +55,11 @@ export class SessionViewService extends Context.Service<
       const inputs = yield* SessionInputs;
       const subscriptions = yield* TranscriptSubscriptions;
       const roots = yield* WorkspaceRoots;
-      const ref = yield* SubscriptionRef.make(emptySessionView(roots.storage));
+      // Each replay begins with the process reader's sampled verbosity. The
+      // transport carries that same policy to the webview fold.
+      const ref = yield* SubscriptionRef.make(
+        emptySessionView(roots.storage, 0, false),
+      );
       const folding = yield* Effect.forkScoped(
         SubscriptionRef.changes(subscriptions.ref).pipe(
           Stream.switchMap((set) =>
@@ -68,6 +72,7 @@ export class SessionViewService extends Context.Service<
                       fromSeq: view.folded.get(entry.id) ?? entry.fromSeq,
                     })),
                     view.cursor,
+                    view.debug,
                   ),
                 ),
               ),

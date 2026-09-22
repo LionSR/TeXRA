@@ -25,7 +25,6 @@ const tempRoots = useTempDirs();
 
 /** The listing's own setting slots, carried as data by the caller. */
 const settings = makeFakeSettingsStores().stores;
-const disabled = readDisabledSkills(settings);
 const commandMocks = vi.hoisted(() => ({ initCliPlatform: vi.fn() }));
 
 vi.mock('@cli/runtime/initPlatform', async (importOriginal) => ({
@@ -117,6 +116,7 @@ describe('CLI skills runtime', () => {
         },
       );
 
+      const disabled = yield* readDisabledSkills(settings);
       expect(
         result.skills.map((entry) => skillDisplayItem(entry, disabled)),
       ).toMatchObject([
@@ -223,6 +223,7 @@ describe('CLI skills runtime', () => {
 
         const result = yield* loadEnabledRuntimeSkills(root, settings);
 
+        const disabled = yield* readDisabledSkills(settings);
         expect(
           result.skills.map((entry) => skillDisplayItem(entry, disabled)),
         ).toMatchObject([

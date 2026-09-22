@@ -1,6 +1,6 @@
 import { Effect, FileSystem } from 'effect';
 
-import { withLogChannel, withLogData } from '@logger/effectLog';
+import { withLogChannel } from '@logger/effectLog';
 import { filterNotNull } from '@utils/core';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { getPromptFileName } from '@utils/prompt';
@@ -49,7 +49,11 @@ export const setVarFromFile = Effect.fn('varsUtils.setVarFromFile')(function* (
       // absence.
       Effect.logWarning(
         `Failed to read ${varName} from file ${filePath}: ${toErrorMessage(error)}`,
-      ).pipe(withLogChannel(CHANNEL), withLogData(error), Effect.as(null)),
+      ).pipe(
+        withLogChannel(CHANNEL),
+        Effect.annotateLogs({ data: error }),
+        Effect.as(null),
+      ),
     ),
   );
 });

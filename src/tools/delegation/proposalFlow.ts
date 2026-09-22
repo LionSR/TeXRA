@@ -9,8 +9,10 @@
 import { Cause, Effect, Exit } from 'effect';
 
 // Local imports
-import type { AgentEntry } from '@agent/index/agentEntry';
-import type { AgentRosterStores } from '@agent/index/agentRegistry';
+import {
+  findAgentByIdentifier,
+  type AgentRosterStores,
+} from '@agent/index/agentRegistry';
 import type { ToolCallShape } from '@agent/runtime/ToolCall';
 import type {
   AgentDelegationScope,
@@ -68,51 +70,45 @@ const DEFAULT_DELEGATION_REJECTION_FEEDBACK = [
  * caller carries the resolved `source` onto the proposal so launch pins the
  * exact `(source, name)` entry instead of re-resolving the bare name.
  */
-export function requireVisibleAgent(
+export const requireVisibleAgent = Effect.fn('requireVisibleAgent')(function* (
   stores: AgentRosterStores,
   category: AgentCategory,
   name: string,
   scope?: AgentDelegationScope,
-): AgentEntry {
-  const agent = getDelegationAgent(stores, category, name, scope);
+) {
+  const agents = yield* getDelegationAgents(stores, category, scope);
+  const agent = findAgentByIdentifier(agents, name);
   if (agent) return agent;
-  const available = getDelegationAgents(stores, category, scope)
-    .map((a) => a.name)
-    .join(', ');
-  throw new Error(
-    `Unknown ${category} agent '${name}'. Available: ${available}`,
+  return yield* Effect.fail(
+    new Error(
+      `Unknown ${category} agent '${name}'. Available: ${agents.map((a) => a.name).join(', ')}`,
+    ),
   );
-}
+});
 
-/**
- * Resolve an agent across both Workflow and ToolUse rosters, returning the
- * first match. Used by delegate_multi_agents where the outer `agent` parameter
- * accepts both kinds.
- */
-export function requireWorkflowOrToolUseAgent(
+/** Resolve either category from the current roster, reporting both on failure. */
+export const requireWorkflowOrToolUseAgent = Effect.fn(
+  'requireWorkflowOrToolUseAgent',
+)(function* (
   stores: AgentRosterStores,
   name: string,
   scope?: AgentDelegationScope,
-): AgentEntry {
-  const searched = [AgentCategory.Workflow, AgentCategory.ToolUse] as const;
-  for (const category of searched) {
-    const agent = getDelegationAgent(stores, category, name, scope);
+) {
+  const available: string[] = [];
+  for (const category of [AgentCategory.Workflow, AgentCategory.ToolUse]) {
+    const agents = yield* getDelegationAgents(stores, category, scope);
+    const agent = findAgentByIdentifier(agents, name);
     if (agent) return agent;
+    available.push(
+      `${category}: ${agents.map((a) => a.name).join(', ') || 'none'}`,
+    );
   }
-  // Both rosters were searched, so both belong in the message: rethrowing the
-  // workflow-only error would advertise half the candidates the caller had.
-  const available = searched
-    .map((category) => {
-      const names = getDelegationAgents(stores, category, scope).map(
-        (a) => a.name,
-      );
-      return `${category}: ${names.join(', ') || 'none'}`;
-    })
-    .join('; ');
-  throw new Error(
-    `Unknown workflow or toolUse agent '${name}'. Available: ${available}`,
+  return yield* Effect.fail(
+    new Error(
+      `Unknown workflow or toolUse agent '${name}'. Available: ${available.join('; ')}`,
+    ),
   );
-}
+});
 
 /** Build a concise summary of proposal parameters for rejection echo. */
 function summarizeProposal(
@@ -282,7 +278,7 @@ export const proposeAndExecute = Effect.fn('proposeAndExecute')(function* (
   const agentOverride =
     result.agent && result.agent !== proposal.agent ? result.agent : undefined;
   const resolvedAgentOverride = agentOverride
-    ? getDelegationAgent(
+    ? yield* getDelegationAgent(
         parent.roots,
         proposal.agentCategory,
         agentOverride,

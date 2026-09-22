@@ -47,6 +47,7 @@ import type { SessionOpenError } from '@shared/session/database';
 import { RunLedger } from '@shared/session/runLedger';
 import type { RunState } from '@shared/session/runStateFold';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
+import { testRunHandle } from '@test/support/runHandleFixtures';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { hostStores } from '@test/support/setupPlatform';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
@@ -242,9 +243,17 @@ function agentRunTestLayer(init: LoopInit) {
       );
       const logger = init.logger ?? new TraceEmitter();
       const scope = yield* Effect.scope;
+      const handle = testRunHandle({
+        runId: init.runId,
+        agent: 'chat',
+        parent: init.parentRunId ?? null,
+      });
+      init.session.runs.track(handle);
+      yield* Effect.addFinalizer(() =>
+        Effect.sync(() => init.session.runs.untrack(handle.runId)),
+      );
       return {
         runId: init.runId,
-        parentRunId: init.parentRunId ?? null,
         session: init.session,
         config: AgentConfigSchema.parse({
           agent: 'chat',
@@ -276,6 +285,7 @@ function agentRunTestLayer(init: LoopInit) {
             runId: init.runId,
             runStageId: undefined,
             config: testWorkspaceRoots().config,
+            usageLog: { log: () => {} },
           },
           { agentName: 'chat', agentCategory: AgentCategory.ToolUse },
         ),
@@ -298,7 +308,9 @@ function loopProgram(init: LoopInit, requests: InvokeRequest[]) {
       Layer.mergeAll(
         invokerLayer(init.script, requests),
         followUpsLayer,
-        nativeToolTestLayer(),
+        nativeToolTestLayer({
+          run: { runId: init.runId, session: init.session, toolPolicy: {} },
+        }),
       ).pipe(
         Layer.provideMerge(agentRunTestLayer(init)),
         Layer.provideMerge(Layer.succeed(RunLedger)(init.session.ledger)),
@@ -494,26 +506,25 @@ function userTexts(state: RunState | null): string[] {
 
 describe('a parked child run', () => {
   it.effect.each([false, true])(
-    'suspends at WAITING once per invocation (input queued: %s)',
+    'keeps the child live across its input wait (input queued: %s)',
     (queued) =>
       Effect.gen(function* () {
-        // A child's continuation belongs to the run that launched it: one
-        // cycle per invocation, whether or not something is already queued.
         const session = quietSession();
         const runId = startedRun(session);
         if (queued) {
           yield* enqueue(session, runId, [{ text: 'later', origin: 'user' }]);
         }
 
-        const { result, requests } = yield* runLoop({
+        const { fiber, park, requests } = yield* forkLoop({
           runId,
           session,
           parentRunId: generateRunId(),
-          script: [textTurn('one cycle')],
+          script: [textTurn('first cycle'), textTurn('second cycle')],
         });
-
-        expect(result.outcome).toBe(RUN_PHASE.WAITING);
-        expect(requests).toHaveLength(1);
+        yield* park(queued ? 1 : 0);
+        expect(fiber.pollUnsafe()).toBeUndefined();
+        expect(requests).toHaveLength(queued ? 2 : 1);
+        yield* Fiber.interrupt(fiber);
       }),
   );
 
@@ -526,12 +537,14 @@ describe('a parked child run', () => {
         const parentRunId = generateRunId();
         const asked = 'state where finiteness is used';
 
-        yield* runLoop({
+        const first = yield* forkLoop({
           runId,
           session,
           parentRunId,
           script: [textTurn('first cycle')],
         });
+        yield* first.park(0);
+        yield* Fiber.interrupt(first.fiber);
         // A crash between admission and the consuming batch leaves the row
         // and nothing else: no process holds the follow-up in memory.
         const queued = {
@@ -543,33 +556,38 @@ describe('a parked child run', () => {
         session.publish([queued]);
         yield* session.settlePublications();
 
-        const resumed = yield* runLoop({
+        const resumed = yield* forkLoop({
           runId,
           session,
           parentRunId,
           resume: true,
           script: [textTurn('second cycle'), textTurn('never reached')],
         });
-        expect(resumed.result.outcome).toBe(RUN_PHASE.WAITING);
-        expect(userTexts(resumed.state)).toContain(asked);
-        // Consumed in the batch that carries it: the fold no longer queues it.
-        expect(resumed.state?.followUps).toEqual([]);
+        yield* resumed.park(1);
+        const resumedState = yield* session.ledger.load(runId);
+        expect(userTexts(resumedState)).toContain(asked);
+        expect(resumedState?.followUps).toEqual([]);
+        yield* Fiber.interrupt(resumed.fiber);
 
         // A producer that replays the delivery after a restart writes the
         // same id again; it names a follow-up already consumed.
         session.publish([queued]);
         yield* session.settlePublications();
-        const again = yield* runLoop({
+        const again = yield* forkLoop({
           runId,
           session,
           parentRunId,
           resume: true,
           script: [textTurn('never reached')],
         });
+        yield* again.park(0);
         expect(again.requests).toHaveLength(0);
-        expect(userTexts(again.state).filter((text) => text === asked)).toEqual(
-          [asked],
-        );
+        expect(
+          userTexts(yield* session.ledger.load(runId)).filter(
+            (text) => text === asked,
+          ),
+        ).toEqual([asked]);
+        yield* Fiber.interrupt(again.fiber);
       }),
   );
 
@@ -645,8 +663,6 @@ describe('a parked root run', () => {
         script: [textTurn('done')],
       });
 
-      // A single-cycle native subagent's caller reads a WAITING result as
-      // an invariant failure, so the cycle that finished must say so.
       expect(result.outcome).toBe(RUN_OUTCOME.COMPLETED);
       expect(requests).toHaveLength(1);
     }),
@@ -1056,16 +1072,18 @@ describe('an active goal at the wait', () => {
             { text: 'try the other lemma', origin: 'user' },
           ]);
 
-          const { result, state } = yield* runLoop({
+          const recovered = yield* forkLoop({
             runId,
             session,
             parentRunId,
             resume: true,
-            script: [textTurn('recovered')],
+            script: [textTurn('recovered'), textTurn('never reached')],
           });
-
-          expect(result.outcome).toBe(RUN_PHASE.WAITING);
-          expect(userTexts(state)).toContain('try the other lemma');
+          yield* recovered.park(1);
+          expect(userTexts(yield* session.ledger.load(runId))).toContain(
+            'try the other lemma',
+          );
+          yield* Fiber.interrupt(recovered.fiber);
           expect(goalOf(session, runId)?.status).toBe('active');
           expect(
             eventsOfType(

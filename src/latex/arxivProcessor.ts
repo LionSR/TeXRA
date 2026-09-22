@@ -19,7 +19,7 @@ import {
 import { StatusCodes } from 'http-status-codes';
 import * as tar from 'tar';
 
-import { withLogChannel, withLogData } from '@logger/effectLog';
+import { withLogChannel } from '@logger/effectLog';
 import { randomizedExponentialBackoff } from '@utils/core/backoffSchedule';
 import { isTransientHttpStatus } from '@utils/core/httpStatus';
 import {
@@ -42,10 +42,8 @@ interface ExtractOptions {
   timeout?: number;
 }
 
-// The per-attempt deadline covers the entire request including body
-// streaming, unlike the old axios timeout which only covered header receipt.
-// Use a generous deadline so large tarballs (10s+ on a slow link) can
-// complete.
+// Cover the entire request, including body streaming, while allowing large
+// tarballs to complete on a slow link.
 const DOWNLOAD_TIMEOUT_MS = 120_000; // 2 min
 
 /** Retries after the first download attempt. */
@@ -248,7 +246,7 @@ class ArxivSourceProcessor {
     }).pipe(
       Effect.catch((error) =>
         Effect.logDebug(`Failed to clean up ${description} ${target}`).pipe(
-          withLogData(error),
+          Effect.annotateLogs({ data: error }),
         ),
       ),
       withLogChannel(ARXIV_CHANNEL),
@@ -376,9 +374,11 @@ class ArxivSourceProcessor {
             Effect.logDebug(
               'Ignoring malformed Content-Disposition header from arXiv source download',
             ).pipe(
-              withLogData({
-                header: disposition,
-                error: toErrorMessage(error),
+              Effect.annotateLogs({
+                data: {
+                  header: disposition,
+                  error: toErrorMessage(error),
+                },
               }),
               Effect.as(undefined),
             ),

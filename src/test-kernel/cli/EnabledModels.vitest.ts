@@ -45,7 +45,7 @@ describe('CLI enabled models catalog', () => {
         enabledExtras: [],
         disabledDefaults: ['grok47'],
       });
-      const catalog = listCliEnabledModelCatalog(state);
+      const catalog = yield* listCliEnabledModelCatalog(state);
       expect(catalog.find((row) => row.id === 'grok47')?.enabled).toBe(false);
       expect(catalog.find((row) => row.id === 'deepseekproT')?.enabled).toBe(
         true,

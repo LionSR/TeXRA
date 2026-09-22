@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 import {
   ModelProvider,
   ReasoningEffort,
@@ -20,29 +21,29 @@ import { warnModelAvailability } from './modelAvailabilityWarning';
  * than quietly disappearing. Reads only; the write path keeps the stored
  * record verbatim so an unreadable entry is never dropped from storage.
  */
-export function reasoningEffortOverrides(
-  state: StateStore,
-): Readonly<Record<string, ReasoningEffort>> {
-  const stored = state.get<Record<string, string>>(
-    GlobalStateKey.REASONING_LEVELS,
-    {},
-  );
-  const overrides: Record<string, ReasoningEffort> = {};
-  for (const [model, value] of Object.entries(stored)) {
-    const parsed = ReasoningEffortSchema.safeParse(value);
-    if (parsed.success) {
-      overrides[model] = parsed.data;
-      continue;
-    }
-    // A stored value outside llm-zoo's vocabulary cannot route a request, so
-    // the model falls back to its catalog default; say so through the
-    // module's host sink rather than dropping the entry silently.
-    warnModelAvailability(
-      `Stored reasoning level "${value}" for model ${model} is not one of llm-zoo's efforts; using the model's default.`,
-      parsed.error,
+export function reasoningEffortOverrides(state: StateStore) {
+  return Effect.gen(function* () {
+    const stored = yield* state.get<Record<string, string>>(
+      GlobalStateKey.REASONING_LEVELS,
+      {},
     );
-  }
-  return overrides;
+    const overrides: Record<string, ReasoningEffort> = {};
+    for (const [model, value] of Object.entries(stored)) {
+      const parsed = ReasoningEffortSchema.safeParse(value);
+      if (parsed.success) {
+        overrides[model] = parsed.data;
+        continue;
+      }
+      // A stored value outside llm-zoo's vocabulary cannot route a request, so
+      // the model falls back to its catalog default; say so through the
+      // module's host sink rather than dropping the entry silently.
+      warnModelAvailability(
+        `Stored reasoning level "${value}" for model ${model} is not one of llm-zoo's efforts; using the model's default.`,
+        parsed.error,
+      );
+    }
+    return overrides;
+  });
 }
 
 /** Whether the model exposes a genuine user-selectable effort range. */

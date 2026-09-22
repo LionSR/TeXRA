@@ -153,7 +153,7 @@ describe('openBuildDisplayIfTex viewer delivery', () => {
 
       const delivery = yield* Effect.forkChild(
         withHostFs(openBuildDisplayIfTex(session, workspaceTex)).pipe(
-          Effect.provide(effectDiagnosticsLayer),
+          Effect.provide(effectDiagnosticsLayer('Trace')),
         ),
         { startImmediately: true },
       );
@@ -239,7 +239,7 @@ describe('openBuildDisplayIfTex viewer delivery', () => {
 
         const delivery = yield* Effect.forkChild(
           withHostFs(openBuildDisplayIfTex(session, workspaceTex)).pipe(
-            Effect.provide(effectDiagnosticsLayer),
+            Effect.provide(effectDiagnosticsLayer('Trace')),
           ),
           { startImmediately: true },
         );
@@ -269,7 +269,7 @@ describe('openBuildDisplayIfTex viewer delivery', () => {
 
         const delivery = yield* Effect.forkChild(
           withHostFs(openBuildDisplayIfTex(session, workspaceTex)).pipe(
-            Effect.provide(effectDiagnosticsLayer),
+            Effect.provide(effectDiagnosticsLayer('Trace')),
           ),
           { startImmediately: true },
         );

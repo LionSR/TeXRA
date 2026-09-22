@@ -14,6 +14,7 @@ import type { CliGlobalArgs } from './cliContext';
 export interface ParsedGlobalArgs {
   readonly print?: boolean;
   readonly quiet?: boolean;
+  readonly verbose?: boolean;
   readonly cwd?: string;
   readonly 'output-format'?: CliOutputFormat;
   readonly 'approval-policy'?: TexraApprovalPolicy;
@@ -40,6 +41,7 @@ export function pickGlobalArgs(
   return {
     print: args.print === true,
     quiet: args.quiet === true,
+    verbose: args.verbose === true,
     cwd: isNonEmptyString(args.cwd) ? args.cwd : undefined,
     outputFormat: args['output-format'],
     approvalPolicy: args['approval-policy'],

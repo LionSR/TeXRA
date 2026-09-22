@@ -62,14 +62,14 @@ export const readCliModelAccessStatus = Effect.fn(
       Effect.forEach(
         codingPlanSubscriptionRuntimes,
         (runtime) =>
-          Effect.map(
-            hasUsableApiKey(secrets, runtime.descriptor.apiProvider),
-            (keySet) =>
-              [
-                runtime.descriptor.id,
-                { preferred: runtime.getEnabled(stores), keySet },
-              ] as const,
-          ),
+          Effect.gen(function* () {
+            const keySet = yield* hasUsableApiKey(
+              secrets,
+              runtime.descriptor.apiProvider,
+            );
+            const preferred = yield* runtime.getEnabled(stores);
+            return [runtime.descriptor.id, { preferred, keySet }] as const;
+          }),
         { concurrency: 'unbounded' },
       ),
     ] as const,

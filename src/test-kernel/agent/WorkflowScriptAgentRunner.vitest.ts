@@ -381,12 +381,14 @@ function inBandRunReturning(finalResult: RunEnd) {
 }
 
 function useToolUseAgentEntries(): void {
-  mocks.requireVisibleAgent.mockImplementation((_stores, _category, name) => ({
-    name,
-    source: 'builtInToolUse',
-    category: 'toolUse',
-    path: `/agents/${name}.yml`,
-  }));
+  mocks.requireVisibleAgent.mockImplementation((_stores, _category, name) =>
+    Effect.succeed({
+      name,
+      source: 'builtInToolUse',
+      category: 'toolUse',
+      path: `/agents/${name}.yml`,
+    }),
+  );
 }
 
 describe('createWorkflowScriptAgentRunner', () => {
@@ -416,8 +418,8 @@ describe('createWorkflowScriptAgentRunner', () => {
       Effect.succeed({ active: null, lastCompleted: null }),
     );
     mocks.recordWorkflowCallAttempt.mockReturnValue(Effect.void);
-    mocks.requireVisibleAgent.mockImplementation(
-      (_stores, _category, name) => ({
+    mocks.requireVisibleAgent.mockImplementation((_stores, _category, name) =>
+      Effect.succeed({
         name,
         source: 'builtInWorkflow',
         category: 'workflow',

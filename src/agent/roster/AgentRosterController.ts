@@ -1,7 +1,11 @@
 import { Effect } from 'effect';
 
 import { createLog } from '@logger/logUtils';
-import type { StateStore, StateWriteFailed } from '@platform/interfaces';
+import type {
+  StateStore,
+  StateWriteFailed,
+  StateReadFailed,
+} from '@platform/interfaces';
 import type {
   AgentCategory,
   AgentModePreset,
@@ -46,7 +50,10 @@ export interface AgentRosterControllerDeps<
   readonly workspaceState: StateStore;
   readonly globalState: StateStore;
   readonly getAgents: (category: AgentCategory) => Entry[];
-  readonly getPresets?: () => readonly AgentModePreset[];
+  readonly getPresets?: () => Effect.Effect<
+    readonly AgentModePreset[],
+    StateReadFailed
+  >;
   /**
    * Resolve one stored identifier without collapsing exact source identity.
    * The controller applies no fallback around this, so an implementation owns
@@ -102,20 +109,20 @@ function allPresets(
  * overwrites the selection the mutation just committed. The mutations own
  * every durable write.
  */
-function readAgentRosterSelection(
-  workspaceState: StateStore,
-): AgentRosterSelection {
-  const raw = workspaceState.get<unknown>(
-    WorkspaceStateKey.AGENT_ROSTER_SELECTION,
-  );
-  if (raw === undefined) return INHERITED_AGENT_ROSTER;
-  const parsed = AgentRosterSelectionSchema.safeParse(raw);
-  if (parsed.success) return parsed.data;
-  log.warn(
-    `Ignoring malformed roster selection; falling back to ` +
-      `the inherited roster: ${parsed.error.message}`,
-  );
-  return INHERITED_AGENT_ROSTER;
+function readAgentRosterSelection(workspaceState: StateStore) {
+  return Effect.gen(function* () {
+    const raw = yield* workspaceState.get<unknown>(
+      WorkspaceStateKey.AGENT_ROSTER_SELECTION,
+    );
+    if (raw === undefined) return INHERITED_AGENT_ROSTER;
+    const parsed = AgentRosterSelectionSchema.safeParse(raw);
+    if (parsed.success) return parsed.data;
+    log.warn(
+      `Ignoring malformed roster selection; falling back to ` +
+        `the inherited roster: ${parsed.error.message}`,
+    );
+    return INHERITED_AGENT_ROSTER;
+  });
 }
 
 function selectedIdentifiers(
@@ -141,8 +148,10 @@ export class AgentRosterController<
   constructor(private readonly deps: AgentRosterControllerDeps<Entry>) {}
 
   /** Host-supplied presets, added to the built-ins by {@link allPresets}. */
-  private extraPresets(): readonly AgentModePreset[] {
-    return this.deps.getPresets?.() ?? [];
+  private extraPresets() {
+    return Effect.gen({ self: this }, function* () {
+      return this.deps.getPresets ? yield* this.deps.getPresets() : [];
+    });
   }
 
   /**
@@ -150,108 +159,131 @@ export class AgentRosterController<
    * The one list roster pickers render — a form composing its own preset
    * list can drift from what {@link setTeam} accepts.
    */
-  allPresets(): readonly AgentModePreset[] {
-    return allPresets(this.extraPresets());
+  allPresets() {
+    return Effect.gen({ self: this }, function* () {
+      return allPresets(yield* this.extraPresets());
+    });
   }
 
-  private getSelection(): AgentRosterSelection {
+  private getSelection() {
     return readAgentRosterSelection(this.deps.workspaceState);
   }
 
-  getDefaultTeamId(): string | undefined {
+  getDefaultTeamId() {
     return getDefaultTeamId(this.deps.globalState);
   }
 
-  private getEffectiveSelection(): AgentRosterSnapshot['effectiveSelection'] {
-    return this.resolveEffectiveSelection(this.getSelection())
-      .effectiveSelection;
+  private getEffectiveSelection() {
+    return Effect.gen({ self: this }, function* () {
+      return (yield* this.resolveEffectiveSelection(yield* this.getSelection()))
+        .effectiveSelection;
+    });
   }
 
   /** The team this workspace effectively runs, or null when it runs no team. */
-  getActiveTeamId(): string | null {
-    const effective = this.getEffectiveSelection();
-    return effective.kind === 'team' ? effective.teamId : null;
+  getActiveTeamId() {
+    return Effect.gen({ self: this }, function* () {
+      const effective = yield* this.getEffectiveSelection();
+      return effective.kind === 'team' ? effective.teamId : null;
+    });
   }
 
-  getVisibleAgents(category: AgentCategory): Entry[] {
-    const effective = this.getEffectiveSelection();
-    const identifiers = selectedIdentifiers(
-      effective,
-      category,
-      this.extraPresets(),
-    );
-    if (identifiers === undefined) return this.deps.getAgents(category);
+  getVisibleAgents(category: AgentCategory) {
+    return Effect.gen({ self: this }, function* () {
+      const effective = yield* this.getEffectiveSelection();
+      const identifiers = selectedIdentifiers(
+        effective,
+        category,
+        yield* this.extraPresets(),
+      );
+      if (identifiers === undefined) return this.deps.getAgents(category);
 
-    const resolved = identifiers
-      .map((identifier) => this.deps.resolveAgent(category, identifier))
-      .filter((entry): entry is Entry => entry !== undefined);
-    return [
-      ...new Map(resolved.map((entry) => [agentKeyOf(entry), entry])).values(),
-    ];
+      const resolved = identifiers
+        .map((identifier) => this.deps.resolveAgent(category, identifier))
+        .filter((entry): entry is Entry => entry !== undefined);
+      return [
+        ...new Map(
+          resolved.map((entry) => [agentKeyOf(entry), entry]),
+        ).values(),
+      ];
+    });
   }
 
   /** Return the effective stored identifiers, including unavailable members. */
-  getEnabledAgentKeys(category: AgentCategory): string[] | undefined {
-    return this.selectionKeys(this.getEffectiveSelection(), category);
+  getEnabledAgentKeys(category: AgentCategory) {
+    return Effect.gen({ self: this }, function* () {
+      return yield* this.selectionKeys(
+        yield* this.getEffectiveSelection(),
+        category,
+      );
+    });
   }
 
-  snapshot(): AgentRosterSnapshot {
-    const selection = this.getSelection();
-    const { effectiveSelection, missingTeamId } =
-      this.resolveEffectiveSelection(selection);
-    const presets = this.extraPresets();
-    const unresolvedNames = AGENT_CATEGORIES.flatMap((category) => {
-      const identifiers = selectedIdentifiers(
+  snapshot() {
+    return Effect.gen({ self: this }, function* () {
+      const selection = yield* this.getSelection();
+      const { effectiveSelection, missingTeamId } =
+        yield* this.resolveEffectiveSelection(selection);
+      const presets = yield* this.extraPresets();
+      const unresolvedNames = AGENT_CATEGORIES.flatMap((category) => {
+        const identifiers = selectedIdentifiers(
+          effectiveSelection,
+          category,
+          presets,
+        );
+        if (identifiers === undefined) return [];
+        return identifiers
+          .filter((identifier) => !this.deps.resolveAgent(category, identifier))
+          .map(agentName);
+      });
+      return {
+        selection,
         effectiveSelection,
-        category,
-        presets,
-      );
-      if (identifiers === undefined) return [];
-      return identifiers
-        .filter((identifier) => !this.deps.resolveAgent(category, identifier))
-        .map(agentName);
+        defaultTeamId: yield* this.getDefaultTeamId(),
+        missingTeamId,
+        unresolvedNames: unique(unresolvedNames),
+      };
     });
-    return {
-      selection,
-      effectiveSelection,
-      defaultTeamId: this.getDefaultTeamId(),
-      missingTeamId,
-      unresolvedNames: unique(unresolvedNames),
-    };
   }
 
   private selectionKeys(
     selection: Exclude<AgentRosterSelection, { readonly kind: 'inherit' }>,
     category: AgentCategory,
-  ): string[] | undefined {
-    const identifiers = selectedIdentifiers(
-      selection,
-      category,
-      this.extraPresets(),
-    );
-    if (identifiers === undefined) return undefined;
-    // A custom selection already stores keys, so only an `all`/team selection
-    // has names left to resolve; the kind is the same for every identifier.
-    if (selection.kind === 'custom') return unique(identifiers);
+  ) {
+    return Effect.gen({ self: this }, function* () {
+      const identifiers = selectedIdentifiers(
+        selection,
+        category,
+        yield* this.extraPresets(),
+      );
+      if (identifiers === undefined) return undefined;
+      // A custom selection already stores keys, so only an `all`/team selection
+      // has names left to resolve; the kind is the same for every identifier.
+      if (selection.kind === 'custom') return unique(identifiers);
 
-    return unique(
-      identifiers.map((identifier) => {
-        const entry = this.deps.resolveAgent(category, identifier);
-        return entry ? agentKeyOf(entry) : identifier;
-      }),
-    );
+      return unique(
+        identifiers.map((identifier) => {
+          const entry = this.deps.resolveAgent(category, identifier);
+          return entry ? agentKeyOf(entry) : identifier;
+        }),
+      );
+    });
   }
 
   /** Team identity a selection resolves to, following inherit to the default. */
-  private teamIdOf(selection: AgentRosterSelection): string | null | undefined {
-    if (selection.kind === 'inherit') {
-      return this.getDefaultTeamId();
-    }
-    return selection.kind === 'team' ? selection.teamId : undefined;
+  private teamIdOf(selection: AgentRosterSelection) {
+    return Effect.gen({ self: this }, function* () {
+      if (selection.kind === 'inherit') {
+        return yield* this.getDefaultTeamId();
+      }
+      return selection.kind === 'team' ? selection.teamId : undefined;
+    });
   }
 
-  private hasPreset(teamId: string): boolean {
-    return this.allPresets().some((preset) => preset.id === teamId);
+  private hasPreset(teamId: string) {
+    return Effect.gen({ self: this }, function* () {
+      return (yield* this.allPresets()).some((preset) => preset.id === teamId);
+    });
   }
 
   /**
@@ -259,27 +291,36 @@ export class AgentRosterController<
    * it: what the workspace effectively runs, and — when the selection names a
    * team preset that no longer exists — which team id went missing.
    */
-  private resolveEffectiveSelection(selection: AgentRosterSelection): {
-    effectiveSelection: AgentRosterSnapshot['effectiveSelection'];
-    missingTeamId: string | undefined;
-  } {
-    const teamId = this.teamIdOf(selection);
-    if (teamId && !this.hasPreset(teamId)) {
-      return { effectiveSelection: { kind: 'all' }, missingTeamId: teamId };
-    }
-    if (selection.kind === 'inherit') {
-      return {
-        effectiveSelection: teamId ? { kind: 'team', teamId } : { kind: 'all' },
-        missingTeamId: undefined,
-      };
-    }
-    return { effectiveSelection: selection, missingTeamId: undefined };
+  private resolveEffectiveSelection(selection: AgentRosterSelection) {
+    return Effect.gen({ self: this }, function* () {
+      const teamId = yield* this.teamIdOf(selection);
+      if (teamId && !(yield* this.hasPreset(teamId))) {
+        return {
+          effectiveSelection: { kind: 'all' as const },
+          missingTeamId: teamId,
+        };
+      }
+      if (selection.kind === 'inherit') {
+        return {
+          effectiveSelection: teamId
+            ? { kind: 'team' as const, teamId }
+            : { kind: 'all' as const },
+          missingTeamId: undefined,
+        };
+      }
+      return { effectiveSelection: selection, missingTeamId: undefined };
+    });
   }
 
-  private effectiveCategorySelection(
-    category: AgentCategory,
-  ): AgentRosterCategorySelection {
-    return this.selectionKeys(this.getEffectiveSelection(), category) ?? 'all';
+  private effectiveCategorySelection(category: AgentCategory) {
+    return Effect.gen({ self: this }, function* () {
+      return (
+        (yield* this.selectionKeys(
+          yield* this.getEffectiveSelection(),
+          category,
+        )) ?? 'all'
+      );
+    });
   }
 
   private materializeCategorySelection(
@@ -310,23 +351,23 @@ export class AgentRosterController<
     );
   }
 
-  setTeam(
-    teamId: string,
-  ): Effect.Effect<void, StateWriteFailed | InvalidAgentTeamError> {
-    const preset = this.allPresets().find(
-      (candidate) => candidate.id === teamId,
-    );
-    if (!preset) {
-      // A refusal in the declared channel, not a synchronous throw. This
-      // method's two production callers are a synchronous TUI select handler
-      // (which would otherwise let the throw escape its Effect recovery) and a
-      // CLI `await` that matches on `instanceof InvalidAgentTeamError` against
-      // the rejection — a defect would break the second one's message.
-      return Effect.fail(
-        new InvalidAgentTeamError(`Unknown agent team: ${teamId}`),
+  setTeam(teamId: string) {
+    return Effect.gen({ self: this }, function* () {
+      const preset = (yield* this.allPresets()).find(
+        (candidate) => candidate.id === teamId,
       );
-    }
-    return this.setSelection({ kind: 'team', teamId: preset.id });
+      if (!preset) {
+        // A refusal in the declared channel, not a synchronous throw. This
+        // method's two production callers are a synchronous TUI select handler
+        // (which would otherwise let the throw escape its Effect recovery) and a
+        // CLI `await` that matches on `instanceof InvalidAgentTeamError` against
+        // the rejection — a defect would break the second one's message.
+        return yield* Effect.fail(
+          new InvalidAgentTeamError(`Unknown agent team: ${teamId}`),
+        );
+      }
+      return yield* this.setSelection({ kind: 'team', teamId: preset.id });
+    });
   }
 
   setCustom(
@@ -344,7 +385,7 @@ export class AgentRosterController<
   setEnabledAgentKeys(
     category: AgentCategory,
     enabledKeys: readonly string[],
-  ): Effect.Effect<void, StateWriteFailed> {
+  ): Effect.Effect<void, StateWriteFailed | StateReadFailed> {
     return serializeWorkspaceWrite(
       this.deps.workspaceState,
       // The untouched categories' keys are a read of the selection, so it has
@@ -352,16 +393,18 @@ export class AgentRosterController<
       // at construction, which is before the lane is acquired. Two calls
       // constructed back to back would otherwise both start from the same
       // pre-lane snapshot and one update would be lost.
-      Effect.suspend(() =>
-        this.writeSelection({
+      Effect.gen({ self: this }, function* () {
+        return yield* this.writeSelection({
           kind: 'custom',
-          agentKeys: byCategory((candidate) =>
-            candidate === category
-              ? unique(enabledKeys)
-              : this.effectiveCategorySelection(candidate),
+          agentKeys: yield* Effect.all(
+            byCategory((candidate) =>
+              candidate === category
+                ? Effect.succeed(unique(enabledKeys))
+                : this.effectiveCategorySelection(candidate),
+            ),
           ),
-        }),
-      ),
+        });
+      }),
     );
   }
 
@@ -378,12 +421,12 @@ export class AgentRosterController<
     readonly source: AgentSource;
     readonly name: string;
     readonly enabled: boolean;
-  }): Effect.Effect<void, StateWriteFailed> {
+  }): Effect.Effect<void, StateWriteFailed | StateReadFailed> {
     return serializeWorkspaceWrite(
       this.deps.workspaceState,
-      Effect.suspend(() => {
-        const selections = byCategory((category) =>
-          this.effectiveCategorySelection(category),
+      Effect.gen({ self: this }, function* () {
+        const selections = yield* Effect.all(
+          byCategory((category) => this.effectiveCategorySelection(category)),
         );
         const target = this.materializeCategorySelection(
           selections[input.category],
@@ -394,13 +437,13 @@ export class AgentRosterController<
           agentMatchesIdentifier(input, candidate),
         );
         const alreadyEnabled = index >= 0;
-        if (input.enabled === alreadyEnabled) return Effect.void;
+        if (input.enabled === alreadyEnabled) return;
         if (input.enabled) {
           target.push(key);
         } else {
           target.splice(index, 1);
         }
-        return this.writeSelection({
+        return yield* this.writeSelection({
           kind: 'custom',
           agentKeys: byCategory((category) =>
             category === input.category ? target : selections[category],
@@ -413,22 +456,25 @@ export class AgentRosterController<
   removeTeamPreset(
     teamId: string,
     removePreset: () => Effect.Effect<void, StateWriteFailed>,
-  ): Effect.Effect<void, StateWriteFailed> {
+  ): Effect.Effect<void, StateWriteFailed | StateReadFailed> {
     return serializeWorkspaceWrite(
       this.deps.workspaceState,
-      Effect.suspend(() => {
-        const selection = this.getSelection();
+      Effect.gen({ self: this }, function* () {
+        const selection = yield* this.getSelection();
         const clearSelection =
           selection.kind === 'team' && selection.teamId === teamId
             ? this.writeSelection({
                 kind: 'custom',
-                agentKeys: byCategory(
-                  (category) =>
-                    this.selectionKeys(selection, category) ?? 'all',
+                agentKeys: yield* Effect.all(
+                  byCategory((category) =>
+                    this.selectionKeys(selection, category).pipe(
+                      Effect.map((keys) => keys ?? 'all'),
+                    ),
+                  ),
                 ),
               })
             : Effect.void;
-        return Effect.andThen(clearSelection, removePreset());
+        return yield* Effect.andThen(clearSelection, removePreset());
       }),
     );
   }

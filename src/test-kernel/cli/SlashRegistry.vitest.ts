@@ -264,26 +264,34 @@ describe('slashRegistry', () => {
     });
   });
 
-  it('passes live model-switch disabled reasons into the model picker', () => {
-    resetCliState(OVERRIDDEN_MODEL_CHAT_SESSION);
-    registerBuiltins({
-      canSelectModel: () => true,
-      getModelSwitchDisabledReason: (model) =>
-        model === 'sonnet46T'
-          ? 'different conversation format; start new chat'
-          : undefined,
-    });
-    const modelNode = openSlashForm<{
-      getModelSwitchDisabledReason?: (model: string) => string | undefined;
-    }>('model');
+  it.effect(
+    'passes live model-switch disabled reasons into the model picker',
+    () =>
+      Effect.gen(function* () {
+        resetCliState(OVERRIDDEN_MODEL_CHAT_SESSION);
+        registerBuiltins({
+          canSelectModel: () => true,
+          getModelSwitchDisabledReason: (model) =>
+            Effect.succeed(
+              model === 'sonnet46T'
+                ? 'different conversation format; start new chat'
+                : undefined,
+            ),
+        });
+        const modelNode = openSlashForm<{
+          getModelSwitchDisabledReason: (
+            model: string,
+          ) => Effect.Effect<string | undefined, Error>;
+        }>('model');
 
-    expect(modelNode.props?.getModelSwitchDisabledReason?.('sonnet46T')).toBe(
-      'different conversation format; start new chat',
-    );
-    expect(modelNode.props?.getModelSwitchDisabledReason?.('gpt55')).toBe(
-      undefined,
-    );
-  });
+        expect(
+          yield* modelNode.props!.getModelSwitchDisabledReason('sonnet46T'),
+        ).toBe('different conversation format; start new chat');
+        expect(
+          yield* modelNode.props!.getModelSwitchDisabledReason('gpt55'),
+        ).toBe(undefined);
+      }),
+  );
 
   it('keeps the model picker open until model selection commits', async () => {
     const selection = createDeferred<void>();

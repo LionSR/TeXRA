@@ -40,7 +40,7 @@ describe('getSubscriptionSessionStatus', () => {
           () => failing,
           'subscriptionStatusProbe',
           'ChatGPT',
-        ).pipe(Effect.provide(effectDiagnosticsLayer));
+        ).pipe(Effect.provide(effectDiagnosticsLayer('Trace')));
 
         expect(status).toEqual({ signedIn: false });
         expect(

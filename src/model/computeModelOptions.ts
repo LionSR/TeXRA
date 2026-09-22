@@ -86,26 +86,10 @@ export interface ModelOptionStores extends SettingsStores {
   readonly globalState: StateStore;
 }
 
-/**
- * Module-private refinement of an unavailable {@link ModelAvailabilityKind},
- * recorded by the branch that chose the kind so the reason builder never has
- * to re-derive that branch's condition. Deliberately not part of the
- * `ModelAvailabilityKind` wire enum: renderers and the CLI treat an OpenRouter
- * key gap exactly like any other missing key, and widening the wire enum would
- * force every host's mapping to grow a case for a distinction only the prose
- * cares about.
- */
+/** Internal detail for availability prose; the wire kind remains missing-key. */
 type UnavailableReason = 'openrouter-missing-key';
 
-/**
- * A resolved verdict: the kind the row ships, plus the refinements this
- * module's later steps read. What the kind *means* is
- * {@link MODEL_AVAILABILITY_STATUS}, not a field copied onto every row.
- *
- * The two Copilot fields are what makes the later steps pure: both are read
- * off the live Copilot preference and route catalogue by the branch that chose
- * the kind, so nothing after the route ladder consults either again.
- */
+/** Availability verdict and captured routing facts; later presentation is pure. */
 interface ModelAvailabilityStatus {
   kind: ModelAvailabilityKind;
   providerCapabilities?: ProviderCapabilityProfile;
@@ -293,87 +277,91 @@ function resolveModelRoute(
   model: string,
   config: ModelConfig,
   ctx: ModelRouteContext,
-): ModelRoute {
-  const globalState: Pick<StateStore, 'get'> = stores.globalState;
-  if (config.retired) {
-    return availabilityStatus('retired');
-  }
+) {
+  return Effect.gen(function* () {
+    const globalState: Pick<StateStore, 'get'> = stores.globalState;
+    if (config.retired) {
+      return availabilityStatus('retired');
+    }
 
-  // An explicit Copilot route preference reports the discovered route's own
-  // state — consent and temporary unavailability are route states on the one
-  // canonical model row, never a reason to fall back to another transport.
-  if (prefersCopilotRoute(model, globalState)) {
-    const route = copilotRouteForModel(model);
-    // No discovered route is the same verdict as a discovered unavailable one.
-    // The kind is the access word itself, so there is nothing to translate.
-    const access = route?.access ?? 'unavailable';
-    if (access === 'allowed') {
+    // An explicit Copilot route preference reports the discovered route's own
+    // state — consent and temporary unavailability are route states on the one
+    // canonical model row, never a reason to fall back to another transport.
+    if (yield* prefersCopilotRoute(model, globalState)) {
+      const route = copilotRouteForModel(model);
+      // No discovered route is the same verdict as a discovered unavailable one.
+      // The kind is the access word itself, so there is nothing to translate.
+      const access = route?.access ?? 'unavailable';
+      if (access === 'allowed') {
+        return {
+          ...availabilityStatus('copilot-allowed'),
+          copilotConfig: route?.effectiveConfig,
+        };
+      }
       return {
-        ...availabilityStatus('copilot-allowed'),
-        copilotConfig: route?.effectiveConfig,
+        ...availabilityStatus(`copilot-${access}`),
+        // The dispatch path's own wording for this model, resolved here from the
+        // same preference and catalogue this decision was made on.
+        copilotReason: yield* copilotRouteUnavailableReason(model, globalState),
       };
     }
-    return {
-      ...availabilityStatus(`copilot-${access}`),
-      // The dispatch path's own wording for this model, resolved here from the
-      // same preference and catalogue this decision was made on.
-      copilotReason: copilotRouteUnavailableReason(model, globalState),
-    };
-  }
 
-  if (isOpenRouterRoutingUnsupported(config, ctx.useOpenRouter)) {
-    return availabilityStatus('provider-unavailable');
-  }
+    if (isOpenRouterRoutingUnsupported(config, ctx.useOpenRouter)) {
+      return availabilityStatus('provider-unavailable');
+    }
 
-  // ChatGPT subscription (Codex) is a preference, not a hard requirement. When
-  // the host is not signed in, continue through the normal API-key paths
-  // so the switch cannot disable models that are otherwise runnable.
-  if (ctx.codexSignedIn) {
-    const subscriptionCapabilities = resolveCodexSubscriptionCapabilities(
-      stores,
-      config,
-      ctx.useOpenRouter,
-    );
-    if (subscriptionCapabilities) {
+    // ChatGPT subscription (Codex) is a preference, not a hard requirement. When
+    // the host is not signed in, continue through the normal API-key paths
+    // so the switch cannot disable models that are otherwise runnable.
+    if (ctx.codexSignedIn) {
+      const subscriptionCapabilities =
+        yield* resolveCodexSubscriptionCapabilities(
+          stores,
+          config,
+          ctx.useOpenRouter,
+        );
+      if (subscriptionCapabilities) {
+        return {
+          ...availabilityStatus('subscription-access'),
+          providerCapabilities: subscriptionCapabilities,
+        };
+      }
+    }
+
+    // Grok (xAI) subscription — same preference pattern as ChatGPT, and its own
+    // kind so pickers and status rows do not say "ChatGPT subscription" for an
+    // xAI model.
+    if (ctx.xaiSignedIn) {
+      const subscriptionCapabilities =
+        yield* resolveXaiSubscriptionCapabilities(
+          stores,
+          config,
+          ctx.useOpenRouter,
+        );
+      if (subscriptionCapabilities) {
+        return {
+          ...availabilityStatus('xai-subscription-access'),
+          providerCapabilities: subscriptionCapabilities,
+        };
+      }
+    }
+
+    // A configured OpenRouter key is the only ready state for these calls.
+    if (shouldRouteModelThroughOpenRouter(config, ctx.useOpenRouter)) {
+      if (ctx.hasOpenRouter) return availabilityStatus('openrouter-key');
       return {
-        ...availabilityStatus('subscription-access'),
-        providerCapabilities: subscriptionCapabilities,
+        ...availabilityStatus('missing-key'),
+        reason: 'openrouter-missing-key' as const,
       };
     }
-  }
 
-  // Grok (xAI) subscription — same preference pattern as ChatGPT, and its own
-  // kind so pickers and status rows do not say "ChatGPT subscription" for an
-  // xAI model.
-  if (ctx.xaiSignedIn) {
-    const subscriptionCapabilities = resolveXaiSubscriptionCapabilities(
-      stores,
-      config,
-      ctx.useOpenRouter,
-    );
-    if (subscriptionCapabilities) {
-      return {
-        ...availabilityStatus('xai-subscription-access'),
-        providerCapabilities: subscriptionCapabilities,
-      };
-    }
-  }
-
-  // A configured OpenRouter key is the only ready state for these calls.
-  if (shouldRouteModelThroughOpenRouter(config, ctx.useOpenRouter)) {
-    if (ctx.hasOpenRouter) return availabilityStatus('openrouter-key');
-    return {
-      ...availabilityStatus('missing-key'),
-      reason: 'openrouter-missing-key',
-    };
-  }
-
-  // Dispatch sends every remaining request to the direct provider, so only its
-  // key makes the model ready. The live-route branch above is the only source
-  // of 'openrouter-key'.
-  const provider = resolveDirectModelApiKeyProvider(config);
-  if (!provider) return availabilityStatus('missing-key');
-  return { needsProviderKey: provider };
+    // Dispatch sends every remaining request to the direct provider, so only its
+    // key makes the model ready. The live-route branch above is the only source
+    // of 'openrouter-key'.
+    const provider = resolveDirectModelApiKeyProvider(config);
+    if (!provider) return availabilityStatus('missing-key');
+    return { needsProviderKey: provider };
+  });
 }
 
 /**
@@ -424,20 +412,18 @@ export class ModelHostFactUnreadable extends Data.TaggedError(
   readonly cause: unknown;
 }> {}
 
-/** The one wrap of this module's synchronous host reads. */
-const hostFact = <A>(
-  fact: string,
-  read: () => A,
-): Effect.Effect<A, ModelHostFactUnreadable> =>
-  Effect.try({
-    try: read,
-    catch: (cause) =>
-      new ModelHostFactUnreadable({
-        fact,
-        message: `Could not read ${fact} from the host.`,
-        cause,
-      }),
-  });
+/** Give state-read failures the availability computation's public error. */
+const hostFact = <A, E>(fact: string, read: Effect.Effect<A, E>) =>
+  read.pipe(
+    Effect.mapError(
+      (cause) =>
+        new ModelHostFactUnreadable({
+          fact,
+          message: `Could not read ${fact} from the host.`,
+          cause,
+        }),
+    ),
+  );
 
 /**
  * One key status per provider, read once. A failed read degrades that provider
@@ -487,17 +473,18 @@ function buildAvailabilityContext(
       preferKimiCode,
       reasoningLevels,
     ] = yield* Effect.all([
-      hostFact('the OpenRouter switch', () => getUseOpenRouter(stores)),
-      hostFact('the ChatGPT subscription preference', () =>
-        isPreferCodexSubscription(stores),
+      hostFact('the OpenRouter switch', getUseOpenRouter(stores)),
+      hostFact(
+        'the ChatGPT subscription preference',
+        Effect.sync(() => isPreferCodexSubscription(stores)),
       ),
-      hostFact('the Grok subscription preference', () =>
-        isPreferXaiSubscription(stores),
+      hostFact(
+        'the Grok subscription preference',
+        Effect.sync(() => isPreferXaiSubscription(stores)),
       ),
-      hostFact('the Kimi Code routing preference', () =>
-        getPreferKimiCode(stores),
-      ),
-      hostFact('the stored reasoning levels', () =>
+      hostFact('the Kimi Code routing preference', getPreferKimiCode(stores)),
+      hostFact(
+        'the stored reasoning levels',
         reasoningEffortOverrides(globalState),
       ),
     ] as const);
@@ -537,22 +524,24 @@ function routeModels(
   stores: ModelOptionStores,
   models: readonly string[],
   ctx: ModelRouteContext,
-): RoutedModels {
-  const routed = new Map<string, RoutedModel>();
-  for (const model of models) {
-    if (routed.has(model)) continue;
-    const rawConfig = getRuntimeModelConfig(model);
-    if (!rawConfig) continue;
-    // Mirror modelRoutes: a dual-backend Kimi model routed to the coding
-    // endpoint runs with the synthesized runtime config, so the row reflects it.
-    const config = kimiCodeEffectiveConfig(rawConfig, ctx.kimiRouting);
-    routed.set(model, {
-      rawConfig,
-      config,
-      route: resolveModelRoute(stores, model, config, ctx),
-    });
-  }
-  return routed;
+) {
+  return Effect.gen(function* () {
+    const routed = new Map<string, RoutedModel>();
+    for (const model of models) {
+      if (routed.has(model)) continue;
+      const rawConfig = getRuntimeModelConfig(model);
+      if (!rawConfig) continue;
+      // Mirror modelRoutes: a dual-backend Kimi model routed to the coding
+      // endpoint runs with the synthesized runtime config, so the row reflects it.
+      const config = kimiCodeEffectiveConfig(rawConfig, ctx.kimiRouting);
+      routed.set(model, {
+        rawConfig,
+        config,
+        route: yield* resolveModelRoute(stores, model, config, ctx),
+      });
+    }
+    return routed;
+  });
 }
 
 /**
@@ -604,16 +593,18 @@ const EMPTY_MODEL_SELECTION: ModelSelection = {
  * the defaults — without being rewritten: the next picker toggle re-encodes a
  * valid delta from the list shown.
  */
-function readModelSelection(state: Pick<StateStore, 'get'>): ModelSelection {
-  const stored = state.get<unknown>(GlobalStateKey.MODEL_SELECTION);
-  if (stored === undefined) return EMPTY_MODEL_SELECTION;
-  const parsed = ModelSelectionSchema.safeParse(stored);
-  if (parsed.success) return parsed.data;
-  warnModelAvailability(
-    `Invalid stored ${GlobalStateKey.MODEL_SELECTION}; showing the default models.`,
-    z.prettifyError(parsed.error),
-  );
-  return EMPTY_MODEL_SELECTION;
+function readModelSelection(state: Pick<StateStore, 'get'>) {
+  return Effect.gen(function* () {
+    const stored = yield* state.get<unknown>(GlobalStateKey.MODEL_SELECTION);
+    if (stored === undefined) return EMPTY_MODEL_SELECTION;
+    const parsed = ModelSelectionSchema.safeParse(stored);
+    if (parsed.success) return parsed.data;
+    warnModelAvailability(
+      `Invalid stored ${GlobalStateKey.MODEL_SELECTION}; showing the default models.`,
+      z.prettifyError(parsed.error),
+    );
+    return EMPTY_MODEL_SELECTION;
+  });
 }
 
 /**
@@ -644,10 +635,10 @@ function enabledOrDefaults(selection: ModelSelection): readonly string[] {
  * The models the pickers show — the single reader of
  * `GlobalStateKey.MODEL_SELECTION` for every host.
  */
-export function getEnabledModels(
-  state: Pick<StateStore, 'get'>,
-): readonly string[] {
-  return enabledOrDefaults(readModelSelection(state));
+export function getEnabledModels(state: Pick<StateStore, 'get'>) {
+  return Effect.gen(function* () {
+    return enabledOrDefaults(yield* readModelSelection(state));
+  });
 }
 
 /**
@@ -661,76 +652,78 @@ export function setModelEnabled(input: {
   readonly model: string;
   readonly enabled: boolean;
   readonly state: StateStore;
-}): Effect.Effect<readonly string[], StateWriteFailed> {
-  const state = input.state;
-  if (input.enabled && isRetiredModel(input.model)) {
-    // The sibling refusal below is typed for the same reason: the guard runs
-    // when the method is called, and a throw here would escape the channel
-    // this signature declares.
-    const message = `Model "${input.model}" is retired and cannot be enabled.`;
-    return Effect.fail(
-      new StateWriteFailed({
-        key: GlobalStateKey.MODEL_SELECTION,
-        message,
-        cause: new Error(message),
-      }),
-    );
-  }
+}) {
+  return Effect.gen(function* () {
+    const state = input.state;
+    if (input.enabled && isRetiredModel(input.model)) {
+      // The sibling refusal below is typed for the same reason: the guard runs
+      // when the method is called, and a throw here would escape the channel
+      // this signature declares.
+      const message = `Model "${input.model}" is retired and cannot be enabled.`;
+      return yield* Effect.fail(
+        new StateWriteFailed({
+          key: GlobalStateKey.MODEL_SELECTION,
+          message,
+          cause: new Error(message),
+        }),
+      );
+    }
 
-  // Edit the list the picker shows — including the all-defaults fallback — and
-  // re-encode the delta from it, so a write never acts on a hidden state. An
-  // explicit enable is recorded in `enabledExtras` even for a default, so it
-  // survives the model later leaving the curated defaults.
-  const selection = readModelSelection(state);
-  const current = enabledOrDefaults(selection);
-  const others = current.filter((model) => model !== input.model);
-  const toggled = input.enabled ? [...others, input.model] : others;
-  const next: ModelSelection = {
-    enabledExtras: [
-      ...new Set([
-        ...selection.enabledExtras.filter((model) => toggled.includes(model)),
-        ...(input.enabled ? [input.model] : []),
-      ]),
-    ],
-    disabledDefaults: DEFAULT_MODELS.filter(
-      (model) => !toggled.includes(model),
-    ),
-  };
-  const nextEnabled = enabledModelsOf(next);
-  if (nextEnabled.length === 0) {
-    // A refusal, not a defect: the caller is told in the channel its signature
-    // declares, so a UI that disables the last model can surface it instead of
-    // crashing the program that composed this.
-    const message =
-      'At least one model must stay enabled. Enable another model before disabling this one.';
-    return Effect.fail(
-      new StateWriteFailed({
-        key: GlobalStateKey.MODEL_SELECTION,
-        message,
-        cause: new Error(message),
-      }),
-    );
-  }
-  // If the helper model was just removed, pin the built-in default. Do not
-  // fall back to the first remaining picker model — that is a premium default,
-  // not the cheap auxiliary.
-  const pinsHelper =
-    !input.enabled &&
-    resolveEffectiveHelperModel(
-      state.get<string | undefined>(GlobalStateKey.HELPER_MODEL),
-      current,
-    ) === input.model;
-
-  return state
-    .update(GlobalStateKey.MODEL_SELECTION, next)
-    .pipe(
-      Effect.andThen(
-        pinsHelper
-          ? state.update(GlobalStateKey.HELPER_MODEL, DEFAULT_HELPER_MODEL)
-          : Effect.void,
+    // Edit the list the picker shows — including the all-defaults fallback — and
+    // re-encode the delta from it, so a write never acts on a hidden state. An
+    // explicit enable is recorded in `enabledExtras` even for a default, so it
+    // survives the model later leaving the curated defaults.
+    const selection = yield* readModelSelection(state);
+    const current = enabledOrDefaults(selection);
+    const others = current.filter((model) => model !== input.model);
+    const toggled = input.enabled ? [...others, input.model] : others;
+    const next: ModelSelection = {
+      enabledExtras: [
+        ...new Set([
+          ...selection.enabledExtras.filter((model) => toggled.includes(model)),
+          ...(input.enabled ? [input.model] : []),
+        ]),
+      ],
+      disabledDefaults: DEFAULT_MODELS.filter(
+        (model) => !toggled.includes(model),
       ),
-      Effect.as(nextEnabled),
-    );
+    };
+    const nextEnabled = enabledModelsOf(next);
+    if (nextEnabled.length === 0) {
+      // A refusal, not a defect: the caller is told in the channel its signature
+      // declares, so a UI that disables the last model can surface it instead of
+      // crashing the program that composed this.
+      const message =
+        'At least one model must stay enabled. Enable another model before disabling this one.';
+      return yield* Effect.fail(
+        new StateWriteFailed({
+          key: GlobalStateKey.MODEL_SELECTION,
+          message,
+          cause: new Error(message),
+        }),
+      );
+    }
+    // If the helper model was just removed, pin the built-in default. Do not
+    // fall back to the first remaining picker model — that is a premium default,
+    // not the cheap auxiliary.
+    const pinsHelper =
+      !input.enabled &&
+      resolveEffectiveHelperModel(
+        yield* state.get<string | undefined>(GlobalStateKey.HELPER_MODEL),
+        current,
+      ) === input.model;
+
+    return yield* state
+      .update(GlobalStateKey.MODEL_SELECTION, next)
+      .pipe(
+        Effect.andThen(
+          pinsHelper
+            ? state.update(GlobalStateKey.HELPER_MODEL, DEFAULT_HELPER_MODEL)
+            : Effect.void,
+        ),
+        Effect.as(nextEnabled),
+      );
+  });
 }
 
 /**
@@ -858,17 +851,19 @@ export const readModelAvailabilityInputs = Effect.fn(
   const routeCtx = yield* buildAvailabilityContext(stores);
   const visible =
     models ??
-    visibleModelsForAccess(
+    (yield* visibleModelsForAccess(
       stores,
-      yield* hostFact('the enabled-model selection', () =>
+      yield* hostFact(
+        'the enabled-model selection',
         getEnabledModels(stores.globalState),
       ),
       routeCtx,
-    );
+    ));
   // Stage 1 is computation over the stage-0 facts except for the one live
   // state read in its ladder, the Copilot route preference, so an unreadable
   // state store fails it the same way it fails the reads above.
-  const routed = yield* hostFact('the Copilot route preference', () =>
+  const routed = yield* hostFact(
+    'the Copilot route preference',
     routeModels(stores, visible, routeCtx),
   );
   const context = yield* withConsultedKeyStatuses(
@@ -929,22 +924,24 @@ function visibleModelsForAccess(
   stores: ModelOptionStores,
   configuredModels: readonly string[],
   context: ModelRouteContext,
-): readonly string[] {
-  const models = new Set(configuredModels);
-  if (!context.codexSignedIn) return [...models];
+) {
+  return Effect.gen(function* () {
+    const models = new Set(configuredModels);
+    if (!context.codexSignedIn) return [...models];
 
-  for (const [model, config] of Object.entries(MODEL_CONFIGS)) {
-    if (
-      !config.retired &&
-      !config.deprecated &&
-      resolveCodexSubscriptionCapabilities(
-        stores,
-        config,
-        context.useOpenRouter,
-      ) !== null
-    ) {
-      models.add(model);
+    for (const [model, config] of Object.entries(MODEL_CONFIGS)) {
+      if (
+        !config.retired &&
+        !config.deprecated &&
+        (yield* resolveCodexSubscriptionCapabilities(
+          stores,
+          config,
+          context.useOpenRouter,
+        )) !== null
+      ) {
+        models.add(model);
+      }
     }
-  }
-  return [...models];
+    return [...models];
+  });
 }

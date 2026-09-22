@@ -56,7 +56,7 @@ const availabilityInputs = (
 class CountingStateStore extends FakeStateStore {
   copilotPreferenceReads = 0;
 
-  override get<T>(key: string, defaultValue?: T): T {
+  override get<T>(key: string, defaultValue?: T): Effect.Effect<T> {
     if (key === GlobalStateKey.COPILOT_ROUTE_MODELS) {
       this.copilotPreferenceReads += 1;
     }
@@ -577,18 +577,20 @@ describe('model availability', () => {
       );
 
       const models = modelOptionsFrom(yield* availabilityInputs(hostStores()));
-      const expected = Object.entries(MODEL_CONFIGS)
-        .filter(
-          ([, config]) =>
-            !config.retired &&
-            !config.deprecated &&
-            resolveCodexSubscriptionCapabilities(
-              hostStores(),
-              config,
-              false,
-            ) !== null,
-        )
-        .map(([model]) => model);
+      const expected: string[] = [];
+      for (const [model, config] of Object.entries(MODEL_CONFIGS)) {
+        if (
+          !config.retired &&
+          !config.deprecated &&
+          (yield* resolveCodexSubscriptionCapabilities(
+            hostStores(),
+            config,
+            false,
+          )) !== null
+        ) {
+          expected.push(model);
+        }
+      }
 
       expect(models.map((model) => model.value)).toEqual(
         expect.arrayContaining(expected),

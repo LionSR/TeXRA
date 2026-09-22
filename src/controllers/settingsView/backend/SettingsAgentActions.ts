@@ -5,7 +5,6 @@ import * as path from 'node:path';
 import { Effect, FileSystem } from 'effect';
 
 // Local imports - controllers
-import type { SettingsAgentDirectoryController } from '@controllers/settingsView/SettingsAgentDirectoryController';
 import type { MessageHost } from '@hosts/uiHosts';
 import type { ProcessServices } from '@platform/processRuntime';
 // Local imports - shared
@@ -48,10 +47,6 @@ interface AgentFileHandlers {
 export type AgentFileCommand = keyof AgentFileHandlers;
 
 interface SettingsAgentActionsOptions {
-  readonly directoryController: Pick<
-    SettingsAgentDirectoryController,
-    'planOpenAgentYaml' | 'planRevealAgentFile'
-  >;
   readonly findAgent: (
     source: AgentSource,
     name: string,
@@ -80,7 +75,7 @@ interface SettingsAgentActionsOptions {
 
 /**
  * Why an agent's YAML could not be opened. The lookup and both failure modes
- * are host-neutral — `planOpenAgentYaml` decides them — so the sentence lives
+ * are host-neutral, so the sentence lives
  * beside the sibling `Agent not found or has no file` messages below rather
  * than being a port each host answers in its own words.
  */
@@ -104,13 +99,13 @@ export function createSettingsAgentActions(
   return {
     openAgentYaml: (message) =>
       Effect.gen(function* () {
-        const result = options.directoryController.planOpenAgentYaml({
-          source: message.agentSource,
-          name: message.agentName,
-        });
-        if (!result.ok) {
+        const entry = options.findAgent(message.agentSource, message.agentName);
+        if (!entry?.path) {
           yield* options.showErrorMessage(
-            openAgentYamlErrorMessage(result.reason, message.agentName),
+            openAgentYamlErrorMessage(
+              entry ? 'missingPath' : 'missingAgent',
+              message.agentName,
+            ),
           );
           return;
         }
@@ -119,23 +114,20 @@ export function createSettingsAgentActions(
         // every later scan and launch reads — and silently bypass the
         // adjacent Customize action that makes the editable copy.
         yield* isPackagedAgentSource(message.agentSource)
-          ? options.openReadOnlyDocument(result.path)
-          : options.openDocument(result.path);
+          ? options.openReadOnlyDocument(entry.path)
+          : options.openDocument(entry.path);
       }),
 
     revealAgentFile: (message) =>
       Effect.gen(function* () {
-        const result = options.directoryController.planRevealAgentFile({
-          source: message.agentSource,
-          name: message.agentName,
-        });
-        if (!result.ok) {
+        const entry = options.findAgent(message.agentSource, message.agentName);
+        if (!entry?.path) {
           yield* options.showErrorMessage(
             `Agent not found or has no file: ${message.agentName}`,
           );
           return;
         }
-        yield* options.revealFile(result.path);
+        yield* options.revealFile(entry.path);
       }),
 
     customizeAgent: (message) =>

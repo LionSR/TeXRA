@@ -15,7 +15,7 @@ import { Effect } from 'effect';
 import { getEnabledModels, setModelEnabled } from '@model/computeModelOptions';
 import { isDeprecatedModel, isRetiredModel } from '@model/modelOptionsBasic';
 import { getRuntimeModelConfig } from '@model/runtimeModelRegistry';
-import type { StateStore } from '@platform/interfaces';
+import type { StateReadFailed, StateStore } from '@platform/interfaces';
 import { StateWriteFailed } from '@platform/interfaces';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { getModelLabel } from '@shared/model/modelLabel';
@@ -34,26 +34,26 @@ export interface CliEnabledModelRow {
  * Full catalog for enable/disable UIs: every non-retired CLI-supported model,
  * marked with whether it is currently enabled.
  */
-export function listCliEnabledModelCatalog(
-  state: StateStore,
-): readonly CliEnabledModelRow[] {
-  const enabled = new Set(getEnabledModels(state));
-  return knownCliModelIds()
-    .filter((id) => !isRetiredModel(id))
-    .map((id) => {
-      const config = getRuntimeModelConfig(id);
-      return {
-        id,
-        label: getModelLabel(id),
-        provider: config?.provider ?? 'unknown',
-        enabled: enabled.has(id),
-        deprecated: isDeprecatedModel(id),
-      };
-    })
-    .toSorted((a, b) => {
-      if (a.enabled !== b.enabled) return a.enabled ? -1 : 1;
-      return a.label.localeCompare(b.label);
-    });
+export function listCliEnabledModelCatalog(state: StateStore) {
+  return Effect.gen(function* () {
+    const enabled = new Set(yield* getEnabledModels(state));
+    return knownCliModelIds()
+      .filter((id) => !isRetiredModel(id))
+      .map((id) => {
+        const config = getRuntimeModelConfig(id);
+        return {
+          id,
+          label: getModelLabel(id),
+          provider: config?.provider ?? 'unknown',
+          enabled: enabled.has(id),
+          deprecated: isDeprecatedModel(id),
+        };
+      })
+      .toSorted((a, b) => {
+        if (a.enabled !== b.enabled) return a.enabled ? -1 : 1;
+        return a.label.localeCompare(b.label);
+      });
+  });
 }
 
 /**
@@ -76,7 +76,7 @@ export function setCliModelEnabled(
     readonly enabled: boolean;
     readonly list: readonly string[];
   },
-  StateWriteFailed
+  StateWriteFailed | StateReadFailed
 > {
   return Effect.suspend(() => {
     const model = resolveKnownCliModelId(modelInput);
