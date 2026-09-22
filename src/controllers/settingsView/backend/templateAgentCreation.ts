@@ -37,32 +37,45 @@ export function templateAgentNamePrompt(category: AgentCategory): string {
   )} agent (without .yaml extension)`;
 }
 
-/** The planned template-agent file, as produced by the directory controller. */
-export interface TemplateAgentFilePlan {
-  readonly fileName: string;
-  readonly filePath: string;
-  readonly baseName: string;
-  readonly description: string;
-  readonly templateKind: 'toolUse' | 'workflowSingle';
+/** Rejection reason for a proposed custom-agent file name, or null. */
+export function validateTemplateAgentName(value: string): string | null {
+  if (!value) return 'Name cannot be empty';
+  if (value.includes('/') || value.includes('\\')) {
+    return 'Name cannot contain path separators';
+  }
+  if (value.includes(' ')) return 'Use underscores instead of spaces';
+  if (/[:#[\]{}|>&*!%@`]/.test(value)) {
+    return 'Name cannot contain YAML-special characters';
+  }
+  return null;
 }
 
 /**
- * Render a planned template agent into its file.
- *
- * Refuses rather than overwrites when the file already exists. Unlike the
- * `reason` codes returned by `planOpenAgentYaml`, this reports a host-neutral
- * sentence that both settings hosts can present directly.
+ * Render a template agent into its file, refusing to overwrite an existing file.
+ * Both settings hosts present the same collision message.
  * `resourcesRoot` is the packaged `…/resources` directory that holds
  * `templates/<kind>.yaml`.
  */
 export const writeTemplateAgentFile = Effect.fn(
   'settings.writeTemplateAgentFile',
-)(function* (plan: TemplateAgentFilePlan, resourcesRoot: string) {
+)(function* (
+  input: { category: AgentCategory; name: string; customDir: string },
+  resourcesRoot: string,
+) {
+  const fileName = input.name.endsWith('.yaml')
+    ? input.name
+    : `${input.name}.yaml`;
+  const filePath = path.join(input.customDir, fileName);
+  const baseName = input.name.replace(/\.yaml$/, '');
+  const isToolUse = input.category === 'toolUse';
+  const description = isToolUse
+    ? `${baseName} — interactive tool-use agent`
+    : `${baseName} — workflow agent`;
   const fs = yield* FileSystem.FileSystem;
-  if (yield* entryExists(fs, plan.filePath)) {
+  if (yield* entryExists(fs, filePath)) {
     return {
       ok: false,
-      message: `A file named "${plan.fileName}" already exists in the custom agents folder.`,
+      message: `A file named "${fileName}" already exists in the custom agents folder.`,
     } as const;
   }
   const raw = yield* readNormalizedFile(
@@ -70,16 +83,16 @@ export const writeTemplateAgentFile = Effect.fn(
     path.join(
       resourcesRoot,
       'templates',
-      AGENT_TEMPLATE_FILES[plan.templateKind],
+      AGENT_TEMPLATE_FILES[isToolUse ? 'toolUse' : 'workflowSingle'],
     ),
   );
   yield* fs.writeFileString(
-    plan.filePath,
+    filePath,
     renderAgentTemplateString(raw, {
-      AGENT_NAME: plan.baseName,
-      DESCRIPTION: plan.description,
+      AGENT_NAME: baseName,
+      DESCRIPTION: description,
       TOOLS_YAML: DEFAULT_AGENT_TEMPLATE_TOOLS_YAML,
     }),
   );
-  return { ok: true } as const;
+  return { ok: true, filePath } as const;
 });

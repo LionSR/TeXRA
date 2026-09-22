@@ -1,6 +1,8 @@
+import { Context, Layer } from 'effect';
 import { z } from 'zod';
 
 import { TurnProtocolSchema } from '@texra-ai/llm/turn';
+import type { ConfigProvider } from '@platform/interfaces';
 import { AgentCategory, UsageRouteSchema } from '@shared/schemas';
 
 const UsageLogMetadataSchema = z.object({
@@ -69,3 +71,19 @@ export const UsageLogResponseSchema = z.discriminatedUnion('success', [
 ]);
 
 export type UsageLogResponse = z.infer<typeof UsageLogResponseSchema>;
+
+/** The process-owned producer; telemetry supplies its scoped sender implementation. */
+export class UsageLog extends Context.Service<
+  UsageLog,
+  {
+    readonly log: (
+      entry: Omit<
+        UsageLogEntry,
+        'timestamp' | 'extensionVersion' | 'editorType'
+      >,
+      config: ConfigProvider,
+    ) => void;
+  }
+>()('@texra/UsageLog') {
+  static readonly disabled = Layer.succeed(UsageLog)({ log: () => {} });
+}

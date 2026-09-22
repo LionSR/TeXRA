@@ -6,13 +6,14 @@ import * as vscode from 'vscode';
 
 import {
   type AgentRosterController,
+  createWorkspaceAgentRosterController,
+  getAgentsByCategory,
   getAgent,
   getCustomAgentScanIssues,
   loadAgents,
   refresh as refreshAgents,
 } from '@agent/index';
 import { supabaseAuthenticated } from '@auth/SupabaseAuth';
-import { createSettingsAgentControllers } from '@controllers/settingsView/SettingsAgentControllerFactory';
 import { fetchRemoteAgentPromptYaml } from '@controllers/settingsView/remoteAgentPrompt';
 import { applySettingsTeamRoster } from '@controllers/settingsView/SettingsTeamRosterController';
 import {
@@ -22,10 +23,10 @@ import {
 } from '@controllers/settingsView/backend/SettingsAgentActions';
 import {
   templateAgentNamePrompt,
+  validateTemplateAgentName,
   writeTemplateAgentFile,
 } from '@controllers/settingsView/backend/templateAgentCreation';
-import type { SettingsAgentDirectoryController } from '@controllers/settingsView/SettingsAgentDirectoryController';
-import type { SettingsAgentCatalogController } from '@controllers/settingsView/SettingsAgentCatalogController';
+import { SettingsAgentCatalogController } from '@controllers/settingsView/SettingsAgentCatalogController';
 import { withAgentCatalogAuthRefreshDeferred } from '@frontend/auth/agentCatalogRefreshScope';
 import { runSignInCommand } from '@frontend/auth/signInCommand';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
@@ -45,6 +46,7 @@ import {
   buildCustomAgentDirMessage,
   buildAgentModePresetsMessage,
 } from '@shared/settingsView/handlers/agentSelectionHandlers';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 import { allSettledVoid } from '@utils/core/allSettledVoid';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
@@ -58,8 +60,9 @@ import {
 /** Agent selection, directory, and team handler delegate. */
 export class AgentHandlers {
   private readonly catalogController: SettingsAgentCatalogController;
-  private readonly directoryController: SettingsAgentDirectoryController;
-  private readonly roster: AgentRosterController;
+  private readonly roster: AgentRosterController<
+    ReturnType<typeof getAgentsByCategory>[number]
+  >;
   readonly agentActions;
   private readonly activeCustomAgentDeletions = new Set<string>();
 
@@ -69,24 +72,23 @@ export class AgentHandlers {
       selectedToolUseAgent?: string,
       agentCatalogAlreadyFresh?: boolean,
     ) => Effect.Effect<void, Error, ProcessServices>,
-    roots: Pick<WorkspaceRoots, 'workspaceState' | 'globalState'>,
+    private readonly roots: Pick<
+      WorkspaceRoots,
+      'workspaceState' | 'globalState'
+    >,
     private readonly refreshCatalogs: () => Effect.Effect<
       void,
       Error,
       ProcessServices
     >,
   ) {
-    const controllers = createSettingsAgentControllers({
+    this.roster = createWorkspaceAgentRosterController(roots);
+    this.catalogController = new SettingsAgentCatalogController({
       workspaceState: roots.workspaceState,
-      globalState: roots.globalState,
-      getCustomAgentDirectory: () => agentDirectories.custom(),
-      getSourceDirectory: (source) => agentDirectories.getDirectory(source),
+      roster: this.roster,
+      getAgents: getAgentsByCategory,
     });
-    this.catalogController = controllers.catalog;
-    this.directoryController = controllers.directory;
-    this.roster = controllers.roster;
     this.agentActions = createSettingsAgentActions({
-      directoryController: this.directoryController,
       findAgent: (source, name) => getAgent(agentKey(source, name)),
       getCustomAgentDirectory: () => agentDirectories.custom(),
       getSourceDirectory: (source) => agentDirectories.getDirectory(source),
@@ -209,10 +211,8 @@ export class AgentHandlers {
       this.ctx,
       'Failed to open agent folder',
       Effect.gen({ self: this }, function* () {
-        const result = yield* this.directoryController.planOpenAgentFolder(
-          data.folderType,
-        );
-        if (!result.ok) {
+        const directory = yield* agentDirectories.getDirectory(data.folderType);
+        if (!directory) {
           yield* showLoggedMessage(
             this.ctx.channel,
             `No local directory for agent source: ${data.folderType}`,
@@ -223,7 +223,7 @@ export class AgentHandlers {
           try: () =>
             vscode.commands.executeCommand(
               'revealFileInOS',
-              vscode.Uri.file(result.path),
+              vscode.Uri.file(directory),
             ),
           catch: ensureError,
         });
@@ -307,9 +307,10 @@ export class AgentHandlers {
 
   sendCustomAgentDir(webview: vscode.Webview) {
     return Effect.flatMap(
-      buildCustomAgentDirMessage({
-        getCustomDirStatus: () => this.directoryController.getCustomDirStatus(),
-      }),
+      buildCustomAgentDirMessage(
+        this.roots.globalState,
+        agentDirectories.custom(),
+      ),
       (message) => postToWebview(webview, message),
     );
   }
@@ -330,8 +331,8 @@ export class AgentHandlers {
     return withHandlerErrorHandling(
       this.ctx,
       'Failed to reset custom agent directory',
-      this.directoryController
-        .resetCustomDir()
+      this.roots.globalState
+        .update(GlobalStateKey.CUSTOM_AGENT_DIR, undefined)
         .pipe(Effect.andThen(this.refreshAgentDirUI())),
     );
   }
@@ -464,8 +465,7 @@ export class AgentHandlers {
           vscode.window.showInputBox({
             prompt: templateAgentNamePrompt(category),
             placeHolder: 'my_agent',
-            validateInput: (value) =>
-              this.directoryController.validateTemplateName(value),
+            validateInput: validateTemplateAgentName,
           }),
         );
         if (!name) return;
@@ -475,14 +475,8 @@ export class AgentHandlers {
           fs.makeDirectory(customDir, { recursive: true }),
         );
 
-        const templatePlan = this.directoryController.planTemplateAgent({
-          category,
-          name,
-          customDir,
-        });
-
         const written = yield* writeTemplateAgentFile(
-          templatePlan,
+          { category, name, customDir },
           path.join(this.ctx.extensionContext.extensionPath, 'resources'),
         );
         if (!written.ok) {
@@ -495,7 +489,7 @@ export class AgentHandlers {
         yield* Effect.tryPromise({
           try: async () => {
             const doc = await vscode.workspace.openTextDocument(
-              vscode.Uri.file(templatePlan.filePath),
+              vscode.Uri.file(written.filePath),
             );
             await vscode.window.showTextDocument(doc);
           },

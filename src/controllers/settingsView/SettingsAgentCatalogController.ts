@@ -2,7 +2,7 @@
 import { Effect } from 'effect';
 
 // Local imports
-import type { InvalidAgentTeamError } from '@agent/roster/AgentRosterController';
+import type { AgentRosterController } from '@agent/roster/AgentRosterController';
 import { TeamCatalogPortFailed } from '@common/teams/TeamAvailabilityPreflight';
 import {
   findTeamPreset,
@@ -15,7 +15,8 @@ import {
   type TeamRosterCatalog,
   type TeamRosterPresetResolution,
 } from '@common/teams/TeamRoster';
-import type { StateWriteFailed, StateReadFailed } from '@platform/interfaces';
+import type { StateStore } from '@platform/interfaces';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
   AGENT_CATEGORIES,
   AGENT_MODE_PRESETS_BY_ID,
@@ -44,41 +45,10 @@ interface SettingsAgentCatalogEntry {
   tools?: string[];
 }
 
-export interface SettingsAgentCatalogState {
-  getEnabledAgentKeys(
-    category: AgentCategory,
-  ): Effect.Effect<string[] | undefined, StateReadFailed>;
-  setEnabledAgentKeys(
-    category: AgentCategory,
-    enabledKeys: string[],
-  ): Effect.Effect<void, StateWriteFailed | StateReadFailed>;
-  /**
-   * The roster refuses an unknown team in its own right, so the port carries
-   * that failure beside the write's: `commitPreset` below maps every error it
-   * receives into `TeamCatalogPortFailed`, so nothing re-tags it here.
-   */
-  setTeamRoster(
-    preset: AgentModePreset,
-  ): Effect.Effect<
-    void,
-    StateWriteFailed | StateReadFailed | InvalidAgentTeamError
-  >;
-  getAgents(category: AgentCategory): SettingsAgentCatalogEntry[];
-  getVisibleAgents(
-    category: AgentCategory,
-  ): Effect.Effect<SettingsAgentCatalogEntry[], StateReadFailed>;
-  getCustomPresetsRaw(): Effect.Effect<unknown, StateReadFailed>;
-  setCustomPresets(
-    presets: unknown[],
-  ): Effect.Effect<void, StateWriteFailed | StateReadFailed>;
-  removeCustomPreset(
-    presetId: string,
-    remaining: unknown[],
-  ): Effect.Effect<void, StateWriteFailed | StateReadFailed>;
-}
-
 interface SettingsAgentCatalogControllerDeps {
-  state: SettingsAgentCatalogState;
+  workspaceState: StateStore;
+  roster: AgentRosterController<SettingsAgentCatalogEntry>;
+  getAgents(category: AgentCategory): SettingsAgentCatalogEntry[];
   now?: () => number;
 }
 
@@ -96,7 +66,10 @@ export class SettingsAgentCatalogController implements TeamRosterCatalog {
   getCustomPresets() {
     return Effect.gen({ self: this }, function* () {
       return parseAgentModePresets(
-        yield* this.deps.state.getCustomPresetsRaw(),
+        yield* this.deps.workspaceState.get<unknown>(
+          WorkspaceStateKey.CUSTOM_AGENT_PRESETS,
+          [],
+        ),
       );
     });
   }
@@ -104,7 +77,10 @@ export class SettingsAgentCatalogController implements TeamRosterCatalog {
   /** Returns raw records so catalog writes preserve unparsed data. */
   private getCustomPresetRecords() {
     return Effect.gen({ self: this }, function* () {
-      const raw = yield* this.deps.state.getCustomPresetsRaw();
+      const raw = yield* this.deps.workspaceState.get<unknown>(
+        WorkspaceStateKey.CUSTOM_AGENT_PRESETS,
+        [],
+      );
       return Array.isArray(raw) ? raw : [];
     });
   }
@@ -121,7 +97,7 @@ export class SettingsAgentCatalogController implements TeamRosterCatalog {
 
   getOrchestratorAgentNames(): string[] {
     const names = new Set<string>(BUILTIN_TEAM_ROOT_AGENT_NAMES);
-    for (const agent of this.deps.state.getAgents('toolUse')) {
+    for (const agent of this.deps.getAgents('toolUse')) {
       if (hasDelegationTool(agent.tools)) names.add(agent.name);
     }
     return [...names].sort();
@@ -147,7 +123,12 @@ export class SettingsAgentCatalogController implements TeamRosterCatalog {
     return Effect.gen({ self: this }, function* () {
       const knownPreset = presetId
         ? findTeamPreset(
-            teamPresets(yield* this.deps.state.getCustomPresetsRaw()),
+            teamPresets(
+              yield* this.deps.workspaceState.get<unknown>(
+                WorkspaceStateKey.CUSTOM_AGENT_PRESETS,
+                [],
+              ),
+            ),
             presetId,
           )
         : undefined;
@@ -160,7 +141,7 @@ export class SettingsAgentCatalogController implements TeamRosterCatalog {
         texraHostedAgents: [],
         source: 'custom',
       };
-      const catalogAgents = this.deps.state.getAgents('toolUse');
+      const catalogAgents = this.deps.getAgents('toolUse');
       return planTeamRun(preset, {
         agents: {
           workflow: [],
@@ -186,7 +167,7 @@ export class SettingsAgentCatalogController implements TeamRosterCatalog {
       return {
         ok: true as const,
         preset,
-        resolution: resolveTeamRoster(this.deps.state, preset),
+        resolution: resolveTeamRoster(this.deps, preset),
       };
     });
   }
@@ -195,7 +176,7 @@ export class SettingsAgentCatalogController implements TeamRosterCatalog {
   commitPreset(
     preset: AgentModePreset,
   ): Effect.Effect<void, TeamCatalogPortFailed> {
-    return this.deps.state.setTeamRoster(preset).pipe(
+    return this.deps.roster.setTeam(preset.id).pipe(
       Effect.mapError(
         (cause) =>
           new TeamCatalogPortFailed({
@@ -211,7 +192,7 @@ export class SettingsAgentCatalogController implements TeamRosterCatalog {
     return Effect.gen({ self: this }, function* () {
       const trimmedName = name.trim();
       const visible = yield* Effect.all(
-        byCategory((category) => this.deps.state.getVisibleAgents(category)),
+        byCategory((category) => this.deps.roster.getVisibleAgents(category)),
       );
       const agents = byCategory((category) =>
         visible[category].map((entry) => entry.name),
@@ -229,8 +210,11 @@ export class SettingsAgentCatalogController implements TeamRosterCatalog {
         ),
       };
 
-      return yield* this.deps.state
-        .setCustomPresets([...(yield* this.getCustomPresetRecords()), preset])
+      return yield* this.deps.workspaceState
+        .update(WorkspaceStateKey.CUSTOM_AGENT_PRESETS, [
+          ...(yield* this.getCustomPresetRecords()),
+          preset,
+        ])
         .pipe(Effect.as(preset));
     });
   }
@@ -242,11 +226,13 @@ export class SettingsAgentCatalogController implements TeamRosterCatalog {
       const target = presets.find((preset) => preset.id === presetId);
       if (!target) return null;
 
-      return yield* this.deps.state
-        .removeCustomPreset(
-          presetId,
-          records.filter(
-            (record) => !isObject(record) || record.id !== presetId,
+      return yield* this.deps.roster
+        .removeTeamPreset(presetId, () =>
+          this.deps.workspaceState.update(
+            WorkspaceStateKey.CUSTOM_AGENT_PRESETS,
+            records.filter(
+              (record) => !isObject(record) || record.id !== presetId,
+            ),
           ),
         )
         .pipe(Effect.as(target));
@@ -266,7 +252,7 @@ export class SettingsAgentCatalogController implements TeamRosterCatalog {
     enabled: boolean;
   }) {
     return Effect.gen({ self: this }, function* () {
-      const allAgents = this.deps.state.getAgents(input.category);
+      const allAgents = this.deps.getAgents(input.category);
       const targetKeys = new Set(
         allAgents
           .filter((entry) => entry.source === input.source)
@@ -274,7 +260,7 @@ export class SettingsAgentCatalogController implements TeamRosterCatalog {
       );
 
       const current =
-        (yield* this.deps.state.getEnabledAgentKeys(input.category)) ??
+        (yield* this.deps.roster.getEnabledAgentKeys(input.category)) ??
         allAgents.map((entry) => agentKeyOf(entry));
 
       const updated = input.enabled
@@ -287,7 +273,7 @@ export class SettingsAgentCatalogController implements TeamRosterCatalog {
       ) {
         return;
       }
-      return yield* this.deps.state.setEnabledAgentKeys(
+      return yield* this.deps.roster.setEnabledAgentKeys(
         input.category,
         updated,
       );
@@ -296,8 +282,8 @@ export class SettingsAgentCatalogController implements TeamRosterCatalog {
 
   private buildCategorySelectionItems(category: AgentCategory) {
     return Effect.gen({ self: this }, function* () {
-      const enabledKeys = yield* this.deps.state.getEnabledAgentKeys(category);
-      return this.deps.state
+      const enabledKeys = yield* this.deps.roster.getEnabledAgentKeys(category);
+      return this.deps
         .getAgents(category)
         .map((entry) => this.toSelectionItem(entry, enabledKeys))
         .sort(byName);

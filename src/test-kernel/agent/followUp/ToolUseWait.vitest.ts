@@ -285,6 +285,7 @@ function agentRunTestLayer(init: LoopInit) {
             runId: init.runId,
             runStageId: undefined,
             config: testWorkspaceRoots().config,
+            usageLog: { log: () => {} },
           },
           { agentName: 'chat', agentCategory: AgentCategory.ToolUse },
         ),

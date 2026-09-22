@@ -16,7 +16,7 @@ import type {
 import type { RunId, SessionEventDraft, RunPhase } from '@shared/schemas';
 import type { RunView } from '@shared/session/sessionView';
 import type { Effect } from 'effect';
-import type { LiveToolUseFlowContext } from './RunHandle';
+import type { LiveToolUseFlowContext, RunParent } from './RunHandle';
 
 /**
  * Child policy shared by `kill()` and `stopAgentRun()`. The caller owns the
@@ -53,10 +53,8 @@ export interface RunStopOptions {
  */
 export interface ChildRunActivation {
   readonly runId: RunId;
-  readonly parentRunId: RunId;
+  parent: RunParent;
   readonly interrupt: () => void;
-  readonly detach: () => void;
-  readonly isDetached: () => boolean;
 }
 
 /**

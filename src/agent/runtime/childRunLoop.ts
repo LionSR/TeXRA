@@ -865,17 +865,15 @@ export function startChildRunLoop<TTurn, R = never>(
     );
     // Retain native lineage through launch and final delivery, outside the
     // engine handle's lifetime. Process children have their stream already.
-    let activationDetached = false;
+    const parent = runs.getHandle(runId)?.parentState ?? {
+      current: parentRunId,
+    };
     const releaseChildActivation = childRun
       ? () => undefined
       : runs.reserveChildActivation({
           runId,
-          parentRunId,
+          parent,
           interrupt: () => loop.interrupt(),
-          detach: () => {
-            activationDetached = true;
-          },
-          isDetached: () => activationDetached,
         });
     let sessionOwnershipReleased = false;
     const releaseSessionOwnershipOnce = (): void => {
@@ -978,9 +976,6 @@ export function startChildRunLoop<TTurn, R = never>(
     }
 
     const attemptId = randomUUID();
-    // The handle retains live detachment through finalization and delivery.
-    const childRunHandle = childRun ? runs.getHandle(runId) : undefined;
-
     let bestCostUsd: number | undefined;
     // Progress reaches the parent as queued follow-ups. The port is
     // synchronous, so it admits each one where it is reported (the target and
@@ -996,10 +991,11 @@ export function startChildRunLoop<TTurn, R = never>(
           params.notify(update);
           return;
         }
-        if (strategy.deliveryMode === 'persistOnly' || activationDetached)
+        if (strategy.deliveryMode === 'persistOnly' || parent.current === null)
           return;
-        const targetRunId = resolveDeliveryTarget(strategy, () =>
-          childRun ? childRunHandle?.deliveryTarget : parentRunId,
+        const targetRunId = resolveDeliveryTarget(
+          strategy,
+          () => parent.current ?? undefined,
         );
         if (!targetRunId) return;
         // The target and the admission are decided where the progress is
@@ -1154,7 +1150,7 @@ export function startChildRunLoop<TTurn, R = never>(
                   strategy,
                   runId,
                   resolveDefaultDeliveryTarget: () =>
-                    childRun ? childRunHandle?.deliveryTarget : parentRunId,
+                    parent.current ?? undefined,
                   logger,
                   turn,
                   turnKey,
@@ -1165,7 +1161,7 @@ export function startChildRunLoop<TTurn, R = never>(
                   finalizing,
                   onTurnSettled: params.onTurnSettled,
                   prepareParentDelivery: () => {
-                    if (activationDetached) return false;
+                    if (!childRun && parent.current === null) return false;
                     if (loop.isInterrupted()) {
                       releaseSessionOwnershipOnce();
                       return strategy.deliverAfterInterrupt === true;

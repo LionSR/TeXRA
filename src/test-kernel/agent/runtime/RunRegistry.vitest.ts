@@ -247,16 +247,11 @@ describe('runRegistry', () => {
         yield* Effect.addFinalizer(() => Effect.sync(() => registry.dispose()));
         const runId = generateRunId();
         const parentRunId = generateRunId();
-        let detached = false;
 
         registry.reserveChildActivation({
           runId,
-          parentRunId,
+          parent: { current: parentRunId },
           interrupt: vi.fn(),
-          detach: () => {
-            detached = true;
-          },
-          isDetached: () => detached,
         });
 
         expect(registry.hasActiveChildren(parentRunId)).toBe(true);
@@ -471,10 +466,8 @@ describe('runRegistry', () => {
     try {
       registry.reserveChildActivation({
         runId: generateRunId(),
-        parentRunId: rootRunId,
+        parent: { current: rootRunId },
         interrupt: queuedChildInterrupt,
-        detach: vi.fn(),
-        isDetached: () => false,
       });
       trackInterruptibleHandle(registry, { runId: rootRunId }, rootInterrupt, {
         agentName: 'test-root',
@@ -721,10 +714,8 @@ describe('runRegistry', () => {
         expect(() =>
           registry.reserveChildActivation({
             runId: lateChildRunId,
-            parentRunId: rootRunId,
+            parent: { current: rootRunId },
             interrupt: vi.fn(),
-            detach: vi.fn(),
-            isDetached: () => false,
           }),
         ).toThrow(/while that run is stopping/);
 
@@ -793,10 +784,8 @@ describe('runRegistry', () => {
           expect(() =>
             registry.reserveChildActivation({
               runId: postFoldChildRunId,
-              parentRunId: rootRunId,
+              parent: { current: rootRunId },
               interrupt: vi.fn(),
-              detach: vi.fn(),
-              isDetached: () => false,
             }),
           ).toThrow(/stop has already folded/);
           expect(registry.getHandle(postFoldChildRunId)).toBeUndefined();
@@ -867,10 +856,8 @@ describe('runRegistry', () => {
         const runId = generateRunId();
         registry.reserveChildActivation({
           runId,
-          parentRunId: generateRunId(),
+          parent: { current: generateRunId() },
           interrupt,
-          detach: vi.fn(),
-          isDetached: () => false,
         });
 
         yield* registry.stopAgentRun(runId);

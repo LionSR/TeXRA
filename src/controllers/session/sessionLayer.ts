@@ -109,6 +109,7 @@ import {
   type GlobalDatabase,
   type SessionOpenError,
 } from '@shared/session/database';
+import type { UsageLog } from '@shared/usageLog';
 import { releaseRunResources } from '@tools/approval';
 import { InlineComments } from '@tools/comment/InlineCommentTool';
 import type { InlineCommentProvider } from '@tools/comment/InlineCommentTool';
@@ -1038,11 +1039,11 @@ interface ProcessRuntimeOptions {
   /**
    * The host's usage log (`usageLogLayer`), stamped with its version and
    * editor. Built with this runtime and drained when it is disposed, so no root
-   * brackets the sender itself; `Layer.empty` reports no usage at all. Passed
+   * brackets the sender itself; `UsageLog.disabled` reports no usage. Passed
    * as a layer for the reason `lean` is: no reach into telemetry from here.
    */
   readonly usageLog: Layer.Layer<
-    never,
+    UsageLog,
     never,
     HttpClient.HttpClient | SupabaseAuth
   >;

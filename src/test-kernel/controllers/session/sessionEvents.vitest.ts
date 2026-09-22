@@ -1083,10 +1083,8 @@ describe('Sessions owner', () => {
         const interrupt = vi.fn(() => releaseChild());
         releaseChild = session.runs.reserveChildActivation({
           runId: RunIdSchema.parse('aa0002'),
-          parentRunId: settled,
+          parent: { current: null },
           interrupt,
-          detach: () => {},
-          isDetached: () => true,
         });
 
         expect(yield* closeSession('/workspace/owner/settled')).toEqual({
