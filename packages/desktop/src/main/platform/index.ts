@@ -182,6 +182,16 @@ export async function initializeElectronPlatform(
   // serves: every project's session graph and Promise-facing fiber runs on
   // it, and the entry disposes it last (`disposeProcessRuntime`), after run
   // settlement and the projects' release of their graphs.
+  const resourcesPath = resolveResourcesPath(mainDirname);
+  const agentDirectories = createPlatformAgentDirectories({
+    channel: 'desktop',
+    // Built-in agents are read straight out of the packaged app bundle;
+    // `resolveResourcesPath` has already asserted both directories exist.
+    resourcesPath,
+    customDirectoryStore: {
+      get: () => globalStateStore.get<string>(GlobalStateKey.CUSTOM_AGENT_DIR),
+    },
+  });
   const setupAuth = createDesktopSetupAuth();
   const runtime = installProcessRuntime({
     processStart: Effect.succeed(processStart),
@@ -192,6 +202,8 @@ export async function initializeElectronPlatform(
     // No editor in this process.
     languageModel: UNAVAILABLE_LANGUAGE_MODEL_PORT,
     agentResume,
+    agentDirectories,
+    lifecycle,
     setup: setupAuth.platform,
     lean: directLeanLanguageServices(),
     // Desktop model traffic goes to the same Supabase usage log the extension
@@ -208,16 +220,6 @@ export async function initializeElectronPlatform(
   });
 
   repairLaunchPath();
-  const resourcesPath = resolveResourcesPath(mainDirname);
-  const agentDirectories = createPlatformAgentDirectories({
-    channel: 'desktop',
-    // Built-in agents are read straight out of the packaged app bundle;
-    // `resolveResourcesPath` has already asserted both directories exist.
-    resourcesPath,
-    customDirectoryStore: {
-      get: () => globalStateStore.get<string>(GlobalStateKey.CUSTOM_AGENT_DIR),
-    },
-  });
   initPlatform({ lifecycle, agentDirectories });
   const processRoots = createNodeWorkspaceRoots({
     workspacePath: undefined,

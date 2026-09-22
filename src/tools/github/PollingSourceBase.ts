@@ -35,8 +35,8 @@ import {
   SHUTDOWN_PHASE,
   type Disposable,
   type LifecycleHost,
+  Lifecycle,
 } from '@platform/interfaces';
-import { platform } from '@platform/platform';
 import type { Secrets } from '@platform/secrets';
 import { jitteredExponentialBackoffMs } from '@utils/core';
 import {
@@ -298,7 +298,7 @@ export abstract class PollingSourceBase<
     key: K,
     initState: () => S,
     onEvent: PollEventListener,
-  ): Effect.Effect<Disposable, never, Secrets> {
+  ): Effect.Effect<Disposable, never, Secrets | Lifecycle> {
     return Effect.suspend(() => {
       let state = this.subscriptions.get(key);
       const created = !state;
@@ -467,6 +467,10 @@ export abstract class PollingSourceBase<
   private notifyKeysChanged(): void {
     const keys = [...this.subscriptions.keys()];
     for (const listener of this.keysChangedListeners) {
+      // Listener fan-out is synchronous bookkeeping on the onKeysChanged/
+      // Disposable contract, invoked outside any fiber. A throwing listener is
+      // logged and the remaining listeners still hear the change: it must not
+      // leak into the subscribe path that called it.
       try {
         listener(keys);
       } catch (err) {
@@ -495,23 +499,25 @@ export abstract class PollingSourceBase<
    * keep a host process alive on its own. Its readings are the ambient
    * clock's, so `Clock.currentTimeMillis` inside a round is unaffected.
    */
-  private ensurePolling(): Effect.Effect<void, never, Secrets> {
-    return Effect.suspend(() => {
-      this.registerShutdownIfNeeded();
-      if (this.pollLoopStop) return Effect.void;
-      const stop = Deferred.makeUnsafe<void>();
-      this.pollLoopStop = stop;
-      return Effect.forkDetach(
-        Effect.raceFirst(this.pollLoopProgram(), Deferred.await(stop)).pipe(
-          Effect.ensuring(
-            Effect.sync(() => {
-              // A stopped loop may finish after a new subscription has started.
-              if (this.pollLoopStop === stop) this.pollLoopStop = undefined;
-            }),
+  private ensurePolling(): Effect.Effect<void, never, Secrets | Lifecycle> {
+    return Effect.flatMap(Lifecycle, (lifecycle) =>
+      Effect.suspend(() => {
+        this.registerShutdownIfNeeded(lifecycle);
+        if (this.pollLoopStop) return Effect.void;
+        const stop = Deferred.makeUnsafe<void>();
+        this.pollLoopStop = stop;
+        return Effect.forkDetach(
+          Effect.raceFirst(this.pollLoopProgram(), Deferred.await(stop)).pipe(
+            Effect.ensuring(
+              Effect.sync(() => {
+                // A stopped loop may finish after a new subscription has started.
+                if (this.pollLoopStop === stop) this.pollLoopStop = undefined;
+              }),
+            ),
           ),
-        ),
-      ).pipe(Effect.asVoid);
-    });
+        ).pipe(Effect.asVoid);
+      }),
+    );
   }
 
   private readonly pollLoopProgram = Effect.fn('PollingSourceBase.pollLoop')(
@@ -560,11 +566,10 @@ export abstract class PollingSourceBase<
   );
 
   /**
-   * Register `disposeAll` with the platform shutdown registry exactly once per
-   * lifecycle instance. Runs on the first subscription, which only happens
-   * after `initPlatform()` in every host — the shared singletons constructed
-   * at module load do nothing until then, so `platform()` throwing here means
-   * a genuine initialization-order defect, not an expected state.
+   * Register `disposeAll` with the process shutdown lifecycle exactly once per
+   * lifecycle instance. Runs on the first subscription; the lifecycle comes
+   * from the process's `Lifecycle` service, so a caller's runtime provides it
+   * rather than this reading the ambient platform locator.
    *
    * Re-checked on every subscribe, so a lifecycle replacement (extension
    * reactivation or test-harness reinstall) is picked up on the next
@@ -572,8 +577,7 @@ export abstract class PollingSourceBase<
    * subsequent subscribe is intentionally not self-healed: no production host
    * installs a new lifecycle while the previous one is still live.
    */
-  private registerShutdownIfNeeded(): void {
-    const lifecycle = platform().lifecycle;
+  private registerShutdownIfNeeded(lifecycle: LifecycleHost): void {
     if (this.shutdownLifecycle === lifecycle) return;
     this.clearShutdownRegistration();
     this.shutdownRegistration = lifecycle.onShutdown(

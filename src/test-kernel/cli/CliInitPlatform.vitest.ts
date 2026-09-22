@@ -4,7 +4,9 @@ import { Effect, Scope } from 'effect';
 import { beforeEach, describe, expect, vi } from 'vitest';
 
 // Local imports
+import { installedProcessRuntime } from '@agent/runtime';
 import { initCliPlatform } from '@cli/runtime/initPlatform';
+import { disposeProcessRuntime } from '@controllers/session/sessionLayer';
 import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
 import { StateWriteFailed } from '@platform/interfaces';
 import { withProcessServices } from '@platform/processRuntime';
@@ -233,6 +235,14 @@ function withFreshSignalCapture<E>(
   });
 }
 
+/** Disposes whichever process runtime an earlier case installed, so the
+ *  CLI init below builds its own runtime (and its own lifecycle/setup) instead
+ *  of joining the test kernel's session-graph runtime. */
+const disposeInstalledRuntime: Effect.Effect<void> = Effect.suspend(() => {
+  const runtime = installedProcessRuntime();
+  return runtime ? disposeProcessRuntime(runtime) : Effect.void;
+});
+
 describe('CLI platform init', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -318,6 +328,7 @@ describe('CLI platform init', () => {
       // session is built after it, not on a runtime an earlier case's shutdown
       // disposed.
       mocks.tryPlatform.mockReturnValueOnce(undefined);
+      yield* disposeInstalledRuntime;
       yield* initCliPlatform(cliContext({ installSignalHandlers: false }));
       const session = createTestSession();
       const interruptCodex = vi
@@ -353,7 +364,9 @@ describe('CLI platform init', () => {
         );
 
         // The runtime this root installed, as it hands it back: the root's own
-        // local, not a process-wide read.
+        // local, not a process-wide read. Disposing the kernel's runtime first
+        // makes this init the one that installs the CLI runtime.
+        yield* disposeInstalledRuntime;
         const { runtime } = yield* initCliPlatform(cliContext());
 
         const setup = yield* withProcessServices(

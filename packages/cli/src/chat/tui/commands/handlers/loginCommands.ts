@@ -29,6 +29,7 @@ import {
 } from '@cli/runtime/supabaseAuth';
 import { formatCliDeviceAuthMessage } from '@cli/runtime/supabaseAuthDeviceCode';
 import type { SubscriptionProviderId } from '@controllers/modelAccess/subscriptionProviders';
+import type { AgentDirectories } from '@platform/interfaces';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { GlobalStorageFs } from '@platform/rootedFs';
 import type { Secrets, PlatformSecrets } from '@platform/secrets';
@@ -191,7 +192,7 @@ const logoutLines = (
 ): Effect.Effect<
   readonly string[],
   never,
-  Secrets | GlobalStorageFs | FileSystem.FileSystem
+  Secrets | GlobalStorageFs | FileSystem.FileSystem | AgentDirectories
 > =>
   Effect.gen(function* () {
     const lines: string[] = [];

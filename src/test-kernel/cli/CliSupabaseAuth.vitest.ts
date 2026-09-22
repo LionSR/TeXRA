@@ -2,6 +2,7 @@
 import { it } from '@effect/vitest';
 import { Effect, Exit, Fiber } from 'effect';
 import { beforeEach, describe, expect, vi } from 'vitest';
+import { AgentDirectories } from '@platform/interfaces';
 import { UpdateCheckRecords } from '@shared/session/updateCheckRecords';
 
 // Local imports
@@ -14,6 +15,7 @@ import {
   globalStorageFsTestLayer,
   nodePlatformLayer,
 } from '@test/support/fsTestUtils';
+import { fakeHostAgentDirectories } from '@test/support/setupPlatform';
 import { gitHubSubscriptionsLayer } from '@tools/github/subscriptionRegistries';
 import {
   LeanLanguageServices,
@@ -298,6 +300,7 @@ describe('CLI Supabase auth', () => {
       yield* signOutCliSupabase().pipe(
         Effect.provide(globalStorageFsTestLayer(globalStorage)),
         Effect.provide(nodePlatformLayer),
+        Effect.provideService(AgentDirectories, fakeHostAgentDirectories),
       );
 
       expect(mocks.authCoordinator.clearSession).toHaveBeenCalledOnce();
@@ -350,6 +353,7 @@ describe('CLI Supabase auth', () => {
         yield* signOutCliSupabase().pipe(
           Effect.provide(globalStorageFsTestLayer(globalStorage)),
           Effect.provide(nodePlatformLayer),
+          Effect.provideService(AgentDirectories, fakeHostAgentDirectories),
         ),
       ).toBeUndefined();
 

@@ -11,6 +11,7 @@ import {
   showLoggedErrorMessage,
   showLoggedMessage,
 } from '@frontend/ui/errorHandlingUtils';
+import type { AgentDirectories } from '@platform/interfaces';
 import type { GlobalStorageFs } from '@platform/rootedFs';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -93,7 +94,7 @@ const showSignedInMessage = (
 export const signIn: Effect.Effect<
   boolean,
   never,
-  GlobalStorageFs | SupabaseAuth | FileSystem.FileSystem
+  GlobalStorageFs | SupabaseAuth | FileSystem.FileSystem | AgentDirectories
 > = Effect.gen(function* () {
   // Check if auth system is ready - if not, provide clear error with reason
   const auth = yield* SupabaseAuth;
@@ -191,7 +192,7 @@ export const signIn: Effect.Effect<
 export const signOut: Effect.Effect<
   void,
   never,
-  GlobalStorageFs | SupabaseAuth | FileSystem.FileSystem
+  GlobalStorageFs | SupabaseAuth | FileSystem.FileSystem | AgentDirectories
 > = Effect.gen(function* () {
   const auth = yield* SupabaseAuth;
   const storedSessionState = yield* auth.storedSessionState;

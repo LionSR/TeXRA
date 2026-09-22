@@ -21,6 +21,7 @@ import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { registerAgentDirectoryRoots } from '@frontend/setup';
 import * as logger from '@logger/logUtils';
 import {
+  AgentDirectories,
   AgentDirectoriesFailed,
   type AgentDirectoriesPort,
 } from '@platform/interfaces';
@@ -42,11 +43,19 @@ import type * as vscode from 'vscode';
  * reads the view the readers name in their requirements.
  */
 function onGlobalStorage<A, E>(
-  program: Effect.Effect<A, E, GlobalStorageFs | FileSystem.FileSystem>,
+  program: Effect.Effect<
+    A,
+    E,
+    GlobalStorageFs | FileSystem.FileSystem | AgentDirectories
+  >,
 ): Effect.Effect<A, E> {
   return Effect.provide(
     program,
-    Layer.merge(unusedGlobalStorageFs(), nodePlatformLayer),
+    Layer.mergeAll(
+      unusedGlobalStorageFs(),
+      nodePlatformLayer,
+      AgentDirectories.layer(mutableAgentDirectories),
+    ),
   );
 }
 

@@ -191,6 +191,8 @@ export function composeProcess(platform: AgentPlatform): ProcessHold {
     auth: unavailableSupabaseAuth(),
     languageModel: platform.languageModel,
     agentResume: platform.agentResume,
+    agentDirectories: platform.agentDirectories,
+    lifecycle: platform.lifecycle,
     setup: PACKAGE_SETUP,
   };
   // The owner carries the runtime it runs on, so a composition beside a host

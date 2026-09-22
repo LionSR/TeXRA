@@ -47,6 +47,7 @@
 import { Effect, Layer } from 'effect';
 
 import { installedProcessRuntime } from '@agent/runtime';
+import { createPlatformAgentDirectories } from '@agent/index';
 import { SignInFailed } from '@common/errors/signInFailed';
 import { openAppStateStore } from '@controllers/session/appStateStore';
 import { globalDatabaseLayer } from '@controllers/session/Database';
@@ -55,6 +56,7 @@ import {
   installProcessRuntime,
 } from '@controllers/session/sessionLayer';
 import { StateWriteFailed, type StateStore } from '@platform/interfaces';
+import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { UNAVAILABLE_LANGUAGE_MODEL_PORT } from '@platform/languageModel';
 import {
   withProcessServices,
@@ -71,7 +73,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { readCliVersion } from './cliContext';
 import { getCliSecrets } from './cliSecrets';
-import { setCliLogRuntime } from './logSinks';
+import { setCliLogRuntime, writeTextStderr } from './logSinks';
 import { cliAgentResume } from './cliAgentResume';
 import { ensureCliSupabaseAuth, signInCliSupabase } from './supabaseAuth';
 
@@ -142,8 +144,13 @@ const refusingGlobalDatabase: Layer.Layer<GlobalDatabase> = Layer.succeed(
  * otherwise open for it.
  */
 interface CliProcessRuntimeInstall {
-  readonly appState: StateStore;
-  readonly globalDatabase: Layer.Layer<GlobalDatabase>;
+  readonly appState?: StateStore;
+  readonly globalDatabase?: Layer.Layer<GlobalDatabase>;
+  /**
+   * The packaged resources root the CLI's built-in agent directories resolve
+   * against. Absent only for the platform-less entries, which load no agents.
+   */
+  readonly resourcesPath?: string;
 }
 
 /**
@@ -229,6 +236,24 @@ export function installCliProcessRuntime(
     // sign-in surfaces settle it through the auth run edge, which
     // `initializeCliSupabaseAuth` installs over this runtime.
     const auth = ensureCliSupabaseAuth(secrets);
+    // The process lifecycle and agent directories are process services the
+    // runtime serves, so both are built here, before the install, rather than
+    // in the platform init that may join an already-installed runtime. The
+    // built-in agent directories read straight out of the CLI package's
+    // `dist/resources`; the platform-less entries pass no resources root and
+    // load no agents.
+    const lifecycle = createLifecycleHost({
+      onError: (phase, error) => {
+        writeTextStderr(
+          `[error] [cli.lifecycle] Lifecycle ${phase} handler failed: ${toErrorMessage(error)}`,
+        );
+      },
+    });
+    const agentDirectories = createPlatformAgentDirectories({
+      channel: 'cli',
+      resourcesPath: options?.resourcesPath ?? '',
+      customDirectoryStore: { get: () => undefined },
+    });
     const runtime: ProcessRuntime = installProcessRuntime({
       processStart: Effect.succeed(processStart),
       globalStorage: globalStoragePath,
@@ -242,6 +267,8 @@ export function installCliProcessRuntime(
       // wires: it forwards to the chat TUI's handler whenever one is
       // mounted, whichever entry installed this runtime.
       agentResume: cliAgentResume,
+      agentDirectories,
+      lifecycle,
       setup: {
         host: 'cli',
         // The one closure left over the runtime being installed, and a real

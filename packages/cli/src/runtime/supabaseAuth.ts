@@ -19,6 +19,7 @@ import {
   memoryPendingOAuthSlots,
   PendingOAuthStore,
 } from '@controllers/auth/pendingOAuthStore';
+import type { AgentDirectories } from '@platform/interfaces';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { GlobalStorageFs } from '@platform/rootedFs';
 import type { PlatformSecrets } from '@platform/secrets';
@@ -227,7 +228,7 @@ export const signInCliSupabaseDeviceCode = Effect.fn(
 export function signOutCliSupabase(): Effect.Effect<
   void,
   Error,
-  GlobalStorageFs | FileSystem.FileSystem
+  GlobalStorageFs | FileSystem.FileSystem | AgentDirectories
 > {
   return Effect.gen(function* () {
     const authCoordinator = yield* Effect.try({

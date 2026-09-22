@@ -49,6 +49,7 @@ import type { AgentFlowResult } from '@agent/runtime/AgentFlowResult';
 // The composition root supplies its existing scoped services privately;
 // public Session capabilities carry no process implementation types.
 import { createLog } from '@logger/logUtils';
+import type { AgentDirectories } from '@platform/interfaces';
 import type { ProcessServices } from '@platform/processRuntime';
 import type { GlobalStorageFs } from '@platform/rootedFs';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
@@ -173,7 +174,7 @@ function admitInput(
 ): Effect.Effect<
   ReturnType<typeof AgentConfigSchema.parse>,
   LaunchError | RunFailure,
-  GlobalStorageFs | FileSystem.FileSystem
+  GlobalStorageFs | FileSystem.FileSystem | AgentDirectories
 > {
   return Effect.gen(function* () {
     const tools = input.tools ?? [];

@@ -74,7 +74,11 @@ import {
   modelOptionsFrom,
   readModelAvailabilityInputs,
 } from '@model/computeModelOptions';
-import type { StateStore, StateWriteFailed } from '@platform/interfaces';
+import type {
+  AgentDirectories,
+  StateStore,
+  StateWriteFailed,
+} from '@platform/interfaces';
 import type { LanguageModel } from '@platform/languageModel';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import {
@@ -437,7 +441,7 @@ export function createExtensionHostRequests(
   ): Effect.Effect<
     void,
     HostCallFailed | RequestRefusal,
-    GlobalStorageFs | FileSystem.FileSystem
+    GlobalStorageFs | FileSystem.FileSystem | AgentDirectories
   > {
     return Effect.gen(function* () {
       const { launch: form } = request;

@@ -59,6 +59,7 @@ import {
 // Local imports - shared/runtime boundaries
 import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import {
+  AgentDirectories,
   AgentResume,
   AgentResumeFailed,
   type RecoveryContinuation,
@@ -80,6 +81,7 @@ import {
   useTempDirs,
 } from '@test/support/tempDirPlatform';
 import {
+  fakeHostAgentDirectories,
   fakeHostAgentResume,
   setupPlatform,
   type FakeHost,
@@ -558,7 +560,11 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
     await Effect.runPromise(
       Effect.provide(
         refresh({ includeRemote: false }),
-        Layer.merge(unusedGlobalStorageFs(), nodePlatformLayer),
+        Layer.mergeAll(
+          unusedGlobalStorageFs(),
+          nodePlatformLayer,
+          AgentDirectories.layer(fakeHostAgentDirectories),
+        ),
       ),
     );
     // The process session over a persistent store: one session per root,

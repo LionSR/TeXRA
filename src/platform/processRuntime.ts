@@ -29,7 +29,12 @@ import type { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import type { SetupPlatform } from '@tools/setup/platform';
 import type { HttpClient } from 'effect/unstable/http';
 
-import type { AgentResume, AppState } from './interfaces';
+import type {
+  AgentDirectories,
+  AgentResume,
+  AppState,
+  Lifecycle,
+} from './interfaces';
 import type { LanguageModel } from './languageModel';
 import type { GlobalStorageFs } from './rootedFs';
 import type { Secrets } from './secrets';
@@ -60,6 +65,8 @@ export type ProcessServices =
   | AppState
   | LanguageModel
   | AgentResume
+  | AgentDirectories
+  | Lifecycle
   | SetupPlatform
   | ToolInjections
   | LeanLanguageServices

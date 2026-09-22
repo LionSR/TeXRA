@@ -20,7 +20,11 @@ import {
   modelOptionsFrom,
   readModelAvailabilityInputs,
 } from '@model/computeModelOptions';
-import type { StateStore, StateWriteFailed } from '@platform/interfaces';
+import type {
+  AgentDirectories,
+  StateStore,
+  StateWriteFailed,
+} from '@platform/interfaces';
 import type { LanguageModel } from '@platform/languageModel';
 import type { GlobalStorageFs } from '@platform/rootedFs';
 import type { PlatformSecrets } from '@platform/secrets';
@@ -103,14 +107,18 @@ export interface HostSnapshotSource {
   readonly refresh: Effect.Effect<
     void,
     never,
-    GlobalStorageFs | LanguageModel | SupabaseAuth | FileSystem.FileSystem
+    | GlobalStorageFs
+    | LanguageModel
+    | SupabaseAuth
+    | FileSystem.FileSystem
+    | AgentDirectories
   >;
   /** The agent, team, and model catalogs changed (a roster edit, a
    *  credential, a sign-in). */
   readonly refreshCatalogs: Effect.Effect<
     void,
     never,
-    GlobalStorageFs | LanguageModel | FileSystem.FileSystem
+    GlobalStorageFs | LanguageModel | FileSystem.FileSystem | AgentDirectories
   >;
   /** The project's files changed on disk, or the surface asked for a relist. */
   readonly refreshFiles: Effect.Effect<void, never, FileSystem.FileSystem>;
@@ -271,10 +279,14 @@ export function createHostSnapshotSource(
 
   return {
     refresh: guarded<
-      GlobalStorageFs | LanguageModel | SupabaseAuth | FileSystem.FileSystem
+      | GlobalStorageFs
+      | LanguageModel
+      | SupabaseAuth
+      | FileSystem.FileSystem
+      | AgentDirectories
     >(...catalogLoads, loadFiles, loadCommits, loadAuth, loadHostBanners),
     refreshCatalogs: guarded<
-      GlobalStorageFs | LanguageModel | FileSystem.FileSystem
+      GlobalStorageFs | LanguageModel | FileSystem.FileSystem | AgentDirectories
     >(...catalogLoads),
     refreshFiles: guarded(loadFiles),
     refreshCommits: guarded(loadCommits),

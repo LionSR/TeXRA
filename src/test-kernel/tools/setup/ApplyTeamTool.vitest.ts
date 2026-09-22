@@ -8,12 +8,14 @@ import { afterEach, beforeAll, beforeEach, describe, expect, vi } from 'vitest';
 
 // Local imports
 import { refresh } from '@agent/index/agentRegistry';
+import { AgentDirectories } from '@platform/interfaces';
 import type { AgentRosterSelection } from '@shared/schemas';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { getDefaultTeamId } from '@shared/state/onboardingState';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { fakeSupabaseAuth } from '@test/support/fakeSupabaseAuth';
 import {
+  fakeHostAgentDirectories,
   hostStores,
   installHostAuth,
   installPlatform,
@@ -102,7 +104,11 @@ beforeAll(async () => {
   await Effect.runPromise(
     Effect.provide(
       refresh({ includeRemote: false }),
-      Layer.merge(unusedGlobalStorageFs(), nodePlatformLayer),
+      Layer.mergeAll(
+        unusedGlobalStorageFs(),
+        nodePlatformLayer,
+        AgentDirectories.layer(fakeHostAgentDirectories),
+      ),
     ),
   );
 });

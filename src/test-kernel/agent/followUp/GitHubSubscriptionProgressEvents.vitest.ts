@@ -20,11 +20,12 @@ import {
   type AppSignal,
   type AppSignalPayloads,
 } from '@eventBus/AppSignals';
-import { AgentResume } from '@platform/interfaces';
+import { AgentResume, Lifecycle } from '@platform/interfaces';
 import { Secrets } from '@platform/secrets';
 import type { RunId } from '@shared/schemas';
 import {
   fakeHostAgentResume,
+  fakeHostLifecycle,
   fakeHostSecrets,
 } from '@test/support/setupPlatform';
 import { testRuntime } from '@test/support/testProcessRuntime';
@@ -203,6 +204,7 @@ describe('GitHub subscription app signals and follow-ups', () => {
         .pipe(
           Effect.provideService(Secrets, fakeHostSecrets),
           Effect.provideService(AgentResume, fakeHostAgentResume),
+          Effect.provideService(Lifecycle, fakeHostLifecycle),
         );
       // Delivery runs on the subscriber's fiber, so each publication lands a
       // turn after the call that made it.
@@ -272,6 +274,7 @@ describe('GitHub subscription app signals and follow-ups', () => {
           .pipe(
             Effect.provideService(Secrets, fakeHostSecrets),
             Effect.provideService(AgentResume, fakeHostAgentResume),
+            Effect.provideService(Lifecycle, fakeHostLifecycle),
           );
 
         yield* Effect.promise(() =>
@@ -305,12 +308,14 @@ describe('GitHub subscription app signals and follow-ups', () => {
           .pipe(
             Effect.provideService(Secrets, fakeHostSecrets),
             Effect.provideService(AgentResume, fakeHostAgentResume),
+            Effect.provideService(Lifecycle, fakeHostLifecycle),
           );
         yield* registry
           .bind(runId, 'owner/repo', secondSession)
           .pipe(
             Effect.provideService(Secrets, fakeHostSecrets),
             Effect.provideService(AgentResume, fakeHostAgentResume),
+            Effect.provideService(Lifecycle, fakeHostLifecycle),
           );
 
         yield* Effect.promise(() =>
@@ -354,6 +359,7 @@ describe('GitHub subscription app signals and follow-ups', () => {
           .pipe(
             Effect.provideService(Secrets, fakeHostSecrets),
             Effect.provideService(AgentResume, fakeHostAgentResume),
+            Effect.provideService(Lifecycle, fakeHostLifecycle),
           );
 
         // emit() awaits the delivery program, so the recovery has run by the

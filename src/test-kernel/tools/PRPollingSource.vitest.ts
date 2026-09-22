@@ -4,10 +4,12 @@ import { Effect } from 'effect';
 import { beforeEach, describe, expect, vi } from 'vitest';
 
 // Local imports - platform
+import { Lifecycle } from '@platform/interfaces';
 import { Secrets } from '@platform/secrets';
 
 // Local imports - test support
 import { FakeSecrets } from '@test/support/FakePlatform';
+import { fakeHostLifecycle } from '@test/support/setupPlatform';
 
 // Local imports - tools
 import { DEFAULT_CHECK_ANNOTATION_LEVEL } from '@tools/github/checkAnnotationLevels';
@@ -233,7 +235,9 @@ describe('PRPollingSource annotation drain', () => {
       const listener = vi.fn<(text: string) => Effect.Effect<void>>(
         () => Effect.void,
       );
-      const disposable = yield* source.subscribe(pr, listener);
+      const disposable = yield* source
+        .subscribe(pr, listener)
+        .pipe(Effect.provideService(Lifecycle, fakeHostLifecycle));
       const key = prKeyToString(pr);
       const state = drainAccess(source).getSubscriptionState(key);
       if (!state) throw new Error('Expected subscription state');

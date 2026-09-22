@@ -13,7 +13,7 @@
 
 import { Cause, Clock, Effect } from 'effect';
 
-import type { Disposable } from '@platform/interfaces';
+import type { Disposable, Lifecycle } from '@platform/interfaces';
 import type { Secrets } from '@platform/secrets';
 import { shouldDropBotEvent } from './botFilter';
 import {
@@ -221,7 +221,7 @@ export class PRPollingSource extends PollingSourceBase<
   subscribe(
     input: PRSubscribeInput,
     onEvent: PollEventListener,
-  ): Effect.Effect<Disposable, never, Secrets> {
+  ): Effect.Effect<Disposable, never, Secrets | Lifecycle> {
     const key = prKeyToString(input);
     return this.register(key, () => createInitialState(input), onEvent).pipe(
       Effect.map((disposable) => {
