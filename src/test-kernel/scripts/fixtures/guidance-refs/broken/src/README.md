@@ -17,3 +17,5 @@ Read the [missing reference][target].
 [collapsed][]
 
 [collapsed]: collapsed.md
+
+The row `run.neverWasARow` is not in the vocabulary.

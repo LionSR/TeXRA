@@ -182,7 +182,7 @@ const KIND_TEXT = {
   discarded:
     'an Effect as an expression statement: nothing executes it — the work is silently dropped',
   thunk:
-    "an Effect returned from the thunk of Effect.tryPromise/Effect.promise: the adapter awaits the thunk's Promise, not the inner Effect, which is never executed",
+    "an Effect produced by the thunk of Effect.tryPromise/Effect.promise: the adapter awaits the thunk's Promise, not the inner Effect, which is never executed",
 };
 
 /**

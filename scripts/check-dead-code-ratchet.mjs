@@ -26,14 +26,20 @@ const baselinePath = path.join(
   'knip-baseline.json',
 );
 
+import { aliases } from './aliases.mjs';
 import {
   classifyFindings,
   countByCategory,
   diffFindings,
+  DYNAMIC_MODULE_LOADER,
   extractFindings,
+  parseDynamicModuleSpecifiers,
+  partitionDynamicConsumers,
   parseKnipIssues,
   readBaseline,
+  suiteReferences,
 } from './check-dead-code-ratchet-core.mjs';
+import { walkFiles } from './walkFiles.mjs';
 
 function runKnip({ production = false } = {}) {
   const knipBin = path.join(rootDir, 'node_modules', '.bin', 'knip');
@@ -64,6 +70,62 @@ function runKnip({ production = false } = {}) {
   return parseKnipIssues(result.stdout, result.stderr);
 }
 
+function toRepoPath(absolutePath) {
+  return path.relative(rootDir, absolutePath).replaceAll(path.sep, '/');
+}
+
+// Maps each module the computed-URL loader can serve to the sources of the
+// kernel suites that load it. Every step is loud on absence: the loader, its
+// declared modules and the suites that use it are all real files, and a rename
+// that quietly emptied this map would hand back the false findings it exists
+// to remove.
+function dynamicTestConsumers() {
+  const loaderPath = path.join(rootDir, DYNAMIC_MODULE_LOADER);
+  if (!existsSync(loaderPath)) {
+    throw new Error(
+      `${DYNAMIC_MODULE_LOADER} not found. Its consumers are invisible to knip, so this ratchet resolves them by hand; point the constant at the loader's new home.`,
+    );
+  }
+  const specifiers = parseDynamicModuleSpecifiers(
+    readFileSync(loaderPath, 'utf8'),
+  );
+  // The text filter only narrows what is worth parsing; which specifiers a
+  // suite loads is decided by the parse below, so a suite that merely names
+  // the loader in prose contributes nothing.
+  const suites = walkFiles(path.join(rootDir, 'src', 'test-kernel'), {
+    include: (relativePath) => relativePath.endsWith('.vitest.ts'),
+  })
+    .map(({ absolutePath }) => readFileSync(absolutePath, 'utf8'))
+    .filter((source) => source.includes('loadSourceModule'))
+    .map((source) => suiteReferences(source));
+
+  const consumers = new Map();
+  for (const specifier of specifiers) {
+    const [alias, ...segments] = specifier.split('/');
+    const aliasRoot = aliases[alias];
+    if (aliasRoot === undefined) {
+      throw new Error(
+        `${DYNAMIC_MODULE_LOADER} declares "${specifier}", whose alias "${alias}" is not in tsconfig.json's paths.`,
+      );
+    }
+    const modulePath = `${path.join(aliasRoot, ...segments)}.ts`;
+    if (!existsSync(modulePath)) {
+      throw new Error(
+        `${DYNAMIC_MODULE_LOADER} declares "${specifier}", which resolves to ${toRepoPath(modulePath)} — a file that does not exist.`,
+      );
+    }
+    const referenced = new Set();
+    for (const suite of suites) {
+      if (!suite.loads.has(specifier)) continue;
+      for (const name of suite.identifiers) referenced.add(name);
+    }
+    if (referenced.size > 0) {
+      consumers.set(toRepoPath(modulePath), referenced);
+    }
+  }
+  return consumers;
+}
+
 function findStrayBuildArtifacts(findings) {
   const artifacts = new Map();
   for (const finding of findings) {
@@ -89,8 +151,17 @@ function main() {
     readFileSync(baselinePath, 'utf8'),
     baselinePath,
   );
-  const normalFindings = extractFindings(runKnip());
-  const productionFindings = extractFindings(runKnip({ production: true }));
+  const consumers = dynamicTestConsumers();
+  const dynamic = [];
+  const withoutDynamicConsumers = (findings) => {
+    const { kept, suppressed } = partitionDynamicConsumers(findings, consumers);
+    dynamic.push(...suppressed);
+    return kept;
+  };
+  const normalFindings = withoutDynamicConsumers(extractFindings(runKnip()));
+  const productionFindings = withoutDynamicConsumers(
+    extractFindings(runKnip({ production: true })),
+  );
   const strayArtifacts = findStrayBuildArtifacts([
     ...normalFindings,
     ...productionFindings,
@@ -117,6 +188,18 @@ function main() {
       `${current.length} combined (unused=${counts.unused ?? 0}, ` +
       `productionDead=${counts['production-dead'] ?? 0}) vs ${baseline.length} baselined`,
   );
+  if (dynamic.length > 0) {
+    const names = [
+      ...new Set(dynamic.map((finding) => `${finding.file}: ${finding.name}`)),
+    ].toSorted();
+    console.log(
+      `\n${names.length} finding(s) are not dead: a kernel suite consumes them through ${DYNAMIC_MODULE_LOADER}, ` +
+        'whose computed file:// URL knip cannot follow. Deleting one breaks that suite.',
+    );
+    for (const name of names) {
+      console.log(`  - ${name}`);
+    }
+  }
 
   if (newFindings.length > 0) {
     console.error(

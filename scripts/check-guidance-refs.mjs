@@ -174,9 +174,18 @@ const EVENT_NAMESPACES = new Set(
     .map((type) => type.split('.')[0]),
 );
 const EVENT_TYPE_SHAPE = /^[a-z][a-z0-9]*(?:\.[a-z][a-zA-Z0-9]*)+$/u;
+// A bare filename whose stem is a namespace (`run.ts`, `context.ts`, `flow.md`)
+// has the same shape as a citation, and reporting it as an unknown event type
+// is a wrong message about a token that is really a path or prose (#12900). No
+// arm of the vocabulary ends in a source extension, and a token that IS a
+// declared arm is admitted before the test runs, so the filter cannot hide one.
+const FILE_EXTENSION =
+  /\.(?:ts|tsx|mts|cts|js|jsx|mjs|cjs|md|json|ya?ml|css|html|sh)$/iu;
 
 /** Whether a backticked token is read as naming a row of the run vocabulary. */
 function citesEventType(candidate) {
+  if (EVENT_TYPES.has(candidate)) return true;
+  if (FILE_EXTENSION.test(candidate)) return false;
   return (
     EVENT_TYPE_SHAPE.test(candidate) &&
     EVENT_NAMESPACES.has(candidate.split('.')[0])

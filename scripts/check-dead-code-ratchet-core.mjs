@@ -1,6 +1,9 @@
 // Node.js imports
 import { stripVTControlCharacters } from 'node:util';
 
+// Third-party imports
+import ts from 'typescript';
+
 const EMPTY_COUNTS = { files: 0, exports: 0, types: 0, duplicates: 0 };
 const KNIP_KINDS = new Set(Object.keys(EMPTY_COUNTS));
 
@@ -34,6 +37,98 @@ export function extractFindings(issues) {
     }
   }
   return findings;
+}
+
+// Consumers knip cannot follow. The desktop suites import four source modules
+// through a `file://` URL built at run time (so a suite observes a module
+// instance of its own, fresh across `vi.resetModules()`), which is an edge no
+// static analysis can see: knip reads the module and the suite, finds no
+// import between them, and reports every name the suite destructures as an
+// export with no consumer. Those findings are false — deleting the export
+// breaks the suite — and they sit in the same bucket as a genuinely dead one,
+// which is the signal "a new export needs a consumer in the same PR" depends
+// on (#12084).
+//
+// The exemption is per name, not per file: a name counts as consumed only
+// while a suite that loads that very module still mentions it, so dropping the
+// last use puts the finding straight back in front of the ratchet.
+export const DYNAMIC_MODULE_LOADER =
+  'src/test-kernel/desktop/loadSourceModule.ts';
+
+// The modules the loader can serve, read from its own type table
+// (`'@alias/path': typeof import('@alias/path')`), so a module that leaves the
+// table stops being exempt on the same commit.
+export function parseDynamicModuleSpecifiers(loaderSource) {
+  const specifiers = [
+    ...new Set(
+      [...loaderSource.matchAll(/typeof import\('([^']+)'\)/gu)].map(
+        ([, specifier]) => specifier,
+      ),
+    ),
+  ];
+  if (specifiers.length === 0) {
+    throw new Error(
+      `${DYNAMIC_MODULE_LOADER} declares no dynamically loaded modules; the computed-URL exemption reads that table, so a rewrite of it must update this parser rather than silently exempt nothing (or everything).`,
+    );
+  }
+  return specifiers;
+}
+
+const LOADER_FUNCTION = 'loadSourceModule';
+
+/** Whether a call's callee is the loader, under a namespace or bare. */
+function isLoaderCallee(callee) {
+  if (ts.isIdentifier(callee)) return callee.text === LOADER_FUNCTION;
+  return (
+    ts.isPropertyAccessExpression(callee) &&
+    callee.name.text === LOADER_FUNCTION
+  );
+}
+
+// What a suite really loads and really references, read from its syntax rather
+// than its text: the specifiers it passes to the loader, and the identifiers it
+// mentions outside comments and string literals. Prose is not a consumer, and
+// exempting an export on a mention in a comment or a test title would hold a
+// dead name in place for as long as the sentence survived.
+export function suiteReferences(source) {
+  const sourceFile = ts.createSourceFile(
+    'suite.ts',
+    source,
+    ts.ScriptTarget.ESNext,
+    false,
+    ts.ScriptKind.TS,
+  );
+  const identifiers = new Set();
+  const loads = new Set();
+  const visit = (node) => {
+    if (ts.isIdentifier(node)) identifiers.add(node.text);
+    if (ts.isCallExpression(node) && isLoaderCallee(node.expression)) {
+      const [argument] = node.arguments;
+      if (argument != null && ts.isStringLiteralLike(argument)) {
+        loads.add(argument.text);
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return { identifiers, loads };
+}
+
+// Splits findings into the ones the ratchet answers for and the ones a suite
+// consumes through the computed-URL loader. `consumers` maps a module's repo
+// path to the identifiers referenced by the suites that load it.
+export function partitionDynamicConsumers(findings, consumers) {
+  const kept = [];
+  const suppressed = [];
+  for (const finding of findings) {
+    const referenced = consumers.get(finding.file);
+    const consumed =
+      referenced != null &&
+      (finding.category === 'exports' || finding.category === 'types') &&
+      referenced.has(finding.name);
+    (consumed ? suppressed : kept).push(finding);
+  }
+  return { kept, suppressed };
 }
 
 function normalizeFinding(finding) {
