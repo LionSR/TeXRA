@@ -66,7 +66,7 @@ Because these are tool-use agents, they can compile the figure and inspect the r
 ### Creating new figures
 
 1. Select a tool-use agent, `research` or `presenter` (<wa-icon library="texra" name="sparkle"></wa-icon>).
-2. Pick a vision-capable model (<wa-icon library="texra" name="robot"></wa-icon>). `sonnet5T`, `opus5T`, `gpt56`, and `gemini31p` are good choices for complex drawings.
+2. Pick a vision-capable model (<wa-icon library="texra" name="robot"></wa-icon>). `sonnet5T`, `opus55`, `gpt6-`, and `gemini31p` are good choices for complex drawings.
 3. Describe the figure you want in detail.
 4. Select **Run agent** (<wa-icon library="texra" name="arrow-up"></wa-icon>).
 

@@ -12,31 +12,31 @@ const rows = [
     icon: 'bolt',
     use: 'Simple tasks',
     note: 'Fast, cheap models',
-    models: ['gpt56--', 'deepseek', 'haiku45'],
+    models: ['gpt6--', 'deepseek', 'haiku45'],
   },
   {
     icon: 'chart-line',
     use: 'Complex tasks',
     note: 'Powerful flagship models',
-    models: ['fable51', 'opus5', 'gpt56', 'gemini31p'],
+    models: ['fable51', 'opus55', 'gpt6-', 'gemini31p'],
   },
   {
     icon: 'code',
     use: 'Code-heavy / LaTeX editing',
     note: 'Strong editing models',
-    models: ['opus5T', 'sonnet5T', 'gpt56'],
+    models: ['opus55', 'sonnet5T', 'gpt6-'],
   },
   {
     icon: 'sparkle',
     use: 'Reasoning-heavy',
     note: 'Thinking models',
-    models: ['fable51', 'opus5T', 'sonnet5T', 'deepseekT', 'kimi3'],
+    models: ['fable51', 'opus55', 'sonnet5T', 'deepseekT', 'kimi3'],
   },
   {
     icon: 'file-lines',
     use: 'Large documents',
     note: 'High-context models',
-    models: ['gemini31p', 'fable51', 'sonnet5', 'opus5'],
+    models: ['gemini31p', 'fable51', 'sonnet5', 'opus55'],
   },
 ];
 </script>
