@@ -711,3 +711,55 @@ Promise rendering beside the Effect surface is exactly one. `Sessions.layer`
 split, or a `runAgent`-style wrapper whose body only runs the Effect
 services. The SDK is no longer an R1 boundary: `packages/agent/src/**` runs
 no `Effect.run*` at all.
+
+---
+
+## Provider-hosted web tools are ruled out of 1.0; the local web tools are the one system (ruled 2026-09-22)
+
+**Question.** The llm hardening note's second change
+(`.agents/docs/proposed/architecture/2026-09-20-llm-package-hardening.md` §3):
+OpenAI `web_search` and Anthropic search and fetch worked on the deleted
+model handlers, but the codecs never grew them — the Anthropic codec answered
+a hosted-tool receipt with an explicit "hosted-tool accounting is not
+supported" failure, and a Responses `web_search_call` output item has no arm
+and fails the output-item schema as a parse error. Implement the hosted tools
+inside the codecs with their usage accounting, or rule them out of 1.0 and
+delete the dead arms?
+
+**Ruling.** Ruled out. 1.0 ships without provider-hosted tools: the run's
+local `web_search` (`src/tools/web/WebSearchTool.ts`) and `web_fetch`
+(`src/tools/web/WebFetchTool.ts`, both registered in
+`src/tools/registry.ts`) are the one system for web search and fetch, and a
+provider-hosted execution of the same capability would be a second system for
+it. The two dead accounting arms in the Anthropic codec are deleted, so the
+codecs stop advertising a capability they refuse; nothing else changes,
+because the codecs never requested a hosted tool in the first place. A stream
+that carries hosted execution still fails loudly — the hosted blocks fail the
+event schema as malformed output — and the standing boundary keeps its name:
+a paused hosted turn fails as unsupported through the existing `pause_turn`
+arm. Hosted tools may return later, but only as a properly scoped lane whose
+spec is both halves together: usage accounting folded through `providerUsage`
+like every other provider-side receipt, AND the `pause_turn` continuation
+protocol.
+
+**Evidence.** The hardening note's own recommendation on file was exactly
+this ruling (§5, option 2: deletion-shaped, removes an explicit failure path
+from the codecs' resting state, and the capability can return with the
+accounting it needs). The capability already ships locally, so a codec
+restore would duplicate it — the no-dual-systems mandate. And a bare codec
+restore would not just be redundant but incomplete: Anthropic pauses hosted
+execution (`stop_reason: pause_turn`) when a server tool's result set grows
+large, and continuing a paused turn needs a continuation protocol that
+resumes the partial turn — a runtime-loop seam, not a codec patch. Hosted
+`web_search` without that continuation breaks in practice on exactly the
+result sets it exists for, which is why the `pause_turn` arm stays in the
+codec as the named seam a future hosted-tools lane must implement, alongside
+the `providerUsage` accounting, before either ships.
+
+**Forbids.** Requesting a provider-hosted web tool from any codec in 1.0 (an
+Anthropic `web_search`/`web_fetch` tool entry, a Responses `web_search`
+tool), and re-adding a hosted-tool accounting arm for one. Reintroducing
+hosted web tools without BOTH the usage accounting folded through
+`providerUsage` and the `pause_turn` continuation protocol. Shipping a second
+web-search or web-fetch system beside the local `web_search` and `web_fetch`
+tools.
