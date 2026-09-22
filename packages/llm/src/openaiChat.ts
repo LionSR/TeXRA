@@ -1355,9 +1355,9 @@ export function openaiChatModel(
             text += decoder.decode(part.value, { stream: true });
           }
           text += decoder.decode();
-          const raw = yield* Effect.try({
-            try: () => JSON.parse(text) as unknown,
-            catch: (cause) =>
+          const raw = yield* parseJsonOrModelError(
+            text,
+            (cause) =>
               new ModelError({
                 kind: 'malformed-output',
                 message: 'Kimi returned malformed message token estimate JSON.',
@@ -1365,7 +1365,7 @@ export function openaiChatModel(
                 model: config.requestedModel,
                 cause,
               }),
-          });
+          );
           const receipt = TokenEstimateSchema.safeParse(raw);
           if (!receipt.success) {
             return yield* new ModelError({
