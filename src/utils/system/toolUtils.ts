@@ -479,7 +479,6 @@ export function hasPackageManager(name: SystemPackageManager): boolean {
   // reaching for a workspace it does not need.
   const available = executeCommandSync([name, '--version'], {
     cwd: process.cwd(),
-    settings: undefined,
   }).success;
   packageManagerAvailability.set(name, available);
   log.debug(

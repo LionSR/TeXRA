@@ -39,7 +39,7 @@ function onGlobalStorage<A, E>(
 }
 
 const mocks = vi.hoisted(() => ({
-  createTeamCatalogPorts: vi.fn(() => ({ catalog: true })),
+  createTeamCatalogPorts: vi.fn(() => Effect.succeed({ catalog: true })),
   resolveTeamLaunch: vi.fn(),
 }));
 

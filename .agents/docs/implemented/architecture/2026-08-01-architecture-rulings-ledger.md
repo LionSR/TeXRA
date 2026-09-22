@@ -444,39 +444,56 @@ required. Moving the `working_directory` gate into `execute` as a way to drop
 the read: that turns a schema rejection into a tool error and is a behavior
 decision of its own, not a threading change.
 
-## The shared `MessageHandler` dispatcher contract stays Promise-shaped (ruled 2026-09-19)
+## Settings dispatch has one native execution boundary (revised 2026-09-22)
 
-**Question.** `src/shared/utils/dispatcher.ts` types every webview message arm
-as `MessageHandler<T> = (data: T) => Promise<void> | void`, and each graphical
-host's registry therefore runs its arm's program with one
-`runtime.runPromise`. That is the largest remaining cluster of runs in the two
-graphical hosts, about twenty of them, and #12820, #12823 and #12826 each
-stopped at it by design. Is the contract debt for a later lane, or does it stay
-Promise-shaped?
+**Question.** The 2026-09-19 ruling retained Promise-shaped registry arms
+because each was already a host boundary. Does that forbid replacing the whole
+backend dispatcher with programs executed once at the incoming host message?
 
-**Ruling.** It stays Promise-shaped, and it is not a round trip. The dispatcher
-is the R1 host entry for every webview message on both graphical hosts, so the
-run at each arm is the boundary run that R1 admits rather than an adapter
-around one.
+**Ruling.** No. The owner's
+[explicit revision in #13009](https://github.com/LionSR/TeXRA/pull/13009#issuecomment-5779248081)
+preserves one execution boundary and rejects duplicate dispatch machinery;
+it does not require a boundary in every registry arm. This supersedes the
+Promise-shape requirement above and the instructions in #12880/#12884 to remove
+the settings-dispatch slice. The ruling is a design decision, not a claim that
+#13009 has merged or completed validation.
 
-**Evidence.** The contract is shared across the hosts and the frontend at once:
-`src/shared/schemas/settingsViewMessages.ts` declares the dispatcher, the
-extension side uses it in `SettingsViewMessageHandler.ts` and in the webview
-frontend `SettingsApp.ts`, and the desktop side in `hostBridge.ts`,
-`desktopSettingsIpc.ts` and `desktopToolingSettingsController.ts`. Each registry
-arm runs exactly one program and nothing lifts a dispatcher result back into
-Effect, so there is no Effect to Promise to Effect hop to delete. Retyping the
-handler as an Effect would move each of those runs one frame up, from inside
-the arm into whatever calls `createDispatcher`'s returned function, and the
-count would not drop, because the message still arrives from a host callback
-that is not on a fiber. The frontend would have to take the new type with it,
-which puts the contract change on a browser bundle for no deletion.
+**Evidence.** `src/controllers/settingsView/settingsViewDispatch.ts` owns the
+one backend selector, `settingsViewProgram`, over the already-validated
+inbound union. Its two consumers are the extension's
+`SettingsViewMessageHandler.handleMessage` and desktop's
+`createDesktopSettingsIpc`; each supplies Effect-valued handlers and executes
+once at its native message entry. The old inbound Promise dispatcher,
+per-handler runners and runner ports are removed together. Exhaustive
+`HandlerRegistry` typing and its `unsupported(reason)` markers remain shared;
+the same markers derive frontend capabilities.
 
-**Forbids.** Re-mining the dispatcher or its registries as a round-trip source.
-A second Effect-shaped dispatcher beside this one, a per-host `MessageHandler`
-variant, and an adapter that wraps an Effect arm into the Promise shape. If the
-contract is ever revisited it is a shared-contract decision taken with the
-webview frontends, not a lane.
+The remaining `createDispatcher` instantiation is
+`dispatchSettingsViewOutbound` in
+`src/shared/settingsView/settingsViewMessages.ts`. Its sole production caller
+is `SettingsApp.messageListener`, shared by the VS Code webview and Electron
+renderer. Every arm in frontend `messageDispatcher.ts` updates browser state
+synchronously; none returns a Promise or starts an Effect. The shared generic
+handler type supports these values without importing the backend runtime into
+the browser graph. Parse, missing-handler and unsupported-command failures
+reach the frontend error callback; a synchronous handler defect propagates
+to the browser event boundary. There is no asynchronous renderer rejection
+left for a generic Promise dispatcher to observe.
+
+**Failure ownership.** Both native host entries observe complete Effect causes,
+including defects; interruption-only causes stay silent. Unsupported commands
+show their reason. The extension logs failures of error presentation or the
+subsequent refresh. Desktop routes both action and presentation failures to
+its final `onError` sink, unwrapping `NotificationFailed.cause` there. Provider
+key failures retain their write-versus-refresh distinction until host
+presentation. Scoped cleanup remains part of the program's exit.
+
+**Forbids.** Retaining the old backend dispatcher beside this selector;
+per-host copies of the selector; Effect-to-Promise adapters around individual
+arms; executing backend programs below the native entry. Asynchronous browser
+work must observe its failure at its own entry rather than being silently
+returned from a synchronous state handler. No compatibility dispatcher or
+second schema is required by the old ruling.
 
 ## A cancelled CLI loopback sign-in reports as interruption (ruled 2026-09-19; landed in [#12821](https://github.com/LionSR/TeXRA/pull/12821))
 

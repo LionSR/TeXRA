@@ -8,7 +8,6 @@ import {
 } from '@shared/state/stateSettings';
 import {
   type ProviderKeyStatus,
-  type ProviderSetting,
   type UpdateProfileMessage,
 } from '@shared/settingsView/settingsViewMessages';
 import {
@@ -64,7 +63,7 @@ export class SettingsProfileController {
     );
     const base = {
       command: SETTINGS_VIEW_COMMANDS.UPDATE_PROFILE,
-      providerKeyStatuses: this.providerKeyStatuses(secretStatuses),
+      providerKeyStatuses: yield* this.providerKeyStatuses(secretStatuses),
     };
 
     // Preserve the distinction between an authoritatively rejected refresh
@@ -100,7 +99,7 @@ export class SettingsProfileController {
     };
   });
 
-  getProviderDisplayName(provider: string): string {
+  getProviderDisplayName(provider: string) {
     return getProviderDisplayName(
       this.deps.stores,
       provider,
@@ -113,32 +112,33 @@ export class SettingsProfileController {
    */
   private providerKeyStatuses(
     secretStatuses: Record<string, ProviderKeyStatus['status']>,
-  ): ProviderKeyStatus[] {
-    return API_PROVIDERS.map((provider) => ({
-      provider,
-      displayName: this.getProviderDisplayName(provider),
-      status: secretStatuses[provider] ?? 'not-set',
-      keyUrl: getProviderKeyUrl(this.deps.stores, provider) ?? '',
-      customEndpoint: getProviderEndpoint(this.deps.stores, provider),
-      supportsCustomEndpoint: supportsCustomEndpoint(provider),
-      providerSettings: this.getProviderSettings(provider),
-    }));
+  ) {
+    return Effect.forEach(API_PROVIDERS, (provider) =>
+      Effect.gen({ self: this }, function* () {
+        return {
+          provider,
+          displayName: yield* this.getProviderDisplayName(provider),
+          status: secretStatuses[provider] ?? 'not-set',
+          keyUrl: (yield* getProviderKeyUrl(this.deps.stores, provider)) ?? '',
+          customEndpoint: yield* getProviderEndpoint(
+            this.deps.stores,
+            provider,
+          ),
+          supportsCustomEndpoint: supportsCustomEndpoint(provider),
+          providerSettings: yield* this.getProviderSettings(provider),
+        };
+      }),
+    );
   }
 
-  /**
-   * The provider's Models-tab controls, projected from the catalog rows that
-   * declare `surfaces.models` for it. Value, default-when-absent, and the slot
-   * the value lives in all come from the row, through the same `readSetting`
-   * the runtime uses — so the toggle shows the value the run will honor.
-   */
-  private getProviderSettings(provider: string): ProviderSetting[] {
-    return modelsTabSettings(provider).map(({ entry, surface }) => {
-      const { provider: _provider, ...display } = surface;
-      return {
-        ...display,
-        key: entry.key,
-        value: readSetting(entry, this.deps.stores, this.deps.host) === true,
-      };
-    });
+  private getProviderSettings(provider: string) {
+    return Effect.forEach(modelsTabSettings(provider), ({ entry, surface }) =>
+      readSetting(entry, this.deps.stores, this.deps.host).pipe(
+        Effect.map((value) => {
+          const { provider: _provider, ...display } = surface;
+          return { ...display, key: entry.key, value: value === true };
+        }),
+      ),
+    );
   }
 }

@@ -3,6 +3,7 @@
 import { Data, Effect, FileSystem } from 'effect';
 import { AgentRosterController } from '@agent/roster/AgentRosterController';
 import { createLog } from '@logger/logUtils';
+import type { StateReadFailed } from '@platform/interfaces';
 import { AgentDirectories } from '@platform/interfaces';
 import type { GlobalStorageFs } from '@platform/rootedFs';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
@@ -113,7 +114,7 @@ export function loadAgents(
   options: LoadAgentsOptions = {},
 ): Effect.Effect<
   void,
-  AgentCatalogLoadError,
+  AgentCatalogLoadError | StateReadFailed,
   GlobalStorageFs | FileSystem.FileSystem | AgentDirectories
 > {
   const includeRemote = options.includeRemote ?? true;
@@ -136,7 +137,7 @@ function queueLoad(
   loadEpoch: number,
 ): Effect.Effect<
   void,
-  AgentCatalogLoadError,
+  AgentCatalogLoadError | StateReadFailed,
   GlobalStorageFs | FileSystem.FileSystem | AgentDirectories
 > {
   return Effect.suspend(() => {
@@ -154,7 +155,7 @@ function doLoad(
   loadEpoch: number,
 ): Effect.Effect<
   boolean,
-  AgentCatalogLoadError,
+  AgentCatalogLoadError | StateReadFailed,
   GlobalStorageFs | FileSystem.FileSystem | AgentDirectories
 > {
   return Effect.gen(function* () {
@@ -290,7 +291,7 @@ export function refresh(
   options: LoadAgentsOptions = {},
 ): Effect.Effect<
   void,
-  AgentCatalogLoadError,
+  AgentCatalogLoadError | StateReadFailed,
   GlobalStorageFs | FileSystem.FileSystem | AgentDirectories
 > {
   return Effect.suspend(() => {
@@ -320,7 +321,7 @@ export function invalidateRemoteAgentsAfterSignOut(): Effect.Effect<
     removeRemoteEntries();
     return refresh({ includeRemote: false });
   }).pipe(
-    Effect.catch((error: AgentCatalogLoadError) =>
+    Effect.catch((error: AgentCatalogLoadError | StateReadFailed) =>
       Effect.sync(() => {
         // An older in-flight remote load may have settled before the rebuild.
         // Preserve the signed-out invariant even when local directory I/O fails.
@@ -412,9 +413,9 @@ export function createWorkspaceAgentRosterController(
     globalState,
     getAgents,
     getPresets: () =>
-      parseAgentModePresets(
-        workspaceState.get(WorkspaceStateKey.CUSTOM_AGENT_PRESETS, []),
-      ),
+      workspaceState
+        .get(WorkspaceStateKey.CUSTOM_AGENT_PRESETS, [])
+        .pipe(Effect.map(parseAgentModePresets)),
     resolveAgent: getRosterAgent,
   });
 }
@@ -427,7 +428,7 @@ export function createWorkspaceAgentRosterController(
 export function getVisibleAgents(
   stores: AgentRosterStores,
   category: AgentCategory,
-): AgentEntry[] {
+) {
   return createWorkspaceAgentRosterController(stores).getVisibleAgents(
     category,
   );
@@ -445,18 +446,20 @@ export function resolveDelegationScopeAgents(
   stores: AgentRosterStores,
   scope: AgentDelegationScope | undefined,
   category: AgentCategoryType,
-): AgentEntry[] {
-  if (!scope) return getVisibleAgents(stores, category);
-  const keys = scope[category];
+) {
+  return Effect.gen(function* () {
+    if (!scope) return yield* getVisibleAgents(stores, category);
+    const keys = scope[category];
 
-  // Deduplicated by canonical key: two identifiers that resolve to the same
-  // entry contribute it once.
-  const byKey = new Map<string, AgentEntry>();
-  for (const key of keys) {
-    const entry = getRosterAgent(category, key);
-    if (entry) byKey.set(agentKeyOf(entry), entry);
-  }
-  return [...byKey.values()];
+    // Deduplicated by canonical key: two identifiers that resolve to the same
+    // entry contribute it once.
+    const byKey = new Map<string, AgentEntry>();
+    for (const key of keys) {
+      const entry = getRosterAgent(category, key);
+      if (entry) byKey.set(agentKeyOf(entry), entry);
+    }
+    return [...byKey.values()];
+  });
 }
 
 /**
@@ -480,8 +483,13 @@ export function getVisibleAgent(
   stores: AgentRosterStores,
   category: AgentCategory,
   identifier: string,
-): AgentEntry | undefined {
-  return findAgentByIdentifier(getVisibleAgents(stores, category), identifier);
+) {
+  return Effect.gen(function* () {
+    return findAgentByIdentifier(
+      yield* getVisibleAgents(stores, category),
+      identifier,
+    );
+  });
 }
 
 /** Resolve an identifier to an agent in a category, ignoring visibility. */
@@ -492,36 +500,25 @@ export function getCategoryAgent(
   return findAgentByIdentifier(getAgentsByCategory(category), identifier);
 }
 
-/**
- * The single launch-time resolver, in three tiers — each consulted only when the
- * previous yields nothing, so launch resolves a name to the same entry
- * validation would and never a different one:
- *
- *  1. The exact `(source, name)` entry the delegation pinned at validation, so
- *     launch lands on precisely the entry validation chose — even if the agent's
- *     visibility changed since.
- *  2. `getVisibleAgent` — the identical call validation makes — so an unpinned
- *     launch (the webview "Run", CLI, restored records) of a visible agent
- *     resolves to exactly what validation resolved, not a same-name shadow the
- *     full set would dedup to differently.
- *  3. The full category set (`getCategoryAgent`), reached only for an agent the
- *     workspace roster hides but a command still names.
- *
- * It never falls back to blind source-priority on a bare name, so launch only
- * ever extends resolution beyond the visible roster — it cannot pick a
- * different entry than validation for any name validation resolves.
+/** Resolve a launch by pinned source, visible roster, then full category.
+ * Each tier runs only when the preceding one has no match, preserving the
+ * exact agent chosen during validation even when visibility changes.
  */
 export function resolveAgentForLaunch(
   stores: AgentRosterStores,
   category: AgentCategory,
   identifier: string,
   source?: AgentSource | null,
-): AgentEntry | undefined {
-  return (
-    (source ? getAgent(agentKey(source, agentName(identifier))) : undefined) ??
-    getVisibleAgent(stores, category, identifier) ??
-    getCategoryAgent(category, identifier)
-  );
+) {
+  return Effect.gen(function* () {
+    return (
+      (source
+        ? getAgent(agentKey(source, agentName(identifier)))
+        : undefined) ??
+      (yield* getVisibleAgent(stores, category, identifier)) ??
+      getCategoryAgent(category, identifier)
+    );
+  });
 }
 
 /**
@@ -599,20 +596,23 @@ export function computeAgentOptionsData(
   stores: AgentRosterStores,
 ): Effect.Effect<
   AgentOptionsDataPayload,
-  AgentCatalogLoadError,
+  AgentCatalogLoadError | StateReadFailed,
   GlobalStorageFs | FileSystem.FileSystem | AgentDirectories
 > {
-  return Effect.map(loadAgents(), () => ({
-    workflow: entriesToOptionData(
-      sortAgentEntries(getVisibleAgents(stores, 'workflow'), [
-        DEFAULT_WORKFLOW_AGENT,
-      ]),
-    ),
-    toolUse: entriesToOptionData(
-      sortAgentEntries(
-        getVisibleAgents(stores, 'toolUse'),
-        PREFERRED_TOOL_USE_AGENTS,
+  return Effect.gen(function* () {
+    yield* loadAgents();
+    return {
+      workflow: entriesToOptionData(
+        sortAgentEntries(yield* getVisibleAgents(stores, 'workflow'), [
+          DEFAULT_WORKFLOW_AGENT,
+        ]),
       ),
-    ),
-  }));
+      toolUse: entriesToOptionData(
+        sortAgentEntries(
+          yield* getVisibleAgents(stores, 'toolUse'),
+          PREFERRED_TOOL_USE_AGENTS,
+        ),
+      ),
+    };
+  });
 }

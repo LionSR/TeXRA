@@ -44,7 +44,8 @@ function options(overrides: {
         Effect.sync(() => {
           refresh();
         }),
-      replan: () => overrides.refreshed ?? { unresolvedNames: [] },
+      replan: () =>
+        Effect.succeed(overrides.refreshed ?? { unresolvedNames: [] }),
       remoteCatalogRefreshAttempted: overrides.remoteCatalogRefreshAttempted,
     },
   };

@@ -105,7 +105,7 @@ describe('coding-plan subscription runtime', () => {
       );
 
       expect(
-        resolveGlmRoute({ stores: hostStores(), useOpenRouter: false }),
+        yield* resolveGlmRoute({ stores: hostStores(), useOpenRouter: false }),
       ).toEqual(expected);
     }),
   );
@@ -168,12 +168,12 @@ describe('coding-plan subscription runtime', () => {
         );
         if (modelBaseUrl) MODEL_CONFIGS.glm52.baseUrl = modelBaseUrl;
 
-        const canonical = resolveGlmRoute({
+        const canonical = yield* resolveGlmRoute({
           stores: hostStores(),
           baseUrl: modelBaseUrl,
           useOpenRouter,
         });
-        const endpoint = resolveRouteEndpoint(
+        const endpoint = yield* resolveRouteEndpoint(
           hostStores(),
           {
             name: 'glm52',
@@ -214,19 +214,25 @@ describe('coding-plan subscription runtime', () => {
         );
 
         expect(
-          resolveGlmRoute({ stores: hostStores(), useOpenRouter: false }).route,
+          (yield* resolveGlmRoute({
+            stores: hostStores(),
+            useOpenRouter: false,
+          })).route,
         ).toBe('official-coding-plan');
         expect(
-          resolveGlmRoute({
+          (yield* resolveGlmRoute({
             stores: hostStores(),
             useOpenRouter: false,
             declinedRoutes: ['glm-coding-plan-subscription'],
-          }).route,
+          })).route,
         ).toBe('official');
         // The decline is the asking run's, so the user's switch is untouched and
         // a concurrent run still routes through the plan.
         expect(
-          hostStores().globalState.get(GlobalStateKey.GLM_CODING_PLAN, false),
+          yield* hostStores().globalState.get(
+            GlobalStateKey.GLM_CODING_PLAN,
+            false,
+          ),
         ).toBe(true);
       }),
   );

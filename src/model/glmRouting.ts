@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 import { ModelProvider } from 'llm-zoo';
 
 import { OPENROUTER_BASE_URL } from '@model/openRouterEndpoint';
@@ -46,40 +47,42 @@ export function isGlmOpenRouterRoute(config: {
 }
 
 /** Resolve the endpoint and usage classification for one GLM request. */
-export function resolveGlmRoute(config: GlmRoutingConfig): GlmRoute {
-  if (config.baseUrl) {
-    return { route: 'model-custom', baseUrl: config.baseUrl };
-  }
-  if (isGlmOpenRouterRoute(config)) {
-    return { route: 'openrouter', baseUrl: OPENROUTER_BASE_URL };
-  }
+export function resolveGlmRoute(config: GlmRoutingConfig) {
+  return Effect.gen(function* () {
+    if (config.baseUrl) {
+      return { route: 'model-custom' as const, baseUrl: config.baseUrl };
+    }
+    if (isGlmOpenRouterRoute(config)) {
+      return { route: 'openrouter' as const, baseUrl: OPENROUTER_BASE_URL };
+    }
 
-  const providerEndpoint = getProviderEndpoint(
-    config.stores,
-    ModelProvider.GLM,
-  );
-  if (providerEndpoint) {
-    return {
-      route: 'provider-custom',
-      baseUrl: `https://${normalizeProviderEndpoint(providerEndpoint)}`,
-    };
-  }
+    const providerEndpoint = yield* getProviderEndpoint(
+      config.stores,
+      ModelProvider.GLM,
+    );
+    if (providerEndpoint) {
+      return {
+        route: 'provider-custom' as const,
+        baseUrl: `https://${normalizeProviderEndpoint(providerEndpoint)}`,
+      };
+    }
 
-  const officialHost = useChinaRegion(config.stores, 'glm')
-    ? 'open.bigmodel.cn'
-    : 'api.z.ai';
-  if (
-    getGLMCodingPlan(config.stores) &&
-    !config.declinedRoutes?.includes('glm-coding-plan-subscription')
-  ) {
+    const officialHost = (yield* useChinaRegion(config.stores, 'glm'))
+      ? 'open.bigmodel.cn'
+      : 'api.z.ai';
+    if (
+      (yield* getGLMCodingPlan(config.stores)) &&
+      !config.declinedRoutes?.includes('glm-coding-plan-subscription')
+    ) {
+      return {
+        route: 'official-coding-plan' as const,
+        baseUrl: `https://${officialHost}/api/coding/paas/v4`,
+        usageRoute: 'glm-coding-plan-subscription' as const,
+      };
+    }
     return {
-      route: 'official-coding-plan',
-      baseUrl: `https://${officialHost}/api/coding/paas/v4`,
-      usageRoute: 'glm-coding-plan-subscription',
+      route: 'official' as const,
+      baseUrl: `https://${officialHost}/api/paas/v4`,
     };
-  }
-  return {
-    route: 'official',
-    baseUrl: `https://${officialHost}/api/paas/v4`,
-  };
+  });
 }

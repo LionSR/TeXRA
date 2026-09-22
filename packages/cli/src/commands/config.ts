@@ -65,10 +65,12 @@ const showConfig = Effect.fn('showConfig')(function* (
   const stores = services.roots;
   const agents = yield* readCliAgentRoster(stores);
   const settings = Object.fromEntries(
-    CLI_STATE_SETTINGS.map((entry) => [
-      entry.key,
-      readSetting(entry, stores, 'cli'),
-    ]),
+    yield* Effect.forEach(CLI_STATE_SETTINGS, (entry) =>
+      Effect.map(readSetting(entry, stores, 'cli'), (value) => [
+        entry.key,
+        value,
+      ]),
+    ),
   );
   const record = { settings, agents };
   emitCliResult(context, {
@@ -156,7 +158,7 @@ const configureAgentRoster = Effect.fn('configureAgentRoster')(function* (
   }
   if (input.clearDefault) yield* roster.clearDefaultTeam();
   if (input.defaultAgent) {
-    const available = roster.getVisibleAgents('toolUse');
+    const available = yield* roster.getVisibleAgents('toolUse');
     const selected = available.find(
       (agent) =>
         agent.name === input.defaultAgent ||

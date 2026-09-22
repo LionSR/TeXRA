@@ -155,23 +155,23 @@ export function applyStateSettingUpdate(
   return persist.pipe(
     Effect.mapError((cause) => new StateSettingWriteFailed({ cause })),
     Effect.andThen(
-      Effect.try({
-        try: () => {
-          if (write.entry.key !== TEXRA_APPROVAL_POLICY_CONFIG_KEY) return;
-          // A reset clears only the workspace layer, so a surviving global
-          // value is what the session must run (issue #9749).
-          const policy =
-            write.kind === 'reset'
-              ? (readSetting(
-                  write.entry,
-                  ports.stores,
-                  ports.host,
-                ) as TexraApprovalPolicy)
-              : (write.value as TexraApprovalPolicy);
-          ports.onApprovalPolicyChanged?.(policy);
-        },
-        catch: (cause) => new StateSettingWriteFailed({ cause }),
-      }),
+      Effect.gen(function* () {
+        if (write.entry.key !== TEXRA_APPROVAL_POLICY_CONFIG_KEY) return;
+        const policy =
+          write.kind === 'reset'
+            ? ((yield* readSetting(
+                write.entry,
+                ports.stores,
+                ports.host,
+              )) as TexraApprovalPolicy)
+            : (write.value as TexraApprovalPolicy);
+        yield* Effect.try({
+          try: () => ports.onApprovalPolicyChanged?.(policy),
+          catch: (cause) => new StateSettingWriteFailed({ cause }),
+        });
+      }).pipe(
+        Effect.mapError((cause) => new StateSettingWriteFailed({ cause })),
+      ),
     ),
     Effect.as({ kind: 'applied', entry: write.entry } as const),
     Effect.catchTag('StateSettingWriteFailed', (failure) =>

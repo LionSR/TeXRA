@@ -11,6 +11,7 @@ import { createLog } from '@logger/logUtils';
 import {
   AgentDirectoriesFailed,
   type AgentDirectoriesPort,
+  type StateReadFailed,
 } from '@platform/interfaces';
 import { GlobalStorageFs } from '@platform/rootedFs';
 import type { AgentSource } from '@shared/schemas';
@@ -22,7 +23,7 @@ import {
 } from './BundledAgentDirectories';
 
 interface CustomAgentDirectoryStore {
-  get(): string | undefined;
+  get(): Effect.Effect<string | undefined, StateReadFailed>;
 }
 
 type AgentDirectoryDocsId = 'custom-agents';
@@ -71,7 +72,16 @@ export class AgentDirectoryService {
   > {
     return Effect.gen({ self: this }, function* () {
       const configuredPath = (
-        this.options.customDirectoryStore.get() ?? ''
+        (yield* this.options.customDirectoryStore.get().pipe(
+          Effect.mapError(
+            (cause) =>
+              new AgentDirectoriesFailed({
+                source: 'custom',
+                message: cause.message,
+                cause,
+              }),
+          ),
+        )) ?? ''
       ).trim();
 
       const resolvedPath =

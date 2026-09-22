@@ -20,7 +20,6 @@ async function createController(options?: {
   hosts: ReturnType<typeof createFakeUIHosts>;
   secrets: FakeSecrets;
   deleted: string[];
-  failures: string[];
   refreshCount: () => number;
 }> {
   const hosts = createFakeUIHosts({
@@ -29,7 +28,6 @@ async function createController(options?: {
   });
   const secrets = new FakeSecrets();
   const deleted: string[] = [];
-  const failures: string[] = [];
   let refreshCount = 0;
 
   const originalSet = secrets.set.bind(secrets);
@@ -53,21 +51,17 @@ async function createController(options?: {
       prompt: hosts.prompt,
       externalOpener: hosts.externalOpener,
       getProviderDisplayName: (provider) =>
-        provider === 'openai' ? 'OpenAI' : provider,
-      getProviderKeyUrl: (provider) => options?.urls?.[provider],
+        Effect.succeed(provider === 'openai' ? 'OpenAI' : provider),
+      getProviderKeyUrl: (provider) =>
+        Effect.succeed(options?.urls?.[provider]),
       refreshAfterKeyChange: () =>
         Effect.sync(() => {
           refreshCount += 1;
-        }),
-      reportFailure: (message, error) =>
-        Effect.sync(() => {
-          failures.push(`${message}: ${String(error)}`);
         }),
     }),
     hosts,
     secrets,
     deleted,
-    failures,
     refreshCount: () => refreshCount,
   };
 }
@@ -134,15 +128,18 @@ describe('SettingsProfileKeyController', () => {
   // graphical hosts happily wrote `sk-xxxxxx` into the secret store.
   it.effect('reports a placeholder key instead of storing it', () =>
     Effect.gen(function* () {
-      const { controller, secrets, failures, refreshCount } =
-        yield* Effect.promise(() => createController());
+      const { controller, secrets, refreshCount } = yield* Effect.promise(() =>
+        createController(),
+      );
 
-      yield* controller.commitProviderKey('openai', 'sk-xxxxxx');
+      const failure = yield* Effect.flip(
+        controller.commitProviderKey('openai', 'sk-xxxxxx'),
+      );
 
       assert.equal(yield* secrets.get('apiKey.openai'), undefined);
       assert.equal(refreshCount(), 0);
-      assert.match(failures[0] ?? '', /Failed to set OpenAI API key/);
-      assert.match(failures[0] ?? '', /looks like a placeholder/);
+      assert.match(failure.message, /Failed to set OpenAI API key/);
+      assert.match(String(failure.cause), /looks like a placeholder/);
     }),
   );
 
@@ -205,31 +202,33 @@ describe('SettingsProfileKeyController', () => {
 
   it.effect('reports an empty provider key instead of storing it', () =>
     Effect.gen(function* () {
-      const { controller, secrets, failures, refreshCount, hosts } =
+      const { controller, secrets, refreshCount, hosts } =
         yield* Effect.promise(() => createController());
 
-      yield* controller.commitProviderKey('openai', '');
+      const failure = yield* Effect.flip(
+        controller.commitProviderKey('openai', ''),
+      );
 
       assert.equal(yield* secrets.get('apiKey.openai'), undefined);
       assert.equal(refreshCount(), 0);
       assert.equal(hosts.prompt.messages.length, 0);
-      assert.match(failures[0] ?? '', /empty/);
+      assert.match(String(failure.cause), /empty/);
     }),
   );
 
   it.effect('does not refresh when secret storage fails', () =>
     Effect.gen(function* () {
       const error = new Error('write failed');
-      const { controller, refreshCount, failures } = yield* Effect.promise(() =>
+      const { controller, refreshCount } = yield* Effect.promise(() =>
         createController({
           inputResponses: ['sk-real-openai-key'],
           setError: error,
         }),
       );
 
-      yield* controller.setProviderKey('openai');
+      const failure = yield* Effect.flip(controller.setProviderKey('openai'));
 
-      assert.match(failures[0] ?? '', /Failed to set OpenAI API key/);
+      assert.match(failure.message, /Failed to set OpenAI API key/);
       assert.equal(refreshCount(), 0);
     }),
   );
@@ -237,12 +236,15 @@ describe('SettingsProfileKeyController', () => {
   it.effect('does not refresh when secret deletion fails', () =>
     Effect.gen(function* () {
       const error = new Error('delete failed');
-      const { controller, refreshCount, deleted, failures } =
-        yield* Effect.promise(() => createController({ deleteError: error }));
+      const { controller, refreshCount, deleted } = yield* Effect.promise(() =>
+        createController({ deleteError: error }),
+      );
 
-      yield* controller.removeProviderKey('openai');
+      const failure = yield* Effect.flip(
+        controller.removeProviderKey('openai'),
+      );
 
-      assert.match(failures[0] ?? '', /Failed to remove OpenAI API key/);
+      assert.match(failure.message, /Failed to remove OpenAI API key/);
       assert.deepEqual(deleted, []);
       assert.equal(refreshCount(), 0);
     }),
@@ -256,10 +258,9 @@ describe('SettingsProfileKeyController', () => {
     'propagates interruption instead of reporting a cancelled write',
     () =>
       Effect.gen(function* () {
-        const { controller, secrets, failures, refreshCount } =
-          yield* Effect.promise(() =>
-            createController({ inputResponses: ['sk-real-openai-key'] }),
-          );
+        const { controller, secrets, refreshCount } = yield* Effect.promise(
+          () => createController({ inputResponses: ['sk-real-openai-key'] }),
+        );
         secrets.set = () => Effect.interrupt;
 
         const exit = yield* Effect.exit(controller.setProviderKey('openai'));
@@ -268,10 +269,9 @@ describe('SettingsProfileKeyController', () => {
           {
             interrupted:
               Exit.isFailure(exit) && Cause.hasInterrupts(exit.cause),
-            failures,
             refreshes: refreshCount(),
           },
-          { interrupted: true, failures: [], refreshes: 0 },
+          { interrupted: true, refreshes: 0 },
         );
       }),
   );

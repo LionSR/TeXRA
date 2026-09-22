@@ -220,7 +220,7 @@ const createTempFileWithCleanup = Effect.fn('createTempFileWithCleanup')(
       return yield* Effect.fail(new Error('No workspace folder open'));
     }
 
-    const location = readSettingFrom<
+    const location = yield* readSettingFrom<
       (typeof LATEXDIFF_TEMP_FILE_LOCATIONS)[number]
     >(entry.request.roots, 'texra.latexdiff.tempFileLocation');
 

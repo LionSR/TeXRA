@@ -30,10 +30,10 @@ const mocks = vi.hoisted(() => ({
     vi.fn<
       (secrets: unknown, provider: string) => Effect.Effect<boolean, Error>
     >(),
-  getUseOpenRouter: vi.fn<() => boolean>(),
-  getProviderEndpoint: vi.fn<() => string>(),
-  useChinaRegion: vi.fn<() => boolean>(),
-  getGLMCodingPlan: vi.fn<() => boolean>(),
+  getUseOpenRouter: vi.fn<() => Effect.Effect<boolean>>(),
+  getProviderEndpoint: vi.fn<() => Effect.Effect<string>>(),
+  useChinaRegion: vi.fn<() => Effect.Effect<boolean>>(),
+  getGLMCodingPlan: vi.fn<() => Effect.Effect<boolean>>(),
 }));
 
 vi.mock('@model/providerCapabilities', async (importOriginal) => {
@@ -72,10 +72,10 @@ beforeEach(() => {
     .mockReset()
     .mockReturnValue(Effect.succeed(false));
   mocks.hasUsableApiKey.mockReset().mockReturnValue(Effect.succeed(false));
-  mocks.getUseOpenRouter.mockReset().mockReturnValue(false);
-  mocks.getProviderEndpoint.mockReset().mockReturnValue('');
-  mocks.useChinaRegion.mockReset().mockReturnValue(true);
-  mocks.getGLMCodingPlan.mockReset().mockReturnValue(false);
+  mocks.getUseOpenRouter.mockReset().mockReturnValue(Effect.succeed(false));
+  mocks.getProviderEndpoint.mockReset().mockReturnValue(Effect.succeed(''));
+  mocks.useChinaRegion.mockReset().mockReturnValue(Effect.succeed(true));
+  mocks.getGLMCodingPlan.mockReset().mockReturnValue(Effect.succeed(false));
 });
 
 /**
@@ -221,7 +221,7 @@ describe('selectSetupCredentialModelExcludingOpenRouter', () => {
  */
 describe('buildDesktopSetupRunRequest', () => {
   it('routes through OpenRouter only when the flag is on and a key exists', async () => {
-    mocks.getUseOpenRouter.mockReturnValue(true);
+    mocks.getUseOpenRouter.mockReturnValue(Effect.succeed(true));
     mockDirectApiKey('openRouter');
 
     await expect(desktopSetupModel()).resolves.toBe(
@@ -230,7 +230,7 @@ describe('buildDesktopSetupRunRequest', () => {
   });
 
   it('refuses launch when the OpenRouter flag is on without a key, without falling back', async () => {
-    mocks.getUseOpenRouter.mockReturnValue(true);
+    mocks.getUseOpenRouter.mockReturnValue(Effect.succeed(true));
     mocks.isCodexSubscriptionActive.mockReturnValue(Effect.succeed(true));
 
     await expect(desktopSetupModel()).resolves.toBeNull();
@@ -239,7 +239,7 @@ describe('buildDesktopSetupRunRequest', () => {
   });
 
   it('uses a managed direct key when the OpenRouter flag is on without a key', async () => {
-    mocks.getUseOpenRouter.mockReturnValue(true);
+    mocks.getUseOpenRouter.mockReturnValue(Effect.succeed(true));
     mockDirectApiKey('kimiCode');
 
     await expect(desktopSetupModel()).resolves.toBe(

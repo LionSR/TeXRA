@@ -26,6 +26,7 @@ import { lineToRange } from '@frontend/vscode/vscodeEditor';
 import { parseCriticismAnnotations } from '@latex/criticismParser';
 import { withLogChannel } from '@logger/effectLog';
 import { createLog } from '@logger/logUtils';
+import type { StateStore, StateReadFailed } from '@platform/interfaces';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { AddOutputFilesPayload, OutputFileInfo } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -45,6 +46,7 @@ interface CriticismRegistration {
   readonly context: vscode.ExtensionContext;
   readonly session: Pick<SessionHandle, 'events' | 'now'>;
   readonly runtime: ProcessRuntime;
+  readonly globalState: StateStore;
 }
 
 let collection: vscode.DiagnosticCollection | undefined;
@@ -60,17 +62,17 @@ function mapSeverity(severity: number): vscode.DiagnosticSeverity {
   return vscode.DiagnosticSeverity.Hint;
 }
 
-/**
- * The toggle reads the extension's own global state, taken from the context
- * {@link registerInlineCriticism} was given. Before registration there is no
- * state to read and the feature cannot be on, so the answer is `false`.
- */
-export function isInlineCriticismEnabled(): boolean {
-  return (
-    registration?.context.globalState.get<boolean>(
-      GlobalStateKey.INLINE_CRITICISM_ENABLED,
-      false,
-    ) === true
+/** Read the shared state store; before registration the feature is off. */
+export function isInlineCriticismEnabled(): Effect.Effect<
+  boolean,
+  StateReadFailed
+> {
+  return Effect.suspend(() =>
+    registration
+      ? registration.globalState
+          .get<boolean>(GlobalStateKey.INLINE_CRITICISM_ENABLED, false)
+          .pipe(Effect.map((enabled) => enabled === true))
+      : Effect.succeed(false),
   );
 }
 
@@ -224,28 +226,37 @@ export function registerInlineCriticism(
   context: vscode.ExtensionContext,
   runtime: ProcessRuntime,
   session: Pick<SessionHandle, 'events' | 'now'>,
-): void {
-  registration = { context, session, runtime };
-  if (isInlineCriticismEnabled()) enable(registration);
-  context.subscriptions.push({ dispose: disable });
+  globalState: StateStore,
+): Effect.Effect<void, StateReadFailed> {
+  return Effect.gen(function* () {
+    const enabled = yield* globalState.get<boolean>(
+      GlobalStateKey.INLINE_CRITICISM_ENABLED,
+      false,
+    );
+    registration = { context, session, runtime, globalState };
+    if (enabled === true) enable(registration);
+    context.subscriptions.push({ dispose: disable });
+  });
 }
 
-/**
- * Persist the new setting value and reconcile the active subsystem. Called
- * from the settings webview handler when the user toggles the checkbox.
- */
-export async function setInlineCriticismEnabled(
+/** Persist the setting before reconciling the active diagnostics. */
+export function setInlineCriticismEnabled(
   enabled: boolean,
-): Promise<void> {
-  if (!registration) {
-    throw new Error(
-      'setInlineCriticismEnabled called before registerInlineCriticism',
+): Effect.Effect<void, Error> {
+  return Effect.gen(function* () {
+    const current = registration;
+    if (!current) {
+      return yield* Effect.fail(
+        new Error(
+          'setInlineCriticismEnabled called before registerInlineCriticism',
+        ),
+      );
+    }
+    yield* current.globalState.update(
+      GlobalStateKey.INLINE_CRITICISM_ENABLED,
+      enabled,
     );
-  }
-  await registration.context.globalState.update(
-    GlobalStateKey.INLINE_CRITICISM_ENABLED,
-    enabled,
-  );
-  if (enabled) enable(registration);
-  else disable();
+    if (enabled) enable(current);
+    else disable();
+  });
 }

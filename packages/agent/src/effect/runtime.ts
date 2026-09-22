@@ -33,6 +33,7 @@ import {
 } from '@controllers/session/sessionLayer';
 import { globalDatabaseLayer } from '@controllers/session/Database';
 import { setDebugModeConfig } from '@logger/logUtils';
+import { AppState, AgentDirectories } from '@platform/interfaces';
 import { initPlatform, tryPlatform, type Platform } from '@platform/platform';
 import type { AgentResumePort } from '@platform/interfaces';
 import type { LanguageModelPort } from '@platform/languageModel';
@@ -185,13 +186,13 @@ export function composeProcess(platform: AgentPlatform): ProcessHold {
   }
   const processServices = {
     secrets: platform.secrets,
-    appState: platform.roots.globalState,
+    appState: AppState.layer(platform.roots.globalState),
     // The package has no TeXRA account plane of its own: every probe answers
     // signed-out, as the uninitialized facade did for an embedder.
     auth: unavailableSupabaseAuth(),
     languageModel: platform.languageModel,
     agentResume: platform.agentResume,
-    agentDirectories: platform.agentDirectories,
+    agentDirectories: AgentDirectories.layer(platform.agentDirectories),
     lifecycle: platform.lifecycle,
     setup: PACKAGE_SETUP,
   };

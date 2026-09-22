@@ -20,7 +20,8 @@ import { withLogChannel } from '@logger/effectLog';
 import { createLog } from '@logger/logUtils';
 import {
   type AgentDirectoriesFailed,
-  StateWriteFailed,
+  type StateWriteFailed,
+  type StateStore,
 } from '@platform/interfaces';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { GlobalStorageFs } from '@platform/rootedFs';
@@ -38,7 +39,7 @@ const AGENT_WATCHER_REBUILD_LANE = 'agent-watcher-rebuild';
  *  one guard covers both. */
 interface AgentDirectoryHost {
   readonly directories: AgentDirectoryService;
-  readonly globalState: vscode.Memento;
+  readonly globalState: StateStore;
   /** The host entry's process runtime, handed down with the two services. */
   readonly runtime: ProcessRuntime;
 }
@@ -53,7 +54,7 @@ class AgentDirectoryManager {
   private readonly watcherRebuildLanes = new Map<string, PerKeyLane>();
 
   initialize(
-    globalState: vscode.Memento,
+    globalState: StateStore,
     resourcesPath: string,
     runtime: ProcessRuntime,
   ): void {
@@ -142,12 +143,10 @@ class AgentDirectoryManager {
       const fs = yield* FileSystem.FileSystem;
       yield* fs.makeDirectory(selectedPath, { recursive: true });
 
-      const key = GlobalStateKey.CUSTOM_AGENT_DIR;
-      yield* Effect.tryPromise({
-        try: () => this.getHost().globalState.update(key, selectedPath),
-        catch: (cause) =>
-          new StateWriteFailed({ key, message: toErrorMessage(cause), cause }),
-      });
+      yield* this.getHost().globalState.update(
+        GlobalStateKey.CUSTOM_AGENT_DIR,
+        selectedPath,
+      );
 
       return selectedPath;
     });

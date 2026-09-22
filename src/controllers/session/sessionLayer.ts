@@ -45,7 +45,7 @@ import {
 } from '@agent/runtime/toolInjection';
 import { EditorModel } from '@agent/runtime/run/modelBinding';
 import { createSessionApprovals } from '@agent/runtime/runApprovalQueue';
-import { makeParkedRuns, RunRegistry } from '@agent/runtime/runRegistry';
+import { RunRegistry } from '@agent/runtime/runRegistry';
 import { runLedgerLayer } from '@agent/runtime/RunLedger';
 import { sessionEventsLayer, tailFrom } from '@agent/runtime/SessionEvents';
 import { ModelRetryGate } from '@agent/runtime/ModelRetryGate';
@@ -70,10 +70,8 @@ import {
   AppState,
   Lifecycle,
   ToolMissingReporter,
-  type AgentDirectoriesPort,
   type AgentResumePort,
   type LifecycleHost,
-  type StateStore,
   type ToolMissingHandler,
 } from '@platform/interfaces';
 import { LanguageModel, type LanguageModelPort } from '@platform/languageModel';
@@ -101,6 +99,7 @@ import { SessionInputs } from '@shared/session/sessionInputs';
 
 import {
   Database,
+  ProjectDatabases,
   type DatabaseOpenFailed,
   type DatabaseReadFailed,
   type GlobalDatabase,
@@ -116,6 +115,7 @@ import { StreamLogStore } from '@transcript/StreamLogStore';
 import { inquiryRecordsLayer } from './inquiryRecords';
 import { updateCheckRecordsLayer } from './updateCheckRecords';
 import { databaseLayer } from './Database';
+import { projectDatabaseLayer } from './projectDatabase';
 import { collectPendingDeletions } from './deletionCleanup';
 import { sessionRequests } from './SessionRequests';
 import { sweepLeftoverRuns } from './sweepLeftoverRuns';
@@ -345,7 +345,6 @@ const sessionHandleLayer = (
           : settleTo(last.commit).pipe(Effect.as(rows));
       };
       const now = () => SubscriptionRef.getUnsafe(eventLog.observedCommit);
-      const parkedRuns = yield* makeParkedRuns();
       const graph = (session: SessionHandle): SessionGraph => {
         // The session's approval state, built here rather than by the handle
         // so that its runs and its request handler share the one instance and
@@ -488,7 +487,6 @@ const sessionHandleLayer = (
             finalizeRun: (input) => finalizeRun(session, input),
             acquireRunClaim: (runId) =>
               session.acquireClaims(qualifyAggregateId('run', runId)),
-            parked: parkedRuns,
           }),
           // The session's requests: the approval state above and the handler
           // that admits on the root graph's log.
@@ -672,17 +670,24 @@ const sessionHandleLayer = (
 /** The runtime graph of one root (PRD 7.3): the root-scoped services the
  *  handle is built over. */
 const sessionGraphLayer = (key: SessionKey) => {
+  const database: Layer.Layer<
+    Database,
+    DatabaseOpenFailed,
+    ProjectDatabases | ProcessIdentity | WorkspaceRoots
+  > =
+    key.open.transcriptMode?.kind === 'ephemeral'
+      ? databaseLayer('ephemeral')
+      : Layer.effect(
+          Database,
+          Effect.flatMap(ProjectDatabases, (databases) =>
+            RcMap.get(databases, key.storage),
+          ),
+        );
   return ownerLiveness.pipe(
     Layer.provideMerge(SessionViewService.layer),
     Layer.provideMerge(sessionInputsLayer),
     Layer.provideMerge(runLedgerLayer),
-    Layer.provideMerge(
-      sessionEventsLayer.pipe(
-        Layer.provideMerge(
-          databaseLayer(key.open.transcriptMode?.kind ?? 'persistent'),
-        ),
-      ),
-    ),
+    Layer.provideMerge(sessionEventsLayer.pipe(Layer.provideMerge(database))),
     Layer.provideMerge(
       Layer.mergeAll(
         LocalRuntimeSource.layer,
@@ -698,11 +703,10 @@ const sessionGraphLayer = (key: SessionKey) => {
  * The complete session of one root: the handle over the root's graph, the
  * handle alone being the entry's service. `Layer.fresh`: the layer map builds
  * every key's entry through one memo map, and layers memoize by reference, so
- * without it the root-scoped layers would be built once and every root on the
- * process would share one log and one fold. The `fresh` covers the sources and
- * the database and nothing above them: every process service the entry reads —
- * the identity first among them, a real effect — comes from the runtime's own
- * context, built once for the process.
+ * without it every root would share one log and one fold. The graph's sources
+ * and ephemeral database are fresh; a persistent graph retains its database
+ * from `ProjectDatabases`, shared with the project's application state. That
+ * resource family and the process identity come from the runtime's context.
  */
 const sessionLayer = (
   key: SessionKey,
@@ -945,18 +949,12 @@ const closeSession = (root: string) =>
  * Effect, on the opener's own fiber; its one synchronous face, `current`,
  * reads the held map and runs nothing.
  *
- * The process services (injection plan §3.1, the one process provide point)
- * are merged here from what the root hands over: `Secrets` and `AppState` over
- * the root's own stores, which every root now opens before it calls this — the
- * desktop and CLI roots open theirs on a bootstrap run rather than on the
- * runtime they are about to install, so both arrive as values (the CLI's
- * secrets-only `clone` entry hands over a store that refuses instead of
- * opening one); `SupabaseAuth` over the root's account plane; `LanguageModel`
- * over the root's editor language-model bridge
- * (`UNAVAILABLE_LANGUAGE_MODEL_PORT` where the host has none); `AgentResume`
- * over the root's own resume port; `SetupPlatform` over the root's
- * host-varying setup capabilities; and `ToolInjections` over
- * `AGENT_TOOL_INJECTIONS`, the same list for every host.
+ * Host values and resource-owning layers are composed here once. Secrets and
+ * identity resolve at bootstrap; AppState is acquired in the process scope,
+ * and the agent-directory layer captures it before serving any reads. Hosts
+ * with externally owned stores supply them through AppState.layer. A CLI
+ * entry without application state supplies a refusing store and database.
+
  */
 interface ProcessRuntimeOptions {
   readonly processStart: Effect.Effect<string | undefined>;
@@ -969,11 +967,10 @@ interface ProcessRuntimeOptions {
    */
   readonly agentResume: AgentResumePort;
   /**
-   * The root's agent directories, served as `AgentDirectories`: the same value
-   * the root wires into its platform, required of every entry even where it
-   * resolves to empty directories (the agent package's embedder default).
+   * The host's agent-directory layer, which can capture AppState at construction
+   * without exposing that dependency in its readers.
    */
-  readonly agentDirectories: AgentDirectoriesPort;
+  readonly agentDirectories: Layer.Layer<AgentDirectories, never, AppState>;
   /**
    * The root's shutdown lifecycle, served as `Lifecycle`: the same host every
    * entry drains on shutdown. A subscriber that must register a cleanup reads
@@ -987,12 +984,15 @@ interface ProcessRuntimeOptions {
    */
   readonly toolMissingReporter?: ToolMissingHandler;
   /**
-   * The root's global state store, opened before this install and served as
-   * `AppState`. Every entry has one: an entry that serves no application state
-   * (the CLI's platform-less `clone`, whose storage root may be read-only)
-   * passes a store that refuses, so absent state is loud, not missing.
+   * The host's global application-state layer, acquired in this runtime's scope.
+   * A platform-less CLI entry supplies its refusing store through AppState.layer
+   * so it creates no storage on a possibly read-only root.
    */
-  readonly appState: StateStore;
+  readonly appState: Layer.Layer<
+    AppState,
+    DatabaseOpenFailed,
+    GlobalDatabase | ProcessIdentity
+  >;
   /**
    * The root's account plane, served as `SupabaseAuth`. Every shipped host
    * builds one from its secrets; a composition with no TeXRA account plane (the
@@ -1029,7 +1029,7 @@ interface ProcessRuntimeOptions {
   readonly lean: Layer.Layer<
     LeanLanguageServices,
     never,
-    FileSystem.FileSystem | Path.Path
+    FileSystem.FileSystem | Path.Path | AppState
   >;
   /**
    * The host's usage log (`usageLogLayer`), stamped with its version and
@@ -1097,11 +1097,10 @@ export function installProcessRuntime({
     inquiryRecordsLayer,
     updateCheckRecordsLayer,
     Secrets.layer(secrets),
-    AppState.layer(appState),
     SupabaseAuth.layer(auth),
     LanguageModel.layer(languageModel),
     AgentResume.layer(agentResume),
-    AgentDirectories.layer(agentDirectories),
+    agentDirectories,
     Lifecycle.layer(lifecycle),
     toolMissingReporter === undefined
       ? Layer.empty
@@ -1116,7 +1115,10 @@ export function installProcessRuntime({
     inlineComments === undefined
       ? Layer.empty
       : Layer.succeed(InlineComments)(inlineComments),
-  ).pipe(Layer.provideMerge(identity));
+  ).pipe(
+    Layer.provideMerge(appState.pipe(Layer.orDie)),
+    Layer.provideMerge(identity),
+  );
   // The map's services on the caller's own fiber: an Effect-native opener (the
   // SDK) runs these where it stands, so the owner adds no run site of its own.
   // Supply only the owned session family: the caller retains its tracer,
@@ -1136,17 +1138,16 @@ export function installProcessRuntime({
   const runtime = withForkFailureReporting(
     ManagedRuntime.make(
       Sessions.layer(held, release).pipe(
+        Layer.provideMerge(projectDatabaseLayer),
         // The usage log's own lifetime: its sender and ticker run as long as
         // this runtime does, and its finalizer drains the queue while the
         // account plane below is still up. Ahead of `services` in the chain so
         // that plane and the HTTP client reach it.
         Layer.provideMerge(usageLog),
-        Layer.provideMerge(services),
-        // The Lean pool is one per process — its servers are shared across
-        // roots — as is the cross-workspace storage view below it: every
-        // session shares that root, so nothing below resolves a global-storage
-        // path against a root of its own.
+        // The editor's Lean port also reads this process's AppState.
         Layer.provideMerge(lean),
+        Layer.provideMerge(services),
+        // Every session shares this process's global-storage view.
         Layer.provideMerge(globalStorageFsLayer(globalStorage)),
         // The records' handle on that same root, for the same reason: one
         // connection and one change poll per process, outside the entry.

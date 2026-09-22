@@ -198,16 +198,12 @@ const addThread = Effect.fn('InlineCommentTool.addThread')(function* (
 ) {
   const call = yield* ToolCall;
   const { path, line, endLine, body } = input;
-  const resolved = yield* Effect.try({
-    try: () =>
-      resolveWorkspaceRelativePath(
-        call.roots,
-        call.roots.workspace,
-        path,
-        call.workingDirectory,
-      ),
-    catch: addCommentFailure,
-  });
+  const resolved = yield* resolveWorkspaceRelativePath(
+    call.roots,
+    call.roots.workspace,
+    path,
+    call.workingDirectory,
+  ).pipe(Effect.mapError(addCommentFailure));
   const provider = yield* requireProvider;
   const result = yield* Effect.try({
     try: () =>
@@ -262,12 +258,12 @@ const listThreads = Effect.fn('InlineCommentTool.list')(function* (
   const absolutePath =
     input.path == null
       ? undefined
-      : resolveWorkspaceRelativePath(
+      : (yield* resolveWorkspaceRelativePath(
           call.roots,
           call.roots.workspace,
           input.path ?? undefined,
           call.workingDirectory,
-        ).absolute;
+        )).absolute;
   const threads = (yield* requireProvider).list({ absolutePath });
   if (threads.length === 0) {
     return executed(

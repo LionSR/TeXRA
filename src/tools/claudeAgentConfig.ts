@@ -10,6 +10,7 @@ import { execa } from 'execa';
 // Local imports
 import { createLog } from '@logger/logUtils';
 import { exposeApiKey, lookupApiKey, apiKeyEnvName } from '@model/apiProviders';
+import type { StateReadFailed } from '@platform/interfaces';
 import type { StateStore } from '@platform/interfaces';
 import { Secrets } from '@platform/secrets';
 import type {
@@ -39,7 +40,7 @@ const log = createLog('claudeAgent');
 
 export const getClaudeAgentModel: (
   workspaceState: StateStore,
-) => ClaudeAgentModel = createEnumStateGetter(
+) => Effect.Effect<ClaudeAgentModel, StateReadFailed> = createEnumStateGetter(
   WorkspaceStateKey.CLAUDE_AGENT_MODEL,
   CLAUDE_AGENT_DEFAULT_MODEL,
   parseClaudeAgentModel,
@@ -51,11 +52,12 @@ export const getClaudeAgentModel: (
 
 export const getClaudeAgentPermissionMode: (
   workspaceState: StateStore,
-) => ClaudeAgentPermissionMode = createEnumStateGetter(
-  WorkspaceStateKey.CLAUDE_AGENT_PERMISSION_MODE,
-  CLAUDE_AGENT_DEFAULT_PERMISSION_MODE,
-  parseClaudeAgentPermissionMode,
-);
+) => Effect.Effect<ClaudeAgentPermissionMode, StateReadFailed> =
+  createEnumStateGetter(
+    WorkspaceStateKey.CLAUDE_AGENT_PERMISSION_MODE,
+    CLAUDE_AGENT_DEFAULT_PERMISSION_MODE,
+    parseClaudeAgentPermissionMode,
+  );
 
 // ============================================================================
 // Effort — adaptive thinking depth hint passed via `effort` SDK option
@@ -63,7 +65,7 @@ export const getClaudeAgentPermissionMode: (
 
 export const getClaudeAgentEffort: (
   workspaceState: StateStore,
-) => ClaudeAgentEffort = createEnumStateGetter(
+) => Effect.Effect<ClaudeAgentEffort, StateReadFailed> = createEnumStateGetter(
   WorkspaceStateKey.CLAUDE_AGENT_EFFORT,
   CLAUDE_AGENT_DEFAULT_EFFORT,
   parseClaudeAgentEffort,

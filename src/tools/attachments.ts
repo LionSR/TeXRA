@@ -133,16 +133,16 @@ export const buildFileAttachment = Effect.fn('buildFileAttachment')(function* ({
   // the model, so it stays a failure rather than becoming a defect.
   const { path, display } = resolved
     ? { path: resolved, display: toPosixPath(resolved.relative) }
-    : yield* Effect.try({
-        try: () =>
-          resolveAndFormat(
-            call.roots,
-            call.roots.workspace,
-            filePath,
-            call.workingDirectory,
-          ),
-        catch: attachmentFailure(`Failed to resolve attachment ${filePath}`),
-      });
+    : yield* resolveAndFormat(
+        call.roots,
+        call.roots.workspace,
+        filePath,
+        call.workingDirectory,
+      ).pipe(
+        Effect.mapError(
+          attachmentFailure(`Failed to resolve attachment ${filePath}`),
+        ),
+      );
   const fs = yield* FileSystem.FileSystem;
   const present = yield* entryExists(fs, path.absolute).pipe(
     Effect.mapError(

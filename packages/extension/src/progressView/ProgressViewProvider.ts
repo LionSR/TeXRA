@@ -1,12 +1,5 @@
-/**
- * The extension's one conversation shell (PRD one-fold-three-renderers,
- * 7.4, 8, 12.1): the sidebar webview and the editor tab are two ports of
- * the window's session, each folding the same frames to the same view. The
- * provider owns the ports' lifetimes, the `host` snapshot the frames carry,
- * the host request handler, the presentation the runtime asks of a host
- * with no renderer in the loop, and the onboarding funnel the New-task
- * state renders.
- */
+/** The sidebar and editor tab render one session; this provider owns their
+ * ports, host snapshot, request handling, and onboarding presentation. */
 import * as path from 'node:path';
 
 import * as vscode from 'vscode';
@@ -72,7 +65,11 @@ import { getLinterMessages } from '@frontend/latex/linter';
 import { AgentReviewService } from '@frontend/review/AgentReviewService';
 import { createLog } from '@logger/logUtils';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
-import type { StateStore, StateWriteFailed } from '@platform/interfaces';
+import type {
+  StateStore,
+  StateReadFailed,
+  StateWriteFailed,
+} from '@platform/interfaces';
 import type { LanguageModel } from '@platform/languageModel';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
@@ -159,16 +156,17 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
 
   constructor(
     private readonly context: vscode.ExtensionContext,
-    /** The platform state port, wrapped once by the extension root from the
-     *  editor's global `Memento`. */
     private readonly globalState: StateStore,
     private readonly secrets: PlatformSecrets,
-    /** This view's handle on the process runtime, handed down by the host
-     *  entry for the session edges below. */
+    /** Process runtime shared with every extension surface. */
     private readonly runtime: ProcessRuntime,
-    /** The extension host's one session, created in `activate` and handed
-     *  down to every surface that needs it. */
+    /** Session created by the extension entry. */
     session: SessionHandle,
+    public readonly refreshApiKeyStatus: Effect.Effect<
+      void,
+      Error,
+      ProcessServices
+    >,
   ) {
     this.logger = createChannelTrace('ProgressViewProvider');
     this.session = session;
@@ -342,6 +340,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       popOutToEditor: () => this.popOutToEditor(),
       showInSidebar: () => this.showInSidebar(),
       refreshOnboardingFunnel: () => this.refreshOnboardingFunnel(),
+      refreshApiKeyStatus: this.refreshApiKeyStatus,
     });
     this.disposables.push({ dispose: () => hostRequests.dispose() });
 
@@ -498,10 +497,11 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   private refreshAfterCredentialChange() {
     return Effect.gen({ self: this }, function* () {
       yield* refresh();
-      // `Promise.all` semantics, which is what this fan-out had: a failed
-      // repaint must not take the other three with it, and a half-repainted
-      // view is not an improvement on a failed one.
-      yield* allSettledVoid<StateWriteFailed, ProcessServices>([
+      // Let every surface finish repainting even when another one fails.
+      yield* allSettledVoid<
+        StateReadFailed | StateWriteFailed,
+        ProcessServices
+      >([
         this.snapshot.refreshCatalogs,
         this.snapshot.refreshAuth,
         this.snapshot.refreshHostBanners,
@@ -545,7 +545,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   /** Recompute the user-scoped funnel; the shared refresher owns the loop. */
   public refreshOnboardingFunnel(): Effect.Effect<
     void,
-    StateWriteFailed,
+    StateReadFailed | StateWriteFailed,
     LanguageModel
   > {
     return this.onboardingFunnel.run();

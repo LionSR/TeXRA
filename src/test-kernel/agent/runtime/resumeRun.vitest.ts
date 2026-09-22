@@ -101,7 +101,7 @@ const resumedFlowTakes = (session: ReturnType<typeof createTestSession>) =>
     }));
     const input = session.followUps.attachInput(RUN, yield* RunInput.make)!;
     input.seed(pending);
-    const batch = yield* input.poll;
+    const batch = input.hasQueued() ? yield* input.take : null;
     if (batch !== null && !batch.synthetic) {
       taken.push(...batch.followUps.map((followUp) => followUp.content.text));
     }

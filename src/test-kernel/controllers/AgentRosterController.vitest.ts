@@ -50,7 +50,7 @@ function controller(
     workspaceState,
     globalState: new FakeStateStore(),
     getAgents,
-    getPresets: () => [preset],
+    getPresets: () => Effect.succeed([preset]),
     resolveAgent: (category, identifier) =>
       getAgents(category).find((entry) =>
         agentMatchesIdentifier(entry, identifier),
@@ -76,35 +76,43 @@ describe('AgentRosterController', () => {
     );
   }
 
-  it('warns and falls back to the inherited roster on malformed state', () => {
-    const warn = stubWarn();
-    const roster = controller(
-      new FakeStateStore({
-        [WorkspaceStateKey.AGENT_ROSTER_SELECTION]: { kind: 'invalid' },
+  it.effect(
+    'warns and falls back to the inherited roster on malformed state',
+    () =>
+      Effect.gen(function* () {
+        const warn = stubWarn();
+        const roster = controller(
+          new FakeStateStore({
+            [WorkspaceStateKey.AGENT_ROSTER_SELECTION]: { kind: 'invalid' },
+          }),
+        );
+
+        expect((yield* roster.snapshot()).selection).toEqual({
+          kind: 'inherit',
+        });
+        expectMalformedWarning(warn);
       }),
-    );
+  );
 
-    expect(roster.snapshot().selection).toEqual({ kind: 'inherit' });
-    expectMalformedWarning(warn);
-  });
+  it.effect('uses the user default only for inherited workspaces', () =>
+    Effect.gen(function* () {
+      const workspaceState = new FakeStateStore();
+      const roster = controller(workspaceState, {
+        globalState: new FakeStateStore({
+          [GlobalStateKey.ONBOARDING_DEFAULT_TEAM_ID]: 'test-team',
+        }),
+      });
 
-  it('uses the user default only for inherited workspaces', () => {
-    const workspaceState = new FakeStateStore();
-    const roster = controller(workspaceState, {
-      globalState: new FakeStateStore({
-        [GlobalStateKey.ONBOARDING_DEFAULT_TEAM_ID]: 'test-team',
-      }),
-    });
-
-    expect(roster.snapshot().selection).toEqual({ kind: 'inherit' });
-    expect(roster.snapshot().effectiveSelection).toEqual({
-      kind: 'team',
-      teamId: 'test-team',
-    });
-    expect(
-      roster.getVisibleAgents('toolUse').map((agent) => agent.name),
-    ).toEqual(['lead']);
-  });
+      expect((yield* roster.snapshot()).selection).toEqual({ kind: 'inherit' });
+      expect((yield* roster.snapshot()).effectiveSelection).toEqual({
+        kind: 'team',
+        teamId: 'test-team',
+      });
+      expect(
+        (yield* roster.getVisibleAgents('toolUse')).map((agent) => agent.name),
+      ).toEqual(['lead']);
+    }),
+  );
 
   it.effect('persists one canonical team selection', () =>
     Effect.gen(function* () {
@@ -114,7 +122,7 @@ describe('AgentRosterController', () => {
       yield* roster.setTeam('test-team');
 
       expect(
-        workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION),
+        yield* workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION),
       ).toEqual({
         kind: 'team',
         teamId: 'test-team',
@@ -135,7 +143,7 @@ describe('AgentRosterController', () => {
         enabled: false,
       });
 
-      expect(roster.snapshot().selection).toEqual({
+      expect((yield* roster.snapshot()).selection).toEqual({
         kind: 'custom',
         agentKeys: {
           workflow: 'all',
@@ -161,9 +169,11 @@ describe('AgentRosterController', () => {
           name: 'write',
           enabled: true,
         });
-        expect(inherited.snapshot().selection).toEqual({ kind: 'inherit' });
+        expect((yield* inherited.snapshot()).selection).toEqual({
+          kind: 'inherit',
+        });
         expect(
-          inheritedState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION),
+          yield* inheritedState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION),
         ).toBeUndefined();
 
         const team = controller(new FakeStateStore());
@@ -174,7 +184,7 @@ describe('AgentRosterController', () => {
           name: 'lead',
           enabled: true,
         });
-        expect(team.snapshot().selection).toEqual({
+        expect((yield* team.snapshot()).selection).toEqual({
           kind: 'team',
           teamId: 'test-team',
         });
@@ -187,7 +197,7 @@ describe('AgentRosterController', () => {
           name: 'search',
           enabled: true,
         });
-        expect(all.snapshot().selection).toEqual({ kind: 'all' });
+        expect((yield* all.snapshot()).selection).toEqual({ kind: 'all' });
       }),
   );
 
@@ -202,11 +212,11 @@ describe('AgentRosterController', () => {
         };
         const workspaceState = new FakeStateStore();
         const roster = controller(workspaceState, {
-          getPresets: () => [unavailablePreset],
+          getPresets: () => Effect.succeed([unavailablePreset]),
         });
         yield* roster.setTeam(unavailablePreset.id);
 
-        expect(roster.getEnabledAgentKeys('workflow')).toEqual([
+        expect(yield* roster.getEnabledAgentKeys('workflow')).toEqual([
           'builtInWorkflow:write',
           'future-reviewer',
         ]);
@@ -218,7 +228,7 @@ describe('AgentRosterController', () => {
           enabled: true,
         });
 
-        expect(roster.snapshot().selection).toEqual({
+        expect((yield* roster.snapshot()).selection).toEqual({
           kind: 'custom',
           agentKeys: {
             workflow: ['builtInWorkflow:write', 'future-reviewer'],
@@ -228,19 +238,23 @@ describe('AgentRosterController', () => {
       }),
   );
 
-  it('falls back to all agents for a missing symbolic team', () => {
-    const workspaceState = new FakeStateStore({
-      [WorkspaceStateKey.AGENT_ROSTER_SELECTION]: {
-        kind: 'team',
-        teamId: 'deleted-team',
-      },
-    });
-    const roster = controller(workspaceState);
+  it.effect('falls back to all agents for a missing symbolic team', () =>
+    Effect.gen(function* () {
+      const workspaceState = new FakeStateStore({
+        [WorkspaceStateKey.AGENT_ROSTER_SELECTION]: {
+          kind: 'team',
+          teamId: 'deleted-team',
+        },
+      });
+      const roster = controller(workspaceState);
 
-    expect(roster.snapshot().effectiveSelection).toEqual({ kind: 'all' });
-    expect(roster.getVisibleAgents('toolUse')).toEqual(agents.toolUse);
-    expect(roster.snapshot().missingTeamId).toBe('deleted-team');
-  });
+      expect((yield* roster.snapshot()).effectiveSelection).toEqual({
+        kind: 'all',
+      });
+      expect(yield* roster.getVisibleAgents('toolUse')).toEqual(agents.toolUse);
+      expect((yield* roster.snapshot()).missingTeamId).toBe('deleted-team');
+    }),
+  );
 
   it.effect(
     'materializes an active custom team before deleting its preset',
@@ -249,7 +263,7 @@ describe('AgentRosterController', () => {
         let presets: AgentModePreset[] = [preset];
         const workspaceState = new FakeStateStore();
         const roster = controller(workspaceState, {
-          getPresets: () => presets,
+          getPresets: () => Effect.succeed(presets),
         });
         yield* roster.setTeam(preset.id);
 
@@ -259,7 +273,7 @@ describe('AgentRosterController', () => {
           }),
         );
 
-        expect(roster.snapshot().selection).toEqual({
+        expect((yield* roster.snapshot()).selection).toEqual({
           kind: 'custom',
           agentKeys: {
             workflow: ['builtInWorkflow:write'],
@@ -269,31 +283,35 @@ describe('AgentRosterController', () => {
       }),
   );
 
-  it('matches source-qualified custom selections by exact identity', () => {
-    const duplicateAgents: Record<AgentCategory, AgentRosterEntry[]> = {
-      workflow: [],
-      toolUse: [
-        { category: 'toolUse', source: 'custom', name: 'review' },
-        { category: 'toolUse', source: 'remote', name: 'review' },
-      ],
-    };
-    const roster = controller(
-      new FakeStateStore({
-        [WorkspaceStateKey.AGENT_ROSTER_SELECTION]: {
-          kind: 'custom',
-          agentKeys: {
-            workflow: [],
-            toolUse: ['remote:review'],
-          },
-        },
-      }),
-      { getAgents: (category) => duplicateAgents[category] },
-    );
+  it.effect(
+    'matches source-qualified custom selections by exact identity',
+    () =>
+      Effect.gen(function* () {
+        const duplicateAgents: Record<AgentCategory, AgentRosterEntry[]> = {
+          workflow: [],
+          toolUse: [
+            { category: 'toolUse', source: 'custom', name: 'review' },
+            { category: 'toolUse', source: 'remote', name: 'review' },
+          ],
+        };
+        const roster = controller(
+          new FakeStateStore({
+            [WorkspaceStateKey.AGENT_ROSTER_SELECTION]: {
+              kind: 'custom',
+              agentKeys: {
+                workflow: [],
+                toolUse: ['remote:review'],
+              },
+            },
+          }),
+          { getAgents: (category) => duplicateAgents[category] },
+        );
 
-    expect(roster.getVisibleAgents('toolUse')).toEqual([
-      { category: 'toolUse', source: 'remote', name: 'review' },
-    ]);
-  });
+        expect(yield* roster.getVisibleAgents('toolUse')).toEqual([
+          { category: 'toolUse', source: 'remote', name: 'review' },
+        ]);
+      }),
+  );
 
   it.effect(
     'serializes concurrent category changes through one workspace owner',
@@ -322,7 +340,7 @@ describe('AgentRosterController', () => {
           { concurrency: 'unbounded' },
         );
 
-        expect(first.snapshot().selection).toEqual({
+        expect((yield* first.snapshot()).selection).toEqual({
           kind: 'custom',
           agentKeys: {
             workflow: ['builtInWorkflow:write'],

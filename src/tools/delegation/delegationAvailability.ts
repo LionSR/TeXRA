@@ -41,12 +41,11 @@ import { decideRunModel } from '@model/runModelDecision';
 import { Secrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import type {
-  AgentCategory,
   AgentDelegationScope,
   ModelOptionData,
   ToolDefinition,
 } from '@shared/schemas';
-import { isModelOptionAvailable } from '@shared/schemas';
+import { AgentCategory, isModelOptionAvailable } from '@shared/schemas';
 import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
 import { unique } from '@utils/core';
 import { isWorktreeSupportEnabled } from '@utils/config/worktreeConfig';
@@ -105,7 +104,7 @@ const NO_AGENTS_LINE =
  * the block regex.
  */
 function formatAgentList(
-  agents: { name: string; description?: string; tools?: string[] }[],
+  agents: readonly { name: string; description?: string; tools?: string[] }[],
 ): string {
   return agents
     .map((agent) => {
@@ -129,12 +128,7 @@ function formatAgentList(
  * registry, so an empty result means the user genuinely has no visible agents
  * in this category — not a not-yet-loaded cache.
  */
-function visibleDelegationAgentsBlock(
-  stores: AgentRosterStores,
-  category: AgentCategory,
-  scope: AgentDelegationScope | undefined,
-): string {
-  const agents = getDelegationAgents(stores, category, scope);
+function visibleDelegationAgentsBlock(agents: readonly AgentEntry[]): string {
   if (agents.length === 0) return NO_AGENTS_LINE;
   return `Available agents:\n${formatAgentList(agents)}`;
 }
@@ -146,55 +140,53 @@ function visibleDelegationAgentsBlock(
  * the annotation itself is pure over them.
  */
 export interface DelegationAnnotationState {
-  /** The run's pinned delegation scope, or undefined for the durable roster. */
-  readonly delegationScope: AgentDelegationScope | undefined;
-  /** This session's `texra.git.worktreeSupport` opt-in. */
   readonly worktreeEnabled: boolean;
-  /** The slots the durable roster is read from when no scope is pinned. */
-  readonly stores: AgentRosterStores;
+  readonly agents: Readonly<Record<AgentCategory, readonly AgentEntry[]>>;
 }
 
-/**
- * Read the annotation's run scope and workspace setting here and now. The
- * caller supplies the run scope and the setting slots explicitly, so both
- * facts reach {@link annotateDelegationAvailability} answering for the session
- * the resolution was given rather than for the calling fiber.
- */
-export function readDelegationAnnotationState(
-  stores: SettingsStores,
-  delegationScope?: AgentDelegationScope,
-): DelegationAnnotationState {
+/** Resolve the roster and workspace setting before pure annotation. */
+export const readDelegationAnnotationState = Effect.fn(
+  'readDelegationAnnotationState',
+)(function* (stores: SettingsStores, delegationScope?: AgentDelegationScope) {
+  const agents = yield* Effect.all({
+    workflow: getDelegationAgents(
+      stores,
+      AgentCategory.Workflow,
+      delegationScope,
+    ),
+    toolUse: getDelegationAgents(
+      stores,
+      AgentCategory.ToolUse,
+      delegationScope,
+    ),
+  });
   return {
-    delegationScope,
-    worktreeEnabled: isWorktreeSupportEnabled(stores),
-    stores,
-  };
-}
+    agents,
+    worktreeEnabled: yield* isWorktreeSupportEnabled(stores),
+  } satisfies DelegationAnnotationState;
+});
 
-/**
- * Resolve delegation targets from an explicitly captured scope, falling back to
- * the durable roster when no run scope applies.
- */
+/** Resolve targets from a pinned run scope or the current durable roster. */
 export function getDelegationAgents(
   stores: AgentRosterStores,
   category: AgentCategory,
   scope?: AgentDelegationScope,
-): AgentEntry[] {
+) {
   return resolveDelegationScopeAgents(stores, scope, category);
 }
 
-/** Resolve one delegation target out of that same candidate set. */
-export function getDelegationAgent(
+/** Resolve one target from the same authoritative candidate set. */
+export const getDelegationAgent = Effect.fn('getDelegationAgent')(function* (
   stores: AgentRosterStores,
   category: AgentCategory,
   identifier: string,
   scope?: AgentDelegationScope,
-): AgentEntry | undefined {
+) {
   return findAgentByIdentifier(
-    getDelegationAgents(stores, category, scope),
+    yield* getDelegationAgents(stores, category, scope),
     identifier,
   );
-}
+});
 
 /* -------------------------------------------------------------------------
  * Models
@@ -345,12 +337,7 @@ export function annotateDelegationAvailability(
   const withAgents = replaceDelegationDescriptionBlock(
     withModels,
     AVAILABLE_AGENTS_BLOCK,
-    () =>
-      visibleDelegationAgentsBlock(
-        state.stores,
-        category,
-        state.delegationScope,
-      ),
+    () => visibleDelegationAgentsBlock(state.agents[category]),
     { appendIfMissing: true },
   );
   return replaceDelegationDescriptionBlock(

@@ -33,10 +33,11 @@ export function registerMergeCommands(
               return;
             }
 
+            const model = yield* getHelperModelName(globalState);
             yield* Effect.promise(() =>
               vscode.commands.executeCommand('texra.execute', {
                 agent: 'merge',
-                model: getHelperModelName(globalState),
+                model,
                 inputFiles: [baseFile],
                 editedFile,
               }),

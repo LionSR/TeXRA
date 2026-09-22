@@ -1,8 +1,9 @@
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
+import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 import { aggregateId as qualifyAggregateId, type RunId } from '@shared/schemas';
 import { testRuntime } from '@test/support/testProcessRuntime';
@@ -154,13 +155,9 @@ function latestDiagnostics(absolutePath: string): unknown[] | undefined {
   return mocks.diagnosticCollections.at(-1)?.items.get(absolutePath);
 }
 
-/**
- * The slice of the extension context these two features use: the disposable
- * list, and the memento the inline-criticism toggle is stored in (the feature
- * reads and writes the toggle through the context it was registered with).
- */
+/** The native context only owns frontend disposables. */
 function fakeExtensionContext() {
-  return { subscriptions: [], globalState: new FakeStateStore() };
+  return { subscriptions: [] };
 }
 
 function disposeContext(context: {
@@ -224,42 +221,52 @@ describe('output-file run fact frontend subscriptions', () => {
     ).toBeUndefined();
   });
 
-  it('refreshes inline criticism only for live run facts while enabled', async () => {
-    tempDir = `/tmp/texra-inline-criticism-${Date.now()}`;
-    const outputPath = join(tempDir, 'out.tex');
-    await mkdir(tempDir, { recursive: true });
-    await writeFile(
-      outputPath,
-      'before\n\\criticize{tighten this argument}{4}{5}\nafter\n',
-    );
+  it.live(
+    'refreshes inline criticism only for live run facts while enabled',
+    () =>
+      Effect.gen(function* () {
+        tempDir = `/tmp/texra-inline-criticism-${Date.now()}`;
+        const outputPath = join(tempDir, 'out.tex');
+        yield* Effect.promise(() => mkdir(tempDir!, { recursive: true }));
+        yield* Effect.promise(() =>
+          writeFile(
+            outputPath,
+            'before\n\\criticize{tighten this argument}{4}{5}\nafter\n',
+          ),
+        );
 
-    const session = createTestSession();
-    publishTestRunStart(session, runId);
-    const context = fakeExtensionContext();
-    registerInlineCriticism(
-      context as unknown as VSCode.ExtensionContext,
-      testRuntime(),
-      session,
-    );
+        const session = createTestSession();
+        publishTestRunStart(session, runId);
+        const context = fakeExtensionContext();
+        yield* Effect.addFinalizer(() =>
+          Effect.sync(() => disposeContext(context)),
+        );
+        yield* registerInlineCriticism(
+          context as unknown as VSCode.ExtensionContext,
+          testRuntime(),
+          session,
+          new FakeStateStore(),
+        );
 
-    await emitOutputFiles(session, outputPath);
-    await setInlineCriticismEnabled(true);
-    expect(latestDiagnostics(outputPath)).toBe(undefined);
+        yield* Effect.promise(() => emitOutputFiles(session, outputPath));
+        yield* setInlineCriticismEnabled(true);
+        expect(latestDiagnostics(outputPath)).toBe(undefined);
 
-    await emitOutputFiles(session, outputPath);
-    await waitForCondition(
-      () => (latestDiagnostics(outputPath) ?? []).length > 0,
-      {
-        timeoutMs: 200,
-        timeoutMessage: 'inline criticism diagnostics were not refreshed',
-      },
-    );
-    expect(latestDiagnostics(outputPath)).toHaveLength(1);
+        yield* Effect.promise(() => emitOutputFiles(session, outputPath));
+        yield* Effect.promise(() =>
+          waitForCondition(
+            () => (latestDiagnostics(outputPath) ?? []).length > 0,
+            {
+              timeoutMs: 200,
+              timeoutMessage: 'inline criticism diagnostics were not refreshed',
+            },
+          ),
+        );
+        expect(latestDiagnostics(outputPath)).toHaveLength(1);
 
-    await setInlineCriticismEnabled(false);
-    await emitOutputFiles(session, outputPath);
-    expect(latestDiagnostics(outputPath)).toBe(undefined);
-
-    disposeContext(context);
-  });
+        yield* setInlineCriticismEnabled(false);
+        yield* Effect.promise(() => emitOutputFiles(session, outputPath));
+        expect(latestDiagnostics(outputPath)).toBe(undefined);
+      }),
+  );
 });

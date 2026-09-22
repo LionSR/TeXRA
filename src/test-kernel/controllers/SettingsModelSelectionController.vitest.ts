@@ -51,7 +51,7 @@ function createController(
     secrets: new FakeSecrets(),
     resolveModelOptions,
     copilotRoutes: Effect.succeed(new Map()),
-    getPreferredCopilotRouteModels: () => [],
+    getPreferredCopilotRouteModels: () => Effect.succeed([]),
     ...overrides,
   });
 }
@@ -173,11 +173,11 @@ describe('SettingsModelSelectionController', () => {
 
       yield* controller.setModelEnabled({ modelName: 'gpt55', enabled: false });
 
-      expect(globalState.get(GlobalStateKey.MODEL_SELECTION)).toEqual({
+      expect(yield* globalState.get(GlobalStateKey.MODEL_SELECTION)).toEqual({
         enabledExtras: [],
         disabledDefaults: [],
       });
-      expect(globalState.get(GlobalStateKey.HELPER_MODEL)).toBe(
+      expect(yield* globalState.get(GlobalStateKey.HELPER_MODEL)).toBe(
         DEFAULT_HELPER_MODEL,
       );
     }),
@@ -201,7 +201,7 @@ describe('SettingsModelSelectionController', () => {
       );
       expect(error).toBeInstanceOf(Error);
       expect(error.message).toMatch(/at least one model/i);
-      expect(globalState.get(GlobalStateKey.MODEL_SELECTION)).toEqual(
+      expect(yield* globalState.get(GlobalStateKey.MODEL_SELECTION)).toEqual(
         onlyGpt55,
       );
     }),
@@ -230,21 +230,21 @@ describe('SettingsModelSelectionController', () => {
         // A toggle edits the fallback the picker shows, not the hidden delta.
         const [first] = DEFAULT_MODELS;
         yield* controller.setModelEnabled({ modelName: first, enabled: false });
-        expect(globalState.get(GlobalStateKey.MODEL_SELECTION)).toEqual({
+        expect(yield* globalState.get(GlobalStateKey.MODEL_SELECTION)).toEqual({
           enabledExtras: [],
           disabledDefaults: [first],
         });
 
         // Turned back on, it stays on even after the curated defaults drop it.
         yield* controller.setModelEnabled({ modelName: first, enabled: true });
-        expect(globalState.get(GlobalStateKey.MODEL_SELECTION)).toEqual({
+        expect(yield* globalState.get(GlobalStateKey.MODEL_SELECTION)).toEqual({
           enabledExtras: [first],
           disabledDefaults: [],
         });
         const defaults = DEFAULT_MODELS as string[];
         defaults.splice(defaults.indexOf(first), 1);
         try {
-          expect(getEnabledModels(globalState)).toContain(first);
+          expect(yield* getEnabledModels(globalState)).toContain(first);
         } finally {
           defaults.unshift(first);
         }
@@ -283,7 +283,7 @@ describe('SettingsModelSelectionController', () => {
     () =>
       Effect.gen(function* () {
         const controller = createController({
-          getPreferredCopilotRouteModels: () => ['sonnet46'],
+          getPreferredCopilotRouteModels: () => Effect.succeed(['sonnet46']),
         });
 
         expect((yield* controller.buildSelectionData()).copilotModels).toEqual([
@@ -302,7 +302,7 @@ describe('SettingsModelSelectionController', () => {
     () =>
       Effect.gen(function* () {
         const controller = createController({
-          getPreferredCopilotRouteModels: () => ['sonnet46'],
+          getPreferredCopilotRouteModels: () => Effect.succeed(['sonnet46']),
           copilotRoutes: Effect.succeed(
             sonnet46CopilotRoutes('allowed', {
               ...MODEL_CONFIGS.sonnet46.capabilities,

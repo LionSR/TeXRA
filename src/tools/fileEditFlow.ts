@@ -120,14 +120,14 @@ export const resolveWritableTarget = Effect.fn('resolveWritableTarget')(
     // the tool runner reports to the model, so they stay a failure rather than
     // becoming a defect.
     const call = yield* ToolCall;
+    const { path: resolved, display } = yield* resolveAndFormat(
+      call.roots,
+      call.roots.workspace,
+      inputPath,
+      call.workingDirectory,
+    );
     const { path, absolutePath, displayPath } = yield* Effect.try({
       try: () => {
-        const { path: resolved, display } = resolveAndFormat(
-          call.roots,
-          call.roots.workspace,
-          inputPath,
-          call.workingDirectory,
-        );
         const fsPath = resolved.fsPath;
         options.validate?.({ path: fsPath, displayPath: display });
         return {

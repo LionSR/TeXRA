@@ -42,12 +42,12 @@ type ExtractBibliographyInput = z.infer<typeof ExtractBibliographyInputSchema>;
 
 const DEFAULT_MAX_ENTRIES = 25;
 
-function formatPathList(roots: WorkspaceRoots, filePaths: string[]): string {
-  return filePaths
-    .map(
-      (filePath) => resolveAndFormat(roots, roots.workspace, filePath).display,
-    )
-    .join(', ');
+function formatPathList(roots: WorkspaceRoots, filePaths: string[]) {
+  return Effect.forEach(filePaths, (filePath) =>
+    resolveAndFormat(roots, roots.workspace, filePath).pipe(
+      Effect.map(({ display }) => display),
+    ),
+  ).pipe(Effect.map((paths) => paths.join(', ')));
 }
 
 const extractBibliography = Effect.fn('ExtractBibliographyTool.execute')(
@@ -72,7 +72,7 @@ const extractBibliography = Effect.fn('ExtractBibliographyTool.execute')(
       bibPath || call.roots.config.get<string>('texra.bib.defaultPath');
 
     if (effectiveBibPath) {
-      const { path: resolved } = resolveAndFormat(
+      const { path: resolved } = yield* resolveAndFormat(
         call.roots,
         call.roots.workspace,
         effectiveBibPath,
@@ -103,7 +103,7 @@ const extractBibliography = Effect.fn('ExtractBibliographyTool.execute')(
 
     const missingBibliographyNote =
       missingBibliographyFiles.length > 0
-        ? `Missing bibliography files: ${formatPathList(
+        ? `Missing bibliography files: ${yield* formatPathList(
             call.roots,
             missingBibliographyFiles,
           )}.`

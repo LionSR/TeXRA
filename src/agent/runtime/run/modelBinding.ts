@@ -154,28 +154,13 @@ export interface BoundModel {
 
 interface BindModelInput {
   readonly config: ModelConfig;
-  /**
-   * The run's stores, from the launch: the process secret store plus the
-   * session's three setting slots. The Models-tab toggles read live from
-   * `stores.config` on every bind and the OpenRouter preference resolves
-   * through the catalog against `stores.globalState`, so a contended
-   * multi-session run reads its own session's values, never the ambient
-   * process frame.
-   */
+  /** Live settings from this run's session, plus the process secret store. */
   readonly stores: ModelOptionStores;
   /** A persisted conversation format wins over today's default route. */
   readonly compatibilityKey?: ModelCompatibilityKey | null;
-  /**
-   * This launch is the user's own-API-key fallback: they answered a quota
-   * prompt with "use my own API key", so the editor's Copilot route is not
-   * taken for it either. Seeds {@link BindModelInput.declinedRoutes}.
-   */
+  /** Own-key quota fallback also declines Copilot; seeds declinedRoutes. */
   readonly ownApiKeyFallback?: boolean;
-  /**
-   * Subscription routes this run declines. Run-scoped: the route the user
-   * turned away from on a retry, carried on the run's ledger state instead
-   * of rewritten into their stored preference.
-   */
+  /** Declined routes persist on this run's ledger, not in user preferences. */
   readonly declinedRoutes?: readonly DeclinableUsageRoute[];
   readonly agentCategory: AgentCategory;
   /** The route default's temperature; the request may override per turn. */
@@ -379,6 +364,8 @@ interface BindingFacts {
   readonly supportsTemperature: boolean;
   readonly effort: RouteEffort | null;
   readonly supportedEfforts: readonly RouteEffort[];
+  readonly gpt5ReasoningSummary: boolean;
+  readonly googleServerState: boolean;
   readonly thinkingMode: 'enabled' | 'disabled';
 }
 
@@ -475,6 +462,7 @@ const PROTOCOL_DESCRIPTORS: {
       supportsTemperature,
       effort,
       supportedEfforts,
+      gpt5ReasoningSummary,
     }) => {
       // GPT-5 asks for a reasoning summary only when the user turned the
       // toggle on; every other reasoning-capable Responses model keeps
@@ -483,13 +471,7 @@ const PROTOCOL_DESCRIPTORS: {
       const isGpt5 =
         config.name.startsWith('gpt5') || config.fullName.startsWith('gpt-5');
       const summary: 'auto' | null =
-        !isGpt5 ||
-        readSettingFrom<boolean>(
-          input.stores,
-          'texra.model.gpt5ReasoningSummary',
-        )
-          ? 'auto'
-          : null;
+        !isGpt5 || gpt5ReasoningSummary ? 'auto' : null;
       if (credential.route === 'chatgpt-subscription') {
         let codexEffort: RouteEffort | null = effort;
         if (effort !== null && !CODEX_ALLOWED_EFFORTS.includes(effort)) {
@@ -571,7 +553,13 @@ const PROTOCOL_DESCRIPTORS: {
     background: (configuration) => configuration.background === 'supported',
   },
   'google-interactions': {
-    configure: ({ base, capabilities, controls, input, effort }) => ({
+    configure: ({
+      base,
+      capabilities,
+      controls,
+      googleServerState,
+      effort,
+    }) => ({
       ...base,
       protocol: 'google-interactions',
       background: 'supported',
@@ -582,10 +570,7 @@ const PROTOCOL_DESCRIPTORS: {
         // holds the conversation and each round sends only the new turn
         // (and background execution becomes reachable); off, every round
         // resends the full transcript and nothing is retained.
-        store: readSettingFrom<boolean>(
-          input.stores,
-          'texra.model.useGoogleInteractionsServerState',
-        ),
+        store: googleServerState,
         thinkingLevel:
           effort === 'low' || effort === 'medium' || effort === 'high'
             ? effort
@@ -760,12 +745,12 @@ const PROTOCOL_DESCRIPTORS: {
 };
 
 /** The configuration one protocol binds, over the facts every arm shares. */
-function configurationFor(
+const configurationFor = Effect.fn('configurationFor')(function* (
   protocol: HttpProtocol,
   config: ModelConfig,
   credential: RouteCredential,
   input: BindModelInput,
-): HttpConfiguration {
+) {
   const { capabilities } = config;
   const maxOutputTokens =
     input.agentCategory === AgentCategory.ToolUse
@@ -781,14 +766,23 @@ function configurationFor(
     credential,
     input,
     base: binding(config, credential),
+    gpt5ReasoningSummary:
+      protocol === 'openai-responses' &&
+      (yield* readSettingFrom<boolean>(
+        input.stores,
+        'texra.model.gpt5ReasoningSummary',
+      )),
+    googleServerState:
+      protocol === 'google-interactions' &&
+      (yield* readSettingFrom<boolean>(
+        input.stores,
+        'texra.model.useGoogleInteractionsServerState',
+      )),
     controls: {
       maxOutputTokens,
       temperature: supportsTemperature ? input.temperature : null,
-      // The user's parallel-tool-calls choice, honored on every
-      // OpenAI-descended arm, the DeepSeek, Kimi and GLM reasoning routes
-      // included, matching what the retired OpenAI handler base sent. The
-      // Anthropic arm never read the setting and keeps the provider default.
-      parallelToolCalls: readSettingFrom<boolean>(
+      // Every OpenAI-descended route honors this; Anthropic uses its default.
+      parallelToolCalls: yield* readSettingFrom<boolean>(
         input.stores,
         'texra.model.openaiParallelToolCalls',
       ),
@@ -798,7 +792,7 @@ function configurationFor(
     supportedEfforts: supportedRouteEfforts(config),
     thinkingMode: capabilities.supportsReasoning ? 'enabled' : 'disabled',
   });
-}
+});
 
 /**
  * The model of one bound configuration, from its protocol's own factory; a
@@ -832,18 +826,19 @@ function backgroundCapable<P extends HttpProtocol>(
  * delivery still wins where both are selected, as it did before the binding
  * owned the choice.
  */
-function responsesWebSocketSelected(
-  credential: RouteCredential,
-  globalState: StateStore,
-): boolean {
-  if (!globalState.get<boolean>(GlobalStateKey.WEBSOCKET_OPENAI, false)) {
-    return false;
-  }
-  return (
-    credential.route === 'chatgpt-subscription' ||
-    credential.endpoint === OPENAI_DEFAULT_ENDPOINT
-  );
-}
+const responsesWebSocketSelected = Effect.fn('responsesWebSocketSelected')(
+  function* (credential: RouteCredential, globalState: StateStore) {
+    if (
+      !(yield* globalState.get<boolean>(GlobalStateKey.WEBSOCKET_OPENAI, false))
+    ) {
+      return false;
+    }
+    return (
+      credential.route === 'chatgpt-subscription' ||
+      credential.endpoint === OPENAI_DEFAULT_ENDPOINT
+    );
+  },
+);
 
 /**
  * Whether a binding delivers its turns as background work: the run's
@@ -853,7 +848,7 @@ function responsesWebSocketSelected(
  * read live on every call through the catalog reader, so a flip mid-run takes
  * effect on the next turn, on the scope the Models tab shows (#12710).
  */
-export function backgroundDelivery(
+export const backgroundDelivery = Effect.fn('backgroundDelivery')(function* (
   bound: {
     readonly backgroundCapable: boolean;
     readonly protocol: ModelOrigin['protocol'];
@@ -861,20 +856,23 @@ export function backgroundDelivery(
     readonly agentCategory: AgentCategory;
   },
   stores: SettingsStores,
-): boolean {
+) {
   if (!bound.backgroundCapable) return false;
   if (bound.agentCategory !== AgentCategory.Workflow) return false;
   if (bound.protocol === 'google-interactions') {
-    return readSettingFrom<boolean>(
+    return yield* readSettingFrom<boolean>(
       stores,
       'texra.model.useGoogleBackgroundResponses',
     );
   }
   return (
     bound.modelName.toLowerCase().startsWith('gpt') &&
-    readSettingFrom<boolean>(stores, 'texra.model.useBackgroundResponses')
+    (yield* readSettingFrom<boolean>(
+      stores,
+      'texra.model.useBackgroundResponses',
+    ))
   );
-}
+});
 
 /**
  * Bind a model the editor serves. The route is the one the registry
@@ -958,18 +956,17 @@ const bindEditorModel = Effect.fn('bindEditorModel')(function* (
  * effort. Only models whose level is user-selectable honor it; every other
  * model keeps the catalog's effort.
  */
-function withReasoningLevelOverride(
-  config: ModelConfig,
-  globalState: StateStore,
-): ModelConfig {
-  if (!supportsReasoningLevel(config)) return config;
-  const effort = reasoningEffortOverrides(globalState)[config.name];
-  if (effort === undefined) return config;
-  return {
-    ...config,
-    capabilities: { ...config.capabilities, reasoningEffort: effort },
-  };
-}
+const withReasoningLevelOverride = Effect.fn('withReasoningLevelOverride')(
+  function* (config: ModelConfig, globalState: StateStore) {
+    if (!supportsReasoningLevel(config)) return config;
+    const effort = (yield* reasoningEffortOverrides(globalState))[config.name];
+    if (effort === undefined) return config;
+    return {
+      ...config,
+      capabilities: { ...config.capabilities, reasoningEffort: effort },
+    };
+  },
+);
 
 /**
  * Delete every file this binding uploaded. Idempotent: a second call finds
@@ -1002,26 +999,25 @@ export function releaseBindingUploads(
 export const bindModel = Effect.fn('bindModel')(function* (
   input: BindModelInput,
 ): Effect.fn.Return<BoundModel, Error, Scope.Scope | HttpClient.HttpClient> {
-  const useOpenRouter = readSettingFrom<boolean>(
+  const useOpenRouter = yield* readSettingFrom<boolean>(
     input.stores,
     GlobalStateKey.USE_OPENROUTER,
   );
   // The wire identity the preference promises, applied to the bound config
   // and not only to the route decision below (which re-applies it as
   // identity), so the request carries the unpinned identifier.
-  const requested = withShortModelName(input.config, input.stores.globalState);
+  const requested = yield* withShortModelName(
+    input.config,
+    input.stores.globalState,
+  );
   const compatibilityKey =
     input.compatibilityKey ??
-    (yield* Effect.try({
-      try: () =>
-        resolveModelCompatibilityKey(
-          requested,
-          input.stores.globalState,
-          useOpenRouter,
-          input.ownApiKeyFallback,
-        ),
-      catch: ensureError,
-    }));
+    (yield* resolveModelCompatibilityKey(
+      requested,
+      input.stores.globalState,
+      useOpenRouter,
+      input.ownApiKeyFallback,
+    ));
   if (compatibilityKey === undefined) {
     return yield* Effect.fail(
       new Error(`Unsupported model provider: ${input.config.provider}`),
@@ -1118,16 +1114,18 @@ export const bindModel = Effect.fn('bindModel')(function* (
       input.declinedRoutes,
     );
   }
-  config = withReasoningLevelOverride(config, input.stores.globalState);
-  const configuration = yield* Effect.try({
-    try: () => configurationFor(protocol, config, credential, input),
-    catch: ensureError,
-  });
+  config = yield* withReasoningLevelOverride(config, input.stores.globalState);
+  const configuration = yield* configurationFor(
+    protocol,
+    config,
+    credential,
+    input,
+  );
   // Background delivery and the persistent WebSocket are alternatives on the
   // Responses protocol, and background wins where the user selected both.
   const onWebSocket =
     configuration.protocol === 'openai-responses' &&
-    !backgroundDelivery(
+    !(yield* backgroundDelivery(
       {
         backgroundCapable: backgroundCapable(configuration),
         protocol: configuration.protocol,
@@ -1135,8 +1133,8 @@ export const bindModel = Effect.fn('bindModel')(function* (
         agentCategory: input.agentCategory,
       },
       input.stores,
-    ) &&
-    responsesWebSocketSelected(credential, input.stores.globalState);
+    )) &&
+    (yield* responsesWebSocketSelected(credential, input.stores.globalState));
   const model =
     configuration.protocol === 'openai-responses' && onWebSocket
       ? yield* openaiResponsesWebSocketModel(

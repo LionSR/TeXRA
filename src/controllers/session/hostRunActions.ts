@@ -2,9 +2,8 @@
  * The host request arms that relaunch or retry a run (PRD
  * one-fold-three-renderers, 8.3): `resume`, `runNew`, `runCompileFixer`,
  * `useOwnApiKey`, and the launcher restore of a settled run's setup. The
- * decision of what to run is host-neutral; a host binds its launcher, its
- * catalog lookups, its key prompt, and its notifications, and both the VS
- * Code extension and the desktop answer the same arms through one body.
+ * host binds its launcher, catalog, key prompt, and notifications. Both the VS
+ * Code extension and desktop use one body.
  */
 import {
   Data,
@@ -37,6 +36,7 @@ import {
 } from '@model/apiProviders';
 import type { ModelHostFactUnreadable } from '@model/computeModelOptions';
 import { getRuntimeModelDirectFallback } from '@model/runtimeModelRegistry';
+import type { StateReadFailed } from '@platform/interfaces';
 import {
   AgentResume,
   type AgentResumeFailed,
@@ -158,7 +158,7 @@ export interface HostRunActionPorts {
   ): Effect.Effect<void, RequestRefusal | RunLaunchFailed>;
   loadModelOptions(): Effect.Effect<
     readonly ProgressFollowUpModelOption[],
-    ModelHostFactUnreadable
+    ModelHostFactUnreadable | StateReadFailed
   >;
   /**
    * Ask the user for a provider key; the controller re-reads the store. A
@@ -197,6 +197,7 @@ export interface HostRunActions {
     void,
     | CompileFixerPlanFailed
     | ModelHostFactUnreadable
+    | StateReadFailed
     | NotificationFailed
     | RequestRefusal
     | RunConfigUnreadable
@@ -228,7 +229,8 @@ export interface HostRunActions {
     | RequestRefusal
     | RunConfigUnreadable
     | RunLaunchFailed
-    | SecretsFailed,
+    | SecretsFailed
+    | StateReadFailed,
     AppState
   >;
   /** The launcher's form of a settled run's saved setup. */
@@ -445,7 +447,7 @@ export const createHostRunActions = (
         const exhaustionReason = exhaustionReasonOf(request);
         let fallback = getRuntimeModelDirectFallback(
           request.model,
-          getUseOpenRouter(session.roots),
+          yield* getUseOpenRouter(session.roots),
         );
         if (!fallback) {
           yield* ports.showInfo(
@@ -464,7 +466,7 @@ export const createHostRunActions = (
         if (!prepared || !isRetryPending(runId, requestId)) return;
         const currentFallback = getRuntimeModelDirectFallback(
           request.model,
-          getUseOpenRouter(session.roots),
+          yield* getUseOpenRouter(session.roots),
         );
         if (!currentFallback) {
           yield* ports.showInfo(modelsChanged);
@@ -479,7 +481,7 @@ export const createHostRunActions = (
           if (!prepared || !isRetryPending(runId, requestId)) return;
           const finalFallback = getRuntimeModelDirectFallback(
             request.model,
-            getUseOpenRouter(session.roots),
+            yield* getUseOpenRouter(session.roots),
           );
           if (!finalFallback || finalFallback.provider !== fallback.provider) {
             yield* ports.showInfo(modelsChanged);

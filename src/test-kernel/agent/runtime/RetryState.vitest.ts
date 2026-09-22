@@ -274,7 +274,6 @@ function agentRun(
 ): AgentRunShape {
   return {
     runId,
-    parentRunId: null,
     session,
     config: CONFIG,
     setting: SETTING,

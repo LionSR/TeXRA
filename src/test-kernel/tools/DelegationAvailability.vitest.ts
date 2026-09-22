@@ -28,7 +28,7 @@ vi.mock('@agent/index/agentRegistry', () => ({
     _stores: unknown,
     scope: unknown,
     category: string,
-  ) => (scope ? [] : mocks.getVisibleAgents(category)),
+  ) => (scope ? Effect.succeed([]) : mocks.getVisibleAgents(category)),
 }));
 
 vi.mock('@model/computeModelOptions', () => ({
@@ -119,12 +119,14 @@ function rewriteRoster(
     description: DELEGATE_AGENT_DESCRIPTION,
   },
 ) {
-  mocks.getVisibleAgents.mockReturnValue(agents);
-  return annotateDelegationAvailability(
-    tool,
-    undefined,
-    readDelegationAnnotationState(annotationSettings),
-  );
+  mocks.getVisibleAgents.mockReturnValue(Effect.succeed(agents));
+  return Effect.gen(function* () {
+    return annotateDelegationAvailability(
+      tool,
+      undefined,
+      yield* readDelegationAnnotationState(annotationSettings),
+    );
+  });
 }
 
 /**
@@ -185,41 +187,53 @@ function model(
 describe('delegation agent availability', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.isWorktreeSupportEnabled.mockReturnValue(Effect.succeed(false));
   });
 
-  it('replaces the placeholder Available agents line with the live roster', () => {
-    const rewritten = rewriteRoster([
-      { name: 'research', description: 'Derive things.' },
-    ]);
+  it.effect(
+    'replaces the placeholder Available agents line with the live roster',
+    () =>
+      Effect.gen(function* () {
+        const rewritten = yield* rewriteRoster([
+          { name: 'research', description: 'Derive things.' },
+        ]);
 
-    expect(rewritten.description).toContain(
-      'Available agents:\n- research: Derive things.',
-    );
-    expect(rewritten.description).not.toContain(
-      'loaded from the active roster at runtime',
-    );
-    // Following sections survive the block replacement untouched.
-    expect(rewritten.description).toContain(
-      'Agent selection: choose the most specific',
-    );
-    expect(rewritten.description).toContain(
-      'Available models: loaded from the active API mode at runtime.',
-    );
-  });
+        expect(rewritten.description).toContain(
+          'Available agents:\n- research: Derive things.',
+        );
+        expect(rewritten.description).not.toContain(
+          'loaded from the active roster at runtime',
+        );
+        // Following sections survive the block replacement untouched.
+        expect(rewritten.description).toContain(
+          'Agent selection: choose the most specific',
+        );
+        expect(rewritten.description).toContain(
+          'Available models: loaded from the active API mode at runtime.',
+        );
+      }),
+  );
 
-  it('treats a $ in an agent description as a literal, not a replacement token', () => {
-    const rewritten = rewriteRoster([
-      { name: 'prover', description: 'Prove $\\forall x$ statements.' },
-    ]);
+  it.effect(
+    'treats a $ in an agent description as a literal, not a replacement token',
+    () =>
+      Effect.gen(function* () {
+        const rewritten = yield* rewriteRoster([
+          { name: 'prover', description: 'Prove $\\forall x$ statements.' },
+        ]);
 
-    expect(rewritten.description).toContain('Prove $\\forall x$ statements.');
-  });
+        expect(rewritten.description).toContain(
+          'Prove $\\forall x$ statements.',
+        );
+      }),
+  );
 });
 
 describe('delegation model availability', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.getVisibleAgents.mockReturnValue([]);
+    mocks.isWorktreeSupportEnabled.mockReturnValue(Effect.succeed(false));
+    mocks.getVisibleAgents.mockReturnValue(Effect.succeed([]));
   });
 
   it('filters model options to only currently runnable models', () => {
@@ -233,22 +247,26 @@ describe('delegation model availability', () => {
     ).toEqual(['sonnet46T', 'deepseekT']);
   });
 
-  it('tells the agent not to guess models when availability cannot be loaded', () => {
-    const rewritten = annotateDelegationAvailability(
-      {
-        name: 'delegate_workflow',
-        availabilityCategory: 'workflow',
-        description: 'Available models: loaded at runtime.',
-      },
-      null,
-      readDelegationAnnotationState(annotationSettings),
-    );
+  it.effect(
+    'tells the agent not to guess models when availability cannot be loaded',
+    () =>
+      Effect.gen(function* () {
+        const rewritten = annotateDelegationAvailability(
+          {
+            name: 'delegate_workflow',
+            availabilityCategory: 'workflow',
+            description: 'Available models: loaded at runtime.',
+          },
+          null,
+          yield* readDelegationAnnotationState(annotationSettings),
+        );
 
-    expect(rewritten.description).toContain(
-      'Available models: unavailable to load; omit model unless the user explicitly requested one.',
-    );
-    expect(rewritten.description).not.toContain('loaded at runtime');
-  });
+        expect(rewritten.description).toContain(
+          'Available models: unavailable to load; omit model unless the user explicitly requested one.',
+        );
+        expect(rewritten.description).not.toContain('loaded at runtime');
+      }),
+  );
 
   it.effect(
     'rejects an explicitly requested model that is not currently available',
@@ -315,9 +333,10 @@ describe('delegation model availability', () => {
 describe('delegation worktree availability', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.getVisibleAgents.mockReturnValue([
-      { name: 'research', description: 'Derive and verify.' },
-    ]);
+    mocks.isWorktreeSupportEnabled.mockReturnValue(Effect.succeed(false));
+    mocks.getVisibleAgents.mockReturnValue(
+      Effect.succeed([{ name: 'research', description: 'Derive and verify.' }]),
+    );
   });
 
   function delegateTool(): ToolDefinition {
@@ -328,30 +347,33 @@ describe('delegation worktree availability', () => {
     };
   }
 
-  it('substitutes the ENABLED guidance when worktrees are on', () => {
-    mocks.isWorktreeSupportEnabled.mockReturnValue(true);
+  it.effect('substitutes the ENABLED guidance when worktrees are on', () =>
+    Effect.gen(function* () {
+      mocks.isWorktreeSupportEnabled.mockReturnValue(Effect.succeed(true));
 
-    const rewritten = annotateDelegationAvailability(
-      delegateTool(),
-      undefined,
-      readDelegationAnnotationState(annotationSettings),
-    );
+      const rewritten = annotateDelegationAvailability(
+        delegateTool(),
+        undefined,
+        yield* readDelegationAnnotationState(annotationSettings),
+      );
 
-    expect(rewritten.description).toContain('Git worktree support: ENABLED.');
-    expect(rewritten.description).toContain('Pass `working_directory`');
-    expect(rewritten.description).not.toContain(
-      'resolved from the active workspace at runtime',
-    );
-    // The lines above the worktree line are left intact.
-    expect(rewritten.description).toContain(
-      'Available models: loaded from the active API mode at runtime.',
-    );
-  });
+      expect(rewritten.description).toContain('Git worktree support: ENABLED.');
+      expect(rewritten.description).toContain('Pass `working_directory`');
+      expect(rewritten.description).not.toContain(
+        'resolved from the active workspace at runtime',
+      );
+      // The lines above the worktree line are left intact.
+      expect(rewritten.description).toContain(
+        'Available models: loaded from the active API mode at runtime.',
+      );
+    }),
+  );
 });
 
 describe('resolveAgentTools delegation annotation', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.isWorktreeSupportEnabled.mockReturnValue(Effect.succeed(false));
     mocks.readModelAvailabilityInputs.mockReturnValue(
       Effect.succeed([
         {
@@ -370,17 +392,19 @@ describe('resolveAgentTools delegation annotation', () => {
         // The #6655 regression: the roster was captured once and reused.
         // Resolving twice with a roster change between calls must yield a
         // refreshed list.
-        mocks.getVisibleAgents.mockReturnValue([
-          { name: 'research', description: 'Derive.' },
-          { name: 'numerics', description: 'Simulate.' },
-        ]);
+        mocks.getVisibleAgents.mockReturnValue(
+          Effect.succeed([
+            { name: 'research', description: 'Derive.' },
+            { name: 'numerics', description: 'Simulate.' },
+          ]),
+        );
         const first = yield* resolveDelegateAgent();
         expect(first?.description).toContain('- research:');
         expect(first?.description).toContain('- numerics:');
 
-        mocks.getVisibleAgents.mockReturnValue([
-          { name: 'coder', description: 'Write code.' },
-        ]);
+        mocks.getVisibleAgents.mockReturnValue(
+          Effect.succeed([{ name: 'coder', description: 'Write code.' }]),
+        );
         const second = yield* resolveDelegateAgent();
         expect(second?.description).toContain('- coder:');
         expect(second?.description).not.toContain('- research:');
@@ -395,7 +419,7 @@ describe('resolveAgentTools delegation annotation', () => {
         // The annotation's worktree read answers for the session whose slots
         // were handed in: a multi-session host resolving another project's
         // tools must not get this project's answer.
-        mocks.getVisibleAgents.mockReturnValue([]);
+        mocks.getVisibleAgents.mockReturnValue(Effect.succeed([]));
         const worktreeTool: ToolInput = {
           name: 'delegate_agent',
           availabilityCategory: 'toolUse',
@@ -403,7 +427,7 @@ describe('resolveAgentTools delegation annotation', () => {
         };
         const enabledStores: ModelOptionStores = { ...hostStores() };
         mocks.isWorktreeSupportEnabled.mockImplementation(
-          (stores: SettingsStores) => stores === enabledStores,
+          (stores: SettingsStores) => Effect.succeed(stores === enabledStores),
         );
 
         const enabled = yield* resolveToolList([worktreeTool], enabledStores);
@@ -421,9 +445,11 @@ describe('resolveAgentTools delegation annotation', () => {
   it.effect('annotates each delegation tool from its own agent category', () =>
     Effect.gen(function* () {
       mocks.getVisibleAgents.mockImplementation((category: string) =>
-        category === 'toolUse'
-          ? [{ name: 'coder', description: 'Write code.' }]
-          : [{ name: 'apply', description: 'Apply review suggestions.' }],
+        Effect.succeed(
+          category === 'toolUse'
+            ? [{ name: 'coder', description: 'Write code.' }]
+            : [{ name: 'apply', description: 'Apply review suggestions.' }],
+        ),
       );
 
       const tools = yield* resolveToolList([

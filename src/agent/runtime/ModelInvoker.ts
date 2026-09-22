@@ -50,6 +50,7 @@ import {
 import { hasMissingApiKeyErrorMarker } from '@common/errors/sdkError/errorMetadata';
 import { isUserAbort } from '@common/errors/sdkError/errorPatterns';
 import { resolveRuntimeModelConfig } from '@model/runtimeModelRegistry';
+import type { StateReadFailed } from '@platform/interfaces';
 import type { LanguageModel } from '@platform/languageModel';
 import { roundedUtilizationPercent } from '@shared/runs/contextUtilization';
 import {
@@ -181,7 +182,8 @@ type InvocationOutcome =
  * path in `loop/toolUseDispatch` branches on the same union, so it imports
  * this rather than re-declaring the alias.
  */
-export type InvokeError = RunLedgerRefused | DatabaseWriteFailed;
+export type InvokeError =
+  RunLedgerRefused | DatabaseWriteFailed | StateReadFailed;
 
 export class ModelInvoker extends Context.Service<
   ModelInvoker,
@@ -292,14 +294,8 @@ export const modelInvokerLayer = (): Layer.Layer<
         runtimeSnapshotRow(runId, state, runtime),
       ];
 
-      /**
-       * Whether a turn runs as background work: a workflow turn on a binding
-       * that supports it, under the provider's toggle. The binding owns the
-       * rule (it decides the Responses transport by the same answer); this
-       * asks it per turn with the run's category, reading the toggle live
-       * from the session's own config provider.
-       */
-      const backgroundRequested = (bound: BoundModel): boolean =>
+      /** Recheck the binding's background policy against live session settings. */
+      const backgroundRequested = (bound: BoundModel) =>
         backgroundDelivery(
           {
             backgroundCapable: bound.backgroundCapable,
@@ -651,7 +647,7 @@ export const modelInvokerLayer = (): Layer.Layer<
           state,
           request,
           bound,
-          backgroundRequested(bound) ? 'background' : 'foreground',
+          (yield* backgroundRequested(bound)) ? 'background' : 'foreground',
         );
         let resolved = yield* prepareAttempt(bound, turnRequest, state);
         yield* saveDebug(
@@ -1150,10 +1146,10 @@ export const modelInvokerLayer = (): Layer.Layer<
         // the default on anything else, so the limit is always >= 1.
         const limit =
           1 +
-          readSettingFrom<number>(
+          (yield* readSettingFrom<number>(
             session.roots,
             MODEL_RETRY_MAX_ATTEMPTS_SETTING.configKey,
-          );
+          ));
         let automaticAttempts = 0;
         // An open attempt with no response is an invocation whose outcome the
         // process never saw: the next attempt continues its numbering, and its

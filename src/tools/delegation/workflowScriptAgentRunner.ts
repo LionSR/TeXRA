@@ -126,7 +126,7 @@ const resolveWorkflowCallConfig = Effect.fn('resolveWorkflowCallConfig')(
           'A structured workflow call must name a tool-use agent.',
         );
       }
-      const agent = requireVisibleAgent(
+      const agent = yield* requireVisibleAgent(
         parent.roots,
         AgentCategory.ToolUse,
         requestedAgentName,
@@ -153,7 +153,7 @@ const resolveWorkflowCallConfig = Effect.fn('resolveWorkflowCallConfig')(
       const agent =
         requestedAgentName === undefined
           ? defaultAgent
-          : requireVisibleAgent(
+          : yield* requireVisibleAgent(
               parent.roots,
               AgentCategory.Workflow,
               requestedAgentName,

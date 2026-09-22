@@ -60,6 +60,7 @@ import type {
   AgentDirectoriesPort,
   StateStore,
   StateWriteFailed,
+  StateReadFailed,
 } from '@platform/interfaces';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
@@ -474,7 +475,7 @@ function createWindow(options: {
     if (!refresh) return;
     runtime.runFork(
       refresh.pipe(
-        Effect.catch((error: StateWriteFailed) =>
+        Effect.catch((error: StateWriteFailed | StateReadFailed) =>
           Effect.sync(() => reportAsyncError(error)),
         ),
       ),
@@ -1253,7 +1254,6 @@ function createWindow(options: {
       installDesktopWindowTitle(window, project.session, project.root, runtime),
     );
     const agentSettingsController = new DefaultDesktopAgentSettingsController({
-      runtime,
       workspaceState: project.roots.workspaceState,
       globalState: options.globalState,
       registry: {
@@ -1600,10 +1600,8 @@ function createWindow(options: {
   );
   runtime.runFork(
     onboardingIpc.refreshOnboardingFunnel().pipe(
-      // The handler's parameter is the whole error type this expression can
-      // carry, so a second failure added to this channel fails to compile
-      // instead of being reported as a funnel refresh the host could not do.
-      Effect.catch((cause: StateWriteFailed) =>
+      // Keep this handler exhaustive over funnel reads and writes.
+      Effect.catch((cause: StateWriteFailed | StateReadFailed) =>
         Effect.sync(() =>
           reportAsyncError(
             new OnboardingRefreshFailed({
@@ -1908,7 +1906,6 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
           // The sessions after the process stores above them, settled before
           // the runtime they run on goes.
           Effect.suspend(() => projects.dispose()),
-          // Last: every project's session has released its graph above.
           disposeProcessRuntime(runtime),
         ],
       });
@@ -1927,6 +1924,7 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
           projects = yield* openDesktopProjectRegistry({
             dataRoot: platformInit.dataRoot,
             processRoots: platformInit.processRoots,
+            processScope: platformInit.processScope,
             globalConfigStore: platformInit.globalConfigStore,
             records: projectRecords,
             warn,

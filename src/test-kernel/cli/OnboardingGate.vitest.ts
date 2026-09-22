@@ -115,7 +115,7 @@ describe('maybeRunCliOnboarding gate', () => {
         // credential must not route every launch into the setup agent.
         expect(yield* maybeOnboarding(services, INTERACTIVE)).toEqual(SKIPPED);
         expect(
-          services.globalState.get(GlobalStateKey.ONBOARDING_DECLINED),
+          yield* services.globalState.get(GlobalStateKey.ONBOARDING_DECLINED),
         ).toBe(false);
       }),
   );

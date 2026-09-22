@@ -34,6 +34,7 @@ describe('AgentRosterForm', () => {
     const output = formatCliAgentRoster({
       selection: { kind: 'team', teamId: 'deleted-team' },
       effectiveSelection: { kind: 'all' },
+      defaultTeamId: undefined,
       missingTeamId: 'deleted-team',
       agentKeys: {
         workflow: 'all',

@@ -9,6 +9,7 @@ import { quote as shellQuote } from 'shell-quote';
 import { createLog } from '@logger/logUtils';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { ExecResult } from '@shared/schemas';
+import { getGitAuthorEnv } from '@utils/system/gitAuthorEnv';
 import { onAbort as onAbortSignal } from '@utils/core';
 import {
   CHANNEL,
@@ -189,7 +190,11 @@ function runCommand(
 
     const execaOptions: Options = {
       cwd: workspacePath,
-      env: commandEnv(workspacePath, options.settings, options.env),
+      env: commandEnv(
+        workspacePath,
+        yield* getGitAuthorEnv(options.settings),
+        options.env,
+      ),
       encoding,
       timeout: options.timeout,
       reject: false,

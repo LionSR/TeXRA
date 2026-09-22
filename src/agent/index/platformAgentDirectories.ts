@@ -1,6 +1,7 @@
 import { Effect } from 'effect';
 
 import { withLogChannel } from '@logger/effectLog';
+import type { StateReadFailed } from '@platform/interfaces';
 
 import {
   AgentDirectoryService,
@@ -11,7 +12,9 @@ interface PlatformAgentDirectoryOptions {
   channel: string;
   /** Packaged resources root holding this host's bundled agent directories. */
   resourcesPath: string;
-  customDirectoryStore: { get(): string | undefined };
+  customDirectoryStore: {
+    get(): Effect.Effect<string | undefined, StateReadFailed>;
+  };
   /** Defaults to logging the issue at `warn`; hosts with an interactive
    * notification surface (e.g. the VS Code extension) can override it. */
   issueReporter?: AgentDirectoryIssueReporter;

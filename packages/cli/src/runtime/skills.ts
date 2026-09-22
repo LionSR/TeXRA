@@ -30,11 +30,13 @@ export function readCliSkills(
   context: Pick<CliContext, 'cwd' | 'resourcesPath'>,
   stores: SettingsStores,
   options: SkillSourceOptions = {},
-): Effect.Effect<DiscoverSkillSourcesResult> {
-  return Effect.map(
-    discoverSkillSources(defaultSkillSources(context, options)),
-    (result) => filterDiscoveredSkills(result, readDisabledSkills(stores)),
-  );
+) {
+  return Effect.gen(function* () {
+    const result = yield* discoverSkillSources(
+      defaultSkillSources(context, options),
+    );
+    return filterDiscoveredSkills(result, yield* readDisabledSkills(stores));
+  });
 }
 
 export function formatCliSkillIssue(issue: SkillLoadIssue): string {

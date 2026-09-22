@@ -58,7 +58,7 @@ export function applyTeamRosterWithPreflight<R = never>(
 ): Effect.Effect<TeamRosterApplicationResult, unknown, R> {
   return Effect.gen(function* () {
     yield* deps.loadLocalCatalog();
-    const initial = deps.catalog.resolvePreset(presetId);
+    const initial = yield* deps.catalog.resolvePreset(presetId);
     if (!initial.ok) return { status: 'unknown' as const };
 
     const preflight = yield* preflightTeamAvailability<ResolvedTeam, R>({
@@ -70,13 +70,16 @@ export function applyTeamRosterWithPreflight<R = never>(
       choose: (names) => deps.choose(initial.preset, names),
       signIn: deps.signIn,
       refreshRemote: deps.forceRefreshRemoteCatalog,
-      replan: () => {
-        const refreshed = deps.catalog.resolvePreset(presetId);
-        if (!refreshed.ok) {
-          throw new Error(`Team no longer exists: ${presetId}`);
-        }
-        return refreshed;
-      },
+      replan: () =>
+        Effect.gen(function* () {
+          const refreshed = yield* deps.catalog.resolvePreset(presetId);
+          if (!refreshed.ok) {
+            return yield* Effect.fail(
+              new Error(`Team no longer exists: ${presetId}`),
+            );
+          }
+          return refreshed;
+        }),
     });
 
     if (preflight.status === 'cancelled') {

@@ -154,7 +154,6 @@ function resolveBinary(config: ResolveBinaryConfig): string | undefined {
     // no workspace settings either.
     const prefixResult = executeCommandSync(['npm', 'prefix', '-g'], {
       cwd: process.cwd(),
-      settings: undefined,
       timeout: 5000,
     });
     const prefix = prefixResult.success ? prefixResult.stdout : undefined;

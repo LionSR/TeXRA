@@ -201,9 +201,9 @@ beforeEach(() => {
   mocks.shouldUseSubscriptionDeviceCode.mockReturnValue(false);
   mocks.hasUsableApiKey.mockReturnValue(Effect.succeed(false));
   mocks.lookupApiKeyOrigin.mockReturnValue(Effect.succeed('none'));
-  mocks.getPreferKimiCode.mockReturnValue(false);
+  mocks.getPreferKimiCode.mockReturnValue(Effect.succeed(false));
   mocks.writeSettingTo.mockReturnValue(Effect.void);
-  mocks.getGLMCodingPlan.mockReturnValue(false);
+  mocks.getGLMCodingPlan.mockReturnValue(Effect.succeed(false));
   mocks.setGLMCodingPlan.mockReturnValue(Effect.void);
 });
 
@@ -287,7 +287,7 @@ describe('CLI model access routes', () => {
       mocks.hasUsableApiKey.mockImplementation((_secrets, provider) =>
         Effect.succeed(provider === 'kimiCode'),
       );
-      mocks.getPreferKimiCode.mockReturnValue(true);
+      mocks.getPreferKimiCode.mockReturnValue(Effect.succeed(true));
 
       expect(yield* readCliModelAccessStatus(stores, secrets)).toEqual(
         expectedAccessStatus(
@@ -495,7 +495,7 @@ describe('CLI model access routes', () => {
           }),
         );
         mocks.isPreferCodexSubscription.mockReturnValue(true);
-        mocks.getPreferKimiCode.mockReturnValue(true);
+        mocks.getPreferKimiCode.mockReturnValue(Effect.succeed(true));
         mocks.hasUsableApiKey.mockReturnValue(Effect.succeed(true));
 
         const status = yield* readCliModelAccessStatus(stores, secrets);
@@ -592,7 +592,7 @@ describe('CLI model access routes', () => {
 
   it.effect('turns off a stale Kimi preference without requiring a key', () =>
     Effect.gen(function* () {
-      mocks.getPreferKimiCode.mockReturnValue(true);
+      mocks.getPreferKimiCode.mockReturnValue(Effect.succeed(true));
       const status = yield* readCliModelAccessStatus(stores, secrets);
       const selection = buildCliModelAccessItems({
         kind: 'loaded',

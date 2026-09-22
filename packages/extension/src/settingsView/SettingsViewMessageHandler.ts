@@ -9,13 +9,16 @@
  * subscription provider).
  */
 import * as vscode from 'vscode';
-import { Cause, Effect, Exit } from 'effect';
-import { ZodError } from 'zod';
+import { Cause, Effect, Exit, Fiber } from 'effect';
 import { ModelError } from '@texra-ai/llm/turn';
 
 // Shared schemas and dispatchers
 import type { SessionHandle } from '@agent/runtime';
 import { AUTH_COMMANDS } from '@auth/constants';
+import {
+  settingsViewProgram,
+  type SettingsViewInboundHandlerRegistry,
+} from '@controllers/settingsView/settingsViewDispatch';
 import { SettingsMemoryController } from '@controllers/settingsView/SettingsMemoryController';
 import { SettingsModelSelectionController } from '@controllers/settingsView/SettingsModelSelectionController';
 import { SubscriptionUsageService } from '@controllers/modelAccess/subscriptionUsage/SubscriptionUsageService';
@@ -24,7 +27,10 @@ import {
   buildToolDashboardItems,
   planToolTerminalAction,
 } from '@controllers/settingsView/ToolDashboardData';
-import { SettingsProfileKeyController } from '@controllers/settingsView/SettingsProfileKeyController';
+import {
+  ProviderKeyActionFailed,
+  SettingsProfileKeyController,
+} from '@controllers/settingsView/SettingsProfileKeyController';
 import { SettingsProfileController } from '@controllers/settingsView/SettingsProfileController';
 import { emitAppSignal } from '@eventBus/AppSignals';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
@@ -41,8 +47,6 @@ import {
 } from '@frontend/ui/errorHandlingUtils';
 import { subscribeAppSignal } from '@frontend/events/appSignalSubscriptions';
 import { subscribeGoalStateChanges } from '@frontend/events/runFactSubscriptions';
-import { NotificationFailed } from '@hosts/uiHosts';
-import { withLogChannel, withLogData } from '@logger/effectLog';
 import { createLog, type Log } from '@logger/logUtils';
 import {
   modelOptionsFrom,
@@ -60,6 +64,7 @@ import {
   refreshRuntimeModelRegistry,
 } from '@model/runtimeModelRegistry';
 import { setCopilotRoutePreference } from '@model/copilotRouting';
+import { withSessionFs } from '@platform/rootedFs';
 import type { StateStore } from '@platform/interfaces';
 import type { LanguageModel } from '@platform/languageModel';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
@@ -76,10 +81,9 @@ import type { SettingsViewSnapshot } from '@shared/state/stateSettings';
 import type {
   DerivedSettingsSnapshot,
   SettingsMessageFor,
-  SettingsViewInboundHandlerRegistry,
 } from '@shared/settingsView/settingsViewMessages';
 import {
-  dispatchSettingsViewInbound,
+  SettingsViewInboundMessageSchema,
   SETTINGS_VIEW_CMD,
 } from '@shared/settingsView/settingsViewMessages';
 
@@ -91,8 +95,6 @@ import {
 import {
   UnsupportedCommandError,
   unsupportedCommands,
-  type DispatcherFn,
-  type HandlerRegistry,
 } from '@shared/utils/dispatcher';
 import { buildSettingsSnapshotMessage } from '@shared/settingsView/handlers/settingsSnapshot';
 import { loadRuntimeSkillDisplay } from '@skills/runtimeSkills';
@@ -117,18 +119,6 @@ import {
 
 /** The webview shapes SettingsView dispatches for. */
 type SettingsWebview = vscode.WebviewView | vscode.WebviewPanel;
-
-/** Type guard to check if a message has a command field. */
-function isCommandMessage(
-  message: unknown,
-): message is { command: string; [key: string]: unknown } {
-  return (
-    typeof message === 'object' &&
-    message !== null &&
-    'command' in message &&
-    typeof (message as Record<string, unknown>).command === 'string'
-  );
-}
 
 export class SettingsViewMessageHandler {
   private readonly viewName = 'SettingsView';
@@ -160,6 +150,10 @@ export class SettingsViewMessageHandler {
     secrets: PlatformSecrets,
     private readonly runtime: ProcessRuntime,
     private readonly session: SessionHandle,
+    private readonly progressView: Pick<
+      ProgressViewProvider,
+      'refreshCatalogs' | 'refreshApiKeyStatus' | 'refreshOnboardingFunnel'
+    >,
   ) {
     const ctx: SettingsHandlerContext = this.handlerContext();
 
@@ -198,16 +192,6 @@ export class SettingsViewMessageHandler {
         getProviderKeyUrl(session.roots, provider),
       refreshAfterKeyChange: (provider) =>
         this.refreshAfterProviderKeyChange(provider),
-      reportFailure: (message, error) =>
-        showLoggedErrorMessage(this.channel, message, error).pipe(
-          // On error, still refresh settings view to reflect current key state.
-          Effect.andThen(
-            this.withActiveWebview((w) =>
-              this.sendProfileAndModelSelectionData(w),
-            ),
-          ),
-          Effect.orDie,
-        ),
     });
     this.agentHandlers = new AgentHandlers(
       ctx,
@@ -217,6 +201,7 @@ export class SettingsViewMessageHandler {
           agentCatalogAlreadyFresh,
         ),
       session.roots,
+      () => this.progressView.refreshCatalogs(),
     );
     this.latexHandlers = new LatexSettingsHandlers(ctx);
     this.memoryHandlers = new MemoryHandlers(
@@ -297,149 +282,111 @@ export class SettingsViewMessageHandler {
     return this.runtime.runPromise(handlers[providerId].handleSignIn());
   }
 
-  /**
-   * The inbound registry: one settled program per message arm. `run` is this
-   * host's R1 boundary — the dispatcher's `MessageHandler` contract is
-   * promise-shaped, so it is the only place a settings message is run, and
-   * the delegates reach the same boundary through `SettingsHandlerContext.run`.
-   *
-   * A tab whose arms all belong to one delegate contributes them as a table it
-   * owns (`...delegate.handlers`), as the desktop's controllers do. Spelled
-   * out here is the rest: what this host performs itself (profile and model
-   * commands, the Tools dashboard, the catalog write, and the VS Code-only
-   * Copilot and extension-install surfaces), plus the tab arms whose delegates
-   * own no table yet — agent, ChatGPT/Grok, inline-criticism and goal arms.
-   */
+  /** Each command builds a program; the message entry runs the selected one. */
   private createHandlerRegistry(
     context: vscode.ExtensionContext,
   ): SettingsViewInboundHandlerRegistry {
-    const run = <A, E>(
-      program: Effect.Effect<A, E, ProcessServices>,
-    ): Promise<A> => this.runtime.runPromise(program);
     return {
-      webviewReady: () =>
-        run(this.withActiveWebview((w) => this.sendAllData(w))),
+      webviewReady: () => this.withActiveWebview((w) => this.sendAllData(w)),
       ...this.memoryHandlers.handlers,
       signIn: () =>
-        run(safeExecuteCommand(AUTH_COMMANDS.SIGN_IN, [], this.viewName)),
+        safeExecuteCommand(AUTH_COMMANDS.SIGN_IN, [], this.viewName),
       signOut: () =>
-        run(safeExecuteCommand(AUTH_COMMANDS.SIGN_OUT, [], this.viewName)),
+        safeExecuteCommand(AUTH_COMMANDS.SIGN_OUT, [], this.viewName),
       setProviderKey: (message) =>
-        run(this.profileKeyController.setProviderKey(message.provider)),
+        this.profileKeyController.setProviderKey(message.provider),
       removeProviderKey: (message) =>
-        run(this.profileKeyController.removeProviderKey(message.provider)),
+        this.profileKeyController.removeProviderKey(message.provider),
       openProviderKeyUrl: (message) =>
-        run(this.profileKeyController.openProviderKeyUrl(message.provider)),
-      openExternalUrl: (message) => run(this.openExternalUrl(message.url)),
+        this.profileKeyController.openProviderKeyUrl(message.provider),
+      openExternalUrl: (message) => this.openExternalUrl(message.url),
       setModelEnabled: (message) =>
-        run(this.setModelEnabled(message.modelName, message.enabled)),
+        this.setModelEnabled(message.modelName, message.enabled),
       setModelReasoningLevel: (message) =>
-        run(
-          this.modelSelectionController
-            .setReasoningLevel({
-              modelName: message.modelName,
-              level: message.level,
-            })
-            .pipe(Effect.andThen(this.postModelSelectionData())),
-        ),
+        this.modelSelectionController
+          .setReasoningLevel({
+            modelName: message.modelName,
+            level: message.level,
+          })
+          .pipe(Effect.andThen(this.postModelSelectionData())),
       requestModelAccess: (message) =>
         this.handleRequestModelAccess(message.modelName, context),
       clearCopilotRoute: (message) =>
-        run(this.handleClearCopilotRoute(message.modelName)),
+        this.handleClearCopilotRoute(message.modelName),
       setAgentEnabled: (message) =>
-        run(this.agentHandlers.handleSetAgentEnabled(message)),
+        this.agentHandlers.handleSetAgentEnabled(message),
       setAllAgentsEnabled: (message) =>
-        run(this.agentHandlers.handleSetAllAgentsEnabled(message)),
+        this.agentHandlers.handleSetAllAgentsEnabled(message),
       openAgentYaml: (message) =>
-        run(
-          this.agentHandlers.runAgentFileAction(
-            'openAgentYaml',
-            this.agentHandlers.agentActions.openAgentYaml(message),
-          ),
+        this.agentHandlers.runAgentFileAction(
+          'openAgentYaml',
+          this.agentHandlers.agentActions.openAgentYaml(message),
         ),
       openAgentFolder: (message) =>
-        run(this.agentHandlers.handleOpenAgentFolder(message)),
-      createAgent: (message) =>
-        run(this.agentHandlers.handleCreateAgent(message)),
+        this.agentHandlers.handleOpenAgentFolder(message),
+      createAgent: (message) => this.agentHandlers.handleCreateAgent(message),
       customizeAgent: (message) =>
-        run(
-          this.agentHandlers.runAgentFileAction(
-            'customizeAgent',
-            this.agentHandlers.agentActions.customizeAgent(message),
-          ),
+        this.agentHandlers.runAgentFileAction(
+          'customizeAgent',
+          this.agentHandlers.agentActions.customizeAgent(message),
         ),
       deleteCustomAgent: (message) =>
-        run(this.agentHandlers.handleDeleteCustomAgent(message)),
+        this.agentHandlers.handleDeleteCustomAgent(message),
       revealAgentFile: (message) =>
-        run(
-          this.agentHandlers.runAgentFileAction(
-            'revealAgentFile',
-            this.agentHandlers.agentActions.revealAgentFile(message),
-          ),
+        this.agentHandlers.runAgentFileAction(
+          'revealAgentFile',
+          this.agentHandlers.agentActions.revealAgentFile(message),
         ),
       viewRemoteAgentPrompt: (message) =>
-        run(this.agentHandlers.handleViewRemoteAgentPrompt(message)),
-      setCustomAgentDir: () =>
-        run(this.agentHandlers.handleSetCustomAgentDir()),
-      resetCustomAgentDir: () =>
-        run(this.agentHandlers.handleResetCustomAgentDir()),
+        this.agentHandlers.handleViewRemoteAgentPrompt(message),
+      setCustomAgentDir: () => this.agentHandlers.handleSetCustomAgentDir(),
+      resetCustomAgentDir: () => this.agentHandlers.handleResetCustomAgentDir(),
       applyAgentModePreset: (message) =>
-        run(this.agentHandlers.handleApplyAgentModePreset(message)),
-      saveAgentModePreset: () =>
-        run(this.agentHandlers.handleSaveAgentModePreset()),
+        this.agentHandlers.handleApplyAgentModePreset(message),
+      saveAgentModePreset: () => this.agentHandlers.handleSaveAgentModePreset(),
       deleteAgentModePreset: (message) =>
-        run(this.agentHandlers.handleDeleteAgentModePreset(message)),
+        this.agentHandlers.handleDeleteAgentModePreset(message),
       ...this.githubHandlers.handlers,
-      signInChatGpt: () => run(this.chatgptHandlers.handleSignIn()),
-      signOutChatGpt: () => run(this.chatgptHandlers.handleSignOut()),
+      signInChatGpt: () => this.chatgptHandlers.handleSignIn(),
+      signOutChatGpt: () => this.chatgptHandlers.handleSignOut(),
       setChatGptPreferSubscription: (message) =>
-        run(this.chatgptHandlers.handleSetPreferSubscription(message.enabled)),
-      signInGrok: () => run(this.grokHandlers.handleSignIn()),
-      signOutGrok: () => run(this.grokHandlers.handleSignOut()),
+        this.chatgptHandlers.handleSetPreferSubscription(message.enabled),
+      signInGrok: () => this.grokHandlers.handleSignIn(),
+      signOutGrok: () => this.grokHandlers.handleSignOut(),
       setGrokPreferSubscription: (message) =>
-        run(this.grokHandlers.handleSetPreferSubscription(message.enabled)),
+        this.grokHandlers.handleSetPreferSubscription(message.enabled),
       getSubscriptionUsage: (message) =>
-        run(
-          this.withActiveWebview((webview) =>
-            this.sendSubscriptionUsage(webview, message.forceRefresh ?? false),
-          ),
+        this.withActiveWebview((webview) =>
+          this.sendSubscriptionUsage(webview, message.forceRefresh ?? false),
         ),
       updateStateSetting: (message) =>
-        run(this.updateStateSetting(message.key, message.value)),
-      openToolInstallUrl: (message) => run(this.openExternalUrl(message.url)),
+        this.updateStateSetting(message.key, message.value),
+      openToolInstallUrl: (message) => this.openExternalUrl(message.url),
       installToolExtension: (message) =>
-        run(this.latexHandlers.installExtension(message.extensionId)),
+        this.latexHandlers.installExtension(message.extensionId),
       recheckToolStatus: () =>
-        run(
-          refreshToolAvailability({
-            workspaceRoot: this.session.roots.workspace,
-            config: this.session.roots.config,
-          }),
-        ),
+        refreshToolAvailability({
+          workspaceRoot: this.session.roots.workspace,
+          config: this.session.roots.config,
+        }),
       toggleTool: (message) =>
-        run(
-          setToolEnabled(
-            message.toolId,
-            message.enabled,
-            this.globalState,
-          ).pipe(
-            Effect.andThen(
-              this.withActiveWebview((w) =>
-                this.sendToolDashboardData(w, { skipChecks: true }),
-              ),
+        setToolEnabled(message.toolId, message.enabled, this.globalState).pipe(
+          Effect.andThen(
+            this.withActiveWebview((w) =>
+              this.sendToolDashboardData(w, { skipChecks: true }),
             ),
           ),
         ),
-      runToolCommand: (message) => this.handleRunToolCommand(message),
+      runToolCommand: (message) =>
+        Effect.sync(() => this.handleRunToolCommand(message)),
       ...this.latexHandlers.handlers,
       getInlineCriticismEnabled: () =>
-        run(this.withActiveWebview((w) => this.sendInlineCriticismEnabled(w))),
+        this.withActiveWebview((w) => this.sendInlineCriticismEnabled(w)),
       setInlineCriticismEnabled: (message) =>
-        run(this.handleSetInlineCriticismEnabled(message.enabled)),
-      getGoalList: () =>
-        run(this.withActiveWebview((w) => this.sendGoalList(w))),
+        this.handleSetInlineCriticismEnabled(message.enabled),
+      getGoalList: () => this.withActiveWebview((w) => this.sendGoalList(w)),
       revealGoalRun: (message) =>
-        run(revealProgressRun(message.runId).pipe(Effect.asVoid)),
+        revealProgressRun(message.runId).pipe(Effect.asVoid),
     };
   }
 
@@ -519,7 +466,6 @@ export class SettingsViewMessageHandler {
       withActiveWebview: (fn) => this.withActiveWebview(fn),
       postMessageToActiveWebview: (message) =>
         this.postMessageToActiveWebview(message),
-      run: (program) => this.runtime.runPromise(program),
     };
   }
 
@@ -550,76 +496,58 @@ export class SettingsViewMessageHandler {
       : this.withActiveWebview((webview) => postToWebview(webview, message));
   }
 
-  /**
-   * Show one dispatcher-level notice on a detached fiber. A message surface
-   * that refuses it arrives as `NotificationFailed` and is logged, rather
-   * than leaving a rejected thenable nobody awaited.
-   */
-  private forkNotice(notice: Effect.Effect<void, NotificationFailed>): void {
-    this.runtime.runFork(
-      notice.pipe(
-        Effect.catchTag('NotificationFailed', (failure) =>
-          Effect.logError('Failed to display message notification').pipe(
-            withLogData(failure.cause),
-            withLogChannel(this.channel),
-          ),
-        ),
-      ),
-    );
-  }
-
-  /**
-   * Schema-driven dispatch through the view's typed {@link DispatcherFn}.
-   * Tracks the active view, runs the dispatcher, logs Zod validation failures
-   * at debug (expected, frequent) and handler exceptions at error (a real
-   * bug), and warns on commands with no handler.
-   */
-  private async dispatchInbound<TMessage extends { command: string }>(
+  /** Validate at the webview edge and run the selected program once. */
+  public handleMessage(
     message: unknown,
     webviewView: SettingsWebview,
-    dispatcher: DispatcherFn<TMessage>,
-    handlers: HandlerRegistry<TMessage>,
   ): Promise<void> {
     this.activeView = webviewView;
-
-    let unsupported = false;
-    const handled = dispatcher(message, handlers, (error) => {
-      if (error instanceof ZodError) {
-        this.log.debug('Message validation failed', {
-          data: error,
-        });
-      } else if (error instanceof UnsupportedCommandError) {
-        // Declared `unsupported(...)` in this host's registry: visible
-        // feedback (toast), not a silent drop or an error-level log.
-        unsupported = true;
-        this.log.debug(error.message);
-        this.forkNotice(vscodeUi.showInfoMessage(error.reason));
-      } else {
-        this.log.error('Error handling message', {
-          data: error,
-        });
-        this.forkNotice(
-          vscodeUi.showErrorMessage(
-            `TeXRA could not handle a ${this.viewName} message. See the TeXRA output for details.`,
-          ),
-        );
-      }
-    });
-
-    if (!handled && !unsupported && isCommandMessage(message)) {
-      this.log.warn(`Unhandled command: ${message.command}`);
+    const parsed = SettingsViewInboundMessageSchema.safeParse(message);
+    if (!parsed.success) {
+      this.log.debug('Message validation failed', { data: parsed.error });
+      return Promise.resolve();
     }
-  }
-
-  public async handleMessage(
-    message: unknown,
-    webviewView: vscode.WebviewView | vscode.WebviewPanel,
-  ): Promise<void> {
-    await this.dispatchInbound(
-      message,
-      webviewView,
-      dispatchSettingsViewInbound,
-      this.handlerRegistry,
+    return this.runtime.runPromise(
+      withSessionFs(
+        this.session.roots,
+        settingsViewProgram(parsed.data, this.handlerRegistry),
+      ).pipe(
+        Effect.catchCause((cause) =>
+          Effect.gen({ self: this }, function* () {
+            if (Cause.hasInterruptsOnly(cause)) return;
+            const error = Cause.squash(cause);
+            const report = Effect.gen({ self: this }, function* () {
+              if (error instanceof UnsupportedCommandError) {
+                yield* vscodeUi.showInfoMessage(error.reason);
+              } else if (error instanceof ProviderKeyActionFailed) {
+                yield* showLoggedErrorMessage(
+                  this.channel,
+                  error.message,
+                  error.cause,
+                );
+                yield* this.withActiveWebview((webview) =>
+                  this.sendProfileAndModelSelectionData(webview),
+                );
+              } else {
+                this.log.error('Error handling message', { data: error });
+                yield* vscodeUi.showErrorMessage(
+                  `TeXRA could not handle a ${this.viewName} message. See the TeXRA output for details.`,
+                );
+              }
+            });
+            const reported = yield* Effect.exit(report);
+            if (
+              Exit.isFailure(reported) &&
+              !Cause.hasInterruptsOnly(reported.cause)
+            ) {
+              this.log.error('Failed to report settings message error', {
+                data: Cause.squash(reported.cause),
+              });
+            }
+          }),
+        ),
+        Effect.asVoid,
+      ),
     );
   }
 
@@ -670,17 +598,16 @@ export class SettingsViewMessageHandler {
   }
 
   private sendInlineCriticismEnabled(webview: vscode.Webview) {
-    return postToWebview(webview, {
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_INLINE_CRITICISM_ENABLED,
-      enabled: isInlineCriticismEnabled(),
-    });
+    return Effect.flatMap(isInlineCriticismEnabled(), (enabled) =>
+      postToWebview(webview, {
+        command: SETTINGS_VIEW_COMMANDS.UPDATE_INLINE_CRITICISM_ENABLED,
+        enabled,
+      }),
+    );
   }
 
   private handleSetInlineCriticismEnabled(enabled: boolean) {
-    return Effect.tryPromise({
-      try: () => setInlineCriticismEnabled(enabled),
-      catch: ensureError,
-    }).pipe(
+    return setInlineCriticismEnabled(enabled).pipe(
       Effect.andThen(
         this.withActiveWebview((w) => this.sendInlineCriticismEnabled(w)),
       ),
@@ -787,7 +714,7 @@ export class SettingsViewMessageHandler {
       if (result.kind !== 'applied') return;
       if (result.entry.onWrite?.invalidatesModelOptions) {
         yield* this.withActiveWebview((w) => this.sendModelSelectionData(w));
-        yield* safeExecuteCommand('texra.refreshAllOptions', [], this.viewName);
+        yield* this.progressView.refreshCatalogs();
       }
       if (codingPlanForUsageSetting(key) !== undefined) {
         yield* this.withActiveWebview((w) => this.sendSubscriptionUsage(w));
@@ -835,9 +762,9 @@ export class SettingsViewMessageHandler {
 
   /**
    * The shared refresh tail for a credential change (API key or subscription
-   * auth): drop the cached usage, re-run the host refresh commands, and push
+   * auth): drop the cached usage, refresh status and catalogs, and push
    * fresh profile/model/usage data to the active webview. Model selection
-   * availability depends on key state, so the key status command is awaited
+   * availability depends on key state, so status and onboarding refresh finish
    * before any model/profile data is sent. `refreshProfileData` selects which
    * profile surface to push (profile+model for key changes, model-only for
    * subscription changes).
@@ -852,11 +779,12 @@ export class SettingsViewMessageHandler {
       if (options.usageProvider) {
         this.subscriptionUsage.invalidate(options.usageProvider);
       }
-      yield* safeExecuteCommand('texra.refreshApiKeyStatus', [], this.viewName);
+      yield* Effect.andThen(
+        this.progressView.refreshApiKeyStatus,
+        this.progressView.refreshOnboardingFunnel(),
+      );
       yield* allSettledVoid([
-        safeExecuteCommand('texra.refreshAllOptions', [], this.viewName).pipe(
-          Effect.asVoid,
-        ),
+        this.progressView.refreshCatalogs().pipe(Effect.asVoid),
         this.withActiveWebview((w) => options.refreshProfileData(w)),
         ...(options.usageProvider
           ? [this.withActiveWebview((w) => this.sendSubscriptionUsage(w))]
@@ -896,12 +824,12 @@ export class SettingsViewMessageHandler {
     });
   }
 
-  private async handleRequestModelAccess(
+  private handleRequestModelAccess(
     modelName: string,
     context: vscode.ExtensionContext,
-  ): Promise<void> {
-    try {
-      const discovery = await this.runtime.runPromiseExit(
+  ) {
+    return Effect.gen({ self: this }, function* () {
+      const discovery = yield* Effect.exit(
         Effect.gen(function* () {
           // Retry one superseded discovery, then fail closed rather than
           // authorize from the retained presentation catalogue. A failed
@@ -919,48 +847,57 @@ export class SettingsViewMessageHandler {
       const route = Exit.isSuccess(discovery) ? discovery.value : undefined;
       let result: Exit.Exit<unknown, unknown> = discovery;
       if (route?.access === 'consent-required') {
-        result = await this.runtime.runPromiseExit(
+        result = yield* Effect.scoped(
           Effect.gen(function* () {
-            const model = yield* acquireVscodeLanguageModel(
-              context,
-              {
-                protocol: 'vscode-lm',
-                requestedModel: route.reference.id,
-                deployment: {
-                  vendor: route.reference.vendor,
-                  version: route.version,
-                },
-                supportsImageInput: false,
-                supportsToolCalling: false,
-                defaults: { justification: 'Use Copilot models in TeXRA.' },
-              },
-              'request-on-send',
-            );
-            const turn = yield* model.prepareTurn({
-              messages: [
-                {
-                  role: 'user',
-                  content: [
+            // Await this fiber's complete exit: timeoutOrElse discards a release
+            // defect when its timeout wins, but native consent must retain it.
+            const pending = yield* Effect.forkScoped(
+              Effect.gen(function* () {
+                const model = yield* acquireVscodeLanguageModel(
+                  context,
+                  {
+                    protocol: 'vscode-lm',
+                    requestedModel: route.reference.id,
+                    deployment: {
+                      vendor: route.reference.vendor,
+                      version: route.version,
+                    },
+                    supportsImageInput: false,
+                    supportsToolCalling: false,
+                    defaults: { justification: 'Use Copilot models in TeXRA.' },
+                  },
+                  'request-on-send',
+                );
+                const turn = yield* model.prepareTurn({
+                  messages: [
                     {
-                      kind: 'text',
-                      text: 'Reply with OK to confirm language-model access for TeXRA.',
+                      role: 'user',
+                      content: [
+                        {
+                          kind: 'text',
+                          text: 'Reply with OK to confirm language-model access for TeXRA.',
+                        },
+                      ],
                     },
                   ],
-                },
-              ],
-            });
-            if (turn.mode !== 'foreground') {
-              return yield* new ModelError({
-                kind: 'unsupported',
-                message: 'Editor access requires a foreground request.',
-              });
-            }
-            // Consume completion; partial output does not establish access.
-            yield* model.generateTurn(turn);
-          }).pipe(Effect.scoped),
-          // Preserve the post-discovery deadline at the host boundary. Direct
-          // interruption joins cleanup and retains any distinct release failure.
-          { signal: AbortSignal.timeout(120_000) },
+                });
+                if (turn.mode !== 'foreground') {
+                  return yield* new ModelError({
+                    kind: 'unsupported',
+                    message: 'Editor access requires a foreground request.',
+                  });
+                }
+                // Consume completion; partial output does not establish access.
+                yield* model.generateTurn(turn);
+              }).pipe(Effect.scoped),
+            );
+            yield* Effect.forkScoped(
+              Effect.sleep(120_000).pipe(
+                Effect.andThen(Fiber.interrupt(pending)),
+              ),
+            );
+            return yield* Fiber.await(pending);
+          }),
         );
       }
       if (Exit.isSuccess(result)) {
@@ -973,7 +910,7 @@ export class SettingsViewMessageHandler {
                 'This Copilot model is no longer available in VS Code. Refresh the model list and choose another model.',
               )
             : setCopilotRoutePreference(modelName, true, this.globalState);
-        result = await this.runtime.runPromiseExit(settle);
+        result = yield* Effect.exit(settle);
       }
       if (Exit.isFailure(result)) {
         const reason =
@@ -987,43 +924,36 @@ export class SettingsViewMessageHandler {
           error.providerEvidence?.kind === 'vscode-lm' &&
           error.providerEvidence.code === 'NoPermissions'
         ) {
-          await this.runtime.runPromise(
-            showLoggedInfoMessage(
-              this.channel,
-              'Copilot access was not granted. TeXRA will leave these models disabled.',
-            ),
+          yield* showLoggedInfoMessage(
+            this.channel,
+            'Copilot access was not granted. TeXRA will leave these models disabled.',
           );
         } else {
-          await this.runtime.runPromise(
-            showLoggedErrorMessage(
-              this.channel,
-              'Could not request Copilot model access',
-              new Error(
-                Cause.hasInterruptsOnly(result.cause)
-                  ? 'The Copilot access request was cancelled.'
-                  : Cause.pretty(result.cause),
-                { cause: result.cause },
-              ),
+          yield* showLoggedErrorMessage(
+            this.channel,
+            'Could not request Copilot model access',
+            new Error(
+              Cause.hasInterruptsOnly(result.cause)
+                ? 'The Copilot access request was cancelled.'
+                : Cause.pretty(result.cause),
+              { cause: result.cause },
             ),
           );
         }
       }
-    } finally {
-      invalidateRuntimeModelRegistry();
-      // This arm keeps its own runs: the consent request carries a host
-      // deadline as an `AbortSignal`, so it is settled at the boundary above
-      // rather than composed into the dispatcher's single run.
-      await this.runtime.runPromise(
-        allSettledVoid([
-          safeExecuteCommand('texra.refreshAllOptions', [], this.viewName).pipe(
-            Effect.asVoid,
-          ),
-          this.withActiveWebview((webview) =>
-            this.sendModelSelectionData(webview),
-          ),
-        ]),
-      );
-    }
+    }).pipe(
+      Effect.ensuring(
+        Effect.gen({ self: this }, function* () {
+          invalidateRuntimeModelRegistry();
+          yield* allSettledVoid([
+            this.progressView.refreshCatalogs(),
+            this.withActiveWebview((webview) =>
+              this.sendModelSelectionData(webview),
+            ),
+          ]).pipe(Effect.orDie);
+        }),
+      ),
+    );
   }
 
   /** Clear the per-model Copilot route preference (#9659), returning the
@@ -1032,9 +962,7 @@ export class SettingsViewMessageHandler {
     return setCopilotRoutePreference(modelName, false, this.globalState).pipe(
       Effect.andThen(
         allSettledVoid([
-          safeExecuteCommand('texra.refreshAllOptions', [], this.viewName).pipe(
-            Effect.asVoid,
-          ),
+          this.progressView.refreshCatalogs().pipe(Effect.asVoid),
           this.withActiveWebview((webview) =>
             this.sendModelSelectionData(webview),
           ),
@@ -1058,13 +986,9 @@ export class SettingsViewMessageHandler {
         this.agentHandlers.sendAgentSelectionData(w),
       ),
       this.withActiveWebview((w) => this.agentHandlers.sendAgentModePresets(w)),
-      safeExecuteCommand(
-        'texra.refreshAllOptions',
-        selectedToolUseAgent || agentCatalogAlreadyFresh
-          ? [{ selectedToolUseAgent, agentCatalogAlreadyFresh }]
-          : [],
-        this.viewName,
-      ).pipe(Effect.asVoid),
+      this.progressView
+        .refreshCatalogs({ selectedToolUseAgent, agentCatalogAlreadyFresh })
+        .pipe(Effect.asVoid),
     ]);
   }
 
@@ -1108,9 +1032,7 @@ export class SettingsViewMessageHandler {
       .pipe(
         Effect.andThen(this.postModelSelectionData()),
         // The options cache is invalidated by the writer itself.
-        Effect.andThen(
-          safeExecuteCommand('texra.refreshAllOptions', [], this.viewName),
-        ),
+        Effect.andThen(this.progressView.refreshCatalogs()),
         Effect.asVoid,
       );
   }
