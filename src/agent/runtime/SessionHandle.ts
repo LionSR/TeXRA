@@ -49,7 +49,6 @@ import {
 import {
   aggregateId as qualifyAggregateId,
   aggregateTarget,
-  DEBUG_MODE_KEY,
   interruptedWorkflowCall,
   RUN_OUTCOME,
   type AggregateId,
@@ -937,6 +936,7 @@ export class SessionHandle {
           fromSeq: 0,
         })),
         0,
+        false,
       )
       .pipe(
         Stream.runHead,
@@ -946,14 +946,7 @@ export class SessionHandle {
               Effect.die(new Error('Session input read produced no replay')),
             onSome: (replay) =>
               Effect.succeed(
-                fold(
-                  emptySessionView(
-                    this.roots.storage,
-                    0,
-                    this.roots.config.get(DEBUG_MODE_KEY, false),
-                  ),
-                  replay,
-                ),
+                fold(emptySessionView(this.roots.storage), replay),
               ),
           }),
         ),

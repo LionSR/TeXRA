@@ -116,6 +116,7 @@ import { gitHubSubscriptionsLayer } from '@tools/github/subscriptionRegistries';
 import type { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import { SetupPlatform, type SetupPlatformShape } from '@tools/setup/platform';
 import { StreamLogStore } from '@transcript/StreamLogStore';
+import { readConfigSettingFrom } from '@utils/config/platformSettings';
 import { inquiryRecordsLayer } from './inquiryRecords';
 import { updateCheckRecordsLayer } from './updateCheckRecords';
 import { databaseLayer } from './Database';
@@ -522,7 +523,7 @@ const sessionHandleLayer = (
       const transcripts = StreamLogStore.open(
         eventLog,
         key.open.transcriptMode,
-        key.open.roots.config.get(DEBUG_MODE_KEY, false),
+        readConfigSettingFrom<boolean>(key.open.roots.config, DEBUG_MODE_KEY),
       );
       // The gate's probe fibers and waiting calls end with this scope, after
       // the handle below has unwound its runs.

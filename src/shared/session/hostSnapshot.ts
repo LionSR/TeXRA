@@ -67,8 +67,6 @@ export function projectDisplayOf(
 
 export const HostSnapshotSchema = z.object({
   project: ProjectDisplaySchema,
-  /** Transcript verbosity at the host's current config authority. */
-  debugMode: z.boolean(),
   agentOptions: z.record(AgentCategorySchema, z.array(AgentOptionDataSchema)),
   modelOptions: z.array(ModelOptionDataSchema),
   teamOptions: z.array(TeamOptionDataSchema),
@@ -92,7 +90,6 @@ export type HostSnapshot = z.infer<typeof HostSnapshotSchema>;
 export function emptyHostSnapshot(project: ProjectDisplay): HostSnapshot {
   return {
     project,
-    debugMode: false,
     agentOptions: { toolUse: [], workflow: [] },
     modelOptions: [],
     teamOptions: [],

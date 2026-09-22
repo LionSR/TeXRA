@@ -54,6 +54,8 @@ const SubscribeSchema = z.object({
   session: SessionKeySchema,
   /** Chosen by the surface, monotone per view instance. */
   generation: GenerationSchema,
+  /** The policy of the surface's currently published view. */
+  debug: z.boolean(),
   /** 0 on a cold mount; the view's cursor on a resubscribe. */
   cursor: CommitOrdinalSchema,
   /** The transcript tier: each `fromSeq` is `view.folded[id]`, 0 when the
@@ -71,6 +73,8 @@ const EventsFrameSchema = z.object({
   chunks: z.array(TextChunkSchema),
   local: LocalRuntimeStateSchema.nullable(),
   host: HostSnapshotSchema.nullable(),
+  /** Fold policy sampled by the process reader for this replay. */
+  debug: z.boolean().nullable(),
   /** True on the frame that ends the reads this `Subscribe` started. */
   replayComplete: z.boolean(),
   /** Only the final frame of a finite read carries its checked claims and removals. */
@@ -187,6 +191,7 @@ export class SessionFrames extends Context.Service<
   {
     readonly inputs: (
       aggregates: readonly TranscriptSubscription[],
+      previousDebug: boolean,
     ) => Stream.Stream<readonly FoldInput[]>;
     readonly host: SubscriptionRef.SubscriptionRef<HostSnapshot | null>;
     readonly begin: (generation: number) => Effect.Effect<void>;
@@ -204,50 +209,62 @@ export class SessionFrames extends Context.Service<
       };
       return {
         host,
-        inputs: (aggregates) =>
+        inputs: (aggregates, previousDebug) =>
           Stream.suspend(() =>
             Stream.fromQueue(current.queue).pipe(
               Stream.mapAccum(
                 () => {
-                  const initialHost = SubscriptionRef.getUnsafe(host);
                   return {
-                    pending: [
-                      ...(initialHost
-                        ? [
-                            {
-                              _tag: 'debug' as const,
-                              enabled: initialHost.debugMode,
-                            },
-                          ]
-                        : []),
-                      { _tag: 'subscriptions', set: [...aggregates] },
-                    ] as FoldInput[],
+                    debug: undefined as boolean | undefined,
+                    pending: [] as FoldInput[],
                     complete: false,
                   };
                 },
                 (state, frame) => {
-                  if (!state.complete && frame.host) {
-                    state.pending.push({
-                      _tag: 'debug',
-                      enabled: frame.host.debugMode,
-                    });
-                  }
+                  if (!state.complete && frame.debug !== null)
+                    state.debug = frame.debug;
                   state.pending.push(...frame.events, ...frame.chunks);
                   if (frame.local)
                     state.pending.push({ _tag: 'local', local: frame.local });
+                  if (frame.existence !== null) {
+                    const marker: FoldInput = frame.replayComplete
+                      ? {
+                          _tag: 'replay.complete',
+                          existence: frame.existence,
+                        }
+                      : {
+                          _tag: 'drained',
+                          cursor: frame.cursor,
+                          existence: frame.existence,
+                        };
+                    state.pending.push(marker);
+                  }
+                  if (!state.complete) {
+                    if (!frame.replayComplete || state.debug === undefined)
+                      return [state, []] as const;
+                    const reset = state.debug !== previousDebug;
+                    const prefix: FoldInput[] = [
+                      { _tag: 'debug', enabled: state.debug },
+                      {
+                        _tag: 'subscriptions',
+                        set: aggregates.map((entry) => ({
+                          ...entry,
+                          fromSeq: reset ? 0 : entry.fromSeq,
+                        })),
+                      },
+                    ];
+                    return [
+                      {
+                        ...state,
+                        pending: [] as FoldInput[],
+                        complete: true,
+                      },
+                      [[...prefix, ...state.pending]],
+                    ] as const;
+                  }
                   if (frame.existence === null) return [state, []] as const;
-                  const marker: FoldInput = frame.replayComplete
-                    ? { _tag: 'replay.complete', existence: frame.existence }
-                    : {
-                        _tag: 'drained',
-                        cursor: frame.cursor,
-                        existence: frame.existence,
-                      };
-                  state.pending.push(marker);
-                  if (!state.complete && !frame.replayComplete)
-                    return [state, []] as const;
                   return [
-                    { pending: [] as FoldInput[], complete: true },
+                    { ...state, pending: [] as FoldInput[] },
                     [state.pending],
                   ] as const;
                 },

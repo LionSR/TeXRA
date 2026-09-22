@@ -68,7 +68,7 @@ export interface FramerSource {
 }
 
 type FrameItem =
-  | Exclude<FoldInput, { _tag: 'subscriptions' | 'debug' }>
+  | Exclude<FoldInput, { _tag: 'subscriptions' }>
   | { readonly _tag: 'host'; readonly host: HostSnapshot };
 
 /** One frame from the items of one window: chunks merged per row where
@@ -85,6 +85,7 @@ function cutFrame(
   const chunks = new Map<string, TextChunk>();
   let local: LocalRuntimeState | null = null;
   let host: HostSnapshot | null = null;
+  let debug: boolean | null = null;
   let replayComplete = false;
   let existence: ExistenceReconciliation | null = null;
   let drained = drainedBefore;
@@ -118,6 +119,9 @@ function cutFrame(
       case 'host':
         host = item.host;
         break;
+      case 'debug':
+        debug = item.enabled;
+        break;
       case 'replay.complete':
         replayComplete = true;
         existence = item.existence;
@@ -137,6 +141,7 @@ function cutFrame(
     chunks: [...chunks.values()],
     local,
     host,
+    debug,
     replayComplete,
     existence,
   };
@@ -164,34 +169,24 @@ export function frameSubscription(
           ? (yield* SubscriptionRef.get(source.view)).cursor
           : subscribe.cursor;
       const inputs = source
-        .inputs(subscribe.aggregates, tailFrom)
+        .inputs(subscribe.aggregates, tailFrom, subscribe.debug)
         .pipe(
           Stream.flatMap((batch) =>
             Stream.fromIterable(batch).pipe(
               Stream.filter(
                 (
                   input,
-                ): input is Exclude<
-                  FoldInput,
-                  { _tag: 'subscriptions' | 'debug' }
-                > => input._tag !== 'subscriptions' && input._tag !== 'debug',
+                ): input is Exclude<FoldInput, { _tag: 'subscriptions' }> =>
+                  input._tag !== 'subscriptions',
               ),
             ),
           ),
         );
-      const initialHost = yield* SubscriptionRef.get(host);
       const hosts = SubscriptionRef.changes(host).pipe(
         Stream.filter((value): value is HostSnapshot => value !== null),
         Stream.map((value): FrameItem => ({ _tag: 'host', host: value })),
       );
-      const merged = Stream.merge(inputs, hosts);
-      const ordered = initialHost
-        ? Stream.concat(
-            Stream.make({ _tag: 'host', host: initialHost } as FrameItem),
-            merged,
-          )
-        : merged;
-      return ordered.pipe(
+      return Stream.merge(inputs, hosts).pipe(
         Stream.groupedWithin(FRAME_ROWS, FRAME_WINDOW),
         Stream.buffer({ capacity: FRAME_BUFFER, strategy: 'suspend' }),
         Stream.mapAccum(

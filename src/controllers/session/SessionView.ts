@@ -55,9 +55,8 @@ export class SessionViewService extends Context.Service<
       const inputs = yield* SessionInputs;
       const subscriptions = yield* TranscriptSubscriptions;
       const roots = yield* WorkspaceRoots;
-      // Each replay begins with the renderer's current verbosity input: the
-      // process reader uses this graph's config provider, while the webview
-      // reader takes it from the host snapshot that precedes the replay.
+      // Each replay begins with the process reader's sampled verbosity. The
+      // transport carries that same policy to the webview fold.
       const ref = yield* SubscriptionRef.make(
         emptySessionView(roots.storage, 0, false),
       );
@@ -73,6 +72,7 @@ export class SessionViewService extends Context.Service<
                       fromSeq: view.folded.get(entry.id) ?? entry.fromSeq,
                     })),
                     view.cursor,
+                    view.debug,
                   ),
                 ),
               ),

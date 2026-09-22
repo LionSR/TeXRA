@@ -238,11 +238,10 @@ const SessionViewSchema = z.object({
    *  Listing and history rows never advance it. */
   cursor: CommitOrdinalSchema,
   /**
-   * Transcript verbosity (`texra.logger.debugMode`), read once from the
-   * config authority nearest the renderer that opens the view — never
-   * stamped onto a row. A process view reads it from its workspace roots;
-   * the whole fold answers with the value the view was opened with, so a
-   * settings flip takes effect on the next replay, not mid-fold.
+   * Transcript verbosity (`texra.logger.debugMode`), sampled by the process
+   * reader and carried with the replay — never stamped onto a row. The whole
+   * fold answers with the replay's value, so a settings flip takes effect on
+   * the next replay, not mid-fold.
    */
   debug: z.boolean(),
   /** One entry per subscribed aggregate: the highest seq the fold has
@@ -266,9 +265,8 @@ export type SessionView = z.infer<typeof SessionViewSchema>;
 
 /**
  * The empty view a fold starts from: keyed by its session, its cursor at the
- * layer's tail anchor (PRD 7.2), and its verbosity flag read from the nearest
- * config authority. Built once per fold fiber and never by an input, since no
- * arm carries a key.
+ * layer's tail anchor (PRD 7.2), and its initial verbosity flag. Built once
+ * per fold fiber; a replay's first input can replace it when policy changes.
  */
 export function emptySessionView(
   key: string,

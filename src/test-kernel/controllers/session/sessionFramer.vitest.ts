@@ -32,6 +32,7 @@ import { SessionBridge } from '@controllers/session/SessionBridge';
 import {
   aggregateId as qualifyAggregateId,
   AgentCategory,
+  DEBUG_MODE_KEY,
   FoldEventSchema,
   MESSAGE_TYPES,
   RUN_PHASE,
@@ -48,7 +49,10 @@ import {
 } from '@shared/session/hostSnapshot';
 import type { EventsFrame, Subscribe } from '@shared/session/sessionFrames';
 import type { SessionView } from '@shared/session/sessionView';
-import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
+import {
+  createFakeWorkspaceRoots,
+  FakeConfigProvider,
+} from '@test/support/FakePlatform';
 import { fakeProcessServices } from '@test/support/setupPlatform';
 import { createTestSession } from '@test/support/sessionTestUtils';
 
@@ -64,15 +68,12 @@ const KEY = '/workspace/framing';
 const RUN = 'ab12cd' as RunId;
 const SECOND = 'dec0de' as RunId;
 const PORT = 'sidebar';
-const DEBUG_HOST: HostSnapshot = {
-  ...emptyHostSnapshot({
-    key: KEY,
-    name: 'Framing',
-    initials: 'FR',
-    subtitle: KEY,
-  }),
-  debugMode: true,
-};
+const HOST: HostSnapshot = emptyHostSnapshot({
+  key: KEY,
+  name: 'Framing',
+  initials: 'FR',
+  subtitle: KEY,
+});
 
 const runStart: SessionEventDraft = {
   type: 'run.start',
@@ -110,8 +111,11 @@ function streamingRow(runId: RunId, rowId: string): SessionEventDraft {
 }
 
 /** The runtime graph, as `sessionLayer` composes it without the host bits. */
-const runtimeGraph = (history: readonly SessionEventDraft[]) => {
-  const roots = createFakeWorkspaceRoots({ storagePath: KEY });
+const runtimeGraph = (
+  history: readonly SessionEventDraft[],
+  config = new FakeConfigProvider(),
+) => {
+  const roots = createFakeWorkspaceRoots({ storagePath: KEY }, { config });
   const seeded = Layer.effectDiscard(
     Effect.gen(function* () {
       const log = yield* Database;
@@ -183,6 +187,7 @@ const subscribe: Subscribe = {
   kind: 'subscribe',
   session: KEY,
   generation: 1,
+  debug: false,
   cursor: 0,
   aggregates: [{ id: qualifyAggregateId('run', RUN), fromSeq: 0 }],
 };
@@ -400,9 +405,7 @@ describe('session framer', () => {
           chunks.ref,
           new Map([[`${RUN}/row-1`, textTail('Hello')]]),
         );
-        const host = yield* SubscriptionRef.make<HostSnapshot | null>(
-          DEBUG_HOST,
-        );
+        const host = yield* SubscriptionRef.make<HostSnapshot | null>(HOST);
         const webview = yield* WebviewSessions.open(KEY);
         const { frames, view } = webview;
         const shell = webview.subscriptions;
@@ -441,6 +444,7 @@ describe('session framer', () => {
           chunks: [],
           local: null,
           host: null,
+          debug: null,
           replayComplete: false,
           existence: null,
         });
@@ -470,7 +474,7 @@ describe('session framer', () => {
           (v) => v.runs.get(RUN)?.status === RUN_PHASE.RUNNING,
         );
         const folded = yield* SubscriptionRef.get(view.ref);
-        expect(folded.debug).toBe(true);
+        expect(folded.debug).toBe(false);
         expect(drawn(folded)).toEqual(
           drawn(yield* SubscriptionRef.get(runtimeView.ref)),
         );
@@ -544,6 +548,7 @@ describe('session framer', () => {
           chunks: [],
           local: null,
           host: null,
+          debug: null,
           replayComplete: false,
           existence: null,
         };
@@ -603,6 +608,7 @@ describe('session framer', () => {
           chunks: [],
           local: null,
           host: null,
+          debug: null,
           replayComplete: false,
           existence: null,
         });
@@ -647,4 +653,89 @@ describe('session framer', () => {
         ),
       ),
   );
+
+  it.effect('replays transcript history when debug policy changes', () => {
+    const config = new FakeConfigProvider({ [DEBUG_MODE_KEY]: 'false' });
+    const debugLog: SessionEventDraft = {
+      type: 'log',
+      aggregateId: qualifyAggregateId('run', RUN),
+      level: 'debug',
+      message: 'Historical debug detail.',
+    };
+    return Effect.gen(function* () {
+      const source = yield* framerSource;
+      const host = yield* SubscriptionRef.make<HostSnapshot | null>(null);
+      const webview = yield* WebviewSessions.open(KEY);
+      const aggregateId = qualifyAggregateId('run', RUN);
+      const hasDebugRow = (view: SessionView) =>
+        view.runs
+          .get(RUN)
+          ?.transcript.rows.some(
+            (row) => row.kind === 'log' && row.level === 'debug',
+          ) ?? false;
+      const startReplay = (request: Subscribe) =>
+        Effect.gen(function* () {
+          yield* webview.frames.begin(request.generation);
+          yield* webview.subscriptions.set('shell', request.aggregates);
+          return yield* Effect.forkScoped(
+            Stream.runForEach(
+              frameSubscription(source, PORT, host, request),
+              webview.frames.feed,
+            ),
+          );
+        });
+      const ticker = yield* Effect.forkScoped(ticking);
+      let decoder = yield* startReplay(subscribe);
+      yield* settle(
+        webview.view.ref,
+        (view) => (view.folded.get(aggregateId) ?? 0) > 0 && view.cursor > 0,
+      );
+      let current = yield* SubscriptionRef.get(webview.view.ref);
+      expect(current.debug).toBe(false);
+      expect(hasDebugRow(current)).toBe(false);
+      expect(current.cursor).toBeGreaterThan(0);
+      const nonzeroFromSeq = current.folded.get(aggregateId)!;
+
+      config.set(DEBUG_MODE_KEY, true);
+      yield* Fiber.interrupt(decoder);
+      decoder = yield* startReplay({
+        ...subscribe,
+        generation: 2,
+        debug: current.debug,
+        cursor: current.cursor,
+        aggregates: [{ id: aggregateId, fromSeq: nonzeroFromSeq }],
+      });
+      yield* settle(
+        webview.view.ref,
+        (view) => view.debug && hasDebugRow(view),
+      );
+      current = yield* SubscriptionRef.get(webview.view.ref);
+      expect(current.folded.get(aggregateId)).toBe(nonzeroFromSeq);
+
+      config.set(DEBUG_MODE_KEY, false);
+      yield* Fiber.interrupt(decoder);
+      decoder = yield* startReplay({
+        ...subscribe,
+        generation: 3,
+        debug: current.debug,
+        cursor: current.cursor,
+        aggregates: [
+          { id: aggregateId, fromSeq: current.folded.get(aggregateId)! },
+        ],
+      });
+      yield* settle(
+        webview.view.ref,
+        (view) => !view.debug && !hasDebugRow(view) && view.runs.has(RUN),
+      );
+      yield* Fiber.interrupt(ticker);
+      yield* Fiber.interrupt(decoder);
+    }).pipe(
+      Effect.provide(
+        Layer.merge(
+          runtimeGraph([runStart, debugLog], config),
+          WebviewSessions.layerNoDeps,
+        ),
+      ),
+    );
+  });
 });

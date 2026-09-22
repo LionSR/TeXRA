@@ -29,11 +29,7 @@ import type { LanguageModel } from '@platform/languageModel';
 import type { GlobalStorageFs } from '@platform/rootedFs';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import {
-  DEBUG_MODE_KEY,
-  type FileOptions,
-  type SessionType,
-} from '@shared/schemas';
+import { type FileOptions, type SessionType } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import type {
   HostSnapshot,
@@ -182,7 +178,6 @@ export function createHostSnapshotSource(
   function publish(): void {
     options.publish({
       project: options.project,
-      debugMode: options.stores.config.get(DEBUG_MODE_KEY, false),
       ...catalogs,
       workspaceRoots: options.workspaceRoots?.() ?? [],
       fileOptions: { ...fileOptions, commit: ['HEAD', ...commits.commits] },

@@ -680,7 +680,7 @@ const CORE_SETTING_ROWS: Record<
     description:
       "Show the transcript's verbose tier: debug-level rows and their payload detail. The log surfaces filter themselves (the Output view's own level filter, the desktop log file, the CLI's --verbose/--quiet).",
     honoredBy: {
-      vscode: { reader: 'src/controllers/session/hostSnapshotSource.ts' },
+      vscode: { reader: 'src/controllers/session/sessionInputs.ts' },
       desktop: { reader: 'src/controllers/session/sessionInputs.ts' },
       cli: { reader: 'src/controllers/session/sessionInputs.ts' },
     },

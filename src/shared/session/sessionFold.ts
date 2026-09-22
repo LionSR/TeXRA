@@ -141,6 +141,7 @@ import {
 import { createTranscriptFold } from './traceFold';
 import { isRunningStreamingTextEntry, StreamLog } from './traceEntries';
 
+import { emptySessionView } from './sessionView';
 import type { SessionView, RunView, TranscriptView } from './sessionView';
 
 type RunStartEvent = Extract<DisplaySessionEvent, { type: 'run.start' }>;
@@ -190,8 +191,7 @@ function foldWith(
   switch (input._tag) {
     case 'debug':
       if (next.debug === input.enabled) return view;
-      next.debug = input.enabled;
-      return next;
+      return emptySessionView(view.key, 0, input.enabled);
     case 'event': {
       if (input.read === 'listing') {
         sessionIndexesOf(next).listed.add(input.event.aggregateId);

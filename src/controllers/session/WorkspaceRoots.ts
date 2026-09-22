@@ -9,8 +9,8 @@
  * (#12421): Effect's scheduler drains many fibers' continuations in one turn,
  * so ambient state bleeds across fibers. The storage root is the one fact
  * every graph has; the config provider rides along for the process reader's
- * fold-time transcript-verbosity input. A webview has no config provider;
- * its host snapshot supplies the corresponding input before replay.
+ * replay-time transcript-verbosity input. A webview has no config provider;
+ * the process reader carries that input through the replay wire.
  */
 import { Context } from 'effect';
 
@@ -20,8 +20,8 @@ export class WorkspaceRoots extends Context.Service<
   WorkspaceRoots,
   /** The storage root of `@platform/workspaceRoots`, as a plain string: a
    *  webview's graph must not name the host module, which reaches Node. The
-   *  config provider is the process session's own; a webview's graph has
-   *  none and receives verbosity through its host snapshot. */
+   *  config provider is the process session's own; the replay wire carries
+   *  its sampled verbosity to a webview graph, which has no provider. */
   {
     readonly storage: string;
     readonly config?: ConfigProvider;
