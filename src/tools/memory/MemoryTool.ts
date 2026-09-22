@@ -9,7 +9,7 @@ import { z } from 'zod';
 import { Runs } from '@agent/runtime/runRegistry';
 import { ToolCall } from '@agent/runtime/ToolCall';
 import type { ToolServices } from '@agent/runtime/ToolServices';
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import { MEMORY_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import { StorageFs } from '@platform/rootedFs';
 import { ToolError, type RunId, type ToolResult } from '@shared/schemas';
@@ -58,7 +58,7 @@ import {
   type MemoryFileMeta,
 } from './memoryMeta';
 
-const log = createLog('MemoryTool');
+const CHANNEL = 'MemoryTool';
 
 const MEMORY_PATH_DESCRIPTION = `Path under ${MEMORY_DISPLAY_ROOT} (e.g. ${MEMORY_DISPLAY_ROOT}/notes.md).`;
 
@@ -299,15 +299,17 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
   )(function* (resolvedPath: string, inputPath: string) {
     const errorMsg = `The path ${inputPath} does not exist or is a directory.`;
     const stats = yield* statMemoryEntry(resolvedPath).pipe(
-      // The collapse is deliberate, but the real error is kept on the
-      // ToolError and named in the log, so a permission fault is not lost
-      // behind "does not exist".
-      Effect.catch((error) => {
-        log.warn(
+      // Keep the cause on ToolError and in the log so permission faults stay visible.
+      Effect.catch((error) =>
+        Effect.logWarning(
           `Memory entry ${inputPath} could not be read: ${toErrorMessage(error)}`,
-        );
-        return Effect.fail(new ToolError(errorMsg, { cause: error }));
-      }),
+        ).pipe(
+          withLogChannel(CHANNEL),
+          Effect.andThen(
+            Effect.fail(new ToolError(errorMsg, { cause: error })),
+          ),
+        ),
+      ),
     );
     if (stats.type === 'Directory') {
       return yield* Effect.fail(new ToolError(errorMsg));
