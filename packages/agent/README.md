@@ -141,9 +141,9 @@ runtime they ran on. So two overlapping scopes over one platform are safe,
 the first one out ends nothing the second is still using, and a later program
 in the same process composes again over the platform already installed. A
 scope arriving during the last holder's shutdown waits for disposal to finish
-before composing the next runtime. Acquisition and its release registration
-are uninterruptible, so cancellation while waiting completes that handoff and
-releases the hold through the scope.
+before composing the next runtime. Acquisition is interruption-safe:
+cancellation while waiting aborts without taking a hold, while the retiring
+runtime completes disposal through its own scope.
 
 A composition that found a host's own installation ends nothing however its
 holds end: those sessions are the host's, and killing its live runs is not
