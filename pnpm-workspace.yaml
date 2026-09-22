@@ -8,7 +8,7 @@ catalog:
   '@anthropic-ai/sdk': '^0.125.0'
   '@cantoo/pdf-lib': '^2.9.2'
   '@date-fns/tz': '^1.5.0'
-  '@effect/platform-node': '4.0.0-rc.115'
+  '@effect/platform-node': '4.0.0-rc.116'
   '@effect/sql-sqlite-node': '4.0.0-rc.115'
   '@google/genai': '^2.23.0'
   '@jamesgopsill/crossref-client': '^1.1.0'
