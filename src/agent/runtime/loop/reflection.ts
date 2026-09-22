@@ -743,7 +743,8 @@ export const runReflection = Effect.fn('reflection.run')(function* (
       const prefillTokens = workspace.assembly.lastResponse.slice(-K_SLICE);
       const continuationPrompt = `Your response got cut off, because you only have limited response space. Continue responding exactly from where you left off until the very end, marked by ${OUTPUT_END_TAG}. Avoid repeating yourself and avoid starting over. Start your response at the next token after: "${prefillTokens}"`;
       flow = { ...flow, endTurn: false };
-      const continued = yield* cell.append([
+      const progressed = { ...base, continuationIndex: next };
+      return yield* cell.append([
         appendRow(runId, [
           {
             role: 'user',
@@ -757,18 +758,13 @@ export const runReflection = Effect.fn('reflection.run')(function* (
           // snapshot is what records that.
           runtime: { lastError: null },
         }),
-        stepRow(
-          runId,
-          { ...base, continuationIndex: next },
-          'response.processed',
-        ),
+        stepRow(runId, progressed, 'response.processed'),
       ]);
-      return continued;
     }
     // `output.pending` is committed before any output file is touched, so
     // a re-entry at this phase knows the pipeline may have started.
     flow = { ...flow, endTurn };
-    const processed = yield* cell.append([
+    return yield* cell.append([
       snapshot(initial, {
         phase: 'output.pending',
         runtime: { lastError: null },
@@ -776,7 +772,6 @@ export const runReflection = Effect.fn('reflection.run')(function* (
       stepRow(runId, initial, 'response.processed'),
       stepRow(runId, initial, 'output.ready'),
     ]);
-    return processed;
   });
 
   /** The output pipeline over the round's raw output: extraction, lineage,

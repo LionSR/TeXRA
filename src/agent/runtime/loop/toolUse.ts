@@ -822,13 +822,19 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   // The host attachment is the outer bracket; the run itself is the inner
   // one. Every ledger append the loop makes is uninterruptible inside
   // `cell.append`, so the halt the release writes never folds onto a state
-  // behind the rows, and the detach now runs after the lease release.
+  // behind the rows, and the detach now runs after the lease release. The
+  // attach itself runs inside the use: a host whose attach throws after
+  // wiring itself up is still live, so a failed acquire, which releases
+  // nothing, would strand it.
   return yield* Effect.acquireUseRelease(
-    Effect.sync(attach),
+    Effect.void,
     () =>
-      Effect.acquireUseRelease(enter, loopBody, (cell, exit) =>
-        settleRun(cell, logger, followUps)(exit),
-      ),
+      Effect.gen(function* () {
+        yield* Effect.sync(attach);
+        return yield* Effect.acquireUseRelease(enter, loopBody, (cell, exit) =>
+          settleRun(cell, logger, followUps)(exit),
+        );
+      }),
     () => Effect.sync(detach),
   ).pipe(
     Effect.map((loop) => result(loop.outcome, loop.state)),

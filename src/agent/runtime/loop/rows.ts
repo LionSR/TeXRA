@@ -35,7 +35,7 @@ export type ToolUseFlowState = ToolUseSnapshot['state'];
 export type ReflectionFlowState = ReflectionSnapshot['state'];
 
 /** The family state a snapshot carries, keyed by its family. */
-export type FamilyState =
+type FamilyState =
   | { readonly family: 'toolUse'; readonly state: ToolUseFlowState }
   | { readonly family: 'reflection'; readonly state: ReflectionFlowState };
 
