@@ -153,22 +153,26 @@ already shipped, in smaller PRs that never came back to update this note:
   written, holds. `src/shared/schemas/` is down to ~6.9k lines
   (from the ~9.5k cited above); `mainView/` and `progressView/` remain, as
   wire-contract state for those views rather than settings surface.
-- **Step 2 (LaTeX/image probe), for the four spellings this note named.**
-  One catalog, `LATEX_TOOLS` in `@shared/constants/latexToolchain`, consumed
-  by `@latex/latexToolchain`, `@tools/setup/toolProbing`,
+- **Step 2 (LaTeX/image probe), for the four spellings this note named, plus
+  a fifth caught and fixed while this note was in review.** One catalog,
+  `LATEX_TOOLS` in `@shared/constants/latexToolchain`, consumed by
+  `@latex/latexToolchain`, `@tools/setup/toolProbing`,
   `@controllers/settingsView/LatexToolingController` and the CLI doctor
   (`@latex/latexToolchain` → `probeLatexToolchain`) — the four spellings §1's
   Findings listed are one now. No "kept in sync" comment remains anywhere in
   the tree. The per-consumer roles (doctor required/optional, probe
   required/image, `drivesCompile`) landed as designed, including the stated
-  `latexmk` residual. Not consolidated, and not one of the four this note
-  named: `checkCoreDependencies` (`src/utils/system/checkCoreDependencies.ts`)
-  still hardcodes its own `['latexindent', 'perl', 'gs']` list rather than
-  reading `LATEX_TOOLS`/`PROBED_LATEX_TOOLS` (it does read `IMAGE_LATEX_TOOLS`
-  for the image half). It backs the progress view's dependency banner
-  (`ProgressViewProvider.ts`, `extensionHostRequests.ts`) — a fifth surface
-  this note's original survey missed, so the catalog can still drift from
-  what that banner shows.
+  `latexmk` residual. An earlier pass of this note flagged a fifth,
+  un-consolidated spelling in `checkCoreDependencies`
+  (`src/utils/system/checkCoreDependencies.ts`), which then hardcoded
+  `['latexindent', 'perl', 'gs']` rather than reading the catalog. That was
+  true when written (#12994) but landed independently in the meantime
+  (`#12962`, before this note could be updated): the function now iterates
+  `CORE_DEPENDENCY_TOOLS`, itself derived from `LATEX_TOOLS` via each entry's
+  `core?: true` flag, and the catalog's own docstring now lists
+  `checkCoreDependencies` as the fourth of "four surfaces" that read it —
+  not a missed fifth. Corrected here rather than left stale, per a review
+  catch on this note's own PR (#13022).
 - **Step 3 (rows).** `sessionEvent.ts` has a single `run.fact` row
   (discriminated by `fact.key`) and a single `state.value.set` row;
   `updateTodos`/`updatePlan`/`addOutputFiles`/`updateMissingOutputs`/
@@ -207,10 +211,6 @@ already shipped, in smaller PRs that never came back to update this note:
 
 ## 6. Still open
 
-- **Step 2, `checkCoreDependencies`.** A fifth (not one of the original
-  four-named) spelling of the LaTeX/image probe list, hardcoded rather than
-  reading `LATEX_TOOLS`, backing the progress view's dependency banner. See
-  §5 Step 2 for detail and evidence.
 - **Step 4, the turn-attribution liveness read.** `/report` and `/result`
   resolve a run's liveness a second time via `resolveRunLiveness` rather than
   reading it off `SessionView`, contradicting the "never... a second time"
