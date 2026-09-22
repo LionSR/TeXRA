@@ -145,10 +145,12 @@ already shipped, in smaller PRs that never came back to update this note:
   `stateSettings.ts`, `settingsViewMessages.ts`, `memoryViewMessages.ts` and
   `profileViewMessages.ts` are no longer exported from
   `src/shared/schemas/index.ts` — they live in `src/shared/state/` and
-  `src/shared/settingsView/` as standalone modules. `stateSettings.ts` is now
-  imported only from the settings view frontend (`LaTeXTab.ts`, `GitTab.ts`,
-  `AIAgentsTab.ts`, `settingsState.ts`, `stateSettingRows.ts`) — the first
-  Acceptance bullet holds. `src/shared/schemas/` is down to ~6.9k lines
+  `src/shared/settingsView/` as standalone modules. `stateSettings.ts` has
+  around two dozen importers tree-wide (backend config plumbing, the CLI's
+  own settings forms, tests), but no webview other than the settings view
+  frontend (`LaTeXTab.ts`, `GitTab.ts`, `AIAgentsTab.ts`, `settingsState.ts`,
+  `stateSettingRows.ts`) is among them — the first Acceptance bullet, as
+  written, holds. `src/shared/schemas/` is down to ~6.9k lines
   (from the ~9.5k cited above); `mainView/` and `progressView/` remain, as
   wire-contract state for those views rather than settings surface.
 - **Step 2 (LaTeX/image probe).** One catalog, `LATEX_TOOLS` in
