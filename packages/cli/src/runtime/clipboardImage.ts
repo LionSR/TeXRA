@@ -21,17 +21,37 @@ import { platform as osPlatform } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 
-import { Effect, type FileSystem, type Path } from 'effect';
+import { Data, Effect, type FileSystem, type Path } from 'effect';
 
 import { isFileNotFoundError } from '@common/errors';
 import { withSessionFs } from '@platform/rootedFs';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { generatePastedImageName } from '@utils/files/pastedImageName';
-import { savePastedImageBuffer } from '@utils/files/pastedImageUtils';
+import {
+  type PastedImageSaveFailed,
+  savePastedImageBuffer,
+} from '@utils/files/pastedImageUtils';
 import { createTexraTempDir } from '@utils/files/tempDir';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const execFileAsync = promisify(execFile);
 const MAX_IMAGE_BYTES = 64 * 1024 * 1024;
+
+/**
+ * The clipboard probe failed at a foreign edge (an OS clipboard tool or a
+ * temp-file read): the untagged value that edge threw, wrapped here so the
+ * channel stays typed. `message` is the cause's own message, which is what
+ * the input bar's error hook prints.
+ */
+export class ClipboardImageProbeFailed extends Data.TaggedError(
+  'ClipboardImageProbeFailed',
+)<{
+  readonly message: string;
+  readonly cause: unknown;
+}> {}
+
+const probeFailed = (cause: unknown): ClipboardImageProbeFailed =>
+  new ClipboardImageProbeFailed({ message: toErrorMessage(cause), cause });
 
 type ClipboardAttachResult =
   | {
@@ -50,14 +70,14 @@ type ClipboardRead = Buffer | 'none' | 'unsupported' | 'too-large';
  *  the probe's failure, not "no image": it reaches the caller's error hook. */
 function readPngFileWithinLimit(
   outFile: string,
-): Effect.Effect<ClipboardRead, unknown> {
+): Effect.Effect<ClipboardRead, ClipboardImageProbeFailed> {
   return Effect.tryPromise({
     try: async (): Promise<ClipboardRead> => {
       const { size } = await stat(outFile);
       if (size > MAX_IMAGE_BYTES) return 'too-large';
       return readFile(outFile);
     },
-    catch: (error: unknown) => error,
+    catch: probeFailed,
   });
 }
 
@@ -72,7 +92,7 @@ function isMaxBufferError(err: unknown): boolean {
 
 function readClipboardPngMac(
   outFile: string,
-): Effect.Effect<ClipboardRead, unknown> {
+): Effect.Effect<ClipboardRead, ClipboardImageProbeFailed> {
   // osascript ships with macOS — no external dependency. The first statement
   // fails when the clipboard holds no image, which is the 'none' outcome.
   return Effect.tryPromise(() =>
@@ -111,7 +131,7 @@ function readClipboardPngLinux(): Effect.Effect<ClipboardRead> {
               encoding: 'buffer',
               maxBuffer: MAX_IMAGE_BYTES,
             }),
-          catch: (error: unknown) => error,
+          catch: probeFailed,
         }),
       );
       if (outcome._tag === 'Success') {
@@ -130,7 +150,7 @@ function readClipboardPngLinux(): Effect.Effect<ClipboardRead> {
 
 function readClipboardPngWindows(
   outFile: string,
-): Effect.Effect<ClipboardRead, unknown> {
+): Effect.Effect<ClipboardRead, ClipboardImageProbeFailed> {
   const quotedOutFile = outFile.replaceAll("'", "''");
   const script = `$img = Get-Clipboard -Format Image; if ($img) { Add-Type -AssemblyName System.Drawing; $img.Save('${quotedOutFile}', [System.Drawing.Imaging.ImageFormat]::Png) } else { Write-Output 'NO_IMAGE' }`;
   return Effect.tryPromise(() =>
@@ -158,7 +178,7 @@ export function attachClipboardImage(
   roots: Pick<WorkspaceRoots, 'workspace' | 'storage'>,
 ): Effect.Effect<
   ClipboardAttachResult,
-  unknown,
+  ClipboardImageProbeFailed | PastedImageSaveFailed,
   FileSystem.FileSystem | Path.Path
 > {
   /** Nothing attached: the caller surfaces `reason` and keeps the draft. */
@@ -175,7 +195,7 @@ export function attachClipboardImage(
     const dir = yield* Effect.acquireRelease(
       Effect.tryPromise({
         try: () => createTexraTempDir('texra-clip-'),
-        catch: (error: unknown) => error,
+        catch: probeFailed,
       }),
       (created) =>
         Effect.ignore(
@@ -186,7 +206,7 @@ export function attachClipboardImage(
     );
     const tmpFile = join(dir, 'clipboard.png');
 
-    let reader: Effect.Effect<ClipboardRead, unknown>;
+    let reader: Effect.Effect<ClipboardRead, ClipboardImageProbeFailed>;
     switch (plat) {
       case 'darwin':
         reader = readClipboardPngMac(tmpFile);

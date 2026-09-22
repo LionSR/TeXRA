@@ -12,7 +12,6 @@
     "packages/cli/src/chat/tui/forms/ProviderApiKeyForm.tsx": 1,
     "packages/cli/src/chat/tui/input/BaseTextInput.tsx": 1,
     "packages/cli/src/chat/tui/state/sessionRunState.ts": 1,
-    "packages/cli/src/runtime/clipboardImage.ts": 5,
     "packages/cli/src/runtime/memory.ts": 1,
     "packages/desktop/src/main/desktopCredentialSettingsController.ts": 3,
     "packages/desktop/src/main/desktopDiffHost.ts": 3,
