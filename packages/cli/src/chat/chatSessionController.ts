@@ -18,7 +18,6 @@ import { getRunRecords } from '@agent/storage';
 import {
   AgentConfigSchema,
   attachTerminalResultToast,
-  describeFollowUpFailure,
   detachSubagentsOnStop,
   resumeRun,
   runAgent,
@@ -28,6 +27,7 @@ import {
   type SessionHandle,
 } from '@agent/runtime';
 import {
+  describeFollowUpFailure,
   presentFollowUpResult,
   type FollowUpQueueInput,
   type FollowUpRecoveryLease,
