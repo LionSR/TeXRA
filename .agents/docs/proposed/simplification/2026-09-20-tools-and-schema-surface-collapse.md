@@ -153,26 +153,37 @@ already shipped, in smaller PRs that never came back to update this note:
   written, holds. `src/shared/schemas/` is down to ~6.9k lines
   (from the ~9.5k cited above); `mainView/` and `progressView/` remain, as
   wire-contract state for those views rather than settings surface.
-- **Step 2 (LaTeX/image probe), for the four spellings this note named, plus
-  a fifth caught and fixed while this note was in review.** One catalog,
-  `LATEX_TOOLS` in `@shared/constants/latexToolchain`, consumed by
-  `@latex/latexToolchain`, `@tools/setup/toolProbing`,
-  `@controllers/settingsView/LatexToolingController` and the CLI doctor
-  (`@latex/latexToolchain` → `probeLatexToolchain`) — the four spellings §1's
-  Findings listed are one now. No "kept in sync" comment remains anywhere in
-  the tree. The per-consumer roles (doctor required/optional, probe
-  required/image, `drivesCompile`) landed as designed, including the stated
-  `latexmk` residual. An earlier pass of this note flagged a fifth,
-  un-consolidated spelling in `checkCoreDependencies`
+- **Step 2 (LaTeX/image probe).** One catalog, `LATEX_TOOLS` in
+  `@shared/constants/latexToolchain`, consumed by `@latex/latexToolchain`,
+  `@tools/setup/toolProbing`, `@controllers/settingsView/LatexToolingController`
+  and the CLI doctor (`@latex/latexToolchain` → `probeLatexToolchain`) — four
+  of the five spellings §1's Findings named are one now. No "kept in sync"
+  comment remains anywhere in the tree. The per-consumer roles (doctor
+  required/optional, probe required/image, `drivesCompile`) landed as
+  designed, including the stated `latexmk` residual.
+
+  The fifth spelling §1 named, `externalToolDefs`, still declares and probes
+  `texcount` on its own (`checkToolInstalled('texcount', false)`, the same
+  call `LATEX_TOOLS`-derived consumers make for it) — as designed, not left
+  over: §2's own step 2 said `externalToolDefs` would "carr[y] no system
+  LaTeX dependency except texcount" going in, because `texcount` is also a
+  registered agent tool (`tools: ['texcount']`) needing a Tools-dashboard
+  availability entry no other `LATEX_TOOLS` consumer needs. Both call sites
+  read the identical primitive, so there is no restated _list_ to drift,
+  only one boolean check reached from two registries for two purposes.
+
+  Not one of §1's five, but flagged as a sixth un-consolidated spelling by an
+  earlier pass of this note: `checkCoreDependencies`
   (`src/utils/system/checkCoreDependencies.ts`), which then hardcoded
   `['latexindent', 'perl', 'gs']` rather than reading the catalog. That was
   true when written (#12994) but landed independently in the meantime
   (`#12962`, before this note could be updated): the function now iterates
   `CORE_DEPENDENCY_TOOLS`, itself derived from `LATEX_TOOLS` via each entry's
   `core?: true` flag, and the catalog's own docstring now lists
-  `checkCoreDependencies` as the fourth of "four surfaces" that read it —
-  not a missed fifth. Corrected here rather than left stale, per a review
-  catch on this note's own PR (#13022).
+  `checkCoreDependencies` as the fourth of "four surfaces" that read it — not
+  a missed one. Corrected here rather than left stale, per a review catch on
+  this note's own PR (#13022).
+
 - **Step 3 (rows).** `sessionEvent.ts` has a single `run.fact` row
   (discriminated by `fact.key`) and a single `state.value.set` row;
   `updateTodos`/`updatePlan`/`addOutputFiles`/`updateMissingOutputs`/
