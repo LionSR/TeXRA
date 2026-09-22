@@ -21,6 +21,7 @@ import { Effect, RcMap } from 'effect';
 import { afterEach, beforeEach } from 'vitest';
 
 import type { ToolInjections } from '@agent/runtime/toolInjection';
+import { AgentEngine } from '@agent/runtime/AgentEngine';
 import {
   unavailableSupabaseAuth,
   type SupabaseAuthShape,
@@ -425,6 +426,7 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     NodeFileSystem.layer,
     NodePath.layer,
     Layer.mock(UpdateCheckRecords, {}),
+    Layer.mock(AgentEngine, {}),
     // The records above are mocked, so the bare runtime's global-root handle
     // is too: a suite that reads it provides its own innermost.
     Layer.mock(GlobalDatabase, {}),
