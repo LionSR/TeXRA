@@ -48,6 +48,7 @@ import type {
   RuntimeToolRegistry,
   ToolServices,
 } from '@agent/runtime/ToolServices';
+import { makeRunCell } from '@agent/runtime/loop/runProgram';
 import { dispatchPendingResponse } from '@agent/runtime/loop/toolUseDispatch';
 import {
   appendRow,
@@ -65,7 +66,7 @@ import { TraceEmitter, type AgentEvent, type AgentTrace } from '@agent/trace';
 import { DatabaseWriteFailed } from '@shared/session/database';
 import {
   AgentCategory,
-  AgentRunStateSnapshotSchema,
+  EMPTY_RUN_USAGE_TOTALS,
   type RunId,
   type ToolResult,
 } from '@shared/schemas';
@@ -219,9 +220,10 @@ const freshState = (): RunState => ({
   requests: {},
   followUps: [],
   followUpIds: new Set(),
-  usage: AgentRunStateSnapshotSchema.parse({}).usageAccumulator.totals,
+  usage: EMPTY_RUN_USAGE_TOTALS,
   flow: null,
   roundOutputs: [],
+  overflowRecoveredAtRound: null,
 });
 
 const INVOCATION = {
@@ -311,7 +313,6 @@ interface HarnessOptions {
 
 /** The slices of a run that has yet to touch a file. */
 const emptySlices = (): NonNullable<ToolUseFlowState['stateSlices']> => ({
-  runStateSnapshot: { totalRounds: 0, totalResponseTimeMs: 0 },
   workspaceSnapshot: AgentWorkspaceState.create().toSnapshot({
     excludeAssemblyStrings: true,
   }),
@@ -341,7 +342,6 @@ const openDispatch = Effect.fn('openDispatch')(function* (
       state: {
         family: 'toolUse',
         state: {
-          shouldSkipCycle: false,
           stateSlices: options.stateSlices ?? null,
         },
       },
@@ -400,10 +400,15 @@ const openDispatch = Effect.fn('openDispatch')(function* (
 
 /** Dispatch the pending response of an opened run. */
 const dispatch = (kit: DispatchKit, userInstruction?: string) =>
-  dispatchPendingResponse(kit.state, {
-    workspace: kit.workspace,
-    userInstruction,
-  }).pipe(Effect.provide(kit.layer));
+  makeRunCell(kit.runId, kit.state).pipe(
+    Effect.flatMap((cell) =>
+      dispatchPendingResponse(cell, {
+        workspace: kit.workspace,
+        userInstruction,
+      }),
+    ),
+    Effect.provide(kit.layer),
+  );
 
 /** The one tool group the dispatch delivers, in call order. */
 function deliveredResults(

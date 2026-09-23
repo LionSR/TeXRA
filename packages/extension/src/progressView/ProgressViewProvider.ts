@@ -115,8 +115,6 @@ export class SurfacePlacementFailed extends Data.TaggedError(
 interface Port {
   readonly attached: AttachedPort;
   readonly disposables: vscode.Disposable[];
-  /** A frame for this port alone (the chime, the accelerator, the drawer). */
-  readonly send: (message: DownMessage) => void;
 }
 
 export class ProgressViewProvider implements vscode.WebviewViewProvider {
@@ -635,7 +633,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
             ),
           ),
       );
-      return { attached, disposables, send };
+      return { attached, disposables };
     });
   }
 
@@ -653,12 +651,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   /** The host acting on the surfaces' shared state (PRD 8.5). */
   public surfaceAction(action: SurfaceActionMessage['action']): void {
     this.bridge.surfaceAction(action);
-  }
-
-  private frameOf(
-    action: SurfaceActionMessage['action'],
-  ): SurfaceActionMessage {
-    return { kind: 'surface.action', session: this.bridge.key, action };
   }
 
   /**
@@ -684,7 +676,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   private chime(): void {
     const port =
       this.visibleSurfacePort() ?? this.sidebarPort ?? this.editor?.port;
-    port?.send(this.frameOf({ kind: 'chime' }));
+    port?.attached.surfaceAction({ kind: 'chime' });
   }
 
   /** `texra.execute` with no configuration (Cmd+Alt+E): the composer's
@@ -695,11 +687,11 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     return Effect.gen({ self: this }, function* () {
       const port = this.visibleSurfacePort();
       if (port !== undefined && port === this.editor?.port) {
-        port.send(this.frameOf({ kind: 'submit' }));
+        port.attached.surfaceAction({ kind: 'submit' });
         return;
       }
       yield* this.showInSidebar();
-      this.sidebarPort?.send(this.frameOf({ kind: 'submit' }));
+      this.sidebarPort?.attached.surfaceAction({ kind: 'submit' });
     });
   }
 
@@ -707,7 +699,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   public toggleDrawer() {
     return Effect.gen({ self: this }, function* () {
       yield* this.showInSidebar();
-      this.sidebarPort?.send(this.frameOf({ kind: 'toggleDrawer' }));
+      this.sidebarPort?.attached.surfaceAction({ kind: 'toggleDrawer' });
     });
   }
 

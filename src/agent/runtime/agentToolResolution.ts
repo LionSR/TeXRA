@@ -74,6 +74,8 @@ interface ResolveAgentToolsInput {
    * model availability.
    */
   stores: ModelOptionStores;
+  /** The run's workspace root: the tool-availability probes answer per workspace. */
+  workspaceRoot: string | undefined;
   /** The run's pinned delegation roster scope, when this is a delegated run. */
   delegationScope?: AgentDelegationScope;
 }
@@ -128,13 +130,14 @@ export const resolveAgentTools = Effect.fn('resolveAgentTools')(function* ({
   runtimeUnavailableTools,
   toolInjections,
   stores,
+  workspaceRoot,
   delegationScope,
 }: ResolveAgentToolsInput) {
   const effectiveRegistry = registry ?? getDefaultToolRegistry();
   const disabled = getDisabledToolNames(
     yield* getDisabledToolIds(stores.globalState),
   );
-  const unavailable = getUnavailableToolNamesCached();
+  const unavailable = getUnavailableToolNamesCached(workspaceRoot);
   const runtimeUnavailable = new Set(runtimeUnavailableTools ?? []);
 
   const toolConfigs = Array.isArray(tools) ? tools : [];

@@ -96,6 +96,13 @@ All notable changes to this project will be documented in this file.
   one of their stops failed, instead of refusing new runs until a restart.
 - The Settings view's tool dashboard no longer spins forever when it cannot be
   loaded; it shows an empty dashboard and logs why.
+- The "💸 Premium API pricing" warning follows a model's price instead of its
+  name: GPT-5.6 Pro ($4/$20 per million tokens) no longer carries it, and o1
+  Pro and o3 Pro now do.
+- **Desktop: tool availability is checked per project.** With several
+  projects open, one project's tool check (for example, whether it is a git
+  repository, which the GitHub tools need) no longer decides which tools a
+  run in another project gets or what that project's Tools tab shows.
 
 ### Extension (VS Code)
 

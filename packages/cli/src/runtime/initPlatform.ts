@@ -33,6 +33,7 @@ import { createNodeWorkspaceRoots } from '@platform/defaults/nodeHost';
 import { DEFAULT_NODE_STORAGE_ROOT } from '@platform/defaults/nodeStorage';
 import { resolveGlobalStoragePath } from '@platform/defaults/workspaceStorage';
 import type { SettingsStores } from '@shared/config/settingsAccess';
+import type { LogLevel } from '@shared/schemas';
 import type { SessionOpenError } from '@shared/session/database';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { registerRuntimeShutdownHandlers } from '@tools/agentCliSessionStores';
@@ -124,11 +125,7 @@ export type CliPlatformServices = Pick<Platform, 'lifecycle'> &
     readonly session: Effect.Effect<SessionHandle, SessionOpenError>;
   };
 
-function logAt(
-  level: 'debug' | 'info' | 'warn' | 'error',
-  channel: string,
-  message: string,
-): void {
+function logAt(level: LogLevel, channel: string, message: string): void {
   if (quietPlatformLogs) return;
   writeTextStderr(`[${level}] [${channel}] ${message}`);
 }

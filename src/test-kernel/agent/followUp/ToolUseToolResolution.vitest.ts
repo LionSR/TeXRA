@@ -46,6 +46,7 @@ describe('tool-use tool resolution', () => {
       logger,
       toolInjections,
       stores: hostStores(),
+      workspaceRoot: undefined,
       ...options,
     }).pipe(
       Effect.map((tools) => tools.map((tool) => tool.name)),
@@ -64,6 +65,7 @@ describe('tool-use tool resolution', () => {
       logger,
       toolInjections,
       stores: hostStores(),
+      workspaceRoot: undefined,
       runtimeUnavailableTools,
       approvalPromptsUnavailable: false,
     }).pipe(

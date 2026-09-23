@@ -71,10 +71,10 @@ function validationLaunch(
 /** A model that records the tools it was offered and then stops the run. */
 function observingInvokerLayer(seen: InvokeRequest[]) {
   return Layer.succeed(ModelInvoker, {
-    invoke: (state, request) =>
-      Effect.sync(() => {
+    invoke: (cell, request) =>
+      Effect.gen(function* () {
         seen.push(request);
-        return { kind: 'cancelled' as const, state };
+        return { kind: 'cancelled' as const, state: yield* cell.current };
       }),
   });
 }
@@ -175,6 +175,7 @@ describe('run-scoped tool resolution', () => {
           // No conditional injections: this pins the declared-tool gates alone.
           toolInjections: NO_TOOL_INJECTIONS,
           stores: hostStores(),
+          workspaceRoot: undefined,
         }).pipe(
           Effect.provide(LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT)),
         );

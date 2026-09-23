@@ -274,18 +274,12 @@ export const launchAgentCliSession = Effect.fn(
         tool: params.agentName,
       } as const;
 
-      yield* registerRun(
-        params.session,
-        runId,
-        params.config,
-        params.agentName,
-        {
-          identity,
-          userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.TERMINAL_BACKED,
-          parentRunId: params.parentRunId,
-          description: childRunDescription(params.description),
-        },
-      ).pipe(
+      yield* registerRun(params.session, runId, params.config, {
+        identity,
+        userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.TERMINAL_BACKED,
+        parentRunId: params.parentRunId,
+        description: childRunDescription(params.description),
+      }).pipe(
         Effect.mapError(
           (error) =>
             new ToolError(

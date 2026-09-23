@@ -12,6 +12,11 @@
  *   - Tool dashboard — runs fresh checks via `runExternalToolChecks()`
  *   - Agent tool resolver — reads the last results via
  *     `getUnavailableToolNamesCached()`
+ *
+ * The cache is keyed by workspace root: the probes read the workspace (the
+ * GitHub group asks whether it is a git repository, Zotero reads its
+ * configuration), so on a multi-project host one workspace's results must
+ * not answer for another's.
  */
 
 // Third-party imports
@@ -94,8 +99,8 @@ export const seedDisabledToolDefaults = Effect.fn('seedDisabledToolDefaults')(
 );
 
 /**
- * Coalescing cache of the last probe results — the only source for
- * availability answers. Encapsulated as a class, not bare module-level
+ * Coalescing cache of one workspace's last probe results — the only source
+ * for its availability answers. Encapsulated as a class, not bare module-level
  * `let`s, per AGENTS.md "No bare module-level mutable singletons in tested
  * code"; same shape as `AnnotationFetchBudget` in
  * `@tools/github/annotationFetchBudget`.
@@ -161,8 +166,23 @@ class ToolAvailabilityCache {
   }
 }
 
-/** Process-wide: one cache per host process, same lifetime as the module. */
-const toolAvailabilityCache = new ToolAvailabilityCache();
+/**
+ * Process-wide, one cache per workspace root (`undefined` = no folder open),
+ * created on first use; same lifetime as the module.
+ */
+const toolAvailabilityCaches = new Map<
+  string | undefined,
+  ToolAvailabilityCache
+>();
+
+function cacheFor(workspaceRoot: string | undefined): ToolAvailabilityCache {
+  let cache = toolAvailabilityCaches.get(workspaceRoot);
+  if (!cache) {
+    cache = new ToolAvailabilityCache();
+    toolAvailabilityCaches.set(workspaceRoot, cache);
+  }
+  return cache;
+}
 
 /**
  * Run all external tool checks in parallel.
@@ -185,7 +205,7 @@ const toolAvailabilityCache = new ToolAvailabilityCache();
 export function runExternalToolChecks(
   inputs: ToolProbeInputs,
 ): Effect.Effect<ExternalToolCheckResult[], never, ToolProbeServices> {
-  return toolAvailabilityCache.runChecks(inputs);
+  return cacheFor(inputs.workspaceRoot).runChecks(inputs);
 }
 
 const probeToolGroup = Effect.fn('probeToolGroup')(function* (
@@ -273,11 +293,13 @@ function resolveOptionalStatus(
 }
 
 /**
- * Return the last check results without re-probing. Returns null if
- * checks haven't been run yet.
+ * Return the workspace's last check results without re-probing. Returns null
+ * if checks haven't been run for that workspace yet.
  */
-export function getLastCheckResults(): ExternalToolCheckResult[] | null {
-  return toolAvailabilityCache.getLastResults();
+export function getLastCheckResults(
+  workspaceRoot: string | undefined,
+): ExternalToolCheckResult[] | null {
+  return toolAvailabilityCaches.get(workspaceRoot)?.getLastResults() ?? null;
 }
 
 /**
@@ -299,8 +321,9 @@ export const refreshToolAvailability = Effect.fn('refreshToolAvailability')(
 );
 
 /**
- * Non-blocking read — derives the unavailable tool names from the last check
- * results, or an empty set if no probe has completed yet. Never triggers I/O.
+ * Non-blocking read — derives the unavailable tool names from the workspace's
+ * last check results, or an empty set if no probe has completed for it yet.
+ * Never triggers I/O.
  *
  * Only includes tools whose external dependency is missing (not-found).
  * Disabled tools are NOT included — the caller handles those separately
@@ -310,9 +333,11 @@ export const refreshToolAvailability = Effect.fn('refreshToolAvailability')(
  * flow on network probes. External tools that are actually missing will
  * fail at call time with a clear error — same as pre-dashboard behavior.
  */
-export function getUnavailableToolNamesCached(): ReadonlySet<string> {
+export function getUnavailableToolNamesCached(
+  workspaceRoot: string | undefined,
+): ReadonlySet<string> {
   return new Set<string>(
-    (toolAvailabilityCache.getLastResults() ?? [])
+    (getLastCheckResults(workspaceRoot) ?? [])
       .filter((result) => result.status === 'not-found')
       .flatMap((result) => result.tools),
   );

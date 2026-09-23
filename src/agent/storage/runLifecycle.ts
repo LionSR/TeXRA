@@ -70,7 +70,6 @@ export const registerRun = Effect.fn('registerRun')(function* (
   session: SessionHandle,
   runId: RunId,
   record: RunRecord,
-  agentName: string,
   options: RegisterRunOptions,
 ): Effect.fn.Return<void, Error> {
   let releaseClaims: Effect.Effect<void, Error> = Effect.void;
@@ -129,11 +128,6 @@ export const registerRun = Effect.fn('registerRun')(function* (
         });
       }
       events.push(
-        {
-          type: 'run.launchLabel',
-          aggregateId: target,
-          label: agentName,
-        },
         {
           type: 'run.record',
           aggregateId: target,

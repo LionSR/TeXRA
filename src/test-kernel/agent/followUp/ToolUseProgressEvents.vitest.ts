@@ -30,6 +30,7 @@ import { turnText } from '@agent/runtime/run/turnText';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { UsageMonitor } from '@agent/runtime/UsageMonitor';
 import { TraceEmitter } from '@agent/trace';
+import type { RunCell } from '@agent/runtime/loop/runProgram';
 import {
   AgentCategory,
   RUN_OUTCOME,
@@ -172,12 +173,12 @@ function invokerLayer(script: readonly ScriptedTurn[], seen: InvokeRequest[]) {
     ModelInvoker,
     Effect.gen(function* () {
       const run = yield* AgentRun;
-      const ledger = yield* RunLedger;
       const aggregateId = rowAggregate(run.runId);
       let index = 0;
       return {
-        invoke: (state: RunState, request: InvokeRequest) =>
+        invoke: (cell: RunCell, request: InvokeRequest) =>
           Effect.gen(function* () {
+            const state = yield* cell.current;
             const scripted = script[index];
             index += 1;
             seen.push(request);
@@ -193,7 +194,7 @@ function invokerLayer(script: readonly ScriptedTurn[], seen: InvokeRequest[]) {
               // As the invoker does: the failure commits before it returns.
               return {
                 kind: 'failed' as const,
-                state: yield* ledger.appendBatch(run.runId, state, [
+                state: yield* cell.append([
                   snapshotRow(run.runId, state, {
                     runtime: { lastError: scripted.failWith },
                   }),
@@ -205,7 +206,7 @@ function invokerLayer(script: readonly ScriptedTurn[], seen: InvokeRequest[]) {
             const invocation = { invocationId: randomUUID(), attempt: 1 };
             const responseId = randomUUID();
             const turn = 'compactTo' in scripted ? scripted.turn : scripted;
-            const next = yield* ledger.appendBatch(run.runId, state, [
+            const next = yield* cell.append([
               {
                 type: 'model.message',
                 aggregateId,

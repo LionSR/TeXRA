@@ -284,7 +284,7 @@ describe('session events and view', () => {
               toolName: 'bash',
               input: { command: 'ls' },
             },
-          ]),
+          ]).pipe(Effect.orDie),
         );
         const settled = yield* events.publish([
           {
@@ -2349,7 +2349,7 @@ describe('RunLedger', () => {
         lastError: null,
         declinedRoutes: [],
       },
-      state: { shouldSkipCycle: false, stateSlices: null },
+      state: { stateSlices: null },
     },
   });
   const refusalOf = (error: unknown): RunLedgerRefused | null =>

@@ -839,25 +839,13 @@ const closeSession = (root: string) =>
     runs.closeAdmissions();
     // Every touch of the session's storage runs in its scope: the stop writes
     // each run's outcome under the session's roots, and the flush writes its
-    // stores there. A child with a handle is stopped by its parent's cascade;
-    // a native child between turns has no handle, and its kill interrupts the
-    // loop the registry retains for it.
+    // stores there.
+    // A settlement fails when a fact the stop owed storage was refused.
+    // `close` answers a `SessionCloseReport` and names no error, so that
+    // travels the same defect channel the flush below documents, rather than
+    // being widened into this close's type.
     const termination = yield* Effect.forkDetach(
-      Effect.all(
-        runs.getActiveIds().flatMap((runId) => {
-          if (runs.getHandle(runId)?.isChild) return [];
-          // A settlement fails when a fact the stop owed storage was refused.
-          // `close` answers a `SessionCloseReport` and names no error, so that
-          // travels the same defect channel the flush below documents, rather
-          // than being widened into this close's type.
-          return [
-            runs
-              .kill(runId, { detachActiveChildren: false })
-              .settlement.pipe(Effect.orDie),
-          ];
-        }),
-        { concurrency: 'unbounded', discard: true },
-      ),
+      runs.stopAll().pipe(Effect.orDie),
       { startImmediately: true },
     );
     // The entry remains owned until waiting metadata finalization, not merely
