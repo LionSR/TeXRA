@@ -30,6 +30,7 @@ import type {
   StreamLogAppendInput,
   StreamLogUpdatePatch,
 } from '@shared/session/traceEntries';
+import { isObject } from '@utils/core';
 
 const KNOWN_MESSAGE_TYPES = new Set<string>(Object.values(MESSAGE_TYPES));
 
@@ -207,7 +208,17 @@ export function createTranscriptFold(
         const parsedResult = ToolUseLogSchema.omit({ status: true }).safeParse(
           event.result,
         );
-        const result = parsedResult.success ? parsedResult.data : {};
+        // Every ToolUseLog field is optional, so collapsing a parse failure to
+        // `{}` would "succeed" trivially when normalizeToolUseData re-parses
+        // this row downstream — turning a malformed row into a silently empty
+        // one instead of the visible "Malformed tool payload" card that same
+        // re-parse already renders for a raw, still-invalid object. Keep the
+        // unvalidated object on parse failure so that existing fallback fires.
+        const result: Partial<ToolUseLog> = parsedResult.success
+          ? parsedResult.data
+          : isObject(event.result)
+            ? (event.result as Partial<ToolUseLog>)
+            : {};
         // Omit groupId on update: undefined would clobber the value stamped
         // at tool.start.
         const patch = {
