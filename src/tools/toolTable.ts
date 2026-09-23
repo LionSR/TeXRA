@@ -14,7 +14,10 @@ import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
  * The resources a plugin owns, as a layer: built when the first open
  * composition that includes the plugin opens, released when the last one
  * closes (`@tools/compositions`). One object per plugin for the life of the
- * process, which is what lets compositions share it.
+ * process, which is what lets compositions share it. Its services are
+ * erased in this type (and it may neither fail nor require a service): no
+ * plugin declares a layer yet, and the first one that does types its
+ * services into the tool contract's requirements.
  */
 export type PluginLayer = Layer.Layer<never>;
 

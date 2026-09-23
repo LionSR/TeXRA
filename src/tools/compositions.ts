@@ -25,7 +25,11 @@ import { Context, Effect, Equal, Hash, Layer, LayerMap, Scope } from 'effect';
 import type { Composition } from '@tools/composition';
 import { ToolRegistry, toolTable, type ToolTable } from '@tools/toolTable';
 
-/** A composition and its hash: what a run pins, and a child joins. */
+/**
+ * A composition and its hash: what a run pins, and a child joins. Equality is
+ * the hash alone, which is sound because `compositionHash` is a sha256 over
+ * the composition's canonical JSON: equal hashes mean equal compositions.
+ */
 export class CompositionKey implements Equal.Equal {
   constructor(
     readonly hash: string,
@@ -46,7 +50,12 @@ export interface PinnedComposition {
   readonly key: CompositionKey;
   /** The process table restricted to the composition's plugins. */
   readonly table: ToolTable;
-  /** The entry's services, its plugins' layers' among them. */
+  /**
+   * The entry's services, its plugins' layers' among them, provided to each
+   * of the run's tool calls. Typed as erased (see `PluginLayer`): a tool
+   * reaches its plugin's service with `Effect.serviceOption` until the
+   * first layered plugin widens the tool contract's requirements.
+   */
   readonly services: Context.Context<never>;
 }
 

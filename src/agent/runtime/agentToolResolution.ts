@@ -155,7 +155,8 @@ export const resolveAgentTools = Effect.fn('resolveAgentTools')(function* ({
       }
     }
   }
-  const own = compositionFor({
+  // A child reads no switches or probes: its plugins are its parent's pin.
+  const composition = compositionFor({
     table,
     disabledIds: inherited
       ? new Set<string>()
@@ -170,15 +171,8 @@ export const resolveAgentTools = Effect.fn('resolveAgentTools')(function* ({
     ),
     injected,
   });
-  // A child's plugins are the ones its parent pinned; its declared tools,
-  // injections and gates are its own.
-  const composition = inherited
-    ? {
-        ...own,
-        plugins: inherited.composition.plugins,
-        disabled: inherited.composition.disabled,
-      }
-    : own;
+  // A child pins its parent's key, so its plugins are the parent's; its
+  // declared tools, injections and gates (below) are its own.
   const pinned = yield* (yield* Compositions).pin(
     inherited ?? new CompositionKey(compositionHash(composition), composition),
   );
@@ -277,7 +271,6 @@ export const resolveAgentTools = Effect.fn('resolveAgentTools')(function* ({
   return {
     definitions,
     registry: new MapToolRegistry(offered),
-    composition,
     pinned,
   };
 });

@@ -246,7 +246,9 @@ export const agentRunLayer = (
       yield* Effect.logDebug(
         `Run ${runId} pinned tool composition ${resolved.pinned.key.hash}`,
       ).pipe(
-        Effect.annotateLogs({ data: resolved.composition }),
+        // The key's own composition, which the logged hash is over: a child's
+        // is its parent's.
+        Effect.annotateLogs({ data: resolved.pinned.key.composition }),
         withLogChannel('AgentRun'),
       );
 
