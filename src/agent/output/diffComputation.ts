@@ -7,7 +7,6 @@
 
 import { Effect, FileSystem, PlatformError } from 'effect';
 
-import { isNotADirectoryError } from '@common/errors';
 import { createLog } from '@logger/logUtils';
 import {
   fileLocationDisplayPath,
@@ -20,6 +19,7 @@ import { locateInWorkspace } from '@utils/files/workspaceFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { diffLineChanges } from '@utils/text/diff';
 import { countLines, normalizeLineEndings } from '@utils/text/stringUtils';
+import { absentReason } from '@utils/files/fsEntryExists';
 
 import { traceFileLineage } from './lineageMapping';
 import { ensureRoundData, type OutputState } from './outputState';
@@ -97,13 +97,7 @@ function toWorkspaceOrigin(
     // a file counts and a dangling one (or a directory) does not.
     const isFile = yield* fs.stat(resolved.absolutePath).pipe(
       Effect.map((info) => info.type === 'File'),
-      Effect.catchIf(
-        (error) =>
-          error.reason._tag === 'NotFound' ||
-          (error.reason._tag === 'BadResource' &&
-            isNotADirectoryError(error.reason.cause)),
-        () => Effect.succeed(false),
-      ),
+      Effect.catchIf(absentReason, () => Effect.succeed(false)),
     );
     if (resolved.kind !== 'workspace' || !isFile) {
       return loc;

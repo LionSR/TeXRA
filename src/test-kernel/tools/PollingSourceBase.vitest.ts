@@ -1,9 +1,10 @@
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Deferred, Effect, Fiber } from 'effect';
-import { describe, expect, vi } from 'vitest';
+import { Deferred, Effect, Fiber, Logger, References } from 'effect';
+import { describe, expect } from 'vitest';
 import { z, type ZodType } from 'zod';
 
+import { LOG_CHANNEL } from '@logger/logSink';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { Lifecycle, SHUTDOWN_PHASE } from '@platform/interfaces';
 import { Secrets } from '@platform/secrets';
@@ -43,12 +44,8 @@ class TestPollingSource extends PollingSourceBase<
   validate<T>(
     res: ConditionalResponse<unknown>,
     schema: ZodType<T>,
-  ): ConditionalResponse<T> | undefined {
+  ): Effect.Effect<ConditionalResponse<T> | undefined> {
     return this.validateOrSkip(res, schema, 'bad payload');
-  }
-
-  setWarnForTest(warn: typeof this.logger.warn): void {
-    this.logger.warn = warn;
   }
 
   subscribeForTest(listener: (text: string) => Effect.Effect<void>) {
@@ -135,20 +132,41 @@ describe('DedupedResource', () => {
 });
 
 describe('PollingSourceBase.validateOrSkip', () => {
-  it('logs and skips malformed 200 responses without throwing', () => {
-    const source = new TestPollingSource();
-    const warn = vi.fn();
-    source.setWarnForTest(warn);
-
-    const result = source.validate(
-      { status: 200, data: { id: 'bad' }, etag: 'etag' },
-      z.object({ id: z.number() }),
-    );
-
-    expect(result).toBeUndefined();
-    expect(warn).toHaveBeenCalledWith('bad payload', {
-      data: expect.any(z.ZodError),
+  it.effect('logs and skips malformed 200 responses without throwing', () => {
+    const entries: Array<{
+      level: string;
+      message: unknown;
+      annotations: Record<string, unknown>;
+    }> = [];
+    const capture = Logger.make((options) => {
+      entries.push({
+        level: options.logLevel,
+        message: options.message,
+        annotations: {
+          ...options.fiber.getRef(References.CurrentLogAnnotations),
+        },
+      });
     });
+    return Effect.gen(function* () {
+      const source = new TestPollingSource();
+
+      const result = yield* source.validate(
+        { status: 200, data: { id: 'bad' }, etag: 'etag' },
+        z.object({ id: z.number() }),
+      );
+
+      expect(result).toBeUndefined();
+      expect(entries).toEqual([
+        {
+          level: 'Warn',
+          message: ['bad payload'],
+          annotations: expect.objectContaining({
+            [LOG_CHANNEL]: 'TestPollingSource',
+            data: expect.any(z.ZodError),
+          }),
+        },
+      ]);
+    }).pipe(Effect.withLogger(capture));
   });
 });
 

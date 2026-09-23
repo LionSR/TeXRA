@@ -16,8 +16,6 @@ import type { SettingsStatePorts } from '@shared/settingsView/types';
 import { FakeSecrets } from '@test/support/FakePlatform';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 
-const noOp = async (): Promise<void> => undefined;
-
 const noOpEffect = (): Effect.Effect<void> => Effect.void;
 
 /** Reads the `command` discriminant off a message posted to the renderer. */
@@ -33,7 +31,6 @@ export function createStubDesktopSettingsUiHost(
     revealRun: async () => 'revealed',
     getRunLabel: () => undefined,
     promptForSecret: () => Effect.succeed(undefined),
-    openExternal: noOp,
     showInfoMessage: () => Effect.void,
     showErrorMessage: () => Effect.void,
     confirmAction: async () => true,
@@ -73,10 +70,6 @@ export function createStubDesktopCredentialSettingsController(
     profileHandlers: {
       signIn: noOpEffect,
       signOut: noOpEffect,
-      setProviderKey: noOpEffect,
-      removeProviderKey: noOpEffect,
-      openProviderKeyUrl: noOpEffect,
-      openExternalUrl: noOpEffect,
     },
     chatGptHandlers: {
       signInChatGpt: noOpEffect,
@@ -100,6 +93,12 @@ export function createStubDesktopCredentialSettingsController(
         ),
       copilotRoutes: discoveredCopilotRoutes(),
     }),
+    profileKeyController: {
+      setProviderKey: noOpEffect,
+      removeProviderKey: noOpEffect,
+      openProviderKeyUrl: noOpEffect,
+    },
+    reportProviderKeyFailure: noOpEffect,
     refreshModelOptions: noOpEffect,
     postProfileData: noOpEffect,
     postStartupData: noOpEffect,
@@ -117,11 +116,9 @@ export function createStubDesktopToolingSettingsController(
 ): DesktopToolingSettingsController {
   return {
     toolHandlers: {
-      openToolInstallUrl: noOpEffect,
       installToolExtension: unsupported(
         'Desktop cannot host VS Code extensions.',
       ),
-      recheckToolStatus: noOpEffect,
       toggleTool: noOpEffect,
       runToolCommand: noOpEffect,
     },

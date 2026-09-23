@@ -1,7 +1,6 @@
 import { Cause, Effect } from 'effect';
 
 import { logSdkError, type ResultEvent, type StageHandle } from '@agent/trace';
-import { createChannelTrace } from '@agent/trace';
 import { finalizeRun } from '@agent/storage/runLifecycle';
 import {
   AGENT_ERROR_OUTCOME,
@@ -14,6 +13,7 @@ import {
   attachProviderError,
 } from '@common/errors/sdkError/errorMetadata';
 import { normalizeProviderError } from '@common/errors/sdkError/providerErrorFormat';
+import { withLogChannel } from '@logger/effectLog';
 import { AppState } from '@platform/interfaces';
 import type {
   RetryErrorInfo,
@@ -43,7 +43,14 @@ import { RunArtifactDrainError, type SessionHandle } from './SessionHandle';
 import type { AgentLaunchContext } from './AgentLaunchContext';
 import type { AgentRunServices } from './toolInjection';
 
-const logger = createChannelTrace('agentRunLifecycle');
+const CHANNEL = 'agentRunLifecycle';
+
+/** A lifecycle diagnostic: guarded cleanup logs past its failure here. */
+const logLifecycleWarning = (message: string, data: unknown) =>
+  Effect.logWarning(message).pipe(
+    Effect.annotateLogs({ data }),
+    withLogChannel(CHANNEL),
+  );
 
 export interface RunFlowLifecycleOptions {
   /** The launching run: the parent edge on the live handle. */
@@ -152,10 +159,9 @@ export const finalizeRunTerminal = Effect.fn('finalizeRunTerminal')(function* (
       catch: ensureError,
     }).pipe(
       Effect.catch((stageErr) =>
-        Effect.sync(() => {
-          logger.warn('Failed to end parent stage', {
-            data: { agentIdentifier: handle.agentName, error: stageErr },
-          });
+        logLifecycleWarning('Failed to end parent stage', {
+          agentIdentifier: handle.agentName,
+          error: stageErr,
         }),
       ),
     );
@@ -171,8 +177,9 @@ export const finalizeRunTerminal = Effect.fn('finalizeRunTerminal')(function* (
     Effect.catch((failure) => Effect.succeed(failure)),
   );
   if (drainFailure !== undefined)
-    logger.warn('Failed to persist the facts this run queued', {
-      data: { runId: handle.runId, error: drainFailure },
+    yield* logLifecycleWarning('Failed to persist the facts this run queued', {
+      runId: handle.runId,
+      error: drainFailure,
     });
   // The exiting run's own report: `params.outcome` unless the drain rolled
   // its facts back, which outranks however the flow itself ended.
@@ -222,13 +229,11 @@ export const finalizeRunTerminal = Effect.fn('finalizeRunTerminal')(function* (
     output,
   });
   if (!finalization.ok) {
-    logger.warn('Failed to finalize durable run state', {
-      data: {
-        agentIdentifier: handle.agentName,
-        runId: handle.runId,
-        outcomePersisted: finalization.outcomePersisted,
-        error: finalization.error,
-      },
+    yield* logLifecycleWarning('Failed to finalize durable run state', {
+      agentIdentifier: handle.agentName,
+      runId: handle.runId,
+      outcomePersisted: finalization.outcomePersisted,
+      error: finalization.error,
     });
   }
   if (params.deliver) {
@@ -238,10 +243,9 @@ export const finalizeRunTerminal = Effect.fn('finalizeRunTerminal')(function* (
       catch: ensureError,
     }).pipe(
       Effect.catch((deliveryError) =>
-        Effect.sync(() => {
-          logger.warn('Terminal delivery hook failed', {
-            data: { agentIdentifier: handle.agentName, error: deliveryError },
-          });
+        logLifecycleWarning('Terminal delivery hook failed', {
+          agentIdentifier: handle.agentName,
+          error: deliveryError,
         }),
       ),
     );
@@ -259,10 +263,9 @@ export const finalizeRunTerminal = Effect.fn('finalizeRunTerminal')(function* (
     catch: ensureError,
   }).pipe(
     Effect.catch((cleanupErr) =>
-      Effect.sync(() => {
-        logger.warn('Post-terminal cleanup threw', {
-          data: { agentIdentifier: handle.agentName, error: cleanupErr },
-        });
+      logLifecycleWarning('Post-terminal cleanup threw', {
+        agentIdentifier: handle.agentName,
+        error: cleanupErr,
       }),
     ),
   );
@@ -372,10 +375,9 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
       // flow.
       yield* Effect.suspend(() => onRun(handle)).pipe(
         Effect.catchCause((cause) =>
-          Effect.sync(() => {
-            logger.warn('onRun callback failed', {
-              data: { agentIdentifier, error: Cause.squash(cause) },
-            });
+          logLifecycleWarning('onRun callback failed', {
+            agentIdentifier,
+            error: Cause.squash(cause),
           }),
         ),
         Effect.forkDetach({ startImmediately: true }),
@@ -506,10 +508,10 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
         Effect.catchCause((cause) =>
           Cause.hasInterruptsOnly(cause)
             ? Effect.interrupt
-            : Effect.sync(() => {
-                logger.warn('Failed to run the run-end hook', {
-                  data: { agentIdentifier, runId, error: Cause.squash(cause) },
-                });
+            : logLifecycleWarning('Failed to run the run-end hook', {
+                agentIdentifier,
+                runId,
+                error: Cause.squash(cause),
               }),
         ),
       );
@@ -569,16 +571,17 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
             done ? Effect.void : setFirstRunDone(globalState, true),
           ),
           Effect.catch((error) =>
-            Effect.sync(() =>
-              logger.warn('Failed to record the first completed run', {
-                data: error,
-              }),
+            logLifecycleWarning(
+              'Failed to record the first completed run',
+              error,
             ),
           ),
         );
       }
 
-      logger.debug(`Task completed with outcome: ${resolvedOutcome}`);
+      yield* Effect.logDebug(
+        `Task completed with outcome: ${resolvedOutcome}`,
+      ).pipe(withLogChannel(CHANNEL));
       return withResolvedOutcome(result, resolvedOutcome);
     });
     return yield* run.pipe(

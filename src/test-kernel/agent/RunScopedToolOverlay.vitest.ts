@@ -4,7 +4,6 @@ import { it } from '@effect/vitest';
 import { Effect, Layer } from 'effect';
 import { describe, expect, vi } from 'vitest';
 
-import { noopTrace } from '@agent/trace';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import {
   AgentPromptSchema,
@@ -27,6 +26,7 @@ import {
 } from '@platform/languageModel';
 import { AgentCategory } from '@shared/schemas';
 import { RunLedger } from '@shared/session/runLedger';
+import { noopTrace } from '@test/support/noopTrace';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import { hostStores, setupPlatform } from '@test/support/setupPlatform';
@@ -71,10 +71,10 @@ function validationLaunch(
 /** A model that records the tools it was offered and then stops the run. */
 function observingInvokerLayer(seen: InvokeRequest[]) {
   return Layer.succeed(ModelInvoker, {
-    invoke: (state, request) =>
-      Effect.sync(() => {
+    invoke: (cell, request) =>
+      Effect.gen(function* () {
         seen.push(request);
-        return { kind: 'cancelled' as const, state };
+        return { kind: 'cancelled' as const, state: yield* cell.current };
       }),
   });
 }

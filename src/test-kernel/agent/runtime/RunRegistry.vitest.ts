@@ -42,10 +42,6 @@ const storageMocks = vi.hoisted(() => ({
   finalizeRun: vi.fn(),
 }));
 
-const channelTraceMocks = vi.hoisted(() => ({
-  warn: vi.fn(),
-}));
-
 // The registry deep-imports finalizeRun from runLifecycle
 // (not the `@agent/storage` barrel), so the spy lives on that leaf module.
 // Mocking both the barrel and the leaf with the same `vi.fn` whose
@@ -65,17 +61,6 @@ vi.mock('@agent/storage', async (importOriginal) => {
   return {
     ...actual,
     finalizeRun: storageMocks.finalizeRun,
-  };
-});
-
-vi.mock('@agent/trace', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@agent/trace')>();
-  return {
-    ...actual,
-    createChannelTrace: vi.fn(() => ({
-      ...actual.noopTrace,
-      warn: channelTraceMocks.warn,
-    })),
   };
 });
 

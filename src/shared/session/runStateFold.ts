@@ -16,6 +16,7 @@ import {
   type TurnResult,
 } from '@texra-ai/llm/turn';
 import {
+  addTurnUsage,
   EMPTY_RUN_USAGE_TOTALS,
   FlowSnapshotPayloadSchema,
   RunUsageTotalsSchema,
@@ -25,11 +26,11 @@ import {
   type DispatchFacts,
   type InvocationRef,
   type ModelCompatibilityKey,
-  type NormalizedUsage,
   type PendingRetry,
   type RetryErrorInfo,
   type RunLoopPhase,
   type RoundOutput,
+  type RunUsageTotals,
   type SessionEvent,
   type SessionEventDraft,
   type SnapshotRuntime,
@@ -95,7 +96,6 @@ const FlowStateSchema = FlowSnapshotPayloadSchema.options.map((arm) =>
   arm.pick({ family: true, state: true }),
 );
 type FlowState = z.output<(typeof FlowStateSchema)[number]>;
-type RunUsageTotals = z.output<typeof RunUsageTotalsSchema>;
 type Message = z.output<typeof MessageSchema>;
 
 /**
@@ -183,6 +183,9 @@ export type RunState = RunRows & {
   readonly usage: RunUsageTotals;
   /** Complete output collection from the newest output.produced row. */
   readonly roundOutputs: RoundOutput[];
+  /** The round of the last `context-window` compaction: a turn that
+   *  overflowed the window is retried once per round against it. */
+  readonly overflowRecoveredAtRound: number | null;
   readonly flow: FlowState | null;
 };
 
@@ -259,6 +262,7 @@ export const freshRunState = (commit: CommitOrdinal): RunState => ({
   usage: EMPTY_RUN_USAGE_TOTALS,
   flow: null,
   roundOutputs: [],
+  overflowRecoveredAtRound: null,
 });
 
 /** The recovery bindings the rows carry (R5): the `model.retry` permit's
@@ -307,43 +311,6 @@ const refuse = (
 
 const sameInvocation = (a: InvocationRef, b: InvocationRef): boolean =>
   a.invocationId === b.invocationId && a.attempt === b.attempt;
-
-/**
- * The priced usage the writer stamped on one completed turn, summed into the
- * run totals. The package's `turn.usage` is deliberately not the input: it
- * carries token counts and provider-specific extras but no runtime price, so
- * folding it would make a resumed run's `totalCost` the sum of `tool.result`
- * add operations alone. Every field of the totals is named here, so a new
- * metric on either schema is a compile error rather than a silent zero;
- * `RunUsageAccumulator` sums the same pairs on the live path.
- */
-function addTurnUsage(
-  totals: RunUsageTotals,
-  usage: NormalizedUsage | null,
-): RunUsageTotals {
-  if (usage === null) return totals;
-  return {
-    firstInputTokens:
-      totals.firstInputTokens === 0
-        ? usage.inputTokens
-        : totals.firstInputTokens,
-    totalInputTokens: totals.totalInputTokens + usage.inputTokens,
-    totalOutputTokens: totals.totalOutputTokens + usage.outputTokens,
-    totalCost: totals.totalCost + usage.cost,
-    totalCacheReadInputTokens:
-      totals.totalCacheReadInputTokens + (usage.cachedInputTokens ?? 0),
-    totalCacheMissInputTokens:
-      totals.totalCacheMissInputTokens + (usage.cacheMissInputTokens ?? 0),
-    totalCacheCreationInputTokens:
-      totals.totalCacheCreationInputTokens + (usage.cacheCreationTokens ?? 0),
-    totalReasoningTokens:
-      totals.totalReasoningTokens + (usage.reasoningTokens ?? 0),
-    totalToolUsePromptTokens:
-      totals.totalToolUsePromptTokens + (usage.toolUsePromptTokens ?? 0),
-    totalServerToolRequests:
-      totals.totalServerToolRequests + (usage.serverToolRequests ?? 0),
-  };
-}
 
 /** One state operation over a JSON document, immutably. */
 function mutate(
@@ -671,6 +638,9 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
         rowsBeforeSnapshot: current.rowsBeforeSnapshot + 1,
         messages: [...current.messages.slice(0, p.keepPrefix), ...p.messages],
         continuation: p.continuation,
+        ...(p.cause === 'context-window'
+          ? { overflowRecoveredAtRound: current.round }
+          : {}),
       });
     }
     case 'tool.intent': {

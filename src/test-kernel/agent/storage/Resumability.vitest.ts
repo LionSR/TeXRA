@@ -33,7 +33,7 @@ const OPENING_SNAPSHOT: FlowSnapshotPayload = {
     lastError: null,
     declinedRoutes: [],
   },
-  state: { shouldSkipCycle: false, stateSlices: null },
+  state: { stateSlices: null },
 };
 
 describe('deriveResumability', () => {

@@ -4,7 +4,6 @@ import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
-import { noopTrace } from '@agent/trace';
 import {
   AgentConfigSchema,
   type AgentConfig,
@@ -19,6 +18,7 @@ import { buildUserVars as buildUserVarsEffect } from '@agent/prompt/userVars';
 import type { ConfigProvider } from '@platform/interfaces';
 import { AgentCategory } from '@shared/schemas';
 import { setRuntimeSkillSources } from '@skills/runtimeSkills';
+import { noopTrace } from '@test/support/noopTrace';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
 import { testRuntime } from '@test/support/testProcessRuntime';

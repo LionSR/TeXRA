@@ -1,7 +1,7 @@
 import type { AgentTrace } from '@agent/trace';
 import type { ConfigProvider } from '@platform/interfaces';
 import type {
-  AgentRunStateSnapshot,
+  NormalizedUsage,
   RunId,
   ExtendedTokenUsageStats,
   RunUsageTotals,
@@ -104,11 +104,14 @@ export class UsageMonitor {
 
   /**
    * Record one round's usage against `bound`, the run's binding that served
-   * it. The loop passes the model it actually ran, so a mid-run switch is
-   * priced and reported against it without anyone mirroring it back in.
+   * it. `totals` are the run's folded totals after the round; `latestUsage`
+   * is the round's own priced usage. The loop passes the model it actually
+   * ran, so a mid-run switch is priced and reported against it without
+   * anyone mirroring it back in.
    */
   recordUsage(
-    stateGlobal: AgentRunStateSnapshot,
+    totals: RunUsageTotals,
+    latestUsage: NormalizedUsage | null,
     bound: { readonly config: UsageMonitorModelInfo },
   ): void {
     const model = bound.config;
@@ -118,9 +121,7 @@ export class UsageMonitor {
       agentCategory === AgentCategory.ToolUse ? 'tool-use' : 'workflow';
 
     try {
-      const totals = stateGlobal.usageAccumulator.totals;
       this.lastSeenTotals = totals;
-      const latestUsage = stateGlobal.usageAccumulator.latestUsage;
       if (!latestUsage) return;
 
       // Per-round usage - billed to the backend, which accounts per round.
@@ -158,7 +159,7 @@ export class UsageMonitor {
         inputTokens: totals.totalInputTokens,
         outputTokens: totals.totalOutputTokens,
         cost: roundTo(totals.totalCost, 3),
-        elapsedTime: roundTo(stateGlobal.totalResponseTimeMs / 1000, 1),
+        elapsedTime: roundTo(totals.totalResponseTimeMs / 1000, 1),
         ...(totals.totalCacheReadInputTokens > 0 && {
           cacheReadInputTokens: totals.totalCacheReadInputTokens,
         }),
@@ -194,7 +195,7 @@ export class UsageMonitor {
 
       // Log to backend for analytics/billing.
       this.logToBackend(
-        stateGlobal.totalResponseTimeMs,
+        totals.totalResponseTimeMs,
         {
           outputTokens: roundOutputTokens,
           cachedInputTokens: roundCacheReadTokens,
@@ -241,9 +242,7 @@ export class UsageMonitor {
       UsageLogStats,
       'outputTokens' | 'cachedInputTokens' | 'reasoningTokens' | 'cost'
     > & { cacheMissInputTokens: number; usageRoute?: UsageRoute },
-    provider: NonNullable<
-      AgentRunStateSnapshot['usageAccumulator']['latestUsage']
-    >['provider'],
+    provider: NormalizedUsage['provider'],
     model: UsageMonitorModelInfo,
   ): void {
     try {

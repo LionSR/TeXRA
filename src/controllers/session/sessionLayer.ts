@@ -187,17 +187,6 @@ class Session extends Context.Service<Session, SessionHandle>()(
  */
 type HeldSessions = Map<SessionKey, SessionHandle>;
 
-/** The held session whose key names `root`, if one does. */
-function heldSessionSync(
-  held: HeldSessions,
-  root: string,
-): SessionHandle | undefined {
-  for (const [key, session] of held) {
-    if (key.storage === root) return session;
-  }
-  return undefined;
-}
-
 /** The owner ids of the non-terminal runs another process wrote. */
 function foreignOwners(view: SessionView, self: OwnerId): OwnerId[] {
   const foreign = [...view.runs.values()].flatMap((run) =>
@@ -850,25 +839,13 @@ const closeSession = (root: string) =>
     runs.closeAdmissions();
     // Every touch of the session's storage runs in its scope: the stop writes
     // each run's outcome under the session's roots, and the flush writes its
-    // stores there. A child with a handle is stopped by its parent's cascade;
-    // a native child between turns has no handle, and its kill interrupts the
-    // loop the registry retains for it.
+    // stores there.
+    // A settlement fails when a fact the stop owed storage was refused.
+    // `close` answers a `SessionCloseReport` and names no error, so that
+    // travels the same defect channel the flush below documents, rather than
+    // being widened into this close's type.
     const termination = yield* Effect.forkDetach(
-      Effect.all(
-        runs.getActiveIds().flatMap((runId) => {
-          if (runs.getHandle(runId)?.isChild) return [];
-          // A settlement fails when a fact the stop owed storage was refused.
-          // `close` answers a `SessionCloseReport` and names no error, so that
-          // travels the same defect channel the flush below documents, rather
-          // than being widened into this close's type.
-          return [
-            runs
-              .kill(runId, { detachActiveChildren: false })
-              .settlement.pipe(Effect.orDie),
-          ];
-        }),
-        { concurrency: 'unbounded', discard: true },
-      ),
+      runs.stopAll().pipe(Effect.orDie),
       { startImmediately: true },
     );
     // The entry remains owned until waiting metadata finalization, not merely
@@ -1186,7 +1163,7 @@ export function installProcessRuntime({
   initSessionOwner({
     runtime,
     open: (open) => onThisRuntime(openSession(open)),
-    current: (root) => heldSessionSync(held, root),
+    current: (root) => [...held].find(([key]) => key.storage === root)?.[1],
     held: () => [...held.values()],
     list: () => onThisRuntime(listSessions),
     close: (root) => onThisRuntime(closeSession(root)),

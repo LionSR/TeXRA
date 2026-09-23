@@ -1,7 +1,5 @@
 import { Cause, Effect } from 'effect';
 
-import type { AgentTrace } from '@agent/trace';
-import { createChannelTrace } from '@agent/trace';
 import { presentAgentFailure, type SessionHandle } from '@agent/runtime';
 import {
   classifyAgentError,
@@ -11,6 +9,7 @@ import {
   resumeCancellationLatch,
   resumeRunWithRefusalNotice,
 } from '@controllers/session/resumeRunPresentation';
+import { withLogChannel } from '@logger/effectLog';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import {
   AgentResumeFailed,
@@ -29,8 +28,6 @@ import { toLogData } from './desktopLogUtils.js';
  * moment the registry drops it.
  */
 export class DesktopProcessResumeOwner {
-  private readonly logger: AgentTrace =
-    createChannelTrace('DesktopAgentResume');
   private shuttingDown = false;
 
   constructor(
@@ -121,18 +118,21 @@ export class DesktopProcessResumeOwner {
         Effect.suspend(() => {
           const error = Cause.squash(cause);
           if (isCancellationRequested()) return Effect.succeed(false);
-          this.logger.error(`Failed to resume desktop run ${runId}`, {
-            data: toLogData(error),
-          });
           const primaryError = primaryAgentError(error);
-          return presentAgentFailure(
-            session.interactions,
-            {
-              kind: classifyAgentError(primaryError),
-              message: `Resume failed: ${toErrorMessage(primaryError)}`,
-            },
-            { replayWhenAttached: true },
-          ).pipe(Effect.as(false));
+          return Effect.logError(`Failed to resume desktop run ${runId}`).pipe(
+            Effect.annotateLogs({ data: toLogData(error) }),
+            withLogChannel('DesktopAgentResume'),
+            Effect.andThen(
+              presentAgentFailure(
+                session.interactions,
+                {
+                  kind: classifyAgentError(primaryError),
+                  message: `Resume failed: ${toErrorMessage(primaryError)}`,
+                },
+                { replayWhenAttached: true },
+              ).pipe(Effect.as(false)),
+            ),
+          );
         }),
       ),
       Effect.ensuring(Effect.sync(() => this.options.onLaunchSettled?.())),

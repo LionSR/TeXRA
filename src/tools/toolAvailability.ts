@@ -139,7 +139,13 @@ class ToolAvailabilityCache {
     inputs: ToolProbeInputs,
   ): Effect.Effect<ExternalToolCheckResult[], never, ToolProbeServices> {
     this.pendingRerun = false;
-    return runProbes(inputs).pipe(
+    // Every group probes at once and no group's failure cancels a sibling,
+    // because each one resolves to a result of its own.
+    return Effect.forEach(
+      EXTERNAL_TOOL_DEFS,
+      (def) => probeToolGroup(def, inputs),
+      { concurrency: 'unbounded' },
+    ).pipe(
       Effect.flatMap((results) => {
         this.lastResults = results;
         return this.pendingRerun
@@ -181,18 +187,6 @@ export function runExternalToolChecks(
 ): Effect.Effect<ExternalToolCheckResult[], never, ToolProbeServices> {
   return toolAvailabilityCache.runChecks(inputs);
 }
-
-const runProbes = (
-  inputs: ToolProbeInputs,
-): Effect.Effect<ExternalToolCheckResult[], never, ToolProbeServices> =>
-  Effect.suspend(() =>
-    // Same fan-out as the Promise.all this replaces: every group probes at once
-    // and no group's failure cancels a sibling, because each one resolves to a
-    // result of its own below.
-    Effect.forEach(EXTERNAL_TOOL_DEFS, (def) => probeToolGroup(def, inputs), {
-      concurrency: 'unbounded',
-    }),
-  );
 
 const probeToolGroup = Effect.fn('probeToolGroup')(function* (
   {
@@ -278,17 +272,6 @@ function resolveOptionalStatus(
   );
 }
 
-/** Build the set of unavailable tool names from external check results only. */
-function buildUnavailableSet(
-  results: ExternalToolCheckResult[],
-): ReadonlySet<string> {
-  return new Set<string>(
-    results
-      .filter((result) => result.status === 'not-found')
-      .flatMap((result) => result.tools),
-  );
-}
-
 /**
  * Return the last check results without re-probing. Returns null if
  * checks haven't been run yet.
@@ -328,6 +311,9 @@ export const refreshToolAvailability = Effect.fn('refreshToolAvailability')(
  * fail at call time with a clear error — same as pre-dashboard behavior.
  */
 export function getUnavailableToolNamesCached(): ReadonlySet<string> {
-  const lastResults = toolAvailabilityCache.getLastResults();
-  return lastResults ? buildUnavailableSet(lastResults) : new Set();
+  return new Set<string>(
+    (toolAvailabilityCache.getLastResults() ?? [])
+      .filter((result) => result.status === 'not-found')
+      .flatMap((result) => result.tools),
+  );
 }

@@ -8,20 +8,14 @@
       "@agent/runtime",
       "@agent/storage"
     ],
-    "desktop": [
-      "@agent/index",
-      "@agent/runtime",
-      "@agent/storage",
-      "@agent/trace"
-    ],
+    "desktop": ["@agent/index", "@agent/runtime", "@agent/storage"],
     "extension": [
       "@agent/implementations/agentCreator/agentCreatorFlow",
       "@agent/index",
       "@agent/review",
       "@agent/runtime",
       "@agent/storage",
-      "@agent/templates",
-      "@agent/trace"
+      "@agent/templates"
     ],
     "agent": [
       "@agent/core/definition/AgentConfig",

@@ -42,12 +42,6 @@ const codexXhighProbeLanes = new Map<string, PerKeyLane>();
 // Reasoning effort
 // ============================================================================
 
-const getCodexReasoningEffort = createEnumStateGetter(
-  WorkspaceStateKey.CODEX_REASONING_EFFORT,
-  CODEX_REASONING_EFFORT_DEFAULT,
-  parseCodexReasoningEffort,
-);
-
 /**
  * Older Codex CLI runtimes reject `xhigh` even though it is present in the SDK
  * type. Preserve the requested level only after the resolved binary has been
@@ -65,17 +59,16 @@ export function toCodexCliReasoningEffort(
   return effort === 'xhigh' && !supportsXhigh ? 'high' : effort;
 }
 
-export function getCodexCliReasoningEffort(
+/** The persisted effort, uncapped: a requested `xhigh` goes through
+ *  `toCodexCliReasoningEffort` with the binary probe's answer. */
+export const getCodexCliReasoningEffort: (
   workspaceState: StateStore,
-  supportsXhigh = false,
-) {
-  return Effect.gen(function* () {
-    return toCodexCliReasoningEffort(
-      yield* getCodexReasoningEffort(workspaceState),
-      supportsXhigh,
-    );
-  });
-}
+) => Effect.Effect<CodexReasoningEffort, StateReadFailed> =
+  createEnumStateGetter(
+    WorkspaceStateKey.CODEX_REASONING_EFFORT,
+    CODEX_REASONING_EFFORT_DEFAULT,
+    parseCodexReasoningEffort,
+  );
 
 // ============================================================================
 // Approval policy

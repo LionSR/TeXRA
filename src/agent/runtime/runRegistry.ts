@@ -132,7 +132,7 @@ export class RunRegistry {
    * resume that would otherwise start a second generation over a live one is
    * refused here rather than by a caller's earlier read of the same fact. The
    * claim that survives it lifts the run's stop marks ({@link
-   * RunRoster.clearStops}); a refused launch leaves the stop's gate intact.
+   * RunRoster.launch}); a refused launch leaves the stop's gate intact.
    */
   launchRun<A, E, R>(
     runId: RunId,
@@ -318,6 +318,22 @@ export class RunRegistry {
    *  caller owes the returned {@link RunStop}. */
   kill(runId: RunId, options: RunStopOptions = {}): RunStop {
     return this.stopper.kill(runId, options);
+  }
+
+  /** Stop every top-level run, cascading into its children: the sweep a
+   *  session close and a project close both run. A child with a handle is
+   *  stopped by its parent's cascade; a native child between turns has no
+   *  handle, and its kill interrupts the loop the registry retains for it.
+   *  The kills are issued now; the answer joins their settlements, and
+   *  fails as the first refused one does, for the caller to map into its
+   *  own error channel. */
+  stopAll(): Effect.Effect<void, Error> {
+    const settlements = this.getActiveIds().flatMap((runId) =>
+      this.getHandle(runId)?.isChild
+        ? []
+        : [this.kill(runId, { detachActiveChildren: false }).settlement],
+    );
+    return Effect.all(settlements, { concurrency: 'unbounded', discard: true });
   }
 
   /** Stop a visible agent run and apply the caller's declared child policy:

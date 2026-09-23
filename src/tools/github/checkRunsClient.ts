@@ -11,7 +11,6 @@
 
 import { Cause, Effect } from 'effect';
 
-import type { AgentTrace } from '@agent/trace';
 import type { Secrets } from '@platform/secrets';
 
 import {
@@ -133,7 +132,6 @@ export const fetchAllCheckRuns = Effect.fn('fetchAllCheckRuns')(
     repo: string,
     sha: string,
     cache: CheckRunsCache | undefined,
-    logger: AgentTrace,
   ): Effect.fn.Return<FetchAllCheckRunsResult, unknown, Secrets> {
     const basePath = `/repos/${owner}/${repo}/commits/${sha}/check-runs?per_page=${CHECK_RUNS_PAGE_SIZE}`;
 
@@ -200,17 +198,25 @@ export const fetchAllCheckRuns = Effect.fn('fetchAllCheckRuns')(
      * cap bites we warn and walk only that many pages: under-reporting beats
      * fanning out into hundreds of GETs every 30s.
      */
-    const pagesForCheckRuns = (totalCount: number, midWalk = false): number => {
+    const pagesForCheckRuns = (
+      totalCount: number,
+      midWalk = false,
+    ): Effect.Effect<number> => {
       const neededPages = Math.max(
         1,
         Math.ceil(totalCount / CHECK_RUNS_PAGE_SIZE),
       );
-      if (neededPages <= MAX_CHECK_RUNS_PAGES) return neededPages;
-      logger.warn(
+      if (neededPages <= MAX_CHECK_RUNS_PAGES) {
+        return Effect.succeed(neededPages);
+      }
+      return Effect.logWarning(
         `Pagination cap hit${midWalk ? ' mid-walk' : ''} for ${owner}/${repo}@${sha.slice(0, 7)} check-runs.`,
-        { data: { totalCount, neededPages, cappedAt: MAX_CHECK_RUNS_PAGES } },
+      ).pipe(
+        Effect.annotateLogs({
+          data: { totalCount, neededPages, cappedAt: MAX_CHECK_RUNS_PAGES },
+        }),
+        Effect.as(MAX_CHECK_RUNS_PAGES),
       );
-      return MAX_CHECK_RUNS_PAGES;
     };
 
     // Page 1 always runs — we need its `total_count` (or a 304 fast-path
@@ -248,13 +254,12 @@ export const fetchAllCheckRuns = Effect.fn('fetchAllCheckRuns')(
     // server's view almost certainly matches what we last committed). If a
     // 200 arrives later, `latestTotal` takes precedence and we recompute.
     const seedTotal = latestTotal ?? cache?.lastTotalCount ?? 0;
-    let totalPages = pagesForCheckRuns(seedTotal);
+    let totalPages = yield* pagesForCheckRuns(seedTotal);
     if (totalPages > 1) {
-      logger.info(
+      yield* Effect.logInfo(
         `Pagination for ${owner}/${repo}@${sha.slice(0, 7)} check-runs.`,
-        {
-          data: { totalCount: seedTotal, totalPages },
-        },
+      ).pipe(
+        Effect.annotateLogs({ data: { totalCount: seedTotal, totalPages } }),
       );
     }
 
@@ -271,7 +276,7 @@ export const fetchAllCheckRuns = Effect.fn('fetchAllCheckRuns')(
       // tracker would strand the terminal gate forever.
       if (result.total !== undefined) {
         latestTotal = result.total;
-        totalPages = pagesForCheckRuns(latestTotal, true);
+        totalPages = yield* pagesForCheckRuns(latestTotal, true);
       }
       page += 1;
     }
@@ -334,7 +339,6 @@ export const fetchAnnotations = Effect.fn('fetchAnnotations')(
     owner: string,
     repo: string,
     checkRunId: number,
-    logger: AgentTrace,
     budget: AnnotationFetchBudget,
     now?: number,
   ): Effect.fn.Return<GhCheckAnnotation[], unknown, Secrets> {
@@ -349,7 +353,7 @@ export const fetchAnnotations = Effect.fn('fetchAnnotations')(
       annotations.push(...res.data);
       if (res.data.length < ANNOTATIONS_PAGE_SIZE) return annotations;
     }
-    logger.warn(
+    yield* Effect.logWarning(
       `Reached annotation page cap (${MAX_ANNOTATION_PAGES_PER_RUN}) for check ${checkRunId}; emitting fetched annotations only.`,
     );
     return annotations;

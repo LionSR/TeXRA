@@ -6,9 +6,6 @@ import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { beforeEach, describe, expect, vi } from 'vitest';
 
-// Local imports - agent
-import type { AgentTrace } from '@agent/trace';
-
 // Local imports - platform
 import { Secrets } from '@platform/secrets';
 
@@ -61,11 +58,6 @@ interface AnnotationDrainSource {
  * the host root provides in production.
  */
 const secretsLayer = Secrets.layer(new FakeSecrets());
-
-/** Minimal logger for driving the infrastructure `fetchAnnotations` directly. */
-function testLogger(): AgentTrace {
-  return { warn: vi.fn() } as unknown as AgentTrace;
-}
 
 function annotation(
   level: GhCheckAnnotation['annotation_level'],
@@ -129,7 +121,6 @@ describe('PRPollingSource annotation pagination', () => {
         'owner',
         'repo',
         42,
-        testLogger(),
         new AnnotationFetchBudget(2, 60_000),
       );
 
@@ -153,7 +144,6 @@ describe('PRPollingSource annotation pagination', () => {
         'owner',
         'repo',
         42,
-        testLogger(),
         new AnnotationFetchBudget(50, 60_000),
       );
 
@@ -176,7 +166,6 @@ describe('PRPollingSource annotation pagination', () => {
           'owner',
           'repo',
           42,
-          testLogger(),
           new AnnotationFetchBudget(1, 60_000),
         ),
       );
