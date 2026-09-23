@@ -146,6 +146,7 @@ export const executeSubagent = Effect.fn('executeSubagent')(function* (
         session: parentSession,
         approvalPromptsUnavailable:
           parent.run.toolPolicy.approvalPromptsUnavailable,
+        composition: parent.run.composition.key,
         onApprovalPolicyDenial: parent.run.onApprovalPolicyDenial,
         onRunResolved: inheritChildRunApprovals,
         onCost: recordCost,
@@ -200,6 +201,7 @@ export const executeSubagent = Effect.fn('executeSubagent')(function* (
         workingDirectory,
         approvalPromptsUnavailable:
           parent.run.toolPolicy.approvalPromptsUnavailable,
+        composition: parent.run.composition.key,
         onApprovalPolicyDenial: parent.run.onApprovalPolicyDenial,
         onRunResolved: inheritChildRunApprovals,
         userFollowUpSupport,

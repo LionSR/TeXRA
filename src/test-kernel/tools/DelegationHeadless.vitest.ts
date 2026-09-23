@@ -33,7 +33,10 @@ import {
   queuedFollowUps,
 } from '@test/support/sessionTestUtils';
 import { fakeProcessServices } from '@test/support/setupPlatform';
-import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
+import {
+  nativeToolTestLayer,
+  emptyPinnedComposition,
+} from '@test/support/nativeToolTestLayer';
 import { DelegateAgentTool } from '@tools/delegation/DelegationTools';
 import {
   executeSubagentInBand as executeSubagentInBandEffect,
@@ -297,6 +300,7 @@ function delegationOptions(
     agentName: 'review',
     parentRunId: IN_BAND_PARENT_RUN_ID,
     session: inBandSession,
+    composition: emptyPinnedComposition.key,
     ...overrides,
   };
 }

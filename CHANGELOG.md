@@ -60,6 +60,11 @@ All notable changes to this project will be documented in this file.
   finished paper into a deck in one pass, use the `paper2slide` workflow
   agent. A built-in agent now takes precedence over a hosted agent with
   the same name, so signed-in users run the built-in copies too.
+- **A subagent works with the same tool plugins as the run that launched
+  it.** Switching a tool plugin on or off in the Tools dashboard applies to
+  runs started afterwards; a delegated agent or workflow-script agent
+  launched by a run already in progress keeps that run's plugins, so one
+  task does not change tools halfway through.
 
 ### Bug Fixes
 

@@ -24,6 +24,7 @@ import {
   type RunId,
   type UserFollowUpSupport,
 } from '@shared/schemas';
+import type { CompositionKey } from '@tools/compositions';
 import { onAbort, unique } from '@utils/core';
 import { ensureError } from '@utils/errors/errorMessage';
 import {
@@ -47,6 +48,11 @@ export interface ChildRunLaunchOptions {
   readonly parentRunId: RunId;
   readonly session: SessionHandle;
   readonly approvalPromptsUnavailable?: boolean;
+  /**
+   * The parent's composition, which a fresh child joins; a resumed child
+   * resolves its own.
+   */
+  readonly composition?: CompositionKey;
   readonly onApprovalPolicyDenial?: () => void;
   /** Caller cancellation for a durable in-band launch. */
   readonly signal?: AbortSignal;
@@ -72,7 +78,11 @@ interface NativeSubagentStrategyBase extends ChildRunLaunchOptions {
 
 type NativeSubagentStrategyParams = NativeSubagentStrategyBase &
   (
-    | { readonly definition: PreparedAgentDefinition; readonly resume?: never }
+    | {
+        readonly definition: PreparedAgentDefinition;
+        readonly resume?: never;
+        readonly composition: CompositionKey;
+      }
     | {
         readonly definition?: never;
         readonly resume: {
@@ -194,6 +204,7 @@ export function createNativeSubagentStrategy(
             ...params.resume?.options,
             session: params.session,
             approvalPromptsUnavailable: params.approvalPromptsUnavailable,
+            composition: params.composition,
             onApprovalPolicyDenial: params.onApprovalPolicyDenial,
             onRunResolved: params.onRunResolved,
             onProgress: (update: Parameters<ChildRunPorts['notify']>[0]) =>

@@ -29,7 +29,8 @@ import { hostStores, setupPlatform } from '@test/support/setupPlatform';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { toolRegistryLayer } from '@tools/registry';
-import { ToolRegistry, toolTable } from '@tools/toolTable';
+import { toolTableLayer } from '@tools/compositions';
+import { toolTable } from '@tools/toolTable';
 import { generateRunId } from '@utils/core';
 
 import { sessionWithInteractions } from './progressTestUtils';
@@ -227,9 +228,10 @@ describe('run-scoped tool resolution', () => {
         stores: hostStores(),
         workspaceRoot: undefined,
       }).pipe(
+        Effect.scoped,
         Effect.provide(LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT)),
         Effect.provide(
-          Layer.succeed(ToolRegistry)(
+          toolTableLayer(
             toolTable({
               test: {
                 bash: approvalGatedTool('bash'),

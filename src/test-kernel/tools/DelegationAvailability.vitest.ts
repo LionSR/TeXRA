@@ -49,7 +49,8 @@ const {
 } = await import('@tools/delegation/delegationAvailability');
 const { resolveAgentTools } =
   await import('@agent/runtime/agentToolResolution');
-const { ToolRegistry, toolTable } = await import('@tools/toolTable');
+const { toolTable } = await import('@tools/toolTable');
+const { toolTableLayer } = await import('@tools/compositions');
 
 const DELEGATE_AGENT_DESCRIPTION = [
   'Delegate a task to a tool-use agent.',
@@ -132,7 +133,7 @@ function rewriteRoster(
  * advertises the table's own contract, not the one the declaration carries.
  */
 function delegationRegistry(tools: readonly ToolInput[]) {
-  return Layer.succeed(ToolRegistry)(
+  return toolTableLayer(
     toolTable({
       test: Object.fromEntries(
         tools.map((tool) => [
@@ -160,7 +161,7 @@ function resolveToolList(
       injectTools: false,
       stores,
       workspaceRoot: undefined,
-    }).pipe(Effect.provide(delegationRegistry(tools)));
+    }).pipe(Effect.scoped, Effect.provide(delegationRegistry(tools)));
   }).pipe(
     Effect.map(({ definitions }) => definitions),
     // The delegation-annotation availability read yields `LanguageModel`;

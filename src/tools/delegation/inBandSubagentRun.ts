@@ -40,6 +40,7 @@ import {
   type RunId,
   type SubagentProgressUpdate,
 } from '@shared/schemas';
+import type { CompositionKey } from '@tools/compositions';
 import { generateRunId } from '@utils/core';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -72,6 +73,8 @@ export class SubagentDurabilityError extends Error {
 
 interface InBandSubagentRunBaseOptions extends ChildRunLaunchOptions {
   readonly configPayload: AgentConfigPayload;
+  /** The parent's composition, which the child joins. */
+  readonly composition: CompositionKey;
   /** Synchronous by contract; forwarded as the loop's `recordCost`. */
   readonly onCost?: (costUsd: number | undefined) => void;
   /**

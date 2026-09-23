@@ -27,6 +27,7 @@ import {
 import { RunLedger } from '@shared/session/runLedger';
 import { emptyRunEndOutput } from '@shared/schemas';
 import type { RunState } from '@shared/session/runStateFold';
+import type { CompositionKey } from '@tools/compositions';
 import { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import { ensureRunDirUnder } from '@utils/files/runStorageFs';
 import { ensureError } from '@utils/errors/errorMessage';
@@ -359,6 +360,11 @@ export interface SubagentRunOptions {
   onProgress?: (update: SubagentProgressUpdate) => void;
   /** Hide tools whose approval prompts cannot be answered in this host mode. */
   approvalPromptsUnavailable?: boolean;
+  /**
+   * The composition a fresh delegated child joins: its parent's. A resume
+   * resolves its own under the recorded-toolset rule.
+   */
+  composition?: CompositionKey;
   /** Record that this run encountered an executable policy denial. */
   onApprovalPolicyDenial?: () => void;
   /** Session owning this run's coordination state; run entry points require it. */
@@ -475,6 +481,8 @@ export function executeAgent(
       toolPolicy: {
         approvalPromptsUnavailable: options.approvalPromptsUnavailable,
         stopAfterCycle: options.stopAfterCycle,
+        // A resumed run resolves its own: its parent's pin is not recorded.
+        composition: options.resumed ? undefined : options.composition,
       },
     });
     return yield* Effect.gen(function* () {

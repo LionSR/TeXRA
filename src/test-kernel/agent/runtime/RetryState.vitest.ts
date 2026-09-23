@@ -77,6 +77,7 @@ import {
 } from '@shared/session/database';
 import { RunLedger, RunLedgerRefused } from '@shared/session/runLedger';
 import type { RunState } from '@shared/session/runStateFold';
+import { emptyPinnedComposition } from '@test/support/nativeToolTestLayer';
 import { noopTrace } from '@test/support/noopTrace';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
@@ -291,6 +292,7 @@ function agentRun(
     tools: new MapToolRegistry({}),
     finalToolName: null,
     toolset: { offeredTools: [], toolsetHash: '0'.repeat(64) },
+    composition: emptyPinnedComposition,
     structured: { value: undefined },
     model,
     scope: Scope.makeUnsafe(),

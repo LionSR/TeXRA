@@ -9,8 +9,13 @@ import {
   DELEGATE_MULTI_AGENTS_TOOL_NAME,
   type CanonicalDelegationToolName,
 } from '@shared/constants/delegationTools';
-import type { PluginToolName, ToolPluginId } from '@tools/plugins';
-import { ToolRegistry, toolTable } from '@tools/toolTable';
+import { toolTableLayer } from '@tools/compositions';
+import type {
+  PluginToolName,
+  ToolPluginEntry,
+  ToolPluginId,
+} from '@tools/plugins';
+import { toolTable, type PluginLayer } from '@tools/toolTable';
 
 // Local file imports
 import { BashTool } from './bash';
@@ -177,6 +182,18 @@ const PLUGIN_TOOLS = {
   };
 };
 
+/**
+ * The layer of each plugin that owns resources, keyed by plugin id: exactly
+ * the plugins whose manifest entry declares `layer`. Each is one object for
+ * the life of the process, so the compositions that include its plugin
+ * share one build of it.
+ */
+const PLUGIN_LAYERS = {} as const satisfies {
+  readonly [
+    Id in Extract<ToolPluginEntry, { readonly layer: true }>['id']
+  ]: PluginLayer;
+};
+
 type PluginTools = typeof PLUGIN_TOOLS;
 
 /** Union of all registered tool names. */
@@ -204,10 +221,13 @@ type _CanonicalDelegationNamesAreRegistered = AssertNever<
  * `ToolRegistry` service. Flattening cannot overwrite a tool: the manifest
  * rules out a name two plugins share.
  */
-export const TOOL_TABLE = toolTable(PLUGIN_TOOLS);
+export const TOOL_TABLE = toolTable(PLUGIN_TOOLS, PLUGIN_LAYERS);
 
-/** The process's `ToolRegistry`, which `installProcessRuntime` provides. */
-export const toolRegistryLayer = Layer.succeed(ToolRegistry)(TOOL_TABLE);
+/**
+ * The process's `ToolRegistry` and the `Compositions` built over it, which
+ * `installProcessRuntime` provides.
+ */
+export const toolRegistryLayer = toolTableLayer(TOOL_TABLE);
 
 /** Whether a registered tool declares itself unavailable on a product host. */
 export function isToolUnavailableOnHost(name: string, host: ToolHost): boolean {

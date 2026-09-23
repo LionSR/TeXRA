@@ -1,6 +1,6 @@
 import { it } from '@effect/vitest';
 import { describe, expect } from 'vitest';
-import { Effect } from 'effect';
+import { Effect, Exit, Layer, Scope } from 'effect';
 
 import { resolveAgentTools } from '@agent/runtime/agentToolResolution';
 import {
@@ -10,7 +10,11 @@ import {
 import type { ToolDefinition } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { hostStores, installPlatform } from '@test/support/setupPlatform';
+import type { CompositionKey } from '@tools/compositions';
+import { toolTableLayer } from '@tools/compositions';
 import { toolRegistryLayer } from '@tools/registry';
+import { toolTable } from '@tools/toolTable';
+import { setToolEnabled } from '@utils/config/constants';
 
 const logger = { warn: () => {} };
 
@@ -37,6 +41,7 @@ describe('tool-use tool resolution', () => {
       ...options,
     }).pipe(
       Effect.map(({ definitions }) => definitions.map((tool) => tool.name)),
+      Effect.scoped,
       // The delegation-annotation availability read yields `LanguageModel`;
       // this host has no editor models.
       Effect.provide(LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT)),
@@ -125,5 +130,77 @@ describe('tool-use tool resolution', () => {
           }),
         ).toEqual(['grep', 'memory']);
       }),
+  );
+
+  it.effect(
+    'a run keeps its composition across a switch change, and its plugin layer closes with the last run holding it',
+    () => {
+      const events: string[] = [];
+      // One plugin whose layer records its lifetime.
+      const table = toolTable(
+        {
+          zotero: {
+            zotero_search: {
+              definition: { name: 'zotero_search' },
+              call: () => Effect.die('not called'),
+            },
+          },
+        },
+        {
+          zotero: Layer.effectDiscard(
+            Effect.acquireRelease(
+              Effect.sync(() => events.push('open')),
+              () => Effect.sync(() => events.push('close')),
+            ),
+          ),
+        },
+      );
+      return Effect.gen(function* () {
+        const stores = hostStores();
+        const resolve = (inherited?: CompositionKey) =>
+          resolveAgentTools({
+            tools: toolDefs(['zotero_search']),
+            logger,
+            injectTools: false,
+            stores,
+            workspaceRoot: undefined,
+            host: 'extension',
+            inherited,
+          }).pipe(
+            Effect.provide(
+              LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT),
+            ),
+          );
+        const names = (resolved: Effect.Success<ReturnType<typeof resolve>>) =>
+          resolved.definitions.map((tool) => tool.name);
+
+        const parentScope = yield* Scope.make();
+        const parent = yield* Scope.provide(resolve(), parentScope);
+        expect(names(parent)).toEqual(['zotero_search']);
+        expect(events).toEqual(['open']);
+
+        yield* setToolEnabled('zotero', false, stores.globalState);
+        // A new run gets the new composition; a child joins its parent's.
+        const laterScope = yield* Scope.make();
+        const later = yield* Scope.provide(resolve(), laterScope);
+        expect(names(later)).toEqual([]);
+        expect(later.pinned.key.hash).not.toBe(parent.pinned.key.hash);
+        const childScope = yield* Scope.make();
+        const child = yield* Scope.provide(
+          resolve(parent.pinned.key),
+          childScope,
+        );
+        expect(names(child)).toEqual(['zotero_search']);
+
+        yield* Scope.close(parentScope, Exit.void);
+        expect(events).toEqual(['open']);
+        yield* Scope.close(childScope, Exit.void);
+        expect(events).toEqual(['open', 'close']);
+        yield* Scope.close(laterScope, Exit.void);
+      }).pipe(
+        Effect.provide(toolTableLayer(table)),
+        Effect.ensuring(Effect.promise(() => installPlatform())),
+      );
+    },
   );
 });
