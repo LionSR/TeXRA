@@ -131,7 +131,6 @@ import {
 } from '@shared/schemas';
 import { TEXRA_APPROVAL_POLICY_DEFAULT } from '@shared/approvalPolicy';
 import { DatabaseReadFailed } from '@shared/session/database';
-import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
@@ -158,7 +157,7 @@ import {
 
 // The state stores the controller's setting reads land on, as ports of the
 // installed fake host rather than a module mock of `platform()`: the setting
-// path (`detachSubagentsOnStop`) reads the session's own roots, which this
+// reads (the multi-agent preset name) take the session's own roots, which this
 // file's stub takes from the installed host, and the kernel's setup file
 // installs a host before this file's mocks are registered.
 setupPlatform(
@@ -664,26 +663,6 @@ describe('createChatSessionController', () => {
 
     expect(mocks.appendLocalErrorTranscript).not.toHaveBeenCalled();
     expect(session.runExitCode).toBe(CliExitCode.Success);
-  });
-
-  it('reads the shared detach-subagents setting key when stopping an active run', () => {
-    const session = makeSession({
-      runId: 'a11111' as RunId,
-    });
-    holdRun('a11111' as RunId);
-    const ctrl = createChatSessionController(makeInit({ session }));
-
-    mocks.globalGet.mockReturnValue(Effect.succeed(true));
-    ctrl.stop();
-
-    expect(mocks.globalGet).toHaveBeenCalledWith(
-      GlobalStateKey.DETACH_SUBAGENTS_ON_STOP,
-    );
-    expect(mocks.request).toHaveBeenCalledWith({
-      kind: 'run.stop',
-      runId: 'a11111',
-      detachActiveChildren: true,
-    });
   });
 
   it('stops the focused root while preserving its agent children', () => {

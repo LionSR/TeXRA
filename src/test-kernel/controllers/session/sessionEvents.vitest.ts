@@ -99,6 +99,7 @@ import {
 } from '@shared/schemas';
 import { InquiryRecords } from '@shared/session/inquiryRecords';
 import { Database } from '@shared/session/database';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 import { RunLedger, RunLedgerRefused } from '@shared/session/runLedger';
 import type { RunLedgerDraft } from '@shared/session/runStateFold';
 import { ProcessIdentity, SessionEvents } from '@shared/session/sessionEvents';
@@ -685,6 +686,9 @@ describe('Sessions owner', () => {
         const session = {
           view: view.ref,
           runs: { stopAgentRun },
+          roots: createFakeWorkspaceRoots({
+            globalState: { [GlobalStateKey.DETACH_SUBAGENTS_ON_STOP]: true },
+          }),
         } as unknown as SessionHandle;
         const requests = sessionRequests(
           session,
@@ -714,7 +718,11 @@ describe('Sessions owner', () => {
         }));
         // A released claim is not held, even while the display still says so.
         expect(yield* requests.request(request)).toEqual({ kind: 'done' });
-        expect(stopAgentRun).toHaveBeenCalledOnce();
+        // A stop that leaves the child policy unset takes the session's
+        // configured "Keep subagents running".
+        expect(stopAgentRun).toHaveBeenCalledExactlyOnceWith(RUN, {
+          detachActiveChildren: true,
+        });
       }).pipe(
         Effect.provide(graph([runStart])),
         Effect.provide(
