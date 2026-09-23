@@ -447,9 +447,8 @@ export function makeSessions(
     open: (roots?: WorkspaceRoots) =>
       Effect.gen(function* () {
         const resolved = roots ?? processRoots;
-        // A root a host already opened keeps that host's decision delivery:
-        // its UI prompts for the retries of every run on the session, this
-        // package's included. Only a session opened here gets the denial.
+        // A root already open on this runtime keeps the retry listener it
+        // was opened with; only the first open of a root installs one.
         const hostOpened = (yield* listOwnedSessions()).some(
           (other) => other.roots.storage === resolved.storage,
         );

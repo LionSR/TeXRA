@@ -90,7 +90,7 @@ has yet to read.
 Every failure is a typed error on the effect that owns it. A refusal before
 any model work fails `session.start` with one of the tagged errors the
 surface names (`AgentNotFound`, `ToolsRefused`, and `PlatformConflict` for a
-second, different platform); a run that fails after entering its session
+second, different platform or a process runtime a host already installed); a run that fails after entering its session
 fails `run.result` and `run.events` with `RunFailure`, whose `cause` is
 exactly what the launch path threw.
 
@@ -122,8 +122,10 @@ descendants as they appear, and stay resident for the life of the process.
 
 Runs share one session per workspace storage root. The runtime's session
 owner holds it, the same owner every TeXRA host opens its sessions through, so
-opening a root twice (two runs, or a run beside a host in the same process)
-resolves the one session already open there; a second root gets its own. When the session was opened by a host (the extension, the desktop, or the CLI in the same process), that host's decision delivery applies to every run on it: retries and approvals prompt in the host's UI and the run waits there, as PR #11893 section 8 rules; the package's inline retry denial applies only to sessions the package opened itself. A
+opening a root twice resolves the one session already open there; a second
+root gets its own. The package never borrows a host's runtime (see "The
+platform" below), so every session on it is the package's own and its inline
+retry denial answers the retries of every run on it. A
 session ends through `sessions.close(roots)`: it refuses new runs on the
 root, interrupts the runs it owns and waits for them to settle within the
 runtime's shutdown budget, flushes its artifacts, and releases the session,
@@ -144,10 +146,6 @@ scope arriving during the last holder's shutdown waits for disposal to finish
 before composing the next runtime. Acquisition is interruption-safe:
 cancellation while waiting aborts without taking a hold, while the retiring
 runtime completes disposal through its own scope.
-
-A composition that found a host's own installation ends nothing however its
-holds end: those sessions are the host's, and killing its live runs is not
-this package's to do.
 
 ## Run results
 
