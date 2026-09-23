@@ -8,13 +8,10 @@ import { Effect, FileSystem } from 'effect';
 import { describe, expect } from 'vitest';
 
 // Local imports
-import { computeOutputDiffStats } from '@agent/implementations/flows/reflection/output/diffComputation';
-import { assignByContentSimilarity } from '@agent/implementations/flows/reflection/output/extraction/contentSimilarity';
-import {
-  createOutputState,
-  ensureRoundData,
-} from '@agent/implementations/flows/reflection/output/outputState';
-import type { RoundFileMapping } from '@agent/implementations/flows/reflection/output/types';
+import { computeOutputDiffStats } from '@agent/output/diffComputation';
+import { assignByContentSimilarity } from '@agent/output/extraction/contentSimilarity';
+import { createOutputState, ensureRoundData } from '@agent/output/outputState';
+import type { RoundFileMapping } from '@agent/output/types';
 import {
   fileLocationDisplayPath,
   RUN_OUTCOME,

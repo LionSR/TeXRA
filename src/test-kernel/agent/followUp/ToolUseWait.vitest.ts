@@ -441,6 +441,7 @@ const seedCommittedResponse = Effect.fn('test.seedCommittedResponse')(
       followUpIds: new Set(),
       usage: AgentRunStateSnapshotSchema.parse({}).usageAccumulator.totals,
       flow: null,
+      roundOutputs: [],
     };
     const opened = yield* ledger.appendBatch(runId, null, [
       appendRow(runId, [

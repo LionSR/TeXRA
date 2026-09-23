@@ -7,11 +7,7 @@
 
 import { Effect } from 'effect';
 
-import {
-  MESSAGE_TYPES,
-  type FileLocation,
-  type OutputFileInfo,
-} from '@shared/schemas';
+import { MESSAGE_TYPES, type FileLocation } from '@shared/schemas';
 
 import { computeOutputDiffStats } from './diffComputation';
 import {
@@ -22,7 +18,6 @@ import {
 import type { RoundFileMapping } from './types';
 
 export interface RoundSummary {
-  fileInfos: OutputFileInfo[];
   filesToOpen: FileLocation[];
 }
 
@@ -72,5 +67,5 @@ export const summarizeRound = Effect.fn('reflection.summarizeRound')(function* (
     messageType: MESSAGE_TYPES.INTERNAL,
   });
 
-  return { fileInfos, filesToOpen } satisfies RoundSummary;
+  return { filesToOpen } satisfies RoundSummary;
 });

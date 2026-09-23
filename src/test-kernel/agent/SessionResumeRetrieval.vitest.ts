@@ -78,7 +78,6 @@ function reflectionSnapshot(modelId: string): FlowSnapshotPayload {
       workspaceSnapshot: AgentWorkspaceState.create().toSnapshot(),
       outputLocation: null,
       runStateSnapshot: { totalRounds: 2, totalResponseTimeMs: 0 },
-      roundOutputs: [],
       continueRounds: true,
       endTurn: false,
     },

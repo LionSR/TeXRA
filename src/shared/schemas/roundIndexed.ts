@@ -116,7 +116,8 @@ export function cloneRoundIndexed<T>(
  * The rounds that hold something. A producer publishes its whole map, so the
  * fold takes the map as it is; a round with nothing in it is not a round any
  * tab shows, so files and compile failures drop it. Missing outputs keep
- * their empty rounds, which mean "checked, nothing missing".
+ * empty rounds to mean no missing files are known; validation may not have
+ * run for every round.
  */
 export function nonEmptyRounds<T>(rounds: RoundIndexed<T>): RoundIndexed<T> {
   const next: RoundIndexed<T> = {};
