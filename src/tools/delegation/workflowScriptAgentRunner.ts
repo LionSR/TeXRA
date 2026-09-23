@@ -472,10 +472,8 @@ const recoverOrLaunchWorkflowChild = Effect.fn('recoverOrLaunchWorkflowChild')(
     AgentRunServices | Scope.Scope
   > {
     const { session } = call;
-    yield* Effect.try({
-      try: () => call.signal?.throwIfAborted(),
-      catch: ensureError,
-    });
+    // A workflow stop reaches this runner as the interruption of the fiber it
+    // runs on; there is no abort signal to poll beside it.
     // The mark does not say where to start; it says what an absent id means. A
     // deleted attempt is collected in the end, and an id-by-id probe reads the
     // hole that leaves as an id that never started — it would launch into it
@@ -689,10 +687,6 @@ const recoverOrLaunchWorkflowChild = Effect.fn('recoverOrLaunchWorkflowChild')(
               ),
             );
           }
-          yield* Effect.try({
-            try: () => call.signal?.throwIfAborted(),
-            catch: ensureError,
-          });
           return {
             runId,
             result: { ...end, output: meta.output },
@@ -790,7 +784,6 @@ export function createWorkflowScriptAgentRunner(
         parentRunId: run.runId,
         checkpointId,
         key: invocation.key,
-        signal: invocation.signal,
         onLaunch: (childRunId) => {
           invocation.report({ childRunId });
         },

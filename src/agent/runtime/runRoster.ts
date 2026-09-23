@@ -359,7 +359,9 @@ export class RunRoster {
    *  refuses on it, a launch of the same run waits for it, and a competing
    *  step is refused. The run's DB claim rides the same fiber's lifetime, so
    *  the in-process owner and the claim are fenced by one construct. */
-  holdInactive(runId: RunId): Effect.Effect<void, RunLive | Error, Scope.Scope> {
+  holdInactive(
+    runId: RunId,
+  ): Effect.Effect<void, RunLive | Error, Scope.Scope> {
     return Effect.asVoid(
       Effect.acquireRelease(
         Effect.suspend(() => {

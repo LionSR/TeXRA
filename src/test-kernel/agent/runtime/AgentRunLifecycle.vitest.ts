@@ -320,7 +320,7 @@ describe('runFlowWithLifecycle', () => {
       const runnerParked = yield* Deferred.make<void>();
       const flow = runFlow(ctx, () =>
         Deferred.succeed(runnerParked, undefined).pipe(
-          Effect.andThen(Effect.never<never>),
+          Effect.andThen(Effect.never),
         ),
       );
       const run = yield* Effect.forkChild(

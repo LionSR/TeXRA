@@ -21,10 +21,10 @@ import {
 import { aggregateError, generateRunId } from '@utils/core';
 import { ensureError } from '@utils/errors/errorMessage';
 import { prepareAgentDefinition } from './AgentLaunchContext';
-import type { AgentRunHandle } from './RunHandle';
 import { applyHelperModelPreference } from './helperModelPreference';
 import { executeAgent, type ExecuteAgentOptions } from './executeAgent';
 import { RunLive } from './runRoster';
+import type { AgentRunHandle } from './RunHandle';
 import type { SessionHandle } from './SessionHandle';
 import type { AgentFlowResult } from './AgentFlowResult';
 

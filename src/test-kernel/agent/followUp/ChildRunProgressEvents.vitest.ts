@@ -587,9 +587,7 @@ describe('child run progress events', () => {
         const childRun = yield* Effect.promise(() =>
           startCodexChild(stoppedRunId, 'Run a stopped Codex child loop'),
         );
-        expect(
-          testDefaultSession().runs.getHandle(stoppedRunId),
-        ).toBeDefined();
+        expect(testDefaultSession().runs.getHandle(stoppedRunId)).toBeDefined();
 
         yield* childRun.finalize({ outcome: RUN_OUTCOME.CANCELLED });
 

@@ -283,7 +283,6 @@ function agentRun(
       { agentName: config.agent, agentCategory: setting.agentCategory },
     ),
     callbacks: { onModelChanged: () => undefined },
-    interrupt: () => undefined,
   };
 }
 

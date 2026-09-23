@@ -930,9 +930,7 @@ describe('headless delegation', () => {
           return persistencePending;
         });
 
-        const running = yield* Effect.forkChild(
-          runInBand(delegationOptions()),
-        );
+        const running = yield* Effect.forkChild(runInBand(delegationOptions()));
         yield* Deferred.await(persisting);
         // The caller's stop interrupts its own await, never the child's
         // persistence: the detached loop owns that record.

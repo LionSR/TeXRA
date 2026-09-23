@@ -834,49 +834,26 @@ export function startChildRunLoop<TTurn, R = never>(
   Error,
   R | Runs | AgentResume
 > {
-  return Effect.gen(function* () {
-    const runSession = params.session;
-    const runs = yield* Runs;
-    const budget = params.budgeted
-      ? yield* childRunBudgetFor(runSession, runs)
-      : undefined;
-    const { childRun, parentRunId, runId, agentName, strategy } = params;
-    // Native runs own their trace; driver diagnostics use a channel trace.
-    const logger = childRun?.logger ?? createChannelTrace('childRunLoop');
-    const loop = new ChildRunInterruptible(runs, runId, childRun === undefined);
-    // Every child loop reserves its stop target on the run's roster entry for
-    // the loop's whole life: a run stop must reach the loop's own signal,
-    // never interrupt the loop's fiber — a stopped turn's settlement, parent
-    // delivery and finalization all run after the abort. Only a native child
-    // also retains a terminal parent's continuation (its delivery
-    // reservation); a process child's reservation would make a terminal
-    // parent look recoverable after it can no longer accept either user
-    // input or the child's result. The parent edge is the roster's shared
-    // cell: a detaching stop severs it for the activation and every handle.
-    const releaseChildActivation = runs.reserveChildActivation({
-      runId,
-      parent: runs.getHandle(runId)?.parentState ?? { current: parentRunId },
-      retainsTerminalParent: childRun === undefined,
-      interrupt: () => loop.interrupt(),
-    });
-    let sessionOwnershipReleased = false;
-    const releaseSessionOwnershipOnce = (): void => {
-      if (sessionOwnershipReleased) return;
-      sessionOwnershipReleased = true;
-      strategy.releaseSessionOwnership?.();
-    };
-
-    let input!: RunInput;
-    let queueLease: FollowUpConsumerLease | undefined;
-    let sessionStage: StageHandle | undefined;
-    // Set once the setup's compensation has run (either early-fail path or
-    // the launch's exit finalizer), so it never runs twice.
-    let setupUnwound = false;
-    // Unwind setup and lane refusals before the run body takes ownership.
-    const unwindSetup = (error: unknown): Effect.Effect<Error> =>
-      Effect.suspend(() => {
-        setupUnwound = true;
-        return Effect.gen(function* () {
+  const runSession = params.session;
+  const runId = params.runId;
+  // The launch's unwind bookkeeping lives beside the generator, not inside
+  // it: the `onExit` chained after it runs the same compensation when the
+  // launch unwinds before the fork, so these stay in its scope.
+  let queueLease: FollowUpConsumerLease | undefined;
+  let sessionStage: StageHandle | undefined;
+  let releaseChildActivation: () => void = () => undefined;
+  let releaseSessionOwnershipOnce: () => void = () => undefined;
+  // Set once the setup's compensation has run (either early-fail path or
+  // the launch's exit finalizer), so it never runs twice.
+  let setupUnwound = false;
+  // Set once the fork has handed settlement to the daemon; an unwind of the
+  // launch fiber before that point still owns the setup it acquired.
+  let forked = false;
+  // Unwind setup and lane refusals before the run body takes ownership.
+  const unwindSetup = (error: unknown): Effect.Effect<Error> =>
+    Effect.suspend(() => {
+      setupUnwound = true;
+      return Effect.gen(function* () {
         const cleanupErrors: unknown[] = [];
         const cleanups = [
           () => sessionStage?.end(RUN_OUTCOME.FAILED),
@@ -898,8 +875,44 @@ export function startChildRunLoop<TTurn, R = never>(
             `Child run ${runId} setup failed and rollback was incomplete`,
           ),
         );
-        });
       });
+    });
+
+  return Effect.gen(function* () {
+    const runs = yield* Runs;
+    const budget = params.budgeted
+      ? yield* childRunBudgetFor(runSession, runs)
+      : undefined;
+    const { childRun, parentRunId, agentName, strategy } = params;
+    // Native runs own their trace; driver diagnostics use a channel trace.
+    const logger = childRun?.logger ?? createChannelTrace('childRunLoop');
+    const loop = new ChildRunInterruptible(runs, runId, childRun === undefined);
+    // Every child loop reserves its stop target on the run's roster entry for
+    // the loop's whole life: a run stop must reach the loop's own signal,
+    // never interrupt the loop's fiber — a stopped turn's settlement, parent
+    // delivery and finalization all run after the abort. Only a native child
+    // also retains a terminal parent's continuation (its delivery
+    // reservation); a process child's reservation would make a terminal
+    // parent look recoverable after it can no longer accept either user
+    // input or the child's result. The parent edge is the roster's shared
+    // cell: a detaching stop severs it for the activation and every handle.
+    const parent = runs.getHandle(runId)?.parentState ?? {
+      current: parentRunId,
+    };
+    releaseChildActivation = runs.reserveChildActivation({
+      runId,
+      parent,
+      retainsTerminalParent: childRun === undefined,
+      interrupt: () => loop.interrupt(),
+    });
+    let sessionOwnershipReleased = false;
+    releaseSessionOwnershipOnce = (): void => {
+      if (sessionOwnershipReleased) return;
+      sessionOwnershipReleased = true;
+      strategy.releaseSessionOwnership?.();
+    };
+
+    let input!: RunInput;
 
     const created = yield* RunInput.make;
     // Fresh children already own their DB claim. Recovery retains its pending
@@ -1053,211 +1066,209 @@ export function startChildRunLoop<TTurn, R = never>(
               queueLease,
             )!;
           }
-            const runNotice = (notice: Effect.Effect<void, Error>) =>
-              notice.pipe(
-                Effect.catch((error) =>
-                  Effect.sync(() => {
-                    logger.warn('Child progress was not queued', {
-                      data: { runId, error },
-                    });
-                  }),
-                ),
-              );
-            const drainer = yield* Effect.forkScoped(
-              Effect.gen(function* () {
-                for (;;) {
-                  const notice = yield* Queue.take(notices).pipe(
-                    Effect.catchTag('Done', () => Effect.succeed(null)),
-                  );
-                  if (notice === null) return;
-                  yield* runNotice(notice);
-                }
-              }),
-            );
-            // Notices await SQLite admission. Offer a sentinel so the
-            // drainer finishes every progress job already queued before a
-            // parent result can commit (otherwise the result is a separate
-            // stale model turn).
-            const drainNotices = Effect.gen(function* () {
-              const done = yield* Deferred.make<void>();
-              yield* Queue.offer(notices, Deferred.succeed(done, undefined));
-              yield* Deferred.await(done);
-            });
-            yield* Effect.addFinalizer(() =>
-              Queue.end(notices).pipe(
-                Effect.andThen(Fiber.await(drainer)),
-                Effect.asVoid,
+          const runNotice = (notice: Effect.Effect<void, Error>) =>
+            notice.pipe(
+              Effect.catch((error) =>
+                Effect.sync(() => {
+                  logger.warn('Child progress was not queued', {
+                    data: { runId, error },
+                  });
+                }),
               ),
             );
-            let consumed: readonly QueuedFollowUp[] = [];
-            let turnStartedAt = Date.now();
-            const beginTurn = Effect.gen(function* () {
-              turnIndex += 1;
-              turnStartedAt = Date.now();
-              const turnKey = { key: attemptId, index: turnIndex };
-              emitTurnDiagnostic(logger, 'turn.accepted', {
-                runId,
-                turn: turnKey,
-                queueOwner: queueLease,
-              });
-              yield* commitChildTurn(runSession, runId, turnKey, 'accepted');
+          const drainer = yield* Effect.forkScoped(
+            Effect.gen(function* () {
+              for (;;) {
+                const notice = yield* Queue.take(notices).pipe(
+                  Effect.catchTag('Done', () => Effect.succeed(null)),
+                );
+                if (notice === null) return;
+                yield* runNotice(notice);
+              }
+            }),
+          );
+          // Notices await SQLite admission. Offer a sentinel so the
+          // drainer finishes every progress job already queued before a
+          // parent result can commit (otherwise the result is a separate
+          // stale model turn).
+          const drainNotices = Effect.gen(function* () {
+            const done = yield* Deferred.make<void>();
+            yield* Queue.offer(notices, Deferred.succeed(done, undefined));
+            yield* Deferred.await(done);
+          });
+          yield* Effect.addFinalizer(() =>
+            Queue.end(notices).pipe(
+              Effect.andThen(Fiber.await(drainer)),
+              Effect.asVoid,
+            ),
+          );
+          let consumed: readonly QueuedFollowUp[] = [];
+          let turnStartedAt = Date.now();
+          const beginTurn = Effect.gen(function* () {
+            turnIndex += 1;
+            turnStartedAt = Date.now();
+            const turnKey = { key: attemptId, index: turnIndex };
+            emitTurnDiagnostic(logger, 'turn.accepted', {
+              runId,
+              turn: turnKey,
+              queueOwner: queueLease,
             });
-            const settleTurn = (
-              turn: TTurn | null,
-              err: unknown,
-              turnIsError: boolean,
-              finalizing: boolean,
-            ) =>
-              Effect.gen(function* () {
-                const turnKey = { key: attemptId, index: turnIndex };
-                const wallTimeMs = Date.now() - turnStartedAt;
-                const turnFailed = err != null || turnIsError;
-
-                if (turn != null) {
-                  strategy.publishUsage?.(turn);
-                }
-
-                // Progress notices are admitted on the forked drainer and can
-                // lag the turn; deliverTurn persists the report and admits the
-                // parent row, so drain first or the result commits ahead of
-                // progress the parent then receives as a separate stale turn.
-                yield* drainNotices;
-                return yield* deliverTurn({
-                  session: runSession,
-                  strategy,
-                  runId,
-                  parent,
-                  logger,
-                  turn,
-                  turnKey,
-                  consumed,
-                  err,
-                  wallTimeMs,
-                  isError: turnFailed,
-                  finalizing,
-                  onTurnSettled: params.onTurnSettled,
-                  prepareParentDelivery: () => {
-                    if (!childRun && parent.current === null) return false;
-                    if (loop.isInterrupted()) {
-                      releaseSessionOwnershipOnce();
-                      return strategy.deliverAfterInterrupt === true;
-                    }
-                    if (turnFailed) {
-                      releaseSessionOwnershipOnce();
-                    } else if (turn != null) {
-                      strategy.onTurnSuccess?.(turn, runSession);
-                    }
-                    return true;
-                  },
-                });
-              });
-            const turns: ChildRunTurns<TTurn, R> = {
-              run: (operation) =>
-                Effect.gen(function* () {
-                  if (loop.isInterrupted()) return yield* Effect.interrupt;
-                  yield* beginTurn;
-                  return yield* budget
-                    ? budget.withPermit(operation)
-                    : operation;
-                }),
-              complete: (turn) =>
-                Effect.gen(function* () {
-                  const delivery = yield* settleTurn(turn, null, false, false);
-                  yield* submitPendingDelivery(
-                    delivery,
-                    runSession,
-                    runId,
-                    logger,
-                  );
-                }).pipe(Effect.uninterruptible),
-            };
-            let runner: (
-              signal: AbortSignal,
-            ) => Effect.Effect<TTurn, Error, R> = (signal) =>
-              strategy.launch(ports, signal, turns);
-            while (!loop.isInterrupted()) {
-              if (!strategy.continuous) yield* beginTurn;
-              const attempt = yield* attemptTurn(
-                strategy,
-                strategy.continuous ? runner : gateTurn(runner),
-                loop,
-                logger,
-                turnStartedAt,
-              );
-              if (attempt.kind === 'interrupted') break;
-              const turn = attempt.kind === 'completed' ? attempt.turn : null;
-              if (turn !== null) result = turn;
-              if (turn !== null && strategy.isTurnInterrupted?.(turn)) {
-                loop.interrupt();
-                break;
-              }
-              const err = attempt.kind === 'failed' ? attempt.err : null;
-              const turnIsError =
-                attempt.kind === 'completed' && attempt.turnIsError;
-              const turnFailed = err != null || turnIsError;
-              const finalizing =
-                turnFailed ||
-                turn == null ||
-                strategy.isTerminal(turn) ||
-                !strategy.runTurn;
-              // A launch failure can terminate before its first model cycle.
-              if (turnIndex === 0) {
-                if (err != null && !(yield* runSession.ownsRun(runId)))
-                  return yield* Effect.fail(ensureError(err));
-                yield* beginTurn;
-              }
-              const delivery = yield* settleTurn(
-                turn,
-                err,
-                turnIsError,
-                finalizing,
-              );
+            yield* commitChildTurn(runSession, runId, turnKey, 'accepted');
+          });
+          const settleTurn = (
+            turn: TTurn | null,
+            err: unknown,
+            turnIsError: boolean,
+            finalizing: boolean,
+          ) =>
+            Effect.gen(function* () {
               const turnKey = { key: attemptId, index: turnIndex };
-              emitTurnDiagnostic(logger, 'turn.delivered', {
+              const wallTimeMs = Date.now() - turnStartedAt;
+              const turnFailed = err != null || turnIsError;
+
+              if (turn != null) {
+                strategy.publishUsage?.(turn);
+              }
+
+              // Progress notices are admitted on the forked drainer and can
+              // lag the turn; deliverTurn persists the report and admits the
+              // parent row, so drain first or the result commits ahead of
+              // progress the parent then receives as a separate stale turn.
+              yield* drainNotices;
+              return yield* deliverTurn({
+                session: runSession,
+                strategy,
                 runId,
-                turn: turnKey,
-                queueOwner: queueLease,
+                parent,
+                logger,
+                turn,
+                turnKey,
+                consumed,
+                err,
+                wallTimeMs,
+                isError: turnFailed,
+                finalizing,
+                onTurnSettled: params.onTurnSettled,
+                prepareParentDelivery: () => {
+                  if (!childRun && parent.current === null) return false;
+                  if (loop.isInterrupted()) {
+                    releaseSessionOwnershipOnce();
+                    return strategy.deliverAfterInterrupt === true;
+                  }
+                  if (turnFailed) {
+                    releaseSessionOwnershipOnce();
+                  } else if (turn != null) {
+                    strategy.onTurnSuccess?.(turn, runSession);
+                  }
+                  return true;
+                },
               });
-
-              if (turnFailed) {
-                sawTurnFailure = true;
-                lastTurnErr =
-                  err ??
-                  new Error(
-                    `${strategy.stageLabel} reported a failed turn without throwing.`,
-                  );
-                pendingDelivery = delivery;
-                break;
-              }
-
-              const isTerminal = turn != null && strategy.isTerminal(turn);
-              if (isTerminal || !strategy.runTurn) {
-                pendingDelivery = delivery;
-                break;
-              }
-
-              // Process strategies wake the parent before waiting for input.
-              yield* submitPendingDelivery(delivery, runSession, runId, logger);
-              if (loop.isInterrupted()) break;
-
-              // The park is durable before the block, so a follow-up arriving
-              // while this loop sleeps is admitted onto its queue instead of
-              // being refused against a run that only looks busy.
-              yield* commitPark(runSession, runId, 'parked');
-              const nextRunTurn = strategy.runTurn;
-              const batch = yield* untilInterrupted(input.take, loop);
-              if (!batch || loop.isInterrupted()) break;
-              // The batch leaves the park: the loop is running again from
-              // here, and the turn it is about to accept is the top's.
-              const taken = batch.synthetic ? [] : batch.followUps;
-              yield* commitPark(runSession, runId, 'resumed');
-              consumed = taken;
-              const prompts: readonly FollowUpContent[] = batch.synthetic
-                ? [{ text: batch.text, origin: 'user' }]
-                : taken.map((followUp) => followUp.content);
-              runner = (signal) => nextRunTurn(prompts, ports, signal);
+            });
+          const turns: ChildRunTurns<TTurn, R> = {
+            run: (operation) =>
+              Effect.gen(function* () {
+                if (loop.isInterrupted()) return yield* Effect.interrupt;
+                yield* beginTurn;
+                return yield* budget ? budget.withPermit(operation) : operation;
+              }),
+            complete: (turn) =>
+              Effect.gen(function* () {
+                const delivery = yield* settleTurn(turn, null, false, false);
+                yield* submitPendingDelivery(
+                  delivery,
+                  runSession,
+                  runId,
+                  logger,
+                );
+              }).pipe(Effect.uninterruptible),
+          };
+          let runner: (
+            signal: AbortSignal,
+          ) => Effect.Effect<TTurn, Error, R> = (signal) =>
+            strategy.launch(ports, signal, turns);
+          while (!loop.isInterrupted()) {
+            if (!strategy.continuous) yield* beginTurn;
+            const attempt = yield* attemptTurn(
+              strategy,
+              strategy.continuous ? runner : gateTurn(runner),
+              loop,
+              logger,
+              turnStartedAt,
+            );
+            if (attempt.kind === 'interrupted') break;
+            const turn = attempt.kind === 'completed' ? attempt.turn : null;
+            if (turn !== null) result = turn;
+            if (turn !== null && strategy.isTurnInterrupted?.(turn)) {
+              loop.interrupt();
+              break;
             }
-          }),
+            const err = attempt.kind === 'failed' ? attempt.err : null;
+            const turnIsError =
+              attempt.kind === 'completed' && attempt.turnIsError;
+            const turnFailed = err != null || turnIsError;
+            const finalizing =
+              turnFailed ||
+              turn == null ||
+              strategy.isTerminal(turn) ||
+              !strategy.runTurn;
+            // A launch failure can terminate before its first model cycle.
+            if (turnIndex === 0) {
+              if (err != null && !(yield* runSession.ownsRun(runId)))
+                return yield* Effect.fail(ensureError(err));
+              yield* beginTurn;
+            }
+            const delivery = yield* settleTurn(
+              turn,
+              err,
+              turnIsError,
+              finalizing,
+            );
+            const turnKey = { key: attemptId, index: turnIndex };
+            emitTurnDiagnostic(logger, 'turn.delivered', {
+              runId,
+              turn: turnKey,
+              queueOwner: queueLease,
+            });
+
+            if (turnFailed) {
+              sawTurnFailure = true;
+              lastTurnErr =
+                err ??
+                new Error(
+                  `${strategy.stageLabel} reported a failed turn without throwing.`,
+                );
+              pendingDelivery = delivery;
+              break;
+            }
+
+            const isTerminal = turn != null && strategy.isTerminal(turn);
+            if (isTerminal || !strategy.runTurn) {
+              pendingDelivery = delivery;
+              break;
+            }
+
+            // Process strategies wake the parent before waiting for input.
+            yield* submitPendingDelivery(delivery, runSession, runId, logger);
+            if (loop.isInterrupted()) break;
+
+            // The park is durable before the block, so a follow-up arriving
+            // while this loop sleeps is admitted onto its queue instead of
+            // being refused against a run that only looks busy.
+            yield* commitPark(runSession, runId, 'parked');
+            const nextRunTurn = strategy.runTurn;
+            const batch = yield* untilInterrupted(input.take, loop);
+            if (!batch || loop.isInterrupted()) break;
+            // The batch leaves the park: the loop is running again from
+            // here, and the turn it is about to accept is the top's.
+            const taken = batch.synthetic ? [] : batch.followUps;
+            yield* commitPark(runSession, runId, 'resumed');
+            consumed = taken;
+            const prompts: readonly FollowUpContent[] = batch.synthetic
+              ? [{ text: batch.text, origin: 'user' }]
+              : taken.map((followUp) => followUp.content);
+            runner = (signal) => nextRunTurn(prompts, ports, signal);
+          }
+        }),
       );
       return result;
     }).pipe(
@@ -1374,13 +1385,9 @@ export function startChildRunLoop<TTurn, R = never>(
             const activation = yield* Effect.exit(
               Effect.sync(releaseChildActivation),
             );
-            const failures = [
-              terminal,
-              released,
-              delivery,
-              activation,
-            ].flatMap((exit) =>
-              Exit.isFailure(exit) ? [Cause.squash(exit.cause)] : [],
+            const failures = [terminal, released, delivery, activation].flatMap(
+              (exit) =>
+                Exit.isFailure(exit) ? [Cause.squash(exit.cause)] : [],
             );
             // The body's own failure or interruption propagates past this
             // finalizer as itself; only the cleanup's failures join it.
@@ -1397,7 +1404,6 @@ export function startChildRunLoop<TTurn, R = never>(
     );
     // The daemon owns settlement from its first tick; an unwind of the
     // launch fiber before this point still owns the setup it acquired.
-    let forked = false;
     return yield* Effect.forkDetach(
       Effect.suspend(() => {
         forked = true;

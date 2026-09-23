@@ -106,30 +106,31 @@ const untrackRun = vi.fn((runId: RunId) => {
 // The real exit choreography over the fake's settlePublications and the mocked
 // claim verbs, so the existing flush/release assertions keep
 // observing the same tree through its one owner.
+const sessionRuns = {
+  track: trackRun,
+  getHandle: vi.fn((runId) =>
+    trackedHandle?.runId === runId ? trackedHandle : undefined,
+  ),
+  untrack: untrackRun,
+  // No generation is live unless a case says so.
+  isLive: () => mocks.runActive(),
+  // This fixture never parks a run at WAITING; the cases that do build a
+  // real registry of their own.
+  // The registry's local application of a durable detach, over the one
+  // handle this fixture tracks.
+  detachChildren: vi.fn((_parent: RunId, children: readonly RunId[]) => {
+    if (trackedHandle && children.includes(trackedHandle.runId))
+      trackedHandle.parentState.current = null;
+  }),
+  // No competing generation exists in this fixture; the lane is a passthrough.
+  launchRun: vi.fn(
+    (_runId: RunId, operation: Effect.Effect<unknown, unknown>) => operation,
+  ),
+  // No parent is detaching this run, so its release waits on nothing.
+  throughDetach: () => Effect.void,
+};
 const SESSION = {
-  runs: {
-    track: trackRun,
-    getHandle: vi.fn((runId) =>
-      trackedHandle?.runId === runId ? trackedHandle : undefined,
-    ),
-    untrack: untrackRun,
-    // No generation is live unless a case says so.
-    isLive: () => mocks.runActive(),
-    // This fixture never parks a run at WAITING; the cases that do build a
-    // real registry of their own.
-    // The registry's local application of a durable detach, over the one
-    // handle this fixture tracks.
-    detachChildren: vi.fn((_parent: RunId, children: readonly RunId[]) => {
-      if (trackedHandle && children.includes(trackedHandle.runId))
-        trackedHandle.parentState.current = null;
-    }),
-    // No competing generation exists in this fixture; the lane is a passthrough.
-    launchRun: vi.fn(
-      (_runId: RunId, operation: Effect.Effect<unknown, unknown>) => operation,
-    ),
-    // No parent is detaching this run, so its release waits on nothing.
-    throughDetach: () => Effect.void,
-  },
+  runs: sessionRuns,
   readView: () => Effect.succeed({ runs: persistedRuns }),
   acquireClaims: (...args: unknown[]) => mocks.acquireClaims(...args),
   graph: {
@@ -327,10 +328,9 @@ describe('runAgent run ownership', () => {
         // The severed edge crossed the launch: the registry applied it to
         // every local record it names, and the run's lifecycle launches
         // parentless.
-        expect(SESSION.runs.detachChildren).toHaveBeenCalledWith(
-          PARENT_RUN_ID,
-          [RUN_ID],
-        );
+        expect(sessionRuns.detachChildren).toHaveBeenCalledWith(PARENT_RUN_ID, [
+          RUN_ID,
+        ]);
         expect(mocks.executeAgent).toHaveBeenCalledWith(
           expect.anything(),
           RUN_ID,

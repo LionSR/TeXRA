@@ -293,7 +293,6 @@ function agentRunTestLayer(init: LoopInit) {
           onModelChanged: vi.fn(),
           ...(init.onIdle ? { onIdle: init.onIdle } : {}),
         },
-        interrupt: vi.fn(),
       } satisfies AgentRunShape;
     }),
   );

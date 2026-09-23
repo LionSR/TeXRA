@@ -619,10 +619,13 @@ const resumeToolUse = Effect.fn('resumeToolUse')(function* (
       // A recovered child's continuous driver holds the claim already; a
       // standalone resume takes it here.
       if (!options.turns) {
-        yield* Effect.acquireRelease(acquireResumedRunOwnership(
-          session,
-          identity.runId,
-        ), () => session.releaseRunLease(identity.runId));
+        yield* Effect.acquireRelease(
+          acquireResumedRunOwnership(session, identity.runId),
+          // A release finalizer cannot fail: a failed claim release is a
+          // defect on the scope's exit, never a swallowed error — the same
+          // `orDie` the registry's other claim releases use.
+          () => session.releaseRunLease(identity.runId).pipe(Effect.orDie),
+        );
       }
       const retrieved = yield* retrieveSessionResumeData(
         identity.runId,

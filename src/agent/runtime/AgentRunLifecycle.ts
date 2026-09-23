@@ -144,147 +144,151 @@ export const finalizeRunTerminal = Effect.fn('finalizeRunTerminal')(
     // either before this finalizer or after its row, never inside it.
     Effect.uninterruptible(finalizeRunTerminalBody(params)),
 );
-const finalizeRunTerminalBody = Effect.fn('finalizeRunTerminal.body')(function* (
-  params: FinalizeRunTerminalParams,
-): Effect.fn.Return<FinalizeRunTerminalResult | undefined, Error, Runs> {
-  const { session, handle } = params;
-  if (!handle.claimTerminalFinalize()) return undefined;
-  const runs = yield* Runs;
-  // Stop precedence, read once: a stop that reached the run before its own
-  // exit outranks the report the flow makes of that exit, on the stage here
-  // as on the row below, so no caller cross-checks the stop itself.
-  const stopped = params.stopped === true;
-  // Close the transcript stage before the drain, not after it: `stage.end`
-  // queues one more publication, and a terminal row that called itself the
-  // post-drain fact while the run's last queued fact was still unsettled
-  // would say COMPLETED over a transcript closure that rolled back. What the
-  // stage carries is the run's own report, since the drain's verdict is not
-  // knowable until the publication this queues has settled; the `run.end` row
-  // is where that verdict lands.
-  if (params.stage) {
-    const stage = params.stage;
-    const stageOutcome = stopped ? RUN_OUTCOME.CANCELLED : params.outcome;
-    yield* Effect.try({
-      try: () => stage.end(stageOutcome),
-      catch: ensureError,
-    }).pipe(
-      Effect.catch((stageErr) =>
-        Effect.sync(() => {
-          logger.warn('Failed to end parent stage', {
-            data: { agentIdentifier: handle.agentName, error: stageErr },
-          });
-        }),
+const finalizeRunTerminalBody = Effect.fn('finalizeRunTerminal.body')(
+  function* (
+    params: FinalizeRunTerminalParams,
+  ): Effect.fn.Return<FinalizeRunTerminalResult | undefined, Error, Runs> {
+    const { session, handle } = params;
+    if (!handle.claimTerminalFinalize()) return undefined;
+    const runs = yield* Runs;
+    // Stop precedence, read once: a stop that reached the run before its own
+    // exit outranks the report the flow makes of that exit, on the stage here
+    // as on the row below, so no caller cross-checks the stop itself.
+    const stopped = params.stopped === true;
+    // Close the transcript stage before the drain, not after it: `stage.end`
+    // queues one more publication, and a terminal row that called itself the
+    // post-drain fact while the run's last queued fact was still unsettled
+    // would say COMPLETED over a transcript closure that rolled back. What the
+    // stage carries is the run's own report, since the drain's verdict is not
+    // knowable until the publication this queues has settled; the `run.end` row
+    // is where that verdict lands.
+    if (params.stage) {
+      const stage = params.stage;
+      const stageOutcome = stopped ? RUN_OUTCOME.CANCELLED : params.outcome;
+      yield* Effect.try({
+        try: () => stage.end(stageOutcome),
+        catch: ensureError,
+      }).pipe(
+        Effect.catch((stageErr) =>
+          Effect.sync(() => {
+            logger.warn('Failed to end parent stage', {
+              data: { agentIdentifier: handle.agentName, error: stageErr },
+            });
+          }),
+        ),
+      );
+    }
+    // The `run.end` row is the run's post-drain fact, and this is the drain:
+    // settling the ordered publisher for this run, so a failure here rolled
+    // back facts the run had queued — the stage closure above included — and
+    // decides the outcome rather than being logged past. The run id keeps that
+    // decision this run's own: a sibling's rolled-back fact is that run's.
+    const drainFailure = yield* session.settlePublications(handle.runId).pipe(
+      Effect.mapError(
+        (cause) => new RunArtifactDrainError(handle.runId, cause),
       ),
+      Effect.as(undefined),
+      Effect.catch((failure) => Effect.succeed(failure)),
     );
-  }
-  // The `run.end` row is the run's post-drain fact, and this is the drain:
-  // settling the ordered publisher for this run, so a failure here rolled
-  // back facts the run had queued — the stage closure above included — and
-  // decides the outcome rather than being logged past. The run id keeps that
-  // decision this run's own: a sibling's rolled-back fact is that run's.
-  const drainFailure = yield* session.settlePublications(handle.runId).pipe(
-    Effect.mapError((cause) => new RunArtifactDrainError(handle.runId, cause)),
-    Effect.as(undefined),
-    Effect.catch((failure) => Effect.succeed(failure)),
-  );
-  if (drainFailure !== undefined)
-    logger.warn('Failed to persist the facts this run queued', {
-      data: { runId: handle.runId, error: drainFailure },
+    if (drainFailure !== undefined)
+      logger.warn('Failed to persist the facts this run queued', {
+        data: { runId: handle.runId, error: drainFailure },
+      });
+    // The exiting run's own report: `params.outcome` unless the drain rolled
+    // its facts back, which outranks however the flow itself ended.
+    const reported =
+      drainFailure === undefined ? params.outcome : RUN_OUTCOME.FAILED;
+    // A lost drain is marked as one on the row it decided: the in-process
+    // `RunArtifactDrainError` reaches only whoever awaits this run, so the
+    // marker is what tells every reader of the row that the run's queued facts
+    // are gone rather than that the model run failed.
+    const reportedError =
+      drainFailure === undefined
+        ? params.error
+        : {
+            kind: 'artifact-drain' as const,
+            message: toErrorMessage(drainFailure),
+          };
+    // The `run.end` row written below is the run's terminal fact, and the stop
+    // latch read above is not yet spent: the report is only the verdict for a
+    // run no stop reached.
+    const outcome = stopped ? RUN_OUTCOME.CANCELLED : reported;
+    // Error facts the run classified for an outcome that did not happen are not
+    // facts about this run. A lost drain is the exception: the queued facts are
+    // gone whichever outcome the row carries, so the marker rides a cancelled
+    // row too and its readers still see an attempt nothing may repeat.
+    const error =
+      drainFailure !== undefined || outcome === reported
+        ? reportedError
+        : undefined;
+    const output = params.output ?? emptyRunEndOutput(handle.category);
+    // Write the terminal row BEFORE untrack so the registry's terminal listener
+    // event never precedes it. The row carries the classified error `kind`
+    // (when any), the run usage totals (present once a round recorded usage,
+    // including on failures), and the flow's output.
+    const event: ResultEvent = {
+      type: 'run.end',
+      outcome,
+      runId: handle.runId,
+      ...(error ? { error } : {}),
+      ...(params.usage ? { usage: params.usage } : {}),
+      output,
+    };
+    const finalization = yield* finalizeRun(session, {
+      runId: handle.runId,
+      outcome,
+      error,
+      usage: params.usage,
+      output,
     });
-  // The exiting run's own report: `params.outcome` unless the drain rolled
-  // its facts back, which outranks however the flow itself ended.
-  const reported =
-    drainFailure === undefined ? params.outcome : RUN_OUTCOME.FAILED;
-  // A lost drain is marked as one on the row it decided: the in-process
-  // `RunArtifactDrainError` reaches only whoever awaits this run, so the
-  // marker is what tells every reader of the row that the run's queued facts
-  // are gone rather than that the model run failed.
-  const reportedError =
-    drainFailure === undefined
-      ? params.error
-      : {
-          kind: 'artifact-drain' as const,
-          message: toErrorMessage(drainFailure),
-        };
-  // The `run.end` row written below is the run's terminal fact, and the stop
-  // latch read above is not yet spent: the report is only the verdict for a
-  // run no stop reached.
-  const outcome = stopped ? RUN_OUTCOME.CANCELLED : reported;
-  // Error facts the run classified for an outcome that did not happen are not
-  // facts about this run. A lost drain is the exception: the queued facts are
-  // gone whichever outcome the row carries, so the marker rides a cancelled
-  // row too and its readers still see an attempt nothing may repeat.
-  const error =
-    drainFailure !== undefined || outcome === reported
-      ? reportedError
-      : undefined;
-  const output = params.output ?? emptyRunEndOutput(handle.category);
-  // Write the terminal row BEFORE untrack so the registry's terminal listener
-  // event never precedes it. The row carries the classified error `kind`
-  // (when any), the run usage totals (present once a round recorded usage,
-  // including on failures), and the flow's output.
-  const event: ResultEvent = {
-    type: 'run.end',
-    outcome,
-    runId: handle.runId,
-    ...(error ? { error } : {}),
-    ...(params.usage ? { usage: params.usage } : {}),
-    output,
-  };
-  const finalization = yield* finalizeRun(session, {
-    runId: handle.runId,
-    outcome,
-    error,
-    usage: params.usage,
-    output,
-  });
-  if (!finalization.ok) {
-    logger.warn('Failed to finalize durable run state', {
-      data: {
-        agentIdentifier: handle.agentName,
-        runId: handle.runId,
-        outcomePersisted: finalization.outcomePersisted,
-        error: finalization.error,
+    if (!finalization.ok) {
+      logger.warn('Failed to finalize durable run state', {
+        data: {
+          agentIdentifier: handle.agentName,
+          runId: handle.runId,
+          outcomePersisted: finalization.outcomePersisted,
+          error: finalization.error,
+        },
+      });
+    }
+    if (params.deliver) {
+      const deliver = params.deliver;
+      yield* Effect.try({
+        try: () => deliver(outcome),
+        catch: ensureError,
+      }).pipe(
+        Effect.catch((deliveryError) =>
+          Effect.sync(() => {
+            logger.warn('Terminal delivery hook failed', {
+              data: { agentIdentifier: handle.agentName, error: deliveryError },
+            });
+          }),
+        ),
+      );
+    }
+    // The run has produced its canonical terminal result. Guard the cleanup so
+    // a throw from untrack's listeners or a run-status host emit cannot
+    // escape past an already-settled result.
+    yield* Effect.try({
+      try: () => {
+        // Only this handle's registration: a run that started again is the
+        // successor's, and a late terminal of the generation it replaced must
+        // not untrack it.
+        runs.untrackIfCurrent(handle);
       },
-    });
-  }
-  if (params.deliver) {
-    const deliver = params.deliver;
-    yield* Effect.try({
-      try: () => deliver(outcome),
       catch: ensureError,
     }).pipe(
-      Effect.catch((deliveryError) =>
+      Effect.catch((cleanupErr) =>
         Effect.sync(() => {
-          logger.warn('Terminal delivery hook failed', {
-            data: { agentIdentifier: handle.agentName, error: deliveryError },
+          logger.warn('Post-terminal cleanup threw', {
+            data: { agentIdentifier: handle.agentName, error: cleanupErr },
           });
         }),
       ),
     );
-  }
-  // The run has produced its canonical terminal result. Guard the cleanup so
-  // a throw from untrack's listeners or a run-status host emit cannot
-  // escape past an already-settled result.
-  yield* Effect.try({
-    try: () => {
-      // Only this handle's registration: a run that started again is the
-      // successor's, and a late terminal of the generation it replaced must
-      // not untrack it.
-      runs.untrackIfCurrent(handle);
-    },
-    catch: ensureError,
-  }).pipe(
-    Effect.catch((cleanupErr) =>
-      Effect.sync(() => {
-        logger.warn('Post-terminal cleanup threw', {
-          data: { agentIdentifier: handle.agentName, error: cleanupErr },
-        });
-      }),
-    ),
-  );
-  return { event };
-});
+    return { event };
+  },
+);
 
 /** Failures finalizeFailedRun already logged, published, and wrapped; the
  *  outer catch rethrows these untouched instead of finalizing them again. */
@@ -602,9 +606,10 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
         // The run's stop is its fiber's interruption, and this is its
         // verdict: complete the owned terminal result before cleanup while
         // retaining interruption.
-        finalizeTerminal({ outcome: RUN_OUTCOME.CANCELLED, stopped: true }).pipe(
-          Effect.orDie,
-        ),
+        finalizeTerminal({
+          outcome: RUN_OUTCOME.CANCELLED,
+          stopped: true,
+        }).pipe(Effect.orDie),
       ),
       Effect.ensuring(
         Effect.gen(function* () {
