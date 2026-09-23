@@ -32,7 +32,6 @@ import {
 import type { Runs } from '@agent/runtime/runRegistry';
 import { ToolCall, type ToolCallShape } from '@agent/runtime/ToolCall';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
-import { createLog } from '@logger/logUtils';
 import type { AgentResume } from '@platform/interfaces';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type {

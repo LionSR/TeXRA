@@ -380,9 +380,9 @@ export const withShortModelName = Effect.fn('withShortModelName')(function* (
     yield* getPreferShortModelNames(globalState),
   );
   if (resolved !== config) {
-    log.debug(
+    yield* Effect.logDebug(
       `Using short model name for ${config.name}: ${config.fullName} → ${resolved.fullName}`,
-    );
+    ).pipe(withLogChannel(CHANNEL));
   }
   return resolved;
 });

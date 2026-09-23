@@ -19,7 +19,8 @@ import {
 } from '@agent/index/agentRegistry';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { registerAgentDirectoryRoots } from '@frontend/setup';
-import * as logger from '@logger/logUtils';
+import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
+import { setLogSink } from '@logger/logSink';
 import {
   AgentDirectories,
   AgentDirectoriesFailed,
@@ -31,6 +32,7 @@ import { FakeStateStore } from '@test/support/FakePlatform';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { REPO_ROOT } from '@test/support/repoScan';
+import { captureLogEntries } from '@test/support/logSinkCapture';
 import {
   nodePlatformLayer,
   unusedGlobalStorageFs,
@@ -323,7 +325,7 @@ describe('agent registry', () => {
   it.effect(
     'removes remote definitions even when the local rebuild fails',
     () => {
-      const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+      const logs = captureLogEntries();
       return Effect.gen(function* () {
         useAgentDirectories();
         yield* onGlobalStorage(refresh({ includeRemote: true }));
@@ -348,20 +350,22 @@ describe('agent registry', () => {
         expect(isRemoteAgent('orchestrator')).toBe(false);
         expect(yield* Fiber.join(invalidation)).toBeUndefined();
         expect(isRemoteAgent('orchestrator')).toBe(false);
-        expect(warn).toHaveBeenCalledWith(
-          'agentRegistry',
-          expect.stringContaining(
+        expect(
+          logs.has(
+            'WARN',
+            'agentRegistry',
             'Local agent catalog rebuild failed after sign-out',
           ),
-        );
+        ).toBe(true);
       }).pipe(
+        Effect.provide(effectDiagnosticsLayer('Info')),
         Effect.ensuring(
           Effect.gen(function* () {
             useAgentDirectories();
             yield* onGlobalStorage(refresh({ includeRemote: false })).pipe(
               Effect.orDie,
             );
-            warn.mockRestore();
+            setLogSink(null);
           }),
         ),
       );

@@ -8,7 +8,7 @@
 import { Effect, FileSystem, PlatformError } from 'effect';
 
 import { isNotADirectoryError } from '@common/errors';
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import {
   fileLocationDisplayPath,
   type DiffStats,
@@ -25,7 +25,7 @@ import { traceFileLineage } from './lineageMapping';
 import { ensureRoundData, type OutputState } from './outputState';
 import type { RoundFileMapping } from './types';
 
-const log = createLog('OutputDiffStats');
+const CHANNEL = 'OutputDiffStats';
 
 // ============================================================================
 // Helpers
@@ -55,22 +55,17 @@ function computeDiffStats(
     // An unreadable side of the pair yields no stats rather than failing the
     // round, but never silently: a missing file is expected on a historical
     // run and logged at debug, anything else at warn.
-    Effect.catch((err) =>
-      Effect.sync((): DiffStats => {
-        const message = `Failed to compute diff stats: ${toErrorMessage(err)}`;
-        // The reads fail as `PlatformError`s, whose `reason` carries the
-        // errno classification the raw Node error used to.
-        if (
-          err instanceof PlatformError.PlatformError &&
-          err.reason._tag === 'NotFound'
-        ) {
-          log.debug(message);
-        } else {
-          log.warn(message);
-        }
-        return {};
-      }),
-    ),
+    Effect.catch((err) => {
+      const message = `Failed to compute diff stats: ${toErrorMessage(err)}`;
+      // The reads fail as `PlatformError`s, whose `reason` carries the
+      // errno classification the raw Node error used to.
+      const notFound =
+        err instanceof PlatformError.PlatformError &&
+        err.reason._tag === 'NotFound';
+      return (
+        notFound ? Effect.logDebug(message) : Effect.logWarning(message)
+      ).pipe(withLogChannel(CHANNEL), Effect.as<DiffStats>({}));
+    }),
   );
 }
 

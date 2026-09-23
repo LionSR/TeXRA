@@ -8,6 +8,7 @@ import OpenAI from 'openai';
 
 import type { ApiKeyRouteCredential } from '@agent/runtime/modelRoutes';
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
+import { withLogChannel } from '@logger/effectLog';
 import { createLog } from '@logger/logUtils';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
@@ -16,7 +17,8 @@ import {
 } from '@utils/system/binaryResolver';
 import { withExtendedPath } from '@utils/system/platformPaths';
 
-const log = createLog('AudioUtils');
+const CHANNEL = 'AudioUtils';
+const log = createLog(CHANNEL);
 
 const RECORDINGS_DIR = 'recordings';
 
@@ -103,7 +105,7 @@ function watchRecorderExit(subprocess: Subprocess): Effect.Effect<void> {
     try: () => subprocess,
     catch: (cause) => cause,
   }).pipe(
-    Effect.match({
+    Effect.matchEffect({
       onSuccess: (result) => {
         // On Windows, kill('SIGTERM') acts as force-kill and result.signal
         // may be 'SIGTERM' or null depending on Node version.  Also treat
@@ -111,17 +113,19 @@ function watchRecorderExit(subprocess: Subprocess): Effect.Effect<void> {
         const intentional =
           result.signal === 'SIGTERM' || result.signal === 'SIGKILL';
         if (intentional) {
-          log.info('Recording stopped intentionally');
-        } else if (result.exitCode !== 0) {
-          log.error(`Sox process exited with code ${result.exitCode}`);
-        } else {
-          log.info('Recording process completed successfully');
+          return Effect.logInfo('Recording stopped intentionally');
         }
+        if (result.exitCode !== 0) {
+          return Effect.logError(
+            `Sox process exited with code ${result.exitCode}`,
+          );
+        }
+        return Effect.logInfo('Recording process completed successfully');
       },
-      onFailure: (cause) => {
-        log.error(`Sox process error: ${getSdkErrorMessage(cause)}`);
-      },
+      onFailure: (cause) =>
+        Effect.logError(`Sox process error: ${getSdkErrorMessage(cause)}`),
     }),
+    withLogChannel(CHANNEL),
     Effect.andThen(
       Ref.update(activeRecording, (current) =>
         current?.process === subprocess ? null : current,

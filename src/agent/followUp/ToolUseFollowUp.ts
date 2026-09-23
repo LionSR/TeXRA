@@ -167,10 +167,12 @@ function admitFollowUp(
     const target = ownerSession.runs.getToolUseFollowUpTarget(runId);
 
     if (target.kind === 'no_session') {
-      logger.warn(
+      return Effect.logWarning(
         `No active session for follow-up on run ${runId}. Status: ${target.runStatus}`,
+      ).pipe(
+        withLogChannel(CHANNEL),
+        Effect.as<Admission>({ status: 'no_session' }),
       );
-      return Effect.succeed<Admission>({ status: 'no_session' });
     }
 
     if (target.kind === 'active') {

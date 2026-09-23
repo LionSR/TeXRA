@@ -12,7 +12,7 @@ import {
 import { helperCompletion, helperModel } from '@agent/runtime/helperModel';
 import { validateAgentYamlContent } from '@agent/runtime/agentLoad';
 import { renderAgentTemplateString } from '@agent/templates/agentTemplateRenderer';
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import type { AgentDirectories } from '@platform/interfaces';
 import type { LanguageModel } from '@platform/languageModel';
@@ -25,8 +25,6 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { isNonEmptyString } from '@utils/text/stringUtils';
 import { extractTextFromTag } from '@utils/text/xmlExtraction';
 import type { HttpClient } from 'effect/unstable/http';
-
-const log = createLog('AgentCreator');
 
 // ── Template parsing ────────────────────────────────────────
 //
@@ -61,7 +59,6 @@ type AgentPromptPair = z.infer<typeof ParsedCreatorYamlSchema>['prompts'];
 export interface CreatorConfig {
   workflow: AgentPromptPair;
   toolUse: AgentPromptPair;
-  retryPrompt: string;
   templates: {
     workflowSingle: string;
     toolUse: string;
@@ -104,7 +101,6 @@ export function buildCreatorConfig(files: CreatorTemplateFiles): CreatorConfig {
   return {
     workflow: wf.prompts,
     toolUse: tu.prompts,
-    retryPrompt: RETRY_PROMPT,
     templates: {
       workflowSingle: files.workflowSingle,
       toolUse: files.toolUseTpl,
@@ -431,7 +427,7 @@ const generateAgentYaml = Effect.fn('agentCreator.generateYaml')(function* (
     if (lastValidationError) {
       userMessage +=
         '\n' +
-        renderAgentTemplateString(config.retryPrompt, {
+        renderAgentTemplateString(RETRY_PROMPT, {
           VALIDATION_ERROR: lastValidationError,
         });
     }
@@ -454,20 +450,24 @@ const generateAgentYaml = Effect.fn('agentCreator.generateYaml')(function* (
       },
     });
 
-    log.info(`AI generation succeeded for ${blueprint.category} agent`);
+    yield* Effect.logInfo(
+      `AI generation succeeded for ${blueprint.category} agent`,
+    ).pipe(withLogChannel('AgentCreator'));
     return candidate;
   }).pipe(Effect.scoped);
 
   return yield* attempt.pipe(
     Effect.retry({ times: AI_GENERATION_ATTEMPTS - 1 }),
-    Effect.catch((error) => {
-      log.warn(
+    Effect.tapError((error) =>
+      Effect.logWarning(
         `AI generation failed, using template: ${toErrorMessage(error)}`,
-      );
-      // Route through the shared renderer so both the Settings "new from
-      // template" flow and this fallback produce byte-identical output for
-      // matching inputs.
-      return Effect.try({
+      ).pipe(withLogChannel('AgentCreator')),
+    ),
+    // Route through the shared renderer so both the Settings "new from
+    // template" flow and this fallback produce byte-identical output for
+    // matching inputs.
+    Effect.catch(() =>
+      Effect.try({
         try: () =>
           ui.renderTemplate(blueprint.fallbackTemplate, blueprint.fallbackVars),
         catch: (cause) =>
@@ -476,8 +476,8 @@ const generateAgentYaml = Effect.fn('agentCreator.generateYaml')(function* (
             message: 'The fallback agent template could not be rendered.',
             cause,
           }),
-      });
-    }),
+      }),
+    ),
   );
 });
 

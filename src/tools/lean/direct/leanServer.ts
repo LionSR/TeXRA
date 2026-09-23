@@ -43,7 +43,6 @@ import {
 } from 'effect/unstable/process';
 
 import { withLogChannel } from '@logger/effectLog';
-import { info, warn } from '@logger/logUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { DiagnosticSeverity } from '@utils/diagnostics/diagnosticFormatting';
 import {
@@ -253,10 +252,14 @@ const make = ({
       handle.stderr.pipe(
         Stream.decodeText(),
         Stream.runForEach((chunk) =>
-          Ref.update(stderrTail, (tail) => {
-            warn(LOG_CHANNEL, `[${root}] ${chunk.trimEnd()}`);
-            return (tail + chunk).slice(-STDERR_TAIL_LIMIT);
-          }),
+          Effect.logWarning(`[${root}] ${chunk.trimEnd()}`).pipe(
+            withLogChannel(LOG_CHANNEL),
+            Effect.andThen(
+              Ref.update(stderrTail, (tail) =>
+                (tail + chunk).slice(-STDERR_TAIL_LIMIT),
+              ),
+            ),
+          ),
         ),
         Effect.catch((error) =>
           Effect.logDebug(`[${root}] stderr ended: ${error.message}`).pipe(
@@ -317,10 +320,9 @@ const make = ({
       Effect.gen(function* () {
         const end = describeEnd(yield* Effect.result(handle.exitCode));
         const tail = (yield* Ref.get(stderrTail)).slice(-1000);
-        info(
-          LOG_CHANNEL,
+        yield* Effect.logInfo(
           `lake env lean --server ended (${end.message ?? 'exit code 0'}) at ${root}${tail ? `\n${tail}` : ''}`,
-        );
+        ).pipe(withLogChannel(LOG_CHANNEL));
         roster.update(id, { status: end.status, errorMessage: end.message });
         yield* abandonFiles;
         yield* rpc.close(end.message ?? 'Lean server stopped');
@@ -377,7 +379,9 @@ const make = ({
 
     const shutdown = yield* Effect.cached(
       Effect.gen(function* () {
-        info(LOG_CHANNEL, `Stopping Lean server at ${root}`);
+        yield* Effect.logInfo(`Stopping Lean server at ${root}`).pipe(
+          withLogChannel(LOG_CHANNEL),
+        );
         yield* rpc.request('shutdown').pipe(
           Effect.timeoutOrElse({
             duration: SHUTDOWN_TIMEOUT,

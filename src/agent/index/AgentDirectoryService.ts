@@ -134,19 +134,24 @@ export class AgentDirectoryService {
           Effect.andThen(() =>
             globalStorageFs.resolve(CUSTOM_AGENTS_STORAGE_DIR),
           ),
-          Effect.catch((cause) => {
-            this.log.error('Failed to create default custom agents directory', {
-              data: cause,
-            });
-            return Effect.fail(
-              new AgentDirectoriesFailed({
-                source: 'custom',
-                message:
-                  'Unable to create custom agents directory. Please check permissions.',
-                cause,
-              }),
-            );
-          }),
+          Effect.catch((cause) =>
+            Effect.logError(
+              'Failed to create default custom agents directory',
+            ).pipe(
+              Effect.annotateLogs({ data: cause }),
+              withLogChannel(this.options.channel),
+              Effect.andThen(
+                Effect.fail(
+                  new AgentDirectoriesFailed({
+                    source: 'custom',
+                    message:
+                      'Unable to create custom agents directory. Please check permissions.',
+                    cause,
+                  }),
+                ),
+              ),
+            ),
+          ),
         );
       yield* Effect.logDebug(
         `Using default custom agents directory: ${defaultPath}`,

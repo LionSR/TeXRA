@@ -10,7 +10,6 @@ import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat'
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from '@latex/latexLogging';
 import type { ResponseTextConnector } from '@latex/texraResponseTextProcessing';
 import { withLogChannel } from '@logger/effectLog';
-import { createLog } from '@logger/logUtils';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import {
   LanguageModel,
@@ -26,8 +25,6 @@ const CASE_CONNECTORS: Record<string, string> = {
 
 /** Case B: what a connector call falls back to when the helper cannot answer. */
 const DEFAULT_CONNECTOR = CASE_CONNECTORS.B;
-
-const log = createLog(CHANNEL);
 
 function buildPrompt(str1: string, str2: string): string {
   return `Given three strings from a LaTeX document:
@@ -77,15 +74,17 @@ export function createAgentResponseTextConnector(
       Effect.scoped,
       Effect.catch((err) => {
         if (err instanceof HelperModelUnavailable) {
-          log.debug(`Skipping connector helper call: ${err.message}`);
-        } else {
-          const write =
-            classifyAgentError(err) === 'missing-api-key'
-              ? log.debug
-              : log.error;
-          write(`Error resolving text connector: ${getSdkErrorMessage(err)}`);
+          return Effect.logDebug(
+            `Skipping connector helper call: ${err.message}`,
+          ).pipe(withLogChannel(CHANNEL), Effect.as(DEFAULT_CONNECTOR));
         }
-        return Effect.succeed(DEFAULT_CONNECTOR);
+        const write =
+          classifyAgentError(err) === 'missing-api-key'
+            ? Effect.logDebug
+            : Effect.logError;
+        return write(
+          `Error resolving text connector: ${getSdkErrorMessage(err)}`,
+        ).pipe(withLogChannel(CHANNEL), Effect.as(DEFAULT_CONNECTOR));
       }),
     );
 }

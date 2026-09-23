@@ -63,7 +63,6 @@ const CONFIG: CreatorConfig = {
     systemPrompt: 'Create {{ AGENT_NAME }} for {{ DESCRIPTION }}.',
     userRequest: 'Tools={{ SELECTED_TOOLS }}; Groups={{ SELECTED_GROUPS }}.',
   },
-  retryPrompt: 'Retry: {{ VALIDATION_ERROR }}',
   templates: {
     workflowSingle: 'workflow fallback',
     toolUse: 'tool-use fallback',
@@ -252,7 +251,9 @@ describe('agent creator orchestration', () => {
         expect(fetchModel).toHaveBeenCalledTimes(2);
         expect(mocks.helperCompletion.mock.calls[1]?.[1]).toEqual(
           expect.objectContaining({
-            userPrompt: expect.stringContaining('Retry: missing prompts'),
+            userPrompt: expect.stringContaining(
+              'The previous attempt failed validation: missing prompts',
+            ),
           }),
         );
         expect(readFileSync(agentPath(), 'utf8')).toBe('valid: true');
