@@ -1,19 +1,9 @@
 /**
- * The one pure run-state fold. `RunLedger.load` runs it over a run's rows,
- * `appendBatch` runs it over the rows it just committed, and the trace
- * viewer's stepper (PR 3) runs it over the same rows up to a chosen commit.
- * Because the same function produces the state the loop saw when it appended
- * step k, "state at step k" and "resume would continue after step k" are the
- * same fact: replay along the flow, without re-executing anything.
- *
- * Pure in the sense that matters: no IO, no clock, no platform, no store
- * read, no synthetic id, no dependence on `Map` iteration order in any output
- * value. Every value it produces comes from a row. It applies no redaction:
- * display redaction is a later boundary, and a redacted fold produces a
- * conversation the provider rejects.
- *
- * A sibling of `sessionFold.ts`, never a section inside it: that fold
- * produces what people see, this one produces what the loop continues from.
+ * Pure run-state replay for ledger load, appendBatch, and the trace stepper:
+ * state at a commit is exactly the state resume continues from, without IO,
+ * clocks, platform reads, synthetic ids, or output-order dependence on Maps.
+ * Rows remain unredacted for provider history; display redaction is separate.
+ * sessionFold produces the view; this fold produces the loop's continuation.
  */
 import { Data, Result } from 'effect';
 
@@ -39,6 +29,7 @@ import {
   type PendingRetry,
   type RetryErrorInfo,
   type RunLoopPhase,
+  type RoundOutput,
   type SessionEvent,
   type SessionEventDraft,
   type SnapshotRuntime,
@@ -76,6 +67,7 @@ export type RunLedgerDraft = Extract<
       | 'tool.result'
       | 'model.retry'
       | 'flow.snapshot'
+      | 'output.produced'
       | 'tool.start'
       | 'tool.end'
       | 'stream.end'
@@ -189,6 +181,8 @@ export type RunState = RunRows & {
   /** Derived (D12): the priced usage stamped on every `response` row plus
    *  `tool.result` `add` operations. No snapshot carries it. */
   readonly usage: RunUsageTotals;
+  /** Complete output collection from the newest output.produced row. */
+  readonly roundOutputs: RoundOutput[];
   readonly flow: FlowState | null;
 };
 
@@ -264,6 +258,7 @@ export const freshRunState = (commit: CommitOrdinal): RunState => ({
   pendingIntents: byId([]),
   usage: EMPTY_RUN_USAGE_TOTALS,
   flow: null,
+  roundOutputs: [],
 });
 
 /** The recovery bindings the rows carry (R5): the `model.retry` permit's
@@ -478,6 +473,11 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
           state.rowsBeforeSnapshot + (verdict.rows.step === undefined ? 0 : 1),
         ...verdict.rows,
       });
+    }
+    case 'output.produced': {
+      if (!opened(current))
+        return refuse('out-of-order', 'output before opening snapshot', commit);
+      return Result.succeed({ ...current, commit, roundOutputs: row.rounds });
     }
     case 'flow.snapshot': {
       // Family state and the coordinates the loop owns, and nothing else: no
@@ -877,9 +877,9 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
  * incremental one, and the two are the same computation: that equality is
  * what the ledger test pins. `null` out means no ledger row has folded.
  *
- * Returns a typed inconsistency rather than throwing or defaulting: a
- * snapshot that disagrees with the rows below it is corruption, not a state
- * to degrade into.
+ * Returns a typed inconsistency rather than throwing or defaulting: a row
+ * the fold cannot apply is corruption, not a state to degrade into. A
+ * snapshot restates no row fact, so it cannot disagree with the rows.
  */
 export function foldRunState(
   state: RunState | null,

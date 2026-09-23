@@ -165,7 +165,9 @@ function workflowRunDetailGroups(
   }
   for (const [round] of [
     ...roundIndexedEntries(facts.outputFilesByRound),
-    ...roundIndexedEntries(facts.missingOutputsByRound),
+    ...roundIndexedEntries(facts.missingOutputsByRound).filter(
+      ([, missing]) => missing.length > 0,
+    ),
     ...roundIndexedEntries(facts.compileFailuresByRound),
   ]) {
     rounds.add(round);

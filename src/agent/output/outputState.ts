@@ -7,8 +7,8 @@
  * `OutputState.rounds` is the canonical live collection, keyed by round
  * index (`Map<number, RoundOutput>`). The reflection flow hydrates it from
  * the persisted `roundOutputs` array on startup via `roundsFromPersisted`
- * and projects it back to that array shape via `roundsToPersisted` before
- * each round is persisted.
+ * and projects it back to that array shape via `roundsToPersisted` for
+ * each durable `output.produced` row.
  */
 
 import type { AgentTrace } from '@agent/trace';
@@ -62,19 +62,9 @@ export function roundsFromPersisted(
   return new Map(rounds.map((round) => [round.round, round]));
 }
 
-/**
- * Project the live `rounds` map back to the persisted array shape, placing
- * each entry at its own `round` index (not insertion order) — some
- * consumers of the persisted shape (e.g. `getFilesForRound`) index it
- * positionally by round number, and a round can in principle be absent
- * without shifting the rounds after it.
- */
+/** The complete round collection, ordered by its explicit round key. */
 export function roundsToPersisted(state: OutputState): RoundOutput[] {
-  const result: RoundOutput[] = [];
-  for (const [round, data] of state.rounds) {
-    result[round] = data;
-  }
-  return result;
+  return [...state.rounds.values()].sort((a, b) => a.round - b.round);
 }
 
 export function ensureRoundData(
@@ -94,31 +84,13 @@ export function ensureRoundData(
   return data;
 }
 
-/**
- * One per-round field of every round the state holds, in the round-indexed
- * shape the run facts carry. Those facts are latest-only listing rows, so
- * each one must carry the run's whole map rather than the round just
- * finished: after a restart the cold fold keeps only the newest row.
- */
-function roundIndexedBy<T>(
-  state: OutputState,
-  pick: (data: RoundOutput) => T[],
-): RoundIndexed<T> {
-  return Object.fromEntries(
-    Array.from(state.rounds, ([round, data]) => [round, pick(data)]),
-  );
-}
-
+/** Output files keyed by round for the diff pipeline. */
 export function getOutputFilesByRound(
   state: OutputState,
 ): RoundIndexed<OutputFileInfo> {
-  return roundIndexedBy(state, (data) => data.outputs);
-}
-
-export function getCompileFailuresByRound(
-  state: OutputState,
-): RoundIndexed<CompileFailure> {
-  return roundIndexedBy(state, (data) => data.compileFailures);
+  return Object.fromEntries(
+    Array.from(state.rounds, ([round, data]) => [round, data.outputs]),
+  );
 }
 
 export function setCompileFailures(
@@ -129,37 +101,7 @@ export function setCompileFailures(
   ensureRoundData(state, round).compileFailures = failures;
 }
 
-/**
- * Record a round's missing outputs and publish the run's whole map. Every
- * producer of a missing-output observation goes through here (or through
- * {@link reportMissingOutputs}, which adds the transcript row), so the row
- * the session stores is always the run's current state.
- */
-export function publishMissingOutputs(
-  state: OutputState,
-  trace: AgentTrace,
-  round: number,
-  missing: string[],
-): void {
-  ensureRoundData(state, round).missingOutputs = missing;
-  trace.emit({
-    type: 'run.fact',
-    fact: {
-      key: 'missingOutputs',
-      filesByRound: roundIndexedBy(state, (data) => data.missingOutputs),
-    },
-  });
-}
-
-/**
- * One report, two artifacts: the human-facing transcript row and the
- * `missingOutputs` run fact always travel together, so the round map
- * and the transcript can never diverge.
- *
- * The `missingOutputs` domain row is the human-facing transcript log and is
- * deliberately distinct from the run fact: it carries only the round's
- * unmatched outputs and the XML file they were expected in.
- */
+/** Record missing outputs and their human-facing diagnostic. */
 export function reportMissingOutputs(
   state: OutputState,
   trace: AgentTrace,
@@ -175,5 +117,5 @@ export function reportMissingOutputs(
     text: `${formatResultCount(missing.length, 'output file')} missing`,
     data: { missing, xmlFile },
   });
-  publishMissingOutputs(state, trace, round, missing);
+  ensureRoundData(state, round).missingOutputs = missing;
 }

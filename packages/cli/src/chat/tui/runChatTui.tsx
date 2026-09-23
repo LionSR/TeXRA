@@ -68,6 +68,7 @@ import { registerBuiltinSlashCommands } from './commands/registerBuiltins';
 import { loadInputHistory } from './history/inputHistory';
 import { notify } from './notifications/terminalNotifier';
 import { announceForegroundApprovals } from './state/subscribeApprovals';
+import { subscribeCliCredentialChanges } from './hosts/cliProviderKeys';
 import { createTuiViewportController } from './render/tuiViewportController';
 import {
   activeRunId as activeRunIdSignal,
@@ -339,12 +340,12 @@ export async function runChat(
       session.runExitCode = CliExitCode.AgentError;
     },
   });
-  // Cosmetic, but "texra-local" (a local dev binary's own name) or a bare
-  // shell prompt in every tab makes a multi-session workflow hard to
-  // navigate. Keep the project name while surfacing live attention state.
+  // Cosmetic, but "texra-local" or a bare shell prompt in every tab makes a
+  // multi-session workflow hard to navigate: show project and attention state.
   const terminalTitleUpdates = installTerminalTitleUpdates(context.cwd);
   disposables.add(terminalTitleUpdates.dispose);
   disposables.add(announceForegroundApprovals());
+  disposables.add(subscribeCliCredentialChanges(runtime, runtimeSession.roots));
   let subscribedRuns = '';
   const syncTranscriptSubscriptions = (): void => {
     const ids = [...currentView().runs.keys()];

@@ -8,7 +8,7 @@ import {
   type ReviewIssueReport,
 } from '@agent/review/reviewIssues';
 import type { HostInteractions } from '@agent/runtime/HostInteractions';
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import { ToolError } from '@shared/schemas';
 import { executed } from '@tools/core/result';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -17,7 +17,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { defineTool } from './core/define';
 import { normalizeStructuredOutputSchema } from './structuredOutput';
 
-const log = createLog('ReportReviewIssueTool');
+const CHANNEL = 'ReportReviewIssueTool';
 
 const NormalizedReportReviewIssueSchema = normalizeStructuredOutputSchema(
   ReportReviewIssueInputSchema,
@@ -39,12 +39,13 @@ const report = Effect.fn('ReportReviewIssueTool.execute')(function* (
 
   const result = yield* Effect.try({
     try: () => sink(input),
-    catch: (error) => {
-      const detail = toErrorMessage(error);
-      log.error(`Failed to report review issue: ${detail}`);
-      return new ToolError(`Failed to report review issue: ${detail}`);
-    },
-  });
+    catch: (error) =>
+      new ToolError(`Failed to report review issue: ${toErrorMessage(error)}`),
+  }).pipe(
+    Effect.tapError((error) =>
+      Effect.logError(error.message).pipe(withLogChannel(CHANNEL)),
+    ),
+  );
   if (!result.accepted) {
     return executed(
       result.reason ?? 'The review issue was not accepted.',

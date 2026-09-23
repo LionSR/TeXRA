@@ -24,11 +24,7 @@ import type {
   MessageHost,
   PromptHost,
 } from '@hosts/uiHosts';
-import {
-  API_PROVIDERS,
-  invalidateApiKeyCache,
-  loadApiKeyStatusMap,
-} from '@model/apiProviders';
+import { API_PROVIDERS, loadApiKeyStatusMap } from '@model/apiProviders';
 import {
   modelOptionsFrom,
   readModelAvailabilityInputs,
@@ -195,6 +191,9 @@ export interface DesktopCredentialSettingsController {
   ): Effect.Effect<void, Error, ProcessServices>;
   refreshAfterProviderSettingChange(
     key: string,
+  ): Effect.Effect<void, Error, ProcessServices>;
+  refreshAfterProviderKeyChange(
+    provider: string,
   ): Effect.Effect<void, Error, ProcessServices>;
   refreshAuthDependentData(): Effect.Effect<void, Error, ProcessServices>;
   /** Also driven by the desktop welcome card, not just the Settings view. */
@@ -526,9 +525,14 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
     });
   }
 
-  private refreshAfterProviderKeyChange(provider: string) {
+  /**
+   * Repaint what depends on one provider's key. Run by the settings
+   * round-trip that wrote the key and by the window's `credentialChanged`
+   * subscriber, which covers every other writer (the setup agent's
+   * `unset_api_key`, another window).
+   */
+  refreshAfterProviderKeyChange(provider: string) {
     return Effect.gen({ self: this }, function* () {
-      invalidateApiKeyCache();
       const usageProvider = codingPlanForApiProvider(provider)?.usageProvider;
       if (usageProvider) this.subscriptionUsage.invalidate(usageProvider);
       yield* this.postProfileData();
@@ -586,17 +590,7 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
       (provider, error) =>
         `${provider.displayName} subscription preference update failed: ${toErrorMessage(error)}`,
       (provider) =>
-        Effect.gen({ self: this }, function* () {
-          const update = yield* provider.setPreferSubscription(
-            this.options.stores,
-            enabled,
-          );
-          if (update.effective !== enabled) {
-            yield* this.options.notifications.showWarningMessage(
-              `A more specific setting still keeps ${provider.displayName} subscription ${update.effective ? 'enabled' : 'disabled'}.`,
-            );
-          }
-        }),
+        provider.setPreferSubscription(this.options.stores, enabled),
     );
   }
 

@@ -10,5 +10,5 @@ Read the [balanced draft](guide_(draft).md) and the
 Plain prose foo](nowhere.md) is not a Markdown link.
 
 A backticked filename whose stem is a run-vocabulary namespace is a path, not a
-citation: `run.ts`, `context.ts` and `flow.md` are files, while `flow.step` and
-`tool.result` are rows the vocabulary declares.
+citation: `run.ts`, `context.ts`, `flow.md`, `output.xml` and `output.tex` are
+files, while `flow.step` and `tool.result` are rows the vocabulary declares.

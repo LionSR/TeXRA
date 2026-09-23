@@ -36,27 +36,21 @@ import type { LanguageModel } from '@platform/languageModel';
 import type { StorageFs, WorkspaceFs } from '@platform/rootedFs';
 import { hasDelegationTool } from '@shared/constants/delegationTools';
 import {
-  AgentRunStateSnapshotSchema,
   EMPTY_RUN_USAGE_TOTALS,
   RUN_OUTCOME,
   type JsonValue,
-  type NormalizedUsage,
   type RetryErrorInfo,
   type RunOutcome,
   type RunUsageTotals,
 } from '@shared/schemas';
 import { RunLedger } from '@shared/session/runLedger';
-import { freshRunState, type RunState } from '@shared/session/runStateFold';
+import type { RunState } from '@shared/session/runStateFold';
 import { goalOf, pauseGoal, setGoalSessionAutoApproval } from '@tools/goal';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 
 import { AgentRun } from '../run/AgentRun';
 import { compactIfNeeded } from '../run/compaction';
-import {
-  bindModel,
-  releaseBindingUploads,
-  type BoundModel,
-} from '../run/modelBinding';
+import { bindModel, releaseBindingUploads } from '../run/modelBinding';
 import { mediaInputParts, type InputPart } from '../run/mediaInput';
 import { toolDefinitionsFor } from '../run/tools';
 import { FollowUps, type ConsumedFollowUps } from '../FollowUps';
@@ -71,8 +65,13 @@ import {
   toolUseFlowState,
   type ToolUseFlowState,
 } from './rows';
-import { alreadyOpenedMessage, recordServedUsage } from './loopScaffold';
-import { recordHalt, runStopError } from './runExit';
+import {
+  alreadyOpenedMessage,
+  freshProgramState,
+  recordServedUsage,
+  usageSnapshot,
+} from './runProgram';
+import { exitOutcome, recordHalt, runStopError } from './runExit';
 import { dispatchPendingResponse, type TurnContext } from './toolUseDispatch';
 import type { HttpClient } from 'effect/unstable/http';
 import type { SessionHandle } from '../SessionHandle';
@@ -153,7 +152,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   let systemPrompt: string | undefined;
   let totalResponseTimeMs = 0;
   let response = '';
-  let lastError: RetryErrorInfo | undefined;
   // A `/compact` the host admitted: honoured at the next model boundary,
   // regardless of the threshold.
   let compactionRequested = false;
@@ -182,21 +180,10 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         : {}),
     };
   };
-  /**
-   * Every snapshot names the run's error fact, so the value `restore` reads
-   * back (`state.lastError`, the fold's runtime field) is the value the live
-   * loop holds: a failed turn resumes as failed, and a follow-up that
-   * recovers the run clears it for good.
-   */
   const snapshot = (
     state: RunState,
     patch: Omit<Parameters<typeof snapshotRow>[2], 'state'>,
-  ) =>
-    snapshotRow(runId, state, {
-      ...patch,
-      runtime: { lastError: lastError ?? null, ...patch.runtime },
-      state: flowState(state),
-    });
+  ) => snapshotRow(runId, state, { ...patch, state: flowState(state) });
 
   const publishTouchedFiles = (): void => {
     const paths = workspace.interactions.toSnapshot().edits.map((e) => e.path);
@@ -397,7 +384,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     if (userRequest) content.push({ kind: 'text', text: userRequest });
     userChannels[USER_VAR_MODEL] = bound.modelId;
     workspace = AgentWorkspaceState.create();
-    const openedAt = fresh(bound);
+    const openedAt = freshProgramState('toolUse', bound, run);
     const opened = yield* ledger.appendBatch(runId, null, [
       appendRow(runId, [{ role: 'user', content }]),
       snapshotRow(runId, openedAt, {
@@ -413,17 +400,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     return yield* commit(opened);
   });
 
-  /** The state a fresh run's opening snapshot is authored against. */
-  const fresh = (bound: BoundModel): RunState => ({
-    ...freshRunState(0),
-    family: 'toolUse',
-    modelId: bound.modelId,
-    modelCompatibilityKey: bound.compatibilityKey,
-    // The launch's own-API-key choice enters the ledger with the opening
-    // snapshot, so every later binding and every resume reads it back.
-    declinedRoutes: run.declinedRoutes,
-  });
-
   const restore = (state: RunState): void => {
     const flow = toolUseFlowState(state);
     if (flow === null) return;
@@ -436,7 +412,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         flow.stateSlices.runStateSnapshot.totalResponseTimeMs;
     }
     systemPrompt = flow.systemPrompt;
-    lastError = state.lastError ?? undefined;
     if (flow.structured !== undefined) run.structured.value = flow.structured;
     logger.debug('Resuming tool-use run from the ledger.');
   };
@@ -447,16 +422,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     readonly outcome: 'completed' | 'failed' | 'cancelled';
   };
   type LoopExit = { readonly state: RunState; readonly outcome: RunOutcome };
-  const usageSnapshot = (
-    state: RunState,
-    latestUsage: NormalizedUsage | null,
-  ) =>
-    AgentRunStateSnapshotSchema.parse({
-      totalRounds: state.round,
-      totalResponseTimeMs,
-      usageAccumulator: { totals: state.usage, latestUsage },
-    });
-
   const runTurn = Effect.fn('toolUse.turn')(function* (
     initial: RunState,
   ): Effect.fn.Return<
@@ -666,13 +631,12 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           stageOutcome = RUN_OUTCOME.CANCELLED;
           return { state, outcome: 'cancelled' };
         }
-        if (outcome.kind === 'failed') {
-          lastError = outcome.error;
-          return { state, outcome: 'failed' };
-        }
-        lastError = undefined;
+        if (outcome.kind === 'failed') return { state, outcome: 'failed' };
         totalResponseTimeMs += outcome.responseTimeMs;
-        yield* recordServedUsage(run, usageSnapshot(state, outcome.usage));
+        yield* recordServedUsage(
+          run,
+          usageSnapshot(state, state.round, totalResponseTimeMs, outcome.usage),
+        );
         if (outcome.text) response = outcome.text;
         if (state.pendingResponse !== null) continue;
         // A text-only response: the same policy the resume path replays.
@@ -720,14 +684,10 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
 
     let restoring = start.resume;
     for (;;) {
-      const parked =
-        state.phase === 'waiting' ||
-        state.phase === 'halted' ||
-        (state.phase === 'response.ready' &&
-          state.openAttempt === null &&
-          state.pendingResponse === null &&
-          state.step === 'waiting');
-      const afterError = lastError !== undefined;
+      const parked = state.phase === 'waiting' || state.phase === 'halted';
+      // The invoker commits the run's failure fact and the input that
+      // recovers the run clears it, so the fold is the one place to read it.
+      const afterError = state.lastError !== null;
       if (parked) {
         // A native child waits in this same run scope, just like its root.
         // Its delivery callback has already committed the preceding turn.
@@ -744,11 +704,10 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         }
         let batch: FollowUpBatch | null = null;
         if (batch === null) {
-          if (afterError) {
-            if (!isChild()) yield* pauseActiveGoal();
-          } else {
-            run.callbacks.onIdle?.(state);
-          }
+          if (afterError && !isChild()) yield* pauseActiveGoal();
+          // Every park is idle, a failed turn's included: a resume
+          // acknowledges at the first one.
+          run.callbacks.onIdle?.(state);
           if (run.toolPolicy.stopAfterCycle) {
             return finish(
               state,
@@ -786,7 +745,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         if (consumed.instruction !== undefined) {
           userChannels[USER_VAR_INSTRUCTION] = consumed.instruction;
         }
-        lastError = undefined;
       }
       restoring = false;
       const turn: TurnExit = yield* start.turns
@@ -852,8 +810,8 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     files: workspace.interactions.toSnapshot().edits.map((e) => e.path),
     usage: at?.usage ?? EMPTY_RUN_USAGE_TOTALS,
     structured: run.structured.value,
-    ...(lastError !== undefined && outcome === RUN_OUTCOME.FAILED
-      ? { error: lastError }
+    ...(at?.lastError != null && outcome === RUN_OUTCOME.FAILED
+      ? { error: at.lastError }
       : {}),
   });
 
@@ -863,7 +821,9 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
    * `onExit` rather than an `Effect.exit` followed by a masked block — an
    * external interrupt unwinds straight past `Effect.exit`, which left the
    * `halted` step unwritten and the follow-up lease held, so a same-process
-   * resume refused the run.
+   * resume refused the run. The release hangs off the halt write's own exit
+   * for the same reason: a failed `halted` append still detaches and frees
+   * the lease, as `recoverable`, since no terminal row landed.
    */
   const finalize = (exit: Exit.Exit<LoopExit, Error>) =>
     Effect.uninterruptible(
@@ -871,37 +831,28 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         // Every exit that ends the run writes its `halted` step; the state a
         // stop interrupted stays at the phase its rows left, so resume
         // continues it.
+        const outcome = exitOutcome(exit);
+        const state = Exit.isSuccess(exit)
+          ? exit.value.state
+          : yield* Ref.get(latest);
         // A tool-use step is stamped with the run state as folded.
-        const halt = recordHalt({ ledger, logger, runId }, (s) => s);
-        const release = (next: 'recoverable' | 'terminal') =>
-          Effect.sync(() => {
-            detach();
-            followUps.release(
-              next === 'recoverable' || runs.hasActiveChildren(runId)
-                ? 'recoverable'
-                : 'terminal',
-            );
-          });
-        // `recordHalt` fails when the ledger write does, so the release is
-        // an `ensuring` finalizer: a failed halt row must not keep the
-        // follow-up lease held for the rest of the process.
-        if (Exit.isSuccess(exit)) {
-          const outcome = exit.value.outcome;
-          return yield* halt(exit.value.state, outcome).pipe(
-            Effect.ensuring(
-              release(
-                outcome === RUN_OUTCOME.COMPLETED ? 'terminal' : 'recoverable',
-              ),
-            ),
-          );
-        }
-        const state = yield* Ref.get(latest);
-        yield* halt(
+        yield* recordHalt({ ledger, logger, runId }, (s) => s)(
           state,
-          Cause.hasInterrupts(exit.cause)
-            ? RUN_OUTCOME.CANCELLED
-            : RUN_OUTCOME.FAILED,
-        ).pipe(Effect.ensuring(release('recoverable')));
+          outcome,
+        ).pipe(
+          Effect.onExit((halted) =>
+            Effect.sync(() => {
+              detach();
+              followUps.release(
+                Exit.isSuccess(halted) &&
+                  outcome === RUN_OUTCOME.COMPLETED &&
+                  !runs.hasActiveChildren(runId)
+                  ? 'terminal'
+                  : 'recoverable',
+              );
+            }),
+          ),
+        );
       }),
     );
 

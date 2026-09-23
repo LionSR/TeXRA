@@ -75,10 +75,6 @@ export function loginStartMessage(args: CliLoginSlashArgs): string {
 /** Sign-in outcome copy shared by the subscription auth objects. */
 interface SubscriptionAuthCopy {
   readonly signedInEnabled: (accountLabel: string) => string;
-  readonly signedInOverrideDisabled: (
-    accountLabel: string,
-    target: string,
-  ) => string;
 }
 
 const SUBSCRIPTION_AUTH_COPY: Record<
@@ -101,12 +97,9 @@ const loginToSubscription = Effect.fn('loginToSubscription')(function* (
     writeProgress: (message) =>
       output.writeProgress(message, { copyable: true }),
   });
-  const update = yield* setCliSubscriptionPreference(stores, providerId, true);
-  const auth = SUBSCRIPTION_AUTH_COPY[providerId];
+  yield* setCliSubscriptionPreference(stores, providerId, true);
   output.appendOutcome(
-    update.effective
-      ? auth.signedInEnabled(account.label)
-      : auth.signedInOverrideDisabled(account.label, update.target),
+    SUBSCRIPTION_AUTH_COPY[providerId].signedInEnabled(account.label),
   );
 });
 

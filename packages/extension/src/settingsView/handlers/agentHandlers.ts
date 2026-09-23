@@ -64,7 +64,6 @@ export class AgentHandlers {
     ReturnType<typeof getAgentsByCategory>[number]
   >;
   readonly agentActions;
-  private readonly activeCustomAgentDeletions = new Set<string>();
 
   constructor(
     private readonly ctx: SettingsHandlerContext,
@@ -285,22 +284,10 @@ export class AgentHandlers {
   handleDeleteCustomAgent(
     data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.DELETE_CUSTOM_AGENT>,
   ) {
-    return Effect.suspend(() => {
-      if (this.activeCustomAgentDeletions.has(data.agentName)) {
-        return Effect.void;
-      }
-      this.activeCustomAgentDeletions.add(data.agentName);
-      return this.runAgentFileAction(
-        'deleteCustomAgent',
-        this.agentActions.deleteCustomAgent(data),
-      ).pipe(
-        Effect.ensuring(
-          Effect.sync(() => {
-            this.activeCustomAgentDeletions.delete(data.agentName);
-          }),
-        ),
-      );
-    });
+    return this.runAgentFileAction(
+      'deleteCustomAgent',
+      this.agentActions.deleteCustomAgent(data),
+    );
   }
 
   // ── Custom agent directory handlers ──
@@ -422,7 +409,12 @@ export class AgentHandlers {
         const target = yield* this.catalogController.getCustomPreset(
           data.presetId,
         );
-        if (!target) return;
+        if (!target) {
+          void vscode.window.showErrorMessage(
+            `Unknown custom team: ${data.presetId}`,
+          );
+          return;
+        }
 
         const confirmed = yield* vscodeUi.confirm(
           `Delete team "${target.name}"?`,

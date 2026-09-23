@@ -1149,7 +1149,7 @@ export class SessionHandle {
           (event.payload.step === 'waiting' ||
             event.payload.step === 'turn.begin'));
       if (!phaseMoved) return;
-      yield* this.runs.handleStatus(target.id);
+      this.runs.handleStatus(target.id);
     });
   }
 

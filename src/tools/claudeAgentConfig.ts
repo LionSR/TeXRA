@@ -8,7 +8,7 @@ import { Effect } from 'effect';
 import { execa } from 'execa';
 
 // Local imports
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import { exposeApiKey, lookupApiKey, apiKeyEnvName } from '@model/apiProviders';
 import type { StateReadFailed } from '@platform/interfaces';
 import type { StateStore } from '@platform/interfaces';
@@ -32,7 +32,7 @@ import { safeHomedir } from '@utils/system/platformPaths';
 // Local file imports
 import { createEnumStateGetter } from './support/enumConfig';
 
-const log = createLog('claudeAgent');
+const CHANNEL = 'claudeAgent';
 
 // ============================================================================
 // Model — defaults to Sonnet 5; users can override per-call or via workspace state
@@ -240,12 +240,11 @@ export const buildClaudeAgentEnv = Effect.fn('buildClaudeAgentEnv')(function* (
   //    letting it surface as an opaque "Invalid API key" from Claude Code.
   const secrets = yield* Secrets;
   const managed = yield* lookupApiKey(secrets, 'anthropic').pipe(
-    Effect.catchTag('SecretsFailed', (error) => {
-      log.warn(
+    Effect.catchTag('SecretsFailed', (error) =>
+      Effect.logWarning(
         `Failed to read the managed Anthropic API key: ${error.message}`,
-      );
-      return Effect.succeed(undefined);
-    }),
+      ).pipe(withLogChannel(CHANNEL), Effect.as(undefined)),
+    ),
   );
   if (managed) {
     env[apiKeyVar] = exposeApiKey(managed);

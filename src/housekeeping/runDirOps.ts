@@ -9,12 +9,16 @@ import { withLogChannel } from '@logger/effectLog';
 import { resolveRunStoragePath } from '@platform/defaults/workspaceStorage';
 import { StorageFs, WorkspaceFs } from '@platform/rootedFs';
 import type { RunId, FileOpResult } from '@shared/schemas';
-import { getCleanAgentName } from '@shared/schemas';
+import {
+  getCleanAgentName,
+  mergeRunDirAndWorkspaceResult,
+} from '@shared/schemas';
 import { copyDereferenced } from '@utils/files/fsDurability';
 import type { RootedFileSystem } from '@utils/files/rootedFileSystem';
 
 // Local file imports
 import { CHANNEL, HISTORY_DIR } from './constants';
+import { runPackMultiple, runPackSingle } from './pack';
 import { asErrorResult, generateTimestamp } from './utils';
 
 /**
@@ -41,7 +45,7 @@ const runDirExists = (storageFs: RootedFileSystem, runDirRelative: string) =>
  * filesystem, and the copy between them names only the two absolute paths
  * each root produced.
  */
-export const runPackRunDir = Effect.fn('housekeeping.runPackRunDir')(function* (
+const runPackRunDir = Effect.fn('housekeeping.runPackRunDir')(function* (
   runId: RunId,
   agent: string,
   model: string,
@@ -116,5 +120,33 @@ export const runCleanRunDir = Effect.fn('housekeeping.runCleanRunDir')(
       });
       return { status: 'success' } satisfies FileOpResult;
     }).pipe(Effect.catch(asErrorResult('Clean runDir')));
+  },
+);
+
+/**
+ * The Pack action both hosts run: the source document's own files (its PDF)
+ * are copied into `History/` and its build artifacts swept, together with
+ * any extra `outputFiles`; when a run is named, that run's storage is
+ * snapshotted beside them and the two results merged. The host only presents
+ * the result.
+ */
+export const packRunOutputs = Effect.fn('housekeeping.packRunOutputs')(
+  function* (request: {
+    readonly agent: string;
+    readonly model: string;
+    readonly inputFile: string;
+    readonly outputFiles: string[];
+    readonly runId?: RunId;
+  }) {
+    const { agent, model, inputFile, outputFiles, runId } = request;
+    const packWorkspace =
+      outputFiles.length > 0
+        ? runPackMultiple(model, inputFile, agent, outputFiles)
+        : runPackSingle(model, inputFile, agent);
+    if (!runId) return yield* packWorkspace;
+    return mergeRunDirAndWorkspaceResult(
+      yield* runPackRunDir(runId, agent, model, inputFile),
+      yield* packWorkspace,
+    );
   },
 );

@@ -11,7 +11,6 @@ import {
   type SubscriptionProviderId,
   type SubscriptionSignInPresenter,
 } from '@controllers/modelAccess/subscriptionProviders';
-import type { ConfigTarget } from '@platform/interfaces';
 import { Secrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { ACCOUNT_OUTCOME } from '@ui/copy/accountAuth';
@@ -81,18 +80,10 @@ function writeCliLoopbackSignInProgress(options: {
   });
 }
 
-type CliSubscriptionSignOutResult =
-  | {
-      readonly preferenceUpdate: {
-        readonly effective: boolean;
-        readonly target: ConfigTarget;
-      };
-      readonly preferenceError?: undefined;
-    }
-  | {
-      readonly preferenceUpdate?: undefined;
-      readonly preferenceError: string;
-    };
+/** A sign-out whose preference write failed carries the reason. */
+interface CliSubscriptionSignOutResult {
+  readonly preferenceError?: string;
+}
 
 /**
  * One subscription sign-in program for every OAuth provider: device-code when
@@ -153,9 +144,7 @@ export const signOutCliSubscription = Effect.fn(
       onFailure: (error): CliSubscriptionSignOutResult => ({
         preferenceError: toErrorMessage(error),
       }),
-      onSuccess: (preferenceUpdate): CliSubscriptionSignOutResult => ({
-        preferenceUpdate,
-      }),
+      onSuccess: (): CliSubscriptionSignOutResult => ({}),
     }),
   );
 });
@@ -166,13 +155,9 @@ export function subscriptionSignOutPreferenceMessage(
   result: CliSubscriptionSignOutResult,
 ): string {
   const { displayName, modelFamily } = subscriptionProvider(providerId);
-  const update = result.preferenceUpdate;
-  if (!update) {
-    return `${displayName} subscription preference could not be disabled: ${result.preferenceError}`;
-  }
-  return update.effective
-    ? `${displayName} subscription preference is still enabled because a more specific setting overrides ${update.target} config.`
-    : `${displayName} subscription disabled for ${modelFamily}.`;
+  return result.preferenceError === undefined
+    ? `${displayName} subscription disabled for ${modelFamily}.`
+    : `${displayName} subscription preference could not be disabled: ${result.preferenceError}`;
 }
 
 /**

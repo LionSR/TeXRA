@@ -122,3 +122,17 @@ boundary and its determinism guards; the external-process strategies
   than moving it. `effect-migration-baseline.json` is unchanged by that step:
   both `new AbortController(` rows are load-bearing (see 2.4).
 - No production path contains `implementations/flows`.
+
+## Reflection output implementation
+
+The output pipeline now lives in `src/agent/output/`. A complete
+`output.produced` round collection owns files, raw-output locations, compile
+failures and missing outputs. Runtime restoration and session listings fold
+that row; reflection snapshots no longer restate the collection. The three
+output-only `run.fact` arms and writers are retired. `SESSION_EVENT_FORMAT`
+is 11; no legacy reader or migration is introduced.
+
+The row is committed after output validation and before the next round or
+halted snapshot. Resuming an interrupted `output.pending` phase continues to
+reprocess the same raw artifacts, as before. The separate continuation cycle,
+raw-file byte offset and cancellation bridge remain unchanged.

@@ -82,9 +82,7 @@ function mockLoopbackSuccess(): void {
 }
 
 function mockPreferenceEnabled(): void {
-  mocks.setPreferCodexSubscription.mockReturnValue(
-    Effect.succeed({ effective: true, target: 'global' }),
-  );
+  mocks.setPreferCodexSubscription.mockReturnValue(Effect.void);
 }
 
 describe('signInWithSubscription (ChatGPT)', () => {
@@ -130,20 +128,6 @@ describe('signInWithSubscription (ChatGPT)', () => {
       'TestChannel',
       'ChatGPT sign-in failed',
       expect.any(Error),
-    );
-  });
-
-  it('warns when a more specific setting keeps subscription preference disabled', async () => {
-    mockLoopbackSuccess();
-    mocks.setPreferCodexSubscription.mockReturnValue(
-      Effect.succeed({ effective: false, target: 'global' }),
-    );
-
-    const signedIn = await signInWithChatGptSubscription('TestChannel');
-
-    expect(signedIn).toBe(false);
-    expect(mocks.showWarningMessage).toHaveBeenCalledWith(
-      'Signed in with ChatGPT as person@example.com, but a more specific setting kept the subscription preference disabled.',
     );
   });
 

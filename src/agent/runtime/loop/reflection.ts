@@ -40,36 +40,29 @@ import {
 
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { userRequestTemplateCount } from '@agent/index/agentYamlScanner';
-import {
-  compileFailuresOf,
-  runCompileCheck,
-} from '@agent/implementations/flows/reflection/output/compileCheck';
+import { compileFailuresOf, runCompileCheck } from '@agent/output/compileCheck';
 import {
   appendCompileFailureRoundContext,
   formatCompileFailureRoundContext,
-} from '@agent/implementations/flows/reflection/output/compileFailureRoundContext';
-import { LatexDiffManager } from '@agent/implementations/flows/reflection/output/LatexDiffManager';
-import { traceFileLineage } from '@agent/implementations/flows/reflection/output/lineageMapping';
-import { extractFilesFromXml } from '@agent/implementations/flows/reflection/output/outputFileExtraction';
-import { recoverOutputFailure } from '@agent/implementations/flows/reflection/output/outputOperations';
+} from '@agent/output/compileFailureRoundContext';
+import { LatexDiffManager } from '@agent/output/LatexDiffManager';
+import { traceFileLineage } from '@agent/output/lineageMapping';
+import { extractFilesFromXml } from '@agent/output/outputFileExtraction';
+import { recoverOutputFailure } from '@agent/output/outputOperations';
 import {
   createOutputState,
   ensureRoundData,
-  getCompileFailuresByRound,
   getOutputFilesByRound,
   roundsFromPersisted,
   roundsToPersisted,
   setCompileFailures,
   type OutputDependencies,
-} from '@agent/implementations/flows/reflection/output/outputState';
-import { checkExpectedOutputs } from '@agent/implementations/flows/reflection/output/outputValidation';
-import {
-  summarizeRound,
-  type RoundSummary,
-} from '@agent/implementations/flows/reflection/output/roundSummary';
-import { resolveBaseFilesForDiff } from '@agent/implementations/flows/reflection/output/snapshotResolution';
-import type { RoundFileMapping } from '@agent/implementations/flows/reflection/output/types';
-import { XmlOutputManager } from '@agent/implementations/flows/reflection/output/XmlOutputManager';
+} from '@agent/output/outputState';
+import { checkExpectedOutputs } from '@agent/output/outputValidation';
+import { summarizeRound, type RoundSummary } from '@agent/output/roundSummary';
+import { resolveBaseFilesForDiff } from '@agent/output/snapshotResolution';
+import type { RoundFileMapping } from '@agent/output/types';
+import { XmlOutputManager } from '@agent/output/XmlOutputManager';
 import {
   getSystemPromptWithRules,
   PromptBuilder,
@@ -86,7 +79,6 @@ import {
 import { deriveRunOutcome } from '@shared/runs/runStatus';
 import {
   AgentCategory,
-  AgentRunStateSnapshotSchema,
   EMPTY_RUN_USAGE_TOTALS,
   fileLocationDisplayPath,
   MESSAGE_TYPES,
@@ -96,7 +88,6 @@ import {
   type AgentFileLocation,
   type CompileResult,
   type FileLocation,
-  type NormalizedUsage,
   type RetryErrorInfo,
   type RoundOutput,
   type RunOutcome,
@@ -104,7 +95,7 @@ import {
   type RunUsageTotals,
 } from '@shared/schemas';
 import { RunLedger } from '@shared/session/runLedger';
-import { freshRunState, type RunState } from '@shared/session/runStateFold';
+import type { RunState } from '@shared/session/runStateFold';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
@@ -118,18 +109,22 @@ import { turnText } from '../run/turnText';
 import { ModelInvoker } from '../ModelInvoker';
 import {
   appendRow,
+  rowAggregate,
   NOT_RESUMABLE_MESSAGE,
   reflectionFlowState,
   reflectionSnapshotRow,
-  runtimeSnapshotRow,
   stepRow,
   type ReflectionFlowState,
   type ReflectionSnapshotPatch,
 } from './rows';
-import { alreadyOpenedMessage, recordServedUsage } from './loopScaffold';
-import { recordHalt, runStopError } from './runExit';
+import {
+  alreadyOpenedMessage,
+  freshProgramState,
+  recordServedUsage,
+  usageSnapshot,
+} from './runProgram';
+import { exitOutcome, recordHalt, runStopError } from './runExit';
 import type { HttpClient } from 'effect/unstable/http';
-import type { BoundModel } from '../run/modelBinding';
 
 // Reflection owns conversation limits and document completion, not the provider.
 /** Length for preview slices of tool output and responses. */
@@ -162,7 +157,6 @@ interface OutputExecResult {
   summary: RoundSummary;
   compileResult?: CompileResult;
   compiledArtifacts: RunStorageFileLocation[];
-  emitCompileFailures: boolean;
 }
 
 type RoundExit = {
@@ -276,10 +270,6 @@ export const runReflection = Effect.fn('reflection.run')(function* (
   const commit = (state: RunState) =>
     Ref.set(latest, state).pipe(Effect.as(state));
   let workspace = AgentWorkspaceState.create();
-  // The run's error fact, runtime-owned: every snapshot names it, so the
-  // value a listing or a resume reads (`runtime.lastError`) is the value the
-  // live loop holds, and a resumed run that retries clears it for good.
-  let lastError: RetryErrorInfo | undefined;
   /**
    * One forced-compaction recovery per round: a turn that overflowed the
    * context window is retried once against a compacted history, and a second
@@ -293,40 +283,23 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     workspaceSnapshot: AgentWorkspaceState.emptySnapshot(),
     outputLocation: null,
     runStateSnapshot: { totalRounds, totalResponseTimeMs: 0 },
-    roundOutputs: [],
     continueRounds: true,
     endTurn: false,
   };
   const flowState = (): ReflectionFlowState => ({
     ...flow,
     workspaceSnapshot: workspace.toSnapshot({ excludeAssemblyStrings: true }),
-    roundOutputs: roundsToPersisted(outputState),
   });
   const snapshot = (
     state: RunState,
     patch: Omit<ReflectionSnapshotPatch, 'state'>,
-  ) =>
-    reflectionSnapshotRow(runId, state, {
-      ...patch,
-      runtime: { lastError: lastError ?? null, ...patch.runtime },
-      state: flowState(),
-    });
+  ) => reflectionSnapshotRow(runId, state, { ...patch, state: flowState() });
   const coordinates = (state: RunState, continuationIndex?: number) => ({
     family: state.family,
     round: flow.currentRound,
     turn: state.turn,
     continuationIndex: continuationIndex ?? state.continuationIndex,
   });
-  const usageSnapshot = (
-    state: RunState,
-    latestUsage: NormalizedUsage | null,
-  ) =>
-    AgentRunStateSnapshotSchema.parse({
-      totalRounds: flow.currentRound,
-      totalResponseTimeMs: flow.runStateSnapshot.totalResponseTimeMs,
-      usageAccumulator: { totals: state.usage, latestUsage },
-    });
-
   /** Disabling rejection is an explicit acceptance decision. */
   const normalizeCompileRejectionPolicy = Effect.fn(function* () {
     if (
@@ -341,14 +314,16 @@ export const runReflection = Effect.fn('reflection.run')(function* (
   const terminalCompileRejection = (): boolean =>
     flow.unresolvedCompileRejection === true &&
     flow.currentRound + 1 >= flow.totalRounds;
-  const resolveOutcome = (): RunOutcome =>
+  // The run's failure fact is read from the fold: the invoker commits it and
+  // a delivered response or a new round clears it.
+  const resolveOutcome = (state: RunState): RunOutcome =>
     deriveRunOutcome({
-      failed: lastError !== undefined || terminalCompileRejection(),
+      failed: state.lastError !== null || terminalCompileRejection(),
       cancelled: false,
     });
   /** The round loop's single continue/finalize decision. */
-  const shouldContinueNextRound = (): boolean =>
-    lastError === undefined &&
+  const shouldContinueNextRound = (state: RunState): boolean =>
+    state.lastError === null &&
     flow.continueRounds &&
     flow.currentRound + 1 < flow.totalRounds;
 
@@ -357,22 +332,12 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     if (round === 0) {
       return config.inputFiles.map((f) => fileService.createLocation(f));
     }
-    const previous = flow.roundOutputs[round - 1];
+    const previous = outputState.rounds.get(round - 1);
     if (previous?.outputs.length) {
       return previous.outputs.map((o) => o.location);
     }
     return config.outputFiles.map((f) => fileService.createLocation(f));
   };
-
-  const fresh = (bound: BoundModel): RunState => ({
-    ...freshRunState(0),
-    family: 'reflection',
-    modelId: bound.modelId,
-    modelCompatibilityKey: bound.compatibilityKey,
-    // The launch's own-API-key choice enters the ledger with the opening
-    // snapshot, so every later binding and every resume reads it back.
-    declinedRoutes: run.declinedRoutes,
-  });
 
   // -------------------------------------------------------------- opening
   const openFresh = Effect.fn('reflection.open')(function* (): Effect.fn.Return<
@@ -390,15 +355,19 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     }
     const bound = yield* SynchronizedRef.get(run.model);
     const opened = yield* ledger.appendBatch(runId, null, [
-      reflectionSnapshotRow(runId, fresh(bound), {
-        phase: 'round.ready',
-        round: 0,
-        runtime: {
-          modelId: bound.modelId,
-          modelCompatibilityKey: bound.compatibilityKey,
+      reflectionSnapshotRow(
+        runId,
+        freshProgramState('reflection', bound, run),
+        {
+          phase: 'round.ready',
+          round: 0,
+          runtime: {
+            modelId: bound.modelId,
+            modelCompatibilityKey: bound.compatibilityKey,
+          },
+          state: flowState(),
         },
-        state: flowState(),
-      }),
+      ),
     ]);
     run.callbacks.onProgress?.({ kind: 'started' });
     return yield* commit(opened);
@@ -419,19 +388,13 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     // (rounds: 2 -> 1) takes effect on resume; a resumed run retries the
     // invocation its failure interrupted rather than failing again at once.
     flow = { ...persisted, totalRounds };
-    // The run's error fact resumes with it: the loop carries the durable
-    // `lastError` forward so the next snapshot restates it, and only a
-    // response that actually arrives clears it (below).
-    lastError = state.lastError ?? undefined;
     workspace = AgentWorkspaceState.fromSnapshot(persisted.workspaceSnapshot);
-    outputState.rounds = roundsFromPersisted(persisted.roundOutputs);
+    outputState.rounds = roundsFromPersisted(state.roundOutputs);
     // Mid-round, the raw output file holds the text every earlier response
     // cycle produced; the next connector and continuation prompt read its tail.
     if (
       persisted.outputLocation !== null &&
-      (state.phase === 'model.ready' ||
-        state.phase === 'model.submitted' ||
-        state.phase === 'response.ready')
+      (state.phase === 'model.ready' || state.phase === 'model.submitted')
     ) {
       const path = persisted.outputLocation.absolutePath;
       const content = yield* fs.readFile(path).pipe(
@@ -838,7 +801,6 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     let mapping: RoundFileMapping | undefined;
     let compileRoundResult: CompileResult | undefined;
     const compiledArtifacts: RunStorageFileLocation[] = [];
-    let emitCompileFailures = false;
     if (endTurn) {
       logger.debug(`Processing output for round ${round}`);
       yield* xmlManager
@@ -857,8 +819,6 @@ export const runReflection = Effect.fn('reflection.run')(function* (
           ...(yield* diffManager.handleLatexdiffOfOutput(round, mapping)),
         );
         yield* Effect.gen(function* () {
-          const hadCompileFailures =
-            (outputState.rounds.get(round)?.compileFailures.length ?? 0) > 0;
           const check = yield* runCompileCheck(
             {
               roots,
@@ -873,8 +833,6 @@ export const runReflection = Effect.fn('reflection.run')(function* (
           compiledArtifacts.push(...check.artifacts);
           const compileFailures = compileFailuresOf(check.compileResult);
           setCompileFailures(outputState, round, compileFailures);
-          emitCompileFailures =
-            compileFailures.length > 0 || hadCompileFailures;
         }).pipe(recoverWarn('Compile check'));
       }
     }
@@ -889,7 +847,6 @@ export const runReflection = Effect.fn('reflection.run')(function* (
       summary,
       compileResult: compileRoundResult,
       compiledArtifacts,
-      emitCompileFailures,
     };
   });
 
@@ -914,7 +871,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
             `Output fallback summary failed; output files may be dropped: ${toErrorMessage(summaryError)}`,
             { data: summaryError },
           );
-          return { fileInfos: [], filesToOpen: [] };
+          return { filesToOpen: [] };
         }),
       ),
     );
@@ -926,37 +883,17 @@ export const runReflection = Effect.fn('reflection.run')(function* (
       summary,
       compileResult: undefined,
       compiledArtifacts: [],
-      emitCompileFailures: false,
     };
   });
 
-  /** Publish the round's facts, open its files, and validate its outputs. */
-  const publishOutput = Effect.fn('reflection.publishOutput')(function* (
-    round: number,
-    outputLocation: AgentFileLocation,
+  /** Open produced files and apply the round's compile policy. */
+  const presentOutput = Effect.fn('reflection.presentOutput')(function* (
     endTurn: boolean,
     result: OutputExecResult,
   ) {
     const interactions = session.interactions;
     const { summary } = result;
     const compileFailures = compileFailuresOf(result.compileResult);
-    // Latest-only listing rows: each carries the run's whole round map.
-    const files = { ...getOutputFilesByRound(outputState) };
-    files[round] = summary.fileInfos;
-    logger.emit({
-      type: 'run.fact',
-      fact: { key: 'outputFiles', filesByRound: files },
-    });
-    if (result.emitCompileFailures) {
-      const failures = {
-        ...getCompileFailuresByRound(outputState),
-        [round]: compileFailures,
-      };
-      logger.emit({
-        type: 'run.fact',
-        fact: { key: 'compileFailures', filesByRound: failures },
-      });
-    }
     for (const location of summary.filesToOpen) {
       yield* interactions.emit('requestOpenFile', {
         location,
@@ -981,22 +918,6 @@ export const runReflection = Effect.fn('reflection.run')(function* (
           preserveFocus: true,
         });
       }
-    }
-    if (endTurn) {
-      yield* Effect.gen(function* () {
-        const validation = yield* checkExpectedOutputs(
-          outputState,
-          deps,
-          outputLocation,
-          round,
-        );
-        if (validation.missing.length > 0) {
-          yield* interactions.emit('requestShowInstruction', {
-            key: 'missingOutputsInfo',
-            message: 'Missing output files detected',
-          });
-        }
-      }).pipe(recoverWarn('Validate expected outputs'));
     }
     if (result.compileResult) {
       const compileFailureContext = (yield* getRejectOnCompileFailure())
@@ -1040,8 +961,35 @@ export const runReflection = Effect.fn('reflection.run')(function* (
           : fallbackOutput(round, location, ensureError(Cause.squash(cause))),
       ),
     );
-    yield* publishOutput(round, location, endTurn, result);
-    return state;
+    if (endTurn) {
+      yield* Effect.gen(function* () {
+        const validation = yield* checkExpectedOutputs(
+          outputState,
+          deps,
+          location,
+          round,
+        );
+        if (validation.missing.length > 0) {
+          yield* session.interactions.emit('requestShowInstruction', {
+            key: 'missingOutputsInfo',
+            message: 'Missing output files detected',
+          });
+        }
+      }).pipe(recoverWarn('Validate expected outputs'));
+    }
+    // The row owns completed outputs. Commit it before fallible presentation
+    // and policy reads; output.pending stays replayable until round end.
+    const produced = yield* commit(
+      yield* ledger.appendBatch(runId, state, [
+        {
+          type: 'output.produced',
+          aggregateId: rowAggregate(runId),
+          rounds: roundsToPersisted(outputState),
+        },
+      ]),
+    );
+    yield* presentOutput(endTurn, result);
+    return produced;
   });
 
   /** One round inside its trace stage: prompt, response cycles, output. */
@@ -1081,8 +1029,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
         if (state.phase === 'round.ready') state = yield* prepareRound(state);
         while (
           state.phase === 'model.ready' ||
-          state.phase === 'model.submitted' ||
-          state.phase === 'response.ready'
+          state.phase === 'model.submitted'
         ) {
           const unprocessed =
             state.openAttempt === null &&
@@ -1108,27 +1055,9 @@ export const runReflection = Effect.fn('reflection.run')(function* (
               return { state, kind: 'cancelled' } as const;
             }
             if (outcome.kind === 'failed') {
-              lastError = outcome.error;
-              // A failure the invoker's gate did not already commit (no
-              // retry was available) is committed here, so a listing and a
-              // resume read the run's error where the gate writes it.
-              if (state.lastError === null) {
-                state = yield* commit(
-                  yield* Effect.uninterruptible(
-                    ledger.appendBatch(runId, state, [
-                      runtimeSnapshotRow(runId, state, {
-                        lastError: outcome.error,
-                      }),
-                    ]),
-                  ),
-                );
-              }
               roundOutcome = RUN_OUTCOME.FAILED;
               return { state, kind: 'failed' } as const;
             }
-            // The retry succeeded: the run is no longer failed, and the next
-            // snapshot is what records that.
-            lastError = undefined;
             flow = {
               ...flow,
               runStateSnapshot: {
@@ -1138,7 +1067,15 @@ export const runReflection = Effect.fn('reflection.run')(function* (
                   outcome.responseTimeMs,
               },
             };
-            yield* recordServedUsage(run, usageSnapshot(state, outcome.usage));
+            yield* recordServedUsage(
+              run,
+              usageSnapshot(
+                state,
+                flow.currentRound,
+                flow.runStateSnapshot.totalResponseTimeMs,
+                outcome.usage,
+              ),
+            );
           }
           state = yield* processResponse(state);
         }
@@ -1214,10 +1151,13 @@ export const runReflection = Effect.fn('reflection.run')(function* (
       return yield* commit(
         yield* ledger.appendBatch(runId, current, [
           ...(closePrevious ? [stepRow(runId, ended, 'round.end')] : []),
+          // Entering a round admits a new attempt, so the run is no longer
+          // failed: a relaunched halted run moves past its recorded error.
           snapshot(current, {
             phase: 'round.ready',
             round: flow.currentRound,
             continuationIndex: 0,
+            runtime: { lastError: null },
           }),
         ]),
       );
@@ -1227,7 +1167,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
       roundEnded: boolean,
     ): Effect.fn.Return<LoopExit, Error> {
       yield* normalizeCompileRejectionPolicy();
-      const outcome = resolveOutcome();
+      const outcome = resolveOutcome(current);
       const state = yield* commit(
         yield* ledger.appendBatch(runId, current, [
           ...(roundEnded
@@ -1243,16 +1183,14 @@ export const runReflection = Effect.fn('reflection.run')(function* (
       if (state.phase === 'halted') {
         // A finished run launched again continues only if rounds remain
         // under the current configuration. The restored error fact does not
-        // decide this: relaunching is the admission of a new attempt, and it
-        // clears the error the way a consumed follow-up does in the tool-use
-        // loop, so the next snapshot no longer restates a failure the run has
-        // moved past.
+        // decide this: relaunching is the admission of a new attempt, and
+        // `enterRound` clears the error the way a consumed follow-up does in
+        // the tool-use loop.
         if (!(
           flow.continueRounds && flow.currentRound + 1 < flow.totalRounds
         )) {
-          return { state, outcome: resolveOutcome() } satisfies LoopExit;
+          return { state, outcome: resolveOutcome(state) } satisfies LoopExit;
         }
-        lastError = undefined;
         state = yield* enterRound(state, false);
       }
       // The configured total may have been lowered since the snapshot; the
@@ -1268,7 +1206,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
       if (exit.kind === 'failed') {
         return { state, outcome: RUN_OUTCOME.FAILED } satisfies LoopExit;
       }
-      if (!shouldContinueNextRound()) return yield* finish(state, true);
+      if (!shouldContinueNextRound(state)) return yield* finish(state, true);
       state = yield* enterRound(state, true);
     }
   });
@@ -1280,8 +1218,8 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     outcome,
     roundOutputs: roundsToPersisted(outputState),
     usage: at?.usage ?? EMPTY_RUN_USAGE_TOTALS,
-    ...(lastError !== undefined && outcome === RUN_OUTCOME.FAILED
-      ? { error: lastError }
+    ...(at?.lastError != null && outcome === RUN_OUTCOME.FAILED
+      ? { error: at.lastError }
       : {}),
   });
 
@@ -1295,15 +1233,13 @@ export const runReflection = Effect.fn('reflection.run')(function* (
   const finalize = (exit: Exit.Exit<LoopExit, Error>) =>
     Effect.uninterruptible(
       Effect.gen(function* () {
-        const halt = recordHalt({ ledger, logger, runId }, coordinates);
-        if (Exit.isSuccess(exit)) {
-          return yield* halt(exit.value.state, exit.value.outcome);
-        }
-        const state = yield* Ref.get(latest);
-        if (Cause.hasInterrupts(exit.cause)) {
-          return yield* halt(state, RUN_OUTCOME.CANCELLED);
-        }
-        yield* halt(state, RUN_OUTCOME.FAILED);
+        const state = Exit.isSuccess(exit)
+          ? exit.value.state
+          : yield* Ref.get(latest);
+        yield* recordHalt({ ledger, logger, runId }, coordinates)(
+          state,
+          exitOutcome(exit),
+        );
       }),
     );
 

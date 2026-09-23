@@ -805,8 +805,7 @@ const GIT_AUTHOR_READER = 'src/utils/system/gitAuthorEnv.ts';
 const GIT_WORKTREE_READER = 'src/utils/config/worktreeConfig.ts';
 const CODEX_CONFIG_READER = 'src/tools/codexConfig.ts';
 const CLAUDE_AGENT_CONFIG_READER = 'src/tools/claudeAgentConfig.ts';
-const WORKFLOW_COMPILE_READER =
-  'src/agent/implementations/flows/reflection/output/compileCheck.ts';
+const WORKFLOW_COMPILE_READER = 'src/agent/output/compileCheck.ts';
 const ROUTE_ENDPOINT_READER = 'src/agent/runtime/run/routeEndpoint.ts';
 const PROVIDER_CONFIG_READER = 'src/utils/config/providerConfig.ts';
 
@@ -1165,9 +1164,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
       'Generate a latexdiff between successive reflection rounds, not just against the original input.',
     category: 'latexdiff',
     slots: sameSlot('workspaceState'),
-    honoredBy: everyHost(
-      'src/agent/implementations/flows/reflection/output/LatexDiffManager.ts',
-    ),
+    honoredBy: everyHost('src/agent/output/LatexDiffManager.ts'),
     surfaces: { settingsView: 'latex' },
   }),
   surfacedSetting({

@@ -1,15 +1,16 @@
 /**
- * The exit protocol both run programs share: the `halted` step every ending
- * run writes, and the error a failed run hands its caller. The two loops own
- * different finalizers — the tool-use loop also releases its follow-up lease
- * and can exit `waiting`, which the reflection loop has no concept of — but
- * the halt row and the failure mapping are one protocol, written once here so
- * the two families cannot drift apart on what a halted run records.
+ * The exit protocol both run programs share: the outcome an exit records, the
+ * `halted` step every ending run writes, and the error a failed run hands its
+ * caller. The tool-use finalizer also detaches and releases its follow-up
+ * lease around the halt write, which the reflection loop has no lease for,
+ * but the outcome, the halt row and the failure mapping are one protocol,
+ * written once here so the two families cannot drift apart on what a halted
+ * run records.
  */
 
-import { Cause, Effect, Option, Result } from 'effect';
+import { Cause, Effect, Exit, Option, Result } from 'effect';
 import type { AgentTrace } from '@agent/trace';
-import type { RunId, RunOutcome } from '@shared/schemas';
+import { RUN_OUTCOME, type RunId, type RunOutcome } from '@shared/schemas';
 import { DatabaseWriteFailed } from '@shared/session/database';
 import { RunLedger, RunLedgerRefused } from '@shared/session/runLedger';
 import type { RunState } from '@shared/session/runStateFold';
@@ -56,6 +57,20 @@ function classifyHaltWriteCause(
 
   return { kind: 'die', defect: Cause.squash(cause) };
 }
+
+/**
+ * The outcome a run's exit records. Any interrupt in the cause is a stop,
+ * even when a finalizer then failed (`Interrupt` + `Die`): `runUntilStopped`
+ * already reports that run `CANCELLED` to its caller, so the row agrees.
+ */
+export const exitOutcome = (
+  exit: Exit.Exit<{ readonly outcome: RunOutcome }, unknown>,
+): RunOutcome => {
+  if (Exit.isSuccess(exit)) return exit.value.outcome;
+  return Cause.hasInterrupts(exit.cause)
+    ? RUN_OUTCOME.CANCELLED
+    : RUN_OUTCOME.FAILED;
+};
 
 /**
  * Appends the run's `halted` step for `outcome`. A run whose state never

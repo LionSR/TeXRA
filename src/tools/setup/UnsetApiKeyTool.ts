@@ -8,7 +8,6 @@ import {
   apiKeyEnvName,
   apiKeySecretName,
   hasUsableApiKey,
-  invalidateApiKeyCache,
   isApiProvider,
 } from '@model/apiProviders';
 import { Secrets } from '@platform/secrets';
@@ -17,7 +16,6 @@ import { ToolError } from '@shared/schemas';
 // Local file imports
 import { executed } from '@tools/core/result';
 import { defineTool } from '../core/define';
-import { SetupPlatform } from './platform';
 
 const UnsetApiKeyInputSchema = z.strictObject({
   provider: z
@@ -31,7 +29,6 @@ type UnsetApiKeyInput = z.infer<typeof UnsetApiKeyInputSchema>;
 const unsetApiKey = Effect.fn('UnsetApiKeyTool.execute')(function* (
   input: UnsetApiKeyInput,
 ) {
-  const platform = yield* SetupPlatform;
   const secrets = yield* Secrets;
   const provider = input.provider.trim();
   if (!isApiProvider(provider)) {
@@ -63,28 +60,9 @@ const unsetApiKey = Effect.fn('UnsetApiKeyTool.execute')(function* (
     );
   }
 
-  // Mirror the manual `texra.setApiKey` command ordering: drop the cached key
-  // lookups so models that just lost their credential stop appearing
-  // selectable, then refresh the status surfaces. The drop is a finalizer of
-  // the removal rather than the next statement: a removal the store committed
-  // under its uninterruptible region still exits as interrupted when this
-  // fiber was cancelled during it, and the next statement would never run
-  // over a credential that is already gone.
-  yield* Effect.ensuring(
-    secrets.delete(apiKeySecretName(provider)),
-    Effect.sync(invalidateApiKeyCache),
-  );
-  const commands = platform.commands;
-  if (commands) {
-    // Credential changes must remain successful when a host cannot refresh
-    // its status surfaces; the next ordinary refresh reconciles stale UI.
-    // `Effect.exit` per command keeps the settled-not-fail-fast semantics.
-    yield* Effect.forEach(
-      ['texra.refreshApiKeyStatus', 'texra.refreshAllOptions'],
-      (commandId) => Effect.exit(commands.invoke(commandId)),
-      { concurrency: 'unbounded', discard: true },
-    );
-  }
+  // The store drops the key cache and announces the change itself, so every
+  // host's credential surfaces repaint from its `credentialChanged` signal.
+  yield* secrets.delete(apiKeySecretName(provider));
 
   // A shell env var can shadow the deletion — flag that so the agent can
   // tell the user why the key still appears to exist after removal.

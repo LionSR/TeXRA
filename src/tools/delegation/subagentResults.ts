@@ -14,7 +14,6 @@ import { Effect, FileSystem } from 'effect';
 
 import { normalizeProviderError } from '@common/errors/sdkError/providerErrorFormat';
 import { withLogChannel } from '@logger/effectLog';
-import { createLog } from '@logger/logUtils';
 import {
   runStorageFilePath,
   type AttachedMemoryMiss,
@@ -294,7 +293,7 @@ const LARGE_CHANGE_RATIO = 0.4;
 const CHANNEL = 'subagentDiffs';
 // The boundary warn in `buildSubagentResult` predates the A4 file merge and
 // stays on its historical channel so log ingestion keyed on it keeps seeing it.
-const deliveryLog = createLog('subagentDelivery');
+const DELIVERY_CHANNEL = 'subagentDelivery';
 
 /**
  * Truncate diff text to a maximum number of lines.
@@ -434,15 +433,12 @@ export const buildSubagentResult = Effect.fn(
       runId,
       output.outputs,
     ).pipe(
-      Effect.catch((err) =>
-        Effect.sync(() => {
-          diffsUnavailable = toErrorMessage(err);
-          deliveryLog.warn(
-            `Diff computation failed for ${runId}: ${diffsUnavailable}`,
-          );
-          return undefined;
-        }),
-      ),
+      Effect.catch((err) => {
+        diffsUnavailable = toErrorMessage(err);
+        return Effect.logWarning(
+          `Diff computation failed for ${runId}: ${diffsUnavailable}`,
+        ).pipe(withLogChannel(DELIVERY_CHANNEL), Effect.as(undefined));
+      }),
     );
   }
 

@@ -235,7 +235,7 @@ export class RunRoster {
     return ids;
   }
 
-  // ----------------------------------------------------------------- parking
+  // ---------------------------------------------------------------- liveness
 
   /** Whether this process holds a live generation of the run. */
   isLive(runId: RunId): boolean {
@@ -441,9 +441,7 @@ export class RunRoster {
   // --------------------------------------------------------------- teardown
 
   /** Drop every local record at session disposal, refuse every step admitted
-   *  but not started, and wake the waiters on the runs that held a handle.
-   *  Parked fibers are interrupted where they wait: the session is gone, so no
-   *  terminal row of theirs is this process's to write. */
+   *  but not started, and wake the waiters on every run the roster tracked. */
   clear(disposal: Error): void {
     for (const refusal of this.waiting) {
       Deferred.doneUnsafe(refusal, Effect.fail(disposal));

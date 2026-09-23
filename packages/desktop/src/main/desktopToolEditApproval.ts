@@ -17,8 +17,10 @@ import type {
   ToolEditPreview,
   ToolEditPreviewContext,
 } from '@controllers/approval/ToolEditApprovalController';
+import { fromHost, hostFailure } from '@controllers/session/hostCallFailure';
 import { NotificationFailed, type DiffSource } from '@hosts/uiHosts';
 import type { ProcessRuntime } from '@platform/processRuntime';
+import type { HostRequestFailure } from '@shared/session/requestErrors';
 import type { BuildDisplayFn } from '@tools/approval/latexPreview';
 import { writeApprovalTempFiles } from '@tools/approval/tempFileManager';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
@@ -57,12 +59,6 @@ interface DesktopToolEditApprovalHostOptions {
   runtime: ProcessRuntime;
 }
 
-/** An Electron-side promise lifted as it is: the rejection reaches the
- *  controller's error report as the value it was thrown with, which is what
- *  the voided `await` handed over. */
-const fromHost = <A>(call: () => Promise<A>): Effect.Effect<A, unknown> =>
-  Effect.tryPromise({ try: call, catch: (error) => error });
-
 export class DesktopToolEditApprovalHost implements ToolEditApprovalHost {
   constructor(private readonly options: DesktopToolEditApprovalHostOptions) {}
 
@@ -77,9 +73,11 @@ export class DesktopToolEditApprovalHost implements ToolEditApprovalHost {
   stagePreview(
     request: ToolEditApprovalRequest,
     context: ToolEditPreviewContext,
-  ): Effect.Effect<ToolEditPreview, unknown> {
+  ): Effect.Effect<ToolEditPreview, HostRequestFailure> {
     const { ui } = this.options;
-    return fromHost(() => createTexraTempDir('texra-tool-edit-')).pipe(
+    return fromHost('approval.createTempDir', () =>
+      createTexraTempDir('texra-tool-edit-'),
+    ).pipe(
       Effect.flatMap((tempDir) =>
         writeApprovalTempFiles({
           directory: tempDir,
@@ -150,28 +148,34 @@ class DesktopToolEditPreview implements ToolEditPreview {
    * the Review tab was still reading the staged files. A failure here
    * reaches the `present` call the host runs, which reports it.
    */
-  present(): Effect.Effect<void, unknown> {
+  present(): Effect.Effect<void, HostRequestFailure> {
     return this.showDiff();
   }
 
-  showDiff(): Effect.Effect<void, unknown> {
-    return this.ui.openDiff(
-      { filePath: this.staged.originalPath },
-      { filePath: this.staged.proposedPath },
-      `Tool edit: ${this.context.relativePath}`,
-      this.context.requestId,
-    );
+  showDiff(): Effect.Effect<void, HostRequestFailure> {
+    return this.ui
+      .openDiff(
+        { filePath: this.staged.originalPath },
+        { filePath: this.staged.proposedPath },
+        `Tool edit: ${this.context.relativePath}`,
+        this.context.requestId,
+      )
+      .pipe(
+        Effect.mapError((cause) => hostFailure('approval.openDiff', cause)),
+      );
   }
 
-  openProposed(): Effect.Effect<void, unknown> {
+  openProposed(): Effect.Effect<void, HostRequestFailure> {
     // #12734's Effect-typed `openPath` reaches the controller as the program
     // it is: `ToolEditPreview` is no longer a Promise-shaped core port, so
     // the run this settled on is gone with the face that needed it.
     return this.ui.openPath(this.staged.proposedPath);
   }
 
-  readProposedContent(): Effect.Effect<string, unknown> {
-    return fromHost(() => readFile(this.staged.proposedPath, 'utf8'));
+  readProposedContent(): Effect.Effect<string, HostRequestFailure> {
+    return fromHost('approval.readProposed', () =>
+      readFile(this.staged.proposedPath, 'utf8'),
+    );
   }
 
   /**
@@ -179,15 +183,14 @@ class DesktopToolEditPreview implements ToolEditPreview {
    * names this request's preview, so a request settling while the user reads
    * another diff takes only its own off the Review workbench.
    */
-  dispose(): Effect.Effect<void, unknown> {
-    return this.ui
-      .closeDiff(this.context.requestId)
-      .pipe(
-        Effect.andThen(
-          fromHost(() =>
-            rm(this.staged.tempDir, { recursive: true, force: true }),
-          ),
+  dispose(): Effect.Effect<void, HostRequestFailure> {
+    return this.ui.closeDiff(this.context.requestId).pipe(
+      Effect.mapError((cause) => hostFailure('approval.closeDiff', cause)),
+      Effect.andThen(
+        fromHost('approval.removeTempDir', () =>
+          rm(this.staged.tempDir, { recursive: true, force: true }),
         ),
-      );
+      ),
+    );
   }
 }

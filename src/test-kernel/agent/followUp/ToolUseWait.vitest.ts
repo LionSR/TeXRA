@@ -43,7 +43,10 @@ import {
   type RetryErrorInfo,
   type RunId,
 } from '@shared/schemas';
-import type { SessionOpenError } from '@shared/session/database';
+import {
+  DatabaseWriteFailed,
+  type SessionOpenError,
+} from '@shared/session/database';
 import { RunLedger } from '@shared/session/runLedger';
 import type { RunState } from '@shared/session/runStateFold';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
@@ -227,6 +230,8 @@ interface LoopInit {
   /** The terminal structured-output tool, when the run has one. */
   readonly finalToolName?: string;
   readonly onIdle?: () => void;
+  /** The ledger the run writes through; the session's own by default. */
+  readonly ledger?: RunLedger['Service'];
   /** Host wiring that is live while the loop can accept an interrupt. */
   readonly attachment?: {
     attach(context: ToolUseFlowContext): void;
@@ -313,7 +318,9 @@ function loopProgram(init: LoopInit, requests: InvokeRequest[]) {
         }),
       ).pipe(
         Layer.provideMerge(agentRunTestLayer(init)),
-        Layer.provideMerge(Layer.succeed(RunLedger)(init.session.ledger)),
+        Layer.provideMerge(
+          Layer.succeed(RunLedger)(init.ledger ?? init.session.ledger),
+        ),
       ),
     ),
   );
@@ -441,6 +448,7 @@ const seedCommittedResponse = Effect.fn('test.seedCommittedResponse')(
       followUpIds: new Set(),
       usage: AgentRunStateSnapshotSchema.parse({}).usageAccumulator.totals,
       flow: null,
+      roundOutputs: [],
     };
     const opened = yield* ledger.appendBatch(runId, null, [
       appendRow(runId, [
@@ -650,6 +658,37 @@ describe('a parked root run', () => {
         expect(result.outcome).toBe(RUN_OUTCOME.COMPLETED);
         expect(requests).toHaveLength(1);
       }),
+  );
+
+  it.effect('releases its follow-up owner when the halt write fails', () =>
+    Effect.gen(function* () {
+      const session = quietSession();
+      const runId = startedRun(session);
+      const writeFailed = new DatabaseWriteFailed({
+        path: ':memory:',
+        cause: new Error('disk full'),
+      });
+      const { exit } = yield* runUntilSpent({
+        runId,
+        session,
+        stopAfterCycle: true,
+        script: [textTurn('done')],
+        ledger: {
+          ...session.ledger,
+          appendBatch: (id, state, drafts) =>
+            drafts.some(
+              (draft) =>
+                draft.type === 'flow.step' && draft.payload.step === 'halted',
+            )
+              ? Effect.fail(writeFailed)
+              : session.ledger.appendBatch(id, state, drafts),
+        },
+      });
+
+      // The failure stays loud, and the next owner can still claim the run.
+      expect(Exit.isFailure(exit)).toBe(true);
+      expect(session.followUps.hasLiveOwner(runId)).toBe(false);
+    }),
   );
 
   it.effect('stops a one-cycle child instead of parking it as waiting', () =>

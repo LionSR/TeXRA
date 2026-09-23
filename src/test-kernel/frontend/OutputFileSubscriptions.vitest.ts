@@ -125,12 +125,15 @@ async function emitOutputFiles(
 ): Promise<void> {
   session.publish([
     {
-      type: 'run.fact',
+      type: 'output.produced',
       aggregateId: qualifyAggregateId('run', runId),
-      fact: {
-        key: 'outputFiles',
-        filesByRound: {
-          1: [
+      rounds: [
+        {
+          round: 1,
+          rawOutput: null,
+          compileFailures: [],
+          missingOutputs: [],
+          outputs: [
             {
               source: absolutePath,
               location: {
@@ -144,7 +147,7 @@ async function emitOutputFiles(
             },
           ],
         },
-      },
+      ],
     },
   ]);
   await Effect.runPromise(session.settlePublications());
@@ -222,7 +225,7 @@ describe('output-file run fact frontend subscriptions', () => {
   });
 
   it.live(
-    'refreshes inline criticism only for live run facts while enabled',
+    'refreshes inline criticism only for live output rows while enabled',
     () =>
       Effect.gen(function* () {
         tempDir = `/tmp/texra-inline-criticism-${Date.now()}`;
