@@ -241,15 +241,6 @@ function accessModeSegment(access: UsageRoute | undefined): StatusBarSegment {
       };
 }
 
-function subscriptionProbeFailureSegment(): StatusBarSegment {
-  return {
-    text: 'subscription status unavailable',
-    compactText: 'sub unknown',
-    color: COLOR_WARNING,
-    compactPriority: STATUS_BAR_COMPACT_PRIORITY.accessMode,
-  };
-}
-
 function subscriptionQuotaSegment(
   snapshot: SubscriptionUsageSnapshot | undefined,
 ): StatusBarSegment | undefined {
@@ -310,35 +301,6 @@ function formatUsage(
   };
 }
 
-function locationSegment(
-  location: { readonly context?: string; readonly label: string } | undefined,
-): StatusBarSegment | undefined {
-  if (!location) return undefined;
-  const text = location.context
-    ? `${location.context} › ${location.label}`
-    : location.label;
-  return {
-    text,
-    compactText: location.context ?? location.label,
-    color: 'dim',
-    compactPriority: STATUS_BAR_COMPACT_PRIORITY.location,
-  };
-}
-
-// One status-bar slot carries the loop position this run is at, in the
-// coordinate its family counts (mirrors the SubagentList row's `flowLabel`).
-function flowSegment(
-  flow: RunView['flow'] | undefined,
-): StatusBarSegment | undefined {
-  const text = formatFlowPositionLabel(flowPosition(flow));
-  if (text === undefined) return undefined;
-  return {
-    text,
-    color: 'dim',
-    compactPriority: STATUS_BAR_COMPACT_PRIORITY.flow,
-  };
-}
-
 // Lower values are removed first when the left status group exceeds the row.
 const STATUS_BAR_COMPACT_PRIORITY = {
   activeSubagent: 20,
@@ -364,57 +326,6 @@ const STATUS_BAR_COMPACT_PRIORITY = {
   // the 2-row chrome budget on narrow terminals.
   bypassBadge: 85,
 } as const;
-
-function queuedFollowUpsCountSegment(
-  messages: readonly string[],
-): StatusBarSegment | undefined {
-  return messages.length > 0
-    ? {
-        text: `queued ${messages.length}`,
-        color: COLOR_WARNING,
-        compactPriority: STATUS_BAR_COMPACT_PRIORITY.queuedFollowUp,
-      }
-    : undefined;
-}
-
-function subagentsSegment(subagents: number): StatusBarSegment | undefined {
-  return subagents > 0
-    ? {
-        text: formatResultCount(subagents, 'agent'),
-        compactText: `${subagents} ${SUBAGENT.compactCountSuffix}`,
-        color: 'dim',
-        compactPriority: STATUS_BAR_COMPACT_PRIORITY.activeSubagent,
-      }
-    : undefined;
-}
-
-function runningSessionsSegment(
-  runningSessions: number,
-): StatusBarSegment | undefined {
-  return runningSessions > 0
-    ? {
-        text: `${runningSessions} active`,
-        compactText: `${runningSessions} ${RUNNING_SESSION.compactCountSuffix}`,
-        color: 'dim',
-        compactPriority: STATUS_BAR_COMPACT_PRIORITY.activeSubagent,
-      }
-    : undefined;
-}
-
-function pendingInteractionSegment({
-  depth,
-  kind = 'approval',
-}: {
-  readonly depth: number;
-  readonly kind?: ApprovalQueueStatusKind;
-}): StatusBarSegment | undefined {
-  if (depth <= 0) return undefined;
-  return {
-    text: formatResultCount(depth, kind),
-    color: COLOR_WARNING,
-    compactPriority: STATUS_BAR_COMPACT_PRIORITY.approvalDepth,
-  };
-}
 
 function statusBarSegmentWidth(segment: StatusBarSegment): number {
   return textDisplayWidth(segment.text) + (segment.badge ? 2 : 0);
@@ -814,18 +725,6 @@ function childListBindingsText(
   });
 }
 
-function rootActiveSegment(
-  input: StatusBarDisplayInput,
-): StatusBarSegment | undefined {
-  return input.ctrlCAction === 'stop root' && !isActivePhase(input.status)
-    ? {
-        text: 'root active',
-        color: COLOR_WARNING,
-        compactPriority: STATUS_BAR_COMPACT_PRIORITY.rootActive,
-      }
-    : undefined;
-}
-
 function approvalPolicySegment(
   policy: TexraApprovalPolicy | undefined,
 ): StatusBarSegment | undefined {
@@ -955,6 +854,7 @@ export function buildStatusBarDisplay(
     { text: STATUS_DIAMOND, color: COLOR_HINT, decorative: true },
   ];
   const turn = input.turn;
+  const queuedCount = input.queuedFollowUpMessages.length;
 
   // No run yet: a child row has no status column, the root keeps its slot.
   const statusLabel = input.statusLabel ?? (input.isChildRun ? '' : '-');
@@ -1017,7 +917,6 @@ export function buildStatusBarDisplay(
   if (input.transientNotice) {
     transientNoticeIndex = left.length;
     left.push({ text: input.transientNotice.text, color: COLOR_WARNING });
-    const queuedCount = input.queuedFollowUpMessages.length;
     if (input.transientNotice.kind === 'exit' && queuedCount > 0) {
       // Exiting drops queued follow-ups silently — warn before the user
       // confirms with the second Ctrl-C.
@@ -1029,25 +928,82 @@ export function buildStatusBarDisplay(
     }
   }
 
+  // One slot carries the loop position this run is at, in the coordinate its
+  // family counts (mirrors the SubagentList row's `flowLabel`).
+  const flowText = formatFlowPositionLabel(flowPosition(input.flow));
   left.push(
-    ...[
-      rootActiveSegment(input),
-      input.subscriptionProbeFailed
-        ? subscriptionProbeFailureSegment()
-        : accessModeSegment(input.modelAccess),
-      subscriptionQuotaSegment(input.subscriptionQuota),
-      approvalPolicySegment(input.approvalPolicy),
-      locationSegment(input.location),
-      flowSegment(input.flow),
-      formatUsage(input.contextState, input.usage),
-      queuedFollowUpsCountSegment(input.queuedFollowUpMessages),
-      subagentsSegment(input.subagents),
-      runningSessionsSegment(input.runningSessions),
-      pendingInteractionSegment({
-        depth: input.approvalDepth,
-        kind: input.approvalKind,
-      }),
-    ].filter(filterNotNullish),
+    ...(
+      [
+        input.ctrlCAction === 'stop root' && !isActivePhase(input.status)
+          ? {
+              text: 'root active',
+              color: COLOR_WARNING,
+              compactPriority: STATUS_BAR_COMPACT_PRIORITY.rootActive,
+            }
+          : undefined,
+        input.subscriptionProbeFailed
+          ? {
+              text: 'subscription status unavailable',
+              compactText: 'sub unknown',
+              color: COLOR_WARNING,
+              compactPriority: STATUS_BAR_COMPACT_PRIORITY.accessMode,
+            }
+          : accessModeSegment(input.modelAccess),
+        subscriptionQuotaSegment(input.subscriptionQuota),
+        approvalPolicySegment(input.approvalPolicy),
+        input.location
+          ? {
+              text: input.location.context
+                ? `${input.location.context} › ${input.location.label}`
+                : input.location.label,
+              compactText: input.location.context ?? input.location.label,
+              color: 'dim',
+              compactPriority: STATUS_BAR_COMPACT_PRIORITY.location,
+            }
+          : undefined,
+        flowText === undefined
+          ? undefined
+          : {
+              text: flowText,
+              color: 'dim',
+              compactPriority: STATUS_BAR_COMPACT_PRIORITY.flow,
+            },
+        formatUsage(input.contextState, input.usage),
+        queuedCount > 0
+          ? {
+              text: `queued ${queuedCount}`,
+              color: COLOR_WARNING,
+              compactPriority: STATUS_BAR_COMPACT_PRIORITY.queuedFollowUp,
+            }
+          : undefined,
+        input.subagents > 0
+          ? {
+              text: formatResultCount(input.subagents, 'agent'),
+              compactText: `${input.subagents} ${SUBAGENT.compactCountSuffix}`,
+              color: 'dim',
+              compactPriority: STATUS_BAR_COMPACT_PRIORITY.activeSubagent,
+            }
+          : undefined,
+        input.runningSessions > 0
+          ? {
+              text: `${input.runningSessions} active`,
+              compactText: `${input.runningSessions} ${RUNNING_SESSION.compactCountSuffix}`,
+              color: 'dim',
+              compactPriority: STATUS_BAR_COMPACT_PRIORITY.activeSubagent,
+            }
+          : undefined,
+        input.approvalDepth > 0
+          ? {
+              text: formatResultCount(
+                input.approvalDepth,
+                input.approvalKind ?? 'approval',
+              ),
+              color: COLOR_WARNING,
+              compactPriority: STATUS_BAR_COMPACT_PRIORITY.approvalDepth,
+            }
+          : undefined,
+      ] satisfies (StatusBarSegment | undefined)[]
+    ).filter(filterNotNullish),
   );
   for (const badge of BYPASS_BADGES) {
     if (input.bypass?.[badge.field]) {
