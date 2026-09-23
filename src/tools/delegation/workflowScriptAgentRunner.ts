@@ -849,8 +849,6 @@ export function createWorkflowScriptAgentRunner(
               approvalPromptsUnavailable:
                 parent.run.toolPolicy.approvalPromptsUnavailable,
               onApprovalPolicyDenial: parent.run.onApprovalPolicyDenial,
-              runtimeUnavailableTools:
-                parent.run.toolPolicy.runtimeUnavailableTools,
               // Live inherited bypass values, matching LLM delegation: each
               // approval follows the parent's corresponding bypass. The run's own
               // stream inherits from the orchestrator, so nested delegation remains

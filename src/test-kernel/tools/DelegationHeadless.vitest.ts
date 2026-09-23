@@ -167,7 +167,6 @@ function parentRunContext(
         stopAfterCycle,
         approvalPromptsUnavailable:
           overrides.approvalPromptsUnavailable ?? false,
-        runtimeUnavailableTools: [],
       },
     },
   };

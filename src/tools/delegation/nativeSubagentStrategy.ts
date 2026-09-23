@@ -48,7 +48,6 @@ export interface ChildRunLaunchOptions {
   readonly session: SessionHandle;
   readonly approvalPromptsUnavailable?: boolean;
   readonly onApprovalPolicyDenial?: () => void;
-  readonly runtimeUnavailableTools?: readonly string[];
   /** Caller cancellation for a durable in-band launch. */
   readonly signal?: AbortSignal;
   /** Fires with the resolved child run id — the caller inherits approvals onto it. */
@@ -196,7 +195,6 @@ export function createNativeSubagentStrategy(
             session: params.session,
             approvalPromptsUnavailable: params.approvalPromptsUnavailable,
             onApprovalPolicyDenial: params.onApprovalPolicyDenial,
-            runtimeUnavailableTools: params.runtimeUnavailableTools,
             onRunResolved: params.onRunResolved,
             onProgress: (update: Parameters<ChildRunPorts['notify']>[0]) =>
               ports.notify(update),

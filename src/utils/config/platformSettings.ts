@@ -28,10 +28,23 @@ function requireEntry(key: string) {
  * process is one host, so the composition root installs it once, beside
  * `initPlatform()`.
  */
-let processSettingHost: SettingHost = 'vscode';
+let installedHost: SettingHost | undefined;
 
 export function initProcessSettingHost(host: SettingHost): void {
-  processSettingHost = host;
+  installedHost = host;
+}
+
+/** Setting slots keep their extension layout until a root names the host. */
+const processSettingHost = (): SettingHost => installedHost ?? 'vscode';
+
+/**
+ * The same host in the tool registry's naming, for `unavailableHosts`, or
+ * `undefined` when no composition root named one (the agent package embedded
+ * in another process, a test). The tool resolver withholds every host-bound
+ * tool from such a process rather than guessing which host it is.
+ */
+export function processToolHost(): 'cli' | 'desktop' | 'extension' | undefined {
+  return installedHost === 'vscode' ? 'extension' : installedHost;
 }
 
 /**
@@ -48,7 +61,7 @@ export function readSettingFrom<T>(
   return readSetting(
     requireEntry(key),
     stores,
-    processSettingHost,
+    processSettingHost(),
   ) as Effect.Effect<T, StateReadFailed>;
 }
 
@@ -90,7 +103,7 @@ export function writeSettingTo(
     requireEntry(key),
     value,
     stores,
-    processSettingHost,
+    processSettingHost(),
     target,
   );
 }

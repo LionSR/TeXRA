@@ -19,7 +19,6 @@ import {
   type ManagedRuntime,
   type Path,
 } from 'effect';
-import type { ToolInjections } from '@agent/runtime/toolInjection';
 import type { AgentEngine } from '@agent/runtime/AgentEngine';
 import type { SupabaseAuth } from '@auth/SupabaseAuth';
 import type { ProcessIdentity } from '@shared/session/sessionEvents';
@@ -78,7 +77,6 @@ export type ProcessServices =
   | AgentDirectories
   | Lifecycle
   | SetupPlatform
-  | ToolInjections
   | AgentEngine
   | LeanLanguageServices
   | GitHubSubscriptions

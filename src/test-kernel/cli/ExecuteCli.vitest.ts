@@ -25,7 +25,6 @@ import {
   useTempDirs,
 } from '@test/support/tempDirPlatform';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
-import { getDefaultUnavailableToolNames } from '@tools/registry';
 
 const mocks = vi.hoisted(() => ({
   close: vi.fn(),
@@ -158,7 +157,6 @@ function toolUseConfig() {
 }
 
 /** Tools the CLI runtime hides by default during agent run. */
-const DEFAULT_RUNTIME_UNAVAILABLE_TOOLS = getDefaultUnavailableToolNames('cli');
 
 /** A run program's options with the session, runtime and lifecycle the
  *  wrapper below supplies. */
@@ -539,7 +537,6 @@ describe('executeCliRequest', () => {
         request,
         expect.objectContaining({
           approvalPromptsUnavailable: false,
-          runtimeUnavailableTools: DEFAULT_RUNTIME_UNAVAILABLE_TOOLS,
         }),
       );
     }),

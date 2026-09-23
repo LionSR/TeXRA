@@ -3,10 +3,7 @@ import { Effect } from 'effect';
 import { z } from 'zod';
 
 // Internal imports
-import type {
-  RuntimeTool as ITool,
-  RuntimeToolRegistry as IToolRegistry,
-} from '@agent/runtime/ToolServices';
+import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
 import { convertToolSchema } from '@agent/runtime/run/toolSchema';
 import {
   ToolError,
@@ -229,23 +226,4 @@ export function buildTerminalTool(
   }
 
   return new TerminalTool();
-}
-
-/**
- * Overlay run-scoped tools on a base registry without mutating it. Overlay
- * tools win name collisions, and later entries win collisions within the
- * overlay. Concurrent runs can therefore share `base` without seeing one
- * another's injected or structured-output tools.
- */
-export function buildOverlayToolRegistry(
-  base: IToolRegistry,
-  tools: readonly ITool[],
-): IToolRegistry {
-  const overlay = new Map(
-    tools.map((tool) => [tool.definition.name, tool] as const),
-  );
-  return {
-    get: (name) => overlay.get(name) ?? base.get(name),
-    has: (name) => overlay.has(name) || base.has(name),
-  };
 }

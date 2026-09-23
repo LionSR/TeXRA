@@ -547,7 +547,6 @@ async function launchWaitingChild(options: {
       logger: noopTrace,
       toolPolicy: {
         approvalPromptsUnavailable: false,
-        runtimeUnavailableTools: [],
       },
     },
   };
@@ -1108,7 +1107,6 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
             session,
             toolPolicy: {
               approvalPromptsUnavailable: false,
-              runtimeUnavailableTools: [],
             },
           },
         });

@@ -361,8 +361,6 @@ export interface SubagentRunOptions {
   approvalPromptsUnavailable?: boolean;
   /** Record that this run encountered an executable policy denial. */
   onApprovalPolicyDenial?: () => void;
-  /** Hide tools unavailable because the current host/runtime cannot support them. */
-  runtimeUnavailableTools?: readonly string[];
   /** Session owning this run's coordination state; run entry points require it. */
   session?: SessionHandle;
   /**
@@ -476,7 +474,6 @@ export function executeAgent(
       stopped: options.launchStopped,
       toolPolicy: {
         approvalPromptsUnavailable: options.approvalPromptsUnavailable,
-        runtimeUnavailableTools: options.runtimeUnavailableTools,
         stopAfterCycle: options.stopAfterCycle,
       },
     });
@@ -630,7 +627,6 @@ const resumeToolUseWithOwnedLease = Effect.fn('resumeToolUseWithOwnedLease')(
             session: runSession,
             toolPolicy: {
               approvalPromptsUnavailable: options.approvalPromptsUnavailable,
-              runtimeUnavailableTools: options.runtimeUnavailableTools,
             },
           });
           const { setting } = ctx;

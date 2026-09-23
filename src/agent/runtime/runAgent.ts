@@ -41,7 +41,6 @@ export interface RunAgentOptions extends Pick<
   | 'stopAfterCycle'
   | 'approvalPromptsUnavailable'
   | 'onApprovalPolicyDenial'
-  | 'runtimeUnavailableTools'
   | 'tools'
   | 'modelCompatibilityKey'
   | 'ownApiKeyFallback'
