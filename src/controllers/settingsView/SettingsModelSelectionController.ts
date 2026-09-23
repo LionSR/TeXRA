@@ -33,6 +33,7 @@ import {
 } from '@shared/settingsView/settingsViewMessages';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import {
+  isExpensiveModel,
   isFastFirstResponseModel,
   MODEL_SOURCE_ORDER,
 } from '@shared/constants/providers';
@@ -239,6 +240,7 @@ export class SettingsModelSelectionController<R = never> {
           contextWindow: option.context,
           cost: option.cost,
           isFast: isFastFirstResponseModel(config.inputPrice),
+          isExpensive: isExpensiveModel(config.outputPrice),
           availability: option.availability,
         };
 

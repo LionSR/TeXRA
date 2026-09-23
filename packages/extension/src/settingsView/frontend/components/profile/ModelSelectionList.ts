@@ -17,7 +17,6 @@ import {
   PROVIDER_DISPLAY_NAMES,
   MODEL_SOURCE_ORDER,
   EXPENSIVE_MODEL_HINT,
-  isExpensiveModel,
 } from '@shared/constants/providers';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
@@ -228,7 +227,7 @@ export class ModelSelectionList extends LitElement {
           }
           ${this.renderAvailabilityIcon(model, isLastEnabledModel)}
           ${
-            isExpensiveModel(model.provider, model.name)
+            model.isExpensive
               ? waIcon('triangle-exclamation', {
                   className: 'model-row-icon model-row-icon--warning',
                   label: EXPENSIVE_MODEL_HINT,

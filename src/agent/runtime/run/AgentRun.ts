@@ -209,6 +209,7 @@ export const agentRunLayer = (
         runtimeUnavailableTools: ctx.toolPolicy.runtimeUnavailableTools,
         toolInjections,
         stores: ctx.stores,
+        workspaceRoot: session.roots.workspace,
         delegationScope: ctx.delegationAgentScope ?? undefined,
       });
       const overlayTools: ITool[] = [];
