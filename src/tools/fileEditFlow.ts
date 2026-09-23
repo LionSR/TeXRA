@@ -298,7 +298,6 @@ export const applyApprovedFileEdit = Effect.fn('applyApprovedFileEdit')(
       status: 'executed',
       summary: presentation.summary,
       output,
-      userPatch: approval.userPatch,
       edits: [
         {
           path: displayPath,

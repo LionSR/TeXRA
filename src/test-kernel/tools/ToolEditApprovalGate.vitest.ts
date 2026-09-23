@@ -282,7 +282,6 @@ describe('Tool edit approval gating', () => {
 
       assert.strictEqual(write.mock.lastCall?.[1], 'reviewed content');
       assert.match(result.output ?? '', /User adjustments to doc\.txt/);
-      assert.ok(result.userPatch);
       assert.strictEqual(result.edits?.[0]?.path, 'doc.txt');
       assert.strictEqual(result.edits?.[0]?.startLine, 1);
     }),

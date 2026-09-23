@@ -79,7 +79,6 @@ export type ToolEditApprovalResult =
   | {
       readonly action: 'apply';
       readonly appliedContent: string;
-      readonly userPatch?: string;
       readonly lineChanges?: {
         readonly added: number;
         readonly removed: number;
@@ -331,9 +330,6 @@ function finalizeApprovalResult(
   }
 
   const { appliedContent } = result;
-  const userPatch =
-    result.userPatch ??
-    unifiedDiffText(request.proposedContent, appliedContent);
 
   // Compute startLine once here (convert 0-based to 1-based; null → line 1).
   const startLine =
@@ -341,7 +337,6 @@ function finalizeApprovalResult(
 
   return {
     ...result,
-    userPatch,
     lineChanges:
       result.lineChanges ??
       computeLineChangeSummary(request.originalContent, appliedContent),
