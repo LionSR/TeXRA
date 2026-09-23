@@ -175,6 +175,8 @@ import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';
 
 const moduleDirname = import.meta.dirname;
 const desktopMainDir = findDesktopMainDir(moduleDirname);
+const warnCredentialProbe = (message: string) =>
+  Effect.logWarning(message).pipe(withLogChannel('Setup Credentials'));
 
 /**
  * Maximum number of commits the renderer displays in the launcher banner.
@@ -1492,20 +1494,14 @@ function createWindow(options: {
     { postToRenderer: postToRendererIfAlive },
     {
       state: options.globalState,
-      // Single source of truth for "does the user have a usable credential",
-      // shared by every host so the gating can't drift between them. The
-      // probe reports failures synchronously; this program logs them.
-      hasCredential: () => {
-        const fails: string[] = [];
-        return hasUsableSetupCredential(
+      // One "usable credential" answer shared by every host, so the
+      // credential gating can't drift between them.
+      hasCredential: () =>
+        hasUsableSetupCredential(
           activeProject().session.roots,
           options.secrets,
-          (message) => fails.push(message),
-        ).pipe(
-          Effect.ensuring(Effect.forEach(fails, (m) => Effect.logWarning(m))),
-          withLogChannel('Setup Credentials'),
-        );
-      },
+          warnCredentialProbe,
+        ),
       // Launch the setup conversation when the user clicks "Run Setup" on the
       // setup card, mirroring the extension's `launchSetupAssistant` →
       // launch path: resolve a model the user's credentials can call,

@@ -122,20 +122,9 @@ export function hasAnyUsableSetupCredential(
   stores: SettingsStores,
   secrets: PlatformSecrets,
 ): Effect.Effect<boolean, never, LanguageModel> {
-  // The probe's failure hook is synchronous: it records each failure and the
-  // program logs them once the probe settles, whichever way it settles.
-  return Effect.suspend(() => {
-    const probeFailures: string[] = [];
-    return hasUsableSetupCredential(stores, secrets, (message) => {
-      probeFailures.push(message);
-    }).pipe(
-      Effect.ensuring(
-        Effect.forEach(probeFailures, (message) => Effect.logWarning(message), {
-          discard: true,
-        }).pipe(withLogChannel(CREDENTIAL_CHANNEL)),
-      ),
-    );
-  });
+  return hasUsableSetupCredential(stores, secrets, (message) =>
+    Effect.logWarning(message).pipe(withLogChannel(CREDENTIAL_CHANNEL)),
+  );
 }
 
 const ensureCredentialOrPrompt = Effect.fn('ensureCredentialOrPrompt')(

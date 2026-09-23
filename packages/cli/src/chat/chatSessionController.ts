@@ -1331,9 +1331,8 @@ export function createChatSessionController(
                 }),
                 onSuccess: (value) => ({ refused: undefined, value }),
               }),
-              // `match` recovers only the typed refusal; a collaborator that
-              // rejects defects. Read the defect the way `SessionBridge`
-              // answers `Internal`: logged, worded, the message handed back.
+              // `match` recovers only the typed refusal; a defect is read the
+              // way `SessionBridge` answers `Internal`: logged and worded.
               Effect.catchCause((cause) =>
                 Effect.gen(function* () {
                   if (Cause.hasInterruptsOnly(cause)) {

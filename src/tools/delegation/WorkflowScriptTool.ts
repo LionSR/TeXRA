@@ -590,12 +590,10 @@ function executeWorkflowScriptTool(
                       // its one user-facing result/error delivery.
                       ...(!stopAfterCycle && {
                         onLoopFailed: (error: unknown) =>
-                          Effect.sync(() =>
-                            childRun.logger.error(
-                              `Workflow script '${meta.name}' run loop failed after launch`,
-                              { data: error },
-                            ),
-                          ),
+                          Effect.sync(() => {
+                            const failed = `Workflow script '${meta.name}' run loop failed after launch`;
+                            childRun.logger.error(failed, { data: error });
+                          }),
                       }),
                     };
                   }),

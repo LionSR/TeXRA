@@ -8,7 +8,6 @@ import { z } from 'zod';
 // Local imports
 import { ToolCall } from '@agent/runtime/ToolCall';
 import { withLogChannel } from '@logger/effectLog';
-import { createLog } from '@logger/logUtils';
 import { API_PROVIDERS, lookupApiKeyOrigin } from '@model/apiProviders';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import { Secrets } from '@platform/secrets';
@@ -28,7 +27,7 @@ import { getChatGptSubscriptionStatus, SetupPlatform } from './platform';
 import { collectCoreSetupStatus, locateTool } from './toolProbing';
 
 const CHANNEL = 'Setup Credentials';
-const credentialLog = createLog('Setup Credentials');
+const CREDENTIAL_CHANNEL = 'Setup Credentials';
 
 const ProbeEnvironmentInputSchema = z
   .strictObject({})
@@ -77,7 +76,9 @@ const probe = Effect.fn('ProbeEnvironmentTool.execute')(function* () {
         ),
         { concurrency: 'unbounded' },
       ),
-      hasUsableSetupCredential(roots, secrets, credentialLog.warn),
+      hasUsableSetupCredential(roots, secrets, (message) =>
+        Effect.logWarning(message).pipe(withLogChannel(CREDENTIAL_CHANNEL)),
+      ),
       resolveGitHubTokenSource(secrets).pipe(
         // A store the host cannot read is not a token; say so in the log
         // rather than reporting "no token" as if it were an answer.

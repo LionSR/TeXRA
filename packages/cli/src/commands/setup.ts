@@ -58,15 +58,11 @@ export async function runSetup(context: CliContext): Promise<number> {
   const credentialed = await runtime.runPromise(
     Effect.gen(function* () {
       const services = yield* initCliPlatform({ ...context, quietLogs: true });
-      // The probe reports failures synchronously; this program logs them.
-      const fails: string[] = [];
       const hasCredential = yield* hasUsableSetupCredential(
         services,
         services.secrets,
-        (message) => fails.push(message),
-      ).pipe(
-        Effect.ensuring(Effect.forEach(fails, (m) => Effect.logWarning(m))),
-        withLogChannel(CREDENTIAL_CHANNEL),
+        (message) =>
+          Effect.logWarning(message).pipe(withLogChannel(CREDENTIAL_CHANNEL)),
       );
       if (hasCredential) return true;
       const { runCliOnboarding } = yield* Effect.promise(

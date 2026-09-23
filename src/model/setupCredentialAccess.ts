@@ -119,18 +119,14 @@ export function setupSubscriptionModel(
 export function hasUsableSetupCredential(
   stores: SettingsStores,
   secrets: PlatformSecrets,
-  onProbeFailure: (message: string) => void,
+  onProbeFailure: (message: string) => Effect.Effect<void>,
 ): Effect.Effect<boolean, never, LanguageModel> {
-  // The host reporters are synchronous log writers shared by the three hosts;
-  // the scan itself reports through an Effect.
-  const reportProbeFailure = (message: string) =>
-    Effect.sync(() => onProbeFailure(message));
   return Effect.gen(function* () {
     const subscriptionModel = yield* setupSubscriptionModel(
       stores,
-      reportProbeFailure,
+      onProbeFailure,
     );
     if (subscriptionModel !== null) return true;
-    return yield* hasAnyUsableProviderApiKey(secrets, reportProbeFailure);
+    return yield* hasAnyUsableProviderApiKey(secrets, onProbeFailure);
   });
 }

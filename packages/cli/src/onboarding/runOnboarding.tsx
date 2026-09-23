@@ -152,15 +152,11 @@ export const maybeRunCliOnboarding = Effect.fn('maybeRunCliOnboarding')(
       return NO_ONBOARDING_RESULT;
     }
     const { globalState } = services;
-    // The probe reports failures synchronously; this program logs them.
-    const fails: string[] = [];
     const hasCredential = yield* hasUsableSetupCredential(
       services,
       services.secrets,
-      (message) => fails.push(message),
-    ).pipe(
-      Effect.ensuring(Effect.forEach(fails, (m) => Effect.logWarning(m))),
-      withLogChannel(CREDENTIAL_CHANNEL),
+      (message) =>
+        Effect.logWarning(message).pipe(withLogChannel(CREDENTIAL_CHANNEL)),
     );
     // Route through the same funnel-transition planner the extension/desktop
     // hosts use, rather than a hand-copied precedence ladder. `selectSetupAgent`

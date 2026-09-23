@@ -40,7 +40,7 @@ describe('shared setup capabilities', () => {
         yield* hasUsableSetupCredential(
           hostStores(),
           hostStores().secrets,
-          () => {},
+          () => Effect.void,
         ),
       ).toBe(true);
       expect(yield* getSetupAuthStatus()).toEqual({

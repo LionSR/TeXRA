@@ -4,7 +4,7 @@ import { z } from 'zod';
 
 // Local imports
 import { ToolCall } from '@agent/runtime/ToolCall';
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import { Secrets } from '@platform/secrets';
 import { IMAGE_TOOL_LABEL } from '@shared/constants/latexToolchain';
@@ -16,7 +16,7 @@ import { defineTool } from '../core/define';
 import { SetupPlatform } from './platform';
 import { collectCoreSetupStatus, locateTool } from './toolProbing';
 
-const credentialLog = createLog('Setup Credentials');
+const CREDENTIAL_CHANNEL = 'Setup Credentials';
 
 const VerifySetupInputSchema = z.strictObject({
   tool: z
@@ -84,7 +84,9 @@ const verify = Effect.fn('VerifySetupTool.execute')(function* (
   const [core, hasUsableCredential] = yield* Effect.all(
     [
       collectCoreSetupStatus(platform),
-      hasUsableSetupCredential(roots, secrets, credentialLog.warn),
+      hasUsableSetupCredential(roots, secrets, (message) =>
+        Effect.logWarning(message).pipe(withLogChannel(CREDENTIAL_CHANNEL)),
+      ),
     ],
     { concurrency: 'unbounded' },
   );
