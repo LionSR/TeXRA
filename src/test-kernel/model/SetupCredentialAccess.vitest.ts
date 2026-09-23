@@ -60,7 +60,9 @@ const { hasUsableSetupCredential } =
 
 function hasCredential(): Promise<boolean> {
   return Effect.runPromise(
-    hasUsableSetupCredential(stores, secrets).pipe(
+    hasUsableSetupCredential(stores, secrets, (message) =>
+      Effect.logWarning(message),
+    ).pipe(
       // The subscription probes yield the `LanguageModel` service by type;
       // both are mocked, so the port is never read.
       Effect.provide(LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT)),

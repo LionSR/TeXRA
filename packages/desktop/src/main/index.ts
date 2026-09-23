@@ -175,8 +175,11 @@ import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';
 
 const moduleDirname = import.meta.dirname;
 const desktopMainDir = findDesktopMainDir(moduleDirname);
-const warnCredentialProbe = (message: string) =>
-  Effect.logWarning(message).pipe(withLogChannel('Setup Credentials'));
+const warnCredentialProbe = (message: string): Effect.Effect<void> =>
+  Effect.logWarning(message).pipe(
+    withLogChannel('Setup Credentials'),
+    Effect.catch(() => Effect.void),
+  );
 
 /**
  * Maximum number of commits the renderer displays in the launcher banner.
@@ -510,6 +513,19 @@ function createWindow(options: {
     });
     return result.response === 0;
   };
+  const confirmDialogEffect = (
+    options: Parameters<typeof confirmDialog>[0],
+  ): Effect.Effect<boolean, PromptFailed> =>
+    Effect.tryPromise({
+      try: () => confirmDialog(options),
+      catch: (cause) =>
+        new PromptFailed({
+          reason: 'host-unavailable',
+          member: 'confirm',
+          message: 'The desktop window would not show the dialog.',
+          cause,
+        }),
+    });
   /**
    * Sole owner of the native unavailable-member prompt. Both the main-view
    * launch path and settings path route here so wording and button labels
@@ -922,7 +938,7 @@ function createWindow(options: {
   > = {
     openPath: previewHost.openPath,
     confirmAcceptFile: (message) =>
-      confirmDialog({ message, confirmLabel: 'Replace file' }),
+      confirmDialogEffect({ message, confirmLabel: 'Replace file' }),
     chooseTeamAvailability: (unavailableNames) =>
       presentTeamAvailabilityPrompt(teamAvailabilityPrompt(unavailableNames)),
     signInForRemoteAgentCatalog,
@@ -1188,7 +1204,7 @@ function createWindow(options: {
     showInfoMessage,
     showErrorMessage,
     confirmAction: (message, confirmLabel) =>
-      confirmDialog({ message, confirmLabel }),
+      confirmDialogEffect({ message, confirmLabel }),
     openPath: previewHost.openPath,
     // Selection is the surface's: a settings jump asks the shown project's
     // surface to select the run, and reports a run the view no longer holds
@@ -1286,7 +1302,7 @@ function createWindow(options: {
       prompts: {
         promptText: (input) => promptController.request(input),
         confirm: ({ title, message }) =>
-          confirmDialog({ title, message, confirmLabel: 'Continue' }),
+          confirmDialogEffect({ title, message, confirmLabel: 'Continue' }),
         chooseTeamAvailability: presentTeamAvailabilityPrompt,
       },
       remoteCatalog: {
@@ -1567,7 +1583,7 @@ function createWindow(options: {
                   { replayWhenAttached: true },
                 );
                 return yield* Effect.fail(error);
-              }),
+              }).pipe(Effect.catch(() => Effect.void)),
             ),
           );
         }),
