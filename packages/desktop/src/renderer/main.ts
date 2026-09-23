@@ -406,8 +406,8 @@ function shellConversationTemplate(): TemplateResult {
   }
   const workspacePath = activeProjectRoot();
   // Names the button even when the ≤560px container query collapses it to the
-  // icon: the shadow button then has no visible text, so only `title` reaches
-  // its accessible name.
+  // icon: the shadow button then has no visible text, so only `aria-label`
+  // reaches its accessible name (the `<wa-tooltip>` shows it on hover).
   const environmentButtonLabel = `${workspaceName(workspacePath)} environment`;
   return html`
     <main class="shell-conversation" aria-label="Task conversation">

@@ -109,8 +109,9 @@ function entryTypeOf(entry: {
  * operational failure (`ELOOP`, `EACCES`) still propagates instead of reading
  * as "absent".
  *
- * This probe follows links, so a dangling or circular symlink reads as
- * absent, unlike the lstat-backed `entryExists` in `fsEntryExists.ts`. A
+ * This probe follows links, so a dangling symlink reads as absent (ENOENT)
+ * while a circular one raises ELOOP and propagates, unlike the lstat-backed
+ * `entryExists` in `fsEntryExists.ts`. A
  * caller asking whether a dependency, figure, bibliography or input *file* is
  * unusable wants the follow; a caller asking whether the path names an entry
  * wants `readLink` first and this as the fallback (see `existsAt` in

@@ -11,6 +11,8 @@ import type { SettingsStores } from '@shared/config/settingsAccess';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { inspectSettingFrom } from '@utils/config/platformSettings';
 
+const CHANNEL = 'ExecutionsTool';
+
 /**
  * Why the orchestrator may not kill a child run, or `undefined` when it may.
  *
@@ -32,7 +34,7 @@ export const orchestratorKillDenial = Effect.fn('orchestratorKillDenial')(
         `Killing subagents is denied: the stored "Allow orchestrator cancellation" ` +
         `setting (${GlobalStateKey.ALLOW_ORCHESTRATOR_KILL}) is invalid ` +
         `(${policy.cause}). Set it again in Settings > Multi-Agent.`;
-      yield* Effect.logWarning(denial).pipe(withLogChannel('ExecutionsTool'));
+      yield* Effect.logWarning(denial).pipe(withLogChannel(CHANNEL));
       return denial;
     }
     return policy.value
