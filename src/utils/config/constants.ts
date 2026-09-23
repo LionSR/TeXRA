@@ -41,7 +41,7 @@ export function setToolEnabled(
   store: StateStore,
 ) {
   return Effect.gen(function* () {
-    const set = new Set(yield* getDisabledToolIds(store));
+    const set = yield* getDisabledToolIds(store);
     if (enabled) {
       set.delete(toolId);
     } else {

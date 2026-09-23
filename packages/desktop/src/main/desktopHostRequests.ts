@@ -371,9 +371,7 @@ export function createDesktopHostRequests(
           fs.readFileString(file),
         ),
       showInfo: (message) => host.showInfoMessage(message),
-      // The refusal is the notice: the member fails with the `Rejected` the
-      // request answers with.
-      showError: (reason) => Effect.fail(new Rejected({ reason })),
+      showError: rejectRequestEffect,
       logError: (message, error) =>
         logger.error(message, { data: toLogData(error) }),
     },

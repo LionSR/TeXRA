@@ -166,9 +166,6 @@ class DesktopToolEditPreview implements ToolEditPreview {
   }
 
   openProposed(): Effect.Effect<void, HostRequestFailure> {
-    // #12734's Effect-typed `openPath` reaches the controller as the program
-    // it is: `ToolEditPreview` is no longer a Promise-shaped core port, so
-    // the run this settled on is gone with the face that needed it.
     return this.ui.openPath(this.staged.proposedPath);
   }
 
