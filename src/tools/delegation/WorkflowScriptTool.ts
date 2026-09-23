@@ -519,7 +519,6 @@ Durability: the journal is keyed by meta.name and the agent field within this se
                         workingDirectory,
                       }),
                     },
-                    meta.name,
                     {
                       category: runConfig.agentCategory,
                       checkpointId,

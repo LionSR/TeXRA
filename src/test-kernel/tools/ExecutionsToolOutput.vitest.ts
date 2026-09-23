@@ -199,7 +199,6 @@ function registerProcessRun(instruction: string) {
         instruction,
         agentCategory: AgentCategory.ToolUse,
       }),
-      'bash',
       { identity: { kind: 'process', tool: 'bash' } },
     );
     return runId;
@@ -222,7 +221,6 @@ function registerWorkflowRun(name: string, model?: string) {
         instruction: `Workflow script ${name}`,
         ...(model === undefined ? {} : { model }),
       },
-      name,
       { identity: { kind: 'multiAgentWorkflow', workflowName: name } },
     );
     if (model !== undefined) {
@@ -607,7 +605,6 @@ describe('ExecutionsTool /executions/{id}/output', () => {
             instruction: 'Check the proof.',
             agentCategory: AgentCategory.ToolUse,
           }),
-          'chat',
           { identity: { kind: 'agent', agent: 'chat' } },
         );
 

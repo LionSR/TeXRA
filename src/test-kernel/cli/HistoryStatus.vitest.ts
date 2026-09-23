@@ -98,7 +98,7 @@ async function seedSnapshot(
   family: 'toolUse' | 'reflection',
 ): Promise<void> {
   await Effect.runPromise(
-    registerRun(testDefaultSession(), id, config, agent, {
+    registerRun(testDefaultSession(), id, config, {
       identity: { kind: 'agent', agent },
     }),
   );

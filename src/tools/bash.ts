@@ -506,7 +506,6 @@ export class BashTool extends defineTool({
             session,
             runId,
             { name: 'bash', instruction: command },
-            'bash',
             {
               identity: { kind: 'process', tool: 'bash' },
               userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,

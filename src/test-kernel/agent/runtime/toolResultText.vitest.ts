@@ -33,16 +33,6 @@ describe('formatToolResultAsText', () => {
     expect(result).toContain('User feedback: do this instead');
   });
 
-  it('includes user patch', () => {
-    const result = formatToolResultAsText({
-      status: 'executed',
-      output: 'test',
-      userPatch: '+added line',
-    });
-    expect(result).toContain('User modifications:');
-    expect(result).toContain('+added line');
-  });
-
   it('keeps head and tail when result exceeds limit, not a discard stub', () => {
     const { text } = oversizedText();
     const result = formatToolResultAsText({

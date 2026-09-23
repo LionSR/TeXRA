@@ -16,7 +16,6 @@ import {
   aggregateTarget,
   RUN_OUTCOME,
   RUN_PHASE,
-  runIdentityName,
   type RunId,
   AgentCategory,
 } from '@shared/schemas';
@@ -58,18 +57,12 @@ const config = AgentConfigSchema.parse({
 const createRegisteredChildRun = Effect.fn('createRegisteredChildRun')(
   function* (...args: Parameters<typeof createChildRun>) {
     const [session, runId, parentRunId, options] = args;
-    yield* registerRun(
-      session,
-      runId,
-      options.config,
-      runIdentityName(options.run),
-      {
-        identity: options.run,
-        userFollowUpSupport: options.userFollowUpSupport,
-        parentRunId,
-        description: options.description,
-      },
-    );
+    yield* registerRun(session, runId, options.config, {
+      identity: options.run,
+      userFollowUpSupport: options.userFollowUpSupport,
+      parentRunId,
+      description: options.description,
+    });
     const child = yield* createChildRun(...args).pipe(
       Effect.provideService(Runs, session.runs),
       Effect.onError(() => session.releaseRunLease(runId).pipe(Effect.orDie)),

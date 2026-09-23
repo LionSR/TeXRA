@@ -689,7 +689,6 @@ describe('headless delegation', () => {
           inBandSession,
           result.runId,
           expect.objectContaining({ agent: 'review' }),
-          'review',
           expect.objectContaining({ parentRunId: IN_BAND_PARENT_RUN_ID }),
         );
         expect(mocks.writeResultMeta).toHaveBeenCalledWith(
