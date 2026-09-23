@@ -42,7 +42,7 @@ describe('GrepTool run', () => {
             }),
           );
 
-        const result = yield* new GrepTool().call({
+        const result = yield* GrepTool.call({
           pattern: 'item',
           output_mode: 'content',
           offset: 1,
@@ -72,7 +72,7 @@ describe('GrepTool run', () => {
         }),
       );
 
-      const result = yield* new GrepTool().call({
+      const result = yield* GrepTool.call({
         pattern: 'item',
         output_mode: 'content',
         offset: 2,
@@ -102,7 +102,7 @@ describe('GrepTool run', () => {
           }),
         );
 
-        const result = yield* new GrepTool().call({
+        const result = yield* GrepTool.call({
           pattern: 'item',
           output_mode: 'content',
           offset: 1,
@@ -131,7 +131,7 @@ describe('GrepTool run', () => {
         }),
       );
 
-      const result = yield* new GrepTool().call({
+      const result = yield* GrepTool.call({
         pattern: '(',
         output_mode: 'content',
       });
@@ -164,7 +164,7 @@ describe('GrepTool run', () => {
         );
 
         try {
-          const result = yield* new GrepTool().call({
+          const result = yield* GrepTool.call({
             pattern: 'external',
             path: '/outside/dist',
             output_mode: 'content',
@@ -199,16 +199,14 @@ describe('GrepTool run', () => {
             }),
           );
 
-        const result = yield* new GrepTool()
-          .call({
-            pattern: 'external',
-            output_mode: 'content',
-          })
-          .pipe(
-            Effect.provide(
-              nativeToolTestLayer({ workingDirectory: '/outside/worktree' }),
-            ),
-          );
+        const result = yield* GrepTool.call({
+          pattern: 'external',
+          output_mode: 'content',
+        }).pipe(
+          Effect.provide(
+            nativeToolTestLayer({ workingDirectory: '/outside/worktree' }),
+          ),
+        );
 
         expect(result.status).toBe('executed');
         expect(executeSpy.mock.calls[0]?.[0]).toContain('--ignore-file');

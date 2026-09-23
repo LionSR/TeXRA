@@ -203,7 +203,7 @@ function stubWorkspaceFiles(exists: boolean, content: string) {
 }
 
 function runAccept(
-  tool: AcceptRunFilesTool,
+  tool: typeof AcceptRunFilesTool,
   files: { path: string; original: string }[],
   tracker = new FileInteractionState(),
 ) {
@@ -268,7 +268,7 @@ describe('accept_run_files progress events', () => {
   it.live('publishes accepted workspace files through app signals', () =>
     Effect.gen(function* () {
       const explicit = createRecordingHost();
-      const tool = new AcceptRunFilesTool();
+      const tool = AcceptRunFilesTool;
       const tracker = new FileInteractionState();
       const { written, delivered } = yield* recordWrittenFiles();
 
@@ -298,7 +298,7 @@ describe('accept_run_files progress events', () => {
     'reports an all-file user rejection without calling it a cancellation',
     () =>
       Effect.gen(function* () {
-        const tool = new AcceptRunFilesTool();
+        const tool = AcceptRunFilesTool;
 
         setRunStorageEntries({
           [`executions/${runId}/output.tex`]: 'File',
@@ -327,7 +327,7 @@ describe('accept_run_files progress events', () => {
     'preserves a cause-free cancellation while aggregating rejections',
     () =>
       Effect.gen(function* () {
-        const tool = new AcceptRunFilesTool();
+        const tool = AcceptRunFilesTool;
 
         setRunStorageEntries({
           [`executions/${runId}/output.tex`]: 'File',
@@ -349,7 +349,7 @@ describe('accept_run_files progress events', () => {
 
   it.live('preserves mixed policy-denial and cancellation details', () =>
     Effect.gen(function* () {
-      const tool = new AcceptRunFilesTool();
+      const tool = AcceptRunFilesTool;
 
       setRunStorageEntries({
         [`executions/${runId}/first.tex`]: 'File',
@@ -381,7 +381,7 @@ describe('accept_run_files progress events', () => {
 
   it.live('uses the pre-run snapshot for same-path workspace outputs', () =>
     Effect.gen(function* () {
-      const tool = new AcceptRunFilesTool();
+      const tool = AcceptRunFilesTool;
       let approvalOriginal = '';
       let approvalProposed = '';
       const snapshotPath = path.join(
@@ -427,7 +427,7 @@ describe('accept_run_files progress events', () => {
           workspace: '/project',
           storage: '/project-storage',
         };
-        const tool = new AcceptRunFilesTool();
+        const tool = AcceptRunFilesTool;
         const tracker = new FileInteractionState();
         const snapshotPath = path.join(
           projectRoots.storage,
@@ -491,7 +491,7 @@ describe('accept_run_files progress events', () => {
   it.live('reports unchanged same-path fallbacks without approval', () =>
     Effect.gen(function* () {
       const explicit = createRecordingHost();
-      const tool = new AcceptRunFilesTool();
+      const tool = AcceptRunFilesTool;
       let approvals = 0;
 
       setRunStorageEntries();
@@ -520,7 +520,7 @@ describe('accept_run_files progress events', () => {
     () =>
       Effect.gen(function* () {
         const explicit = createRecordingHost();
-        const tool = new AcceptRunFilesTool();
+        const tool = AcceptRunFilesTool;
         let approvals = 0;
 
         setRunStorageEntries({

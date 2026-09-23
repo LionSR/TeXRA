@@ -38,12 +38,8 @@ function workspaceRoster() {
   );
 }
 
-function applyTeam(
-  input: Parameters<InstanceType<typeof ApplyTeamTool>['call']>[0],
-) {
-  return new ApplyTeamTool()
-    .call(input)
-    .pipe(Effect.provide(nativeToolTestLayer()));
+function applyTeam(input: Parameters<(typeof ApplyTeamTool)['call']>[0]) {
+  return ApplyTeamTool.call(input).pipe(Effect.provide(nativeToolTestLayer()));
 }
 
 const expectNoTeamState = Effect.gen(function* () {

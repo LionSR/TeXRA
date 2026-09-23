@@ -177,12 +177,12 @@ export function normalizeStructuredOutputSchema(
 /**
  * Build a terminal tool from a normalized structured-output schema.
  *
- * The guarantee is the tool layer's own spine: `defineTool`/`BaseTool` validate
+ * The guarantee is the tool layer's own spine: `defineTool` validates
  * the model's call before `execute` runs, and an invalid call surfaces a
  * `ZodError` the model self-corrects. `execute` then enforces the persisted
  * JSON-value contract and hands the result to `capture`.
  *
- * `capture` is closed over by a tool class built per call, not a module-level
+ * `capture` is closed over by a tool built per call, not a module-level
  * global, so concurrent runs never share a sink.
  */
 export function buildTerminalTool(
@@ -191,28 +191,23 @@ export function buildTerminalTool(
 ): ITool<Error, never> {
   const { zodSchema } = normalizeStructuredOutputSchema(input);
 
-  const GeneratedTool = defineTool<unknown, never>({
+  // Built per call, so `captured` and `capture` belong to this run alone.
+  let captured = false;
+  return defineTool<unknown, never>({
     name: SUBMIT_OUTPUT_TOOL_NAME,
     description:
       'Submit the final result. Call this exactly once, with the complete result, when the task is done.',
     schema: zodSchema,
-  });
-
-  // Built inside this call, so the class closes over this run's `capture`
-  // rather than having it threaded through a constructor.
-  class TerminalTool extends GeneratedTool {
-    private captured = false;
-
-    protected execute(input: unknown): Effect.Effect<ToolResult, Error> {
-      return Effect.try({
+    execute: (input) =>
+      Effect.try({
         try: (): ToolResult => {
-          if (this.captured) {
+          if (captured) {
             throw new ToolError(
               'submit_output can only be accepted once per run.',
             );
           }
           const jsonValue = JsonValueSchema.parse(input);
-          this.captured = true;
+          captured = true;
           capture(jsonValue);
           return {
             status: 'executed',
@@ -222,9 +217,6 @@ export function buildTerminalTool(
           };
         },
         catch: ensureError,
-      });
-    }
-  }
-
-  return new TerminalTool();
+      }),
+  });
 }

@@ -243,17 +243,15 @@ import { defineTool } from '@texra-ai/agent';
 import { Effect } from 'effect';
 import { z } from 'zod';
 
-class EchoTool extends defineTool({
+const EchoTool = defineTool({
   name: 'echo',
   description: 'Return the supplied text.',
   schema: z.strictObject({ text: z.string() }),
-}) {
-  protected execute({ text }: { text: string }) {
-    return Effect.succeed({ status: 'executed' as const, output: text });
-  }
-}
+  execute: ({ text }) =>
+    Effect.succeed({ status: 'executed' as const, output: text }),
+});
 
-const tools = [new EchoTool()];
+const tools = [EchoTool];
 ```
 
 Pass `tools` to `session.start`. Custom tools are accepted for **tool-use**

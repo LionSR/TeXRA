@@ -131,23 +131,21 @@ function launchBackgroundRun(emit: (sink: ExecChunkSink) => void) {
     // empty batch on the session's publisher, so the child's admission read
     // runs after the parent's queued `run.start`. Settling here instead would
     // make this suite pass whether or not that barrier exists.
-    const launched = yield* new BashTool()
-      .call({
-        command: 'make build',
-        run_in_background: true,
-      })
-      .pipe(
-        Effect.provide(
-          nativeToolTestLayer({
-            tracker: new FileInteractionState(),
-            run: {
-              session: testDefaultSession(),
-              runId: PARENT_RUN_ID,
-              toolPolicy: {},
-            },
-          }),
-        ),
-      );
+    const launched = yield* BashTool.call({
+      command: 'make build',
+      run_in_background: true,
+    }).pipe(
+      Effect.provide(
+        nativeToolTestLayer({
+          tracker: new FileInteractionState(),
+          run: {
+            session: testDefaultSession(),
+            runId: PARENT_RUN_ID,
+            toolPolicy: {},
+          },
+        }),
+      ),
+    );
 
     assert.equal(launched.status, 'executed');
     yield* Effect.promise(() => outputEmitted);
@@ -180,7 +178,7 @@ function launchBackgroundRun(emit: (sink: ExecChunkSink) => void) {
 function readOutput(runId: RunId, viewRange?: [number, number]) {
   return Effect.gen(function* () {
     yield* testDefaultSession().settlePublications();
-    return yield* new ExecutionsTool().call({
+    return yield* ExecutionsTool.call({
       path: `/executions/${runId}/output`,
       ...(viewRange ? { view_range: viewRange } : {}),
     });
@@ -678,7 +676,7 @@ describe('ExecutionsTool /executions/{id}/output', () => {
         ],
       });
 
-      const result = yield* new ExecutionsTool().call({
+      const result = yield* ExecutionsTool.call({
         path: `/executions/${runId}`,
       });
       const output = result.output ?? '';
@@ -731,7 +729,7 @@ describe('ExecutionsTool /executions/{id}/output', () => {
         ],
       });
 
-      const result = yield* new ExecutionsTool().call({
+      const result = yield* ExecutionsTool.call({
         path: `/executions/${runId}`,
       });
       const output = result.output ?? '';
@@ -763,10 +761,10 @@ describe('ExecutionsTool /executions/{id}/output', () => {
           'parity-model-1',
         );
 
-        const summary = yield* new ExecutionsTool().call({
+        const summary = yield* ExecutionsTool.call({
           path: `/executions/${runId}`,
         });
-        const listing = yield* new ExecutionsTool().call({
+        const listing = yield* ExecutionsTool.call({
           path: '/executions',
         });
         const summaryOutput = summary.output ?? '';
@@ -801,7 +799,7 @@ describe('ExecutionsTool /executions/{id}/output', () => {
           sink.onStdout?.('still working\n');
         });
 
-        const running = yield* new ExecutionsTool().call({
+        const running = yield* ExecutionsTool.call({
           path: `/executions/${run.runId}`,
         });
         const runningOutput = running.output ?? '';
@@ -821,7 +819,7 @@ describe('ExecutionsTool /executions/{id}/output', () => {
 
         yield* Effect.promise(() => run.finish());
 
-        const completed = yield* new ExecutionsTool().call({
+        const completed = yield* ExecutionsTool.call({
           path: `/executions/${run.runId}`,
         });
         const completedOutput = completed.output ?? '';

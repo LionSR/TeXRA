@@ -102,7 +102,7 @@ function startPlanUpdate(
     const { session, awaitPlanRequest } = planSession(runId);
     if (seed) yield* seed(session);
     const workPlanState = new WorkPlanState();
-    const tool = new PlanTool();
+    const tool = PlanTool;
 
     const resultFiber = yield* Effect.forkScoped(
       tool.call({ command: 'update', objective }).pipe(
@@ -174,7 +174,7 @@ describe('PlanTool — update (plan approval)', () => {
           expect(proposalApprovals(session).isBypassed(runId)).toBe(true);
 
           const resultFiber = yield* Effect.forkScoped(
-            new PlanTool().call({ command: 'update', ...followUpPlan }).pipe(
+            PlanTool.call({ command: 'update', ...followUpPlan }).pipe(
               Effect.provide(
                 nativeToolTestLayer({
                   run: { runId, session, toolPolicy: {} },
@@ -398,7 +398,7 @@ describe('PlanTool — pause/complete (goal lifecycle)', () => {
   });
 
   function callTool(input: unknown) {
-    const tool = new PlanTool();
+    const tool = PlanTool;
     return tool.call(input).pipe(
       Effect.provide(
         nativeToolTestLayer({

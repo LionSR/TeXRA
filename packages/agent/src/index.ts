@@ -72,7 +72,7 @@ export type {
 } from '@agent/core/tools/ToolTypes';
 export { MapToolRegistry } from '@agent/core/tools/ToolTypes';
 export { defineTool } from '@tools/core/definition';
-export type { DefinedToolClass } from '@tools/core/definition';
+export type { DefinedTool } from '@tools/core/definition';
 export type {
   AggregateId,
   RunId,

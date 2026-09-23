@@ -143,72 +143,69 @@ const fetchPage = Effect.fn('WebFetchTool.fetchPage')((url: string) =>
   ),
 );
 
-export class WebFetchTool extends defineTool({
+const turndown = createHtmlToMarkdown();
+
+const fetchAsMarkdown = Effect.fn('WebFetchTool.execute')(function* ({
+  url,
+  prompt,
+}: WebFetchInput) {
+  const parsedUrl = new URL(url);
+  const hostname = parsedUrl.hostname.toLowerCase();
+  if (BLOCKED_HOSTNAMES.has(hostname)) {
+    return yield* Effect.fail(
+      new ToolError(
+        'Cannot fetch localhost URLs. Provide a public URL instead.',
+      ),
+    );
+  }
+
+  if (isRestrictedIp(hostname)) {
+    return yield* Effect.fail(
+      new ToolError(
+        'Cannot fetch private network IPs. Provide a public URL instead.',
+      ),
+    );
+  }
+
+  const { rawBody, contentType } = yield* fetchPage(url);
+
+  const ctLower = contentType.toLowerCase();
+  const isMarkupContent =
+    ctLower.includes('html') ||
+    ctLower.includes('xml') ||
+    ctLower.includes('xhtml') ||
+    (!contentType && rawBody.trim().startsWith('<'));
+
+  const markdown = isMarkupContent
+    ? yield* Effect.try({
+        try: () => turndown.turndown(rawBody),
+        catch: (error) =>
+          new ToolError(
+            `Failed to convert HTML to Markdown: ${toErrorMessage(error)}`,
+          ),
+      })
+    : rawBody;
+
+  const cleaned = markdown.trim();
+  const sections = [
+    ...(prompt ? [`Prompt\n------\n${prompt.trim()}`] : []),
+    cleaned.length > 0
+      ? cleaned
+      : 'No readable content was extracted from the provided URL.',
+  ];
+
+  return executed(sections.join('\n\n'), `Fetched: ${url}`);
+});
+
+export const WebFetchTool = defineTool({
   name: 'web_fetch',
   slow: true,
   parallelSafe: true,
   description:
     'Fetch content from a URL and return it as clean text. Uses the native provider fetch tool when available; falls back to fetching HTML and converting to Markdown locally. Include an optional prompt to explain what context you need so the fetched content can be interpreted correctly.',
   schema: WebFetchInputSchema,
-}) {
-  private readonly turndown = createHtmlToMarkdown();
-
-  private readonly fetchAsMarkdown = Effect.fn('WebFetchTool.execute')(
-    { self: this },
-    function* (this: WebFetchTool, { url, prompt }: WebFetchInput) {
-      const parsedUrl = new URL(url);
-      const hostname = parsedUrl.hostname.toLowerCase();
-      if (BLOCKED_HOSTNAMES.has(hostname)) {
-        return yield* Effect.fail(
-          new ToolError(
-            'Cannot fetch localhost URLs. Provide a public URL instead.',
-          ),
-        );
-      }
-
-      if (isRestrictedIp(hostname)) {
-        return yield* Effect.fail(
-          new ToolError(
-            'Cannot fetch private network IPs. Provide a public URL instead.',
-          ),
-        );
-      }
-
-      const { rawBody, contentType } = yield* fetchPage(url);
-
-      const ctLower = contentType.toLowerCase();
-      const isMarkupContent =
-        ctLower.includes('html') ||
-        ctLower.includes('xml') ||
-        ctLower.includes('xhtml') ||
-        (!contentType && rawBody.trim().startsWith('<'));
-
-      const markdown = isMarkupContent
-        ? yield* Effect.try({
-            try: () => this.turndown.turndown(rawBody),
-            catch: (error) =>
-              new ToolError(
-                `Failed to convert HTML to Markdown: ${toErrorMessage(error)}`,
-              ),
-          })
-        : rawBody;
-
-      const cleaned = markdown.trim();
-      const sections = [
-        ...(prompt ? [`Prompt\n------\n${prompt.trim()}`] : []),
-        cleaned.length > 0
-          ? cleaned
-          : 'No readable content was extracted from the provided URL.',
-      ];
-
-      return executed(sections.join('\n\n'), `Fetched: ${url}`);
-    },
-  );
-
-  protected execute(input: WebFetchInput): Effect.Effect<ToolResult, Error> {
-    // The owning agent run's cancellation enters here as interruption —
-    // without it, a cancelled run would wait out fetches (and their retries)
-    // that only observe the internal timeout.
-    return this.fetchAsMarkdown(input);
-  }
-}
+  // The owning agent run's cancellation enters here as interruption —
+  // without it, a cancelled run would wait out fetches (and their retries)
+  // that only observe the internal timeout.
+  execute: fetchAsMarkdown,
+});

@@ -176,19 +176,17 @@ function parentRunContext(
 let testEngine: AgentEngine['Service'];
 
 function callDelegateReview(call = parentRunContext()) {
-  return new DelegateAgentTool()
-    .call({
-      agent: 'review',
-      model: null,
-      instruction: 'Check the proof.',
-      memories: [],
-      working_directory: null,
-      execution_id: null,
-    })
-    .pipe(
-      Effect.provideService(AgentEngine, testEngine),
-      Effect.provide(nativeToolTestLayer(call)),
-    );
+  return DelegateAgentTool.call({
+    agent: 'review',
+    model: null,
+    instruction: 'Check the proof.',
+    memories: [],
+    working_directory: null,
+    execution_id: null,
+  }).pipe(
+    Effect.provideService(AgentEngine, testEngine),
+    Effect.provide(nativeToolTestLayer(call)),
+  );
 }
 
 const waitForChildrenEffect = Effect.fn('waitForTestChildren')(function* (

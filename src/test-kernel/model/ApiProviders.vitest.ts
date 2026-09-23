@@ -277,9 +277,9 @@ describe('API provider key caches', () => {
           );
           yield* Effect.yieldNow;
 
-          yield* new UnsetApiKeyTool()
-            .call({ provider: 'openai' })
-            .pipe(Effect.provide(nativeToolTestLayer()));
+          yield* UnsetApiKeyTool.call({ provider: 'openai' }).pipe(
+            Effect.provide(nativeToolTestLayer()),
+          );
 
           expect(yield* lookupApiKeyOrigin(secrets, 'openai')).toBe('none');
           expect(yield* Deferred.await(changed)).toBe(
@@ -301,9 +301,9 @@ describe('API provider key caches', () => {
       vi.spyOn(secrets, 'getStored').mockReturnValue(Effect.succeed(undefined));
       yield* Effect.promise(() => setupApiKeyToolPlatform(secrets));
 
-      const result = yield* new UnsetApiKeyTool()
-        .call({ provider: 'openai' })
-        .pipe(Effect.provide(nativeToolTestLayer()));
+      const result = yield* UnsetApiKeyTool.call({ provider: 'openai' }).pipe(
+        Effect.provide(nativeToolTestLayer()),
+      );
 
       expect(result.status).toBe('executed');
       expect(result.output).toContain('Removed stored API key');
@@ -321,9 +321,9 @@ describe('API provider key caches', () => {
         );
         yield* Effect.promise(() => setupApiKeyToolPlatform(secrets));
 
-        const result = yield* new UnsetApiKeyTool()
-          .call({ provider: 'kimiCode' })
-          .pipe(Effect.provide(nativeToolTestLayer()));
+        const result = yield* UnsetApiKeyTool.call({
+          provider: 'kimiCode',
+        }).pipe(Effect.provide(nativeToolTestLayer()));
 
         expect(result.status).toBe('executed');
         expect(result.output).toContain('KIMI_CODE_API_KEY');

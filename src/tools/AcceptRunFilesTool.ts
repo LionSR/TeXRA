@@ -171,279 +171,251 @@ const AcceptRunFilesInputSchema = z.strictObject({
     ),
 });
 
-export type AcceptRunFilesInput = z.infer<typeof AcceptRunFilesInputSchema>;
+type AcceptRunFilesInput = z.infer<typeof AcceptRunFilesInputSchema>;
 
 // ============================================================================
 // Tool Implementation
 // ============================================================================
 
-export class AcceptRunFilesTool extends defineTool({
-  name: 'accept_run_files',
-  requiresApproval: true,
-  description: `Accept output files from a completed workflow run into the workspace.
-
-Only workflow subagent results (category="workflow") have output files to
-accept; tool-use subagents return text and have nothing for this tool.
-
-Locates output files in run storage and writes them to the workspace.
-Each file goes through an approval step before writing and may be rejected.
-
-Parameters map directly to subagent-result delivery attributes:
-  execution_id ← <subagent-result id="...">
-  path         ← <file path="...">
-  original     ← <file original="...">`,
-  schema: AcceptRunFilesInputSchema,
-}) {
-  protected execute(
-    input: AcceptRunFilesInput,
-  ): Effect.Effect<ToolResult, Error, ToolServices> {
-    const acceptFiles = (call: ToolCallShape) => this.acceptFiles(input, call);
-    return Effect.gen(function* () {
-      const call = yield* ToolCall;
-      const { session } = yield* requireToolRun('accept_run_files', call);
-      const directory = yield* findExistingRunStoragePathUnder(
-        call.roots.storage,
-        input.execution_id,
+function executeAcceptRunFilesTool(
+  input: AcceptRunFilesInput,
+): Effect.Effect<ToolResult, Error, ToolServices> {
+  return Effect.gen(function* () {
+    const call = yield* ToolCall;
+    const { session } = yield* requireToolRun('accept_run_files', call);
+    const directory = yield* findExistingRunStoragePathUnder(
+      call.roots.storage,
+      input.execution_id,
+    );
+    if (
+      directory === undefined &&
+      !(yield* getRunRecords(session, input.execution_id).exists())
+    ) {
+      return yield* Effect.fail(
+        new ToolError(
+          `Run not found: ${input.execution_id}. Use the executions tool with path /executions to list available runs.`,
+        ),
       );
-      if (
-        directory === undefined &&
-        !(yield* getRunRecords(session, input.execution_id).exists())
-      ) {
-        return yield* Effect.fail(
-          new ToolError(
-            `Run not found: ${input.execution_id}. Use the executions tool with path /executions to list available runs.`,
-          ),
+    }
+    return yield* acceptFiles(input, call);
+  });
+}
+
+const acceptFiles = Effect.fn('AcceptRunFilesTool.acceptFiles')(function* (
+  input: AcceptRunFilesInput,
+  call: ToolCallShape,
+): Effect.fn.Return<
+  ToolResult,
+  Error,
+  ToolCall | FileSystem.FileSystem | WorkspaceFs
+> {
+  const { execution_id: runId, files, strip_criticize } = input;
+
+  // Phase 1: Validate all source paths and read content before any approvals
+  const prepared = yield* Effect.forEach(
+    files,
+    (mapping) =>
+      Effect.gen(function* () {
+        assertNoParentTraversal(mapping.path);
+
+        const sourceLocation = yield* resolveSourceFile(
+          runId,
+          mapping.path,
+          call,
         );
-      }
-      return yield* acceptFiles(call);
+
+        const destPath = mapping.original ?? mapping.path;
+        // The call's own workspace root, as data: the source may resolve
+        // under any root, but the destination is this session's.
+        const dest = locateInWorkspace(call.roots.workspace, destPath);
+        if (dest.kind === 'external') {
+          throw new ToolError(
+            `original must be inside the workspace: ${destPath}`,
+          );
+        }
+        const workspaceFs: FileSystem.FileSystem = yield* WorkspaceFs;
+        const processFs = yield* FileSystem.FileSystem;
+
+        const rawContent = yield* readNormalizedFile(
+          processFs,
+          sourceLocation.absolutePath,
+        ).pipe(Effect.mapError(ensureError));
+        const { content: proposedContent, count: strippedCount } =
+          strip_criticize
+            ? stripCriticizeAnnotations(rawContent)
+            : { content: rawContent, count: 0 };
+        const destExists = yield* entryExists(
+          workspaceFs,
+          dest.relativePath,
+        ).pipe(Effect.mapError(ensureError));
+
+        // Determine original content for diff display. In-place workflow
+        // outputs can make source and destination the same workspace file, so
+        // the pre-run snapshot is the only reliable "before" image.
+        const snapshotPath = originalSnapshotPathUnder(
+          call.roots.storage,
+          runId,
+          dest.relativePath,
+        );
+        const snapshotExists = yield* fileAt(processFs, snapshotPath).pipe(
+          Effect.mapError(ensureError),
+        );
+        const snapshotContent = snapshotExists
+          ? yield* readNormalizedFile(processFs, snapshotPath).pipe(
+              Effect.mapError(ensureError),
+            )
+          : undefined;
+        const isSameFile =
+          sourceLocation.kind === 'workspace' &&
+          sourceLocation.absolutePath === dest.absolutePath;
+        let originalContent: string;
+        if (snapshotContent !== undefined) {
+          originalContent = snapshotContent;
+        } else if (isSameFile) {
+          originalContent = rawContent;
+        } else if (destExists) {
+          originalContent = yield* readNormalizedFile(
+            workspaceFs,
+            dest.relativePath,
+          ).pipe(Effect.mapError(ensureError));
+        } else {
+          originalContent = '';
+        }
+
+        return {
+          path: mapping.path,
+          original: dest.relativePath,
+          destAbsolutePath: dest.absolutePath,
+          proposedContent,
+          originalContent,
+          destExists,
+          strippedCount,
+        };
+      }),
+    { concurrency: 'unbounded' },
+  );
+
+  // Phase 2: Request approval and write each file
+  const results: string[] = [];
+  const edits: EditRecord[] = [];
+  const acceptedEntries: {
+    outputPath: string;
+    originalPath: string;
+    destAbsolutePath: string;
+  }[] = [];
+  let unchanged = 0;
+  const rejections: RecordedRejection[] = [];
+
+  let totalStripped = 0;
+
+  for (const entry of prepared) {
+    const mappingNote =
+      entry.path !== entry.original ? ` (from ${entry.path})` : '';
+
+    if (entry.originalContent === entry.proposedContent) {
+      unchanged++;
+      results.push(`unchanged: ${entry.original}${mappingNote}`);
+      continue;
+    }
+
+    const approval = yield* requestToolEditApproval({
+      path: entry.original,
+      originalContent: entry.originalContent,
+      proposedContent: entry.proposedContent,
+      sourceTool: 'accept_run_files',
+    });
+
+    if (approval.action !== 'apply') {
+      rejections.push({ path: entry.original, refusal: approval });
+      results.push(`rejected: ${entry.original}${mappingNote}`);
+      continue;
+    }
+
+    yield* writeApprovedContent(
+      entry.original,
+      entry.originalContent,
+      approval.appliedContent,
+    );
+
+    const action = entry.destExists ? 'replaced' : 'created';
+    const strippedNote =
+      entry.strippedCount > 0
+        ? ` (stripped ${entry.strippedCount} \\criticize)`
+        : '';
+    totalStripped += entry.strippedCount;
+    results.push(`${action}: ${entry.original}${mappingNote}${strippedNote}`);
+    edits.push({
+      path: entry.original,
+      lineChanges: approval.lineChanges,
+      startLine: approval.startLine,
+    });
+    acceptedEntries.push({
+      outputPath: entry.path,
+      originalPath: entry.original,
+      destAbsolutePath: entry.destAbsolutePath,
     });
   }
 
-  private readonly acceptFiles = Effect.fn('AcceptRunFilesTool.acceptFiles')(
-    function* (
-      this: AcceptRunFilesTool,
-      input: AcceptRunFilesInput,
-      call: ToolCallShape,
-    ): Effect.fn.Return<
-      ToolResult,
-      Error,
-      ToolCall | FileSystem.FileSystem | WorkspaceFs
-    > {
-      const { execution_id: runId, files, strip_criticize } = input;
-      const resolveSourceFile = (runId: RunId, runPath: string) =>
-        this.resolveSourceFile(runId, runPath, call);
+  // Badge all accepted workspace files
+  if (acceptedEntries.length > 0) {
+    emitAppSignal('workspaceFilesWritten', {
+      absolutePaths: acceptedEntries.map((e) => e.destAbsolutePath),
+    });
+  }
 
-      // Phase 1: Validate all source paths and read content before any approvals
-      const prepared = yield* Effect.forEach(
-        files,
-        (mapping) =>
-          Effect.gen(function* () {
-            assertNoParentTraversal(mapping.path);
+  const changed = files.length - unchanged;
+  const detailedOutput = (summary: string): string =>
+    `${summary}:\n${results.map((r) => `  - ${r}`).join('\n')}`;
 
-            const sourceLocation = yield* resolveSourceFile(
-              runId,
-              mapping.path,
-            );
+  if (changed === 0) {
+    const summary = `No changes to accept from run ${runId}`;
+    return {
+      status: 'executed',
+      summary,
+      output: detailedOutput(summary),
+      edits,
+    };
+  }
 
-            const destPath = mapping.original ?? mapping.path;
-            // The call's own workspace root, as data: the source may resolve
-            // under any root, but the destination is this session's.
-            const dest = locateInWorkspace(call.roots.workspace, destPath);
-            if (dest.kind === 'external') {
-              throw new ToolError(
-                `original must be inside the workspace: ${destPath}`,
-              );
-            }
-            const workspaceFs: FileSystem.FileSystem = yield* WorkspaceFs;
-            const processFs = yield* FileSystem.FileSystem;
+  // All changed files rejected: one rejection result, worded by the
+  // refusal that outranks the others.
+  if (rejections.length === changed && acceptedEntries.length === 0) {
+    const { path, refusal } = summarizeRefusals(rejections);
+    return buildApprovalRejectedResult(path, 'accept_run_files', refusal);
+  }
 
-            const rawContent = yield* readNormalizedFile(
-              processFs,
-              sourceLocation.absolutePath,
-            ).pipe(Effect.mapError(ensureError));
-            const { content: proposedContent, count: strippedCount } =
-              strip_criticize
-                ? stripCriticizeAnnotations(rawContent)
-                : { content: rawContent, count: 0 };
-            const destExists = yield* entryExists(
-              workspaceFs,
-              dest.relativePath,
-            ).pipe(Effect.mapError(ensureError));
-
-            // Determine original content for diff display. In-place workflow
-            // outputs can make source and destination the same workspace file, so
-            // the pre-run snapshot is the only reliable "before" image.
-            const snapshotPath = originalSnapshotPathUnder(
-              call.roots.storage,
-              runId,
-              dest.relativePath,
-            );
-            const snapshotExists = yield* fileAt(processFs, snapshotPath).pipe(
-              Effect.mapError(ensureError),
-            );
-            const snapshotContent = snapshotExists
-              ? yield* readNormalizedFile(processFs, snapshotPath).pipe(
-                  Effect.mapError(ensureError),
-                )
-              : undefined;
-            const isSameFile =
-              sourceLocation.kind === 'workspace' &&
-              sourceLocation.absolutePath === dest.absolutePath;
-            let originalContent: string;
-            if (snapshotContent !== undefined) {
-              originalContent = snapshotContent;
-            } else if (isSameFile) {
-              originalContent = rawContent;
-            } else if (destExists) {
-              originalContent = yield* readNormalizedFile(
-                workspaceFs,
-                dest.relativePath,
-              ).pipe(Effect.mapError(ensureError));
-            } else {
-              originalContent = '';
-            }
-
-            return {
-              path: mapping.path,
-              original: dest.relativePath,
-              destAbsolutePath: dest.absolutePath,
-              proposedContent,
-              originalContent,
-              destExists,
-              strippedCount,
-            };
-          }),
-        { concurrency: 'unbounded' },
-      );
-
-      // Phase 2: Request approval and write each file
-      const results: string[] = [];
-      const edits: EditRecord[] = [];
-      const acceptedEntries: {
-        outputPath: string;
-        originalPath: string;
-        destAbsolutePath: string;
-      }[] = [];
-      let unchanged = 0;
-      const rejections: RecordedRejection[] = [];
-
-      let totalStripped = 0;
-
-      for (const entry of prepared) {
-        const mappingNote =
-          entry.path !== entry.original ? ` (from ${entry.path})` : '';
-
-        if (entry.originalContent === entry.proposedContent) {
-          unchanged++;
-          results.push(`unchanged: ${entry.original}${mappingNote}`);
-          continue;
-        }
-
-        const approval = yield* requestToolEditApproval({
-          path: entry.original,
-          originalContent: entry.originalContent,
-          proposedContent: entry.proposedContent,
-          sourceTool: 'accept_run_files',
-        });
-
-        if (approval.action !== 'apply') {
-          rejections.push({ path: entry.original, refusal: approval });
-          results.push(`rejected: ${entry.original}${mappingNote}`);
-          continue;
-        }
-
-        yield* writeApprovedContent(
-          entry.original,
-          entry.originalContent,
-          approval.appliedContent,
-        );
-
-        const action = entry.destExists ? 'replaced' : 'created';
-        const strippedNote =
-          entry.strippedCount > 0
-            ? ` (stripped ${entry.strippedCount} \\criticize)`
-            : '';
-        totalStripped += entry.strippedCount;
-        results.push(
-          `${action}: ${entry.original}${mappingNote}${strippedNote}`,
-        );
-        edits.push({
-          path: entry.original,
-          lineChanges: approval.lineChanges,
-          startLine: approval.startLine,
-        });
-        acceptedEntries.push({
-          outputPath: entry.path,
-          originalPath: entry.original,
-          destAbsolutePath: entry.destAbsolutePath,
-        });
-      }
-
-      // Badge all accepted workspace files
-      if (acceptedEntries.length > 0) {
-        emitAppSignal('workspaceFilesWritten', {
-          absolutePaths: acceptedEntries.map((e) => e.destAbsolutePath),
-        });
-      }
-
-      const changed = files.length - unchanged;
-      const detailedOutput = (summary: string): string =>
-        `${summary}:\n${results.map((r) => `  - ${r}`).join('\n')}`;
-
-      if (changed === 0) {
-        const summary = `No changes to accept from run ${runId}`;
-        return {
-          status: 'executed',
-          summary,
-          output: detailedOutput(summary),
-          edits,
-        };
-      }
-
-      // All changed files rejected: one rejection result, worded by the
-      // refusal that outranks the others.
-      if (rejections.length === changed && acceptedEntries.length === 0) {
-        const { path, refusal } = summarizeRefusals(rejections);
-        return buildApprovalRejectedResult(path, 'accept_run_files', refusal);
-      }
-
-      // Phase 3: Clean up diff files from workspace for accepted files
-      const cleaned = yield* cleanupAcceptedWorkspaceDiffFiles(
-        call.roots.workspace,
-        acceptedEntries,
-      );
-      for (const f of cleaned) {
-        results.push(`cleaned: ${f}`);
-      }
-
-      const accepted = acceptedEntries.length;
-      const strippedSuffix =
-        totalStripped > 0
-          ? ` (stripped ${formatResultCount(totalStripped, '\\criticize annotation')})`
-          : '';
-      const unchangedSuffix =
-        unchanged > 0
-          ? ` (${formatResultCount(unchanged, 'unchanged file')})`
-          : '';
-      const summary = `Accepted ${accepted}/${changed} changed ${pluralize(changed, 'file')} from run ${runId}${strippedSuffix}${unchangedSuffix}`;
-      return {
-        status: 'executed',
-        summary,
-        output: detailedOutput(summary),
-        edits,
-      };
-    },
+  // Phase 3: Clean up diff files from workspace for accepted files
+  const cleaned = yield* cleanupAcceptedWorkspaceDiffFiles(
+    call.roots.workspace,
+    acceptedEntries,
   );
+  for (const f of cleaned) {
+    results.push(`cleaned: ${f}`);
+  }
 
-  /**
-   * Resolves a source file by checking run storage first, then workspace.
-   * In run-storage mode, files live under the call's storage root. In
-   * workspace mode, files are written directly to the workspace.
-   */
-  private readonly resolveSourceFile = Effect.fn(
-    'AcceptRunFilesTool.resolveSourceFile',
-  )(function* (
-    this: AcceptRunFilesTool,
+  const accepted = acceptedEntries.length;
+  const strippedSuffix =
+    totalStripped > 0
+      ? ` (stripped ${formatResultCount(totalStripped, '\\criticize annotation')})`
+      : '';
+  const unchangedSuffix =
+    unchanged > 0 ? ` (${formatResultCount(unchanged, 'unchanged file')})` : '';
+  const summary = `Accepted ${accepted}/${changed} changed ${pluralize(changed, 'file')} from run ${runId}${strippedSuffix}${unchangedSuffix}`;
+  return {
+    status: 'executed',
+    summary,
+    output: detailedOutput(summary),
+    edits,
+  };
+});
+
+/**
+ * Resolves a source file by checking run storage first, then workspace.
+ * In run-storage mode, files live under the call's storage root. In
+ * workspace mode, files are written directly to the workspace.
+ */
+const resolveSourceFile = Effect.fn('AcceptRunFilesTool.resolveSourceFile')(
+  function* (
     runId: RunId,
     runPath: string,
     call: ToolCallShape,
@@ -491,5 +463,24 @@ Parameters map directly to subagent-result delivery attributes:
       `File not found in run storage or workspace: ${runPath}. ` +
         `Use executions tool with path /executions/${runId}/files to list available files.`,
     );
-  });
-}
+  },
+);
+
+export const AcceptRunFilesTool = defineTool({
+  name: 'accept_run_files',
+  requiresApproval: true,
+  description: `Accept output files from a completed workflow run into the workspace.
+
+Only workflow subagent results (category="workflow") have output files to
+accept; tool-use subagents return text and have nothing for this tool.
+
+Locates output files in run storage and writes them to the workspace.
+Each file goes through an approval step before writing and may be rejected.
+
+Parameters map directly to subagent-result delivery attributes:
+  execution_id ← <subagent-result id="...">
+  path         ← <file path="...">
+  original     ← <file original="...">`,
+  schema: AcceptRunFilesInputSchema,
+  execute: executeAcceptRunFilesTool,
+});

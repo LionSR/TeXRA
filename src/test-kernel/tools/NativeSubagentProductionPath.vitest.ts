@@ -443,31 +443,29 @@ async function queueSecondAssertionFollowUp(
   instruction = 'Now prove the second assertion.',
 ) {
   const resumed = await testRuntime().runPromise(
-    new DelegateAgentTool()
-      .call({
-        agent: null,
-        model: null,
-        instruction,
-        memories: [],
-        working_directory: null,
-        execution_id: runId,
-      })
-      .pipe(
-        Effect.provide(
-          nativeToolTestLayer({
-            tracker: new FileInteractionState(),
-            run: {
-              runId: parentContext.runId,
-              session: parentContext.session,
-              config: AgentConfigSchema.parse({
-                agent: 'chat',
-                model: parentContext.model,
-              }),
-              toolPolicy: {},
-            },
-          }),
-        ),
+    DelegateAgentTool.call({
+      agent: null,
+      model: null,
+      instruction,
+      memories: [],
+      working_directory: null,
+      execution_id: runId,
+    }).pipe(
+      Effect.provide(
+        nativeToolTestLayer({
+          tracker: new FileInteractionState(),
+          run: {
+            runId: parentContext.runId,
+            session: parentContext.session,
+            config: AgentConfigSchema.parse({
+              agent: 'chat',
+              model: parentContext.model,
+            }),
+            toolPolicy: {},
+          },
+        }),
       ),
+    ),
   );
   expect(resumed.status).toBe('executed');
   return resumed;
@@ -1110,15 +1108,15 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
             },
           },
         });
-        const reportView = yield* new ExecutionsTool()
-          .call({ path: `/executions/${runId}/report` })
-          .pipe(Effect.provide(executionToolLayer));
+        const reportView = yield* ExecutionsTool.call({
+          path: `/executions/${runId}/report`,
+        }).pipe(Effect.provide(executionToolLayer));
         expect(reportView.status).toBe('executed');
         expect(reportView.output).toContain('Result A.');
         expect(reportView.output).toContain('interrupted');
-        const resultView = yield* new ExecutionsTool()
-          .call({ path: `/executions/${runId}/result` })
-          .pipe(Effect.provide(executionToolLayer));
+        const resultView = yield* ExecutionsTool.call({
+          path: `/executions/${runId}/result`,
+        }).pipe(Effect.provide(executionToolLayer));
         expect(resultView.status).toBe('executed');
         // /result is the machine-readable chaining endpoint: the attribution
         // rides inside the JSON, never as prefixed prose.

@@ -130,6 +130,13 @@ All notable changes to this project will be documented in this file.
 
 #### Breaking Changes
 
+- **`defineTool` returns a tool object, not a class** — `@texra-ai/agent`'s
+  `defineTool` now takes `execute` in its definition and returns the tool
+  itself, ready to pass in `tools`. Subclassing it and calling `new` no longer
+  apply — `class Echo extends defineTool({...}) { protected execute(i) {...} }`
+  with `new Echo()` becomes `const Echo = defineTool({ ..., execute })`. The
+  exported `DefinedToolClass` type is replaced by `DefinedTool`, and a tool's
+  `description` is a plain string.
 - **`texra tools list` and `texra skills list` JSON changed shape** — both now
   print the same records the Tools and Skills settings tabs show. Each tool
   record gains `description`, `tools`, `installActions`, `configNotes` and

@@ -103,7 +103,7 @@ describe('human prompt progress events', () => {
       Effect.gen(function* () {
         const explicit = createRecordingHost();
         const runId = startedRun();
-        const tool = new AskUserQuestionTool();
+        const tool = AskUserQuestionTool;
         const question = 'Which path should the agent take?';
         const decided = autoDecideRequests(testDefaultSession(), () => ({
           action: 'submit',
