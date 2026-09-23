@@ -511,7 +511,7 @@ async function launchWaitingChild(options: {
     workingDirectory: process.cwd(),
   });
   await Effect.runPromise(
-    registerRun(session, PARENT_RUN_ID, parentConfig, PARENT_AGENT, {
+    registerRun(session, PARENT_RUN_ID, parentConfig, {
       identity: { kind: 'agent', agent: PARENT_AGENT },
       parentRunId: OUTER_RUN_ID,
     }),

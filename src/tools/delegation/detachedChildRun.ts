@@ -53,7 +53,7 @@ export const registerChildRun = Effect.fn('registerChildRun')(function* (
   },
 ): Effect.fn.Return<void, Error> {
   const { runId, config } = input;
-  yield* registerRun(session, runId, config, input.agentName, {
+  yield* registerRun(session, runId, config, {
     identity: { kind: 'agent', agent: config.agent },
     userFollowUpSupport: input.userFollowUpSupport,
     parentRunId: input.parentRunId,

@@ -72,7 +72,7 @@ function checkToolResultTextLimit(text: string): string | null {
 
 /**
  * Format a tool result as plain text for the model. Priority: output, then
- * the user's patch and feedback from approval, then the error of a failed
+ * the user's feedback from approval, then the error of a failed
  * tool, then the summary as a fallback; the attachment summary last.
  */
 export function formatToolResultAsText(
@@ -85,14 +85,8 @@ export function formatToolResultAsText(
     textPieces.push(result.output);
   }
 
-  // userPatch / userInstruction are shared fields on both variants. userPatch
-  // captures user modifications to tool proposals (distinct from userDiffNote,
-  // which only shows merge conflicts).
-  if (result.userPatch) {
-    textPieces.push(
-      `User modifications:\n\`\`\`diff\n${result.userPatch}\n\`\`\``,
-    );
-  }
+  // A user's edit to an approved write reaches the model once, inside the
+  // tool's own output (`appendApprovalDiffNote`); only feedback rides here.
   if (result.userInstruction) {
     textPieces.push(`User feedback: ${result.userInstruction}`);
   }
