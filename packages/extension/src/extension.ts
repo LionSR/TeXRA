@@ -79,6 +79,7 @@ import { withLogChannel } from '@logger/effectLog';
 import * as logger from '@logger/logUtils';
 import { setLogSink } from '@logger/logSink';
 import { formatFatalErrorDetail } from '@logger/redaction';
+import { invalidateApiKeyCache } from '@model/apiProviders';
 import { invalidateRuntimeModelRegistry } from '@model/runtimeModelRegistry';
 import { AppState, AgentDirectories } from '@platform/interfaces';
 import type { AgentResumePort, LifecycleHost } from '@platform/interfaces';
@@ -823,9 +824,10 @@ async function activateExtension(context: vscode.ExtensionContext) {
 
   context.subscriptions.push(
     // The VS Code store's half of `credentialChanged`: SecretStorage reports
-    // every committed write, this window's and other windows' alike, so the
-    // signal is emitted here rather than from `VscodeSecrets` itself.
+    // every committed write, other windows' included, so the signal and the
+    // lookup-cache drop (another window never ran our finalizer) live here.
     context.secrets.onDidChange(({ key }) => {
+      invalidateApiKeyCache();
       emitAppSignal('credentialChanged', { key });
     }),
     // The GitHub token gates the `github_subscription` tool group; re-probe so

@@ -57,6 +57,9 @@ export interface AppSignalPayloads {
    * them remembering to. The file-backed stores (desktop, CLI) emit from
    * their own commit finalizer; the VS Code store emits from
    * `SecretStorage.onDidChange`, which also sees writes from other windows.
+   * The file-backed finalizer runs on every exit of the write, failure and
+   * interruption included, because an interrupted commit may still have
+   * landed; the signal means "re-read this key", never "the value changed".
    * The same stores hold OAuth tokens, sign-in nonces and Overleaf
    * credentials, so a subscriber filters on `key` and ignores the rest: an
    * OAuth refresh must not repaint the profile tab.
