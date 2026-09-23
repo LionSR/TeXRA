@@ -27,7 +27,7 @@
     "packages/desktop/src/main/desktopSettingsIpc.ts": 669,
     "packages/desktop/src/main/desktopWorkspaceIpc.ts": 574,
     "packages/desktop/src/main/index.ts": 2044,
-    "packages/desktop/src/renderer/desktopShell.ts": 700,
+    "packages/desktop/src/renderer/desktopShell.ts": 699,
     "packages/desktop/src/renderer/editorPane.ts": 627,
     "packages/desktop/src/renderer/main.ts": 1247,
     "packages/extension/src/commands/latex/latexdiffCommands.ts": 545,

@@ -14,7 +14,6 @@ import '@awesome.me/webawesome/dist/components/dialog/dialog.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/popover/popover.js';
 import '@awesome.me/webawesome/dist/components/split-panel/split-panel.js';
-import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 import { html, nothing, render, type TemplateResult } from 'lit';
 import { repeat } from 'lit/directives/repeat.js';
 import { z } from 'zod';
