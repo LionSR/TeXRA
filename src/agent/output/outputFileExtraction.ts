@@ -92,7 +92,14 @@ const handleNoOutputs = Effect.fn('reflection.handleNoOutputs')(function* (
   // below still fires, so the round is never recorded as a quiet success.
   const rawText = yield* fs.readFileString(outputLocation.absolutePath).pipe(
     Effect.map(normalizeLineEndings),
-    Effect.orElseSucceed(() => ''),
+    Effect.catch((error) =>
+      Effect.sync(() => {
+        deps.logger.warn(
+          `The raw response at ${outputLocation.absolutePath} could not be read: ${error.message}`,
+        );
+        return '';
+      }),
+    ),
   );
   if (rawText.trim().length > 0) {
     deps.logger.warn(

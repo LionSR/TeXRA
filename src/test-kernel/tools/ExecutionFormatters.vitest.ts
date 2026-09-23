@@ -13,6 +13,7 @@ import {
   type RunOutcome,
   type SessionEventDraft,
 } from '@shared/schemas';
+import { DatabaseReadFailed } from '@shared/session/database';
 import {
   createTestSession,
   publishTestRunStart,
@@ -243,7 +244,14 @@ describe('resolveRunLiveness', () => {
   it.effect('reports an unreadable claim rather than a terminal reading', () =>
     Effect.gen(function* () {
       persisted(null);
-      claimOwner.mockReturnValue(Effect.fail(new Error('claim unreadable')));
+      claimOwner.mockReturnValue(
+        Effect.fail(
+          new DatabaseReadFailed({
+            path: 'session.db',
+            cause: new Error('claim unreadable'),
+          }),
+        ),
+      );
 
       const liveness = yield* onSessionRuns(
         resolveRunLiveness(RUN_ID, session),

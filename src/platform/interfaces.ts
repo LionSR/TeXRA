@@ -333,12 +333,13 @@ export class AgentResume extends Context.Service<
 /**
  * The host's optional "tool is missing" reporter. The VS Code host is the only
  * one with a UI for it; every other host omits it, and callers treat an absent
- * reporter as silence.
+ * reporter as silence. It settles its own presentation failures, so the probe
+ * that reports a missing tool still gets its answer.
  */
 export type ToolMissingHandler = (
   message: string,
   openDocsCommand?: string,
-) => void | Promise<void>;
+) => Effect.Effect<void>;
 
 /**
  * The process's tool-missing reporter as an Effect service

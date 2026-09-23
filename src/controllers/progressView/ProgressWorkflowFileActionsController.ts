@@ -53,7 +53,6 @@ interface ProgressWorkflowFileActionsHost {
   readFile(file: string): FileAction<string>;
   showInfo(message: string): FileAction<void>;
   showError(message: string): FileAction<void>;
-  logError?(message: string, error: unknown): void;
 }
 
 interface ProgressWorkflowFileActionsControllerDeps {
@@ -106,12 +105,14 @@ export class ProgressWorkflowFileActionsController {
       yield* this.deps.host.openDirectory(directoryToReveal);
     }).pipe(
       Effect.catch((error) =>
-        Effect.gen({ self: this }, function* () {
-          this.deps.host.logError?.('Failed to open run folder', error);
-          yield* this.deps.host.showError(
-            `Failed to open run folder: ${toErrorMessage(error)}`,
-          );
-        }),
+        Effect.logError('Failed to open run folder', error).pipe(
+          withLogChannel(CHANNEL),
+          Effect.andThen(
+            this.deps.host.showError(
+              `Failed to open run folder: ${toErrorMessage(error)}`,
+            ),
+          ),
+        ),
       ),
     );
   }

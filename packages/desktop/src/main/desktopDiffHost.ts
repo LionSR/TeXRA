@@ -8,13 +8,15 @@ import {
   type DiffSource,
   type DiffViewHost,
 } from '@hosts/uiHosts';
-import type { ProcessRuntime } from '@platform/processRuntime';
+import {
+  type ProcessRuntime,
+  withProcessServices,
+} from '@platform/processRuntime';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { monacoLanguageForPath } from '@shared/monaco/monacoLanguage';
 import { computeLineChangeSummary } from '@tools/approval/toolEditApproval';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { unifiedDiffText } from '@utils/text/unifiedDiff';
-import { createTexraTempDir } from '@utils/files/tempDir';
 
 import {
   DESKTOP_DIFF_COMMANDS,
@@ -91,16 +93,6 @@ interface DesktopDiffHost {
 export function createDesktopDiffHost(
   options: DesktopDiffHostOptions,
 ): DesktopDiffHost {
-  /** The window's services, handed to a program the caller runs on a runtime
-   *  of its own: `DiffViewHost` takes no requirements, so the filesystem the
-   *  reads and writes below need is provided here. */
-  const withProcessServices = <A, E>(
-    program: Effect.Effect<A, E, FileSystem.FileSystem>,
-  ): Effect.Effect<A, E> =>
-    Effect.flatMap(options.runtime.contextEffect, (context) =>
-      Effect.provideContext(program, context),
-    );
-
   function openDiff(
     reviewSession: string,
     original: DiffSource,
@@ -109,6 +101,7 @@ export function createDesktopDiffHost(
     previewId: string = nanoid(),
   ): Effect.Effect<void, Error> {
     return withProcessServices(
+      options.runtime,
       Effect.gen(function* () {
         const fs = yield* FileSystem.FileSystem;
         // Both sides of a diff are absolute paths their caller chose — a run's
@@ -155,9 +148,9 @@ export function createDesktopDiffHost(
         const patch = diffBody
           ? `--- ${original.filePath}\n+++ ${proposed.filePath}\n${diffBody}\n`
           : `No textual changes for ${path.basename(proposed.filePath)}.\n`;
-        const tempDir = yield* Effect.promise(() =>
-          createTexraTempDir('texra-desktop-diff-'),
-        );
+        const tempDir = yield* fs.makeTempDirectory({
+          prefix: 'texra-desktop-diff-',
+        });
         options.recordPatchDir(tempDir);
         const diffPath = path.join(tempDir, `${nanoid()}.diff`);
 

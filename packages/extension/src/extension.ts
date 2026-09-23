@@ -39,7 +39,9 @@ import {
   openProjectStateStore,
 } from '@controllers/session/appStateStore';
 import { bootstrapHost } from '@controllers/hostBootstrap';
+import { fromHost } from '@controllers/session/hostCallFailure';
 import { emitAppSignal } from '@eventBus/AppSignals';
+import { vscodeToolMissingReporter } from '@frontend/system/commandUtils';
 import { subscribeAppSignal } from '@frontend/events/appSignalSubscriptions';
 import { refreshApiKeyStatusBar } from '@frontend/statusBar/apiKeyStatusBar';
 import { acquireVscodeLanguageModel } from '@frontend/lm/acquireVscodeLanguageModel';
@@ -687,18 +689,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
       () => runtimeSession,
       {
         languageModel,
-        toolMissingHandler: async (message, openDocsCommand) => {
-          const actions = openDocsCommand ? ['View Installation Guide'] : [];
-          log.error(message);
-          const choice = await vscode.window.showErrorMessage(
-            message,
-            ...actions,
-          );
-          if (choice === 'View Installation Guide' && openDocsCommand) {
-            const [command, ...args] = openDocsCommand.split(',');
-            void vscode.commands.executeCommand(command, ...args);
-          }
-        },
+        toolMissingHandler: vscodeToolMissingReporter,
       },
     );
   const { globalState } = roots;
@@ -769,7 +760,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
       `Failed to initialize agent index: ${toErrorMessage(Cause.squash(agentIndex.cause))}`,
     );
   } else {
-    void runtime.runPromise(
+    runtime.runFork(
       loadAgents().pipe(
         Effect.catchCause((cause) =>
           Effect.logWarning(
@@ -835,22 +826,18 @@ async function activateExtension(context: vscode.ExtensionContext) {
     // the Tools tab and the next run's tool list see the new token presence.
     subscribeAppSignal(runtime, 'credentialChanged', ({ key }) => {
       if (key !== GITHUB_TOKEN_STORAGE_KEY) return;
-      void runtime.runPromise(refreshToolAvailabilityLogged('secret change'));
+      runtime.runFork(refreshToolAvailabilityLogged('secret change'));
     }),
     // Lean/LaTeX extension installed or removed → re-probe so the Tools tab
     // reflects the new state without the user clicking Re-check.
     vscode.extensions.onDidChange(() => {
-      void runtime.runPromise(
-        refreshToolAvailabilityLogged('extension change'),
-      );
+      runtime.runFork(refreshToolAvailabilityLogged('extension change'));
     }),
     // Workspace folders opened/closed can flip `isGitRepository`, which
     // gates the GitHub PR subscription tool group. ProgressViewProvider owns
     // the ordered workspace-storage and native-config replacement.
     vscode.workspace.onDidChangeWorkspaceFolders(() => {
-      void runtime.runPromise(
-        refreshToolAvailabilityLogged('workspace folder change'),
-      );
+      runtime.runFork(refreshToolAvailabilityLogged('workspace folder change'));
     }),
   );
   const gitHubAuthListener = subscribeAppSignal(
@@ -1041,12 +1028,20 @@ async function activateExtension(context: vscode.ExtensionContext) {
     // Land first-run users on the main welcome card so the credential choice
     // (ChatGPT subscription first) is the first real action, then open the
     // walkthrough alongside for the rest of the onboarding tips.
-    void vscode.commands
-      .executeCommand('texra.showMainView')
-      .then(() =>
-        vscode.commands.executeCommand(EXTENSION_COMMANDS.OPEN_GETTING_STARTED),
-      )
-      .then(() => runtime.runPromise(globalState.update(welcomeKey, true)));
+    // A failure leaves the flag unset, so the welcome shows again next time.
+    runtime.runFork(
+      Effect.forEach(
+        ['texra.showMainView', EXTENSION_COMMANDS.OPEN_GETTING_STARTED],
+        (id) => fromHost(id, () => vscode.commands.executeCommand(id)),
+        { discard: true },
+      ).pipe(
+        Effect.andThen(globalState.update(welcomeKey, true)),
+        Effect.catchCause((cause) =>
+          Effect.logWarning('Welcome failed', cause),
+        ),
+        withLogChannel(EXTENSION_CHANNEL),
+      ),
+    );
   }
 }
 

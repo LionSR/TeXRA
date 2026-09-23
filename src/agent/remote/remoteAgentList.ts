@@ -49,11 +49,6 @@ type RemoteAgentListQueryError = z.infer<
   typeof RemoteAgentListQueryErrorSchema
 >;
 
-type RemoteAgentListQueryResult = {
-  data: RemoteAgentListRow[] | null;
-  error: RemoteAgentListQueryError | null;
-};
-
 /** Parse DB row to RemoteAgentListItem, returning null on validation failure. */
 function parseListItemRow(
   row: RemoteAgentListRow,
@@ -91,15 +86,8 @@ export function listRemoteAgents(): Effect.Effect<RemoteAgentListItem[]> {
     const token = yield* auth.value.accessToken;
     if (!token) return [];
 
-    const { data, error } = yield* fetchRemoteAgentListRows(token);
-
-    if (error) {
-      return yield* new RemoteAgentListError({
-        message: error.message ?? 'remote list request failed',
-      });
-    }
-
-    const items = yield* Effect.forEach(data ?? [], parseListItemRow);
+    const rows = yield* fetchRemoteAgentListRows(token);
+    const items = yield* Effect.forEach(rows, parseListItemRow);
     return items.filter(filterNotNull);
   }).pipe(
     Effect.catch((error: RemoteAgentListError) =>
@@ -113,7 +101,7 @@ export function listRemoteAgents(): Effect.Effect<RemoteAgentListItem[]> {
 
 function fetchRemoteAgentListRows(
   accessToken: string,
-): Effect.Effect<RemoteAgentListQueryResult, RemoteAgentListError> {
+): Effect.Effect<RemoteAgentListRow[], RemoteAgentListError> {
   const url = new URL('/rest/v1/remote_agents', SUPABASE_CONFIG.url);
   url.searchParams.set('select', REMOTE_AGENT_LIST_COLUMNS);
   url.searchParams.set('order', 'name.asc');
@@ -122,8 +110,9 @@ function fetchRemoteAgentListRows(
   // is awaited by registry/settings refreshes and treats failure as an empty
   // list, so ky's default GET retries (which honor Retry-After on 429/503)
   // would block the UI rather than surfacing immediately.
-  const request = Effect.tryPromise({
-    try: () =>
+  // The fiber's own signal aborts the request when the load is interrupted.
+  return Effect.tryPromise({
+    try: (signal) =>
       ky
         .get(url, {
           headers: {
@@ -133,43 +122,36 @@ function fetchRemoteAgentListRows(
           },
           retry: 0,
           timeout: false,
-          signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+          signal: AbortSignal.any([
+            signal,
+            AbortSignal.timeout(FETCH_TIMEOUT_MS),
+          ]),
         })
         .json<RemoteAgentListRow[]>(),
-    catch: ensureError,
+    catch: remoteAgentListError,
   });
+}
 
-  return request.pipe(
-    Effect.map((data): RemoteAgentListQueryResult => ({ data, error: null })),
-    Effect.catch((error: unknown) => {
-      if (!(error instanceof HTTPError)) {
-        return Effect.fail(
-          new RemoteAgentListError({
-            message: toErrorMessage(error),
-            cause: error,
-          }),
-        );
-      }
-
-      const rawBody = errorDataToString(error.data);
-      const parsedError = rawBody
-        ? Result.getOrElse(
-            parseJsonWith(rawBody, RemoteAgentListQueryErrorSchema),
-            () => ({ message: rawBody }),
-          )
-        : {};
-      const fallbackMessage =
-        `${error.response.status} ${error.response.statusText}`.trim();
-      return Effect.succeed({
-        data: null,
-        error: {
-          ...parsedError,
-          message:
-            parsedError.message ||
-            fallbackMessage ||
-            'remote list request failed',
-        },
-      });
-    }),
-  );
+/** A rejected list request, worded from the query's own error body when the
+ *  relay sent one. */
+function remoteAgentListError(error: unknown): RemoteAgentListError {
+  if (!(error instanceof HTTPError)) {
+    return new RemoteAgentListError({
+      message: toErrorMessage(error),
+      cause: error,
+    });
+  }
+  const rawBody = errorDataToString(error.data);
+  const parsedError: RemoteAgentListQueryError = rawBody
+    ? Result.getOrElse(
+        parseJsonWith(rawBody, RemoteAgentListQueryErrorSchema),
+        () => ({ message: rawBody }),
+      )
+    : {};
+  const fallbackMessage =
+    `${error.response.status} ${error.response.statusText}`.trim();
+  return new RemoteAgentListError({
+    message:
+      parsedError.message || fallbackMessage || 'remote list request failed',
+  });
 }

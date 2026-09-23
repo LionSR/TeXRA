@@ -956,7 +956,7 @@ describe('desktop settings IPC', () => {
   );
 
   it('requires UI confirmation before deleting memory', async () => {
-    const confirmAction = vi.fn(async () => false);
+    const confirmAction = vi.fn(() => Effect.succeed(false));
     const { settings, posted } = createCapturedSettingsFixture({
       ui: { confirmAction },
     });

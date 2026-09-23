@@ -39,8 +39,6 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'SetupAssistant';
 const log = createLog(CHANNEL);
-const credentialLog = createLog('Setup Credentials');
-
 interface LaunchModelResolution {
   model: string;
   requiresOpenRouter: boolean;
@@ -124,7 +122,9 @@ export function hasAnyUsableSetupCredential(
   stores: SettingsStores,
   secrets: PlatformSecrets,
 ): Effect.Effect<boolean, never, LanguageModel> {
-  return hasUsableSetupCredential(stores, secrets, credentialLog.warn);
+  return hasUsableSetupCredential(stores, secrets).pipe(
+    withLogChannel('Setup Credentials'),
+  );
 }
 
 const ensureCredentialOrPrompt = Effect.fn('ensureCredentialOrPrompt')(

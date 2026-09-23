@@ -44,32 +44,20 @@ interface ToolConfig {
 }
 
 /**
- * Hand the missing-tool message to the host, whose handler is the one foreign
- * edge here. A handler that rejects is reported rather than dropped: the probe
- * itself succeeded, so the caller still gets its answer. The reporter is the
- * process's optional `ToolMissingReporter` service; the composition root omits
- * it where no host UI exists, so an absent port reads as silence.
+ * Hand the missing-tool message to the host. The reporter is the process's
+ * optional `ToolMissingReporter` service; the composition root omits it where
+ * no host UI exists, so an absent port reads as silence.
  */
 function reportMissingTool(
   message: string,
   openDocsCommand?: string,
 ): Effect.Effect<void> {
   return Effect.serviceOption(ToolMissingReporter).pipe(
-    Effect.flatMap((reportMissing) =>
-      Option.isNone(reportMissing)
-        ? Effect.void
-        : Effect.tryPromise({
-            try: async () => {
-              await reportMissing.value(message, openDocsCommand);
-            },
-            catch: ensureError,
-          }).pipe(
-            Effect.catch((err) =>
-              Effect.logError(
-                `Failed to report missing tool: ${toErrorMessage(err)}`,
-              ).pipe(withLogChannel(CHANNEL)),
-            ),
-          ),
+    Effect.flatMap(
+      Option.match({
+        onNone: () => Effect.void,
+        onSome: (report) => report(message, openDocsCommand),
+      }),
     ),
   );
 }

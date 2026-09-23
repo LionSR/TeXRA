@@ -30,7 +30,11 @@ import {
 import { SettingsAgentCatalogController } from '@controllers/settingsView/SettingsAgentCatalogController';
 import { fetchRemoteAgentPromptYaml } from '@controllers/settingsView/remoteAgentPrompt';
 import { applySettingsTeamRoster } from '@controllers/settingsView/SettingsTeamRosterController';
-import { ExternalOpenFailed, type MessageHost } from '@hosts/uiHosts';
+import {
+  ExternalOpenFailed,
+  type MessageHost,
+  type PromptFailed,
+} from '@hosts/uiHosts';
 import type { StateStore } from '@platform/interfaces';
 import type { AgentDirectoriesFailed } from '@platform/interfaces';
 import type { ProcessServices } from '@platform/processRuntime';
@@ -49,7 +53,6 @@ import {
   buildCustomAgentDirMessage,
 } from '@shared/settingsView/handlers/agentSelectionHandlers';
 import type { SettingsStatePorts } from '@shared/settingsView/types';
-import { createTexraTempDir } from '@utils/files/tempDir';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 import type { PreviewUnavailable } from './desktopPreviewHost.js';
@@ -158,7 +161,7 @@ interface DefaultDesktopAgentSettingsControllerOptions extends SettingsStatePort
     readonly confirm: (input: {
       title: string;
       message: string;
-    }) => Promise<boolean>;
+    }) => Effect.Effect<boolean, PromptFailed>;
     readonly chooseTeamAvailability: (
       prompt: TeamAvailabilityPrompt,
     ) => Effect.Effect<
@@ -245,10 +248,9 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
       openReadOnlyDocument: (filePath) =>
         Effect.gen(function* () {
           const target = path.join(
-            yield* Effect.tryPromise({
-              try: () => createTexraTempDir('texra-agent-yaml-'),
-              catch: ensureError,
-            }),
+            yield* FileSystem.FileSystem.use((fs) =>
+              fs.makeTempDirectory({ prefix: 'texra-agent-yaml-' }),
+            ),
             path.basename(filePath),
           );
           yield* FileSystem.FileSystem.use((fs) =>
@@ -262,16 +264,12 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
           catch: ensureError,
         }),
       confirmAction: (message, confirmLabel) =>
-        Effect.tryPromise({
-          try: () =>
-            prompts.confirm({
-              title:
-                confirmLabel === 'Delete'
-                  ? 'Delete custom agent?'
-                  : 'Overwrite custom copy?',
-              message,
-            }),
-          catch: ensureError,
+        prompts.confirm({
+          title:
+            confirmLabel === 'Delete'
+              ? 'Delete custom agent?'
+              : 'Overwrite custom copy?',
+          message,
         }),
       showInfoMessage: notifications.showInfoMessage,
       showErrorMessage: notifications.showErrorMessage,
@@ -605,15 +603,18 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
           }
 
           const target = path.join(
-            yield* Effect.tryPromise({
-              try: () => createTexraTempDir('texra-agent-prompt-'),
-              catch: (cause) =>
-                new AgentSettingsActionFailed({
-                  member: 'createTempDir',
-                  message: `A temporary directory could not be created: ${toErrorMessage(cause)}`,
-                  cause,
-                }),
-            }),
+            yield* FileSystem.FileSystem.use((fs) =>
+              fs.makeTempDirectory({ prefix: 'texra-agent-prompt-' }),
+            ).pipe(
+              Effect.mapError(
+                (cause) =>
+                  new AgentSettingsActionFailed({
+                    member: 'createTempDir',
+                    message: `A temporary directory could not be created: ${toErrorMessage(cause)}`,
+                    cause,
+                  }),
+              ),
+            ),
             `${data.agentName}.yaml`,
           );
           const fs = yield* FileSystem.FileSystem;
@@ -698,13 +699,9 @@ export class DefaultDesktopAgentSettingsController implements DesktopAgentSettin
         return;
       }
 
-      const confirmed = yield* Effect.tryPromise({
-        try: () =>
-          this.prompts.confirm({
-            title: 'Delete team?',
-            message: `Delete team "${target.name}"?`,
-          }),
-        catch: ensureError,
+      const confirmed = yield* this.prompts.confirm({
+        title: 'Delete team?',
+        message: `Delete team "${target.name}"?`,
       });
       if (!confirmed) return;
 

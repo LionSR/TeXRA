@@ -83,6 +83,10 @@ export class CliUsageError extends Error {
   }
 }
 
+/** Fail the command with a usage error. */
+export const failUsage = (message: string) =>
+  Effect.fail(new CliUsageError(message));
+
 export interface CliAmbientState {
   readonly isCi: boolean;
   readonly stdinIsTty: boolean;

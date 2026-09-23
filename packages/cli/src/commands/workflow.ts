@@ -8,7 +8,7 @@ import type { SessionOpenError } from '@shared/session/database';
 import { snapshotHoldsTerminalCompileRejection } from '../runtime/toolUseResumeData';
 
 import {
-  CliUsageError,
+  failUsage,
   readCliStdinText,
   type CliContext,
 } from '../runtime/cliContext';
@@ -105,7 +105,7 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
   init: HeadlessRunInit,
 ): Effect.fn.Return<number, Error, CliRunServices> {
   if (init.output && init.outputDir) {
-    throw new CliUsageError('Use either --output or --output-dir, not both.');
+    return yield* failUsage('Use either --output or --output-dir, not both.');
   }
   const instruction = yield* resolveFileBackedInstruction(init, context.cwd);
   // Neither category can run this: a workflow agent needs at least one input
@@ -113,7 +113,7 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
   // platform init keeps a plain usage error off the agent-catalog fetch a
   // signed-in session would otherwise pay for.
   if (!instruction && init.inputFiles.length === 0) {
-    throw new CliUsageError(
+    return yield* failUsage(
       'Provide --instruction or --instruction-file for a tool-use agent, or --input for a workflow agent.',
     );
   }
@@ -130,7 +130,7 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
   // `mkdir -p` their destination before `withExpandedRunInputs` would report
   // it. Refuse first so an invalid command leaves nothing on disk.
   if (init.inputFiles.length === 0) {
-    throw new CliUsageError(WORKFLOW_INPUT_REQUIRED_MESSAGE);
+    return yield* failUsage(WORKFLOW_INPUT_REQUIRED_MESSAGE);
   }
   // Reject `--output-dir <path>` early when the path already points at a
   // non-directory (else we'd run the full workflow and EEXIST at the end).
@@ -140,7 +140,7 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
   // full agent run otherwise.
   yield* assertOutputFileAvailable(init.output, context.cwd);
   if (init.output && hasMixedStdinWorkflowInputSpecs(init.inputFiles)) {
-    throw new CliUsageError(MULTI_INPUT_OUTPUT_MESSAGE);
+    return yield* failUsage(MULTI_INPUT_OUTPUT_MESSAGE);
   }
 
   return yield* withExpandedRunInputs(
@@ -151,7 +151,7 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
     ({ inputFiles, contextFiles, stdinInputPath }) =>
       Effect.gen(function* () {
         if (init.output && inputFiles.length > 1) {
-          throw new CliUsageError(MULTI_INPUT_OUTPUT_MESSAGE);
+          return yield* failUsage(MULTI_INPUT_OUTPUT_MESSAGE);
         }
 
         const model = yield* selectCliRunModel(
@@ -226,12 +226,12 @@ const runToolUseAgent = Effect.fn('runToolUseAgent')(function* (
     ? '--output'
     : init.outputDir && '--output-dir';
   if (workflowOnlyFlag) {
-    throw new CliUsageError(
+    return yield* failUsage(
       `${workflowOnlyFlag} is only available for workflow agents; "${init.agent}" is a ${AgentCategory.ToolUse} agent.`,
     );
   }
   if (!instruction) {
-    throw new CliUsageError('Provide --instruction or --instruction-file.');
+    return yield* failUsage('Provide --instruction or --instruction-file.');
   }
 
   const model = yield* selectCliRunModel(context, init.model, 'chat', services);

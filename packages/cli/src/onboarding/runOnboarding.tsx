@@ -27,7 +27,8 @@ import {
   type SubscriptionAccount,
 } from '@controllers/modelAccess/subscriptionProviders';
 import { planOnboardingFunnelTransition } from '@controllers/onboarding/onboardingFunnel';
-import { createLog, warn as logWarning } from '@logger/logUtils';
+import { warn as logWarning } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import {
   API_PROVIDERS,
   apiKeyEnvName,
@@ -94,8 +95,6 @@ interface OnboardingGateContext {
 }
 
 const LOG_CHANNEL = 'CLI Onboarding';
-const credentialLog = createLog('Setup Credentials');
-
 /**
  * The gate degrades to "not configured yet" when a state read or write fails,
  * which at worst re-prompts. Say why in the log so a read-only home directory
@@ -154,8 +153,7 @@ export const maybeRunCliOnboarding = Effect.fn('maybeRunCliOnboarding')(
     const hasCredential = yield* hasUsableSetupCredential(
       services,
       services.secrets,
-      credentialLog.warn,
-    );
+    ).pipe(withLogChannel('Setup Credentials'));
     // Route through the same funnel-transition planner the extension/desktop
     // hosts use, rather than a hand-copied precedence ladder. `selectSetupAgent`
     // is discarded: the CLI has no launcher agent list to steer. Clearing a

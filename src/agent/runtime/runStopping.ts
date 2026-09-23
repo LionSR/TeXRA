@@ -113,7 +113,7 @@ export class RunStopper {
     return Effect.acquireUseRelease(
       this.acquireRunClaim(runId),
       () => this.applyStop(runId, options),
-      (release) => release.pipe(Effect.orDie),
+      (release) => release,
     );
   }
 

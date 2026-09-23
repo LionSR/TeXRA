@@ -6,7 +6,10 @@ import {
   type RunAgentRequest,
   type SessionHandle,
 } from '@agent/runtime';
-import type { ProcessRuntime } from '@platform/processRuntime';
+import {
+  type ProcessRuntime,
+  withProcessServices,
+} from '@platform/processRuntime';
 import type { RequestOpenFilePayload } from '@shared/schemas';
 import { ensureError } from '@utils/errors/errorMessage';
 import {
@@ -85,7 +88,5 @@ export function launchDesktopAgent(
         }),
     }).pipe(Effect.asVoid);
   });
-  return Effect.flatMap(context.runtime.contextEffect, (runtimeContext) =>
-    Effect.provideContext(launch, runtimeContext),
-  );
+  return withProcessServices(context.runtime, launch);
 }

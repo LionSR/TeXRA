@@ -349,7 +349,7 @@ export class AgentHandlers {
       this.ctx,
       'Failed to apply agent team',
       withAgentCatalogAuthRefreshDeferred(
-        applySettingsTeamRoster<ProcessServices>(data.presetId, {
+        applySettingsTeamRoster(data.presetId, {
           catalog: this.catalogController,
           loadLocalCatalog: () => loadAgents({ includeRemote: false }),
           canAccessRemoteCatalog: () => supabaseAuthenticated,

@@ -1,7 +1,7 @@
 import type { MainViewRunLaunchHost } from '@controllers/mainView/backend/MainViewRunLaunchController';
 import type { TranscriptExportFormat } from '@controllers/progressView/exportTranscript';
 import type { TranscriptExportFailed } from '@controllers/progressView/transcriptExportFailure';
-import type { DiffViewHost, MessageHost } from '@hosts/uiHosts';
+import type { DiffViewHost, MessageHost, PromptFailed } from '@hosts/uiHosts';
 import type { InstructionAction } from '@shared/schemas';
 import type { BuildDisplayFn } from '@tools/approval/latexPreview';
 import type { Effect } from 'effect';
@@ -44,5 +44,5 @@ export interface DesktopAgentRunHost
   ): Effect.Effect<void, PreviewUnavailable>;
   openBuildDisplay: BuildDisplayFn;
   openDiff: DiffViewHost['openDiff'];
-  confirmAcceptFile(message: string): Promise<boolean>;
+  confirmAcceptFile(message: string): Effect.Effect<boolean, PromptFailed>;
 }

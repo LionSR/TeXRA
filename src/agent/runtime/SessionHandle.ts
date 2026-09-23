@@ -186,17 +186,6 @@ export type SessionHandleInit = Partial<
   readonly transcriptMode?: StreamLogStoreMode;
 };
 
-/**
- * The graph's refusals arrive as causes; every door this class exposes reports
- * them as a plain `Error`, so one normalization serves them all.
- */
-const asTypedError = <A, E>(
-  effect: Effect.Effect<A, E>,
-): Effect.Effect<A, Error> =>
-  effect.pipe(
-    Effect.catchCause((cause) => Effect.fail(ensureError(Cause.squash(cause)))),
-  );
-
 export class SessionHandle {
   /**
    * The one session state every renderer of this session reads (PRD
@@ -518,12 +507,11 @@ export class SessionHandle {
    *  before a relaunch journals into it. */
   acquireClaims(
     id: AggregateId,
-  ): Effect.Effect<Effect.Effect<void, Error>, Error> {
-    return asTypedError(
-      this.graph
-        .acquireClaims(id)
-        .pipe(Effect.map((release) => asTypedError(release))),
-    );
+  ): Effect.Effect<
+    Effect.Effect<void, DatabaseWriteFailed>,
+    DatabaseReadFailed | DatabaseWriteFailed
+  > {
+    return this.graph.acquireClaims(id);
   }
 
   /**
@@ -541,16 +529,16 @@ export class SessionHandle {
    * never from the view: the view's liveness comes from a prober that only
    * watches owners of runs already resident in it.
    */
-  claimOwner(runId: RunId): Effect.Effect<AggregateClaim, Error> {
-    return asTypedError(this.graph.claimOwner(runId));
+  claimOwner(runId: RunId): Effect.Effect<AggregateClaim, DatabaseReadFailed> {
+    return this.graph.claimOwner(runId);
   }
 
   /** Drop this process's claim on one aggregate, so the next process resumes
    *  it instead of reading a live owner: a run's when its lease ends, a
    *  workflow checkpoint's when its invocation does. The claim belongs to the
    *  invocation, not to the process, and this is its one release. */
-  releaseClaims(id: AggregateId): Effect.Effect<void, Error> {
-    return asTypedError(this.graph.releaseClaims(id));
+  releaseClaims(id: AggregateId): Effect.Effect<void, DatabaseWriteFailed> {
+    return this.graph.releaseClaims(id);
   }
 
   /**

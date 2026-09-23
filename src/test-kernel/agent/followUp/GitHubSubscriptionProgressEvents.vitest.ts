@@ -134,7 +134,7 @@ class TestPollingSource extends PollingSourceBase<
     return this.handleFailure(
       'owner/repo',
       state,
-      new GitHubAuthError('bad token'),
+      new GitHubAuthError({ message: 'bad token' }),
       Date.now(),
     );
   }

@@ -20,10 +20,12 @@ import { randomUUID } from 'node:crypto';
 import {
   Cause,
   Context,
+  Data,
   Effect,
   Exit,
   type FileSystem,
   Layer,
+  Result,
   Scope,
   Stream,
   SynchronizedRef,
@@ -205,10 +207,11 @@ function turnReasoning(turn: TurnResult): string {
 }
 
 /** A failed attempt's classification; the rows it left are in the cell. */
-class AttemptFailed extends Error {
-  constructor(readonly failure: ModelFailure) {
-    super(failure.formatted.message);
-    this.name = 'AttemptFailed';
+class AttemptFailed extends Data.TaggedError('AttemptFailed')<{
+  readonly failure: ModelFailure;
+}> {
+  override get message(): string {
+    return this.failure.formatted.message;
   }
 }
 
@@ -324,9 +327,9 @@ export const modelInvokerLayer = (): Layer.Layer<
         partialText?: string,
       ) =>
         Effect.fail(
-          new AttemptFailed(
-            classifyModelFailure(cause, bound.usageRoute, partialText),
-          ),
+          new AttemptFailed({
+            failure: classifyModelFailure(cause, bound.usageRoute, partialText),
+          }),
         );
 
       /**
@@ -1209,15 +1212,15 @@ export const modelInvokerLayer = (): Layer.Layer<
           }
           if (Exit.isSuccess(exit)) return exit.value;
           if (Cause.hasInterrupts(exit.cause)) return yield* Effect.interrupt;
-          const error = Cause.squash(exit.cause);
-          if (!(error instanceof AttemptFailed)) {
-            if (
-              error instanceof RunLedgerRefused ||
-              error instanceof DatabaseWriteFailed
-            ) {
-              return yield* Effect.fail(error);
-            }
-            return yield* Effect.die(error);
+          const found = Cause.findError(exit.cause);
+          const error = Result.isSuccess(found) ? found.success : undefined;
+          if (error?._tag !== 'AttemptFailed') {
+            const ledger =
+              error?._tag === 'RunLedgerRefused' ||
+              error?._tag === 'DatabaseWriteFailed';
+            return yield* ledger
+              ? Effect.fail(error)
+              : Effect.die(error ?? Cause.squash(exit.cause));
           }
           lastFailure = error.failure.formatted;
           failedAttempt = invocation;
