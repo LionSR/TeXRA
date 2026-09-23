@@ -17,7 +17,6 @@ import {
   latexdiffAllFailedMessage,
   NO_LATEXDIFF_OPERATIONS_MESSAGE,
 } from '@latex/latexdiff/latexdiffCopy';
-import { DEFAULT_MATH_MARKUP } from '@latex/latexdiff/mathMarkup';
 import { runLatexdiffForRun } from '@latex/latexdiff/runLatexdiff';
 import type {
   DiffProgressReporter,
@@ -25,8 +24,11 @@ import type {
 } from '@latex/latexdiff/types';
 import type { StateStore, StateReadFailed } from '@platform/interfaces';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
+import type { LatexdiffMathMarkupValue } from '@shared/constants/latexConfig';
 import type { OutputFileInfo, ReadonlyRoundIndexed } from '@shared/schemas';
 import type { Rejected } from '@shared/session/requestErrors';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { readSettingFrom } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   createExternalLocation,
@@ -206,9 +208,9 @@ export class DesktopProgressFileActions {
    * accepted file pair and therefore has a single-file fallback. Here there is
    * no such pair to fall back to — the request is scoped to a run — so an empty
    * or failed outcome reports instead, matching what the VS Code command shows
-   * when a run yields no diff operations. Like the rest of the desktop
-   * latexdiff surface it uses `DEFAULT_MATH_MARKUP`, since this host has no
-   * quick-pick to choose a markup mode with.
+   * when a run yields no diff operations. This host has no quick-pick to
+   * choose a markup mode with, so every desktop diff runs with the configured
+   * `texra.latexdiff.mathMarkup`.
    */
   diffStreamToolbarAction(
     runContext: DesktopLatexdiffRunContext,
@@ -223,7 +225,12 @@ export class DesktopProgressFileActions {
       if (yield* this.openSharedLatexdiffResults(outcome)) return;
 
       yield* this.ui.showErrorMessage(
-        latexdiffAllFailedMessage(DEFAULT_MATH_MARKUP),
+        latexdiffAllFailedMessage(
+          yield* readSettingFrom<LatexdiffMathMarkupValue>(
+            this.host.session.roots,
+            WorkspaceStateKey.LATEXDIFF_MATH_MARKUP,
+          ),
+        ),
       );
     });
   }
@@ -241,7 +248,7 @@ export class DesktopProgressFileActions {
         pathToLocationIn(this.host.session.roots.workspace, baseFile),
         pathToLocationIn(this.host.session.roots.workspace, editedFile),
         '_diff',
-        DEFAULT_MATH_MARKUP,
+        undefined,
         { cwd: this.host.session.roots.workspace },
       );
 
@@ -294,7 +301,6 @@ export class DesktopProgressFileActions {
         outputFiles: scan?.outputFiles,
         runId: runContext.runId ?? null,
         outputsByRound: hasOutputs ? runContext.outputsByRound : null,
-        mathMarkup: DEFAULT_MATH_MARKUP,
         generateBetweenRoundDiffs: true,
         runDiscovery: createLatexRunDiscovery(this.host.session),
         latexdiff: {

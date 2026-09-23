@@ -1422,7 +1422,6 @@ function createWindow(options: {
     const toolingSettingsController =
       new DefaultDesktopToolingSettingsController({
         onError: reportAsyncError,
-        workspaceState: project.roots.workspaceState,
         globalState: options.globalState,
         config: project.roots.config,
         workspaceRoot: project.roots.workspace,

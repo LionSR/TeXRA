@@ -29,7 +29,8 @@ export const LATEXDIFF_MATH_MARKUP_VALUES = [
   'coarse',
   'fine',
 ] as const;
-type LatexdiffMathMarkupValue = (typeof LATEXDIFF_MATH_MARKUP_VALUES)[number];
+export type LatexdiffMathMarkupValue =
+  (typeof LATEXDIFF_MATH_MARKUP_VALUES)[number];
 
 /** Allowed values for the LaTeX formatter selector. */
 export const LATEX_FORMATTER_VALUES = [

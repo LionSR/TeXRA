@@ -24,7 +24,11 @@ import * as path from 'node:path';
 import { Effect } from 'effect';
 
 import { isModuleNotFoundError } from '@common/errors';
-import type { StateStore, StateReadFailed } from '@platform/interfaces';
+import type { StateReadFailed } from '@platform/interfaces';
+import type { SettingsStores } from '@shared/config/settingsAccess';
+import type { CodexSandboxMode } from '@shared/schemas';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { readSettingFrom } from '@utils/config/platformSettings';
 import { ensureError } from '@utils/errors/errorMessage';
 import { IS_WINDOWS } from '@utils/system/platformPaths';
 
@@ -181,14 +185,17 @@ export const getCodexConfig = Effect.promise(
 /**
  * The sandbox mode a codex call runs under: its own override, else the
  * user-configured default. The approval prompt the loop opens and the launch
- * that follows it read the same one from here.
+ * that follows it read the same one from here. The SDK-typed return is the
+ * alignment guard between the persisted schema values and the Codex sandbox
+ * union: a schema value the SDK doesn't accept fails to compile here.
  */
 export const codexSandboxMode = (
   input: { readonly sandbox_mode?: SandboxMode | null },
-  workspaceState: StateStore,
+  stores: SettingsStores,
 ): Effect.Effect<SandboxMode, StateReadFailed> =>
-  Effect.flatMap(getCodexConfig, (config) =>
-    input.sandbox_mode == null
-      ? config.getCodexSandboxMode(workspaceState)
-      : Effect.succeed(input.sandbox_mode),
-  );
+  input.sandbox_mode == null
+    ? readSettingFrom<CodexSandboxMode>(
+        stores,
+        WorkspaceStateKey.CODEX_SANDBOX_MODE,
+      )
+    : Effect.succeed(input.sandbox_mode);

@@ -5,6 +5,7 @@ import { Effect, FileSystem, PlatformError } from 'effect';
 import { formatError } from '@common/errors';
 import { withLogChannel } from '@logger/effectLog';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
+import type { LatexdiffMathMarkupValue } from '@shared/constants/latexConfig';
 import type { FileLocation } from '@shared/schemas';
 import { readNormalizedFile } from '@utils/files/fsDurability';
 import { entryExists } from '@utils/files/fsEntryExists';
@@ -16,7 +17,6 @@ import {
 } from './latexdiff/diffFileNameManager';
 import { DiffFileProcessor } from './latexdiff/diffFileProcessor';
 import { DiffCommandExecutor } from './latexdiff/diffCommandExecutor';
-import type { MathMarkupOption } from './latexdiff/mathMarkup';
 
 export type LaTeXdiffResult =
   | {
@@ -119,7 +119,7 @@ export class LaTeXdiffService {
     inputLocation: FileLocation,
     editedLocation: FileLocation,
     suffix = '_diff',
-    mathMarkup: MathMarkupOption | undefined,
+    mathMarkup: LatexdiffMathMarkupValue | undefined,
     options: {
       /**
        * Directory latexdiff runs in. Required so the caller names the root it
@@ -204,7 +204,7 @@ export class LaTeXdiffService {
   runDiffVc(
     inputLocation: FileLocation,
     commitHash: string,
-    mathMarkup?: MathMarkupOption,
+    mathMarkup?: LatexdiffMathMarkupValue,
   ): Effect.Effect<LaTeXdiffResult, never, FileSystem.FileSystem> {
     return Effect.gen({ self: this }, function* () {
       const inputFile = inputLocation.absolutePath;
@@ -262,7 +262,7 @@ export class LaTeXdiffService {
     baseLocation: FileLocation,
     outputLocation: FileLocation,
     round: number,
-    mathMarkup: MathMarkupOption | undefined,
+    mathMarkup: LatexdiffMathMarkupValue | undefined,
     options: { cwd: string | undefined; outputDirectory?: string },
   ): Effect.Effect<LaTeXdiffResult, never, FileSystem.FileSystem> {
     return Effect.gen({ self: this }, function* () {
@@ -290,7 +290,7 @@ export class LaTeXdiffService {
     secondLocation: FileLocation,
     fromRound: number,
     toRound: number,
-    mathMarkup: MathMarkupOption | undefined,
+    mathMarkup: LatexdiffMathMarkupValue | undefined,
     options: { cwd: string | undefined; outputDirectory?: string },
   ): Effect.Effect<LaTeXdiffResult, never, FileSystem.FileSystem> {
     return Effect.gen({ self: this }, function* () {

@@ -139,7 +139,6 @@ function createFixture(
   const reportedErrors: unknown[] = [];
   const commands: string[] = [];
   const globalState = overrides.globalState ?? new FakeStateStore();
-  const workspaceState = overrides.workspaceState ?? new FakeStateStore();
   const controller = new DefaultDesktopToolingSettingsController({
     onError: (error) => {
       reportedErrors.push(error);
@@ -147,7 +146,6 @@ function createFixture(
     },
     config: new FakeConfigProvider(),
     globalState,
-    workspaceState,
     workspaceRoot: undefined,
     renderer: {
       postToRenderer: (message) => {
@@ -187,7 +185,6 @@ function createFixture(
     globalState,
     posted,
     reportedErrors,
-    workspaceState,
   };
 }
 
@@ -219,21 +216,18 @@ describe('DefaultDesktopToolingSettingsController', () => {
         {},
         {
           onPost: (_message, posted) => {
-            if (posted.length === 4)
+            if (posted.length === 3)
               Deferred.doneUnsafe(repainted, Effect.void);
           },
         },
       );
 
-      yield* controller.postLatexConfigValues();
       yield* withProcessServices(testRuntime(), controller.postStartupData());
 
-      const startup = posted.map(commandOf);
-      expect(startup[0]).toBe(SETTINGS_VIEW_COMMANDS.UPDATE_SETTINGS_SNAPSHOT);
       // `postStartupData` fans the dashboard and LaTeX reads out with
       // `Effect.all`, so which of the two posts first is not a contract; that
       // both land before the refresh repaint below is.
-      expect([...startup.slice(1)].sort()).toEqual(
+      expect(posted.map(commandOf).sort()).toEqual(
         [
           SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD,
           SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_SETTINGS_STATUS,
@@ -245,7 +239,7 @@ describe('DefaultDesktopToolingSettingsController', () => {
 
       finishRefresh?.();
       yield* Deferred.await(repainted);
-      expect(posted.map(commandOf)).toHaveLength(4);
+      expect(posted.map(commandOf)).toHaveLength(3);
       expect(posted.map(commandOf).at(-1)).toBe(
         SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD,
       );

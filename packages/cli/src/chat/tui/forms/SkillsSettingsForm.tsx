@@ -7,12 +7,11 @@ import {
   type ActiveSkillSourceScope,
   type SkillDisplayItem,
 } from '@shared/schemas';
-import { stateSettingByKey } from '@shared/state/stateSettings';
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import { readSetting } from '@shared/config/settingsAccess';
 import { applyStateSettingUpdate } from '@shared/settingsView/handlers/stateSettingWrite';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { loadRuntimeSkillDisplay } from '@skills/runtimeSkills';
+import { readSettingFrom } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { setTransientNotice } from '../state/cliState';
@@ -42,12 +41,6 @@ interface SkillsSettingsFormProps {
   readonly onClose: () => void;
 }
 
-function requireSetting(key: string) {
-  const entry = stateSettingByKey(key);
-  if (!entry) throw new Error(`Missing skill setting: ${key}`);
-  return entry;
-}
-
 async function loadSkillsSettings(
   stores: SettingsStores,
   workspaceRoot: string | undefined,
@@ -55,16 +48,14 @@ async function loadSkillsSettings(
 ): Promise<SkillsSettingsData> {
   return runtime.runPromise(
     Effect.gen(function* () {
-      const disabledNames = (yield* readSetting(
-        requireSetting(WorkspaceStateKey.DISABLED_SKILLS),
+      const disabledNames = yield* readSettingFrom<string[]>(
         stores,
-        'cli',
-      )) as string[];
-      const disabledScopes = (yield* readSetting(
-        requireSetting(WorkspaceStateKey.DISABLED_SKILL_SOURCES),
+        WorkspaceStateKey.DISABLED_SKILLS,
+      );
+      const disabledScopes = yield* readSettingFrom<ActiveSkillSourceScope[]>(
         stores,
-        'cli',
-      )) as ActiveSkillSourceScope[];
+        WorkspaceStateKey.DISABLED_SKILL_SOURCES,
+      );
       const result = yield* loadRuntimeSkillDisplay(workspaceRoot, stores);
       return {
         skills: result.skills,

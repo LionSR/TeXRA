@@ -13,6 +13,7 @@
 import { Effect, FileSystem, type Path } from 'effect';
 
 import { withLogChannel } from '@logger/effectLog';
+import type { LatexdiffMathMarkupValue } from '@shared/constants/latexConfig';
 import {
   RunIdSchema,
   OutputFileInfoSchema,
@@ -29,7 +30,6 @@ import { runLatexdiffFromMetadata } from './diffOperations';
 import { discoverLatestRunOutputs } from './outputDiscovery';
 import { scanRunDirForOutputs } from './runOutputFiles';
 import type { LatexRunDiscoveryPort } from './runDiscovery';
-import type { MathMarkupOption } from './mathMarkup';
 import type {
   DiffProgressReporter,
   DiffRunOutcome,
@@ -83,7 +83,7 @@ export interface RunLatexdiffForRunParams {
    * present, discovery is skipped and the metadata engine runs directly.
    */
   readonly outputsByRound?: ReadonlyRoundIndexed<OutputFileInfo> | null;
-  readonly mathMarkup?: MathMarkupOption;
+  readonly mathMarkup?: LatexdiffMathMarkupValue;
   readonly generateBetweenRoundDiffs: boolean;
   /** Host-supplied diff service + logger channel (see {@link LatexdiffRuntime}). */
   readonly latexdiff: LatexdiffRuntime;

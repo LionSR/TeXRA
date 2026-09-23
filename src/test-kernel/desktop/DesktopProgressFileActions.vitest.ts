@@ -204,9 +204,12 @@ describe('DesktopProgressFileActions latexdiff', () => {
       expect.objectContaining({
         outputsByRound,
         runId: 'exec-1',
-        mathMarkup: 'coarse',
         generateBetweenRoundDiffs: true,
       }),
+    );
+    // No host override: the executor reads `texra.latexdiff.mathMarkup`.
+    expect(runLatexdiffForRun.mock.calls[0]?.[0]).not.toHaveProperty(
+      'mathMarkup',
     );
     expect(runDiff).not.toHaveBeenCalled();
     expectOpenedDiff(
@@ -243,7 +246,6 @@ describe('DesktopProgressFileActions latexdiff', () => {
         model: 'gpt-5',
         inputFile: 'main.tex',
         outputsByRound: null,
-        mathMarkup: 'coarse',
         generateBetweenRoundDiffs: true,
       }),
     );

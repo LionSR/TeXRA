@@ -803,8 +803,8 @@ const CORE_SETTINGS: readonly StateSettingEntry[] = [
 
 const GIT_AUTHOR_READER = 'src/utils/system/gitAuthorEnv.ts';
 const GIT_WORKTREE_READER = 'src/utils/config/worktreeConfig.ts';
-const CODEX_CONFIG_READER = 'src/tools/codexConfig.ts';
-const CLAUDE_AGENT_CONFIG_READER = 'src/tools/claudeAgentConfig.ts';
+const CODEX_TOOL_READER = 'src/tools/codex.ts';
+const CLAUDE_AGENT_TOOL_READER = 'src/tools/claudeAgent.ts';
 const WORKFLOW_COMPILE_READER = 'src/agent/output/compileCheck.ts';
 const ROUTE_ENDPOINT_READER = 'src/model/routeEndpoint.ts';
 const PROVIDER_CONFIG_READER = 'src/utils/config/providerConfig.ts';
@@ -827,9 +827,9 @@ const WORKSPACE_STATE_CLI_CONFIG_SLOTS: SettingSlots = {
 
 const GIT_AUTHOR_HONORED_BY = everyHost(GIT_AUTHOR_READER);
 
-const CODEX_AGENT_HONORED_BY = everyHost(CODEX_CONFIG_READER);
+const CODEX_AGENT_HONORED_BY = everyHost(CODEX_TOOL_READER);
 
-const CLAUDE_AGENT_HONORED_BY = everyHost(CLAUDE_AGENT_CONFIG_READER);
+const CLAUDE_AGENT_HONORED_BY = everyHost(CLAUDE_AGENT_TOOL_READER);
 
 const WORKFLOW_COMPILE_HONORED_BY = everyHost(WORKFLOW_COMPILE_READER);
 
@@ -1419,10 +1419,6 @@ export const ALL_SETTINGS: readonly StateSettingEntry[] = [
   ...STATE_SETTINGS,
 ];
 
-const STATE_SETTINGS_BY_KEY: ReadonlyMap<string, StateSettingEntry> = new Map(
-  STATE_SETTINGS.map((entry) => [entry.key, entry]),
-);
-
 const SETTINGS_BY_KEY: ReadonlyMap<string, StateSettingEntry> = new Map(
   ALL_SETTINGS.map((entry) => [entry.key, entry]),
 );
@@ -1447,11 +1443,6 @@ const SETTINGS_VIEW_SETTINGS_BY_KEY: ReadonlyMap<
       entry.surfaces.settingsView !== undefined,
   ).map((entry) => [entry.key, entry]),
 );
-
-/** Look up a state-backed catalog entry by its canonical `texra.*` key. */
-export function stateSettingByKey(key: string): StateSettingEntry | undefined {
-  return STATE_SETTINGS_BY_KEY.get(key);
-}
 
 /** Look up any catalog entry — config-tree or state-backed — by its key. */
 export function settingByKey(key: string): StateSettingEntry | undefined {

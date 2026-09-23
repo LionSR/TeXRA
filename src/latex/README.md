@@ -107,8 +107,8 @@ The files have distinct roles:
   diff via `outputDiscovery.ts`/`executionDiscovery.ts` (the latter's narrow
   port lets `latex` stay out of `@agent/storage`), then builds and dispatches
   the diff operations via `diffOperations.ts`/`diffCommandExecutor.ts`, naming
-  output files with `diffFileNameManager.ts` (math markup options come from
-  `mathMarkup.ts`). `diffFileProcessor.ts` is the post-processor
+  output files with `diffFileNameManager.ts` (the math markup mode is the
+  `texra.latexdiff.mathMarkup` catalog row). `diffFileProcessor.ts` is the post-processor
   `LaTeXdiffService` itself calls after generating a direct or VC diff, to
   restore flattened bibliography directives and sanitize latexdiff's
   `\DIFadd`/`\DIFdel` markup. `types.ts` holds the types those

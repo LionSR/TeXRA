@@ -1,34 +1,14 @@
-// Suites for loose src/shared/schemas helpers (work plan, agent CLI
-// settings, main-view housekeeping messages, settings-view tab invariants).
+// Suites for loose src/shared/schemas helpers (work plan, main-view
+// housekeeping messages, settings-view tab invariants).
 
 import { describe, expect, it } from 'vitest';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import {
-  planSummaryLine,
-  parseClaudeAgentModel,
-  parseCodexApprovalPolicy,
-} from '@shared/schemas';
+import { planSummaryLine } from '@shared/schemas';
 import {
   dispatchSettingsViewOutbound,
   SETTINGS_TAB_GROUPS,
   SETTINGS_TAB_ORDER,
 } from '@shared/settingsView/settingsViewMessages';
-
-describe('parseCodexApprovalPolicy', () => {
-  it('defaults to automatic approval for invalid persisted values', () => {
-    expect(parseCodexApprovalPolicy('ask')).toBe('never');
-  });
-});
-
-describe('parseClaudeAgentModel', () => {
-  it('defaults invalid persisted selections to Sonnet', () => {
-    expect(parseClaudeAgentModel('claude-opus-3')).toBe('claude-sonnet-5');
-  });
-
-  it('defaults a retired persisted id to Sonnet rather than mapping it', () => {
-    expect(parseClaudeAgentModel('claude-fable-5')).toBe('claude-sonnet-5');
-  });
-});
 
 describe('settings view tool install actions', () => {
   it.each([
