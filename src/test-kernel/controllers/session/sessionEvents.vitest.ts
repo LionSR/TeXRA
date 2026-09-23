@@ -1393,6 +1393,48 @@ describe('the C1 event table and the C6 publisher', () => {
     }).pipe(Effect.scoped),
   );
 
+  it.effect('keeps polling for other writers after a failed poll read', () =>
+    Effect.gen(function* () {
+      const storage = workspace();
+      let polls = 0;
+      const original = SqlDriver.make;
+      const construct = vi
+        .spyOn(SqlDriver, 'make')
+        .mockImplementationOnce((options) =>
+          original(options).pipe(
+            Effect.map((client) => {
+              const unsafe = client.unsafe.bind(client);
+              // The open reads `data_version` once; the first tick's read
+              // fails, as a busy wait past the timeout would.
+              return Object.assign(client, {
+                unsafe: ((statement, params) =>
+                  statement === 'PRAGMA data_version' && ++polls === 2
+                    ? Effect.die(new Error('database is locked'))
+                    : unsafe(statement, params)) as typeof client.unsafe,
+              });
+            }),
+          ),
+        );
+      yield* Effect.gen(function* () {
+        const follower = yield* Database;
+        yield* TestClock.adjust('250 millis');
+        expect(polls).toBeGreaterThanOrEqual(2);
+        yield* Effect.gen(function* () {
+          const writer = yield* Database;
+          yield* writer.appendAll([olderStart]);
+        }).pipe(Effect.provide(substrate(storage, OTHER)));
+        for (let tick = 0; tick < 4; tick++) {
+          yield* TestClock.adjust('250 millis');
+        }
+        expect(yield* SubscriptionRef.get(follower.observedCommit)).toBe(1);
+        expect(yield* SubscriptionRef.get(follower.level)).toBe(1);
+      }).pipe(
+        Effect.provide(substrate(storage)),
+        Effect.ensuring(Effect.sync(() => construct.mockRestore())),
+      );
+    }).pipe(Effect.scoped),
+  );
+
   it.effect(
     'assigns a dense seq per aggregate and one commit order across them',
     () => {

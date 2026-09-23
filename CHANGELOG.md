@@ -89,6 +89,13 @@ All notable changes to this project will be documented in this file.
   deleting a team preset that is already gone now reports "Unknown custom
   team" instead of doing nothing, as the desktop app does. Double-clicking
   Delete on a custom agent in the desktop app no longer asks twice.
+- One failed read of a workspace's session history (for example while another
+  TeXRA window holds it busy) no longer stops that window from seeing runs
+  the other windows write; it recovers and logs a warning. A workspace whose
+  close outlived its budget is also released once its runs settle, even when
+  one of their stops failed, instead of refusing new runs until a restart.
+- The Settings view's tool dashboard no longer spins forever when it cannot be
+  loaded; it shows an empty dashboard and logs why.
 
 ### Extension (VS Code)
 

@@ -646,7 +646,7 @@ const sessionHandleLayer = (
       yield* Stream.runForEach(session.folded(anchor), (event) =>
         session.receiveFoldedEvent(event),
       ).pipe(
-        Effect.tapError((error) =>
+        Effect.catch((error) =>
           Effect.logError(
             `Session ${key.storage} stopped delivering folded rows: the log could not be read.`,
           ).pipe(Effect.annotateLogs({ data: error }), withLogChannel(CHANNEL)),
@@ -876,6 +876,12 @@ const closeSession = (root: string) =>
     const settled = Fiber.join(termination).pipe(
       Effect.andThen(runs.awaitDrained()),
     );
+    // Nothing joins the detached fibers below: each logs its own failure.
+    const logDetached = (what: string) => (cause: unknown) =>
+      Effect.logError(`Session ${root}: ${what}`).pipe(
+        Effect.annotateLogs({ data: cause }),
+        withLogChannel(CHANNEL),
+      );
     // One budget for the whole close: the shutdown-phase deadline, forked
     // once so the flush below shares what settlement left.
     const budget = yield* Effect.forkChild(
@@ -886,16 +892,16 @@ const closeSession = (root: string) =>
       Fiber.join(budget).pipe(Effect.as(false)),
     ).pipe(
       Effect.catchCause((cause) =>
-        // A refused stop fact kills the detached termination fiber. The run
-        // may still be unwinding, so retain the entry until it settles, then
-        // make the same final flush and release the ordinary close path owes,
-        // re-raising the original defect after arming that cleanup so callers
-        // still see the failed close instead of a false success report.
+        // A refused stop fact kills the termination fiber while its run may
+        // still unwind: keep the entry until it settles, then flush and
+        // release as the ordinary path does, and re-raise the original defect
+        // after arming that, so callers see the failed close, not a success.
         Effect.forkDetach(
           runs
             .awaitDrained()
             .pipe(
               Effect.andThen(flushArtifacts),
+              Effect.tapCause(logDetached('the flush after a failed close')),
               Effect.ensuring(sessions.invalidate(key)),
             ),
           { startImmediately: true },
@@ -913,21 +919,22 @@ const closeSession = (root: string) =>
           // returns and no timer stands between the report and the release.
           Effect.andThen(
             Effect.forkDetach(
-              settled.pipe(Effect.andThen(sessions.invalidate(key))),
+              Fiber.join(termination).pipe(
+                Effect.catchCause(logDetached('a run stop failed past budget')),
+                Effect.andThen(runs.awaitDrained()),
+                Effect.ensuring(sessions.invalidate(key)),
+              ),
               { startImmediately: true },
             ),
           ),
         );
     // The release is the flush's finalizer: the entry goes, or its release is
     // armed on the settlement, whatever the flush's exit, and a flush that
-    // fails still fails this close.
-    //
-    // `flushArtifacts` does fail when a session publication failed, and
-    // `Effect.orDie` is deliberate: `close` answers a `SessionCloseReport` and
-    // names no error, so the defect is the channel a failed flush travels on,
-    // and `ProcessHold.release` (packages/agent/src/effect/runtime.ts)
-    // documents the embedder seeing exactly that. Widening it into a typed
-    // failure is a contract change, not a conversion.
+    // fails still fails this close. `flushArtifacts` fails when a session
+    // publication failed, and `Effect.orDie` is deliberate: `close` answers a
+    // `SessionCloseReport` naming no error, so a failed flush travels the
+    // defect channel, as `ProcessHold.release` (packages/agent/src/effect/
+    // runtime.ts) documents for the embedder; typing it is a contract change.
     yield* Effect.race(
       flushArtifacts,
       Fiber.join(budget).pipe(
@@ -938,11 +945,7 @@ const closeSession = (root: string) =>
         ),
       ),
     ).pipe(Effect.ensuring(release));
-    const report: SessionCloseReport = {
-      settled: didSettle,
-      abandoned,
-    };
-    return report;
+    return { settled: didSettle, abandoned } satisfies SessionCloseReport;
   }).pipe(Effect.uninterruptible);
 
 /**

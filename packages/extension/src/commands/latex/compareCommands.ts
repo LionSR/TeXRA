@@ -25,7 +25,7 @@ import { createLog } from '@logger/logUtils';
 import type { AcceptCopyMeta, FileLocation } from '@shared/schemas';
 import { DIFF_REGISTRATION_DELAY_MS } from '@shared/constants/latexTiming';
 import { workflowOutputCopyStem } from '@shared/constants/workflowOutput';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'CompareCommands';
 const log = createLog(CHANNEL);
@@ -170,7 +170,16 @@ export const handleCompare = Effect.fn('compareCommands.handleCompare')(
     yield* Effect.forkDetach(
       Effect.sleep(DIFF_REGISTRATION_DELAY_MS).pipe(
         Effect.andThen(
-          Effect.sync(() => registerDiffRefresh(editedUri, baseUri, title)),
+          Effect.try({
+            try: () => registerDiffRefresh(editedUri, baseUri, title),
+            catch: ensureError,
+          }),
+        ),
+        // Nothing joins this fiber: a failed registration is logged here.
+        Effect.catch((error) =>
+          Effect.logWarning(
+            'Could not register the diff refresh; the comparison will not update on save.',
+          ).pipe(Effect.annotateLogs({ data: error }), withLogChannel(CHANNEL)),
         ),
       ),
     );

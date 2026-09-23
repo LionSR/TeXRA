@@ -156,9 +156,7 @@ function createRegistry(
         substate: extra.substate ?? null,
         runStartedAt: extra.runStartedAt ?? null,
       } as RunView);
-      // The tail runs what `handleStatus` returns on the session's runtime;
-      // this harness's boundary is the synchronous run.
-      Effect.runSync(registry.handleStatus(runId));
+      registry.handleStatus(runId);
     },
   };
   const registry = new RunRegistry({

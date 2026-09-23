@@ -47,6 +47,7 @@ import {
 } from '@frontend/ui/errorHandlingUtils';
 import { subscribeAppSignal } from '@frontend/events/appSignalSubscriptions';
 import { subscribeGoalStateChanges } from '@frontend/events/runFactSubscriptions';
+import { withLogChannel } from '@logger/effectLog';
 import { createLog, type Log } from '@logger/logUtils';
 import {
   modelOptionsFrom,
@@ -569,10 +570,32 @@ export class SettingsViewMessageHandler {
     return Effect.gen({ self: this }, function* () {
       // Tool dashboard involves network I/O (Zotero probe, etc.) — fire on a
       // detached fiber so it doesn't block the initial render. The frontend
-      // shows a loading spinner until data arrives.
-      yield* Effect.forkDetach(this.sendToolDashboardData(webview), {
-        startImmediately: true,
-      });
+      // shows a loading spinner until data arrives, so a failed build still
+      // posts an empty dashboard to end it, and nothing joins this fiber, so
+      // each failure is logged on it.
+      yield* Effect.forkDetach(
+        this.sendToolDashboardData(webview).pipe(
+          Effect.catch((error) =>
+            Effect.logWarning(
+              'The tool dashboard could not be built; showing it empty.',
+            ).pipe(
+              Effect.annotateLogs({ data: error }),
+              withLogChannel(this.channel),
+              Effect.andThen(
+                postToWebview(webview, {
+                  command: SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD,
+                  items: [],
+                }),
+              ),
+            ),
+          ),
+          Effect.ignore({
+            log: 'Warn',
+            message: 'The empty tool dashboard could not be posted either.',
+          }),
+        ),
+        { startImmediately: true },
+      );
 
       yield* postToWebview(webview, {
         command: SETTINGS_VIEW_COMMANDS.SET_UNSUPPORTED_COMMANDS,

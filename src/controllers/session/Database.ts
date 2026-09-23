@@ -33,6 +33,7 @@ import {
   Exit,
   Layer,
   Result,
+  Schedule,
   Stream,
   SubscriptionRef,
 } from 'effect';
@@ -408,6 +409,25 @@ export const databaseLayer = (
               yield* SubscriptionRef.update(level, (wake) => wake + 1);
             }),
           ),
+          // One failed read (a busy wait past the timeout, an I/O error) ends
+          // the stream; restart it on a backoff capped at 30 seconds, so a
+          // blip does not stop change notification for the handle's life and
+          // a persistent failure warns a few times a minute, not every tick.
+          // The ticking stream never completes, so only a failure repeats it.
+          Effect.catch((error) =>
+            Effect.logWarning(
+              'The session database change poll failed; restarting it.',
+            ).pipe(
+              Effect.annotateLogs({ data: error }),
+              withLogChannel(CHANNEL),
+            ),
+          ),
+          Effect.repeat({
+            schedule: Schedule.min([
+              Schedule.exponential('250 millis'),
+              Schedule.spaced('30 seconds'),
+            ]),
+          }),
         ),
       );
       const transactions = (mode: 'read' | 'write') =>
