@@ -65,12 +65,12 @@ TeXRA has two ways to create an agent with AI. The first is the `texra.createAge
 The wizard stack has one production consumer chain, and nothing else imports it (grepped at HEAD bac10c1af1):
 
 - Settings view `packages/extension/src/settingsView/handlers/agentHandlers.ts:273` calls `texra.createAgentWithAI`. The command is registered at `packages/extension/src/commands/extensionCommandHandlers.ts:223` and bound at `packages/extension/src/commands/extensionCommandSurface.ts:143`. Its handler `handleCreateAgentWithAI` is imported only at `extensionCommandSurface.ts:11`.
-- `packages/extension/src/commands/agent/agentCreatorCommands.ts` (312 lines) is the only production importer of `src/agent/implementations/agentCreator/agentCreatorFlow.ts` (534 lines: `runAgentCreator`, `buildCreatorConfig`, `CreatorConfig`, `CreatorTemplateFiles`, `TOOL_GROUPS`, `ToolGroup`, `AgentCreatorUI`), at `agentCreatorCommands.ts:15`. The test importers are `src/test-kernel/agent/AgentCreatorOrchestration.vitest.ts` (283) and `src/test-kernel/commands/AgentCreatorTemplateSchema.vitest.ts` (63).
+- `packages/extension/src/commands/agent/agentCreatorCommands.ts` (312 lines) is the only production importer of `src/agent/implementations/agentCreator/agentCreatorFlow.ts` (534 lines; six exports, `CreatorConfig`, `buildCreatorConfig`, `TOOL_GROUPS`, `AgentCreatorUiFailed`, `AgentCreatorUI` and `runAgentCreator`, beside the module-private `CreatorTemplateFiles` and `ToolGroup`), at `agentCreatorCommands.ts:15`. The test importers are `src/test-kernel/agent/AgentCreatorOrchestration.vitest.ts` (283) and `src/test-kernel/commands/AgentCreatorTemplateSchema.vitest.ts` (63).
 - `validateAgentYamlContent` (`src/agent/runtime/agentLoad.ts:31`) has one production caller, `agentCreatorFlow.ts:13/:450`. Its test block is `src/test-kernel/agent/runtime/agentLoad.vitest.ts:73` to about `:123`.
 - `promptToAddAgentToConfig` (`packages/extension/src/frontend/agents/register.ts:17`, 67-line file) has one consumer: `agentCreatorCommands.ts:17/:244`.
 - The `@agent/templates` barrel (`src/agent/templates/index.ts`, 18 lines) has one importer: `agentCreatorCommands.ts:7`. It was introduced deliberately to replace the host deep import `@agent/templates/agentTemplateRenderer` (`index.ts:1-15`). So it can be deleted only together with the wizard; re-pointing that one importer to the deep path would widen `host-agent-import-baseline`.
 - The templates `packages/extension/resources/templates/agentCreatorWorkflow.yaml` (120) and `agentCreatorToolUse.yaml` (64) are read only by `agentCreatorCommands.ts:46-47`. They are also listed at `packages/cli/scripts/validate-pack.mjs:18-19`.
-- Ratchet rows: `config/ratchets/host-agent-import-baseline.json:18` (`@agent/implementations/agentCreator/agentCreatorFlow`), `:23` (`@agent/templates`) and `config/ratchets/file-size-baseline.json:62` (`agentCreatorFlow.ts: 534`). `knip-baseline.json` has no row for any of this.
+- Ratchet rows: the `@agent/implementations/agentCreator/agentCreatorFlow` and `@agent/templates` specifiers in `config/ratchets/host-agent-import-baseline.json`, and the `agentCreatorFlow.ts: 534` row in `config/ratchets/file-size-baseline.json`. They are named by content, not line, because both files shift as other rows leave. `knip-baseline.json` has no row for any of this.
 - A replacement launch path already exists: `packages/extension/src/commands/latex/latexCommands.ts:86-97` dispatches `texra.execute` with `{ agent, agentCategory: AgentCategory.ToolUse, instruction }`.
 
 Tool catalog drift, independent of the ruling:
@@ -83,14 +83,14 @@ The owner is asked to rule on option A. Option B stands on its own.
 
 **A. Extension-only wizard retirement (needs an owner ruling).** Re-point `createAgentWithAI` inline in `extensionCommandSurface.ts` to `texra.execute` with `{ agent: 'creator', agentCategory: AgentCategory.ToolUse, instruction }`, following `latexCommands.ts:86-97`. The following would then no longer exist:
 
-- `runAgentCreator`, `buildCreatorConfig`, `CreatorConfig`, `CreatorTemplateFiles`, `TOOL_GROUPS`, `ToolGroup`, `AgentCreatorUI` (file `agentCreatorFlow.ts` deleted)
+- the six exports of `agentCreatorFlow.ts` (`CreatorConfig`, `buildCreatorConfig`, `TOOL_GROUPS`, `AgentCreatorUiFailed`, `AgentCreatorUI`, `runAgentCreator`) and its private `CreatorTemplateFiles` and `ToolGroup` (file deleted)
 - `handleCreateAgentWithAI` (file `agentCreatorCommands.ts` deleted)
 - `promptToAddAgentToConfig` (file `frontend/agents/register.ts` deleted)
 - the `@agent/templates` barrel (`src/agent/templates/index.ts`)
 - `validateAgentYamlContent` and its test block
 - `agentCreatorWorkflow.yaml`, `agentCreatorToolUse.yaml`, and their two entries in `validate-pack.mjs`
 - `AgentCreatorOrchestration.vitest.ts` and `AgentCreatorTemplateSchema.vitest.ts`
-- ratchet rows `host-agent-import-baseline.json:18`, `:23` and `file-size-baseline.json:62`, all of which shrink
+- the two `host-agent-import-baseline.json` specifiers and the `file-size-baseline.json` row above, all of which shrink
 
 Afterwards the `creator` tool-use agent is the one AI agent-creation owner in the extension, and `tool_catalog.md` is the one tool taxonomy it reads. `agentHandlers.ts:270-282` currently calls `refreshAfterAgentMutation` as soon as the command returns. A `texra.execute` launch resolves before the agent file exists, so that refresh must move to the existing agent-file watcher or be dropped.
 
@@ -106,7 +106,7 @@ Afterwards the `creator` tool-use agent is the one AI agent-creation owner in th
 
 ### Estimated delta
 
-- Option A: about −1480 net LoC. That is 1461 lines across the eight deleted files, plus the `validateAgentYamlContent` definition (about 17) and its test block (about 50), 3 ratchet rows and 2 `validate-pack.mjs` lines, less about +15 for the inline `texra.execute` dispatch. Element delta: −8 files, −9 exported symbols (7 in `agentCreatorFlow.ts`, `handleCreateAgentWithAI`, `promptToAddAgentToConfig`), −1 exported function (`validateAgentYamlContent`), −1 barrel, −2 host→`@agent` specifiers, −1 file-size row, −1 parallel tool taxonomy (`TOOL_GROUPS`).
+- Option A: about −1520 net LoC. That is 1461 lines across the eight deleted files, plus the `validateAgentYamlContent` definition (about 17) and its test block (about 50), 3 ratchet rows and 2 `validate-pack.mjs` lines, less about +15 for the inline `texra.execute` dispatch (1461 + 17 + 50 + 3 + 2 − 15 = 1518). Element delta: −8 files, −8 exported symbols (6 in `agentCreatorFlow.ts`, `handleCreateAgentWithAI`, `promptToAddAgentToConfig`), −1 exported function (`validateAgentYamlContent`), −1 barrel, −2 host→`@agent` specifiers, −1 file-size row, −1 parallel tool taxonomy (`TOOL_GROUPS`).
 - Option B: about +8 lines of documentation.
 
 ### Risk
@@ -116,7 +116,7 @@ Option A is a user-visible behaviour change, and the shipped command keeps its n
 - The quick-pick tool-group wizard, which runs one helper-model call, becomes an open-ended conversation on a tool-capable model. The user needs a runnable non-helper model at launch.
 - The rendered-template fallback is lost. This reverses the 2026-07-12 fallback-audit ruling "keep validated template" (`.agents/docs/archived/bug-fix/2026-07-12-fallback-audit.md:1448`).
 - The "add to agent dropdown" prompt (`agentCreatorCommands.ts:244`) disappears.
-- The `refreshAfterAgentMutation` call at `agentHandlers.ts:281` stops doing anything useful.
+- The `refreshAfterAgentMutation` call that ends `handleCreateAgent` in `agentHandlers.ts` stops doing anything useful.
 - It conflicts with the 2026-09-17 readiness reverify (`.agents/docs/implemented/simplification/2026-09-17-agent-sdk-readiness-reverify.md:164-172`) and manifest open item 1 (`.agents/docs/proposed/architecture/2026-09-10-agent-sdk-tier-1-manifest.md:293-295`). Both keep the `runAgentCreator` boundary open "correctly" pending a `HostInteractions` design. Deleting the wizard would close that item by removal rather than by design, and the owner should rule on that explicitly.
 
 Recent commits on these files (#13013, #13008, #12975, #12946) are refactors, not product rulings on the wizard. Option B is low risk.
