@@ -32,7 +32,6 @@
     "packages/desktop/src/renderer/main.ts": 1247,
     "packages/extension/src/commands/latex/latexdiffCommands.ts": 545,
     "packages/extension/src/extension.ts": 1055,
-    "packages/extension/src/frontend/agents/AgentDirectoryManager.ts": 523,
     "packages/extension/src/frontend/auth/SupabaseAuthProvider.ts": 548,
     "packages/extension/src/frontend/lean/VscodeIntegration.ts": 550,
     "packages/extension/src/frontend/lm/acquireVscodeLanguageModel.ts": 587,

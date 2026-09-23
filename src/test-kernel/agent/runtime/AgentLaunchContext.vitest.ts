@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@agent/index', () => ({
   isRemoteAgent: () => false,
+  refresh: () => Effect.void,
   resolveAgentForLaunch: mocks.resolve,
 }));
 vi.mock('@agent/runtime/agentLoad', () => ({
@@ -259,6 +260,7 @@ describe('AgentLaunchContext', () => {
               nodePlatformLayer,
             ),
           ),
+          Effect.provide(fakeProcessServices()),
         );
         expect(error.message).toContain('is not registered');
 

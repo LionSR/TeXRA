@@ -108,6 +108,14 @@ All notable changes to this project will be documented in this file.
   projects open, one project's tool check (for example, whether it is a git
   repository, which the GitHub tools need) no longer decides which tools a
   run in another project gets or what that project's Tools tab shows.
+- **Desktop: signing in shows your team's agents.** After you sign in, the
+  desktop app now fetches the remote agents your account can use. Before, it
+  kept showing the catalog it loaded while signed out until you restarted it.
+- **Saving a custom agent no longer re-downloads the remote catalog.** In VS
+  Code, editing an agent YAML in your agent directories rescans only the local
+  agents and keeps the remote ones already loaded. A run that names an agent
+  the catalog has not seen yet rescans the local directories once before it
+  reports the agent as missing.
 
 ### Extension (VS Code)
 
