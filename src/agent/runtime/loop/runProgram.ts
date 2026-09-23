@@ -9,7 +9,7 @@
  * .agents/docs/proposed/architecture/2026-09-21-effect-design-run-loop-programs.md).
  */
 
-import { Cause, Effect, Exit, SynchronizedRef } from 'effect';
+import { Cause, Effect, Exit, Result, SynchronizedRef } from 'effect';
 
 import type { AgentTrace, StageHandle } from '@agent/trace';
 import {
@@ -18,10 +18,12 @@ import {
   type RunFamily,
   type RunId,
   type RunOutcome,
+  type SessionEvent,
 } from '@shared/schemas';
 import type { DatabaseWriteFailed } from '@shared/session/database';
 import { RunLedger, RunLedgerRefused } from '@shared/session/runLedger';
 import {
+  foldRunState,
   freshRunState,
   type RunLedgerDraft,
   type RunState,
@@ -51,7 +53,9 @@ export interface RunCell {
    * against. Read-append-write is one uninterruptible region under the
    * cell's lock, so a stop can never leave the cell behind the rows, and
    * concurrent settlements of one parallel partition each fold onto the
-   * latest state.
+   * latest state. The wait for the lock is masked too, deliberately: a
+   * settlement queued behind a sibling when the run stops belongs to a tool
+   * that already ran, and committing it keeps a resume from running it again.
    */
   readonly append: (
     rows:
@@ -60,10 +64,16 @@ export interface RunCell {
   ) => Effect.Effect<RunState, RunLedgerRefused | DatabaseWriteFailed>;
   /**
    * Adopt a state a run service already committed against (the follow-up
-   * consumer, the compaction), or one a decision row another writer
-   * committed folds to.
+   * consumer, the compaction).
    */
   readonly adopt: (state: RunState) => Effect.Effect<RunState>;
+  /**
+   * Fold a row another writer already committed (a `request.decided` the
+   * decide command landed) onto the latest state, under the cell's lock, so
+   * no append between the read and the write is lost. A row that does not
+   * fold onto the run is a defect: `what` names it in the message.
+   */
+  readonly fold: (row: SessionEvent, what: string) => Effect.Effect<RunState>;
 }
 
 /**
@@ -90,6 +100,21 @@ export const makeRunCell = (
           ),
         ).pipe(Effect.uninterruptible),
       adopt: (state) => SynchronizedRef.set(ref, state).pipe(Effect.as(state)),
+      fold: (row, what) =>
+        SynchronizedRef.updateAndGetEffect(ref, (state) => {
+          const folded = foldRunState(state, [row]);
+          return Result.isFailure(folded) || folded.success === null
+            ? Effect.die(
+                new Error(
+                  `${what} does not fold onto the run: ${
+                    Result.isFailure(folded)
+                      ? folded.failure.detail
+                      : 'no state'
+                  }`,
+                ),
+              )
+            : Effect.succeed(folded.success);
+        }),
     } satisfies RunCell;
   });
 

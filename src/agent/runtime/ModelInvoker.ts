@@ -24,7 +24,6 @@ import {
   Exit,
   type FileSystem,
   Layer,
-  Result,
   Scope,
   Stream,
   SynchronizedRef,
@@ -66,7 +65,7 @@ import {
 } from '@shared/schemas';
 import { DatabaseWriteFailed } from '@shared/session/database';
 import { RunLedgerRefused } from '@shared/session/runLedger';
-import { foldRunState, type RunState } from '@shared/session/runStateFold';
+import type { RunState } from '@shared/session/runStateFold';
 import { generateShortId } from '@utils/core';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import { ensureError } from '@utils/errors/errorMessage';
@@ -1018,19 +1017,7 @@ export const modelInvokerLayer = (): Layer.Layer<
           if (row === null) {
             decision = { action: 'cancel', cause: 'The session closed.' };
           } else {
-            const folded = foldRunState(state, [row]);
-            if (Result.isFailure(folded) || folded.success === null) {
-              return yield* Effect.die(
-                new Error(
-                  `The retry decision does not fold onto the run: ${
-                    Result.isFailure(folded)
-                      ? folded.failure.detail
-                      : 'no state'
-                  }`,
-                ),
-              );
-            }
-            yield* cell.adopt(folded.success);
+            yield* cell.fold(row, 'The retry decision');
             decision = row.decision;
           }
         }

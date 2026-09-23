@@ -60,11 +60,16 @@ export interface RunCell {
    *  back. Read-append-write is one uninterruptible region, so a stop can
    *  never leave the cell behind the rows. */
   readonly append: (
-    rows: readonly RunLedgerDraft[],
+    rows:
+      | readonly RunLedgerDraft[]
+      | ((state: RunState) => readonly RunLedgerDraft[]),
   ) => Effect.Effect<RunState, RunLedgerRefused | DatabaseWriteFailed>;
-  /** Adopt a state a run service already committed against (ModelInvoker,
-   *  dispatchPendingResponse, FollowUps.consume, compactIfNeeded). */
+  /** Adopt a state a run service already committed against
+   *  (FollowUps.consume, compactIfNeeded). */
   readonly adopt: (state: RunState) => Effect.Effect<RunState>;
+  /** Fold a row another writer committed (a `request.decided`) onto the
+   *  latest state under the cell's lock. */
+  readonly fold: (row: SessionEvent, what: string) => Effect.Effect<RunState>;
 }
 
 export const makeRunCell = (
@@ -73,7 +78,7 @@ export const makeRunCell = (
 ): Effect.Effect<RunCell, never, RunLedger>;
 ```
 
-`Ref`, not `SynchronizedRef`: one fiber owns a run (the loop, the invoker and the dispatcher all run on it), so a lock would be a primitive bought against no contention. (Amended by PR-D: the premise does not hold for the dispatcher, whose parallel partition settles calls on sibling fibers that each fold onto the one before, which is why `toolUseDispatch` held its own `SynchronizedRef`. Once the cell reaches dispatch it is that `SynchronizedRef`, and `append` also takes a `(state) => rows` builder so rows that read the state are built from the state they commit against.) The cell is seeded with a non-null `RunState` because it is created inside acquire, after the run is opened or restored, which is what removes the null branch from every reader.
+`Ref`, not `SynchronizedRef`: one fiber owns a run (the loop, the invoker and the dispatcher all run on it), so a lock would be a primitive bought against no contention. (Amended by PR-D, and the snippet above shows the amended shape: the premise does not hold for the dispatcher, whose parallel partition settles calls on sibling fibers that each fold onto the one before, which is why `toolUseDispatch` held its own `SynchronizedRef`. Once the cell reaches dispatch it is that `SynchronizedRef`, and `append` also takes a `(state) => rows` builder so rows that read the state are built from the state they commit against. The whole region, lock wait included, is uninterruptible: a settlement queued behind a sibling when the run stops belongs to a tool that already ran, and committing it keeps a resume from running it twice. A decision row another writer committed is folded under the same lock by `fold`, never read-then-`adopt`, so no append between the two is lost.) The cell is seeded with a non-null `RunState` because it is created inside acquire, after the run is opened or restored, which is what removes the null branch from every reader.
 
 Every `state = yield* commit(yield* ledger.appendBatch(runId, state, rows))` becomes `state = yield* cell.append(rows)`. `RunLedger` stays stateless by construction (runLedger.ts header: the loop holds the RunState); the cell lives on the run, not on the session-root service.
 

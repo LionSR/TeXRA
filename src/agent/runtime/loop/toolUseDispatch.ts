@@ -20,14 +20,7 @@
  * skip; a barrier with an intent and no result is outcome-unknown and asks;
  * a parallel-safe call without a result re-runs.
  */
-import {
-  Cause,
-  Effect,
-  Exit,
-  FileSystem,
-  Result,
-  SynchronizedRef,
-} from 'effect';
+import { Cause, Effect, Exit, FileSystem, SynchronizedRef } from 'effect';
 
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { normalizeToolCallError } from '@agent/core/tools/toolCallParsing';
@@ -51,7 +44,6 @@ import { JsonValueSchema } from '@shared/schemas';
 import { RunLedgerRefused } from '@shared/session/runLedger';
 import { DatabaseWriteFailed } from '@shared/session/database';
 import {
-  foldRunState,
   type RunLedgerDraft,
   type RunState,
 } from '@shared/session/runStateFold';
@@ -691,17 +683,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
         ),
       );
     if (row === null) return yield* Effect.interrupt;
-    const folded = foldRunState(yield* cell.current, [row]);
-    if (Result.isFailure(folded) || folded.success === null) {
-      return yield* Effect.die(
-        new Error(
-          `The tool-outcome decision does not fold onto the run: ${
-            Result.isFailure(folded) ? folded.failure.detail : 'no state'
-          }`,
-        ),
-      );
-    }
-    yield* cell.adopt(folded.success);
+    yield* cell.fold(row, 'The tool-outcome decision');
     const answer = decided(row.decision);
     if (answer === null) return yield* Effect.interrupt;
     return yield* recordOutcomeDecision(fact, call, intent, answer);
