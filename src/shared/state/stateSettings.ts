@@ -989,7 +989,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
       'Allow the orchestrator to stop subagents that are no longer needed.',
     category: 'multi-agent',
     slots: sameSlot('globalState'),
-    honoredBy: everyHost('src/tools/ExecutionsTool.ts'),
+    honoredBy: everyHost('src/tools/executions/killPolicy.ts'),
     surfaces: { settingsView: 'multi-agent', cliConfig: true },
   }),
   surfacedSetting({

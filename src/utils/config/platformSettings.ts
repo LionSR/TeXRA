@@ -6,10 +6,12 @@ import type {
 } from '@platform/interfaces';
 import { settingByKey, type SettingHost } from '@shared/state/stateSettings';
 import {
+  inspectSetting,
   readConfigSetting,
   readSetting,
   writeSetting,
   type SettingsStores,
+  type StoredSetting,
 } from '@shared/config/settingsAccess';
 import type { Effect } from 'effect';
 
@@ -50,6 +52,21 @@ export function readSettingFrom<T>(
     stores,
     processSettingHost,
   ) as Effect.Effect<T, StateReadFailed>;
+}
+
+/**
+ * {@link readSettingFrom} that reports a present value failing the row's
+ * schema as `invalid` instead of resolving it to the row's default.
+ */
+export function inspectSettingFrom<T>(
+  stores: SettingsStores,
+  key: string,
+): Effect.Effect<StoredSetting<T>, StateReadFailed> {
+  return inspectSetting(
+    requireEntry(key),
+    stores,
+    processSettingHost,
+  ) as Effect.Effect<StoredSetting<T>, StateReadFailed>;
 }
 
 /** Read and validate one catalog-backed value from its config slot. */

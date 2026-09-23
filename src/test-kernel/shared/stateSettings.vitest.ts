@@ -76,6 +76,7 @@ import {
   isStored,
   makeFakeSettingsStores,
 } from '@test/support/settingsStoresFake';
+import { orchestratorKillDenial } from '@tools/executions/killPolicy';
 import { readSettingFrom } from '@utils/config/platformSettings';
 
 const VALID_STORES: ReadonlySet<SettingStore> = new Set<SettingStore>([
@@ -679,5 +680,27 @@ describe('settingsAccess', () => {
           warn.mockRestore();
         }
       }),
+  );
+
+  // #11797: the kill gate's permissive default answers only for an absent
+  // key; a stored value that fails the schema denies, loudly.
+  it.effect('denies orchestrator kills on an invalid stored policy', () =>
+    Effect.gen(function* () {
+      const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+      const { stores, globalState } = makeFakeSettingsStores();
+      try {
+        assert.equal(yield* orchestratorKillDenial(stores), undefined);
+        yield* globalState.update(
+          GlobalStateKey.ALLOW_ORCHESTRATOR_KILL,
+          'false',
+        );
+        const denial = yield* orchestratorKillDenial(stores);
+        assert.match(String(denial), /denied: .* is invalid/);
+        assert.equal(warn.mock.calls.length, 1);
+        assert.equal(warn.mock.calls[0]?.[1], denial);
+      } finally {
+        warn.mockRestore();
+      }
+    }),
   );
 });
