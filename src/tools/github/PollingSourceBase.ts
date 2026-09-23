@@ -416,9 +416,12 @@ export abstract class PollingSourceBase<
     );
   }
 
-  /** One process-lifetime owner shared by poll rounds and admitted deliveries. */
+  /** One owner per lifecycle for poll rounds and admitted deliveries. */
   private ensureLifetime(lifecycle: LifecycleHost) {
     return Effect.suspend(() => {
+      // The old owner may still be draining while a replacement host starts.
+      // Keep its captured scopes for that drain, but give the new host its own.
+      if (this.shutdownLifecycle?.shutdownRan) this.lifetime = undefined;
       if (this.lifetime) {
         this.registerShutdownIfNeeded(lifecycle);
         return Effect.succeed(this.lifetime);
@@ -521,8 +524,10 @@ export abstract class PollingSourceBase<
         Effect.ensuring(Scope.close(lifetime.deliveryScope, Exit.void)),
         Effect.ensuring(
           Effect.sync(() => {
-            if (this.lifetime === lifetime) this.lifetime = undefined;
-            this.clearShutdownRegistration();
+            if (this.lifetime === lifetime) {
+              this.lifetime = undefined;
+              this.clearShutdownRegistration();
+            }
           }),
         ),
       ),
