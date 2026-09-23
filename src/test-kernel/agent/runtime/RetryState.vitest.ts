@@ -840,6 +840,10 @@ describe('ModelInvoker retry', () => {
       if (outcome.kind === 'response') {
         expect(outcome.state.pendingRetry).toBeNull();
       }
+      // The response retires the failure the gate recorded in its own batch:
+      // a crash before the loop's next snapshot resumes a recovered run, not
+      // one that re-reads the stale error and finishes FAILED.
+      expect((yield* session.ledger.load(runId))?.lastError).toBeNull();
       // The decision neither parks nor ends the run: the phase the fold
       // reports is still running.
       expect(session.runView(runId)?.status).toBe(RUN_PHASE.RUNNING);

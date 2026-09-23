@@ -72,6 +72,8 @@ All notable changes to this project will be documented in this file.
 - Resuming a run in VS Code or the desktop app returns as soon as the run
   has taken your message and is waiting, instead of holding the Resume
   request until the whole run ends.
+- A run whose model request you retried successfully no longer resumes as
+  failed if TeXRA exits before the turn ends.
 
 ### Extension (VS Code)
 
