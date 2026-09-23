@@ -23,6 +23,7 @@ import { resolveAgentTools } from '@agent/runtime/agentToolResolution';
 import { AGENT_TOOL_INJECTIONS } from '@agent/runtime/toolInjection';
 import type { UsageMonitor } from '@agent/runtime/UsageMonitor';
 import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
+import { withLogChannel } from '@logger/effectLog';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import { resolveRuntimeModelConfig } from '@model/runtimeModelRegistry';
 import type { LanguageModel } from '@platform/languageModel';
@@ -254,19 +255,25 @@ export const agentRunLayer = (
           }),
         );
         tools = new MapToolRegistry(kept);
-        for (const name of recorded.offeredTools) {
-          if (byName.has(name)) continue;
-          const message = `Tool "${name}" was offered to this run but is no longer available; the resumed run continues without it.`;
-          yield* Effect.logWarning(message);
-          logger.warn(message);
-        }
+        const warnings = recorded.offeredTools
+          .filter((name) => !byName.has(name))
+          .map(
+            (name) =>
+              `Tool "${name}" was offered to this run but is no longer available; the resumed run continues without it.`,
+          );
         if (
-          definitions.length === recorded.offeredTools.length &&
+          warnings.length === 0 &&
           offeredToolset(definitions).toolsetHash !== recorded.toolsetHash
         ) {
-          yield* Effect.logWarning(
+          warnings.push(
             'A tool offered to this run changed its input schema since the run opened; the resumed run offers the current schema.',
           );
+        }
+        // Both the process log and the run's transcript (the trace's `log`
+        // row) carry each warning.
+        for (const message of warnings) {
+          yield* Effect.logWarning(message).pipe(withLogChannel('AgentRun'));
+          logger.warn(message);
         }
       }
 
