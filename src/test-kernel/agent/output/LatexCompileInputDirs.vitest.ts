@@ -8,15 +8,12 @@ import { beforeEach, describe, expect, vi } from 'vitest';
 
 // Local imports
 import type { AgentTrace } from '@agent/trace';
-import { LatexDiffManager } from '@agent/implementations/flows/reflection/output/LatexDiffManager';
+import { LatexDiffManager } from '@agent/output/LatexDiffManager';
 import {
   resolveWorkspaceSourceDir,
   runCompileCheck,
-} from '@agent/implementations/flows/reflection/output/compileCheck';
-import {
-  createOutputState,
-  ensureRoundData,
-} from '@agent/implementations/flows/reflection/output/outputState';
+} from '@agent/output/compileCheck';
+import { createOutputState, ensureRoundData } from '@agent/output/outputState';
 import type { WorkspaceFs } from '@platform/rootedFs';
 import type { RunId, FileLocation } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
@@ -62,17 +59,14 @@ vi.mock('@latex/latexToolchain', () => ({
   hasLatexCompiler: mocks.hasLatexCompiler,
 }));
 
-vi.mock(
-  '@agent/implementations/flows/reflection/output/compiledPdfArtifacts',
-  async (importOriginal) => ({
-    // Only the publish is mocked; the best-effort recovery that wraps it in
-    // `LatexDiffManager` stays real, so the failure case exercises it.
-    ...(await importOriginal<
-      typeof import('@agent/implementations/flows/reflection/output/compiledPdfArtifacts')
-    >()),
-    publishCompiledPdfArtifact: mocks.publishCompiledPdfArtifact,
-  }),
-);
+vi.mock('@agent/output/compiledPdfArtifacts', async (importOriginal) => ({
+  // Only the publish is mocked; the best-effort recovery that wraps it in
+  // `LatexDiffManager` stays real, so the failure case exercises it.
+  ...(await importOriginal<
+    typeof import('@agent/output/compiledPdfArtifacts')
+  >()),
+  publishCompiledPdfArtifact: mocks.publishCompiledPdfArtifact,
+}));
 
 function createDiffCompiler(runId: RunId, logger: AgentTrace) {
   const manager = new LatexDiffManager(

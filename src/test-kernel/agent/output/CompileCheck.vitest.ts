@@ -8,14 +8,8 @@ import { Effect } from 'effect';
 import { beforeEach, describe, expect, vi } from 'vitest';
 
 // Local imports
-import {
-  compileFailuresOf,
-  runCompileCheck,
-} from '@agent/implementations/flows/reflection/output/compileCheck';
-import {
-  createOutputState,
-  ensureRoundData,
-} from '@agent/implementations/flows/reflection/output/outputState';
+import { compileFailuresOf, runCompileCheck } from '@agent/output/compileCheck';
+import { createOutputState, ensureRoundData } from '@agent/output/outputState';
 import type { CompileLatex2PdfResult } from '@latex/texTools';
 import type { RunId, FileLocation } from '@shared/schemas';
 import { fakePath } from '@test/support/FakePlatform';

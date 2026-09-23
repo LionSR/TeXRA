@@ -28,6 +28,7 @@ import { parseJsonWith } from '@common/parsing/safeParseJson';
 import { TexraApprovalPolicySchema } from '@shared/approvalPolicy';
 import { AgentCategorySchema } from './agent';
 import { AgentConfigFieldsSchema } from './agentConfig';
+import { RoundOutputSchema } from './output';
 import { GoalStateSchema } from './goal';
 import {
   RunEndSchema,
@@ -347,6 +348,7 @@ const DisplaySessionEventDraftSchema = z.discriminatedUnion('type', [
    */
   durable('run.end', RunEndSchema.shape),
   durable('conversation.progress', { progress: ConversationProgressSchema }),
+  durable('output.produced', { rounds: z.array(RoundOutputSchema) }),
   durable('run.fact', { fact: RunFactSchema }),
   /**
    * An agent-CLI child's park across its turns (one run model, 3.3):
@@ -586,7 +588,7 @@ export type DisplaySessionEvent = z.infer<typeof DisplaySessionEventSchema>;
  * with any change to the stored shape of `SessionEventSchema`, which
  * `sessionEventFormat.vitest.ts` pins.
  */
-export const SESSION_EVENT_FORMAT = 10;
+export const SESSION_EVENT_FORMAT = 11;
 
 export const SessionEventSchema = z.discriminatedUnion('type', [
   ...DisplaySessionEventSchema.options,
@@ -635,7 +637,7 @@ export function referencedAggregates(event: SessionEvent): AggregateId[] {
  * one of every run into every renderer for no reader.
  *
  * A listing key is "latest per aggregate and type", so `run.fact`, which
- * holds five families on one type, is read grouped by its `key` as well
+ * holds two families on one type, is read grouped by its `key` as well
  * ({@link listingKeyOf} and `Database`'s listing queries).
  */
 export function listingTypeOf(
@@ -667,7 +669,7 @@ export function listingTypeOf(
     case 'workflow.attempt':
       // The run ledger's private rows stay out of the listing: a cold hydrate
       // must never pull a run's latest `flow.snapshot` into every renderer.
-      // `flow.step` is the one ledger row that is listed (its own key, the
+      // `flow.step` and `output.produced` are listing rows (their own keys, the
       // `default` below). The keyed private records and the checkpoint
       // journal are folded by their readers over the whole aggregate, so
       // "latest of type" is not a fact about them. Not compiler-enforced

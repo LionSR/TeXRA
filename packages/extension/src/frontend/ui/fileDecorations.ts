@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 
 import type { SessionHandle } from '@agent/runtime';
 import { subscribeAppSignal } from '@frontend/events/appSignalSubscriptions';
-import { subscribeAddOutputFilesRunFact } from '@frontend/events/runFactSubscriptions';
+import { subscribeOutputFiles } from '@frontend/events/runFactSubscriptions';
 import type { ProcessRuntime } from '@platform/processRuntime';
 
 // Session-scoped: the touched set is not persisted across window reloads so
@@ -55,7 +55,7 @@ export function registerFileDecorations(
 ): void {
   const provider = new TeXRAFileDecorationProvider();
 
-  const unsubscribeOutputFiles = subscribeAddOutputFilesRunFact(
+  const unsubscribeOutputFiles = subscribeOutputFiles(
     session,
     ({ filesByRound }) => {
       // Only mark the primary output location. Lineage entries (original,

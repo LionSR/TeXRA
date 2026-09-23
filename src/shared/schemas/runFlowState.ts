@@ -13,11 +13,7 @@ import { TurnProtocolSchema } from '@texra-ai/llm/turn';
 
 import { JsonValueSchema } from './jsonValue';
 import { LineCountSchema } from './lineChanges';
-import {
-  AgentFileLocationSchema,
-  FileLocationSchema,
-  RoundOutputSchema,
-} from './output';
+import { AgentFileLocationSchema, FileLocationSchema } from './output';
 import {
   RunUsageTotalsSchema,
   TokenCountSchema,
@@ -315,8 +311,6 @@ export const ReflectionSnapshotStateSchema = z.object({
   outputLocation: AgentFileLocationSchema.nullable(),
 
   runStateSnapshot: AgentRunStateSnapshotSchema,
-
-  roundOutputs: z.array(RoundOutputSchema),
 
   continueRounds: z.boolean(),
   endTurn: z.boolean(),

@@ -4,16 +4,16 @@ import { beforeEach, describe, expect, vi } from 'vitest';
 
 import { TraceEmitter, type AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import { assignByContentSimilarity } from '@agent/implementations/flows/reflection/output/extraction/contentSimilarity';
-import { extractFilesFromXml } from '@agent/implementations/flows/reflection/output/outputFileExtraction';
+import { assignByContentSimilarity } from '@agent/output/extraction/contentSimilarity';
+import { extractFilesFromXml } from '@agent/output/outputFileExtraction';
 import {
   createOutputState,
   ensureRoundData,
   type OutputDependencies,
   type OutputState,
-} from '@agent/implementations/flows/reflection/output/outputState';
+} from '@agent/output/outputState';
 
-import { XmlOutputManager } from '@agent/implementations/flows/reflection/output/XmlOutputManager';
+import { XmlOutputManager } from '@agent/output/XmlOutputManager';
 import type { FileLocation, OutputFileInfo, RunId } from '@shared/schemas';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { installPlatform } from '@test/support/setupPlatform';
@@ -22,8 +22,6 @@ import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { spiedTrace } from '@test/support/spiedTrace';
 import { createExternalLocation } from '@utils/files/fileLocation';
 import { RunFileService } from '@utils/files/runStorage';
-
-import { recordTraceEvents, runFactsOfKey } from '../progressTestUtils';
 
 const RUN_ID = 'xml-output-manager-test' as RunId;
 
@@ -1663,10 +1661,9 @@ describe('extractFilesFromXml', () => {
     },
     { name: 'when extraction yields no files', failure: null, round: 4 },
   ]) {
-    it.live(`publishes the run-wide missing-output map ${name}`, () =>
+    it.live(`retains missing outputs across rounds ${name}`, () =>
       Effect.gen(function* () {
         const logger = new TraceEmitter();
-        const { events } = recordTraceEvents(logger);
         const state = createOutputState();
         // An earlier round already reported a missing file: the row this round
         // publishes carries the run's whole map, since a cold fold keeps only
@@ -1689,9 +1686,10 @@ describe('extractFilesFromXml', () => {
           round,
         );
 
-        expect(runFactsOfKey(events, 'missingOutputs')).toMatchObject([
-          { filesByRound: { [round - 1]: ['earlier.tex'], [round]: [] } },
+        expect(state.rounds.get(round - 1)?.missingOutputs).toEqual([
+          'earlier.tex',
         ]);
+        expect(state.rounds.get(round)?.missingOutputs).toEqual([]);
         expect(state.rounds.get(round)?.outputs).toEqual([]);
       }).pipe(Effect.provide(nodePlatformLayer)),
     );

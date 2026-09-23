@@ -39,36 +39,29 @@ import {
 
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { userRequestTemplateCount } from '@agent/index/agentYamlScanner';
-import {
-  compileFailuresOf,
-  runCompileCheck,
-} from '@agent/implementations/flows/reflection/output/compileCheck';
+import { compileFailuresOf, runCompileCheck } from '@agent/output/compileCheck';
 import {
   appendCompileFailureRoundContext,
   formatCompileFailureRoundContext,
-} from '@agent/implementations/flows/reflection/output/compileFailureRoundContext';
-import { LatexDiffManager } from '@agent/implementations/flows/reflection/output/LatexDiffManager';
-import { traceFileLineage } from '@agent/implementations/flows/reflection/output/lineageMapping';
-import { extractFilesFromXml } from '@agent/implementations/flows/reflection/output/outputFileExtraction';
-import { recoverOutputFailure } from '@agent/implementations/flows/reflection/output/outputOperations';
+} from '@agent/output/compileFailureRoundContext';
+import { LatexDiffManager } from '@agent/output/LatexDiffManager';
+import { traceFileLineage } from '@agent/output/lineageMapping';
+import { extractFilesFromXml } from '@agent/output/outputFileExtraction';
+import { recoverOutputFailure } from '@agent/output/outputOperations';
 import {
   createOutputState,
   ensureRoundData,
-  getCompileFailuresByRound,
   getOutputFilesByRound,
   roundsFromPersisted,
   roundsToPersisted,
   setCompileFailures,
   type OutputDependencies,
-} from '@agent/implementations/flows/reflection/output/outputState';
-import { checkExpectedOutputs } from '@agent/implementations/flows/reflection/output/outputValidation';
-import {
-  summarizeRound,
-  type RoundSummary,
-} from '@agent/implementations/flows/reflection/output/roundSummary';
-import { resolveBaseFilesForDiff } from '@agent/implementations/flows/reflection/output/snapshotResolution';
-import type { RoundFileMapping } from '@agent/implementations/flows/reflection/output/types';
-import { XmlOutputManager } from '@agent/implementations/flows/reflection/output/XmlOutputManager';
+} from '@agent/output/outputState';
+import { checkExpectedOutputs } from '@agent/output/outputValidation';
+import { summarizeRound, type RoundSummary } from '@agent/output/roundSummary';
+import { resolveBaseFilesForDiff } from '@agent/output/snapshotResolution';
+import type { RoundFileMapping } from '@agent/output/types';
+import { XmlOutputManager } from '@agent/output/XmlOutputManager';
 import {
   getSystemPromptWithRules,
   PromptBuilder,
@@ -118,6 +111,7 @@ import { Runs } from '../runRegistry';
 import {
   appendRow,
   familyState,
+  rowAggregate,
   snapshotRow,
   stepRow,
   type ReflectionFlowState,
@@ -163,7 +157,6 @@ interface OutputExecResult {
   summary: RoundSummary;
   compileResult?: CompileResult;
   compiledArtifacts: RunStorageFileLocation[];
-  emitCompileFailures: boolean;
 }
 
 type RoundExit = {
@@ -297,7 +290,6 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     workspaceSnapshot: AgentWorkspaceState.emptySnapshot(),
     outputLocation: null,
     runStateSnapshot: { totalRounds, totalResponseTimeMs: 0 },
-    roundOutputs: [],
     continueRounds: true,
     endTurn: false,
   };
@@ -305,7 +297,6 @@ export const runReflection = Effect.fn('reflection.run')(function* (
   const flowState = (): ReflectionFlowState => ({
     ...flow,
     workspaceSnapshot: workspace.toSnapshot({ excludeAssemblyStrings: true }),
-    roundOutputs: roundsToPersisted(outputState),
   });
   const snapshot = (state: RunState, patch: Omit<SnapshotPatch, 'state'>) =>
     snapshotRow(runId, state, {
@@ -342,7 +333,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     if (round === 0) {
       return config.inputFiles.map((f) => fileService.createLocation(f));
     }
-    const previous = flow.roundOutputs[round - 1];
+    const previous = outputState.rounds.get(round - 1);
     if (previous?.outputs.length) {
       return previous.outputs.map((o) => o.location);
     }
@@ -393,7 +384,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     // invocation its failure interrupted rather than failing again at once.
     flow = { ...persisted, totalRounds };
     workspace = AgentWorkspaceState.fromSnapshot(persisted.workspaceSnapshot);
-    outputState.rounds = roundsFromPersisted(persisted.roundOutputs);
+    outputState.rounds = roundsFromPersisted(state.roundOutputs);
     // Mid-round, the cycle files hold the text every earlier response cycle
     // produced; the next connector and continuation prompt read their tail.
     // `continuationIndex` is folded state, so no directory enumeration is
@@ -793,7 +784,6 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     let mapping: RoundFileMapping | undefined;
     let compileRoundResult: CompileResult | undefined;
     const compiledArtifacts: RunStorageFileLocation[] = [];
-    let emitCompileFailures = false;
     if (endTurn) {
       logger.debug(`Processing output for round ${round}`);
       yield* xmlManager
@@ -812,8 +802,6 @@ export const runReflection = Effect.fn('reflection.run')(function* (
           ...(yield* diffManager.handleLatexdiffOfOutput(round, mapping)),
         );
         yield* Effect.gen(function* () {
-          const hadCompileFailures =
-            (outputState.rounds.get(round)?.compileFailures.length ?? 0) > 0;
           const check = yield* runCompileCheck(
             {
               roots,
@@ -828,8 +816,6 @@ export const runReflection = Effect.fn('reflection.run')(function* (
           compiledArtifacts.push(...check.artifacts);
           const compileFailures = compileFailuresOf(check.compileResult);
           setCompileFailures(outputState, round, compileFailures);
-          emitCompileFailures =
-            compileFailures.length > 0 || hadCompileFailures;
         }).pipe(recoverWarn('Compile check'));
       }
     }
@@ -844,7 +830,6 @@ export const runReflection = Effect.fn('reflection.run')(function* (
       summary,
       compileResult: compileRoundResult,
       compiledArtifacts,
-      emitCompileFailures,
     };
   });
 
@@ -869,7 +854,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
             `Output fallback summary failed; output files may be dropped: ${toErrorMessage(summaryError)}`,
             { data: summaryError },
           );
-          return { fileInfos: [], filesToOpen: [] };
+          return { filesToOpen: [] };
         }),
       ),
     );
@@ -881,37 +866,17 @@ export const runReflection = Effect.fn('reflection.run')(function* (
       summary,
       compileResult: undefined,
       compiledArtifacts: [],
-      emitCompileFailures: false,
     };
   });
 
-  /** Publish the round's facts, open its files, and validate its outputs. */
-  const publishOutput = Effect.fn('reflection.publishOutput')(function* (
-    round: number,
-    outputLocation: AgentFileLocation,
+  /** Open produced files and apply the round's compile policy. */
+  const presentOutput = Effect.fn('reflection.presentOutput')(function* (
     endTurn: boolean,
     result: OutputExecResult,
   ) {
     const interactions = session.interactions;
     const { summary } = result;
     const compileFailures = compileFailuresOf(result.compileResult);
-    // Latest-only listing rows: each carries the run's whole round map.
-    const files = { ...getOutputFilesByRound(outputState) };
-    files[round] = summary.fileInfos;
-    logger.emit({
-      type: 'run.fact',
-      fact: { key: 'outputFiles', filesByRound: files },
-    });
-    if (result.emitCompileFailures) {
-      const failures = {
-        ...getCompileFailuresByRound(outputState),
-        [round]: compileFailures,
-      };
-      logger.emit({
-        type: 'run.fact',
-        fact: { key: 'compileFailures', filesByRound: failures },
-      });
-    }
     for (const location of summary.filesToOpen) {
       yield* interactions.emit('requestOpenFile', {
         location,
@@ -936,22 +901,6 @@ export const runReflection = Effect.fn('reflection.run')(function* (
           preserveFocus: true,
         });
       }
-    }
-    if (endTurn) {
-      yield* Effect.gen(function* () {
-        const validation = yield* checkExpectedOutputs(
-          outputState,
-          deps,
-          outputLocation,
-          round,
-        );
-        if (validation.missing.length > 0) {
-          yield* interactions.emit('requestShowInstruction', {
-            key: 'missingOutputsInfo',
-            message: 'Missing output files detected',
-          });
-        }
-      }).pipe(recoverWarn('Validate expected outputs'));
     }
     if (result.compileResult) {
       const compileFailureContext = (yield* getRejectOnCompileFailure())
@@ -1004,8 +953,35 @@ export const runReflection = Effect.fn('reflection.run')(function* (
           : fallbackOutput(round, location, ensureError(Cause.squash(cause))),
       ),
     );
-    yield* publishOutput(round, location, endTurn, result);
-    return state;
+    if (endTurn) {
+      yield* Effect.gen(function* () {
+        const validation = yield* checkExpectedOutputs(
+          outputState,
+          deps,
+          location,
+          round,
+        );
+        if (validation.missing.length > 0) {
+          yield* session.interactions.emit('requestShowInstruction', {
+            key: 'missingOutputsInfo',
+            message: 'Missing output files detected',
+          });
+        }
+      }).pipe(recoverWarn('Validate expected outputs'));
+    }
+    // The row owns completed outputs. Commit it before fallible presentation
+    // and policy reads; output.pending stays replayable until round end.
+    const produced = yield* commit(
+      yield* ledger.appendBatch(runId, state, [
+        {
+          type: 'output.produced',
+          aggregateId: rowAggregate(runId),
+          rounds: roundsToPersisted(outputState),
+        },
+      ]),
+    );
+    yield* presentOutput(endTurn, result);
+    return produced;
   });
 
   /** One round inside its trace stage: prompt, response cycles, output. */

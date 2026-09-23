@@ -5,7 +5,7 @@
  * Problems panel, like a linter.
  *
  * Two ingest paths:
- *   1. Session run facts keyed by `outputFiles` parse each output
+ *   1. Session `output.produced` rows parse each output
  *      `.tex` file. Universal — any agent that writes the macro participates.
  *   2. The `diagnostics` tool's `add` command routes through
  *      `pushManualCriticism` here for tool-use agents that want to flag issues
@@ -21,7 +21,7 @@ import * as vscode from 'vscode';
 
 // Local imports
 import { type ManualCriticismEntry, type SessionHandle } from '@agent/runtime';
-import { subscribeAddOutputFilesRunFact } from '@frontend/events/runFactSubscriptions';
+import { subscribeOutputFiles } from '@frontend/events/runFactSubscriptions';
 import { lineToRange } from '@frontend/vscode/vscodeEditor';
 import { parseCriticismAnnotations } from '@latex/criticismParser';
 import { withLogChannel } from '@logger/effectLog';
@@ -50,7 +50,7 @@ interface CriticismRegistration {
 }
 
 let collection: vscode.DiagnosticCollection | undefined;
-let runFactUnsubscribe: (() => void) | undefined;
+let outputUnsubscribe: (() => void) | undefined;
 /** The single owner of the context and event hub `enable` works against. */
 let registration: CriticismRegistration | undefined;
 
@@ -169,7 +169,7 @@ function enable({ context, session, runtime }: CriticismRegistration): void {
   if (collection) return;
   collection = vscode.languages.createDiagnosticCollection(COLLECTION_NAME);
   context.subscriptions.push(collection);
-  runFactUnsubscribe = subscribeAddOutputFilesRunFact(
+  outputUnsubscribe = subscribeOutputFiles(
     session,
     (payload) => handleAddOutputFiles(payload, runtime),
     runtime,
@@ -178,8 +178,8 @@ function enable({ context, session, runtime }: CriticismRegistration): void {
 }
 
 function disable(): void {
-  runFactUnsubscribe?.();
-  runFactUnsubscribe = undefined;
+  outputUnsubscribe?.();
+  outputUnsubscribe = undefined;
   if (collection) {
     collection.clear();
     collection.dispose();
