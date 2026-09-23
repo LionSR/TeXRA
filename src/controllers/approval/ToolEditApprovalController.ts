@@ -40,7 +40,7 @@ import {
 
 // Local imports
 import { isLatexFile } from '@common/files/fileTypeUtils';
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import {
   Rejected,
   type HostRequestFailure,
@@ -61,7 +61,7 @@ import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
 
-const log = createLog('ToolEditApproval');
+const CHANNEL = 'ToolEditApproval';
 
 /**
  * The services the programs this controller composes take from the runtime a
@@ -590,9 +590,11 @@ export class ToolEditApprovalController {
     return Effect.gen(function* () {
       const staging = yield* Deferred.await(entry.inFlight);
       if (Exit.isFailure(staging)) {
-        log.warn(
+        yield* Effect.logWarning(
           `The tool-edit preview for request ${requestId} failed while its release waited for it`,
-          { data: Cause.squash(staging.cause) },
+        ).pipe(
+          Effect.annotateLogs({ data: Cause.squash(staging.cause) }),
+          withLogChannel(CHANNEL),
         );
       }
       if (entry.phase !== 'pending') return;

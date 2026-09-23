@@ -6,7 +6,6 @@ import { Data, Effect } from 'effect';
 
 // Local imports
 import { registerRun } from '@agent/storage';
-import { type AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { RunHandle } from '@agent/runtime/RunHandle';
@@ -517,7 +516,7 @@ interface AgentCliLoopParams<TTurn> {
   formatError: (turn: TTurn | null, err: unknown, lastPrompt: string) => string;
   /** Omitted by providers (codex) that always throw on failure. */
   isTurnError?: (turn: TTurn) => boolean;
-  onTurnError?: (turn: TTurn, logger: AgentTrace) => void;
+  turnErrorMessage?: (turn: TTurn) => string | undefined;
   /** Logged if the loop fails after launch. */
   loopFailedMessage: string;
 }
@@ -553,7 +552,7 @@ export function buildAgentCliLaunch<TTurn>(
       formatDelivery,
       formatError,
       isTurnError,
-      onTurnError,
+      turnErrorMessage,
       loopFailedMessage,
     } = params;
     const { logger } = childRun;
@@ -595,7 +594,7 @@ export function buildAgentCliLaunch<TTurn>(
       isTerminal: () => false,
       getUsage,
       isTurnError,
-      onTurnError,
+      turnErrorMessage,
       onLoopStart: () => {
         registry.trackInFlight(target);
       },

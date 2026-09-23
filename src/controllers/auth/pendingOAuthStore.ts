@@ -20,11 +20,9 @@ import {
 } from '@auth/pendingOAuthState';
 import { parseJsonWith } from '@common/parsing/safeParseJson';
 import { withLogChannel } from '@logger/effectLog';
-import { createLog } from '@logger/logUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'pendingOAuthStore';
-const log = createLog(CHANNEL);
 
 /**
  * Key prefix a durable {@link PendingOAuthSlots} implementation puts its
@@ -56,17 +54,16 @@ export class PendingOAuthStore {
 
   /** The record for `nonce`, or null when there is none worth trusting. */
   read(nonce: string): Effect.Effect<PendingOAuthState | null, Error> {
-    return Effect.map(this.slots.read(nonce), (stored) => {
-      if (stored === undefined) return null;
+    return Effect.flatMap(this.slots.read(nonce), (stored) => {
+      if (stored === undefined) return Effect.succeed(null);
       const parsed = parseJsonWith(stored, PendingOAuthStateSchema);
       if (Result.isFailure(parsed)) {
         // The fixed diagnostic deliberately excludes stored secret content.
-        log.warn(
+        return Effect.logWarning(
           'Stored OAuth callback state is malformed and will be ignored',
-        );
-        return null;
+        ).pipe(withLogChannel(CHANNEL), Effect.as(null));
       }
-      return parsed.success;
+      return Effect.succeed(parsed.success);
     });
   }
 

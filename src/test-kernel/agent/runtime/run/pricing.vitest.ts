@@ -8,9 +8,9 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports
-import { noopTrace } from '@agent/trace';
 import type { BoundModel } from '@agent/runtime/run/modelBinding';
 import { priceTurnUsage } from '@agent/runtime/run/pricing';
+import { noopTrace } from '@test/support/noopTrace';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 
 import type { Model, TurnResult } from '@texra-ai/llm/turn';

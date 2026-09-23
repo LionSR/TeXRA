@@ -324,8 +324,7 @@ export class PRPollingSource extends PollingSourceBase<
               pr.repo,
               state.currentShaState.sha,
               state.currentShaState.checkRunsCache,
-              this.logger,
-            )
+            ).pipe(this.inLogChannel)
           : Effect.succeed({
               response: { status: 304 as const },
               stagedCache: undefined,
@@ -429,7 +428,7 @@ export class PRPollingSource extends PollingSourceBase<
     // state.etags.pr, so the PR-detail ETag is not advanced on a bad body —
     // the next tick re-fetches the same resource and re-validates (no
     // strand).
-    const parsed = this.validateOrSkip(
+    const parsed = yield* this.validateOrSkip(
       prRes,
       GhPullRequestSchema,
       `Skipping PR poll for ${key}: malformed pull-request payload`,
@@ -805,10 +804,10 @@ export class PRPollingSource extends PollingSourceBase<
       pr.owner,
       pr.repo,
       run.id,
-      this.logger,
       SharedAnnotationFetchBudget,
       now,
     ).pipe(
+      this.inLogChannel,
       Effect.map((annotations) => ({ ok: true as const, annotations })),
       Effect.catchCause((cause) => {
         // Recover only a single typed failure, unwrapped — the caller
@@ -839,17 +838,18 @@ export class PRPollingSource extends PollingSourceBase<
     if (err instanceof GitHubPermanentError || err instanceof GitHubAuthError) {
       const reason =
         err instanceof GitHubAuthError ? 'forbidden' : 'unavailable';
-      this.logger.warn(`Annotations for check ${run.id} ${reason}; dropping.`, {
-        data: err,
-      });
+      yield* this.logWarning(
+        `Annotations for check ${run.id} ${reason}; dropping.`,
+        err,
+      );
       this.removePendingAnnotationRun(state, run.id);
       return true;
     }
     this.removePendingAnnotationRun(state, run.id);
     state.currentShaState?.pendingAnnotationRuns.push(run);
-    this.logger.warn(
+    yield* this.logWarning(
       `Annotation fetch for check ${run.id} failed; rotating to back of queue`,
-      { data: err },
+      err,
     );
     return true;
   });
