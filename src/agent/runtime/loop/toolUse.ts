@@ -845,7 +845,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
    * `halted` step unwritten and the follow-up lease held, so a same-process
    * resume refused the run. The release hangs off the halt write's own exit
    * for the same reason: a failed `halted` append still detaches and frees
-   * the lease (#12982), as `recoverable`, since no terminal row landed.
+   * the lease, as `recoverable`, since no terminal row landed.
    */
   const finalize = (exit: Exit.Exit<LoopExit, Error>) =>
     Effect.uninterruptible(
