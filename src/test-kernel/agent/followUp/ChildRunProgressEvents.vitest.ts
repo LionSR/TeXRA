@@ -16,7 +16,6 @@ import {
   aggregateTarget,
   RUN_OUTCOME,
   RUN_PHASE,
-  runIdentityName,
   type RunId,
   AgentCategory,
 } from '@shared/schemas';
