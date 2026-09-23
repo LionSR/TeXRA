@@ -926,6 +926,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
    */
   const produceOutput = Effect.fn('reflection.produceOutput')(function* (
     state: RunState,
+    cell: RunCell,
   ): Effect.fn.Return<RunState, Error, FileSystem.FileSystem | WorkspaceFs> {
     const round = flow.currentRound;
     const location = flow.outputLocation;
@@ -971,15 +972,13 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     }
     // The row owns completed outputs. Commit it before fallible presentation
     // and policy reads; output.pending stays replayable until round end.
-    const produced = yield* commit(
-      yield* ledger.appendBatch(runId, state, [
-        {
-          type: 'output.produced',
-          aggregateId: rowAggregate(runId),
-          rounds: roundsToPersisted(outputState),
-        },
-      ]),
-    );
+    const produced = yield* cell.append([
+      {
+        type: 'output.produced',
+        aggregateId: rowAggregate(runId),
+        rounds: roundsToPersisted(outputState),
+      },
+    ]);
     yield* presentOutput(endTurn, result);
     return produced;
   });
@@ -1059,7 +1058,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
         state = yield* processResponse(state, cell);
       }
       if (state.phase === 'output.pending') {
-        state = yield* produceOutput(state);
+        state = yield* produceOutput(state, cell);
       }
       return { state, kind: 'completed' } as const;
     });
