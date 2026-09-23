@@ -2,7 +2,7 @@
 import * as path from 'node:path';
 
 import { it } from '@effect/vitest';
-import { Effect, Exit, Fiber } from 'effect';
+import { Effect, Exit, Fiber, Logger } from 'effect';
 import { beforeAll, beforeEach, describe, expect, vi } from 'vitest';
 import { AgentDirectories } from '@platform/interfaces';
 import { AgentCategory } from '@shared/schemas';
@@ -357,10 +357,10 @@ describe('CLI Supabase auth', () => {
       const { signOutCliSupabase } = yield* Effect.promise(() =>
         loadSupabaseAuth(),
       );
-      // The module graph `loadSupabaseAuth` reset and reloaded, so the spy
-      // lands on the logger the agent registry writes through.
-      const logger = yield* Effect.promise(() => import('@logger/logUtils'));
-      const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+      const warnings: unknown[] = [];
+      const capture = Logger.make((options) => {
+        if (options.logLevel === 'Warn') warnings.push(options.message);
+      });
       const { globalStorage } = createFakeWorkspaceRoots();
       // The invalidation owns the best-effort guard, defects included: the
       // directory port dying mid-rebuild must not fail sign-out.
@@ -375,15 +375,14 @@ describe('CLI Supabase auth', () => {
           Effect.provide(globalStorageFsTestLayer(globalStorage)),
           Effect.provide(nodePlatformLayer),
           Effect.provideService(AgentDirectories, rebuildDies),
+          Effect.withLogger(capture),
         ),
       ).toBeUndefined();
 
       expect(mocks.authCoordinator.clearSession).toHaveBeenCalledOnce();
-      expect(warn).toHaveBeenCalledWith(
-        'agentRegistry',
+      expect(warnings).toContainEqual([
         'Local agent catalog rebuild failed after sign-out: local rebuild failed',
-      );
-      warn.mockRestore();
+      ]);
     }),
   );
 });
