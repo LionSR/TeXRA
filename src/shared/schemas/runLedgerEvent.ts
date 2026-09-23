@@ -468,15 +468,12 @@ export type ToolResultPayload = z.infer<typeof ToolResultPayloadSchema>;
 
 /* ----------------------------------------------------------- flow.snapshot */
 
-/** The loop's phase vocabulary, apart from `RunPhaseSchema` (D9). Nothing
- *  writes `response.ready` or `tools.dispatching`: cut at the next bump. */
+/** The loop's phase vocabulary, apart from `RunPhaseSchema` (D9). */
 const RunLoopPhaseSchema = z.enum([
   'initial',
   'round.ready',
   'model.ready',
   'model.submitted',
-  'response.ready',
-  'tools.dispatching',
   'results.ready',
   'output.pending',
   'waiting',

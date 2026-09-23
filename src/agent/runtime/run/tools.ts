@@ -6,7 +6,9 @@
  * own; a call whose name and arguments repeat an earlier one in the same
  * window is a duplicate that never executes.
  */
+import { createHash } from 'node:crypto';
 import { Result } from 'effect';
+import stableStringify from 'safe-stable-stringify';
 import {
   JsonObjectSchema,
   type TurnRequest,
@@ -33,6 +35,29 @@ export function toolDefinitionsFor(
       convertToolSchema(definition) ?? { type: 'object', properties: {} },
     ),
   }));
+}
+
+/**
+ * The toolset a tool-use run records at open: the offered names in offer
+ * order, and a sha256 over the canonical (key-sorted) JSON of each offered
+ * name and input schema. Descriptions are left out: delegation annotations
+ * rewrite them between launches without changing what a call may carry.
+ */
+export function offeredToolset(definitions: readonly ToolDefinition[]): {
+  readonly offeredTools: readonly string[];
+  readonly toolsetHash: string;
+} {
+  const offered = toolDefinitionsFor(definitions);
+  const canonical = offered.map(({ name, parameters }) => ({
+    name,
+    parameters,
+  }));
+  return {
+    offeredTools: offered.map(({ name }) => name),
+    toolsetHash: createHash('sha256')
+      .update(stableStringify(canonical))
+      .digest('hex'),
+  };
 }
 
 /** One local call of a completed turn. */

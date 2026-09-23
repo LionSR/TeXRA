@@ -266,6 +266,7 @@ function agentRun(
     fileService: new RunFileService(runId, session.roots),
     tools,
     finalToolName: null,
+    toolset: { offeredTools: [], toolsetHash: '0'.repeat(64) },
     structured: { value: undefined },
     model,
     scope: Scope.makeUnsafe(),
@@ -343,6 +344,8 @@ const openDispatch = Effect.fn('openDispatch')(function* (
         family: 'toolUse',
         state: {
           stateSlices: options.stateSlices ?? null,
+          offeredTools: [],
+          toolsetHash: '0'.repeat(64),
         },
       },
     }),

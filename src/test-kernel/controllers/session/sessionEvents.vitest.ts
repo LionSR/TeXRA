@@ -2353,7 +2353,11 @@ describe('RunLedger', () => {
         lastError: null,
         declinedRoutes: [],
       },
-      state: { stateSlices: null },
+      state: {
+        stateSlices: null,
+        offeredTools: [],
+        toolsetHash: '0'.repeat(64),
+      },
     },
   });
   const refusalOf = (error: unknown): RunLedgerRefused | null =>

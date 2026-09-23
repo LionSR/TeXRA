@@ -452,6 +452,7 @@ function agentRunTestLayer(init: LoopInit) {
         fileService: new RunFileService(init.runId, init.session.roots),
         tools: new MapToolRegistry({}),
         finalToolName: null,
+        toolset: { offeredTools: [], toolsetHash: '0'.repeat(64) },
         structured: { value: undefined },
         model,
         scope,

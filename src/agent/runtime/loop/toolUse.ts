@@ -160,6 +160,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       }),
       userChannels,
     },
+    ...run.toolset,
     ...(systemPrompt !== undefined ? { systemPrompt } : {}),
     ...(run.structured.value !== undefined
       ? { structured: run.structured.value }
@@ -406,7 +407,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
 
   // ------------------------------------------------------------ the turn
   type TurnExit = { readonly state: RunState; readonly outcome: RunOutcome };
-  type LoopExit = TurnExit;
   const runTurn = Effect.fn('toolUse.turn')(function* (
     cell: RunCell,
   ): Effect.fn.Return<
@@ -763,7 +763,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     });
 
   /** The terminal step of a run that ends here, then the caller's result. */
-  const finish = (state: RunState, outcome: RunOutcome): LoopExit =>
+  const finish = (state: RunState, outcome: RunOutcome): TurnExit =>
     ({ state, outcome }) as const;
 
   const result = (outcome: RunOutcome, at: RunState): ToolUseResult => ({

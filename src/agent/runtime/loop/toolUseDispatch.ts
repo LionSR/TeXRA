@@ -408,7 +408,13 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     turn.workspace.interactions.recordToolCall();
     let result: ToolResult;
     if (!tool) {
-      result = { status: 'error', error: `Unknown tool ${fact.toolName}` };
+      // A name the run was not offered, or one it was offered that no longer
+      // resolves on resume: a model-visible error, and the turn continues.
+      result = {
+        status: 'error',
+        error: `tool_unavailable: the tool "${fact.toolName}" is not available in this run. Continue with the tools you were offered.`,
+        diagnostics: { code: 'tool_unavailable', tool: fact.toolName },
+      };
     } else {
       // Guard first, in the same call context: a refused path or an
       // unapproved command settles the call without the body running.
