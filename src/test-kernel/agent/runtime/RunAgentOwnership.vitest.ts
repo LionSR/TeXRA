@@ -61,6 +61,7 @@ vi.mock('@agent/runtime/executeAgent', async () => {
         try: () => mocks.executeAgent(...args),
         catch: ensureError,
       }),
+    resumeToolUseFromResumeData: () => Effect.die('Unexpected resume'),
   };
 });
 

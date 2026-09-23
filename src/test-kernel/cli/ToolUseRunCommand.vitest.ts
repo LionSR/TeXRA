@@ -4,7 +4,6 @@ import { beforeEach, describe, expect, vi } from 'vitest';
 // Shared mock registrations must evaluate before anything that loads
 // the mocked modules — keep these imports immediately after the vitest
 // import (enforced by architecture/supportMockImportOrder.vitest.ts).
-import '@test/support/agentCatalogMock';
 import { cliInitPlatformMock } from '@test/support/cliInitPlatformMock';
 import { cliLogSinksMock } from '@test/support/cliLogSinksMock';
 import { cliOutputMock } from '@test/support/cliOutputMock';

@@ -35,14 +35,12 @@ import type { RunStatusInfo } from '@agent/runtime/RunHandle';
 import { Runs } from '@agent/runtime/runRegistry';
 import { getRunRecords } from '@agent/storage/runRecords';
 import { withLogChannel } from '@logger/effectLog';
-import { createLog } from '@logger/logUtils';
 import { type RunId, type RunOutcome, type RunPhase } from '@shared/schemas';
 import { runHeldClause } from '@shared/runs/runStatusDisplay';
 import { claimStanding } from '@shared/session/database';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'RunLiveness';
-const log = createLog(CHANNEL);
 
 /**
  * What may be said about a run right now. `unsettled` carries a mid-sentence
@@ -119,17 +117,18 @@ export const resolveRunLiveness = Effect.fn('resolveRunLiveness')(function* (
     // without finishing.
     return { kind: 'interrupted' };
   }).pipe(
-    Effect.catch((error) =>
-      Effect.sync((): RunLiveness => {
-        const cause = toErrorMessage(error);
-        log.warn(`Cannot read the durable facts for run ${runId}: ${cause}`, {
-          data: error,
-        });
-        return {
+    Effect.catch((error) => {
+      const cause = toErrorMessage(error);
+      return Effect.logWarning(
+        `Cannot read the durable facts for run ${runId}: ${cause}`,
+      ).pipe(
+        Effect.annotateLogs({ data: error }),
+        withLogChannel(CHANNEL),
+        Effect.as({
           kind: 'unsettled',
           reason: `in a state this process cannot read (${cause})`,
-        };
-      }),
-    ),
+        } as RunLiveness),
+      );
+    }),
   );
 });

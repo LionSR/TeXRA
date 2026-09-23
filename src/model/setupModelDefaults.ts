@@ -8,12 +8,12 @@
  * proves ChatGPT-subscription access.
  */
 export const SETUP_MODEL_BY_PROVIDER: Readonly<Record<string, string>> = {
-  anthropic: 'opus5T',
-  openai: 'gpt56',
+  anthropic: 'opus55',
+  openai: 'gpt6-',
   google: 'gemini31p',
   deepseek: 'deepseekproT',
   openRouter: 'sonnet5T',
-  xai: 'grok45',
+  xai: 'grok47',
   moonshot: 'kimi26T',
   kimiCode: 'kimiCoding',
   dashscope: 'qwenplus',

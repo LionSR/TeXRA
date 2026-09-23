@@ -10,6 +10,7 @@ import {
   AgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
+import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { getRunRecords } from '@agent/storage/runRecords';
 import { CliUsageError, type CliContext } from '@cli/runtime/cliContext';
@@ -17,6 +18,7 @@ import { CliExitCode } from '@cli/runtime/exitCodes';
 import { aggregateId } from '@shared/schemas';
 import type { FlowSnapshotPayload, RunId } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
+import { DatabaseReadFailed } from '@shared/session/database';
 import { RunLedgerRefused } from '@shared/session/runLedger';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { createProcessSession } from '@test/support/sessionTestUtils';
@@ -29,7 +31,6 @@ const mocks = vi.hoisted(() => ({
   initCliPlatform: vi.fn(),
   installCliProcessRuntime: vi.fn(),
   resolveCliLaunchAgent: vi.fn(),
-  retrieveSessionResumeData: vi.fn(),
   runChat: vi.fn(),
   writeTextStderr: vi.fn(),
 }));
@@ -52,14 +53,6 @@ vi.mock('@cli/runtime/logSinks', () => ({
 
 vi.mock('@cli/runtime/agents', () => ({
   resolveCliLaunchAgent: mocks.resolveCliLaunchAgent,
-}));
-
-vi.mock('@agent/runtime/SessionResumeRetrieval', () => ({
-  retrieveSessionResumeData: (...args: unknown[]) =>
-    Effect.tryPromise({
-      try: () => mocks.retrieveSessionResumeData(...args),
-      catch: (error) => error,
-    }),
 }));
 
 vi.mock('@cli/commands/workflow', () => ({
@@ -110,6 +103,38 @@ const OPENING_SNAPSHOT: FlowSnapshotPayload = {
   state: { shouldSkipCycle: false, stateSlices: null },
 };
 
+/**
+ * The checkpoint a workflow run's aggregate carries. The real
+ * `retrieveSessionResumeData` reads it: the family must match the config's
+ * category, and the runtime's model fields are what the resumed launch pins.
+ */
+const workflowSnapshot = (
+  modelId: string,
+  modelCompatibilityKey: FlowSnapshotPayload['runtime']['modelCompatibilityKey'] = null,
+): FlowSnapshotPayload => ({
+  family: 'reflection',
+  runtime: {
+    phase: 'initial',
+    round: 0,
+    turn: 0,
+    continuationIndex: 0,
+    modelId,
+    modelCompatibilityKey,
+    lastError: null,
+    declinedRoutes: [],
+  },
+  state: {
+    currentRound: 0,
+    totalRounds: 4,
+    workspaceSnapshot: AgentWorkspaceState.create().toSnapshot(),
+    outputLocation: null,
+    runStateSnapshot: { totalRounds: 4, totalResponseTimeMs: 0 },
+    roundOutputs: [],
+    continueRounds: true,
+    endTurn: false,
+  },
+});
+
 /** The session the seeded run lives in, as the command resolves it. */
 let seededSession: SessionHandle;
 
@@ -117,6 +142,7 @@ let seededSession: SessionHandle;
 async function seedRunRecord(seed: {
   readonly config?: AgentConfig | null;
   readonly checkpoint?: boolean;
+  readonly modelCompatibilityKey?: FlowSnapshotPayload['runtime']['modelCompatibilityKey'];
 }): Promise<void> {
   const session = await Effect.runPromise(createProcessSession());
   seededSession = session;
@@ -146,13 +172,19 @@ async function seedRunRecord(seed: {
       getRunRecords(session, RUN_ID).writeRunRecord(seed.config),
     );
   if (seed.checkpoint !== false) {
+    // The snapshot's family matches the seeded category: the real retrieval
+    // refuses a contradiction, so the seed must be one a run could write.
+    const snapshot =
+      seed.config?.agentCategory === AgentCategory.Workflow
+        ? workflowSnapshot(seed.config.model, seed.modelCompatibilityKey)
+        : OPENING_SNAPSHOT;
     await Effect.runPromise(session.ledger.acquire(RUN_ID));
     await Effect.runPromise(
       session.ledger.appendBatch(RUN_ID, null, [
         {
           type: 'flow.snapshot',
           aggregateId: aggregateId('run', RUN_ID),
-          payload: OPENING_SNAPSHOT,
+          payload: snapshot,
         },
       ]),
     );
@@ -179,13 +211,9 @@ async function run(context: CliContext, id: RunId = RUN_ID) {
   return runResumeCommand(context, id);
 }
 
-async function stubWorkflowResume(config: AgentConfig): Promise<void> {
+/** Seed a workflow run the real retrieval resumes. */
+async function seedWorkflowResume(config: AgentConfig): Promise<void> {
   await seedRunRecord({ config });
-  mocks.retrieveSessionResumeData.mockResolvedValue({
-    type: 'workflow',
-    agentConfig: config,
-    runId: RUN_ID,
-  });
 }
 
 describe('runResumeCommand', () => {
@@ -231,12 +259,9 @@ describe('runResumeCommand', () => {
   });
 
   it('resumes a workflow run headless under its persisted run id', async () => {
-    await seedRunRecord({ config: WORKFLOW_CONFIG });
-    mocks.retrieveSessionResumeData.mockResolvedValue({
-      type: 'workflow',
-      agentConfig: WORKFLOW_CONFIG,
-      runId: RUN_ID,
-      modelCompatibilityKey: 'anthropic',
+    await seedRunRecord({
+      config: WORKFLOW_CONFIG,
+      modelCompatibilityKey: 'Anthropic',
     });
 
     // Headless (non-TTY) is fine for the workflow arm — only tool-use resume
@@ -248,7 +273,7 @@ describe('runResumeCommand', () => {
       expect.any(Object),
       expect.objectContaining({
         runId: RUN_ID,
-        modelCompatibilityKey: 'anthropic',
+        modelCompatibilityKey: 'Anthropic',
       }),
     );
     expect(mocks.resolveCliLaunchAgent).toHaveBeenCalledWith(
@@ -270,7 +295,7 @@ describe('runResumeCommand', () => {
         expectedOutputFiles: ['paper.tex', 'appendix.tex'],
       },
     });
-    await stubWorkflowResume(workflowConfig);
+    await seedWorkflowResume(workflowConfig);
 
     await expect(run(cliContext())).resolves.toBe(0);
 
@@ -292,7 +317,7 @@ describe('runResumeCommand', () => {
       workingDirectory,
       cli: { outputDirectory: path.join(workingDirectory, 'out') },
     });
-    await stubWorkflowResume(workflowConfig);
+    await seedWorkflowResume(workflowConfig);
     mocks.assertOutputDirAvailable.mockReturnValue(
       Effect.fail(new CliUsageError('--output-dir must refer to a directory.')),
     );
@@ -331,7 +356,6 @@ describe('runResumeCommand', () => {
     await expect(run(cliContext({ stdoutIsTty: false }))).resolves.toBe(2);
 
     expect(mocks.runChat).not.toHaveBeenCalled();
-    expect(mocks.retrieveSessionResumeData).not.toHaveBeenCalled();
     expect(mocks.writeTextStderr).toHaveBeenCalledWith(
       expect.stringContaining(`texra resume ${RUN_ID}`),
     );
@@ -392,7 +416,6 @@ describe('runResumeCommand', () => {
       expect(mocks.writeTextStderr).toHaveBeenCalledWith(
         `Run ${RUN_ID} is already running in this process.`,
       );
-      expect(mocks.retrieveSessionResumeData).not.toHaveBeenCalled();
     }),
   );
 
@@ -409,7 +432,6 @@ describe('runResumeCommand', () => {
     expect(mocks.writeTextStderr).toHaveBeenCalledWith(
       `Run ${RUN_ID} is held by another TeXRA process (pid 4321 on other-host).`,
     );
-    expect(mocks.retrieveSessionResumeData).not.toHaveBeenCalled();
   });
 
   it('identifies claim read failures separately from session loading', async () => {
@@ -424,19 +446,18 @@ describe('runResumeCommand', () => {
     expect(mocks.writeTextStderr).toHaveBeenCalledWith(
       `Could not read the state of run ${RUN_ID}: claim unreadable (claim disk offline)`,
     );
-    expect(mocks.retrieveSessionResumeData).not.toHaveBeenCalled();
   });
 
   // One reader now: the classification and the resume both read the run's
   // latest snapshot. The guarantee that survives the collapse is the negative
   // one — a run whose aggregate still carries a snapshot is never reported to
-  // its user as finished.
+  // its user as finished; the real retrieval resumes it.
   it('never reports a run that still has a snapshot as finished', async () => {
-    await seedRunRecord({ config: WORKFLOW_CONFIG });
-    mocks.retrieveSessionResumeData.mockResolvedValue(null);
+    await seedWorkflowResume(WORKFLOW_CONFIG);
 
-    await expect(run(cliContext())).resolves.toBe(2);
+    await expect(run(cliContext())).resolves.toBe(0);
 
+    expect(mocks.executeCliWorkflowConfig).toHaveBeenCalled();
     expect(mocks.writeTextStderr).not.toHaveBeenCalledWith(
       expect.stringContaining('This run has finished'),
     );
@@ -444,16 +465,33 @@ describe('runResumeCommand', () => {
   });
 
   // A transient failure over a checkpoint that is still on disk says nothing
-  // about the record, so it stays the operational error it was.
+  // about the record, so it stays the operational error it was. The
+  // classification's read of the snapshot succeeds; the resume's own read of
+  // the same checkpoint fails, the way a transient storage fault lands
+  // mid-command.
   it('reports a transient resume-state load failure as an operational error', async () => {
-    await seedRunRecord({ config: WORKFLOW_CONFIG });
-    mocks.retrieveSessionResumeData.mockRejectedValue(new Error('KV timeout'));
+    await seedWorkflowResume(WORKFLOW_CONFIG);
+    let snapshotReads = 0;
+    const realLatestSnapshot = seededSession.ledger.latestSnapshot.bind(
+      seededSession.ledger,
+    );
+    vi.spyOn(seededSession.ledger, 'latestSnapshot').mockImplementation(
+      (runId) =>
+        ++snapshotReads === 1
+          ? realLatestSnapshot(runId)
+          : Effect.fail(
+              new DatabaseReadFailed({
+                path: 'run-ledger',
+                cause: new Error('KV timeout'),
+              }),
+            ),
+    );
 
     await expect(run(cliContext())).resolves.toBe(1);
 
     expect(mocks.runChat).not.toHaveBeenCalled();
     expect(mocks.writeTextStderr).toHaveBeenCalledWith(
-      `Could not load session ${RUN_ID}: KV timeout`,
+      `Could not load session ${RUN_ID}: Failed to retrieve workflow resume data for run: ${RUN_ID}: checkpoint could not be read (KV timeout)`,
     );
   });
 
@@ -461,7 +499,7 @@ describe('runResumeCommand', () => {
   // refused them, so the user is told the saved state cannot be continued
   // instead of being shown the launch's internal wording.
   it('refuses an aggregate the ledger cannot fold as unusable state', async () => {
-    await stubWorkflowResume(WORKFLOW_CONFIG);
+    await seedWorkflowResume(WORKFLOW_CONFIG);
     mocks.executeCliWorkflowConfig.mockRejectedValue(
       new RunLedgerRefused({
         reason: 'inconsistent',

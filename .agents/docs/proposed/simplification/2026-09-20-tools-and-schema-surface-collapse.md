@@ -108,8 +108,8 @@ folds.
    which is what `define.ts` is.
 7. Move the module-global mutable ownership state into session- or
    process-scoped services, one PR per subsystem: the Lean server map in
-   `leanServerRegistry.ts`, the agent-engine slot (only after the #12888
-   ruling admits a tag; not actionable before it), the inline-comment
+   `leanServerRegistry.ts`, the agent-engine slot (#12888 admitted a
+   process tag on 2026-09-22, now implemented), the inline-comment
    provider slot, the Codex config slots and the GitHub subscription
    bindings. The lazy memos of immutable tables (`registry.ts`), the
    class-shaped `toolAvailability` cache, the per-API rate limiters and the
@@ -153,43 +153,66 @@ already shipped, in smaller PRs that never came back to update this note:
   written, holds. `src/shared/schemas/` is down to ~6.9k lines
   (from the ~9.5k cited above); `mainView/` and `progressView/` remain, as
   wire-contract state for those views rather than settings surface.
-- **Step 2 (LaTeX/image probe), for the four spellings this note named.**
-  One catalog, `LATEX_TOOLS` in `@shared/constants/latexToolchain`, consumed
-  by `@latex/latexToolchain`, `@tools/setup/toolProbing`,
-  `@controllers/settingsView/LatexToolingController` and the CLI doctor
-  (`@latex/latexToolchain` → `probeLatexToolchain`) — the four spellings §1's
-  Findings listed are one now. No "kept in sync" comment remains anywhere in
-  the tree. The per-consumer roles (doctor required/optional, probe
-  required/image, `drivesCompile`) landed as designed, including the stated
-  `latexmk` residual. Not consolidated, and not one of the four this note
-  named: `checkCoreDependencies` (`src/utils/system/checkCoreDependencies.ts`)
-  still hardcodes its own `['latexindent', 'perl', 'gs']` list rather than
-  reading `LATEX_TOOLS`/`PROBED_LATEX_TOOLS` (it does read `IMAGE_LATEX_TOOLS`
-  for the image half). It backs the progress view's dependency banner
-  (`ProgressViewProvider.ts`, `extensionHostRequests.ts`) — a fifth surface
-  this note's original survey missed, so the catalog can still drift from
-  what that banner shows.
+- **Step 2 (LaTeX/image probe).** One catalog, `LATEX_TOOLS` in
+  `@shared/constants/latexToolchain`, consumed by `@latex/latexToolchain`,
+  `@tools/setup/toolProbing`, `@controllers/settingsView/LatexToolingController`
+  and the CLI doctor (`@latex/latexToolchain` → `probeLatexToolchain`) — four
+  of the five spellings §1's Findings named are one now. No "kept in sync"
+  comment remains anywhere in the tree. The per-consumer roles (doctor
+  required/optional, probe required/image, `drivesCompile`) landed as
+  designed, including the stated `latexmk` residual.
+
+  The fifth spelling §1 named, `externalToolDefs`, still declares and probes
+  `texcount` on its own (`checkToolInstalled('texcount', false)`, the same
+  call `LATEX_TOOLS`-derived consumers make for it) — as designed, not left
+  over: §2's own step 2 said `externalToolDefs` would "carr[y] no system
+  LaTeX dependency except texcount" going in, because `texcount` is also a
+  registered agent tool (`tools: ['texcount']`). Its definition is hidden from
+  the Tools dashboard (`hideFromDashboard: true`); LaTeX settings shows its
+  status instead. Both call sites read the identical primitive, so there is
+  no restated _list_ to drift, only one boolean check reached from two
+  registries for two purposes.
+
+  Not one of §1's five, but flagged as a sixth un-consolidated spelling by an
+  earlier pass of this note: `checkCoreDependencies`
+  (`src/utils/system/checkCoreDependencies.ts`), which then hardcoded
+  `['latexindent', 'perl', 'gs']` rather than reading the catalog. That was
+  true when written (#12994) but landed independently in the meantime
+  (`#12962`, before this note could be updated): the function now iterates
+  `CORE_DEPENDENCY_TOOLS`, itself derived from `LATEX_TOOLS` via each entry's
+  `core?: true` flag, and the catalog's own docstring now lists
+  `checkCoreDependencies` as the fourth of "four surfaces" that read it — not
+  a missed one. Corrected here rather than left stale, per a review catch on
+  this note's own PR (#13022).
+
 - **Step 3 (rows).** `sessionEvent.ts` has a single `run.fact` row
   (discriminated by `fact.key`) and a single `state.value.set` row;
   `updateTodos`/`updatePlan`/`addOutputFiles`/`updateMissingOutputs`/
   `updateCompileFailures` and the three singleton record types no longer
   exist as separate schema arms. `runFactEvents.ts` is gone.
   `src/agent/storage/runRecords.ts` has no restated latest-row readers.
-- **Step 4 (`ExecutionsTool`), mostly.** Its own module docstring now states
-  the invariant directly: "every fact about a run... is read off the session
-  fold (`SessionView`)... this surface never resolves liveness, parentage or
-  a task list a second time." One documented exception the docstring doesn't
-  cover: `/report` and `/result` (`showReport`/`showResultMeta`,
-  `ExecutionsTool.ts:559-596`) call `turnAttributionNote`, which calls
-  `resolveRunLiveness` (`executions/runLiveness.ts`) — a second liveness read
-  against `Runs`, the run-end row and claim ownership, not the fold. Its own
-  docstring says why: a single-run read needs the unsettled/interrupted
-  _reason_ string the fold doesn't carry, and a listing surface reads the
-  fold "instead" because it "has already decided all of this for every run
-  at once." Whether that split is the intended design or an un-migrated
-  residual is not settled by this note; recorded here so a future audit
-  doesn't take the docstring's "never... a second time" as covering this
-  path too.
+- **Step 4 (`ExecutionsTool`), mostly, corrected on a review catch.** Its own
+  module docstring now states the invariant directly: "every fact about a
+  run... is read off the session fold (`SessionView`)... this surface never
+  resolves liveness, parentage or a task list a second time." One documented
+  exception the docstring doesn't cover: `/report` and `/result`
+  (`showReport`/`showResultMeta`, `ExecutionsTool.ts:559-596`) call
+  `turnAttributionNote`, which calls `resolveRunLiveness`
+  (`executions/runLiveness.ts`) — a second read against `Runs`, the run-end
+  row and claim ownership, not the fold. An earlier pass of this note
+  claimed the fold carries no reason string for the unsettled/interrupted
+  cases, which is wrong and was caught on review: `RunView.statusDetail`
+  (`sessionView.ts`) is filled by `withAggregates`
+  (`sessionFold.ts`) with `runInterruptedMessage()` or
+  `runHeldMessage(ownerPid(heldBy))` for exactly the interrupted and
+  foreign-held cases `resolveRunLiveness` also names. The one case the fold's
+  `statusDetail` does not cover is narrower: this process holding the run's
+  claim with no tracked handle and no recorded outcome — the anomaly
+  `resolveRunLiveness` calls `OWNED_HERE_REASON` and logs as a leak, which
+  the fold's `own` branch instead folds into ordinary "held," no detail
+  attached. Whether that narrow gap justifies a second full liveness read
+  (rather than, say, the fold flagging that one anomaly too) is not settled
+  by this note.
 - **Step 5 (replacement categories).** `NON_REGEX_REPLACEMENT_CATEGORIES` /
   `REGEX_REPLACEMENT_CATEGORIES` in
   `@shared/constants/replacementCategories` are the one declaration;
@@ -201,25 +224,20 @@ already shipped, in smaller PRs that never came back to update this note:
 - **Step 7 (module-global state), partially.** The Lean server roster
   (`leanServerRegistry.ts`) is now a per-adapter factory
   (`createLeanServerRoster`) rather than a module map. GitHub subscription
-  bindings (`GitHubSubscriptions`) and the inline-comment provider
-  (`InlineComments`) are both `Context.Service` tags resolved from process
-  scope, not module slots.
+  bindings (`GitHubSubscriptions`), the inline-comment provider
+  (`InlineComments`), and the delegation agent engine (`AgentEngine`)
+  are `Context.Service` tags resolved from process scope, not module slots.
 
 ## 6. Still open
 
-- **Step 2, `checkCoreDependencies`.** A fifth (not one of the original
-  four-named) spelling of the LaTeX/image probe list, hardcoded rather than
-  reading `LATEX_TOOLS`, backing the progress view's dependency banner. See
-  §5 Step 2 for detail and evidence.
 - **Step 4, the turn-attribution liveness read.** `/report` and `/result`
   resolve a run's liveness a second time via `resolveRunLiveness` rather than
   reading it off `SessionView`, contradicting the "never... a second time"
-  reading of the module docstring if taken to cover every codepath. See §5
-  Step 4 for detail, including the design rationale that may make this
-  intentional rather than a residual.
-- **Step 7, the agent-engine slot.** `src/tools/delegation/nativeSubagentStrategy.ts`
-  still holds `let agentEngine: AgentEngine | undefined;` at module scope —
-  unchanged, and still correctly gated on the #12888 ruling as stated above.
+  reading of the module docstring if taken to cover every codepath. The fold
+  already carries a reason string for the interrupted and foreign-held cases
+  (`RunView.statusDetail`); the real gap is narrower — one anomalous case
+  (this process's own orphaned claim) the fold doesn't flag. See §5 Step 4
+  for detail.
 - **Step 7, the remaining slots.** The Codex config module
   (`src/tools/codexConfig.ts`) now reads settings entirely through
   `StateStore`/`createEnumStateGetter`; its only module-level state is an

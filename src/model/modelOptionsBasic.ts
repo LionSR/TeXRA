@@ -32,9 +32,9 @@ export const DEFAULT_MODELS: readonly string[] = [
   // quality default.
   DEFAULT_AGENT_MODEL,
   'gpt56-',
-  'gpt56--',
+  'gpt6--',
   'sonnet5T',
-  'opus5T',
+  'opus55',
   'fable51',
   'gemini38f',
   'gemini31p',
@@ -47,7 +47,7 @@ export const DEFAULT_MODELS: readonly string[] = [
   'glm53',
   'glm53flash',
   // Current non-retired xAI flagship — API key or experimental Grok OAuth.
-  'grok45',
+  'grok47',
   'musespark13',
 ];
 

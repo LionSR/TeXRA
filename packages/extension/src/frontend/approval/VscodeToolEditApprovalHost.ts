@@ -27,6 +27,7 @@ import {
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import type { ProcessRuntime } from '@platform/processRuntime';
+import type { HostRequestFailure } from '@shared/session/requestErrors';
 import type { BuildDisplayFn } from '@tools/approval/latexPreview';
 import type { ApprovalTempFiles } from '@tools/approval/tempFileManager';
 import { writeApprovalTempFiles } from '@tools/approval/tempFileManager';
@@ -55,7 +56,7 @@ export class VscodeToolEditApprovalHost implements ToolEditApprovalHost {
   stagePreview(
     request: ToolEditApprovalRequest,
     context: ToolEditPreviewContext,
-  ): Effect.Effect<ToolEditPreview, unknown> {
+  ): Effect.Effect<ToolEditPreview, HostRequestFailure> {
     return fromHost('stagePreview.mkdir', () =>
       mkdir(this.storageDirectory, { recursive: true }),
     ).pipe(
@@ -80,7 +81,7 @@ export class VscodeToolEditApprovalHost implements ToolEditApprovalHost {
     );
   }
 
-  revealApprovalSurface(): Effect.Effect<void, unknown> {
+  revealApprovalSurface(): Effect.Effect<void, HostRequestFailure> {
     // A failure here reaches the controller's action wrapper, which reports
     // it through `reportError`. Swallowing it left the diff tab open with no
     // approve/reject surface and no visible cause.
@@ -122,23 +123,14 @@ class VscodeToolEditPreview implements ToolEditPreview {
     return this.staged.proposedPath;
   }
 
-  present(): Effect.Effect<void, unknown> {
+  present(): Effect.Effect<void, HostRequestFailure> {
     return this.openDiff().pipe(
       Effect.andThen(Effect.sync(() => this.watchForTabClose())),
-      Effect.andThen(
-        // A reveal that failed under a request that settled meanwhile is not
-        // a presentation failure: the diff opened, and nobody is left to look
-        // at the caret.
-        this.revealFirstChange().pipe(
-          Effect.catch((error) =>
-            this.context.isSettled() ? Effect.void : Effect.fail(error),
-          ),
-        ),
-      ),
+      Effect.andThen(this.revealFirstChange()),
     );
   }
 
-  showDiff(): Effect.Effect<void, unknown> {
+  showDiff(): Effect.Effect<void, HostRequestFailure> {
     return this.openDiff().pipe(
       Effect.andThen(
         Effect.suspend(() =>
@@ -150,7 +142,7 @@ class VscodeToolEditPreview implements ToolEditPreview {
     );
   }
 
-  openProposed(): Effect.Effect<void, unknown> {
+  openProposed(): Effect.Effect<void, HostRequestFailure> {
     return fromHost('showTextDocument', () =>
       vscode.window.showTextDocument(
         vscode.Uri.file(this.staged.proposedPath),
@@ -159,11 +151,11 @@ class VscodeToolEditPreview implements ToolEditPreview {
     ).pipe(Effect.asVoid);
   }
 
-  readProposedContent(): Effect.Effect<string, unknown> {
+  readProposedContent(): Effect.Effect<string, HostRequestFailure> {
     return this.diffViewHost.readProposedContent(this.diffSession);
   }
 
-  dispose(): Effect.Effect<void, unknown> {
+  dispose(): Effect.Effect<void, HostRequestFailure> {
     return Effect.sync(() => {
       // Stop listening for tab closes before closing the diff ourselves.
       this.tabCloseListener?.dispose();
@@ -173,7 +165,7 @@ class VscodeToolEditPreview implements ToolEditPreview {
     );
   }
 
-  private openDiff(): Effect.Effect<void, unknown> {
+  private openDiff(): Effect.Effect<void, HostRequestFailure> {
     return this.diffViewHost.openDiff(
       this.diffSession.original,
       this.diffSession.proposed,
@@ -181,7 +173,7 @@ class VscodeToolEditPreview implements ToolEditPreview {
     );
   }
 
-  private revealFirstChange(): Effect.Effect<void, unknown> {
+  private revealFirstChange(): Effect.Effect<void> {
     return Effect.suspend(() => {
       const line = firstChangedLine(
         this.request.originalContent,

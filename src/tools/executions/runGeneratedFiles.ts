@@ -17,7 +17,7 @@ import * as path from 'node:path';
 import { Effect, FileSystem } from 'effect';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import type { RunId } from '@shared/schemas';
 import { byStringProp } from '@utils/core';
 // toPosixPath also trims and resolves `.`/`..` segments beyond a bare slash
@@ -26,7 +26,7 @@ import { byStringProp } from '@utils/core';
 import { toPosixPath } from '@utils/core/pathCore';
 import { runDirUnder } from '@utils/files/runStorageFs';
 
-const log = createLog('runGeneratedFiles');
+const CHANNEL = 'runGeneratedFiles';
 
 /** Scan depth: the run root plus one level of generated subdirectories. */
 const RUN_FILE_SCAN_DEPTH = 2;
@@ -79,15 +79,15 @@ function walkRunStorage(
       // loudly — the warn is the surfacing mechanism, matching the
       // outputDiscovery/externalInquiryStorage fallback precedent (#10630).
       Effect.catch((error) =>
-        Effect.sync((): string[] => {
-          if (error.reason._tag !== 'NotFound') {
-            log.warn(
+        error.reason._tag === 'NotFound'
+          ? Effect.succeed([] as string[])
+          : Effect.logWarning(
               `Unreadable run directory '${fullPath}'; listing it as empty`,
-              { data: error },
-            );
-          }
-          return [];
-        }),
+            ).pipe(
+              Effect.annotateLogs({ data: error }),
+              withLogChannel(CHANNEL),
+              Effect.as([] as string[]),
+            ),
       ),
     );
 

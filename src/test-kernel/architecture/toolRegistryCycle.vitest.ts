@@ -32,10 +32,10 @@ const TOOL_REGISTRY = 'src/tools/registry.ts';
 
 /**
  * Tools whose closure may still contain the registry. Empty since the
- * delegation tools stopped reaching `executeAgent` statically: the engine now
- * provides its entry points to `nativeSubagentStrategy` at its own module
- * load, so even the agent-launching tools resolve the tool table through the
- * live engine rather than through their import closure. Keep it empty.
+ * delegation tools stopped reaching `executeAgent` statically: the process
+ * runtime provides the engine through Effect context, so even the
+ * agent-launching tools resolve the tool table through the live engine rather
+ * than through their import closure. Keep it empty.
  */
 const AGENT_LAUNCHING_TOOLS: readonly string[] = [];
 

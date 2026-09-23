@@ -7,7 +7,7 @@ import { ToolCall } from '@agent/runtime/ToolCall';
 
 // Local imports
 import type { HostInteractions } from '@agent/runtime/HostInteractions';
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import { type ToolResult, ToolError } from '@shared/schemas';
 import {
   resolveWorkspaceRelativePath,
@@ -25,7 +25,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 // Local file imports
 import { defineTool } from './core/define';
 
-const log = createLog('DiagnosticsTool');
+const CHANNEL = 'DiagnosticsTool';
 
 /**
  * The host capabilities and working directory this tool reads from the
@@ -149,16 +149,20 @@ export class DiagnosticsTool extends defineTool({
     // refresh build faulted or the collection itself threw, and the agent is
     // told which.
     const messages = yield* linter(diagnosticsPath).pipe(
-      Effect.catchTag('DiagnosticsReadFailed', (error) => {
-        log.error(
+      Effect.catchTag('DiagnosticsReadFailed', (error) =>
+        Effect.logError(
           `Failed to collect diagnostics for ${diagnosticsPath} (${error.reason}): ${error.message}`,
-        );
-        return Effect.fail(
-          new ToolError(
-            `Failed to collect diagnostics (${error.reason}): ${error.message}`,
+        ).pipe(
+          withLogChannel(CHANNEL),
+          Effect.flatMap(() =>
+            Effect.fail(
+              new ToolError(
+                `Failed to collect diagnostics (${error.reason}): ${error.message}`,
+              ),
+            ),
           ),
-        );
-      }),
+        ),
+      ),
     );
     const counts = countBySeverity(messages);
     const header = `${diagnosticsPath}: ${formatCounts(counts)}`;
@@ -220,12 +224,13 @@ export class DiagnosticsTool extends defineTool({
             }),
           };
         },
-        catch: (error) => {
-          const detail = toErrorMessage(error);
-          log.error(`Failed to add criticism: ${detail}`);
-          return new ToolError(`Failed to add criticism: ${detail}`);
-        },
-      });
+        catch: (error) =>
+          new ToolError(`Failed to add criticism: ${toErrorMessage(error)}`),
+      }).pipe(
+        Effect.tapError((error) =>
+          Effect.logError(error.message).pipe(withLogChannel(CHANNEL)),
+        ),
+      );
       if (!added.result.accepted) {
         return executed(
           'Inline criticism diagnostics are disabled. Enable "texra.inlineCriticism.enabled" in settings to surface critiques as diagnostics.',

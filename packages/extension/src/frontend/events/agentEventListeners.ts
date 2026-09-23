@@ -145,8 +145,8 @@ function handleRequestShowInstruction(
 function handleShowAgentConfigBanner(
   payload: ShowAgentConfigBannerPayload,
   progressViewProvider: ProgressViewProvider,
-): void {
-  progressViewProvider.showAgentConfigBanner(
+): Effect.Effect<void> {
+  return progressViewProvider.showAgentConfigBanner(
     payload.agentName,
     payload.category,
   );

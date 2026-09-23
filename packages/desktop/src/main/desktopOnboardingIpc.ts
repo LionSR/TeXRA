@@ -92,7 +92,9 @@ export interface DesktopOnboardingIpc extends DesktopMessageHandler {
   /** The funnel as last derived; null before the first refresh. */
   funnelState(): OnboardingFunnelState | null;
   /** Fires after every refresh that changed the funnel. */
-  onFunnelChange(listener: (state: OnboardingFunnelState) => void): () => void;
+  onFunnelChange(
+    listener: (state: OnboardingFunnelState) => Effect.Effect<void>,
+  ): () => void;
   /** The welcome card's skip: persists the declined flag and refreshes. */
   skipOnboarding(): OnboardingAction;
   /** The setup card's skip: marks the first run done and refreshes. */
@@ -111,7 +113,9 @@ export function createDesktopOnboardingIpc(
 ): DesktopOnboardingIpc {
   const state = options.state;
   let setupKickoffStarted = false;
-  const funnelListeners = new Set<(state: OnboardingFunnelState) => void>();
+  const funnelListeners = new Set<
+    (state: OnboardingFunnelState) => Effect.Effect<void>
+  >();
   // This host's half of the shared funnel loop. Entering State 1 only paints
   // the setup card (the launcher's agent selection is the surface's), so the
   // `selectSetupAgent` arm is deliberately discarded here as it is in the CLI;
@@ -120,10 +124,14 @@ export function createDesktopOnboardingIpc(
   const funnel = new OnboardingFunnelRefresher({
     hasCredential: () => options.hasCredential(),
     flags: state,
-    apply: ({ state: funnelState, changed }) => {
-      if (!changed) return;
-      for (const listener of [...funnelListeners]) listener(funnelState);
-    },
+    apply: ({ state: funnelState, changed }) =>
+      changed
+        ? Effect.forEach(
+            [...funnelListeners],
+            (listener) => listener(funnelState),
+            { discard: true },
+          )
+        : Effect.void,
   });
 
   const postCurrentState = Effect.gen(function* () {

@@ -7,6 +7,7 @@
 import { Effect } from 'effect';
 
 import { type AgentFlowResult } from '@agent/runtime/AgentFlowResult';
+import { AgentEngine } from '@agent/runtime/AgentEngine';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { ExecuteAgentOptions } from '@agent/runtime/executeAgent';
 import type { AgentRunServices } from '@agent/runtime/toolInjection';
@@ -32,49 +33,6 @@ import {
   formatSubagentError,
   type SubagentResultMeta,
 } from './subagentResults';
-
-/**
- * The engine entry point a native child run needs. Provided by
- * `@agent/runtime/executeAgent` at its module load rather than imported: a
- * static import here would close the
- * registry -> DelegationTools -> proposalFlow -> subagentRun ->
- * nativeSubagentStrategy -> executeAgent -> AgentRun -> registry cycle,
- * because the run layer statically imports the tool registry (a kept edge). Agents launching agents is inherently recursive; this slot is
- * the single, typed point where that recursion closes at runtime.
- */
-export interface AgentEngine {
-  readonly executeAgent: typeof import('@agent/runtime/executeAgent').executeAgent;
-  readonly resumeToolUseFromResumeData: typeof import('@agent/runtime/executeAgent').resumeToolUseFromResumeData;
-}
-
-let agentEngine: AgentEngine | undefined;
-
-/**
- * Scoped provider for the engine slot. Production has exactly one caller —
- * `@agent/runtime/executeAgent` at its own module load, guaranteed before any
- * strategy call because a subagent only launches from inside an engine-driven
- * run. Tests dispose their override after each case so a fake cannot leak into
- * another consumer of this module graph. Passing the engine as an explicit
- * parameter instead is not available: the strategy's callers are the
- * delegation tools, whose static import of the engine is the exact cycle this
- * slot exists to sever.
- */
-export function provideAgentEngine(engine: AgentEngine): () => void {
-  const previous = agentEngine;
-  agentEngine = engine;
-  return () => {
-    if (agentEngine === engine) agentEngine = previous;
-  };
-}
-
-function engine(): AgentEngine {
-  if (!agentEngine) {
-    throw new Error(
-      'Native subagent launch requires the agent engine, but @agent/runtime/executeAgent has not been loaded.',
-    );
-  }
-  return agentEngine;
-}
 
 /**
  * The launch fields every native child run needs, shared between the two
@@ -148,7 +106,6 @@ export function createNativeSubagentStrategy(
   const config = params.definition
     ? params.definition.config
     : params.resume.identity.agentConfig;
-  let runHandle: AgentRunHandle | undefined;
   // Captured for the turn currently in flight; read once the call resolves.
   // `executeAgent` never rejects for a
   // subagent's own application-level failure (runFlowWithLifecycle returns a
@@ -161,10 +118,6 @@ export function createNativeSubagentStrategy(
   // already-built result manifest is still available for persistence.
   let cachedBuilt: SubagentResultMeta | undefined;
   let cachedDelivery: string | undefined;
-
-  const resolveDeliveryTarget = (): RunId | undefined => {
-    return runHandle ? runHandle.deliveryTarget : params.parentRunId;
-  };
 
   const runNative = Effect.fn('nativeSubagent.runTurn')(function* (
     ports: ChildRunPorts,
@@ -181,7 +134,6 @@ export function createNativeSubagentStrategy(
     return yield* call((handle) =>
       Effect.sync(() => {
         detachAbort();
-        runHandle = handle;
         detachAbort = bindAbortSignals([params.signal, signal], handle);
       }),
     ).pipe(
@@ -236,6 +188,7 @@ export function createNativeSubagentStrategy(
     launch: (ports, signal, turns) =>
       runNative(ports, signal, (onRun) =>
         Effect.gen(function* () {
+          const engine = yield* AgentEngine;
           const executeOptions: ExecuteAgentOptions & {
             session: SessionHandle;
           } = {
@@ -268,11 +221,11 @@ export function createNativeSubagentStrategy(
             },
           };
           if (params.resume)
-            return yield* engine().resumeToolUseFromResumeData(
+            return yield* engine.resumeToolUseFromResumeData(
               params.resume.identity,
               executeOptions,
             );
-          const turn = yield* engine().executeAgent(
+          const turn = yield* engine.executeAgent(
             params.definition,
             params.runId,
             {
@@ -293,8 +246,6 @@ export function createNativeSubagentStrategy(
       params.runMode !== 'single-cycle' &&
       turn.outcome === RUN_OUTCOME.CANCELLED,
     isTurnError: () => lastErr !== undefined,
-
-    resolveDeliveryTarget,
 
     formatDelivery: Effect.fn('nativeSubagent.formatDelivery')(function* (
       turn: AgentFlowResult,

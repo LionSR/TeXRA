@@ -36,10 +36,9 @@ const mocks = vi.hoisted(() => ({
   activePlatform: null as object | null,
   agentCategory: 'toolUse',
   /** The runtime owner's close, as the package reaches it: by storage root. */
-  closeSession: vi.fn((_root: string) => ({
-    settled: true,
-    abandoned: [] as string[],
-  })),
+  closeSession: vi.fn((_root: string) =>
+    Effect.succeed({ settled: true, abandoned: [] as string[] }),
+  ),
   detachEvents: vi.fn(),
   disposeRuntime: vi.fn(() => Effect.void),
   runId: 'ae0001',
@@ -150,8 +149,7 @@ vi.mock('@agent/runtime', async () => {
     closeSession: (root: string) =>
       Effect.sync(() => {
         sessions.delete(root);
-        return mocks.closeSession(root);
-      }),
+      }).pipe(Effect.andThen(() => mocks.closeSession(root))),
     runAgent: (input: unknown, options: RunAgentOptions) =>
       Effect.tryPromise({
         try: () => mocks.runValidatedAgent(input, options),
@@ -420,6 +418,73 @@ describe('agent package sessions', () => {
           PLATFORM.roots.storage,
         );
         expect(mocks.disposeRuntime).toHaveBeenCalledOnce();
+      }),
+  );
+
+  it.effect(
+    'waits for the retiring runtime before admitting another scope',
+    () =>
+      Effect.gen(function* () {
+        const closing = yield* Deferred.make<void>();
+        const closeMayFinish = yield* Deferred.make<void>();
+        const retiring = yield* Deferred.make<void>();
+        const retirementMayFinish = yield* Deferred.make<void>();
+        const successorEntered = yield* Deferred.make<void>();
+        const successorMayLeave = yield* Deferred.make<void>();
+        mocks.closeSession.mockImplementationOnce(() =>
+          Deferred.succeed(closing, undefined).pipe(
+            Effect.andThen(Deferred.await(closeMayFinish)),
+            Effect.as({ settled: true, abandoned: [] as string[] }),
+          ),
+        );
+        mocks.disposeRuntime.mockImplementationOnce(() =>
+          Effect.sync(() => {
+            // Disposal uninstalls the owner before unwinding the runtime.
+            mocks.ownerRuntime = undefined;
+          }).pipe(
+            Effect.andThen(Deferred.succeed(retiring, undefined)),
+            Effect.andThen(Deferred.await(retirementMayFinish)),
+          ),
+        );
+        yield* Effect.gen(function* () {
+          const first = yield* Effect.forkChild(
+            Effect.flatMap(Sessions, (sessions) => sessions.open()).pipe(
+              Effect.provide(Sessions.layer(PLATFORM)),
+            ),
+          );
+          yield* Deferred.await(closing);
+          const successor = yield* Effect.forkChild(
+            Effect.gen(function* () {
+              const sessions = yield* Sessions;
+              yield* sessions.open();
+              yield* Deferred.succeed(successorEntered, undefined);
+              yield* Deferred.await(successorMayLeave);
+            }).pipe(Effect.provide(Sessions.layer(PLATFORM))),
+            { startImmediately: true },
+          );
+          expect(yield* Deferred.isDone(successorEntered)).toBe(false);
+          yield* Deferred.succeed(closeMayFinish, undefined);
+          yield* Deferred.await(retiring);
+          expect(mocks.ownerRuntime).toBeUndefined();
+          expect(yield* Deferred.isDone(successorEntered)).toBe(false);
+          expect(mocks.installRuntime).toHaveBeenCalledOnce();
+          yield* Deferred.succeed(retirementMayFinish, undefined);
+          yield* Fiber.join(first);
+          yield* Deferred.await(successorEntered);
+          expect(mocks.installRuntime).toHaveBeenCalledTimes(2);
+          expect(mocks.disposeRuntime).toHaveBeenCalledOnce();
+          yield* Deferred.succeed(successorMayLeave, undefined);
+          yield* Fiber.join(successor);
+          expect(mocks.disposeRuntime).toHaveBeenCalledTimes(2);
+        }).pipe(
+          Effect.ensuring(
+            Effect.all([
+              Deferred.succeed(closeMayFinish, undefined),
+              Deferred.succeed(retirementMayFinish, undefined),
+              Deferred.succeed(successorMayLeave, undefined),
+            ]),
+          ),
+        );
       }),
   );
 

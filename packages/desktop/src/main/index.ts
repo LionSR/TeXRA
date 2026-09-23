@@ -1038,12 +1038,12 @@ function createWindow(options: {
         ),
       readRecentCommits: () => recentCommitsOf(project),
       onError: reportBackgroundError,
-      publish: (next) => {
-        runtime.runFork(bridge.setHost(next));
-      },
+      publish: (next) => bridge.setHost(next),
     });
     const funnel = onboardingIpcRef.current?.funnelState();
-    if (funnel) snapshot.setOnboarding(funnel);
+    const initialSnapshot = funnel
+      ? snapshot.setOnboarding(funnel).pipe(Effect.andThen(snapshot.refresh))
+      : snapshot.refresh;
     const run = createDesktopAgentRun({
       runtime,
       host: {
@@ -1109,7 +1109,7 @@ function createWindow(options: {
         },
       }),
     );
-    void runtime.runPromise(snapshot.refresh);
+    void runtime.runPromise(initialSnapshot);
     return {
       project,
       bridge,
@@ -1585,11 +1585,13 @@ function createWindow(options: {
   afterLaunchFunnelRefresh.current = refreshFunnelAfterLaunch;
   // The funnel is host state every open project's snapshot carries (8.1).
   windowResources.add(
-    onboardingIpc.onFunnelChange((state) => {
-      for (const binding of projectBindings.values()) {
-        binding.snapshot.setOnboarding(state);
-      }
-    }),
+    onboardingIpc.onFunnelChange((state) =>
+      Effect.forEach(
+        [...projectBindings.values()],
+        (binding) => binding.snapshot.setOnboarding(state),
+        { discard: true },
+      ),
+    ),
   );
   runtime.runFork(
     onboardingIpc.refreshOnboardingFunnel().pipe(
