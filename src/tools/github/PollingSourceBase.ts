@@ -184,7 +184,6 @@ export abstract class PollingSourceBase<
   disposeAll(): void {
     this.subscriptions.clear();
     this.stopPolling();
-    // In shutdown, register's shutdownRan guard blocks re-subscribe here.
     this.notifyKeysChanged();
   }
 
@@ -210,6 +209,9 @@ export abstract class PollingSourceBase<
               `Cannot subscribe to ${this.config.name} after shutdown`,
             );
           }
+          // A replacement host starts with fresh subscriptions. Stop the old
+          // poller now, even if its shutdown is still in the BEFORE phase.
+          if (this.shutdownLifecycle?.shutdownRan) this.disposeAll();
           let state = this.subscriptions.get(key);
           const created = !state;
           if (!state) {
@@ -512,12 +514,14 @@ export abstract class PollingSourceBase<
    */
   private registerShutdownIfNeeded(lifecycle: LifecycleHost): void {
     if (this.shutdownLifecycle === lifecycle) return;
-    this.clearShutdownRegistration();
+    // A shutdown already in progress still needs its ON hook to close the old
+    // scopes and drain admitted deliveries after a replacement subscribes.
+    if (!this.shutdownLifecycle?.shutdownRan) this.clearShutdownRegistration();
     const lifetime = this.lifetime!;
     this.shutdownRegistration = lifecycle.onShutdown(
       SHUTDOWN_PHASE.ON,
       Effect.gen({ self: this }, function* () {
-        this.disposeAll();
+        if (this.lifetime === lifetime) this.disposeAll();
         yield* Scope.close(lifetime.pollScope, Exit.void);
         yield* FiberSet.awaitEmpty(lifetime.deliveries);
       }).pipe(
