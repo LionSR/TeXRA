@@ -75,11 +75,10 @@ in place. Nothing is copied into global storage, so there is no bundle-copy
 step to run and no version state key to keep.
 
 Beside the platform, a Node root calls `bootstrapHost`
-(`src/controllers/hostBootstrap.ts:77-96`) once, on its own process runtime: it
-installs the model HTTP dispatcher, the process setting host, the logger's
-debug-mode read, the account probes, the runtime skill sources, and the
-first-install disabled-tool seed. An embedder that skips it gets a runtime
-without those, not a broken one.
+(`src/controllers/hostBootstrap.ts:75-92`) once, on its own process runtime: it
+installs the model HTTP dispatcher, the process setting host, the account
+probes, the runtime skill sources, and the first-install disabled-tool seed.
+An embedder that skips it gets a runtime without those, not a broken one.
 
 Only a composition root calls `initPlatform`; that rule is stated in the
 `nodeHost` module header (`src/platform/defaults/nodeHost.ts:1-18`).
@@ -128,13 +127,13 @@ inside `resourcesPath`, and the files are read where they are.
 const agentDirectories = createPlatformAgentDirectories({
   channel: 'my-embedder',
   resourcesPath, // dir containing agents/, tool_use_agents/, skills/
-  customDirectoryStore: { get: () => undefined },
+  customDirectoryStore: { get: () => Effect.succeed(undefined) },
 });
 initPlatform({ lifecycle, agentDirectories });
 ```
 
-`customDirectoryStore.get()` is the user-configured custom agent directory, or
-`undefined` for none. The three methods return Effects, not Promises
+`customDirectoryStore.get()` yields the user-configured custom agent
+directory, or `undefined` for none. The three methods return Effects, not Promises
 (`src/agent/index/AgentDirectoryService.ts:61-85`); a failure to resolve a
 directory is an `AgentDirectoriesFailed`, and the `issueReporter` option
 decides how it surfaces (the default logs it at `warn`).
@@ -160,7 +159,7 @@ that need no session leave the store unopened.
   Pass the handle to `runAgent`; close it through the session owner when its
   lifetime ends.
 
-### Prerequisite B — `await loadAgents(...)`
+### Prerequisite B — `yield* loadAgents(...)`
 
 The registry is **not** lazily populated on the run path.
 `getAgentPath` → `resolveAgentForLaunch` is a synchronous read of already-loaded
@@ -168,7 +167,7 @@ state (`src/agent/index/agentRegistry.ts`); when it misses,
 `AgentLaunchContext` emits `showAgentConfigBanner` and throws
 `Could not find agent: <name>` (`src/agent/runtime/AgentLaunchContext.ts:158-159`).
 
-`loadAgents` (`src/agent/index/agentRegistry.ts:116-148`) is what fills it.
+`loadAgents` (`src/agent/index/agentRegistry.ts:113-128`) is what fills it.
 Neither `runAgent`, `executeAgent`, nor `AgentLaunchContext` populates the
 registry, so the caller must ensure that loading has happened before launch.
 Pass `{ includeRemote: false }` unless you want the Supabase remote-agent
@@ -179,14 +178,15 @@ catalog.
 `runAgent` and `executeAgent` obtain presentation and approval behavior from
 the selected session's stable `SessionHostInteractions` object. A host attaches
 its adapter with `session.interactions.use(...)` and detaches that adapter
-when the host presentation lifetime ends. An embedder that is certain no
-response-bearing interaction can occur may leave the session unattached.
-Otherwise, a non-interactive embedder must attach a host that answers every
-request kind its runs can raise. A method the host omits does not decline the
-request: a run-scoped request stays parked for a decision on its approval row.
-The adapter in the example below answers retry prompts with a denial, and
-`approvalPromptsUnavailable` (§3) keeps the approval-gated tools away from the
-model.
+when the host presentation lifetime ends. `use` returns an `Effect` that
+yields the detach disposer, so it is `yield*`ed. The attachment answers
+nothing: every request a run makes of a person (retry, question, approval) is
+a `request.opened` row the run's fold lists, closed by the
+`request.decided` row a surface's decision commits
+(`src/agent/runtime/HostInteractions.ts:85-91`). An unanswered request stays
+parked on its row. The adapter in the example below only receives
+presentation events, and `approvalPromptsUnavailable` (§3) keeps the
+approval-gated tools away from the model.
 
 ### Putting it together
 
@@ -217,7 +217,7 @@ const lifecycle = createLifecycleHost();
 const agentDirectories = createPlatformAgentDirectories({
   channel: 'my-embedder',
   resourcesPath, // dir containing agents/, tool_use_agents/, skills/
-  customDirectoryStore: { get: () => undefined },
+  customDirectoryStore: { get: () => Effect.succeed(undefined) },
 });
 initPlatform({ lifecycle, agentDirectories });
 
@@ -252,14 +252,12 @@ await runtime.runPromise(
     });
 
     const session = yield* initializeDefaultSession({ roots });
-    const detachHostInteractions = session.interactions.use({
-      cancel: () => {},
-      requestRetry: async () => ({
-        action: 'deny',
-        reason: 'No retry prompts.',
-      }),
+    const detachHostInteractions = yield* session.interactions.use({
+      emit: (event, payload) => {
+        console.error(`[texra] ${event}`, payload);
+      },
     }); // see §3 — DO NOT SKIP
-    yield* Effect.promise(() => loadAgents({ includeRemote: false }));
+    yield* loadAgents({ includeRemote: false });
 
     const validated = validateRunRequest({
       config: {
@@ -293,9 +291,9 @@ exceptions may instead run `AgentConfigSchema.parse` and construct the
 `agentCategory` normalizes to `Workflow`
 (`src/agent/core/definition/AgentConfig.ts:77-88`). The example sets
 `AgentCategory.ToolUse` explicitly because `assistant` is loaded from the
-tool-use agent directory (`src/agent/index/agentYamlScanner.ts:212-217`);
+tool-use agent directory (`src/agent/index/agentYamlScanner.ts:289-291`);
 launch resolution searches only the requested category
-(`src/agent/index/agentRegistry.ts:740-749`).
+(`src/agent/index/agentRegistry.ts:507-521`).
 
 ---
 
@@ -308,7 +306,7 @@ an embedder. That is correct only in a narrow sense, and the phrasing invites a
 wrong reading. State it plainly:
 
 ```ts
-// src/platform/interfaces.ts:208-216
+// src/platform/interfaces.ts:230-238
 export interface AgentDirectoriesPort {
   custom(): Effect.Effect<
     string,
@@ -328,11 +326,11 @@ disk_; that is the entire capability.
 ### Why in-memory definitions cannot work: two filesystem planes in one function
 
 `loadAgents` calls `doLoad`, which resolves the three paths and hands each to
-`scanDirectory` (`src/agent/index/agentRegistry.ts:150,160-173`). Inside
+`scanDirectory` (`src/agent/index/agentRegistry.ts:153,184-186`). Inside
 `scanDirectory`:
 
 - **Enumeration** uses the npm `glob` package with **no `fs` option**
-  (`src/agent/index/agentYamlScanner.ts:53-57`, import at `:3`). `glob` without
+  (`src/agent/index/agentYamlScanner.ts:75-80`, import at `:5`). `glob` without
   an injected `fs` reads the real Node filesystem directly.
 - **Reading** three lines later goes through Effect's own `FileSystem`, which
   a test or an embedder can back with something other than the real disk.
@@ -375,7 +373,7 @@ one agent, an embedder cannot either.
 ### What injection _does_ buy you
 
 - **Skipping the packaged bundle.** `scanDirectory` returns no entries for an
-  empty path (`src/agent/index/agentYamlScanner.ts:68`), so
+  empty path (`src/agent/index/agentYamlScanner.ts:71`), so
   `builtIn: () => Effect.succeed('')` and
   `builtInToolUse: () => Effect.succeed('')` are legal and cheap. This is the
   "empty-builtIn trick" the proposals mention, and it does work. With it you
@@ -383,15 +381,15 @@ one agent, an embedder cannot either.
   own directory of YAML.
 - **Choosing where custom agents live.** The CLI builds its port with
   `createPlatformAgentDirectories({ channel: 'cli', customDirectoryStore: … })`
-  (`packages/cli/src/runtime/initPlatform.ts:276-279`,
+  (`packages/cli/src/runtime/cliProcessRuntime.ts:246-250`,
   `src/agent/index/platformAgentDirectories.ts:25-57`). An embedder is free to
   supply a three-line literal instead:
 
   ```ts
   const agentDirectories: AgentDirectoriesPort = {
-    custom: async () => '/abs/path/to/my/agents',
-    builtIn: async () => '',
-    builtInToolUse: async () => '',
+    custom: () => Effect.succeed('/abs/path/to/my/agents'),
+    builtIn: () => Effect.succeed(''),
+    builtInToolUse: () => Effect.succeed(''),
   };
   ```
 
@@ -608,60 +606,59 @@ does not hold them leaves `loadAgents` with no packaged agents (§2).
 
 ## 5. Reading the CLI: obligations vs. product features
 
-`packages/cli/src/runtime/initPlatform.ts` is 392 lines and performs ~15
-registrations after `initPlatform`. An embedder reading it cannot tell which
-are runtime requirements and which are `texra`-the-product. The following
-classification makes that distinction.
+`initCliPlatform` (`packages/cli/src/runtime/initPlatform.ts:256-467`) is one
+Effect program that builds the process runtime, the platform and the process
+session, and every `texra` command runs it. An embedder reading it cannot tell
+which steps are runtime requirements and which are `texra`-the-product. The
+following classification makes that distinction.
 
 ### Runtime bootstrap and shipped-feature parity
 
-- **`initPlatform({ lifecycle, agentDirectories })`:** Required.
-  `platform()` throws otherwise (`src/platform/platform.ts:68-75`).
-- **`lean: directLeanLanguageServices()`** (in
-  `packages/cli/src/runtime/cliProcessRuntime.ts`): Shipped-feature parity, not
-  a raw-loop requirement. It is the direct Lean services layer of the process
-  runtime; an embedder may pass another port. The `memory` and `plan`
-  injections self-register (`src/agent/runtime/toolInjection.ts`).
-- **`bootstrapHost({ host: 'cli', roots, secrets, skills })`:** The shared
-  once-per-process install every host runs beside its platform
-  (`src/controllers/hostBootstrap.ts:77-96`): the model HTTP dispatcher, the
-  process setting host, the logger's debug-mode read, the account probes, the
-  runtime skill sources, and the first-install disabled-tool seed. An embedder
-  that skips it gets a runtime without those, not a broken one.
+- **`:275-282` — `installCliProcessRuntime(...)`:** Required. The one process
+  runtime (`packages/cli/src/runtime/cliProcessRuntime.ts:251`), which also
+  builds the lifecycle host and the agent-directories port
+  (`:246-250`). Its `lean: directLeanLanguageServices()` (`:298`) is
+  shipped-feature parity, not a raw-loop requirement; an embedder may pass
+  another layer. The `memory` and `plan` injections self-register
+  (`src/agent/runtime/toolInjection.ts`).
+- **`:326-333` — `createNodeWorkspaceRoots(...)`:** Required. The workspace
+  roots every session is opened over.
+- **`:370-378` — `bootstrapHost({ host: 'cli', roots, secrets, skills })`:**
+  The shared once-per-process install every host runs beside its platform
+  (`src/controllers/hostBootstrap.ts:75-92`): the model HTTP dispatcher, the
+  process setting host, the account probes, the runtime skill sources, and the
+  first-install disabled-tool seed. An embedder that skips it gets a runtime
+  without those, not a broken one. The CLI runs it before `initPlatform` so
+  the fallible seed fails while the platform is still private.
+- **`:400` — `initPlatform(platform)`:** Required. `platform()` throws
+  otherwise (`src/platform/platform.ts:68-75`).
 
-### CLI initialization choices (8) — not runtime obligations
+### CLI initialization choices — not runtime obligations
 
-- **`:306` — `seedDisabledToolDefaults(...)`:** First-install policy:
-  default-disable toggleable external tools. The key is versioned per host.
-- **`:311` — `installCliShutdownSignalHandlers(lifecycle)`:** SIGINT/SIGTERM
+- **`:308-311` — `openCliWorkspaceState(...)`:** The CLI's own on-disk
+  workspace state stores under its storage root. An embedder supplies its own
+  stores to `createNodeWorkspaceRoots`.
+- **`:340-363` — the memoized session open:** Opens the process session lazily,
+  with the LaTeX response-text connector as its `responseTextProcessing`, so a
+  command that needs no session never opens one. An embedder calls
+  `initializeDefaultSession` directly (§1, Prerequisite A).
+- **`:386-398` — `registerRuntimeShutdownHandlers(lifecycle, …)`:** Drains
+  agent-spawned OS children, flushes session publications, and disposes the
+  runtime on shutdown. Recommended for any long-lived process that runs `bash`
+  tools; its hook record names CLI-owned resources.
+- **`:403-405` — `installCliShutdownSignalHandlers(lifecycle)`:** SIGINT/SIGTERM
   handling for a terminal process.
-- **`:320` — `applyCliGitAuthorConfig(platform().config)`:** Attributes
-  agent-authored commits to the TeXRA Git identity.
-- **`:327-330` — `UsageLogService.initialize(...)` and shutdown flush:**
-  Supabase usage logging tagged `editorType: 'cli'`, for telemetry.
-- **`:334` — `initializeCliSupabaseAuth(log, storageRoot)`:** Supabase sign-in
-  wiring for the CLI's authentication flow.
-- **`:342-348` — `setSetupPlatform({ host: 'cli', signIn })`:** Wires the
-  setup-assistant onboarding surface.
-- **`:350-357` — OpenRouter reconciliation and model-cache invalidation:**
-  Resolves the persisted OpenRouter toggle.
-- **`:359-377` — authentication probe and CLI model policy:** Installs the
-  account probes (Codex/xAI eligibility) and applies the CLI's
-  `--helper-model` flag.
-
-### Optional, graceful (1)
-
-- `:387` — `initializeNodeRuntimeSkills({…})` (§4).
+- **`:460-463` — `initializeCliSupabaseAuth(...)`:** Supabase sign-in wiring
+  for the CLI's authentication flow.
 
 ### Cross-check against desktop
 
-The desktop main process makes the same three initialization choices, showing
-how a shipped host obtains full feature parity rather than proving that every
-call is a minimum runtime requirement:
-`initPlatform({ lifecycle, agentDirectories })` at
-`packages/desktop/src/main/platform/index.ts:221` over the port it builds at
-`:212`, `lean: directLeanLanguageServices()` in its `installProcessRuntime`
-call, and the same `bootstrapHost` the CLI runs, at `:233`. Product policy is
+The desktop main process makes the same runtime choices, showing how a shipped
+host obtains full feature parity rather than proving that every call is a
+minimum runtime requirement: it builds its agent-directories port at
+`packages/desktop/src/main/platform/index.ts:167`, runs the same
+`bootstrapHost` at `:228`, and calls `initPlatform({ lifecycle,
+agentDirectories })` at `:234`, after it rather than before. Product policy is
 not necessarily CLI-only: the disabled-tool seed and the runtime skill sources
 reach both hosts through that one shared call rather than being repeated per
 host.
@@ -681,7 +678,7 @@ host.
    it and closed with it; a host passes it exactly where it calls
    `installProcessRuntime` (`src/controllers/session/sessionLayer.ts`).
 3. **The registry is process-global**, not session-scoped
-   (`src/agent/index/agentRegistry.ts:116-148`). There is no per-embedder agent
+   (`src/agent/index/agentRegistry.ts:113-128`). There is no per-embedder agent
    namespace.
 4. **`initializeDefaultSession` throws when a default is already open over the
    same storage root** (`src/agent/runtime/sessionGraph.ts:313-316`). Embedding
