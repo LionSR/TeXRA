@@ -1,12 +1,11 @@
 import * as path from 'node:path';
 
-import { Effect, FileSystem, PlatformError } from 'effect';
+import { Effect, FileSystem } from 'effect';
 import { XMLParser } from 'fast-xml-parser';
 
 import { debugInternal, logInternal, type AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 
-import { isNotADirectoryError } from '@common/errors';
 import type { ConfigProvider } from '@platform/interfaces';
 import replacementEngine from '@replacement/engine';
 import type { FileLocation, OutputFileInfo } from '@shared/schemas';
@@ -34,6 +33,7 @@ import {
   extractDocuments,
   type NamedDocument,
 } from '@utils/text/xmlExtraction';
+import { absentReason } from '@utils/files/fsEntryExists';
 
 import {
   assignByContentSimilarity,
@@ -45,15 +45,6 @@ import {
 } from './extraction/filenameHeaders';
 import { reportMissingOutputs, type OutputState } from './outputState';
 
-/** ENOENT, or ENOTDIR on a parent, as `AbsoluteFS.exists`/`statIfExists` treated them. */
-function isAbsentFsPath(error: PlatformError.PlatformError): boolean {
-  return (
-    error.reason._tag === 'NotFound' ||
-    (error.reason._tag === 'BadResource' &&
-      isNotADirectoryError(error.reason.cause))
-  );
-}
-
 /** Delete any pre-staged symlink before writing so the write never follows the link into the immutable snapshot. */
 const writeRoundOutput = Effect.fn('XmlOutputManager.writeRoundOutput')(
   function* (absolutePath: string, content: string) {
@@ -62,7 +53,7 @@ const writeRoundOutput = Effect.fn('XmlOutputManager.writeRoundOutput')(
     // `FileSystem.stat` follows a link, so the probe is the `lstat`-backed one:
     // a link must be seen as itself to be removed rather than written through.
     const type = yield* entryTypeAt(absolutePath).pipe(
-      Effect.catchIf(isAbsentFsPath, () => Effect.succeed(null)),
+      Effect.catchIf(absentReason, () => Effect.succeed(null)),
     );
     if (type === 'SymbolicLink') {
       yield* fs.remove(absolutePath, { force: true });

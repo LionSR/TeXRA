@@ -8,23 +8,14 @@
  * canonical "before" content for accurate stats.
  */
 
-import { Effect, FileSystem, PlatformError } from 'effect';
+import { Effect, FileSystem } from 'effect';
 
-import { isNotADirectoryError } from '@common/errors';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { RunId, FileLocation } from '@shared/schemas';
 import { ensureError } from '@utils/errors/errorMessage';
 import { createRunStorageLocation } from '@utils/files/fileLocation';
 import { originalSnapshotPathUnder } from '@utils/files/runStorageFs';
-
-/** ENOENT, or ENOTDIR on a parent, both read as the path being absent. */
-function isAbsentFsPath(error: PlatformError.PlatformError): boolean {
-  return (
-    error.reason._tag === 'NotFound' ||
-    (error.reason._tag === 'BadResource' &&
-      isNotADirectoryError(error.reason.cause))
-  );
-}
+import { absentReason } from '@utils/files/fsEntryExists';
 
 /** Map each workspace base file to its snapshot location when one exists.
  *  Non-workspace files and missing snapshots pass through unchanged. The
@@ -50,7 +41,7 @@ export const resolveBaseFilesForDiff = Effect.fn(
         // `stat` follows a link, as the `isFile` this replaces did.
         const isFile = yield* fs.stat(snapshotAbsolute).pipe(
           Effect.map((info) => info.type === 'File'),
-          Effect.catchIf(isAbsentFsPath, () => Effect.succeed(false)),
+          Effect.catchIf(absentReason, () => Effect.succeed(false)),
           Effect.mapError(ensureError),
         );
         if (!isFile) {
