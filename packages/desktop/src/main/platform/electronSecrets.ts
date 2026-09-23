@@ -1,7 +1,9 @@
 import { Effect } from 'effect';
 import { safeStorage } from 'electron';
 
+import { emitAppSignal } from '@eventBus/AppSignals';
 import type { MessageHost } from '@hosts/uiHosts';
+import { invalidateApiKeyCache } from '@model/apiProviders';
 import {
   SecretsFailed,
   secretsGet,
@@ -237,7 +239,9 @@ export class ElectronSecrets implements PlatformSecrets {
   /**
    * Persist (or clear) one entry of the desktop secrets store. The store's
    * own write carries the Q2 mask: the lane wait is interruptible, the
-   * read-modify-write behind it is not.
+   * read-modify-write behind it is not. The key cache drop and the
+   * `credentialChanged` signal run on every exit, because a commit that
+   * landed still exits as interrupted when its caller was cancelled.
    */
   private commit(
     key: string,
@@ -254,6 +258,13 @@ export class ElectronSecrets implements PlatformSecrets {
           message: `Could not ${operation === 'set' ? 'store' : 'remove'} the desktop secret "${key}": ${toErrorMessage(cause)}`,
           cause,
         }),
+    ).pipe(
+      Effect.ensuring(
+        Effect.sync(() => {
+          invalidateApiKeyCache();
+          emitAppSignal('credentialChanged', { key });
+        }),
+      ),
     );
   }
 

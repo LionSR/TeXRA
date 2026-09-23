@@ -29,6 +29,17 @@ export function apiKeySecretName(provider: ApiProvider): string {
   return `apiKey.${provider}`;
 }
 
+/**
+ * The provider whose API key a secret-store entry holds, or `undefined` for
+ * every other entry (OAuth tokens, the GitHub token, sign-in nonces). The
+ * inverse of {@link apiKeySecretName}, for subscribers of the store's
+ * `credentialChanged` signal.
+ */
+export function apiProviderOfSecretName(key: string): ApiProvider | undefined {
+  const provider = key.startsWith('apiKey.') ? key.slice('apiKey.'.length) : '';
+  return isApiProvider(provider) ? provider : undefined;
+}
+
 /** Environment variable name for a provider's API key. */
 export function apiKeyEnvName(provider: ApiProvider): string {
   return (

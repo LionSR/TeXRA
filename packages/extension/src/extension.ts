@@ -79,6 +79,7 @@ import { withLogChannel } from '@logger/effectLog';
 import * as logger from '@logger/logUtils';
 import { setLogSink } from '@logger/logSink';
 import { formatFatalErrorDetail } from '@logger/redaction';
+import { invalidateApiKeyCache } from '@model/apiProviders';
 import { invalidateRuntimeModelRegistry } from '@model/runtimeModelRegistry';
 import { AppState, AgentDirectories } from '@platform/interfaces';
 import type { AgentResumePort, LifecycleHost } from '@platform/interfaces';
@@ -822,10 +823,17 @@ async function activateExtension(context: vscode.ExtensionContext) {
     );
 
   context.subscriptions.push(
-    context.secrets.onDidChange((e) => {
-      if (e.key !== GITHUB_TOKEN_STORAGE_KEY) return;
-      // Re-probe so any subscribed UI (Tools tab) reflects the new token
-      // presence; getGitHubToken() now reads SecretStorage live (no cache).
+    // The VS Code store's half of `credentialChanged`: SecretStorage reports
+    // every committed write, other windows' included, so the signal and the
+    // lookup-cache drop (another window never ran our finalizer) live here.
+    context.secrets.onDidChange(({ key }) => {
+      invalidateApiKeyCache();
+      emitAppSignal('credentialChanged', { key });
+    }),
+    // The GitHub token gates the `github_subscription` tool group; re-probe so
+    // the Tools tab and the next run's tool list see the new token presence.
+    subscribeAppSignal(runtime, 'credentialChanged', ({ key }) => {
+      if (key !== GITHUB_TOKEN_STORAGE_KEY) return;
       void runtime.runPromise(refreshToolAvailabilityLogged('secret change'));
     }),
     // Lean/LaTeX extension installed or removed → re-probe so the Tools tab

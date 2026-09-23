@@ -1,6 +1,11 @@
+import * as path from 'node:path';
+
 import { it } from '@effect/vitest';
-import { Effect, Fiber, Redacted } from 'effect';
+import { Deferred, Effect, Fiber, Redacted } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
+
+import { CliSecrets } from '@cli/runtime/cliSecrets';
+import { onAppSignal } from '@eventBus/AppSignals';
 
 import {
   apiKeyEnvName,
@@ -17,6 +22,7 @@ import { SecretsFailed, type PlatformSecrets } from '@platform/secrets';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { installPlatform } from '@test/support/setupPlatform';
+import { withTempDirEffect } from '@test/support/tempDirPlatform';
 import { UnsetApiKeyTool } from '@tools/setup/UnsetApiKeyTool';
 
 function createSecrets(
@@ -250,20 +256,38 @@ describe('API provider key caches', () => {
       }),
   );
 
-  it.effect('unset_api_key invalidates stale stored-key lookups', () =>
-    Effect.gen(function* () {
-      const { secrets } = createSecrets({
-        [apiKeySecretName('openai')]: 'sk-test',
-      });
-      yield* Effect.promise(() => setupApiKeyToolPlatform(secrets));
+  // Regression: the key cache drop and the repaint signal belong to the
+  // store's commit, so a writer outside the settings controllers (here the
+  // setup agent's tool, on the CLI's file store) still reaches both.
+  it.effect(
+    'unset_api_key on a file-backed store drops the key cache and emits credentialChanged',
+    () =>
+      withTempDirEffect('texra-unset-key-', (root) =>
+        Effect.gen(function* () {
+          const secrets = new CliSecrets(path.join(root, 'secrets.json'));
+          yield* secrets.set(apiKeySecretName('openai'), 'sk-test');
+          yield* Effect.promise(() => setupApiKeyToolPlatform(secrets));
+          expect(yield* lookupApiKeyOrigin(secrets, 'openai')).toBe('secret');
 
-      expect(yield* lookupApiKeyOrigin(secrets, 'openai')).toBe('secret');
-      yield* new UnsetApiKeyTool()
-        .call({ provider: 'openai' })
-        .pipe(Effect.provide(nativeToolTestLayer()));
+          const changed = Deferred.makeUnsafe<string>();
+          const subscriber = yield* Effect.forkChild(
+            onAppSignal('credentialChanged', ({ key }) => {
+              Deferred.doneUnsafe(changed, Effect.succeed(key));
+            }),
+          );
+          yield* Effect.yieldNow;
 
-      expect(yield* lookupApiKeyOrigin(secrets, 'openai')).toBe('none');
-    }),
+          yield* new UnsetApiKeyTool()
+            .call({ provider: 'openai' })
+            .pipe(Effect.provide(nativeToolTestLayer()));
+
+          expect(yield* lookupApiKeyOrigin(secrets, 'openai')).toBe('none');
+          expect(yield* Deferred.await(changed)).toBe(
+            apiKeySecretName('openai'),
+          );
+          yield* Fiber.interrupt(subscriber);
+        }),
+      ),
   );
 
   it.effect('removes a stored key whose value can no longer be read', () =>

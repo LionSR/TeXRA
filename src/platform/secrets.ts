@@ -66,12 +66,14 @@ export class SecretsFailed extends Data.TaggedError('SecretsFailed')<{
  * single `SecretStorage` call, which is the whole commit. Everything that
  * prepares a write — the lane wait, opening the store, the desktop store's
  * encrypt step — stays interruptible, because interruption there means
- * nothing was written. A caller with a post-commit step of its own (dropping
- * a key cache, say) owes it the same guarantee and cannot get it from a step
- * after the write: a commit the store landed still exits as interrupted when
- * its caller was cancelled during it, so the step — and any finalizer that
- * reads the exit — is skipped over a credential that is now on disk. Run it
- * as an `Effect.ensuring` finalizer, which runs on every exit.
+ * nothing was written. A post-commit step cannot run as a step after the
+ * write: a commit the store landed still exits as interrupted when its caller
+ * was cancelled during it, so the step would be skipped over a credential
+ * that is now on disk. The host stores therefore own the post-commit facts
+ * themselves, in an `Effect.ensuring` finalizer that runs on every exit: they
+ * drop the API-key lookup cache (`invalidateApiKeyCache`) and publish the
+ * `credentialChanged` app signal (the VS Code store publishes it from
+ * `SecretStorage.onDidChange` instead). A writer does neither by hand.
  */
 export interface PlatformSecrets {
   /** Get a raw secret by key name. */
