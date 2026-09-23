@@ -13,7 +13,7 @@
  */
 
 // Third-party imports
-import { Cause, Effect, Exit, Fiber } from 'effect';
+import { Cause, Effect, Exit, Fiber, Scope } from 'effect';
 
 // Local imports
 import { getRunRecords } from '@agent/storage';
@@ -91,7 +91,6 @@ export interface InBandSubagentLaunchOptions {
   /** The run this attempt executes under; the caller owns its derivation. */
   readonly runId: RunId;
   readonly parentRunId: RunId;
-  readonly signal?: AbortSignal;
   /** Resolve mutable launch prerequisites only when a launch actually happens. */
   readonly prepare: () => Effect.Effect<
     Omit<InBandSubagentRunBaseOptions, 'signal'>,
@@ -371,13 +370,35 @@ const executeInBand = Effect.fn('executeInBand')(
  * Launch one child under the run id its caller derived and read the typed
  * result back from the durable record. Recovering an earlier attempt belongs
  * to the caller that owns the call identity; this only ever starts a new run.
+ *
+ * The child runs uninterruptibly under the child-run loop, which cancels it
+ * through a signal. The caller cancels by interruption, so this is the edge
+ * between the two: interrupting the caller aborts the child's signal, then
+ * waits for the child to settle its own terminal record.
  */
-export const executeSubagentInBand = Effect.fn('executeSubagentInBand')(
+export const executeSubagentInBand = (
+  options: InBandSubagentLaunchOptions,
+): Effect.Effect<InBandSubagentRunResult, Error, AgentRunServices> =>
+  Effect.gen(function* () {
+    const signalScope = yield* Scope.make();
+    const signal = yield* Effect.abortSignal.pipe(Scope.provide(signalScope));
+    const child = yield* Effect.forkChild(
+      launchSubagentInBand(options, signal),
+      { startImmediately: true },
+    );
+    return yield* Fiber.join(child).pipe(
+      Effect.onExit(() => Scope.close(signalScope, Exit.void)),
+      Effect.onInterrupt(() => Fiber.await(child)),
+    );
+  });
+
+const launchSubagentInBand = Effect.fn('executeSubagentInBand')(
   function* (
     options: InBandSubagentLaunchOptions,
+    signal: AbortSignal,
   ): Effect.fn.Return<InBandSubagentRunResult, Error, AgentRunServices> {
     const prepared = yield* options.prepare();
-    const launch = { ...prepared, signal: options.signal };
+    const launch = { ...prepared, signal };
     const definition = yield* prepareInBandDefinition(launch);
     // Validate the current definition, not metadata left by an earlier
     // catalog load.

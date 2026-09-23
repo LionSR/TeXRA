@@ -37,6 +37,7 @@ import { RunEndSchema, WORKFLOW_CALL_STATUS } from '@shared/schemas';
 import { DELIVERY_TAG } from '@shared/deliveryTags';
 import { DELEGATE_MULTI_AGENTS_TOOL_NAME } from '@shared/constants/delegationTools';
 import { escapeText } from '@shared/utils/xmlEscape';
+import { onAbort } from '@utils/core';
 import { truncateSummary } from '@utils/text/stringUtils';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { formatDelivery } from './deliveryEnvelope';
@@ -281,7 +282,6 @@ export function createWorkflowScriptStrategy(
             ...(params.files !== undefined && {
               files: params.files,
             }),
-            signal,
             // The session's child-run budget is the one owner of "how many at
             // once": the engine's own default is a library fallback only.
             concurrency: yield* resolveChildRunConcurrencyBudget(
@@ -340,13 +340,32 @@ export function createWorkflowScriptStrategy(
           ports.recordCost(costUsd);
           settleSummary({ journal, board: projection.board() }, costUsd);
         };
+        // The child-run loop cancels a turn through `signal` (it runs the
+        // turn uninterruptibly); the engine cancels by interruption. This is
+        // the one edge between them: the abort interrupts the run, which
+        // settles its cards CANCELLED, and fails the turn with its reason.
         const result = yield* Effect.exit(
-          runPersistedWorkflowScript(projection.options).pipe(
-            Effect.onExit((exit) =>
-              Effect.sync(() => {
-                projection.settle(exit);
-                unregisterControls?.();
-              }),
+          Effect.raceFirst(
+            runPersistedWorkflowScript(projection.options).pipe(
+              Effect.onExit((exit) =>
+                Effect.sync(() => {
+                  projection.settle(exit);
+                  unregisterControls?.();
+                }),
+              ),
+            ),
+            Effect.callback<never, Error>((resume) =>
+              Effect.sync(
+                onAbort(signal, () => {
+                  resume(
+                    Effect.fail(
+                      signal.reason instanceof Error
+                        ? signal.reason
+                        : new Error(toErrorMessage(signal.reason)),
+                    ),
+                  );
+                }),
+              ),
             ),
           ),
         );

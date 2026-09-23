@@ -284,8 +284,8 @@ function recordWorkflowCallSupersession(
 /**
  * Run or resume a workflow script against its durable journal. Every
  * completed `agent()` call is a committed row before the script can consume
- * it: the engine awaits `onJournalEntry` inside its journal commit fence,
- * which is sealed and drained before the run settles. The whole invocation
+ * it: the engine awaits `onJournalEntry` uninterruptibly, and every call's
+ * fiber has ended before the run settles. The whole invocation
  * takes its checkpoint's lane, so overlapping calls on one id run in order
  * rather than replaying the same journal twice.
  */

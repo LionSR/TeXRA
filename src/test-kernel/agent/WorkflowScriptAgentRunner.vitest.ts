@@ -299,7 +299,6 @@ function invocation(
     key: '0123456789abcdef',
     prompt: 'Draft the section.',
     options,
-    signal: new AbortController().signal,
     report: vi.fn(),
   };
 }
@@ -622,7 +621,6 @@ describe('createWorkflowScriptAgentRunner', () => {
         expect.objectContaining({
           runId: expect.stringMatching(/^[a-f0-9]{24}$/),
           parentRunId: runId,
-          signal: call.signal,
           prepare: expect.any(Function),
         }),
       );
