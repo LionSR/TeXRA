@@ -49,14 +49,11 @@ import {
 import { ensureError } from '@utils/errors/errorMessage';
 
 /**
- * `BaseFS.isFile` without the facade.
- *
- * The facade's `isFile` is the FileType bitmask after a lstat that, for a
- * link, ORs in the target's type: a symlink to a file is a file, a circular
- * link is not. `fs.stat` follows, so a symlink to a file answers `File`, a
- * dangling target is `NotFound`/`ENOTDIR`, and a circular link raises `ELOOP`
- * (`BadResource`) — those absences match `statIfExists`, and any other
- * failure still propagates.
+ * Whether `target` is a file, following links: a symlink to a file is a
+ * file, a dangling or circular link is not. `fs.stat` follows, so a symlink
+ * to a file answers `File`, a dangling target is `NotFound`/`ENOTDIR`, and a
+ * circular link raises `ELOOP` (`BadResource`) — those absences match
+ * `statIfExists`, and any other failure still propagates.
  */
 const fileAt = (fs: FileSystem.FileSystem, target: string) =>
   fs.stat(target).pipe(

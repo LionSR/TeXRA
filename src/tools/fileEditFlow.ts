@@ -146,8 +146,8 @@ export const resolveWritableTarget = Effect.fn('resolveWritableTarget')(
     // Shared read-before-edit gate, then the current content. The gate asks
     // whether the path names a filesystem entry at all, so it must answer
     // true for a dangling symlink: `fs.exists` stats through the link and
-    // reports one as missing, where the WorkspaceFS.exists this replaced was
-    // lstat-based and gated it. The readLink fallback is that lstat half.
+    // reports one as missing, so the readLink fallback supplies the lstat
+    // half that gates it.
     const fs = yield* FileSystem.FileSystem;
     const exists =
       (yield* fs.exists(absolutePath)) ||

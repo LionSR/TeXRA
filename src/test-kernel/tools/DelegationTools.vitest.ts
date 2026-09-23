@@ -34,9 +34,8 @@ import {
 } from '@tools/delegation/inputFields';
 
 describe('DelegationTools', () => {
-  // The bib-size probe reads the real filesystem now that the `WorkspaceFS`
-  // facade is gone, so the cases build a real tree whose files carry the
-  // sizes under test rather than stubbing a `stat`.
+  // The bib-size probe reads the real filesystem, so the cases build a real
+  // tree whose files carry the sizes under test rather than stubbing a `stat`.
   let workspaceRoot: string;
 
   beforeEach(async () => {

@@ -139,9 +139,8 @@ function workflowScriptDraftStem(id: string): string {
 /**
  * The view of a resolved tool path's own filesystem: a workspace-relative
  * path (`fsPath` stays relative inside the session's folder) goes through the
- * session's confined workspace view, and an absolute one — a path the caller
- * chose outside the workspace — through the process filesystem, which is the
- * split the old `WorkspaceFS` static made by passing absolute paths through.
+ * session's confined `WorkspaceFs` view, and an absolute one — a path the
+ * caller chose outside the workspace — through the process `FileSystem`.
  */
 const fileSystemAt = (
   fsPath: string,

@@ -63,9 +63,9 @@ function withStubbedExists<A, E, R>(program: Effect.Effect<A, E, R>) {
   });
 }
 
-// The fingerprint now reads through the process `FileSystem` rather than the
-// deleted `AbsoluteFS` facade, so the stub replaces one method of the real
-// service (as GlobTool's suite does) instead of mocking a module.
+// The fingerprint reads through the process `FileSystem`, so the stub
+// replaces one method of the real service (as GlobTool's suite does) instead
+// of mocking a module.
 function fingerprintWorkflowAgentDependencies(
   ...args: Parameters<typeof fingerprintInputDependencies> extends [
     unknown,
@@ -166,9 +166,8 @@ vi.mock('@tools/delegation/inputFields', async (importOriginal) => ({
   rejectOversizedBibAttachments: mocks.rejectOversizedBibAttachments,
 }));
 
-// `resolveInvocationFileList` canonicalizes through `node:fs/promises.realpath`
-// now that the `WorkspaceFS` facade is gone, so the stub stands in for that one
-// export.
+// `resolveInvocationFileList` canonicalizes through
+// `node:fs/promises.realpath`, so the stub stands in for that one export.
 vi.mock('node:fs/promises', async (importOriginal) => ({
   ...(await importOriginal<typeof import('node:fs/promises')>()),
   realpath: mocks.realpath,

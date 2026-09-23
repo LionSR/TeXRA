@@ -30,7 +30,7 @@ const hasChinesePackages = Effect.fn('texcount.hasChinesePackages')(function* (
   return yield* fs.readFile(absolutePath).pipe(
     Effect.mapError(ensureError),
     // Decoded from bytes rather than `readFileString`, whose `TextDecoder`
-    // strips a leading UTF-8 BOM that the old `AbsoluteFS.read` preserved.
+    // would strip a leading UTF-8 BOM the file carries.
     Effect.map((bytes) =>
       normalizeLineEndings(Buffer.from(bytes).toString('utf-8')),
     ),
