@@ -22,7 +22,7 @@ import { Data, Duration, Effect } from 'effect';
 import { z } from 'zod';
 
 // Local imports
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import { ToolError } from '@shared/schemas';
 import { acquireRateLimitSlot } from '@tools/support/rateLimiter';
 import { CROSSREF_CONSTANTS, CrossrefClient } from '@tools/citation/constants';
@@ -39,7 +39,7 @@ import {
   type ConnectorResult,
 } from './bbtClient';
 
-const log = createLog('ZoteroAddTool');
+const CHANNEL = 'ZoteroAddTool';
 const CROSSREF_RESOLVE_TIMEOUT_MS = 15_000; // 15 s
 
 /**
@@ -289,14 +289,11 @@ const resolveDOI = Effect.fn('ZoteroAddTool.resolveDOI')((doi: string) =>
         : null,
     ),
     Effect.catchTag('CrossrefLookupFailed', (error) =>
-      Effect.sync(() => {
-        // The caller still falls back to the user's own metadata; log so a
-        // silently degraded entry is traceable to the Crossref failure.
-        log.warn(
-          `Crossref lookup failed for DOI ${doi}: ${toErrorMessage(error.cause)}`,
-        );
-        return null;
-      }),
+      // The caller still falls back to the user's own metadata; log so a
+      // silently degraded entry is traceable to the Crossref failure.
+      Effect.logWarning(
+        `Crossref lookup failed for DOI ${doi}: ${toErrorMessage(error.cause)}`,
+      ).pipe(withLogChannel(CHANNEL), Effect.as(null)),
     ),
   ),
 );

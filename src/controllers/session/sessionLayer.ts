@@ -1,6 +1,5 @@
 /**
- * The per-session Effect graph and the process's keyed family of them (PRD
- * one-fold-three-renderers, 7.3 and 7.7). `Sessions` is a `LayerMap` keyed by
+ * The per-session Effect graph and the process's keyed family of them. `Sessions` is a `LayerMap` keyed by
  * workspace storage root: one session per root and one only, built on the one
  * `ManagedRuntime` each process makes at its entry (`installProcessRuntime`).
  * A root's entry is the complete session: the root-scoped services (the
