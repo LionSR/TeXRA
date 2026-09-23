@@ -200,7 +200,6 @@ describe('desktop preview host', () => {
           >[0]['onboarding'],
           openExternalUrl: preview.openExternal,
           recheckTools: () => Effect.void,
-          logger: { warn: () => {}, error: () => {} },
         });
         yield* Effect.addFinalizer(() =>
           Effect.sync(() => {

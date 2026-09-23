@@ -70,7 +70,6 @@ const mocks = vi.hoisted(() => ({
     // roots' own `globalState` slot, which is the store the init opened.
     globalState: mocks.cliGlobalState,
   })),
-  initializeCliSupabaseAuth: vi.fn(),
   initializeNodeRuntimeSkills: vi.fn(),
   getCliSecrets: vi.fn(() => ({ kind: 'cli-secrets' })),
   cliGlobalState: { get: vi.fn(), update: vi.fn() },
@@ -86,7 +85,6 @@ vi.mock('@cli/runtime/supabaseAuth', async () => {
   const { Effect } = await import('effect');
   const { fakeSupabaseAuth } = await import('@test/support/fakeSupabaseAuth');
   return {
-    initializeCliSupabaseAuth: mocks.initializeCliSupabaseAuth,
     signInCliSupabase: mocks.signInCliSupabase,
     // The runtime install's account plane, steerable per test: the probe
     // reads the flag when it runs, not when the plane is built.

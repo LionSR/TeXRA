@@ -76,7 +76,7 @@ import { VscodeSecrets } from '@frontend/vscode/vscodeSecrets';
 import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
 import { withLogChannel } from '@logger/effectLog';
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import { setLogSink } from '@logger/logSink';
 import { formatFatalErrorDetail } from '@logger/redaction';
 import { invalidateApiKeyCache } from '@model/apiProviders';
@@ -128,7 +128,7 @@ import { ProgressViewProvider } from './progressView/ProgressViewProvider';
 import { registerCommands } from './commands';
 
 const EXTENSION_CHANNEL = 'extension';
-const log = logger.createLog(EXTENSION_CHANNEL);
+const log = createLog(EXTENSION_CHANNEL);
 
 /** The TeXRA account provider and its URI handler could not be registered. */
 class SupabaseAuthRegistrationFailed extends Data.TaggedError(
@@ -219,7 +219,6 @@ async function initVscodePlatform(
               ? Effect.void
               : Effect.fail(new Error(AUTH_URI_HANDLER_NOT_INITIALIZED)),
           ),
-        log: logger,
       }).pipe(
         Effect.catch((error) => Effect.succeed(unavailableSupabaseAuth(error))),
       );

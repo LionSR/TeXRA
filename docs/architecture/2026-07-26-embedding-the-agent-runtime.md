@@ -625,8 +625,6 @@ following classification makes that distinction.
   tools; its hook record names CLI-owned resources.
 - **`:403-405` — `installCliShutdownSignalHandlers(lifecycle)`:** SIGINT/SIGTERM
   handling for a terminal process.
-- **`:460-463` — `initializeCliSupabaseAuth(...)`:** Supabase sign-in wiring
-  for the CLI's authentication flow.
 
 ### Cross-check against desktop
 

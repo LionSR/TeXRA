@@ -37,23 +37,11 @@ export const GitHubTokenExchangeSchema = z.object({
       .optional(),
   }),
 });
-export interface SupabaseSessionParseOptions {
-  logSource?: string;
-  warn?: (source: string, message: string) => void;
-}
-
 /** Storage boundary for persisted Supabase session data. */
 export interface SupabaseSessionStorage {
   get(): Effect.Effect<string | undefined, AuthPortError>;
   store(sessionData: string): Effect.Effect<void, AuthPortError>;
   delete(): Effect.Effect<void, AuthPortError>;
-}
-
-export interface SupabaseSessionLog {
-  debug?(source: string, message: string, options?: { data?: unknown }): void;
-  info?(source: string, message: string, options?: { data?: unknown }): void;
-  warn?(source: string, message: string, options?: { data?: unknown }): void;
-  error?(source: string, message: string, options?: { data?: unknown }): void;
 }
 
 /** Result of converting an auth callback into a stored session. */
@@ -75,27 +63,24 @@ export type SupabaseCallbackResult =
 
 /**
  * Parse and validate stored session data.
- * Returns null if session data is missing or invalid.
- * Logs warnings for corrupted data to help diagnose auth issues.
+ * Returns null if session data is missing or invalid, reporting corrupted
+ * data through `warn` to help diagnose auth issues.
  */
 export function parseStoredSupabaseSession(
   sessionData: string | undefined,
-  options?: SupabaseSessionParseOptions,
+  warn?: (message: string) => void,
 ): SupabaseSession | null {
   if (!sessionData) return null;
-  const logSource = options?.logSource ?? 'SupabaseSession';
   const parsedJson = safeParseJson(sessionData);
   if (Result.isFailure(parsedJson)) {
-    options?.warn?.(
-      logSource,
+    warn?.(
       `Failed to parse stored session: ${toErrorMessage(parsedJson.failure)}`,
     );
     return null;
   }
   const parsed = SupabaseSessionSchema.safeParse(parsedJson.success);
   if (!parsed.success) {
-    options?.warn?.(
-      logSource,
+    warn?.(
       `Stored session has invalid schema: ${z.prettifyError(parsed.error)}`,
     );
     return null;

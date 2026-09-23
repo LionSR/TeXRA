@@ -51,6 +51,8 @@ import {
 } from '@housekeeping/packLatexdiffvc';
 import { packRunOutputs, runCleanRunDir } from '@housekeeping/runDirOps';
 import { LaTeXdiffService } from '@latex/latexdiff';
+import { withLogChannel } from '@logger/effectLog';
+import { createLog } from '@logger/logUtils';
 import {
   modelOptionsFrom,
   readModelAvailabilityInputs,
@@ -97,7 +99,6 @@ import {
   postDesktopSettingsView,
   vsCodeOnlyGettingStartedMessage,
 } from '../shared/desktopCommandSurface.js';
-import { toLogData } from './desktopLogUtils.js';
 import {
   DesktopProgressFileActions,
   type DesktopLatexdiffWorkspaceScan,
@@ -147,10 +148,6 @@ interface DesktopHostRequestsOptions {
   /** The process runtime this window was handed; every request arm below runs
    *  on it. */
   runtime: ProcessRuntime;
-  logger: {
-    warn(message: string, data?: { data?: unknown }): void;
-    error(message: string, data?: { data?: unknown }): void;
-  };
 }
 
 export interface DesktopHostRequests {
@@ -163,7 +160,9 @@ export interface DesktopHostRequests {
   dispose(): void;
 }
 
-const LATEXDIFF_CHANNEL = 'DesktopHostRequests';
+const CHANNEL = 'DesktopHostRequests';
+/** For the controller callbacks below that report outside any fiber. */
+const log = createLog(CHANNEL);
 
 type WorkflowFileOperation = 'pack' | 'clean';
 
@@ -179,7 +178,7 @@ function operationLabel(operation: WorkflowFileOperation): {
 export function createDesktopHostRequests(
   options: DesktopHostRequestsOptions,
 ): DesktopHostRequests {
-  const { session, host, run, logger, runtime } = options;
+  const { session, host, run, runtime } = options;
   /** The rooted filesystems of this window's paper, for the housekeeping
    *  programs. An open session holds a snapshot of its roots for its whole
    *  lifetime, so the layer is built once from it here, never from an
@@ -274,13 +273,14 @@ export function createDesktopHostRequests(
               // interrupts-only silence rather than presented.
               Cause.hasInterruptsOnly(cause)
                 ? Effect.failCause(cause)
-                : Effect.suspend(() => {
+                : Effect.gen(function* () {
                     const error = Cause.squash(cause);
-                    logger.error('Desktop merge run failed', {
-                      data: toLogData(error),
-                    });
+                    yield* Effect.logError('Desktop merge run failed').pipe(
+                      Effect.annotateLogs({ data: error }),
+                      withLogChannel(CHANNEL),
+                    );
                     const primaryError = primaryAgentError(error);
-                    return presentAgentFailure(
+                    return yield* presentAgentFailure(
                       session.interactions,
                       {
                         kind: classifyAgentError(primaryError),
@@ -375,8 +375,7 @@ export function createDesktopHostRequests(
         ),
       showInfo: (message) => host.showInfoMessage(message),
       showError: rejectRequestEffect,
-      logError: (message, error) =>
-        logger.error(message, { data: toLogData(error) }),
+      logError: (message, error) => log.error(message, { data: error }),
     },
     sendFollowUp: (runId, text) => runActions.sendFollowUp(runId, text),
   });
@@ -462,9 +461,10 @@ export function createDesktopHostRequests(
       );
       if (Exit.isFailure(ran)) {
         const error = Cause.squash(ran.cause);
-        logger.error(`Desktop ${operation} operation failed`, {
-          data: toLogData(error),
-        });
+        yield* Effect.logError(`Desktop ${operation} operation failed`).pipe(
+          Effect.annotateLogs({ data: error }),
+          withLogChannel(CHANNEL),
+        );
         return yield* Effect.fail(
           new Rejected({
             reason: `Error during ${operation}: ${toErrorMessage(error)}`,
@@ -537,7 +537,7 @@ export function createDesktopHostRequests(
         showInfo: (message) => host.showInfoMessage(message),
         showWarning: (message) => host.showWarningMessage(message),
         showError: rejectRequestEffect,
-        reportDetail: (message) => logger.error(message),
+        reportDetail: (message) => log.error(message),
         getController: getChatExportController,
         getTraceViewerTemplate: () =>
           path.join(options.resourcesPath, 'traceViewer', 'index.html'),
@@ -565,7 +565,7 @@ export function createDesktopHostRequests(
       const base = pathToLocationIn(session.roots.workspace, baseFile);
       if (action === 'latexdiffvc') {
         const result = yield* new LaTeXdiffService(
-          LATEXDIFF_CHANNEL,
+          CHANNEL,
           session.roots,
         ).runDiffVc(base, commit);
         if (!result.success) {

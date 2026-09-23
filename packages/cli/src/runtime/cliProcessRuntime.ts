@@ -226,9 +226,7 @@ export function installCliProcessRuntime(
     );
     const version = await readCliVersion();
     const secrets = getCliSecrets(storageRoot);
-    // The account plane is built beside the runtime that serves it; the CLI's
-    // sign-in surfaces settle it through the auth run edge, which
-    // `initializeCliSupabaseAuth` installs over this runtime.
+    // The account plane is built beside the runtime that serves it.
     const auth = ensureCliSupabaseAuth(secrets);
     // The process lifecycle and agent directories are process services the
     // runtime serves, so both are built here, before the install, rather than

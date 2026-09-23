@@ -1,5 +1,6 @@
 import { Clock, Deferred, Effect } from 'effect';
 
+import { withLogChannel } from '@logger/effectLog';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   parseAuthCallbackCode,
@@ -11,7 +12,6 @@ import {
   toStorableSupabaseSession,
   type SupabaseCallbackResult,
   type SupabaseSession,
-  type SupabaseSessionLog,
   type SupabaseSessionStorage,
 } from './supabaseSessionTypes';
 import {
@@ -29,23 +29,16 @@ export {
   toStorableSupabaseSession,
   type SupabaseCallbackResult,
   type SupabaseSession,
-  type SupabaseSessionLog,
 } from './supabaseSessionTypes';
+
+const CHANNEL = 'SupabaseSession';
 
 export interface SupabaseSessionCoordinatorOptions {
   storage: SupabaseSessionStorage;
   getClient: () => Client;
   whenReady: () => Effect.Effect<void, Error>;
   tokenRefreshThresholdMs: number;
-  log?: SupabaseSessionLog;
 }
-
-const NOOP_SUPABASE_SESSION_LOG: Required<SupabaseSessionLog> = {
-  debug: () => undefined,
-  info: () => undefined,
-  warn: () => undefined,
-  error: () => undefined,
-};
 
 /**
  * Host-neutral coordinator for Supabase session storage, token freshness,
@@ -68,11 +61,8 @@ export class SupabaseSessionCoordinator {
   // permit, so its idle barrier plus a version recheck is `stableSnapshot`'s
   // "no mutation in flight, and none started during the read" guarantee.
   private readonly sessionMutations = new SerializedWrites();
-  private readonly log: Required<SupabaseSessionLog>;
 
-  constructor(private readonly options: SupabaseSessionCoordinatorOptions) {
-    this.log = { ...NOOP_SUPABASE_SESSION_LOG, ...options.log };
-  }
+  constructor(private readonly options: SupabaseSessionCoordinatorOptions) {}
 
   whenReady(): Effect.Effect<void, AuthPortError> {
     return this.options
@@ -120,13 +110,9 @@ export class SupabaseSessionCoordinator {
   getStoredSessionState(): Effect.Effect<StoredSessionState> {
     return this.storedSessionState().pipe(
       Effect.catchTag('AuthPortError', (error) =>
-        Effect.sync(() => {
-          this.log.error(
-            'SupabaseSession',
-            `Error classifying stored session: ${toErrorMessage(error.cause)}`,
-          );
-          return 'transient' as const;
-        }),
+        Effect.logError(
+          `Error classifying stored session: ${toErrorMessage(error.cause)}`,
+        ).pipe(withLogChannel(CHANNEL), Effect.as('transient' as const)),
       ),
     );
   }
@@ -167,10 +153,14 @@ export class SupabaseSessionCoordinator {
   readonly loadSession = Effect.fn('SupabaseSessionCoordinator.loadSession')(
     function* (this: SupabaseSessionCoordinator) {
       const raw = yield* this.options.storage.get();
-      return parseStoredSupabaseSession(raw, {
-        logSource: 'SupabaseSession',
-        warn: this.log.warn,
-      });
+      const warnings: string[] = [];
+      const session = parseStoredSupabaseSession(raw, (message) =>
+        warnings.push(message),
+      );
+      for (const warning of warnings) {
+        yield* Effect.logWarning(warning).pipe(withLogChannel(CHANNEL));
+      }
+      return session;
     },
   );
 
@@ -281,16 +271,12 @@ export class SupabaseSessionCoordinator {
     this.refreshInFlight = inFlight;
     this.lastRefreshFailure = null;
     return yield* this.performRefresh(session, expectedVersion).pipe(
-      Effect.catchTag('AuthPortError', (error) =>
-        Effect.sync(() => {
-          this.lastRefreshFailure = 'transient';
-          this.log.error(
-            'SupabaseSession',
-            `Error refreshing session: ${toErrorMessage(error.cause)}`,
-          );
-          return null;
-        }),
-      ),
+      Effect.catchTag('AuthPortError', (error) => {
+        this.lastRefreshFailure = 'transient';
+        return Effect.logError(
+          `Error refreshing session: ${toErrorMessage(error.cause)}`,
+        ).pipe(withLogChannel(CHANNEL), Effect.as(null));
+      }),
       Effect.onExit((exit) =>
         Effect.sync(() => {
           Deferred.doneUnsafe(inFlight, exit);
@@ -352,16 +338,12 @@ export class SupabaseSessionCoordinator {
     'SupabaseSessionCoordinator.freshSession',
   )(function* (this: SupabaseSessionCoordinator) {
     const snapshot = yield* this.stableSnapshot().pipe(
-      Effect.catchTag('AuthPortError', (error) =>
-        Effect.sync(() => {
-          this.lastRefreshFailure = 'transient';
-          this.log.error(
-            'SupabaseSession',
-            `Error loading fresh session: ${toErrorMessage(error.cause)}`,
-          );
-          return null;
-        }),
-      ),
+      Effect.catchTag('AuthPortError', (error) => {
+        this.lastRefreshFailure = 'transient';
+        return Effect.logError(
+          `Error loading fresh session: ${toErrorMessage(error.cause)}`,
+        ).pipe(withLogChannel(CHANNEL), Effect.as(null));
+      }),
     );
     if (!snapshot?.session) return null;
     const { session, version } = snapshot;
@@ -370,17 +352,15 @@ export class SupabaseSessionCoordinator {
       session.expiresAt - (yield* Clock.currentTimeMillis);
 
     if (timeUntilExpiry < this.options.tokenRefreshThresholdMs) {
-      this.log.info(
-        'SupabaseSession',
+      yield* Effect.logInfo(
         `Token expires in ${Math.round(timeUntilExpiry / 1000)}s, refreshing proactively`,
-      );
+      ).pipe(withLogChannel(CHANNEL));
       const refreshed = yield* this.refreshSession(session, version);
       if (refreshed) return refreshed;
       if (timeUntilExpiry <= 0) {
-        this.log.warn(
-          'SupabaseSession',
+        yield* Effect.logWarning(
           'Token expired and refresh failed, returning null',
-        );
+        ).pipe(withLogChannel(CHANNEL));
         return null;
       }
     }

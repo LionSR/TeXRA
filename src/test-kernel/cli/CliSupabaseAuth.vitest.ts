@@ -221,9 +221,9 @@ async function loadSupabaseAuth() {
     ),
   );
   const supabaseAuth = await import('@cli/runtime/supabaseAuth');
-  // The root's init is what builds the coordinator; nothing below it builds
-  // one on demand.
-  supabaseAuth.initializeCliSupabaseAuth(cliSecrets);
+  // The root's runtime install is what builds the coordinator; nothing below
+  // it builds one on demand.
+  supabaseAuth.ensureCliSupabaseAuth(cliSecrets);
   return { ...supabaseAuth, runtime };
 }
 
@@ -249,10 +249,10 @@ describe('CLI Supabase auth', () => {
   });
 
   it('builds one account plane for the root secret store', async () => {
-    const { initializeCliSupabaseAuth } = await loadSupabaseAuth();
+    const { ensureCliSupabaseAuth } = await loadSupabaseAuth();
 
-    initializeCliSupabaseAuth(cliSecrets);
-    initializeCliSupabaseAuth(cliSecrets);
+    ensureCliSupabaseAuth(cliSecrets);
+    ensureCliSupabaseAuth(cliSecrets);
 
     expect(mocks.createSupabaseAuth).toHaveBeenCalledTimes(1);
     expect(mocks.createSupabaseAuth).toHaveBeenCalledWith(

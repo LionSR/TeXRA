@@ -9,7 +9,6 @@ import {
   tryDefaultSession,
   type SessionHandle,
 } from '@agent/runtime';
-import type { SupabaseSessionLog } from '@auth/SupabaseSession';
 import { bootstrapHost } from '@controllers/hostBootstrap';
 import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { consoleLogSink, setLogSink, silentLogSink } from '@logger/logSink';
@@ -33,7 +32,6 @@ import { createNodeWorkspaceRoots } from '@platform/defaults/nodeHost';
 import { DEFAULT_NODE_STORAGE_ROOT } from '@platform/defaults/nodeStorage';
 import { resolveGlobalStoragePath } from '@platform/defaults/workspaceStorage';
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import type { LogLevel } from '@shared/schemas';
 import type { SessionOpenError } from '@shared/session/database';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { registerRuntimeShutdownHandlers } from '@tools/agentCliSessionStores';
@@ -51,13 +49,10 @@ import {
   flushTextStderr,
   writeTextStderr,
 } from './logSinks';
-import { initializeCliSupabaseAuth } from './supabaseAuth';
 import { openCliWorkspaceState } from './cliStateStores';
 import { CliExitCode } from './exitCodes';
 import type { CliContext } from './cliContext';
 
-let supabaseAuthInitialized = false;
-let quietPlatformLogs = false;
 type CliShutdownSignal = 'SIGINT' | 'SIGTERM';
 // Removers for the listeners installCliShutdownSignalHandlers put on the
 // process — kept so handOffCliShutdownSignalHandlers can remove exactly those
@@ -124,18 +119,6 @@ export type CliPlatformServices = Pick<Platform, 'lifecycle'> &
      */
     readonly session: Effect.Effect<SessionHandle, SessionOpenError>;
   };
-
-function logAt(level: LogLevel, channel: string, message: string): void {
-  if (quietPlatformLogs) return;
-  writeTextStderr(`[${level}] [${channel}] ${message}`);
-}
-
-const cliPlatformLog: SupabaseSessionLog = {
-  debug: (channel, message) => logAt('debug', channel, message),
-  info: (channel, message) => logAt('info', channel, message),
-  warn: (channel, message) => logAt('warn', channel, message),
-  error: (channel, message) => logAt('error', channel, message),
-};
 
 /**
  * The canonical "shut down the CLI platform" sequence — lifecycle shutdown
@@ -255,10 +238,9 @@ export function initCliPlatform(
     Pick<CliContext, 'quietLogs' | 'minimumLogLevel'>,
 ): Effect.Effect<CliPlatformServices, Error> {
   return Effect.gen(function* () {
-    quietPlatformLogs = context.quietLogs;
     // The terminal is the operator's own, so entries reach it unredacted — the
     // contract `logSinks.ts` documents for CLI output.
-    setLogSink(quietPlatformLogs ? silentLogSink : consoleLogSink, {
+    setLogSink(context.quietLogs ? silentLogSink : consoleLogSink, {
       trusted: true,
     });
 
@@ -453,11 +435,6 @@ export function initCliPlatform(
       lifecycle: services.lifecycle,
       roots: settingSlots,
     };
-
-    if (!supabaseAuthInitialized) {
-      initializeCliSupabaseAuth(cliServices.secrets, cliPlatformLog);
-      supabaseAuthInitialized = true;
-    }
 
     return cliServices;
   });

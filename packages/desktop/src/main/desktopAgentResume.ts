@@ -18,7 +18,6 @@ import {
 import type { RunId } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { launchDesktopAgent } from './desktopAgentLaunch.js';
-import { toLogData } from './desktopLogUtils.js';
 
 /**
  * Process-lifetime owner of desktop run resumption. One process holds a
@@ -115,7 +114,7 @@ export class DesktopProcessResumeOwner {
           if (isCancellationRequested()) return Effect.succeed(false);
           const primaryError = primaryAgentError(error);
           return Effect.logError(`Failed to resume desktop run ${runId}`).pipe(
-            Effect.annotateLogs({ data: toLogData(error) }),
+            Effect.annotateLogs({ data: error }),
             withLogChannel('DesktopAgentResume'),
             Effect.andThen(
               presentAgentFailure(

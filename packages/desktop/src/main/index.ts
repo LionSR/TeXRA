@@ -245,7 +245,6 @@ const protocolLifecycle = installDesktopProtocolCallbackLifecycle({
   execPath: process.execPath,
   devAppArg: process.argv[1] ? resolvePath(process.argv[1]) : undefined,
   focusMainWindow: focusOrReopenMainWindow,
-  log: console,
 });
 
 function findDesktopMainDir(startDir: string): string {
@@ -761,7 +760,6 @@ function createWindow(options: {
       auth: options.supabaseAuth,
       store: options.pendingOAuthStore,
       host: desktopAuthHost,
-      log: console,
       runtime,
     }),
   );
@@ -1106,7 +1104,6 @@ function createWindow(options: {
           workspaceRoot: project.roots.workspace,
           config: project.roots.config,
         }),
-      logger: console,
     });
     const port = runtime.runSync(
       bridge.attach({
@@ -1967,7 +1964,6 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
             });
 
             const pendingOAuthStore = createDesktopPendingOAuthStore(
-              console,
               platformInit.globalState,
             );
             installContentSecurityPolicy();

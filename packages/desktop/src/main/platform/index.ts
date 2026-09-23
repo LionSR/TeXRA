@@ -47,7 +47,6 @@ import {
   createDesktopSetupAuth,
   type DesktopSetupAuth,
 } from '../desktopSetupAuth.js';
-import { createSessionLog } from '../desktopSupabaseAuth.js';
 import { ElectronSecrets } from './electronSecrets.js';
 import { repairLaunchPath } from './pathFix.js';
 import { resolveDesktopDataRoot, resolveResourcesPath } from './paths.js';
@@ -149,10 +148,7 @@ export async function initializeElectronPlatform(
                 }),
             }),
         });
-        const supabaseAuth = yield* createSupabaseAuth({
-          secrets,
-          log: createSessionLog(console),
-        });
+        const supabaseAuth = yield* createSupabaseAuth({ secrets });
         return { processStart, configStores, secrets, supabaseAuth };
       }).pipe(Effect.provide(nodeFileServices)),
     );
