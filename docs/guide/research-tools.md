@@ -70,7 +70,7 @@ For documentation, project pages, or general information:
 Find the official PyTorch documentation for attention mechanisms.
 ```
 
-The `web_search` tool queries the DuckDuckGo Instant Answers API; TeXRA does not use provider-hosted search. `web_fetch` retrieves a specific URL and extracts its main content.
+The `web_search` tool queries the DuckDuckGo Instant Answers API, not a model provider's hosted search. `web_fetch` retrieves a specific URL and extracts its main content.
 
 ### <wa-icon library="texra" name="book"></wa-icon> Manage references with Zotero
 
