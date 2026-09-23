@@ -88,7 +88,6 @@ import {
 import { deriveRunOutcome } from '@shared/runs/runStatus';
 import {
   AgentCategory,
-  AgentRunStateSnapshotSchema,
   EMPTY_RUN_USAGE_TOTALS,
   fileLocationDisplayPath,
   MESSAGE_TYPES,
@@ -98,7 +97,6 @@ import {
   type AgentFileLocation,
   type CompileResult,
   type FileLocation,
-  type NormalizedUsage,
   type RetryErrorInfo,
   type RoundOutput,
   type RunOutcome,
@@ -106,7 +104,7 @@ import {
   type RunUsageTotals,
 } from '@shared/schemas';
 import { RunLedger } from '@shared/session/runLedger';
-import { freshRunState, type RunState } from '@shared/session/runStateFold';
+import type { RunState } from '@shared/session/runStateFold';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
@@ -127,10 +125,14 @@ import {
   type ReflectionFlowState,
   type ReflectionSnapshotPatch,
 } from './rows';
-import { alreadyOpenedMessage, recordServedUsage } from './loopScaffold';
+import {
+  alreadyOpenedMessage,
+  freshProgramState,
+  recordServedUsage,
+  usageSnapshot,
+} from './runProgram';
 import { recordHalt, runStopError } from './runExit';
 import type { HttpClient } from 'effect/unstable/http';
-import type { BoundModel } from '../run/modelBinding';
 
 // Reflection owns conversation limits and document completion, not the provider.
 /** Length for preview slices of tool output and responses. */
@@ -327,16 +329,6 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     turn: state.turn,
     continuationIndex: continuationIndex ?? state.continuationIndex,
   });
-  const usageSnapshot = (
-    state: RunState,
-    latestUsage: NormalizedUsage | null,
-  ) =>
-    AgentRunStateSnapshotSchema.parse({
-      totalRounds: flow.currentRound,
-      totalResponseTimeMs: flow.runStateSnapshot.totalResponseTimeMs,
-      usageAccumulator: { totals: state.usage, latestUsage },
-    });
-
   /** Disabling rejection is an explicit acceptance decision. */
   const normalizeCompileRejectionPolicy = Effect.fn(function* () {
     if (
@@ -374,16 +366,6 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     return config.outputFiles.map((f) => fileService.createLocation(f));
   };
 
-  const fresh = (bound: BoundModel): RunState => ({
-    ...freshRunState(0),
-    family: 'reflection',
-    modelId: bound.modelId,
-    modelCompatibilityKey: bound.compatibilityKey,
-    // The launch's own-API-key choice enters the ledger with the opening
-    // snapshot, so every later binding and every resume reads it back.
-    declinedRoutes: run.declinedRoutes,
-  });
-
   // -------------------------------------------------------------- opening
   const openFresh = Effect.fn('reflection.open')(function* (): Effect.fn.Return<
     RunState,
@@ -400,15 +382,19 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     }
     const bound = yield* SynchronizedRef.get(run.model);
     const opened = yield* ledger.appendBatch(runId, null, [
-      reflectionSnapshotRow(runId, fresh(bound), {
-        phase: 'round.ready',
-        round: 0,
-        runtime: {
-          modelId: bound.modelId,
-          modelCompatibilityKey: bound.compatibilityKey,
+      reflectionSnapshotRow(
+        runId,
+        freshProgramState('reflection', bound, run),
+        {
+          phase: 'round.ready',
+          round: 0,
+          runtime: {
+            modelId: bound.modelId,
+            modelCompatibilityKey: bound.compatibilityKey,
+          },
+          state: flowState(),
         },
-        state: flowState(),
-      }),
+      ),
     ]);
     run.callbacks.onProgress?.({ kind: 'started' });
     return yield* commit(opened);
@@ -1150,7 +1136,15 @@ export const runReflection = Effect.fn('reflection.run')(function* (
                   outcome.responseTimeMs,
               },
             };
-            yield* recordServedUsage(run, usageSnapshot(state, outcome.usage));
+            yield* recordServedUsage(
+              run,
+              usageSnapshot(
+                state,
+                flow.currentRound,
+                flow.runStateSnapshot.totalResponseTimeMs,
+                outcome.usage,
+              ),
+            );
           }
           state = yield* processResponse(state);
         }
