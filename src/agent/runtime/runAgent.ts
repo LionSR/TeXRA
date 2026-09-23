@@ -219,7 +219,7 @@ export const runAgent = Effect.fn('runAgent')(function* (
             ? USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE
             : USER_FOLLOW_UP_SUPPORT.UNSUPPORTED;
         if (shouldRegister) {
-          yield* registerRun(runSession, runId, config, config.agent, {
+          yield* registerRun(runSession, runId, config, {
             identity: { kind: 'agent', agent: config.agent },
             userFollowUpSupport,
           });

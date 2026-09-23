@@ -226,7 +226,6 @@ const IGNORED_ROW_TYPES: Readonly<
   'response.finalized': true,
   domain: true,
   'run.record': true,
-  'run.launchLabel': true,
   'run.report': true,
   'run.result': true,
   'run.workspaceFiles': true,

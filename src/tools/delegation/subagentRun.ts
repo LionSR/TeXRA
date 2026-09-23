@@ -187,7 +187,6 @@ export const executeSubagent = Effect.fn('executeSubagent')(function* (
       yield* registerChildRun(parentSession, {
         runId,
         config,
-        agentName,
         userFollowUpSupport,
         parentRunId: parentRunId,
       });

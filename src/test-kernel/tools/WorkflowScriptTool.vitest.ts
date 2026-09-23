@@ -1116,11 +1116,6 @@ return null`;
             checkpointId: checkpointIdFor('tool-test'),
           },
           {
-            type: 'run.launchLabel',
-            aggregateId: aggregateId('run', runId),
-            label: 'tool-test',
-          },
-          {
             type: 'run.activate',
             aggregateId: aggregateId('run', runId),
             category: AgentCategory.Workflow,

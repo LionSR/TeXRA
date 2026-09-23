@@ -148,7 +148,7 @@ const captureStartedLaunch = Effect.fn(function* (
         mocks.buildVars.mockReturnValueOnce(Effect.fail(LAUNCH_FAILURE));
 
         if (!options.resumedRunId) {
-          yield* registerRun(session, FRESH_RUN_ID, config, 'chat', {
+          yield* registerRun(session, FRESH_RUN_ID, config, {
             identity: { kind: 'agent', agent: 'chat' },
             parentRunId: options.parentRunId,
           });
@@ -344,7 +344,7 @@ describe('native agent launch activation', () => {
           agentCategory: AgentCategory.ToolUse,
           instruction: 'Fix grammar.',
         });
-        yield* registerRun(session, DESCRIPTION_RUN_ID, described, 'chat', {
+        yield* registerRun(session, DESCRIPTION_RUN_ID, described, {
           identity: { kind: 'agent', agent: 'chat' },
         });
         const failure = yield* Effect.forkChild(
