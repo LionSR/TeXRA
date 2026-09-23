@@ -139,9 +139,10 @@ export class Sessions extends Context.Service<
   /**
    * The Effect embedder's entry: compose the process once and serve its
    * session owner, with this scope as the lifetime of the hold it takes on
-   * that composition. A second, different platform in a process this package
-   * already composed fails with {@link PlatformConflict}; anything else
-   * composition throws is a defect. Acquisition waits for a retiring runtime.
+   * that composition. A second, different platform while this package holds
+   * a composition, or a process runtime a host installed rather than this
+   * package, fails with {@link PlatformConflict}; anything else composition
+   * throws is a defect. Acquisition waits for a retiring runtime.
    */
   static layer(
     platform: AgentPlatform,

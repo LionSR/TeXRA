@@ -139,7 +139,7 @@ on it, and the last hold to end is what closes every session the owner holds,
 each settling its runs and flushing its artifacts, and then disposes the
 runtime they ran on. So two overlapping scopes over one platform are safe,
 the first one out ends nothing the second is still using, and a later program
-in the same process composes again over the platform already installed. A
+in the same process composes again once the last hold has ended. A
 scope arriving during the last holder's shutdown waits for disposal to finish
 before composing the next runtime. Acquisition is interruption-safe:
 cancellation while waiting aborts without taking a hold, while the retiring
@@ -180,7 +180,7 @@ files.
 | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
 | `@texra-ai/agent`         | `Sessions`, `Session`, `Run`, the tagged errors, and the tool-definition helpers (`defineTool`, `MapToolRegistry`) with their types |
 | `@texra-ai/agent/schemas` | Zod schemas + inferred types for agent definitions, configs, and run results                                                        |
-| `@texra-ai/agent/node`    | `nodePlatform(options)`, a ready-made Node `Platform` with its workspace roots                                                      |
+| `@texra-ai/agent/node`    | `nodePlatform(options)`, a ready-made Node `AgentPlatform` with its workspace roots                                                 |
 
 Every entry needs the `effect` and `zod` peers installed. See
 [Install](#install).
@@ -213,18 +213,25 @@ A runnable version of this program against a packed tarball is in
 
 ## The platform
 
-Every run needs a `Platform`: the process-wide host port bundle (global state,
-filesystem, storage, secrets, logging) plus the `WorkspaceRoots` of the folder
-the runs work in (workspace path, its storage path, config, and workspace
-state). `nodePlatform()` supplies both: process-local config and state,
-TeXRA's ordinary storage layout, and environment-variable secrets (so provider
-API keys are read from `process.env`; nothing is persisted).
+Every run needs an `AgentPlatform`: the process services the package
+composes (the shutdown lifecycle, the agent directories, secrets, the resume
+and language-model ports, and an optional `toolMissingHandler` that surfaces
+a missing external tool) plus the `WorkspaceRoots` of the folder the runs
+work in (workspace path, its storage path, config, workspace state, and the
+process-wide global state). `nodePlatform()` supplies both: process-local
+config and state, TeXRA's ordinary storage layout, and environment-variable
+secrets (so provider API keys are read from `process.env`; nothing is
+persisted).
 
-The platform is **process-wide**. Create one and reuse it for every run;
-passing a second, different platform in the same process fails the layer with
-`PlatformConflict`.
+The platform is **process-wide** while any `Sessions.layer` scope holds the
+composition. Create one and reuse it for every run: passing a second,
+different platform while a hold is live fails the layer with
+`PlatformConflict`, and so does composing in a process where a TeXRA host
+already installed its own process runtime, since the package does not borrow
+a runtime built for someone else's roots. Once the last hold ends, the next
+scope may compose with a different platform.
 
-Implement the `Platform` ports and the `roots` yourself when embedding in a
+Implement the `AgentPlatform` ports and the `roots` yourself when embedding in a
 host that already owns those services. For TeXRA 1.0, supply a fresh,
 application-owned storage directory in custom `WorkspaceRoots`; the SDK uses
 that exact directory. Do not reuse an earlier TeXRA storage directory.
