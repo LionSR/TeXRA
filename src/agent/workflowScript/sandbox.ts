@@ -1,6 +1,3 @@
-// Node imports
-import { setImmediate as setImmediateAsync } from 'node:timers/promises';
-
 // Third-party imports
 import quickJsReleaseVariant from '@jitl/quickjs-wasmfile-release-sync';
 import quickJsWasm from '@jitl/quickjs-wasmfile-release-sync/wasm';
@@ -8,24 +5,26 @@ import {
   type QuickJSContext,
   type QuickJSDeferredPromise,
   type QuickJSHandle,
-  type QuickJSRuntime,
   type VmFunctionImplementation,
   memoizePromiseFactory,
   newQuickJSWASMModuleFromVariant,
   newVariant,
 } from 'quickjs-emscripten-core';
+import { Cause, Effect, Exit, FiberSet, Latch, Result } from 'effect';
 import { z } from 'zod';
 
 // Local imports - utilities
-import { createLog } from '@logger/logUtils';
-import { onAbort } from '@utils/core';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
-const log = createLog('workflowSandbox');
-
-export interface SandboxHostBridge {
-  /** Async primitives. Arguments and results cross as JSON text only. */
-  asyncFns: Record<string, (args: unknown[]) => Promise<string | undefined>>;
+export interface SandboxHostBridge<R = never> {
+  /**
+   * Async primitives. Arguments and results cross as JSON text only. Each call
+   * is a sandbox-owned fiber, interrupted before its realm is disposed.
+   */
+  asyncFns: Record<
+    string,
+    (args: unknown[]) => Effect.Effect<string | undefined, Error, R>
+  >;
   /** Sync primitives. Arguments cross as JSON text; results are primitives. */
   syncFns: Record<string, (args: unknown[]) => string | undefined>;
   /** JSON payload for the `args` global; undefined installs `args` as undefined. */
@@ -40,10 +39,6 @@ export interface SandboxOptions {
   /** Wall-clock cap for the whole (async) script run. */
   timeoutMs: number;
   filename: string;
-  /** Parent cancellation signal for immediate guest preemption. */
-  signal?: AbortSignal;
-  /** Fired exactly once when the wall-clock timeout is first observed. */
-  onTimeout?: () => void;
 }
 
 const QUICKJS_MEMORY_LIMIT_BYTES = 64 * 1024 * 1024;
@@ -251,10 +246,8 @@ const BRIDGE_PRELUDE = `
 })()
 `;
 
-interface GuestOutcome {
-  value?: unknown;
-  error?: Error;
-}
+/** What the guest body delivered: its JSON-revived value, or its error. */
+type GuestOutcome = Result.Result<unknown, Error>;
 
 /** Error shape the bridge prelude delivers for a rejected guest body. */
 const GuestErrorRecordSchema = z.object({
@@ -266,143 +259,149 @@ const GuestErrorRecordSchema = z.object({
 type SandboxSettlement =
   | { readonly kind: 'outcome'; readonly outcome: GuestOutcome }
   | { readonly kind: 'host-failure'; readonly error: Error }
-  | { readonly kind: 'aborted'; readonly error: Error }
   | { readonly kind: 'timeout' };
 
-function abortError(signal: AbortSignal): Error {
-  return signal.reason instanceof Error
-    ? signal.reason
-    : new DOMException('The operation was aborted', 'AbortError');
-}
+const loadQuickJsModule = Effect.tryPromise({
+  try: () => getQuickJsModule(),
+  catch: ensureError,
+});
 
 /**
  * Evaluates a workflow body in a fresh preemptible QuickJS runtime. The WASM
  * module is shared, but every script receives a new runtime and context with
  * independent interrupt, heap, stack, promise-job, and handle ownership.
+ *
+ * The run is one scoped Effect. The runtime, the context, the pending host
+ * promises, the host-call fibers and the deadline timer belong to its scope,
+ * so however the run ends (result, fault, timeout, or the caller interrupting
+ * it) the host calls are interrupted first and the realm is disposed after.
+ * Guest code that never yields is preempted by the QuickJS interrupt handler
+ * at the deadline; an interruption lands at the pump's next yield.
  */
-export async function runScriptInSandbox(
+export function runScriptInSandbox<R = never>(
   body: string,
-  bridge: SandboxHostBridge,
+  bridge: SandboxHostBridge<R>,
   options: SandboxOptions,
-): Promise<unknown> {
-  if (options.signal?.aborted) throw abortError(options.signal);
-  const quickJs = await getQuickJsModule();
-  if (options.signal?.aborted) throw abortError(options.signal);
-  const deadline = performance.now() + options.timeoutMs;
-  let active = true;
-  let interruptRequested = false;
-  let timeoutNotified = false;
-  let settlement: SandboxSettlement | undefined;
-  let wakeResolve: (() => void) | undefined;
-
-  const wake = () => {
-    const resolve = wakeResolve;
-    wakeResolve = undefined;
-    resolve?.();
-  };
-  const waitForWake = () =>
-    new Promise<void>((resolve) => {
-      wakeResolve = resolve;
-      if (settlement !== undefined || runtime.hasPendingJob()) {
+): Effect.Effect<unknown, Error, R> {
+  return Effect.scoped(
+    Effect.gen(function* () {
+      const quickJs = yield* loadQuickJsModule;
+      const deadline = performance.now() + options.timeoutMs;
+      const wakeLatch = yield* Latch.make(false);
+      let interruptRequested = false;
+      let settlement: SandboxSettlement | undefined;
+      const settled = (): boolean => settlement !== undefined;
+      const wake = (): void => {
+        wakeLatch.openUnsafe();
+      };
+      const settle = (next: SandboxSettlement): void => {
+        settlement ??= next;
         wake();
-      }
-    });
-  const markTimedOut = () => {
-    interruptRequested = true;
-    if (settlement !== undefined) {
-      wake();
-      return;
-    }
-    settlement = { kind: 'timeout' };
-    if (!timeoutNotified) {
-      timeoutNotified = true;
-      try {
-        options.onTimeout?.();
-      } catch (err) {
-        // Timeout settlement must not depend on the caller's abort callback,
-        // but a callback that throws is a fault of its own, not silence.
-        log.warn(`Workflow timeout callback threw: ${toErrorMessage(err)}`);
-      }
-    }
-    wake();
-  };
-  const markAborted = () => {
-    interruptRequested = true;
-    if (settlement === undefined && options.signal) {
-      settlement = { kind: 'aborted', error: abortError(options.signal) };
-    }
-    wake();
-  };
+      };
+      const markTimedOut = (): void => {
+        interruptRequested = true;
+        settle({ kind: 'timeout' });
+      };
 
-  const runtime = quickJs.newRuntime({
-    memoryLimitBytes: QUICKJS_MEMORY_LIMIT_BYTES,
-    maxStackSizeBytes: QUICKJS_STACK_LIMIT_BYTES,
-    interruptHandler: () => {
-      if (interruptRequested || performance.now() >= deadline) {
-        markTimedOut();
-        return true;
-      }
-      return false;
-    },
-  });
-  let context: QuickJSContext;
-  try {
-    context = runtime.newContext();
-  } catch (error) {
-    runtime.dispose();
-    throw error;
-  }
-  const pendingHostPromises = new Set<QuickJSDeferredPromise>();
-  const timeout = setTimeout(markTimedOut, options.timeoutMs);
-  const detachAbort = onAbort(options.signal, markAborted);
-
-  try {
-    installHostBridge(
-      context,
-      bridge,
-      pendingHostPromises,
-      () => active,
-      (error) => {
-        if (settlement !== undefined) return;
-        settlement = { kind: 'host-failure', error };
-        wake();
-      },
-      (delivered) => {
-        if (settlement !== undefined) return;
-        settlement = { kind: 'outcome', outcome: delivered };
-        wake();
-      },
-      wake,
-    );
-
-    const deliver = evaluate(context, BRIDGE_PRELUDE, 'workflow-bridge.js');
-    try {
-      evaluateAndDispose(context, DETERMINISM_PRELUDE, 'workflow-prelude.js');
-      evaluateAndDispose(
-        context,
-        bridge.realmPrelude,
-        'workflow-orchestration.js',
+      const runtime = yield* Effect.acquireRelease(
+        Effect.try({
+          try: () =>
+            quickJs.newRuntime({
+              memoryLimitBytes: QUICKJS_MEMORY_LIMIT_BYTES,
+              maxStackSizeBytes: QUICKJS_STACK_LIMIT_BYTES,
+              interruptHandler: () => {
+                if (interruptRequested || performance.now() >= deadline) {
+                  markTimedOut();
+                  return true;
+                }
+                return false;
+              },
+            }),
+          catch: ensureError,
+        }),
+        (runtime) => Effect.sync(() => runtime.dispose()),
+      );
+      const context = yield* Effect.acquireRelease(
+        Effect.try({ try: () => runtime.newContext(), catch: ensureError }),
+        (context) => Effect.sync(() => context.dispose()),
+      );
+      const hostCalls = yield* FiberSet.make<void>();
+      const forkHostCall = yield* FiberSet.runtime(hostCalls)<R>();
+      const pendingHostPromises = new Set<QuickJSDeferredPromise>();
+      let active = true;
+      // Released before the host calls are interrupted: a call ending under
+      // that interrupt must not settle into a realm being torn down.
+      yield* Effect.addFinalizer(() =>
+        Effect.sync(() => {
+          active = false;
+          for (const deferred of pendingHostPromises) {
+            if (deferred.alive) deferred.dispose();
+          }
+          pendingHostPromises.clear();
+        }),
+      );
+      yield* Effect.sync(markTimedOut).pipe(
+        Effect.delay(options.timeoutMs),
+        Effect.forkScoped,
       );
 
-      let bodyThunk: QuickJSHandle;
-      try {
-        bodyThunk = evaluate(
-          context,
-          `(async () => {\n'use strict';\n${body}\n})`,
-          options.filename,
+      const run = Effect.gen(function* () {
+        const deliver = yield* Effect.acquireRelease(
+          Effect.try({
+            try: () => {
+              installHostBridge(context, bridge, {
+                pending: pendingHostPromises,
+                isActive: () => active,
+                fork: (call) => {
+                  forkHostCall(call);
+                },
+                fail: (error) => settle({ kind: 'host-failure', error }),
+                deliver: (outcome) => settle({ kind: 'outcome', outcome }),
+                wake,
+              });
+              return evaluate(context, BRIDGE_PRELUDE, 'workflow-bridge.js');
+            },
+            catch: ensureError,
+          }),
+          (handle) => Effect.sync(() => handle.dispose()),
         );
-      } catch (error) {
-        throw new Error(
-          `Workflow script syntax error: ${toErrorMessage(error)}`,
+        yield* Effect.try({
+          try: () => {
+            evaluateAndDispose(
+              context,
+              DETERMINISM_PRELUDE,
+              'workflow-prelude.js',
+            );
+            evaluateAndDispose(
+              context,
+              bridge.realmPrelude,
+              'workflow-orchestration.js',
+            );
+          },
+          catch: ensureError,
+        });
+        const bodyThunk = yield* Effect.acquireRelease(
+          Effect.try({
+            try: () =>
+              evaluate(
+                context,
+                `(async () => {\n'use strict';\n${body}\n})`,
+                options.filename,
+              ),
+            catch: (error) =>
+              new Error(
+                `Workflow script syntax error: ${toErrorMessage(error)}`,
+              ),
+          }),
+          (handle) => Effect.sync(() => handle.dispose()),
         );
-      }
-
-      try {
-        setGlobal(context, '__wfBody', bodyThunk);
-        setGlobal(context, '__wfDeliver', deliver);
-        evaluateAndDispose(
-          context,
-          `(() => {
+        yield* Effect.try({
+          try: () => {
+            setGlobal(context, '__wfBody', bodyThunk);
+            setGlobal(context, '__wfDeliver', deliver);
+            evaluateAndDispose(
+              context,
+              `(() => {
   const body = globalThis.__wfBody;
   const deliver = globalThis.__wfDeliver;
   delete globalThis.__wfBody;
@@ -412,69 +411,94 @@ export async function runScriptInSandbox(
     (error) => deliver(error, true),
   );
 })()`,
-          'workflow-kickoff.js',
-        );
-      } finally {
-        bodyThunk.dispose();
-      }
+              'workflow-kickoff.js',
+            );
+          },
+          catch: ensureError,
+        });
 
-      await pumpJobs(runtime, () => settlement !== undefined, waitForWake);
+        while (!settled()) {
+          const executed = yield* Effect.try({
+            try: () => {
+              const result = runtime.executePendingJobs(MAX_JOBS_PER_TURN);
+              // Result delivery is the run's linearization point. A later
+              // guest job in the same QuickJS batch must not replace that
+              // result with its own error.
+              if (settled()) {
+                result.dispose();
+                return 0;
+              }
+              return result.unwrap();
+            },
+            catch: ensureError,
+          });
+          if (settled()) break;
+          if (executed === MAX_JOBS_PER_TURN || runtime.hasPendingJob()) {
+            // Give host calls, sibling runtimes, and the timer a turn: the
+            // scheduler dispatches through a macrotask.
+            yield* Effect.yieldNow;
+            continue;
+          }
+          // Close, then re-check: a wake that landed since the last batch
+          // either settled the run or queued a job.
+          wakeLatch.closeUnsafe();
+          if (settled() || runtime.hasPendingJob()) continue;
+          yield* wakeLatch.await;
+        }
 
-      switch (settlement?.kind) {
-        case 'outcome':
-          if (settlement.outcome.error) throw settlement.outcome.error;
-          return settlement.outcome.value;
-        case 'host-failure':
-        case 'aborted':
-          throw settlement.error;
-        case 'timeout':
-          throw timeoutError(options);
-        case undefined:
-          throw new Error('Workflow sandbox stopped without a result.');
-      }
-    } finally {
-      deliver.dispose();
-    }
-  } catch (error) {
-    if (settlement?.kind === 'timeout') throw timeoutError(options);
-    if (settlement?.kind === 'aborted') throw settlement.error;
-    throw error;
-  } finally {
-    active = false;
-    clearTimeout(timeout);
-    detachAbort();
-    wake();
-    try {
-      for (const deferred of pendingHostPromises) deferred.dispose();
-      pendingHostPromises.clear();
-    } finally {
-      try {
-        context.dispose();
-      } finally {
-        runtime.dispose();
-      }
-    }
-  }
+        switch (settlement?.kind) {
+          case 'outcome':
+            return yield* Effect.fromResult(settlement.outcome);
+          case 'host-failure':
+            return yield* Effect.fail(settlement.error);
+          case 'timeout':
+            return yield* Effect.fail(timeoutError(options));
+          case undefined:
+            return yield* Effect.fail(
+              new Error('Workflow sandbox stopped without a result.'),
+            );
+        }
+      });
+      // A step the deadline interrupted fails with QuickJS's own interrupt
+      // error; the run's outcome is the timeout.
+      return yield* run.pipe(
+        Effect.mapError((error) =>
+          settlement?.kind === 'timeout' ? timeoutError(options) : error,
+        ),
+      );
+    }),
+  );
 }
 
-function installHostBridge(
+interface HostBridgePorts<R> {
+  readonly pending: Set<QuickJSDeferredPromise>;
+  readonly isActive: () => boolean;
+  /**
+   * Start one host call as a sandbox-owned fiber. It starts synchronously,
+   * inside the guest's call, so its host-side effects keep guest order.
+   */
+  readonly fork: (call: Effect.Effect<void, never, R>) => void;
+  readonly fail: (error: Error) => void;
+  readonly deliver: (outcome: GuestOutcome) => void;
+  readonly wake: () => void;
+}
+
+function installHostBridge<R>(
   context: QuickJSContext,
-  bridge: SandboxHostBridge,
-  pending: Set<QuickJSDeferredPromise>,
-  isActive: () => boolean,
-  fail: (error: Error) => void,
-  deliver: (outcome: GuestOutcome) => void,
-  wake: () => void,
+  bridge: SandboxHostBridge<R>,
+  ports: HostBridgePorts<R>,
 ): void {
+  const { pending, isActive, fork, fail, deliver, wake } = ports;
   const parseArgs = (json: string): unknown[] => {
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(json) as unknown;
-    } catch (error) {
-      throw new Error(
-        `Workflow bridge received malformed argument JSON: ${toErrorMessage(error)}`,
-      );
-    }
+    const parsed = Result.getOrThrow(
+      Result.try({
+        try: () => JSON.parse(json) as unknown,
+        catch: (error) =>
+          new Error(
+            `Workflow bridge received malformed argument JSON: ${toErrorMessage(error)}`,
+          ),
+      }),
+    );
     if (!Array.isArray(parsed)) {
       throw new Error('Workflow bridge arguments must decode to an array.');
     }
@@ -483,35 +507,36 @@ function installHostBridge(
 
   const settleHostPromise = (
     deferred: QuickJSDeferredPromise,
-    payload?: string,
-    rejection?: unknown,
+    exit: Exit.Exit<string | undefined, Error>,
   ): void => {
     pending.delete(deferred);
-    if (!isActive() || !deferred.alive) return;
-    try {
-      if (rejection !== undefined) {
-        const errorHandle = context.newError(toErrorRecord(rejection));
-        try {
-          deferred.reject(errorHandle);
-        } finally {
-          errorHandle.dispose();
-        }
-      } else if (payload === undefined) {
-        deferred.resolve();
-      } else {
-        const payloadHandle = context.newString(payload);
-        try {
-          deferred.resolve(payloadHandle);
-        } finally {
-          payloadHandle.dispose();
-        }
-      }
-    } catch (error) {
-      if (deferred.alive) deferred.dispose();
-      fail(error instanceof Error ? error : new Error(toErrorMessage(error)));
-    } finally {
+    if (!isActive() || !deferred.alive) {
       wake();
+      return;
     }
+    const settledPromise = Result.try({
+      try: () => {
+        const handle = Exit.match(exit, {
+          onSuccess: (payload) =>
+            payload === undefined ? undefined : context.newString(payload),
+          onFailure: (cause) =>
+            context.newError(toErrorRecord(Cause.squash(cause))),
+        });
+        if (handle === undefined) return deferred.resolve();
+        try {
+          if (Exit.isSuccess(exit)) deferred.resolve(handle);
+          else deferred.reject(handle);
+        } finally {
+          handle.dispose();
+        }
+      },
+      catch: ensureError,
+    });
+    if (Result.isFailure(settledPromise)) {
+      if (deferred.alive) deferred.dispose();
+      fail(settledPromise.failure);
+    }
+    wake();
   };
 
   defineHostGlobal(context, '__wfHostAsync', (nameHandle, argsHandle) => {
@@ -519,16 +544,21 @@ function installHostBridge(
     const argsJson = context.getString(argsHandle);
     const fn = bridge.asyncFns[name];
     if (!fn) throw new Error(`Unknown workflow async primitive: ${name}`);
+    const args = parseArgs(argsJson);
 
     const deferred = context.newPromise();
     pending.add(deferred);
-    void fn(parseArgs(argsJson)).then(
-      (payload) => {
-        settleHostPromise(deferred, payload);
-      },
-      (error: unknown) => {
-        settleHostPromise(deferred, undefined, error);
-      },
+    fork(
+      Effect.suspend(() => fn(args)).pipe(
+        Effect.exit,
+        // Settle on a later scheduler turn, never from inside this host
+        // function: a call that finished synchronously would otherwise
+        // resolve its promise before the guest holds it.
+        Effect.tap(() => Effect.yieldNow),
+        Effect.flatMap((exit) =>
+          Effect.sync(() => settleHostPromise(deferred, exit)),
+        ),
+      ),
     );
     return deferred.handle;
   });
@@ -577,32 +607,6 @@ function defineHostGlobal(
   setGlobalAndDispose(context, name, context.newFunction(name, fn));
 }
 
-async function pumpJobs(
-  runtime: QuickJSRuntime,
-  shouldStop: () => boolean,
-  waitForWake: () => Promise<void>,
-): Promise<void> {
-  while (!shouldStop()) {
-    const result = runtime.executePendingJobs(MAX_JOBS_PER_TURN);
-    // Result delivery is the run's linearization point. A later guest job in
-    // the same QuickJS batch must not replace that result with its own error.
-    if (shouldStop()) {
-      result.dispose();
-      return;
-    }
-    const executed = result.unwrap();
-    if (shouldStop()) return;
-
-    if (executed === MAX_JOBS_PER_TURN || runtime.hasPendingJob()) {
-      // Give host promises, sibling runtimes, and abort listeners a turn.
-      await setImmediateAsync();
-      continue;
-    }
-
-    await waitForWake();
-  }
-}
-
 function evaluate(
   context: QuickJSContext,
   source: string,
@@ -640,23 +644,21 @@ function setGlobalAndDispose(
 
 function parseOutcome(payload?: string, errorJson?: string): GuestOutcome {
   if (errorJson !== undefined) {
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(errorJson) as unknown;
-    } catch (error) {
-      return {
-        error: new Error(
+    const parsed = Result.try({
+      try: () => JSON.parse(errorJson) as unknown,
+      catch: (error) =>
+        new Error(
           `Workflow script returned malformed error JSON: ${toErrorMessage(error)}`,
         ),
-      };
-    }
-    const decoded = GuestErrorRecordSchema.safeParse(parsed);
+    });
+    if (Result.isFailure(parsed)) return parsed;
+    const decoded = GuestErrorRecordSchema.safeParse(parsed.success);
     if (!decoded.success) {
-      return {
-        error: new Error(
+      return Result.fail(
+        new Error(
           'Workflow script returned an invalid error record from the sandbox.',
         ),
-      };
+      );
     }
     const record = decoded.data;
     // Guest stack frames locate the failure inside the script (the only
@@ -672,18 +674,16 @@ function parseOutcome(payload?: string, errorJson?: string): GuestOutcome {
         : record.message,
     );
     error.name = record.name;
-    return { error };
+    return Result.fail(error);
   }
-  if (payload === undefined) return { value: undefined };
-  try {
-    return { value: JSON.parse(payload) };
-  } catch (error) {
-    return {
-      error: new Error(
+  if (payload === undefined) return Result.succeed(undefined);
+  return Result.try({
+    try: () => JSON.parse(payload) as unknown,
+    catch: (error) =>
+      new Error(
         `Workflow script returned malformed result JSON: ${toErrorMessage(error)}`,
       ),
-    };
-  }
+  });
 }
 
 function toErrorRecord(error: unknown): { name: string; message: string } {

@@ -116,11 +116,6 @@ export class WorkflowRunState {
     return this.#currentIndex;
   }
 
-  /** True once `finish` ran: every later transition is a no-op. */
-  get sealed(): boolean {
-    return this.#sealed;
-  }
-
   enterStage(title: string): void {
     if (this.#sealed) throw new Error('Workflow run state is sealed.');
     let nextIndex = this.#stages.findIndex((stage) => stage.title === title);
