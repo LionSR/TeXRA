@@ -199,7 +199,7 @@ runtime packages named `@platform/platform`, `@agent/runtime/runAgent`, and so
 on.
 
 ```ts
-import { Effect } from 'effect';
+import { Effect, Fiber, Stream } from 'effect';
 import { initPlatform } from '@platform/platform';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { createNodeWorkspaceRoots } from '@platform/defaults/nodeHost';
@@ -259,8 +259,45 @@ await runtime.runPromise(
         console.error(`[texra] ${event}`, payload);
       },
     });
-    // §3 — DO NOT SKIP: approvalPromptsUnavailable below removes the tools
-    // that open requests; a `retry` still needs a decider over viewChanges.
+    // §3 — DO NOT SKIP: approvalPromptsUnavailable below removes every tool
+    // that opens a request, but a provider failure still opens a `retry`, and
+    // nothing answers it unless this process does. Deny each one once.
+    const answered = new Set<string>();
+    const retryDenier = yield* Effect.forkChild(
+      Stream.runForEach(session.viewChanges, (view) => {
+        // Forget what the fold no longer lists, so the set tracks only
+        // live requests over a long-lived session.
+        const live = new Set(view.requests.map((pending) => pending.requestId));
+        for (const requestId of answered) {
+          if (!live.has(requestId)) answered.delete(requestId);
+        }
+        return Effect.forEach(
+          view.requests.filter(
+            (pending) =>
+              pending.payload.kind === 'retry' &&
+              !answered.has(pending.requestId),
+          ),
+          (pending) => {
+            answered.add(pending.requestId);
+            return session.requests
+              .request({
+                kind: 'request.decide',
+                runId: pending.runId,
+                requestId: pending.requestId,
+                decision: { action: 'deny', reason: 'No retry prompts.' },
+              })
+              .pipe(
+                // A refused write answered nothing: forget the request so
+                // the next view denies it again.
+                Effect.catch(() =>
+                  Effect.sync(() => answered.delete(pending.requestId)),
+                ),
+              );
+          },
+          { discard: true },
+        );
+      }),
+    );
     yield* loadAgents({ includeRemote: false });
 
     const validated = validateRunRequest({
@@ -277,7 +314,10 @@ await runtime.runPromise(
         session,
         approvalPromptsUnavailable: true,
       }),
-      Effect.sync(detachHostInteractions),
+      Effect.andThen(
+        Fiber.interrupt(retryDenier),
+        Effect.sync(detachHostInteractions),
+      ),
     );
   }),
 );
@@ -491,8 +531,8 @@ exactly this: a listener over `viewChanges` denies each pending `retry`
 with the decide command above (`denyRetryRequests`,
 `packages/agent/src/effect/sessionPrograms.ts:91-146`). It keeps the set of
 requests it has answered, prunes it as the fold drops them, and forgets a
-request whose decision was refused so a later level denies it again. Copy
-that shape.
+request whose decision was refused so a later level denies it again. The worked
+example in §1 inlines the same listener.
 
 The headless CLI does the same for every kind, answering from policy first
 and from a terminal prompt otherwise
