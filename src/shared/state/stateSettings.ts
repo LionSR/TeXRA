@@ -806,7 +806,7 @@ const GIT_WORKTREE_READER = 'src/utils/config/worktreeConfig.ts';
 const CODEX_CONFIG_READER = 'src/tools/codexConfig.ts';
 const CLAUDE_AGENT_CONFIG_READER = 'src/tools/claudeAgentConfig.ts';
 const WORKFLOW_COMPILE_READER = 'src/agent/output/compileCheck.ts';
-const ROUTE_ENDPOINT_READER = 'src/agent/runtime/run/routeEndpoint.ts';
+const ROUTE_ENDPOINT_READER = 'src/model/routeEndpoint.ts';
 const PROVIDER_CONFIG_READER = 'src/utils/config/providerConfig.ts';
 
 /**
@@ -850,7 +850,7 @@ const PROVIDER_ENDPOINT_SETTINGS = PROVIDER_ENDPOINT_STATE_ENTRIES.map(
 );
 
 /**
- * Region/routing toggles resolved by `run/routeEndpoint`, each also a Models
+ * Region/routing toggles resolved by `@model/routeEndpoint`, each also a Models
  * tab control for its provider. The rows differ only in key, default, and
  * copy, so the shared fields are written once.
  */

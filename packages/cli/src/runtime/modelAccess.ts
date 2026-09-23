@@ -7,8 +7,8 @@ import {
   readModelAvailabilityInputs,
   type ModelOptionStores,
 } from '@model/computeModelOptions';
-import { resolveGlmRoute } from '@model/glmRouting';
 import { shouldRouteModelThroughOpenRouter } from '@model/openRouterRouting';
+import { resolveRouteEndpoint } from '@model/routeEndpoint';
 import { getRuntimeModelConfig } from '@model/runtimeModelRegistry';
 import {
   decideRunModel,
@@ -162,15 +162,15 @@ export function formatModelStatusForCli(
     ) {
       const config = getRuntimeModelConfig(model.model.value);
       if (config) {
-        const route = yield* resolveGlmRoute({
+        const endpoint = yield* resolveRouteEndpoint(
           stores,
-          baseUrl: config.baseUrl,
-          useOpenRouter: shouldRouteModelThroughOpenRouter(
+          config,
+          shouldRouteModelThroughOpenRouter(
             config,
             yield* getUseOpenRouter(stores),
           ),
-        });
-        if (route.route === 'official-coding-plan') {
+        );
+        if (endpoint.usageRoute === 'glm-coding-plan-subscription') {
           return 'api: GLM Coding Plan';
         }
       }

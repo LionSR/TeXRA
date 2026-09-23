@@ -92,10 +92,11 @@ describe('provider capabilities', () => {
         );
 
         expect(capabilities).toMatchObject({
-          contextWindow: DEFAULT_INPUT_LIMIT + gpt55Config.maxOutputTokens,
-          inputTokenLimit: DEFAULT_INPUT_LIMIT,
-          inputPrice: 0,
-          outputPrice: 0,
+          config: {
+            contextWindow: DEFAULT_INPUT_LIMIT + gpt55Config.maxOutputTokens,
+            inputPrice: 0,
+            outputPrice: 0,
+          },
           usageRoute: 'chatgpt-subscription',
         });
       }),
@@ -114,8 +115,9 @@ describe('provider capabilities', () => {
 
         expect(model.codexSubscription).toBe(true);
         expect(capabilities).toMatchObject({
-          contextWindow: DEFAULT_INPUT_LIMIT + model.maxOutputTokens,
-          inputTokenLimit: DEFAULT_INPUT_LIMIT,
+          config: {
+            contextWindow: DEFAULT_INPUT_LIMIT + model.maxOutputTokens,
+          },
         });
       }),
   );
@@ -142,10 +144,7 @@ describe('provider capabilities', () => {
               gpt55Config,
               false,
             ),
-          ).toMatchObject({
-            inputTokenLimit: 872_000,
-            contextWindow: 1_000_000,
-          });
+          ).toMatchObject({ config: { contextWindow: 1_000_000 } });
         }),
     );
 
@@ -169,7 +168,9 @@ describe('provider capabilities', () => {
               false,
             ),
           ).toMatchObject({
-            inputTokenLimit: DEFAULT_INPUT_LIMIT,
+            config: {
+              contextWindow: DEFAULT_INPUT_LIMIT + gpt55Config.maxOutputTokens,
+            },
           });
         }),
     );

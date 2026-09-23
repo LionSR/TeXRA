@@ -43,7 +43,7 @@ import {
   withShortModelName,
   type RouteCredential,
 } from '@agent/runtime/modelRoutes';
-import { OPENAI_DEFAULT_ENDPOINT } from '@agent/runtime/run/routeEndpoint';
+import { OPENAI_DEFAULT_ENDPOINT } from '@model/routeEndpoint';
 import { type ModelOptionStores } from '@model/computeModelOptions';
 import {
   reasoningEffortOverrides,

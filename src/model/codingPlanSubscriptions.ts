@@ -2,13 +2,13 @@ import { Effect } from 'effect';
 import { ModelProvider } from 'llm-zoo';
 
 import { hasUsableApiKey } from '@model/apiProviders';
-import { resolveGlmRoute } from '@model/glmRouting';
 import {
   isKimiCodeRoute,
   resolveKimiCodeRoutingFacts,
 } from '@model/kimiCodeSubscriptionRouting';
 import { shouldRouteModelThroughOpenRouter } from '@model/openRouterRouting';
 import { oauthSubscriptionUsageRoute } from '@model/providerCapabilities';
+import { resolveRouteEndpoint } from '@model/routeEndpoint';
 import { resolveRuntimeModelConfig } from '@model/runtimeModelRegistry';
 import type { LanguageModel } from '@platform/languageModel';
 import type { PlatformSecrets } from '@platform/secrets';
@@ -61,15 +61,15 @@ function isGlmCodingPlanActive(
     const config = yield* resolveRuntimeModelConfig(modelId);
     if (config?.provider !== ModelProvider.GLM) return false;
 
-    const route = yield* resolveGlmRoute({
+    const endpoint = yield* resolveRouteEndpoint(
       stores,
-      baseUrl: config.baseUrl,
-      useOpenRouter: shouldRouteModelThroughOpenRouter(
+      config,
+      shouldRouteModelThroughOpenRouter(
         config,
         yield* getUseOpenRouter(stores),
       ),
-    });
-    if (route.route !== 'official-coding-plan') return false;
+    );
+    if (endpoint.usageRoute !== 'glm-coding-plan-subscription') return false;
     return yield* hasUsableApiKey(stores.secrets, 'glm');
   });
 }

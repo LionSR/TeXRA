@@ -53,7 +53,7 @@ vi.mock('llm-zoo', async (importOriginal) => {
 /**
  * The GLM routing settings the status formatter reads, as the installed fake
  * host's global state rather than a module mock of `@utils/config/providerConfig`:
- * the read path (`resolveGlmRoute` -> `readSettingFrom`) answers from the
+ * the read path (`resolveRouteEndpoint` -> `readSettingFrom`) answers from the
  * stores the host publishes, and the kernel's setup file installs one before
  * this file's mocks are registered.
  */
