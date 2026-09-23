@@ -6,7 +6,7 @@ import { ActiveSkillsSnapshotSchema } from './activeSkills';
 import { ContextStateDataSchema } from './contextManagement';
 import { RunIdSchema } from './identifiers';
 import { LogLevelSchema } from './log';
-import { ToolCallStatusSchema, ToolUseLogSchema } from './progressView/data';
+import { ToolCallStatusSchema } from './progressView/data';
 import { RunOutcomeSchema } from './run';
 import { StageKindSchema } from './taskGroup';
 import { ExtendedTokenUsageStatsSchema } from './usage';
@@ -49,7 +49,7 @@ export const TranscriptEventSchemas = {
   toolEnd: trace('tool.end', {
     logId: z.string(),
     status: ToolCallStatusSchema,
-    result: ToolUseLogSchema.omit({ status: true }).optional(),
+    result: z.unknown().optional(),
   }),
   workflowPlan: trace('workflow.plan', {
     attemptId: z.string(),

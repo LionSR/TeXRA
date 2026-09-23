@@ -11,6 +11,7 @@ import {
   STREAM_LOG_ENTRY_TYPES,
   RUN_PHASE,
   TOOL_CALL_STATUS,
+  ToolUseLogSchema,
   isTerminalWorkflowCallProgress,
   isTranscriptEvent,
   type LogLevel,
@@ -203,7 +204,10 @@ export function createTranscriptFold(
 
       case 'tool.end': {
         if (transcriptBoundaryClosed) return;
-        const result = event.result ?? {};
+        const parsedResult = ToolUseLogSchema.omit({ status: true }).safeParse(
+          event.result,
+        );
+        const result = parsedResult.success ? parsedResult.data : {};
         // Omit groupId on update: undefined would clobber the value stamped
         // at tool.start.
         const patch = {
