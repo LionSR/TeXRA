@@ -798,3 +798,30 @@ hosted web tools without BOTH the usage accounting folded through
 `providerUsage` and the `pause_turn` continuation protocol. Shipping a second
 web-search or web-fetch system beside the local `web_search` and `web_fetch`
 tools.
+
+## Post-auth cache invalidation is a permanent host boundary; only the sign-out catalog refresh is shared (recorded 2026-09-23; moved here from the deleted `src/auth/authFlowEffects.ts` by [#13054](https://github.com/LionSR/TeXRA/issues/13054))
+
+**Question.** Should the post-sign-in and post-sign-out cache-invalidation
+sequence that each host runs be collapsed into one shared coordinator?
+
+**Ruling.** No. The one shared step is the best-effort remote-agent-catalog
+refresh after sign-out, owned by `invalidateRemoteAgentsAfterSignOut`
+(`src/agent/index/agentRegistry.ts`), which absorbs every failure, defects
+included, so a stale local catalog never blocks sign-out. Everything around it
+stays per host.
+
+**Evidence.** The extension invalidates its long-lived model cache before
+publishing a session event. Desktop routes the same transition through its
+settings-IPC refresh chain because that chain also republishes model and
+profile state; agent-catalog publication normally follows there, except that
+team sign-in defers it to the team resolver, and the desktop session-change
+handler refreshes onboarding separately. Ordinary CLI login and logout
+commands exit without consuming model options; persistent CLI callers own
+their transition before reading credential-dependent state (onboarding
+invalidates its model-options cache, the orchestration launcher its model
+list, the chat TUI its subscription-preference views), and setup-agent team
+sign-in refreshes and rereads the remote catalog before applying the team.
+Collapsing these effects would either omit host refresh work or repeat it.
+
+**Forbids.** A shared post-auth invalidation coordinator across hosts, and a
+second guard around `invalidateRemoteAgentsAfterSignOut` at a call site.

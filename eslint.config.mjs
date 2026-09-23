@@ -41,14 +41,13 @@ const INTERNAL_ALIAS_PATH_GROUPS = INTERNAL_ALIAS_NAMES.flatMap((alias) => [
 const COMPOSITION_ROOT_FILES = new Set([
   path.join(__dirname, 'packages/extension/src/extension.ts'),
   path.join(__dirname, 'packages/desktop/src/main/platform/index.ts'),
-  path.join(__dirname, 'packages/cli/src/runtime/initPlatform.ts'),
+  path.join(__dirname, 'packages/cli/src/runtime/cliProcessRuntime.ts'),
   // The package's composition root is `composeProcess`, which the Promise
   // entry and the Effect subpath's `Sessions.layer` both call.
   path.join(__dirname, 'packages/agent/src/effect/runtime.ts'),
-  // The test suite's composition root: the sole place vitest suites swap the
-  // fake platform, replacing the per-suite `await import('@platform/platform')`
-  // dance every suite used to hand-roll to dodge this same rule.
-  path.join(__dirname, 'src/test-kernel/support/setupPlatform.ts'),
+  // The test suite's composition root: the one harness file that installs
+  // the process runtime the session graph runs on.
+  path.join(__dirname, 'src/test-kernel/support/sessionGraphTestSetup.ts'),
 ]);
 
 // The `@utils/*` modules the webview frontends may import at runtime. Each is
@@ -339,16 +338,16 @@ const localRules = {
         };
       },
     },
-    'no-platform-init-outside-composition-root': {
+    'no-process-runtime-install-outside-composition-root': {
       meta: {
         type: 'problem',
         docs: {
           description:
-            'Disallow initPlatform imports outside composition roots.',
+            'Disallow installProcessRuntime imports outside composition roots.',
         },
         messages: {
           forbidden:
-            'initPlatform may only be imported by composition roots; elsewhere use platform() and take the workspace roots as data from the session, run or tool call that holds them.',
+            'installProcessRuntime may only be imported by composition roots; elsewhere read process services from the Effect context and take the workspace roots as data from the session, run or tool call that holds them.',
         },
         schema: [],
       },
@@ -362,15 +361,15 @@ const localRules = {
 
         return {
           ImportDeclaration(node) {
-            const importsInitPlatform = node.specifiers.some((specifier) => {
+            const importsInstall = node.specifiers.some((specifier) => {
               return (
                 specifier.type === 'ImportSpecifier' &&
                 specifier.imported.type === 'Identifier' &&
-                specifier.imported.name === 'initPlatform'
+                specifier.imported.name === 'installProcessRuntime'
               );
             });
 
-            if (!importsInitPlatform) return;
+            if (!importsInstall) return;
 
             context.report({
               node,
@@ -567,7 +566,7 @@ export default tseslint.config(
       unicorn,
     },
     rules: {
-      'local/no-platform-init-outside-composition-root': 'error',
+      'local/no-process-runtime-install-outside-composition-root': 'error',
 
       // --- Unicorn modernization rules (ES2023+) ---
       'unicorn/prefer-string-replace-all': 'error',

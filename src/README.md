@@ -25,7 +25,7 @@ Use the alias, not a long relative chain.
 | `src/latex/`        | LaTeX compilation, diffing, formatting, and log parsing                                                                                                                                                  |
 | `src/common/`       | Cross-cutting helpers that are not wire contracts — notably `common/errors/` error classification                                                                                                        |
 | `src/auth/`         | Sign-in, session, and credential handling. **Core zones import this directly today** — `tools/setup/platform.ts`, `agent/remote/`, `telemetry/` all do. Decoupling it behind ports is proposed, not done |
-| `src/platform/`     | The `Platform` port interfaces (config, state, log, fs, workspace, storage, secrets) that hosts implement                                                                                                |
+| `src/platform/`     | Host port contracts (config, state, lifecycle, agent directories, secrets, rooted fs, workspace roots) served by `installProcessRuntime`                                                                 |
 | `src/model/`        | Model catalog, selection, and capability resolution                                                                                                                                                      |
 | `src/transcript/`   | Trace and transcript document schemas plus stream logging                                                                                                                                                |
 | `src/replacement/`  | Text-replacement utilities used by editing tools                                                                                                                                                         |
@@ -44,8 +44,8 @@ Use the alias, not a long relative chain.
 importing `vscode` inside one is a lint error, not a convention. The canonical
 list is `VSCODE_FREE_ZONE_DIRS` in [`eslint.config.mjs`](../eslint.config.mjs) — read it there rather
 than trusting a copy, including this one. Code in those zones reaches host
-services through `platform()` from `@platform/platform`; when it needs a
-capability the port does not expose, add a typed port rather than an import.
+services through the Effect context the process runtime serves; when it
+needs a capability no port exposes, add a typed port rather than an import.
 
 **Does it run in a webview?** The webview frontends bundle for the browser, so
 anything they import must avoid Node built-ins. Only a small, fixed set of

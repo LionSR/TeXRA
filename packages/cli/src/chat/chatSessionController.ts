@@ -18,7 +18,6 @@ import { getRunRecords } from '@agent/storage';
 import {
   AgentConfigSchema,
   attachTerminalResultToast,
-  detachSubagentsOnStop,
   resumeRun,
   runAgent,
   type AgentConfig,
@@ -517,18 +516,9 @@ export function createChatSessionController(
     const runId = session.runId;
     if (!runId || !runViewOf(currentView(), runId)) return;
     session.interruptedRunId = runId;
-    // Ctrl-C honors the configured child-detach policy.
-    runtime.runFork(
-      Effect.flatMap(
-        detachSubagentsOnStop(runtimeSession.roots),
-        (detachActiveChildren) =>
-          request({
-            kind: 'run.stop',
-            runId,
-            detachActiveChildren,
-          }),
-      ),
-    );
+    // Ctrl-C leaves the child policy unset, so the session's request handler
+    // applies the configured "Keep subagents running".
+    runtime.runFork(request({ kind: 'run.stop', runId }));
   };
 
   // Shared tail of the run/resume failure recovery: surface the error to

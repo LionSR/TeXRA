@@ -33,7 +33,7 @@ export interface AgentDirectoryEntry {
   source: AgentSource;
 }
 
-export interface AgentDirectoryIssueReporter {
+interface AgentDirectoryIssueReporter {
   report(message: string, docsId: AgentDirectoryDocsId): Effect.Effect<void>;
 }
 
@@ -46,7 +46,9 @@ export interface AgentDirectoryServiceOptions {
    */
   resourcesPath: string;
   customDirectoryStore: CustomAgentDirectoryStore;
-  issueReporter: AgentDirectoryIssueReporter;
+  /** Defaults to logging the issue at `warn`; hosts with an interactive
+   * notification surface (e.g. the VS Code extension) can override it. */
+  issueReporter?: AgentDirectoryIssueReporter;
 }
 
 export class AgentDirectoryService {
@@ -227,7 +229,12 @@ export class AgentDirectoryService {
     message: string,
     docsId: AgentDirectoryDocsId,
   ): Effect.Effect<void> {
-    return this.options.issueReporter.report(message, docsId);
+    if (this.options.issueReporter) {
+      return this.options.issueReporter.report(message, docsId);
+    }
+    return Effect.logWarning(`${message}. See documentation: ${docsId}`).pipe(
+      withLogChannel(this.options.channel),
+    );
   }
 
   /** This file's one failure shape, from whatever cause raised it. */

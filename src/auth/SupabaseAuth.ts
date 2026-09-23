@@ -19,10 +19,7 @@ import {
   secretBackedSessionStorage,
   type SessionSecretStore,
 } from './oauth/sessionAccess';
-import {
-  SupabaseSessionCoordinator,
-  type SupabaseSessionLog,
-} from './SupabaseSession';
+import { SupabaseSessionCoordinator } from './SupabaseSession';
 import type { StoredSessionState } from './TokenProvider';
 
 const CHANNEL = 'SupabaseAuth';
@@ -119,7 +116,6 @@ function gotrueStorage(
  */
 export interface SupabaseAuthInit {
   readonly secrets: SessionSecretStore;
-  readonly log?: SupabaseSessionLog;
   readonly whenReady?: () => Effect.Effect<void, Error>;
 }
 
@@ -243,7 +239,6 @@ export function createSupabaseAuth(
       getClient: () => client,
       whenReady: init.whenReady ?? (() => Effect.void),
       tokenRefreshThresholdMs: TOKEN_REFRESH_THRESHOLD_MS,
-      log: init.log,
     });
 
     let initError: Error | null = null;

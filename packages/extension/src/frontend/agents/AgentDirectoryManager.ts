@@ -7,10 +7,9 @@ import * as vscode from 'vscode';
 
 // Local imports
 import {
-  type AgentDirectoryService,
+  AgentDirectoryService,
   type AgentSource,
   agentSourceDirectory,
-  createPlatformAgentDirectories,
 } from '@agent/index';
 import { showLoggedMessageWithDocs } from '@frontend/ui/errorHandlingUtils';
 import { type OpenDialogFailed, selectFolder } from '@frontend/ui/dialogs';
@@ -58,7 +57,7 @@ class AgentDirectoryManager {
     this.host = {
       globalState,
       runtime,
-      directories: createPlatformAgentDirectories({
+      directories: new AgentDirectoryService({
         channel: CHANNEL,
         // Built-in agents are read straight out of the installed extension's
         // `resources`, never copied into global storage.

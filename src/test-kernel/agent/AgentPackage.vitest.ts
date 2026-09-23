@@ -34,7 +34,6 @@ type FakeSessionView = Omit<RuntimeSessionView, 'runs'> & {
 };
 
 const mocks = vi.hoisted(() => ({
-  activePlatform: null as object | null,
   agentCategory: 'toolUse',
   /** The runtime owner's close, as the package reaches it: by storage root. */
   closeSession: vi.fn((_root: string) =>
@@ -46,7 +45,6 @@ const mocks = vi.hoisted(() => ({
   /** Fails the package session's fold, as a fold defect ends its view. */
   foldDeath: undefined as Deferred.Deferred<never, Error> | undefined,
   eventListener: undefined as ((event: unknown) => void) | undefined,
-  initPlatform: vi.fn(),
   /** The process's session owner, as `installProcessRuntime` installs it
    *  and `disposeProcessRuntime` takes it away, carrying the runtime it runs
    *  on: what says whether the package must compose the process. */
@@ -171,11 +169,6 @@ vi.mock('@controllers/session/sessionLayer', async () => {
   };
 });
 
-vi.mock('@platform/platform', () => ({
-  initPlatform: mocks.initPlatform,
-  tryPlatform: () => mocks.activePlatform,
-}));
-
 vi.mock('@transcript/StreamLogStore', () => ({
   StreamLogStore: {},
 }));
@@ -189,6 +182,7 @@ import { testRuntime } from '@test/support/testProcessRuntime';
 import {
   aggregateId,
   type AgentPlatform,
+  PlatformConflict,
   Sessions,
 } from '../../../packages/agent/src/index';
 import { nodePlatform } from '../../../packages/agent/src/node';
@@ -269,13 +263,9 @@ describe('agent package sessions', () => {
   beforeEach(() => {
     mocks.sessionInits.splice(0);
     vi.clearAllMocks();
-    mocks.activePlatform = null;
     mocks.agentCategory = 'toolUse';
     mocks.eventListener = undefined;
     mocks.ownerRuntime = undefined;
-    mocks.initPlatform.mockImplementation((platform: object) => {
-      mocks.activePlatform = platform;
-    });
     mocks.installRuntime.mockImplementation(() => {
       mocks.ownerRuntime = testRuntime();
       return mocks.ownerRuntime;
@@ -542,6 +532,33 @@ describe('agent package sessions', () => {
         expect(released.pollUnsafe()).toBeDefined();
         expect(mocks.closeSession).toHaveBeenCalledTimes(2);
         expect(mocks.disposeRuntime).toHaveBeenCalledOnce();
+      }),
+  );
+
+  it.live(
+    "serves the embedder's tool-missing handler and refuses a runtime it did not compose",
+    () =>
+      Effect.gen(function* () {
+        const openOnce = (platform: AgentPlatform) =>
+          Effect.flatMap(Sessions, (sessions) => sessions.open()).pipe(
+            Effect.scoped,
+            Effect.provide(Sessions.layer(platform)),
+          );
+        const toolMissingHandler = vi.fn();
+        yield* openOnce({ ...PLATFORM, toolMissingHandler });
+        expect(mocks.installRuntime).toHaveBeenCalledWith(
+          expect.objectContaining({ toolMissingReporter: toolMissingHandler }),
+        );
+
+        // A runtime a host installed for its own roots is not the package's
+        // to borrow, even once every hold of its own has ended.
+        mocks.ownerRuntime = testRuntime();
+        const exit = yield* Effect.exit(openOnce(PLATFORM));
+        expect(Exit.isFailure(exit)).toBe(true);
+        if (Exit.isFailure(exit)) {
+          expect(Cause.squash(exit.cause)).toBeInstanceOf(PlatformConflict);
+        }
+        expect(mocks.installRuntime).toHaveBeenCalledOnce();
       }),
   );
 

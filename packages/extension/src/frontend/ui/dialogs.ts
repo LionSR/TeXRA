@@ -151,8 +151,7 @@ interface FolderDialogOptions {
 /**
  * Generic helper to show a folder-picker dialog and return the selected
  * absolute path. Unlike {@link selectFiles}, this needs
- * no workspace, so it's safe to call before a workspace (or `platform()`) is
- * available.
+ * no workspace, so it's safe to call before a workspace is available.
  */
 export function selectFolder(
   options: FolderDialogOptions,

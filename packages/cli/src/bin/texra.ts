@@ -1,6 +1,8 @@
 import { Effect } from 'effect';
+import { installedProcessRuntime } from '@agent/runtime';
 import { setLogSink } from '@logger/logSink';
-import { tryPlatform } from '@platform/platform';
+import { Lifecycle } from '@platform/interfaces';
+import { withProcessServices } from '@platform/processRuntime';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 import { runCli } from '../commands/root';
@@ -25,9 +27,11 @@ import {
 // sink for it, and `initCliPlatform` swaps in the platform's as before.
 setLogSink(prePlatformDiagnosticSink, { trusted: true });
 
-// The process entry: one run, with the platform's shutdown drain and the
-// final NDJSON flush as its finalizers, in that order — the drain is a
-// program now, so this entry is where it is run.
+// The process entry: one run, with the process lifecycle's shutdown drain
+// and the final NDJSON flush as its finalizers, in that order — the drain is
+// a program now, so this entry is where it is run. The lifecycle is the
+// installed runtime's own `Lifecycle`, read before the drain runs: its last
+// step disposes that runtime.
 await Effect.runPromise(
   Effect.tryPromise({
     try: async () => {
@@ -52,9 +56,15 @@ await Effect.runPromise(
       }),
     ),
     Effect.ensuring(
-      Effect.suspend(
-        () => tryPlatform()?.lifecycle.runShutdown ?? Effect.void,
-      ).pipe(Effect.ensuring(flushNdjsonStdout())),
+      Effect.suspend(() => {
+        const runtime = installedProcessRuntime();
+        return runtime
+          ? Effect.flatMap(
+              withProcessServices(runtime, Effect.service(Lifecycle)),
+              (lifecycle) => lifecycle.runShutdown,
+            )
+          : Effect.void;
+      }).pipe(Effect.ensuring(flushNdjsonStdout())),
     ),
   ),
 );

@@ -2,7 +2,7 @@ import { join } from 'node:path';
 import { app } from 'electron';
 import { Cause, Effect, Exit, Layer, Scope } from 'effect';
 
-import { createPlatformAgentDirectories } from '@agent/index';
+import { AgentDirectoryService } from '@agent/index';
 import { createSupabaseAuth, type SupabaseAuthShape } from '@auth/SupabaseAuth';
 import { bootstrapHost } from '@controllers/hostBootstrap';
 import {
@@ -15,7 +15,6 @@ import {
 } from '@controllers/session/sessionLayer';
 import { globalDatabaseLayer } from '@controllers/session/Database';
 import { NotificationFailed } from '@hosts/uiHosts';
-import { initPlatform } from '@platform/platform';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type {
@@ -47,7 +46,6 @@ import {
   createDesktopSetupAuth,
   type DesktopSetupAuth,
 } from '../desktopSetupAuth.js';
-import { createSessionLog } from '../desktopSupabaseAuth.js';
 import { ElectronSecrets } from './electronSecrets.js';
 import { repairLaunchPath } from './pathFix.js';
 import { resolveDesktopDataRoot, resolveResourcesPath } from './paths.js';
@@ -66,10 +64,9 @@ export interface ElectronPlatformInitResult {
   globalConfigStore: ConfigStore;
   lifecycle: LifecycleHost;
   /**
-   * The process-wide services the composition root builds and `initPlatform`
-   * publishes. Returned so the window and the IPC surfaces below it are
-   * *handed* their stores instead of each re-reading the ambient
-   * `platform()` singleton: one owner, one place to substitute in a test.
+   * The process-wide services the composition root builds. Returned so the
+   * window and the IPC surfaces below it are *handed* their stores instead
+   * of each re-reading them: one owner, one place to substitute in a test.
    */
   globalState: StateStore;
   secrets: PlatformSecrets;
@@ -149,10 +146,7 @@ export async function initializeElectronPlatform(
                 }),
             }),
         });
-        const supabaseAuth = yield* createSupabaseAuth({
-          secrets,
-          log: createSessionLog(console),
-        });
+        const supabaseAuth = yield* createSupabaseAuth({ secrets });
         return { processStart, configStores, secrets, supabaseAuth };
       }).pipe(Effect.provide(nodeFileServices)),
     );
@@ -163,15 +157,17 @@ export async function initializeElectronPlatform(
   const resourcesPath = resolveResourcesPath(mainDirname);
   const agentDirectoriesLayer = Layer.effect(
     AgentDirectories,
-    Effect.map(AppState, (state) =>
-      createPlatformAgentDirectories({
-        channel: 'desktop',
-        resourcesPath,
-        customDirectoryStore: {
-          get: () =>
-            state.get<string | undefined>(GlobalStateKey.CUSTOM_AGENT_DIR),
-        },
-      }),
+    Effect.map(
+      AppState,
+      (state) =>
+        new AgentDirectoryService({
+          channel: 'desktop',
+          resourcesPath,
+          customDirectoryStore: {
+            get: () =>
+              state.get<string | undefined>(GlobalStateKey.CUSTOM_AGENT_DIR),
+          },
+        }),
     ),
   );
   const setupAuth = createDesktopSetupAuth();
@@ -231,7 +227,6 @@ export async function initializeElectronPlatform(
         secrets,
         skills: { resourcesPath },
       });
-      initPlatform({ lifecycle, agentDirectories });
       return {
         processRoots,
         globalConfigStore: configStores.global,

@@ -6,7 +6,7 @@
  * most suites need nothing else. Suites that need custom options/overrides (a
  * seeded workspace, stubbed secrets, etc.) should
  * call `setupPlatform(...)` once, at module scope or inside a `describe`,
- * instead of hand-wiring `initPlatform(...)` in a `beforeAll`/`beforeEach`.
+ * instead of hand-wiring `installFakeHost(...)` in a `beforeAll`/`beforeEach`.
  * It installs the requested platform before each test in the current suite
  * and restores the suite-default fake platform afterward, so overrides never
  * leak into later tests in the same file.
@@ -38,7 +38,6 @@ import {
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
   type LanguageModelPort,
 } from '@platform/languageModel';
-import type { Platform } from '@platform/platform';
 import { globalStorageFsLayer } from '@platform/rootedFs';
 import type { PlatformSecrets, Secrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
@@ -64,22 +63,23 @@ import {
   createFakeWorkspaceRoots,
   FakeSecrets,
   type FakeHostOverrides,
+  type FakeProcessPorts,
   type FakePlatformOptions,
 } from './FakePlatform';
 import type { Layer } from 'effect';
 
 /**
- * A process platform and the workspace roots installed beside it, plus the
+ * A host's process ports and the workspace roots installed beside them, plus the
  * setup platform a setup-tool suite provides (absent on every other host:
  * a setup-tool call there is a test error).
  */
 export interface FakeHost {
-  readonly platform: Platform;
+  readonly platform: FakeProcessPorts;
   readonly roots: WorkspaceRoots;
   /** The store the host's `Secrets` service reads, as a root's own local. */
   readonly secrets: PlatformSecrets;
   /** The two ports a real root hands `installProcessRuntime`, held here as
-   *  its own locals because the platform object carries no copy. */
+   *  its own locals. */
   readonly agentResume: AgentResumePort;
   readonly languageModel: LanguageModelPort;
   readonly setup?: SetupPlatformShape;
@@ -375,18 +375,15 @@ export function fakeProcessServices(): FakeProcessServicesLayer {
 }
 
 /**
- * Installs a fake host right now. `initPlatform` is restricted to composition
- * roots by lint, so this is the one place test helpers reach for it; suites
- * needing an ad hoc, one-off install (rather than the standard per-test
- * `setupPlatform` wiring below) call this instead.
+ * Installs a fake host right now. Suites needing an ad hoc, one-off install
+ * (rather than the standard per-test `setupPlatform` wiring below) call this.
  *
- * Both platform modules are imported at call time, not statically: a suite
+ * The harness modules are imported at call time, not statically: a suite
  * that calls `vi.resetModules()` gets fresh module instances, and the install
  * must land in the instances the code under test will import next.
  */
 export async function installFakeHost(host: FakeHost): Promise<void> {
   const [
-    { initPlatform },
     { initTestWorkspaceRoots },
     { initTestProcessRuntime, tryTestProcessRuntime },
     { Layer, ManagedRuntime },
@@ -397,7 +394,6 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     { SetupPlatform },
     { SupabaseAuth },
   ] = await Promise.all([
-    import('@platform/platform'),
     import('@test/support/testWorkspaceRoots'),
     import('./testProcessRuntime'),
     import('effect'),
@@ -462,7 +458,6 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
       Layer.mergeAll(NodeFileSystem.layer, NodePath.layer),
     ),
   );
-  initPlatform(host.platform);
   initTestWorkspaceRoots(host.roots);
   // A bare process runtime for the Promise-facing boundaries that run
   // fibers (the loopback sign-in). The session graph family is not installed

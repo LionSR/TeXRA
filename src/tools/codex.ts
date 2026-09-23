@@ -36,6 +36,7 @@ import { createLog } from '@logger/logUtils';
 import type { AgentResume } from '@platform/interfaces';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type {
+  CodexApprovalPolicy,
   RunId,
   TodoItem,
   ToolResult,
@@ -48,8 +49,10 @@ import {
   ToolError,
 } from '@shared/schemas';
 import { DELIVERY_TAG } from '@shared/deliveryTags';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { buildSyntheticToolUseConfig } from '@tools/core/syntheticAgentConfig';
 import { parseWorkingDirectory } from '@tools/pathResolution';
+import { readSettingFrom } from '@utils/config/platformSettings';
 import { formatWallTimeSeconds, previewLabel } from '@utils/text/stringUtils';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -102,9 +105,9 @@ import type {
 
 // The sandbox-mode schema is imported eagerly from `@shared` (a light,
 // dependency-free leaf) since it is used at module level by the input schema.
-// All other config (model, reasoning, sandbox getter) is lazy-imported from
-// codexConfig.ts at runtime to avoid pulling the heavy platform/SDK graph into
-// the tool-registration path.
+// The model and reasoning config are lazy-imported from codexConfig.ts at
+// runtime, off the tool-registration path. Setting reads are schema-typed and
+// land in SDK-typed fields, so a value the Codex union rejects fails to compile.
 
 // ============================================================================
 // Schema
@@ -434,13 +437,14 @@ const createCodexThread = Effect.fn('codex.createCodexThread')(function* (
       : {};
   // Probe Extra High support only when that tier is selected so other
   // efforts do not wait on a slow or hung Codex binary.
-  const requestedEffort = yield* config.getCodexCliReasoningEffort(
-    roots.workspaceState,
-  );
+  const requestedEffort = yield* config.getCodexCliReasoningEffort(roots);
   const threadOptions: ThreadOptions = {
     ...workspace,
     sandboxMode,
-    approvalPolicy: yield* config.getCodexApprovalPolicy(roots.workspaceState),
+    approvalPolicy: yield* readSettingFrom<CodexApprovalPolicy>(
+      roots,
+      WorkspaceStateKey.CODEX_APPROVAL_POLICY,
+    ),
     model: config.CODEX_CLI_MODEL,
     modelReasoningEffort:
       requestedEffort === 'xhigh'
@@ -473,10 +477,7 @@ const runCodex = Effect.fn('CodexTool.run')(function* (
   ToolCall | Runs | AgentResume
 > {
   const toolCall = yield* ToolCall;
-  const sandboxMode = yield* codexSandboxMode(
-    input,
-    toolCall.roots.workspaceState,
-  );
+  const sandboxMode = yield* codexSandboxMode(input, toolCall.roots);
 
   return yield* dispatchAgentCliTool({
     toolCall,
@@ -515,8 +516,8 @@ export const CodexTool = defineTool({
   schema: CodexInputSchema,
   guard: {
     bash: (input: CodexInput) =>
-      agentCliApprovalCommand(CODEX_AGENT_NAME, input.prompt, (state) =>
-        codexSandboxMode(input, state),
+      agentCliApprovalCommand(CODEX_AGENT_NAME, input.prompt, (stores) =>
+        codexSandboxMode(input, stores),
       ),
     // A resumed thread keeps its stored workspace: name none, not the wrong one.
     cwd: 'unknown',

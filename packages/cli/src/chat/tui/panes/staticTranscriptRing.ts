@@ -1,18 +1,13 @@
 // The bounded static-scrollback ring behind `StaticConversationTranscript`:
-// what the retained tail contains (session header, finalized entries,
-// duplicate-row markers), what it costs in rows and bytes, and how an
-// incremental tick advances it. Everything here is plain data over the
-// transcript fold — no React, no Ink — so the component file holds only the
-// component.
+// what the retained tail contains (session header and finalized entries),
+// what it costs in rows and bytes, and how an incremental tick advances it.
+// Everything here is plain data over the transcript fold — no React, no Ink —
+// so the component file holds only the component.
 
-import { randomUUID } from 'node:crypto';
-
-import { createLog } from '@logger/logUtils';
 import type { RunPhase } from '@shared/schemas';
 import { getModelLabel } from '@shared/model/modelLabel';
 import type { RunLabels } from '@shared/tools/executionsDisplay';
-import { transcriptText, type TranscriptRow } from '@ui/transcript';
-import { createBoundedIdSet } from '@utils/core/boundedIdSet';
+import type { TranscriptRow } from '@ui/transcript';
 
 import {
   incrementalStaticTranscriptEntries,
@@ -589,70 +584,6 @@ interface StaticTranscriptBuildResult {
   readonly trimmed: boolean;
 }
 
-const log = createLog('StaticConversationTranscript');
-/** Row ids already logged as duplicates: a collision that persists is marked
- *  again on every rebuild but logged once. */
-const duplicateRowIdsLogged = createBoundedIdSet(1000);
-/** A per-process token, not a fixed string: entry ids are wire content with
- *  no format constraint, so a literal prefix alone is an id an upstream
- *  producer could reproduce. */
-const DUPLICATE_ROW_MARKER_PREFIX = `duplicate-row-warning:${randomUUID()}:`;
-
-/**
- * The items `entries` add to a list already holding `existing`: each row whose
- * id is new, then one marker row per repeated id. `upsertRow` (sessionFold) and
- * the local-notice counter (`transcript.ts`) both guarantee unique ids, so a
- * repeat means one of those broke upstream. The marker is shaped like a local
- * notice and appended at the tail, the last thing the ring would trim; it is
- * what an interactive user sees, since the TUI installs a silent log sink
- * (`runChatTui` forces `quietLogs`), so the `log.warn` only reaches other
- * hosts. A marker's id derives from its source id, so a collision already
- * marked in `existing` is not marked twice, while one the ring trimmed away can
- * reappear. A full rebuild passes an empty `existing`.
- */
-function dedupedEntryItems(
-  entries: readonly TranscriptRow[],
-  existing: readonly StaticTranscriptItem[],
-): StaticTranscriptItem[] {
-  if (entries.length === 0) return [];
-  const taken = new Set(existing.map((item) => item.id));
-  const accepted: StaticTranscriptItem[] = [];
-  const markers: StaticTranscriptItem[] = [];
-  for (const entry of entries) {
-    if (!taken.has(entry.id)) {
-      taken.add(entry.id);
-      accepted.push({ id: entry.id, kind: 'entry', entry });
-      continue;
-    }
-    const markerId = `${DUPLICATE_ROW_MARKER_PREFIX}${entry.id}`;
-    if (taken.has(markerId)) continue;
-    taken.add(markerId);
-    markers.push({
-      id: markerId,
-      kind: 'entry',
-      entry: {
-        id: markerId,
-        origin: 'local',
-        timestamp: Date.now(),
-        level: 'error',
-        kind: 'error',
-        summary: transcriptText(
-          `Duplicate transcript row id (kind ${entry.kind}); dropped a repeat. This points at an upsert or local-notice bug upstream.`,
-        ),
-        details: [],
-        detailText: transcriptText(''),
-      },
-    });
-    if (!duplicateRowIdsLogged.has(entry.id)) {
-      duplicateRowIdsLogged.add(entry.id);
-      log.warn(
-        `Duplicate transcript row id ${entry.id} (kind ${entry.kind}); dropping the repeat. Row ids should be unique — this points at an upsert or local-notice bug upstream.`,
-      );
-    }
-  }
-  return [...accepted, ...markers];
-}
-
 export function buildStaticTranscriptItems(
   options: BuildStaticTranscriptItemsOptions,
 ): StaticTranscriptBuildResult {
@@ -677,17 +608,15 @@ export function buildStaticTranscriptItems(
     source,
     width,
   });
-  const items: StaticTranscriptItem[] = [
-    ...header.items,
-    ...dedupedEntryItems(
-      orderedStaticTranscriptEntries(
-        source.entries ?? [],
-        source.settledRows,
-        source.status,
-      ),
-      [],
-    ),
-  ];
+  const items: StaticTranscriptItem[] = [...header.items];
+  for (const entry of orderedStaticTranscriptEntries(
+    source.entries ?? [],
+    source.settledRows,
+    source.status,
+  )) {
+    items.push({ id: entry.id, kind: 'entry', entry });
+  }
+
   const retained = retainedStaticTranscriptTail(items, {
     budgets: ringBudgets,
     runLabels,
@@ -905,7 +834,8 @@ export function advanceStaticTranscriptState(
     bytes: nextByteCount,
   });
   let aboveMarginBottomRows = itemMarginBottomRows(nextItems.at(-1));
-  for (const item of dedupedEntryItems(plan.appended, nextItems)) {
+  for (const entry of plan.appended) {
+    const item: StaticTranscriptItem = { id: entry.id, kind: 'entry', entry };
     const metrics = staticTranscriptItemMetrics(item, width, runLabels);
     totals.insert(aboveMarginBottomRows, metrics, undefined);
     aboveMarginBottomRows = metrics.marginBottomRows;

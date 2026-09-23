@@ -63,7 +63,6 @@ import {
   AgentResumeFailed,
   type RecoveryContinuation,
 } from '@platform/interfaces';
-import type { Platform } from '@platform/platform';
 import { withProcessServices } from '@platform/processRuntime';
 import {
   RUN_OUTCOME,

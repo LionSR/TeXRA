@@ -11,12 +11,15 @@ import { readSettingFrom } from '@utils/config/platformSettings';
  * run is being stopped, so a settings change takes effect immediately and a
  * process holding several papers answers for the right one.
  *
- * This owns the policy for the *configured* stop surfaces, in every host: the
- * extension and desktop progress-view stream stop, the extension review-run
- * stop, the CLI root-run interrupt (Ctrl-C) and TUI kill action, and the
- * orchestrator `executions` kill tool. Two stop paths deliberately do not
- * consult it, and each declares that at its own call site rather than reading
- * a default:
+ * This owns the policy for the *configured* stop surfaces, in every host. Two
+ * callers read it: the session request handler's `run.stop` arm, which
+ * resolves a request that leaves `detachActiveChildren` unset (the extension
+ * and desktop progress-view stream stop, the extension review-run stop, the
+ * CLI root-run interrupt (Ctrl-C) and TUI kill action), and the orchestrator
+ * `executions` kill tool, which kills through `Runs` directly because it
+ * reports whether the kill was accepted. Two stop paths deliberately do not
+ * consult it, and each declares an explicit value at its own call site
+ * rather than reading a default:
  *
  * - Bare Escape in the CLI TUI is a focus-scoped gesture — "stop only the
  *   focused stream" — so `stopRun` always detaches descendants instead of

@@ -40,7 +40,7 @@ import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
  * conversation, inherit a bypass its predecessor turned on, without a
  * one-shot copy that misses toggles made after the child/round was created.
  */
-export interface RunApprovalBypass {
+interface RunApprovalBypass {
   isBypassed(runId: RunId): boolean;
   /**
    * Set bypass for a run. Publishes the run's new `approval.policy` snapshot

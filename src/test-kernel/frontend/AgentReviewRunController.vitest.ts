@@ -11,19 +11,13 @@ import {
   type AgentReviewRunToken,
 } from '@frontend/review/AgentReviewRunController';
 import type { RunId } from '@shared/schemas';
-import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 
 function createRunHarness() {
-  const stopAgentRun = vi.fn(() => Effect.void);
+  const stopRequest = vi.fn(() => Effect.succeed({ kind: 'done' }));
   let currentHandle: AgentRunHandle | undefined;
   const session = {
-    // The setting the controller reads when it stops a run is this session's:
-    // the installed fake host's stores, as the real handle would carry them.
-    roots: testWorkspaceRoots(),
-    runs: {
-      getHandle: () => currentHandle,
-      stopAgentRun,
-    },
+    runs: { getHandle: () => currentHandle },
+    requests: { request: stopRequest },
   } as unknown as SessionHandle;
   const bind = (
     controller: AgentReviewRunController,
@@ -35,7 +29,7 @@ function createRunHarness() {
     Effect.runSync(controller.bind(run, handle));
     return handle;
   };
-  return { bind, session, stopAgentRun };
+  return { bind, session, stopRequest };
 }
 
 function startBoundRun(
@@ -71,9 +65,9 @@ describe('AgentReviewRunController', () => {
     expect(controller.isActive).toBe(true);
     harness.bind(controller, run, 'review-a' as RunId);
 
-    expect(harness.stopAgentRun).toHaveBeenCalledOnce();
+    expect(harness.stopRequest).toHaveBeenCalledOnce();
     expect(stopReview(controller)).toBe(false);
-    expect(harness.stopAgentRun).toHaveBeenCalledOnce();
+    expect(harness.stopRequest).toHaveBeenCalledOnce();
     expect(controller.isActive).toBe(true);
     expect(controller.finish(run)).toBe(true);
     expect(controller.isActive).toBe(false);
@@ -90,8 +84,8 @@ describe('AgentReviewRunController', () => {
 
     expect(controller.finish(runA)).toBe(false);
     expect(stopReview(controller)).toBe(true);
-    expect(first.stopAgentRun).not.toHaveBeenCalled();
-    expect(second.stopAgentRun).toHaveBeenCalledOnce();
+    expect(first.stopRequest).not.toHaveBeenCalled();
+    expect(second.stopRequest).toHaveBeenCalledOnce();
   });
 
   it('carries the collection only while the run is current', () => {
@@ -119,7 +113,7 @@ describe('AgentReviewRunController', () => {
 
       yield* controller.discard();
 
-      expect(harness.stopAgentRun).toHaveBeenCalledOnce();
+      expect(harness.stopRequest).toHaveBeenCalledOnce();
       // The run settles on its own schedule, so the slot stays claimed
       // while its results and any further reports are dropped.
       expect(controller.isActive).toBe(true);

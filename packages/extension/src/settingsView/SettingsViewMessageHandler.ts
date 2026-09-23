@@ -81,10 +81,7 @@ import type {
   DerivedSettingsSnapshot,
   SettingsMessageFor,
 } from '@shared/settingsView/settingsViewMessages';
-import {
-  SettingsViewInboundMessageSchema,
-  SETTINGS_VIEW_CMD,
-} from '@shared/settingsView/settingsViewMessages';
+import { SettingsViewInboundMessageSchema } from '@shared/settingsView/settingsViewMessages';
 
 import {
   applyStateSettingUpdate,
@@ -449,7 +446,7 @@ export class SettingsViewMessageHandler {
   }
 
   private handleRunToolCommand(
-    data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.RUN_TOOL_COMMAND>,
+    data: SettingsMessageFor<typeof SETTINGS_VIEW_COMMANDS.RUN_TOOL_COMMAND>,
   ): void {
     const action = planToolTerminalAction({
       toolId: data.toolId,

@@ -239,7 +239,7 @@ function executeWorkflowScriptTool(
   input: WorkflowScriptToolInput,
 ): Effect.Effect<ToolResult, Error, ToolServices> {
   return Effect.gen(function* () {
-    const parent = requireDelegationParent(
+    const parent = yield* requireDelegationParent(
       'delegate_multi_agents',
       yield* ToolCall,
     );

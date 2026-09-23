@@ -6,15 +6,13 @@ import {
   buildToolDashboardItems,
   planToolTerminalAction,
 } from '@controllers/settingsView/ToolDashboardData';
-import type { ConfigProvider } from '@platform/interfaces';
+import type { ConfigProvider, StateStore } from '@platform/interfaces';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type {
   ToolCommandKind,
   ToolDashboardItem,
 } from '@shared/settingsView/settingsViewMessages';
-import { buildSettingsSnapshotMessage } from '@shared/settingsView/handlers/settingsSnapshot';
-import type { SettingsStatePorts } from '@shared/settingsView/types';
 import { unsupported } from '@shared/utils/dispatcher';
 import type { ToolProbeInputs } from '@tools/externalToolDefs';
 import {
@@ -43,8 +41,9 @@ type DesktopLatexHandlers = Pick<
   | typeof SETTINGS_VIEW_COMMANDS.RUN_INSTALL_COMMAND
 >;
 
-interface DefaultDesktopToolingSettingsControllerOptions extends SettingsStatePorts {
+interface DefaultDesktopToolingSettingsControllerOptions {
   readonly config: ConfigProvider;
+  readonly globalState: StateStore;
   /** The active paper's workspace folder, for the probes that need one. */
   readonly workspaceRoot: string | undefined;
   readonly runtime: ProcessRuntime;
@@ -61,7 +60,6 @@ interface DefaultDesktopToolingSettingsControllerOptions extends SettingsStatePo
 export interface DesktopToolingSettingsController {
   readonly toolHandlers: DesktopToolHandlers;
   readonly latexHandlers: DesktopLatexHandlers;
-  postLatexConfigValues(): Effect.Effect<void, Error>;
   postStartupData(): Effect.Effect<void, Error, ProcessServices>;
   /**
    * Releases the app-signal subscription. Scoped to the window that built this
@@ -113,21 +111,6 @@ export class DefaultDesktopToolingSettingsController implements DesktopToolingSe
 
   dispose(): void {
     this.unsubscribeToolAvailability();
-  }
-
-  postLatexConfigValues(): Effect.Effect<void, Error> {
-    return Effect.map(
-      buildSettingsSnapshotMessage(
-        'latex',
-        {
-          config: this.options.config,
-          workspaceState: this.options.workspaceState,
-          globalState: this.options.globalState,
-        },
-        'desktop',
-      ),
-      (message) => this.options.renderer.postToRenderer(message),
-    );
   }
 
   postStartupData(): Effect.Effect<void, Error, ProcessServices> {

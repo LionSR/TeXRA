@@ -25,8 +25,11 @@ import * as path from 'node:path';
 import { Effect } from 'effect';
 
 import { isModuleNotFoundError } from '@common/errors';
-import type { StateStore, StateReadFailed } from '@platform/interfaces';
+import type { StateReadFailed } from '@platform/interfaces';
+import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { ClaudeAgentPermissionMode } from '@shared/schemas';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { readSettingFrom } from '@utils/config/platformSettings';
 import { ensureError } from '@utils/errors/errorMessage';
 import { IS_WINDOWS } from '@utils/system/platformPaths';
 import {
@@ -169,10 +172,11 @@ export const getClaudeAgentConfig = Effect.promise(
  */
 export const claudeAgentPermissionMode = (
   input: { readonly permission_mode?: ClaudeAgentPermissionMode | null },
-  workspaceState: StateStore,
+  stores: SettingsStores,
 ): Effect.Effect<ClaudeAgentPermissionMode, StateReadFailed> =>
-  Effect.flatMap(getClaudeAgentConfig, (config) =>
-    input.permission_mode == null
-      ? config.getClaudeAgentPermissionMode(workspaceState)
-      : Effect.succeed(input.permission_mode),
-  );
+  input.permission_mode == null
+    ? readSettingFrom<ClaudeAgentPermissionMode>(
+        stores,
+        WorkspaceStateKey.CLAUDE_AGENT_PERMISSION_MODE,
+      )
+    : Effect.succeed(input.permission_mode);

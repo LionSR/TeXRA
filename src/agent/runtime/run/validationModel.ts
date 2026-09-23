@@ -15,7 +15,7 @@
  * defined to `''`, so {@link shouldUseInternalValidationModel} constant-folds
  * to `return false`, and the build aliases this whole module to a stub so no
  * canned output ships. The reads stay lazy (evaluated at call time, not module
- * load) so they happen after `initPlatform()` and can be overridden between
+ * load) so they happen after the host is composed and can be overridden between
  * test cases.
  */
 import { readFileSync } from 'node:fs';

@@ -9,14 +9,12 @@ import {
   tryDefaultSession,
   type SessionHandle,
 } from '@agent/runtime';
-import type { SupabaseSessionLog } from '@auth/SupabaseSession';
 import { bootstrapHost } from '@controllers/hostBootstrap';
+import { openProjectStateStore } from '@controllers/session/appStateStore';
 import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { consoleLogSink, setLogSink, silentLogSink } from '@logger/logSink';
-import { initPlatform, tryPlatform, type Platform } from '@platform/platform';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
-  AgentDirectories,
   AppState,
   Lifecycle,
   type LifecycleHost,
@@ -31,9 +29,11 @@ import {
 } from '@platform/processRuntime';
 import { createNodeWorkspaceRoots } from '@platform/defaults/nodeHost';
 import { DEFAULT_NODE_STORAGE_ROOT } from '@platform/defaults/nodeStorage';
-import { resolveGlobalStoragePath } from '@platform/defaults/workspaceStorage';
+import {
+  resolveGlobalStoragePath,
+  WorkspaceStorageProvider,
+} from '@platform/defaults/workspaceStorage';
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import type { LogLevel } from '@shared/schemas';
 import type { SessionOpenError } from '@shared/session/database';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { registerRuntimeShutdownHandlers } from '@tools/agentCliSessionStores';
@@ -51,13 +51,9 @@ import {
   flushTextStderr,
   writeTextStderr,
 } from './logSinks';
-import { initializeCliSupabaseAuth } from './supabaseAuth';
-import { openCliWorkspaceState } from './cliStateStores';
 import { CliExitCode } from './exitCodes';
 import type { CliContext } from './cliContext';
 
-let supabaseAuthInitialized = false;
-let quietPlatformLogs = false;
 type CliShutdownSignal = 'SIGINT' | 'SIGTERM';
 // Removers for the listeners installCliShutdownSignalHandlers put on the
 // process — kept so handOffCliShutdownSignalHandlers can remove exactly those
@@ -67,8 +63,8 @@ type CliShutdownSignal = 'SIGINT' | 'SIGTERM';
 let shutdownHandlers: DisposableStore | undefined;
 // The one memoized open of the process session (`CliPlatformServices.session`),
 // built by the first init beside the roots it installs; undefined only when
-// another root installed the platform before this init ran (a test harness's
-// fake host), in which case the session is whichever one that root opened.
+// another root opened the process session before this init ran (a test
+// harness's fake host), in which case the session is that one.
 let sessionOpen: Effect.Effect<SessionHandle, SessionOpenError> | undefined;
 
 type CliPlatformInitOptions = Pick<
@@ -82,59 +78,46 @@ type CliPlatformInitOptions = Pick<
 /**
  * The platform services the CLI entry points read immediately after init.
  *
- * `initCliPlatform` already holds the whole `Platform` it just built (or the
- * one an earlier init installed), so it hands these capabilities back instead of
- * leaving each caller to re-enter the ambient `platform()` singleton for a
- * value the composition root was holding all along.
+ * `initCliPlatform` already holds every one of them, from the runtime it
+ * installed or joined and the roots it built (or an earlier init built), so
+ * it hands them back instead of leaving each caller to look them up again.
  */
-export type CliPlatformServices = Pick<Platform, 'lifecycle'> &
-  SettingsStores & {
-    /**
-     * The one Effect runtime of this process, built (or joined) by this root:
-     * every entry point runs its programs on it and threads it to the modules
-     * that run programs at a Promise edge, instead of looking it up.
-     */
-    readonly runtime: ProcessRuntime;
-    /** The process's cross-workspace storage root, from the roots built below. */
-    readonly globalStorage: string;
-    /**
-     * The stores this root opened, handed over rather than read back. `config`,
-     * `workspaceState` and `globalState` are the three slots a catalog setting
-     * resolves against, so a read or write through `readSettingFrom` /
-     * `writeSettingTo` answers for this process's project, from the record
-     * the caller holds rather than any process-wide lookup.
-     */
-    readonly secrets: PlatformSecrets;
-    /**
-     * The process roots this init installed: one process, one project (the
-     * `--cwd` workspace) -- or, when another root installed the platform
-     * before this init ran (a test harness's fake host), the roots that
-     * root's process session was opened over. A process with neither is a
-     * composition defect the init refuses below, so every caller gets roots
-     * rather than branching on their absence.
-     */
-    readonly roots: WorkspaceRoots;
-    /**
-     * The process session over the process roots: one CLI process, one
-     * project, one persistent session, opened by the first entry point that
-     * runs this Effect (`chat`, `run`, `resume`, `history`) and
-     * handed to every later one as the same handle. `auth`, `doctor`,
-     * `models`, `skills`, `tools` and `init` never run it, so a storage root
-     * nothing can write to fails a command only when it asks for a transcript.
-     */
-    readonly session: Effect.Effect<SessionHandle, SessionOpenError>;
-  };
-
-function logAt(level: LogLevel, channel: string, message: string): void {
-  if (quietPlatformLogs) return;
-  writeTextStderr(`[${level}] [${channel}] ${message}`);
-}
-
-const cliPlatformLog: SupabaseSessionLog = {
-  debug: (channel, message) => logAt('debug', channel, message),
-  info: (channel, message) => logAt('info', channel, message),
-  warn: (channel, message) => logAt('warn', channel, message),
-  error: (channel, message) => logAt('error', channel, message),
+export type CliPlatformServices = SettingsStores & {
+  /** The process runtime's `Lifecycle`: the host every exit path drains. */
+  readonly lifecycle: LifecycleHost;
+  /**
+   * The one Effect runtime of this process, built (or joined) by this root:
+   * every entry point runs its programs on it and threads it to the modules
+   * that run programs at a Promise edge, instead of looking it up.
+   */
+  readonly runtime: ProcessRuntime;
+  /** The process's cross-workspace storage root, from the roots built below. */
+  readonly globalStorage: string;
+  /**
+   * The stores this root opened, handed over rather than read back. `config`,
+   * `workspaceState` and `globalState` are the three slots a catalog setting
+   * resolves against, so a read or write through `readSettingFrom` /
+   * `writeSettingTo` answers for this process's project, from the record
+   * the caller holds rather than any process-wide lookup.
+   */
+  readonly secrets: PlatformSecrets;
+  /**
+   * The process roots this init installed: one process, one project (the
+   * `--cwd` workspace) -- or, when another root opened the process session
+   * before this init ran (a test harness's fake host), the roots that
+   * session was opened over. A process with neither builds its own, so
+   * every caller gets roots rather than branching on their absence.
+   */
+  readonly roots: WorkspaceRoots;
+  /**
+   * The process session over the process roots: one CLI process, one
+   * project, one persistent session, opened by the first entry point that
+   * runs this Effect (`chat`, `run`, `resume`, `history`) and
+   * handed to every later one as the same handle. `auth`, `doctor`,
+   * `models`, `skills`, `tools` and `init` never run it, so a storage root
+   * nothing can write to fails a command only when it asks for a transcript.
+   */
+  readonly session: Effect.Effect<SessionHandle, SessionOpenError>;
 };
 
 /**
@@ -228,7 +211,7 @@ export function setCliHelperModel(
 }
 
 /** The process roots the first init installed; later inits return them
- *  beside the already-installed platform. */
+ *  rather than building a second set. */
 let installedRoots: WorkspaceRoots | undefined;
 
 /**
@@ -255,10 +238,9 @@ export function initCliPlatform(
     Pick<CliContext, 'quietLogs' | 'minimumLogLevel'>,
 ): Effect.Effect<CliPlatformServices, Error> {
   return Effect.gen(function* () {
-    quietPlatformLogs = context.quietLogs;
     // The terminal is the operator's own, so entries reach it unredacted — the
     // contract `logSinks.ts` documents for CLI output.
-    setLogSink(quietPlatformLogs ? silentLogSink : consoleLogSink, {
+    setLogSink(context.quietLogs ? silentLogSink : consoleLogSink, {
       trusted: true,
     });
 
@@ -282,38 +264,45 @@ export function initCliPlatform(
     // state store comes from its own context, and on the first init everything
     // below runs in the same fiber rather than as a chain of separate runs.
     //
-    // Double init is the normal path (every command runs this), so the
-    // already-installed platform is the value returned on the second and later
-    // calls; the first call keeps the one it builds below.
+    // Double init is the normal path (every command runs this), so the roots
+    // an earlier init installed (or, beside a test harness's fake host, the
+    // process session it opened) are what the second and later calls find;
+    // the first call builds them below.
     //
     // A step that fails after the runtime exists (a store that will not open, a
     // seed that will not write) must not leave the runtime installed with
     // nothing registered to dispose it: the failure disposes it and is
     // re-raised, so the caller reports the cause rather than a half-built
-    // platform. Keep the platform, roots, and lazy session private until the
-    // fallible setup has succeeded: their ports have no reset operation.
-    const { globalState, platform: services } = yield* withProcessServices(
+    // platform. Keep the roots and lazy session private until the fallible
+    // setup has succeeded: their ports have no reset operation.
+    const { globalState, lifecycle, roots } = yield* withProcessServices(
       runtime,
       Effect.gen(function* () {
         const globalState = yield* AppState;
-        const installed = tryPlatform();
-        if (installed) return { globalState, platform: installed };
+        // The process lifecycle is the value the runtime install built, so
+        // nothing here builds a second copy beside the runtime's.
+        const lifecycle = yield* Lifecycle;
+        // The three setting slots this process answers a catalog row from:
+        // the roots an earlier init built, or -- when another root opened the
+        // process session before this init ran (a test harness's fake host)
+        // -- the roots that session was opened over, which is where `session`
+        // below already looks.
+        const joined = installedRoots ?? tryDefaultSession()?.roots;
+        if (joined) return { globalState, lifecycle, roots: joined };
 
         const projectScope = yield* Scope.make();
         const closeProject = Scope.close(projectScope, Exit.void);
         return yield* Effect.gen(function* () {
-          const stateStores = yield* openCliWorkspaceState({
-            storageRoot: context.storageRoot,
-            workspacePath: context.cwd,
-          }).pipe(Scope.provide(projectScope));
-          // The process lifecycle and agent directories are the values the
-          // runtime install built before the platform init: the platform
-          // publishes the same instances, so nothing here re-enters the ambient
-          // locator or builds a second copy beside the runtime's.
-          const lifecycle = yield* Lifecycle;
-          const agentDirectories = yield* AgentDirectories;
+          // The project's `texra.db` lives in its storage directory and is
+          // owned by the project scope; AppState (global) is the runtime's.
+          const storage = new WorkspaceStorageProvider(
+            context.storageRoot ?? DEFAULT_NODE_STORAGE_ROOT,
+            context.cwd,
+          );
+          const workspaceState = yield* openProjectStateStore(
+            storage.getStoragePath(),
+          ).pipe(Scope.provide(projectScope));
           const cliSecrets = getCliSecrets(context.storageRoot);
-          const platform: Platform = { lifecycle, agentDirectories };
           // One process, one project: the process roots are the `--cwd` workspace,
           // over the config provider the startup read already opened — the project
           // `.texra/config.json` (or the internal workspace store, when that file
@@ -322,10 +311,10 @@ export function initCliPlatform(
           // what keeps a value `texra config` writes readable at the next startup.
           const roots = createNodeWorkspaceRoots({
             workspacePath: context.cwd,
-            storage: stateStores.storage.getStoragePath(),
-            globalStorage: stateStores.storage.getGlobalStoragePath(),
+            storage: storage.getStoragePath(),
+            globalStorage: storage.getGlobalStoragePath(),
             config: context.config,
-            workspaceState: stateStores.workspaceState,
+            workspaceState,
             globalState,
           });
           // The one open of the process session, over the roots published below,
@@ -359,11 +348,11 @@ export function initCliPlatform(
             ),
           );
 
-          // Everything this process installs once beside its platform, in the
-          // order the shared bootstrap owns for all three hosts. Before
-          // `initPlatform` below, not after: its one fallible step (the
-          // first-install tool seed) must fail while the platform is still
-          // private, as the seed did when this body owned it.
+          // Everything this process installs once beside its roots, in the
+          // order the shared bootstrap owns for all three hosts. Before the
+          // roots are published below, not after: its one fallible step (the
+          // first-install tool seed) must fail while they are still private,
+          // as the seed did when this body owned it.
           yield* bootstrapHost({
             host: 'cli',
             roots,
@@ -394,13 +383,12 @@ export function initCliPlatform(
             ],
           });
 
-          initPlatform(platform);
           installedRoots = roots;
           sessionOpen = openSession;
           if (context.installSignalHandlers !== false) {
             installCliShutdownSignalHandlers(lifecycle);
           }
-          return { globalState, platform };
+          return { globalState, lifecycle, roots };
         }).pipe(
           Effect.onExit((exit) =>
             Exit.isFailure(exit) ? closeProject : Effect.void,
@@ -413,25 +401,12 @@ export function initCliPlatform(
     // process-wide singleton: the secret store is the same stateless view over
     // this process's storage root the composition block installed, and the
     // application state is the store that install opened before it.
-    // The three setting slots this process answers a catalog row from: the
-    // roots this init built, or — when another root installed the platform
-    // before this init ran (a test harness's fake host) — the roots that
-    // root's process session was opened over, which is where `session` below
-    // already looks. There is no process-wide roots record to reach for, so a
-    // process with neither is a composition defect rather than a silently
-    // wrong project.
-    const settingSlots = installedRoots ?? tryDefaultSession()?.roots;
-    if (!settingSlots) {
-      throw new Error(
-        'The CLI platform was installed by another root that opened no process session, so the CLI has no workspace roots to read its settings from.',
-      );
-    }
     const cliServices: CliPlatformServices = {
       runtime,
-      config: settingSlots.config,
-      workspaceState: settingSlots.workspaceState,
+      config: roots.config,
+      workspaceState: roots.workspaceState,
       // The pure path calculator over this process's storage root (no mkdir),
-      // so every CLI entry, including the ones that find the platform already
+      // so every CLI entry, including the ones that find the roots already
       // installed, names one root without touching the filesystem again.
       globalStorage: resolveGlobalStoragePath(
         context.storageRoot ?? DEFAULT_NODE_STORAGE_ROOT,
@@ -446,18 +421,13 @@ export function initCliPlatform(
             ? Effect.succeed(opened)
             : Effect.die(
                 new Error(
-                  'The CLI platform was installed by another root and no process session is open.',
+                  'The CLI process session was opened by another root and is no longer open.',
                 ),
               );
         }),
-      lifecycle: services.lifecycle,
-      roots: settingSlots,
+      lifecycle,
+      roots,
     };
-
-    if (!supabaseAuthInitialized) {
-      initializeCliSupabaseAuth(cliServices.secrets, cliPlatformLog);
-      supabaseAuthInitialized = true;
-    }
 
     return cliServices;
   });

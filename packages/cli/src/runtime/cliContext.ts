@@ -20,14 +20,11 @@ import {
   type CliOutputFormat,
 } from '@shared/schemas';
 import type { SkillSourceOptions } from '@skills/skillSources';
+import { readConfigSettingFrom } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { isNonEmptyString } from '@utils/text/stringUtils';
 
-import {
-  isCliSupportedModelId,
-  loadCliStartupConfig,
-  readCliConfigSetting,
-} from './cliConfig';
+import { isCliSupportedModelId, loadCliStartupConfig } from './cliConfig';
 import { resolveCliResourcesPath } from './resourcesPath';
 import type { Stats } from 'node:fs';
 
@@ -412,7 +409,7 @@ export const buildCliContext = Effect.fn('cliContext.buildCliContext')(
             parseTexraApprovalPolicy,
             configWarnings,
           ) ??
-          readCliConfigSetting<TexraApprovalPolicy>(
+          readConfigSettingFrom<TexraApprovalPolicy>(
             config,
             TEXRA_APPROVAL_POLICY_CONFIG_KEY,
           )));
@@ -427,7 +424,7 @@ export const buildCliContext = Effect.fn('cliContext.buildCliContext')(
             : undefined,
         configWarnings,
       ) ??
-      readCliConfigSetting<CliOutputFormat>(
+      readConfigSettingFrom<CliOutputFormat>(
         config,
         CLI_OUTPUT_FORMAT_CONFIG_KEY,
       );

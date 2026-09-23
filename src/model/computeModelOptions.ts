@@ -748,14 +748,10 @@ function buildModelOptionData(
     decision.route,
     ctx.keyStatuses,
   );
-  const optionConfig = availability.providerCapabilities
-    ? {
-        ...config,
-        contextWindow: availability.providerCapabilities.contextWindow,
-        inputPrice: availability.providerCapabilities.inputPrice,
-        outputPrice: availability.providerCapabilities.outputPrice,
-      }
-    : (availability.copilotConfig ?? config);
+  const optionConfig =
+    availability.providerCapabilities?.config ??
+    availability.copilotConfig ??
+    config;
   let reasoning: string | undefined;
   if (optionConfig.capabilities.supportsReasoning) {
     if (availability.kind === 'copilot-allowed') {

@@ -73,16 +73,6 @@ function fileListLines(row: Extract<TranscriptRow, { kind: 'fileList' }>) {
   });
 }
 
-function webSearchLines(
-  row: Extract<TranscriptRow, { kind: 'webSearch' }>,
-): string[] {
-  return row.results.map((result) => {
-    const title = result.title ?? result.url ?? '(untitled)';
-    const domain = result.domain ? ` — ${result.domain}` : '';
-    return `${title}${domain}`;
-  });
-}
-
 /**
  * The rows a transcript entry paints beneath its headline. Returns terminal-
  * safe, unwrapped lines already carrying their corner/indent gutter; the
@@ -119,11 +109,10 @@ export function transcriptRowBodyLines(
         ];
       case 'progressStatus':
         return row.detail ? elidedTextLines(row.detail, elide) : [];
-      case 'webSearch':
-        return webSearchLines(row);
       case 'assistant':
       case 'user':
       case 'tool':
+      case 'webSearch':
       case 'workflowTask':
       case 'compactionActivity':
       case 'phase':

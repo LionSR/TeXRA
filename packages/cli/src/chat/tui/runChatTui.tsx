@@ -9,7 +9,7 @@ import { Cause, Effect, Exit } from 'effect';
 import { render, type Instance as InkInstance } from 'ink';
 
 import { getVisibleAgents, loadAgents } from '@agent/index';
-import { detachSubagentsOnStop, type AgentConfig } from '@agent/runtime';
+import type { AgentConfig } from '@agent/runtime';
 import { type CliContext, readCliVersion } from '@cli/runtime/cliContext';
 import {
   firstRunSetupAgentOverride,
@@ -87,7 +87,10 @@ import {
 } from './state/sessionView';
 import { notifyStaticTranscriptErased } from './state/staticTranscriptRepaint';
 import { discoverTerminalCapabilities } from './state/terminalCapabilities';
-import { appendLocalAssistantTranscript } from './state/transcript';
+import {
+  appendLocalAssistantTranscript,
+  describeRequestError,
+} from './state/transcript';
 import { installTerminalTitleUpdates } from './terminalTitle';
 import {
   chatTuiCanInterruptActiveRun,
@@ -537,21 +540,15 @@ export async function runChat(
       onSuspend={() => exitController.handleSigtstp()}
       onKillRun={(runId) => {
         runtime.runFork(
-          Effect.gen(function* () {
-            const detachActiveChildren = yield* detachSubagentsOnStop(
-              runtimeSession.roots,
-            );
-            const stop = runtimeSession.runs.kill(runId, {
-              detachActiveChildren,
-            });
-            yield* stop.settlement;
-          }).pipe(
-            Effect.catch((error) =>
-              Effect.sync(() =>
-                appendLocalAssistantTranscript(toErrorMessage(error)),
+          runtimeSession.requests
+            .request({ kind: 'run.stop', runId })
+            .pipe(
+              Effect.catch((error) =>
+                Effect.sync(() =>
+                  appendLocalAssistantTranscript(describeRequestError(error)),
+                ),
               ),
             ),
-          ),
         );
       }}
       onWorkflowControl={(runId, action) => {

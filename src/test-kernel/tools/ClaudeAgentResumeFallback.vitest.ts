@@ -67,9 +67,6 @@ vi.mock('@agent/runtime/childRunLoop', () => ({
 }));
 
 vi.mock('@tools/claudeAgentConfig', () => ({
-  getClaudeAgentPermissionMode: () => Effect.succeed('acceptEdits'),
-  getClaudeAgentModel: () => Effect.succeed('claude-sonnet-4-6'),
-  getClaudeAgentEffort: () => Effect.succeed('high'),
   buildClaudeAgentEnv: mocks.buildClaudeAgentEnv,
 }));
 

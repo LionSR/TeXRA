@@ -10,10 +10,7 @@ import type { SettingsViewInboundHandlerRegistry } from '@controllers/settingsVi
 
 import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import {
-  SETTINGS_VIEW_CMD,
-  type SettingsMessageFor,
-} from '@shared/settingsView/settingsViewMessages';
+import type { SettingsMessageFor } from '@shared/settingsView/settingsViewMessages';
 import {
   LATEX_WORKSHOP_EXT_ID,
   normalizePlatform,
@@ -134,9 +131,9 @@ function resolveUpdateValue(
 /** The LaTeX tab's inbound arms, spread into the settings-view registry. */
 type LatexTabHandlers = Pick<
   SettingsViewInboundHandlerRegistry,
-  | typeof SETTINGS_VIEW_CMD.APPLY_LATEX_SETTINGS
-  | typeof SETTINGS_VIEW_CMD.INSTALL_LATEX_WORKSHOP
-  | typeof SETTINGS_VIEW_CMD.RUN_INSTALL_COMMAND
+  | typeof SETTINGS_VIEW_COMMANDS.APPLY_LATEX_SETTINGS
+  | typeof SETTINGS_VIEW_COMMANDS.INSTALL_LATEX_WORKSHOP
+  | typeof SETTINGS_VIEW_COMMANDS.RUN_INSTALL_COMMAND
 >;
 
 /** LaTeX settings handler delegate. */
@@ -181,7 +178,9 @@ export class LatexSettingsHandlers {
   }
 
   private handleApplyLatexSettings(
-    data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.APPLY_LATEX_SETTINGS>,
+    data: SettingsMessageFor<
+      typeof SETTINGS_VIEW_COMMANDS.APPLY_LATEX_SETTINGS
+    >,
   ) {
     return withHandlerErrorHandling(
       this.ctx,
@@ -227,7 +226,7 @@ export class LatexSettingsHandlers {
   }
 
   private handleRunInstallCommand(
-    data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.RUN_INSTALL_COMMAND>,
+    data: SettingsMessageFor<typeof SETTINGS_VIEW_COMMANDS.RUN_INSTALL_COMMAND>,
   ) {
     return Effect.sync(() => {
       if (

@@ -28,7 +28,7 @@ function requireEntry(key: string) {
  * by host (the git identity rows live in worktree-shared workspace state on
  * the extension and desktop and in `.texra/config.json` on the CLI). One
  * process is one host, so the composition root installs it once, beside
- * `initPlatform()`.
+ * `installProcessRuntime()`.
  */
 let installedHost: SettingHost | undefined;
 

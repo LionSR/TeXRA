@@ -20,7 +20,8 @@ import {
   FOLLOW_UP_WAKE_FAILED_MESSAGE,
   submitFollowUp,
 } from '@agent/followUp/ToolUseFollowUp';
-import { AgentResume, type StateStore } from '@platform/interfaces';
+import { AgentResume } from '@platform/interfaces';
+import type { SettingsStores } from '@shared/config/settingsAccess';
 import {
   emptyUsageStats,
   sumUsageStats,
@@ -377,11 +378,11 @@ const withAgentCliRun = Effect.fn('agentCliShared.withAgentCliRun')(function* <
 export const agentCliApprovalCommand = (
   agentName: string,
   prompt: string,
-  mode: (workspaceState: StateStore) => Effect.Effect<string, Error>,
+  mode: (stores: SettingsStores) => Effect.Effect<string, Error>,
 ): Effect.Effect<string, Error, ToolCall> =>
   Effect.gen(function* () {
     const { roots } = yield* ToolCall;
-    const resolved = yield* mode(roots.workspaceState);
+    const resolved = yield* mode(roots);
     return `[${agentName} ${resolved}] ${prompt}`;
   });
 

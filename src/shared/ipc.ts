@@ -4,13 +4,11 @@ export const COMMON_COMMANDS = {
   WEBVIEW_READY: 'webviewReady',
 } as const;
 
-/**
- * Settings-view command literals the schema definitions reference. Mostly
- * inbound (webview → host), plus a few outbound ones such as `SET_TAB` and the
- * auth-status updates; `SETTINGS_VIEW_COMMANDS` adds the rest of the outbound
- * set on top of these.
- */
-export const SETTINGS_VIEW_CMD = {
+/** Settings-view command literals, both directions. */
+export const SETTINGS_VIEW_COMMANDS = {
+  ...COMMON_COMMANDS,
+  // Schema-referenced: mostly inbound (webview → host), plus a few outbound
+  // ones such as `SET_TAB` and the auth-status updates.
   // Navigation commands
   SET_TAB: 'setTab',
   // Memory commands
@@ -90,13 +88,6 @@ export const SETTINGS_VIEW_CMD = {
   SET_INLINE_CRITICISM_ENABLED: 'setInlineCriticismEnabled',
   GET_GOAL_LIST: 'getGoalList',
   REVEAL_GOAL_RUN: 'revealGoalRun',
-} as const;
-
-// Settings view specific commands
-// SETTINGS_VIEW_CMD is the source of truth; outbound-only commands are added here
-export const SETTINGS_VIEW_COMMANDS = {
-  ...COMMON_COMMANDS,
-  ...SETTINGS_VIEW_CMD,
   // Outbound-only commands (backend → frontend, not schema-validated)
   UPDATE_MEMORY: 'updateMemory',
   UPDATE_MEMORY_PREVIEW: 'updateMemoryPreview',

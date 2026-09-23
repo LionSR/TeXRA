@@ -44,14 +44,17 @@ import {
 } from '@shared/schemas';
 import type {
   ClaudeAgentEffort,
+  ClaudeAgentModel,
   ClaudeAgentPermissionMode,
   RunId,
   ToolResult,
   ToolUseLog,
 } from '@shared/schemas';
 import { DELIVERY_TAG } from '@shared/deliveryTags';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { buildSyntheticToolUseConfig } from '@tools/core/syntheticAgentConfig';
 import { parseWorkingDirectory } from '@tools/pathResolution';
+import { readSettingFrom } from '@utils/config/platformSettings';
 import { linkAbortSignals } from '@utils/core';
 import {
   formatWallTimeSeconds,
@@ -540,16 +543,15 @@ const run = Effect.fn('ClaudeAgentTool.run')(function* (
   AgentCliToolFailure,
   Secrets | ToolCall | Runs | AgentResume
 > {
-  const config = yield* getClaudeAgentConfig;
-  const { workspaceState } = toolCall.roots;
-  const permissionMode = yield* claudeAgentPermissionMode(
-    input,
-    workspaceState,
-  );
+  const { roots } = toolCall;
+  const { CLAUDE_AGENT_MODEL, CLAUDE_AGENT_EFFORT } = WorkspaceStateKey;
+  const permissionMode = yield* claudeAgentPermissionMode(input, roots);
   const model =
-    input.model ?? (yield* config.getClaudeAgentModel(workspaceState));
+    input.model ??
+    (yield* readSettingFrom<ClaudeAgentModel>(roots, CLAUDE_AGENT_MODEL));
   const effort =
-    input.effort ?? (yield* config.getClaudeAgentEffort(workspaceState));
+    input.effort ??
+    (yield* readSettingFrom<ClaudeAgentEffort>(roots, CLAUDE_AGENT_EFFORT));
   const sessionId = input.session_id ?? undefined;
   const isFork = input.fork_session === true;
 
@@ -596,8 +598,8 @@ export const ClaudeAgentTool = defineTool({
   schema: ClaudeAgentInputSchema,
   guard: {
     bash: (input: ClaudeAgentInput) =>
-      agentCliApprovalCommand(CLAUDE_AGENT_NAME, input.prompt, (state) =>
-        claudeAgentPermissionMode(input, state),
+      agentCliApprovalCommand(CLAUDE_AGENT_NAME, input.prompt, (stores) =>
+        claudeAgentPermissionMode(input, stores),
       ),
   },
   execute: executeClaudeAgentTool,

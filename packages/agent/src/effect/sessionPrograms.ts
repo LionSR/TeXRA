@@ -69,7 +69,6 @@ import {
   type LaunchError,
 } from './errors.js';
 import type { Sessions, Session, Run, StartInput } from './sessions.js';
-import type { AgentRuntime } from './runtime.js';
 
 /** A run that returned without ever publishing its stream: the launcher's
  *  contract broke, and a caller waiting on admission must hear it. */
@@ -438,7 +437,7 @@ function sessionOf(
  *  transcript store and, on the sessions it opens, the retry denial that
  *  stands in for the person a package session has no way to ask. */
 export function makeSessions(
-  runtime: AgentRuntime,
+  processRoots: WorkspaceRoots,
   services: Layer.Layer<ProcessServices>,
 ): Context.Service.Shape<typeof Sessions> {
   /** The retry listener of each session this package opened, by storage
@@ -447,10 +446,9 @@ export function makeSessions(
   return {
     open: (roots?: WorkspaceRoots) =>
       Effect.gen(function* () {
-        const resolved = roots ?? runtime.roots;
-        // A root a host already opened keeps that host's decision delivery:
-        // its UI prompts for the retries of every run on the session, this
-        // package's included. Only a session opened here gets the denial.
+        const resolved = roots ?? processRoots;
+        // A root already open on this runtime keeps the retry listener it
+        // was opened with; only the first open of a root installs one.
         const hostOpened = (yield* listOwnedSessions()).some(
           (other) => other.roots.storage === resolved.storage,
         );
@@ -482,7 +480,7 @@ export function makeSessions(
       }),
     close: (roots?: WorkspaceRoots) =>
       Effect.gen(function* () {
-        const root = (roots ?? runtime.roots).storage;
+        const root = (roots ?? processRoots).storage;
         const report = yield* closeOwnedSession(root);
         // A close that could not settle leaves the session open with its
         // runs live, so the listener stays with them; the close that finally

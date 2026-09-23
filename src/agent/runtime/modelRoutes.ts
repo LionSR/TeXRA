@@ -2,7 +2,6 @@ import { Effect } from 'effect';
 import { ModelProvider, type ModelConfig } from 'llm-zoo';
 
 import { shouldUseInternalValidationModel } from '@agent/runtime/run/validationModel';
-import { resolveRouteEndpoint } from '@agent/runtime/run/routeEndpoint';
 import {
   CODEX_BACKEND_BASE_URL,
   CodexAuthError,
@@ -33,6 +32,7 @@ import {
   shouldRouteModelThroughOpenRouter,
 } from '@model/openRouterRouting';
 import { exposeApiKey, getApiKey, type ApiProvider } from '@model/apiProviders';
+import { resolveRouteEndpoint } from '@model/routeEndpoint';
 import type { StateStore } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
 import type {
@@ -239,21 +239,7 @@ export const resolveSubscriptionCredential = Effect.fn(
         provider,
         usageRoute: 'chatgpt-subscription',
       },
-      config: {
-        ...config,
-        contextWindow: profile.contextWindow,
-        inputPrice: profile.inputPrice,
-        outputPrice: profile.outputPrice,
-        // Whether this backend takes input files is the route's fact, not
-        // the base model's, and the ChatGPT-subscription backend takes none.
-        // The binding's PDF admission reads this, so the route degrades a PDF
-        // the way any route without native PDF does instead of sending a
-        // shape the backend rejects.
-        capabilities: {
-          ...config.capabilities,
-          supportsNativePdf: false,
-        },
-      },
+      config: profile.config,
     };
   }
   if (config.provider === ModelProvider.XAI) {
@@ -290,12 +276,7 @@ export const resolveSubscriptionCredential = Effect.fn(
         provider,
         usageRoute: 'xai-subscription',
       },
-      config: {
-        ...config,
-        contextWindow: profile.contextWindow,
-        inputPrice: profile.inputPrice,
-        outputPrice: profile.outputPrice,
-      },
+      config: profile.config,
     };
   }
   return null;

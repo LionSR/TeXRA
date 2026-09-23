@@ -29,6 +29,7 @@ import { Effect, SubscriptionRef, type Context } from 'effect';
 
 import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
 import { RunLive } from '@agent/runtime/runRoster';
 import { Runs } from '@agent/runtime/runRegistry';
 import type {
@@ -343,14 +344,20 @@ function handle(
 ): Effect.Effect<Outcome, RequestError, InquiryRecords | Runs | AgentResume> {
   switch (req.kind) {
     case 'run.stop':
-      return Effect.flatMap(Runs, (runs) =>
-        runs.stopAgentRun(req.runId, {
-          detachActiveChildren: req.detachActiveChildren ?? undefined,
-        }),
-      ).pipe(
-        // The stop fails when the run's terminal row was refused (a live
-        // foreign owner, a rolled-back transaction): the run is still in
-        // flight, so the requester hears that rather than `done`.
+      return Effect.gen(function* () {
+        const runs = yield* Runs;
+        // An explicit child policy wins; an unset one is this session's
+        // configured "Keep subagents running", resolved here once for every
+        // request-borne stop.
+        const detachActiveChildren =
+          req.detachActiveChildren ??
+          (yield* detachSubagentsOnStop(session.roots));
+        yield* runs.stopAgentRun(req.runId, { detachActiveChildren });
+      }).pipe(
+        // The stop fails when the setting could not be read or the run's
+        // terminal row was refused (a live foreign owner, a rolled-back
+        // transaction): the run is still in flight, so the requester hears
+        // that rather than `done`.
         Effect.mapError(
           (error): RequestError =>
             new Unavailable({

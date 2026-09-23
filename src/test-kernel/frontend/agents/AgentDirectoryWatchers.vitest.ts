@@ -40,21 +40,27 @@ vi.mock('vscode', () => ({
   },
 }));
 
-vi.mock('@agent/index/platformAgentDirectories', () => ({
+vi.mock('@agent/index/AgentDirectoryService', async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import('@agent/index/AgentDirectoryService')
+  >()),
   // The service's readers, `Effect`s like the ones `AgentDirectoryService`
   // answers with: the rebuild under test composes them.
-  createPlatformAgentDirectories: (options: {
-    customDirectoryStore: { get(): Effect.Effect<string | undefined> };
-  }) => ({
-    builtIn: () => Effect.succeed('/agents/builtin'),
-    builtInToolUse: () => Effect.succeed('/agents/toolUse'),
-    custom: () =>
-      options.customDirectoryStore
+  AgentDirectoryService: class {
+    constructor(
+      private readonly options: {
+        customDirectoryStore: { get(): Effect.Effect<string | undefined> };
+      },
+    ) {}
+    builtIn = () => Effect.succeed('/agents/builtin');
+    builtInToolUse = () => Effect.succeed('/agents/toolUse');
+    custom = () =>
+      this.options.customDirectoryStore
         .get()
-        .pipe(Effect.map((value) => value || '/agents/custom')),
-    getDirectory: () => Effect.succeed(undefined),
-    getAllLocal: () => Effect.promise(() => mocks.getAllLocal()),
-  }),
+        .pipe(Effect.map((value) => value || '/agents/custom'));
+    getDirectory = () => Effect.succeed(undefined);
+    getAllLocal = () => Effect.promise(() => mocks.getAllLocal());
+  },
 }));
 
 vi.mock('@frontend/ui/errorHandlingUtils', () => ({

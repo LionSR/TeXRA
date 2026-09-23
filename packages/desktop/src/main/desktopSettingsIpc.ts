@@ -294,7 +294,7 @@ export function createDesktopSettingsIpc(
   function postInitialSettingsData() {
     return Effect.gen(function* () {
       yield* postSettingsSnapshot('git-author');
-      yield* options.toolingSettingsController.postLatexConfigValues();
+      yield* postSettingsSnapshot('latex');
       // Forked, not yielded: `runFork` runs the goal read on this turn, so the
       // list still repaints ahead of the snapshots below, and the dialog a
       // failed read raises does not hold them up. Nothing waits on it, as
@@ -336,7 +336,7 @@ export function createDesktopSettingsIpc(
   > = {
     approval: () => postSettingsSnapshot('approval'),
     'git-author': () => postSettingsSnapshot('git-author'),
-    latex: () => options.toolingSettingsController.postLatexConfigValues(),
+    latex: () => postSettingsSnapshot('latex'),
     memory: () => postSettingsSnapshot('memory'),
     models: () => postModelSelectionData(),
     'multi-agent': () => postSettingsSnapshot('multi-agent'),

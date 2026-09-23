@@ -72,13 +72,10 @@ export const CodexDeviceTokenSchema = z.object({
   code_challenge: z.string().min(1).nullish(),
 });
 
-/** Error kinds match the shared subscription OAuth vocabulary. */
-export type CodexAuthErrorKind = SubscriptionOAuthErrorKind;
-
 export class CodexAuthError extends SubscriptionOAuthError {
   constructor(
     message: string,
-    kind: CodexAuthErrorKind,
+    kind: SubscriptionOAuthErrorKind,
     status?: number,
     options?: ErrorOptions,
   ) {

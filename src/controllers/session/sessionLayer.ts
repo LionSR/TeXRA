@@ -179,7 +179,7 @@ class Session extends Context.Service<Session, SessionHandle>()(
 /**
  * The sessions the owner holds, outside the map: what the owner's synchronous
  * `current` and `held` read, and so the process's one list of live sessions
- * (`heldSessions`, `forEachLiveSession`) — no module keeps a second one. An
+ * (`heldSessions`) — no module keeps a second one. An
  * entry is written once its handle exists and removed as the first step of its
  * release, so a root whose session is still building, or already unwinding,
  * reads as having none. Keyed by the entry's `SessionKey` and matched on its
@@ -914,7 +914,7 @@ const closeSession = (root: string) =>
 /**
  * Make the one Effect runtime of this process over its identity (PRD 7.7) and
  * install it with the session family it serves: called by a composition root
- * exactly once at startup, right beside `initPlatform()`, which calls
+ * exactly once at startup, which calls
  * {@link disposeProcessRuntime} on its shutdown path after the last session
  * has released its graph. The identity is a program for the process start:
  * already-resolved on a host that read it before installing, still a pending

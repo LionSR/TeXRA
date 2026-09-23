@@ -10,8 +10,8 @@ import * as path from 'node:path';
 import { Effect, FileSystem } from 'effect';
 
 // Local imports
-import type { MathMarkupOption } from '@latex/latexdiff/mathMarkup';
 import { withLogChannel } from '@logger/effectLog';
+import type { LatexdiffMathMarkupValue } from '@shared/constants/latexConfig';
 import { getEffectiveDiffBase, roundIndexedEntries } from '@shared/schemas';
 import type { OutputFileInfo, ReadonlyRoundIndexed } from '@shared/schemas';
 import { pathExists } from '@utils/files/fsDurability';
@@ -30,7 +30,7 @@ import type {
 const executeDiffOperations = Effect.fn('latexdiff.executeDiffOperations')(
   function* (
     operations: readonly DiffOperation[],
-    mathMarkup: MathMarkupOption | undefined,
+    mathMarkup: LatexdiffMathMarkupValue | undefined,
     latexdiff: LatexdiffRuntime,
     progress: DiffProgressReporter,
     immediateResults: DiffRunResult[] = [],
@@ -113,7 +113,7 @@ export const runLatexdiffFromMetadata = Effect.fn('latexdiff.runFromMetadata')(
     rounds: ReadonlyRoundIndexed<OutputFileInfo>;
     /** The calling session's workspace folder, or `undefined` with none open. */
     workspaceRoot: string | undefined;
-    mathMarkup?: MathMarkupOption;
+    mathMarkup?: LatexdiffMathMarkupValue;
     generateBetweenRoundDiffs: boolean;
     latexdiff: LatexdiffRuntime;
     progress: DiffProgressReporter;

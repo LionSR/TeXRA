@@ -5,8 +5,7 @@
  * `src/controllers/session/sessionLayer.ts`, keyed by workspace storage
  * root: it builds each root's Effect graph and the `SessionHandle` over it
  * on the one `ManagedRuntime` the process makes at its entry
- * (`installProcessRuntime`), which installs the owner here beside
- * `initPlatform()`, exactly as it installs the process roots. `src/agent`
+ * (`installProcessRuntime`), which installs the owner here. `src/agent`
  * never imports `src/controllers`, so the owner arrives through this port
  * rather than by import; a `SessionHandle` holds no runtime at all, its
  * Effects run on the fibers of whoever calls them.
@@ -184,8 +183,7 @@ export interface SessionOwner {
 let owner: SessionOwner | undefined;
 
 /** Install the process's session owner, or uninstall it with `undefined`.
- *  Called by `installProcessRuntime` exactly once at startup, right beside
- *  `initPlatform()`, and by `disposeProcessRuntime` in the shutdown step
+ *  Called by `installProcessRuntime` exactly once at startup, and by `disposeProcessRuntime` in the shutdown step
  *  that disposes the runtime the owner runs on: from then on a close
  *  answers as a process with no owner does, instead of reaching a disposed
  *  runtime. */
@@ -196,12 +194,10 @@ export function initSessionOwner(sessions: SessionOwner | undefined): void {
 /**
  * The runtime this process's session owner runs on, or `undefined` before
  * the first `installProcessRuntime` and again once `disposeProcessRuntime`
- * has uninstalled it. The owner, not the platform, is what says a process is
- * composed: `initPlatform` has no inverse and holds for the life of the
- * process, while the owner and the runtime under it end with the
- * composition that installed them, so a composition root asks here whether
- * it must install its own and, when it need not, borrows the runtime the
- * answer carries.
+ * has uninstalled it. The owner is what says a process is composed: it and
+ * the runtime under it end with the composition that installed them, so a
+ * composition root asks here whether it must install its own and, when it
+ * need not, joins the runtime the answer carries.
  */
 export function installedProcessRuntime(): ProcessRuntime | undefined {
   return owner?.runtime;

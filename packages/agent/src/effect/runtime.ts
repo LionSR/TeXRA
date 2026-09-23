@@ -1,10 +1,10 @@
 /**
  * The process `@texra-ai/agent` composes, as an Effect service.
  *
- * {@link acquireProcess} is the package's composition root: the platform,
- * the process workspace roots, the node agent runtime, and the one Effect
- * runtime that holds the session owner. Acquisition waits for any previous
- * composition's retirement before borrowing or building that installation.
+ * {@link acquireProcess} is the package's composition root: the process
+ * workspace roots, the node agent runtime, and the one Effect runtime that
+ * holds the session owner. Acquisition waits for any previous composition's
+ * retirement before joining or building that installation.
  *
  * That composition is one installation, however many callers reach it, so
  * it is held rather than owned: every {@link acquireProcess} takes a
@@ -30,9 +30,14 @@ import {
   installProcessRuntime,
 } from '@controllers/session/sessionLayer';
 import { globalDatabaseLayer } from '@controllers/session/Database';
-import { AppState, AgentDirectories } from '@platform/interfaces';
-import { initPlatform, tryPlatform, type Platform } from '@platform/platform';
-import type { AgentResumePort } from '@platform/interfaces';
+import {
+  AppState,
+  AgentDirectories,
+  type AgentDirectoriesPort,
+  type AgentResumePort,
+  type LifecycleHost,
+  type ToolMissingHandler,
+} from '@platform/interfaces';
 import type { LanguageModelPort } from '@platform/languageModel';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
@@ -49,11 +54,19 @@ import { makeSessions } from './sessionPrograms.js';
 import type { Sessions } from './sessions.js';
 
 /**
- * The process platform together with the workspace roots the package's runs
- * work in. `nodePlatform()` builds both; an embedder supplying its own
- * platform names its workspace roots beside it.
+ * The process services the package composes, together with the workspace
+ * roots the package's runs work in. `nodePlatform()` builds all of them; an
+ * embedder supplying its own names its workspace roots beside them.
  */
-export interface AgentPlatform extends Platform {
+export interface AgentPlatform {
+  /** The shutdown lifecycle this process's `Lifecycle` service serves. */
+  readonly lifecycle: LifecycleHost;
+  /** The agent directories this process's `AgentDirectories` service serves. */
+  readonly agentDirectories: AgentDirectoriesPort;
+  /** Surfaces a tool-missing error to the embedder, served as
+   *  `ToolMissingReporter`; absent, a missing-tool probe answers without
+   *  surfacing. */
+  readonly toolMissingHandler?: ToolMissingHandler;
   readonly roots: WorkspaceRoots;
   /** The secret store this process's `Secrets` service reads from. */
   readonly secrets: PlatformSecrets;
@@ -62,12 +75,6 @@ export interface AgentPlatform extends Platform {
   /** The bridge its `LanguageModel` service serves; an embedder with no
    *  editor passes `UNAVAILABLE_LANGUAGE_MODEL_PORT`, as `nodePlatform()`. */
   readonly languageModel: LanguageModelPort;
-}
-
-/** The composed process, as the package's services read it. */
-export interface AgentRuntime {
-  readonly platform: AgentPlatform;
-  readonly roots: WorkspaceRoots;
 }
 
 /**
@@ -121,10 +128,7 @@ interface ProcessHold {
   /**
    * End this hold (R6). The last hold to end closes every session the owner
    * holds and then disposes the runtime they ran on; every earlier one ends
-   * nothing, because something else is still working on it. A hold on a
-   * host's own installation ends nothing either: the session belongs to the
-   * host that opened it, and killing its live runs is not this package's to
-   * do.
+   * nothing, because something else is still working on it.
    *
    * The disposal is the close's finalizer, not its continuation: the close
    * flushes each session's artifacts, and a flush that defects must not
@@ -151,13 +155,13 @@ interface ProcessHold {
 let holds = 0;
 
 /**
- * Whether the installation those holds share is this package's. What says a
- * process is composed is the session owner, not the platform: `initPlatform`
- * has no inverse and holds for the life of the process, while the owner and
- * the runtime under it end with the holds on them. A composition that found
- * a host's own installation disposes nothing, however its holds end.
+ * The platform the installation those holds share was composed with, while
+ * this package holds one; cleared with the last hold. It is what says the
+ * installed process runtime is this package's to join: one that is installed
+ * while this is unset was installed by a host for its own roots, and one
+ * composed with a different platform serves another embedder's services.
  */
-let installedHere = false;
+let composedWith: AgentPlatform | undefined;
 
 /** A new hold must wait for the last hold's full session and runtime teardown. */
 const processChanges = Semaphore.makeUnsafe(1);
@@ -187,10 +191,9 @@ export const acquireProcess = (
   ).pipe(Effect.map((hold) => hold.sessions));
 
 /**
- * Compose the process, or take a hold on the one already composed.
- * Synchronous and idempotent: a run beside a host that already ran its own
- * composition root (the same platform object) reuses all four
- * installations, its session included, and nothing here is installed twice.
+ * Compose the process, or take a hold on the one this package already
+ * composed with the same platform. Synchronous and idempotent: nothing here
+ * is installed twice.
  *
  * Every call takes a hold, ended by its scope's finalizer. This makes the
  * Effect surface usable more than once per process and safe to use twice
@@ -198,11 +201,15 @@ export const acquireProcess = (
  * composition it found, and the last one out ends it.
  *
  * Throws {@link PlatformConflict} when a second, different platform reaches
- * a process the package already composed.
+ * a process the package already composed, or when a process runtime the
+ * package did not install is already there: borrowing a runtime a host built
+ * for its own roots would silently serve the host's services to this one.
  */
 function composeProcess(platform: AgentPlatform): ProcessHold {
-  const active = tryPlatform();
-  if (active && active !== platform) {
+  // The owner carries the runtime it runs on; an absent owner is what says
+  // this composition must install its own.
+  let processRuntime = installedProcessRuntime();
+  if (composedWith ? composedWith !== platform : processRuntime !== undefined) {
     throw new PlatformConflict({
       message:
         'The agent package is already using another platform in this process.',
@@ -218,17 +225,10 @@ function composeProcess(platform: AgentPlatform): ProcessHold {
     agentResume: platform.agentResume,
     agentDirectories: AgentDirectories.layer(platform.agentDirectories),
     lifecycle: platform.lifecycle,
+    toolMissingReporter: platform.toolMissingHandler,
     setup: PACKAGE_SETUP,
   };
-  // The owner carries the runtime it runs on, so a composition beside a host
-  // that already installed one borrows exactly that runtime; an absent owner
-  // is what says this composition must install its own.
-  let processRuntime = installedProcessRuntime();
   if (!processRuntime) {
-    // The process-wide installations, once for the life of the process.
-    if (!active) {
-      initPlatform(platform);
-    }
     // The identity stays a pending read -- the package's composition root is
     // synchronous, so it hands the program over rather than a value, and the
     // runtime it installs reads it once for the process. The direct Lean
@@ -249,12 +249,11 @@ function composeProcess(platform: AgentPlatform): ProcessHold {
       // package speaks at the informational level rather than flooding it.
       minimumLogLevel: 'Info',
     });
-    installedHere = true;
+    composedWith = platform;
   }
   const heldRuntime = processRuntime;
-  const runtime: AgentRuntime = { platform, roots: platform.roots };
   const sessions = makeSessions(
-    runtime,
+    platform.roots,
     Layer.effectContext(processRuntime.contextEffect),
   );
   holds += 1;
@@ -265,8 +264,8 @@ function composeProcess(platform: AgentPlatform): ProcessHold {
       if (!held) return Effect.void;
       held = false;
       holds -= 1;
-      if (holds > 0 || !installedHere) return Effect.void;
-      installedHere = false;
+      if (holds > 0) return Effect.void;
+      composedWith = undefined;
       return closeOwnedSessions().pipe(
         // The runtime is this composition's own local, not a read of what is
         // installed now.

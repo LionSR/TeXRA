@@ -8,7 +8,6 @@ import { Effect } from 'effect';
 import { describe, expect } from 'vitest';
 
 // Local imports - platform
-import { createNodeStorageProvider } from '@platform/defaults/nodeStorage';
 import { openTexraConfigStores } from '@platform/defaults/nodeStores';
 import {
   MEMORY_STORAGE_DIR,
@@ -164,10 +163,7 @@ describe('workspace storage defaults', () => {
         yield* Effect.promise(() =>
           writeFile(join(workspacePath, '.texra', 'config.json'), '{ broken'),
         );
-        const storage = createNodeStorageProvider({
-          storageRoot: root,
-          workspacePath,
-        });
+        const storage = new WorkspaceStorageProvider(root, workspacePath);
         const warnings: string[] = [];
 
         const stores = yield* openTexraConfigStores(

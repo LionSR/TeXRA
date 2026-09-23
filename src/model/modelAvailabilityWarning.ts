@@ -12,10 +12,9 @@ export type ModelAvailabilityWarningSink = (
  * that no longer parses), and a host that never called
  * `setModelAvailabilityWarningSink` must not turn one into silence.
  *
- * The console rather than the logger or `platform()`: this module's callers
- * are synchronous registry readers with no Effect to yield, `src/model` has
- * no import edge to `src/logger`, and `platform()` is the ambient locator the
- * Effect migration is retiring.
+ * The console rather than the logger: this module's callers are synchronous
+ * registry readers with no Effect to yield, and `src/model` has no import
+ * edge to `src/logger`.
  */
 const consoleWarningSink: ModelAvailabilityWarningSink = (message, error) => {
   console.warn(`[modelAvailability] ${message}`, error);

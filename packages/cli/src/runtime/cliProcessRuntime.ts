@@ -41,7 +41,7 @@
 import { Effect, Layer } from 'effect';
 
 import { installedProcessRuntime } from '@agent/runtime';
-import { createPlatformAgentDirectories } from '@agent/index';
+import { AgentDirectoryService } from '@agent/index';
 import { SignInFailed } from '@common/errors/signInFailed';
 import { appStateStoreFromDatabase } from '@controllers/session/appStateStore';
 import { globalDatabaseLayer } from '@controllers/session/Database';
@@ -226,9 +226,7 @@ export function installCliProcessRuntime(
     );
     const version = await readCliVersion();
     const secrets = getCliSecrets(storageRoot);
-    // The account plane is built beside the runtime that serves it; the CLI's
-    // sign-in surfaces settle it through the auth run edge, which
-    // `initializeCliSupabaseAuth` installs over this runtime.
+    // The account plane is built beside the runtime that serves it.
     const auth = ensureCliSupabaseAuth(secrets);
     // The process lifecycle and agent directories are process services the
     // runtime serves, so both are built here, before the install, rather than
@@ -243,7 +241,7 @@ export function installCliProcessRuntime(
         );
       },
     });
-    const agentDirectories = createPlatformAgentDirectories({
+    const agentDirectories = new AgentDirectoryService({
       channel: 'cli',
       resourcesPath: options?.resourcesPath ?? '',
       customDirectoryStore: { get: () => Effect.succeed(undefined) },

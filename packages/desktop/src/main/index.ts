@@ -245,7 +245,6 @@ const protocolLifecycle = installDesktopProtocolCallbackLifecycle({
   execPath: process.execPath,
   devAppArg: process.argv[1] ? resolvePath(process.argv[1]) : undefined,
   focusMainWindow: focusOrReopenMainWindow,
-  log: console,
 });
 
 function findDesktopMainDir(startDir: string): string {
@@ -315,8 +314,8 @@ function createWindow(options: {
   /**
    * The process services the composition root built (see
    * `ElectronPlatformInitResult`). Handed down so the window's controllers and
-   * IPC surfaces take their stores from their owner rather than re-reading the
-   * ambient `platform()` singleton.
+   * IPC surfaces take their stores from their owner rather than re-reading
+   * them.
    */
   globalState: StateStore;
   secrets: PlatformSecrets;
@@ -761,7 +760,6 @@ function createWindow(options: {
       auth: options.supabaseAuth,
       store: options.pendingOAuthStore,
       host: desktopAuthHost,
-      log: console,
       runtime,
     }),
   );
@@ -1106,7 +1104,6 @@ function createWindow(options: {
           workspaceRoot: project.roots.workspace,
           config: project.roots.config,
         }),
-      logger: console,
     });
     const port = runtime.runSync(
       bridge.attach({
@@ -1422,7 +1419,6 @@ function createWindow(options: {
     const toolingSettingsController =
       new DefaultDesktopToolingSettingsController({
         onError: reportAsyncError,
-        workspaceState: project.roots.workspaceState,
         globalState: options.globalState,
         config: project.roots.config,
         workspaceRoot: project.roots.workspace,
@@ -1968,7 +1964,6 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
             });
 
             const pendingOAuthStore = createDesktopPendingOAuthStore(
-              console,
               platformInit.globalState,
             );
             installContentSecurityPolicy();

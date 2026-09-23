@@ -1,24 +1,37 @@
 import { Effect } from 'effect';
 /**
- * The endpoint of one model route, resolved as an explicit URL. The package
- * binds a model to a stated deployment endpoint (it never falls back to an
- * SDK default), so the providers the handler left to their SDKs are named
- * here. Precedence is the handler resolver's, unchanged: a per-model base
- * URL, then GLM's own route table, then OpenRouter, then a per-provider
- * dashboard endpoint, then the provider default.
+ * The endpoint of one model route, resolved as an explicit URL, and the one
+ * owner of endpoint precedence. The package binds a model to a stated
+ * deployment endpoint (it never falls back to an SDK default), so the
+ * providers the handler left to their SDKs are named here. Precedence: a
+ * per-model base URL, then OpenRouter, then a per-provider dashboard
+ * endpoint, then the provider default. GLM's default is its region host, on
+ * the Coding Plan path when that plan serves the request, which is the one
+ * place `usageRoute` is set.
  */
 import { ModelProvider, type ModelConfig } from 'llm-zoo';
 
-import { resolveGlmRoute } from '@model/glmRouting';
-import { OPENROUTER_BASE_URL } from '@model/openRouterEndpoint';
-import { normalizeProviderEndpoint } from '@model/providerEndpoint';
 import type { StateReadFailed } from '@platform/interfaces';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { DeclinableUsageRoute, UsageRoute } from '@shared/schemas';
 import {
+  getGLMCodingPlan,
   getProviderEndpoint,
   useChinaRegion,
 } from '@utils/config/providerConfig';
+import { tryParseUrl } from '@utils/core';
+
+const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1';
+
+/** Normalize a URL-like endpoint to `host/path` form without protocol or trailing slashes. */
+function normalizeProviderEndpoint(input: string): string {
+  if (!input) return '';
+
+  const withProtocol = input.includes('://') ? input : `https://${input}`;
+  const parsed = tryParseUrl(withProtocol);
+  if (!parsed) return input.replace(/^https?:\/\//, '').replace(/\/+$/, '');
+  return `${parsed.host}${parsed.pathname}`.replace(/\/+$/, '');
+}
 
 /**
  * OpenAI's own endpoint. Named because a route that lands on it is the one
@@ -67,7 +80,8 @@ const BASE_URLS: Record<
           `https://${china ? 'api.minimaxi.com' : 'api.minimax.io'}/v1`,
       ),
     ),
-  // Resolved by `resolveGlmRoute`, which carries the usage classification.
+  // Resolved by the GLM tail of `resolveRouteEndpoint`, which carries the
+  // usage classification.
   [ModelProvider.GLM]: null,
   [ModelProvider.META]: 'https://api.meta.ai/v1',
   [ModelProvider.COPILOT]: null,
@@ -84,24 +98,30 @@ export function resolveRouteEndpoint(
   config: Pick<ModelConfig, 'name' | 'provider' | 'baseUrl'>,
   useOpenRouter: boolean,
   declinedRoutes?: readonly DeclinableUsageRoute[],
-) {
+): Effect.Effect<RouteEndpoint, StateReadFailed> {
   return Effect.gen(function* () {
-    if (config.provider === ModelProvider.GLM) {
-      const route = yield* resolveGlmRoute({
-        stores,
-        baseUrl: config.baseUrl,
-        useOpenRouter,
-        declinedRoutes,
-      });
-      return route.route === 'official-coding-plan'
-        ? { baseUrl: route.baseUrl, usageRoute: route.usageRoute }
-        : { baseUrl: route.baseUrl };
-    }
     if (config.baseUrl) return { baseUrl: config.baseUrl };
     if (useOpenRouter) return { baseUrl: OPENROUTER_BASE_URL };
     const customUrl = yield* getProviderEndpoint(stores, config.provider);
     if (customUrl) {
       return { baseUrl: `https://${normalizeProviderEndpoint(customUrl)}` };
+    }
+    if (config.provider === ModelProvider.GLM) {
+      const host = (yield* useChinaRegion(stores, 'glm'))
+        ? 'open.bigmodel.cn'
+        : 'api.z.ai';
+      // A run that declined the plan takes the standard API even while the
+      // user's preference is on.
+      if (
+        (yield* getGLMCodingPlan(stores)) &&
+        !declinedRoutes?.includes('glm-coding-plan-subscription')
+      ) {
+        return {
+          baseUrl: `https://${host}/api/coding/paas/v4`,
+          usageRoute: 'glm-coding-plan-subscription',
+        };
+      }
+      return { baseUrl: `https://${host}/api/paas/v4` };
     }
     const baseUrl = BASE_URLS[config.provider];
     const resolved =

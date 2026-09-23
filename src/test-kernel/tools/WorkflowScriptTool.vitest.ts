@@ -125,7 +125,6 @@ vi.mock('@tools/delegation/childRun', () => ({
 
 vi.mock('@tools/approval', () => ({
   configureDelegatedChildApprovals: mocks.configureDelegatedChildApprovals,
-  proposalApprovals: () => ({ isBypassed: () => false }),
 }));
 
 vi.mock('@tools/delegation/proposalFlow', async (importOriginal) => ({
@@ -575,7 +574,7 @@ return null`;
       }).pipe(Effect.provide(nativeToolTestLayer()));
       expect(outside).toMatchObject({
         status: 'error',
-        error: expect.stringContaining('active launched agent session'),
+        error: expect.stringContaining('active run context'),
       });
       expect(mocks.startChildRunLoop).not.toHaveBeenCalled();
     }),

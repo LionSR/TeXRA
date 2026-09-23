@@ -5,8 +5,6 @@
  */
 import { z } from 'zod';
 
-import { sanitizeLiveLinkUrl } from '@shared/utils/liveLinkUrl';
-
 import {
   AgentOptionDataSchema,
   ModelOptionDataSchema,
@@ -99,33 +97,8 @@ export type NormalizedToolUse = {
   status?: ToolCallStatus;
 };
 
-// ============================================================
-// URL Sanitization
-// ============================================================
-
-/** URL field for tool payloads that will be rendered as live links. */
-const SafeUrlSchema = z.string().transform(sanitizeLiveLinkUrl);
-
-/**
- * Render-boundary projection of the canonical provider web-search entry
- * (`WebSearchResult['results'][number]` in `@agent/types/ServerTools`). The
- * schema is not imported here because the shared layer must not depend on the
- * agent layer. It keeps only the rendered fields, all optional because
- * persisted archives may be partial, and applies the SafeUrl sanitization
- * transform to `url` at this boundary (#7230). Named for its payload so it no
- * longer collides with the agent layer's same-name schemas (#10279).
- */
-const WebSearchPayloadItemSchema = z.object({
-  url: SafeUrlSchema.optional(),
-  title: z.string().optional(),
-  domain: z.string().optional(),
-});
-
 export const WebSearchPayloadSchema = z.object({
   query: z.string().optional(),
-  results: z.array(WebSearchPayloadItemSchema).optional(),
-  provider: z.string().optional(),
-  status: z.string().optional(),
 });
 
 /** What a pending request shows (diff, command, question), never host

@@ -3,7 +3,6 @@ import { it } from '@effect/vitest';
 // Suites for src/utils/config (platformSettings + providerConfig).
 
 import { afterEach, describe, expect, vi } from 'vitest';
-import { platform } from '@platform/platform';
 import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latexConfig';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';

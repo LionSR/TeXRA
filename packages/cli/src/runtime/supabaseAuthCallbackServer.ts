@@ -28,6 +28,7 @@ import type {
   AuthCallbackTransport,
   SignInCallbackOutcome,
 } from '@controllers/auth/supabaseSignIn';
+import { withLogChannel } from '@logger/effectLog';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import { escapeHtml } from '@shared/utils/xmlEscape';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
@@ -42,7 +43,6 @@ interface LoopbackTransportOptions {
   readonly runtime: ProcessRuntime;
   /** Launch the browser; `false` prints the URL and waits. */
   readonly openBrowser: (url: string) => Effect.Effect<void, Error>;
-  readonly log: (message: string) => void;
 }
 
 /**
@@ -70,11 +70,9 @@ export function loopbackCallbackTransport(
     // outcome with nothing waiting on it belongs to an attempt the terminal
     // already abandoned; the browser page carries the wording the user needs.
     announce: (outcome) =>
-      Effect.sync(() => {
-        options.log(
-          `Loopback sign-in callback ${outcome.kind} with no attempt waiting.`,
-        );
-      }),
+      Effect.logWarning(
+        `Loopback sign-in callback ${outcome.kind} with no attempt waiting.`,
+      ).pipe(withLogChannel('cli-auth')),
   };
 }
 

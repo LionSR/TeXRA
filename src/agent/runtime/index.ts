@@ -67,9 +67,6 @@ export type { ResumeRunOptions } from './resumeRun';
 // The refusal wording a host applies to a `ResumeRunResult` failure.
 export { describeFollowUpFailure } from '@agent/followUp/ToolUseFollowUp';
 
-// detachSubagentsOnStop
-export { detachSubagentsOnStop } from './detachSubagentsOnStop';
-
 // runtimePresentationEvents
 export {
   DiagnosticsReadFailed,

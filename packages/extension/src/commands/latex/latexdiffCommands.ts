@@ -35,18 +35,15 @@ import {
   latexdiffAllFailedMessage,
   NO_LATEXDIFF_OPERATIONS_MESSAGE,
 } from '@latex/latexdiff/latexdiffCopy';
-import {
-  DEFAULT_MATH_MARKUP,
-  MATH_MARKUP_OPTIONS,
-  describeMathMarkupOption,
-  type MathMarkupOption,
-} from '@latex/latexdiff/mathMarkup';
 import { createLog } from '@logger/logUtils';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import { withSessionFs } from '@platform/rootedFs';
 import type { FileLocation } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { settingByKey, settingEnumChoices } from '@shared/state/stateSettings';
 import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latexConfig';
+import type { LatexdiffMathMarkupValue } from '@shared/constants/latexConfig';
+import { readSettingFrom } from '@utils/config/platformSettings';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { pathToLocationIn } from '@utils/files/fileLocation';
 import { entryExists } from '@utils/files/fsEntryExists';
@@ -88,21 +85,24 @@ const withLatexdiffTool = <E, R>(
     ),
   );
 
-type MarkupItem = vscode.QuickPickItem & { value: MathMarkupOption };
+type MarkupItem = vscode.QuickPickItem & { value: LatexdiffMathMarkupValue };
 
 // Returns undefined when the user cancels, logging it so callers just bail.
 const promptForLatexdiffMathMarkup = Effect.fnUntraced(function* (
   session: SessionHandle,
 ) {
-  const configuredMode = yield* session.roots.workspaceState.get<string>(
+  const configuredMode = yield* readSettingFrom<LatexdiffMathMarkupValue>(
+    session.roots,
     WorkspaceStateKey.LATEXDIFF_MATH_MARKUP,
-    DEFAULT_MATH_MARKUP,
   );
-  const items: MarkupItem[] = MATH_MARKUP_OPTIONS.map((mode) => ({
-    label: mode,
-    description: describeMathMarkupOption(mode),
-    picked: mode === configuredMode,
-    value: mode,
+  // The row is a catalog enum row: a missing one is a defect, not an option.
+  const items: MarkupItem[] = settingEnumChoices<LatexdiffMathMarkupValue>(
+    settingByKey(WorkspaceStateKey.LATEXDIFF_MATH_MARKUP)!,
+  )!.map(({ value, label, description }) => ({
+    label,
+    description,
+    picked: value === configuredMode,
+    value,
   }));
   // Keep the configured mode first so Enter accepts it immediately.
   const prioritizedItems = [
@@ -274,7 +274,7 @@ const runDiffAndOpen = Effect.fnUntraced(function* (
   session: SessionHandle,
   toolLabel: string,
   runDiff: (
-    mathMarkup: MathMarkupOption,
+    mathMarkup: LatexdiffMathMarkupValue,
   ) => Effect.Effect<LaTeXdiffResult, never, FileSystem.FileSystem>,
 ) {
   const mathMarkup = yield* promptForLatexdiffMathMarkup(session);

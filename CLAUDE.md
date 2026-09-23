@@ -53,7 +53,7 @@ Things the tree won't tell you:
   (no NEW distinct `@agent/*` deep-import specifier from a host, type-only
   included), `host-agent-mock`,
   `architecture-edges`, and `effect-migration` (per-file allowlists of
-  shrink-only counts: `platform()`, `new AbortController(`,
+  shrink-only counts: `new AbortController(`,
   superseded package imports, `Effect.run*` boundary calls, raw catches in
   `effect`-importing files; it admits a new `Effect.run*`
   file only under `packages/{extension,desktop,cli,agent}/src/` (webview
@@ -134,7 +134,7 @@ VS Code-free webview frontends above. This list is enforced by
 sync with this list and with each other.
 
 **VS Code-allowed zones** — platform wiring belongs here:
-`packages/extension/src/extension.ts` (calls `initPlatform()` exactly once),
+`packages/extension/src/extension.ts` (calls `installProcessRuntime()` exactly once),
 `packages/extension/src/commands/`, `packages/extension/src/frontend/`,
 `packages/extension/src/common/`, `src/platform/` interface definitions, and
 `src/auth/`. Within `src/utils/`, a browser-reachable module additionally
@@ -142,9 +142,12 @@ stays free of Node built-ins — see the browser-safe note above; that is a
 stricter constraint layered on top of the VS Code-free rule, not a
 substitute for it.
 
-Reach host services through `platform()` from `@platform/platform` (config,
-state, log, fs, workspace, storage, secrets). When agnostic code needs a
-host-only capability, add a typed `Platform` port rather than an import.
+Reach process services from the Effect context the process runtime serves
+(`Lifecycle`, `AgentDirectories`, `AppState`, `Secrets`, `FileSystem`, …; the
+composition roots install it once through `installProcessRuntime`) and
+per-workspace ones from the `WorkspaceRoots` the caller holds. When agnostic
+code needs a host-only capability, add a typed port served by that runtime
+rather than an import.
 Substitutions and the push-UI-to-the-caller rule: AGENTS.md "Platform
 decoupling rules".
 

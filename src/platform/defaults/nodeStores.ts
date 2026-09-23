@@ -1,6 +1,6 @@
 /**
- * The JSON stores a Node-family host (CLI, desktop, extension) opens before
- * `initPlatform`.
+ * The JSON stores a Node-family host (CLI, desktop, extension) opens while
+ * it composes its process.
  *
  * Every host resolves the same files from the same
  * {@link WorkspaceStorageProvider}, so the derivations live here once: which

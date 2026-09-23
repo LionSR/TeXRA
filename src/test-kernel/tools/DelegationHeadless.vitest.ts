@@ -48,7 +48,6 @@ const mocks = vi.hoisted(() => ({
   childRecords: vi.fn(),
   getVisibleAgents: vi.fn(),
   isApprovalBypassedForRun: vi.fn(),
-  isProposalBypassed: vi.fn(),
   registerRun: vi.fn(),
   writeReport: vi.fn(),
   writeResultMeta: vi.fn(),
@@ -133,9 +132,6 @@ vi.mock('@model/computeModelOptions', () => ({
 vi.mock('@tools/approval', () => ({
   configureDelegatedChildApprovals: mocks.configureDelegatedChildApprovals,
   isApprovalBypassedForRun: mocks.isApprovalBypassedForRun,
-  proposalApprovals: () => ({
-    isBypassed: mocks.isProposalBypassed,
-  }),
 }));
 
 const PARENT_RUN_ID = 'aaaaaa222222' as RunId;
@@ -249,7 +245,6 @@ function delegateWithProposalDecision(
 ) {
   return Effect.scoped(
     Effect.gen(function* () {
-      mocks.isProposalBypassed.mockReturnValue(false);
       const session = createTestSession();
       const decider = answerOpenedRequests(session, decision);
       yield* Effect.addFinalizer(() =>
@@ -532,7 +527,11 @@ describe('headless delegation', () => {
         },
       ]),
     );
-    mocks.isProposalBypassed.mockReturnValue(true);
+    // Every case delegates without a proposal unless it brings its own
+    // session, whose proposal bypass starts off.
+    testDefaultSession().approvals.proposal.setBypass(PARENT_RUN_ID, true, {
+      silent: true,
+    });
     mocks.isApprovalBypassedForRun.mockReturnValue(false);
     const records = new Map<RunId, ReturnType<typeof memoryChildRecords>>();
     mocks.childRecords.mockImplementation((runId: RunId) => {
@@ -1123,7 +1122,6 @@ describe('headless delegation', () => {
           // front, so a delegation tool that still executes was deliberately offered
           // (delegate_multi_agents). The proposal gate must not settle a
           // guaranteed denial; the child stays on inherited approval state.
-          mocks.isProposalBypassed.mockReturnValue(false);
           const session = createTestSession();
           const decider = answerOpenedRequests(session, { action: 'approve' });
           yield* Effect.addFinalizer(() =>

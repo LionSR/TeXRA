@@ -19,11 +19,12 @@ import type { Effect } from 'effect';
 import type { LiveToolUseFlowContext, RunParent } from './RunHandle';
 
 /**
- * Child policy shared by `kill()` and `stopAgentRun()`. The caller owns the
- * decision because only it knows which gesture it is serving: the configured
- * stop surfaces resolve it through `detachSubagentsOnStop()`, the CLI's
- * bare-Escape stop always detaches, and shutdown always cascades. Omitting
- * the field means cascade, since a child left running has no owner.
+ * Child policy shared by `kill()` and `stopAgentRun()`. An explicit value
+ * wins: the CLI's bare-Escape stop always detaches and shutdown always
+ * cascades. A `run.stop` request that leaves it unset is resolved by the
+ * session request handler through `detachSubagentsOnStop()`. `Runs` itself
+ * still reads a missing option as cascade, since a child left running has no
+ * owner.
  */
 export interface RunStop {
   /** Whether a live interrupt target took the stop, asked rather than read:

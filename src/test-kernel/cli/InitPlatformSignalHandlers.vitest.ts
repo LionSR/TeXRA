@@ -199,7 +199,7 @@ describe('CLI platform signal handlers', () => {
     expect(order).toEqual(['shutdown', 'flush']);
 
     // Best-effort: a lifecycle shutdown failure must not skip the flush, and
-    // an undefined lifecycle (tryPlatform() returning nothing) must not throw.
+    // an undefined lifecycle must not throw.
     order.length = 0;
     const failingRunShutdown = vi.fn(async () => {
       order.push('shutdown');

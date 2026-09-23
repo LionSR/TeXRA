@@ -40,7 +40,6 @@ import {
   DesktopToolEditApprovalHost,
   type DesktopToolEditApprovalUi,
 } from './desktopToolEditApproval.js';
-import { toLogData } from './desktopLogUtils.js';
 import {
   launchDesktopAgent,
   type DesktopAgentLaunchOptions as DesktopRunOptions,
@@ -182,7 +181,7 @@ export function createDesktopAgentRun(
             .pipe(
               Effect.catchCause((cause) =>
                 Effect.logWarning('Failed to stage the tool-edit preview').pipe(
-                  Effect.annotateLogs({ data: toLogData(Cause.squash(cause)) }),
+                  Effect.annotateLogs({ data: Cause.squash(cause) }),
                   withLogChannel(CHANNEL),
                 ),
               ),

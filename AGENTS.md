@@ -146,7 +146,7 @@ a source scan cannot see — a suite that changes process-wide state a library
 reads once, such as the environment chalk takes its color level from — is found
 by file-order shuffles and fixed in the suite: set the state on the instance it
 lives on and restore it after. There is no list of exempt suites. A module
-under test that reads `platform()` or the workspace roots itself is a
+under test that reaches for an ambient host or the workspace roots itself is a
 production defect, and the fix is to make it take its host as a layer or a
 value. So the practical
 rule for a new suite: test the module directly, provide dependencies as values
@@ -296,7 +296,7 @@ A third code budget reached zero and is now a hardcoded rule: `unknownErrorChann
   Git, Shortcuts, LaTeX, Memory, Goals)
 - `packages/extension/src/progressView/` - Task tracking board webview, including the file-selection, banner and onboarding-card components it owns; there is no separate main-view bundle
 - `packages/extension/resources/` - Packaged agents, tool-use agents, docs, templates, examples, and extension assets
-- `src/platform/` - Platform abstraction layer (composition root). Hosts call `initPlatform()` once at startup; agnostic code uses `platform()` from `@platform/platform`.
+- `src/platform/` - Platform abstraction layer: the host ports and the process runtime types. Each host's composition root calls `installProcessRuntime()` once at startup; agnostic code reads the ports from the Effect context that runtime serves.
 - `src/hosts/` - Host capability interfaces for clipboard, prompts, terminals, diff views, and openers.
 - `src/ui/` (`@ui/*`) - The host-neutral UI toolkit all three hosts render from: `ui/wa/` (Web Awesome and Lit building blocks, `waIcon()`), `ui/styles/` (shared `css` blocks), `ui/transcript/` (the transcript row model), `ui/markdown/` (the markdown/KaTeX pipeline) and `ui/copy/` (user-facing copy tables). It is a VS Code-free zone and takes no `@agent/*` imports. `src/shared/` keeps the wire contracts and UI-shared message types only; `src/transcript/` (`@transcript`) is the unrelated run-transcript persistence layer.
 - `src/test-kernel/` - Centralized Vitest suites for shared and host-specific behavior, including extension, desktop, and CLI code.
@@ -565,7 +565,7 @@ For good separation of concerns and platform independence, core business logic s
 
 3. **Push UI side-effects to the caller.** Business logic functions should return error information (result objects, thrown errors) instead of calling `vscode.window.show*Message()` directly. The command/frontend layer handles user-facing notifications.
 
-4. **Read host capabilities from the Context service that owns them.** When agnostic code needs something only the host provides (e.g., whether an editor extension is installed), take it from the typed service the host composition root already provides once per process (e.g., `SetupPlatform.extensions?.isInstalled`, `Secrets`, `AppState`, the Effect-native `FileSystem`/`Path`). Do not add fields to `Platform`: it is shrinking onto those services (ruling 2026-09-13, #12073 R-1), and a new `Platform` port is a second home for a fact a service already owns.
+4. **Read host capabilities from the Context service that owns them.** When agnostic code needs something only the host provides (e.g., whether an editor extension is installed), take it from the typed service the host composition root already provides once per process (e.g., `SetupPlatform.extensions?.isInstalled`, `Secrets`, `AppState`, the Effect-native `FileSystem`/`Path`). There is no `Platform` object to add a field to: it shrank onto those services (ruling 2026-09-13, #12073 R-1) and is gone, and a process fact has one home, the service the runtime serves.
 
 5. **Prefer the session's own `roots.workspace` over `vscode.workspace.workspaceFolders`.** Carry it as data from the caller that holds it (a run's `session.roots`, a tool's `ToolCall.roots`); inside Effect, take it from the `WorkspaceFs` service, whose `root` is the same value. There is no ambient fallback left, since `workspaceRootPath()` was deleted with the rest of the ambient readers (#12770), so code that cannot name a caller holding the root has an owner to thread it from, not a helper to reach for.
 
@@ -620,7 +620,7 @@ A run is one Effect program in `src/agent/runtime/loop/`, no cursor and no graph
 **Error handling and types**
 
 - Format and surface errors through `logErrorMessage`, `showLoggedErrorMessage`, and `showLoggedMessageWithDocs` in `packages/extension/src/frontend/ui/errorHandlingUtils.ts` for consistent telemetry and documentation links.
-- Keep shared type definitions colocated with their domains (e.g., `src/agent/types`) and derive runtime-safe interfaces with `zod` plus `z.infer`.
+- Keep shared type definitions colocated with their domains (e.g., `src/agent/core/state`) and derive runtime-safe interfaces with `zod` plus `z.infer`.
 
 **Miscellaneous**
 
@@ -648,8 +648,7 @@ one the view you're touching already uses:
   base: this is the only view on the pattern, so the machinery lives in the one
   class that uses it.
   Commands are named constants in `src/shared/ipc.ts` (`COMMON_COMMANDS`,
-  `SETTINGS_VIEW_CMD`, `SETTINGS_VIEW_COMMANDS`) — use those, not string
-  literals. Frontend state lives in module-level reactive
+  `SETTINGS_VIEW_COMMANDS`) — use those, not string literals. Frontend state lives in module-level reactive
   signals declared in `settingsView/frontend/settingsState.ts`
   (`trackedSignal`); `settingsView/frontend/messageDispatcher.ts` holds the one
   outbound message-handler registry (`settingsViewHandlers`, typed

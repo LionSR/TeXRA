@@ -9,12 +9,9 @@
  * without pulling in `openai/*` or `@google/genai`.
  *
  * These types describe an in-process representation rather than a validation
- * boundary. The one cross-module dependency is the canonical web-search
- * result type from `@agent/types/ServerTools`, whose provider SDK imports are
- * type-only, so the neutrality note above still holds.
+ * boundary.
  */
 
-import type { WebSearchResult } from '@agent/types/ServerTools';
 import type { MediaAttachmentKind } from '@shared/schemas';
 
 // ============================================================
@@ -43,16 +40,6 @@ export interface ChatExportInput {
 // ============================================================
 
 /**
- * One rendered search hit in the exported document: the title/url projection
- * of the canonical provider result entry ({@link WebSearchResult} in
- * `@agent/types/ServerTools`). Domain never reaches the export IR.
- */
-type ExportWebSearchResult = Pick<
-  WebSearchResult['results'][number],
-  'title' | 'url'
->;
-
-/**
  * Attachment kinds a renderer must be able to label. Kept in step with the
  * canonical {@link MediaAttachmentKind} vocabulary: the transcript row and the
  * exported document describe the same attachment, so a kind added there must
@@ -72,8 +59,7 @@ export type ExportNode =
   /** `input` is the call's raw arguments; each renderer serializes them. */
   | { kind: 'tool-call'; name: string; input: unknown }
   | { kind: 'tool-result'; text: string }
-  | { kind: 'web-search'; query: string }
-  | { kind: 'web-search-results'; results: ExportWebSearchResult[] };
+  | { kind: 'web-search'; query: string };
 
 // ============================================================
 // Document metadata

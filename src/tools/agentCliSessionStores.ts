@@ -1,10 +1,8 @@
 import { Effect } from 'effect';
 
 import type { RunRegistry } from '@agent/runtime/runRegistry';
-import {
-  forEachLiveSession,
-  settleLiveSessionRuns,
-} from '@agent/runtime/SessionHandle';
+import { settleLiveSessionRuns } from '@agent/runtime/SessionHandle';
+import { heldSessions } from '@agent/runtime/sessionGraph';
 import {
   SHUTDOWN_PHASE,
   type LifecycleHost,
@@ -61,11 +59,11 @@ function registerAgentShutdownHandler(lifecycle: LifecycleHost): void {
   lifecycle.onShutdown(
     SHUTDOWN_PHASE.BEFORE,
     Effect.sync(() => {
-      forEachLiveSession((session) => {
+      for (const session of heldSessions()) {
         session.runs.killBackgroundProcesses();
         codexThreads.registries.get(session.runs)?.interruptAll();
         claudeAgentSessions.registries.get(session.runs)?.interruptAll();
-      });
+      }
     }),
   );
 }
