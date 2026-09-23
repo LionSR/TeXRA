@@ -638,12 +638,6 @@
       "name": "getVisibleAgent"
     },
     {
-      "file": "src/agent/trace/index.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "noopTrace"
-    },
-    {
       "file": "src/auth/codex/CodexSessionCoordinator.ts",
       "category": "production-dead",
       "kind": "types",

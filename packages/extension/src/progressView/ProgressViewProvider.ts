@@ -16,8 +16,6 @@ import {
 } from 'effect';
 
 import { getAgent, refresh } from '@agent/index';
-import type { AgentTrace } from '@agent/trace';
-import { createChannelTrace } from '@agent/trace';
 import {
   attachTerminalResultToast,
   PdfOpenFailed,
@@ -63,6 +61,7 @@ import { onTexraAuthSessionsChanged } from '@frontend/events/onTexraAuthSessions
 import { pushManualCriticism } from '@frontend/latex/inlineCriticism';
 import { getLinterMessages } from '@frontend/latex/linter';
 import { AgentReviewService } from '@frontend/review/AgentReviewService';
+import { withLogChannel } from '@logger/effectLog';
 import { createLog } from '@logger/logUtils';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import type {
@@ -94,7 +93,8 @@ import { createExtensionHostRequests } from './extensionHostRequests';
 
 const RECENT_COMMIT_LIMIT = 20;
 
-const log = createLog('ProgressViewProvider');
+const CHANNEL = 'ProgressViewProvider';
+const log = createLog(CHANNEL);
 
 export type ProgressRunRevealResult = 'revealed' | 'missing';
 
@@ -132,7 +132,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
    *  {@link dispose} closes it. */
   private readonly bridgeScope = Scope.makeUnsafe();
   private readonly contentProvider: BundledViewContentProvider;
-  private readonly logger: AgentTrace;
   private readonly disposables: vscode.Disposable[] = [];
 
   /** The sidebar's `WebviewView` while VS Code holds one resolved. */
@@ -168,7 +167,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       ProcessServices
     >,
   ) {
-    this.logger = createChannelTrace('ProgressViewProvider');
     this.session = session;
     this.contentProvider = new BundledViewContentProvider(
       context,
@@ -272,7 +270,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
           })),
         ),
       onError: (error) => {
-        this.logger.error('Host snapshot refresh failed', { data: error });
+        log.error('Host snapshot refresh failed', { data: error });
       },
       publish: (snapshot) => this.bridge.setHost(snapshot),
     });
@@ -385,15 +383,16 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
         // request either way, so a staging failure is reported, never swallowed.
         presentToolEdit: (request) => {
           this.runtime.runFork(
-            this.toolEditApprovals.present(request).pipe(
-              Effect.catchCause((cause) =>
-                Effect.sync(() => {
-                  this.logger.error('Tool edit preview staging failed', {
-                    data: Cause.squash(cause),
-                  });
-                }),
+            this.toolEditApprovals
+              .present(request)
+              .pipe(
+                Effect.catchCause((cause) =>
+                  Effect.logError('Tool edit preview staging failed').pipe(
+                    Effect.annotateLogs({ data: Cause.squash(cause) }),
+                    withLogChannel(CHANNEL),
+                  ),
+                ),
               ),
-            ),
           );
         },
         // An open that never committed leaves the staged preview with no
@@ -442,7 +441,9 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     return Effect.gen({ self: this }, function* () {
       yield* this.snapshot.refresh;
       yield* this.refreshOnboardingFunnel();
-      this.logger.debug('ProgressViewProvider initialized');
+      yield* Effect.logDebug('ProgressViewProvider initialized').pipe(
+        withLogChannel(CHANNEL),
+      );
     });
   }
 

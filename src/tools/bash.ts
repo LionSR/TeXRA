@@ -316,10 +316,8 @@ function createBackgroundBashStrategy(params: {
     // `executeCommand` never fails on a non-zero exit — it answers with the
     // exit code, so the failure is an application-level one.
     isTurnError: (turn) => !turn.success,
-    onTurnError: (turn, turnLogger) =>
-      turnLogger.error(
-        `Background bash failed with exit code ${turn.exitCode}.`,
-      ),
+    turnErrorMessage: (turn) =>
+      `Background bash failed with exit code ${turn.exitCode}.`,
 
     formatDelivery: (turn, wallTimeMs) =>
       Effect.try({ try: () => delivery(turn, wallTimeMs), catch: ensureError }),

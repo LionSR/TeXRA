@@ -4,7 +4,6 @@ import { it } from '@effect/vitest';
 import { Effect, Layer } from 'effect';
 import { describe, expect, vi } from 'vitest';
 
-import { noopTrace } from '@agent/trace';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import {
   AgentPromptSchema,
@@ -27,6 +26,7 @@ import {
 } from '@platform/languageModel';
 import { AgentCategory } from '@shared/schemas';
 import { RunLedger } from '@shared/session/runLedger';
+import { noopTrace } from '@test/support/noopTrace';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import { hostStores, setupPlatform } from '@test/support/setupPlatform';
