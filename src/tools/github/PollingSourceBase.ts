@@ -496,9 +496,7 @@ export abstract class PollingSourceBase<
     function* (this: PollingSourceBase<K, S>) {
       const exit = yield* Effect.exit(this.pollRound());
       if (Exit.isSuccess(exit)) return;
-      if (Cause.hasInterrupts(exit.cause)) {
-        return yield* Effect.failCause(exit.cause);
-      }
+      if (Cause.hasInterrupts(exit.cause)) return yield* Effect.interrupt;
       this.logger.warn('Poll round failed; polling continues.', {
         data:
           exit.cause.reasons.length === 1

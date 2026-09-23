@@ -10,7 +10,7 @@
 // someEffect` and `await somePromiseCall(...)` look identical. tsc is not an
 // oracle for Promise-to-Effect conversions; this type-aware scan is. It walks
 // every project config `npm run typecheck` composes with the TypeScript
-// compiler API (the repo's `typescript` devDependency) and flags four shapes:
+// compiler API (the repo's `typescript` devDependency) and flags five shapes:
 //
 //   1. `await <Effect>`           — the awaited value is the un-run Effect
 //   2. `void <Effect>`            — "fire and forget" that never fires
@@ -28,6 +28,20 @@
 //      produce-now-execute-later through a Promise<Effect> is not a supported
 //      pattern: construct the value the Promise resolves to, then build and
 //      yield* the Effect from it.
+//   5. a discarded fork with a typed error channel (#12675): an in-program
+//      `Effect.forkDetach` / `forkChild` / `forkScoped` / `forkIn` or
+//      `FiberSet.run` whose `Fiber<A, E>` nobody keeps (the fork is a
+//      `yield*` statement, or its next step is `asVoid`, `as`, `ignore` or
+//      an `andThen` whose continuation is not a function of the Fiber) while
+//      `E` is not `never`. Nothing
+//      observes such a fiber end, so a typed failure ends it silently: the
+//      forked program must be total (recover inside it, per iteration for a
+//      loop). A fork whose program ends in `Effect.onExit((exit) =>
+//      Deferred.done(d, exit))` (or `Deferred.succeed(d, exit)`, which holds
+//      the Exit as its value) forwards its Exit unconditionally and is owned
+//      by whoever awaits that Deferred. `runtime.runFork`
+//      is not this shape: `withForkFailureReporting` observes every root
+//      fiber (src/platform/processRuntime.ts). Production sources only.
 //
 // An expression is an Effect when its type carries the `~effect/Effect`
 // TypeId property (effect/Effect's `[TypeId]` variance key) AND its apparent
@@ -81,6 +95,14 @@ const PROJECT_CONFIGS = [
 
 const EFFECT_TYPE_ID = '~effect/Effect';
 const THUNK_ADAPTER_NAMES = new Set(['tryPromise', 'promise']);
+const FORK_NAMES = new Set(['forkDetach', 'forkChild', 'forkScoped', 'forkIn']);
+const FIBER_SET_RUN = new Set(['run']);
+const ON_EXIT = new Set(['onExit']);
+/** The steps after a fork that drop its Fiber; `andThen` drops it unless its
+ *  continuation is a function of the Fiber. */
+const FIBER_DROPPING_STEPS = new Set(['asVoid', 'as', 'ignore']);
+const AND_THEN = new Set(['andThen']);
+const DEFERRED_FORWARDERS = new Set(['done', 'succeed']);
 const ISSUE = 'https://github.com/LionSR/TeXRA/issues/12491';
 
 /**
@@ -124,20 +146,223 @@ function makeIsEffectType(checker) {
  * declares elsewhere.
  */
 function isEffectThunkAdapter(checker, nameNode) {
-  const name = ts.isIdentifier(nameNode) ? nameNode.text : null;
-  if (name == null || !THUNK_ADAPTER_NAMES.has(name)) return false;
+  return isEffectExport(checker, nameNode, THUNK_ADAPTER_NAMES, 'Effect');
+}
+
+/** Whether a name node resolves to one of `names` exported by the effect
+ *  package's `module` (`Effect`, `FiberSet`, `Deferred`), under any alias:
+ *  the alias resolves first, so `import { forkDetach as fork }` matches. */
+function isEffectExport(checker, nameNode, names, module) {
+  if (nameNode == null || !ts.isIdentifier(nameNode)) return false;
   let symbol = checker.getSymbolAtLocation(nameNode);
   if (symbol == null) return false;
   if ((symbol.flags & ts.SymbolFlags.Alias) !== 0) {
     symbol = checker.getAliasedSymbol(symbol);
   }
+  if (!names.has(symbol.name)) return false;
   return (symbol.declarations ?? []).some((declaration) => {
     const fileName = declaration.getSourceFile().fileName;
     return (
       fileName.includes(`${sep}effect${sep}`) &&
-      fileName.endsWith(`${sep}Effect.d.ts`)
+      fileName.endsWith(`${sep}${module}.d.ts`)
     );
   });
+}
+
+/** The name a reference or a call's callee ends in: `Effect.x(...)` → `x`. */
+function calleeName(node) {
+  if (ts.isCallExpression(node)) return calleeName(node.expression);
+  if (ts.isPropertyAccessExpression(node)) return node.name;
+  return ts.isIdentifier(node) ? node : null;
+}
+
+function outerParent(node) {
+  let current = node.parent;
+  while (ts.isParenthesizedExpression(current)) current = current.parent;
+  return current;
+}
+
+/** Whether `node` (a reference, or a call of one) names a fork. */
+function isForkReference(checker, node) {
+  const name = calleeName(node);
+  return (
+    isEffectExport(checker, name, FORK_NAMES, 'Effect') ||
+    isEffectExport(checker, name, FIBER_SET_RUN, 'FiberSet')
+  );
+}
+
+/** A covariant variance member's type (`_A`, `_E`) under `typeId`, or null. */
+function varianceMember(checker, type, typeId, member, at) {
+  const variance = checker.getApparentType(type).getProperty(typeId);
+  const covariant =
+    variance == null
+      ? null
+      : checker.getTypeOfSymbolAtLocation(variance, at).getProperty(member);
+  const [signature] =
+    covariant == null
+      ? []
+      : checker.getTypeOfSymbolAtLocation(covariant, at).getCallSignatures();
+  return signature == null ? null : checker.getReturnTypeOfSignature(signature);
+}
+
+/** The error type of the Fiber an `Effect<Fiber<A, E>>` yields, when it is
+ *  not `never`; null otherwise. */
+function typedForkError(checker, effectType, at) {
+  const fiber = varianceMember(checker, effectType, EFFECT_TYPE_ID, '_A', at);
+  const error =
+    fiber == null
+      ? null
+      : varianceMember(checker, fiber, '~effect/Fiber', '_E', at);
+  return error == null || (error.flags & ts.TypeFlags.Never) !== 0
+    ? null
+    : error;
+}
+
+/** Whether a forked program ends in `Effect.onExit((exit) =>
+ *  Deferred.done(deferred, exit))`, or `Deferred.succeed(deferred, exit)`
+ *  whose value is the Exit: the callback forwards the program's Exit
+ *  unconditionally, so it is owned by whoever awaits that Deferred. */
+function endsInDeferredExit(checker, program) {
+  let last = program;
+  while (ts.isParenthesizedExpression(last)) last = last.expression;
+  if (!ts.isCallExpression(last)) return false;
+  if (
+    ts.isPropertyAccessExpression(last.expression) &&
+    last.expression.name.text === 'pipe'
+  ) {
+    const final = last.arguments.at(-1);
+    return final != null && endsInDeferredExit(checker, final);
+  }
+  if (!isEffectExport(checker, calleeName(last), ON_EXIT, 'Effect')) {
+    return false;
+  }
+  const callback = last.arguments.at(-1);
+  if (callback == null || !ts.isArrowFunction(callback)) return false;
+  const [exit] = callback.parameters;
+  const body = callback.body;
+  return (
+    exit != null &&
+    ts.isIdentifier(exit.name) &&
+    ts.isCallExpression(body) &&
+    isEffectExport(
+      checker,
+      calleeName(body),
+      DEFERRED_FORWARDERS,
+      'Deferred',
+    ) &&
+    body.arguments.length === 2 &&
+    ts.isIdentifier(body.arguments[1]) &&
+    body.arguments[1].text === exit.name.text
+  );
+}
+
+/** Whether a step drops the Fiber it receives. `continuation` is its
+ *  `andThen` argument: the pipe step's only one, or a data-first call's
+ *  second. A continuation that is a function of the Fiber consumes it. */
+function dropsFiber(checker, step, continuation) {
+  const name = step == null ? null : calleeName(step);
+  if (isEffectExport(checker, name, FIBER_DROPPING_STEPS, 'Effect')) {
+    return true;
+  }
+  if (!isEffectExport(checker, name, AND_THEN, 'Effect')) return false;
+  return (
+    continuation != null &&
+    !checker
+      .getTypeAtLocation(continuation)
+      .getCallSignatures()
+      .some((signature) => signature.parameters.length > 0)
+  );
+}
+
+/** Whether an expression is the operand of a `yield*` statement. */
+function isYieldStatementOperand(node) {
+  const parent = outerParent(node);
+  return (
+    ts.isYieldExpression(parent) &&
+    parent.asteriskToken != null &&
+    ts.isExpressionStatement(outerParent(parent))
+  );
+}
+
+/**
+ * The error type of a discarded typed fork at `node`, or null. Two forms:
+ * data-first (`Effect.forkDetach(program)`, `FiberSet.run(set, program)`),
+ * whose call is the Effect<Fiber>, and a pipe step (`program.pipe(...,
+ * Effect.forkScoped, ...)`), whose Fiber type is read off the pipe's
+ * resolved signature at that argument.
+ */
+function discardedForkError(checker, node) {
+  if (!ts.isCallExpression(node)) return null;
+  const isEffectType = makeIsEffectType(checker);
+  if (isForkReference(checker, node.expression)) {
+    const type = checker.getTypeAtLocation(node);
+    if (!isEffectType(type)) return null;
+    const error = typedForkError(checker, type, node);
+    // `FiberSet.run(set, program)` takes the program second; a curried
+    // `FiberSet.run(set)(program)` and every Effect fork take it first.
+    const program =
+      !ts.isCallExpression(node.expression) &&
+      isEffectExport(
+        checker,
+        calleeName(node.expression),
+        FIBER_SET_RUN,
+        'FiberSet',
+      )
+        ? node.arguments[1]
+        : node.arguments[0];
+    if (error == null || endsInDeferredExit(checker, program)) return null;
+    // The Fiber goes to the pipe's first step (`fork.pipe(step)`), or to a
+    // data-first call that takes it first (`Effect.andThen(fork, next)`).
+    const outer = outerParent(node);
+    const piped =
+      ts.isPropertyAccessExpression(outer) && outer.name.text === 'pipe'
+        ? outer.parent.arguments[0]
+        : undefined;
+    const dropped =
+      piped != null
+        ? dropsFiber(
+            checker,
+            piped,
+            ts.isCallExpression(piped) ? piped.arguments[0] : undefined,
+          )
+        : ts.isCallExpression(outer) &&
+          outer.arguments[0] === node &&
+          dropsFiber(checker, outer, outer.arguments[1]);
+    return isYieldStatementOperand(node) || dropped ? error : null;
+  }
+  const callee = node.expression;
+  if (!ts.isPropertyAccessExpression(callee) || callee.name.text !== 'pipe') {
+    return null;
+  }
+  const index = node.arguments.findIndex(
+    (argument) =>
+      isForkReference(checker, argument) &&
+      !isEffectType(checker.getTypeAtLocation(argument)),
+  );
+  const parameter =
+    index < 0 ? null : checker.getResolvedSignature(node)?.parameters[index];
+  const [step] =
+    parameter == null
+      ? []
+      : checker.getTypeOfSymbolAtLocation(parameter, node).getCallSignatures();
+  const error =
+    step == null
+      ? null
+      : typedForkError(checker, checker.getReturnTypeOfSignature(step), node);
+  const program = index === 0 ? callee.expression : node.arguments[index - 1];
+  if (error == null || endsInDeferredExit(checker, program)) return null;
+  const next = node.arguments[index + 1];
+  return (
+    next != null
+      ? dropsFiber(
+          checker,
+          next,
+          ts.isCallExpression(next) ? next.arguments[0] : undefined,
+        )
+      : isYieldStatementOperand(node)
+  )
+    ? error
+    : null;
 }
 
 /**
@@ -183,6 +408,7 @@ const KIND_TEXT = {
     'an Effect as an expression statement: nothing executes it — the work is silently dropped',
   thunk:
     "an Effect produced by the thunk of Effect.tryPromise/Effect.promise: the adapter awaits the thunk's Promise, not the inner Effect, which is never executed",
+  fork: 'a discarded fork whose error channel is not never: nothing observes the fiber, so a failure ends it silently — make the forked program total (recover and log inside it)',
 };
 
 /**
@@ -223,6 +449,11 @@ function isAssignmentExpression(node) {
 
 function scanSourceFile(checker, sourceFile) {
   const isEffectType = makeIsEffectType(checker);
+  // Shape 5 is production-only: a test's background fiber that fails shows up
+  // as that test's failure or timeout, not as silently lost work.
+  const forksScanned = !sourceFile.fileName.includes(
+    `${sep}src${sep}test-kernel${sep}`,
+  );
   const findings = [];
   const record = (kind, node, detail) => {
     const { line, character } = sourceFile.getLineAndCharacterOfPosition(
@@ -250,7 +481,12 @@ function scanSourceFile(checker, sourceFile) {
       if (isEffectType(type)) {
         record('discarded', node, checker.typeToString(type));
       }
-    } else if (ts.isCallExpression(node)) {
+    }
+    const forkError = forksScanned ? discardedForkError(checker, node) : null;
+    if (forkError != null) {
+      record('fork', node, checker.typeToString(forkError));
+    }
+    if (ts.isCallExpression(node)) {
       const callee = node.expression;
       const nameNode = ts.isPropertyAccessExpression(callee)
         ? callee.name
@@ -328,8 +564,8 @@ function selfTest() {
   const probe = `
 import { Effect } from 'effect';
 import * as E from 'effect';
-import { Data, Exit } from 'effect';
-import { tryPromise } from 'effect/Effect';
+import { Data, Deferred, Exit, Fiber, FiberSet, Scope } from 'effect';
+import { forkDetach as detach, tryPromise } from 'effect/Effect';
 
 declare const eff: Effect.Effect<number, Error>;
 declare const cond: boolean;
@@ -372,6 +608,32 @@ let stored: Effect.Effect<number, Error>;
 stored = eff; // clean: an assignment stores the Effect for its consumer
 const gen = Effect.gen(function* () {
   yield* eff; // clean: the gen driver executes it
+});
+
+declare const total: Effect.Effect<number>;
+declare const scope: Scope.Scope;
+declare const set: FiberSet.FiberSet<number, Error>;
+declare const ended: Deferred.Deferred<number, Error>;
+const forks = Effect.gen(function* () {
+  yield* Effect.forkDetach(eff); // fork
+  yield* eff.pipe(Effect.forkScoped); // fork
+  yield* Effect.forkChild(eff).pipe(Effect.asVoid); // fork
+  yield* eff.pipe(Effect.forkIn(scope), Effect.andThen(Effect.void)); // fork
+  yield* FiberSet.run(set, eff); // fork
+  yield* Effect.forkDetach(total); // clean: the error channel is never
+  const kept = yield* Effect.forkDetach(eff); // clean: the fiber is kept
+  yield* eff.pipe(
+    Effect.onExit((exit) => Deferred.done(ended, exit)),
+    Effect.forkIn(scope),
+  ); // clean: owned by whoever awaits the Deferred
+  yield* detach(eff); // fork: an aliased import
+  yield* Effect.andThen(Effect.forkDetach(eff), Effect.void); // fork
+  yield* eff.pipe(
+    Effect.onExit(() => Deferred.succeed(ended, 1)),
+    Effect.forkIn(scope),
+  ); // fork: the settlement drops the exit
+  const joined = yield* Effect.andThen(Effect.forkDetach(eff), Fiber.join); // clean
+  const piped = yield* Effect.forkDetach(eff).pipe(Effect.andThen(Fiber.join)); // clean
 });
 `;
   // A virtual file inside the repo so module resolution finds the repo's
@@ -433,6 +695,14 @@ const gen = Effect.gen(function* () {
     ['thunk', 30],
     ['thunk', 31],
     ['thunk', 32],
+    ['fork', 55],
+    ['fork', 56],
+    ['fork', 57],
+    ['fork', 58],
+    ['fork', 59],
+    ['fork', 66],
+    ['fork', 67],
+    ['fork', 68],
   ];
   const actual = scanSourceFile(program.getTypeChecker(), probeFile).map(
     ({ kind, line }) => [kind, line],
