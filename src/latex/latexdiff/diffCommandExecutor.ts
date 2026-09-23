@@ -32,16 +32,6 @@ const LATEXDIFF_CITATION_TEXT_COMMAND_EXCLUSIONS: readonly string[] =
 
 const LATEXDIFF_CHANGES_ONLY_SUBTYPE = 'ONLYCHANGEDPAGE';
 
-function resolveLatexdiffSubtype(options?: {
-  subtype?: string;
-  changesOnly?: boolean;
-}): string | undefined {
-  return (
-    options?.subtype ??
-    (options?.changesOnly ? LATEXDIFF_CHANGES_ONLY_SUBTYPE : undefined)
-  );
-}
-
 /**
  * Options for diff execution.
  * @property mathMarkup - Math markup mode ('off' | 'whole' | 'coarse' | 'fine').
@@ -123,18 +113,17 @@ export class DiffCommandExecutor {
   private buildLatexdiffCommand(
     inputFile: string,
     editedFile: string,
-    useFlatten = true,
-    options?: DiffExecutionOptions,
+    useFlatten: boolean,
+    options: DiffExecutionOptions,
   ) {
     return Effect.gen({ self: this }, function* () {
-      const { mathMarkup, pictureEnvs, subtype } =
-        yield* this.getLatexdiffConfig(options);
+      const { mathMarkup, subtype } = yield* this.getLatexdiffConfig(options);
       return [
         'latexdiff',
         ...(useFlatten ? ['--flatten'] : []),
         '--encoding=utf8',
         '-c',
-        `PICTUREENV=${pictureEnvs}`,
+        `PICTUREENV=${LATEXDIFF_PICTURE_ENVIRONMENTS}`,
         ...this.markupFlags(mathMarkup, subtype),
         inputFile,
         editedFile,
@@ -145,17 +134,16 @@ export class DiffCommandExecutor {
   private buildLatexdiffVcCommand(
     inputFile: string,
     commitHash: string,
-    useFlatten = true,
-    options?: DiffExecutionOptions,
+    useFlatten: boolean,
+    options: DiffExecutionOptions,
   ) {
     return Effect.gen({ self: this }, function* () {
-      const { mathMarkup, pictureEnvs, subtype } =
-        yield* this.getLatexdiffConfig(options);
+      const { mathMarkup, subtype } = yield* this.getLatexdiffConfig(options);
       return [
         'latexdiff-vc',
         '--encoding=utf8',
         '-c',
-        `PICTUREENV=${pictureEnvs}`,
+        `PICTUREENV=${LATEXDIFF_PICTURE_ENVIRONMENTS}`,
         '--force',
         ...(useFlatten ? ['--flatten'] : []),
         '--git',
@@ -284,7 +272,7 @@ export class DiffCommandExecutor {
     );
   }
 
-  private getLatexdiffConfig(options?: DiffExecutionOptions) {
+  private getLatexdiffConfig(options: DiffExecutionOptions) {
     return Effect.gen({ self: this }, function* () {
       const changesOnly = yield* this.setting<boolean>(
         WorkspaceStateKey.LATEXDIFF_CHANGES_ONLY,
@@ -292,15 +280,13 @@ export class DiffCommandExecutor {
 
       return {
         mathMarkup:
-          options?.mathMarkup ??
+          options.mathMarkup ??
           (yield* this.setting<MathMarkupOption>(
             WorkspaceStateKey.LATEXDIFF_MATH_MARKUP,
           )),
-        pictureEnvs: LATEXDIFF_PICTURE_ENVIRONMENTS,
-        subtype: resolveLatexdiffSubtype({
-          subtype: options?.subtype,
-          changesOnly,
-        }),
+        subtype:
+          options.subtype ??
+          (changesOnly ? LATEXDIFF_CHANGES_ONLY_SUBTYPE : undefined),
       };
     });
   }
