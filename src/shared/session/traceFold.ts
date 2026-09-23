@@ -219,11 +219,14 @@ export function createTranscriptFold(
         // one instead of the visible "Malformed tool payload" card that same
         // re-parse already renders for a raw, still-invalid object. Keep the
         // unvalidated object on parse failure so that existing fallback fires.
-        const result: Partial<ToolUseLog> = parsedResult.success
-          ? parsedResult.data
-          : isObject(event.result)
-            ? (event.result as Partial<ToolUseLog>)
-            : {};
+        let result: Partial<ToolUseLog>;
+        if (parsedResult.success) {
+          result = parsedResult.data;
+        } else if (isObject(event.result)) {
+          result = event.result as Partial<ToolUseLog>;
+        } else {
+          result = {};
+        }
         // Omit groupId on update: undefined would clobber the value stamped
         // at tool.start.
         const patch = {
