@@ -71,7 +71,7 @@ import {
   recordServedUsage,
   usageSnapshot,
 } from './runProgram';
-import { recordHalt, runStopError } from './runExit';
+import { exitOutcome, recordHalt, runStopError } from './runExit';
 import { dispatchPendingResponse, type TurnContext } from './toolUseDispatch';
 import type { HttpClient } from 'effect/unstable/http';
 import type { SessionHandle } from '../SessionHandle';
@@ -725,11 +725,10 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         }
         let batch: FollowUpBatch | null = null;
         if (batch === null) {
-          if (afterError) {
-            if (!isChild()) yield* pauseActiveGoal();
-          } else {
-            run.callbacks.onIdle?.(state);
-          }
+          if (afterError && !isChild()) yield* pauseActiveGoal();
+          // Every park is idle, a failed turn's included: a resume
+          // acknowledges at the first one.
+          run.callbacks.onIdle?.(state);
           if (run.toolPolicy.stopAfterCycle) {
             return finish(
               state,
@@ -844,7 +843,9 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
    * `onExit` rather than an `Effect.exit` followed by a masked block — an
    * external interrupt unwinds straight past `Effect.exit`, which left the
    * `halted` step unwritten and the follow-up lease held, so a same-process
-   * resume refused the run.
+   * resume refused the run. The release hangs off the halt write's own exit
+   * for the same reason: a failed `halted` append still detaches and frees
+   * the lease (#12982), as `recoverable`, since no terminal row landed.
    */
   const finalize = (exit: Exit.Exit<LoopExit, Error>) =>
     Effect.uninterruptible(
@@ -852,31 +853,28 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         // Every exit that ends the run writes its `halted` step; the state a
         // stop interrupted stays at the phase its rows left, so resume
         // continues it.
+        const outcome = exitOutcome(exit);
+        const state = Exit.isSuccess(exit)
+          ? exit.value.state
+          : yield* Ref.get(latest);
         // A tool-use step is stamped with the run state as folded.
-        const halt = recordHalt({ ledger, logger, runId }, (s) => s);
-        const release = (next: 'recoverable' | 'terminal') =>
-          Effect.sync(() => {
-            detach();
-            followUps.release(
-              next === 'recoverable' || runs.hasActiveChildren(runId)
-                ? 'recoverable'
-                : 'terminal',
-            );
-          });
-        if (Exit.isSuccess(exit)) {
-          const outcome = exit.value.outcome;
-          yield* halt(exit.value.state, outcome);
-          return yield* release(
-            outcome === RUN_OUTCOME.COMPLETED ? 'terminal' : 'recoverable',
-          );
-        }
-        const state = yield* Ref.get(latest);
-        if (Cause.hasInterrupts(exit.cause)) {
-          yield* halt(state, RUN_OUTCOME.CANCELLED);
-          return yield* release('recoverable');
-        }
-        yield* halt(state, RUN_OUTCOME.FAILED);
-        yield* release('recoverable');
+        yield* recordHalt({ ledger, logger, runId }, (s) => s)(
+          state,
+          outcome,
+        ).pipe(
+          Effect.onExit((halted) =>
+            Effect.sync(() => {
+              detach();
+              followUps.release(
+                Exit.isSuccess(halted) &&
+                  outcome === RUN_OUTCOME.COMPLETED &&
+                  !runs.hasActiveChildren(runId)
+                  ? 'terminal'
+                  : 'recoverable',
+              );
+            }),
+          ),
+        );
       }),
     );
 
