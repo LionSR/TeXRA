@@ -4,7 +4,7 @@ import { z } from 'zod';
 
 // Internal imports
 import { ToolCall } from '@agent/runtime/ToolCall';
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import { ToolError, type ToolResult } from '@shared/schemas';
 import { resolveWorkspaceRelativePath } from '@tools/pathResolution';
 import { executed } from '@tools/core/result';
@@ -14,7 +14,7 @@ import { formatResultCount } from '@utils/text/stringUtils';
 // Local file imports
 import { defineTool } from '../core/define';
 
-const log = createLog('InlineCommentTool');
+const CHANNEL = 'InlineCommentTool';
 
 /** A single comment within a thread, as seen by the agent. */
 interface InlineCommentView {
@@ -179,11 +179,15 @@ function formatThread(thread: InlineCommentThreadView): string {
  * Wrap an unexpected failure from path resolution or the provider. A
  * `ToolError` already names itself and passes through unchanged.
  */
-function addCommentFailure(error: unknown): ToolError {
-  if (error instanceof ToolError) return error;
+function addCommentFailure(error: unknown): Effect.Effect<never, ToolError> {
+  if (error instanceof ToolError) return Effect.fail(error);
   const detail = toErrorMessage(error);
-  log.error(`Failed to add inline comment: ${detail}`);
-  return new ToolError(`Failed to add inline comment: ${detail}`);
+  return Effect.logError(`Failed to add inline comment: ${detail}`).pipe(
+    withLogChannel(CHANNEL),
+    Effect.andThen(
+      Effect.fail(new ToolError(`Failed to add inline comment: ${detail}`)),
+    ),
+  );
 }
 
 function threadNotFound(threadId: string): ToolResult {
@@ -203,7 +207,7 @@ const addThread = Effect.fn('InlineCommentTool.addThread')(function* (
     call.roots.workspace,
     path,
     call.workingDirectory,
-  ).pipe(Effect.mapError(addCommentFailure));
+  ).pipe(Effect.catch(addCommentFailure));
   const provider = yield* requireProvider;
   const result = yield* Effect.try({
     try: () =>
@@ -213,8 +217,8 @@ const addThread = Effect.fn('InlineCommentTool.addThread')(function* (
         endLine: endLine ?? line,
         body,
       }),
-    catch: addCommentFailure,
-  });
+    catch: (error) => error,
+  }).pipe(Effect.catch(addCommentFailure));
   if (!result) {
     return yield* Effect.fail(
       new ToolError('Failed to create the comment thread.'),

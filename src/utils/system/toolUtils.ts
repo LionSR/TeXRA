@@ -7,6 +7,7 @@ import { execa } from 'execa';
 import { parse as shellParse } from 'shell-quote';
 
 // Local imports
+import { withLogChannel } from '@logger/effectLog';
 import { createLog } from '@logger/logUtils';
 import { ToolMissingReporter } from '@platform/interfaces';
 import type { ExecResult } from '@shared/schemas';
@@ -32,7 +33,8 @@ import { resolveOptionalCommand } from './binaryResolver';
 import { executeCommandSync } from './execCore';
 import { executeCommand, type ExecuteCommandBaseOptions } from './execUtils';
 
-const log = createLog('toolUtils');
+const CHANNEL = 'toolUtils';
+const log = createLog(CHANNEL);
 
 interface ToolConfig {
   command?: string | string[]; // Optional - defaults to "${toolName} --version"
@@ -63,11 +65,9 @@ function reportMissingTool(
             catch: ensureError,
           }).pipe(
             Effect.catch((err) =>
-              Effect.sync(() => {
-                log.error(
-                  `Failed to report missing tool: ${toErrorMessage(err)}`,
-                );
-              }),
+              Effect.logError(
+                `Failed to report missing tool: ${toErrorMessage(err)}`,
+              ).pipe(withLogChannel(CHANNEL)),
             ),
           ),
     ),
@@ -207,37 +207,41 @@ const executeWithFallback = Effect.fn('toolUtils.executeWithFallback')(
     args: string[],
     execEnv: NodeJS.ProcessEnv,
   ): Effect.fn.Return<boolean, Error> {
-    log.debug(`Checking tool '${cmd}' with args [${args.join(', ')}]`);
+    yield* Effect.logDebug(
+      `Checking tool '${cmd}' with args [${args.join(', ')}]`,
+    ).pipe(withLogChannel(CHANNEL));
 
     let result = yield* spawnProbe(cmd, args, execEnv);
-    log.debug(
+    yield* Effect.logDebug(
       `Initial check for '${cmd}': exitCode=${result.exitCode}, ` +
         `stdout=${result.stdout?.slice(0, 100) || '(empty)'}, ` +
         `stderr=${result.stderr?.slice(0, 100) || '(empty)'}`,
-    );
+    ).pipe(withLogChannel(CHANNEL));
 
     // Accept if exit code is 0, OR if we got version-like output
     // (some tools return non-zero for --version but still output version info)
     if (result.exitCode === 0 || hasVersionOutput(result)) {
-      log.debug(`Tool '${cmd}' detected successfully`);
+      yield* Effect.logDebug(`Tool '${cmd}' detected successfully`).pipe(
+        withLogChannel(CHANNEL),
+      );
       return true;
     }
 
     const fallback = resolveOptionalCommand(cmd, args);
-    log.debug(
+    yield* Effect.logDebug(
       `Fallback search for '${cmd}': ${fallback?.resolvedPath ?? 'not found'}`,
-    );
+    ).pipe(withLogChannel(CHANNEL));
 
     if (fallback) {
-      log.debug(
+      yield* Effect.logDebug(
         `Running fallback '${fallback.command}' with args [${fallback.args.join(', ')}]`,
-      );
+      ).pipe(withLogChannel(CHANNEL));
       result = yield* spawnProbe(fallback.command, fallback.args, execEnv);
-      log.debug(
+      yield* Effect.logDebug(
         `Fallback result: exitCode=${result.exitCode}, ` +
           `stdout=${result.stdout?.slice(0, 100) || '(empty)'}, ` +
           `stderr=${result.stderr?.slice(0, 100) || '(empty)'}`,
-      );
+      ).pipe(withLogChannel(CHANNEL));
 
       if (result.exitCode === 0 || hasVersionOutput(result)) {
         return true;
@@ -245,11 +249,11 @@ const executeWithFallback = Effect.fn('toolUtils.executeWithFallback')(
     }
 
     // Log at info level so it shows in output channel by default
-    log.info(
+    yield* Effect.logInfo(
       `Tool '${cmd}' not detected. Last result: exitCode=${result.exitCode}, ` +
         `stdout=${result.stdout?.slice(0, 200) || '(empty)'}, ` +
         `stderr=${result.stderr?.slice(0, 200) || '(empty)'}`,
-    );
+    ).pipe(withLogChannel(CHANNEL));
     return false;
   },
 );
@@ -292,10 +296,10 @@ export const checkToolInstalled = Effect.fn('toolUtils.checkToolInstalled')(
       const extendedPath = extendEnvPath();
 
       // Log PATH info once (not per-command)
-      log.debug(
+      yield* Effect.logDebug(
         `PATH contains ${extendedPath.split(path.delimiter).length} entries, ` +
           `includes /usr/bin: ${extendedPath.includes('/usr/bin')}`,
-      );
+      ).pipe(withLogChannel(CHANNEL));
 
       if (Array.isArray(command)) {
         // Try each command in the array until one succeeds
@@ -324,10 +328,12 @@ export const checkToolInstalled = Effect.fn('toolUtils.checkToolInstalled')(
     // A probe failure and an absent tool differ only in what the report links
     // to: the failing path has no install-docs command, exactly as before.
     const answerAsAbsent = (err: unknown) =>
-      Effect.sync(() => {
-        log.warn(`Tool check for '${toolName}' failed: ${toErrorMessage(err)}`);
-        return { installed: false, probeFailed: true };
-      });
+      Effect.logWarning(
+        `Tool check for '${toolName}' failed: ${toErrorMessage(err)}`,
+      ).pipe(
+        withLogChannel(CHANNEL),
+        Effect.as({ installed: false, probeFailed: true }),
+      );
 
     // Both arms, because the `try`/`catch` this replaces answered a rejected
     // spawn and a synchronous throw alike — the binary resolution and the PATH

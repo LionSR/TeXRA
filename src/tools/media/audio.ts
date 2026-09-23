@@ -8,6 +8,7 @@ import OpenAI from 'openai';
 
 import type { ApiKeyRouteCredential } from '@agent/runtime/modelRoutes';
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
+import { withLogChannel } from '@logger/effectLog';
 import { createLog } from '@logger/logUtils';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
@@ -17,7 +18,8 @@ import {
 import { withExtendedPath } from '@utils/system/platformPaths';
 import { ensureError } from '@utils/errors/errorMessage';
 
-const log = createLog('AudioUtils');
+const CHANNEL = 'AudioUtils';
+const log = createLog(CHANNEL);
 
 const RECORDINGS_DIR = 'recordings';
 
@@ -46,11 +48,14 @@ class AudioRecorderError extends Data.TaggedError('AudioRecorderError')<{
  *  where the operation is named. */
 const recorderFailure =
   (operation: string) =>
-  (cause: unknown): AudioRecorderError => {
-    const message = getSdkErrorMessage(cause);
-    log.error(`Error in ${operation}: ${message}`);
-    return new AudioRecorderError({ message, cause });
-  };
+  <A, E>(self: Effect.Effect<A, E>): Effect.Effect<A, AudioRecorderError> =>
+    Effect.catch(self, (cause) => {
+      const message = getSdkErrorMessage(cause);
+      return Effect.logError(`Error in ${operation}: ${message}`).pipe(
+        withLogChannel(CHANNEL),
+        Effect.andThen(Effect.fail(new AudioRecorderError({ message, cause }))),
+      );
+    });
 
 /**
  * Upper bound on how long a SIGTERM'd sox may take to flush and exit before
@@ -104,7 +109,7 @@ function watchRecorderExit(subprocess: Subprocess): Effect.Effect<void> {
     try: () => subprocess,
     catch: ensureError,
   }).pipe(
-    Effect.match({
+    Effect.matchEffect({
       onSuccess: (result) => {
         // On Windows, kill('SIGTERM') acts as force-kill and result.signal
         // may be 'SIGTERM' or null depending on Node version.  Also treat
@@ -112,17 +117,19 @@ function watchRecorderExit(subprocess: Subprocess): Effect.Effect<void> {
         const intentional =
           result.signal === 'SIGTERM' || result.signal === 'SIGKILL';
         if (intentional) {
-          log.info('Recording stopped intentionally');
-        } else if (result.exitCode !== 0) {
-          log.error(`Sox process exited with code ${result.exitCode}`);
-        } else {
-          log.info('Recording process completed successfully');
+          return Effect.logInfo('Recording stopped intentionally');
         }
+        if (result.exitCode !== 0) {
+          return Effect.logError(
+            `Sox process exited with code ${result.exitCode}`,
+          );
+        }
+        return Effect.logInfo('Recording process completed successfully');
       },
-      onFailure: (cause) => {
-        log.error(`Sox process error: ${getSdkErrorMessage(cause)}`);
-      },
+      onFailure: (cause) =>
+        Effect.logError(`Sox process error: ${getSdkErrorMessage(cause)}`),
     }),
+    withLogChannel(CHANNEL),
     Effect.andThen(
       Ref.update(activeRecording, (current) =>
         current?.process === subprocess ? null : current,
@@ -190,8 +197,8 @@ export function startRecording(
         });
         return { process: subprocess, path: absPath };
       },
-      catch: recorderFailure('startRecording'),
-    });
+      catch: (cause) => cause,
+    }).pipe(recorderFailure('startRecording'));
     if (!started) {
       return yield* new AudioRecorderError({
         message:
@@ -233,8 +240,8 @@ export function stopRecording(): Effect.Effect<string, AudioRecorderError> {
 
     yield* Effect.try({
       try: () => active.process.kill('SIGTERM'),
-      catch: recorderFailure('stopRecording'),
-    });
+      catch: (cause) => cause,
+    }).pipe(recorderFailure('stopRecording'));
 
     // Await the process this module already holds rather than guessing how
     // long sox needs to flush. `execa` was started with `reject: false`, so
@@ -248,8 +255,8 @@ export function stopRecording(): Effect.Effect<string, AudioRecorderError> {
 
     const size = yield* Effect.try({
       try: () => (existsSync(active.path) ? statSync(active.path).size : null),
-      catch: recorderFailure('stopRecording'),
-    });
+      catch: (cause) => cause,
+    }).pipe(recorderFailure('stopRecording'));
     if (size === null) {
       return yield* new AudioRecorderError({
         message: 'Recording file not found',
@@ -292,6 +299,6 @@ export function transcribeRecording(
       });
       return result.text;
     },
-    catch: recorderFailure('transcribeRecording'),
-  });
+    catch: (cause) => cause,
+  }).pipe(recorderFailure('transcribeRecording'));
 }

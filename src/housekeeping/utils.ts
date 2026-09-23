@@ -98,10 +98,6 @@ async function* findFilesFromPatterns(
   patterns: string[],
   extensions: string[],
 ): AsyncGenerator<string, void, void> {
-  log.debug(
-    `Finding files in ${inputDir} using patterns ${patterns} and extensions ${extensions}`,
-  );
-
   // `resolve`, not `join`: an inputDir that is already absolute names the
   // directory it says, while a workspace-relative one is taken from the
   // workspace root. Joining an absolute path onto the root duplicated the
@@ -155,6 +151,9 @@ export const collectFilesFromPatterns = Effect.fn(
   patterns: string[],
   extensions: string[],
 ) {
+  yield* Effect.logDebug(
+    `Finding files in ${inputDir} using patterns ${patterns} and extensions ${extensions}`,
+  ).pipe(withLogChannel(CHANNEL));
   return yield* Effect.tryPromise({
     try: async () => {
       const files = new Set<string>();
