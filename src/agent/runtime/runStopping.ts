@@ -52,10 +52,8 @@ export class RunStopper {
     const stopToken = this.roster.beginStop(runId);
     const handle = this.roster.handle(runId);
     if (!handle) {
-      const activation = this.roster.activation(runId);
-      activation?.interrupt();
+      const reached = this.interruptActivation(runId);
       this.roster.notifyWaiters(runId);
-      const reached = activation !== undefined;
       return {
         accepted: () => reached,
         settlement: this.roster.throughStop(runId, stopToken, Effect.void),
@@ -233,25 +231,13 @@ export class RunStopper {
             // Shared across the child sweep and the root cascade so each run in
             // the chain is interrupted exactly once.
             const visited = new Set<string>();
+            const cascade = options.detachActiveChildren !== true;
 
-            if (options.detachActiveChildren !== true) {
-              this.interruptActiveChildren(runId, visited, true);
-            }
+            if (cascade) this.interruptActiveChildren(runId, visited, true);
 
-            let stopped = rootHandle
-              ? this.terminate(
-                  rootHandle,
-                  visited,
-                  options.detachActiveChildren !== true,
-                )
-              : false;
-            if (!rootHandle) {
-              const activation = this.roster.activation(runId);
-              if (activation) {
-                activation.interrupt();
-                stopped = true;
-              }
-            }
+            const stopped = rootHandle
+              ? this.terminate(rootHandle, visited, cascade)
+              : this.interruptActivation(runId);
             // A reached handle or child driver owns terminal finalization.
             // Only an ownerless stop needs to write the terminal fact here.
             return stopped ? Effect.void : this.finalizeOwnerlessStop(runId);
@@ -353,8 +339,15 @@ export class RunStopper {
     // aborting the loop spends the handle's interrupt target before we reach
     // it. The delivered stop is the admission, exactly as the handle-less
     // branch of `kill` reports an activation-only stop.
-    if (interrupted || activationInterrupted) return true;
-    return false;
+    return interrupted || activationInterrupted;
+  }
+
+  /** Interrupt the child driver of a run no live handle holds, reporting
+   *  whether there was one to reach. */
+  private interruptActivation(runId: RunId): boolean {
+    const activation = this.roster.activation(runId);
+    activation?.interrupt();
+    return activation !== undefined;
   }
 
   /**
