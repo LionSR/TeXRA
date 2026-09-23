@@ -13,6 +13,7 @@ import { Effect } from 'effect';
 import { StatusCodes } from 'http-status-codes';
 import { Secrets } from '@platform/secrets';
 import { isNonEmptyString } from '@utils/text/stringUtils';
+import { ensureError } from '@utils/errors/errorMessage';
 
 import { getGitHubToken } from './githubAuth';
 
@@ -83,7 +84,7 @@ function escapeOctokitLegacyTemplate(path: string): string {
 export const ghGet = Effect.fn('ghGet')(function* <T>(
   path: string,
   etag?: string,
-): Effect.fn.Return<ConditionalResponse<T>, unknown, Secrets> {
+): Effect.fn.Return<ConditionalResponse<T>, Error, Secrets> {
   const secrets = yield* Secrets;
   const token = yield* getGitHubToken(secrets);
   const headers: Record<string, string> = {
@@ -113,7 +114,7 @@ export const ghGet = Effect.fn('ghGet')(function* <T>(
       data: res.data as T,
       etag: res.headers.etag,
     })),
-    Effect.catch((err): Effect.Effect<ConditionalResponse<T>, unknown> => {
+    Effect.catch((err): Effect.Effect<ConditionalResponse<T>, Error> => {
       primary = { error: err };
       return Effect.try({
         try: (): ConditionalResponse<T> => {
@@ -186,7 +187,7 @@ export const ghGet = Effect.fn('ghGet')(function* <T>(
           }
           throw err;
         },
-        catch: (error) => error,
+        catch: ensureError,
       });
     }),
     // Effect aborts the request before this uninterruptible join. Octokit's

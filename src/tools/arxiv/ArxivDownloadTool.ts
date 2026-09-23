@@ -32,7 +32,7 @@ function formatDirEntry(name: string, type: FileSystem.File.Type): string {
 const listExtractedEntries = Effect.fn('listExtractedEntries')(function* (
   dirFsPath: string,
   workspaceRoot: string,
-): Effect.fn.Return<string, unknown, FileSystem.FileSystem | Path.Path> {
+): Effect.fn.Return<string, Error, FileSystem.FileSystem | Path.Path> {
   // The extraction directory is already absolute, so it is listed through the
   // process filesystem; each entry carries its own type, a symlink reported
   // as a symlink rather than as what it points at.

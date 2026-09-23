@@ -111,7 +111,7 @@ class IssuePollingSource extends PollingSourceBase<string, SubscriptionState> {
   protected pollOne(
     _key: string,
     state: SubscriptionState,
-  ): Effect.Effect<void, unknown, Secrets> {
+  ): Effect.Effect<void, Error, Secrets> {
     return this.pollIssue(state);
   }
 

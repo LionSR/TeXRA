@@ -22,7 +22,7 @@ import { z } from 'zod';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { ToolCall } from '@agent/runtime/ToolCall';
-import { Secrets } from '@platform/secrets';
+import { Secrets, type SecretsFailed } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { ToolError, type RunId, type ToolResult } from '@shared/schemas';
 import { parseWorkingDirectory } from '@tools/pathResolution';
@@ -178,7 +178,11 @@ function parsePath(raw: string): ParsedPath {
   );
 }
 
-const requireToken = (): Effect.Effect<void, unknown, Secrets> =>
+const requireToken = (): Effect.Effect<
+  void,
+  SecretsFailed | ToolError,
+  Secrets
+> =>
   Effect.gen(function* () {
     const secrets = yield* Secrets;
     const token = yield* getGitHubToken(secrets);
@@ -317,7 +321,7 @@ const resolveIssueIsPR = (
   owner: string,
   repo: string,
   number: number,
-): Effect.Effect<boolean, unknown, Secrets> =>
+): Effect.Effect<boolean, Error, Secrets> =>
   Effect.flatMap(
     ghGet<GhIssue>(`/repos/${owner}/${repo}/issues/${number}`),
     (res) =>
@@ -425,7 +429,7 @@ interface OpenPullSummary {
 const getDefaultBranch = (
   owner: string,
   repo: string,
-): Effect.Effect<string, unknown, Secrets> =>
+): Effect.Effect<string, Error, Secrets> =>
   Effect.flatMap(
     ghGet<{ default_branch?: string }>(`/repos/${owner}/${repo}`),
     (res) =>
@@ -459,7 +463,7 @@ const getLocalDefaultBranchHint = (
 const listOpenPullSuggestions = (
   owner: string,
   repo: string,
-): Effect.Effect<string, unknown, Secrets> =>
+): Effect.Effect<string, Error, Secrets> =>
   Effect.map(
     ghGet<OpenPullSummary[]>(
       `/repos/${owner}/${repo}/pulls?state=open&per_page=5`,

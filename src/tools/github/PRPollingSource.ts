@@ -277,7 +277,7 @@ export class PRPollingSource extends PollingSourceBase<
   protected pollOne(
     key: string,
     state: PRSubscriptionState,
-  ): Effect.Effect<void, unknown, Secrets> {
+  ): Effect.Effect<void, Error, Secrets> {
     return this.pollPr(key, state);
   }
 

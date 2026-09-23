@@ -30,7 +30,7 @@ const write = Effect.fn('WriteFileTool.execute')(function* (
   input: WriteInput,
 ): Effect.fn.Return<
   ToolResult,
-  unknown,
+  Error,
   ToolCall | FileSystem.FileSystem | WorkspaceFs
 > {
   const call = yield* ToolCall;
