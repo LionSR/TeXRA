@@ -46,18 +46,14 @@ function mapCodingPlanSubscriptions(
   ) as Record<CodingPlanUsageProvider, string>;
 }
 
-const CODING_PLAN_PROVIDER_NAMES = mapCodingPlanSubscriptions('credentialName');
-
-const CODING_PLAN_DEFAULT_NAMES = mapCodingPlanSubscriptions('displayName');
-
 const PROVIDER_NAMES: Record<SubscriptionUsageProvider, string> = {
   chatgpt: 'ChatGPT',
-  ...CODING_PLAN_PROVIDER_NAMES,
+  ...mapCodingPlanSubscriptions('credentialName'),
 };
 
 const DEFAULT_PLAN_NAMES: Record<SubscriptionUsageProvider, string> = {
   chatgpt: 'ChatGPT Coding Plan',
-  ...CODING_PLAN_DEFAULT_NAMES,
+  ...mapCodingPlanSubscriptions('displayName'),
 };
 
 /** The credential stores this service reads, plus the two test-only clocks. */

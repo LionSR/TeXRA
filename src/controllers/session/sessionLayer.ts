@@ -187,17 +187,6 @@ class Session extends Context.Service<Session, SessionHandle>()(
  */
 type HeldSessions = Map<SessionKey, SessionHandle>;
 
-/** The held session whose key names `root`, if one does. */
-function heldSessionSync(
-  held: HeldSessions,
-  root: string,
-): SessionHandle | undefined {
-  for (const [key, session] of held) {
-    if (key.storage === root) return session;
-  }
-  return undefined;
-}
-
 /** The owner ids of the non-terminal runs another process wrote. */
 function foreignOwners(view: SessionView, self: OwnerId): OwnerId[] {
   const foreign = [...view.runs.values()].flatMap((run) =>
@@ -1186,7 +1175,7 @@ export function installProcessRuntime({
   initSessionOwner({
     runtime,
     open: (open) => onThisRuntime(openSession(open)),
-    current: (root) => heldSessionSync(held, root),
+    current: (root) => [...held].find(([key]) => key.storage === root)?.[1],
     held: () => [...held.values()],
     list: () => onThisRuntime(listSessions),
     close: (root) => onThisRuntime(closeSession(root)),
