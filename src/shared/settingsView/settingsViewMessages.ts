@@ -746,7 +746,6 @@ const RunToolCommandMessageSchema = z.object({
 export type ToolCommandKind = z.infer<
   typeof RunToolCommandMessageSchema
 >['kind'];
-
 // GitHub token messages (for PR subscription tool)
 const GetGitHubTokenStatusMessageSchema = commandOnly(
   SETTINGS_VIEW_COMMANDS.GET_GITHUB_TOKEN_STATUS,
@@ -760,7 +759,6 @@ const RemoveGitHubTokenMessageSchema = commandOnly(
 const OpenGitHubTokenUrlMessageSchema = commandOnly(
   SETTINGS_VIEW_COMMANDS.OPEN_GITHUB_TOKEN_URL,
 );
-
 // ChatGPT subscription (Codex) sign-in messages
 const SignInChatGptMessageSchema = commandOnly(
   SETTINGS_VIEW_COMMANDS.SIGN_IN_CHATGPT,

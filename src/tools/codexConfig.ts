@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 // Local imports - agent config
 import { withLogChannel } from '@logger/effectLog';
+import type { StateReadFailed } from '@platform/interfaces';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { CodexReasoningEffort } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';

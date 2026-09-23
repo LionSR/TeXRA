@@ -437,9 +437,7 @@ const createCodexThread = Effect.fn('codex.createCodexThread')(function* (
       : {};
   // Probe Extra High support only when that tier is selected so other
   // efforts do not wait on a slow or hung Codex binary.
-  const requestedEffort = yield* config.getCodexCliReasoningEffort(
-    roots,
-  );
+  const requestedEffort = yield* config.getCodexCliReasoningEffort(roots);
   const threadOptions: ThreadOptions = {
     ...workspace,
     sandboxMode,
