@@ -29,11 +29,9 @@ import { RetryErrorInfoSchema } from './errors';
 import { JsonValueSchema } from './jsonValue';
 import { RunOutcomeSchema } from './run';
 import {
-  AgentRunStateSnapshotSchema,
   ModelCompatibilityKeySchema,
   NormalizedUsageSchema,
   ReflectionSnapshotStateSchema,
-  StateSlicesSchema,
   ToolUseSnapshotStateSchema,
 } from './runFlowState';
 import {
@@ -287,6 +285,7 @@ export const ModelCompactionPayloadSchema = z
       'handler-replacement',
       'round-open',
       'context-limit',
+      'context-window',
       'model-switch',
     ]),
     continuation: ContinuationSchema.nullable(),
@@ -533,16 +532,6 @@ const SnapshotRuntimeSchema = z.strictObject({
 });
 export type SnapshotRuntime = z.infer<typeof SnapshotRuntimeSchema>;
 
-/**
- * The usage accumulator is NOT a snapshot field (D12): the fold derives usage
- * from `model.message response` and `tool.result` `add` ops, which is what
- * makes the restore-only rule sound. `.omit` here, not in `runFlowState.ts`,
- * so the relocation stays behaviour-identical for the agent modules.
- */
-const LedgerRunStateSnapshotSchema = AgentRunStateSnapshotSchema.omit({
-  usageAccumulator: true,
-});
-
 /** A snapshot restates nothing the rows carry (single-owner note, 3.3): the
  *  pending response, its intents and their approval bindings are folded from
  *  `model.message`, `tool.intent` and `tool.binding`. */
@@ -555,21 +544,13 @@ export const FlowSnapshotPayloadSchema = z.discriminatedUnion('family', [
     family: z.literal('toolUse'),
     ...SnapshotArmFields,
     /** The non-message fields of `ToolUseRunSharedSchema`. */
-    state: ToolUseSnapshotStateSchema.extend({
-      stateSlices: StateSlicesSchema.extend({
-        runStateSnapshot: LedgerRunStateSnapshotSchema,
-      }).nullable(),
-    }),
+    state: ToolUseSnapshotStateSchema,
   }),
   z.strictObject({
     family: z.literal('reflection'),
     ...SnapshotArmFields,
-    /** The non-message fields of `ReflectionFlowStateSchema`.
-     *  `workspaceSnapshot` and `runStateSnapshot` stay top-level: reflection
-     *  has no `stateSlices` and no `userChannels`. */
-    state: ReflectionSnapshotStateSchema.extend({
-      runStateSnapshot: LedgerRunStateSnapshotSchema,
-    }),
+    /** The non-message fields of `ReflectionFlowStateSchema`. */
+    state: ReflectionSnapshotStateSchema,
   }),
 ]);
 export type FlowSnapshotPayload = z.infer<typeof FlowSnapshotPayloadSchema>;

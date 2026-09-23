@@ -71,7 +71,6 @@ import {
   settleRun,
   stagedBy,
   stoppedBy,
-  usageSnapshot,
   type RunCell,
 } from './runProgram';
 import { dispatchPendingResponse, type TurnContext } from './toolUseDispatch';
@@ -148,41 +147,28 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   let workspace = AgentWorkspaceState.create();
   const userChannels: Record<string, unknown> = { ...run.userVarChannels };
   let systemPrompt: string | undefined;
-  let totalResponseTimeMs = 0;
   let response = '';
   // A `/compact` the host admitted: honoured at the next model boundary,
   // regardless of the threshold.
   let compactionRequested = false;
 
   /** The family state every snapshot of this run carries. */
-  const flowState = (state: RunState): ToolUseFlowState => {
-    const previous = familyState(state, 'toolUse');
-    return {
-      modelId: state.modelId ?? previous?.modelId,
-      ...(state.modelCompatibilityKey === null
-        ? {}
-        : { modelCompatibilityKey: state.modelCompatibilityKey }),
-      shouldSkipCycle: false,
-      stateSlices: {
-        runStateSnapshot: {
-          totalRounds: state.round,
-          totalResponseTimeMs,
-        },
-        workspaceSnapshot: workspace.toSnapshot({
-          excludeAssemblyStrings: true,
-        }),
-        userChannels,
-      },
-      ...(systemPrompt !== undefined ? { systemPrompt } : {}),
-      ...(run.structured.value !== undefined
-        ? { structured: run.structured.value }
-        : {}),
-    };
-  };
+  const flowState = (): ToolUseFlowState => ({
+    stateSlices: {
+      workspaceSnapshot: workspace.toSnapshot({
+        excludeAssemblyStrings: true,
+      }),
+      userChannels,
+    },
+    ...(systemPrompt !== undefined ? { systemPrompt } : {}),
+    ...(run.structured.value !== undefined
+      ? { structured: run.structured.value }
+      : {}),
+  });
   const snapshot = (state: RunState, patch: Omit<SnapshotPatch, 'state'>) =>
     snapshotRow(runId, state, {
       ...patch,
-      state: { family: 'toolUse', state: flowState(state) },
+      state: { family: 'toolUse', state: flowState() },
     });
 
   const publishTouchedFiles = (): void => {
@@ -395,7 +381,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           modelId: bound.modelId,
           modelCompatibilityKey: bound.compatibilityKey,
         },
-        state: { family: 'toolUse', state: flowState(opening) },
+        state: { family: 'toolUse', state: flowState() },
       }),
     ]);
     run.callbacks.onProgress?.({ kind: 'started' });
@@ -412,8 +398,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         flow.stateSlices.workspaceSnapshot,
       );
       Object.assign(userChannels, flow.stateSlices.userChannels);
-      totalResponseTimeMs =
-        flow.stateSlices.runStateSnapshot.totalResponseTimeMs;
     }
     systemPrompt = flow.systemPrompt;
     if (flow.structured !== undefined) run.structured.value = flow.structured;
@@ -590,7 +574,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         // admits the round, then the invocation. An open attempt's history
         // is fixed; it is neither compacted nor re-admitted.
         if (state.openAttempt === null) {
-          const force = compactionRequested;
+          const force = compactionRequested ? 'request' : null;
           compactionRequested = false;
           state = yield* cell.adopt(
             yield* compactIfNeeded(state, {
@@ -627,11 +611,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         if (outcome.kind === 'failed') {
           return { state, outcome: 'failed' } as const;
         }
-        totalResponseTimeMs += outcome.responseTimeMs;
-        yield* recordServedUsage(
-          run,
-          usageSnapshot(state, state.round, totalResponseTimeMs, outcome.usage),
-        );
+        yield* recordServedUsage(run, state, outcome.usage);
         if (outcome.text) response = outcome.text;
         if (state.pendingResponse !== null) continue;
         // A text-only response: the same policy the resume path replays.

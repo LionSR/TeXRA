@@ -13,9 +13,7 @@ import { Cause, Effect, Exit, SynchronizedRef } from 'effect';
 
 import type { AgentTrace, StageHandle } from '@agent/trace';
 import {
-  AgentRunStateSnapshotSchema,
   RUN_OUTCOME,
-  type AgentRunStateSnapshot,
   type NormalizedUsage,
   type RunFamily,
   type RunId,
@@ -99,28 +97,19 @@ export const makeRunCell = (
  * Record one round's usage against the binding that served it. A manual retry
  * may have rebound the model inside the invoker, so the price is charged
  * against `run.model`'s current value rather than whatever the round started
- * with. Both loops call this after a successful round.
+ * with. The totals are the ledger's folded ones, response time included.
+ * Both loops call this after a successful round.
  */
 export const recordServedUsage = (
   run: Pick<AgentRunShape, 'model' | 'usageMonitor'>,
-  snapshot: AgentRunStateSnapshot,
+  state: RunState,
+  latestUsage: NormalizedUsage | null,
 ): Effect.Effect<void> =>
   Effect.gen(function* () {
     const served = yield* SynchronizedRef.get(run.model);
-    yield* Effect.sync(() => run.usageMonitor.recordUsage(snapshot, served));
-  });
-
-/** Build the turn's usage record from the ledger's folded totals. */
-export const usageSnapshot = (
-  state: RunState,
-  totalRounds: number,
-  totalResponseTimeMs: number,
-  latestUsage: NormalizedUsage | null,
-): AgentRunStateSnapshot =>
-  AgentRunStateSnapshotSchema.parse({
-    totalRounds,
-    totalResponseTimeMs,
-    usageAccumulator: { totals: state.usage, latestUsage },
+    yield* Effect.sync(() =>
+      run.usageMonitor.recordUsage(state.usage, latestUsage, served),
+    );
   });
 
 /** Why a run the ledger holds no rows for cannot be continued. */

@@ -45,7 +45,7 @@ import { TraceEmitter } from '@agent/trace';
 import type { RunCell } from '@agent/runtime/loop/runProgram';
 import {
   AgentCategory,
-  AgentRunStateSnapshotSchema,
+  EMPTY_RUN_USAGE_TOTALS,
   MESSAGE_TYPES,
   RUN_OUTCOME,
   RUN_PHASE,
@@ -462,9 +462,10 @@ const seedCommittedResponse = Effect.fn('test.seedCommittedResponse')(
       requests: {},
       followUps: [],
       followUpIds: new Set(),
-      usage: AgentRunStateSnapshotSchema.parse({}).usageAccumulator.totals,
+      usage: EMPTY_RUN_USAGE_TOTALS,
       flow: null,
       roundOutputs: [],
+      overflowRecoveredAtRound: null,
     };
     const opened = yield* ledger.appendBatch(runId, null, [
       appendRow(runId, [
@@ -475,7 +476,7 @@ const seedCommittedResponse = Effect.fn('test.seedCommittedResponse')(
         turn: 1,
         state: {
           family: 'toolUse',
-          state: { shouldSkipCycle: false, stateSlices: null },
+          state: { stateSlices: null },
         },
       }),
     ]);

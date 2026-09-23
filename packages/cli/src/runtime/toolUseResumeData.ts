@@ -40,10 +40,9 @@ export function snapshotHoldsTerminalCompileRejection(
   snapshot: FlowSnapshotPayload,
 ): boolean {
   if (snapshot.family !== 'reflection') return false;
-  const { state } = snapshot;
   return (
-    state.unresolvedCompileRejection === true &&
-    state.currentRound + 1 >= state.totalRounds
+    snapshot.state.unresolvedCompileRejection === true &&
+    snapshot.runtime.round + 1 >= snapshot.state.totalRounds
   );
 }
 

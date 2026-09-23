@@ -65,7 +65,7 @@ import {
 } from '@platform/languageModel';
 import {
   AgentCategory,
-  AgentRunStateSnapshotSchema,
+  EMPTY_RUN_USAGE_TOTALS,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
   RUN_PHASE,
   type RunId,
@@ -335,9 +335,10 @@ const freshState = (): RunState => ({
   requests: {},
   followUps: [],
   followUpIds: new Set(),
-  usage: AgentRunStateSnapshotSchema.parse({}).usageAccumulator.totals,
+  usage: EMPTY_RUN_USAGE_TOTALS,
   flow: null,
   roundOutputs: [],
+  overflowRecoveredAtRound: null,
 });
 
 interface InvokerKit {
@@ -373,7 +374,7 @@ const openRun = Effect.fn('openRun')(function* (
       phase: 'initial',
       state: {
         family: 'toolUse',
-        state: { shouldSkipCycle: false, stateSlices: null },
+        state: { stateSlices: null },
       },
     }),
   ]);

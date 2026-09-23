@@ -35,7 +35,7 @@ export const FileLocationSchema = z.discriminatedUnion('kind', [
 ]);
 
 /** Agent outputs are workspace or runStorage, never external */
-export const AgentFileLocationSchema = z.discriminatedUnion('kind', [
+const AgentFileLocationSchema = z.discriminatedUnion('kind', [
   WorkspaceFileLocationSchema,
   RunStorageFileLocationSchema,
 ]);

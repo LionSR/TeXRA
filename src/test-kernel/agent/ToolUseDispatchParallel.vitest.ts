@@ -71,7 +71,7 @@ import {
 import { DatabaseWriteFailed } from '@shared/session/database';
 import {
   AgentCategory,
-  AgentRunStateSnapshotSchema,
+  EMPTY_RUN_USAGE_TOTALS,
   type RunId,
   type ToolResult,
 } from '@shared/schemas';
@@ -224,9 +224,10 @@ const freshState = (): RunState => ({
   requests: {},
   followUps: [],
   followUpIds: new Set(),
-  usage: AgentRunStateSnapshotSchema.parse({}).usageAccumulator.totals,
+  usage: EMPTY_RUN_USAGE_TOTALS,
   flow: null,
   roundOutputs: [],
+  overflowRecoveredAtRound: null,
 });
 
 const INVOCATION = {
@@ -316,7 +317,6 @@ interface HarnessOptions {
 
 /** The slices of a run that has yet to touch a file. */
 const emptySlices = (): NonNullable<ToolUseFlowState['stateSlices']> => ({
-  runStateSnapshot: { totalRounds: 0, totalResponseTimeMs: 0 },
   workspaceSnapshot: AgentWorkspaceState.create().toSnapshot({
     excludeAssemblyStrings: true,
   }),
@@ -346,7 +346,6 @@ const openDispatch = Effect.fn('openDispatch')(function* (
       state: {
         family: 'toolUse',
         state: {
-          shouldSkipCycle: false,
           stateSlices: options.stateSlices ?? null,
         },
       },

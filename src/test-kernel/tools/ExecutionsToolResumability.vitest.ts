@@ -29,7 +29,7 @@ function openingSnapshot(runId: RunId): RunLedgerDraft {
         lastError: null,
         declinedRoutes: [],
       },
-      state: { shouldSkipCycle: false, stateSlices: null },
+      state: { stateSlices: null },
     },
   };
 }

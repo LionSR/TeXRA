@@ -11,7 +11,7 @@ import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
 import type { AgentFlowResult } from '@agent/runtime/AgentFlowResult';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
-  AgentRunStateSnapshotSchema,
+  EMPTY_RUN_USAGE_TOTALS,
   RUN_OUTCOME,
   RUN_PHASE,
   type RunId,
@@ -217,7 +217,8 @@ describe('terminal result event', () => {
         // Record one round of usage so the failed result still carries totals.
         yield* Effect.sync(() =>
           ctx.usageMonitor.recordUsage(
-            AgentRunStateSnapshotSchema.parse({}),
+            EMPTY_RUN_USAGE_TOTALS,
+            null,
             testModelInfo,
           ),
         );
