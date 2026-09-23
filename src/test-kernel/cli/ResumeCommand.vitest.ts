@@ -100,7 +100,7 @@ const OPENING_SNAPSHOT: FlowSnapshotPayload = {
     lastError: null,
     declinedRoutes: [],
   },
-  state: { stateSlices: null },
+  state: { stateSlices: null, offeredTools: [], toolsetHash: '0'.repeat(64) },
 };
 
 /**

@@ -290,6 +290,7 @@ function agentRun(
     fileService: new RunFileService(runId, session.roots),
     tools: getDefaultToolRegistry(),
     finalToolName: null,
+    toolset: { offeredTools: [], toolsetHash: '0'.repeat(64) },
     structured: { value: undefined },
     model,
     scope: Scope.makeUnsafe(),
@@ -375,7 +376,11 @@ const openRun = Effect.fn('openRun')(function* (
       phase: 'initial',
       state: {
         family: 'toolUse',
-        state: { stateSlices: null },
+        state: {
+          stateSlices: null,
+          offeredTools: [],
+          toolsetHash: '0'.repeat(64),
+        },
       },
     }),
   ]);
