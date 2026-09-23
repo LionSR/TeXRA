@@ -400,7 +400,11 @@ export class SettingsViewMessageHandler {
       getInlineCriticismEnabled: () =>
         this.withActiveWebview((w) => this.sendInlineCriticismEnabled(w)),
       setInlineCriticismEnabled: (message) =>
-        this.handleSetInlineCriticismEnabled(message.enabled),
+        setInlineCriticismEnabled(message.enabled).pipe(
+          Effect.andThen(
+            this.withActiveWebview((w) => this.sendInlineCriticismEnabled(w)),
+          ),
+        ),
       getGoalList: () => this.withActiveWebview((w) => this.sendGoalList(w)),
       revealGoalRun: (message) =>
         revealProgressRun(message.runId).pipe(Effect.asVoid),
@@ -633,14 +637,6 @@ export class SettingsViewMessageHandler {
         command: SETTINGS_VIEW_COMMANDS.UPDATE_INLINE_CRITICISM_ENABLED,
         enabled,
       }),
-    );
-  }
-
-  private handleSetInlineCriticismEnabled(enabled: boolean) {
-    return setInlineCriticismEnabled(enabled).pipe(
-      Effect.andThen(
-        this.withActiveWebview((w) => this.sendInlineCriticismEnabled(w)),
-      ),
     );
   }
 

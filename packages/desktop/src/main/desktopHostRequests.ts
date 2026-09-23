@@ -39,6 +39,7 @@ import type { HostDraftRequests } from '@controllers/session/hostDraftRequests';
 import type { HostSnapshotSource } from '@controllers/session/hostSnapshotSource';
 import {
   handleSharedHostRequest,
+  isSharedHostRequest,
   type SharedHostRequestBindings,
   type SharedHostRequestPorts,
 } from '@controllers/session/sharedHostRequests';
@@ -55,7 +56,11 @@ import {
   readModelAvailabilityInputs,
 } from '@model/computeModelOptions';
 import type { AgentDirectoriesFailed, StateStore } from '@platform/interfaces';
-import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
+import {
+  withProcessServices,
+  type ProcessRuntime,
+  type ProcessServices,
+} from '@platform/processRuntime';
 import {
   sessionFsLayer,
   type GlobalStorageFs,
@@ -194,14 +199,12 @@ export function createDesktopHostRequests(
       session,
       runAgentRequest: run.runAgentRequest,
       loadModelOptions: () =>
-        Effect.flatMap(runtime.contextEffect, (context) =>
-          Effect.provideContext(
-            readModelAvailabilityInputs({
-              ...session.roots,
-              secrets: options.secrets,
-            }).pipe(Effect.map(modelOptionsFrom)),
-            context,
-          ),
+        withProcessServices(
+          runtime,
+          readModelAvailabilityInputs({
+            ...session.roots,
+            secrets: options.secrets,
+          }).pipe(Effect.map(modelOptionsFrom)),
         ),
       // Only the "ask the user for a key" step is host-specific: on the
       // desktop that means opening the Models tab rather than a modal prompt.
@@ -371,9 +374,7 @@ export function createDesktopHostRequests(
           fs.readFileString(file),
         ),
       showInfo: (message) => host.showInfoMessage(message),
-      // The refusal is the notice: the member fails with the `Rejected` the
-      // request answers with.
-      showError: (reason) => Effect.fail(new Rejected({ reason })),
+      showError: rejectRequestEffect,
       logError: (message, error) =>
         logger.error(message, { data: toLogData(error) }),
     },
@@ -707,40 +708,10 @@ export function createDesktopHostRequests(
   > {
     return Effect.gen(function* () {
       const done: HostOutcome = { kind: 'done' };
+      if (isSharedHostRequest(request)) {
+        return yield* handleSharedHostRequest(sharedRequests, request, port);
+      }
       switch (request.kind) {
-        case 'openFile':
-        case 'openLabel':
-        case 'openRunStorage':
-        case 'exportTranscript':
-        case 'restoreIntoLauncher':
-        case 'resume':
-        case 'runNew':
-        case 'runCompileFixer':
-        case 'useOwnApiKey':
-        case 'latexdiff':
-        case 'pack':
-        case 'clean':
-        case 'latexdiffs':
-        case 'record':
-        case 'openDashboard':
-        case 'refreshCommits':
-        case 'refreshFiles':
-        case 'openSettings':
-        case 'polish':
-        case 'savePastedImage':
-        case 'toolEdit':
-        case 'setActiveView':
-        case 'fileAction':
-        case 'restoreProposalConfig':
-        case 'apiKeyBanner':
-        case 'agentConfigBanner':
-        case 'recheckDependencies':
-        case 'openInstallGuide':
-        case 'signIn':
-        case 'dismissBanner':
-        case 'gettingStarted':
-        case 'onboarding':
-          return yield* handleSharedHostRequest(sharedRequests, request, port);
         case 'popOut':
         case 'popBack':
           return yield* Effect.fail(notOnDesktop('Pop-out to editor'));

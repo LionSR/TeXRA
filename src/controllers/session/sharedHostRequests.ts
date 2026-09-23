@@ -7,10 +7,11 @@
  * read-then-act order, the same three- and six-way sub-switches -- so the
  * body lives here once and the difference is the table.
  *
- * A host keeps a `case` only for an arm it performs its own way (its file
- * pickers, its editor's current file, its tab pop-out, its launch path), so
- * its switch stays exhaustive over `HostRequest` and the compiler still
- * names a kind it forgot.
+ * A host routes every kind {@link isSharedHostRequest} admits here and keeps
+ * a `case` only for an arm it performs its own way (its file pickers, its
+ * editor's current file, its tab pop-out, its launch path). The guard narrows
+ * the host's switch to exactly those kinds, so it stays exhaustive and the
+ * compiler still names a kind it forgot.
  */
 import { Effect } from 'effect';
 
@@ -37,45 +38,58 @@ import type {
   SurfaceActionMessage,
 } from '@shared/session/sessionFrames';
 
-/** The requests {@link handleSharedHostRequest} answers. */
+/** The kinds {@link handleSharedHostRequest} answers. */
+const SHARED_HOST_REQUEST_KINDS = [
+  'agentConfigBanner',
+  'apiKeyBanner',
+  'clean',
+  'dismissBanner',
+  'exportTranscript',
+  'fileAction',
+  'gettingStarted',
+  'latexdiff',
+  'latexdiffs',
+  'onboarding',
+  'openDashboard',
+  'openFile',
+  'openInstallGuide',
+  'openLabel',
+  'openRunStorage',
+  'openSettings',
+  'pack',
+  'polish',
+  'recheckDependencies',
+  'record',
+  'refreshCommits',
+  'refreshFiles',
+  'restoreIntoLauncher',
+  'restoreProposalConfig',
+  'resume',
+  'runCompileFixer',
+  'runNew',
+  'savePastedImage',
+  'setActiveView',
+  'signIn',
+  'toolEdit',
+  'useOwnApiKey',
+] as const satisfies readonly HostRequest['kind'][];
+
 type SharedHostRequest = Extract<
   HostRequest,
-  {
-    kind:
-      | 'agentConfigBanner'
-      | 'apiKeyBanner'
-      | 'clean'
-      | 'dismissBanner'
-      | 'exportTranscript'
-      | 'fileAction'
-      | 'gettingStarted'
-      | 'latexdiff'
-      | 'latexdiffs'
-      | 'onboarding'
-      | 'openDashboard'
-      | 'openFile'
-      | 'openInstallGuide'
-      | 'openLabel'
-      | 'openRunStorage'
-      | 'openSettings'
-      | 'pack'
-      | 'polish'
-      | 'recheckDependencies'
-      | 'record'
-      | 'refreshCommits'
-      | 'refreshFiles'
-      | 'restoreIntoLauncher'
-      | 'restoreProposalConfig'
-      | 'resume'
-      | 'runCompileFixer'
-      | 'runNew'
-      | 'savePastedImage'
-      | 'setActiveView'
-      | 'signIn'
-      | 'toolEdit'
-      | 'useOwnApiKey';
-  }
+  { kind: (typeof SHARED_HOST_REQUEST_KINDS)[number] }
 >;
+
+const sharedHostRequestKinds: ReadonlySet<HostRequest['kind']> = new Set(
+  SHARED_HOST_REQUEST_KINDS,
+);
+
+/** Whether the shared body answers `request`. A host routes these to
+ *  {@link handleSharedHostRequest} and switches over what the guard leaves. */
+export function isSharedHostRequest(
+  request: HostRequest,
+): request is SharedHostRequest {
+  return sharedHostRequestKinds.has(request.kind);
+}
 
 /** A verb a host binds: it runs on the fiber the host's dispatch owns, and
  *  its failure is the value the arm answers with. */

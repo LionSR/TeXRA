@@ -32,7 +32,6 @@ import {
   type RequestEnsureProgressViewPayload,
   type RequestShowErrorPayload,
   type RequestShowInstructionPayload,
-  type ShowAgentConfigBannerPayload,
 } from '@shared/schemas';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -142,16 +141,6 @@ function handleRequestShowInstruction(
   );
 }
 
-function handleShowAgentConfigBanner(
-  payload: ShowAgentConfigBannerPayload,
-  progressViewProvider: ProgressViewProvider,
-): Effect.Effect<void> {
-  return progressViewProvider.showAgentConfigBanner(
-    payload.agentName,
-    payload.category,
-  );
-}
-
 function handleRequestEnsureProgressView(
   payload: RequestEnsureProgressViewPayload,
   progressViewProvider: ProgressViewProvider,
@@ -240,7 +229,10 @@ export function createAgentPresentationHost(
     requestShowInstruction: (payload) =>
       handleRequestShowInstruction(globalState, payload),
     showAgentConfigBanner: (payload) =>
-      handleShowAgentConfigBanner(payload, progressViewProvider),
+      progressViewProvider.showAgentConfigBanner(
+        payload.agentName,
+        payload.category,
+      ),
     requestShowError: handleRequestShowError,
     requestEnsureProgressView: (payload) =>
       handleRequestEnsureProgressView(payload, progressViewProvider),

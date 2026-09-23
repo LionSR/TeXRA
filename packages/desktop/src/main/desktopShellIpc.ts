@@ -139,9 +139,9 @@ export function createDesktopShellActions(
     runShellAction(openCustomAgentDirectory);
   }
 
-  // New Session is the header's "+" (PRD 12.4): the New-task state with
+  // Also New Session, the header's "+" (PRD 12.4): the New-task state with
   // the launcher's selections as they are.
-  function resetMainView() {
+  function showLauncher() {
     renderer.postToRenderer({
       command: DESKTOP_SHELL_COMMANDS.SHOW_LAUNCHER,
     });
@@ -168,12 +168,8 @@ export function createDesktopShellActions(
         command: DESKTOP_SHELL_COMMANDS.SAVE_FILE,
       });
     },
-    resetMainView,
-    showLauncher: () => {
-      renderer.postToRenderer({
-        command: DESKTOP_SHELL_COMMANDS.SHOW_LAUNCHER,
-      });
-    },
+    resetMainView: showLauncher,
+    showLauncher,
     openWorkbench,
     showSettings,
     toggleBottomBar: () => toggleLayout('bottomBar'),

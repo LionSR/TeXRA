@@ -20,10 +20,7 @@ import {
   type SessionHandle,
   type ValidatedRunRequest,
 } from '@agent/runtime';
-import {
-  ToolEditApprovalController,
-  type ToolEditApprovalHost,
-} from '@controllers/approval/ToolEditApprovalController';
+import { ToolEditApprovalController } from '@controllers/approval/ToolEditApprovalController';
 import { RunLaunchFailed } from '@controllers/session/hostRunActions';
 import { withLogChannel } from '@logger/effectLog';
 import type { ProcessRuntime } from '@platform/processRuntime';
@@ -150,21 +147,16 @@ export function createDesktopAgentRun(
   // (`request.opened` folds into the view), and a surface's `request.decide`
   // settles it there; the staged preview is discarded when the request
   // resolves, whichever way.
-  const decideRequest: ToolEditApprovalHost['decide'] = (
-    runId,
-    requestId,
-    decision,
-  ) =>
-    session.requests
-      .request({ kind: 'request.decide', runId, requestId, decision })
-      .pipe(Effect.asVoid);
   const toolEditApprovals = new ToolEditApprovalController({
     host: new DesktopToolEditApprovalHost({
       ui: {
         ...options.toolEditPreview,
         showErrorMessage: host.showErrorMessage,
       },
-      decide: decideRequest,
+      decide: (runId, requestId, decision) =>
+        session.requests
+          .request({ kind: 'request.decide', runId, requestId, decision })
+          .pipe(Effect.asVoid),
       runtime,
     }),
   });
