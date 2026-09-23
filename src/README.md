@@ -44,8 +44,8 @@ Use the alias, not a long relative chain.
 importing `vscode` inside one is a lint error, not a convention. The canonical
 list is `VSCODE_FREE_ZONE_DIRS` in [`eslint.config.mjs`](../eslint.config.mjs) — read it there rather
 than trusting a copy, including this one. Code in those zones reaches host
-services through `platform()` from `@platform/platform`; when it needs a
-capability the port does not expose, add a typed port rather than an import.
+services through the Effect context the process runtime serves; when it
+needs a capability no port exposes, add a typed port rather than an import.
 
 **Does it run in a webview?** The webview frontends bundle for the browser, so
 anything they import must avoid Node built-ins. Only a small, fixed set of

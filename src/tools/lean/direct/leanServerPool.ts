@@ -580,8 +580,8 @@ function isFileTableExhausted(error: unknown): boolean {
   return false;
 }
 
-// Uses fs/promises directly — must not call platform() because this runs
-// before initPlatform() during early startup / test harness setup.
+// Uses fs/promises directly: this runs before any process runtime exists,
+// during early startup / test harness setup.
 const pathExists = (target: string): Effect.Effect<boolean> =>
   Effect.isSuccess(Effect.tryPromise(() => access(target)));
 

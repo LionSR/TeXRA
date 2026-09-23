@@ -914,7 +914,7 @@ const closeSession = (root: string) =>
 /**
  * Make the one Effect runtime of this process over its identity (PRD 7.7) and
  * install it with the session family it serves: called by a composition root
- * exactly once at startup, right beside `initPlatform()`, which calls
+ * exactly once at startup, which calls
  * {@link disposeProcessRuntime} on its shutdown path after the last session
  * has released its graph. The identity is a program for the process start:
  * already-resolved on a host that read it before installing, still a pending

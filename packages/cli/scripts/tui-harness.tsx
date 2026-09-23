@@ -25,7 +25,6 @@ import { tryDefaultSession } from '@agent/runtime';
 import { tuiOutputStreamForColor } from '@cli/tui/noColorOutput';
 import { DEFAULT_MODELS } from '@model/modelOptionsBasic';
 import { apiKeySecretName } from '@model/apiProviders';
-import { platform } from '@platform/platform';
 import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
 import { MEMORY_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import {
@@ -1954,7 +1953,7 @@ async function exitHarness(exitCode: number): Promise<void> {
   ink.unmount();
   try {
     await Effect.runPromise(harnessRuntimeHost.close());
-    await Effect.runPromise(platform().lifecycle.runShutdown);
+    await Effect.runPromise(HARNESS_PLATFORM_SERVICES.lifecycle.runShutdown);
   } finally {
     process.exit(exitCode);
   }

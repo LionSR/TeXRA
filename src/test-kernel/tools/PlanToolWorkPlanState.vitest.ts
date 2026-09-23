@@ -8,7 +8,6 @@ import { afterEach, beforeEach, describe, expect } from 'vitest';
 // Local imports
 import { WorkPlanState } from '@agent/core/state/AgentWorkspaceState';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
-import { platform, type Platform } from '@platform/platform';
 import { planSummaryLine, GOAL_FEATURE_FLAG_KEY } from '@shared/schemas';
 import type { Goal, Plan, RequestDecision, RunId } from '@shared/schemas';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
@@ -48,9 +47,8 @@ const followUpPlan: Plan = {
   ].join('\n'),
 };
 
-async function installPlatform(flagOn: boolean): Promise<Platform> {
+async function installPlatform(flagOn: boolean): Promise<void> {
   await installFakePlatform({ config: { [GOAL_FEATURE_FLAG_KEY]: flagOn } });
-  return platform();
 }
 
 /** Request watchers the cases opened, released after each. */

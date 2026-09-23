@@ -1,7 +1,7 @@
 /**
  * The process's Effect runtime (PRD one-fold-three-renderers, 7.7): one
- * `ManagedRuntime` per process, made at the composition root beside
- * `initPlatform()` and disposed on the existing shutdown path. `runPromise`,
+ * `ManagedRuntime` per process, made at the composition root and disposed
+ * on the existing shutdown path. `runPromise`,
  * `runFork`, and `runSync` appear at the entries and at the outermost
  * Promise-facing methods; inside, cancellation is fiber interruption.
  *

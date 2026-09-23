@@ -82,8 +82,11 @@ import { formatFatalErrorDetail } from '@logger/redaction';
 import { invalidateApiKeyCache } from '@model/apiProviders';
 import { invalidateRuntimeModelRegistry } from '@model/runtimeModelRegistry';
 import { AppState, AgentDirectories } from '@platform/interfaces';
-import type { AgentResumePort, LifecycleHost } from '@platform/interfaces';
-import { initPlatform, type Platform } from '@platform/platform';
+import type {
+  AgentResumePort,
+  LifecycleHost,
+  ToolMissingHandler,
+} from '@platform/interfaces';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import {
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
@@ -164,7 +167,7 @@ let projectScope: Scope.Closeable | undefined;
 let extensionShutdownPromise: Promise<void> | undefined;
 
 /**
- * The platform, the process runtime, and the process roots, wired once for
+ * The process runtime and the process roots, wired once for
  * both activation paths: the credential-only path without a folder and the
  * workspace path, which adds the ports only a folder can answer.
  *
@@ -179,7 +182,9 @@ async function initVscodePlatform(
    *  platform must exist before `initializeDefaultSession` can run, so the
    *  session cannot be a value here. */
   getSession: () => SessionHandle,
-  extras: Pick<Platform, 'toolMissingHandler'> & {
+  extras: {
+    /** The editor's tool-missing UI, served as `ToolMissingReporter` below. */
+    readonly toolMissingHandler?: ToolMissingHandler;
     /** The editor's LM bridge, served as `LanguageModel` below. */
     readonly languageModel?: LanguageModelPort;
   } = {},
@@ -191,7 +196,7 @@ async function initVscodePlatform(
   roots: WorkspaceRoots;
 }> {
   // The process runtime comes first: the config stores below are opened as
-  // Effect programs, so it must exist before the platform this host wires.
+  // Effect programs, so it must exist before the roots this host wires.
   const storage = createNodeStorageProvider({ workspacePath: workspaceRoot });
   const secrets = new VscodeSecrets(context);
   const appState = Layer.effect(
@@ -306,11 +311,6 @@ async function initVscodePlatform(
       ),
     ),
   );
-  initPlatform({
-    lifecycle,
-    agentDirectories,
-    toolMissingHandler: extras.toolMissingHandler,
-  });
   const roots = createNodeWorkspaceRoots({
     workspacePath: workspaceRoot,
     storage: storage.getStoragePath(),
@@ -319,7 +319,7 @@ async function initVscodePlatform(
     workspaceState,
     globalState,
   });
-  // Everything this process installs once after its platform exists, in the
+  // Everything this process installs once after its roots exist, in the
   // order the shared bootstrap owns for all three hosts.
   await runtime.runPromise(
     bootstrapHost({
@@ -594,7 +594,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
   if (!hasSingleWorkspace) {
     registerWelcomeView(context);
     // Credential-only platform. Every sign-in path stores into SecretStorage
-    // (`platform().secrets`) and the global `~/.texra` config — none of it
+    // (the `Secrets` service) and the global `~/.texra` config — none of it
     // needs a folder — so the walkthrough's credential buttons work before
     // one is open. Agents still require the workspace-backed platform below;
     // opening a folder reloads the window into that path (welcomeView.ts).

@@ -314,8 +314,8 @@ function createWindow(options: {
   /**
    * The process services the composition root built (see
    * `ElectronPlatformInitResult`). Handed down so the window's controllers and
-   * IPC surfaces take their stores from their owner rather than re-reading the
-   * ambient `platform()` singleton.
+   * IPC surfaces take their stores from their owner rather than re-reading
+   * them.
    */
   globalState: StateStore;
   secrets: PlatformSecrets;

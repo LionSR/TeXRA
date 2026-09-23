@@ -4,8 +4,8 @@
  * All three composition roots (the `texra` CLI runtime, the Electron desktop
  * main process, and the VS Code extension host) open a workspace's roots and
  * register their runtime skill sources the same way. This module owns those
- * two steps so the hosts cannot drift; each host still performs the actual
- * `initPlatform(...)` call in its own composition root.
+ * two steps so the hosts cannot drift; each host still installs its process
+ * runtime in its own composition root.
  *
  * This file is a composition helper, not a core platform abstraction: it
  * deliberately reaches "up" into `@agent` and `@skills` for the registration

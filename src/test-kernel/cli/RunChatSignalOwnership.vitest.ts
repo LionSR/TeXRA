@@ -17,7 +17,6 @@ import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { rootRunId as rootRunIdSignal } from '@cli/chat/tui/state/cliState';
 import { currentView } from '@cli/chat/tui/state/sessionView';
-import { platform } from '@platform/platform';
 import {
   aggregateId as qualifyAggregateId,
   AgentCategory,
@@ -281,7 +280,7 @@ describe('runChat signal ownership wiring', () => {
     // The init hands back the services the composition root holds; the fake
     // host installed above owns those stores here.
     const cliServices = () => ({
-      ...platform(),
+      ...installedHost().platform,
       globalStorage: installedHost().roots.globalStorage,
       globalState: installedHost().roots.globalState,
       secrets: installedHost().secrets,

@@ -271,20 +271,18 @@ describe('desktop composition root and launch environment', () => {
     ),
   );
 
-  it('keeps platform initialization in the Electron composition root', async () => {
+  it('keeps the process runtime install in the Electron composition root', async () => {
     const files = sourceFilesUnder(DESKTOP_SRC_DIR);
-    const initPlatformFiles: string[] = [];
+    const installFiles: string[] = [];
 
     for (const filePath of files) {
       const source = await readFile(filePath, 'utf8');
-      if (source.includes('initPlatform(')) {
-        initPlatformFiles.push(
-          normalizeFilePath(relative(REPO_ROOT, filePath)),
-        );
+      if (source.includes('installProcessRuntime(')) {
+        installFiles.push(normalizeFilePath(relative(REPO_ROOT, filePath)));
       }
     }
 
-    expect(initPlatformFiles).toEqual([
+    expect(installFiles).toEqual([
       'packages/desktop/src/main/platform/index.ts',
     ]);
   });

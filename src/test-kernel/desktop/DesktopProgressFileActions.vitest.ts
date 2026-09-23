@@ -104,9 +104,6 @@ async function loadFileActions(options: {
     ),
   );
 
-  mocks.doMock('@platform/platform', () => ({
-    platform: () => ({ fs: { readDirectory: vi.fn(), isSymlink: vi.fn() } }),
-  }));
   mocks.doMock('@latex/latexdiff/runLatexdiff', () => ({
     runLatexdiffForRun,
   }));

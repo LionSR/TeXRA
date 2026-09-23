@@ -1,25 +1,23 @@
 /**
- * The once-per-process bootstrap that sits beside `initPlatform()`, in one
- * order for every host.
+ * The once-per-process bootstrap that sits beside each composition root's
+ * `installProcessRuntime()`, in one order for every host.
  *
- * Each composition root still builds its own `Platform` literal and makes its
- * own `initPlatform()` call — every field of the literal is host-specific and
- * ESLint pins the call to the roots. What surrounded that call was not
- * host-specific at all: the VS Code extension, the Electron main process and
- * the `texra` CLI each performed the same process-wide installs in three
- * different orders, every body carrying a comment claiming to mirror one of
- * the other two. This module owns that order, so the three roots cannot drift
- * and there is one place to read what a started TeXRA process has installed.
+ * Each composition root still installs its own process runtime — every
+ * service it serves is host-specific and ESLint pins the install to the
+ * roots. What surrounded that install was not host-specific at all: the VS
+ * Code extension, the Electron main process and the `texra` CLI each
+ * performed the same process-wide installs in three different orders, every
+ * body carrying a comment claiming to mirror one of the other two. This
+ * module owns that order, so the three roots cannot drift and there is one
+ * place to read what a started TeXRA process has installed.
  *
- * Nothing here reads `platform()`: every step either sets a module-global or
- * registers a closure that resolves later, and the one state write takes its
- * store as an argument. So the extension and the desktop run it straight
- * after `initPlatform()`, while the CLI runs it just before — that host keeps
- * its platform, roots and lazy session private until the fallible setup has
- * succeeded, and the first-install seed below is the fallible step that
- * invariant was written for.
+ * Nothing here reads an ambient host: every step either sets a module-global
+ * or registers a closure that resolves later, and the one state write takes
+ * its store as an argument. The CLI keeps its roots and lazy session private
+ * until this fallible setup has succeeded, and the first-install seed below
+ * is the fallible step that invariant was written for.
  *
- * What stays with the caller: the `Platform` literal and `initPlatform()`, the
+ * What stays with the caller: the process runtime install, the
  * `WorkspaceRoots` (each host resolves its config stores differently, and the
  * CLI opens its process session over the roots before this runs), and
  * `registerRuntimeShutdownHandlers` — its hook record names host-owned

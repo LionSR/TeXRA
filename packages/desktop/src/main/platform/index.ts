@@ -15,7 +15,6 @@ import {
 } from '@controllers/session/sessionLayer';
 import { globalDatabaseLayer } from '@controllers/session/Database';
 import { NotificationFailed } from '@hosts/uiHosts';
-import { initPlatform } from '@platform/platform';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type {
@@ -65,10 +64,9 @@ export interface ElectronPlatformInitResult {
   globalConfigStore: ConfigStore;
   lifecycle: LifecycleHost;
   /**
-   * The process-wide services the composition root builds and `initPlatform`
-   * publishes. Returned so the window and the IPC surfaces below it are
-   * *handed* their stores instead of each re-reading the ambient
-   * `platform()` singleton: one owner, one place to substitute in a test.
+   * The process-wide services the composition root builds. Returned so the
+   * window and the IPC surfaces below it are *handed* their stores instead
+   * of each re-reading them: one owner, one place to substitute in a test.
    */
   globalState: StateStore;
   secrets: PlatformSecrets;
@@ -229,7 +227,6 @@ export async function initializeElectronPlatform(
         secrets,
         skills: { resourcesPath },
       });
-      initPlatform({ lifecycle, agentDirectories });
       return {
         processRoots,
         globalConfigStore: configStores.global,

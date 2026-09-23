@@ -10,12 +10,12 @@ The full zone list lives in `CLAUDE.md` → "Separation of concerns: VS Code cou
 
 - **`grep -nE "from ['\"]vscode['\"]"`** in every directory of `VSCODE_FREE_ZONE_DIRS` (`eslint.config.mjs`). Any hit is a finding.
 - **New `from '@agent/*'` imports in `src/shared/`** → finding. `src/shared/` is for wire contracts and UI-shared message types; host-neutral orchestration belongs under `src/controllers/`.
-- **Direct `vscode.workspace.getConfiguration` / `workspace.fs` / `secrets`** in agnostic code → finding. `Platform` carries none of these any more (`src/platform/platform.ts`): configuration is the `ConfigProvider` on the `WorkspaceRoots` the caller holds, files are Effect's own `FileSystem` through the rooted `WorkspaceFs`/`StorageFs`/`GlobalStorageFs` views (`@platform/rootedFs`), and secrets are the `Secrets` service. There is no `platform().config`, `platform().fs` or `platform().secrets` to reach for. Note: `src/utils/config/platformSettings.ts` is host-neutral (VS Code-free) and is called directly from agnostic code too, not only VS Code-allowed code.
+- **Direct `vscode.workspace.getConfiguration` / `workspace.fs` / `secrets`** in agnostic code → finding. There is no ambient platform object: configuration is the `ConfigProvider` on the `WorkspaceRoots` the caller holds, files are Effect's own `FileSystem` through the rooted `WorkspaceFs`/`StorageFs`/`GlobalStorageFs` views (`@platform/rootedFs`), and secrets are the `Secrets` service. There is no `platform()` locator to reach for. Note: `src/utils/config/platformSettings.ts` is host-neutral (VS Code-free) and is called directly from agnostic code too, not only VS Code-allowed code.
 - **`instanceof vscode.FileSystemError`** → `isFileNotFoundError(err)` from `@common/errors`.
 - **`vscode.FileType.File` / `.Directory`** → `isFile()` / `isDirectory()` from `@utils/files/fsEntryType`.
 - **`vscode.window.show*Message()` in business logic** → return error results; let the command/frontend layer handle UI.
 - **`process.env`, `os.homedir()`, raw `fs/promises`, `child_process.exec`** in agnostic zones → platform interfaces or `executeCommand` from `@utils/system/execUtils`.
-- **`initPlatform()`** called outside the host entry point (`packages/extension/src/extension.ts`) → bug. Read access uses `platform()`; module-init facades use `tryPlatform()`.
+- **`installProcessRuntime()`** called outside a composition root (`COMPOSITION_ROOT_FILES` in `eslint.config.mjs`) → bug. Process services are read from the Effect context the runtime serves.
 
 ## 2. Zod v4 schema correctness
 

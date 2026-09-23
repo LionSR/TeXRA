@@ -1,6 +1,6 @@
 /**
  * Platform port contracts — the host-neutral interfaces a host wires into
- * `initPlatform()`. Formerly one file per port under `interfaces/`.
+ * `installProcessRuntime()`. Formerly one file per port under `interfaces/`.
  */
 import { Context, Data, Effect, FileSystem, Layer } from 'effect';
 import type { AgentSource, RunId } from '@shared/schemas';

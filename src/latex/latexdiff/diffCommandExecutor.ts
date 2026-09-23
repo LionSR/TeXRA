@@ -170,7 +170,7 @@ export class DiffCommandExecutor {
       // across the --flatten attempt and any retry, while still picking up any
       // updates the user has made between successive diff runs. Reading per
       // diff also matters because `LaTeXdiffService` is constructed at module
-      // scope (before `initPlatform()` runs); a value captured at construction
+      // scope (before any host is composed); a value captured at construction
       // would permanently freeze at whatever the default was at activation-zero.
       const timeoutMs = yield* this.setting<number>(
         WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS,

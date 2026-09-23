@@ -3,7 +3,6 @@ import { Effect } from 'effect';
 import { beforeEach, describe, expect, vi } from 'vitest';
 
 import type { ModelOptionStores } from '@model/computeModelOptions';
-import { platform } from '@platform/platform';
 import {
   LanguageModel,
   UNAVAILABLE_LANGUAGE_MODEL_PORT,

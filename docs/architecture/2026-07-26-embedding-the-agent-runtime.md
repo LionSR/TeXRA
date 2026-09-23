@@ -25,7 +25,7 @@ awkward, this note says so rather than describing an intended future shape.
 ## 1. The minimum sequence to a working `runAgent`
 
 The sections below separate minimum launch requirements from shipped-feature
-parity. A raw agent loop needs an initialized platform, usable credentials,
+parity. A raw agent loop needs an installed process runtime, usable credentials,
 agent directories, a session, and a populated registry. When a run can open
 requests, something must also decide them (§3); presentation goes through the
 session's interactions attachment, and there is no separate presentation-host
@@ -34,34 +34,17 @@ services the shipped Node hosts pass to `installProcessRuntime` are a
 shipped-feature choice; the raw loop only needs some `LeanLanguageServices`
 layer there.
 
-### Step 1 — `initPlatform({ lifecycle, agentDirectories })`
+### Step 1 — `installProcessRuntime({ lifecycle, agentDirectories, … })`
 
-`platform()` throws until this runs (`src/platform/platform.ts:68-75`).
-`initPlatform` itself just freezes and stores the services object
-(`src/platform/platform.ts:60-62`).
+There is no `createNodePlatform` factory and no process-wide platform object
+any more: the `Platform` module was deleted (#13060). Every process fact has
+one of two owners, and an embedder supplies each one there:
 
-There is no `createNodePlatform` factory any more, and no list of eight further
-services to fill in. `Platform` has shrunk onto two required members plus one
-optional one (`src/platform/platform.ts:39-52`):
-
-```ts
-interface Platform {
-  readonly lifecycle: LifecycleHost;
-  readonly agentDirectories: AgentDirectoriesPort;
-  readonly toolMissingHandler?: (
-    message: string,
-    openDocsCommand?: string,
-  ) => void | Promise<void>;
-}
-```
-
-Everything the old factory supplied moved to one of two owners, and an embedder
-supplies each one there rather than in the platform literal:
-
-- **Process services** (the filesystem, `Path`, secrets, application state, the
-  resume port, the editor language-model bridge) are Effect services provided
-  once per process by `installProcessRuntime`
-  (`src/controllers/session/sessionLayer.ts:1055-1069`).
+- **Process services** (the shutdown `lifecycle`, the `agentDirectories` port,
+  the optional `toolMissingReporter`, the filesystem, `Path`, secrets,
+  application state, the resume port, the editor language-model bridge) are
+  Effect services provided once per process by `installProcessRuntime`
+  (`src/controllers/session/sessionLayer.ts`).
 - **Per-workspace services** (the workspace root, its storage paths, its
   configuration and its state stores) are a `WorkspaceRoots`
   (`@platform/workspaceRoots`) carried by each `SessionHandle`, so one process
@@ -76,14 +59,14 @@ packaged resources tree; its `builtIn()` and `builtInToolUse()` read that tree
 in place. Nothing is copied into global storage, so there is no bundle-copy
 step to run and no version state key to keep.
 
-Beside the platform, a Node root calls `bootstrapHost`
+Beside that install, a Node root calls `bootstrapHost`
 (`src/controllers/hostBootstrap.ts:75-92`) once, on its own process runtime: it
 installs the model HTTP dispatcher, the process setting host, the account
 probes, the runtime skill sources, and the first-install disabled-tool seed.
 An embedder that skips it gets a runtime without those, not a broken one.
 
-Only a composition root calls `initPlatform`; that rule is stated in the
-`nodeHost` module header (`src/platform/defaults/nodeHost.ts:1-18`).
+Only a composition root calls `installProcessRuntime`; ESLint pins the import
+to the files in `COMPOSITION_ROOT_FILES` (`eslint.config.mjs`).
 
 ### Feature-parity step — the `lean` layer of `installProcessRuntime`
 
@@ -98,7 +81,7 @@ The two conditional tool injections — `memory` and the unified `plan` tool
 that drives the goal loop — are not part of this step: they self-register when
 `src/agent/runtime/toolInjection.ts` loads. Registration only stores
 predicates: the memory setting is read later, when its predicate is evaluated.
-The platform must merely exist before injected tools are resolved.
+The process runtime must merely exist before injected tools are resolved.
 
 The pool the layer builds spawns nothing until a Lean tool is first used, and
 its servers stop when the process runtime is disposed.
@@ -131,7 +114,8 @@ const agentDirectories = new AgentDirectoryService({
   resourcesPath, // dir containing agents/, tool_use_agents/, skills/
   customDirectoryStore: { get: () => Effect.succeed(undefined) },
 });
-initPlatform({ lifecycle, agentDirectories });
+// Served as `AgentDirectories` by the Step 1 install:
+// installProcessRuntime({ …, agentDirectories: AgentDirectories.layer(agentDirectories) });
 ```
 
 `customDirectoryStore.get()` yields the user-configured custom agent
@@ -140,7 +124,7 @@ directory, or `undefined` for none. The three methods return Effects, not Promis
 directory is an `AgentDirectoriesFailed`, and the `issueReporter` option
 decides how it surfaces (the default logs it at `warn`).
 
-Alternatively, skip the packaged tree entirely and hand `initPlatform` an
+Alternatively, skip the packaged tree entirely and hand `installProcessRuntime` an
 `AgentDirectoriesPort` of your own that points at your directory. See
 [§2](#2-agentdirectoriesport-is-three-directory-paths-not-agent-values) — this
 is the part the plan of record describes incorrectly.
@@ -195,12 +179,12 @@ approval-gated tools away from the model.
 This example assumes an alias-aware build from a TeXRA checkout, as described
 at the start of this document. Copying these imports into an ordinary external
 TypeScript project and running plain `tsc` is insufficient: there are no
-runtime packages named `@platform/platform`, `@agent/runtime/runAgent`, and so
-on.
+runtime packages named `@controllers/session/sessionLayer`,
+`@agent/runtime/runAgent`, and so on.
 
 ```ts
 import { Effect, Fiber, Stream } from 'effect';
-import { initPlatform } from '@platform/platform';
+import { AgentDirectories } from '@platform/interfaces';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { createNodeWorkspaceRoots } from '@platform/defaults/nodeHost';
 import { directLeanLanguageServices } from '@tools/lean/direct/directLspAdapter';
@@ -214,26 +198,26 @@ import { runAgent } from '@agent/runtime/runAgent';
 import { validateRunRequest } from '@agent/core/state/runRequests';
 import { AgentCategory } from '@shared/schemas/agent';
 
-// Step 1 — the platform is two members; everything else has another owner.
+// Step 1 — the process services: lifecycle, agent directories, filesystem,
+// secrets, application state, and the rest.
 const lifecycle = createLifecycleHost();
 const agentDirectories = new AgentDirectoryService({
   channel: 'my-embedder',
   resourcesPath, // dir containing agents/, tool_use_agents/, skills/
   customDirectoryStore: { get: () => Effect.succeed(undefined) },
 });
-initPlatform({ lifecycle, agentDirectories });
-
-// The process services: filesystem, secrets, application state, and the rest.
 const runtime = installProcessRuntime({
   processStart: nodeProcesses.selfIdentity(),
   globalStorage,
   secrets,
+  lifecycle,
+  agentDirectories: AgentDirectories.layer(agentDirectories),
   appState: globalState,
   /* …the other process services… */
   lean: directLeanLanguageServices(), // Shipped-feature parity
 });
 
-// The per-workspace services, carried by the session rather than the platform.
+// The per-workspace services, carried by the session rather than the process.
 const roots = createNodeWorkspaceRoots({
   workspacePath,
   storage,
@@ -245,7 +229,7 @@ const roots = createNodeWorkspaceRoots({
 
 await runtime.runPromise(
   Effect.gen(function* () {
-    // Everything a TeXRA process installs once beside its platform.
+    // Everything a TeXRA process installs once beside its process runtime.
     yield* bootstrapHost({
       host: 'cli',
       roots,
@@ -584,8 +568,8 @@ does not hold them leaves `loadAgents` with no packaged agents (§2).
 ## 5. Reading the CLI: obligations vs. product features
 
 `initCliPlatform` (`packages/cli/src/runtime/initPlatform.ts:256-467`) is one
-Effect program that builds the process runtime, the platform and the process
-session, and every `texra` command runs it. An embedder reading it cannot tell
+Effect program that builds the process runtime, the process roots and the
+process session, and every `texra` command runs it. An embedder reading it cannot tell
 which steps are runtime requirements and which are `texra`-the-product. The
 following classification makes that distinction.
 
@@ -601,14 +585,12 @@ following classification makes that distinction.
 - **`:326-333` — `createNodeWorkspaceRoots(...)`:** Required. The workspace
   roots every session is opened over.
 - **`:370-378` — `bootstrapHost({ host: 'cli', roots, secrets, skills })`:**
-  The shared once-per-process install every host runs beside its platform
+  The shared once-per-process install every host runs beside its runtime
   (`src/controllers/hostBootstrap.ts:75-92`): the model HTTP dispatcher, the
   process setting host, the account probes, the runtime skill sources, and the
   first-install disabled-tool seed. An embedder that skips it gets a runtime
-  without those, not a broken one. The CLI runs it before `initPlatform` so
-  the fallible seed fails while the platform is still private.
-- **`:400` — `initPlatform(platform)`:** Required. `platform()` throws
-  otherwise (`src/platform/platform.ts:68-75`).
+  without those, not a broken one. The CLI runs it before publishing its roots
+  so the fallible seed fails while they are still private.
 
 ### CLI initialization choices — not runtime obligations
 
@@ -632,8 +614,7 @@ The desktop main process makes the same runtime choices, showing how a shipped
 host obtains full feature parity rather than proving that every call is a
 minimum runtime requirement: it builds its agent-directories port at
 `packages/desktop/src/main/platform/index.ts:167`, runs the same
-`bootstrapHost` at `:228`, and calls `initPlatform({ lifecycle,
-agentDirectories })` at `:234`, after it rather than before. Product policy is
+`bootstrapHost` at `:228`. Product policy is
 not necessarily CLI-only: the disabled-tool seed and the runtime skill sources
 reach both hosts through that one shared call rather than being repeated per
 host.
@@ -642,11 +623,11 @@ host.
 
 ## 6. Known sharp edges
 
-1. **Only part of the shipped ordering is immediately load-bearing.** Step 3
-   reads `platform()`, so Step 1 must precede it; nothing checks this beyond the
-   throw in `platform()` itself. Feature-parity registration stores
-   predicates and a Lean adapter without evaluating host services; the
-   platform is needed only when the memory predicate later runs
+1. **Only part of the shipped ordering is immediately load-bearing.** Step 3's
+   port is served by the Step 1 install, so it is built first. Feature-parity
+   registration stores predicates and a Lean adapter without evaluating host
+   services; the process runtime is needed only when the memory predicate
+   later runs
    (`src/agent/runtime/toolInjection.ts`;
    `src/tools/lean/direct/directLspAdapter.ts:47-52`).
 2. **The process runtime is once-per-process.** The Lean layer is built with

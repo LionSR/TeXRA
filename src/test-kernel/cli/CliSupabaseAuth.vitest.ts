@@ -82,7 +82,6 @@ const mocks = vi.hoisted(() => {
     requestDeviceAuthorization: vi.fn(),
     signInWithOAuth: vi.fn(),
     toStorableSupabaseSession: vi.fn((session) => session),
-    platform: vi.fn(),
   };
 });
 
@@ -139,10 +138,6 @@ vi.mock('@auth/SupabaseAuth', async (importActual) => {
 vi.mock('@auth/SupabaseSession', () => ({
   DEFAULT_SUPABASE_SESSION_EXPIRY_MS: 60_000,
   toStorableSupabaseSession: mocks.toStorableSupabaseSession,
-}));
-
-vi.mock('@platform/platform', () => ({
-  platform: mocks.platform,
 }));
 
 vi.mock('@cli/runtime/browser', () => ({
@@ -245,7 +240,6 @@ describe('CLI Supabase auth', () => {
       Effect.succeed('none'),
     );
     mocks.authCoordinator.loadSession.mockReturnValue(Effect.succeed(null));
-    mocks.platform.mockReturnValue({ secrets: { kind: 'platform-secrets' } });
   });
 
   it('builds one account plane for the root secret store', async () => {

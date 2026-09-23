@@ -1,7 +1,7 @@
 /**
  * `host.request` (PRD one-fold-three-renderers, section 8.3): a capability
- * the host performs on the surface's behalf, mapped onto `platform()` and
- * the `@hosts/*` ports. Components dispatch one arm as the detail of a
+ * the host performs on the surface's behalf, mapped onto the process
+ * services and the `@hosts/*` ports. Components dispatch one arm as the detail of a
  * `host-request` event (`uiEvents.ts`); the root forwards it over the
  * bridge under a `session` and a `requestId`, answered by 8.4.
  *

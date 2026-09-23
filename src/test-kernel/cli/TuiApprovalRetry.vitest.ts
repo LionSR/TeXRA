@@ -13,11 +13,9 @@ const mocks = vi.hoisted(() => ({
   preferKimiCode: false,
   glmCodingPlan: false,
   notify: vi.fn(),
-  openRouter: false,
   setCliSubscriptionPreference: vi.fn(),
   setCliCodingPlanSubscription: vi.fn(),
   setGLMCodingPlan: vi.fn((_enabled: boolean) => Effect.void),
-  updateGlobalState: vi.fn(),
 }));
 
 vi.mock('@model/codex/codexSubscription', () => ({
@@ -51,20 +49,6 @@ vi.mock('@model/apiProviders', async (importActual) => {
   };
 });
 
-vi.mock('@platform/platform', async () => {
-  const { GlobalStateKey } = await import('@shared/state/stateKeys');
-  return {
-    platform: () => ({
-      workspace: { getWorkspacePath: () => undefined },
-      globalState: {
-        get: (key: string, fallback: unknown) =>
-          key === GlobalStateKey.USE_OPENROUTER ? mocks.openRouter : fallback,
-        update: mocks.updateGlobalState,
-      },
-    }),
-  };
-});
-
 import { currentApproval } from '@cli/chat/tui/state/approvalQueue';
 import { bindSessionView } from '@cli/chat/tui/state/sessionView';
 import { resetCliState, rootRunId } from '@cli/chat/tui/state/cliState';
@@ -89,7 +73,6 @@ import {
   APPROVE_SESSION_ACTION,
   type SurfaceDecision,
 } from '@shared/session/approvalDecision';
-import { GlobalStateKey } from '@shared/state/stateKeys';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { createTuiCliContext } from '@test/cli/fixtures/cliContext';
@@ -375,18 +358,7 @@ beforeAll(() => {
 
 beforeEach(() => {
   mocks.preferSubscription = true;
-  mocks.openRouter = false;
   mocks.hasUsableApiKey.mockReturnValue(Effect.succeed(false));
-  mocks.updateGlobalState.mockImplementation(
-    async (key: string, value: unknown) => {
-      if (key === GlobalStateKey.USE_OPENROUTER) {
-        mocks.openRouter = value === true;
-      }
-      if (key === GlobalStateKey.KIMI_CODE_PREFER) {
-        mocks.preferKimiCode = value === true;
-      }
-    },
-  );
   mocks.setCliSubscriptionPreference.mockImplementation((_id, enabled) => {
     mocks.preferSubscription = enabled;
     return Effect.void;
@@ -423,7 +395,6 @@ afterEach(async () => {
   mocks.setCliSubscriptionPreference.mockReset();
   mocks.setCliCodingPlanSubscription.mockReset();
   mocks.setGLMCodingPlan.mockReset();
-  mocks.updateGlobalState.mockReset();
 });
 
 describe('TUI request decisions', () => {
