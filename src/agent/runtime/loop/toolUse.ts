@@ -49,7 +49,11 @@ import { getUseOpenRouter } from '@utils/config/providerConfig';
 
 import { AgentRun } from '../run/AgentRun';
 import { compactIfNeeded } from '../run/compaction';
-import { bindModel, releaseBindingUploads } from '../run/modelBinding';
+import {
+  bindModel,
+  releaseBindingUploads,
+  type BoundModel,
+} from '../run/modelBinding';
 import { mediaInputParts, type InputPart } from '../run/mediaInput';
 import { toolDefinitionsFor } from '../run/tools';
 import { FollowUps, type ConsumedFollowUps } from '../FollowUps';
@@ -323,67 +327,81 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   );
 
   // -------------------------------------------------------------- opening
+  const prepareFresh = Effect.fn('toolUse.prepareFresh')(
+    function* (): Effect.fn.Return<
+      { bound: BoundModel; content: InputPart[] },
+      Error,
+      ProcessServices
+    > {
+      const bound = yield* SynchronizedRef.get(run.model);
+      const resolvedToolNames = run.setting.tools.map((tool) => tool.name);
+      const promptVars = {
+        ...run.userVarChannels,
+        [USER_VAR_MODEL]: bound.modelId,
+      };
+      const prompts = yield* buildInitialToolUsePrompts(
+        run.prompt,
+        promptVars,
+        logger,
+        {
+          workspace: session.roots.workspace,
+          settings: session.roots,
+          resolvedToolNames,
+          hasDelegationTools: hasDelegationTool(resolvedToolNames),
+          isChild: isChild(),
+        },
+      );
+      systemPrompt = prompts.systemPrompt
+        ? `${prompts.systemPrompt}\n${prompts.instructionSuffix}`
+        : prompts.instructionSuffix;
+      const userPrefix = prompts.userPrefix.trim();
+      const userRequest = prompts.userRequest.trim();
+      if (!userPrefix && !userRequest) {
+        return yield* Effect.fail(
+          new Error(
+            'A tool-use run requires a non-empty user prefix or request.',
+          ),
+        );
+      }
+      const content: InputPart[] = [];
+      if (userPrefix) content.push({ kind: 'text', text: userPrefix });
+      // Attached media (CLI `--media`, an image pasted on the first message)
+      // rides the initial user message; the transcript's opening row logs
+      // whether or not the attachment succeeds.
+      const media = yield* Effect.exit(
+        run.config.mediaFiles.length
+          ? mediaInputParts(
+              run.config.mediaFiles.map((p) =>
+                run.fileService.createLocation(p),
+              ),
+              bound,
+              logger,
+              run.session.roots.config,
+            )
+          : Effect.succeed({ parts: [], kinds: [] }),
+      );
+      if (run.initialUserMessageForTranscript) {
+        logUserMessage(
+          logger,
+          run.initialUserMessageForTranscript,
+          Exit.isSuccess(media) ? media.value.kinds : [],
+        );
+      }
+      if (Exit.isFailure(media)) return yield* Effect.failCause(media.cause);
+      content.push(...media.value.parts);
+      if (userRequest) content.push({ kind: 'text', text: userRequest });
+      userChannels[USER_VAR_MODEL] = bound.modelId;
+      workspace = AgentWorkspaceState.create();
+      return { bound, content };
+    },
+  );
+
   const openFresh = Effect.fn('toolUse.open')(function* (
     opening: RunState,
-  ): Effect.fn.Return<RunState, Error, ProcessServices> {
-    const bound = yield* SynchronizedRef.get(run.model);
-    const resolvedToolNames = run.setting.tools.map((tool) => tool.name);
-    const promptVars = {
-      ...run.userVarChannels,
-      [USER_VAR_MODEL]: bound.modelId,
-    };
-    const prompts = yield* buildInitialToolUsePrompts(
-      run.prompt,
-      promptVars,
-      logger,
-      {
-        workspace: session.roots.workspace,
-        settings: session.roots,
-        resolvedToolNames,
-        hasDelegationTools: hasDelegationTool(resolvedToolNames),
-        isChild: isChild(),
-      },
-    );
-    systemPrompt = prompts.systemPrompt
-      ? `${prompts.systemPrompt}\n${prompts.instructionSuffix}`
-      : prompts.instructionSuffix;
-    const userPrefix = prompts.userPrefix.trim();
-    const userRequest = prompts.userRequest.trim();
-    if (!userPrefix && !userRequest) {
-      return yield* Effect.fail(
-        new Error(
-          'A tool-use run requires a non-empty user prefix or request.',
-        ),
-      );
-    }
-    const content: InputPart[] = [];
-    if (userPrefix) content.push({ kind: 'text', text: userPrefix });
-    // Attached media (CLI `--media`, an image pasted on the first message)
-    // rides the initial user message; the transcript's opening row logs
-    // whether or not the attachment succeeds.
-    const media = yield* Effect.exit(
-      run.config.mediaFiles.length
-        ? mediaInputParts(
-            run.config.mediaFiles.map((p) => run.fileService.createLocation(p)),
-            bound,
-            logger,
-            run.session.roots.config,
-          )
-        : Effect.succeed({ parts: [], kinds: [] }),
-    );
-    if (run.initialUserMessageForTranscript) {
-      logUserMessage(
-        logger,
-        run.initialUserMessageForTranscript,
-        Exit.isSuccess(media) ? media.value.kinds : [],
-      );
-    }
-    if (Exit.isFailure(media)) return yield* Effect.failCause(media.cause);
-    content.push(...media.value.parts);
-    if (userRequest) content.push({ kind: 'text', text: userRequest });
-    userChannels[USER_VAR_MODEL] = bound.modelId;
-    workspace = AgentWorkspaceState.create();
-    const opened = yield* ledger.appendBatch(runId, null, [
+    prepared: Effect.Success<ReturnType<typeof prepareFresh>>,
+  ): Effect.fn.Return<RunState, Error> {
+    const { bound, content } = prepared;
+    return yield* ledger.appendBatch(runId, null, [
       appendRow(runId, [{ role: 'user', content }]),
       snapshotRow(runId, opening, {
         phase: 'initial',
@@ -394,8 +412,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         state: { family: 'toolUse', state: flowState(opening) },
       }),
     ]);
-    run.callbacks.onProgress?.({ kind: 'started' });
-    return opened;
   });
 
   const restore = (state: RunState): void => {
@@ -662,20 +678,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   });
 
   // ------------------------------------------------------------- the loop
-  const enter = Effect.gen(function* () {
-    const entry = yield* loadRun(runId, 'toolUse', start.resume);
-    // The follow-ups the rows still queue: input admitted while no consumer
-    // held this run, or a batch a crash left unconsumed (C3). An unopened
-    // aggregate (`phase` null) still carries those rows; seed them before
-    // the opening batch so a restart delivers the SQLite copy.
-    followUps.seed(entry.loaded);
-    const opened =
-      entry._tag === 'fresh'
-        ? yield* openFresh(entry.opening)
-        : (restore(entry.loaded), entry.loaded);
-    return yield* makeRunCell(runId, opened);
-  });
-
   const loopBody = (cell: RunCell) =>
     Effect.gen(function* () {
       let restoring = start.resume;
@@ -820,7 +822,10 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   });
 
   // The host attachment is the outer bracket; the run itself is the inner
-  // one. Every ledger append the loop makes is uninterruptible inside
+  // one. Loading and prompt/media preparation stay in the outer use, where
+  // interruption can cancel expensive I/O. Only the opening commit and cell
+  // allocation form the inner bracket's uninterruptible acquire. Every ledger
+  // append the loop makes is uninterruptible inside
   // `cell.append`, so the halt the release writes never folds onto a state
   // behind the rows, and the detach now runs after the lease release. The
   // attach itself runs inside the use: a host whose attach throws after
@@ -831,8 +836,38 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     () =>
       Effect.gen(function* () {
         yield* Effect.sync(attach);
-        return yield* Effect.acquireUseRelease(enter, loopBody, (cell, exit) =>
-          settleRun(cell, logger, followUps)(exit),
+        const entry = yield* loadRun(runId, 'toolUse', start.resume);
+        // Follow-ups admitted without a consumer, or left unconsumed by a
+        // crash, must be seeded before opening a fresh aggregate.
+        followUps.seed(entry.loaded);
+        const preparedEntry =
+          entry._tag === 'fresh'
+            ? {
+                _tag: 'fresh' as const,
+                opening: entry.opening,
+                prepared: yield* prepareFresh(),
+              }
+            : { _tag: 'restored' as const, loaded: entry.loaded };
+        if (preparedEntry._tag === 'restored') restore(preparedEntry.loaded);
+        return yield* Effect.acquireUseRelease(
+          Effect.gen(function* () {
+            const opened =
+              preparedEntry._tag === 'fresh'
+                ? yield* openFresh(
+                    preparedEntry.opening,
+                    preparedEntry.prepared,
+                  )
+                : preparedEntry.loaded;
+            return yield* makeRunCell(runId, opened);
+          }),
+          (cell) =>
+            Effect.gen(function* () {
+              if (preparedEntry._tag === 'fresh') {
+                run.callbacks.onProgress?.({ kind: 'started' });
+              }
+              return yield* loopBody(cell);
+            }),
+          (cell, exit) => settleRun(cell, logger, followUps)(exit),
         );
       }),
     () => Effect.sync(detach),
