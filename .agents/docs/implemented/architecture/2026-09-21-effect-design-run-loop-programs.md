@@ -1,6 +1,6 @@
 ---
 created: 2026-09-21
-status: proposed
+status: implemented — PR-A #13029, PR-B #13029, PR-C and PR-D #13040; PR-C part (c) superseded by #13027's output.produced row. Moved from proposed/ 2026-09-23.
 ---
 
 # One run program family: acquireUseRelease at two scales, one state cell, reflection output as folded run.fact rows

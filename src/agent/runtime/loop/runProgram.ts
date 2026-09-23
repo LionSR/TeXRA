@@ -6,7 +6,7 @@
  * own files. There is no family parameter and no hook record: the shared
  * surface is values and total functions, and each loop writes its own
  * three-argument `Effect.acquireUseRelease` (the run-loop design,
- * .agents/docs/proposed/architecture/2026-09-21-effect-design-run-loop-programs.md).
+ * .agents/docs/implemented/architecture/2026-09-21-effect-design-run-loop-programs.md).
  */
 
 import { Cause, Effect, Exit, Result, SynchronizedRef } from 'effect';
