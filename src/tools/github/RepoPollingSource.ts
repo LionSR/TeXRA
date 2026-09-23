@@ -211,19 +211,19 @@ class RepoPollingSource extends PollingSourceBase<RepoKey, SubscriptionState> {
       // Skipping is safe because no parsed response has been committed yet: the
       // DedupedResource instances and PR transition/probe maps are untouched, so
       // the same window is re-evaluated idempotently next tick.
-      const issueRes = this.validateOrSkip(
+      const issueRes = yield* this.validateOrSkip(
         rawIssueRes,
         GhIssueCommentArraySchema,
         `Skipping ${owner}/${repo} tick: issue-comments payload failed validation`,
       );
       if (!issueRes) return;
-      const reviewRes = this.validateOrSkip(
+      const reviewRes = yield* this.validateOrSkip(
         rawReviewRes,
         GhReviewCommentArraySchema,
         `Skipping ${owner}/${repo} tick: review-comments payload failed validation`,
       );
       if (!reviewRes) return;
-      const pullsRes = this.validateOrSkip(
+      const pullsRes = yield* this.validateOrSkip(
         rawPullsRes,
         GhPullsListEntryArraySchema,
         `Skipping ${owner}/${repo} tick: pulls-list payload failed validation`,
@@ -448,9 +448,9 @@ class RepoPollingSource extends PollingSourceBase<RepoKey, SubscriptionState> {
       if (res.status !== 200) return undefined;
       const parsed = GhPullRequestSchema.safeParse(res.data);
       if (!parsed.success) {
-        this.logger.warn(
+        yield* this.logWarning(
           `Skipping merge probe for ${state.owner}/${state.repo}#${pr.number}: payload failed validation`,
-          { data: parsed.error },
+          parsed.error,
         );
         return undefined;
       }

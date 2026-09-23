@@ -33,7 +33,7 @@ import type { AuthPortError } from '@auth/authProgram';
 import { codexAccountLabel } from '@auth/codex/codexSessionTypes';
 import { LoopbackTransportUnavailableError } from '@auth/oauth/loopbackLogin';
 import type { SubscriptionSessionStatus } from '@auth/oauth/SubscriptionOAuthCoordinator';
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import {
   isPreferCodexSubscription,
   setPreferCodexSubscription,
@@ -49,7 +49,7 @@ import type { SUBSCRIPTION_AUTH_PROVIDERS } from '@shared/settingsView/settingsV
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { HttpClient } from 'effect/unstable/http';
 
-const log = createLog('subscriptionProviders');
+const CHANNEL = 'subscriptionProviders';
 
 /**
  * A provider's id, spelled once: the wire vocabulary in
@@ -231,11 +231,13 @@ function defineSubscriptionProvider<
                       error.cause === undefined
                         ? ''
                         : ` Cause: ${toErrorMessage(error.cause)}`;
-                    log.warn(
+                    return Effect.logWarning(
                       `${bindings.displayName} browser sign-in is unavailable, falling back to a one-time device code: ${toErrorMessage(error)}${causeMessage}`,
-                      { data: error },
+                    ).pipe(
+                      Effect.annotateLogs({ data: error }),
+                      withLogChannel(CHANNEL),
+                      Effect.andThen(deviceCodeLogin(coordinator, options)),
                     );
-                    return deviceCodeLogin(coordinator, options);
                   },
                 ),
               );

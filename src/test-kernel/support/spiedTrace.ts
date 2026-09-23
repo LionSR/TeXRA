@@ -1,7 +1,7 @@
 import { vi } from 'vitest';
 
 import type { AgentTrace } from '@agent/trace';
-import { noopTrace } from '@agent/trace';
+import { noopTrace } from '@test/support/noopTrace';
 
 interface SpiedTraceOptions {
   /** Throw when code reads a trace member not supplied in `overrides`. */

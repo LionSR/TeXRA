@@ -405,11 +405,8 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   };
 
   // ------------------------------------------------------------ the turn
-  type TurnExit = {
-    readonly state: RunState;
-    readonly outcome: 'completed' | 'failed' | 'cancelled';
-  };
-  type LoopExit = { readonly state: RunState; readonly outcome: RunOutcome };
+  type TurnExit = { readonly state: RunState; readonly outcome: RunOutcome };
+  type LoopExit = TurnExit;
   const runTurn = Effect.fn('toolUse.turn')(function* (
     cell: RunCell,
   ): Effect.fn.Return<

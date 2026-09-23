@@ -180,7 +180,7 @@ const EVENT_TYPE_SHAPE = /^[a-z][a-z0-9]*(?:\.[a-z][a-zA-Z0-9]*)+$/u;
 // arm of the vocabulary ends in a source extension, and a token that IS a
 // declared arm is admitted before the test runs, so the filter cannot hide one.
 const FILE_EXTENSION =
-  /\.(?:ts|tsx|mts|cts|js|jsx|mjs|cjs|md|json|ya?ml|css|html|sh|xml|tex)$/iu;
+  /\.(?:ts|tsx|mts|cts|js|jsx|mjs|cjs|md|json|ya?ml|css|html|sh|xml|tex|bib)$/iu;
 
 /** Whether a backticked token is read as naming a row of the run vocabulary. */
 function citesEventType(candidate) {

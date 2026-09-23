@@ -4,16 +4,6 @@
 // output. A PTY adds emulator reflow but cannot reveal stale rows that the same
 // repaint subsequently clears.
 
-// Set before Ink/chalk load so reverse-video SGR (`ESC[7m`) is emitted to the
-// in-memory TTY; otherwise chalk no-ops `inverse` and the band has no styled
-// fill to measure.
-const ORIGINAL_COLOR_ENV = {
-  FORCE_COLOR: process.env.FORCE_COLOR,
-  NO_COLOR: process.env.NO_COLOR,
-};
-delete process.env.NO_COLOR;
-process.env.FORCE_COLOR = '3';
-
 // Third-party imports
 import stripAnsi from 'strip-ansi';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -42,12 +32,23 @@ import {
   viewWith,
 } from './fixtures/sessionViewFixture';
 
-afterAll(() => {
-  for (const [name, value] of Object.entries(ORIGINAL_COLOR_ENV)) {
-    if (value == null) delete process.env[name];
-    else process.env[name] = value;
-  }
+// Reverse-video SGR (`ESC[7m`) must reach the in-memory TTY, or chalk no-ops
+// `inverse` and the band has no styled fill to measure. Chalk reads its level
+// from the environment once, when it first loads, and the `pure` project
+// shares one module registry: whichever suite loads Ink first would fix the
+// level for both. So the level is set on Ink's own chalk instance for this
+// suite and restored after it, not through `FORCE_COLOR`.
+let restoreChalkLevel = (): void => {};
+beforeAll(async () => {
+  const { requireFromInk } = await loadInk();
+  const chalk = (await import(requireFromInk.resolve('chalk'))).default;
+  const level: number = chalk.level;
+  chalk.level = 3;
+  restoreChalkLevel = () => {
+    chalk.level = level;
+  };
 });
+afterAll(() => restoreChalkLevel());
 
 const TRANSCRIPT_SESSION: Omit<SessionMeta, 'cwd'> = {
   agent: 'research',

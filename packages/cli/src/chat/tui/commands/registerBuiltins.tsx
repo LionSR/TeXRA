@@ -342,10 +342,13 @@ export function registerBuiltinSlashCommands(options: {
           // Picking the root agent and the root model is a single up-front
           // choice before the first message, so chain straight into the model
           // picker instead of closing — but only while still choosing the root
-          // and model selection is available.
+          // and model selection is available. The agent form closes first:
+          // `takeActiveForm` requeues what it displaces, and a finished pick
+          // must not come back when the model picker closes.
           onDone:
             selectable && canSelectModel()
-              ? () => {
+              ? (value) => {
+                  props.onDone(value);
                   openCliSlashCommandForm('model', '');
                 }
               : props.onDone,

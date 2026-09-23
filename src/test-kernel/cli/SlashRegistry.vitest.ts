@@ -32,7 +32,7 @@ import {
   transientNotice,
   type SessionMeta,
 } from '@cli/chat/tui/state/cliState';
-import { activeForm } from '@cli/chat/tui/state/formSlot';
+import { activeForm, closeActiveForm } from '@cli/chat/tui/state/formSlot';
 import { notices, noticesFor } from '@cli/chat/tui/state/transcript';
 import type { CliModelAccessSelection } from '@cli/runtime/modelAccessRoute';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
@@ -140,9 +140,12 @@ describe('slashRegistry', () => {
     readonly isClosed: () => boolean;
   } {
     let closed = false;
+    const form = activeForm.get();
+    // Close through the slot owner, as `App` does.
     const node = renderFormAdapter<TProps>(
-      activeForm.get()?.render(() => {
+      form?.render(() => {
         closed = true;
+        closeActiveForm(form);
       }, 20),
     );
     return {
@@ -209,10 +212,16 @@ describe('slashRegistry', () => {
 
     const modelNode = renderOpenForm<{
       selectable?: boolean;
+      onClose?: () => void;
     }>();
     expect(modelNode.props).toMatchObject({
       selectable: true,
     });
+
+    // Closing the chained model picker returns to the chat input, not to the
+    // agent picker it replaced.
+    modelNode.props?.onClose?.();
+    expect(activeForm.get()).toBeUndefined();
   });
 
   it('does not advance agent picks into the model form when model selection is unavailable', async () => {
@@ -228,7 +237,7 @@ describe('slashRegistry', () => {
 
     expect(sessionMeta.get().agent).toBe('review');
     expect(agentNode.isClosed()).toBe(true);
-    expect(activeForm.get()?.commandName).toBe('agent');
+    expect(activeForm.get()).toBeUndefined();
   });
 
   it('marks the agent picker read-only when root selection is closed', () => {

@@ -10,8 +10,6 @@
 
 import { Cause, Effect, Fiber, Stream } from 'effect';
 
-import type { AgentTrace } from '@agent/trace';
-import { createChannelTrace } from '@agent/trace';
 import {
   validateRunRequest,
   type HostPresentation,
@@ -27,6 +25,7 @@ import {
   type ToolEditApprovalHost,
 } from '@controllers/approval/ToolEditApprovalController';
 import { RunLaunchFailed } from '@controllers/session/hostRunActions';
+import { withLogChannel } from '@logger/effectLog';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type {
   AgentCategory,
@@ -51,6 +50,8 @@ import {
 } from './desktopAgentLaunch.js';
 import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';
 
+const CHANNEL = 'DesktopAgentRun';
+
 export interface DesktopAgentRunOptions {
   host: DesktopAgentRunHost;
   /** Preview operations reject; the approval controller presents failures. */
@@ -72,7 +73,6 @@ export interface DesktopAgentRunOptions {
    *  host can recompute the onboarding funnel from the updated flag. The
    *  refresh is idempotent and runs on every settle. */
   onRunCompleted?: () => void;
-  logger?: AgentTrace;
 }
 
 export interface DesktopAgentRun {
@@ -105,7 +105,6 @@ export function createDesktopAgentRun(
   options: DesktopAgentRunOptions,
 ): DesktopAgentRun {
   const { session, host, runtime } = options;
-  const logger = options.logger ?? createChannelTrace('DesktopAgentRun');
   let disposed = false;
 
   /**
@@ -186,15 +185,16 @@ export function createDesktopAgentRun(
       // here rather than left to a fiber nobody reads.
       presentToolEdit: (request) => {
         runtime.runFork(
-          toolEditApprovals.present(request).pipe(
-            Effect.catchCause((cause) =>
-              Effect.sync(() => {
-                logger.warn('Failed to stage the tool-edit preview', {
-                  data: toLogData(Cause.squash(cause)),
-                });
-              }),
+          toolEditApprovals
+            .present(request)
+            .pipe(
+              Effect.catchCause((cause) =>
+                Effect.logWarning('Failed to stage the tool-edit preview').pipe(
+                  Effect.annotateLogs({ data: toLogData(Cause.squash(cause)) }),
+                  withLogChannel(CHANNEL),
+                ),
+              ),
             ),
-          ),
         );
       },
       // An open that never committed leaves the staged preview with no
@@ -234,10 +234,13 @@ export function createDesktopAgentRun(
     runAgentRequest(request, runOptions) {
       const validated = validateRunRequest(request);
       if (!validated.valid) {
-        logger.error('Invalid desktop run request', {
-          data: validated.issue,
-        });
-        return Effect.fail(new Rejected({ reason: validated.message }));
+        return Effect.logError('Invalid desktop run request').pipe(
+          Effect.annotateLogs({ data: validated.issue }),
+          withLogChannel(CHANNEL),
+          Effect.andThen(
+            Effect.fail(new Rejected({ reason: validated.message })),
+          ),
+        );
       }
       // The launch program still fails with a bare `Error`, so the port's
       // one channel is named here, as the extension's binding names it.

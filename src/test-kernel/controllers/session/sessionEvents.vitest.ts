@@ -284,7 +284,7 @@ describe('session events and view', () => {
               toolName: 'bash',
               input: { command: 'ls' },
             },
-          ]),
+          ]).pipe(Effect.orDie),
         );
         const settled = yield* events.publish([
           {

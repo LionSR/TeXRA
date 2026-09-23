@@ -28,14 +28,7 @@
  * family, and the reflection run's tool registry is empty by construction.
  */
 import { dirname } from 'node:path';
-import {
-  Cause,
-  Effect,
-  Exit,
-  FileSystem,
-  PlatformError,
-  SynchronizedRef,
-} from 'effect';
+import { Cause, Effect, Exit, FileSystem, SynchronizedRef } from 'effect';
 
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { userRequestTemplateCount } from '@agent/index/agentYamlScanner';
@@ -67,7 +60,6 @@ import {
   PromptBuilder,
 } from '@agent/prompt/PromptBuilder';
 import { logUserMessage } from '@agent/trace';
-import { isNotADirectoryError } from '@common/errors';
 import { LatexMediaManager } from '@latex/LatexMediaManager';
 import { getTeXCountStats } from '@latex/texcount';
 import type { WorkspaceFs } from '@platform/rootedFs';
@@ -101,6 +93,7 @@ import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { pathToLocationIn } from '@utils/files/fileLocation';
+import { absentReason } from '@utils/files/fsEntryExists';
 import { extractScratchpad } from '@utils/text/xmlExtraction';
 import { AgentRun } from '../run/AgentRun';
 import { compactIfNeeded } from '../run/compaction';
@@ -160,17 +153,8 @@ interface OutputExecResult {
 
 type RoundExit = {
   readonly state: RunState;
-  readonly kind: 'completed' | 'failed' | 'cancelled';
+  readonly kind: RunOutcome;
 };
-
-/** ENOENT, or ENOTDIR on a parent, as `AbsoluteFS.exists`/`statIfExists` treated them. */
-function isAbsentFsPath(error: PlatformError.PlatformError): boolean {
-  return (
-    error.reason._tag === 'NotFound' ||
-    (error.reason._tag === 'BadResource' &&
-      isNotADirectoryError(error.reason.cause))
-  );
-}
 
 /** The finish reason of a completed turn; the editor arm reports none. */
 function finishReasonOf(
@@ -560,7 +544,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
       for (let index = 0; index < count; index++) {
         raw += yield* fs
           .readFileString(cycleLocationFor(round, index).absolutePath)
-          .pipe(Effect.catchIf(isAbsentFsPath, () => Effect.succeed('')));
+          .pipe(Effect.catchIf(absentReason, () => Effect.succeed('')));
       }
       return raw;
     });

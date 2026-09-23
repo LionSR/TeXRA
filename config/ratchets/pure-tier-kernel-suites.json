@@ -1,7 +1,0 @@
-{
-  "semantics": "Ink renderer suites under a pure-tier directory (see PURE_DIRS in vitest.config.mjs) whose source shows no mock or host import, but which the pure project cannot run because they leak process terminal state into each other under a shared module registry. Found by file-order shuffles, not by a source scan. Shrink-only: a suite that stops sharing process state leaves the list and runs in `pure` on its own. A listed file that no longer exists fails config load, and a listed file the source scan already sends to `kernel` does not belong here. The former `hostReadByModuleUnderTest` list is gone — a module that reads the host itself is a production defect to fix, not an entry to add here.",
-  "shareTerminalState": [
-    "src/test-kernel/cli/StaticBandResize.vitest.ts",
-    "src/test-kernel/cli/ToolRenderers.vitest.ts"
-  ]
-}

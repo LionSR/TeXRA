@@ -62,12 +62,7 @@ import type { BoundModel } from '@agent/runtime/run/modelBinding';
 import { dispatchFactsFor } from '@agent/runtime/run/tools';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { UsageMonitor } from '@agent/runtime/UsageMonitor';
-import {
-  noopTrace,
-  TraceEmitter,
-  type AgentEvent,
-  type AgentTrace,
-} from '@agent/trace';
+import { TraceEmitter, type AgentEvent, type AgentTrace } from '@agent/trace';
 import { DatabaseWriteFailed } from '@shared/session/database';
 import {
   AgentCategory,
@@ -77,6 +72,7 @@ import {
 } from '@shared/schemas';
 import { RunLedger } from '@shared/session/runLedger';
 import type { RunState } from '@shared/session/runStateFold';
+import { noopTrace } from '@test/support/noopTrace';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { createTestSession } from '@test/support/sessionTestUtils';

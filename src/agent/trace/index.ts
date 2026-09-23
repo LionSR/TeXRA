@@ -15,8 +15,6 @@ export type { AgentEvent, ResultEvent } from './events';
 export type { AgentTrace, StageHandle, StreamHandle } from './AgentTrace';
 
 export { TraceEmitter } from './TraceEmitter';
-export { noopTrace } from './noopTrace';
-export { createChannelTrace } from './channelTrace';
 export {
   startToolUseCard,
   endToolUseCard,

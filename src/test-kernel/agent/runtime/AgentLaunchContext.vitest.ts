@@ -22,7 +22,6 @@ vi.mock('@transcript', async (importActual) => ({
 }));
 vi.mock('@agent/prompt/userVars', () => ({ buildUserVars: mocks.buildVars }));
 
-import { noopTrace } from '@agent/trace';
 import { registerRun } from '@agent/storage/runLifecycle';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
@@ -42,6 +41,7 @@ import {
   AgentCategory,
   type RunId,
 } from '@shared/schemas';
+import { noopTrace } from '@test/support/noopTrace';
 import {
   createTestSession,
   publishTestRunStart,

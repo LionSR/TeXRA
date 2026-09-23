@@ -103,7 +103,7 @@ export interface Log {
  */
 export function createLog(channel: string): Log {
   const bind =
-    (level: 'debug' | 'info' | 'warn' | 'error') =>
+    (level: LogLevel) =>
     (message: string, options?: LogUtilsOptions): void => {
       if (options === undefined) loggerSelf[level](channel, message);
       else loggerSelf[level](channel, message, options);
