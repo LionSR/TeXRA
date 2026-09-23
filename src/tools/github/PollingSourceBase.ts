@@ -184,7 +184,6 @@ export abstract class PollingSourceBase<
   disposeAll(): void {
     this.subscriptions.clear();
     this.stopPolling();
-    // In shutdown, register's shutdownRan guard blocks re-subscribe here.
     this.notifyKeysChanged();
   }
 
@@ -210,6 +209,9 @@ export abstract class PollingSourceBase<
               `Cannot subscribe to ${this.config.name} after shutdown`,
             );
           }
+          // A replacement host starts with fresh subscriptions. Stop the old
+          // poller now, even if its shutdown is still in the BEFORE phase.
+          if (this.shutdownLifecycle?.shutdownRan) this.disposeAll();
           let state = this.subscriptions.get(key);
           const created = !state;
           if (!state) {
@@ -416,9 +418,12 @@ export abstract class PollingSourceBase<
     );
   }
 
-  /** One process-lifetime owner shared by poll rounds and admitted deliveries. */
+  /** One owner per lifecycle for poll rounds and admitted deliveries. */
   private ensureLifetime(lifecycle: LifecycleHost) {
     return Effect.suspend(() => {
+      // The old owner may still be draining while a replacement host starts.
+      // Keep its captured scopes for that drain, but give the new host its own.
+      if (this.shutdownLifecycle?.shutdownRan) this.lifetime = undefined;
       if (this.lifetime) {
         this.registerShutdownIfNeeded(lifecycle);
         return Effect.succeed(this.lifetime);
@@ -509,20 +514,24 @@ export abstract class PollingSourceBase<
    */
   private registerShutdownIfNeeded(lifecycle: LifecycleHost): void {
     if (this.shutdownLifecycle === lifecycle) return;
-    this.clearShutdownRegistration();
+    // A shutdown already in progress still needs its ON hook to close the old
+    // scopes and drain admitted deliveries after a replacement subscribes.
+    if (!this.shutdownLifecycle?.shutdownRan) this.clearShutdownRegistration();
     const lifetime = this.lifetime!;
     this.shutdownRegistration = lifecycle.onShutdown(
       SHUTDOWN_PHASE.ON,
       Effect.gen({ self: this }, function* () {
-        this.disposeAll();
+        if (this.lifetime === lifetime) this.disposeAll();
         yield* Scope.close(lifetime.pollScope, Exit.void);
         yield* FiberSet.awaitEmpty(lifetime.deliveries);
       }).pipe(
         Effect.ensuring(Scope.close(lifetime.deliveryScope, Exit.void)),
         Effect.ensuring(
           Effect.sync(() => {
-            if (this.lifetime === lifetime) this.lifetime = undefined;
-            this.clearShutdownRegistration();
+            if (this.lifetime === lifetime) {
+              this.lifetime = undefined;
+              this.clearShutdownRegistration();
+            }
           }),
         ),
       ),
