@@ -43,10 +43,6 @@ import {
   executeAgent,
   resumeToolUseFromResumeData,
 } from '@agent/runtime/executeAgent';
-import {
-  AGENT_TOOL_INJECTIONS,
-  ToolInjections,
-} from '@agent/runtime/toolInjection';
 import { EditorModel } from '@agent/runtime/run/modelBinding';
 import { createSessionApprovals } from '@agent/runtime/runApprovalQueue';
 import { RunRegistry } from '@agent/runtime/runRegistry';
@@ -1102,7 +1098,6 @@ export function installProcessRuntime({
       ? Layer.empty
       : ToolMissingReporter.layer(toolMissingReporter),
     SetupPlatform.layer(setup),
-    ToolInjections.layer(AGENT_TOOL_INJECTIONS),
     Layer.succeed(AgentEngine)({ executeAgent, resumeToolUseFromResumeData }),
     // Built with this runtime: a replacement starts with empty tables.
     gitHubSubscriptionsLayer,

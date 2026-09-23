@@ -174,7 +174,7 @@ export interface ChildRunStrategy<TTurn, R = never> {
   /**
    * Produce the first turn's outcome. Throws on hard failure. `R` names the
    * process services a turn reads (the native strategy's engine turns read
-   * `ToolInjections` and `AppState`); the loop forwards it to its caller,
+   * `AppState`); the loop forwards it to its caller,
    * where the process runtime provides them.
    */
   launch(

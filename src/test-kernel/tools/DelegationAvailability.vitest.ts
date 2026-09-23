@@ -51,7 +51,6 @@ const {
 const { resolveAgentTools } =
   await import('@agent/runtime/agentToolResolution');
 const { MapToolRegistry } = await import('@agent/core/tools/ToolTypes');
-const { NO_TOOL_INJECTIONS } = await import('@agent/runtime/toolInjection');
 
 const DELEGATE_AGENT_DESCRIPTION = [
   'Delegate a task to a tool-use agent.',
@@ -157,10 +156,13 @@ function resolveToolList(
       tools,
       registry: delegationRegistry(tools),
       logger: { warn: () => {} },
-      toolInjections: NO_TOOL_INJECTIONS,
+      host: 'extension',
+      toolInjections: [],
       stores,
+      workspaceRoot: undefined,
     });
   }).pipe(
+    Effect.map(({ definitions }) => definitions),
     // The delegation-annotation availability read yields `LanguageModel`;
     // this host has no editor models.
     Effect.provide(LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT)),

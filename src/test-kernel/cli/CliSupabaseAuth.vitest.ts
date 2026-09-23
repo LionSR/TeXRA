@@ -174,17 +174,12 @@ async function loadSupabaseAuth() {
     import('@shared/session/sessionEvents'),
     import('@platform/defaults/nodeProcesses'),
   ]);
-  const [
-    { Secrets },
-    { AgentResume, AppState },
-    { SetupPlatform },
-    { ToolInjections },
-  ] = await Promise.all([
-    import('@platform/secrets'),
-    import('@platform/interfaces'),
-    import('@tools/setup/platform'),
-    import('@agent/runtime/toolInjection'),
-  ]);
+  const [{ Secrets }, { AgentResume, AppState }, { SetupPlatform }] =
+    await Promise.all([
+      import('@platform/secrets'),
+      import('@platform/interfaces'),
+      import('@tools/setup/platform'),
+    ]);
   const { SupabaseAuth, unavailableSupabaseAuth } =
     await import('@auth/SupabaseAuth');
   const { LanguageModel } = await import('@platform/languageModel');
@@ -223,7 +218,6 @@ async function loadSupabaseAuth() {
       // Plain in-memory ownership tables; the auth edge binds nothing.
       gitHubSubscriptionsLayer,
       SetupPlatform.layer({ host: 'cli', signIn: () => Effect.succeed(false) }),
-      ToolInjections.layer([]),
     ),
   );
   const supabaseAuth = await import('@cli/runtime/supabaseAuth');

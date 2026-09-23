@@ -29,7 +29,6 @@ import {
   DatabaseNotOwner,
   type SessionOpenError,
 } from '@shared/session/database';
-import { getDefaultUnavailableToolNames } from '@tools/registry';
 import { aggregateError, generateRunId } from '@utils/core';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -559,7 +558,6 @@ export function executeCliRequest(
         ),
         onApprovalPolicyDenial: () =>
           warnApprovalDenied(session, runContext, 'Tool or edit approval'),
-        runtimeUnavailableTools: getDefaultUnavailableToolNames('cli'),
       });
 
     let runResult:

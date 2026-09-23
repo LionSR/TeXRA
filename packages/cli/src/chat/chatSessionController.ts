@@ -73,7 +73,6 @@ import {
 } from '@shared/session/database';
 import type { RuntimeRequest } from '@shared/session/runtimeRequest';
 import { escapeText } from '@shared/utils/xmlEscape';
-import { getDefaultUnavailableToolNames } from '@tools/registry';
 import { FOCUSED_BACKGROUND_TASK } from '@ui/copy/nestedRuns';
 import { generateRunId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -587,7 +586,6 @@ export function createChatSessionController(
     | 'session'
     | 'approvalPromptsUnavailable'
     | 'onApprovalPolicyDenial'
-    | 'runtimeUnavailableTools'
     | 'executeWorkflow'
   > => ({
     session: runtimeSession,
@@ -599,7 +597,6 @@ export function createChatSessionController(
         'Tool or edit approval',
         launchRunId,
       ),
-    runtimeUnavailableTools: getDefaultUnavailableToolNames('cli'),
     executeWorkflow: (_config, runId) =>
       Effect.fail(
         new Error(
@@ -671,7 +668,6 @@ export function createChatSessionController(
                   'Tool or edit approval',
                   runId,
                 ),
-              runtimeUnavailableTools: getDefaultUnavailableToolNames('cli'),
               onRunResolved: (resolvedRunId) => {
                 // Each chat round mints a fresh root run id, so
                 // bash/tool-edit/super-YOLO bypass, which is

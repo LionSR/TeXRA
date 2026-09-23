@@ -50,6 +50,11 @@ All notable changes to this project will be documented in this file.
 
 ### Bug Fixes
 
+- **An agent can only run the tools it was offered.** A model that named a
+  tool the run had not offered it (one you disabled in settings, a tool the
+  agent does not declare, or one that needs an approval prompt the current
+  host cannot show) could still have that tool run. Such a call now fails as
+  an unknown tool.
 - **GPT-5.6 works on a ChatGPT subscription again.** Selecting GPT-5.6 sent an
   abbreviated model name the Codex service does not recognise, and it answered
   that the model "is not supported when using Codex with a ChatGPT account" —
@@ -96,6 +101,21 @@ All notable changes to this project will be documented in this file.
   one of their stops failed, instead of refusing new runs until a restart.
 - The Settings view's tool dashboard no longer spins forever when it cannot be
   loaded; it shows an empty dashboard and logs why.
+- The "💸 Premium API pricing" warning follows a model's price instead of its
+  name: GPT-5.6 Pro ($4/$20 per million tokens) no longer carries it, and o1
+  Pro and o3 Pro now do.
+- **Desktop: tool availability is checked per project.** With several
+  projects open, one project's tool check (for example, whether it is a git
+  repository, which the GitHub tools need) no longer decides which tools a
+  run in another project gets or what that project's Tools tab shows.
+- **Desktop: signing in shows your team's agents.** After you sign in, the
+  desktop app now fetches the remote agents your account can use. Before, it
+  kept showing the catalog it loaded while signed out until you restarted it.
+- **Saving a custom agent no longer re-downloads the remote catalog.** In VS
+  Code, editing an agent YAML in your agent directories rescans only the local
+  agents and keeps the remote ones already loaded. A run that names an agent
+  the catalog has not seen yet rescans the local directories once before it
+  reports the agent as missing.
 
 ### Extension (VS Code)
 

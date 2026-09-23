@@ -92,7 +92,6 @@ describe('executeSubagent child run launch', () => {
       logger: noopTrace,
       toolPolicy: {
         approvalPromptsUnavailable: false,
-        runtimeUnavailableTools: [],
       },
     },
   };

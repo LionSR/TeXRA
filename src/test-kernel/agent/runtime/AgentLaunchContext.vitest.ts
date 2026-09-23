@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@agent/index', () => ({
   isRemoteAgent: () => false,
+  refresh: () => Effect.void,
   resolveAgentForLaunch: mocks.resolve,
 }));
 vi.mock('@agent/runtime/agentLoad', () => ({
@@ -259,6 +260,7 @@ describe('AgentLaunchContext', () => {
               nodePlatformLayer,
             ),
           ),
+          Effect.provide(fakeProcessServices()),
         );
         expect(error.message).toContain('is not registered');
 
@@ -354,7 +356,7 @@ describe('AgentLaunchContext', () => {
           model: 'gpt55',
           agentCategory: AgentCategory.ToolUse,
         });
-        yield* registerRun(session, EXECUTION_ID, config, 'chat', {
+        yield* registerRun(session, EXECUTION_ID, config, {
           identity: { kind: 'agent', agent: 'chat' },
         });
         yield* buildAgentLaunchContext({
@@ -365,7 +367,6 @@ describe('AgentLaunchContext', () => {
         });
         expect(batches.mock.calls[0]?.[0].map((event) => event.type)).toEqual([
           'run.start',
-          'run.launchLabel',
           'run.record',
           'run.activate',
         ]);
@@ -374,11 +375,11 @@ describe('AgentLaunchContext', () => {
             .slice(0, 2)
             .map((event) => event.type),
         ).toEqual(['run.start', 'run.activate']);
-        // One aggregate, one counter: the activation is the fourth durable
+        // One aggregate, one counter: the activation is the third durable
         // row of the creation batch, and the phase the fold reads from it.
         expect(
           (yield* Effect.promise(() => recording.read()))[1],
-        ).toMatchObject({ seq: 4 });
+        ).toMatchObject({ seq: 3 });
       }),
   );
 

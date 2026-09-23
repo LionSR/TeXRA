@@ -20,7 +20,6 @@ import * as NodePath from '@effect/platform-node/NodePath';
 import { Effect, RcMap } from 'effect';
 import { afterEach, beforeEach } from 'vitest';
 
-import type { ToolInjections } from '@agent/runtime/toolInjection';
 import { AgentEngine } from '@agent/runtime/AgentEngine';
 import {
   unavailableSupabaseAuth,
@@ -396,7 +395,6 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     { AgentDirectories, AgentResume, AppState, Lifecycle },
     { LanguageModel },
     { SetupPlatform },
-    { ToolInjections },
     { SupabaseAuth },
   ] = await Promise.all([
     import('@platform/platform'),
@@ -408,7 +406,6 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     import('@platform/interfaces'),
     import('@platform/languageModel'),
     import('@tools/setup/platform'),
-    import('@agent/runtime/toolInjection'),
     import('@auth/SupabaseAuth'),
   ]);
   current = host;
@@ -457,9 +454,6 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     AgentDirectories.layer(fakeHostAgentDirectories),
     Lifecycle.layer(fakeHostLifecycle),
     SetupPlatform.layer(fakeSetupPlatform),
-    // No conditional injections on the bare fake host: a suite that
-    // exercises them passes its own list to `resolveAgentTools`.
-    ToolInjections.layer([]),
     // The cross-workspace storage view the process runtime serves, over the
     // installed host's global root. A suite that exercises it directly
     // provides its own view innermost.

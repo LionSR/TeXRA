@@ -511,7 +511,7 @@ async function launchWaitingChild(options: {
     workingDirectory: process.cwd(),
   });
   await Effect.runPromise(
-    registerRun(session, PARENT_RUN_ID, parentConfig, PARENT_AGENT, {
+    registerRun(session, PARENT_RUN_ID, parentConfig, {
       identity: { kind: 'agent', agent: PARENT_AGENT },
       parentRunId: OUTER_RUN_ID,
     }),
@@ -547,7 +547,6 @@ async function launchWaitingChild(options: {
       logger: noopTrace,
       toolPolicy: {
         approvalPromptsUnavailable: false,
-        runtimeUnavailableTools: [],
       },
     },
   };
@@ -1108,7 +1107,6 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
             session,
             toolPolicy: {
               approvalPromptsUnavailable: false,
-              runtimeUnavailableTools: [],
             },
           },
         });

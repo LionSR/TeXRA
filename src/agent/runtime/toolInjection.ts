@@ -1,4 +1,4 @@
-import { Context, Effect, Layer } from 'effect';
+import { Effect } from 'effect';
 
 import type { StateReadFailed } from '@platform/interfaces';
 import type { ProcessServices } from '@platform/processRuntime';
@@ -16,11 +16,10 @@ import type { Runs } from './runRegistry';
  * tool list when `shouldInject()` returns true. Used to keep agents from
  * having to opt into shared infrastructure (memory, goal) in YAML.
  *
- * The process's list is {@link AGENT_TOOL_INJECTIONS}, provided as
- * {@link ToolInjections}; core flow code iterates what it is handed and does
- * not know which features exist.
+ * The list every host ships is {@link AGENT_TOOL_INJECTIONS}; the tool
+ * resolver iterates what it is handed and does not know which features exist.
  */
-interface ConditionalToolInjection {
+export interface ConditionalToolInjection {
   readonly toolName: RegisteredToolName;
   /** Whether the run resolving its tools, in the workspace whose settings
    *  slots `settings` are, gets this tool. */
@@ -58,34 +57,8 @@ export const AGENT_TOOL_INJECTIONS: readonly ConditionalToolInjection[] = [
 ];
 
 /**
- * The process's conditional tool injections as an Effect service
- * (`@texra/agent/ToolInjections`, injection plan §5 row 14): the resolved
- * list, provided once by `installProcessRuntime`. Replaces the module-level
- * registry the roots used to register into at startup.
- */
-export class ToolInjections extends Context.Service<
-  ToolInjections,
-  { readonly list: () => readonly ConditionalToolInjection[] }
->()('@texra/agent/ToolInjections') {
-  static layer(
-    injections: readonly ConditionalToolInjection[],
-  ): Layer.Layer<ToolInjections> {
-    return Layer.succeed(ToolInjections)({ list: () => injections });
-  }
-}
-
-/**
- * What a run resolving its tools with no injections of its own is handed
- * (the reflection family: memory and plan are tool-use infrastructure).
- */
-export const NO_TOOL_INJECTIONS: ToolInjections['Service'] = Object.freeze({
-  list: () => [],
-});
-
-/**
  * The services every step of an agent run reads on the way down: the process
- * services (the conditional tool injections, the global state store, the
- * secret store, ...) and the `Runs` of the session the run is launched on.
+ * services (the global state store, the secret store, ...) and the `Runs` of the session the run is launched on.
  * Named once here because the launch, resume and delegation signatures all
  * carry exactly these tags in their `R` channel.
  */
