@@ -409,6 +409,15 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
       commit,
     );
   }
+  /** A row that presupposes the opening snapshot, folded before it. */
+  const beforeOpening = (what: string) =>
+    refuse('out-of-order', `${what} before the opening flow.snapshot`, commit);
+  /** The state with this ledger row counted in. */
+  const advance = (state: RunState): RunState => ({
+    ...state,
+    commit,
+    rowsBeforeSnapshot: state.rowsBeforeSnapshot + 1,
+  });
   switch (row.type) {
     case 'flow.step':
     case 'request.opened':
@@ -456,10 +465,8 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
         return refuse('out-of-order', 'a snapshot of another family', commit);
       }
       return Result.succeed({
-        ...state,
-        commit,
+        ...advance(state),
         snapshotCommit: commit,
-        rowsBeforeSnapshot: state.rowsBeforeSnapshot + 1,
         family: p.family,
         ...p.runtime,
         flow: flowOf(p),
@@ -470,24 +477,12 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
       if (p.kind === 'append' && p.sourceResponse === null) {
         const state = current ?? freshRunState(commit);
         return Result.succeed({
-          ...state,
-          commit,
-          rowsBeforeSnapshot: state.rowsBeforeSnapshot + 1,
+          ...advance(state),
           messages: [...state.messages, ...p.messages],
         });
       }
-      if (!opened(current)) {
-        return refuse(
-          'out-of-order',
-          `${row.type} ${p.kind} before the opening flow.snapshot`,
-          commit,
-        );
-      }
-      const state: RunState = {
-        ...current,
-        commit,
-        rowsBeforeSnapshot: current.rowsBeforeSnapshot + 1,
-      };
+      if (!opened(current)) return beforeOpening(`${row.type} ${p.kind}`);
+      const state = advance(current);
       switch (p.kind) {
         case 'attempt': {
           const open = state.openAttempt;
@@ -624,18 +619,10 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
       return p satisfies never;
     }
     case 'model.compaction': {
-      if (!opened(current)) {
-        return refuse(
-          'out-of-order',
-          `${row.type} before the opening flow.snapshot`,
-          commit,
-        );
-      }
+      if (!opened(current)) return beforeOpening(row.type);
       const p = row.payload;
       return Result.succeed({
-        ...current,
-        commit,
-        rowsBeforeSnapshot: current.rowsBeforeSnapshot + 1,
+        ...advance(current),
         messages: [...current.messages.slice(0, p.keepPrefix), ...p.messages],
         continuation: p.continuation,
         ...(p.cause === 'context-window'
@@ -644,13 +631,7 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
       });
     }
     case 'tool.intent': {
-      if (!opened(current)) {
-        return refuse(
-          'out-of-order',
-          `${row.type} before the opening flow.snapshot`,
-          commit,
-        );
-      }
+      if (!opened(current)) return beforeOpening(row.type);
       const p = row.payload;
       const pending = current.pendingResponse;
       if (pending === null || pending.responseId !== p.responseId) {
@@ -688,20 +669,12 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
         };
       }
       return Result.succeed({
-        ...current,
-        commit,
-        rowsBeforeSnapshot: current.rowsBeforeSnapshot + 1,
+        ...advance(current),
         pendingIntents,
       });
     }
     case 'tool.binding': {
-      if (!opened(current)) {
-        return refuse(
-          'out-of-order',
-          `${row.type} before the opening flow.snapshot`,
-          commit,
-        );
-      }
+      if (!opened(current)) return beforeOpening(row.type);
       // The approval that guards one outcome-unknown call, committed with
       // the `request.opened` it names: the intent it binds is the one the
       // rows already hold, at the attempt the approval admits.
@@ -715,9 +688,7 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
         );
       }
       return Result.succeed({
-        ...current,
-        commit,
-        rowsBeforeSnapshot: current.rowsBeforeSnapshot + 1,
+        ...advance(current),
         pendingIntents: byId([
           ...Object.entries(current.pendingIntents),
           [p.callId, { ...intent, approvalRequestId: p.requestId }],
@@ -725,13 +696,7 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
       });
     }
     case 'model.retry': {
-      if (!opened(current)) {
-        return refuse(
-          'out-of-order',
-          `${row.type} before the opening flow.snapshot`,
-          commit,
-        );
-      }
+      if (!opened(current)) return beforeOpening(row.type);
       const permit = row.payload.permit;
       // A permit presupposes the request.opened it names.
       if (permit !== null && current.requests[permit.requestId] === undefined) {
@@ -739,20 +704,12 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
       }
       // The retry owner's durable gate, its one carrier: `null` retires it.
       return Result.succeed({
-        ...current,
-        commit,
-        rowsBeforeSnapshot: current.rowsBeforeSnapshot + 1,
+        ...advance(current),
         pendingRetry: permit,
       });
     }
     case 'tool.result': {
-      if (!opened(current)) {
-        return refuse(
-          'out-of-order',
-          `${row.type} before the opening flow.snapshot`,
-          commit,
-        );
-      }
+      if (!opened(current)) return beforeOpening(row.type);
       const p = row.payload;
       const pending = current.pendingResponse;
       if (
@@ -804,9 +761,7 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
             );
       return applyMutations(
         {
-          ...current,
-          commit,
-          rowsBeforeSnapshot: current.rowsBeforeSnapshot + 1,
+          ...advance(current),
           pendingResponse: {
             ...pending,
             settled: byId([
