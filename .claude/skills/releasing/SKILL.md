@@ -131,14 +131,15 @@ Verify on a throwaway tag before the first real preview of a train:
 - **Both publish jobs assert the release tag matches the corresponding
   `package.json` version and fail closed if it doesn't.** Cut the tags only
   after that manifest version is actually on `main`.
-- **At the end of a 1.x patch train, do not take the version
-  `version-bump.yml` proposes.** `nextWorkspaceVersion` in
-  `scripts/bump-workspace-version.mjs` rolls `X.Y.10` to `X.(Y+1).0`, which
-  from 1.0 on is the odd-minor stable version `publish-extension` refuses.
-  The automatic bump after a `1.Y.10` release therefore opens a PR for
-  `1.(Y+1).0`; set the manifests to `1.(Y+2).0` by hand
-  (`node scripts/bump-workspace-version.mjs --version 1.(Y+2).0`) before
-  cutting the next release.
+- **Take the version `version-bump.yml` proposes as-is, including at the end
+  of a patch train.** `nextWorkspaceVersion` in
+  `scripts/bump-workspace-version.mjs` bumps the patch (`X.Y.Z` to
+  `X.Y.(Z+1)`) up to `.10`, then rolls `X.Y.10` over to a new minor with
+  patch `0`: `0.(Y+1).0` on 0.x, and `X.(Y+2).0` from 1.0 on, stepping over
+  the odd minor that is the previous train's Marketplace pre-release number
+  and that `publish-extension` refuses as a stable version. So the automatic
+  PR after a `1.Y.10` release already proposes `1.(Y+2).0`; no hand edit is
+  needed.
 
 - **`version-bump.yml` is gated to the plain `vX.Y.Z` tag only**, so it doesn't
   double-fire off the `cli-` tag, and it skips pre-releases entirely. It opens
