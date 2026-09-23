@@ -495,7 +495,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   /** Every credential-dependent surface: catalogs, sign-in, the funnel. */
   private refreshAfterCredentialChange() {
     return Effect.gen({ self: this }, function* () {
-      yield* refresh();
+      yield* refresh({ includeRemote: true });
       // Let every surface finish repainting even when another one fails.
       yield* allSettledVoid<
         StateReadFailed | StateWriteFailed,

@@ -736,6 +736,9 @@ function createWindow(options: {
         (binding) => binding.snapshot.refreshAuth,
         { concurrency: 'unbounded', discard: true },
       );
+      // A signed-out load already stamped the catalog as including remote,
+      // so only a forced refetch picks up the new account's agents.
+      if (!teamSignInPending) yield* refresh({ includeRemote: true });
       yield* settingsIpcRef.current?.refreshAuthDependentData({
         deferAgentCatalogRefresh: teamSignInPending,
       }) ?? Effect.void;
