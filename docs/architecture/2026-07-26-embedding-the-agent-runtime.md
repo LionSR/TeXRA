@@ -16,8 +16,9 @@ has a measurable baseline.
 Every claim below is cited to `file:line`. The original baseline was verified
 at the PR base (`5fc03f9436`); review corrections were rechecked against
 `origin/main` (`97543989b5`). None of the 50 cited files changed between those
-snapshots. Where the code is awkward, this note says so rather than describing
-an intended future shape.
+snapshots. §1, §2, §3 and §5 were rewritten against `main` at `bac10c1` for
+#12950, after the request model and the host bootstrap moved. Where the code is
+awkward, this note says so rather than describing an intended future shape.
 
 ---
 
@@ -25,9 +26,10 @@ an intended future shape.
 
 The sections below separate minimum launch requirements from shipped-feature
 parity. A raw agent loop needs an initialized platform, usable credentials,
-agent directories, a session, and a populated registry. When response-bearing
-interactions are possible, the session also needs an interactions attachment;
-there is no separate presentation-host argument. The direct Lean language
+agent directories, a session, and a populated registry. When a run can open
+requests, something must also decide them (§3); presentation goes through the
+session's interactions attachment, and there is no separate presentation-host
+argument. The direct Lean language
 services the shipped Node hosts pass to `installProcessRuntime` are a
 shipped-feature choice; the raw loop only needs some `LeanLanguageServices`
 layer there.
@@ -75,11 +77,10 @@ in place. Nothing is copied into global storage, so there is no bundle-copy
 step to run and no version state key to keep.
 
 Beside the platform, a Node root calls `bootstrapHost`
-(`src/controllers/hostBootstrap.ts:77-96`) once, on its own process runtime: it
-installs the model HTTP dispatcher, the process setting host, the logger's
-debug-mode read, the account probes, the runtime skill sources, and the
-first-install disabled-tool seed. An embedder that skips it gets a runtime
-without those, not a broken one.
+(`src/controllers/hostBootstrap.ts:75-92`) once, on its own process runtime: it
+installs the model HTTP dispatcher, the process setting host, the account
+probes, the runtime skill sources, and the first-install disabled-tool seed.
+An embedder that skips it gets a runtime without those, not a broken one.
 
 Only a composition root calls `initPlatform`; that rule is stated in the
 `nodeHost` module header (`src/platform/defaults/nodeHost.ts:1-18`).
@@ -128,13 +129,13 @@ inside `resourcesPath`, and the files are read where they are.
 const agentDirectories = createPlatformAgentDirectories({
   channel: 'my-embedder',
   resourcesPath, // dir containing agents/, tool_use_agents/, skills/
-  customDirectoryStore: { get: () => undefined },
+  customDirectoryStore: { get: () => Effect.succeed(undefined) },
 });
 initPlatform({ lifecycle, agentDirectories });
 ```
 
-`customDirectoryStore.get()` is the user-configured custom agent directory, or
-`undefined` for none. The three methods return Effects, not Promises
+`customDirectoryStore.get()` yields the user-configured custom agent
+directory, or `undefined` for none. The three methods return Effects, not Promises
 (`src/agent/index/AgentDirectoryService.ts:61-85`); a failure to resolve a
 directory is an `AgentDirectoriesFailed`, and the `issueReporter` option
 decides how it surfaces (the default logs it at `warn`).
@@ -160,7 +161,7 @@ that need no session leave the store unopened.
   Pass the handle to `runAgent`; close it through the session owner when its
   lifetime ends.
 
-### Prerequisite B — `await loadAgents(...)`
+### Prerequisite B — `yield* loadAgents(...)`
 
 The registry is **not** lazily populated on the run path.
 `getAgentPath` → `resolveAgentForLaunch` is a synchronous read of already-loaded
@@ -168,7 +169,7 @@ state (`src/agent/index/agentRegistry.ts`); when it misses,
 `AgentLaunchContext` emits `showAgentConfigBanner` and throws
 `Could not find agent: <name>` (`src/agent/runtime/AgentLaunchContext.ts:158-159`).
 
-`loadAgents` (`src/agent/index/agentRegistry.ts:116-148`) is what fills it.
+`loadAgents` (`src/agent/index/agentRegistry.ts:113-128`) is what fills it.
 Neither `runAgent`, `executeAgent`, nor `AgentLaunchContext` populates the
 registry, so the caller must ensure that loading has happened before launch.
 Pass `{ includeRemote: false }` unless you want the Supabase remote-agent
@@ -179,14 +180,15 @@ catalog.
 `runAgent` and `executeAgent` obtain presentation and approval behavior from
 the selected session's stable `SessionHostInteractions` object. A host attaches
 its adapter with `session.interactions.use(...)` and detaches that adapter
-when the host presentation lifetime ends. An embedder that is certain no
-response-bearing interaction can occur may leave the session unattached.
-Otherwise, a non-interactive embedder must attach a host that answers every
-request kind its runs can raise. A method the host omits does not decline the
-request: a run-scoped request stays parked for a decision on its approval row.
-The adapter in the example below answers retry prompts with a denial, and
-`approvalPromptsUnavailable` (§3) keeps the approval-gated tools away from the
-model.
+when the host presentation lifetime ends. `use` returns an `Effect` that
+yields the detach disposer, so it is `yield*`ed. The attachment answers
+nothing: every request a run makes of a person (retry, question, approval) is
+a `request.opened` row the run's fold lists, closed by the
+`request.decided` row a surface's decision commits
+(`src/agent/runtime/HostInteractions.ts:85-91`). An unanswered request stays
+parked on its row. The adapter in the example below only receives
+presentation events, and `approvalPromptsUnavailable` (§3) keeps the
+approval-gated tools away from the model.
 
 ### Putting it together
 
@@ -217,7 +219,7 @@ const lifecycle = createLifecycleHost();
 const agentDirectories = createPlatformAgentDirectories({
   channel: 'my-embedder',
   resourcesPath, // dir containing agents/, tool_use_agents/, skills/
-  customDirectoryStore: { get: () => undefined },
+  customDirectoryStore: { get: () => Effect.succeed(undefined) },
 });
 initPlatform({ lifecycle, agentDirectories });
 
@@ -252,14 +254,14 @@ await runtime.runPromise(
     });
 
     const session = yield* initializeDefaultSession({ roots });
-    const detachHostInteractions = session.interactions.use({
-      cancel: () => {},
-      requestRetry: async () => ({
-        action: 'deny',
-        reason: 'No retry prompts.',
-      }),
-    }); // see §3 — DO NOT SKIP
-    yield* Effect.promise(() => loadAgents({ includeRemote: false }));
+    const detachHostInteractions = yield* session.interactions.use({
+      emit: (event, payload) => {
+        console.error(`[texra] ${event}`, payload);
+      },
+    });
+    // §3 — DO NOT SKIP: approvalPromptsUnavailable below removes the tools
+    // that open requests; a `retry` still needs a decider over viewChanges.
+    yield* loadAgents({ includeRemote: false });
 
     const validated = validateRunRequest({
       config: {
@@ -293,9 +295,9 @@ exceptions may instead run `AgentConfigSchema.parse` and construct the
 `agentCategory` normalizes to `Workflow`
 (`src/agent/core/definition/AgentConfig.ts:77-88`). The example sets
 `AgentCategory.ToolUse` explicitly because `assistant` is loaded from the
-tool-use agent directory (`src/agent/index/agentYamlScanner.ts:212-217`);
+tool-use agent directory (`src/agent/index/agentYamlScanner.ts:289-291`);
 launch resolution searches only the requested category
-(`src/agent/index/agentRegistry.ts:740-749`).
+(`src/agent/index/agentRegistry.ts:507-521`).
 
 ---
 
@@ -308,7 +310,7 @@ an embedder. That is correct only in a narrow sense, and the phrasing invites a
 wrong reading. State it plainly:
 
 ```ts
-// src/platform/interfaces.ts:208-216
+// src/platform/interfaces.ts:230-238
 export interface AgentDirectoriesPort {
   custom(): Effect.Effect<
     string,
@@ -328,11 +330,11 @@ disk_; that is the entire capability.
 ### Why in-memory definitions cannot work: two filesystem planes in one function
 
 `loadAgents` calls `doLoad`, which resolves the three paths and hands each to
-`scanDirectory` (`src/agent/index/agentRegistry.ts:150,160-173`). Inside
+`scanDirectory` (`src/agent/index/agentRegistry.ts:153,184-186`). Inside
 `scanDirectory`:
 
 - **Enumeration** uses the npm `glob` package with **no `fs` option**
-  (`src/agent/index/agentYamlScanner.ts:53-57`, import at `:3`). `glob` without
+  (`src/agent/index/agentYamlScanner.ts:75-80`, import at `:5`). `glob` without
   an injected `fs` reads the real Node filesystem directly.
 - **Reading** three lines later goes through Effect's own `FileSystem`, which
   a test or an embedder can back with something other than the real disk.
@@ -375,7 +377,7 @@ one agent, an embedder cannot either.
 ### What injection _does_ buy you
 
 - **Skipping the packaged bundle.** `scanDirectory` returns no entries for an
-  empty path (`src/agent/index/agentYamlScanner.ts:68`), so
+  empty path (`src/agent/index/agentYamlScanner.ts:71`), so
   `builtIn: () => Effect.succeed('')` and
   `builtInToolUse: () => Effect.succeed('')` are legal and cheap. This is the
   "empty-builtIn trick" the proposals mention, and it does work. With it you
@@ -383,15 +385,15 @@ one agent, an embedder cannot either.
   own directory of YAML.
 - **Choosing where custom agents live.** The CLI builds its port with
   `createPlatformAgentDirectories({ channel: 'cli', customDirectoryStore: … })`
-  (`packages/cli/src/runtime/initPlatform.ts:276-279`,
+  (`packages/cli/src/runtime/cliProcessRuntime.ts:246-250`,
   `src/agent/index/platformAgentDirectories.ts:25-57`). An embedder is free to
   supply a three-line literal instead:
 
   ```ts
   const agentDirectories: AgentDirectoriesPort = {
-    custom: async () => '/abs/path/to/my/agents',
-    builtIn: async () => '',
-    builtInToolUse: async () => '',
+    custom: () => Effect.succeed('/abs/path/to/my/agents'),
+    builtIn: () => Effect.succeed(''),
+    builtInToolUse: () => Effect.succeed(''),
   };
   ```
 
@@ -408,179 +410,112 @@ documentation.
 
 ---
 
-## 3. The headless minimum for interactions — the one section to read
+## 3. The headless minimum for requests — the one section to read
 
-**A host must answer every blocking request its runs can raise. Attaching
-nothing, or attaching a host that omits the method a run calls, parks that
-run.** The mostly-optional method signatures suggest otherwise, and this is
-the single highest-consequence fact in this document.
+**Every request a run opens waits until something writes its decision. The
+runtime writes none for you, and attaching host interactions does not answer
+anything.** A headless embedder must either remove the requests its runs can
+raise or answer them itself. This is the single highest-consequence fact in
+this document.
 
 ### The mechanism
 
-Every blocking interaction goes through `SessionHostInteractions.enqueue`
-(`src/agent/runtime/HostInteractions.ts:784-814`), which adds the pending
-record to `this.pending` and then calls `dispatch`:
+A run that needs a person commits a `request.opened` row carrying what a
+surface shows (a diff, a command, a question) and parks. The row is answered
+by a `request.decided` row (`src/shared/schemas/sessionEvent.ts:407-421`).
+"Pending" is nothing but the fold: an opened request with no decision is
+listed in the session view's `requests`
+(`src/shared/session/sessionView.ts:256`;
+`src/shared/session/sessionFold.ts:1621-1640`), which a host reads through
+`SessionHandle.view` or the level stream `SessionHandle.viewChanges`
+(`src/agent/runtime/SessionHandle.ts:208-217`).
+
+Any surface decides by sending one command through the session's request
+handler:
 
 ```ts
-// src/agent/runtime/HostInteractions.ts:811-812
-this.pending.add(pending);
-this.dispatch(pending);
+yield *
+  session.requests.request({
+    kind: 'request.decide',
+    runId,
+    requestId,
+    decision: { action: 'deny', reason: 'Nobody to ask.' },
+  });
 ```
 
-`dispatch` starts with:
+(`src/shared/session/runtimeRequest.ts:42-52`). The decision lands as the
+run's `request.decided` row, and the run continues from it.
 
-```ts
-// src/agent/runtime/HostInteractions.ts:901-906
-private dispatch(pending: PendingSessionInteraction): void {
-  const attachment = this.activeAttachment;
-  if (!attachment) {
-    this.warnParked(pending);
-    return;
-  }
-```
+`HostInteractions` is not part of this path. It is a presentation port —
+events, diagnostics, PDFs, the tool-edit preview a durable payload cannot
+carry — and no method on it returns a decision
+(`src/agent/runtime/HostInteractions.ts:85-91`). Attaching a host with
+`session.interactions.use(...)` is how a host sees what a run does; it never
+unparks a run.
 
-The pending promise has already been created and registered. With no
-attachment, `dispatch` logs a warning and returns **without settling it**.
+### The request kinds
 
-With an attachment whose method is simply _omitted_, the optional call yields
-`undefined`, and the next branch settles only a request that names no run
-(`src/agent/runtime/HostInteractions.ts:914-933`):
+The payload union is the vocabulary: `toolEdit`, `bash`, `retry`,
+`proposal`, `planApproval`, `externalInquiry`, `userQuestion`
+(`src/shared/schemas/progressView/data.ts:133-156`). Every kind but
+`externalInquiry` parks the tool or turn that opened it
+(`requestParksItsCaller`, `:171-175`); an external inquiry is answered later
+and parks nothing.
 
-```ts
-if (!result) {
-  if (pending.fact) {
-    // run-scoped: stays pending for a decision on its approval row
-    return;
-  }
-  this.deletePending(pending);
-  pending.settle(pending.cancellationResult());
-  return;
-}
-```
+### Removing the requests: `approvalPromptsUnavailable`
 
-A run-scoped request stays pending until a surface settles it through the
-session (`settleRequest` / `settleRetry`), a cancel reaches it, or the session
-is disposed. For an embedder with no surface, that is a hang.
+`runAgent`'s `approvalPromptsUnavailable: true` withholds every
+`requiresApproval` tool from the model before the first turn, so a run cannot
+open the requests those tools would raise. `executeAgent` threads the option
+into the run context on a fresh launch and on a resume
+(`src/agent/runtime/executeAgent.ts:478`, `:632`); the run layer forwards it
+to tool resolution (`src/agent/runtime/run/AgentRun.ts:208`); and
+`resolveAgentTools` drops the gated tools
+(`src/agent/runtime/agentToolResolution.ts:142-148`). The tools that open
+`toolEdit`, `bash`, `proposal`, `planApproval`, `externalInquiry` and
+`userQuestion` requests all declare `requiresApproval: true`. This is a loud,
+defined degradation — an agent that cannot ask is not given the tools that
+ask — rather than a hang.
 
-Nothing in the runtime attaches interactions for you. A fresh `SessionHandle`
-constructs an empty `SessionHostInteractions`
-(`src/agent/runtime/SessionHandle.ts:165`), and hosts call `.use(...)` on it
-directly (`SessionHostInteractions.use`,
-`src/agent/runtime/HostInteractions.ts:429`). The former
-`SessionHandle.useHostInteractions` pass-through was deleted in #11380.
+The CLI derives the flag from its approval policy
+(`packages/cli/src/runtime/approval/settleApprovals.ts:59` —
+`cliApprovalPromptsUnavailable`) and passes it to its `runAgent` call
+(`packages/cli/src/runtime/executeCli.ts:556`).
 
-### The affected calls
+### Answering the rest: `retry`
 
-Six request kinds park when unattached or unanswered —
-`requestToolEditApproval`, `requestBashApproval`, `requestPlanApproval`,
-`requestAgentProposal`, `requestRetry`, `askUserQuestion`
-(`src/agent/runtime/HostInteractions.ts:564-630`).
+`retry` has no tool behind it. The model invoker opens one on a
+user-retryable provider failure, so the flag cannot remove it, and a headless
+embedder must answer it. The `@texra-ai/agent` package's own sessions do
+exactly this: a listener over `viewChanges` denies each pending `retry`
+with the decide command above (`denyRetryRequests`,
+`packages/agent/src/effect/sessionPrograms.ts:91-146`). It keeps the set of
+requests it has answered, prunes it as the fold drops them, and forgets a
+request whose decision was refused so a later level denies it again. Copy
+that shape.
 
-`openExternalInquiry` is deliberately excluded: it reads
-`this.activeAttachment?.interactions.openExternalInquiry?.(request)` directly
-(`src/agent/runtime/HostInteractions.ts:632-641`), and its comment explicitly
-says this is to avoid "parking the agent while no UI is attached".
+The headless CLI does the same for every kind, answering from policy first
+and from a terminal prompt otherwise
+(`createHeadlessCliHostInteractions`,
+`packages/cli/src/runtime/approvalAdapter.ts:141`).
 
-### Escape hatches, and why they are not a substitute
+### What ends a wait without a decision
 
-- **Attaching later unblocks.** `use()` calls `activateCurrentAttachment`,
-  which redispatches everything still pending
-  (`src/agent/runtime/HostInteractions.ts:621-639`). Parking is not permanent
-  _if_ a host eventually attaches.
-- **Interrupting a retained run handle settles pending interactions.**
-  `RunAgentOptions.onRun` exposes an `AgentRunHandle`
-  (`src/agent/runtime/runAgent.ts:31-46`;
-  `src/agent/runtime/RunHandle.ts`). Retain it and call
-  `handle.interrupt()` to abort the run; both workflow and tool-use
-  interruption call `runSession.interactions.cancel`
-  (`src/agent/runtime/executeAgent.ts`; `src/agent/runtime/loop/toolUse.ts`).
-  This is the supported cancellation path, not a substitute for attaching a
-  host to a run that should continue.
-- **Direct `cancel()` / `dispose()` also settle without an attachment.**
-  `cancel` falls through to `settleFallbacks()` synchronously when there is no
-  active attachment (`src/agent/runtime/HostInteractions.ts:549-555`), and
-  `dispose()` settles anything still owned
-  (`src/agent/runtime/HostInteractions.ts:558-589`). These direct methods are
-  available to an embedder that owns the session.
-- **`approvalPromptsUnavailable: true` narrows the problem, it does not solve
-  it.** That option filters `requiresApproval` tools out of the model-facing
-  tool list before invocation
-  (`src/agent/runtime/agentToolResolution.ts:150-157`, threaded through
-  the run's `AgentRun` service, `src/agent/runtime/run/AgentRun.ts`). It does not
-  touch `requestRetry` or `askUserQuestion`, and it does not change dispatch.
-  The CLI sets it for `policy === 'never'` and for headless `ask`
-  (`packages/cli/src/runtime/approval/settleApprovals.ts` —
-  `cliApprovalPromptsUnavailable`) _in addition
-  to_ attaching real interactions.
+Interrupting the run through a retained `AgentRunHandle`
+(`RunAgentOptions.onRun`; `src/agent/runtime/RunHandle.ts:49`) ends the
+run, and the fold drops a closed run's open requests with it
+(`src/shared/session/sessionFold.ts:1858-1860`). That is
+the cancellation path, not a substitute for answering a run that should
+continue.
 
-### The typed shape
+### Why there is no runtime default
 
-`cancel` is the one **required** member of `HostInteractions`
-(`src/agent/runtime/HostInteractions.ts:389`); every other member — the seven
-request methods plus `emit`, `dispose`, the diagnostics readers, and
-`setApprovalBypassState` — is optional
-(`src/agent/runtime/HostInteractions.ts:347-390`). So the compiler forces you
-to write `{ cancel: … }`, and nothing more. The trap is not a badly-typed
-object: it is **never calling `interactions.use`**, or attaching a host that
-omits a request method a run will call. No type catches either.
-
-### The headless embedder contract (issue #9256)
-
-Issue #9256 asked what a session should do when no interaction host is ever
-attached at all. The ruling: **no runtime semantic change.** Parking (above)
-stays — it is what lets a desktop per-window reattach pick up a request that
-parked before it attached — and the runtime installs no default attachment.
-Instead, the contract is on the caller: attach a host that answers each
-request kind a run can raise, and use `approvalPromptsUnavailable: true` to
-remove the approval kinds, the most common ones. The flag does not reach
-`requestRetry`, so a headless host answers it itself; the package's own
-headless host denies it (`packages/agent/src/effect/sessions.ts:199-213`).
-
-**`approvalPromptsUnavailable: true` is the real headless answer for that
-case**, not merely a partial mitigation: an agent that cannot be asked simply
-is not given the tools that require asking, which is a defined, loud
-degradation instead of a hang. Trace the wiring end to end:
-
-- `executeAgent` threads `options.approvalPromptsUnavailable` into the run
-  context on both a fresh launch and a resume
-  (`src/agent/runtime/executeAgent.ts:392-396`, `:547-550`).
-- The run layer reads it off the launch context's tool policy and forwards it
-  to tool resolution (`src/agent/runtime/run/AgentRun.ts`).
-- `resolveAgentTools`'s shared gate drops any tool with
-  `requiresApproval: true` once the flag is set, before the model ever sees it
-  in its tool list (`src/agent/runtime/agentToolResolution.ts:150-157`).
-
-The worked example is the CLI's own headless path: it derives the flag from
-policy and mode (`packages/cli/src/runtime/approval/settleApprovals.ts` —
-`cliApprovalPromptsUnavailable`)
-and passes it straight into the real `runAgent` call
-(`packages/cli/src/runtime/executeCli.ts`). As the "Escape hatches"
-note above says, the flag does not touch `requestRetry` or `askUserQuestion`
-dispatch — it only narrows which tools can raise the approval kinds that were
-the reachable hang.
-
-**The diagnostic for getting it wrong anyway:** an unattached `dispatch` logs
-a warning before returning, naming the parked request kind and run and
-prescribing a host that answers requests
-(`src/agent/runtime/HostInteractions.ts:901-906` calls `warnParked`, defined
-at `:947-958`). A request parked because the attached host omits its method
-is logged at `info` (`:914-924`).
-
-**Why there is no runtime default.** `activeAttachment` is the most recently
-attached host (`this.attachments.at(-1)`,
-`src/agent/runtime/HostInteractions.ts:573-575`); detaching reactivates
-whatever is left, or re-parks anything still pending if nothing is
-(`:381-389`, `:603-626`). A permanent default-denier occupying that stack
-would instead settle every live approval the instant the real host detached —
-and desktop attaches and detaches per window, one `DesktopProgressBridge`
-per `BrowserWindow` calling `interactions.use` on the one process-owned
-session and disposing it on close
-(`packages/desktop/src/main/desktopAgentRun.ts`;
-`packages/desktop/src/main/index.ts:583-621`). Closing one window would
-silently deny a pending tool-edit diff. A latch that auto-denies before any
-host has ever attached fares no better: the runtime cannot know whether a
-UI is coming; the caller can, and `approvalPromptsUnavailable` is how it
-says so.
+A request is a durable row, answerable by any surface that folds the session
+— the TUI, a reattached desktop window, a resumed process. A built-in
+decider could not tell a session nobody watches from one whose surface has
+not attached yet, and it would answer requests a person was meant to see.
+The caller knows which case it is in, and says so with
+`approvalPromptsUnavailable` plus a decider for `retry`.
 
 ---
 
@@ -608,60 +543,59 @@ does not hold them leaves `loadAgents` with no packaged agents (§2).
 
 ## 5. Reading the CLI: obligations vs. product features
 
-`packages/cli/src/runtime/initPlatform.ts` is 392 lines and performs ~15
-registrations after `initPlatform`. An embedder reading it cannot tell which
-are runtime requirements and which are `texra`-the-product. The following
-classification makes that distinction.
+`initCliPlatform` (`packages/cli/src/runtime/initPlatform.ts:256-467`) is one
+Effect program that builds the process runtime, the platform and the process
+session, and every `texra` command runs it. An embedder reading it cannot tell
+which steps are runtime requirements and which are `texra`-the-product. The
+following classification makes that distinction.
 
 ### Runtime bootstrap and shipped-feature parity
 
-- **`initPlatform({ lifecycle, agentDirectories })`:** Required.
-  `platform()` throws otherwise (`src/platform/platform.ts:68-75`).
-- **`lean: directLeanLanguageServices()`** (in
-  `packages/cli/src/runtime/cliProcessRuntime.ts`): Shipped-feature parity, not
-  a raw-loop requirement. It is the direct Lean services layer of the process
-  runtime; an embedder may pass another port. The `memory` and `plan`
-  injections self-register (`src/agent/runtime/toolInjection.ts`).
-- **`bootstrapHost({ host: 'cli', roots, secrets, skills })`:** The shared
-  once-per-process install every host runs beside its platform
-  (`src/controllers/hostBootstrap.ts:77-96`): the model HTTP dispatcher, the
-  process setting host, the logger's debug-mode read, the account probes, the
-  runtime skill sources, and the first-install disabled-tool seed. An embedder
-  that skips it gets a runtime without those, not a broken one.
+- **`:275-282` — `installCliProcessRuntime(...)`:** Required. The one process
+  runtime (`packages/cli/src/runtime/cliProcessRuntime.ts:251`), which also
+  builds the lifecycle host and the agent-directories port
+  (`:246-250`). Its `lean: directLeanLanguageServices()` (`:298`) is
+  shipped-feature parity, not a raw-loop requirement; an embedder may pass
+  another layer. The `memory` and `plan` injections self-register
+  (`src/agent/runtime/toolInjection.ts`).
+- **`:326-333` — `createNodeWorkspaceRoots(...)`:** Required. The workspace
+  roots every session is opened over.
+- **`:370-378` — `bootstrapHost({ host: 'cli', roots, secrets, skills })`:**
+  The shared once-per-process install every host runs beside its platform
+  (`src/controllers/hostBootstrap.ts:75-92`): the model HTTP dispatcher, the
+  process setting host, the account probes, the runtime skill sources, and the
+  first-install disabled-tool seed. An embedder that skips it gets a runtime
+  without those, not a broken one. The CLI runs it before `initPlatform` so
+  the fallible seed fails while the platform is still private.
+- **`:400` — `initPlatform(platform)`:** Required. `platform()` throws
+  otherwise (`src/platform/platform.ts:68-75`).
 
-### CLI initialization choices (8) — not runtime obligations
+### CLI initialization choices — not runtime obligations
 
-- **`:306` — `seedDisabledToolDefaults(...)`:** First-install policy:
-  default-disable toggleable external tools. The key is versioned per host.
-- **`:311` — `installCliShutdownSignalHandlers(lifecycle)`:** SIGINT/SIGTERM
+- **`:308-311` — `openCliWorkspaceState(...)`:** The CLI's own on-disk
+  workspace state stores under its storage root. An embedder supplies its own
+  stores to `createNodeWorkspaceRoots`.
+- **`:340-363` — the memoized session open:** Opens the process session lazily,
+  with the LaTeX response-text connector as its `responseTextProcessing`, so a
+  command that needs no session never opens one. An embedder calls
+  `initializeDefaultSession` directly (§1, Prerequisite A).
+- **`:386-398` — `registerRuntimeShutdownHandlers(lifecycle, …)`:** Drains
+  agent-spawned OS children, flushes session publications, and disposes the
+  runtime on shutdown. Recommended for any long-lived process that runs `bash`
+  tools; its hook record names CLI-owned resources.
+- **`:403-405` — `installCliShutdownSignalHandlers(lifecycle)`:** SIGINT/SIGTERM
   handling for a terminal process.
-- **`:320` — `applyCliGitAuthorConfig(platform().config)`:** Attributes
-  agent-authored commits to the TeXRA Git identity.
-- **`:327-330` — `UsageLogService.initialize(...)` and shutdown flush:**
-  Supabase usage logging tagged `editorType: 'cli'`, for telemetry.
-- **`:334` — `initializeCliSupabaseAuth(log, storageRoot)`:** Supabase sign-in
-  wiring for the CLI's authentication flow.
-- **`:342-348` — `setSetupPlatform({ host: 'cli', signIn })`:** Wires the
-  setup-assistant onboarding surface.
-- **`:350-357` — OpenRouter reconciliation and model-cache invalidation:**
-  Resolves the persisted OpenRouter toggle.
-- **`:359-377` — authentication probe and CLI model policy:** Installs the
-  account probes (Codex/xAI eligibility) and applies the CLI's
-  `--helper-model` flag.
-
-### Optional, graceful (1)
-
-- `:387` — `initializeNodeRuntimeSkills({…})` (§4).
+- **`:460-463` — `initializeCliSupabaseAuth(...)`:** Supabase sign-in wiring
+  for the CLI's authentication flow.
 
 ### Cross-check against desktop
 
-The desktop main process makes the same three initialization choices, showing
-how a shipped host obtains full feature parity rather than proving that every
-call is a minimum runtime requirement:
-`initPlatform({ lifecycle, agentDirectories })` at
-`packages/desktop/src/main/platform/index.ts:221` over the port it builds at
-`:212`, `lean: directLeanLanguageServices()` in its `installProcessRuntime`
-call, and the same `bootstrapHost` the CLI runs, at `:233`. Product policy is
+The desktop main process makes the same runtime choices, showing how a shipped
+host obtains full feature parity rather than proving that every call is a
+minimum runtime requirement: it builds its agent-directories port at
+`packages/desktop/src/main/platform/index.ts:167`, runs the same
+`bootstrapHost` at `:228`, and calls `initPlatform({ lifecycle,
+agentDirectories })` at `:234`, after it rather than before. Product policy is
 not necessarily CLI-only: the disabled-tool seed and the runtime skill sources
 reach both hosts through that one shared call rather than being repeated per
 host.
@@ -681,16 +615,15 @@ host.
    it and closed with it; a host passes it exactly where it calls
    `installProcessRuntime` (`src/controllers/session/sessionLayer.ts`).
 3. **The registry is process-global**, not session-scoped
-   (`src/agent/index/agentRegistry.ts:116-148`). There is no per-embedder agent
+   (`src/agent/index/agentRegistry.ts:113-128`). There is no per-embedder agent
    namespace.
 4. **`initializeDefaultSession` throws when a default is already open over the
    same storage root** (`src/agent/runtime/sessionGraph.ts:313-316`). Embedding
    inside a process that already hosts TeXRA means reusing
    `tryDefaultSession()` or owning your own `SessionHandle`.
 5. **Some failure modes cluster at run time, not startup.** A missing
-   `loadAgents` throws at agent resolution, and a missing interactions
-   attachment, or a host that omits a request method the run calls, parks the
-   run mid-way. Neither fails fast at bootstrap.
+   `loadAgents` throws at agent resolution, and a request nobody decides
+   parks the run mid-way (§3). Neither fails fast at bootstrap.
 
 ## 7. Related documents
 
