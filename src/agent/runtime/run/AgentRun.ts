@@ -22,6 +22,8 @@ import type { AgentTrace, StageHandle } from '@agent/trace';
 import { resolveAgentTools } from '@agent/runtime/agentToolResolution';
 import { AGENT_TOOL_INJECTIONS } from '@agent/runtime/toolInjection';
 import type { UsageMonitor } from '@agent/runtime/UsageMonitor';
+import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
+import { withLogChannel } from '@logger/effectLog';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import { resolveRuntimeModelConfig } from '@model/runtimeModelRegistry';
 import type { LanguageModel } from '@platform/languageModel';
@@ -43,6 +45,7 @@ import { ensureError } from '@utils/errors/errorMessage';
 import { RunFileService } from '@utils/files/runStorage';
 
 import { bindModel, type BoundModel } from './modelBinding';
+import { offeredToolset } from './tools';
 import type { HttpClient } from 'effect/unstable/http';
 import type { AgentLaunchContext } from '../AgentLaunchContext';
 import type { SessionHandle } from '../SessionHandle';
@@ -103,6 +106,9 @@ export interface AgentRunShape {
   readonly initialUserMessageForTranscript: string | undefined;
   readonly fileService: RunFileService;
   readonly tools: IToolRegistry;
+  /** The toolset the run was offered at open, which a tool-use snapshot
+   *  records; a resumed run carries its recorded set forward unchanged. */
+  readonly toolset: ReturnType<typeof offeredToolset>;
   /** The synthetic terminal tool, when the config declares an output schema. */
   readonly finalToolName: string | null;
   /** The value the terminal tool captured, read by the loop at its exit. A
@@ -202,7 +208,7 @@ export const agentRunLayer = (
           })
         : undefined;
       const finalToolName = terminalTool?.definition.name ?? null;
-      const { definitions, registry: tools } = yield* resolveAgentTools({
+      const resolved = yield* resolveAgentTools({
         tools: setting.tools,
         logger,
         approvalPromptsUnavailable: ctx.toolPolicy.approvalPromptsUnavailable,
@@ -221,10 +227,59 @@ export const agentRunLayer = (
         delegationScope: ctx.delegationAgentScope ?? undefined,
       });
 
+      const snapshot = yield* ledger.latestSnapshot(runId);
+      // A resumed tool-use run offers the tools it recorded at open that
+      // still resolve, in recorded order, and never one it was not offered.
+      // Each recorded tool that no longer resolves (a plugin disabled or
+      // removed, a dependency gone) is named in the run's transcript; a call
+      // the model still makes to it settles as `tool_unavailable`.
+      const recorded =
+        snapshot?.payload.family === 'toolUse'
+          ? {
+              offeredTools: snapshot.payload.state.offeredTools,
+              toolsetHash: snapshot.payload.state.toolsetHash,
+            }
+          : null;
+      const toolset = recorded ?? offeredToolset(resolved.definitions);
+      let { definitions, registry: tools } = resolved;
+      if (recorded !== null) {
+        const byName = new Map(definitions.map((d) => [d.name, d]));
+        definitions = recorded.offeredTools.flatMap((name) => {
+          const definition = byName.get(name);
+          return definition ? [definition] : [];
+        });
+        const kept = new Map(
+          definitions.flatMap(({ name }) => {
+            const tool = resolved.registry.get(name);
+            return tool ? [[name, tool] as const] : [];
+          }),
+        );
+        tools = new MapToolRegistry(kept);
+        const warnings = recorded.offeredTools
+          .filter((name) => !byName.has(name))
+          .map(
+            (name) =>
+              `Tool "${name}" was offered to this run but is no longer available; the resumed run continues without it.`,
+          );
+        if (
+          warnings.length === 0 &&
+          offeredToolset(definitions).toolsetHash !== recorded.toolsetHash
+        ) {
+          warnings.push(
+            'A tool offered to this run changed its input schema since the run opened; the resumed run offers the current schema.',
+          );
+        }
+        // Both the process log and the run's transcript (the trace's `log`
+        // row) carry each warning.
+        for (const message of warnings) {
+          yield* Effect.logWarning(message).pipe(withLogChannel('AgentRun'));
+          logger.warn(message);
+        }
+      }
+
       // The model of a resumed run is the one its latest snapshot names; a
       // fresh run binds the launch model under the route the launch context
       // resolved for it (including a persisted compatibility key).
-      const snapshot = yield* ledger.latestSnapshot(runId);
       const persisted = snapshot === null ? null : snapshot.payload.runtime;
       const modelId = persisted?.modelId ?? config.model;
       const compatibilityKey =
@@ -275,6 +330,7 @@ export const agentRunLayer = (
         initialUserMessageForTranscript: ctx.initialUserMessageForTranscript,
         fileService: new RunFileService(runId, session.roots),
         tools,
+        toolset,
         finalToolName,
         structured,
         model,

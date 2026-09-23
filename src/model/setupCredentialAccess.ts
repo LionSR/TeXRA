@@ -17,7 +17,6 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 /** True when any provider has a usable API key in secret storage or the environment. */
 function hasAnyUsableProviderApiKey(
   secrets: PlatformSecrets,
-  onProbeFailure: (message: string) => Effect.Effect<void>,
 ): Effect.Effect<boolean> {
   return Effect.gen(function* () {
     for (const provider of API_PROVIDERS) {
@@ -26,7 +25,6 @@ function hasAnyUsableProviderApiKey(
         hasUsableApiKey(secrets, provider).pipe(
           Effect.mapError(setupCredentialProbeFailed(`${provider} API key`)),
         ),
-        onProbeFailure,
       );
       if (hasApiKey) return true;
     }
@@ -60,9 +58,8 @@ export const setupCredentialProbeFailed =
     });
 
 /**
- * A probe failure is treated as no credential of that kind. The caller owns
- * reporting so this model-layer policy stays free of logging side effects.
- * Interruption is not a probe failure: it cancels the scan rather than
+ * A probe failure is treated as no credential of that kind and logged as a
+ * warning; the caller names the log channel. Interruption is not a probe failure: it cancels the scan rather than
  * answering it, which is why the recovery matches the failure tag rather
  * than every exit.
  *
@@ -72,11 +69,10 @@ export const setupCredentialProbeFailed =
  */
 export function probeSetupCredential<R>(
   check: Effect.Effect<boolean, SetupCredentialProbeFailed, R>,
-  onProbeFailure: (message: string) => Effect.Effect<void>,
 ): Effect.Effect<boolean, never, R> {
   return check.pipe(
     Effect.catchTag('SetupCredentialProbeFailed', (failure) =>
-      onProbeFailure(failure.message).pipe(Effect.as(false)),
+      Effect.logWarning(failure.message).pipe(Effect.as(false)),
     ),
   );
 }
@@ -86,26 +82,23 @@ export function probeSetupCredential<R>(
  * ChatGPT/Codex first, then Grok. The one ladder both the setup gate below and
  * the setup model picker read, so the priority order and the probe wiring
  * cannot come to disagree about which subscription the user has. A probe
- * failure is treated as no subscription of that kind and reported through
- * `onProbeFailure`; `null` when neither subscription is signed in.
+ * failure is treated as no subscription of that kind and logged; `null`
+ * when neither subscription is signed in.
  */
 export function setupSubscriptionModel(
   stores: SettingsStores,
-  onProbeFailure: (message: string) => Effect.Effect<void>,
 ): Effect.Effect<string | null, never, LanguageModel> {
   return Effect.gen(function* () {
     const hasChatGptSubscription = yield* probeSetupCredential(
       isCodexSubscriptionActive(stores, CHATGPT_SETUP_MODEL).pipe(
         Effect.mapError(setupCredentialProbeFailed('ChatGPT subscription')),
       ),
-      onProbeFailure,
     );
     if (hasChatGptSubscription) return CHATGPT_SETUP_MODEL;
     const hasGrokSubscription = yield* probeSetupCredential(
       isXaiSubscriptionActive(stores, XAI_SETUP_MODEL).pipe(
         Effect.mapError(setupCredentialProbeFailed('Grok subscription')),
       ),
-      onProbeFailure,
     );
     return hasGrokSubscription ? XAI_SETUP_MODEL : null;
   });
@@ -114,19 +107,15 @@ export function setupSubscriptionModel(
 /**
  * True when any setup credential is usable: a signed-in subscription, or an
  * API key of any provider. Each failed credential probe resolves to false
- * after being reported through `onProbeFailure`.
+ * after being logged.
  */
 export function hasUsableSetupCredential(
   stores: SettingsStores,
   secrets: PlatformSecrets,
-  onProbeFailure: (message: string) => Effect.Effect<void>,
 ): Effect.Effect<boolean, never, LanguageModel> {
   return Effect.gen(function* () {
-    const subscriptionModel = yield* setupSubscriptionModel(
-      stores,
-      onProbeFailure,
-    );
+    const subscriptionModel = yield* setupSubscriptionModel(stores);
     if (subscriptionModel !== null) return true;
-    return yield* hasAnyUsableProviderApiKey(secrets, onProbeFailure);
+    return yield* hasAnyUsableProviderApiKey(secrets);
   });
 }

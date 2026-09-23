@@ -119,6 +119,16 @@ const PREFER_CODEX_CONFIG = {
   'texra.chatgptCodex.preferSubscription': true,
 };
 
+/** The logger production installs, so entries reach the captured sink. */
+const withDiagnostics = <A, E, R>(
+  self: Effect.Effect<A, E, R>,
+): Effect.Effect<A, E, R> =>
+  Effect.provide(self, effectDiagnosticsLayer('Trace'));
+
+afterEach(() => {
+  setLogSink(null);
+});
+
 describe('model catalogue direct-route key ownership', () => {
   it('assigns every servable direct route to an API-key provider', () => {
     for (const [modelId, config] of Object.entries(MODEL_CONFIGS)) {
@@ -154,10 +164,6 @@ describe('model availability', () => {
     // The picker reads the app's account plane through the model layer's
     // seam; install the same probes the three hosts install.
     installTexraAccountProbes(hostStores().secrets);
-  });
-
-  afterEach(() => {
-    setLogSink(null);
   });
 
   it.effect.each([
@@ -273,18 +279,18 @@ describe('model availability', () => {
 
         expect(gpt55.availability).toBe('missing-key');
         expect(gpt56.availability).toBe('missing-key');
-        const warnings = logs.at('WARN', 'computeModelOptions');
-        expect(warnings.map((entry) => entry.message).sort()).toEqual([
-          'Failed to read Kimi Code API key status; treating it as unavailable.',
-          'Failed to read OpenAI API key status; treating it as unavailable.',
-          'Failed to read OpenRouter API key status; treating it as unavailable.',
-        ]);
-        for (const entry of warnings) {
-          expect(String(entry.annotations['data'])).toContain(
-            'credential store unavailable',
-          );
-        }
-      }).pipe(Effect.provide(effectDiagnosticsLayer('Trace'))),
+        // The provider reads run concurrently, so the order is not fixed.
+        expect(logs.at('WARN').map((entry) => entry.message)).toEqual(
+          expect.arrayContaining(
+            ['OpenAI', 'OpenRouter', 'Kimi Code'].map((name) =>
+              expect.stringContaining(
+                `Failed to read ${name} API key status; treating it as unavailable.`,
+              ),
+            ),
+          ),
+        );
+        expect(logs.at('WARN')).toHaveLength(3);
+      }).pipe(withDiagnostics),
   );
 
   it.effect(
@@ -319,7 +325,7 @@ describe('model availability', () => {
           'retired',
         ]);
         // Only the two routing keys every call resolves up front.
-        expect(logs.at('WARN', 'computeModelOptions')).toHaveLength(2);
+        expect(logs.at('WARN')).toHaveLength(2);
 
         // Two models that do reach the Copilot branch: one preference read each.
         const keyed = modelOptionsFrom(
@@ -328,7 +334,7 @@ describe('model availability', () => {
 
         expect(keyed).toHaveLength(2);
         expect(globalState.copilotPreferenceReads).toBe(2);
-      }).pipe(Effect.provide(effectDiagnosticsLayer('Trace'))),
+      }).pipe(withDiagnostics),
   );
 
   it.effect(

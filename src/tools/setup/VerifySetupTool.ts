@@ -16,8 +16,6 @@ import { defineTool } from '../core/define';
 import { SetupPlatform } from './platform';
 import { collectCoreSetupStatus, locateTool } from './toolProbing';
 
-const CREDENTIAL_CHANNEL = 'Setup Credentials';
-
 const VerifySetupInputSchema = z.strictObject({
   tool: z
     .string()
@@ -84,8 +82,8 @@ const verify = Effect.fn('VerifySetupTool.execute')(function* (
   const [core, hasUsableCredential] = yield* Effect.all(
     [
       collectCoreSetupStatus(platform),
-      hasUsableSetupCredential(roots, secrets, (message) =>
-        Effect.logWarning(message).pipe(withLogChannel(CREDENTIAL_CHANNEL)),
+      hasUsableSetupCredential(roots, secrets).pipe(
+        withLogChannel('Setup Credentials'),
       ),
     ],
     { concurrency: 'unbounded' },

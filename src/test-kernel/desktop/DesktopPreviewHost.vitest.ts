@@ -461,7 +461,8 @@ describe('desktop preview host', () => {
             reportFailure: false,
           }),
         );
-        expect(error).toBe(browserError);
+        expect(error._tag).toBe('ExternalOpenFailed');
+        expect(error.cause).toBe(browserError);
         expect(showErrorMessage).not.toHaveBeenCalled();
       }),
   );

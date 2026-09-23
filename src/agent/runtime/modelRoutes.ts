@@ -312,8 +312,10 @@ export const resolveRouteCredential = Effect.fn('resolveRouteCredential')(
         new Error(`Model "${config.name}" has no direct API-key provider.`),
       );
     }
-    const apiKey = yield* Effect.mapBoth(getApiKey(secrets, provider), {
-      onFailure: (cause) => {
+    // An unreadable key store fails as itself, not as a missing key.
+    const apiKey = yield* getApiKey(secrets, provider).pipe(
+      Effect.map(exposeApiKey),
+      Effect.catchTag('ApiKeyMissing', (cause) => {
         const error = new Error(
           useOpenRouter
             ? 'Missing OpenRouter API key. Set an OpenRouter API key in settings.'
@@ -321,10 +323,9 @@ export const resolveRouteCredential = Effect.fn('resolveRouteCredential')(
           { cause },
         );
         attachMissingApiKeyError(error);
-        return error;
-      },
-      onSuccess: exposeApiKey,
-    });
+        return Effect.fail(error);
+      }),
+    );
     const endpoint = yield* resolveRouteEndpoint(
       stores,
       config,

@@ -298,6 +298,15 @@ const StateSlicesSchema = z.object({
  */
 export const ToolUseSnapshotStateSchema = z.object({
   stateSlices: StateSlicesSchema.nullable(),
+  /**
+   * The tool names the run was offered at open, in offer order, restated
+   * unchanged by every later snapshot. A resume offers these names that
+   * still resolve and never a tool the run was not offered.
+   */
+  offeredTools: z.array(z.string().min(1)).readonly(),
+  /** sha256 over the canonical JSON of each offered name and input schema.
+   *  Descriptions are excluded: delegation annotations rewrite them. */
+  toolsetHash: z.string().regex(/^[0-9a-f]{64}$/),
   /** Per-call system text for providers that do not embed it in messages. */
   systemPrompt: z.string().optional(),
   /** Validated terminal-tool result retained across interrupt and resume. */

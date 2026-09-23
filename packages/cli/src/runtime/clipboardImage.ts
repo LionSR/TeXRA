@@ -16,12 +16,12 @@
 // Effect of its own and the clipboard tools stay one wrapped foreign edge.
 
 import { execFile } from 'node:child_process';
-import { readFile, rm, stat } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 import { platform as osPlatform } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 
-import { Data, Effect, type FileSystem, type Path } from 'effect';
+import { Data, Effect, FileSystem, type Path } from 'effect';
 
 import { isFileNotFoundError } from '@common/errors';
 import { withSessionFs } from '@platform/rootedFs';
@@ -31,7 +31,6 @@ import {
   type PastedImageSaveFailed,
   savePastedImageBuffer,
 } from '@utils/files/pastedImageUtils';
-import { createTexraTempDir } from '@utils/files/tempDir';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 const execFileAsync = promisify(execFile);
@@ -196,18 +195,10 @@ export function attachClipboardImage(
       return notAttached(`Image paste is not supported on ${plat}.`);
     }
 
-    const dir = yield* Effect.acquireRelease(
-      Effect.tryPromise({
-        try: () => createTexraTempDir('texra-clip-'),
-        catch: probeFailed,
-      }),
-      (created) =>
-        Effect.ignore(
-          Effect.tryPromise(() =>
-            rm(created, { recursive: true, force: true }),
-          ),
-        ),
-    );
+    const fs = yield* FileSystem.FileSystem;
+    const dir = yield* fs
+      .makeTempDirectoryScoped({ prefix: 'texra-clip-' })
+      .pipe(Effect.mapError(probeFailed));
     const tmpFile = join(dir, 'clipboard.png');
 
     let reader: Effect.Effect<ClipboardRead, ClipboardImageProbeFailed>;

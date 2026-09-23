@@ -39,7 +39,6 @@ import {
   reasoningEffortOverrides,
   supportsReasoningLevel,
 } from './reasoningLevel';
-import { warnModelAvailability } from './modelAvailabilityWarning';
 import {
   resolveCodexSubscriptionCapabilities,
   resolveXaiSubscriptionCapabilities,
@@ -439,7 +438,7 @@ function readProviderKeyStatuses(
     (provider) =>
       hasUsableApiKey(secrets, provider).pipe(
         Effect.catchTag('SecretsFailed', (failure) =>
-          warnModelAvailability(
+          Effect.logWarning(
             `Failed to read ${providerDisplayName(provider)} API key status; treating it as unavailable.`,
             failure.cause,
           ).pipe(Effect.as(false)),
@@ -596,7 +595,7 @@ function readModelSelection(state: Pick<StateStore, 'get'>) {
     if (stored === undefined) return EMPTY_MODEL_SELECTION;
     const parsed = ModelSelectionSchema.safeParse(stored);
     if (parsed.success) return parsed.data;
-    yield* warnModelAvailability(
+    yield* Effect.logWarning(
       `Invalid stored ${GlobalStateKey.MODEL_SELECTION}; showing the default models.`,
       z.prettifyError(parsed.error),
     );

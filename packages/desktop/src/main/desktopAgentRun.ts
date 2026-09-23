@@ -23,7 +23,10 @@ import {
 import { ToolEditApprovalController } from '@controllers/approval/ToolEditApprovalController';
 import { RunLaunchFailed } from '@controllers/session/hostRunActions';
 import { withLogChannel } from '@logger/effectLog';
-import type { ProcessRuntime } from '@platform/processRuntime';
+import {
+  type ProcessRuntime,
+  withProcessServices,
+} from '@platform/processRuntime';
 import type {
   AgentCategory,
   RequestOpenFilePayload,
@@ -195,9 +198,7 @@ export function createDesktopAgentRun(
       // services from the runtime's context, which the session that composes
       // them does not carry.
       releaseToolEdit: (requestId) =>
-        Effect.flatMap(runtime.contextEffect, (context) =>
-          Effect.provideContext(toolEditApprovals.release(requestId), context),
-        ),
+        withProcessServices(runtime, toolEditApprovals.release(requestId)),
     }),
   );
 

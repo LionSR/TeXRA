@@ -27,8 +27,6 @@ import { getChatGptSubscriptionStatus, SetupPlatform } from './platform';
 import { collectCoreSetupStatus, locateTool } from './toolProbing';
 
 const CHANNEL = 'Setup Credentials';
-const CREDENTIAL_CHANNEL = 'Setup Credentials';
-
 const ProbeEnvironmentInputSchema = z
   .strictObject({})
   .describe(
@@ -76,8 +74,8 @@ const probe = Effect.fn('ProbeEnvironmentTool.execute')(function* () {
         ),
         { concurrency: 'unbounded' },
       ),
-      hasUsableSetupCredential(roots, secrets, (message) =>
-        Effect.logWarning(message).pipe(withLogChannel(CREDENTIAL_CHANNEL)),
+      hasUsableSetupCredential(roots, secrets).pipe(
+        withLogChannel('Setup Credentials'),
       ),
       resolveGitHubTokenSource(secrets).pipe(
         // A store the host cannot read is not a token; say so in the log

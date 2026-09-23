@@ -5,7 +5,11 @@ import { Data, Effect, type FileSystem, type Path } from 'effect';
 
 import { isFileNotFoundError } from '@common/errors';
 import { isLatexFile } from '@common/files/fileTypeUtils';
-import type { ExternalOpener, MessageHost } from '@hosts/uiHosts';
+import {
+  ExternalOpenFailed,
+  type ExternalOpener,
+  type MessageHost,
+} from '@hosts/uiHosts';
 import { withSessionFs } from '@platform/rootedFs';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { FileLocation } from '@shared/schemas';
@@ -46,13 +50,12 @@ interface DesktopPreviewHost {
   openExternal(url: string): Effect.Effect<void, PreviewUnavailable>;
   /**
    * `reportFailure: false` leaves the dialog out and hands the caller the
-   * shell's own rejection as an `Error` — which is why that form's channel is
-   * wider than the default form's.
+   * shell's rejection as {@link ExternalOpenFailed}.
    */
   openExternal(
     url: string,
     options: { readonly reportFailure?: boolean },
-  ): Effect.Effect<void, Error>;
+  ): Effect.Effect<void, PreviewUnavailable | ExternalOpenFailed>;
   /** Open a workspace file in the OS default application. */
   openPath(filePath: string): Effect.Effect<void, PreviewUnavailable>;
   /**
@@ -132,33 +135,39 @@ export function createDesktopPreviewHost(
   function openExternalProgram(
     url: string,
     reportFailure: boolean,
-  ): Effect.Effect<void, Error> {
+  ): Effect.Effect<void, PreviewUnavailable | ExternalOpenFailed> {
     return Effect.tryPromise({
       try: () => options.shell.openExternal(url),
-      catch: ensureError,
+      catch: (cause) =>
+        new ExternalOpenFailed({
+          kind: 'url',
+          target: url,
+          message: `The desktop could not open ${url} in the default browser: ${toErrorMessage(cause)}`,
+          cause,
+        }),
     }).pipe(
+      // Unreported, an OAuth flow decides for itself whether a missing
+      // browser handler is worth a dialog.
       Effect.catch((error) =>
         reportFailure
-          ? fail(`Failed to open URL ${url}: ${toErrorMessage(error)}`)
-          : // The caller asked to keep the original rejection: an OAuth flow
-            // decides for itself whether a missing browser handler is worth a
-            // dialog.
-            Effect.fail(error),
+          ? fail(`Failed to open URL ${url}: ${toErrorMessage(error.cause)}`)
+          : Effect.fail<PreviewUnavailable | ExternalOpenFailed>(error),
       ),
+      Effect.asVoid,
     );
   }
 
   /** The two forms above as one implementation: the reported one is the
-   *  default, and only the unreported one carries the shell's own value. */
+   *  default, and only the unreported one carries the shell's rejection. */
   function openExternal(url: string): Effect.Effect<void, PreviewUnavailable>;
   function openExternal(
     url: string,
     options: { readonly reportFailure?: boolean },
-  ): Effect.Effect<void, Error>;
+  ): Effect.Effect<void, PreviewUnavailable | ExternalOpenFailed>;
   function openExternal(
     url: string,
     { reportFailure = true }: { readonly reportFailure?: boolean } = {},
-  ): Effect.Effect<void, Error> {
+  ): Effect.Effect<void, PreviewUnavailable | ExternalOpenFailed> {
     return openExternalProgram(url, reportFailure);
   }
 

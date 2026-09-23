@@ -116,7 +116,7 @@ describe('PRPollingSource annotation drain', () => {
         const source = createDrainSource();
         const run = createCheckRun(42);
         const state = createDrainState([run]);
-        const rateLimit = new GitHubRateLimitError(1_800_000_000);
+        const rateLimit = new GitHubRateLimitError({ resetAt: 1_800_000_000 });
         mocks.fetchAnnotations.mockReturnValue(Effect.fail(rateLimit));
 
         yield* drainAccess(source).drainAnnotationQueues([

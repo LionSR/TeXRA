@@ -33,7 +33,7 @@ export function createStubDesktopSettingsUiHost(
     promptForSecret: () => Effect.succeed(undefined),
     showInfoMessage: () => Effect.void,
     showErrorMessage: () => Effect.void,
-    confirmAction: async () => true,
+    confirmAction: () => Effect.succeed(true),
     onError: () => undefined,
     ...overrides,
   };

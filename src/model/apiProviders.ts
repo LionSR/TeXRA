@@ -4,7 +4,7 @@
  * Shared between SecretManager (VS Code), modelRoutes (agent runtime),
  * and computeModelOptions (model). Platform-agnostic.
  */
-import { Deferred, Effect, Redacted } from 'effect';
+import { Data, Deferred, Effect, Redacted } from 'effect';
 import { LRUCache } from 'lru-cache';
 
 import type { PlatformSecrets, SecretsFailed } from '@platform/secrets';
@@ -270,17 +270,24 @@ export function configuredApiKeyProviders(
   );
 }
 
+/** No key is configured for the provider, in secret storage or the env. */
+class ApiKeyMissing extends Data.TaggedError('ApiKeyMissing')<{
+  readonly provider: ApiProvider;
+  readonly message: string;
+}> {}
+
 /** Get an API key, failing if none is configured. See trio doc above. */
 export function getApiKey(
   secrets: PlatformSecrets,
   provider: ApiProvider,
-): Effect.Effect<Redacted.Redacted<string>, SecretsFailed | Error> {
+): Effect.Effect<Redacted.Redacted<string>, SecretsFailed | ApiKeyMissing> {
   return Effect.flatMap(resolveApiKey(secrets, provider), ({ value: key }) =>
     key === undefined
       ? Effect.fail(
-          new Error(
-            `No API key found for ${provider}. Set the ${apiKeyEnvName(provider)} environment variable, or configure your ${provider} API key.`,
-          ),
+          new ApiKeyMissing({
+            provider,
+            message: `No API key found for ${provider}. Set the ${apiKeyEnvName(provider)} environment variable, or configure your ${provider} API key.`,
+          }),
         )
       : Effect.succeed(key),
   );

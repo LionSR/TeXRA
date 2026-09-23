@@ -272,9 +272,9 @@ export const finalizeRunTerminal = Effect.fn('finalizeRunTerminal')(function* (
   return { event };
 });
 
-/** Failures finalizeFailedRun already logged, published, and wrapped; the
- *  outer catch rethrows these untouched instead of finalizing them again. */
-const finalizedRunFailures = new WeakSet<Error>();
+/** A failure the run already logged, published, and wrapped; the outer catch
+ *  rethrows it untouched instead of finalizing it again. */
+class FinalizedRunFailure extends AgentError {}
 
 /**
  * Recover a run's carried failure as an `Error`, so the one failure path below
@@ -492,9 +492,9 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
         );
       }
 
-      const finalizedFailure = new AgentError(errorMsg, { cause: err });
-      finalizedRunFailures.add(finalizedFailure);
-      return yield* Effect.fail(finalizedFailure);
+      return yield* Effect.fail(
+        new FinalizedRunFailure(errorMsg, { cause: err }),
+      );
     });
     /**
      * Invoke the composition-supplied hook once the live run ends.
@@ -588,7 +588,7 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
       Effect.catchCause((cause) => {
         const err = ensureError(Cause.squash(cause));
         // A failure already classified and published retains its one error path.
-        if (finalizedRunFailures.has(err)) return Effect.fail(err);
+        if (err instanceof FinalizedRunFailure) return Effect.fail(err);
         return finalizeFailedRun(err, undefined);
       }),
       Effect.onInterrupt(() =>

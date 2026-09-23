@@ -1,6 +1,9 @@
 // Standard library imports
 import * as path from 'node:path';
 
+// Third-party imports
+import { Effect } from 'effect';
+
 // Local imports - shared schemas
 import { Rejected } from '@shared/session/requestErrors';
 
@@ -13,7 +16,10 @@ import { Rejected } from '@shared/session/requestErrors';
 export function attachDroppedPaths(
   paths: readonly (string | null)[],
   allowedExtensions: readonly string[],
-): { paths: string[]; attachedCount: number; rejectedCount: number } {
+): Effect.Effect<
+  { paths: string[]; attachedCount: number; rejectedCount: number },
+  Rejected
+> {
   const allowed = new Set(
     allowedExtensions.map(normalizeMainViewFileExtension),
   );
@@ -34,17 +40,19 @@ export function attachDroppedPaths(
   }
 
   if (attached.size === 0 && rejectedCount > 0) {
-    throw new Rejected({
-      reason:
-        'No dropped files were attached. Use regular files inside this workspace with supported TeXRA extensions.',
-    });
+    return Effect.fail(
+      new Rejected({
+        reason:
+          'No dropped files were attached. Use regular files inside this workspace with supported TeXRA extensions.',
+      }),
+    );
   }
 
-  return {
+  return Effect.succeed({
     paths: [...attached],
     attachedCount: attached.size,
     rejectedCount,
-  };
+  });
 }
 
 export function normalizeMainViewFileExtension(filePath: string): string {

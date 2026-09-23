@@ -27,9 +27,6 @@ import { AgentCategory } from '@shared/schemas';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 
-const reportProbeFailure = (message: string): Effect.Effect<void> =>
-  Effect.logWarning(message).pipe(withLogChannel('Setup Credentials'));
-
 /** Instruction handed to the setup agent when launched. Shared by every host. */
 export const SETUP_INSTRUCTION =
   'Finish installing TeXRA. Probe my environment, install anything missing, and configure a working credential.';
@@ -47,9 +44,8 @@ export function selectSetupCredentialModelExcludingOpenRouter(
     // Subscription routes follow the global OpenRouter selection.
     // When it is enabled, only managed direct credentials can bypass it.
     if (!useOpenRouter) {
-      const subscriptionModel = yield* setupSubscriptionModel(
-        stores,
-        reportProbeFailure,
+      const subscriptionModel = yield* setupSubscriptionModel(stores).pipe(
+        withLogChannel('Setup Credentials'),
       );
       if (subscriptionModel !== null) return subscriptionModel;
     }
@@ -66,8 +62,7 @@ export function selectSetupCredentialModelExcludingOpenRouter(
         hasUsableApiKey(secrets, provider).pipe(
           Effect.mapError(setupCredentialProbeFailed(`${provider} API key`)),
         ),
-        reportProbeFailure,
-      );
+      ).pipe(withLogChannel('Setup Credentials'));
       if (hasApiKey) return model;
     }
 
@@ -99,8 +94,7 @@ export function resolveSetupLaunchModel(
       hasUsableApiKey(secrets, 'openRouter').pipe(
         Effect.mapError(setupCredentialProbeFailed('OpenRouter API key')),
       ),
-      reportProbeFailure,
-    );
+    ).pipe(withLogChannel('Setup Credentials'));
     const openRouterModel = hasOpenRouterKey
       ? SETUP_MODEL_BY_PROVIDER.openRouter
       : null;

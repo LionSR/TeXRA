@@ -290,6 +290,7 @@ function agentRunTestLayer(init: LoopInit) {
         fileService: new RunFileService(init.runId, init.session.roots),
         tools: new MapToolRegistry({}),
         finalToolName: init.finalToolName ?? null,
+        toolset: { offeredTools: [], toolsetHash: '0'.repeat(64) },
         structured: { value: undefined },
         model,
         scope,
@@ -476,7 +477,11 @@ const seedCommittedResponse = Effect.fn('test.seedCommittedResponse')(
         turn: 1,
         state: {
           family: 'toolUse',
-          state: { stateSlices: null },
+          state: {
+            stateSlices: null,
+            offeredTools: [],
+            toolsetHash: '0'.repeat(64),
+          },
         },
       }),
     ]);

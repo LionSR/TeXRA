@@ -61,13 +61,6 @@ class SignInPresentationFailed extends Data.TaggedError(
   readonly message: string;
 }> {}
 
-/** A subscription-provider mutation (sign-in, sign-out, preference) failed. */
-class SubscriptionActionFailed extends Data.TaggedError(
-  'SubscriptionActionFailed',
-)<{
-  readonly cause: unknown;
-}> {}
-
 interface DesktopCredentialSettingsControllerOptions extends SettingsStatePorts {
   readonly config: ConfigProvider;
   readonly secrets: PlatformSecrets;
@@ -264,7 +257,7 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
     this.profileHandlers = {
       // The settings view's Sign in button is a host entry, so the sign-in
       // program settles here.
-      signIn: () => options.auth.signIn().pipe(Effect.mapError(ensureError)),
+      signIn: () => options.auth.signIn(),
       signOut: () =>
         Effect.tryPromise({
           try: () => options.auth.signOut(),
@@ -444,17 +437,10 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
     const options = this.options;
     const refresh = this.refreshAfterSubscriptionAuthChange(providerId);
     const attempt = work(provider).pipe(
-      Effect.mapError((cause) => new SubscriptionActionFailed({ cause })),
-      Effect.catchTag('SubscriptionActionFailed', (failure) =>
+      Effect.catch((error) =>
         options.notifications
-          .showErrorMessage(buildErrorMessage(provider, failure.cause))
-          .pipe(
-            Effect.flatMap(() =>
-              Effect.sync(() => {
-                options.onError(failure.cause);
-              }),
-            ),
-          ),
+          .showErrorMessage(buildErrorMessage(provider, error))
+          .pipe(Effect.andThen(Effect.sync(() => options.onError(error)))),
       ),
     );
     return Effect.gen(function* () {

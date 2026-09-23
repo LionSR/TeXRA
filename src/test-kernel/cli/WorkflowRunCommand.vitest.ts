@@ -555,13 +555,11 @@ describe('CLI run command, workflow agents', () => {
             ),
           );
 
-          // The command reports a usage error by throwing `CliUsageError` from
-          // its `Effect.fn` body, which Effect surfaces as a defect rather than
-          // a typed failure, so the assertion reads the cause.
+          // The command fails with the typed `CliUsageError`.
           expect(Exit.isFailure(exit)).toBe(true);
           expect(
             Exit.isFailure(exit) &&
-              exit.cause.reasons.find(Cause.isDieReason)?.defect,
+              exit.cause.reasons.find(Cause.isFailReason)?.error,
           ).toMatchObject({
             message: 'At least one workflow input file is required.',
           });

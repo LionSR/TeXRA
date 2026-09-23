@@ -24,8 +24,6 @@ import {
 } from './_helpers/globalArgs';
 import { type CliContext } from '../runtime/cliContext';
 
-const CREDENTIAL_CHANNEL = 'Setup Credentials';
-
 /** Exported for the test kernel — the command's `run` is the only other caller. */
 export async function runSetup(context: CliContext): Promise<number> {
   const terminalFailure = interactiveTerminalFailure(context);
@@ -58,13 +56,13 @@ export async function runSetup(context: CliContext): Promise<number> {
   const credentialed = await runtime.runPromise(
     Effect.gen(function* () {
       const services = yield* initCliPlatform({ ...context, quietLogs: true });
-      const hasCredential = yield* hasUsableSetupCredential(
-        services,
-        services.secrets,
-        (message) =>
-          Effect.logWarning(message).pipe(withLogChannel(CREDENTIAL_CHANNEL)),
-      );
-      if (hasCredential) return true;
+      if (
+        yield* hasUsableSetupCredential(services, services.secrets).pipe(
+          withLogChannel('Setup Credentials'),
+        )
+      ) {
+        return true;
+      }
       const { runCliOnboarding } = yield* Effect.promise(
         () => import('../onboarding/runOnboarding'),
       );

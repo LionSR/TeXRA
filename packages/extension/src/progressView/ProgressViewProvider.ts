@@ -245,19 +245,19 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       // Already an Effect program: the typed port lets the banner read it
       // directly instead of settling it on the runtime first.
       apiKeyBanner: () =>
-        hasUsableSetupCredential(this.session.roots, this.secrets, (message) =>
-          Effect.logWarning(message).pipe(withLogChannel(CHANNEL)),
-        ).pipe(
-          Effect.map((usable) => ({ visible: !usable })),
-          Effect.mapError(
-            (cause) =>
-              new HostSnapshotReadFailed({
-                member: 'apiKeyBanner',
-                message: 'The provider credential status could not be read.',
-                cause,
-              }),
+        hasUsableSetupCredential(this.session.roots, this.secrets)
+          .pipe(withLogChannel('Setup Credentials'))
+          .pipe(
+            Effect.map((usable) => ({ visible: !usable })),
+            Effect.mapError(
+              (cause) =>
+                new HostSnapshotReadFailed({
+                  member: 'apiKeyBanner',
+                  message: 'The provider credential status could not be read.',
+                  cause,
+                }),
+            ),
           ),
-        ),
       // Already an Effect program, and one that answers a failed probe as a
       // missing tool rather than failing, so the banner reads it directly.
       dependencyBanner: () =>

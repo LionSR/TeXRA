@@ -24,6 +24,7 @@ import {
   agentMatchesIdentifier,
 } from '@shared/schemas';
 import type { ModelOptionData, RequestDecision, RunId } from '@shared/schemas';
+import { DatabaseWriteFailed } from '@shared/session/database';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { testRunHandle } from '@test/support/runHandleFixtures';
 import {
@@ -705,7 +706,12 @@ describe('headless delegation', () => {
       Effect.gen(function* () {
         const drain = vi.spyOn(inBandSession, 'settlePublications');
         releaseClaims.mockReturnValueOnce(
-          Effect.fail(new Error('claim release failed')),
+          Effect.fail(
+            new DatabaseWriteFailed({
+              path: 'session.db',
+              cause: new Error('claim release failed'),
+            }),
+          ),
         );
 
         const result = yield* runInBand(delegationOptions());
@@ -831,7 +837,12 @@ describe('headless delegation', () => {
         const childFailure = new Error('review model failed');
         mocks.executeAgent.mockRejectedValueOnce(childFailure);
         releaseClaims.mockReturnValueOnce(
-          Effect.fail(new Error('claim release failed')),
+          Effect.fail(
+            new DatabaseWriteFailed({
+              path: 'session.db',
+              cause: new Error('claim release failed'),
+            }),
+          ),
         );
         expect(yield* Effect.flip(runInBand(delegationOptions()))).toBe(
           childFailure,

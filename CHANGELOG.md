@@ -68,6 +68,14 @@ All notable changes to this project will be documented in this file.
   agent does not declare, or one that needs an approval prompt the current
   host cannot show) could still have that tool run. Such a call now fails as
   an unknown tool.
+- **A resumed run keeps the tools it was offered.** Each tool-use run now
+  records the tools it started with. When you resume it, it is offered those
+  tools that are still available and never gains one it was not offered; a
+  tool that has since been disabled or removed is named in the run's
+  transcript, and a call the model still makes to it returns a
+  `tool_unavailable` error the model can work around. Session history saved
+  by an earlier build is cleared the first time this build opens a
+  workspace, because the stored format changed to hold the offered tools.
 - **GPT-5.6 works on a ChatGPT subscription again.** Selecting GPT-5.6 sent an
   abbreviated model name the Codex service does not recognise, and it answered
   that the model "is not supported when using Codex with a ChatGPT account" —

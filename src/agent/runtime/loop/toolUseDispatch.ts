@@ -408,7 +408,13 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     turn.workspace.interactions.recordToolCall();
     let result: ToolResult;
     if (!tool) {
-      result = { status: 'error', error: `Unknown tool ${fact.toolName}` };
+      // A name the run was not offered, or one it was offered that no longer
+      // resolves on resume: a model-visible error, and the turn continues.
+      result = {
+        status: 'error',
+        error: `tool_unavailable: the tool "${fact.toolName}" is not available in this run. Continue with the tools you were offered.`,
+        diagnostics: { code: 'tool_unavailable', tool: fact.toolName },
+      };
     } else {
       // Guard first, in the same call context: a refused path or an
       // unapproved command settles the call without the body running.
@@ -571,10 +577,6 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
       },
       cards,
       true,
-    ).pipe(
-      // A ledger refusal mid-dispatch is the loop's to stop on; it surfaces
-      // as a defect of this call's fiber so the partition unwinds with it.
-      Effect.orDie,
     );
   });
 
@@ -586,7 +588,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
       readonly attempt: number;
       readonly approvalRequestId: string | null;
     },
-  ): Effect.fn.Return<'rerun' | 'skip', never> {
+  ): Effect.fn.Return<'rerun' | 'skip', InvokeError> {
     let current = yield* cell.current;
     const question = `The tool "${fact.toolName}" may have run before the run was interrupted, and no result was recorded. Run it again, or skip it?`;
     const rerunOption = 'Run again';
@@ -660,7 +662,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
           attempt: intent.attempt,
           requestId,
         }),
-      ]).pipe(Effect.orDie);
+      ]);
       current = yield* cell.current;
     }
     // The decision is the `request.decided` row the decide command lands on
@@ -696,7 +698,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     call: LocalCall,
     intent: { readonly attempt: number },
     decision: 'rerun' | 'skip',
-  ): Effect.fn.Return<'rerun' | 'skip', never> {
+  ): Effect.fn.Return<'rerun' | 'skip', InvokeError> {
     if (decision === 'rerun') {
       yield* append([
         {
@@ -709,7 +711,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
           },
         },
         ...admittedCards(fact, call),
-      ]).pipe(Effect.orDie);
+      ]);
     }
     return decision;
   });
@@ -730,17 +732,12 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
       return yield* Effect.die(new Error(`No call at ordinal ${fact.ordinal}`));
     }
     if (afterEndTurn) {
-      yield* settle(
-        fact,
-        1,
-        syntheticSettlement(SKIPPED_AFTER_END_TURN),
-        [],
-      ).pipe(Effect.orDie);
+      yield* settle(fact, 1, syntheticSettlement(SKIPPED_AFTER_END_TURN), []);
       return;
     }
     if (fact.parallelSafe) {
       const cards = admittedCards(fact, call);
-      if (cards.length > 0) yield* append(cards).pipe(Effect.orDie);
+      if (cards.length > 0) yield* append(cards);
       yield* execute(fact, call, 1);
       return;
     }
@@ -753,7 +750,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
           intent.attempt,
           syntheticSettlement(SKIPPED_OUTCOME_UNKNOWN),
           [],
-        ).pipe(Effect.orDie);
+        );
         return;
       }
       yield* execute(fact, call, intent.attempt + 1);
@@ -768,7 +765,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
         payload: { responseId, callIds: [fact.callId], attempt: 1 },
       },
       ...admittedCards(fact, call),
-    ]).pipe(Effect.orDie);
+    ]);
     yield* execute(fact, call, 1);
   });
 
@@ -806,7 +803,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
         stateMutation: [],
       },
       [],
-    ).pipe(Effect.orDie);
+    );
   });
 
   // Partitions in order; each barrier is its own, each run of parallel-safe
