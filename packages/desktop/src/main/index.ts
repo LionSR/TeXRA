@@ -1455,10 +1455,11 @@ function createWindow(options: {
       toolingSettingsController,
       globalState: options.globalState,
       secrets: options.secrets,
-      // The one browser hand-off every settings URL takes, with the window's
-      // own "could not open" dialog.
+      // The one browser hand-off every settings URL takes. Its failure
+      // reaches the settings IPC's own report, so the opener shows no dialog
+      // of its own: one failed open, one dialog.
       externalOpener: {
-        openExternal: (url) => openExternalProgram(url, true),
+        openExternal: (url) => openExternalProgram(url, false),
       },
       ui: settingsUi,
       session: project.session,

@@ -311,12 +311,23 @@ export class SettingsViewMessageHandler {
           refreshModelCatalog: () =>
             this.progressView.refreshCatalogs().pipe(Effect.asVoid),
           // A failed key write leaves the profile and the Models tab showing
-          // the key as it was before the attempt.
+          // the key as it was before the attempt. The error dialog is the
+          // report: a repaint that fails after it (a view closed meanwhile)
+          // is logged, not raised as a second, generic dialog.
           reportProviderKeyFailure: (error) =>
             Effect.andThen(
               showLoggedErrorMessage(this.channel, error.message, error.cause),
               this.withActiveWebview((w) =>
                 this.sendProfileAndModelSelectionData(w),
+              ).pipe(
+                Effect.catch((cause) =>
+                  Effect.logWarning(
+                    'Could not repaint the profile after a failed key write',
+                  ).pipe(
+                    Effect.annotateLogs({ data: cause }),
+                    withLogChannel(this.channel),
+                  ),
+                ),
               ),
             ),
         },
