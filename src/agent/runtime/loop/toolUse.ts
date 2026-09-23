@@ -18,7 +18,7 @@
  * pending response dispatches what is unsettled, and a halted run that is
  * launched again waits for the input that resumes it.
  */
-import { Cause, Effect, Exit, Ref, Scope, SynchronizedRef } from 'effect';
+import { Effect, Exit, Scope, SynchronizedRef } from 'effect';
 
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { FollowUpBatch } from '@agent/followUp/RunInput';
@@ -36,7 +36,6 @@ import type { LanguageModel } from '@platform/languageModel';
 import type { StorageFs, WorkspaceFs } from '@platform/rootedFs';
 import { hasDelegationTool } from '@shared/constants/delegationTools';
 import {
-  EMPTY_RUN_USAGE_TOTALS,
   RUN_OUTCOME,
   type JsonValue,
   type RetryErrorInfo,
@@ -44,7 +43,7 @@ import {
   type RunUsageTotals,
 } from '@shared/schemas';
 import { RunLedger } from '@shared/session/runLedger';
-import type { RunState } from '@shared/session/runStateFold';
+import { type RunState } from '@shared/session/runStateFold';
 import { goalOf, pauseGoal, setGoalSessionAutoApproval } from '@tools/goal';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 
@@ -58,20 +57,23 @@ import { ModelInvoker } from '../ModelInvoker';
 import { Runs } from '../runRegistry';
 import {
   appendRow,
-  NOT_RESUMABLE_MESSAGE,
+  familyState,
   rowAggregate,
   snapshotRow,
   stepRow,
-  toolUseFlowState,
+  type SnapshotPatch,
   type ToolUseFlowState,
 } from './rows';
 import {
-  alreadyOpenedMessage,
-  freshProgramState,
+  loadRun,
+  makeRunCell,
   recordServedUsage,
+  settleRun,
+  stagedBy,
+  stoppedBy,
   usageSnapshot,
+  type RunCell,
 } from './runProgram';
-import { exitOutcome, recordHalt, runStopError } from './runExit';
 import { dispatchPendingResponse, type TurnContext } from './toolUseDispatch';
 import type { HttpClient } from 'effect/unstable/http';
 import type { SessionHandle } from '../SessionHandle';
@@ -143,10 +145,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   const isChild = () => runs.getHandle(runId)?.isChild === true;
 
   // ---------------------------------------------------------------- state
-  // The latest folded state, for the halt finalizer and the host controls.
-  const latest = yield* Ref.make<RunState | null>(null);
-  const commit = (state: RunState) =>
-    Ref.set(latest, state).pipe(Effect.as(state));
   let workspace = AgentWorkspaceState.create();
   const userChannels: Record<string, unknown> = { ...run.userVarChannels };
   let systemPrompt: string | undefined;
@@ -156,8 +154,9 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   // regardless of the threshold.
   let compactionRequested = false;
 
+  /** The family state every snapshot of this run carries. */
   const flowState = (state: RunState): ToolUseFlowState => {
-    const previous = toolUseFlowState(state);
+    const previous = familyState(state, 'toolUse');
     return {
       modelId: state.modelId ?? previous?.modelId,
       ...(state.modelCompatibilityKey === null
@@ -180,10 +179,11 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         : {}),
     };
   };
-  const snapshot = (
-    state: RunState,
-    patch: Omit<Parameters<typeof snapshotRow>[2], 'state'>,
-  ) => snapshotRow(runId, state, { ...patch, state: flowState(state) });
+  const snapshot = (state: RunState, patch: Omit<SnapshotPatch, 'state'>) =>
+    snapshotRow(runId, state, {
+      ...patch,
+      state: { family: 'toolUse', state: flowState(state) },
+    });
 
   const publishTouchedFiles = (): void => {
     const paths = workspace.interactions.toSnapshot().edits.map((e) => e.path);
@@ -259,6 +259,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   const applyPendingModelSwitch = Effect.fn('toolUse.applyModelSwitch')(
     function* (
       state: RunState,
+      cell: RunCell,
     ): Effect.fn.Return<
       RunState,
       Error,
@@ -284,7 +285,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         temperature: run.setting.temperature,
       }).pipe(Scope.provide(run.scope));
       userChannels[USER_VAR_MODEL] = next.modelId;
-      const switched = yield* ledger.appendBatch(runId, state, [
+      const switched = yield* cell.append([
         {
           type: 'model.compaction',
           aggregateId: rowAggregate(runId),
@@ -317,92 +318,95 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       yield* releaseBindingUploads(current.model, current.modelId);
       run.callbacks.onModelChanged(next.modelId);
       logger.emit({ type: 'run.config', runId, config: nextAgentConfig });
-      return yield* commit(switched);
+      return switched;
     },
   );
 
   // -------------------------------------------------------------- opening
-  const openFresh = Effect.fn('toolUse.open')(function* (): Effect.fn.Return<
-    RunState,
-    Error,
-    ProcessServices
-  > {
-    const bound = yield* SynchronizedRef.get(run.model);
-    const resolvedToolNames = run.setting.tools.map((tool) => tool.name);
-    const promptVars = {
-      ...run.userVarChannels,
-      [USER_VAR_MODEL]: bound.modelId,
-    };
-    const prompts = yield* buildInitialToolUsePrompts(
-      run.prompt,
-      promptVars,
-      logger,
-      {
-        workspace: session.roots.workspace,
-        settings: session.roots,
-        resolvedToolNames,
-        hasDelegationTools: hasDelegationTool(resolvedToolNames),
-        isChild: isChild(),
-      },
-    );
-    systemPrompt = prompts.systemPrompt
-      ? `${prompts.systemPrompt}\n${prompts.instructionSuffix}`
-      : prompts.instructionSuffix;
-    const userPrefix = prompts.userPrefix.trim();
-    const userRequest = prompts.userRequest.trim();
-    if (!userPrefix && !userRequest) {
-      return yield* Effect.fail(
-        new Error(
-          'A tool-use run requires a non-empty user prefix or request.',
-        ),
-      );
-    }
-    const content: InputPart[] = [];
-    if (userPrefix) content.push({ kind: 'text', text: userPrefix });
-    // Attached media (CLI `--media`, an image pasted on the first message)
-    // rides the initial user message; the transcript's opening row logs
-    // whether or not the attachment succeeds.
-    const media = yield* Effect.exit(
-      run.config.mediaFiles.length
-        ? mediaInputParts(
-            run.config.mediaFiles.map((p) => run.fileService.createLocation(p)),
-            bound,
+  const openFresh = Effect.fn('toolUse.open')(function* (
+    opening: RunState,
+  ): Effect.fn.Return<RunState, Error, ProcessServices> {
+    // Keep preparation interruptible inside the masked acquire.
+    const { bound, content } = yield* Effect.interruptible(
+      Effect.gen(function* () {
+        const bound = yield* SynchronizedRef.get(run.model);
+        const resolvedToolNames = run.setting.tools.map((tool) => tool.name);
+        const promptVars = {
+          ...run.userVarChannels,
+          [USER_VAR_MODEL]: bound.modelId,
+        };
+        const prompts = yield* buildInitialToolUsePrompts(
+          run.prompt,
+          promptVars,
+          logger,
+          {
+            workspace: session.roots.workspace,
+            settings: session.roots,
+            resolvedToolNames,
+            hasDelegationTools: hasDelegationTool(resolvedToolNames),
+            isChild: isChild(),
+          },
+        );
+        systemPrompt = prompts.systemPrompt
+          ? `${prompts.systemPrompt}\n${prompts.instructionSuffix}`
+          : prompts.instructionSuffix;
+        const userPrefix = prompts.userPrefix.trim();
+        const userRequest = prompts.userRequest.trim();
+        if (!userPrefix && !userRequest)
+          return yield* Effect.fail(
+            new Error(
+              'A tool-use run requires a non-empty user prefix or request.',
+            ),
+          );
+        const content: InputPart[] = [];
+        if (userPrefix) content.push({ kind: 'text', text: userPrefix });
+        const media = yield* Effect.exit(
+          run.config.mediaFiles.length
+            ? mediaInputParts(
+                run.config.mediaFiles.map((p) =>
+                  run.fileService.createLocation(p),
+                ),
+                bound,
+                logger,
+                run.session.roots.config,
+              )
+            : Effect.succeed({ parts: [], kinds: [] }),
+        );
+        if (run.initialUserMessageForTranscript) {
+          logUserMessage(
             logger,
-            run.session.roots.config,
-          )
-        : Effect.succeed({ parts: [], kinds: [] }),
+            run.initialUserMessageForTranscript,
+            Exit.isSuccess(media) ? media.value.kinds : [],
+          );
+        }
+        if (Exit.isFailure(media)) return yield* Effect.failCause(media.cause);
+        content.push(...media.value.parts);
+        if (userRequest) content.push({ kind: 'text', text: userRequest });
+        userChannels[USER_VAR_MODEL] = bound.modelId;
+        workspace = AgentWorkspaceState.create();
+        return { bound, content };
+      }),
     );
-    if (run.initialUserMessageForTranscript) {
-      logUserMessage(
-        logger,
-        run.initialUserMessageForTranscript,
-        Exit.isSuccess(media) ? media.value.kinds : [],
-      );
-    }
-    if (Exit.isFailure(media)) return yield* Effect.failCause(media.cause);
-    content.push(...media.value.parts);
-    if (userRequest) content.push({ kind: 'text', text: userRequest });
-    userChannels[USER_VAR_MODEL] = bound.modelId;
-    workspace = AgentWorkspaceState.create();
-    const openedAt = freshProgramState('toolUse', bound, run);
     const opened = yield* ledger.appendBatch(runId, null, [
       appendRow(runId, [{ role: 'user', content }]),
-      snapshotRow(runId, openedAt, {
+      snapshotRow(runId, opening, {
         phase: 'initial',
         runtime: {
           modelId: bound.modelId,
           modelCompatibilityKey: bound.compatibilityKey,
         },
-        state: flowState(openedAt),
+        state: { family: 'toolUse', state: flowState(opening) },
       }),
     ]);
     run.callbacks.onProgress?.({ kind: 'started' });
-    return yield* commit(opened);
+    return opened;
   });
 
   const restore = (state: RunState): void => {
-    const flow = toolUseFlowState(state);
-    if (flow === null) return;
+    const flow = familyState(state, 'toolUse');
+    if (flow === null) {
+      throw new Error(`Run ${runId} is not a toolUse run; resume it as one.`);
+    }
     if (flow.stateSlices) {
       workspace = AgentWorkspaceState.fromSnapshot(
         flow.stateSlices.workspaceSnapshot,
@@ -423,13 +427,13 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   };
   type LoopExit = { readonly state: RunState; readonly outcome: RunOutcome };
   const runTurn = Effect.fn('toolUse.turn')(function* (
-    initial: RunState,
+    cell: RunCell,
   ): Effect.fn.Return<
     TurnExit,
     Error,
     AgentRun | RunLedger | ProcessServices | Runs | WorkspaceFs | StorageFs
   > {
-    let state = initial;
+    let state = yield* cell.current;
     const turnContext: TurnContext = {
       workspace,
       get userInstruction() {
@@ -449,14 +453,12 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         run.callbacks.onProgress?.({ kind: 'plan', plan });
       },
     });
-    const stage = logger.openStage('Tool-use turn', { kind: 'session' });
-    let stageOutcome: RunOutcome = RUN_OUTCOME.FAILED;
     /** The turn's completed exit; the stage closes with its own verdict. */
-    const completeTurn = (at: RunState): TurnExit => {
-      stageOutcome = RUN_OUTCOME.COMPLETED;
-      return { state: at, outcome: 'completed' };
-    };
-    try {
+    const completeTurn = (at: RunState): TurnExit => ({
+      state: at,
+      outcome: 'completed',
+    });
+    const body = Effect.gen(function* () {
       // A turn begins from a settled boundary; a resumed turn continues at
       // whatever phase its rows left.
       if (
@@ -467,12 +469,10 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         response = '';
         workspace.assembly.lastResponse = '';
         workspace.assembly.accumulatedOutput = '';
-        state = yield* commit(
-          yield* ledger.appendBatch(runId, state, [
-            snapshot(state, { phase: 'model.ready', turn: state.turn + 1 }),
-            stepRow(runId, { ...state, turn: state.turn + 1 }, 'turn.begin'),
-          ]),
-        );
+        state = yield* cell.append([
+          snapshot(state, { phase: 'model.ready', turn: state.turn + 1 }),
+          stepRow(runId, { ...state, turn: state.turn + 1 }, 'turn.begin'),
+        ]);
       }
       let forcedTool: string | null = null;
       /**
@@ -507,18 +507,16 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
             continuedAt !== next.messages.length
           ) {
             continuedAt = next.messages.length;
-            next = yield* commit(
-              yield* ledger.appendBatch(runId, next, [
-                appendRow(runId, [
-                  {
-                    role: 'user',
-                    content: [
-                      { kind: 'text', text: BLANK_TOOL_RESULT_CONTINUATION },
-                    ],
-                  },
-                ]),
+            next = yield* cell.append([
+              appendRow(runId, [
+                {
+                  role: 'user',
+                  content: [
+                    { kind: 'text', text: BLANK_TOOL_RESULT_CONTINUATION },
+                  ],
+                },
               ]),
-            );
+            ]);
             workspace.resetServerToolContent();
             workspace.resetReasoning();
             return { state: next, done: false };
@@ -536,16 +534,14 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           ) {
             finalToolAttempted = true;
             forcedTool = run.finalToolName;
-            next = yield* commit(
-              yield* ledger.appendBatch(runId, next, [
-                appendRow(runId, [
-                  {
-                    role: 'user',
-                    content: [{ kind: 'text', text: FINAL_TOOL_INSTRUCTION }],
-                  },
-                ]),
+            next = yield* cell.append([
+              appendRow(runId, [
+                {
+                  role: 'user',
+                  content: [{ kind: 'text', text: FINAL_TOOL_INSTRUCTION }],
+                },
               ]),
-            );
+            ]);
             return { state: next, done: false };
           }
           return { state: next, done: true };
@@ -560,10 +556,10 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       // boundary could finalize a run with no structured output at all.
       let replayCommitted = true;
       for (;;) {
-        state = yield* applyPendingModelSwitch(state);
+        state = yield* applyPendingModelSwitch(state, cell);
         if (state.pendingResponse !== null) {
           const dispatched = yield* dispatchPendingResponse(state, turnContext);
-          state = yield* commit(dispatched.state);
+          state = yield* cell.adopt(dispatched.state);
           if (dispatched.endTurn) return completeTurn(state);
           continue;
         }
@@ -596,7 +592,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         if (state.openAttempt === null) {
           const force = compactionRequested;
           compactionRequested = false;
-          state = yield* commit(
+          state = yield* cell.adopt(
             yield* compactIfNeeded(state, {
               runId,
               ledger,
@@ -608,11 +604,9 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
               force,
             }),
           );
-          state = yield* commit(
-            yield* ledger.appendBatch(runId, state, [
-              snapshot(state, { phase: 'model.ready', round: state.round + 1 }),
-            ]),
-          );
+          state = yield* cell.append([
+            snapshot(state, { phase: 'model.ready', round: state.round + 1 }),
+          ]);
         }
         const toolChoice =
           forcedTool !== null && bound.supportsForcedToolChoice
@@ -626,12 +620,13 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           round: state.round,
           debugName: 'tooluse',
         });
-        state = yield* commit(outcome.state);
+        state = yield* cell.adopt(outcome.state);
         if (outcome.kind === 'cancelled') {
-          stageOutcome = RUN_OUTCOME.CANCELLED;
-          return { state, outcome: 'cancelled' };
+          return { state, outcome: 'cancelled' } as const;
         }
-        if (outcome.kind === 'failed') return { state, outcome: 'failed' };
+        if (outcome.kind === 'failed') {
+          return { state, outcome: 'failed' } as const;
+        }
         totalResponseTimeMs += outcome.responseTimeMs;
         yield* recordServedUsage(
           run,
@@ -645,10 +640,13 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         if (!processed.done) continue;
         return completeTurn(state);
       }
-    } finally {
-      stage.end(stageOutcome);
-      workspace.workPlan.clearOnUpdate();
-    }
+    });
+    return yield* stagedBy(
+      () => logger.openStage('Tool-use turn', { kind: 'session' }),
+      (exit: TurnExit) => exit.outcome,
+    )(body).pipe(
+      Effect.ensuring(Effect.sync(() => workspace.workPlan.clearOnUpdate())),
+    );
   });
 
   const pauseActiveGoal = Effect.fn('toolUse.pauseGoal')(function* () {
@@ -658,212 +656,167 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   });
 
   // ------------------------------------------------------------- the loop
-  const program = Effect.gen(function* () {
-    attach();
-    if (start.resume) yield* ledger.acquire(runId);
-    const loaded = yield* ledger.load(runId);
+  const enter = Effect.gen(function* () {
+    const entry = yield* loadRun(runId, 'toolUse', start.resume);
     // The follow-ups the rows still queue: input admitted while no consumer
     // held this run, or a batch a crash left unconsumed (C3). An unopened
     // aggregate (`phase` null) still carries those rows; seed them before
     // the opening batch so a restart delivers the SQLite copy.
-    followUps.seed(loaded);
-    let state: RunState;
-    if (loaded === null || loaded.phase === null) {
-      if (start.resume && loaded === null) {
-        return yield* Effect.fail(new Error(NOT_RESUMABLE_MESSAGE));
-      }
-      state = yield* openFresh();
-    } else {
-      if (!start.resume && loaded.phase !== null) {
-        // A fresh launch onto a non-empty aggregate is refused (#11313).
-        return yield* Effect.fail(new Error(alreadyOpenedMessage(runId)));
-      }
-      restore(loaded);
-      state = yield* commit(loaded);
-    }
+    followUps.seed(entry.loaded);
+    const opened =
+      entry._tag === 'fresh'
+        ? yield* openFresh(entry.opening)
+        : (restore(entry.loaded), entry.loaded);
+    return yield* makeRunCell(runId, opened);
+  });
 
-    let restoring = start.resume;
-    for (;;) {
-      const parked = state.phase === 'waiting' || state.phase === 'halted';
-      // The invoker commits the run's failure fact and the input that
-      // recovers the run clears it, so the fold is the one place to read it.
-      const afterError = state.lastError !== null;
-      if (parked) {
-        // A native child waits in this same run scope, just like its root.
-        // Its delivery callback has already committed the preceding turn.
-        if (isChild() && afterError && !followUps.hasQueued())
-          return finish(state, RUN_OUTCOME.FAILED);
-        // Activation clears the visible step. Restore an already idle cursor
-        // before acknowledging it; no new model turn is needed to park it.
-        if (restoring && !followUps.hasQueued()) {
-          state = yield* commit(
-            yield* ledger.appendBatch(runId, state, [
-              stepRow(runId, state, 'waiting'),
-            ]),
-          );
-        }
-        let batch: FollowUpBatch | null = null;
-        if (batch === null) {
-          if (afterError && !isChild()) yield* pauseActiveGoal();
-          // Every park is idle, a failed turn's included: a resume
-          // acknowledges at the first one.
-          run.callbacks.onIdle?.(state);
-          if (run.toolPolicy.stopAfterCycle) {
-            return finish(
-              state,
-              afterError ? RUN_OUTCOME.FAILED : RUN_OUTCOME.COMPLETED,
-            );
+  const loopBody = (cell: RunCell) =>
+    Effect.gen(function* () {
+      let restoring = start.resume;
+      for (;;) {
+        let state = yield* cell.current;
+        const parked = state.phase === 'waiting' || state.phase === 'halted';
+        // The invoker commits the run's failure fact and the input that
+        // recovers the run clears it, so the fold is the one place to read it.
+        const afterError = state.lastError !== null;
+        if (parked) {
+          // A native child waits in this same run scope, just like its root.
+          // Its delivery callback has already committed the preceding turn.
+          if (isChild() && afterError && !followUps.hasQueued())
+            return finish(state, RUN_OUTCOME.FAILED);
+          // Activation clears the visible step. Restore an already idle cursor
+          // before acknowledging it; no new model turn is needed to park it.
+          if (restoring && !followUps.hasQueued()) {
+            state = yield* cell.append([stepRow(runId, state, 'waiting')]);
           }
-          if (!isChild() && !afterError && !followUps.hasQueued()) {
-            const continuation = yield* maybeBuildGoalContinuation(
-              session,
-              runId,
-            );
-            if (continuation && !followUps.hasQueued()) {
-              batch = { synthetic: true, text: continuation };
+          let batch: FollowUpBatch | null = null;
+          if (batch === null) {
+            if (afterError && !isChild()) yield* pauseActiveGoal();
+            // Every park is idle, a failed turn's included: a resume
+            // acknowledges at the first one.
+            run.callbacks.onIdle?.(state);
+            if (run.toolPolicy.stopAfterCycle) {
+              return finish(
+                state,
+                afterError ? RUN_OUTCOME.FAILED : RUN_OUTCOME.COMPLETED,
+              );
+            }
+            if (!isChild() && !afterError && !followUps.hasQueued()) {
+              const continuation = yield* maybeBuildGoalContinuation(
+                session,
+                runId,
+              );
+              if (continuation && !followUps.hasQueued()) {
+                batch = { synthetic: true, text: continuation };
+              }
             }
           }
-        }
-        if (batch === null) {
-          detach();
-          batch = yield* followUps.wait;
           if (batch === null) {
-            // The queue was cancelled or disposed under the parked loop:
-            // a cancellation, never a completed turn.
-            return finish(
-              state,
-              afterError ? RUN_OUTCOME.FAILED : RUN_OUTCOME.CANCELLED,
-            );
+            detach();
+            batch = yield* followUps.wait;
+            if (batch === null) {
+              // The queue was cancelled or disposed under the parked loop:
+              // a cancellation, never a completed turn.
+              return finish(
+                state,
+                afterError ? RUN_OUTCOME.FAILED : RUN_OUTCOME.CANCELLED,
+              );
+            }
+            attach();
           }
-          attach();
+          const consumed: ConsumedFollowUps = yield* followUps.consume(
+            state,
+            batch,
+          );
+          state = yield* cell.adopt(consumed.state);
+          if (consumed.instruction !== undefined) {
+            userChannels[USER_VAR_INSTRUCTION] = consumed.instruction;
+          }
         }
-        const consumed: ConsumedFollowUps = yield* followUps.consume(
-          state,
-          batch,
-        );
-        state = yield* commit(consumed.state);
-        if (consumed.instruction !== undefined) {
-          userChannels[USER_VAR_INSTRUCTION] = consumed.instruction;
+        restoring = false;
+        const turn: TurnExit = yield* start.turns
+          ? start.turns.run(runTurn(cell))
+          : runTurn(cell);
+        state = turn.state;
+        if (turn.outcome === 'cancelled') {
+          return finish(state, RUN_OUTCOME.CANCELLED);
         }
-      }
-      restoring = false;
-      const turn: TurnExit = yield* start.turns
-        ? start.turns.run(runTurn(state))
-        : runTurn(state);
-      state = turn.state;
-      if (turn.outcome === 'cancelled') {
-        return finish(state, RUN_OUTCOME.CANCELLED);
-      }
-      // The turn's trace rows publish fire-and-forget while the ledger
-      // appends on this fiber, so the parking row would commit ahead of
-      // them: the transcript boundary closes on `waiting`, and this turn's
-      // `stream.start`/`stream.end`/`response.finalized` are then dropped by
-      // the fold, leaving a parked run whose transcript holds no assistant
-      // answer. Settling this run's publications here is the order between
-      // the two paths, and the run id is what makes it a barrier: a
-      // session-wide settle reports session-scoped failures only, so a
-      // rolled-back transcript of this run would return successfully here and
-      // park the run over it. It observes rather than answers: the failure it
-      // throws ends the run through the loop's failure path, and the terminal
-      // row that path writes is the one that has to carry the
-      // `artifact-drain` marker, which it can only do while the drain that
-      // decides it still finds the lost fact.
-      yield* session.settlePublications(runId, { consume: false });
-      // The turn boundary: the snapshot precedes the steps in one batch, so
-      // a viewer cut at either step sees the fields, and a stop between the
-      // turn and its wait cannot leave the turn unended. The `waiting` step
-      // parks the run (one run model, 3.3), so the streaming rows still open
-      // close in its batch: a parked transcript never streams.
-      state = yield* commit(
-        yield* ledger.appendBatch(runId, state, [
+        // The turn's trace rows publish fire-and-forget while the ledger
+        // appends on this fiber, so the parking row would commit ahead of
+        // them: the transcript boundary closes on `waiting`, and this turn's
+        // `stream.start`/`stream.end`/`response.finalized` are then dropped by
+        // the fold, leaving a parked run whose transcript holds no assistant
+        // answer. Settling this run's publications here is the order between
+        // the two paths, and the run id is what makes it a barrier: a
+        // session-wide settle reports session-scoped failures only, so a
+        // rolled-back transcript of this run would return successfully here and
+        // park the run over it. It observes rather than answers: the failure it
+        // throws ends the run through the loop's failure path, and the terminal
+        // row that path writes is the one that has to carry the
+        // `artifact-drain` marker, which it can only do while the drain that
+        // decides it still finds the lost fact.
+        yield* session.settlePublications(runId, { consume: false });
+        // The turn boundary: the snapshot precedes the steps in one batch, so
+        // a viewer cut at either step sees the fields, and a stop between the
+        // turn and its wait cannot leave the turn unended. The `waiting` step
+        // parks the run (one run model, 3.3), so the streaming rows still open
+        // close in its batch: a parked transcript never streams. The invoker
+        // owns `lastError`; this snapshot does not restate it.
+        state = yield* cell.append([
           snapshot(state, { phase: 'waiting' }),
           stepRow(runId, state, 'turn.end'),
           ...session.streamClosureFacts(runId),
           stepRow(runId, state, 'waiting'),
-        ]),
-      );
-      publishTouchedFiles();
-      if (turn.outcome === 'completed') {
-        const interactions = workspace.interactions;
-        const cost = state.usage.totalCost;
-        run.callbacks.onProgress?.({
-          kind: 'overview',
-          toolCallCount: interactions.toolCallCount,
-          filesChanged: interactions.editedFilePaths,
-          cost: cost > 0 ? cost : undefined,
-        });
+        ]);
+        publishTouchedFiles();
+        if (turn.outcome === 'completed') {
+          const interactions = workspace.interactions;
+          const cost = state.usage.totalCost;
+          run.callbacks.onProgress?.({
+            kind: 'overview',
+            toolCallCount: interactions.toolCallCount,
+            filesChanged: interactions.editedFilePaths,
+            cost: cost > 0 ? cost : undefined,
+          });
+        }
+        if (run.toolPolicy.stopAfterCycle && turn.outcome === 'completed')
+          return finish(state, turn.outcome);
+        if (turn.outcome === 'failed') continue;
+        if (start.turns)
+          yield* start.turns.complete(result(turn.outcome, state));
       }
-      if (run.toolPolicy.stopAfterCycle && turn.outcome === 'completed')
-        return finish(state, turn.outcome);
-      if (turn.outcome === 'failed') continue;
-      if (start.turns) yield* start.turns.complete(result(turn.outcome, state));
-    }
-  });
+    });
 
   /** The terminal step of a run that ends here, then the caller's result. */
   const finish = (state: RunState, outcome: RunOutcome): LoopExit =>
     ({ state, outcome }) as const;
 
-  const result = (outcome: RunOutcome, at: RunState | null): ToolUseResult => ({
+  const result = (outcome: RunOutcome, at: RunState): ToolUseResult => ({
     outcome,
     response,
     files: workspace.interactions.toSnapshot().edits.map((e) => e.path),
-    usage: at?.usage ?? EMPTY_RUN_USAGE_TOTALS,
+    usage: at.usage,
     structured: run.structured.value,
-    ...(at?.lastError != null && outcome === RUN_OUTCOME.FAILED
+    ...(outcome === RUN_OUTCOME.FAILED && at.lastError !== null
       ? { error: at.lastError }
       : {}),
   });
 
-  /**
-   * The exit protocol: the halt row and the lease release happen whether the
-   * loop returned, failed, or was interrupted by a host stop. It hangs off
-   * `onExit` rather than an `Effect.exit` followed by a masked block — an
-   * external interrupt unwinds straight past `Effect.exit`, which left the
-   * `halted` step unwritten and the follow-up lease held, so a same-process
-   * resume refused the run. The release hangs off the halt write's own exit
-   * for the same reason: a failed `halted` append still detaches and frees
-   * the lease, as `recoverable`, since no terminal row landed.
-   */
-  const finalize = (exit: Exit.Exit<LoopExit, Error>) =>
-    Effect.uninterruptible(
+  // Attach inside the outer use so its release detaches even after a partial
+  // attach failure. The inner bracket settles the cell before detachment;
+  // `cell.append` protects each ledger commit from interruption.
+  return yield* Effect.acquireUseRelease(
+    Effect.void,
+    () =>
       Effect.gen(function* () {
-        // Every exit that ends the run writes its `halted` step; the state a
-        // stop interrupted stays at the phase its rows left, so resume
-        // continues it.
-        const outcome = exitOutcome(exit);
-        const state = Exit.isSuccess(exit)
-          ? exit.value.state
-          : yield* Ref.get(latest);
-        // A tool-use step is stamped with the run state as folded.
-        yield* recordHalt({ ledger, logger, runId }, (s) => s)(
-          state,
-          outcome,
-        ).pipe(
-          Effect.onExit((halted) =>
-            Effect.sync(() => {
-              detach();
-              followUps.release(
-                Exit.isSuccess(halted) &&
-                  outcome === RUN_OUTCOME.COMPLETED &&
-                  !runs.hasActiveChildren(runId)
-                  ? 'terminal'
-                  : 'recoverable',
-              );
-            }),
-          ),
+        yield* Effect.sync(attach);
+        return yield* Effect.acquireUseRelease(enter, loopBody, (cell, exit) =>
+          settleRun(cell, logger, followUps)(exit),
         );
       }),
-    );
-
-  return yield* program.pipe(
-    Effect.onExit(finalize),
+    () => Effect.sync(detach),
+  ).pipe(
     Effect.map((loop) => result(loop.outcome, loop.state)),
-    Effect.catchCause((cause) => {
-      if (Cause.hasInterrupts(cause)) return Effect.failCause(cause);
-      const stopped = runStopError(Cause.squash(cause));
-      logger.warn(`Tool-use run ${runId} stopped: ${stopped.message}`);
-      return Effect.fail(stopped);
-    }),
+    Effect.catchCause(stoppedBy(logger, `Tool-use run ${runId}`)),
   );
 });

@@ -341,7 +341,9 @@ export class NdjsonStdoutSink implements LogSink {
   /**
    * Writes one queued record, honouring backpressure. Never fails: the fiber
    * is forked unobserved, so a failure would die unreported. A failed write
-   * or an unserializable record closes the sink.
+   * or an unserializable record closes the sink — loudly, on stderr, since a
+   * write that throws (including a stringify of a malformed record, which is
+   * a producer bug) must not pass without a trace.
    */
   private writeLine(record: CliNdjsonRecord): Effect.Effect<void> {
     return Effect.gen({ self: this }, function* () {
@@ -350,9 +352,13 @@ export class NdjsonStdoutSink implements LogSink {
         try: () => this.stdout.write(`${JSON.stringify(record)}\n`),
         catch: (cause) => cause,
       }).pipe(
-        Effect.catch(() =>
+        Effect.catch((cause: unknown) =>
           Effect.sync(() => {
+            // Closed first, so this report cannot re-enter the broken sink.
             this.closeQueue();
+            writeTextStderr(
+              `[warn] [cli.output] A queued NDJSON record could not be written; the sink is closed for the rest of this process: ${toErrorMessage(cause)}`,
+            );
             return undefined;
           }),
         ),

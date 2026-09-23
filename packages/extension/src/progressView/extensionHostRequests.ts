@@ -13,7 +13,7 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import * as vscode from 'vscode';
-import { Data, Effect, FileSystem } from 'effect';
+import { Effect, FileSystem } from 'effect';
 
 import {
   runAgent,
@@ -130,16 +130,6 @@ import {
 
 const CHANNEL = 'ExtensionHostRequests';
 const log = createLog(CHANNEL);
-
-/** A dropped `file:` path Node could not read as a URL. */
-class DropPathUndecodable extends Data.TaggedError('DropPathUndecodable')<{
-  readonly message: string;
-}> {}
-
-/** A dropped path the workspace file system could not stat. */
-class DropFileUnreadable extends Data.TaggedError('DropFileUnreadable')<{
-  readonly message: string;
-}> {}
 
 interface ExtensionHostRequestsOptions {
   readonly session: SessionHandle;
@@ -522,12 +512,11 @@ export function createExtensionHostRequests(
       const decodedPath = trimmed.startsWith('file:')
         ? yield* Effect.try({
             try: () => fileURLToPath(trimmed),
-            catch: (cause) =>
-              new DropPathUndecodable({ message: toErrorMessage(cause) }),
+            catch: (cause) => cause,
           }).pipe(
-            Effect.catchTag('DropPathUndecodable', (error) =>
+            Effect.catch((cause: unknown) =>
               Effect.logDebug(
-                `Dropped path is not a file URL: ${trimmed}: ${error.message}`,
+                `Dropped path is not a file URL: ${trimmed}: ${toErrorMessage(cause)}`,
               ).pipe(withLogChannel(CHANNEL), Effect.as(trimmed)),
             ),
           )
@@ -537,17 +526,16 @@ export function createExtensionHostRequests(
       return yield* Effect.tryPromise({
         try: () =>
           vscode.workspace.fs.stat(vscode.Uri.file(resolved.absolutePath)),
-        catch: (cause) =>
-          new DropFileUnreadable({ message: toErrorMessage(cause) }),
+        catch: (cause) => cause,
       }).pipe(
         Effect.map((stat) =>
           (stat.type & vscode.FileType.File) === 0
             ? null
             : resolved.relativePath,
         ),
-        Effect.catchTag('DropFileUnreadable', (error) =>
+        Effect.catch((cause: unknown) =>
           Effect.logDebug(
-            `Dropped file could not be read: ${decodedPath}: ${error.message}`,
+            `Dropped file could not be read: ${decodedPath}: ${toErrorMessage(cause)}`,
           ).pipe(withLogChannel(CHANNEL), Effect.as(null)),
         ),
       );

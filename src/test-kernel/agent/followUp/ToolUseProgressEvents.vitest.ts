@@ -18,7 +18,7 @@ import { followUpsLayer } from '@agent/runtime/FollowUps';
 import { ModelInvoker, type InvokeRequest } from '@agent/runtime/ModelInvoker';
 import {
   rowAggregate,
-  runtimeSnapshotRow,
+  snapshotRow,
   stepRow,
   type Message,
 } from '@agent/runtime/loop/rows';
@@ -194,8 +194,8 @@ function invokerLayer(script: readonly ScriptedTurn[], seen: InvokeRequest[]) {
               return {
                 kind: 'failed' as const,
                 state: yield* ledger.appendBatch(run.runId, state, [
-                  runtimeSnapshotRow(run.runId, state, {
-                    lastError: scripted.failWith,
+                  snapshotRow(run.runId, state, {
+                    runtime: { lastError: scripted.failWith },
                   }),
                 ]),
                 error: scripted.failWith,

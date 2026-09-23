@@ -221,7 +221,7 @@ function checkDirectory(
     yield* deps.pathAccess(dir, mode);
     return pass(id, name, dir);
   }).pipe(
-    Effect.catch((failure) =>
+    Effect.catch((failure: DoctorProbeFailed) =>
       Effect.succeed(
         failFromError(
           id,
@@ -346,7 +346,7 @@ function checkLatex(
       );
       return checks;
     }),
-    Effect.catch((failure) =>
+    Effect.catch((failure: DoctorProbeFailed) =>
       Effect.succeed([
         failFromError(
           'latex',

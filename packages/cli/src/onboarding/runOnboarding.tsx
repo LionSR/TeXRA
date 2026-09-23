@@ -39,6 +39,7 @@ import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import type { LanguageModel } from '@platform/languageModel';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { ProcessRuntime } from '@platform/processRuntime';
+import type { StateWriteFailed } from '@platform/interfaces';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import {
   readOnboardingFlags,
@@ -169,7 +170,9 @@ export const maybeRunCliOnboarding = Effect.fn('maybeRunCliOnboarding')(
     });
     if (transition.clearDeclined) {
       yield* setOnboardingDeclined(globalState, false).pipe(
-        Effect.catch((error) =>
+        // The handler names the channel's whole error type, so a widened
+        // channel fails to compile rather than being absorbed unlogged.
+        Effect.catch((error: StateWriteFailed) =>
           Effect.sync(() =>
             warnOnboardingFailure('Clearing the stale skip flag', error),
           ),
@@ -253,7 +256,8 @@ const runOnboardingFlow = Effect.fn('runOnboardingFlow')(function* (options: {
     // global-state write fails (read-only home, permissions), tell the user
     // rather than silently re-prompting later with no explanation.
     yield* setOnboardingDeclined(options.stores.globalState, true).pipe(
-      Effect.catch((error) =>
+      // Handler param names the whole channel, so widening it fails to compile.
+      Effect.catch((error: StateWriteFailed) =>
         Effect.sync(() => {
           warnOnboardingFailure('Saving the skip flag', error);
           writeTextStderr(
@@ -268,7 +272,8 @@ const runOnboardingFlow = Effect.fn('runOnboardingFlow')(function* (options: {
     // signed out would have the stale flag suppress onboarding and land back on
     // the dead-end. Best-effort: a failed clear only re-surfaces that rare edge.
     yield* setOnboardingDeclined(options.stores.globalState, false).pipe(
-      Effect.catch((error) =>
+      // Handler param names the whole channel, so widening it fails to compile.
+      Effect.catch((error: StateWriteFailed) =>
         Effect.sync(() =>
           warnOnboardingFailure('Clearing the stale skip flag', error),
         ),

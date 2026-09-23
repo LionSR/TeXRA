@@ -252,8 +252,20 @@ function readOverrides(storage: Storage | undefined): DesktopShortcutOverrides {
     const parsed: unknown = JSON.parse(raw);
     const result = DesktopShortcutOverridesSchema.safeParse(parsed);
     if (result.success) return result.data;
-  } catch {
-    // Malformed JSON resolves to the same empty defaults as a failed schema parse.
+    // A present-but-invalid overrides blob is user-authored state, and the
+    // next `update` rewrites the whole key: falling back to {} silently would
+    // turn one bad write into the permanent loss of every other binding.
+    console.warn(
+      '[desktop] Stored keyboard shortcut overrides failed validation; falling back to defaults.',
+      result.error,
+    );
+  } catch (error) {
+    // Malformed JSON resolves to the same empty defaults as a failed schema
+    // parse, with the same loudness for the same reason.
+    console.warn(
+      '[desktop] Stored keyboard shortcut overrides are not readable JSON; falling back to defaults.',
+      error,
+    );
   }
   return {};
 }
