@@ -205,9 +205,14 @@ export function createTranscriptFold(
 
       case 'tool.end': {
         if (transcriptBoundaryClosed) return;
-        const parsedResult = ToolUseLogSchema.omit({ status: true }).safeParse(
-          event.result,
-        );
+        // .passthrough(): endToolUseCard documents its result as "forwarded
+        // as-is", and a producer (e.g. toolUseDispatch.ts's top-level
+        // `files`) can legitimately carry fields ToolUseLogSchema doesn't
+        // declare. A plain z.object() parse strips unknown keys even on
+        // success, which would silently drop them from the persisted row.
+        const parsedResult = ToolUseLogSchema.omit({ status: true })
+          .passthrough()
+          .safeParse(event.result);
         // Every ToolUseLog field is optional, so collapsing a parse failure to
         // `{}` would "succeed" trivially when normalizeToolUseData re-parses
         // this row downstream — turning a malformed row into a silently empty
