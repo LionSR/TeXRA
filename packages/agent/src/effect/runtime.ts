@@ -276,16 +276,19 @@ function composeProcess(platform: AgentPlatform): ProcessHold {
   };
 }
 
-/** Every session the owner still holds, closed one at a time: a root some
+/** Every session the owner still holds, closed together: a root some
  *  composition opened of its own settles its runs and flushes its artifacts
  *  exactly as the runtime's own root does, rather than going down with the
- *  runtime unwritten. */
+ *  runtime unwritten. Each close is uninterruptible and spends the shutdown
+ *  deadline from the moment it starts, so starting them all at once is what
+ *  settles the process under one deadline (#12804); one at a time, N sessions
+ *  would take N deadlines. */
 function closeOwnedSessions(): Effect.Effect<void> {
   return Effect.flatMap(listOwnedSessions(), (open) =>
     Effect.forEach(
       open,
       (session) => closeOwnedSession(session.roots.storage),
-      { discard: true },
+      { concurrency: 'unbounded', discard: true },
     ),
   );
 }

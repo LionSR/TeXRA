@@ -175,7 +175,6 @@ const executeInBand = Effect.fn('executeInBand')(
     yield* registerChildRun(options.session, {
       runId,
       config,
-      agentName: options.agentName,
       userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
       parentRunId: options.parentRunId,
     }).pipe(

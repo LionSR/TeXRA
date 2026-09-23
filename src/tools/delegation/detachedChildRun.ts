@@ -37,9 +37,7 @@ import type { ChildRun } from './childRun';
 
 /**
  * Register a native agent child and take its run's claim. The identity
- * derives from the canonical config's `agent`, never from `agentName`, which
- * callers resolve differently (an approved override's display name vs. its
- * registry name) and which reaches only the durable launch label.
+ * derives from the canonical config's `agent`.
  */
 export const registerChildRun = Effect.fn('registerChildRun')(function* (
   session: SessionHandle,
@@ -47,7 +45,6 @@ export const registerChildRun = Effect.fn('registerChildRun')(function* (
     readonly runId: RunId;
     /** Canonical config, already parsed by the launch site. */
     readonly config: AgentConfig;
-    readonly agentName: string;
     readonly userFollowUpSupport: UserFollowUpSupport;
     readonly parentRunId?: RunId;
   },

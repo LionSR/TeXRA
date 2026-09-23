@@ -300,10 +300,27 @@ describe('attachCliSessionProgressProjection', () => {
             aggregateId: runAggregate,
             description: 'Recorded before the resume',
           },
+          // A child that ran and settled before the resume: its parent's
+          // roster is history too, not a line to replay (#11864).
+          {
+            type: 'run.start',
+            aggregateId: childAggregate,
+            identity: { kind: 'agent', agent: 'review' },
+            category: AgentCategory.ToolUse,
+            isRemote: false,
+            userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+            parent: { id: runId },
+          },
+          {
+            type: 'run.end',
+            aggregateId: childAggregate,
+            outcome: 'completed',
+            output: { category: 'toolUse', response: '', files: [] },
+          },
         ]);
         yield* session.settlePublications();
 
-        const { records, publish, detach } = projectionOver(session);
+        const { all, publish, detach } = projectionOver(session);
         yield* Effect.addFinalizer(() => Effect.promise(() => detach()));
         // A resume mints no run.start: the activation is its only new fact.
         yield* Effect.promise(() =>
@@ -316,8 +333,9 @@ describe('attachCliSessionProgressProjection', () => {
             },
           }),
         );
+        yield* Effect.promise(() => detach());
 
-        expect(records().map(rowFields)).toEqual([
+        expect(all().map(rowFields)).toEqual([
           {
             event: 'run.activate',
             fields: {

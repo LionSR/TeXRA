@@ -36,7 +36,6 @@ import {
 } from '@shared/schemas';
 import { BASH_BACKGROUND_LOG_CAP_CHARS } from '@shared/toolUse';
 import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
-import { GlobalStateKey } from '@shared/state/stateKeys';
 import { assertNoParentTraversal } from '@tools/pathResolution';
 import { executed } from '@tools/core/result';
 import { requireToolRun } from '@tools/core/toolRun';
@@ -45,7 +44,6 @@ import {
   readCompletedRunConversation,
 } from '@transcript';
 import { assertNever, unique } from '@utils/core';
-import { readSettingFrom } from '@utils/config/platformSettings';
 import { readNormalizedFile } from '@utils/files/fsDurability';
 import { findExistingRunStoragePathUnder } from '@utils/files/runStorageFs';
 import { getPathSegments } from '@utils/core/pathCore';
@@ -72,6 +70,7 @@ import {
 } from './formatting';
 import { serializeFilteredConfig } from './executions/configView';
 import { formatConversation } from './executions/conversationFormat';
+import { orchestratorKillDenial } from './executions/killPolicy';
 import { EXECUTION_PATH_LIST } from './executions/pathCatalog';
 import {
   OUTPUT_MAX_LINES,
@@ -504,19 +503,12 @@ Delegated subagent and workflow results are delivered automatically as follow-up
         );
       }
 
-      // Only block kills when the toggle is disabled (the guard above has
-      // already narrowed `target` to an owned RunHandle).
-      if (
-        !(yield* readSettingFrom<boolean>(
-          context.session.roots,
-          GlobalStateKey.ALLOW_ORCHESTRATOR_KILL,
-        ))
-      ) {
-        return yield* Effect.fail(
-          new ToolError(
-            'Killing subagents is disabled. Enable it in Settings > Multi-Agent.',
-          ),
-        );
+      // The permission gate: off, or a stored value that fails its schema,
+      // denies (the guard above has already narrowed `target` to an owned
+      // RunHandle).
+      const killDenial = yield* orchestratorKillDenial(context.session.roots);
+      if (killDenial !== undefined) {
+        return yield* Effect.fail(new ToolError(killDenial));
       }
 
       const detachActiveChildren = yield* detachSubagentsOnStop(

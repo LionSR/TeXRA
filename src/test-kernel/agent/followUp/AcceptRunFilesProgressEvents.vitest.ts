@@ -94,16 +94,15 @@ function installTestPlatform(): Promise<void> {
 
 /**
  * The write side of the workspace: `accept_run_files` writes through the
- * session's rooted workspace view now that the `WorkspaceFS` facade is gone,
- * so a case stubs that one method of the real service rather than the deleted
- * static.
+ * session's rooted `WorkspaceFs` view, so a case stubs that one method of the
+ * real service.
  */
 const workspaceWrites = vi.fn<(target: string, content: string) => void>();
 const workspaceReads = new Map<string, { exists: boolean; content: string }>();
 
 /**
- * The absolute-path half: the process filesystem is what the deleted
- * `AbsoluteFS` reached. A path in `absoluteFilePaths` answers as a file, and
+ * The absolute-path half, read through the process `FileSystem`. A path in
+ * `absoluteFilePaths` answers as a file, and
  * `absoluteContents` (falling back to `absoluteContentFallback`) is what a
  * read of it returns.
  */

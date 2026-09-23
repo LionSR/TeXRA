@@ -95,8 +95,8 @@ const silentDelete = (
 ): Effect.Effect<void, never, FileSystem.FileSystem> =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
-    // What `BaseFS.delete` reached on the process provider: a non-directory
-    // (a symlink included) is unlinked, a directory is `rm`'d without
+    // `fs.remove` without `recursive`: a non-directory (a symlink included)
+    // is unlinked, a directory is `rm`'d without
     // recursion, and an already-absent target is not an error — that last is
     // what `force` carries, not a new best-effort.
     yield* fs.remove(targetPath, { force: true }).pipe(
@@ -187,8 +187,8 @@ const readFileWithFallback = (
 ): Effect.Effect<string, never, PreviewServices> =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
-    // `BaseFS.readBytes` returned the raw bytes: no line-ending normalization
-    // and no BOM handling, unlike `read`.
+    // The raw bytes decoded as-is: no line-ending normalization and no BOM
+    // handling, unlike `readNormalizedFile`.
     return yield* fs.readFile(uri.fsPath).pipe(
       Effect.map((bytes) => Buffer.from(bytes).toString('utf8')),
       Effect.catch((error) =>

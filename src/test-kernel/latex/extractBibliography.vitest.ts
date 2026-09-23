@@ -20,10 +20,9 @@ const BIB_CONTENT = `@article{alpha,
 }`;
 
 /**
- * The files "on disk" for one case. The suite used to stub `AbsoluteFS.read`
- * and `AbsoluteFS.exists`; the module now reads through the *context*
- * filesystem, so the same two answers are served from one map — a listed path
- * exists and reads back its content, anything else is absent.
+ * The files "on disk" for one case. The module reads through the *context*
+ * `FileSystem`, so its existence and read answers are served from one map —
+ * a listed path exists and reads back its content, anything else is absent.
  */
 function filesLayer(
   files: Record<string, string>,

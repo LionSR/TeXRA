@@ -406,26 +406,24 @@ function shellConversationTemplate(): TemplateResult {
   }
   const workspacePath = activeProjectRoot();
   // Names the button even when the ≤560px container query collapses it to the
-  // icon: the shadow button then has no visible text, so only `title` reaches
-  // its accessible name.
+  // icon: the shadow button then has no visible text, so only `aria-label`
+  // reaches its accessible name (the `<wa-tooltip>` shows it on hover).
   const environmentButtonLabel = `${workspaceName(workspacePath)} environment`;
   return html`
     <main class="shell-conversation" aria-label="Task conversation">
       <header class="shell-header">
         <span class="shell-header-button-slot">
-          <wa-button
-            type="button"
-            class="shell-header-button icon-button is-size-l"
-            appearance="plain"
-            size="s"
-            aria-label=${sidebarToggleLabel}
-            title=${sidebarToggleLabel}
-            @click=${() => updateShell(toggleSidebar(shellState()))}
-          >
-            ${waIcon(
-              shellState().sidebarCollapsed ? 'chevron-right' : 'chevron-left',
-            )}
-          </wa-button>
+          ${renderIconActionButton({
+            id: 'shellSidebarToggle',
+            icon: shellState().sidebarCollapsed
+              ? 'chevron-right'
+              : 'chevron-left',
+            label: sidebarToggleLabel,
+            tooltip: sidebarToggleLabel,
+            className: 'shell-header-button icon-button',
+            size: 'l',
+            onClick: () => updateShell(toggleSidebar(shellState())),
+          })}
           ${
             sidebarCollapsedWithPendingApproval
               ? html`<span
@@ -451,26 +449,26 @@ function shellConversationTemplate(): TemplateResult {
                   appearance="outlined"
                   size="s"
                   aria-label=${environmentButtonLabel}
-                  title=${environmentButtonLabel}
                   with-caret
                 >
                   ${waIcon('folder-open', { slot: 'start' })}
                   <span>${workspaceName(workspacePath)}</span>
                 </wa-button>
+                <wa-tooltip for="shellEnvironmentButton"
+                  >${environmentButtonLabel}</wa-tooltip
+                >
               `
             : nothing
         }
-        <wa-button
-          type="button"
-          class="shell-header-button icon-button is-size-l"
-          appearance="plain"
-          size="s"
-          aria-label=${commandLabel(DESKTOP_COMMAND_PALETTE_ID)}
-          title=${commandTitle(DESKTOP_COMMAND_PALETTE_ID)}
-          @click=${openCommandPalette}
-        >
-          ${waIcon('ellipsis')}
-        </wa-button>
+        ${renderIconActionButton({
+          id: 'shellCommandPalette',
+          icon: 'ellipsis',
+          label: commandLabel(DESKTOP_COMMAND_PALETTE_ID),
+          tooltip: commandTitle(DESKTOP_COMMAND_PALETTE_ID),
+          className: 'shell-header-button icon-button',
+          size: 'l',
+          onClick: openCommandPalette,
+        })}
         <div
           class="shell-layout-controls"
           role="group"

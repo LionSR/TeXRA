@@ -98,8 +98,7 @@ export interface WorkflowScriptStrategyParams {
   readonly session: SessionHandle;
   /**
    * The host's dependency fingerprint. It reads file bytes through the process
-   * `FileSystem` now that the `AbsoluteFS` facade is gone, so its `R` names
-   * that service rather than nothing.
+   * `FileSystem`, so its `R` names that service.
    */
   readonly fingerprintAgentDependencies: (
     options: Parameters<

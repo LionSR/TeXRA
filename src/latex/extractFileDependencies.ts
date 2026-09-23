@@ -72,7 +72,7 @@ export const extractLatexFileDependencies = Effect.fn(
   const latexDir = yield* resolveLatexDir(latexFileLocation.absolutePath);
 
   // Decoded from bytes rather than `readFileString`, whose `TextDecoder`
-  // strips a leading UTF-8 BOM that the old `AbsoluteFS.read` preserved.
+  // would strip a leading UTF-8 BOM the file carries.
   const fs = yield* FileSystem.FileSystem;
   const bytes = yield* fs
     .readFile(latexFileLocation.absolutePath)

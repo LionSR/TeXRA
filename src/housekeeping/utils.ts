@@ -47,8 +47,8 @@ export class GlobFailed extends Data.TaggedError('GlobFailed')<{
 /**
  * The filesystem a housekeeping path is handled through, with the path in
  * absolute form. The extension's picker keeps a selection outside the
- * workspace as an absolute path, and the old `WorkspaceFS` facade passed such
- * paths through; so does this, whole: every path of an external selection —
+ * workspace as an absolute path, and this passes such paths through whole:
+ * every path of an external selection —
  * its sources, the `History/` or `Diffs/` folder beside it, the artifacts
  * swept there — is absolute and goes through the process `FileSystem` at its
  * own location. Every other path goes through the confined workspace view,

@@ -92,7 +92,7 @@ export const resolveLatexDir = Effect.fn('latex.resolveLatexDir')(function* (
 /**
  * Return `absolutePath` if it exists on disk, otherwise null. Centralizes
  * the existence probe used by the various LaTeX dependency resolvers:
- * `pathExists`'s reading, which is `BaseFS.exists`'s ENOTDIR correction plus
+ * `pathExists`'s reading, which is ENOTDIR read as absent alongside ENOENT plus
  * a link that resolves to nothing read as absent -- right for a dependency,
  * which a dangling symlink does not supply.
  */
