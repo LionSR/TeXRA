@@ -43,7 +43,7 @@ import {
   frameSubscription,
   type FramerSource,
 } from '@controllers/session/SessionFramer';
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import type { ProcessServices } from '@platform/processRuntime';
 import type { HostRequest } from '@shared/session/hostRequest';
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
@@ -64,7 +64,7 @@ import {
 } from '@shared/session/sessionFrames';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-const log = createLog('SessionBridge');
+const CHANNEL = 'SessionBridge';
 
 /** Enough of any up message to answer it: a message that names a request
  *  id gets its `Invalid` response even when the rest did not parse. */
@@ -294,23 +294,26 @@ export class SessionBridge {
       if (!parsed.success) {
         const envelope = RequestEnvelopeSchema.safeParse(message);
         const reason = `Unparseable message from port ${port.id}: ${z.prettifyError(parsed.error)}`;
-        log.warn(reason);
-        if (envelope.success) {
-          port.send({
-            kind: 'response',
-            session: envelope.data.session,
-            requestId: envelope.data.requestId,
-            result: { ok: false, error: { _tag: 'Invalid', reason } },
-          });
-        }
-        return Effect.void;
+        return Effect.logWarning(reason).pipe(
+          withLogChannel(CHANNEL),
+          Effect.andThen(
+            Effect.sync(() => {
+              if (!envelope.success) return;
+              port.send({
+                kind: 'response',
+                session: envelope.data.session,
+                requestId: envelope.data.requestId,
+                result: { ok: false, error: { _tag: 'Invalid', reason } },
+              });
+            }),
+          ),
+        );
       }
       const up = parsed.data;
       if (up.session !== this.key) {
-        log.warn(
+        return Effect.logWarning(
           `Port ${port.id} addressed session ${up.session}; this backend is ${this.key}`,
-        );
-        return Effect.void;
+        ).pipe(withLogChannel(CHANNEL));
       }
       switch (up.kind) {
         case 'subscribe':
@@ -364,15 +367,15 @@ export class SessionBridge {
     return Effect.forkIn(
       result.pipe(
         Effect.catchCause((cause) =>
-          Effect.sync((): Response['result'] => {
-            log.error(
-              `Request ${requestId} from port ${entry.port.id} failed: ${toErrorMessage(Cause.squash(cause))}`,
-            );
-            return {
+          Effect.logError(
+            `Request ${requestId} from port ${entry.port.id} failed: ${toErrorMessage(Cause.squash(cause))}`,
+          ).pipe(
+            withLogChannel(CHANNEL),
+            Effect.as<Response['result']>({
               ok: false,
               error: wireError(new Internal({ ref: requestId })),
-            };
-          }),
+            }),
+          ),
         ),
         Effect.flatMap((answer) =>
           Effect.sync(() => {

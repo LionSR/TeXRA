@@ -1,7 +1,7 @@
 import { Cause, Effect } from 'effect';
 
 // Local imports - shared constants
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import {
   DEFAULT_LATEX_SETTINGS_STATUS,
   type LatexSettingsStatus,
@@ -18,7 +18,7 @@ import {
 } from '@shared/constants/latexToolchain';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-const log = createLog('LatexToolingController');
+const CHANNEL = 'LatexToolingController';
 
 /** Perl backs latexindent but is never shown with a path of its own. */
 type LatexPathTool = Exclude<ProbedLatexTool, 'perl'>;
@@ -88,13 +88,13 @@ export class LatexToolingController {
       Effect.catchCause((cause) =>
         Cause.hasInterrupts(cause)
           ? Effect.failCause(cause)
-          : Effect.sync(() => {
+          : Effect.gen({ self: this }, function* () {
               const error = Cause.squash(cause);
-              log.warn(
+              yield* Effect.logWarning(
                 `LaTeX tooling detection failed: ${toErrorMessage(error)}`,
-                {
-                  data: error,
-                },
+              ).pipe(
+                Effect.annotateLogs({ data: error }),
+                withLogChannel(CHANNEL),
               );
               this.deps.onDetectionError?.(error);
               return {
