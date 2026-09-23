@@ -11,7 +11,7 @@ import {
 import { WorkflowRunAbortError } from '@agent/workflowScript/runWorkflowScript';
 import type { WorkflowAgentInvocation } from '@agent/workflowScript/types';
 import type { AgentEntry } from '@agent/index/agentEntry';
-import type { AgentRunServices } from '@agent/runtime/toolInjection';
+import type { AgentRunServices } from '@agent/runtime/runRegistry';
 import { Runs } from '@agent/runtime/runRegistry';
 import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
 import { formatError } from '@common/errors';

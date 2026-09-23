@@ -12,6 +12,7 @@
 
 import { Context, Effect, Semaphore, type Scope } from 'effect';
 
+import type { ProcessServices } from '@platform/processRuntime';
 import {
   RUN_PHASE,
   RUN_SUBSTATE,
@@ -427,3 +428,12 @@ export class RunRegistry {
 export class Runs extends Context.Service<Runs, RunRegistry>()(
   '@texra/session/Runs',
 ) {}
+
+/**
+ * The services every step of an agent run reads on the way down: the process
+ * services (the global state store, the secret store, the tool table, ...)
+ * and the `Runs` of the session the run is launched on. Named once here
+ * because the launch, resume and delegation signatures all carry exactly
+ * these tags in their `R` channel.
+ */
+export type AgentRunServices = ProcessServices | Runs;

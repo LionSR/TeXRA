@@ -10,7 +10,7 @@ import { type AgentFlowResult } from '@agent/runtime/AgentFlowResult';
 import { AgentEngine } from '@agent/runtime/AgentEngine';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { ExecuteAgentOptions } from '@agent/runtime/executeAgent';
-import type { AgentRunServices } from '@agent/runtime/toolInjection';
+import type { AgentRunServices } from '@agent/runtime/runRegistry';
 import type { AgentRunHandle } from '@agent/runtime/RunHandle';
 import type {
   ChildRunPorts,

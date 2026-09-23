@@ -56,7 +56,7 @@ import { agentRunLayer } from './run/AgentRun';
 import { runReflection } from './loop/reflection';
 import { runToolUse } from './loop/toolUse';
 import { Runs } from './runRegistry';
-import type { AgentRunServices } from './toolInjection';
+import type { AgentRunServices } from './runRegistry';
 import type { SessionHandle } from './SessionHandle';
 import type { RunHandle, AgentRunHandle } from './RunHandle';
 

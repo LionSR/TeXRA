@@ -1,41 +1,37 @@
 /**
  * Agent tool resolution — single source of truth for the effective tool list.
  *
- * The pipeline, in order:
- *   1. Start with the tool names declared in the agent YAML, and take each
- *      one's contract (description, parameter schema) from the registry.
- *   2. Strip tools the process's product host cannot run (a tool's
- *      `unavailableHosts`; every such tool when no host was named), and approval-gated tools when approval prompts
- *      are unavailable (e.g. a subagent without an interactive channel).
- *   3. Strip user-disabled tools (settings dashboard toggle).
- *   4. Strip tools whose external dependency is unavailable (probed at startup).
- *   5. Auto-inject the process's conditional tools (memory, goal, etc.), which
- *      the caller passes in as data;
- *      injected tools are subject to the approval gate but bypass the
- *      disabled/unavailable filters (they are runtime infrastructure, not
- *      user-selectable tools).
- *   6. Lay the run's own tools (caller-supplied, and the structured-output
- *      terminal tool) over the result: each is force-called, replaces a
+ * A run's tools come from its composition (`@tools/composition`), a value:
+ * the plugins still on (the user's dashboard switches and the dependency
+ * probes applied), the host and approval gates, the agent's declared tools
+ * and the tools the manifest injects while their setting is on (none for
+ * reflection). The offered registry is rebuilt from the composition's plugin
+ * list over the process's `ToolRegistry` table, in this order:
+ *   1. The declared tools, in declaration order, each with the table's own
+ *      contract (description, parameter schema). A tool the host cannot run
+ *      (its `unavailableHosts`; every such tool when no host was named) or
+ *      that is approval-gated while approval prompts are unavailable is
+ *      withheld, then one whose plugin is off.
+ *   2. The injected tools not already declared, under the same host and
+ *      approval gates.
+ *   3. Delegation tools annotated with the models and agents currently
+ *      available for delegation, so the model sees an accurate "Available
+ *      models:" line and an "Available agents:" roster.
+ *   4. The run's own tools (caller-supplied, and the structured-output
+ *      terminal tool) laid over the result: each is force-called, replaces a
  *      same-named entry, and wins the name in the returned registry. That
  *      registry holds the offered tools only, so dispatch cannot run a tool
  *      the model was not offered.
- *   7. Annotate delegation tools with the models and agents currently available
- *      for delegation, so the model sees an accurate "Available models:" line
- *      and an "Available agents:" roster instead of a snapshot frozen when the
- *      tool registry was first constructed.
  *
- * Routine filtering outcomes (disabled, unavailable) are intentionally silent;
- * tools with missing external dependencies are skipped quietly and stay
- * inactive until set up (no toast on each cycle). A declared name the registry
- * does not hold is the one reported case.
+ * Routine filtering outcomes (switched off, dependency missing) are
+ * intentionally silent; those tools stay inactive until set up (no toast on
+ * each cycle). A declared name the table does not hold is the one reported
+ * case.
  */
 
 import { Effect } from 'effect';
 
-import type {
-  RuntimeTool as ITool,
-  RuntimeToolRegistry as IToolRegistry,
-} from '@agent/runtime/ToolServices';
+import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
 import { MapToolRegistry, type ToolHost } from '@agent/core/tools/ToolTypes';
 import type { AgentToolUseSetting } from '@agent/core/definition/AgentDataclass';
 import { withLogChannel } from '@logger/effectLog';
@@ -47,24 +43,23 @@ import {
 import type { LanguageModel } from '@platform/languageModel';
 import type { AgentDelegationScope, ToolDefinition } from '@shared/schemas';
 import { hasDelegationTool } from '@shared/constants/delegationTools';
-import { getDisabledToolNames } from '@tools/plugins';
-import { getDefaultToolRegistry } from '@tools/registry';
+import { compositionFor } from '@tools/composition';
+import { findToolPlugin } from '@tools/plugins';
 import { getUnavailableToolNamesCached } from '@tools/toolAvailability';
+import { ToolRegistry } from '@tools/toolTable';
 import {
   annotateDelegationAvailability,
   availableModelNamesFromOptions,
   readDelegationAnnotationState,
 } from '@tools/delegation/delegationAvailability';
 import { getDisabledToolIds } from '@utils/config/constants';
+import { readSettingFrom } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import type { ConditionalToolInjection } from './toolInjection';
 
 const CHANNEL = 'AgentToolResolution';
 
 interface ResolveAgentToolsInput {
   tools: AgentToolUseSetting['tools'];
-  /** Registry to resolve tool definitions from. Defaults to the global registry. */
-  registry?: IToolRegistry;
   logger: { warn: (msg: string) => void };
   /** When true, approval-gated tools are filtered out before model invocation. */
   approvalPromptsUnavailable?: boolean;
@@ -73,13 +68,13 @@ interface ResolveAgentToolsInput {
    * `undefined` (no composition root named one) drops every host-bound tool.
    */
   host: ToolHost | undefined;
-  /** Tools only this run holds, laid over the resolved list (step 6). */
+  /** Tools only this run holds, laid over the resolved list (step 4). */
   runTools?: readonly ITool[];
-  /** Conditional runtime tool injections (step 5); none for reflection. */
-  toolInjections: readonly ConditionalToolInjection[];
+  /** Whether the manifest's injected tools join (step 2); not for reflection. */
+  injectTools: boolean;
   /**
    * The run's stores: the session's three setting slots, which the injections'
-   * predicates, the user's disabled-tool set and the delegation annotation's
+   * settings, the user's disabled-tool set and the delegation annotation's
    * worktree opt-in read, and the secret store behind the delegation roster's
    * model availability.
    */
@@ -126,35 +121,51 @@ function availableDelegationModelNamesForTools(
 }
 
 /**
- * Resolve the effective tool list for a single agent run.
- *
- * Called once per tool-use flow invocation. The registry is passed explicitly
- * so callers can substitute a test registry; it defaults to the singleton
- * returned by `getDefaultToolRegistry()`.
+ * Resolve the effective tool list for a single agent run: its composition,
+ * and the offered definitions and registry built from it.
  */
 export const resolveAgentTools = Effect.fn('resolveAgentTools')(function* ({
   tools,
-  registry,
   logger,
-  approvalPromptsUnavailable,
+  approvalPromptsUnavailable = false,
   host,
   runTools = [],
-  toolInjections,
+  injectTools,
   stores,
   workspaceRoot,
   delegationScope,
 }: ResolveAgentToolsInput) {
-  const effectiveRegistry = registry ?? getDefaultToolRegistry();
-  const disabled = getDisabledToolNames(
-    yield* getDisabledToolIds(stores.globalState),
+  const table = yield* ToolRegistry;
+  const injected: string[] = [];
+  if (injectTools) {
+    for (const id of table.plugins.keys()) {
+      const injections = findToolPlugin(id)?.injectedWhen ?? {};
+      for (const [name, setting] of Object.entries(injections)) {
+        if (yield* readSettingFrom<boolean>(stores, setting)) {
+          injected.push(name);
+        }
+      }
+    }
+  }
+  const composition = compositionFor({
+    table,
+    disabledIds: yield* getDisabledToolIds(stores.globalState),
+    unavailableTools: getUnavailableToolNamesCached(workspaceRoot),
+    host,
+    approvalPromptsUnavailable,
+    tools: (Array.isArray(tools) ? tools : []).map((toolConfig) =>
+      typeof toolConfig === 'string' ? toolConfig : toolConfig.name,
+    ),
+    injected,
+  });
+  // The tools the composition may offer, rebuilt from its plugin list.
+  const enabled = new Map(
+    composition.plugins.flatMap((id) => [...(table.plugins.get(id) ?? [])]),
   );
-  const unavailable = getUnavailableToolNamesCached(workspaceRoot);
 
-  const toolConfigs = Array.isArray(tools) ? tools : [];
-
-  /** Runtime-availability and approval gates shared by declared and injected tools. */
+  /** The host and approval gates, shared by declared and injected tools. */
   const passesRuntimeGates = (name: string): boolean => {
-    const tool = effectiveRegistry.get(name);
+    const tool = table.get(name);
     const excluded = tool?.unavailableHosts ?? [];
     if (excluded.length > 0 && host === undefined) {
       logger.warn(
@@ -168,36 +179,33 @@ export const resolveAgentTools = Effect.fn('resolveAgentTools')(function* ({
 
   const resolved: ToolDefinition[] = [];
   const resolvedNames = new Set<string>();
-  for (const toolConfig of toolConfigs) {
-    const name = typeof toolConfig === 'string' ? toolConfig : toolConfig.name;
-    if (resolvedNames.has(name)) continue;
+  for (const name of composition.tools) {
     if (!passesRuntimeGates(name)) continue;
-    if (disabled.has(name)) continue;
-    if (unavailable.has(name)) continue;
-    const registered = effectiveRegistry.get(name);
-    if (!registered) {
+    const tool = enabled.get(name);
+    if (!tool) {
       // A declared name with no registration is a configuration error (typo,
-      // or a tool retired from the registry) — dropping it silently would
-      // strip the agent's capability with no trace.
-      logger.warn(`Declared tool not found in registry: ${name}`);
+      // or a tool retired from the table) — dropping it silently would strip
+      // the agent's capability with no trace. One whose plugin is off is
+      // withheld quietly.
+      if (!table.get(name)) {
+        logger.warn(`Declared tool not found in registry: ${name}`);
+      }
       continue;
     }
-    // The contract the model is shown is the registry's own, never one an
-    // agent definition carries: a declaration names a tool, it does not
-    // redefine it.
-    resolved.push(registered.definition);
+    // The contract the model is shown is the table's own, never one an agent
+    // definition carries: a declaration names a tool, it does not redefine it.
+    resolved.push(tool.definition);
     resolvedNames.add(name);
   }
-  for (const injection of toolInjections) {
-    if (!(yield* injection.shouldInject(stores))) continue;
-    if (resolvedNames.has(injection.toolName)) continue;
-    if (!passesRuntimeGates(injection.toolName)) continue;
-    const tool = effectiveRegistry.get(injection.toolName);
+  for (const name of composition.injected) {
+    if (resolvedNames.has(name)) continue;
+    if (!passesRuntimeGates(name)) continue;
+    const tool = enabled.get(name);
     if (tool) {
       resolved.push(tool.definition);
-      resolvedNames.add(injection.toolName);
+      resolvedNames.add(name);
     } else {
-      logger.warn(`Injected tool not found in registry: ${injection.toolName}`);
+      logger.warn(`Injected tool not found in registry: ${name}`);
     }
   }
 
@@ -226,7 +234,7 @@ export const resolveAgentTools = Effect.fn('resolveAgentTools')(function* ({
   for (const tool of runTools) {
     const { name } = tool.definition;
     const index = definitions.findIndex((entry) => entry.name === name);
-    if (overlay.has(name) || effectiveRegistry.has(name) || index !== -1) {
+    if (overlay.has(name) || table.get(name) || index !== -1) {
       logger.warn(`Run-scoped tool "${name}" shadows an existing tool.`);
     }
     overlay.set(name, tool);
@@ -239,8 +247,12 @@ export const resolveAgentTools = Effect.fn('resolveAgentTools')(function* ({
   // running because the model named it anyway.
   const offered = new Map<string, ITool>();
   for (const { name } of definitions) {
-    const tool = overlay.get(name) ?? effectiveRegistry.get(name);
+    const tool = overlay.get(name) ?? enabled.get(name);
     if (tool) offered.set(name, tool);
   }
-  return { definitions, registry: new MapToolRegistry(offered) };
+  return {
+    definitions,
+    registry: new MapToolRegistry(offered),
+    composition,
+  };
 });

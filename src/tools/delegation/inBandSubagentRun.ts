@@ -30,7 +30,7 @@ import {
   RunArtifactDrainError,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
-import type { AgentRunServices } from '@agent/runtime/toolInjection';
+import type { AgentRunServices } from '@agent/runtime/runRegistry';
 import { withLogChannel } from '@logger/effectLog';
 import {
   RUN_OUTCOME,

@@ -41,7 +41,7 @@ import {
 } from './AgentFlowResult';
 import { RunArtifactDrainError, type SessionHandle } from './SessionHandle';
 import type { AgentLaunchContext } from './AgentLaunchContext';
-import type { AgentRunServices } from './toolInjection';
+import type { AgentRunServices } from './runRegistry';
 
 const CHANNEL = 'agentRunLifecycle';
 

@@ -1,5 +1,5 @@
 import { it } from '@effect/vitest';
-import { Effect } from 'effect';
+import { Effect, Layer } from 'effect';
 import { beforeEach, describe, expect, vi } from 'vitest';
 
 import type { ModelOptionStores } from '@model/computeModelOptions';
@@ -49,7 +49,7 @@ const {
 } = await import('@tools/delegation/delegationAvailability');
 const { resolveAgentTools } =
   await import('@agent/runtime/agentToolResolution');
-const { MapToolRegistry } = await import('@agent/core/tools/ToolTypes');
+const { ToolRegistry, toolTable } = await import('@tools/toolTable');
 
 const DELEGATE_AGENT_DESCRIPTION = [
   'Delegate a task to a tool-use agent.',
@@ -128,21 +128,23 @@ function rewriteRoster(
 }
 
 /**
- * A registry holding exactly these definitions: `resolveAgentTools` advertises
- * the registry's own contract, not the one the declaration carries.
+ * A tool table holding exactly these definitions: `resolveAgentTools`
+ * advertises the table's own contract, not the one the declaration carries.
  */
 function delegationRegistry(tools: readonly ToolInput[]) {
-  return new MapToolRegistry(
-    Object.fromEntries(
-      tools.map((tool) => [
-        tool.name,
-        {
-          definition: tool,
-          call: () =>
-            Effect.succeed({ status: 'executed', summary: '', output: '' }),
-        },
-      ]),
-    ),
+  return Layer.succeed(ToolRegistry)(
+    toolTable({
+      test: Object.fromEntries(
+        tools.map((tool) => [
+          tool.name,
+          {
+            definition: tool,
+            call: () =>
+              Effect.succeed({ status: 'executed', summary: '', output: '' }),
+          },
+        ]),
+      ),
+    }),
   );
 }
 
@@ -153,13 +155,12 @@ function resolveToolList(
   return Effect.suspend(() => {
     return resolveAgentTools({
       tools,
-      registry: delegationRegistry(tools),
       logger: { warn: () => {} },
       host: 'extension',
-      toolInjections: [],
+      injectTools: false,
       stores,
       workspaceRoot: undefined,
-    });
+    }).pipe(Effect.provide(delegationRegistry(tools)));
   }).pipe(
     Effect.map(({ definitions }) => definitions),
     // The delegation-annotation availability read yields `LanguageModel`;

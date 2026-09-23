@@ -17,7 +17,7 @@ import type {
   ToolDashboardItem,
 } from '@shared/settingsView/settingsViewMessages';
 import { TOOL_PLUGINS, findToolPlugin, type ToolPlugin } from '@tools/plugins';
-import { isDefaultToolUnavailableOnHost } from '@tools/registry';
+import { isToolUnavailableOnHost } from '@tools/registry';
 import type { ToolProbeInputs } from '@tools/toolProbes';
 import {
   runExternalToolChecks,
@@ -78,9 +78,7 @@ export function isToolPluginVisible(
 ): boolean {
   return (
     plugin.hidden !== true &&
-    !plugin.toolNames.every((name) =>
-      isDefaultToolUnavailableOnHost(name, host),
-    )
+    !plugin.toolNames.every((name) => isToolUnavailableOnHost(name, host))
   );
 }
 

@@ -78,10 +78,10 @@ installProcessRuntime({ /* … */, lean: directLeanLanguageServices() });
 ```
 
 The two conditional tool injections — `memory` and the unified `plan` tool
-that drives the goal loop — are not part of this step: they self-register when
-`src/agent/runtime/toolInjection.ts` loads. Registration only stores
-predicates: the memory setting is read later, when its predicate is evaluated.
-The process runtime must merely exist before injected tools are resolved.
+that drives the goal loop — are not part of this step: they are data on the
+memory-workflow plugin (`injectedWhen` in `src/tools/plugins.ts`), and their
+settings are read when a run resolves its tools against the `ToolRegistry`
+table the process runtime provides.
 
 The pool the layer builds spawns nothing until a Lean tool is first used, and
 its servers stop when the process runtime is disposed.
@@ -555,7 +555,7 @@ The caller knows which case it is in, and says so with
 - **`lean: directLeanLanguageServices()`:** The raw loop still runs over any
   `LeanLanguageServices` layer; without the direct one, Lean tools reach
   whatever port the embedder passed. The `memory`/`plan` injections do not
-  depend on this choice (`src/agent/runtime/toolInjection.ts`).
+  depend on this choice (`src/tools/plugins.ts`).
 
 There is no separate agent-bundle bootstrap to run or skip. The installed
 `AgentDirectoriesPort` is the whole of it: `AgentDirectoryService`
@@ -580,8 +580,8 @@ following classification makes that distinction.
   builds the lifecycle host and the agent-directories port
   (`:246-250`). Its `lean: directLeanLanguageServices()` (`:298`) is
   shipped-feature parity, not a raw-loop requirement; an embedder may pass
-  another layer. The `memory` and `plan` injections self-register
-  (`src/agent/runtime/toolInjection.ts`).
+  another layer. The `memory` and `plan` injections are manifest data
+  (`src/tools/plugins.ts`).
 - **`:326-333` — `createNodeWorkspaceRoots(...)`:** Required. The workspace
   roots every session is opened over.
 - **`:370-378` — `bootstrapHost({ host: 'cli', roots, secrets, skills })`:**
@@ -625,10 +625,10 @@ host.
 
 1. **Only part of the shipped ordering is immediately load-bearing.** Step 3's
    port is served by the Step 1 install, so it is built first. Feature-parity
-   registration stores predicates and a Lean adapter without evaluating host
-   services; the process runtime is needed only when the memory predicate
-   later runs
-   (`src/agent/runtime/toolInjection.ts`;
+   registration stores a Lean adapter without evaluating host services, and
+   the injections are manifest data; the process runtime is needed only when
+   a run later reads the memory setting
+   (`src/tools/plugins.ts`;
    `src/tools/lean/direct/directLspAdapter.ts:47-52`).
 2. **The process runtime is once-per-process.** The Lean layer is built with
    it and closed with it; a host passes it exactly where it calls

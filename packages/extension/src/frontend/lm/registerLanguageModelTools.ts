@@ -18,7 +18,7 @@ import type { ProcessRuntime } from '@platform/processRuntime';
 import { sessionFsLayer } from '@platform/rootedFs';
 
 import type { ToolResult } from '@shared/schemas';
-import { getDefaultToolRegistry } from '@tools/registry';
+import { TOOL_TABLE } from '@tools/registry';
 
 // Local imports - language model tools
 import {
@@ -55,9 +55,8 @@ export function registerLanguageModelTools(
   const lm = (vscode as { lm?: Partial<typeof vscode.lm> }).lm;
   if (typeof lm?.registerTool !== 'function') return;
 
-  const registry = getDefaultToolRegistry();
   for (const [lmName, toolName] of Object.entries(LM_TOOL_NAMES)) {
-    const tool = registry.get(toolName);
+    const tool = TOOL_TABLE.get(toolName);
     if (!tool) {
       log.warn(
         `Tool "${toolName}" missing from registry; skipping LM registration for "${lmName}".`,

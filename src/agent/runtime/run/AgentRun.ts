@@ -20,7 +20,6 @@ import type {
 } from '@agent/runtime/ToolServices';
 import type { AgentTrace, StageHandle } from '@agent/trace';
 import { resolveAgentTools } from '@agent/runtime/agentToolResolution';
-import { AGENT_TOOL_INJECTIONS } from '@agent/runtime/toolInjection';
 import type { UsageMonitor } from '@agent/runtime/UsageMonitor';
 import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
 import { withLogChannel } from '@logger/effectLog';
@@ -39,7 +38,9 @@ import {
 } from '@shared/schemas';
 import { RunLedger } from '@shared/session/runLedger';
 import type { RunState } from '@shared/session/runStateFold';
+import { compositionHash } from '@tools/composition';
 import { buildTerminalTool } from '@tools/structuredOutput';
+import type { ToolRegistry } from '@tools/toolTable';
 import { processToolHost } from '@utils/config/platformSettings';
 import { ensureError } from '@utils/errors/errorMessage';
 import { RunFileService } from '@utils/files/runStorage';
@@ -174,7 +175,7 @@ export const agentRunLayer = (
 ): Layer.Layer<
   AgentRun,
   Error,
-  RunLedger | LanguageModel | HttpClient.HttpClient
+  RunLedger | LanguageModel | HttpClient.HttpClient | ToolRegistry
 > =>
   Layer.effect(
     AgentRun,
@@ -218,14 +219,17 @@ export const agentRunLayer = (
           : input.tools,
         // The reflection family injects none: memory and plan are tool-use
         // infrastructure.
-        toolInjections:
-          setting.agentCategory === AgentCategory.ToolUse
-            ? AGENT_TOOL_INJECTIONS
-            : [],
+        injectTools: setting.agentCategory === AgentCategory.ToolUse,
         stores: ctx.stores,
         workspaceRoot: session.roots.workspace,
         delegationScope: ctx.delegationAgentScope ?? undefined,
       });
+      yield* Effect.logDebug(
+        `Run ${runId} tool composition ${compositionHash(resolved.composition)}`,
+      ).pipe(
+        Effect.annotateLogs({ data: resolved.composition }),
+        withLogChannel('AgentRun'),
+      );
 
       const snapshot = yield* ledger.latestSnapshot(runId);
       // A resumed tool-use run offers the tools it recorded at open that

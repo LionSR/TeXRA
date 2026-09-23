@@ -116,6 +116,7 @@ import type { InlineCommentProvider } from '@tools/comment/InlineCommentTool';
 import { gitHubSubscriptionsLayer } from '@tools/github/subscriptionRegistries';
 import type { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import { SetupPlatform, type SetupPlatformShape } from '@tools/setup/platform';
+import { toolRegistryLayer } from '@tools/registry';
 import { StreamLogStore } from '@transcript/StreamLogStore';
 import { readConfigSettingFrom } from '@utils/config/platformSettings';
 import { inquiryRecordsLayer } from './inquiryRecords';
@@ -1063,9 +1064,8 @@ export function installProcessRuntime({
   globalDatabase: globalDatabaseOption,
   minimumLogLevel,
 }: ProcessRuntimeOptions): ProcessRuntime {
-  // Non-failing by contract: `nodeProcesses.selfIdentity()` reports an
-  // unreadable identity as undefined, and a root that already read one hands
-  // over `Effect.succeed(...)`, which builds this layer synchronously.
+  // Non-failing: `nodeProcesses.selfIdentity()` reads an unreadable identity
+  // as undefined; a root that already read one passes `Effect.succeed(...)`.
   const identity = Layer.effect(
     ProcessIdentity,
     Effect.map(processStart, (start) => ({ ownerId: processOwnerId(start) })),
@@ -1088,6 +1088,7 @@ export function installProcessRuntime({
       ? Layer.empty
       : ToolMissingReporter.layer(toolMissingReporter),
     SetupPlatform.layer(setup),
+    toolRegistryLayer,
     Layer.succeed(AgentEngine)({ executeAgent, resumeToolUseFromResumeData }),
     // Built with this runtime: a replacement starts with empty tables.
     gitHubSubscriptionsLayer,
@@ -1133,10 +1134,9 @@ export function installProcessRuntime({
           Layer.mergeAll(
             effectDiagnosticsLayer(minimumLogLevel),
             FetchHttpClient.layer,
-            // The standard library's filesystem and path services, provided
-            // once per process here rather than by each program that needs
-            // them: every root reaches this install, so a consumer (the Lean
-            // layer included) takes `FileSystem`/`Path` from context and
+            // The standard library's filesystem and path services, once per
+            // process: every root reaches this install, so a consumer (the
+            // Lean layer included) takes `FileSystem`/`Path` from context and
             // builds no layer of its own.
             NodeFileSystem.layer,
             NodePath.layer,
