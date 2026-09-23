@@ -21,7 +21,7 @@ interface InvokeRecord {
 }
 
 async function setupTool(): Promise<{
-  tool: InstanceType<typeof InvokeCommandTool>;
+  tool: typeof InvokeCommandTool;
   invocations: InvokeRecord[];
 }> {
   const invocations: InvokeRecord[] = [];
@@ -38,10 +38,10 @@ async function setupTool(): Promise<{
       }),
     },
   );
-  return { tool: new InvokeCommandTool(), invocations };
+  return { tool: InvokeCommandTool, invocations };
 }
 
-const invoke = (tool: InstanceType<typeof InvokeCommandTool>, input: unknown) =>
+const invoke = (tool: typeof InvokeCommandTool, input: unknown) =>
   tool.call(input).pipe(Effect.provide(nativeToolTestLayer()));
 
 describe('InvokeCommandTool allowlist', () => {

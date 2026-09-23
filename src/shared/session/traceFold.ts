@@ -11,6 +11,7 @@ import {
   STREAM_LOG_ENTRY_TYPES,
   RUN_PHASE,
   TOOL_CALL_STATUS,
+  ToolUseLogSchema,
   isTerminalWorkflowCallProgress,
   isTranscriptEvent,
   type LogLevel,
@@ -29,6 +30,7 @@ import type {
   StreamLogAppendInput,
   StreamLogUpdatePatch,
 } from '@shared/session/traceEntries';
+import { isObject } from '@utils/core';
 
 const KNOWN_MESSAGE_TYPES = new Set<string>(Object.values(MESSAGE_TYPES));
 
@@ -203,7 +205,20 @@ export function createTranscriptFold(
 
       case 'tool.end': {
         if (transcriptBoundaryClosed) return;
-        const result = (event.result ?? {}) as Partial<ToolUseLog>;
+        // .passthrough() keeps fields outside ToolUseLogSchema (e.g.
+        // toolUseDispatch.ts's `files`), matching endToolUseCard's "forwarded
+        // as-is" contract. On failure, keep the raw object rather than `{}`:
+        // every field is optional, so `{}` would "succeed" on
+        // normalizeToolUseData's re-parse and hide a malformed row instead of
+        // tripping its "Malformed tool payload" fallback.
+        const parsedResult = ToolUseLogSchema.omit({ status: true })
+          .passthrough()
+          .safeParse(event.result);
+        let result: Partial<ToolUseLog>;
+        if (parsedResult.success) result = parsedResult.data;
+        else if (isObject(event.result))
+          result = event.result as Partial<ToolUseLog>;
+        else result = {};
         // Omit groupId on update: undefined would clobber the value stamped
         // at tool.start.
         const patch = {
@@ -211,7 +226,7 @@ export function createTranscriptFold(
           data: {
             ...result,
             status: event.status,
-          } as ToolUseLog,
+          } satisfies ToolUseLog,
         } satisfies StreamLogUpdatePatch;
         if (event.status === TOOL_CALL_STATUS.IN_PROGRESS) {
           if (!activeToolEntries.has(event.logId)) return;

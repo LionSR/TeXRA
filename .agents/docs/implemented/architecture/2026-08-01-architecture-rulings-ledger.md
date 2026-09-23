@@ -636,6 +636,18 @@ contract.
 and implementation modules, as part of a simplification, refactor or
 consolidation lane. That change needs its own owner decision and its own PR.
 
+**Amendment (owner decision, 2026-09-23; "tools as data" PR).** The owner
+lifted this freeze for the plugin architecture: the SDK tool contract may
+change, and `definition.ts`, `define.ts` and `packages/agent/src/index.ts` are
+open to that work. Net-negative LOC is not the gate for this line of work. The
+first change under the amendment makes `defineTool` return a plain tool object
+carrying `execute` instead of a class to subclass: `BaseTool`
+(`src/tools/core/base.ts`) is deleted, every class-based tool and the
+structured-output terminal tool are tool objects, the registry lists them by
+value, and the SDK exports `DefinedTool` in place of `DefinedToolClass`. The
+freeze's premise still holds for unrelated lanes: a simplification lane does
+not retype the tool contract on its own initiative.
+
 ---
 
 ## The pandoc scratchpad conversion tier is retired; there is one conversion path (ruled 2026-09-19; [#12863](https://github.com/LionSR/TeXRA/pull/12863))

@@ -13,12 +13,11 @@
 
 import { Effect } from 'effect';
 
-import type { AgentTrace } from '@agent/trace';
 import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 
 import { emitAppSignal } from '@eventBus/AppSignals';
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import {
   AgentResume,
   type Disposable,
@@ -45,10 +44,8 @@ interface PollingSourceLike<K extends string, Input> {
 }
 
 export interface RunSubscriptionRegistryOptions<K extends string, Input> {
-  /** Display name for log messages. */
+  /** Log channel for this registry's messages. */
   name: string;
-  /** Logger override. */
-  logger?: Pick<AgentTrace, 'info' | 'warn'>;
   /** The polling source that owns the subscription. */
   source: PollingSourceLike<K, Input>;
   /** Convert a subscribe-input value to the canonical string key. */
@@ -67,7 +64,6 @@ interface BoundSubscription {
 }
 
 export class RunSubscriptionRegistry<K extends string, Input> {
-  private readonly logger: Pick<AgentTrace, 'info' | 'warn'>;
   private readonly perRun = new Map<RunId, Map<K, BoundSubscription>>();
   private readonly releaseHooks = new Map<SessionHandle, () => void>();
   /**
@@ -81,7 +77,6 @@ export class RunSubscriptionRegistry<K extends string, Input> {
   private readonly keysListener: Disposable;
 
   constructor(private readonly opts: RunSubscriptionRegistryOptions<K, Input>) {
-    this.logger = opts.logger ?? createLog(opts.name);
     // Source-key changes are internal bookkeeping. The registry emits the UI
     // signal only after its binding map has reached the corresponding state.
     this.keysListener = opts.source.onKeysChanged((keys) => {
@@ -148,11 +143,10 @@ export class RunSubscriptionRegistry<K extends string, Input> {
           if (!subscription) return Effect.void;
           const owner = subscription.owner;
           const reportDeliveryFailure = (err: unknown) =>
-            Effect.sync(() => {
-              this.logger.warn('Failed to deliver subscription follow-up', {
-                data: { key, runId, err },
-              });
-            });
+            Effect.logWarning('Failed to deliver subscription follow-up').pipe(
+              Effect.annotateLogs({ data: { key, runId, err } }),
+              withLogChannel(this.opts.name),
+            );
           return submitFollowUp(runId, text, {
             session: owner,
             mode: 'live_notification',
@@ -166,7 +160,7 @@ export class RunSubscriptionRegistry<K extends string, Input> {
           );
         };
         return this.opts.source.subscribe(input, onEvent).pipe(
-          Effect.map((disposable) => {
+          Effect.flatMap((disposable) => {
             const subscription: BoundSubscription = {
               disposable,
               onEvent,
@@ -176,9 +170,17 @@ export class RunSubscriptionRegistry<K extends string, Input> {
             this.perRun.set(runId, bound);
             this.incrementSessionRefCount(session);
             this.ensureReleaseHook(session);
-            this.logger.info(`Bound subscription ${key} → run ${runId}`);
-            this.emitBindingsChanged();
-            return true;
+            return Effect.logInfo(
+              `Bound subscription ${key} → run ${runId}`,
+            ).pipe(
+              withLogChannel(this.opts.name),
+              Effect.andThen(
+                Effect.sync(() => {
+                  this.emitBindingsChanged();
+                  return true;
+                }),
+              ),
+            );
           }),
         );
       }),

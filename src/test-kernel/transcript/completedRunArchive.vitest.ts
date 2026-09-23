@@ -622,11 +622,9 @@ describe('completedRunArchive facade', () => {
           roots: taskSession.roots,
         });
 
-        const endpoint = yield* new ExecutionsTool()
-          .call({
-            path: `/executions/${runId}/conversation`,
-          })
-          .pipe(Effect.provide(toolLayer));
+        const endpoint = yield* ExecutionsTool.call({
+          path: `/executions/${runId}/conversation`,
+        }).pipe(Effect.provide(toolLayer));
         expect(endpoint.status).toBe('executed');
         expect(endpoint.output).toContain('Conversation (4 messages)');
         expect(endpoint.output).toContain('Prove the first lemma.');
@@ -634,20 +632,16 @@ describe('completedRunArchive facade', () => {
         expect(endpoint.output).toContain('Now prove the second lemma.');
         expect(endpoint.output).toContain('Second proof.');
 
-        const firstPage = yield* new ExecutionsTool()
-          .call({
-            path: `/executions/${runId}/conversation`,
-            offset: 0,
-            limit: 2,
-          })
-          .pipe(Effect.provide(toolLayer));
-        const secondPage = yield* new ExecutionsTool()
-          .call({
-            path: `/executions/${runId}/conversation`,
-            offset: 2,
-            limit: 2,
-          })
-          .pipe(Effect.provide(toolLayer));
+        const firstPage = yield* ExecutionsTool.call({
+          path: `/executions/${runId}/conversation`,
+          offset: 0,
+          limit: 2,
+        }).pipe(Effect.provide(toolLayer));
+        const secondPage = yield* ExecutionsTool.call({
+          path: `/executions/${runId}/conversation`,
+          offset: 2,
+          limit: 2,
+        }).pipe(Effect.provide(toolLayer));
         expect(firstPage.output).toContain('Source: streamLog');
         expect(firstPage.output).toContain('Returned message interval: [0, 2)');
         expect(firstPage.output).toContain('Next offset: 2');
@@ -673,12 +667,10 @@ describe('completedRunArchive facade', () => {
           ).toHaveLength(2);
         }
 
-        const lineRange = yield* new ExecutionsTool()
-          .call({
-            path: `/executions/${runId}/conversation`,
-            view_range: [1, 10],
-          })
-          .pipe(Effect.provide(toolLayer));
+        const lineRange = yield* ExecutionsTool.call({
+          path: `/executions/${runId}/conversation`,
+          view_range: [1, 10],
+        }).pipe(Effect.provide(toolLayer));
         expect(lineRange.status).toBe('error');
         expect(lineRange.error).toContain(
           'Conversation pagination is message-based. Use offset and limit',
@@ -774,18 +766,16 @@ describe('completedRunArchive facade', () => {
       });
       expect(hasCompletedRunConversationEvidence(result)).toBe(false);
 
-      const endpoint = yield* new ExecutionsTool()
-        .call({
-          path: `/executions/${runId}/conversation`,
-        })
-        .pipe(
-          Effect.provide(
-            nativeToolTestLayer({
-              run: { session: taskSession, runId, toolPolicy: {} },
-              roots: taskSession.roots,
-            }),
-          ),
-        );
+      const endpoint = yield* ExecutionsTool.call({
+        path: `/executions/${runId}/conversation`,
+      }).pipe(
+        Effect.provide(
+          nativeToolTestLayer({
+            run: { session: taskSession, runId, toolPolicy: {} },
+            roots: taskSession.roots,
+          }),
+        ),
+      );
       expect(endpoint.status).toBe('executed');
       expect(endpoint.output).toContain('Conversation (0 messages)');
     }),

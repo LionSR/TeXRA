@@ -30,7 +30,7 @@ import {
   type ToolUseCardRef,
 } from '@agent/trace';
 import type { Runs } from '@agent/runtime/runRegistry';
-import { ToolCall, type ToolCallShape } from '@agent/runtime/ToolCall';
+import { ToolCall } from '@agent/runtime/ToolCall';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import type { AgentResume } from '@platform/interfaces';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
@@ -464,7 +464,44 @@ const createCodexThread = Effect.fn('codex.createCodexThread')(function* (
 // Tool
 // ============================================================================
 
-export class CodexTool extends defineTool({
+const runCodex = Effect.fn('CodexTool.run')(function* (
+  input: CodexInput,
+): Effect.fn.Return<
+  ToolResult,
+  AgentCliToolFailure,
+  ToolCall | Runs | AgentResume
+> {
+  const toolCall = yield* ToolCall;
+  const sandboxMode = yield* codexSandboxMode(
+    input,
+    toolCall.roots.workspaceState,
+  );
+
+  return yield* dispatchAgentCliTool({
+    toolCall,
+    agentName: CODEX_AGENT_NAME,
+    store: codexThreadsFor,
+    resumeId: input.thread_id ?? undefined,
+    prompt: input.prompt,
+    labels: {
+      notActiveLabel: 'Codex thread',
+      idParamName: 'thread_id',
+      summaryLabel: 'Codex',
+      queuedLabel: 'Codex thread',
+    },
+    launch: (context) =>
+      launchCodexSession(
+        input,
+        sandboxMode,
+        context.parentRunId,
+        context.parentWorkingDirectory,
+        context.releaseFallbackClaim,
+        context.session,
+      ),
+  });
+});
+
+export const CodexTool = defineTool({
   name: 'codex',
   requiresApproval: true,
   description:
@@ -483,53 +520,8 @@ export class CodexTool extends defineTool({
     // A resumed thread keeps its stored workspace: name none, not the wrong one.
     cwd: 'unknown',
   },
-}) {
-  protected execute(input: CodexInput) {
-    return Effect.gen({ self: this }, function* () {
-      return yield* reraiseAgentCliCallFailure(
-        this.run(input, yield* ToolCall),
-      );
-    });
-  }
-
-  private readonly run = Effect.fn('CodexTool.run')(function* (
-    this: CodexTool,
-    input: CodexInput,
-    toolCall: ToolCallShape,
-  ): Effect.fn.Return<
-    ToolResult,
-    AgentCliToolFailure,
-    ToolCall | Runs | AgentResume
-  > {
-    const sandboxMode = yield* codexSandboxMode(
-      input,
-      toolCall.roots.workspaceState,
-    );
-
-    return yield* dispatchAgentCliTool({
-      toolCall,
-      agentName: CODEX_AGENT_NAME,
-      store: codexThreadsFor,
-      resumeId: input.thread_id ?? undefined,
-      prompt: input.prompt,
-      labels: {
-        notActiveLabel: 'Codex thread',
-        idParamName: 'thread_id',
-        summaryLabel: 'Codex',
-        queuedLabel: 'Codex thread',
-      },
-      launch: (context) =>
-        launchCodexSession(
-          input,
-          sandboxMode,
-          context.parentRunId,
-          context.parentWorkingDirectory,
-          context.releaseFallbackClaim,
-          context.session,
-        ),
-    });
-  });
-}
+  execute: (input) => reraiseAgentCliCallFailure(runCodex(input)),
+});
 
 const launchCodexSession = Effect.fn('codex.launchCodexSession')(function* (
   input: CodexInput,

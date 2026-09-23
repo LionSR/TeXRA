@@ -48,6 +48,19 @@ All notable changes to this project will be documented in this file.
   keeps debug entries. The CLI gains a `--verbose` flag for additional debug
   diagnostics; `--quiet` suppresses diagnostics.
 
+### Features
+
+- **The orchestrator and the Lean agents ship with TeXRA** — `orchestrator`,
+  `search`, `simplifier`, `presenter`, `progressCheck`, and the Lean Project
+  agents (`lean`, `leanSearch`, `leanSimplifier`, `leanBlueprint`,
+  `leanOrchestrator`) are now built in, in the VS Code extension, the desktop
+  app and the CLI. They no longer need a TeXRA sign-in, so every team's lead
+  works on a fresh install. `presenter` is now the interactive deck builder
+  that compiles your slides and checks every page visually; to turn a
+  finished paper into a deck in one pass, use the `paper2slide` workflow
+  agent. A built-in agent now takes precedence over a hosted agent with
+  the same name, so signed-in users run the built-in copies too.
+
 ### Bug Fixes
 
 - **An agent can only run the tools it was offered.** A model that named a
@@ -130,6 +143,13 @@ All notable changes to this project will be documented in this file.
 
 #### Breaking Changes
 
+- **`defineTool` returns a tool object, not a class** — `@texra-ai/agent`'s
+  `defineTool` now takes `execute` in its definition and returns the tool
+  itself, ready to pass in `tools`. Subclassing it and calling `new` no longer
+  apply — `class Echo extends defineTool({...}) { protected execute(i) {...} }`
+  with `new Echo()` becomes `const Echo = defineTool({ ..., execute })`. The
+  exported `DefinedToolClass` type is replaced by `DefinedTool`, and a tool's
+  `description` is a plain string.
 - **`texra tools list` and `texra skills list` JSON changed shape** — both now
   print the same records the Tools and Skills settings tabs show. Each tool
   record gains `description`, `tools`, `installActions`, `configNotes` and

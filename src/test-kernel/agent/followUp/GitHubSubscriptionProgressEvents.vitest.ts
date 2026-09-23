@@ -6,7 +6,7 @@ import '@test/support/defaultSessionTestSetup';
 // Third-party imports
 import { it } from '@effect/vitest';
 import { Deferred, Effect, Fiber } from 'effect';
-import { beforeEach, describe, expect, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 const submitFollowUpMock = vi.hoisted(() => vi.fn());
 
@@ -20,6 +20,8 @@ import {
   type AppSignal,
   type AppSignalPayloads,
 } from '@eventBus/AppSignals';
+import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
+import { setLogSink } from '@logger/logSink';
 import { AgentResume, Lifecycle } from '@platform/interfaces';
 import { Secrets } from '@platform/secrets';
 import type { RunId } from '@shared/schemas';
@@ -31,6 +33,7 @@ import {
 import { testRuntime } from '@test/support/testProcessRuntime';
 
 // Test support imports
+import { captureLogEntries } from '@test/support/logSinkCapture';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { GitHubAuthError } from '@tools/github/githubClient';
 import {
@@ -190,11 +193,16 @@ class RegistryTestSource {
   /**
    * Deliver one event the way `PollingSourceBase.emitToListener` does: the
    * listener builds its delivery program on this turn, then the program runs.
-   * Awaiting the program keeps the assertions below deterministic.
+   * Awaiting the program keeps the assertions below deterministic, and the
+   * diagnostics logger routes its warnings to the log sink as a host's does.
    */
   async emit(input: string, text: string): Promise<void> {
     const listener = this.onEventByKey.get(input);
-    if (listener) await testRuntime().runPromise(listener(text));
+    if (listener) {
+      await testRuntime().runPromise(
+        listener(text).pipe(Effect.provide(effectDiagnosticsLayer('Trace'))),
+      );
+    }
   }
 
   private emitKeysChanged(): void {
@@ -209,6 +217,10 @@ describe('GitHub subscription app signals and follow-ups', () => {
     submitFollowUpMock.mockReturnValue(
       Effect.succeed({ status: 'sent' as const }),
     );
+  });
+
+  afterEach(() => {
+    setLogSink(null);
   });
 
   it.live('publishes githubSubscriptionsChanged through app signals', () =>
@@ -377,11 +389,8 @@ describe('GitHub subscription app signals and follow-ups', () => {
         const runId = 'stream-a' as RunId;
         const source = new RegistryTestSource();
         const session = createTestSession();
-        const logger = {
-          info: vi.fn(),
-          warn: vi.fn(),
-        };
-        const registry = createTestRegistry(source, { logger });
+        const logs = captureLogEntries();
+        const registry = createTestRegistry(source);
         const unhandledRejection = vi.fn();
         submitFollowUpMock.mockReturnValueOnce(
           Effect.fail(new Error('delivery failed')),
@@ -409,15 +418,12 @@ describe('GitHub subscription app signals and follow-ups', () => {
         );
 
         expect(unhandledRejection).not.toHaveBeenCalled();
-        expect(logger.warn).toHaveBeenCalledWith(
+        const [warning] = logs.at('WARN', 'test subscriptions');
+        expect(warning?.message).toBe(
           'Failed to deliver subscription follow-up',
-          expect.objectContaining({
-            data: expect.objectContaining({
-              key: 'owner/repo',
-              runId,
-            }),
-          }),
         );
+        expect(warning?.annotations.data).toContain('owner/repo');
+        expect(warning?.annotations.data).toContain(runId);
       }),
   );
 });

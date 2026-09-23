@@ -20,7 +20,7 @@ import { SupabaseAuth } from '@auth/SupabaseAuth';
 import { parseJsonWith } from '@common/parsing/safeParseJson';
 import { withLogChannel } from '@logger/effectLog';
 import { filterNotNull } from '@utils/core';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
   errorDataToString,
@@ -136,7 +136,7 @@ function fetchRemoteAgentListRows(
           signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
         })
         .json<RemoteAgentListRow[]>(),
-    catch: (cause) => cause,
+    catch: ensureError,
   });
 
   return request.pipe(

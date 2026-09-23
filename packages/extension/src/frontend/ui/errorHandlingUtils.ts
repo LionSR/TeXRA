@@ -6,7 +6,7 @@ import * as vscode from 'vscode';
 import { formatError } from '@common/errors';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { withLogChannel } from '@logger/effectLog';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 /** Valid documentation identifiers for error messages. */
 type DocId = 'intelligent-merge' | 'custom-agents' | 'latex-diff';
@@ -91,7 +91,7 @@ export function showLoggedMessageWithDocs(
       try: async () => {
         await vscode.commands.executeCommand('texra.openDoc', docId);
       },
-      catch: (err: unknown) => err,
+      catch: ensureError,
     }).pipe(
       Effect.catch((err) =>
         Effect.logError(

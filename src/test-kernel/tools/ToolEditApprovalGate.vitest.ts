@@ -188,7 +188,7 @@ describe('Tool edit approval gating', () => {
 
   it.effect('gates an edit to a dangling symlink as an existing file', () =>
     Effect.gen(function* () {
-      const tool = new EditFileTool();
+      const tool = EditFileTool;
       mkdirSync(WORKSPACE_PATH, { recursive: true });
       // A dangling symlink names a workspace entry even though stat through
       // the link fails; the read-before-edit gate must not treat it as new.
@@ -211,7 +211,7 @@ describe('Tool edit approval gating', () => {
 
   it.effect('write_file applies changes after approval', () =>
     Effect.gen(function* () {
-      const tool = new WriteFileTool();
+      const tool = WriteFileTool;
       const write = stubWorkspaceFile('doc.txt', {
         exists: true,
         content: 'old content',
@@ -238,7 +238,7 @@ describe('Tool edit approval gating', () => {
 
   it.effect('write_file resolves paths in the invoking project scope', () =>
     Effect.gen(function* () {
-      const tool = new WriteFileTool();
+      const tool = WriteFileTool;
       const project = createFakeHost({
         workspacePath: path.resolve(path.sep, 'project'),
         config: { 'texra.toolUse.requireEditApproval': true },
@@ -269,7 +269,7 @@ describe('Tool edit approval gating', () => {
 
   it.effect('write_file reports the content adjusted during approval', () =>
     Effect.gen(function* () {
-      const tool = new WriteFileTool();
+      const tool = WriteFileTool;
       const write = stubWorkspaceFile('doc.txt', {
         exists: true,
         content: 'old content',
@@ -289,7 +289,7 @@ describe('Tool edit approval gating', () => {
 
   it.effect('write_file rejects when user denies approval', () =>
     Effect.gen(function* () {
-      const tool = new WriteFileTool();
+      const tool = WriteFileTool;
       const write = stubWorkspaceFile('summary.txt', {
         exists: true,
         content: 'base',
@@ -313,7 +313,7 @@ describe('Tool edit approval gating', () => {
 
   it.effect('does not present an automatic cancellation as user feedback', () =>
     Effect.gen(function* () {
-      const tool = new WriteFileTool();
+      const tool = WriteFileTool;
       const write = stubWorkspaceFile('summary.txt', {
         exists: true,
         content: 'base',
@@ -333,7 +333,7 @@ describe('Tool edit approval gating', () => {
 
   it.effect('preserves an automatic cancellation without a cause', () =>
     Effect.gen(function* () {
-      const tool = new WriteFileTool();
+      const tool = WriteFileTool;
       const write = stubWorkspaceFile('summary.txt', {
         exists: true,
         content: 'base',
@@ -356,7 +356,7 @@ describe('Tool edit approval gating', () => {
       yield* Effect.tryPromise(() =>
         installPlatform({ 'texra.toolUse.requireEditApproval': false }),
       );
-      const tool = new WriteFileTool();
+      const tool = WriteFileTool;
       const write = stubWorkspaceFile('doc.txt', {
         exists: false,
         content: '',
@@ -379,7 +379,7 @@ describe('Tool edit approval gating', () => {
       );
       testDefaultSession().setApprovalPolicy('never');
 
-      const tool = new WriteFileTool();
+      const tool = WriteFileTool;
       const write = stubWorkspaceFile('denied.txt', {
         exists: false,
         content: '',
@@ -400,7 +400,7 @@ describe('Tool edit approval gating', () => {
 
   it.effect('session bypass auto-approves pending requests', () =>
     Effect.gen(function* () {
-      const tool = new WriteFileTool();
+      const tool = WriteFileTool;
       const write = stubWorkspaceFile('doc.txt', {
         exists: false,
         content: '',

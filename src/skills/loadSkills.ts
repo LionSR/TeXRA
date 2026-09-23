@@ -9,7 +9,7 @@ import { Effect } from 'effect';
 import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
 import type { ActiveSkillSourceScope } from '@shared/schemas';
 import { byName } from '@utils/core';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local imports - skill parsing
 import { type SkillLoadIssue, issue, loadSkillDirectory } from './skillLoader';
@@ -87,7 +87,7 @@ const scanSkillRoot = Effect.fn('skills.scanSkillRoot')(function* (
 
   const entries: Dirent[] | undefined = yield* Effect.tryPromise({
     try: () => fs.readdir(root, { withFileTypes: true }),
-    catch: (err) => err,
+    catch: ensureError,
   }).pipe(
     Effect.catch((err) =>
       Effect.sync(() => {
@@ -111,7 +111,7 @@ const scanSkillRoot = Effect.fn('skills.scanSkillRoot')(function* (
     const skillPath = path.join(skillDir, 'SKILL.md');
     const realSkillPath: string | undefined = yield* Effect.tryPromise({
       try: () => fs.realpath(skillPath),
-      catch: (err) => err,
+      catch: ensureError,
     }).pipe(
       Effect.catch((err) =>
         Effect.sync(() => {
@@ -163,7 +163,7 @@ function validateRequiredSource(
     });
   return Effect.tryPromise({
     try: () => fs.stat(source.path),
-    catch: (err) => err,
+    catch: ensureError,
   }).pipe(
     Effect.map((sourceStat) =>
       sourceStat.isDirectory() ? undefined : notADirectory(),

@@ -60,27 +60,27 @@ The agent dropdown is a single flat list with no Local/Remote headers; remote ag
 
 <DropdownMenu
   label="Agent"
-  value="search"
+  value="generic"
   valueIcon="cloud"
   maxWidth="320px"
   :groups="[
     { items: [
       { name: 'polish', icon: 'sparkle' },
       { name: 'correct', icon: 'pencil' },
-      { name: 'search', icon: 'cloud', badge: 'in use', badgeVariant: 'accent', active: true },
-      { name: 'simplifier', icon: 'cloud' },
-      { name: 'orchestrator', icon: 'cloud' },
+      { name: 'generic', icon: 'cloud', badge: 'in use', badgeVariant: 'accent', active: true },
+      { name: 'devise', icon: 'cloud' },
+      { name: 'criticize', icon: 'cloud' },
     ] },
   ]"
 />
 
-<p class="hero-caption">The agent dropdown: one flat list where remote agents (<code>search</code>, <code>simplifier</code>, <code>orchestrator</code>) carry a cloud marker that sets them apart from local agents like <code>polish</code> and <code>correct</code>.</p>
+<p class="hero-caption">The agent dropdown: one flat list where remote agents (<code>generic</code>, <code>devise</code>, <code>criticize</code>) carry a cloud marker that sets them apart from local agents like <code>polish</code> and <code>correct</code>.</p>
 
 None of this is VS Code-only. The whole loop works from a terminal too:
 
 <CliRemoteHero />
 
-<p class="hero-caption">Sign in once and remote agents resolve by name everywhere: <code>agents show</code> reports <code>source: remote</code>, and <code>texra chat --agent search</code> runs it like any local agent.</p>
+<p class="hero-caption">Sign in once and remote agents resolve by name everywhere: <code>agents show</code> reports <code>source: remote</code>, and <code>texra run generic --input draft.tex</code> runs it like any local agent.</p>
 
 ## Remote agent access
 
@@ -103,7 +103,7 @@ Signed-in researchers, academics, and technical writers can use specialized remo
 
 <p class="hero-caption">What remote agent access gets you: domain-specific agents, advanced multi-step reasoning, early access to beta agents, and a direct line into how agents evolve.</p>
 
-Current remote agents include `search` (literature discovery), `simplifier` (code and writing simplification), and `orchestrator` (multi-agent coordination). Read the [remote agents section of the built-in agents guide](./built-in-agents.md#remote-agents) for details on each.
+Current remote agents are workflow agents such as `generic`, `devise`, `apply`, and `criticize`, which the Physicist, Mathematician, and Computer Scientist [teams](./built-in-agents.md#built-in-teams) include. The tool-use agents that used to be remote (`orchestrator`, `search`, `simplifier`, `presenter`, `progressCheck`, and the Lean Project agents) now ship with TeXRA and need no sign-in.
 
 Different agents may be available to different research groups, depending on their domain and needs.
 

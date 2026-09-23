@@ -141,26 +141,24 @@ describe('DelegateAgentTool resume ownership', () => {
         runs: { getHandle: () => makeHandle() },
       } as never;
 
-      yield* new DelegateAgentTool()
-        .call({
-          execution_id: runId,
-          instruction: 'Keep going.',
-        })
-        .pipe(
-          Effect.provide(
-            nativeToolTestLayer({
-              run: {
-                session,
-                runId: parentRunId,
-                config: AgentConfigSchema.parse({
-                  agent: 'chat',
-                  model: 'parent-model',
-                }),
-                toolPolicy: {},
-              },
-            }),
-          ),
-        );
+      yield* DelegateAgentTool.call({
+        execution_id: runId,
+        instruction: 'Keep going.',
+      }).pipe(
+        Effect.provide(
+          nativeToolTestLayer({
+            run: {
+              session,
+              runId: parentRunId,
+              config: AgentConfigSchema.parse({
+                agent: 'chat',
+                model: 'parent-model',
+              }),
+              toolPolicy: {},
+            },
+          }),
+        ),
+      );
 
       // The wake-failure delivery is forked detached inside the tool; the mock
       // completes this deferred when that fiber makes the second call.

@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
 import { parseCriticismAnnotations } from '@latex/criticismParser';
-import type { DiagnosticsInput } from '@tools/DiagnosticsTool';
 import { getDefaultToolRegistry } from '@tools/registry';
 
 describe('parseCriticismAnnotations', () => {
@@ -70,7 +69,7 @@ describe('DiagnosticsTool add-command input validation', () => {
       message: 'verified',
       severity: 0,
       confidence: 5,
-    }) as Extract<DiagnosticsInput, { command: 'add' }>;
+    }) as { severity: number };
     expect(parsed.severity).toBe(0);
   });
 });

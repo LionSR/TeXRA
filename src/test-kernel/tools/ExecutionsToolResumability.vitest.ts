@@ -50,7 +50,7 @@ describe('ExecutionsTool metadata-free run summary', () => {
           openingSnapshot(runId),
         ]);
 
-        const result = yield* new ExecutionsTool().call({
+        const result = yield* ExecutionsTool.call({
           path: `/executions/${runId}`,
         });
 

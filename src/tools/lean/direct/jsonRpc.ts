@@ -74,9 +74,9 @@ export interface JsonRpcConnection {
 
 interface JsonRpcConnectionOptions {
   /** The peer's output: bytes we decode. */
-  readonly input: Stream.Stream<Uint8Array, unknown>;
+  readonly input: Stream.Stream<Uint8Array, Error>;
   /** The peer's input: bytes we encode. */
-  readonly output: Sink.Sink<void, Uint8Array, never, unknown>;
+  readonly output: Sink.Sink<void, Uint8Array, never, Error>;
   readonly onNotification: (
     method: string,
     params: unknown,

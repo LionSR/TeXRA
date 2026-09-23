@@ -16,6 +16,7 @@ import {
   type ResolvedBinaryCommand,
 } from '@utils/system/binaryResolver';
 import { withExtendedPath } from '@utils/system/platformPaths';
+import { ensureError } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'AudioUtils';
 const log = createLog(CHANNEL);
@@ -47,11 +48,14 @@ class AudioRecorderError extends Data.TaggedError('AudioRecorderError')<{
  *  where the operation is named. */
 const recorderFailure =
   (operation: string) =>
-  (cause: unknown): AudioRecorderError => {
-    const message = getSdkErrorMessage(cause);
-    log.error(`Error in ${operation}: ${message}`);
-    return new AudioRecorderError({ message, cause });
-  };
+  <A, E>(self: Effect.Effect<A, E>): Effect.Effect<A, AudioRecorderError> =>
+    Effect.catch(self, (cause) => {
+      const message = getSdkErrorMessage(cause);
+      return Effect.logError(`Error in ${operation}: ${message}`).pipe(
+        withLogChannel(CHANNEL),
+        Effect.andThen(Effect.fail(new AudioRecorderError({ message, cause }))),
+      );
+    });
 
 /**
  * Upper bound on how long a SIGTERM'd sox may take to flush and exit before
@@ -103,7 +107,7 @@ function resolveSoxCommand(
 function watchRecorderExit(subprocess: Subprocess): Effect.Effect<void> {
   return Effect.tryPromise({
     try: () => subprocess,
-    catch: (cause) => cause,
+    catch: ensureError,
   }).pipe(
     Effect.matchEffect({
       onSuccess: (result) => {
@@ -193,8 +197,8 @@ export function startRecording(
         });
         return { process: subprocess, path: absPath };
       },
-      catch: recorderFailure('startRecording'),
-    });
+      catch: (cause) => cause,
+    }).pipe(recorderFailure('startRecording'));
     if (!started) {
       return yield* new AudioRecorderError({
         message:
@@ -236,8 +240,8 @@ export function stopRecording(): Effect.Effect<string, AudioRecorderError> {
 
     yield* Effect.try({
       try: () => active.process.kill('SIGTERM'),
-      catch: recorderFailure('stopRecording'),
-    });
+      catch: (cause) => cause,
+    }).pipe(recorderFailure('stopRecording'));
 
     // Await the process this module already holds rather than guessing how
     // long sox needs to flush. `execa` was started with `reject: false`, so
@@ -246,13 +250,13 @@ export function stopRecording(): Effect.Effect<string, AudioRecorderError> {
     // would hang the tool, which the old fixed sleep could not do.
     yield* Effect.tryPromise({
       try: () => active.process,
-      catch: (cause) => cause,
+      catch: ensureError,
     }).pipe(Effect.ignore, Effect.timeoutOption(SOX_SHUTDOWN_TIMEOUT_MS));
 
     const size = yield* Effect.try({
       try: () => (existsSync(active.path) ? statSync(active.path).size : null),
-      catch: recorderFailure('stopRecording'),
-    });
+      catch: (cause) => cause,
+    }).pipe(recorderFailure('stopRecording'));
     if (size === null) {
       return yield* new AudioRecorderError({
         message: 'Recording file not found',
@@ -295,6 +299,6 @@ export function transcribeRecording(
       });
       return result.text;
     },
-    catch: recorderFailure('transcribeRecording'),
-  });
+    catch: (cause) => cause,
+  }).pipe(recorderFailure('transcribeRecording'));
 }

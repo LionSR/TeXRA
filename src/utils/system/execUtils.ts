@@ -6,6 +6,7 @@ import { execa, type Options, type ResultPromise } from 'execa';
 import { quote as shellQuote } from 'shell-quote';
 
 // Internal imports
+import { withLogChannel } from '@logger/effectLog';
 import { createLog } from '@logger/logUtils';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { ExecResult } from '@shared/schemas';
@@ -180,7 +181,9 @@ function runCommand(
     }
 
     const encoding = normalizeEncoding(options.encoding);
-    const log = createLog(options.channel ?? CHANNEL);
+    const channel = options.channel ?? CHANNEL;
+    // Threaded into `logCommandStderr`, which is not an Effect program.
+    const log = createLog(channel);
     const isArrayForm = Array.isArray(command);
     const teardown: CommandTeardown = {
       shellTimedOut: false,
@@ -206,13 +209,15 @@ function runCommand(
       stderr: options.stderr,
     };
 
+    if (!options.quiet) {
+      yield* Effect.logDebug(
+        `Running command: ${isArrayForm ? shellQuote(command) : command}`,
+      ).pipe(withLogChannel(channel));
+    }
     const subprocess = yield* Effect.try({
       try: (): ResultPromise => {
         if (Array.isArray(command)) {
           const [cmd, ...args] = command;
-          if (!options.quiet) {
-            log.debug(`Running command: ${shellQuote(command)}`);
-          }
           return execa(cmd, args, {
             ...execaOptions,
             cancelSignal: options.signal,
@@ -222,9 +227,6 @@ function runCommand(
             // tracked-pid kill would leave behind.
             killDescendants: options.killProcessTree,
           });
-        }
-        if (!options.quiet) {
-          log.debug(`Running command: ${command}`);
         }
         // Shell commands with pipes (e.g. "find / | head -2") create child
         // processes that inherit stdout.  execa's built-in timeout only kills

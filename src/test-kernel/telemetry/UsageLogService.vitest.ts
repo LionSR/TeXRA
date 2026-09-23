@@ -3,7 +3,8 @@ import { Context, Effect, Exit, Layer, Scope } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi, type Mock } from 'vitest';
 
 import { SupabaseAuth } from '@auth/SupabaseAuth';
-import * as logger from '@logger/logUtils';
+import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
+import { setLogSink } from '@logger/logSink';
 import { AgentCategory, TELEMETRY_ENABLED_KEY } from '@shared/schemas';
 import { UsageLog } from '@shared/usageLog';
 import {
@@ -13,6 +14,7 @@ import {
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { createDeferred } from '@test/support/asyncTestUtils';
+import { captureLogEntries } from '@test/support/logSinkCapture';
 import {
   createFakePlatform,
   FakeScopedConfigProvider,
@@ -97,8 +99,13 @@ describe('UsageLogService', () => {
     lifetime = scope ?? Scope.makeUnsafe();
     const context = await testRuntime().runPromise(
       Scope.provide(
+        // The process runtime's diagnostics, which the service logs through.
         Layer.build(
-          usageLogLayer({ version: undefined, editorType: undefined, config }),
+          usageLogLayer({
+            version: undefined,
+            editorType: undefined,
+            config,
+          }).pipe(Layer.provide(effectDiagnosticsLayer('Trace'))),
         ),
         lifetime,
       ),
@@ -117,6 +124,7 @@ describe('UsageLogService', () => {
 
   afterEach(async () => {
     await stopUsageLog();
+    setLogSink(null);
     vi.useRealTimers();
     vi.unstubAllGlobals();
     vi.unstubAllEnvs();
@@ -243,7 +251,13 @@ describe('UsageLogService', () => {
 
   it('warns after five seconds without bounding disposal', async () => {
     stubAccessToken();
-    const warn = vi.spyOn(logger, 'warn');
+    const logs = captureLogEntries();
+    const disposeWarned = () =>
+      logs.has(
+        'WARN',
+        'UsageLogService',
+        'Dispose timeout waiting for in-flight flush',
+      );
 
     const { promise: fetchReleased, resolve: releaseFetch } = createDeferred();
     const { batches, fetchMock } = stubBatchFetch(async () => {
@@ -260,16 +274,10 @@ describe('UsageLogService', () => {
     });
 
     await vi.advanceTimersByTimeAsync(4999);
-    expect(warn).not.toHaveBeenCalledWith(
-      'UsageLogService',
-      'Dispose timeout waiting for in-flight flush',
-    );
+    expect(disposeWarned()).toBe(false);
 
     await vi.advanceTimersByTimeAsync(1);
-    expect(warn).toHaveBeenCalledWith(
-      'UsageLogService',
-      'Dispose timeout waiting for in-flight flush',
-    );
+    expect(disposeWarned()).toBe(true);
     expect(disposed).toBe(false);
 
     releaseFetch();

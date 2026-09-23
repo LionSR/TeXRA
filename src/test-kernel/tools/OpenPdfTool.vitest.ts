@@ -98,7 +98,7 @@ describe('OpenPdfTool', () => {
     'reports that PDF opening is unavailable when no host serves it',
     () =>
       Effect.gen(function* () {
-        const tool = new OpenPdfTool();
+        const tool = OpenPdfTool;
 
         const result = yield* tool.call({ path: 'paper.tex' });
 
@@ -119,7 +119,7 @@ describe('OpenPdfTool', () => {
   it.effect('opens an existing PDF through the registered host callback', () =>
     Effect.gen(function* () {
       const openPdf = installOpener();
-      const tool = new OpenPdfTool();
+      const tool = OpenPdfTool;
 
       const result = yield* tool.call({
         path: 'figures/result.pdf',
@@ -151,7 +151,7 @@ describe('OpenPdfTool', () => {
   it.effect('allows absolute paths inside active run storage', () =>
     Effect.gen(function* () {
       const openPdf = installOpener();
-      const tool = new OpenPdfTool();
+      const tool = OpenPdfTool;
 
       const result = yield* tool
         .call({
@@ -198,7 +198,7 @@ describe('OpenPdfTool', () => {
     () =>
       Effect.gen(function* () {
         const openPdf = installOpener();
-        const tool = new OpenPdfTool();
+        const tool = OpenPdfTool;
 
         const result = yield* tool
           .call({ path: fakePath('storage/executions/run-1/output.pdf') })
@@ -233,7 +233,7 @@ describe('OpenPdfTool', () => {
   it.effect('rejects arbitrary absolute paths outside the allowed roots', () =>
     Effect.gen(function* () {
       const openPdf = installOpener();
-      const tool = new OpenPdfTool();
+      const tool = OpenPdfTool;
 
       const result = yield* tool.call({ path: fakePath('run/paper.pdf') }).pipe(
         Effect.provide(
@@ -266,7 +266,7 @@ describe('OpenPdfTool', () => {
   it.effect('rejects non-PDF files before invoking the host callback', () =>
     Effect.gen(function* () {
       const openPdf = installOpener();
-      const tool = new OpenPdfTool();
+      const tool = OpenPdfTool;
 
       const result = yield* tool.call({ path: 'paper.tex' });
 

@@ -25,7 +25,7 @@ export function executed(output: string, summary?: string): ExecutedToolResult {
 /**
  * Build a `status: 'error'` result literal. Reserved for call sites that
  * cannot use the dominant `throw new ToolError(...)` convention (caught
- * centrally by `BaseTool.call`) — typically because the caller must keep
+ * centrally by `defineTool`'s `call`) — typically because the caller must keep
  * running after emitting a partial per-item error, or because a nested try/catch
  * would otherwise reformat the thrown message. Prefer `throw new ToolError(...)`
  * over this helper whenever the call site can support it.

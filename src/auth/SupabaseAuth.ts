@@ -6,7 +6,6 @@ import {
 } from '@supabase/supabase-js';
 import { Context, Effect, Layer } from 'effect';
 import { withLogChannel } from '@logger/effectLog';
-import { createLog } from '@logger/logUtils';
 import type { SecretsFailed } from '@platform/secrets';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { callPort, settleFailure } from './authProgram';
@@ -27,7 +26,6 @@ import {
 import type { StoredSessionState } from './TokenProvider';
 
 const CHANNEL = 'SupabaseAuth';
-const log = createLog(CHANNEL);
 
 /**
  * GoTrue storage for the host's client.
@@ -273,10 +271,12 @@ export function createSupabaseAuth(
             return true;
           }),
           Effect.catchCause((cause) =>
-            Effect.sync(() => {
+            Effect.gen(function* () {
               const error = settleFailure(cause);
               readinessError = ensureError(error);
-              log.error(`Auth provider not ready: ${toErrorMessage(error)}`);
+              yield* Effect.logError(
+                `Auth provider not ready: ${toErrorMessage(error)}`,
+              ).pipe(withLogChannel(CHANNEL));
               return false;
             }),
           ),
@@ -300,17 +300,13 @@ export function createSupabaseAuth(
       authenticated: Effect.map(accessToken, (token) => token !== null),
       storedSessionState: coordinator.getStoredSessionState(),
       storedAccountLabel: coordinator.getStoredAccountLabel().pipe(
+        // A failed read is otherwise indistinguishable from "no session
+        // stored", and both collapse to the generic account label in the UI.
         Effect.catchCause((cause) =>
-          Effect.sync(() => {
-            // A failed read is otherwise indistinguishable from "no session
-            // stored", and both collapse to the generic account label in
-            // the UI.
-            log.warn(
-              `Error reading stored account label: ` +
-                `${toErrorMessage(settleFailure(cause))}`,
-            );
-            return null;
-          }),
+          Effect.logWarning(
+            `Error reading stored account label: ` +
+              `${toErrorMessage(settleFailure(cause))}`,
+          ).pipe(withLogChannel(CHANNEL), Effect.as(null)),
         ),
       ),
       getInitError: () => initError ?? readinessError,

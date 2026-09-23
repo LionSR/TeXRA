@@ -89,9 +89,9 @@ describe('setup credential reporting', () => {
           ),
         );
 
-        const result = yield* new ProbeEnvironmentTool()
-          .call({})
-          .pipe(Effect.provide(nativeToolTestLayer()));
+        const result = yield* ProbeEnvironmentTool.call({}).pipe(
+          Effect.provide(nativeToolTestLayer()),
+        );
 
         assert.match(outputOf(result), /"host": "cli"/);
         assert.match(outputOf(result), /"provider": "deepseek"/);
@@ -107,9 +107,9 @@ describe('setup credential reporting', () => {
       Effect.gen(function* () {
         installChatGptOnlySetupPlatform();
 
-        const result = yield* new ProbeEnvironmentTool()
-          .call({})
-          .pipe(Effect.provide(nativeToolTestLayer()));
+        const result = yield* ProbeEnvironmentTool.call({}).pipe(
+          Effect.provide(nativeToolTestLayer()),
+        );
 
         assert.equal(result.status, 'executed');
         assert.match(
@@ -140,9 +140,9 @@ describe('setup credential reporting', () => {
         ),
       );
 
-      const result = yield* new ProbeEnvironmentTool()
-        .call({})
-        .pipe(Effect.provide(nativeToolTestLayer()));
+      const result = yield* ProbeEnvironmentTool.call({}).pipe(
+        Effect.provide(nativeToolTestLayer()),
+      );
 
       assert.equal(result.status, 'executed');
       assert.match(outputOf(result), /"origin": "unknown"/);
@@ -158,9 +158,9 @@ describe('setup credential reporting', () => {
       Effect.gen(function* () {
         installChatGptOnlySetupPlatform();
 
-        const result = yield* new VerifySetupTool()
-          .call({})
-          .pipe(Effect.provide(nativeToolTestLayer()));
+        const result = yield* VerifySetupTool.call({}).pipe(
+          Effect.provide(nativeToolTestLayer()),
+        );
 
         assert.equal(result.status, 'executed');
         assert.match(

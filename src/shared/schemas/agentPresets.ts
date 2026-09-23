@@ -65,10 +65,6 @@ export function parseAgentModePresets(raw: unknown): AgentModePreset[] {
  * of {@link AGENT_MODE_PRESETS}: it is not a discipline and must not appear
  * as a team card in the settings UI — only `apply_team` and default-team
  * seeding resolve it.
- *
- * `orchestrator` is account-served and only resolves after sign-in; listing it
- * here is harmless because roster application intersects preset names with
- * the live registry.
  */
 export const STARTER_AGENT_MODE_PRESET: AgentModePreset = {
   id: 'starter',
@@ -86,7 +82,7 @@ export const STARTER_AGENT_MODE_PRESET: AgentModePreset = {
       'orchestrator',
     ],
   },
-  texraHostedAgents: ['orchestrator'],
+  texraHostedAgents: [],
 };
 
 /**
@@ -114,14 +110,7 @@ export const AGENT_MODE_PRESETS: AgentModePreset[] = [
         'leanOrchestrator',
       ],
     },
-    texraHostedAgents: [
-      'lean',
-      'leanSearch',
-      'leanSimplifier',
-      'leanBlueprint',
-      'progressCheck',
-      'leanOrchestrator',
-    ],
+    texraHostedAgents: [],
   },
   {
     id: 'physicist',
@@ -150,17 +139,7 @@ export const AGENT_MODE_PRESETS: AgentModePreset[] = [
         'search',
       ],
     },
-    texraHostedAgents: [
-      'generic',
-      'devise',
-      'apply',
-      'criticize',
-      'orchestrator',
-      'presenter',
-      'simplifier',
-      'progressCheck',
-      'search',
-    ],
+    texraHostedAgents: ['generic', 'devise', 'apply', 'criticize'],
   },
   {
     id: 'mathematician',
@@ -189,16 +168,7 @@ export const AGENT_MODE_PRESETS: AgentModePreset[] = [
         'orchestrator',
       ],
     },
-    texraHostedAgents: [
-      'generic',
-      'devise',
-      'apply',
-      'criticize',
-      'lean',
-      'simplifier',
-      'progressCheck',
-      'orchestrator',
-    ],
+    texraHostedAgents: ['generic', 'devise', 'apply', 'criticize'],
   },
   {
     id: 'cs-ml',
@@ -222,17 +192,7 @@ export const AGENT_MODE_PRESETS: AgentModePreset[] = [
         'progressCheck',
       ],
     },
-    texraHostedAgents: [
-      'criticize',
-      'generic',
-      'devise',
-      'apply',
-      'orchestrator',
-      'search',
-      'presenter',
-      'simplifier',
-      'progressCheck',
-    ],
+    texraHostedAgents: ['criticize', 'generic', 'devise', 'apply'],
   },
   {
     id: 'software-engineer',

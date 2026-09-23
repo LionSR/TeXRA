@@ -120,7 +120,7 @@ import {
 } from '@shared/state/onboardingState';
 
 import { getProviderKeyUrl } from '@utils/config/providerConfig';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { pathToLocationIn } from '@utils/files/fileLocation';
 import {
   locateInWorkspace,
@@ -513,7 +513,7 @@ export function createExtensionHostRequests(
       const decodedPath = trimmed.startsWith('file:')
         ? yield* Effect.try({
             try: () => fileURLToPath(trimmed),
-            catch: (cause) => cause,
+            catch: ensureError,
           }).pipe(
             Effect.catch((cause: unknown) =>
               Effect.logDebug(
@@ -527,7 +527,7 @@ export function createExtensionHostRequests(
       return yield* Effect.tryPromise({
         try: () =>
           vscode.workspace.fs.stat(vscode.Uri.file(resolved.absolutePath)),
-        catch: (cause) => cause,
+        catch: ensureError,
       }).pipe(
         Effect.map((stat) =>
           (stat.type & vscode.FileType.File) === 0

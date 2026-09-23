@@ -14,6 +14,7 @@ import { relativeToRoot } from '@platform/defaults/nodeWorkspace';
 import type { DocumentFileType, FileOptions } from '@shared/schemas';
 import { Rejected } from '@shared/session/requestErrors';
 import { normalizeFilePath } from '@utils/core';
+import { ensureError } from '@utils/errors/errorMessage';
 
 interface DesktopFileSelectionDialogOptions {
   title: string;
@@ -167,7 +168,7 @@ export function createDesktopFileSelection(
         Effect.try({
           try: () =>
             attachDroppedPaths(resolved, getIncludedExtensions(category)).paths,
-          catch: (cause) => cause,
+          catch: ensureError,
         }).pipe(
           Effect.catch((cause) =>
             cause instanceof Rejected ? Effect.fail(cause) : Effect.die(cause),

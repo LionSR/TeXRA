@@ -39,7 +39,7 @@ import {
   readCompletedRunConversation,
 } from '@transcript';
 import { byStringProp } from '@utils/core';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 import { CliUsageError } from './cliContext';
 import { isCliRunResumable, readCliResumedModel } from './toolUseResumeData';
@@ -355,7 +355,7 @@ export function readCliHistoryStandaloneTemplate(
   );
   return Effect.tryPromise({
     try: () => readFile(templatePath, 'utf8'),
-    catch: (cause) => cause,
+    catch: ensureError,
   }).pipe(
     Effect.catch((error) =>
       isFileNotFoundError(error) || isNotADirectoryError(error)
