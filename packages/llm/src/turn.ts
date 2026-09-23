@@ -4,10 +4,10 @@
  * What a caller reads and writes is here: the request, the selected binding,
  * the prepared and resolved turn, its result and its events, and the `Model`
  * interface that executes one. The modules this contract was split into —
- * `protocol.ts`, `message.ts`, `errors.ts` and `transport.ts` — define the
- * symbols they own, and this entry re-exports every one of them, so a
- * consumer still imports this one subpath and never the file layout behind
- * it.
+ * `protocol.ts`, `message.ts` and `errors.ts` — define the symbols they own,
+ * and this entry re-exports the ones consumers read, so a consumer imports
+ * this one subpath and never the file layout behind it. The protocol helpers
+ * in `errors.ts` and `transport.ts` stay package-internal.
  */
 // Third-party imports
 import { Effect, Stream } from 'effect';
@@ -45,8 +45,7 @@ import {
   type RemoteOperation,
 } from './errors.js';
 
-// The modules the contract was split into, re-exported so that this subpath
-// keeps every symbol it exported before the split.
+// The contract symbols the modules behind this subpath define.
 export {
   JsonObjectSchema,
   ModelOriginSchema,
@@ -60,25 +59,8 @@ export {
   PreparedHistorySchema,
 } from './message.js';
 export type { Continuation } from './message.js';
-export {
-  ModelError,
-  RemoteOperationSchema,
-  authOrRejectionKind,
-  enrichModelError,
-  hasErrorField,
-  parseJsonOrModelError,
-  retryAfterMsOf,
-} from './errors.js';
+export { ModelError, RemoteOperationSchema } from './errors.js';
 export type { RemoteOperation } from './errors.js';
-export {
-  chatToolResultMessages,
-  ownedAbortSafeRequest,
-  parseInboundToolArguments,
-  parseOutboundToolArguments,
-  pullStream,
-  readerAbortSignal,
-  sseEvents,
-} from './transport.js';
 
 const ToolDefinitionSchema = z
   .strictObject({

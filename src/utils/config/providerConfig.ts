@@ -95,9 +95,7 @@ export function getProviderKeyUrl(stores: SettingsStores, provider: string) {
 
 /** Whether a provider routes through its China-region endpoint. */
 export function useChinaRegion(stores: SettingsStores, provider: string) {
-  return Effect.gen(function* () {
-    return (yield* regionSet(stores, provider)) ?? false;
-  });
+  return regionSet(stores, provider).pipe(Effect.map((set) => set ?? false));
 }
 
 // ---------------------------------------------------------------------------
@@ -105,12 +103,7 @@ export function useChinaRegion(stores: SettingsStores, provider: string) {
 // ---------------------------------------------------------------------------
 
 export function getGLMCodingPlan(stores: SettingsStores) {
-  return Effect.gen(function* () {
-    return yield* readSettingFrom<boolean>(
-      stores,
-      GlobalStateKey.GLM_CODING_PLAN,
-    );
-  });
+  return readSettingFrom<boolean>(stores, GlobalStateKey.GLM_CODING_PLAN);
 }
 
 export function setGLMCodingPlan(
@@ -128,12 +121,7 @@ export function setGLMCodingPlan(
  * schema via the shared accessor.
  */
 export function getPreferKimiCode(stores: SettingsStores) {
-  return Effect.gen(function* () {
-    return yield* readSettingFrom<boolean>(
-      stores,
-      GlobalStateKey.KIMI_CODE_PREFER,
-    );
-  });
+  return readSettingFrom<boolean>(stores, GlobalStateKey.KIMI_CODE_PREFER);
 }
 
 /**
@@ -142,10 +130,5 @@ export function getPreferKimiCode(stores: SettingsStores) {
  * accessor.
  */
 export function getUseOpenRouter(stores: SettingsStores) {
-  return Effect.gen(function* () {
-    return yield* readSettingFrom<boolean>(
-      stores,
-      GlobalStateKey.USE_OPENROUTER,
-    );
-  });
+  return readSettingFrom<boolean>(stores, GlobalStateKey.USE_OPENROUTER);
 }

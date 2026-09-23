@@ -142,35 +142,6 @@ export function createDesktopOnboardingIpc(
     renderer.postToRenderer(buildDesktopOnboardingSetStateMessage(!dismissed));
   });
 
-  // Single guarded entry point for launching setup. The explicit "Run Setup"
-  // card action routes through here so a setup run can't be started twice
-  // concurrently — the host's `handleExecute`/`runAgent` has no in-flight
-  // dedup of its own.
-  function startSetupKickoff(): void {
-    if (setupKickoffStarted) return;
-    setupKickoffStarted = true;
-    // Fire-and-forget: the host kickoff runs the setup conversation to
-    // completion, which must NOT block the serialized funnel-refresh chain —
-    // otherwise a later "skip setup" / sign-out / credential-removal refresh
-    // would queue behind the entire setup run, leaving the card stuck on 'setup'.
-    options.runtime.runFork(
-      options.kickoffSetup().pipe(
-        // Swallow — the kickoff handler already surfaced the error to the user.
-        Effect.ignore,
-        // Clear the guard once the run settles (success or failure), not only on
-        // error: while it's in flight the guard blocks a concurrent second run,
-        // but afterwards another manual "Run Setup" click must be able to launch
-        // setup again (otherwise the guard would stay stuck for the window's
-        // lifetime after the first kickoff).
-        Effect.ensuring(
-          Effect.sync(() => {
-            setupKickoffStarted = false;
-          }),
-        ),
-      ),
-    );
-  }
-
   const dismiss = Effect.gen(function* () {
     yield* state
       .update(DESKTOP_ONBOARDING_DISMISSED_STATE_KEY, true)
@@ -188,11 +159,34 @@ export function createDesktopOnboardingIpc(
   const skipSetup = (): OnboardingAction =>
     setFirstRunDone(state, true).pipe(Effect.flatMap(() => funnel.run()));
 
+  // The guard keeps a double-click of "Run Setup" from launching a second
+  // concurrent run — the host's `handleExecute`/`runAgent` has no in-flight
+  // dedup of its own.
   const runSetup = (): OnboardingAction =>
     Effect.suspend(() => {
-      // Route through the shared guard so a double-click of "Run Setup" can't
-      // launch a second concurrent run.
-      startSetupKickoff();
+      if (!setupKickoffStarted) {
+        setupKickoffStarted = true;
+        // Fire-and-forget: the host kickoff runs the setup conversation to
+        // completion, which must NOT block the serialized funnel-refresh
+        // chain — otherwise a later "skip setup" / sign-out /
+        // credential-removal refresh would queue behind the entire setup run,
+        // leaving the card stuck on 'setup'.
+        options.runtime.runFork(
+          options.kickoffSetup().pipe(
+            // Swallow — the kickoff handler already surfaced the error to the
+            // user.
+            Effect.ignore,
+            // Clear the guard once the run settles (success or failure): while
+            // it's in flight the guard blocks a concurrent second run, but
+            // afterwards another manual "Run Setup" click must launch again.
+            Effect.ensuring(
+              Effect.sync(() => {
+                setupKickoffStarted = false;
+              }),
+            ),
+          ),
+        );
+      }
       return funnel.run();
     });
 
