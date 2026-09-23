@@ -204,9 +204,9 @@ const runVerdict = (exit: Exit.Exit<RunExit, Error>): RunOutcome | null =>
 
 /**
  * The exit protocol, as the release arm of the run's acquireUseRelease: the
- * halt row and, where a family holds one, the input lease. A halt-write
- * failure only logs: the run is already unwinding and has nothing left to
- * surface it to.
+ * halt row and, where a family holds one, the input lease. A refused halt
+ * write warns; a database write failure reaches the caller. The lease is
+ * released in either case.
  */
 export const settleRun =
   (
@@ -216,31 +216,41 @@ export const settleRun =
      *  a missing FollowUps must not leak a lease with nothing saying so. */
     lease: FollowUps['Service'] | null,
   ) =>
-  (exit: Exit.Exit<RunExit, Error>): Effect.Effect<void, never, Runs> =>
-    Effect.gen(function* () {
-      const outcome = runVerdict(exit);
+  (
+    exit: Exit.Exit<RunExit, Error>,
+  ): Effect.Effect<void, DatabaseWriteFailed, Runs> => {
+    const outcome = runVerdict(exit);
+    const releaseLease =
+      lease === null
+        ? Effect.void
+        : Effect.gen(function* () {
+            const runs = yield* Runs;
+            lease.release(
+              outcome === RUN_OUTCOME.COMPLETED &&
+                !runs.hasActiveChildren(cell.runId)
+                ? 'terminal'
+                : 'recoverable',
+            );
+          });
+    return Effect.gen(function* () {
       if (outcome !== null) {
         const state = yield* cell.current;
         yield* cell
           .append([haltedStepRow(cell.runId, state, outcome)])
           .pipe(
             Effect.catch((error) =>
-              Effect.sync(() =>
-                logger.warn('Failed to record the run halt', { data: error }),
-              ),
+              error instanceof RunLedgerRefused
+                ? Effect.sync(() =>
+                    logger.warn('Failed to record the run halt', {
+                      data: error,
+                    }),
+                  )
+                : Effect.fail(error),
             ),
           );
       }
-      if (lease !== null) {
-        const runs = yield* Runs;
-        lease.release(
-          outcome === RUN_OUTCOME.COMPLETED &&
-            !runs.hasActiveChildren(cell.runId)
-            ? 'terminal'
-            : 'recoverable',
-        );
-      }
-    });
+    }).pipe(Effect.ensuring(releaseLease));
+  };
 
 /**
  * The caller's error for a run that ended in a failure cause; a pure
