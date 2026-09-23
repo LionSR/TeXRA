@@ -159,6 +159,7 @@ function resolveToolList(
       logger: { warn: () => {} },
       toolInjections: NO_TOOL_INJECTIONS,
       stores,
+      workspaceRoot: undefined,
     });
   }).pipe(
     // The delegation-annotation availability read yields `LanguageModel`;

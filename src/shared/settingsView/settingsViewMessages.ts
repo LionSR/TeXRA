@@ -271,6 +271,8 @@ const ModelSelectionItemSchema = z.object({
   supportedReasoningLevels: z.array(ReasoningEffortSchema).optional(),
   /** Whether this model qualifies as a "fast first response" pick (price-based). */
   isFast: z.boolean().optional(),
+  /** Whether this model's API pricing earns the premium warning (price-based). */
+  isExpensive: z.boolean().optional(),
   // Resolved once by modelOptionsFrom and carried verbatim so the
   // Models tab renders availability without re-deriving it at render time.
   ...ModelAvailabilityFieldsSchema.shape,

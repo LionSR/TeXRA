@@ -175,6 +175,7 @@ describe('run-scoped tool resolution', () => {
           // No conditional injections: this pins the declared-tool gates alone.
           toolInjections: NO_TOOL_INJECTIONS,
           stores: hostStores(),
+          workspaceRoot: undefined,
         }).pipe(
           Effect.provide(LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT)),
         );

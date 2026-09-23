@@ -1026,7 +1026,7 @@ export class SettingsViewMessageHandler {
   ) {
     return Effect.gen({ self: this }, function* () {
       const cachedResults = options?.skipChecks
-        ? (getLastCheckResults() ?? undefined)
+        ? (getLastCheckResults(this.session.roots.workspace) ?? undefined)
         : undefined;
       const items = yield* buildToolDashboardItems(
         'extension',

@@ -179,7 +179,7 @@ export class DefaultDesktopToolingSettingsController implements DesktopToolingSe
       const items = yield* buildToolDashboardItems(
         'desktop',
         this.probeInputs,
-        getLastCheckResults() ?? undefined,
+        getLastCheckResults(this.probeInputs.workspaceRoot) ?? undefined,
       );
       this.options.renderer.postToRenderer({
         command: SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD,

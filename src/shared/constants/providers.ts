@@ -306,22 +306,28 @@ export function isFastFirstResponseModel(
  * Predicate and copy for models whose API pricing is high enough that we
  * actively steer users toward the External Inquiry tool — which lets agents
  * ask the user to paste an answer from their own ChatGPT/Claude/Gemini
- * subscription instead of paying per-token API rates. For OpenAI's "-pro"
- * variants ($15-$30 input, $120-$180 output per 1M) a single agentic turn
- * can cost tens of dollars.
+ * subscription instead of paying per-token API rates.
  *
- * The match is name-shaped (`gpt<digits>pro`) rather than price-thresholded
- * so a future flagship Pro release stays covered without a tweak, and other
- * vendors' priciest reasoning models aren't lumped in.
+ * The test is the output price, not the name: `gpt<digits>pro` once meant
+ * "Pro tier", but `gpt56pro` ships at $4/$20 while `o1pro` ($150/$600) and
+ * `o3pro` ($20/$80) never matched. The Pro tier (o3pro, gpt5pro … gpt55pro,
+ * o1pro) plus gpt45 all price output at $80+ per 1M; the most expensive
+ * flagship tier (Opus 4/4.1) tops out at $75, so $80 separates the two.
  */
+
+/** Output-price floor (USD per million tokens) for the premium-pricing hint. */
+const EXPENSIVE_OUTPUT_PRICE_FLOOR = 80;
 
 /** Hint string prepended to the model tooltip when the model qualifies. */
 export const EXPENSIVE_MODEL_HINT =
   '💸 Premium API pricing — consider the External Inquiry tool to use your own ChatGPT/Claude subscription instead';
 
-const GPT_PRO_NAME = /^gpt\d+pro$/;
-
-/** Returns true when API use of the model is expensive enough to warn about. */
-export function isExpensiveModel(provider: string, name: string): boolean {
-  return provider === 'openai' && GPT_PRO_NAME.test(name);
+/**
+ * Returns true when API use of the model is expensive enough to warn about.
+ * Undefined prices (unpriced / local / custom) are treated as not expensive.
+ */
+export function isExpensiveModel(outputPrice: number | undefined): boolean {
+  return (
+    outputPrice !== undefined && outputPrice >= EXPENSIVE_OUTPUT_PRICE_FLOOR
+  );
 }

@@ -78,7 +78,7 @@ function prefixHint(prefix: string, base: string): string {
 /** Build the model tooltip string from static model metadata. */
 function buildModelHint(config: ModelConfig): string {
   const base = hint(config);
-  if (isExpensiveModel(config.provider, config.name)) {
+  if (isExpensiveModel(config.outputPrice)) {
     return prefixHint(EXPENSIVE_MODEL_HINT, base);
   }
   if (isFastFirstResponseModel(config.inputPrice)) {
