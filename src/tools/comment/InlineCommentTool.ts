@@ -8,7 +8,7 @@ import { withLogChannel } from '@logger/effectLog';
 import { ToolError, type ToolResult } from '@shared/schemas';
 import { resolveWorkspaceRelativePath } from '@tools/pathResolution';
 import { executed } from '@tools/core/result';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { formatResultCount } from '@utils/text/stringUtils';
 
 // Local file imports
@@ -217,7 +217,7 @@ const addThread = Effect.fn('InlineCommentTool.addThread')(function* (
         endLine: endLine ?? line,
         body,
       }),
-    catch: (error) => error,
+    catch: ensureError,
   }).pipe(Effect.catch(addCommentFailure));
   if (!result) {
     return yield* Effect.fail(
