@@ -13,7 +13,7 @@ import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { it } from '@effect/vitest';
-import { Deferred, Effect, Fiber, Layer, SynchronizedRef } from 'effect';
+import { Deferred, Effect, Exit, Fiber, Layer, SynchronizedRef } from 'effect';
 import { describe, expect, vi } from 'vitest';
 
 // Local imports
@@ -37,6 +37,7 @@ import { turnText } from '@agent/runtime/run/turnText';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { UsageMonitor } from '@agent/runtime/UsageMonitor';
 import { TraceEmitter } from '@agent/trace';
+import { StateReadFailed } from '@platform/interfaces';
 import {
   LanguageModel,
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
@@ -68,7 +69,7 @@ import {
   installPlatform,
   setupPlatform,
 } from '@test/support/setupPlatform';
-import { fakePath } from '@test/support/FakePlatform';
+import { FakeStateStore, fakePath } from '@test/support/FakePlatform';
 import { generateRunId, isObject } from '@utils/core';
 import { createRunStorageLocation } from '@utils/files/fileLocation';
 import { RunFileService } from '@utils/files/runStorage';
@@ -896,6 +897,46 @@ describe('a resumed reflection run', () => {
 });
 
 describe('the output facts a reflection round publishes', () => {
+  it.effect('keeps extracted outputs when presentation settings fail', () =>
+    Effect.gen(function* () {
+      const stateStore = new FakeStateStore();
+      yield* Effect.promise(() =>
+        installPlatform(
+          {
+            storagePath: fakePath('storage'),
+            workspacePath: fakePath('workspace'),
+          },
+          {
+            workspaceState: {
+              get: <T>(key: string, defaultValue?: T) =>
+                key === WorkspaceStateKey.WORKFLOW_AUTO_OPEN_PDF
+                  ? Effect.fail(
+                      new StateReadFailed({
+                        key,
+                        message: 'Cannot read auto-open setting',
+                        cause: new Error('read failed'),
+                      }),
+                    )
+                  : stateStore.get(key, defaultValue),
+              update: (key, value) => stateStore.update(key, value),
+            },
+          },
+        ),
+      );
+      const session = yield* createProcessSession();
+      const runId = startedRun(session);
+      const init = { runId, session, rounds: 1 };
+
+      const exit = yield* Effect.exit(loopProgram(init, []));
+      const state = yield* loadState(init);
+
+      expect(Exit.isFailure(exit)).toBe(true);
+      expect(state.roundOutputs[0]?.outputs[0]?.location).toMatchObject({
+        relativePath: 'r0/main.tex',
+      });
+    }),
+  );
+
   it.effect('publishes the run-wide output map, restored rounds included', () =>
     Effect.gen(function* () {
       const session = yield* createProcessSession();

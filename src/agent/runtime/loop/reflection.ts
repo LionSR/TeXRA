@@ -912,10 +912,8 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     };
   });
 
-  /** Publish the round's facts, open its files, and validate its outputs. */
-  const publishOutput = Effect.fn('reflection.publishOutput')(function* (
-    round: number,
-    outputLocation: AgentFileLocation,
+  /** Open produced files and apply the round's compile policy. */
+  const presentOutput = Effect.fn('reflection.presentOutput')(function* (
     endTurn: boolean,
     result: OutputExecResult,
   ) {
@@ -946,22 +944,6 @@ export const runReflection = Effect.fn('reflection.run')(function* (
           preserveFocus: true,
         });
       }
-    }
-    if (endTurn) {
-      yield* Effect.gen(function* () {
-        const validation = yield* checkExpectedOutputs(
-          outputState,
-          deps,
-          outputLocation,
-          round,
-        );
-        if (validation.missing.length > 0) {
-          yield* interactions.emit('requestShowInstruction', {
-            key: 'missingOutputsInfo',
-            message: 'Missing output files detected',
-          });
-        }
-      }).pipe(recoverWarn('Validate expected outputs'));
     }
     if (result.compileResult) {
       const compileFailureContext = (yield* getRejectOnCompileFailure())
@@ -1005,10 +987,25 @@ export const runReflection = Effect.fn('reflection.run')(function* (
           : fallbackOutput(round, location, ensureError(Cause.squash(cause))),
       ),
     );
-    yield* publishOutput(round, location, endTurn, result);
-    // The row owns completed outputs; output.pending remains replayable until
-    // the round-end snapshot commits, over the same run-owned raw artifacts.
-    return yield* commit(
+    if (endTurn) {
+      yield* Effect.gen(function* () {
+        const validation = yield* checkExpectedOutputs(
+          outputState,
+          deps,
+          location,
+          round,
+        );
+        if (validation.missing.length > 0) {
+          yield* session.interactions.emit('requestShowInstruction', {
+            key: 'missingOutputsInfo',
+            message: 'Missing output files detected',
+          });
+        }
+      }).pipe(recoverWarn('Validate expected outputs'));
+    }
+    // The row owns completed outputs. Commit it before fallible presentation
+    // and policy reads; output.pending stays replayable until round end.
+    const produced = yield* commit(
       yield* ledger.appendBatch(runId, state, [
         {
           type: 'output.produced',
@@ -1017,6 +1014,8 @@ export const runReflection = Effect.fn('reflection.run')(function* (
         },
       ]),
     );
+    yield* presentOutput(endTurn, result);
+    return produced;
   });
 
   /** One round inside its trace stage: prompt, response cycles, output. */
