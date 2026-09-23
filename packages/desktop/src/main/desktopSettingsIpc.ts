@@ -127,7 +127,7 @@ export interface DesktopSettingsIpc extends DesktopMessageHandler {
   refreshAuthDependentData(options?: {
     deferAgentCatalogRefresh?: boolean;
   }): Effect.Effect<void, Error, ProcessServices>;
-  signInChatGpt(): Effect.Effect<void, unknown, ProcessServices>;
+  signInChatGpt(): Effect.Effect<void, Error, ProcessServices>;
   /**
    * Releases the goal and app-signal subscriptions. They are scoped to the
    * window that built this IPC, not to the process: `createWindow` runs again

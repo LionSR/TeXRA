@@ -77,7 +77,7 @@ import { Cancelled, Rejected } from '@shared/session/requestErrors';
 import { registerRuntimeShutdownHandlers } from '@tools/agentCliSessionStores';
 import { refreshToolAvailability } from '@tools/toolAvailability';
 import { killActiveRecording } from '@tools/media/audio';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import {
   readGitEnvironmentSummary,
   readRecentCommits,
@@ -768,11 +768,11 @@ function createWindow(options: {
     chooseDesktopOAuthProvider((messageBoxOptions) =>
       dialog.showMessageBox(window, messageBoxOptions),
     );
-  const signIn = (): Effect.Effect<void, unknown> =>
+  const signIn = (): Effect.Effect<void, Error> =>
     Effect.gen(function* () {
       const provider = yield* Effect.tryPromise({
         try: chooseOAuthProvider,
-        catch: (cause) => cause,
+        catch: ensureError,
       });
       if (provider === undefined) return;
       yield* desktopAuth.signIn(provider);
@@ -863,7 +863,7 @@ function createWindow(options: {
             defaultPath: folderPickerDefaultPath(),
             properties: ['openDirectory'],
           }),
-        catch: (cause) => cause,
+        catch: ensureError,
       });
       const selectedPath = result.canceled ? undefined : result.filePaths[0];
       if (!selectedPath) return;
@@ -1532,7 +1532,7 @@ function createWindow(options: {
             }
             const { buildDesktopSetupRunRequest } = yield* Effect.tryPromise({
               try: () => import('@controllers/onboarding/setupLaunch'),
-              catch: (error) => error,
+              catch: ensureError,
             });
             const request = yield* buildDesktopSetupRunRequest(
               setupSession.roots,

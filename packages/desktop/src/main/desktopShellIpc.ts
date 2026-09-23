@@ -58,10 +58,10 @@ interface DesktopShellActionFactoryOptions extends Pick<
   openPath(filePath: string): Effect.Effect<void, PreviewUnavailable>;
   openWorkspaceFolder(): Effect.Effect<
     void,
-    unknown,
+    Error,
     FileSystem.FileSystem | Path.Path | ProjectDatabases
   >;
-  signIn(): Effect.Effect<void, unknown>;
+  signIn(): Effect.Effect<void, Error>;
   onAsyncError: (error: unknown) => void;
   /** The process runtime the composition root built; every shell action's
    *  program is forked on it rather than on a bare `Effect.run*`. */

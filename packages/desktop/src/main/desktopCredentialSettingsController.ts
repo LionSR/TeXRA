@@ -110,7 +110,7 @@ interface DesktopCredentialSettingsControllerOptions extends SettingsStatePorts 
   };
   readonly notifications: MessageHost;
   readonly auth: {
-    signIn(): Effect.Effect<void, unknown>;
+    signIn(): Effect.Effect<void, Error>;
     signOut(): Promise<void>;
   };
   readonly subscriptionUsage?: Pick<
@@ -197,7 +197,7 @@ export interface DesktopCredentialSettingsController {
   ): Effect.Effect<void, Error, ProcessServices>;
   refreshAuthDependentData(): Effect.Effect<void, Error, ProcessServices>;
   /** Also driven by the desktop welcome card, not just the Settings view. */
-  signInChatGpt(): Effect.Effect<void, unknown, ProcessServices>;
+  signInChatGpt(): Effect.Effect<void, Error, ProcessServices>;
 }
 
 /** Owns desktop credential mutation, authentication, and dependent refreshes. */
@@ -456,7 +456,7 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
     ) => string,
     work: (
       provider: ReturnType<typeof subscriptionProvider>,
-    ) => Effect.Effect<void, unknown, ProcessServices>,
+    ) => Effect.Effect<void, Error, ProcessServices>,
   ) {
     const provider = subscriptionProvider(providerId);
     const options = this.options;

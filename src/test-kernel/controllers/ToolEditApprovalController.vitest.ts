@@ -288,13 +288,13 @@ describe('tool edit approval controller', () => {
     const testHost = createTestHost();
     const controller = createController(testHost.host);
     const events: string[] = [];
-    const builds: Deferred.Deferred<void, unknown>[] = [];
+    const builds: Deferred.Deferred<void, Error>[] = [];
     // The host build is a program now, and its own settlement is what a
     // release waits for, so the event it records belongs inside it.
     const firstBuildStarted = Deferred.makeUnsafe<void>();
     const secondBuildStarted = Deferred.makeUnsafe<void>();
     const openBuildDisplay = vi.fn(() => {
-      const build = Deferred.makeUnsafe<void, unknown>();
+      const build = Deferred.makeUnsafe<void, Error>();
       builds.push(build);
       Deferred.doneUnsafe(
         builds.length === 1 ? firstBuildStarted : secondBuildStarted,

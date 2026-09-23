@@ -12,7 +12,7 @@ import type { Effect } from 'effect';
  * stores a value every reader runs on its own fiber instead of a promise the
  * claim had to run a fiber to produce.
  */
-export type RootRunSettled = Effect.Effect<void, unknown>;
+export type RootRunSettled = Effect.Effect<void, Error>;
 
 /**
  * Root-run state of one chat TUI session.

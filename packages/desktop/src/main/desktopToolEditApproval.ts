@@ -42,13 +42,13 @@ export type DesktopToolEditApprovalUi = Pick<
     proposed: DiffSource,
     title: string,
     previewId: string,
-  ): Effect.Effect<void, unknown>;
+  ): Effect.Effect<void, Error>;
   /**
    * Take this request's staged diff off the Review workbench and nothing
    * else: settling here must not dismiss another request's pending preview
    * or an unrelated review, whichever of them the user is looking at.
    */
-  closeDiff(previewId: string): Effect.Effect<void, unknown>;
+  closeDiff(previewId: string): Effect.Effect<void, Error>;
 };
 
 interface DesktopToolEditApprovalHostOptions {

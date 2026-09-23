@@ -1,21 +1,17 @@
 // Untyped Effect error channels (Effect facility adoption,
 // .agents/docs/proposed/simplification/2026-09-20-effect-facility-adoption.md
-// section 2, step 5). The repo declares 120 `Data.TaggedError` classes and
-// still fails about 220 signatures with `unknown`, which is the shape that
-// forces the next reader to re-derive a tag with `instanceof`. This freezes
-// the count per file so it can only come down.
+// section 2, step 5). An `unknown` failure channel is the shape that forces
+// the next reader to re-derive a tag with `instanceof`. The shrink-only
+// baseline this began as reached zero, so the rule is now absolute: no
+// production signature spells its error channel `unknown`.
 //
-// Same mechanism as the effect-migration ratchet: exact, shrink-only counts.
-// A count that rose fails, a file absent from the baseline fails on its first
-// site, and a count that shrank also fails — the leftover is room a later PR
-// could regrow into unnoticed, so the PR that types a channel lowers the entry
-// and the PR that types the last one in a file deletes the entry.
-//
-// Clones the checked-in-baseline + AST-scanning vitest pattern from
-// hostAgentDeepImportRatchet.vitest.ts.
+// Type the channel with the tagged error the path already raises; a port
+// whose hosts each fail with their own surface's error takes `Error`, and a
+// foreign rejection (a Promise, a thrown value) becomes one at the boundary
+// with `ensureError` from `@utils/errors/errorMessage`, never `(e) => e`. A
+// combinator that absorbs any failure is generic in it instead.
 
 // Node imports
-import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 // Third-party imports
@@ -30,38 +26,40 @@ import {
   REPO_ROOT,
 } from '../support/repoScan';
 
-const BASELINE_FILE = 'config/ratchets/unknown-error-baseline.json';
-
-interface UnknownErrorBaseline {
-  semantics: string;
-  files: Record<string, number>;
-}
-
-/** `Effect.Effect`, the only spelling the repo uses for the type. */
-function isEffectEffect(typeName: ts.EntityName): boolean {
+/** The two spellings of an Effect's type the repo uses, both `<A, E, R>`:
+ *  `Effect.Effect` and the `Effect.fn` generator's `Effect.fn.Return`. */
+function isEffectType(typeName: ts.EntityName): boolean {
+  if (!ts.isQualifiedName(typeName)) return false;
+  const { left, right } = typeName;
+  if (ts.isIdentifier(left))
+    return left.text === 'Effect' && right.text === 'Effect';
   return (
-    ts.isQualifiedName(typeName) &&
-    ts.isIdentifier(typeName.left) &&
-    typeName.left.text === 'Effect' &&
-    typeName.right.text === 'Effect'
+    right.text === 'Return' &&
+    ts.isIdentifier(left.left) &&
+    left.left.text === 'Effect' &&
+    left.right.text === 'fn'
   );
 }
 
-/** `Effect.Effect<A, unknown, R>` sites in one file: the error channel is the
- *  second type argument, and only the bare `unknown` keyword counts — a union
- *  that merely contains `unknown` is not the shape this ratchet retires. */
-function countUnknownErrorChannels(file: string): number {
+/** `Effect.Effect<A, unknown, R>` / `Effect.fn.Return<A, unknown, R>` sites
+ *  in one file, as `line: text`: the error channel is the second type
+ *  argument, and only the bare `unknown` keyword counts — a union that merely
+ *  contains `unknown` is not the shape this rule retires. */
+function unknownErrorChannels(file: string): string[] {
   const sourceFile = parseSourceFile(resolve(REPO_ROOT, file), {
     setParentNodes: false,
   });
-  let sites = 0;
+  const sites: string[] = [];
   const visit = (node: ts.Node): void => {
     if (
       ts.isTypeReferenceNode(node) &&
-      isEffectEffect(node.typeName) &&
+      isEffectType(node.typeName) &&
       node.typeArguments?.[1]?.kind === ts.SyntaxKind.UnknownKeyword
     ) {
-      sites += 1;
+      const { line } = sourceFile.getLineAndCharacterOfPosition(
+        node.getStart(sourceFile),
+      );
+      sites.push(`${file}:${line + 1}: ${node.getText(sourceFile)}`);
     }
     ts.forEachChild(node, visit);
   };
@@ -69,66 +67,23 @@ function countUnknownErrorChannels(file: string): number {
   return sites;
 }
 
-function currentCounts(): Map<string, number> {
-  const counts = new Map<string, number>();
-  for (const root of productionRoots()) {
-    for (const file of productionFilesUnder(root)) {
-      const sites = countUnknownErrorChannels(file);
-      if (sites > 0) counts.set(file, sites);
-    }
-  }
-  return counts;
-}
-
-function readBaseline(): UnknownErrorBaseline {
-  return JSON.parse(
-    readFileSync(resolve(REPO_ROOT, BASELINE_FILE), 'utf8'),
-  ) as UnknownErrorBaseline;
-}
-
-describe('unknown Effect error-channel ratchet', () => {
-  const baseline = readBaseline();
-  const current = currentCounts();
+describe('unknown Effect error-channel rule', () => {
   const roots = productionRoots();
 
   it('scans the production tree it claims to', () => {
     expectRealCoverage(roots, 1000);
   });
 
-  it('rejects a new file with an unknown error channel', () => {
-    const added = [...current]
-      .filter(([file]) => baseline.files[file] === undefined)
-      .map(([file, sites]) => `  + ${file} (${sites})`)
-      .toSorted((a, b) => a.localeCompare(b));
-    expect(
-      added,
-      `File(s) with Effect.Effect<..., unknown, ...> that are not in ${BASELINE_FILE}:\n` +
-        `${added.join('\n')}\n\n` +
-        `Type the failure channel with the tagged error the path already raises; do not widen ${BASELINE_FILE}.`,
-    ).toEqual([]);
-  });
-
-  it('rejects any per-file count that no longer matches the baseline', () => {
-    const drifted = Object.entries(baseline.files)
-      .filter(([file, count]) => (current.get(file) ?? 0) !== count)
-      .map(
-        ([file, count]) => `  ${file}: ${count} -> ${current.get(file) ?? 0}`,
-      )
-      .toSorted((a, b) => a.localeCompare(b));
-    expect(
-      drifted,
-      `Per-file unknown-error counts drifted from ${BASELINE_FILE}:\n` +
-        `${drifted.join('\n')}\n\n` +
-        `A count that rose is new debt: type the channel instead. A count that ` +
-        `fell is the welcome direction — lower the entry in this PR, and delete ` +
-        `the entry when the file reaches zero.`,
-    ).toEqual([]);
-  });
-
-  it('keeps the baseline sorted by path', () => {
-    const keys = Object.keys(baseline.files);
-    expect(keys, `${BASELINE_FILE} files`).toEqual(
-      keys.toSorted((a, b) => a.localeCompare(b)),
+  it('rejects an Effect whose error channel is unknown', () => {
+    const sites = roots.flatMap((root) =>
+      productionFilesUnder(root).flatMap(unknownErrorChannels),
     );
+    expect(
+      sites,
+      `Effect signature(s) with an unknown error channel:\n` +
+        `${sites.map((site) => `  ${site}`).join('\n')}\n\n` +
+        `Type the channel with the tagged error the path raises (Error for a ` +
+        `host port; ensureError at a foreign boundary).`,
+    ).toEqual([]);
   });
 });

@@ -84,7 +84,7 @@ function useAsyncStatusView<Status, View extends StatusViewBase>(options: {
    * on the surface's runtime and recovers from the whole cause there, so a
    * failed read reaches the view without a Promise rejection in between.
    */
-  readonly load: () => Effect.Effect<Status, unknown>;
+  readonly load: () => Effect.Effect<Status, Error>;
   readonly runtime: ProcessRuntime;
   readonly buildView: (status: Status) => View;
   readonly onErrorRef: {

@@ -22,7 +22,7 @@ import { z } from 'zod';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { ToolCall } from '@agent/runtime/ToolCall';
-import { Secrets, type SecretsFailed } from '@platform/secrets';
+import { Secrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { ToolError, type RunId, type ToolResult } from '@shared/schemas';
 import { parseWorkingDirectory } from '@tools/pathResolution';
@@ -178,11 +178,7 @@ function parsePath(raw: string): ParsedPath {
   );
 }
 
-const requireToken = (): Effect.Effect<
-  void,
-  SecretsFailed | ToolError,
-  Secrets
-> =>
+const requireToken = (): Effect.Effect<void, Error, Secrets> =>
   Effect.gen(function* () {
     const secrets = yield* Secrets;
     const token = yield* getGitHubToken(secrets);

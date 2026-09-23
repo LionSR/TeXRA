@@ -82,7 +82,7 @@ interface DesktopProgressFileActionHost {
   startRun(request: ValidatedRunRequest): void;
   listWorkspaceCandidateFiles(): Effect.Effect<
     readonly string[],
-    unknown,
+    Error,
     ProcessServices
   >;
 }
@@ -186,7 +186,7 @@ export class DesktopProgressFileActions {
     baseFile: string,
     editedFile: string,
     runContext: DesktopLatexdiffRunContext,
-  ): Effect.Effect<void, unknown> {
+  ): Effect.Effect<void, Error> {
     return Effect.gen({ self: this }, function* () {
       const outcome = yield* this.runSharedLatexdiff(runContext);
       if (outcome && (yield* this.openSharedLatexdiffResults(outcome))) return;
@@ -212,7 +212,7 @@ export class DesktopProgressFileActions {
    */
   diffStreamToolbarAction(
     runContext: DesktopLatexdiffRunContext,
-  ): Effect.Effect<void, unknown> {
+  ): Effect.Effect<void, Error> {
     return Effect.gen({ self: this }, function* () {
       const outcome = yield* this.runSharedLatexdiff(runContext);
       if (!outcome?.results.length) {
@@ -231,7 +231,7 @@ export class DesktopProgressFileActions {
   runLatexdiffFile(
     baseFile: string,
     editedFile: string,
-  ): Effect.Effect<void, unknown> {
+  ): Effect.Effect<void, Error> {
     return Effect.gen({ self: this }, function* () {
       const service = new LaTeXdiffService(
         DESKTOP_LATEXDIFF_CHANNEL,
@@ -254,7 +254,7 @@ export class DesktopProgressFileActions {
     }).pipe((program) => this.withProcessServices(program));
   }
 
-  findAndOpenLabel(label: string): Effect.Effect<boolean, unknown> {
+  findAndOpenLabel(label: string): Effect.Effect<boolean, Error> {
     return this.withProcessServices(
       Effect.gen({ self: this }, function* () {
         const candidates = new Set(
@@ -336,7 +336,7 @@ export class DesktopProgressFileActions {
    */
   private openSharedLatexdiffResults(
     outcome: DiffRunOutcome,
-  ): Effect.Effect<boolean, unknown> {
+  ): Effect.Effect<boolean, Error> {
     return Effect.gen({ self: this }, function* () {
       const successes = outcome.results.filter((entry) => entry.success);
 
@@ -349,7 +349,7 @@ export class DesktopProgressFileActions {
   }
 
   /** Open a generated diff file via the desktop LaTeX build display. */
-  private openDiffOutput(diffFilePath: string): Effect.Effect<void, unknown> {
+  private openDiffOutput(diffFilePath: string): Effect.Effect<void, Error> {
     return this.withProcessServices(
       this.ui.openBuildDisplay(createExternalLocation(diffFilePath)),
     );

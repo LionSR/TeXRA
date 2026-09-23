@@ -31,7 +31,7 @@ let createDesktopDiffHost: DesktopDiffHostModule['createDesktopDiffHost'];
 // `afterEach` removes them the way the desktop quit lifecycle does.
 function createHost(overrides: Partial<DiffHostOptions> = {}) {
   const openedPaths: string[] = [];
-  const openPath = vi.fn((filePath: string): Effect.Effect<void, unknown> =>
+  const openPath = vi.fn((filePath: string): Effect.Effect<void, Error> =>
     Effect.sync(() => {
       openedPaths.push(filePath);
     }),
