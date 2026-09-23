@@ -21,7 +21,6 @@ import { z } from 'zod';
 import type { WorkPlanState } from '@agent/core/state/AgentWorkspaceState';
 import { ToolCall, type ToolCallShape } from '@agent/runtime/ToolCall';
 import { withLogChannel } from '@logger/effectLog';
-import { createLog } from '@logger/logUtils';
 import type { Goal, Plan, RunId, ToolResult } from '@shared/schemas';
 import { goalElapsedMs, ToolError } from '@shared/schemas';
 import { refusalOf } from '@shared/session/approvalDecision';
@@ -43,7 +42,6 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { formatCompactDuration } from '@utils/text/stringUtils';
 
 const CHANNEL = 'PlanTool';
-const logger = createLog(CHANNEL);
 
 function formatGoalView(goal: Goal): string {
   return [
@@ -165,21 +163,23 @@ const startGoalForPlan = Effect.fn('PlanTool.startGoalForPlan')(function* (
     }).pipe(
       Effect.catch((err) => {
         const reason = toErrorMessage(err);
-        logger.warn(
+        return Effect.logWarning(
           'Failed to retarget in-flight goal for approved plan; returning an explicit error result.',
-          { data: err },
-        );
-        return Effect.succeed(
-          errorResult(
-            `The user approved this plan and requested autonomous run, ` +
-              `but the in-flight goal could not be retargeted: ${reason}\n\n` +
-              `Work toward the new objective turn-by-turn. The pre-existing ` +
-              `goal is still active and will keep injecting continuations ` +
-              `against its previous objective until the user pauses or abandons it.`,
-            {
-              summary:
-                'Plan approved: goal could not be retargeted, proceeding without it',
-            },
+        ).pipe(
+          Effect.annotateLogs({ data: err }),
+          withLogChannel(CHANNEL),
+          Effect.as(
+            errorResult(
+              `The user approved this plan and requested autonomous run, ` +
+                `but the in-flight goal could not be retargeted: ${reason}\n\n` +
+                `Work toward the new objective turn-by-turn. The pre-existing ` +
+                `goal is still active and will keep injecting continuations ` +
+                `against its previous objective until the user pauses or abandons it.`,
+              {
+                summary:
+                  'Plan approved: goal could not be retargeted, proceeding without it',
+              },
+            ),
           ),
         );
       }),
@@ -203,17 +203,19 @@ const startGoalForPlan = Effect.fn('PlanTool.startGoalForPlan')(function* (
   }).pipe(
     Effect.catch((err) => {
       const reason = toErrorMessage(err);
-      logger.warn(
+      return Effect.logWarning(
         'Failed to start goal for approved plan; falling back to plain approval.',
-        { data: err },
-      );
-      return Effect.succeed(
-        executed(
-          `The user approved this plan and requested autonomous run, but ` +
-            `the goal could not be started: ${reason}\n\n` +
-            `Work toward the objective as a normal turn-by-turn workflow, ` +
-            `tracking concrete steps with the todo tool.`,
-          'Plan approved: goal could not be started, proceeding without it',
+      ).pipe(
+        Effect.annotateLogs({ data: err }),
+        withLogChannel(CHANNEL),
+        Effect.as(
+          executed(
+            `The user approved this plan and requested autonomous run, but ` +
+              `the goal could not be started: ${reason}\n\n` +
+              `Work toward the objective as a normal turn-by-turn workflow, ` +
+              `tracking concrete steps with the todo tool.`,
+            'Plan approved: goal could not be started, proceeding without it',
+          ),
         ),
       );
     }),
@@ -267,25 +269,30 @@ const requestApproval = Effect.fn('PlanTool.requestApproval')(function* (
 
   // 'cancelled' and 'policy' differ only in wording: a host cancel with an
   // optional cause vs a policy denial with its reason.
-  const denialResult = (outcome: string, detail?: string): ToolResult => {
+  const denialResult = (
+    outcome: string,
+    detail?: string,
+  ): Effect.Effect<ToolResult> => {
     const trimmed = detail?.trim();
-    logger.info(
-      `Plan approval ${outcome}`,
-      trimmed ? { data: trimmed } : undefined,
-    );
-    return errorResult(
-      trimmed
-        ? `Plan approval was ${outcome}.\n\n${trimmed}`
-        : `Plan approval was ${outcome}.`,
-      { summary: `Plan approval ${outcome}` },
+    return Effect.logInfo(`Plan approval ${outcome}`).pipe(
+      Effect.annotateLogs(trimmed ? { data: trimmed } : {}),
+      withLogChannel(CHANNEL),
+      Effect.as(
+        errorResult(
+          trimmed
+            ? `Plan approval was ${outcome}.\n\n${trimmed}`
+            : `Plan approval was ${outcome}.`,
+          { summary: `Plan approval ${outcome}` },
+        ),
+      ),
     );
   };
 
   switch (refusal.action) {
     case 'cancel':
-      return denialResult('cancelled', refusal.cause ?? undefined);
+      return yield* denialResult('cancelled', refusal.cause ?? undefined);
     case 'deny':
-      return denialResult('denied', refusal.reason);
+      return yield* denialResult('denied', refusal.reason);
     case 'reject': {
       const feedback = refusal.feedback?.trim();
       const feedbackNote = feedback
