@@ -4,16 +4,22 @@
  * The pipeline, in order:
  *   1. Start with the tool names declared in the agent YAML, and take each
  *      one's contract (description, parameter schema) from the registry.
- *   2. Strip approval-gated tools when approval prompts are unavailable
- *      (e.g. a subagent running without an interactive approval channel).
+ *   2. Strip tools the process's product host cannot run (a tool's
+ *      `unavailableHosts`; every such tool when no host was named), and approval-gated tools when approval prompts
+ *      are unavailable (e.g. a subagent without an interactive channel).
  *   3. Strip user-disabled tools (settings dashboard toggle).
  *   4. Strip tools whose external dependency is unavailable (probed at startup).
  *   5. Auto-inject the process's conditional tools (memory, goal, etc.), which
- *      the caller reads from the `ToolInjections` service and passes in;
+ *      the caller passes in as data;
  *      injected tools are subject to the approval gate but bypass the
  *      disabled/unavailable filters (they are runtime infrastructure, not
  *      user-selectable tools).
- *   6. Annotate delegation tools with the models and agents currently available
+ *   6. Lay the run's own tools (caller-supplied, and the structured-output
+ *      terminal tool) over the result: each is force-called, replaces a
+ *      same-named entry, and wins the name in the returned registry. That
+ *      registry holds the offered tools only, so dispatch cannot run a tool
+ *      the model was not offered.
+ *   7. Annotate delegation tools with the models and agents currently available
  *      for delegation, so the model sees an accurate "Available models:" line
  *      and an "Available agents:" roster instead of a snapshot frozen when the
  *      tool registry was first constructed.
@@ -26,7 +32,11 @@
 
 import { Effect } from 'effect';
 
-import type { RuntimeToolRegistry as IToolRegistry } from '@agent/runtime/ToolServices';
+import type {
+  RuntimeTool as ITool,
+  RuntimeToolRegistry as IToolRegistry,
+} from '@agent/runtime/ToolServices';
+import { MapToolRegistry, type ToolHost } from '@agent/core/tools/ToolTypes';
 import type { AgentToolUseSetting } from '@agent/core/definition/AgentDataclass';
 import { withLogChannel } from '@logger/effectLog';
 import {
@@ -49,7 +59,7 @@ import {
 } from '@tools/delegation/delegationAvailability';
 import { getDisabledToolIds } from '@utils/config/constants';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import type { ToolInjections } from './toolInjection';
+import type { ConditionalToolInjection } from './toolInjection';
 
 const CHANNEL = 'AgentToolResolution';
 
@@ -60,13 +70,15 @@ interface ResolveAgentToolsInput {
   logger: { warn: (msg: string) => void };
   /** When true, approval-gated tools are filtered out before model invocation. */
   approvalPromptsUnavailable?: boolean;
-  /** Tools unavailable because the current host/runtime cannot support them. */
-  runtimeUnavailableTools?: readonly string[];
   /**
-   * Conditional runtime tool injections: the process's `ToolInjections`
-   * service, or a caller-owned list for a flow that injects its own.
+   * The product host this process is; tools excluded from it are dropped.
+   * `undefined` (no composition root named one) drops every host-bound tool.
    */
-  toolInjections: ToolInjections['Service'];
+  host: ToolHost | undefined;
+  /** Tools only this run holds, laid over the resolved list (step 6). */
+  runTools?: readonly ITool[];
+  /** Conditional runtime tool injections (step 5); none for reflection. */
+  toolInjections: readonly ConditionalToolInjection[];
   /**
    * The run's stores: the session's three setting slots, which the injections'
    * predicates, the user's disabled-tool set and the delegation annotation's
@@ -127,7 +139,8 @@ export const resolveAgentTools = Effect.fn('resolveAgentTools')(function* ({
   registry,
   logger,
   approvalPromptsUnavailable,
-  runtimeUnavailableTools,
+  host,
+  runTools = [],
   toolInjections,
   stores,
   workspaceRoot,
@@ -138,17 +151,21 @@ export const resolveAgentTools = Effect.fn('resolveAgentTools')(function* ({
     yield* getDisabledToolIds(stores.globalState),
   );
   const unavailable = getUnavailableToolNamesCached(workspaceRoot);
-  const runtimeUnavailable = new Set(runtimeUnavailableTools ?? []);
 
   const toolConfigs = Array.isArray(tools) ? tools : [];
 
   /** Runtime-availability and approval gates shared by declared and injected tools. */
   const passesRuntimeGates = (name: string): boolean => {
-    if (runtimeUnavailable.has(name)) return false;
-    return (
-      !approvalPromptsUnavailable ||
-      !effectiveRegistry.get(name)?.requiresApproval
-    );
+    const tool = effectiveRegistry.get(name);
+    const excluded = tool?.unavailableHosts ?? [];
+    if (excluded.length > 0 && host === undefined) {
+      logger.warn(
+        `Tool "${name}" is not offered: it depends on the product host, and this process named none.`,
+      );
+      return false;
+    }
+    if (host !== undefined && excluded.includes(host)) return false;
+    return !approvalPromptsUnavailable || !tool?.requiresApproval;
   };
 
   const resolved: ToolDefinition[] = [];
@@ -173,7 +190,7 @@ export const resolveAgentTools = Effect.fn('resolveAgentTools')(function* ({
     resolved.push(registered.definition);
     resolvedNames.add(name);
   }
-  for (const injection of toolInjections.list()) {
+  for (const injection of toolInjections) {
     if (!(yield* injection.shouldInject(stores))) continue;
     if (resolvedNames.has(injection.toolName)) continue;
     if (!passesRuntimeGates(injection.toolName)) continue;
@@ -193,12 +210,40 @@ export const resolveAgentTools = Effect.fn('resolveAgentTools')(function* ({
   // Both facts travel into the pure annotation mapping as data: the worktree
   // opt-in is read from the slots this resolution was given, and the run's
   // pinned delegation scope is already explicit data from AgentRun.
-  if (availableModelNames === undefined) return resolved;
-  const annotationState = yield* readDelegationAnnotationState(
-    stores,
-    delegationScope,
-  );
-  return resolved.map((tool) =>
-    annotateDelegationAvailability(tool, availableModelNames, annotationState),
-  );
+  let definitions = resolved;
+  if (availableModelNames !== undefined) {
+    const annotationState = yield* readDelegationAnnotationState(
+      stores,
+      delegationScope,
+    );
+    definitions = resolved.map((tool) =>
+      annotateDelegationAvailability(
+        tool,
+        availableModelNames,
+        annotationState,
+      ),
+    );
+  }
+  const overlay = new Map<string, ITool>();
+  for (const tool of runTools) {
+    const { name } = tool.definition;
+    const index = definitions.findIndex((entry) => entry.name === name);
+    if (overlay.has(name) || effectiveRegistry.has(name) || index !== -1) {
+      logger.warn(`Run-scoped tool "${name}" shadows an existing tool.`);
+    }
+    overlay.set(name, tool);
+    const definition = { ...tool.definition, forceFunctionCall: true };
+    if (index === -1) definitions.push(definition);
+    else definitions[index] = definition;
+  }
+  // Dispatch answers only the names the model was offered: a registered tool
+  // the run withheld (disabled, undeclared, host-excluded, or gated on an
+  // approval prompt this host cannot show) settles as unknown rather than
+  // running because the model named it anyway.
+  const offered = new Map<string, ITool>();
+  for (const { name } of definitions) {
+    const tool = overlay.get(name) ?? effectiveRegistry.get(name);
+    if (tool) offered.set(name, tool);
+  }
+  return { definitions, registry: new MapToolRegistry(offered) };
 });

@@ -4,12 +4,8 @@ import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { z } from 'zod';
 
-// Local imports - core
-import { MapToolRegistry, type ITool } from '@agent/core/tools/ToolTypes';
-
 // Local imports - tools
 import {
-  buildOverlayToolRegistry,
   buildTerminalTool,
   normalizeStructuredOutputSchema,
 } from '@tools/structuredOutput';

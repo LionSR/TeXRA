@@ -196,15 +196,6 @@ export function getDefaultToolRegistry(): IToolRegistry {
   return defaultRegistryInstance;
 }
 
-/** Derive a host's static exclusions from the tools that own those capabilities. */
-export function getDefaultUnavailableToolNames(
-  host: ToolHost,
-): readonly RegisteredToolName[] {
-  return (Object.keys(getDefaultTools()) as RegisteredToolName[]).filter(
-    (name) => isDefaultToolUnavailableOnHost(name, host),
-  );
-}
-
 /** Whether a registered tool declares itself unavailable on a product host. */
 export function isDefaultToolUnavailableOnHost(
   name: RegisteredToolName,

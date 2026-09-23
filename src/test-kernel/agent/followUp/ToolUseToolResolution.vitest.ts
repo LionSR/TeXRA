@@ -2,7 +2,6 @@ import { it } from '@effect/vitest';
 import { beforeEach, describe, expect } from 'vitest';
 import { Effect } from 'effect';
 
-import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
 import { resolveAgentTools } from '@agent/runtime/agentToolResolution';
 import {
   LanguageModel,
@@ -11,7 +10,6 @@ import {
 import type { ToolDefinition } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { hostStores, installPlatform } from '@test/support/setupPlatform';
-import { DiagnosticsTool } from '@tools/DiagnosticsTool';
 import { getDefaultToolRegistry } from '@tools/registry';
 
 const logger = { warn: () => {} };
@@ -27,7 +25,6 @@ describe('tool-use tool resolution', () => {
     readonly toolName: 'update_config';
     readonly shouldInject: () => Effect.Effect<boolean>;
   }[] = [];
-  const toolInjections = { list: () => injected };
 
   beforeEach(() => {
     injected = [];
@@ -37,38 +34,22 @@ describe('tool-use tool resolution', () => {
     names: readonly string[],
     options: {
       approvalPromptsUnavailable: boolean;
-      runtimeUnavailableTools?: readonly string[];
+      host?: 'cli' | 'desktop' | 'extension' | undefined;
     },
   ) {
     return resolveAgentTools({
       tools: toolDefs(names),
       registry: getDefaultToolRegistry(),
       logger,
-      toolInjections,
+      toolInjections: injected,
       stores: hostStores(),
       workspaceRoot: undefined,
+      host: 'extension',
       ...options,
     }).pipe(
-      Effect.map((tools) => tools.map((tool) => tool.name)),
+      Effect.map(({ definitions }) => definitions.map((tool) => tool.name)),
       // The delegation-annotation availability read yields `LanguageModel`;
       // this host has no editor models.
-      Effect.provide(LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT)),
-    );
-  }
-
-  function resolveDiagnostics(runtimeUnavailableTools: readonly string[]) {
-    const diagnostics = new DiagnosticsTool();
-    const registry = new MapToolRegistry({ diagnostics });
-    return resolveAgentTools({
-      tools: [diagnostics.definition],
-      registry,
-      logger,
-      toolInjections,
-      stores: hostStores(),
-      workspaceRoot: undefined,
-      runtimeUnavailableTools,
-      approvalPromptsUnavailable: false,
-    }).pipe(
       Effect.provide(LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT)),
     );
   }
@@ -97,7 +78,7 @@ describe('tool-use tool resolution', () => {
   );
 
   it.effect(
-    'filters runtime-unavailable tools without hiding other approval-gated tools',
+    'filters host-excluded tools without hiding other approval-gated tools',
     () =>
       Effect.gen(function* () {
         expect(
@@ -105,10 +86,18 @@ describe('tool-use tool resolution', () => {
             ['ask_user_question', 'bash', 'grep', 'inquiry', 'write_file'],
             {
               approvalPromptsUnavailable: false,
-              runtimeUnavailableTools: ['inquiry'],
+              host: 'cli',
             },
           ),
         ).toEqual(['ask_user_question', 'bash', 'grep', 'write_file']);
+        // A process no composition root named withholds every host-bound
+        // tool rather than guessing it is the extension.
+        expect(
+          yield* resolveNames(['bash', 'inquiry', 'send_to_terminal'], {
+            approvalPromptsUnavailable: false,
+            host: undefined,
+          }),
+        ).toEqual(['bash']);
       }),
   );
 

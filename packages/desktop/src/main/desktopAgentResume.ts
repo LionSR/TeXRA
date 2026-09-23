@@ -16,7 +16,7 @@ import {
   type RecoveryContinuation,
 } from '@platform/interfaces';
 import type { RunId } from '@shared/schemas';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { launchDesktopAgent } from './desktopAgentLaunch.js';
 import { toLogData } from './desktopLogUtils.js';
 
@@ -88,16 +88,11 @@ export class DesktopProcessResumeOwner {
     if (isCancellationRequested()) return Effect.succeed(false);
     const runtime = this.options.runtime();
     const attempt = Effect.gen(function* () {
-      const { getDefaultUnavailableToolNames } = yield* Effect.tryPromise({
-        try: () => import('@tools/registry'),
-        catch: ensureError,
-      });
       const exists = (yield* session.transcripts.readEvents(runId)).length > 0;
       if (!exists) return false;
       return yield* resumeRunWithRefusalNotice(runId, {
         session,
         recovery,
-        runtimeUnavailableTools: getDefaultUnavailableToolNames('desktop'),
         isCancellationRequested,
         executeWorkflow: (config, id, modelCompatibilityKey) =>
           launchDesktopAgent(

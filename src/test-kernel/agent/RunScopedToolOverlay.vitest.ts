@@ -15,11 +15,7 @@ import { followUpsLayer } from '@agent/runtime/FollowUps';
 import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
 import { ModelInvoker, type InvokeRequest } from '@agent/runtime/ModelInvoker';
 import { runToolUse } from '@agent/runtime/loop/toolUse';
-import { agentRunLayer } from '@agent/runtime/run/AgentRun';
-import {
-  NO_TOOL_INJECTIONS,
-  ToolInjections,
-} from '@agent/runtime/toolInjection';
+import { AgentRun, agentRunLayer } from '@agent/runtime/run/AgentRun';
 import {
   LanguageModel,
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
@@ -104,8 +100,12 @@ describe('run-scoped tool resolution', () => {
         });
         const ctx = validationLaunch({ runId, session, logger }, config);
         const seen: InvokeRequest[] = [];
+        const shadowing = tool('bash');
 
-        yield* runToolUse({ resume: false }).pipe(
+        const dispatch = yield* Effect.gen(function* () {
+          yield* runToolUse({ resume: false });
+          return (yield* AgentRun).tools;
+        }).pipe(
           Effect.provide(
             Layer.mergeAll(
               observingInvokerLayer(seen),
@@ -115,14 +115,11 @@ describe('run-scoped tool resolution', () => {
               Layer.provideMerge(
                 agentRunLayer(ctx, {
                   // Run-scoped tools, one of them shadowing a registered tool.
-                  tools: [tool('bash'), tool('second')],
+                  tools: [shadowing, tool('second')],
                   callbacks: { onModelChanged: () => {} },
                 }),
               ),
               Layer.provideMerge(Layer.succeed(RunLedger, session.ledger)),
-              // The run reads its conditional injections from the process:
-              // none here, so the overlay is the whole difference.
-              Layer.provideMerge(ToolInjections.layer([])),
               Layer.provideMerge(
                 LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT),
               ),
@@ -132,9 +129,11 @@ describe('run-scoped tool resolution', () => {
           Effect.orDie,
         );
 
-        // The overlay tools and the synthetic terminal tool are what the model
-        // is offered, in overlay order.
+        // The default-on injections, then the overlay tools and the synthetic
+        // terminal tool, in overlay order.
         expect(seen[0]?.tools?.map(({ name }) => name)).toEqual([
+          'memory',
+          'plan',
           'bash',
           'second',
           'submit_output',
@@ -142,45 +141,47 @@ describe('run-scoped tool resolution', () => {
         expect(warn).toHaveBeenCalledWith(
           'Run-scoped tool "bash" shadows an existing tool.',
         );
+        // Dispatch answers the offered names only: a registered tool the run
+        // did not offer is unknown, however the model came to name it.
+        expect(dispatch.get('bash')).toBe(shadowing);
+        expect(dispatch.has('grep')).toBe(false);
         yield* session.dispose();
       }),
   );
 
-  it.effect(
-    'filters approval-gated and runtime-unavailable declared tools',
-    () =>
-      Effect.gen(function* () {
-        // The run's tool policy carries both gates; `AgentRun` hands them to the
-        // resolver when it builds the model-facing list.
-        const resolved = yield* resolveAgentTools({
-          tools: AgentToolUseSettingSchema.parse({
-            tools: [
-              { name: 'bash' },
-              { name: 'grep' },
-              { name: 'inquiry' },
-              { name: 'write_file' },
-              { name: 'wolfram' },
-            ],
-          }).tools,
-          registry: new MapToolRegistry({
-            bash: approvalGatedTool('bash'),
-            grep: tool('grep'),
-            inquiry: approvalGatedTool('inquiry'),
-            write_file: approvalGatedTool('write_file'),
-            wolfram: approvalGatedTool('wolfram'),
-          }),
-          logger: noopTrace,
-          approvalPromptsUnavailable: true,
-          runtimeUnavailableTools: ['inquiry'],
-          // No conditional injections: this pins the declared-tool gates alone.
-          toolInjections: NO_TOOL_INJECTIONS,
-          stores: hostStores(),
-          workspaceRoot: undefined,
-        }).pipe(
-          Effect.provide(LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT)),
-        );
+  it.effect('filters approval-gated and host-excluded declared tools', () =>
+    Effect.gen(function* () {
+      // The run's tool policy carries both gates; `AgentRun` hands them to the
+      // resolver when it builds the model-facing list.
+      const resolved = yield* resolveAgentTools({
+        tools: AgentToolUseSettingSchema.parse({
+          tools: [
+            { name: 'bash' },
+            { name: 'grep' },
+            { name: 'inquiry' },
+            { name: 'write_file' },
+            { name: 'wolfram' },
+          ],
+        }).tools,
+        registry: new MapToolRegistry({
+          bash: approvalGatedTool('bash'),
+          grep: tool('grep'),
+          inquiry: { ...tool('inquiry'), unavailableHosts: ['cli'] },
+          write_file: approvalGatedTool('write_file'),
+          wolfram: approvalGatedTool('wolfram'),
+        }),
+        logger: noopTrace,
+        approvalPromptsUnavailable: true,
+        host: 'cli',
+        // No conditional injections: this pins the declared-tool gates alone.
+        toolInjections: [],
+        stores: hostStores(),
+        workspaceRoot: undefined,
+      }).pipe(
+        Effect.provide(LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT)),
+      );
 
-        expect(resolved.map(({ name }) => name)).toEqual(['grep']);
-      }),
+      expect(resolved.definitions.map(({ name }) => name)).toEqual(['grep']);
+    }),
   );
 });

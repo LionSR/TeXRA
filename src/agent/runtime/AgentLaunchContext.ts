@@ -562,15 +562,8 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
       modelConfig,
       modelCompatibilityKey,
       ownApiKeyFallback: input.ownApiKeyFallback ?? false,
-      // Frozen so nothing mutates it mid-run; `Object.freeze` is shallow, so
-      // the nested tool-name array gets its own frozen copy rather than
-      // aliasing the caller's (still mutable) array.
-      toolPolicy: Object.freeze({
-        ...input.toolPolicy,
-        runtimeUnavailableTools: input.toolPolicy?.runtimeUnavailableTools
-          ? Object.freeze([...input.toolPolicy.runtimeUnavailableTools])
-          : undefined,
-      }),
+      // Frozen so nothing mutates it mid-run.
+      toolPolicy: Object.freeze({ ...input.toolPolicy }),
       stores,
       logger: agentLogger,
       parentStage,

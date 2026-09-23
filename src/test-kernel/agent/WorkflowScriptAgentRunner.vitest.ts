@@ -268,7 +268,6 @@ function parentContext(): DelegationParent {
       },
       toolPolicy: {
         approvalPromptsUnavailable: true,
-        runtimeUnavailableTools: ['user_question'],
       },
     },
   };
@@ -631,7 +630,6 @@ describe('createWorkflowScriptAgentRunner', () => {
           agentName: 'correct',
           parentRunId: runId,
           approvalPromptsUnavailable: true,
-          runtimeUnavailableTools: ['user_question'],
           configPayload: expect.objectContaining({
             agent: 'correct',
             agentSource: 'builtInWorkflow',

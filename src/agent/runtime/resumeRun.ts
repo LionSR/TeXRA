@@ -70,9 +70,7 @@ export type ResumeRunResult =
 
 export interface ResumeRunOptions extends Pick<
   SubagentRunOptions,
-  | 'approvalPromptsUnavailable'
-  | 'onApprovalPolicyDenial'
-  | 'runtimeUnavailableTools'
+  'approvalPromptsUnavailable' | 'onApprovalPolicyDenial'
 > {
   /** Session owning the resumed run's coordination state. */
   readonly session: SessionHandle;
@@ -417,7 +415,6 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
         session,
         approvalPromptsUnavailable: options.approvalPromptsUnavailable,
         onApprovalPolicyDenial: options.onApprovalPolicyDenial,
-        runtimeUnavailableTools: options.runtimeUnavailableTools,
         isCancellationRequested: options.isCancellationRequested,
         onCancellationAtFlowAttachment: () => {
           cancelledAtFlowAttachment = true;

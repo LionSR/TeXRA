@@ -50,6 +50,11 @@ All notable changes to this project will be documented in this file.
 
 ### Bug Fixes
 
+- **An agent can only run the tools it was offered.** A model that named a
+  tool the run had not offered it (one you disabled in settings, a tool the
+  agent does not declare, or one that needs an approval prompt the current
+  host cannot show) could still have that tool run. Such a call now fails as
+  an unknown tool.
 - **GPT-5.6 works on a ChatGPT subscription again.** Selecting GPT-5.6 sent an
   abbreviated model name the Codex service does not recognise, and it answered
   that the model "is not supported when using Codex with a ChatGPT account" —
