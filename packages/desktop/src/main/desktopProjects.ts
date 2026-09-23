@@ -180,11 +180,10 @@ const stopProjectRuns = Effect.fn('desktopProjects.stopProjectRuns')(function* (
   session: SessionHandle,
 ) {
   const { runs } = session;
-  const stops = runs.getActiveIds().flatMap((runId) => {
-    if (runs.getHandle(runId)?.isChild) return [];
-    return [runs.kill(runId, { detachActiveChildren: false }).settlement];
+  yield* Effect.all(runs.stopAll(), {
+    concurrency: 'unbounded',
+    discard: true,
   });
-  yield* Effect.all(stops, { concurrency: 'unbounded' });
   yield* runs.awaitDrained();
 });
 
