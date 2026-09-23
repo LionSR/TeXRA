@@ -336,6 +336,7 @@ const freshState = (): RunState => ({
   followUpIds: new Set(),
   usage: AgentRunStateSnapshotSchema.parse({}).usageAccumulator.totals,
   flow: null,
+  roundOutputs: [],
 });
 
 interface InvokerKit {

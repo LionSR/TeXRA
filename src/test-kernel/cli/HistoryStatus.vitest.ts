@@ -89,7 +89,6 @@ function snapshotPayload(
             workspaceSnapshot: AgentWorkspaceState.emptySnapshot(),
             outputLocation: null,
             runStateSnapshot: {},
-            roundOutputs: [],
             continueRounds: false,
             endTurn: false,
           },

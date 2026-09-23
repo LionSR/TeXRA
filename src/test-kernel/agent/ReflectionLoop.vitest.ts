@@ -46,7 +46,6 @@ import {
   RUN_OUTCOME,
   STREAM_LOG_ENTRY_TYPES,
   type CompileResult,
-  type OutputFileInfo,
   type RetryErrorInfo,
   type RunId,
 } from '@shared/schemas';
@@ -74,11 +73,7 @@ import { generateRunId, isObject } from '@utils/core';
 import { createRunStorageLocation } from '@utils/files/fileLocation';
 import { RunFileService } from '@utils/files/runStorage';
 
-import {
-  createRecordingHost,
-  recordTraceEvents,
-  runFactsOfKey,
-} from './progressTestUtils';
+import { createRecordingHost } from './progressTestUtils';
 
 import type { Model, TurnResult } from '@texra-ai/llm/turn';
 
@@ -104,123 +99,99 @@ const scripted = vi.hoisted(() => ({
   openFiles: false,
 }));
 
-vi.mock(
-  '@agent/implementations/flows/reflection/output/compileCheck',
-  async (importOriginal) => ({
+vi.mock('@agent/output/compileCheck', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agent/output/compileCheck')>()),
+  runCompileCheck: vi.fn((_context: unknown, round: number) =>
+    Effect.sync(() => ({
+      compileResult: scripted.compileResults.get(round),
+      artifacts: [],
+    })),
+  ),
+}));
+
+vi.mock('@agent/output/outputFileExtraction', async (importOriginal) => {
+  const { ensureRoundData } = await import('@agent/output/outputState');
+  const { createRunStorageLocation: locate } =
+    await import('@utils/files/fileLocation');
+  type OutputState = Parameters<typeof ensureRoundData>[0];
+  return {
     ...(await importOriginal<
-      typeof import('@agent/implementations/flows/reflection/output/compileCheck')
+      typeof import('@agent/output/outputFileExtraction')
     >()),
-    runCompileCheck: vi.fn((_context: unknown, round: number) =>
-      Effect.sync(() => ({
-        compileResult: scripted.compileResults.get(round),
-        artifacts: [],
-      })),
+    extractFilesFromXml: vi.fn(
+      (
+        outputState: OutputState,
+        _deps: unknown,
+        _xml: unknown,
+        _location: unknown,
+        round: number,
+      ) =>
+        Effect.sync(() => {
+          ensureRoundData(outputState, round).outputs = [
+            {
+              source: 'main.tex',
+              round,
+              location: locate(
+                `/storage/executions/${scripted.runId}/r${round}/main.tex`,
+                `r${round}/main.tex`,
+                scripted.runId as RunId,
+              ),
+              lineage: null,
+              diff: null,
+            },
+          ];
+        }),
     ),
-  }),
-);
+  };
+});
 
-vi.mock(
-  '@agent/implementations/flows/reflection/output/outputFileExtraction',
-  async (importOriginal) => {
-    const { ensureRoundData } =
-      await import('@agent/implementations/flows/reflection/output/outputState');
-    const { createRunStorageLocation: locate } =
-      await import('@utils/files/fileLocation');
-    type OutputState = Parameters<typeof ensureRoundData>[0];
-    return {
-      ...(await importOriginal<
-        typeof import('@agent/implementations/flows/reflection/output/outputFileExtraction')
-      >()),
-      extractFilesFromXml: vi.fn(
-        (
-          outputState: OutputState,
-          _deps: unknown,
-          _xml: unknown,
-          _location: unknown,
-          round: number,
-        ) =>
-          Effect.sync(() => {
-            ensureRoundData(outputState, round).outputs = [
-              {
-                source: 'main.tex',
-                round,
-                location: locate(
-                  `/storage/executions/${scripted.runId}/r${round}/main.tex`,
-                  `r${round}/main.tex`,
-                  scripted.runId as RunId,
-                ),
-                lineage: null,
-                diff: null,
-              },
-            ];
-          }),
-      ),
-    };
+vi.mock('@agent/output/lineageMapping', () => ({
+  traceFileLineage: vi.fn(() => ({ files: [] })),
+}));
+
+vi.mock('@agent/output/LatexDiffManager', () => ({
+  LatexDiffManager: class {
+    handleLatexdiffOfOutput = () => Effect.succeed([]);
   },
-);
+}));
 
-vi.mock(
-  '@agent/implementations/flows/reflection/output/lineageMapping',
-  () => ({ traceFileLineage: vi.fn(() => ({ files: [] })) }),
-);
-
-vi.mock(
-  '@agent/implementations/flows/reflection/output/LatexDiffManager',
-  () => ({
-    LatexDiffManager: class {
-      handleLatexdiffOfOutput = () => Effect.succeed([]);
-    },
-  }),
-);
-
-vi.mock(
-  '@agent/implementations/flows/reflection/output/XmlOutputManager',
-  () => ({
-    XmlOutputManager: class {
-      ensureCorrectXmlStructure = () => Effect.void;
-    },
-  }),
-);
-
-vi.mock(
-  '@agent/implementations/flows/reflection/output/roundSummary',
-  async () => {
-    const { ensureRoundData } =
-      await import('@agent/implementations/flows/reflection/output/outputState');
-    type OutputState = Parameters<typeof ensureRoundData>[0];
-    return {
-      summarizeRound: vi.fn(
-        (
-          outputState: OutputState,
-          _deps: unknown,
-          _location: unknown,
-          round: number,
-        ) =>
-          Effect.sync(() => {
-            const outputs = ensureRoundData(outputState, round).outputs;
-            return {
-              fileInfos: outputs,
-              filesToOpen: scripted.openFiles
-                ? outputs.map((output) => output.location)
-                : [],
-            };
-          }),
-      ),
-    };
+vi.mock('@agent/output/XmlOutputManager', () => ({
+  XmlOutputManager: class {
+    ensureCorrectXmlStructure = () => Effect.void;
   },
-);
+}));
 
-vi.mock(
-  '@agent/implementations/flows/reflection/output/outputValidation',
-  () => ({
-    checkExpectedOutputs: vi.fn(() => Effect.succeed({ missing: [] })),
-  }),
-);
+vi.mock('@agent/output/roundSummary', async () => {
+  const { ensureRoundData } = await import('@agent/output/outputState');
+  type OutputState = Parameters<typeof ensureRoundData>[0];
+  return {
+    summarizeRound: vi.fn(
+      (
+        outputState: OutputState,
+        _deps: unknown,
+        _location: unknown,
+        round: number,
+      ) =>
+        Effect.sync(() => {
+          const outputs = ensureRoundData(outputState, round).outputs;
+          return {
+            fileInfos: outputs,
+            filesToOpen: scripted.openFiles
+              ? outputs.map((output) => output.location)
+              : [],
+          };
+        }),
+    ),
+  };
+});
 
-vi.mock(
-  '@agent/implementations/flows/reflection/output/snapshotResolution',
-  () => ({ resolveBaseFilesForDiff: vi.fn(() => Effect.succeed([])) }),
-);
+vi.mock('@agent/output/outputValidation', () => ({
+  checkExpectedOutputs: vi.fn(() => Effect.succeed({ missing: [] })),
+}));
+
+vi.mock('@agent/output/snapshotResolution', () => ({
+  resolveBaseFilesForDiff: vi.fn(() => Effect.succeed([])),
+}));
 
 vi.mock('@agent/prompt/PromptBuilder', () => ({
   getSystemPromptWithRules: vi.fn(() => Effect.succeed('system')),
@@ -931,9 +902,8 @@ describe('the output facts a reflection round publishes', () => {
       const session = yield* createProcessSession();
       const runId = startedRun(session);
       const firstLogger = new TraceEmitter();
-      const first = recordTraceEvents(firstLogger);
 
-      yield* runLoop({
+      const first = yield* runLoop({
         runId,
         session,
         rounds: 2,
@@ -941,12 +911,10 @@ describe('the output facts a reflection round publishes', () => {
         turns: [COMPLETE, { failWith: PROVIDER_FAILURE }],
       });
 
-      const opened = runFactsOfKey(first.events, 'outputFiles');
-      expect(Object.keys(opened.at(-1)?.filesByRound ?? {})).toEqual(['0']);
+      expect(first.state.roundOutputs.map((round) => round.round)).toEqual([0]);
 
       const resumedLogger = new TraceEmitter();
-      const resumed = recordTraceEvents(resumedLogger);
-      yield* runLoop({
+      const resumed = yield* runLoop({
         runId,
         session,
         rounds: 2,
@@ -957,10 +925,10 @@ describe('the output facts a reflection round publishes', () => {
       // The row carries the run's whole round map, not the round that just
       // finished: a cold fold keeps only the newest row, so the restored
       // round has to ride along.
-      const republished = runFactsOfKey(resumed.events, 'outputFiles');
-      const filesByRound = republished.at(-1)?.filesByRound ?? {};
-      expect(Object.keys(filesByRound)).toEqual(['0', '1']);
-      expect((filesByRound[0] as OutputFileInfo[])[0]?.round).toBe(0);
+      expect(resumed.state.roundOutputs.map((round) => round.round)).toEqual([
+        0, 1,
+      ]);
+      expect(resumed.state.roundOutputs[0]?.outputs[0]?.round).toBe(0);
     }),
   );
 
@@ -969,14 +937,11 @@ describe('the output facts a reflection round publishes', () => {
       const session = yield* createProcessSession();
       const runId = startedRun(session);
       const logger = new TraceEmitter();
-      const recorded = recordTraceEvents(logger);
       scripted.compileResults.set(0, compileFailure(0));
 
-      yield* runLoop({ runId, session, rounds: 1, logger });
+      const completed = yield* runLoop({ runId, session, rounds: 1, logger });
 
-      const failures = runFactsOfKey(recorded.events, 'compileFailures');
-      expect(failures).toHaveLength(1);
-      expect(failures[0]?.filesByRound[0]).toMatchObject([
+      expect(completed.state.roundOutputs[0]?.compileFailures).toMatchObject([
         { round: 0, displayName: 'main.tex' },
       ]);
     }),
@@ -1158,15 +1123,15 @@ describe('an interrupted reflection run', () => {
         );
 
         // The first round's stage closed with its own verdict; only the
-        // interrupted one is cancelled, and its outputs stay on the
-        // snapshot a resume continues from.
+        // interrupted one is cancelled, and its outputs stay in the
+        // ledger a resume continues from.
         expect(roundStageOutcomes(store)).toEqual([
           RUN_OUTCOME.COMPLETED,
           RUN_OUTCOME.CANCELLED,
         ]);
         expect(halted.outcome).toBe(RUN_OUTCOME.CANCELLED);
         expect(flowOf(halted).currentRound).toBe(1);
-        expect(flowOf(halted).roundOutputs[0]?.outputs).toHaveLength(1);
+        expect(halted.roundOutputs[0]?.outputs).toHaveLength(1);
 
         const resumed = yield* runLoop({
           runId,

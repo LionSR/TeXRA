@@ -8,7 +8,7 @@ import { Effect, FileSystem, PlatformError } from 'effect';
 import { afterEach, describe, expect, vi } from 'vitest';
 
 // Local imports
-import { publishCompiledPdfArtifact } from '@agent/implementations/flows/reflection/output/compiledPdfArtifacts';
+import { publishCompiledPdfArtifact } from '@agent/output/compiledPdfArtifacts';
 import type { RunId } from '@shared/schemas';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';

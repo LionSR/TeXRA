@@ -41,36 +41,29 @@ import {
 
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { userRequestTemplateCount } from '@agent/index/agentYamlScanner';
-import {
-  compileFailuresOf,
-  runCompileCheck,
-} from '@agent/implementations/flows/reflection/output/compileCheck';
+import { compileFailuresOf, runCompileCheck } from '@agent/output/compileCheck';
 import {
   appendCompileFailureRoundContext,
   formatCompileFailureRoundContext,
-} from '@agent/implementations/flows/reflection/output/compileFailureRoundContext';
-import { LatexDiffManager } from '@agent/implementations/flows/reflection/output/LatexDiffManager';
-import { traceFileLineage } from '@agent/implementations/flows/reflection/output/lineageMapping';
-import { extractFilesFromXml } from '@agent/implementations/flows/reflection/output/outputFileExtraction';
-import { recoverOutputFailure } from '@agent/implementations/flows/reflection/output/outputOperations';
+} from '@agent/output/compileFailureRoundContext';
+import { LatexDiffManager } from '@agent/output/LatexDiffManager';
+import { traceFileLineage } from '@agent/output/lineageMapping';
+import { extractFilesFromXml } from '@agent/output/outputFileExtraction';
+import { recoverOutputFailure } from '@agent/output/outputOperations';
 import {
   createOutputState,
   ensureRoundData,
-  getCompileFailuresByRound,
   getOutputFilesByRound,
   roundsFromPersisted,
   roundsToPersisted,
   setCompileFailures,
   type OutputDependencies,
-} from '@agent/implementations/flows/reflection/output/outputState';
-import { checkExpectedOutputs } from '@agent/implementations/flows/reflection/output/outputValidation';
-import {
-  summarizeRound,
-  type RoundSummary,
-} from '@agent/implementations/flows/reflection/output/roundSummary';
-import { resolveBaseFilesForDiff } from '@agent/implementations/flows/reflection/output/snapshotResolution';
-import type { RoundFileMapping } from '@agent/implementations/flows/reflection/output/types';
-import { XmlOutputManager } from '@agent/implementations/flows/reflection/output/XmlOutputManager';
+} from '@agent/output/outputState';
+import { checkExpectedOutputs } from '@agent/output/outputValidation';
+import { summarizeRound, type RoundSummary } from '@agent/output/roundSummary';
+import { resolveBaseFilesForDiff } from '@agent/output/snapshotResolution';
+import type { RoundFileMapping } from '@agent/output/types';
+import { XmlOutputManager } from '@agent/output/XmlOutputManager';
 import {
   getSystemPromptWithRules,
   PromptBuilder,
@@ -117,6 +110,7 @@ import { turnText } from '../run/turnText';
 import { ModelInvoker } from '../ModelInvoker';
 import {
   appendRow,
+  rowAggregate,
   NOT_RESUMABLE_MESSAGE,
   reflectionFlowState,
   reflectionSnapshotRow,
@@ -165,7 +159,6 @@ interface OutputExecResult {
   summary: RoundSummary;
   compileResult?: CompileResult;
   compiledArtifacts: RunStorageFileLocation[];
-  emitCompileFailures: boolean;
 }
 
 type RoundExit = {
@@ -305,14 +298,12 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     workspaceSnapshot: AgentWorkspaceState.emptySnapshot(),
     outputLocation: null,
     runStateSnapshot: { totalRounds, totalResponseTimeMs: 0 },
-    roundOutputs: [],
     continueRounds: true,
     endTurn: false,
   };
   const flowState = (): ReflectionFlowState => ({
     ...flow,
     workspaceSnapshot: workspace.toSnapshot({ excludeAssemblyStrings: true }),
-    roundOutputs: roundsToPersisted(outputState),
   });
   const snapshot = (
     state: RunState,
@@ -359,7 +350,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     if (round === 0) {
       return config.inputFiles.map((f) => fileService.createLocation(f));
     }
-    const previous = flow.roundOutputs[round - 1];
+    const previous = outputState.rounds.get(round - 1);
     if (previous?.outputs.length) {
       return previous.outputs.map((o) => o.location);
     }
@@ -420,7 +411,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     // response that actually arrives clears it (below).
     lastError = state.lastError ?? undefined;
     workspace = AgentWorkspaceState.fromSnapshot(persisted.workspaceSnapshot);
-    outputState.rounds = roundsFromPersisted(persisted.roundOutputs);
+    outputState.rounds = roundsFromPersisted(state.roundOutputs);
     // Mid-round, the raw output file holds the text every earlier response
     // cycle produced; the next connector and continuation prompt read its tail.
     if (
@@ -836,7 +827,6 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     let mapping: RoundFileMapping | undefined;
     let compileRoundResult: CompileResult | undefined;
     const compiledArtifacts: RunStorageFileLocation[] = [];
-    let emitCompileFailures = false;
     if (endTurn) {
       logger.debug(`Processing output for round ${round}`);
       yield* xmlManager
@@ -855,8 +845,6 @@ export const runReflection = Effect.fn('reflection.run')(function* (
           ...(yield* diffManager.handleLatexdiffOfOutput(round, mapping)),
         );
         yield* Effect.gen(function* () {
-          const hadCompileFailures =
-            (outputState.rounds.get(round)?.compileFailures.length ?? 0) > 0;
           const check = yield* runCompileCheck(
             {
               roots,
@@ -871,8 +859,6 @@ export const runReflection = Effect.fn('reflection.run')(function* (
           compiledArtifacts.push(...check.artifacts);
           const compileFailures = compileFailuresOf(check.compileResult);
           setCompileFailures(outputState, round, compileFailures);
-          emitCompileFailures =
-            compileFailures.length > 0 || hadCompileFailures;
         }).pipe(recoverWarn('Compile check'));
       }
     }
@@ -887,7 +873,6 @@ export const runReflection = Effect.fn('reflection.run')(function* (
       summary,
       compileResult: compileRoundResult,
       compiledArtifacts,
-      emitCompileFailures,
     };
   });
 
@@ -912,7 +897,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
             `Output fallback summary failed; output files may be dropped: ${toErrorMessage(summaryError)}`,
             { data: summaryError },
           );
-          return { fileInfos: [], filesToOpen: [] };
+          return { filesToOpen: [] };
         }),
       ),
     );
@@ -924,7 +909,6 @@ export const runReflection = Effect.fn('reflection.run')(function* (
       summary,
       compileResult: undefined,
       compiledArtifacts: [],
-      emitCompileFailures: false,
     };
   });
 
@@ -938,23 +922,6 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     const interactions = session.interactions;
     const { summary } = result;
     const compileFailures = compileFailuresOf(result.compileResult);
-    // Latest-only listing rows: each carries the run's whole round map.
-    const files = { ...getOutputFilesByRound(outputState) };
-    files[round] = summary.fileInfos;
-    logger.emit({
-      type: 'run.fact',
-      fact: { key: 'outputFiles', filesByRound: files },
-    });
-    if (result.emitCompileFailures) {
-      const failures = {
-        ...getCompileFailuresByRound(outputState),
-        [round]: compileFailures,
-      };
-      logger.emit({
-        type: 'run.fact',
-        fact: { key: 'compileFailures', filesByRound: failures },
-      });
-    }
     for (const location of summary.filesToOpen) {
       yield* interactions.emit('requestOpenFile', {
         location,
@@ -1039,7 +1006,17 @@ export const runReflection = Effect.fn('reflection.run')(function* (
       ),
     );
     yield* publishOutput(round, location, endTurn, result);
-    return state;
+    // The row owns completed outputs; output.pending remains replayable until
+    // the round-end snapshot commits, over the same run-owned raw artifacts.
+    return yield* commit(
+      yield* ledger.appendBatch(runId, state, [
+        {
+          type: 'output.produced',
+          aggregateId: rowAggregate(runId),
+          rounds: roundsToPersisted(outputState),
+        },
+      ]),
+    );
   });
 
   /** One round inside its trace stage: prompt, response cycles, output. */

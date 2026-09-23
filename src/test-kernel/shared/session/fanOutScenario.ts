@@ -337,8 +337,16 @@ export function buildScenario({ proposal = false } = {}) {
     payload: { family: 'toolUse', step: 'turn.begin', turn: 1 },
   });
   log.emit(GRANDCHILD, T.grandchildFiles, {
-    type: 'run.fact',
-    fact: { key: 'outputFiles', filesByRound: { 1: [] } },
+    type: 'output.produced',
+    rounds: [
+      {
+        round: 1,
+        rawOutput: null,
+        outputs: [],
+        compileFailures: [],
+        missingOutputs: [],
+      },
+    ],
   });
   log.emit(GRANDCHILD, T.grandchildDone, {
     type: 'run.end',

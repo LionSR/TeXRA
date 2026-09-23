@@ -15,13 +15,12 @@ import { z } from 'zod';
 import { InquiryThreadRecordSchema } from './inquiry';
 import { JsonValueSchema } from './jsonValue';
 import { PlanSchema } from './plan';
-import { RoundKeyedOutputSidecarValueSchemas } from './runState';
 import { TodoItemSchema } from './todo';
 import { UpdateCheckRecordSchema } from './updateCheck';
 
 /**
  * One durable run fact: the latest value of one key family on its run. One
- * row type, one aggregate kind (the run), five families. `key` is also what
+ * row type, one aggregate kind (the run), two families. `key` is also what
  * the cold listing groups by beside the row type, so one family's newest row
  * never hides another's and a plan can never be committed under the todos
  * key.
@@ -29,18 +28,6 @@ import { UpdateCheckRecordSchema } from './updateCheck';
 export const RunFactSchema = z.discriminatedUnion('key', [
   z.object({ key: z.literal('todos'), todos: z.array(TodoItemSchema) }),
   z.object({ key: z.literal('plan'), plan: PlanSchema.nullable() }),
-  z.object({
-    key: z.literal('outputFiles'),
-    filesByRound: RoundKeyedOutputSidecarValueSchemas.outputFiles,
-  }),
-  z.object({
-    key: z.literal('missingOutputs'),
-    filesByRound: RoundKeyedOutputSidecarValueSchemas.missingOutputs,
-  }),
-  z.object({
-    key: z.literal('compileFailures'),
-    filesByRound: RoundKeyedOutputSidecarValueSchemas.compileFailures,
-  }),
 ]);
 
 /** A stored value as the journal and the state store keep it: `undefined` is

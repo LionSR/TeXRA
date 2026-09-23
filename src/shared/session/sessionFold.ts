@@ -33,27 +33,15 @@
  * direct child's progress. Folding a frame defers that derivation to the
  * end of the frame, so a replay of R events derives each board once.
  *
- * The publication contract (decision D5): every view `fold` returns is
- * immutable, and untouched branches are shared by reference between levels.
- * `view.runs`, `view.policy`, `view.folded`, `view.queuedFollowUps`, and
- * a transcript's `rows` and `taskGroups` are copied at most once per `fold`
- * call, by the write that touches them (`writableMap`,
- * `writableTranscriptArray`), and never written after the call returns.
- * The copy belongs to the write, not to the input: an entry that projects no
- * row, one that lands no task group, and a delete of a key its map never
- * held all leave those branches the objects the previous level published.
- * Every `RunView` value, every `TranscriptView` value, and the
- * `SessionView` envelope are replaced on change and never mutated, so a host
- * comparing them by identity sees exactly what changed and an older view
- * stays stable to read. The fold's own indexes are not inputs: they live in
- * module-private maps keyed by the value they index, per transcript (row and
- * group positions, the measured live text, the newest thinking row) and per
- * view (the claims, the newest commit per listing entry, the live text per
- * row, the local snapshot, runs by owner, the ended runs, the listed
- * aggregates, each run's shared-row slice), single-owner and advancing with
- * the latest level only. The invariant the copy rests on: an arm that writes
- * a container reports `changed`, so `foldWith` publishes the envelope
- * holding the copy; a write followed by "no change" would be dropped.
+ * Publication (D5): returned views are immutable; untouched branches retain
+ * identity. writableMap/writableTranscriptArray copy each changed container
+ * at most once per fold, and writes stop when fold returns. No-op writes keep
+ * the previous branch. RunView, TranscriptView, and SessionView are replaced
+ * on change, preserving older views and identity-based host comparisons.
+ * Indexes are module-private, keyed by their transcript/view, and advance only
+ * with the latest level: row/group positions, text and thinking state, claims,
+ * listing commits, owners, ended/listed runs, snapshots, and shared-row slices.
+ * Every container write must report changed so foldWith publishes its copy.
  */
 
 import {
@@ -1467,20 +1455,32 @@ function applyOwnArm(run: RunView, event: DisplaySessionEvent): RunView {
           ),
         },
       };
+    case 'output.produced': {
+      const files = nonEmptyRounds(
+        Object.fromEntries(
+          event.rounds.map((round) => [round.round, round.outputs]),
+        ),
+      );
+      return {
+        ...run,
+        ...(run.category === AgentCategory.Workflow
+          ? { files }
+          : { outputs: files }),
+        compileFailures: nonEmptyRounds(
+          Object.fromEntries(
+            event.rounds.map((round) => [round.round, round.compileFailures]),
+          ),
+        ),
+        missingOutputs: Object.fromEntries(
+          event.rounds.map((round) => [round.round, round.missingOutputs]),
+        ),
+      };
+    }
     case 'run.fact': {
       // Every family is a latest-only listing key of its own, so a cold
       // read delivers one row per family and each row carries the run's
       // whole value: the newest row replaces what the view holds.
       const fact = event.fact;
-      if (fact.key === 'missingOutputs')
-        // An empty round is a fact, not an absence: the round was checked.
-        return { ...run, missingOutputs: { ...fact.filesByRound } };
-      if (fact.key === 'compileFailures')
-        return { ...run, compileFailures: nonEmptyRounds(fact.filesByRound) };
-      if (fact.key === 'outputFiles')
-        return run.category === AgentCategory.Workflow
-          ? { ...run, files: nonEmptyRounds(fact.filesByRound) }
-          : { ...run, outputs: nonEmptyRounds(fact.filesByRound) };
       if (run.category !== AgentCategory.ToolUse)
         return wrongArm(run, `run.fact ${fact.key}`);
       return fact.key === 'todos'

@@ -11,7 +11,7 @@ import { debugInternal } from '@agent/trace';
 import type { FileLocation } from '@shared/schemas';
 
 import {
-  publishMissingOutputs,
+  ensureRoundData,
   reportMissingOutputs,
   type OutputDependencies,
   type OutputState,
@@ -61,7 +61,7 @@ export const checkExpectedOutputs = Effect.fn(
   // A round with nothing missing reports an empty set so consumers can
   // distinguish "checked, all present" from "never reported".
   if (missing.length === 0) {
-    publishMissingOutputs(state, deps.logger, currRound, []);
+    ensureRoundData(state, currRound).missingOutputs = [];
   }
 
   return { missing };

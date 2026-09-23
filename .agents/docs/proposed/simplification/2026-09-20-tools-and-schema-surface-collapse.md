@@ -191,28 +191,24 @@ already shipped, in smaller PRs that never came back to update this note:
   `updateCompileFailures` and the three singleton record types no longer
   exist as separate schema arms. `runFactEvents.ts` is gone.
   `src/agent/storage/runRecords.ts` has no restated latest-row readers.
-- **Step 4 (`ExecutionsTool`), mostly, corrected on a review catch.** Its own
-  module docstring now states the invariant directly: "every fact about a
-  run... is read off the session fold (`SessionView`)... this surface never
-  resolves liveness, parentage or a task list a second time." One documented
-  exception the docstring doesn't cover: `/report` and `/result`
-  (`showReport`/`showResultMeta`, `ExecutionsTool.ts:559-596`) call
-  `turnAttributionNote`, which calls `resolveRunLiveness`
-  (`executions/runLiveness.ts`) — a second read against `Runs`, the run-end
-  row and claim ownership, not the fold. An earlier pass of this note
-  claimed the fold carries no reason string for the unsettled/interrupted
-  cases, which is wrong and was caught on review: `RunView.statusDetail`
-  (`sessionView.ts`) is filled by `withAggregates`
-  (`sessionFold.ts`) with `runInterruptedMessage()` or
-  `runHeldMessage(ownerPid(heldBy))` for exactly the interrupted and
-  foreign-held cases `resolveRunLiveness` also names. The one case the fold's
-  `statusDetail` does not cover is narrower: this process holding the run's
-  claim with no tracked handle and no recorded outcome — the anomaly
-  `resolveRunLiveness` calls `OWNED_HERE_REASON` and logs as a leak, which
-  the fold's `own` branch instead folds into ordinary "held," no detail
-  attached. Whether that narrow gap justifies a second full liveness read
-  (rather than, say, the fold flagging that one anomaly too) is not settled
-  by this note.
+- **Step 4 (`ExecutionsTool`), report/result exception retained after audit.**
+  `/report` and `/result` call `turnAttributionNote`, which reads child turn
+  attribution and calls `resolveRunLiveness`. The session fold carries
+  `statusDetail` for interrupted and foreign-held runs, but is not an equally
+  fresh ownership authority. `SessionHandle.claimOwner` reads the database
+  and proves liveness during the call; the view's local liveness prober only
+  watches owners of resident runs. A cold view of a nonresident run can
+  therefore describe a dead foreign owner as held. The self-owned orphan
+  claim also requires a current claim and absence of a tracked handle.
+
+  Replacing this check with `readView([runId])` would additionally read the
+  listing, replay the aggregate and read the input batch
+  (`controllers/session/sessionInputs.ts`), while the child turn identity
+  still requires its own aggregate read. Keep the targeted run-end/claim
+  check: this proposed collapse neither preserves freshness nor reduces
+  reads. The separate `workflowScriptAgentRunner.ts` call remains a live
+  replay/admission fence. No new cache, mirror or service is warranted.
+
 - **Step 5 (replacement categories).** `NON_REGEX_REPLACEMENT_CATEGORIES` /
   `REGEX_REPLACEMENT_CATEGORIES` in
   `@shared/constants/replacementCategories` are the one declaration;
