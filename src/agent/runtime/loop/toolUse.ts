@@ -558,8 +558,8 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       for (;;) {
         state = yield* applyPendingModelSwitch(state, cell);
         if (state.pendingResponse !== null) {
-          const dispatched = yield* dispatchPendingResponse(state, turnContext);
-          state = yield* cell.adopt(dispatched.state);
+          const dispatched = yield* dispatchPendingResponse(cell, turnContext);
+          state = dispatched.state;
           if (dispatched.endTurn) return completeTurn(state);
           continue;
         }
@@ -613,14 +613,14 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
             ? { name: forcedTool }
             : undefined;
         forcedTool = null;
-        const outcome = yield* invoker.invoke(state, {
+        const outcome = yield* invoker.invoke(cell, {
           system: systemPrompt,
           tools,
           toolChoice,
           round: state.round,
           debugName: 'tooluse',
         });
-        state = yield* cell.adopt(outcome.state);
+        state = outcome.state;
         if (outcome.kind === 'cancelled') {
           return { state, outcome: 'cancelled' } as const;
         }

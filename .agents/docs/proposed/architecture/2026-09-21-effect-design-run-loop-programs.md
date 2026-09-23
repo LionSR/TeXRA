@@ -73,7 +73,7 @@ export const makeRunCell = (
 ): Effect.Effect<RunCell, never, RunLedger>;
 ```
 
-`Ref`, not `SynchronizedRef`: one fiber owns a run (the loop, the invoker and the dispatcher all run on it), so a lock would be a primitive bought against no contention. The cell is seeded with a non-null `RunState` because it is created inside acquire, after the run is opened or restored, which is what removes the null branch from every reader.
+`Ref`, not `SynchronizedRef`: one fiber owns a run (the loop, the invoker and the dispatcher all run on it), so a lock would be a primitive bought against no contention. (Amended by PR-D: the premise does not hold for the dispatcher, whose parallel partition settles calls on sibling fibers that each fold onto the one before, which is why `toolUseDispatch` held its own `SynchronizedRef`. Once the cell reaches dispatch it is that `SynchronizedRef`, and `append` also takes a `(state) => rows` builder so rows that read the state are built from the state they commit against.) The cell is seeded with a non-null `RunState` because it is created inside acquire, after the run is opened or restored, which is what removes the null branch from every reader.
 
 Every `state = yield* commit(yield* ledger.appendBatch(runId, state, rows))` becomes `state = yield* cell.append(rows)`. `RunLedger` stays stateless by construction (runLedger.ts header: the loop holds the RunState); the cell lives on the run, not on the session-root service.
 

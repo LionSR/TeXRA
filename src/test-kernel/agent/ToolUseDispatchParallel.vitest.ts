@@ -48,6 +48,7 @@ import type {
   RuntimeToolRegistry,
   ToolServices,
 } from '@agent/runtime/ToolServices';
+import { makeRunCell } from '@agent/runtime/loop/runProgram';
 import { dispatchPendingResponse } from '@agent/runtime/loop/toolUseDispatch';
 import {
   appendRow,
@@ -404,10 +405,15 @@ const openDispatch = Effect.fn('openDispatch')(function* (
 
 /** Dispatch the pending response of an opened run. */
 const dispatch = (kit: DispatchKit, userInstruction?: string) =>
-  dispatchPendingResponse(kit.state, {
-    workspace: kit.workspace,
-    userInstruction,
-  }).pipe(Effect.provide(kit.layer));
+  makeRunCell(kit.runId, kit.state).pipe(
+    Effect.flatMap((cell) =>
+      dispatchPendingResponse(cell, {
+        workspace: kit.workspace,
+        userInstruction,
+      }),
+    ),
+    Effect.provide(kit.layer),
+  );
 
 /** The one tool group the dispatch delivers, in call order. */
 function deliveredResults(

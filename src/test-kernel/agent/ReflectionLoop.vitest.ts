@@ -46,6 +46,7 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { UsageMonitor } from '@agent/runtime/UsageMonitor';
 import { TraceEmitter } from '@agent/trace';
 import { Runs } from '@agent/runtime/runRegistry';
+import type { RunCell } from '@agent/runtime/loop/runProgram';
 import { StateReadFailed } from '@platform/interfaces';
 import {
   LanguageModel,
@@ -338,16 +339,16 @@ function invokerLayer(init: LoopInit, requests: InvokeRequest[]) {
     ModelInvoker,
     Effect.gen(function* () {
       const run = yield* AgentRun;
-      const ledger = yield* RunLedger;
       const aggregateId = rowAggregate(run.runId);
       return {
-        invoke: (state: RunState, request: InvokeRequest) =>
+        invoke: (cell: RunCell, request: InvokeRequest) =>
           Effect.gen(function* () {
+            const state = yield* cell.current;
             const turnScript = init.turns?.[requests.length] ?? COMPLETE;
             requests.push(request);
             if (init.beforeResponse) yield* init.beforeResponse(request.round);
             if ('failWith' in turnScript) {
-              const failed = yield* ledger.appendBatch(run.runId, state, [
+              const failed = yield* cell.append([
                 snapshotRow(run.runId, state, {
                   runtime: {
                     lastError: turnScript.failWith,
@@ -368,7 +369,7 @@ function invokerLayer(init: LoopInit, requests: InvokeRequest[]) {
               turnScript.text ?? `round ${request.round} output`,
               turnScript.finish,
             );
-            const next = yield* ledger.appendBatch(run.runId, state, [
+            const next = yield* cell.append([
               {
                 type: 'model.message',
                 aggregateId,

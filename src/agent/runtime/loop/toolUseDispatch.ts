@@ -48,7 +48,7 @@ import {
   type ToolResultPayload,
 } from '@shared/schemas';
 import { JsonValueSchema } from '@shared/schemas';
-import { RunLedger, RunLedgerRefused } from '@shared/session/runLedger';
+import { RunLedgerRefused } from '@shared/session/runLedger';
 import { DatabaseWriteFailed } from '@shared/session/database';
 import {
   foldRunState,
@@ -82,6 +82,7 @@ import {
 } from './rows';
 import type { InvokeError } from '../ModelInvoker';
 import type { Runs } from '../runRegistry';
+import type { RunCell } from './runProgram';
 
 /** Max concurrently executing tool calls within one parallel-safe partition. */
 const MAX_PARALLEL_TOOL_CALLS = 4;
@@ -254,41 +255,25 @@ function settlementContent(
 
 /** Dispatch every unsettled call of the pending response, then deliver. */
 export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
-  initial: RunState,
+  cell: RunCell,
   turn: TurnContext,
 ): Effect.fn.Return<
   DispatchOutcome,
   InvokeError,
-  AgentRun | RunLedger | ProcessServices | Runs | WorkspaceFs | StorageFs
+  AgentRun | ProcessServices | Runs | WorkspaceFs | StorageFs
 > {
   const run = yield* AgentRun;
-  const ledger = yield* RunLedger;
   const { runId, logger } = run;
   const aggregateId = rowAggregate(runId);
+  const initial = yield* cell.current;
   const pending = initial.pendingResponse;
   if (pending === null) return { state: initial, endTurn: false };
   const { responseId } = pending;
   const calls = localCallsOf(pending.turn);
-  const stateRef = yield* SynchronizedRef.make(initial);
-
-  /** Append rows under the state's semaphore: concurrent settlements of one
-   *  parallel partition serialize here and each folds onto the latest. Rows
-   *  may be built from that latest state, so a settlement that carries the
-   *  workspace it mutated records it in the order the batches commit. */
-  const append = (
-    rows:
-      | readonly RunLedgerDraft[]
-      | ((state: RunState) => readonly RunLedgerDraft[]),
-  ) =>
-    SynchronizedRef.updateEffect(stateRef, (state) =>
-      Effect.uninterruptible(
-        ledger.appendBatch(
-          runId,
-          state,
-          typeof rows === 'function' ? rows(state) : rows,
-        ),
-      ),
-    );
+  // Concurrent settlements of one parallel partition serialize under the
+  // cell's lock and each folds onto the latest state, so a settlement that
+  // carries the workspace it mutated records it in the order batches commit.
+  const { append } = cell;
   const settledOf = (state: RunState, callId: string) =>
     state.pendingResponse?.responseId === responseId
       ? (state.pendingResponse.settled[callId] ?? null)
@@ -610,7 +595,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
       readonly approvalRequestId: string | null;
     },
   ): Effect.fn.Return<'rerun' | 'skip', never> {
-    let current = yield* SynchronizedRef.get(stateRef);
+    let current = yield* cell.current;
     const question = `The tool "${fact.toolName}" may have run before the run was interrupted, and no result was recorded. Run it again, or skip it?`;
     const rerunOption = 'Run again';
     // Only a person decides this barrier: the answer's chosen option, or a
@@ -684,7 +669,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
           requestId,
         }),
       ]).pipe(Effect.orDie);
-      current = yield* SynchronizedRef.get(stateRef);
+      current = yield* cell.current;
     }
     // The decision is the `request.decided` row the decide command lands on
     // the tail. A plane that closes first, and every refusal a person did not
@@ -706,17 +691,17 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
         ),
       );
     if (row === null) return yield* Effect.interrupt;
-    yield* SynchronizedRef.update(stateRef, (state) => {
-      const folded = foldRunState(state, [row]);
-      if (Result.isFailure(folded) || folded.success === null) {
-        throw new Error(
+    const folded = foldRunState(yield* cell.current, [row]);
+    if (Result.isFailure(folded) || folded.success === null) {
+      return yield* Effect.die(
+        new Error(
           `The tool-outcome decision does not fold onto the run: ${
             Result.isFailure(folded) ? folded.failure.detail : 'no state'
           }`,
-        );
-      }
-      return folded.success;
-    });
+        ),
+      );
+    }
+    yield* cell.adopt(folded.success);
     const answer = decided(row.decision);
     if (answer === null) return yield* Effect.interrupt;
     return yield* recordOutcomeDecision(fact, call, intent, answer);
@@ -756,7 +741,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     InvokeError,
     ProcessServices | Runs | WorkspaceFs | StorageFs
   > {
-    const current = yield* SynchronizedRef.get(stateRef);
+    const current = yield* cell.current;
     if (settledOf(current, fact.callId) !== null) return;
     const call = calls[fact.ordinal];
     if (call === undefined) {
@@ -814,7 +799,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     InvokeError,
     ProcessServices | Runs | WorkspaceFs | StorageFs
   > {
-    const current = yield* SynchronizedRef.get(stateRef);
+    const current = yield* cell.current;
     if (settledOf(current, fact.callId) !== null) return;
     const primary = settledOf(current, primaryId);
     if (primary === null) {
@@ -858,7 +843,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
         yield* deriveDuplicate(fact, fact.duplicateOf);
       }
     }
-    const after = yield* SynchronizedRef.get(stateRef);
+    const after = yield* cell.current;
     if (!endTurn) {
       endTurn = members.some((fact) => {
         const settled = settledOf(after, fact.callId);
@@ -868,7 +853,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
   }
 
   // Delivery: the paid turn enters history once, with the complete group.
-  const settledState = yield* SynchronizedRef.get(stateRef);
+  const settledState = yield* cell.current;
   const settledPending = settledState.pendingResponse;
   if (settledPending === null || settledPending.responseId !== responseId) {
     return yield* Effect.die(
@@ -977,13 +962,13 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
             excludeAssemblyStrings: true,
           }),
         };
-  const delivered = yield* ledger.appendBatch(runId, settledState, [
+  const delivered = yield* cell.append((state) => [
     appendRow(runId, [group], responseId),
-    snapshotRow(runId, settledState, {
+    snapshotRow(runId, state, {
       phase: 'results.ready',
       state: { family: 'toolUse', state: { ...flow, stateSlices } },
     }),
-    stepRow(runId, settledState, 'results.ready'),
+    stepRow(runId, state, 'results.ready'),
   ]);
   return { state: delivered, endTurn };
 });

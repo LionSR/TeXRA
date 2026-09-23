@@ -51,6 +51,7 @@ import {
   modelInvokerLayer,
   type InvokeRequest,
 } from '@agent/runtime/ModelInvoker';
+import { makeRunCell } from '@agent/runtime/loop/runProgram';
 import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
 import type { BoundModel } from '@agent/runtime/run/modelBinding';
 import { classifyModelFailure } from '@agent/runtime/run/modelFailure';
@@ -343,8 +344,8 @@ interface InvokerKit {
   readonly runId: RunId;
   /** The folded state of the freshly opened run. */
   readonly state: RunState;
-  /** `ModelInvoker` over this run's ledger, with nothing left to provide. */
-  readonly layer: Layer.Layer<ModelInvoker>;
+  /** `ModelInvoker` and this run's ledger, with nothing left to provide. */
+  readonly layer: Layer.Layer<ModelInvoker | RunLedger>;
 }
 
 /**
@@ -378,19 +379,19 @@ const openRun = Effect.fn('openRun')(function* (
   ]);
   const bound = yield* SynchronizedRef.make(boundModel(model, overrides));
   const layer = modelInvokerLayer().pipe(
-    Layer.provide([
+    Layer.provide(
       Layer.succeed(AgentRun, agentRun(runId, session, logger, bound)),
-      Layer.succeed(RunLedger, session.ledger),
-    ]),
+    ),
+    Layer.merge(Layer.succeed(RunLedger, session.ledger)),
   );
   return { runId, state, layer };
 });
 
 /** One invocation on an opened run. */
-const invokeOn = ({ layer, state }: InvokerKit) =>
+const invokeOn = ({ layer, runId, state }: InvokerKit) =>
   Effect.gen(function* () {
     const invoker = yield* ModelInvoker;
-    return yield* invoker.invoke(state, REQUEST);
+    return yield* invoker.invoke(yield* makeRunCell(runId, state), REQUEST);
   }).pipe(
     // `invoke`'s debug-object sink writes through the process `FileSystem`;
     // this suite runs on `it.effect`'s own runtime, so the service comes from

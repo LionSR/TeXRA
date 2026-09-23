@@ -1006,7 +1006,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
             run.userVarChannels,
             roots.workspace,
           );
-          const outcome = yield* invoker.invoke(state, {
+          const outcome = yield* invoker.invoke(cell, {
             system,
             tools: [],
             toolChoice: undefined,
@@ -1014,7 +1014,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
             round,
             debugName: `r${round}`,
           });
-          state = yield* cell.adopt(outcome.state);
+          state = outcome.state;
           if (outcome.kind === 'cancelled') {
             return { state, kind: 'cancelled' } as const;
           }

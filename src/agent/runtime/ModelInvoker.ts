@@ -24,7 +24,6 @@ import {
   Exit,
   type FileSystem,
   Layer,
-  Ref,
   Result,
   Scope,
   Stream,
@@ -66,7 +65,7 @@ import {
   type RetryErrorInfo,
 } from '@shared/schemas';
 import { DatabaseWriteFailed } from '@shared/session/database';
-import { RunLedger, RunLedgerRefused } from '@shared/session/runLedger';
+import { RunLedgerRefused } from '@shared/session/runLedger';
 import { foldRunState, type RunState } from '@shared/session/runStateFold';
 import { generateShortId } from '@utils/core';
 import { readSettingFrom } from '@utils/config/platformSettings';
@@ -92,6 +91,7 @@ import {
   snapshotRow,
   stepRow,
 } from './loop/rows';
+import type { RunCell } from './loop/runProgram';
 import type { HttpClient } from 'effect/unstable/http';
 import type { RoutePolicy } from './ModelRetryGate';
 
@@ -184,7 +184,7 @@ export class ModelInvoker extends Context.Service<
   ModelInvoker,
   {
     readonly invoke: (
-      state: RunState,
+      cell: RunCell,
       request: InvokeRequest,
     ) => Effect.Effect<
       InvocationOutcome,
@@ -205,12 +205,9 @@ function turnReasoning(turn: TurnResult): string {
     .join('\n');
 }
 
-/** A failed attempt: its classification plus the state its rows left. */
+/** A failed attempt's classification; the rows it left are in the cell. */
 class AttemptFailed extends Error {
-  constructor(
-    readonly failure: ModelFailure,
-    readonly state: RunState,
-  ) {
+  constructor(readonly failure: ModelFailure) {
     super(failure.formatted.message);
     this.name = 'AttemptFailed';
   }
@@ -223,17 +220,19 @@ type RetryLifecycleEvent =
   | 'retry_decision_requested'
   | 'retry_decided';
 
-/** Build a request service for one run; its model and ledger identity are run-owned. */
+/**
+ * Build a request service for one run; its model is run-owned, and every row
+ * it writes goes through the run cell the loop hands each invocation.
+ */
 export const modelInvokerLayer = (): Layer.Layer<
   ModelInvoker,
   never,
-  AgentRun | RunLedger
+  AgentRun
 > =>
   Layer.effect(
     ModelInvoker,
     Effect.gen(function* () {
       const run = yield* AgentRun;
-      const ledger = yield* RunLedger;
       const { runId, session, logger } = run;
       const aggregateId = rowAggregate(runId);
 
@@ -322,32 +321,28 @@ export const modelInvokerLayer = (): Layer.Layer<
 
       const failAttempt = (
         cause: unknown,
-        at: RunState,
         bound: BoundModel,
         partialText?: string,
       ) =>
         Effect.fail(
           new AttemptFailed(
             classifyModelFailure(cause, bound.usageRoute, partialText),
-            at,
           ),
         );
 
       /**
        * Prepare one attempt's turn. A preparation that fails is this
-       * attempt's own failure, carrying the state its rows left; an
-       * interruption stays an interruption.
+       * attempt's own failure; an interruption stays an interruption.
        */
       const prepareAttempt = Effect.fn('ModelInvoker.prepare')(function* (
         bound: BoundModel,
         request: TurnRequest,
-        at: RunState,
       ): Effect.fn.Return<ResolvedTurn, AttemptFailed> {
         const prepared = yield* Effect.exit(bound.model.prepareTurn(request));
         if (Exit.isFailure(prepared)) {
           if (Cause.hasInterrupts(prepared.cause))
             return yield* Effect.interrupt;
-          return yield* failAttempt(Cause.squash(prepared.cause), at, bound);
+          return yield* failAttempt(Cause.squash(prepared.cause), bound);
         }
         return prepared.value;
       });
@@ -379,7 +374,7 @@ export const modelInvokerLayer = (): Layer.Layer<
       const eventSink =
         (
           invocation: InvocationRef,
-          stateRef: Ref.Ref<RunState>,
+          cell: RunCell,
           trace: AttemptTrace,
           completed: AttemptOutcome,
         ) =>
@@ -387,14 +382,14 @@ export const modelInvokerLayer = (): Layer.Layer<
           Effect.gen(function* () {
             switch (event.kind) {
               case 'identified': {
-                const current = yield* Ref.get(stateRef);
+                const current = yield* cell.current;
                 if (
                   current.openAttempt?.providerResponseId ===
                   event.providerResponseId
                 ) {
                   return;
                 }
-                const next = yield* ledger.appendBatch(runId, current, [
+                yield* cell.append([
                   {
                     type: 'model.message',
                     aggregateId,
@@ -406,7 +401,6 @@ export const modelInvokerLayer = (): Layer.Layer<
                     },
                   },
                 ]);
-                yield* Ref.set(stateRef, next);
                 return;
               }
               case 'delta':
@@ -437,7 +431,7 @@ export const modelInvokerLayer = (): Layer.Layer<
        * `response` row before any local tool runs.
        */
       const finishAttempt = Effect.fn('ModelInvoker.finish')(function* (
-        state: RunState,
+        cell: RunCell,
         invocation: InvocationRef,
         request: InvokeRequest,
         bound: BoundModel,
@@ -466,12 +460,7 @@ export const modelInvokerLayer = (): Layer.Layer<
           logRetryLifecycle(operationId, 'attempt_failed', bound, {
             attempt: invocation.attempt,
           });
-          return yield* failAttempt(
-            cause,
-            state,
-            bound,
-            completed.streamedText,
-          );
+          return yield* failAttempt(cause, bound, completed.streamedText);
         }
         const responseTimeMs = Date.now() - started;
         const turn = completed.value;
@@ -483,7 +472,6 @@ export const modelInvokerLayer = (): Layer.Layer<
               kind: 'malformed-output',
               message: EMPTY_RESPONSE_ERROR_MESSAGE,
             }),
-            state,
             bound,
             completed.streamedText,
           );
@@ -519,26 +507,24 @@ export const modelInvokerLayer = (): Layer.Layer<
         // The completed turn, committed once before any local tool runs. A
         // response retires the failure a retry was recovering from in the
         // same transaction, so no resume reads a delivered turn as failed.
-        const next = yield* Effect.uninterruptible(
-          ledger.appendBatch(runId, state, [
-            {
-              type: 'model.message',
-              aggregateId,
-              payload: {
-                kind: 'response',
-                responseId,
-                invocation,
-                turn,
-                calls,
-                usage,
-              },
+        const next = yield* cell.append((state) => [
+          {
+            type: 'model.message',
+            aggregateId,
+            payload: {
+              kind: 'response',
+              responseId,
+              invocation,
+              turn,
+              calls,
+              usage,
             },
-            ...(state.lastError === null
-              ? []
-              : [snapshotRow(runId, state, { runtime: { lastError: null } })]),
-            stepRow(runId, state, 'response.ready'),
-          ]),
-        );
+          },
+          ...(state.lastError === null
+            ? []
+            : [snapshotRow(runId, state, { runtime: { lastError: null } })]),
+          stepRow(runId, state, 'response.ready'),
+        ]);
         logRetryLifecycle(operationId, 'attempt_succeeded', bound, {
           attempt: invocation.attempt,
         });
@@ -563,7 +549,7 @@ export const modelInvokerLayer = (): Layer.Layer<
         resolved: Extract<ResolvedTurn, { mode: 'background' }>,
         invocation: InvocationRef,
         bound: BoundModel,
-        stateRef: Ref.Ref<RunState>,
+        cell: RunCell,
         onEvent: (event: BackgroundEvent) => Effect.Effect<void, InvokeError>,
         completed: AttemptOutcome,
       ): Effect.fn.Return<void, ModelError | InvokeError> {
@@ -581,32 +567,28 @@ export const modelInvokerLayer = (): Layer.Layer<
           return;
         }
         const deadlineAtMs = Date.now() + BACKGROUND_MAX_DURATION_MS;
-        const current = yield* Ref.get(stateRef);
-        const next = yield* Effect.uninterruptible(
-          ledger.appendBatch(runId, current, [
-            {
-              type: 'model.message',
-              aggregateId,
-              payload: {
-                kind: 'identified',
-                invocation,
-                providerResponseId: submission.operation.providerResponseId,
-                returnedModel: submission.returnedModel,
-              },
+        yield* cell.append([
+          {
+            type: 'model.message',
+            aggregateId,
+            payload: {
+              kind: 'identified',
+              invocation,
+              providerResponseId: submission.operation.providerResponseId,
+              returnedModel: submission.returnedModel,
             },
-            {
-              type: 'model.message',
-              aggregateId,
-              payload: {
-                kind: 'accepted',
-                invocation,
-                operation: submission.operation,
-                deadlineAtMs,
-              },
+          },
+          {
+            type: 'model.message',
+            aggregateId,
+            payload: {
+              kind: 'accepted',
+              invocation,
+              operation: submission.operation,
+              deadlineAtMs,
             },
-          ]),
-        );
-        yield* Ref.set(stateRef, next);
+          },
+        ]);
         yield* Stream.runForEach(
           background.observe(resolved, submission.operation, { deadlineAtMs }),
           onEvent,
@@ -616,12 +598,11 @@ export const modelInvokerLayer = (): Layer.Layer<
       /**
        * One billed attempt: prepare, commit the `attempt` row, stream or
        * submit-and-observe, commit the `response` row. Preparation and the
-       * events run interruptible; the appends are masked so a stop cannot
-       * split a request from its row. Fails with `AttemptFailed` carrying the
-       * state after the attempt row.
+       * events run interruptible; every append is the cell's, masked, so a
+       * stop cannot split a request from its row.
        */
       const attemptOnce = Effect.fn('ModelInvoker.attempt')(function* (
-        initial: RunState,
+        cell: RunCell,
         invocation: InvocationRef,
         request: InvokeRequest,
         bound: BoundModel,
@@ -631,14 +612,14 @@ export const modelInvokerLayer = (): Layer.Layer<
         AttemptFailed | InvokeError,
         FileSystem.FileSystem
       > {
-        let state = initial;
+        const state = yield* cell.current;
         const turnRequest = turnRequestFor(
           state,
           request,
           bound,
           (yield* backgroundRequested(bound)) ? 'background' : 'foreground',
         );
-        let resolved = yield* prepareAttempt(bound, turnRequest, state);
+        let resolved = yield* prepareAttempt(bound, turnRequest);
         yield* saveDebug(
           state.messages,
           'messages',
@@ -664,7 +645,6 @@ export const modelInvokerLayer = (): Layer.Layer<
                   kind: 'invalid-request',
                   message: `Input is ${inputTokens} tokens, which exceeds the model's context window of ${bound.contextWindow} tokens.`,
                 }),
-                state,
                 bound,
               );
             }
@@ -700,11 +680,10 @@ export const modelInvokerLayer = (): Layer.Layer<
               // The clamp is part of the request, so the request is prepared
               // again with it: execution never reapplies defaults over a
               // resolved turn.
-              resolved = yield* prepareAttempt(
-                bound,
-                { ...turnRequest, maxOutputTokens: reduced },
-                state,
-              );
+              resolved = yield* prepareAttempt(bound, {
+                ...turnRequest,
+                maxOutputTokens: reduced,
+              });
             }
           }
         }
@@ -713,26 +692,23 @@ export const modelInvokerLayer = (): Layer.Layer<
           delivery: resolved.mode,
         });
         // The durable fact before the billed request (F1).
-        state = yield* Effect.uninterruptible(
-          ledger.appendBatch(runId, state, [
-            {
-              type: 'model.message',
-              aggregateId,
-              payload: {
-                kind: 'attempt',
-                invocation,
-                origin: bound.origin,
-                delivery:
-                  resolved.mode === 'background' ? 'background' : 'stream',
-              },
+        yield* cell.append([
+          {
+            type: 'model.message',
+            aggregateId,
+            payload: {
+              kind: 'attempt',
+              invocation,
+              origin: bound.origin,
+              delivery:
+                resolved.mode === 'background' ? 'background' : 'stream',
             },
-          ]),
-        );
+          },
+        ]);
         const trace = openTrace();
-        const stateRef = yield* Ref.make(state);
         const started = Date.now();
         const completed: AttemptOutcome = { value: null, streamedText: '' };
-        const onEvent = eventSink(invocation, stateRef, trace, completed);
+        const onEvent = eventSink(invocation, cell, trace, completed);
         const streamed = yield* Effect.exit(
           resolved.mode === 'foreground'
             ? Stream.runForEach(bound.model.streamTurn(resolved), onEvent)
@@ -740,14 +716,13 @@ export const modelInvokerLayer = (): Layer.Layer<
                 resolved,
                 invocation,
                 bound,
-                stateRef,
+                cell,
                 onEvent,
                 completed,
               ),
         );
-        state = yield* Ref.get(stateRef);
         return yield* finishAttempt(
-          state,
+          cell,
           invocation,
           request,
           bound,
@@ -769,7 +744,7 @@ export const modelInvokerLayer = (): Layer.Layer<
        */
       const observeAccepted = Effect.fn('ModelInvoker.observeAccepted')(
         function* (
-          initial: RunState,
+          cell: RunCell,
           invocation: InvocationRef,
           request: InvokeRequest,
           bound: BoundModel,
@@ -790,7 +765,6 @@ export const modelInvokerLayer = (): Layer.Layer<
                 message:
                   'The run resumed onto a model that cannot observe its accepted background operation.',
               }),
-              initial,
               bound,
             );
           }
@@ -801,16 +775,15 @@ export const modelInvokerLayer = (): Layer.Layer<
           // anchor, and its fingerprint check would reject the turn before
           // observe can compare the admitted fingerprint and deliver the result.
           const { continuation: _prior, ...admitted } = turnRequestFor(
-            initial,
+            yield* cell.current,
             request,
             bound,
             'background',
           );
-          const resolved = yield* prepareAttempt(
-            bound,
-            { ...admitted, store: accepted.operation.store },
-            initial,
-          );
+          const resolved = yield* prepareAttempt(bound, {
+            ...admitted,
+            store: accepted.operation.store,
+          });
           if (resolved.mode !== 'background') {
             return yield* failAttempt(
               new ModelError({
@@ -818,7 +791,6 @@ export const modelInvokerLayer = (): Layer.Layer<
                 message:
                   'The resumed background operation re-prepared as a foreground turn.',
               }),
-              initial,
               bound,
             );
           }
@@ -828,7 +800,6 @@ export const modelInvokerLayer = (): Layer.Layer<
             resumed: true,
           });
           const trace = openTrace();
-          const stateRef = yield* Ref.make(initial);
           const started = Date.now();
           const completed: AttemptOutcome = { value: null, streamedText: '' };
           const streamed = yield* Effect.exit(
@@ -836,12 +807,11 @@ export const modelInvokerLayer = (): Layer.Layer<
               background.observe(resolved, accepted.operation, {
                 deadlineAtMs: accepted.deadlineAtMs,
               }),
-              eventSink(invocation, stateRef, trace, completed),
+              eventSink(invocation, cell, trace, completed),
             ),
           );
-          const state = yield* Ref.get(stateRef);
           return yield* finishAttempt(
-            state,
+            cell,
             invocation,
             request,
             bound,
@@ -861,7 +831,7 @@ export const modelInvokerLayer = (): Layer.Layer<
        * the gate reads as the waiting or in-flight attempt being abandoned.
        */
       const gatedAttempt = (
-        state: RunState,
+        cell: RunCell,
         invocation: InvocationRef,
         request: InvokeRequest,
         bound: BoundModel,
@@ -901,7 +871,7 @@ export const modelInvokerLayer = (): Layer.Layer<
           baseBackoffMs: RETRY_BACKOFF_MS,
           onWait: (delayMs) =>
             logger.debug(`Waiting ${delayMs}ms for the model recovery probe.`),
-        })(attemptOnce(state, invocation, request, bound, operationId));
+        })(attemptOnce(cell, invocation, request, bound, operationId));
       };
 
       /**
@@ -956,10 +926,7 @@ export const modelInvokerLayer = (): Layer.Layer<
           }),
         );
 
-      type Decision =
-        | { readonly kind: 'retry'; readonly state: RunState }
-        | { readonly kind: 'deny'; readonly state: RunState }
-        | { readonly kind: 'cancel'; readonly state: RunState };
+      type Decision = 'retry' | 'deny' | 'cancel';
 
       /**
        * The durable manual-retry admission. `requestId` is the outstanding
@@ -967,7 +934,7 @@ export const modelInvokerLayer = (): Layer.Layer<
        * committed with its binding before the prompt is shown.
        */
       const manualRetry = Effect.fn('ModelInvoker.manualRetry')(function* (
-        initial: RunState,
+        cell: RunCell,
         failed: BoundModel,
         // The failure as it is recorded, live or recovered from the ledger:
         // the prompt, the row and the reported error all read this one value,
@@ -981,7 +948,6 @@ export const modelInvokerLayer = (): Layer.Layer<
         InvokeError,
         LanguageModel | HttpClient.HttpClient
       > {
-        let state = initial;
         const requestId = outstanding ?? `retry-${generateShortId()}`;
         const info = toRetryErrorInfo(recorded);
         const request = {
@@ -1011,25 +977,24 @@ export const modelInvokerLayer = (): Layer.Layer<
             statusCode: info.statusCode,
             provider: info.provider,
           });
-          state = yield* Effect.uninterruptible(
-            ledger.appendBatch(runId, state, [
-              {
-                type: 'request.opened',
-                aggregateId,
-                requestId,
-                // The row is committed here rather than at the session's door
-                // (`openRequest`), so the scrub that door applies happens here:
-                // a provider message echoing an `Authorization` header never
-                // reaches a durable row.
-                payload: redactedForFact({ kind: 'retry', data: request }),
-                thread: null,
-              },
-              ...retryRows(runId, state, pendingRetry('waiting'), {
-                lastError: info,
-              }),
-            ]),
-          );
+          yield* cell.append((state) => [
+            {
+              type: 'request.opened',
+              aggregateId,
+              requestId,
+              // The row is committed here rather than at the session's door
+              // (`openRequest`), so the scrub that door applies happens here:
+              // a provider message echoing an `Authorization` header never
+              // reaches a durable row.
+              payload: redactedForFact({ kind: 'retry', data: request }),
+              thread: null,
+            },
+            ...retryRows(runId, state, pendingRetry('waiting'), {
+              lastError: info,
+            }),
+          ]);
         }
+        const state = yield* cell.current;
         logger.debug('Waiting for manual retry', { data: info.message });
         // The decision is the `request.decided` row (R5): one a surface already
         // landed for an outstanding request (a crash after the decision keeps
@@ -1065,7 +1030,7 @@ export const modelInvokerLayer = (): Layer.Layer<
                 ),
               );
             }
-            state = folded.success;
+            yield* cell.adopt(folded.success);
             decision = row.decision;
           }
         }
@@ -1075,7 +1040,11 @@ export const modelInvokerLayer = (): Layer.Layer<
         if (decision.action === 'retry') {
           logger.debug('Manual retry triggered');
           const selection = decision.credentials ?? 'configured';
-          const declinedRoutes = declinedAfter(state, selection, failed);
+          const declinedRoutes = declinedAfter(
+            yield* cell.current,
+            selection,
+            failed,
+          );
           // Always rebuild the binding on a manual retry: the user may have set
           // a new key or toggled a route preference while the panel waited, and
           // a personal-credentials answer declines the exhausted route for the
@@ -1093,15 +1062,13 @@ export const modelInvokerLayer = (): Layer.Layer<
               ),
             ),
           );
-          state = yield* Effect.uninterruptible(
-            ledger.appendBatch(runId, state, [
-              ...retryRows(runId, state, pendingRetry('authorized'), {
-                lastError: info,
-                declinedRoutes,
-              }),
-            ]),
+          yield* cell.append((state) =>
+            retryRows(runId, state, pendingRetry('authorized'), {
+              lastError: info,
+              declinedRoutes,
+            }),
           );
-          return { kind: 'retry', state };
+          return 'retry';
         }
         logProgressStatus(
           logger,
@@ -1110,25 +1077,21 @@ export const modelInvokerLayer = (): Layer.Layer<
             : 'Retry cancelled by user',
         );
         // Either answer clears the gate, keeping the failure it recorded.
-        state = yield* Effect.uninterruptible(
-          ledger.appendBatch(runId, state, [
-            ...retryRows(runId, state, null, { lastError: info }),
-          ]),
+        yield* cell.append((state) =>
+          retryRows(runId, state, null, { lastError: info }),
         );
-        return decision.action === 'deny'
-          ? { kind: 'deny', state }
-          : { kind: 'cancel', state };
+        return decision.action === 'deny' ? 'deny' : 'cancel';
       });
 
       const invoke = Effect.fn('ModelInvoker.invoke')(function* (
-        initial: RunState,
+        cell: RunCell,
         request: InvokeRequest,
       ): Effect.fn.Return<
         InvocationOutcome,
         InvokeError,
         FileSystem.FileSystem | LanguageModel | HttpClient.HttpClient
       > {
-        let state = initial;
+        const state = yield* cell.current;
         const operationId = `model-operation-${generateShortId()}`;
         // One initial attempt plus the configured number of automatic
         // retries; the schema bounds the setting to [0, 5] and falls back to
@@ -1198,38 +1161,35 @@ export const modelInvokerLayer = (): Layer.Layer<
                 );
               }
               const decision = yield* manualRetry(
-                state,
+                cell,
                 bound,
                 failure,
                 failedAttempt,
                 operationId,
                 outstanding,
               );
-              state = decision.state;
               outstanding = null;
-              if (decision.kind === 'deny') {
+              if (decision === 'deny') {
                 return {
                   kind: 'failed',
-                  state,
+                  state: yield* cell.current,
                   error: toRetryErrorInfo(failure),
                 };
               }
-              if (decision.kind === 'cancel')
-                return { kind: 'cancelled', state };
+              if (decision === 'cancel')
+                return { kind: 'cancelled', state: yield* cell.current };
             }
             // Consume the permit: `started` commits with the attempt row, so
             // a crash after this transaction cannot reuse the authorization.
-            const gate = state.pendingRetry;
+            const gate = (yield* cell.current).pendingRetry;
             if (gate === null) {
               return yield* Effect.die(
                 new Error('An authorized retry has no gate.'),
               );
             }
-            state = yield* Effect.uninterruptible(
-              ledger.appendBatch(runId, state, [
-                retryRow(runId, { ...gate, substate: 'started' }),
-              ]),
-            );
+            yield* cell.append([
+              retryRow(runId, { ...gate, substate: 'started' }),
+            ]);
             admission = 'automatic';
           }
           let invocation: InvocationRef;
@@ -1238,7 +1198,7 @@ export const modelInvokerLayer = (): Layer.Layer<
             invocation = observing.invocation;
             exit = yield* Effect.exit(
               observeAccepted(
-                state,
+                cell,
                 invocation,
                 request,
                 yield* SynchronizedRef.get(run.model),
@@ -1252,7 +1212,7 @@ export const modelInvokerLayer = (): Layer.Layer<
             attempt += 1;
             exit = yield* Effect.exit(
               gatedAttempt(
-                state,
+                cell,
                 invocation,
                 request,
                 yield* SynchronizedRef.get(run.model),
@@ -1272,12 +1232,12 @@ export const modelInvokerLayer = (): Layer.Layer<
             }
             return yield* Effect.die(error);
           }
-          state = error.state;
           lastFailure = error.failure.formatted;
           failedAttempt = invocation;
           automaticAttempts += 1;
           const { failure } = error;
-          if (isUserAbort(failure.error)) return { kind: 'cancelled', state };
+          if (isUserAbort(failure.error))
+            return { kind: 'cancelled', state: yield* cell.current };
           if (failure.autoRetryable && automaticAttempts < limit) {
             logger.debug(
               `Model request failed; automatic retry ${automaticAttempts} of ${limit - 1} in ${RETRY_BACKOFF_MS}ms.`,
@@ -1296,13 +1256,12 @@ export const modelInvokerLayer = (): Layer.Layer<
               failure.formatted,
             );
             // The invoker is the one writer of the run's failure fact.
-            const failed = snapshotRow(runId, state, {
-              runtime: { lastError: failure.info },
-            });
-            state = yield* Effect.uninterruptible(
-              ledger.appendBatch(runId, state, [failed]),
-            );
-            return { kind: 'failed', state, error: failure.info };
+            const failed = yield* cell.append((state) => [
+              snapshotRow(runId, state, {
+                runtime: { lastError: failure.info },
+              }),
+            ]);
+            return { kind: 'failed', state: failed, error: failure.info };
           }
           admission = 'decision';
         }

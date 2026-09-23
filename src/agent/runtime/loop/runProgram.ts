@@ -9,7 +9,7 @@
  * .agents/docs/proposed/architecture/2026-09-21-effect-design-run-loop-programs.md).
  */
 
-import { Cause, Effect, Exit, Ref, SynchronizedRef } from 'effect';
+import { Cause, Effect, Exit, SynchronizedRef } from 'effect';
 
 import type { AgentTrace, StageHandle } from '@agent/trace';
 import {
@@ -38,7 +38,9 @@ import type { FollowUps } from '../FollowUps';
 /**
  * The run's one state holder and its only ledger writer. Seeded with the
  * opened state inside the acquire, so no reader branches on null: "the run
- * has rows and a phase" is the acquire's postcondition.
+ * has rows and a phase" is the acquire's postcondition. The loop hands the
+ * same cell to the invoker and the dispatch unit, so no run service keeps a
+ * copy of the state it commits against.
  */
 export interface RunCell {
   readonly runId: RunId;
@@ -46,24 +48,30 @@ export interface RunCell {
   readonly current: Effect.Effect<RunState>;
   /**
    * Commit one batch against the current state and adopt what the ledger
-   * folds back. Read-append-write is one uninterruptible region, so a stop
-   * can never leave the cell behind the rows: the halt the release writes
-   * always folds onto the state every committed batch produced.
+   * folds back. Rows that read the state (a snapshot, a step, a settlement
+   * carrying the workspace) are built from the state the batch commits
+   * against. Read-append-write is one uninterruptible region under the
+   * cell's lock, so a stop can never leave the cell behind the rows, and
+   * concurrent settlements of one parallel partition each fold onto the
+   * latest state.
    */
   readonly append: (
-    rows: readonly RunLedgerDraft[],
+    rows:
+      | readonly RunLedgerDraft[]
+      | ((state: RunState) => readonly RunLedgerDraft[]),
   ) => Effect.Effect<RunState, RunLedgerRefused | DatabaseWriteFailed>;
   /**
-   * Adopt a state a run service already committed against (the invoker, the
-   * dispatch unit, the follow-up consumer, the compaction).
+   * Adopt a state a run service already committed against (the follow-up
+   * consumer, the compaction), or one a decision row another writer
+   * committed folds to.
    */
   readonly adopt: (state: RunState) => Effect.Effect<RunState>;
 }
 
 /**
- * A `Ref`, not a `SynchronizedRef`: one fiber owns a run — the loop, the
- * invoker and the dispatcher all run on it — so a lock would be a primitive
- * bought against no contention.
+ * A `SynchronizedRef`: the loop, the invoker and a barrier call run on one
+ * fiber, but a parallel partition settles its calls on sibling fibers, and
+ * each settlement must fold onto the one before it.
  */
 export const makeRunCell = (
   runId: RunId,
@@ -71,17 +79,19 @@ export const makeRunCell = (
 ): Effect.Effect<RunCell, never, RunLedger> =>
   Effect.gen(function* () {
     const ledger = yield* RunLedger;
-    const ref = yield* Ref.make(opened);
+    const ref = yield* SynchronizedRef.make(opened);
     return {
       runId,
-      current: Ref.get(ref),
+      current: SynchronizedRef.get(ref),
       append: (rows) =>
-        Ref.get(ref).pipe(
-          Effect.flatMap((state) => ledger.appendBatch(runId, state, rows)),
-          Effect.tap((next) => Ref.set(ref, next)),
-          Effect.uninterruptible,
-        ),
-      adopt: (state) => Ref.set(ref, state).pipe(Effect.as(state)),
+        SynchronizedRef.updateAndGetEffect(ref, (state) =>
+          ledger.appendBatch(
+            runId,
+            state,
+            typeof rows === 'function' ? rows(state) : rows,
+          ),
+        ).pipe(Effect.uninterruptible),
+      adopt: (state) => SynchronizedRef.set(ref, state).pipe(Effect.as(state)),
     } satisfies RunCell;
   });
 
