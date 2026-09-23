@@ -28,12 +28,7 @@ import {
 } from '@platform/interfaces';
 import type { Secrets } from '@platform/secrets';
 import { jitteredExponentialBackoffMs } from '@utils/core';
-import {
-  createBoundedIdSet,
-  type BoundedIdSet,
-} from '@utils/core/boundedIdSet';
 import { unrefSleepClock } from '@utils/system/unrefSleepClock';
-import { getNewestTimestamp } from './githubPaths';
 import {
   type ConditionalResponse,
   GitHubAuthError,
@@ -41,6 +36,7 @@ import {
   GitHubRateLimitError,
 } from './githubClient';
 import { shouldDropBotEvent } from './botFilter';
+import type { DedupedResource } from './pollingDedup';
 import type { GhUser } from './prTypes';
 import type { ZodType } from 'zod';
 
@@ -96,6 +92,12 @@ interface PollingSourceConfig {
   maxFailureDurationMs: number;
 }
 
+interface PollingLifetime {
+  pollScope: Scope.Closeable;
+  deliveryScope: Scope.Closeable;
+  deliveries: FiberSet.FiberSet<void>;
+}
+
 type SuccessfulConditionalResponse<T> = Extract<
   ConditionalResponse<T>,
   { status: 200 }
@@ -110,87 +112,7 @@ export const DEFAULT_POLLING_BACKOFF_CONFIG = Object.freeze({
   'backoffBaseMs' | 'backoffMaxMs' | 'maxFailureDurationMs'
 >);
 
-interface DedupedResourceOptions<T, Id> {
-  getId(item: T): Id;
-  getCursor?(items: readonly T[]): string | undefined;
-  maxSeenIds: number;
-  sinceCursor?: string;
-}
-
-export class DedupedResource<T, Id extends NonNullable<unknown> = number> {
-  readonly seenIds: BoundedIdSet<Id>;
-  sinceCursor: string | undefined;
-
-  private readonly getId: (item: T) => Id;
-  private readonly getCursor:
-    ((items: readonly T[]) => string | undefined) | undefined;
-
-  constructor(options: DedupedResourceOptions<T, Id>) {
-    this.getId = options.getId;
-    this.getCursor = options.getCursor;
-    this.sinceCursor = options.sinceCursor;
-    this.seenIds = createBoundedIdSet<Id>(options.maxSeenIds);
-  }
-
-  seed(items: readonly T[]): void {
-    for (const item of items) {
-      this.seenIds.add(this.getId(item));
-    }
-    this.advanceCursor(items);
-  }
-
-  diff(items: readonly T[], emit: (item: T) => void): void {
-    // Classify the whole batch against pre-batch membership before adding
-    // anything, so an eviction triggered partway through this tick can't
-    // make an id already seen this tick look "new" again (`newIds` also
-    // catches the same id appearing twice within one fetched page).
-    const newIds = new Set<Id>();
-    for (const item of items) {
-      const id = this.getId(item);
-      if (this.seenIds.has(id) || newIds.has(id)) continue;
-      newIds.add(id);
-      emit(item);
-    }
-    for (const id of newIds) this.seenIds.add(id);
-    this.advanceCursor(items);
-  }
-
-  private advanceCursor(items: readonly T[]): void {
-    const newest = this.getCursor?.(items);
-    if (newest) this.sinceCursor = newest;
-  }
-}
-
-/**
- * Per-resource id history is trimmed to this many entries so long-running
- * subscriptions don't grow the dedup set unboundedly. Shared by every
- * comment-shaped poller (issue comments, PR review comments, repo-wide
- * issue/review comments).
- */
-export const MAX_SEEN_IDS = 1000;
-
-interface CommentShape {
-  id: number;
-  created_at?: string | null;
-  updated_at?: string | null;
-}
-
-/**
- * Build a {@link DedupedResource} for comment-shaped items, hardcoding the
- * three options every comment poller agrees on: id-keyed dedup, newest-
- * timestamp cursor advance (via {@link getNewestTimestamp}), and the shared
- * {@link MAX_SEEN_IDS} window. Callers pass only an optional seed cursor.
- */
-export function dedupeComments<T extends CommentShape>(options?: {
-  sinceCursor?: string;
-}): DedupedResource<T> {
-  return new DedupedResource<T>({
-    getId: (item) => item.id,
-    getCursor: getNewestTimestamp,
-    maxSeenIds: MAX_SEEN_IDS,
-    sinceCursor: options?.sinceCursor,
-  });
-}
+export { DedupedResource, dedupeComments, MAX_SEEN_IDS } from './pollingDedup';
 
 /**
  * `K` is the canonical string key (PR keys flatten to `owner/repo#N`,
@@ -208,13 +130,8 @@ export abstract class PollingSourceBase<
   >();
   /** The stop request for the owned poll loop; absent while it is stopped. */
   private pollLoopStop: Deferred.Deferred<void> | undefined;
-  private lifetime:
-    | {
-        pollScope: Scope.Closeable;
-        deliveryScope: Scope.Closeable;
-        deliveries: FiberSet.FiberSet<void>;
-      }
-    | undefined;
+  private lifetime: PollingLifetime | undefined;
+  private lifetimeInitializing: Deferred.Deferred<PollingLifetime> | undefined;
   private shutdownRegistration: Disposable | undefined;
   private shutdownLifecycle: LifecycleHost | undefined;
 
@@ -356,7 +273,7 @@ export abstract class PollingSourceBase<
 
   /**
    * Safe-parse a 200 payload, warning and skipping malformed data. A throw
-   * would count as poll failure and eventually detach a reachable source;
+   * would count as poll failure and eventually detach a reachable source.
    */
   protected validateOrSkip<T>(
     res: SuccessfulConditionalResponse<unknown>,
@@ -501,17 +418,43 @@ export abstract class PollingSourceBase<
 
   /** One process-lifetime owner shared by poll rounds and admitted deliveries. */
   private ensureLifetime(lifecycle: LifecycleHost) {
-    return Effect.gen({ self: this }, function* () {
-      if (!this.lifetime) {
+    return Effect.suspend(() => {
+      if (this.lifetime) {
+        this.registerShutdownIfNeeded(lifecycle);
+        return Effect.succeed(this.lifetime);
+      }
+      if (this.lifetimeInitializing) {
+        return Deferred.await(this.lifetimeInitializing).pipe(
+          Effect.tap(() =>
+            Effect.sync(() => this.registerShutdownIfNeeded(lifecycle)),
+          ),
+        );
+      }
+
+      // Claim before scope allocation yields, so concurrent first subscribers
+      // share the owner whose shutdown hook will drain their deliveries.
+      const pending = Deferred.makeUnsafe<PollingLifetime>();
+      this.lifetimeInitializing = pending;
+      return Effect.gen({ self: this }, function* () {
         const pollScope = yield* Scope.make();
         const deliveryScope = yield* Scope.make();
         const deliveries = yield* FiberSet.make<void>().pipe(
           Effect.provideService(Scope.Scope, deliveryScope),
         );
-        this.lifetime = { pollScope, deliveryScope, deliveries };
-      }
-      this.registerShutdownIfNeeded(lifecycle);
-      return this.lifetime;
+        const lifetime = { pollScope, deliveryScope, deliveries };
+        this.lifetime = lifetime;
+        this.registerShutdownIfNeeded(lifecycle);
+        return lifetime;
+      }).pipe(
+        Effect.onExit((exit) =>
+          Effect.sync(() => {
+            Deferred.doneUnsafe(pending, exit);
+            if (this.lifetimeInitializing === pending) {
+              this.lifetimeInitializing = undefined;
+            }
+          }),
+        ),
+      );
     });
   }
 
