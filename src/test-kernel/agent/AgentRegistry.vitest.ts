@@ -64,8 +64,8 @@ function onGlobalStorage<A, E>(
 
 const { listRemoteAgents, ORCHESTRATOR_AGENT } = vi.hoisted(() => {
   const ORCHESTRATOR_AGENT = {
-    id: 'remote-orchestrator',
-    name: 'orchestrator',
+    id: 'remote-lead',
+    name: 'remoteLead',
     description: 'Remote team root',
     tools: ['delegate_agent'],
     agentCategory: 'toolUse',
@@ -268,7 +268,11 @@ describe('agent registry', () => {
               yield* Deferred.await(staleLoadGate);
               return [remoteAgentFixture('stale-agent', 'staleAgent', 'Stale')];
             }
-            return [remoteAgentFixture('fresh-agent', 'freshAgent', 'Fresh')];
+            return [
+              remoteAgentFixture('fresh-agent', 'freshAgent', 'Fresh'),
+              // A hosted row left behind for a name the bundle now ships.
+              remoteAgentFixture('hosted-orchestrator', 'orchestrator', 'Old'),
+            ];
           }),
         );
 
@@ -291,6 +295,7 @@ describe('agent registry', () => {
         expect(listRemoteAgents).toHaveBeenCalledTimes(2);
         expect(getAgent('freshAgent')?.source).toBe('remote');
         expect(getAgent('staleAgent')).toBeUndefined();
+        expect(getAgent('orchestrator')?.source).toBe('builtInToolUse');
       }).pipe(
         Effect.ensuring(
           Effect.gen(function* () {
@@ -335,7 +340,7 @@ describe('agent registry', () => {
         yield* Fiber.join(remote);
         yield* Fiber.join(local);
 
-        expect(isRemoteAgent('orchestrator')).toBe(true);
+        expect(isRemoteAgent('remoteLead')).toBe(true);
         expect(listRemoteAgents).toHaveBeenCalledTimes(fetchesBefore + 1);
       }),
   );
@@ -344,12 +349,12 @@ describe('agent registry', () => {
     Effect.gen(function* () {
       useAgentDirectories();
       yield* onGlobalStorage(refresh({ includeRemote: true }));
-      expect(isRemoteAgent('orchestrator')).toBe(true);
+      expect(isRemoteAgent('remoteLead')).toBe(true);
       const remoteFetchCount = listRemoteAgents.mock.calls.length;
 
       yield* onGlobalStorage(invalidateRemoteAgentsAfterSignOut());
 
-      expect(isRemoteAgent('orchestrator')).toBe(false);
+      expect(isRemoteAgent('remoteLead')).toBe(false);
       expect(listRemoteAgents).toHaveBeenCalledTimes(remoteFetchCount);
     }),
   );
@@ -361,7 +366,7 @@ describe('agent registry', () => {
       return Effect.gen(function* () {
         useAgentDirectories();
         yield* onGlobalStorage(refresh({ includeRemote: true }));
-        expect(isRemoteAgent('orchestrator')).toBe(true);
+        expect(isRemoteAgent('remoteLead')).toBe(true);
         useAgentDirectories({
           builtIn: () =>
             Effect.fail(
@@ -379,9 +384,9 @@ describe('agent registry', () => {
           onGlobalStorage(invalidateRemoteAgentsAfterSignOut()),
           { startImmediately: true },
         );
-        expect(isRemoteAgent('orchestrator')).toBe(false);
+        expect(isRemoteAgent('remoteLead')).toBe(false);
         expect(yield* Fiber.join(invalidation)).toBeUndefined();
-        expect(isRemoteAgent('orchestrator')).toBe(false);
+        expect(isRemoteAgent('remoteLead')).toBe(false);
         expect(
           logs.has(
             'WARN',
@@ -451,7 +456,7 @@ describe('agent registry', () => {
       yield* Fiber.join(staleLoad);
 
       expect(getAgent('lateRemote')).toBeUndefined();
-      expect(isRemoteAgent('orchestrator')).toBe(false);
+      expect(isRemoteAgent('remoteLead')).toBe(false);
 
       localRebuild.resolve();
       yield* Fiber.join(invalidation);
@@ -501,14 +506,14 @@ describe('agent registry', () => {
           (yield* getVisibleAgents(hostStores(), 'toolUse')).map(
             (agent) => agent.name,
           ),
-        ).not.toContain('orchestrator');
+        ).not.toContain('remoteLead');
 
         const options = yield* onGlobalStorage(
           computeAgentOptionsData(hostStores()),
         );
 
         expect(options.toolUse.map((option) => option.label)).toContain(
-          'orchestrator',
+          'remoteLead',
         );
       }).pipe(
         Effect.ensuring(
@@ -545,7 +550,7 @@ describe('agent registry', () => {
         const result = yield* Fiber.join(options);
 
         expect(result.toolUse.map((option) => option.label)).toContain(
-          'orchestrator',
+          'remoteLead',
         );
       }).pipe(
         Effect.ensuring(

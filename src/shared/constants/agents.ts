@@ -4,31 +4,18 @@ import { agentName } from '../schemas/agent';
 export const SETUP_AGENT_NAME = 'setup';
 
 /**
- * Remote-catalog orchestrator roots that delegate to a team. They need
- * sign-in, so UIs surface them first.
+ * Bundled orchestrator roots that delegate to a team. They ship with every
+ * host and need no sign-in; UIs surface them first.
  */
-const REMOTE_ORCHESTRATOR_AGENT_NAMES = [
+export const BUILTIN_TEAM_ROOT_AGENT_NAMES = [
   'orchestrator',
   'leanOrchestrator',
-] as const;
-
-/**
- * Bundled (local) orchestrator roots that delegate to a team. Unlike the
- * remote-catalog roots above, these ship in the extension/CLI and are
- * available offline without sign-in.
- */
-const BUNDLED_ORCHESTRATOR_AGENT_NAMES = ['engineer'] as const;
-
-/** Built-in delegating team roots, remote-catalog plus bundled. */
-export const BUILTIN_TEAM_ROOT_AGENT_NAMES = [
-  ...REMOTE_ORCHESTRATOR_AGENT_NAMES,
-  ...BUNDLED_ORCHESTRATOR_AGENT_NAMES,
+  'engineer',
 ] as const;
 
 /**
  * Preferred tool-use agents for dropdown fallback and sorting.
- * Remote orchestrators come first, then bundled orchestrators, then general
- * and task-flavored fallbacks for users without sign-in.
+ * Orchestrators come first, then general and task-flavored fallbacks.
  */
 export const PREFERRED_TOOL_USE_AGENTS = [
   ...BUILTIN_TEAM_ROOT_AGENT_NAMES,

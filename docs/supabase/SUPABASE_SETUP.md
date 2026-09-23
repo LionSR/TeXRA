@@ -422,18 +422,18 @@ Before writing any metadata, `--apply` verifies that every catalog `storage_path
 
 ```bash
 # <source> is the YAML path under prompts/agents/remote/, including any
-# subdirectory (for example "workflow/apply.yaml" or "tool_use/Lean4/lean.yaml").
+# subdirectory (for example "workflow/apply.yaml").
 # The bucket key is NOT the source path: it is <folder>/<agent>.yaml, where
 # <folder> is the agent's "folder" in prompts/agents/remote/catalog.json and
 # <agent> is its YAML `name`. That is the storage_path the sync writes and the
 # preflight checks. For example:
 #   workflow/apply.yaml       -> researcher/apply.yaml
-#   tool_use/presenter.yaml   -> tool-use/presenter.yaml
-#   tool_use/Lean4/lean.yaml  -> tool-use-lean/lean.yaml
 supabase storage cp "prompts/agents/remote/<source>" "ss:///agent-configs/<folder>/<agent>.yaml" --project-ref <PROJECT-REF>
 ```
 
 The same apply command (including the storage check) runs on merge to `main` when those files change (`.github/workflows/remote-agents-sync.yml`). PRs run `npm run sync:remote-agents` (generate only) and do not write production.
+
+The sync only upserts the agents it finds under `prompts/agents/remote/`; it never deletes a row. When an agent leaves the remote catalog (for example because it now ships bundled in `packages/extension/resources/tool_use_agents/`), its `remote_agents` row and `agent-configs` object stay behind. They are harmless: the registry ranks the bundled sources above `remote` for the same name, so signed-in users resolve the bundled copy. Deleting them by hand is cleanup only.
 
 ---
 

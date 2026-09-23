@@ -124,7 +124,7 @@ The `inquiry` tool lets a TeXRA agent ask one question in an external chat (Chat
 
 ## Which agent to use
 
-Specialist research agents are tuned for different stages of the work. Pick one from the **Agent** dropdown (<wa-icon library="texra" name="sparkle"></wa-icon>). `search` is an account-served agent: it appears only after you sign in and apply the Physicist or Computer Scientist team. Without an account, the built-in `assistant` agent carries the same literature toolset (arXiv, Crossref, web, Zotero). For computational derivations, reach for `research`; for formal proof verification, use `lean`:
+Specialist research agents are tuned for different stages of the work. Pick one from the **Agent** dropdown (<wa-icon library="texra" name="sparkle"></wa-icon>). `search` ships with TeXRA and needs no sign-in; the built-in `assistant` agent carries the same literature toolset (arXiv, Crossref, web, Zotero). For computational derivations, reach for `research`; for formal proof verification, use `lean`:
 
 <DropdownMenu
   label="Agent"
@@ -141,7 +141,7 @@ Specialist research agents are tuned for different stages of the work. Pick one 
 <FeatureCards
   min="220px"
   :cards="[
-    { icon: 'mortar-board', title: 'search', tag: 'sign-in', tagVariant: 'warning', desc: 'Finding papers, literature reviews, fact-checking. Account-served; built-in assistant has the same tools.', chips: [
+    { icon: 'mortar-board', title: 'search', desc: 'Finding papers, literature reviews, fact-checking. Built in; the assistant agent has the same tools.', chips: [
       { text: 'arxiv_metadata', variant: 'neutral' },
       { text: 'crossref_search', variant: 'neutral' },
       { text: 'web_search', variant: 'neutral' },

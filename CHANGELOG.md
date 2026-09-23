@@ -48,6 +48,19 @@ All notable changes to this project will be documented in this file.
   keeps debug entries. The CLI gains a `--verbose` flag for additional debug
   diagnostics; `--quiet` suppresses diagnostics.
 
+### Features
+
+- **The orchestrator and the Lean agents ship with TeXRA** — `orchestrator`,
+  `search`, `simplifier`, `presenter`, `progressCheck`, and the Lean Project
+  agents (`lean`, `leanSearch`, `leanSimplifier`, `leanBlueprint`,
+  `leanOrchestrator`) are now built in, in the VS Code extension, the desktop
+  app and the CLI. They no longer need a TeXRA sign-in, so every team's lead
+  works on a fresh install. `presenter` is now the interactive deck builder
+  that compiles your slides and checks every page visually; to turn a
+  finished paper into a deck in one pass, use the `paper2slide` workflow
+  agent. A built-in agent now takes precedence over a hosted agent with
+  the same name, so signed-in users run the built-in copies too.
+
 ### Bug Fixes
 
 - **An agent can only run the tools it was offered.** A model that named a

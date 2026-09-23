@@ -79,7 +79,7 @@ async function clearOnboardingState(): Promise<void> {
 beforeAll(async () => {
   // Real bundled agent YAMLs on disk and no remote agents (signed out), so
   // the tests exercise the actual name → key resolution including the
-  // unresolved account-served orchestrator.
+  // unresolved TeXRA-hosted workflow members of the Physicist team.
   await installPlatform(
     {},
     {
@@ -162,7 +162,7 @@ describe('apply_team', () => {
 
   it.effect('performs no writes before an unresolved-team choice', () =>
     Effect.gen(function* () {
-      const result = yield* applyTeam({ teamId: 'starter' });
+      const result = yield* applyTeam({ teamId: 'physicist' });
 
       expect(result.status).toBe('executed');
       expect(result.output).toMatch(/Sign in to TeXRA/);
@@ -189,7 +189,7 @@ describe('apply_team', () => {
   it.effect('cancels without writing roster or default-team state', () =>
     Effect.gen(function* () {
       const result = yield* applyTeam({
-        teamId: 'starter',
+        teamId: 'physicist',
         unavailableAction: 'cancel',
       });
 
@@ -208,18 +208,18 @@ describe('apply_team', () => {
         mockCatalogAccess(true);
 
         const result = yield* applyTeam({
-          teamId: 'starter',
+          teamId: 'physicist',
           unavailableAction: 'continue',
         });
 
         expect(result.status).toBe('executed');
-        expect(result.summary).toMatch(/Applied the Starter roster/);
+        expect(result.summary).toMatch(/Applied the Physicist roster/);
         expect(yield* workspaceRoster()).toEqual({
           kind: 'team',
-          teamId: 'starter',
+          teamId: 'physicist',
         });
         expect(yield* getDefaultTeamId(hostStores().globalState)).toBe(
-          'starter',
+          'physicist',
         );
       }),
   );
@@ -232,7 +232,7 @@ describe('apply_team', () => {
         mockCatalogAccess(false);
 
         const result = yield* applyTeam({
-          teamId: 'starter',
+          teamId: 'physicist',
           unavailableAction: 'sign-in',
         });
 
