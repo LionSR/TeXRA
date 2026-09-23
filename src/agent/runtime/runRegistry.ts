@@ -324,14 +324,16 @@ export class RunRegistry {
    *  session close and a project close both run. A child with a handle is
    *  stopped by its parent's cascade; a native child between turns has no
    *  handle, and its kill interrupts the loop the registry retains for it.
-   *  Answers each stop's settlement, which the caller joins under its own
-   *  error channel. */
-  stopAll(): Effect.Effect<void, Error>[] {
-    return this.getActiveIds().flatMap((runId) =>
+   *  The kills are issued now; the answer joins their settlements, and
+   *  fails as the first refused one does, for the caller to map into its
+   *  own error channel. */
+  stopAll(): Effect.Effect<void, Error> {
+    const settlements = this.getActiveIds().flatMap((runId) =>
       this.getHandle(runId)?.isChild
         ? []
         : [this.kill(runId, { detachActiveChildren: false }).settlement],
     );
+    return Effect.all(settlements, { concurrency: 'unbounded', discard: true });
   }
 
   /** Stop a visible agent run and apply the caller's declared child policy:
