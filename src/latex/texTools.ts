@@ -244,7 +244,10 @@ export const compileLatex2Pdf = Effect.fn('compileLatex2Pdf')(function* (
     const latexmkArgs = ['-pdf', '-f', ...pdflatexArgs];
 
     // Interrupting the compile stops the engine: the fiber's interruption is
-    // what aborts the spawn, so nothing threads a signal through.
+    // what aborts the spawn, so nothing threads a signal through. latexmk
+    // hands each pass to a pdflatex/bibtex/biber child, so the stop (and a
+    // timeout) signals the whole tree: a tracked-pid kill would stop latexmk
+    // and leave its engine writing into the build directory.
     const runTool = (tool: string, args: string[], showError: boolean) =>
       runToolWithCheck(tool, args, {
         channel,
@@ -254,6 +257,7 @@ export const compileLatex2Pdf = Effect.fn('compileLatex2Pdf')(function* (
         env,
         timeout,
         showError,
+        killProcessTree: true,
       }).pipe(Effect.mapError((cause) => new LatexCompilerNotRun({ cause })));
 
     let result: ExecResult | false;
