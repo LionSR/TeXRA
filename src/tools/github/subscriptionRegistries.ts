@@ -8,7 +8,7 @@
  * test harness's stand-in — imports `subscriptionBindings` and loads none of
  * that graph.
  */
-import { Layer } from 'effect';
+import { Effect, Layer } from 'effect';
 
 import {
   issueKeyToString,
@@ -31,26 +31,36 @@ import { GitHubSubscriptions } from './subscriptionBindings';
 
 /**
  * The ownership tables of one process runtime. Building them here is what
- * makes a replacement runtime start empty; it does not release what the old
- * one held. This layer has no finalizer, and each registry drops the
- * `Disposable` from `source.onKeysChanged(...)`, so the listeners outlive a
- * disposed runtime on the module-singleton polling sources (#12933).
+ * makes a replacement runtime start empty, and releasing the layer disposes
+ * them, so the old runtime's bindings and source listeners leave the
+ * module-singleton polling sources with it.
  */
 export const gitHubSubscriptionsLayer: Layer.Layer<GitHubSubscriptions> =
-  Layer.sync(GitHubSubscriptions, () => ({
-    pr: new RunSubscriptionRegistry<string, PRSubscribeInput>({
-      name: 'PRRunSubscriptionRegistry',
-      source: SharedPRPollingSource,
-      keyOf: prKeyToString,
-    }),
-    repo: new RunSubscriptionRegistry<RepoKey, RepoSubscribeInput>({
-      name: 'RepoRunSubscriptionRegistry',
-      source: SharedRepoPollingSource,
-      keyOf: repoKeyToString,
-    }),
-    issue: new RunSubscriptionRegistry<string, IssueKey>({
-      name: 'IssueRunSubscriptionRegistry',
-      source: SharedIssuePollingSource,
-      keyOf: issueKeyToString,
-    }),
-  }));
+  Layer.effect(
+    GitHubSubscriptions,
+    Effect.acquireRelease(
+      Effect.sync(() => ({
+        pr: new RunSubscriptionRegistry<string, PRSubscribeInput>({
+          name: 'PRRunSubscriptionRegistry',
+          source: SharedPRPollingSource,
+          keyOf: prKeyToString,
+        }),
+        repo: new RunSubscriptionRegistry<RepoKey, RepoSubscribeInput>({
+          name: 'RepoRunSubscriptionRegistry',
+          source: SharedRepoPollingSource,
+          keyOf: repoKeyToString,
+        }),
+        issue: new RunSubscriptionRegistry<string, IssueKey>({
+          name: 'IssueRunSubscriptionRegistry',
+          source: SharedIssuePollingSource,
+          keyOf: issueKeyToString,
+        }),
+      })),
+      (registries) =>
+        Effect.sync(() => {
+          registries.pr.dispose();
+          registries.repo.dispose();
+          registries.issue.dispose();
+        }),
+    ),
+  );

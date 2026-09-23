@@ -104,6 +104,10 @@ export interface AttachedPort {
   readonly receive: (
     message: unknown,
   ) => Effect.Effect<void, never, ProcessServices>;
+  /** One host action for this port alone (the composer's Send, the
+   *  drawer, the chime), held like {@link SessionBridge.surfaceAction}'s
+   *  until the port is live. */
+  readonly surfaceAction: (action: SurfaceActionMessage['action']) => void;
   /** The port went away: its transcript set leaves the union, the host
    *  hears it, and its replay is interrupted. A second close is a no-op. */
   readonly close: Effect.Effect<void>;
@@ -155,6 +159,12 @@ interface PortEntry {
   readonly framers: Scope.Closeable;
   readonly close: Effect.Effect<void>;
   fiber: Fiber.Fiber<void> | null;
+  /** Host actions sent before the port's first `Subscribe`, in order, or
+   *  null once it has subscribed. A port is live only when its surface has
+   *  mounted and asked for frames: a message posted to a webview whose
+   *  document is still loading is dropped, so an action that opens a fresh
+   *  surface would otherwise never reach it (#12495). */
+  held: SurfaceActionMessage[] | null;
 }
 
 export class SessionBridge {
@@ -198,9 +208,17 @@ export class SessionBridge {
   /** The host acting on surface-owned state (8.5): every attached port
    *  applies it, so the sidebar and the editor tab follow together. */
   surfaceAction(action: SurfaceActionMessage['action']): void {
-    for (const { port } of this.ports.values()) {
-      port.send({ kind: 'surface.action', session: this.key, action });
-    }
+    for (const entry of this.ports.values()) this.act(entry, action);
+  }
+
+  private act(entry: PortEntry, action: SurfaceActionMessage['action']): void {
+    const message: SurfaceActionMessage = {
+      kind: 'surface.action',
+      session: this.key,
+      action,
+    };
+    if (entry.held) entry.held.push(message);
+    else entry.port.send(message);
   }
 
   attach(
@@ -234,6 +252,7 @@ export class SessionBridge {
         framers,
         close: Scope.close(scope, Exit.void),
         fiber: null,
+        held: [],
       };
       const { session, onPortClosed } = this.options;
       yield* Scope.addFinalizer(
@@ -249,6 +268,9 @@ export class SessionBridge {
       this.ports.set(port.id, entry);
       return {
         receive: (message) => this.receive(entry, message),
+        surfaceAction: (action) => {
+          if (this.ports.get(port.id) === entry) this.act(entry, action);
+        },
         close: entry.close,
       };
     });
@@ -316,8 +338,14 @@ export class SessionBridge {
         ).pipe(withLogChannel(CHANNEL));
       }
       switch (up.kind) {
-        case 'subscribe':
+        case 'subscribe': {
+          // The surface is live: what the host did while it loaded lands
+          // now, once, before its first frame.
+          const held = entry.held;
+          entry.held = null;
+          for (const message of held ?? []) port.send(message);
           return this.subscribe(entry, up);
+        }
         case 'runtime.request':
           return this.answer(
             entry,
