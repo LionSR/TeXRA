@@ -380,7 +380,6 @@ export type PreparedAgentDefinition = Effect.Success<
 const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
   function* (
     input: AgentLaunchInput & { session: SessionHandle },
-    runId: RunId,
   ): Effect.fn.Return<
     AgentLaunchContext,
     Error,
@@ -393,7 +392,7 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
     // The session is resolved once at the boundary (buildAgentLaunchContext)
     // and carried in, so a delegated launch inherits the parent run's session
     // policy and a root launch gets the process default exactly once.
-    const session = input.session;
+    const { session, runId } = input;
     const modelCompatibilityKey =
       input.modelCompatibilityKey ??
       (yield* inferLaunchModelCompatibilityKey(runId, session)) ??
@@ -599,7 +598,7 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
     const { session: launchSession, runId } = input;
     const { config } = input.definition;
 
-    return yield* assembleAgentLaunchContext(input, runId).pipe(
+    return yield* assembleAgentLaunchContext(input).pipe(
       Effect.onError((cause) =>
         Effect.gen(function* () {
           const err = Cause.squash(cause);

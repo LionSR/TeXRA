@@ -132,7 +132,7 @@ export class RunRegistry {
    * resume that would otherwise start a second generation over a live one is
    * refused here rather than by a caller's earlier read of the same fact. The
    * claim that survives it lifts the run's stop marks ({@link
-   * RunRoster.clearStops}); a refused launch leaves the stop's gate intact.
+   * RunRoster.launch}); a refused launch leaves the stop's gate intact.
    */
   launchRun<A, E, R>(
     runId: RunId,

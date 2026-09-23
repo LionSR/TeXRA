@@ -279,7 +279,9 @@ export class RunRoster {
           (this.isRetained(runId) || this.isLaneOccupied(runId));
         if (this.isLive(runId) || held) return new RunLive({ runId });
         if (refuseWhenLive) return undefined;
-        this.clearStops(runId);
+        // A new generation is the run starting again: whatever stop the run
+        // was marked for belongs to the generation it ended.
+        this.stopping.delete(runId);
         counted = this.entryFor(runId);
         counted.launches += 1;
         return undefined;
@@ -430,12 +432,6 @@ export class RunRoster {
   /** Whether a stop of `runId` has begun and not yet settled. */
   isStopping(runId: RunId): boolean {
     return this.stopping.has(runId);
-  }
-
-  /** A new generation of `runId` is the run starting again: whatever stop the
-   *  run was marked for belongs to the generation it ended. */
-  clearStops(runId: RunId): void {
-    this.stopping.delete(runId);
   }
 
   // --------------------------------------------------------------- teardown
