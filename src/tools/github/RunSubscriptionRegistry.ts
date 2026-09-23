@@ -142,9 +142,14 @@ export class RunSubscriptionRegistry<K extends string, Input> {
           const subscription = bound.get(key);
           if (!subscription) return Effect.void;
           const owner = subscription.owner;
+          // The identifiers ride in the message: the sink renders `data` with
+          // sorted keys under a length bound, so beside an error's stack they
+          // would be the part truncated away.
           const reportDeliveryFailure = (err: unknown) =>
-            Effect.logWarning('Failed to deliver subscription follow-up').pipe(
-              Effect.annotateLogs({ data: { key, runId, err } }),
+            Effect.logWarning(
+              `Failed to deliver subscription follow-up for ${key} (run ${runId})`,
+            ).pipe(
+              Effect.annotateLogs({ data: { err } }),
               withLogChannel(this.opts.name),
             );
           return submitFollowUp(runId, text, {
