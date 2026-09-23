@@ -8,7 +8,7 @@ import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
 import { acquireResumedRunOwnership } from '@agent/storage/runLifecycle';
 import { persistedParentRunId } from '@agent/storage/runRecords';
 import { AgentError } from '@common/errors';
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import type { ProcessServices } from '@platform/processRuntime';
 import { sessionFsLayer } from '@platform/rootedFs';
 import {
@@ -60,7 +60,7 @@ import type { AgentRunServices } from './toolInjection';
 import type { SessionHandle } from './SessionHandle';
 import type { RunHandle, AgentRunHandle } from './RunHandle';
 
-const logger = createLog('executeAgent');
+const CHANNEL = 'executeAgent';
 
 /** A claimed run no longer has the persisted tool-use state to resume. */
 export class ResumeSessionUnavailableError extends Error {
@@ -512,16 +512,25 @@ export function executeAgent(
               const parentRunId = handle.deliveryTarget;
               // Pre-run UI setup (RUNNING is set by runFlowWithLifecycle)
               yield* ensureRunDirUnder(runSession.roots.storage, runId);
-              logger.info(`Starting run (runId: ${runId})`);
-              logger.info(`Input file: ${config.inputFiles[0] ?? '(none)'}`);
-              logger.debug('Run details', {
-                data: {
-                  runId,
-                  agent: config.agent,
-                  model: config.model,
-                },
-              });
-              logger.debug(`Output files: ${config.outputFiles?.length ?? 0}`);
+              yield* Effect.logInfo(`Starting run (runId: ${runId})`).pipe(
+                withLogChannel(CHANNEL),
+              );
+              yield* Effect.logInfo(
+                `Input file: ${config.inputFiles[0] ?? '(none)'}`,
+              ).pipe(withLogChannel(CHANNEL));
+              yield* Effect.logDebug('Run details').pipe(
+                Effect.annotateLogs({
+                  data: {
+                    runId,
+                    agent: config.agent,
+                    model: config.model,
+                  },
+                }),
+                withLogChannel(CHANNEL),
+              );
+              yield* Effect.logDebug(
+                `Output files: ${config.outputFiles?.length ?? 0}`,
+              ).pipe(withLogChannel(CHANNEL));
               // Subagents don't need to force-open the progress board or show notifications;
               // the orchestrator's run is already visible.
               if (parentRunId === undefined) {
@@ -533,9 +542,12 @@ export function executeAgent(
                   { replayWhenAttached: true },
                 );
               }
-              logger.info('Executing agent', {
-                data: { agent: config.agent, model: config.model },
-              });
+              yield* Effect.logInfo('Executing agent').pipe(
+                Effect.annotateLogs({
+                  data: { agent: config.agent, model: config.model },
+                }),
+                withLogChannel(CHANNEL),
+              );
 
               if (setting.agentCategory === AgentCategory.ToolUse) {
                 return yield* launchToolUseRun(
