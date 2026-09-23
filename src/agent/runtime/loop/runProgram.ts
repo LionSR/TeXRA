@@ -246,8 +246,7 @@ export const settleRun =
           : Effect.gen(function* () {
               const runs = yield* Runs;
               lease.release(
-                Exit.isSuccess(halted) &&
-                  outcome === RUN_OUTCOME.COMPLETED &&
+                outcome === RUN_OUTCOME.COMPLETED &&
                   !runs.hasActiveChildren(cell.runId)
                   ? 'terminal'
                   : 'recoverable',
