@@ -594,7 +594,7 @@ following classification makes that distinction.
 
 ### CLI initialization choices — not runtime obligations
 
-- **`:308-311` — `openCliWorkspaceState(...)`:** The CLI's own on-disk
+- **`openProjectStateStore(storage.getStoragePath())`:** The CLI's own on-disk
   workspace state stores under its storage root. An embedder supplies its own
   stores to `createNodeWorkspaceRoots`.
 - **`:340-363` — the memoized session open:** Opens the process session lazily,

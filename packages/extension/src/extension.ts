@@ -96,10 +96,13 @@ import type { PlatformSecrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { createNodeWorkspaceRoots } from '@platform/defaults/nodeHost';
 import { nodeProcesses } from '@platform/defaults/nodeProcesses';
-import { createNodeStorageProvider } from '@platform/defaults/nodeStorage';
+import { DEFAULT_NODE_STORAGE_ROOT } from '@platform/defaults/nodeStorage';
 import { openTexraConfigStores } from '@platform/defaults/nodeStores';
 import { JsonConfigProvider } from '@platform/defaults/jsonConfigProvider';
-import { RUNS_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
+import {
+  RUNS_STORAGE_DIR,
+  WorkspaceStorageProvider,
+} from '@platform/defaults/workspaceStorage';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
 import { WorktreeStateStore } from '@platform/defaults/worktreeStateStore';
@@ -142,8 +145,7 @@ class SupabaseAuthRegistrationFailed extends Data.TaggedError(
  * The OAuth readiness gate the account plane's `isReady` probe awaits. Built
  * with the plane in `initVscodePlatform` and flipped by `registerSupabaseAuth`
  * once the URI handler is installed, so a sign-in attempted before that
- * reports the handler as not initialized — the check the auth provider's own
- * constructor closure used to make.
+ * reports the handler as not initialized.
  */
 interface AuthReadinessGate {
   uriHandlerInstalled: boolean;
@@ -195,9 +197,12 @@ async function initVscodePlatform(
   authReadiness: AuthReadinessGate;
   roots: WorkspaceRoots;
 }> {
-  // The process runtime comes first: the config stores below are opened as
-  // Effect programs, so it must exist before the roots this host wires.
-  const storage = createNodeStorageProvider({ workspacePath: workspaceRoot });
+  // `~/.texra` is one history across CLI/desktop/extension (#8622). The
+  // process runtime precedes the config stores below, which open on it.
+  const storage = new WorkspaceStorageProvider(
+    DEFAULT_NODE_STORAGE_ROOT,
+    workspaceRoot,
+  );
   const secrets = new VscodeSecrets(context);
   const appState = Layer.effect(
     AppState,
@@ -208,8 +213,7 @@ async function initVscodePlatform(
   const authReadiness: AuthReadinessGate = { uriHandlerInstalled: false };
   // A construction failure degrades to the unavailable plane instead of
   // failing activation: registration below records and reports the error, and
-  // every probe answers signed-out — what the facade's statics answered when
-  // initialization threw.
+  // every probe answers signed-out.
   // The account plane and the process identity both resolve before the
   // runtime that serves them, on one pre-runtime run: an opener that uses the
   // synchronous `open` would otherwise face an asynchronous identity layer
@@ -672,8 +676,6 @@ async function activateExtension(context: vscode.ExtensionContext) {
   // not leave a disposed host surface installed.
   context.subscriptions.push({ dispose: () => setLogSink(null) });
   const languageModel = createLanguageModelPort(context);
-  // Shared `~/.texra` storage root (one history across CLI/desktop/extension,
-  // #8622).
   const { secrets, runtime, auth, authReadiness, roots } =
     await initVscodePlatform(
       context,

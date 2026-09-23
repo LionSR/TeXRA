@@ -10,10 +10,8 @@ import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
 import { MemoryStateStore } from '@platform/defaults/memoryState';
 import { createNodeWorkspaceRoots } from '@platform/defaults/nodeHost';
-import {
-  createNodeStorageProvider,
-  DEFAULT_NODE_STORAGE_ROOT,
-} from '@platform/defaults/nodeStorage';
+import { DEFAULT_NODE_STORAGE_ROOT } from '@platform/defaults/nodeStorage';
+import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 import { UNAVAILABLE_LANGUAGE_MODEL_PORT } from '@platform/languageModel';
 
 import type { AgentPlatform } from './index.js';
@@ -57,10 +55,10 @@ const environmentSecrets: PlatformSecrets = {
 export function nodePlatform(options: NodePlatformOptions): AgentPlatform {
   const workspaceDir = options.workspaceDir ?? process.cwd();
   const globalState = new MemoryStateStore();
-  const storage = createNodeStorageProvider({
-    storageRoot: options.storageDir ?? DEFAULT_NODE_STORAGE_ROOT,
-    workspacePath: workspaceDir,
-  });
+  const storage = new WorkspaceStorageProvider(
+    options.storageDir ?? DEFAULT_NODE_STORAGE_ROOT,
+    workspaceDir,
+  );
   return {
     secrets: environmentSecrets,
     // The two process ports `composeProcess` serves: this platform resumes

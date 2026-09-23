@@ -2,9 +2,6 @@
 import * as os from 'node:os';
 import * as path from 'node:path';
 
-// Local imports - platform
-import { WorkspaceStorageProvider } from './workspaceStorage';
-
 /** Directory name for TeXRA data, both global (`~/.texra`) and per-project (`<workspace>/.texra`). */
 export const TEXRA_STORAGE_DIR_NAME = '.texra';
 
@@ -26,16 +23,4 @@ export function workspaceTexraConfigPath(workspaceRoot: string): string {
     TEXRA_STORAGE_DIR_NAME,
     TEXRA_CONFIG_FILE_NAME,
   );
-}
-
-interface NodeStorageProviderOptions {
-  readonly storageRoot?: string;
-  readonly workspacePath?: string;
-}
-
-export function createNodeStorageProvider({
-  storageRoot = DEFAULT_NODE_STORAGE_ROOT,
-  workspacePath,
-}: NodeStorageProviderOptions = {}): WorkspaceStorageProvider {
-  return new WorkspaceStorageProvider(storageRoot, workspacePath);
 }

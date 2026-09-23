@@ -10,6 +10,7 @@ import {
   type SessionHandle,
 } from '@agent/runtime';
 import { bootstrapHost } from '@controllers/hostBootstrap';
+import { openProjectStateStore } from '@controllers/session/appStateStore';
 import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { consoleLogSink, setLogSink, silentLogSink } from '@logger/logSink';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
@@ -28,7 +29,10 @@ import {
 } from '@platform/processRuntime';
 import { createNodeWorkspaceRoots } from '@platform/defaults/nodeHost';
 import { DEFAULT_NODE_STORAGE_ROOT } from '@platform/defaults/nodeStorage';
-import { resolveGlobalStoragePath } from '@platform/defaults/workspaceStorage';
+import {
+  resolveGlobalStoragePath,
+  WorkspaceStorageProvider,
+} from '@platform/defaults/workspaceStorage';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { SessionOpenError } from '@shared/session/database';
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -47,7 +51,6 @@ import {
   flushTextStderr,
   writeTextStderr,
 } from './logSinks';
-import { openCliWorkspaceState } from './cliStateStores';
 import { CliExitCode } from './exitCodes';
 import type { CliContext } from './cliContext';
 
@@ -290,10 +293,15 @@ export function initCliPlatform(
         const projectScope = yield* Scope.make();
         const closeProject = Scope.close(projectScope, Exit.void);
         return yield* Effect.gen(function* () {
-          const stateStores = yield* openCliWorkspaceState({
-            storageRoot: context.storageRoot,
-            workspacePath: context.cwd,
-          }).pipe(Scope.provide(projectScope));
+          // The project's `texra.db` lives in its storage directory and is
+          // owned by the project scope; AppState (global) is the runtime's.
+          const storage = new WorkspaceStorageProvider(
+            context.storageRoot ?? DEFAULT_NODE_STORAGE_ROOT,
+            context.cwd,
+          );
+          const workspaceState = yield* openProjectStateStore(
+            storage.getStoragePath(),
+          ).pipe(Scope.provide(projectScope));
           const cliSecrets = getCliSecrets(context.storageRoot);
           // One process, one project: the process roots are the `--cwd` workspace,
           // over the config provider the startup read already opened — the project
@@ -303,10 +311,10 @@ export function initCliPlatform(
           // what keeps a value `texra config` writes readable at the next startup.
           const roots = createNodeWorkspaceRoots({
             workspacePath: context.cwd,
-            storage: stateStores.storage.getStoragePath(),
-            globalStorage: stateStores.storage.getGlobalStoragePath(),
+            storage: storage.getStoragePath(),
+            globalStorage: storage.getGlobalStoragePath(),
             config: context.config,
-            workspaceState: stateStores.workspaceState,
+            workspaceState,
             globalState,
           });
           // The one open of the process session, over the roots published below,
