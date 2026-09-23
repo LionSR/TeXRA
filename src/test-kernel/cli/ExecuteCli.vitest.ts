@@ -301,13 +301,8 @@ function reflectionSnapshot(): FlowSnapshotPayload {
       declinedRoutes: [],
     },
     state: {
-      currentRound: 0,
       totalRounds: 4,
       workspaceSnapshot: AgentWorkspaceState.create().toSnapshot(),
-      outputLocation: null,
-      runStateSnapshot: { totalRounds: 4, totalResponseTimeMs: 0 },
-      continueRounds: true,
-      endTurn: false,
     },
   };
 }

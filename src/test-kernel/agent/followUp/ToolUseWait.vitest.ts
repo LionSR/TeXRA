@@ -42,9 +42,10 @@ import { dispatchFactsFor } from '@agent/runtime/run/tools';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { UsageMonitor } from '@agent/runtime/UsageMonitor';
 import { TraceEmitter } from '@agent/trace';
+import type { RunCell } from '@agent/runtime/loop/runProgram';
 import {
   AgentCategory,
-  AgentRunStateSnapshotSchema,
+  EMPTY_RUN_USAGE_TOTALS,
   MESSAGE_TYPES,
   RUN_OUTCOME,
   RUN_PHASE,
@@ -150,11 +151,11 @@ function invokerLayer(script: readonly ScriptedTurn[], seen: InvokeRequest[]) {
     ModelInvoker,
     Effect.gen(function* () {
       const run = yield* AgentRun;
-      const ledger = yield* RunLedger;
       const aggregateId = rowAggregate(run.runId);
       return {
-        invoke: (state: RunState, request: InvokeRequest) =>
+        invoke: (cell: RunCell, request: InvokeRequest) =>
           Effect.gen(function* () {
+            const state = yield* cell.current;
             const scripted = script[seen.length];
             seen.push(request);
             if (scripted === undefined) {
@@ -165,7 +166,7 @@ function invokerLayer(script: readonly ScriptedTurn[], seen: InvokeRequest[]) {
             if ('failWith' in scripted) {
               // The runtime snapshot the invoker writes on a failed attempt:
               // the error a resumed run reads back off the fold.
-              const failed = yield* ledger.appendBatch(run.runId, state, [
+              const failed = yield* cell.append([
                 snapshotRow(run.runId, state, {
                   runtime: {
                     lastError: scripted.failWith,
@@ -182,7 +183,7 @@ function invokerLayer(script: readonly ScriptedTurn[], seen: InvokeRequest[]) {
             const bound = yield* SynchronizedRef.get(run.model);
             const invocation = { invocationId: randomUUID(), attempt: 1 };
             const responseId = randomUUID();
-            const next = yield* ledger.appendBatch(run.runId, state, [
+            const next = yield* cell.append([
               {
                 type: 'model.message',
                 aggregateId,
@@ -461,9 +462,10 @@ const seedCommittedResponse = Effect.fn('test.seedCommittedResponse')(
       requests: {},
       followUps: [],
       followUpIds: new Set(),
-      usage: AgentRunStateSnapshotSchema.parse({}).usageAccumulator.totals,
+      usage: EMPTY_RUN_USAGE_TOTALS,
       flow: null,
       roundOutputs: [],
+      overflowRecoveredAtRound: null,
     };
     const opened = yield* ledger.appendBatch(runId, null, [
       appendRow(runId, [
@@ -474,7 +476,7 @@ const seedCommittedResponse = Effect.fn('test.seedCommittedResponse')(
         turn: 1,
         state: {
           family: 'toolUse',
-          state: { shouldSkipCycle: false, stateSlices: null },
+          state: { stateSlices: null },
         },
       }),
     ]);

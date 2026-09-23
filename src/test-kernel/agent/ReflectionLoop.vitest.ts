@@ -46,6 +46,7 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { UsageMonitor } from '@agent/runtime/UsageMonitor';
 import { TraceEmitter } from '@agent/trace';
 import { Runs } from '@agent/runtime/runRegistry';
+import type { RunCell } from '@agent/runtime/loop/runProgram';
 import { StateReadFailed } from '@platform/interfaces';
 import {
   LanguageModel,
@@ -59,6 +60,10 @@ import {
   type RetryErrorInfo,
   type RunId,
 } from '@shared/schemas';
+import {
+  WORKFLOW_RAW_OUTPUT_EXT,
+  workflowOutputPath,
+} from '@shared/constants/workflowOutput';
 import { RunLedger } from '@shared/session/runLedger';
 import type { RunState } from '@shared/session/runStateFold';
 import { StreamLog } from '@shared/session/traceEntries';
@@ -338,16 +343,16 @@ function invokerLayer(init: LoopInit, requests: InvokeRequest[]) {
     ModelInvoker,
     Effect.gen(function* () {
       const run = yield* AgentRun;
-      const ledger = yield* RunLedger;
       const aggregateId = rowAggregate(run.runId);
       return {
-        invoke: (state: RunState, request: InvokeRequest) =>
+        invoke: (cell: RunCell, request: InvokeRequest) =>
           Effect.gen(function* () {
+            const state = yield* cell.current;
             const turnScript = init.turns?.[requests.length] ?? COMPLETE;
             requests.push(request);
             if (init.beforeResponse) yield* init.beforeResponse(request.round);
             if ('failWith' in turnScript) {
-              const failed = yield* ledger.appendBatch(run.runId, state, [
+              const failed = yield* cell.append([
                 snapshotRow(run.runId, state, {
                   runtime: {
                     lastError: turnScript.failWith,
@@ -368,7 +373,7 @@ function invokerLayer(init: LoopInit, requests: InvokeRequest[]) {
               turnScript.text ?? `round ${request.round} output`,
               turnScript.finish,
             );
-            const next = yield* ledger.appendBatch(run.runId, state, [
+            const next = yield* cell.append([
               {
                 type: 'model.message',
                 aggregateId,
@@ -578,6 +583,18 @@ function userTexts(state: RunState): string[] {
         )
       : [],
   );
+}
+
+/** The canonical raw output a round's pipeline reads, as the loop derives it
+ *  from the round. */
+function canonicalOutputOf(
+  session: SessionHandle,
+  runId: RunId,
+  round: number,
+): string {
+  return new RunFileService(runId, session.roots).createLocation(
+    workflowOutputPath({ ext: WORKFLOW_RAW_OUTPUT_EXT, round }),
+  ).absolutePath;
 }
 
 /** The persisted reflection state of a folded run. */
@@ -977,8 +994,7 @@ describe('the output facts a reflection round publishes', () => {
       scripted.collidingDocument = true;
 
       const { result, state } = yield* runLoop({ runId, session, rounds: 1 });
-      const canonical = flowOf(state).outputLocation?.absolutePath;
-      if (canonical === undefined) throw new Error('The round has no output.');
+      const canonical = canonicalOutputOf(session, runId, 0);
       const roundDir = dirname(canonical);
       const cycle = join(dirname(roundDir), 'raw', 'r0', 'output.c0.xml');
       const extracted = join(roundDir, 'output.c0.xml');
@@ -1134,17 +1150,16 @@ describe('a token-limited reflection response', () => {
         ],
       });
 
-      const location = flowOf(state).outputLocation;
-      if (location === null) throw new Error('The round kept no output.');
+      const canonical = canonicalOutputOf(session, runId, state.round);
       // Every cycle asks the policy how it joins onto what came before; the
       // first has nothing before it, so its connector is never written.
       expect(connectResponseText.mock.calls).toEqual([
         ['', 'left'],
         ['left', 'right'],
       ]);
-      expect(
-        yield* Effect.promise(() => readFile(location.absolutePath, 'utf-8')),
-      ).toBe('left\nright');
+      expect(yield* Effect.promise(() => readFile(canonical, 'utf-8'))).toBe(
+        'left\nright',
+      );
     }),
   );
 
@@ -1191,7 +1206,7 @@ describe('an interrupted reflection run', () => {
       expect(state.step).toBe('halted');
       expect(state.outcome).toBe(RUN_OUTCOME.CANCELLED);
       // The round the stop interrupted is still the round a resume reopens.
-      expect(flowOf(state).currentRound).toBe(0);
+      expect(state.round).toBe(0);
 
       const resumed = yield* runLoop({
         runId,
@@ -1229,7 +1244,7 @@ describe('an interrupted reflection run', () => {
           RUN_OUTCOME.CANCELLED,
         ]);
         expect(halted.outcome).toBe(RUN_OUTCOME.CANCELLED);
-        expect(flowOf(halted).currentRound).toBe(1);
+        expect(halted.round).toBe(1);
         expect(halted.roundOutputs[0]?.outputs).toHaveLength(1);
 
         const resumed = yield* runLoop({
@@ -1268,10 +1283,7 @@ describe('an interrupted reflection run', () => {
         );
         // The response row is committed; its cycle file is not yet written.
         expect(halted.lastTurn).not.toBeNull();
-        const canonical = flowOf(halted).outputLocation?.absolutePath;
-        if (canonical === undefined) {
-          throw new Error('The round has no output.');
-        }
+        const canonical = canonicalOutputOf(session, runId, halted.round);
         yield* Effect.promise(async () => {
           if (seed === null) return;
           const target =

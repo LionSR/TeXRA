@@ -5,10 +5,10 @@ import { TraceEmitter } from '@agent/trace';
 import { UsageMonitor } from '@agent/runtime/UsageMonitor';
 import {
   AgentCategory,
-  AgentRunStateSnapshotSchema,
-  type AgentRunStateSnapshot,
+  RunUsageTotalsSchema,
   type NormalizedUsage,
   type RunId,
+  type RunUsageTotals,
 } from '@shared/schemas';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 
@@ -21,27 +21,35 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+/** What the loop hands the monitor: the run's folded totals and the
+ *  round's own priced usage. */
+interface RunUsage {
+  readonly totals: RunUsageTotals;
+  latestUsage: NormalizedUsage | null;
+}
+
+const freshUsage = (): RunUsage => ({
+  totals: RunUsageTotalsSchema.parse({}),
+  latestUsage: null,
+});
+
 /**
- * One round's usage folded into the snapshot the monitor reads, the way the
- * loop's fold sums `response.usage` rows: totals accumulate, `latestUsage`
+ * One round's usage folded into the totals the monitor reads, the way the
+ * ledger's fold sums `response.usage` rows: totals accumulate, `latestUsage`
  * is the round's own figure (null for a usage-less continuation).
  */
-function recordRound(
-  state: AgentRunStateSnapshot,
-  responseTimeMs: number,
-  usage: NormalizedUsage | null,
-): void {
-  const acc = state.usageAccumulator;
+function recordRound(state: RunUsage, usage: NormalizedUsage | null): void {
+  const { totals } = state;
   if (usage) {
-    if (acc.totals.firstInputTokens === 0) {
-      acc.totals.firstInputTokens = usage.inputTokens;
+    if (totals.firstInputTokens === 0) {
+      totals.firstInputTokens = usage.inputTokens;
     }
-    acc.totals.totalInputTokens += usage.inputTokens;
-    acc.totals.totalOutputTokens += usage.outputTokens;
-    acc.totals.totalCost += usage.cost;
+    totals.totalInputTokens += usage.inputTokens;
+    totals.totalOutputTokens += usage.outputTokens;
+    totals.totalCost += usage.cost;
+    totals.totalResponseTimeMs += usage.responseTimeMs;
   }
-  acc.latestUsage = usage;
-  state.totalResponseTimeMs += responseTimeMs;
+  state.latestUsage = usage;
 }
 
 type MonitorContext = ReturnType<typeof createMonitorWithEvents>;
@@ -87,19 +95,19 @@ describe('UsageMonitor', () => {
     await withMonitor(async ({ monitor }) => {
       expect(monitor.lastTotals()).toBeUndefined();
 
-      const state = AgentRunStateSnapshotSchema.parse({});
-      monitor.recordUsage(state, testModelInfo);
+      const state = freshUsage();
+      monitor.recordUsage(state.totals, state.latestUsage, testModelInfo);
 
       // The cache holds the exact totals object the accumulator exposed, so a
       // failed run's terminal `result` event can report usage from the catch arm.
-      expect(monitor.lastTotals()).toBe(state.usageAccumulator.totals);
+      expect(monitor.lastTotals()).toBe(state.totals);
     });
   });
 
   it('forwards the ChatGPT subscription route to session usage facts', async () => {
     await withMonitor(async ({ monitor, events }) => {
-      const state = AgentRunStateSnapshotSchema.parse({});
-      recordRound(state, 50, {
+      const state = freshUsage();
+      recordRound(state, {
         inputTokens: 10,
         outputTokens: 2,
         cost: 0,
@@ -108,7 +116,7 @@ describe('UsageMonitor', () => {
         usageRoute: 'chatgpt-subscription',
       });
 
-      monitor.recordUsage(state, testModelInfo);
+      monitor.recordUsage(state.totals, state.latestUsage, testModelInfo);
 
       const usageEvent = traceEventsOfType(events, 'usage').at(0);
       expect(usageEvent).toMatchObject({
@@ -122,7 +130,7 @@ describe('UsageMonitor', () => {
 
   it('publishes the run total on every usage row while billing the round', async () => {
     await withMonitor(async ({ monitor, events, log }) => {
-      const state = AgentRunStateSnapshotSchema.parse({});
+      const state = freshUsage();
       const round = {
         inputTokens: 100,
         outputTokens: 10,
@@ -130,10 +138,10 @@ describe('UsageMonitor', () => {
         responseTimeMs: 50,
         provider: 'openai-chat' as const,
       };
-      recordRound(state, 50, round);
-      monitor.recordUsage(state, testModelInfo);
-      recordRound(state, 50, round);
-      monitor.recordUsage(state, testModelInfo);
+      recordRound(state, round);
+      monitor.recordUsage(state.totals, state.latestUsage, testModelInfo);
+      recordRound(state, round);
+      monitor.recordUsage(state.totals, state.latestUsage, testModelInfo);
 
       // The session row is a snapshot of the run's spend (the fold replaces
       // the run's total with the newest row), so the second round's row
@@ -153,7 +161,7 @@ describe('UsageMonitor', () => {
 
   it('does not replay prior usage during a usage-less tool-use continuation', async () => {
     await withMonitor(async ({ monitor, events, log }) => {
-      const state = AgentRunStateSnapshotSchema.parse({});
+      const state = freshUsage();
       const usage = {
         inputTokens: 10,
         outputTokens: 2,
@@ -161,17 +169,17 @@ describe('UsageMonitor', () => {
         responseTimeMs: 50,
         provider: 'openai-chat' as const,
       };
-      recordRound(state, 50, usage);
-      monitor.recordUsage(state, testModelInfo);
+      recordRound(state, usage);
+      monitor.recordUsage(state.totals, state.latestUsage, testModelInfo);
 
-      recordRound(state, 25, null);
-      expect(state.usageAccumulator.latestUsage).toBeNull();
-      monitor.recordUsage(state, testModelInfo);
+      recordRound(state, null);
+      expect(state.latestUsage).toBeNull();
+      monitor.recordUsage(state.totals, state.latestUsage, testModelInfo);
 
       expect(traceEventsOfType(events, 'usage')).toHaveLength(1);
       expect(log).toHaveBeenCalledTimes(1);
-      expect(monitor.lastTotals()).toBe(state.usageAccumulator.totals);
-      expect(state.usageAccumulator.totals).toMatchObject({
+      expect(monitor.lastTotals()).toBe(state.totals);
+      expect(state.totals).toMatchObject({
         totalInputTokens: 10,
         totalOutputTokens: 2,
       });
@@ -184,15 +192,15 @@ describe('UsageMonitor', () => {
         config: { ...testModelInfo.config, fullName: 'Switched Model' },
       };
 
-      const state = AgentRunStateSnapshotSchema.parse({});
-      recordRound(state, 50, {
+      const state = freshUsage();
+      recordRound(state, {
         inputTokens: 10,
         outputTokens: 2,
         cost: 0.01,
         responseTimeMs: 50,
         provider: 'openai-chat' as const,
       });
-      monitor.recordUsage(state, switched);
+      monitor.recordUsage(state.totals, state.latestUsage, switched);
 
       // The loop passes the binding that served the round, so the round is
       // billed against it and not against the launch model.
@@ -209,8 +217,8 @@ describe('UsageMonitor', () => {
       const other = {
         config: { ...testModelInfo.config, provider: ModelProvider.OTHERS },
       };
-      const state = AgentRunStateSnapshotSchema.parse({});
-      recordRound(state, 50, {
+      const state = freshUsage();
+      recordRound(state, {
         inputTokens: 10,
         outputTokens: 2,
         cost: 0.01,
@@ -218,7 +226,7 @@ describe('UsageMonitor', () => {
         provider: 'openrouter-chat' as const,
       });
 
-      monitor.recordUsage(state, other);
+      monitor.recordUsage(state.totals, state.latestUsage, other);
 
       expect(log).toHaveBeenCalledWith(
         expect.objectContaining({ provider: 'openrouter-chat' }),

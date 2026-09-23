@@ -103,7 +103,7 @@ export const followUpsLayer: Layer.Layer<
     // reach it, because a failed acquire or a thrown attach releases nothing
     // under acquireUseRelease semantics, and the lease must not outlive the
     // scope that claimed it (the run-loop design,
-    // .agents/docs/proposed/architecture/2026-09-21-effect-design-run-loop-programs.md).
+    // .agents/docs/implemented/architecture/2026-09-21-effect-design-run-loop-programs.md).
     const created = yield* RunInput.make;
     let released = false;
     const lease = yield* Effect.acquireRelease(

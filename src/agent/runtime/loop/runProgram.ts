@@ -6,24 +6,24 @@
  * own files. There is no family parameter and no hook record: the shared
  * surface is values and total functions, and each loop writes its own
  * three-argument `Effect.acquireUseRelease` (the run-loop design,
- * .agents/docs/proposed/architecture/2026-09-21-effect-design-run-loop-programs.md).
+ * .agents/docs/implemented/architecture/2026-09-21-effect-design-run-loop-programs.md).
  */
 
-import { Cause, Effect, Exit, Ref, SynchronizedRef } from 'effect';
+import { Cause, Effect, Exit, Result, SynchronizedRef } from 'effect';
 
 import type { AgentTrace, StageHandle } from '@agent/trace';
 import {
-  AgentRunStateSnapshotSchema,
   RUN_OUTCOME,
-  type AgentRunStateSnapshot,
   type NormalizedUsage,
   type RunFamily,
   type RunId,
   type RunOutcome,
+  type SessionEvent,
 } from '@shared/schemas';
 import type { DatabaseWriteFailed } from '@shared/session/database';
 import { RunLedger, RunLedgerRefused } from '@shared/session/runLedger';
 import {
+  foldRunState,
   freshRunState,
   type RunLedgerDraft,
   type RunState,
@@ -38,7 +38,9 @@ import type { FollowUps } from '../FollowUps';
 /**
  * The run's one state holder and its only ledger writer. Seeded with the
  * opened state inside the acquire, so no reader branches on null: "the run
- * has rows and a phase" is the acquire's postcondition.
+ * has rows and a phase" is the acquire's postcondition. The loop hands the
+ * same cell to the invoker and the dispatch unit, so no run service keeps a
+ * copy of the state it commits against.
  */
 export interface RunCell {
   readonly runId: RunId;
@@ -46,24 +48,38 @@ export interface RunCell {
   readonly current: Effect.Effect<RunState>;
   /**
    * Commit one batch against the current state and adopt what the ledger
-   * folds back. Read-append-write is one uninterruptible region, so a stop
-   * can never leave the cell behind the rows: the halt the release writes
-   * always folds onto the state every committed batch produced.
+   * folds back. Rows that read the state (a snapshot, a step, a settlement
+   * carrying the workspace) are built from the state the batch commits
+   * against. Read-append-write is one uninterruptible region under the
+   * cell's lock, so a stop can never leave the cell behind the rows, and
+   * concurrent settlements of one parallel partition each fold onto the
+   * latest state. The wait for the lock is masked too, deliberately: a
+   * settlement queued behind a sibling when the run stops belongs to a tool
+   * that already ran, and committing it keeps a resume from running it again.
    */
   readonly append: (
-    rows: readonly RunLedgerDraft[],
+    rows:
+      | readonly RunLedgerDraft[]
+      | ((state: RunState) => readonly RunLedgerDraft[]),
   ) => Effect.Effect<RunState, RunLedgerRefused | DatabaseWriteFailed>;
   /**
-   * Adopt a state a run service already committed against (the invoker, the
-   * dispatch unit, the follow-up consumer, the compaction).
+   * Adopt a state a run service already committed against (the follow-up
+   * consumer, the compaction).
    */
   readonly adopt: (state: RunState) => Effect.Effect<RunState>;
+  /**
+   * Fold a row another writer already committed (a `request.decided` the
+   * decide command landed) onto the latest state, under the cell's lock, so
+   * no append between the read and the write is lost. A row that does not
+   * fold onto the run is a defect: `what` names it in the message.
+   */
+  readonly fold: (row: SessionEvent, what: string) => Effect.Effect<RunState>;
 }
 
 /**
- * A `Ref`, not a `SynchronizedRef`: one fiber owns a run — the loop, the
- * invoker and the dispatcher all run on it — so a lock would be a primitive
- * bought against no contention.
+ * A `SynchronizedRef`: the loop, the invoker and a barrier call run on one
+ * fiber, but a parallel partition settles its calls on sibling fibers, and
+ * each settlement must fold onto the one before it.
  */
 export const makeRunCell = (
   runId: RunId,
@@ -71,17 +87,34 @@ export const makeRunCell = (
 ): Effect.Effect<RunCell, never, RunLedger> =>
   Effect.gen(function* () {
     const ledger = yield* RunLedger;
-    const ref = yield* Ref.make(opened);
+    const ref = yield* SynchronizedRef.make(opened);
     return {
       runId,
-      current: Ref.get(ref),
+      current: SynchronizedRef.get(ref),
       append: (rows) =>
-        Ref.get(ref).pipe(
-          Effect.flatMap((state) => ledger.appendBatch(runId, state, rows)),
-          Effect.tap((next) => Ref.set(ref, next)),
-          Effect.uninterruptible,
-        ),
-      adopt: (state) => Ref.set(ref, state).pipe(Effect.as(state)),
+        SynchronizedRef.updateAndGetEffect(ref, (state) =>
+          ledger.appendBatch(
+            runId,
+            state,
+            typeof rows === 'function' ? rows(state) : rows,
+          ),
+        ).pipe(Effect.uninterruptible),
+      adopt: (state) => SynchronizedRef.set(ref, state).pipe(Effect.as(state)),
+      fold: (row, what) =>
+        SynchronizedRef.updateAndGetEffect(ref, (state) => {
+          const folded = foldRunState(state, [row]);
+          return Result.isFailure(folded) || folded.success === null
+            ? Effect.die(
+                new Error(
+                  `${what} does not fold onto the run: ${
+                    Result.isFailure(folded)
+                      ? folded.failure.detail
+                      : 'no state'
+                  }`,
+                ),
+              )
+            : Effect.succeed(folded.success);
+        }),
     } satisfies RunCell;
   });
 
@@ -89,28 +122,19 @@ export const makeRunCell = (
  * Record one round's usage against the binding that served it. A manual retry
  * may have rebound the model inside the invoker, so the price is charged
  * against `run.model`'s current value rather than whatever the round started
- * with. Both loops call this after a successful round.
+ * with. The totals are the ledger's folded ones, response time included.
+ * Both loops call this after a successful round.
  */
 export const recordServedUsage = (
   run: Pick<AgentRunShape, 'model' | 'usageMonitor'>,
-  snapshot: AgentRunStateSnapshot,
+  state: RunState,
+  latestUsage: NormalizedUsage | null,
 ): Effect.Effect<void> =>
   Effect.gen(function* () {
     const served = yield* SynchronizedRef.get(run.model);
-    yield* Effect.sync(() => run.usageMonitor.recordUsage(snapshot, served));
-  });
-
-/** Build the turn's usage record from the ledger's folded totals. */
-export const usageSnapshot = (
-  state: RunState,
-  totalRounds: number,
-  totalResponseTimeMs: number,
-  latestUsage: NormalizedUsage | null,
-): AgentRunStateSnapshot =>
-  AgentRunStateSnapshotSchema.parse({
-    totalRounds,
-    totalResponseTimeMs,
-    usageAccumulator: { totals: state.usage, latestUsage },
+    yield* Effect.sync(() =>
+      run.usageMonitor.recordUsage(state.usage, latestUsage, served),
+    );
   });
 
 /** Why a run the ledger holds no rows for cannot be continued. */

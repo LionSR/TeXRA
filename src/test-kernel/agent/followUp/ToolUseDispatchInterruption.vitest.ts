@@ -33,6 +33,7 @@ import { dispatchFactsFor } from '@agent/runtime/run/tools';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { UsageMonitor } from '@agent/runtime/UsageMonitor';
 import { TraceEmitter } from '@agent/trace';
+import type { RunCell } from '@agent/runtime/loop/runProgram';
 import {
   AgentCategory,
   type RequestDecision,
@@ -144,12 +145,12 @@ function invokerLayer(turns: readonly TurnResult[]) {
     ModelInvoker,
     Effect.gen(function* () {
       const run = yield* AgentRun;
-      const ledger = yield* RunLedger;
       const aggregateId = rowAggregate(run.runId);
       let index = 0;
       return {
-        invoke: (state: RunState) =>
+        invoke: (cell: RunCell) =>
           Effect.gen(function* () {
+            const state = yield* cell.current;
             const turn = turns[index];
             index += 1;
             if (turn === undefined) {
@@ -160,7 +161,7 @@ function invokerLayer(turns: readonly TurnResult[]) {
             const bound = yield* SynchronizedRef.get(run.model);
             const invocation = { invocationId: randomUUID(), attempt: 1 };
             const responseId = randomUUID();
-            const next = yield* ledger.appendBatch(run.runId, state, [
+            const next = yield* cell.append([
               {
                 type: 'model.message',
                 aggregateId,

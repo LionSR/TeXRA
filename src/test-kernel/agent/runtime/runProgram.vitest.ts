@@ -38,6 +38,7 @@ describe('settleRun', () => {
             current: Effect.succeed(state),
             append,
             adopt: (next: RunState) => Effect.succeed(next),
+            fold: () => Effect.succeed(state),
           } as RunCell;
           return { cell, append };
         };

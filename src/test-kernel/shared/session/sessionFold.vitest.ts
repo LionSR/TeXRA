@@ -1292,7 +1292,7 @@ const toolUseSnapshot = (runtime: Record<string, unknown> = {}) => ({
   payload: {
     family: 'toolUse',
     runtime: { ...RUNTIME, ...runtime },
-    state: { shouldSkipCycle: false, stateSlices: null },
+    state: { stateSlices: null },
   },
 });
 
@@ -1307,7 +1307,6 @@ const reflectionSnapshot = {
     family: 'reflection',
     runtime: RUNTIME,
     state: {
-      currentRound: 0,
       totalRounds: 1,
       workspaceSnapshot: {
         assembly: {},
@@ -1316,10 +1315,6 @@ const reflectionSnapshot = {
         interactions: {},
         workPlan: {},
       },
-      outputLocation: null,
-      runStateSnapshot: {},
-      continueRounds: true,
-      endTurn: false,
     },
   },
 };
@@ -1559,19 +1554,26 @@ describe('foldRunState', () => {
     [
       'compaction that replaced history mid-run: keepPrefix plus the row',
       () => {
-        const state = stateOf(
-          through(11, {
-            type: 'model.compaction',
-            payload: {
-              keepPrefix: 1,
-              messages: [USER('summary')],
-              cause: 'context-limit',
-              continuation: null,
-              continuationDropped: null,
-            },
-          }),
-        );
+        const compacted = (cause: 'context-limit' | 'context-window') =>
+          stateOf(
+            through(11, {
+              type: 'model.compaction',
+              payload: {
+                keepPrefix: 1,
+                messages: [USER('summary')],
+                cause,
+                continuation: null,
+                continuationDropped: null,
+              },
+            }),
+          );
+        const state = compacted('context-limit');
         expect(state?.messages.map((m) => m.role)).toEqual(['user', 'user']);
+        // Only an overflow compaction spends the round's one overflow retry.
+        expect(state?.overflowRecoveredAtRound).toBeNull();
+        const overflow = compacted('context-window');
+        expect(overflow?.round).toBeTypeOf('number');
+        expect(overflow?.overflowRecoveredAtRound).toBe(overflow?.round);
       },
     ],
     [
@@ -1690,10 +1692,8 @@ describe('foldRunState', () => {
         );
         const flow = state?.flow;
         expect(flow?.family).toBe('reflection');
-        // D12: no snapshot payload carries an accumulator; usage is derived.
-        expect(
-          flow?.family === 'reflection' ? flow.state.runStateSnapshot : null,
-        ).not.toHaveProperty('usageAccumulator');
+        // D12: no snapshot payload carries usage; it is derived from the rows.
+        expect(flow?.state).not.toHaveProperty('runStateSnapshot');
         expect(state?.snapshotCommit).toBe(2);
       },
     ],

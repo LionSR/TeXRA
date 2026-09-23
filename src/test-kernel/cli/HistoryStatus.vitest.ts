@@ -82,15 +82,10 @@ function snapshotPayload(
     runtime: SNAPSHOT_RUNTIME,
     state:
       family === 'toolUse'
-        ? { shouldSkipCycle: false, stateSlices: null }
+        ? { stateSlices: null }
         : {
-            currentRound: 1,
             totalRounds: 2,
             workspaceSnapshot: AgentWorkspaceState.emptySnapshot(),
-            outputLocation: null,
-            runStateSnapshot: {},
-            continueRounds: false,
-            endTurn: false,
           },
   });
 }
