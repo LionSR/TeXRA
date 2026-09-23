@@ -342,11 +342,6 @@ export function createExtensionHostRequests(
         ),
       showInfo: (message) => vscodeUi.showInfoMessage(message),
       showError: (message) => vscodeUi.showErrorMessage(message),
-      logError: (message, error) => {
-        log.error(message, {
-          data: error instanceof Error ? error : undefined,
-        });
-      },
     },
     sendFollowUp: (runId, text) => runActions.sendFollowUp(runId, text),
   });
@@ -545,26 +540,28 @@ export function createExtensionHostRequests(
 
   function attachDroppedFiles(
     request: Extract<HostRequest, { kind: 'attachDroppedFiles' }>,
-  ): Effect.Effect<HostOutcome> {
+  ): Effect.Effect<HostOutcome, Rejected> {
     return Effect.forEach(
       request.paths,
       (rawPath) => resolveWorkspaceDropFile(rawPath),
       { concurrency: 'unbounded' },
     ).pipe(
-      Effect.map((paths): HostOutcome => {
-        const attached = attachDroppedPaths(
-          paths,
-          getIncludedExtensions(request.category),
-        );
-        if (attached.attachedCount > 0 && attached.rejectedCount > 0) {
-          void runtime.runFork(
-            vscodeUi.showInfoMessage(
-              `Attached ${formatResultCount(attached.attachedCount, 'dropped file')}; skipped ${formatResultCount(attached.rejectedCount, 'unsupported, folder, or out-of-workspace item')}.`,
-            ),
-          );
-        }
-        return { kind: 'files', paths: attached.paths };
-      }),
+      Effect.flatMap((paths) =>
+        attachDroppedPaths(paths, getIncludedExtensions(request.category)),
+      ),
+      Effect.tap((attached) =>
+        attached.attachedCount > 0 && attached.rejectedCount > 0
+          ? Effect.forkDetach(
+              vscodeUi.showInfoMessage(
+                `Attached ${formatResultCount(attached.attachedCount, 'dropped file')}; skipped ${formatResultCount(attached.rejectedCount, 'unsupported, folder, or out-of-workspace item')}.`,
+              ),
+            )
+          : Effect.void,
+      ),
+      Effect.map((attached): HostOutcome => ({
+        kind: 'files',
+        paths: attached.paths,
+      })),
     );
   }
 

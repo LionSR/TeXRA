@@ -20,7 +20,6 @@ import {
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { MessageHost, NotificationFailed } from '@hosts/uiHosts';
 import { withLogChannel } from '@logger/effectLog';
-import { createLog } from '@logger/logUtils';
 import type { ApiProvider } from '@model/apiProviders';
 import {
   API_PROVIDERS,
@@ -75,7 +74,6 @@ import {
 } from '../progressView/ProgressFollowUpController';
 
 const CHANNEL = 'HostRunActions';
-const log = createLog(CHANNEL);
 
 /** The workflow toolbar's latexdiff over a run's outputs, as each host's
  *  diff command takes it. */
@@ -236,7 +234,7 @@ export interface HostRunActions {
   readonly runOutputs: ProgressFollowUpState & {
     getKnownWorkspaceOutputPaths(runId: RunId): Set<string>;
   };
-  restoreProposal(proposal: unknown): AgentConfig;
+  restoreProposal(proposal: unknown): Effect.Effect<AgentConfig, Rejected>;
   sendFollowUp(
     runId: RunId,
     text: string,
@@ -539,15 +537,19 @@ export const createHostRunActions = (
       runOutputs,
       restoreProposal(proposal) {
         const parsed = AgentConfigSchema.safeParse(proposal);
-        if (!parsed.success) {
-          log.warn('Invalid proposal config', {
-            data: parsed.error.issues,
-          });
-          throw new Rejected({
-            reason: 'This proposal does not carry a restorable setup.',
-          });
-        }
-        return parsed.data;
+        if (parsed.success) return Effect.succeed(parsed.data);
+        return Effect.logWarning('Invalid proposal config', {
+          issues: parsed.error.issues,
+        }).pipe(
+          Effect.andThen(
+            Effect.fail(
+              new Rejected({
+                reason: 'This proposal does not carry a restorable setup.',
+              }),
+            ),
+          ),
+          withLogChannel(CHANNEL),
+        );
       },
       sendFollowUp(runId, text) {
         const present = (message: string) => ports.showWarning(message);

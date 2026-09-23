@@ -198,25 +198,25 @@ export function buildTerminalTool(
     description:
       'Submit the final result. Call this exactly once, with the complete result, when the task is done.',
     schema: zodSchema,
+    // A repeated call and a malformed payload are the call's own failures,
+    // the latter keeping its Zod issues for the model's diagnostics.
     execute: (input) =>
-      Effect.try({
-        try: (): ToolResult => {
-          if (captured) {
-            throw new ToolError(
-              'submit_output can only be accepted once per run.',
-            );
-          }
-          const jsonValue = JsonValueSchema.parse(input);
-          captured = true;
-          capture(jsonValue);
-          return {
-            status: 'executed',
-            endTurn: true,
-            summary: 'Structured output captured.',
-            output: 'Structured output captured.',
-          };
-        },
-        catch: ensureError,
+      Effect.suspend(() => {
+        if (captured) {
+          return Effect.fail(
+            new ToolError('submit_output can only be accepted once per run.'),
+          );
+        }
+        const parsed = JsonValueSchema.safeParse(input);
+        if (!parsed.success) return Effect.fail(parsed.error);
+        captured = true;
+        capture(parsed.data);
+        return Effect.succeed<ToolResult>({
+          status: 'executed',
+          endTurn: true,
+          summary: 'Structured output captured.',
+          output: 'Structured output captured.',
+        });
       }),
   });
 }

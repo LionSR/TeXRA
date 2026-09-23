@@ -82,7 +82,7 @@ function snapshotPayload(
     runtime: SNAPSHOT_RUNTIME,
     state:
       family === 'toolUse'
-        ? { stateSlices: null }
+        ? { stateSlices: null, offeredTools: [], toolsetHash: '0'.repeat(64) }
         : {
             totalRounds: 2,
             workspaceSnapshot: AgentWorkspaceState.emptySnapshot(),

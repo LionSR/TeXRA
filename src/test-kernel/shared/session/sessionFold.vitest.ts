@@ -1189,7 +1189,8 @@ describe('sessionFold', () => {
 //
 // Measured serialized size of the two snapshot drafts below (aggregate id
 // included, parsed defaults filled), so PR 2 has a number before it turns the
-// writes on: tool-use with `stateSlices: null` is 362 bytes; reflection with
+// writes on (before the offered toolset joined the tool-use state): tool-use
+// with `stateSlices: null` was 362 bytes; reflection with
 // an empty workspace and no round outputs is 741 bytes. Both grow with the
 // family state they carry, never with the conversation, which the rows carry.
 // ---------------------------------------------------------------------------
@@ -1292,7 +1293,7 @@ const toolUseSnapshot = (runtime: Record<string, unknown> = {}) => ({
   payload: {
     family: 'toolUse',
     runtime: { ...RUNTIME, ...runtime },
-    state: { stateSlices: null },
+    state: { stateSlices: null, offeredTools: [], toolsetHash: '0'.repeat(64) },
   },
 });
 

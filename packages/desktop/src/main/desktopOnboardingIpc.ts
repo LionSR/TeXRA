@@ -71,8 +71,8 @@ interface DesktopOnboardingIpcOptions {
    */
   hasCredential: () => Effect.Effect<boolean, never, LanguageModel>;
   /** Launch the setup conversation when the user clicks "Run Setup". The
-   *  program is forked below, so its own failure is the host's to word. */
-  kickoffSetup: () => Effect.Effect<void, Error>;
+   *  host presents its own failure, so the program settles. */
+  kickoffSetup: () => Effect.Effect<void>;
   /** Run ChatGPT sign-in flow from the welcome card. */
   signInWithChatGpt: () => Effect.Effect<void, Error, ProcessServices>;
   onAsyncError: (error: unknown) => void;
@@ -173,9 +173,6 @@ export function createDesktopOnboardingIpc(
         // leaving the card stuck on 'setup'.
         options.runtime.runFork(
           options.kickoffSetup().pipe(
-            // Swallow — the kickoff handler already surfaced the error to the
-            // user.
-            Effect.ignore,
             // Clear the guard once the run settles (success or failure): while
             // it's in flight the guard blocks a concurrent second run, but
             // afterwards another manual "Run Setup" click must launch again.

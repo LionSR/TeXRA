@@ -92,28 +92,26 @@ export class MemoryHandlers {
   ) {
     return this.ctx.withActiveWebview((webview) =>
       Effect.gen({ self: this }, function* () {
-        const delivered = yield* this.withStorage(
-          Effect.exit(
-            Effect.flatMap(
-              this.memory.getMemoryPreviewMessage(data.storagePath),
-              (preview) =>
-                postToWebview(webview, preview).pipe(
-                  Effect.mapError(
-                    (cause) =>
-                      new MemoryMessageUndelivered({
-                        cause,
-                        message: toErrorMessage(cause),
-                      }),
-                  ),
+        const failure = yield* this.withStorage(
+          Effect.flatMap(
+            this.memory.getMemoryPreviewMessage(data.storagePath),
+            (preview) =>
+              postToWebview(webview, preview).pipe(
+                Effect.mapError(
+                  (cause) =>
+                    new MemoryMessageUndelivered({
+                      cause,
+                      message: toErrorMessage(cause),
+                    }),
                 ),
-            ),
-          ),
+              ),
+          ).pipe(Effect.as(null), Effect.catch(Effect.succeed)),
         );
-        if (Exit.isSuccess(delivered)) return;
+        if (failure === null) return;
         yield* showLoggedErrorMessage(
           this.ctx.channel,
           'Failed to load memory preview',
-          Cause.squash(delivered.cause),
+          failure,
         );
         yield* postToWebview(
           webview,

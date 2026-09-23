@@ -88,7 +88,7 @@ const DIFF_SUFFIX = '_diff';
  */
 type PreviewServices = FileSystem.FileSystem | Path.Path;
 
-/** Silently attempt to delete a file or directory, ignoring errors */
+/** Delete a file or directory; a real failure is logged, not raised. */
 const silentDelete = (
   targetPath: string,
   kind: 'file' | 'dir',
@@ -100,9 +100,10 @@ const silentDelete = (
     // recursion, and an already-absent target is not an error — that last is
     // what `force` carries, not a new best-effort.
     yield* fs.remove(targetPath, { force: true }).pipe(
-      // Best-effort temp cleanup; the target may already be gone.
+      // Best-effort temp cleanup: `force` already absorbs an absent target,
+      // so what reaches here is a real fault worth a warning.
       Effect.catch((error) =>
-        Effect.logDebug(`Failed to delete temp ${kind} ${targetPath}`).pipe(
+        Effect.logWarning(`Failed to delete temp ${kind} ${targetPath}`).pipe(
           withLogChannel(CHANNEL),
           Effect.annotateLogs({ data: error }),
         ),

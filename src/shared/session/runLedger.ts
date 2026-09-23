@@ -56,7 +56,11 @@ export class RunLedgerRefused extends Data.TaggedError('RunLedgerRefused')<{
   readonly runId: RunId;
   readonly detail: string;
   readonly cause?: RunLedgerInconsistent;
-}> {}
+}> {
+  override get message(): string {
+    return `The run ledger refused a write (${this.reason}): ${this.detail}`;
+  }
+}
 
 export class RunLedger extends Context.Service<
   RunLedger,

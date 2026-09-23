@@ -245,6 +245,7 @@ function agentRunTestLayer(init: HarnessInit) {
         fileService: new RunFileService(init.runId, init.session.roots),
         tools: new MapToolRegistry(init.tools),
         finalToolName: null,
+        toolset: { offeredTools: [], toolsetHash: '0'.repeat(64) },
         structured: { value: undefined },
         model,
         scope,

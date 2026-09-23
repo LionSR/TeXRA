@@ -40,7 +40,7 @@ interface ControllerFixtureOptions {
     includeRemote?: boolean;
   }) => Effect.Effect<void>;
   readonly promptText?: () => Effect.Effect<string | undefined>;
-  readonly confirm?: () => Promise<boolean>;
+  readonly confirm?: () => Effect.Effect<boolean>;
   readonly chooseTeamAvailability?: () => Effect.Effect<
     'cancel' | 'continue' | 'sign-in'
   >;
@@ -117,10 +117,11 @@ function createControllerFixture(options: ControllerFixtureOptions = {}) {
       }),
     prompts: {
       promptText: options.promptText ?? (() => Effect.succeed(undefined)),
-      confirm: async (input) => {
-        confirmed.push(input.message);
-        return (await options.confirm?.()) ?? true;
-      },
+      confirm: (input) =>
+        Effect.suspend(() => {
+          confirmed.push(input.message);
+          return options.confirm?.() ?? Effect.succeed(true);
+        }),
       chooseTeamAvailability:
         options.chooseTeamAvailability ?? (() => Effect.succeed('cancel')),
     },
@@ -448,7 +449,7 @@ describe('DefaultDesktopAgentSettingsController', () => {
         const workspaceState = savedTeamState();
         const { confirmed, controller } = createControllerFixture({
           workspaceState,
-          confirm: async () => false,
+          confirm: () => Effect.succeed(false),
         });
 
         yield* withProcessServices(

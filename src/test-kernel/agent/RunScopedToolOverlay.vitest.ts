@@ -75,6 +75,26 @@ function observingInvokerLayer(seen: InvokeRequest[]) {
   });
 }
 
+/** The run's layer over a launch, with the given run-scoped tools. */
+function runLayer(
+  ctx: AgentLaunchContext,
+  tools: ITool[],
+  seen: InvokeRequest[] = [],
+) {
+  return Layer.mergeAll(
+    observingInvokerLayer(seen),
+    followUpsLayer,
+    nativeToolTestLayer(),
+  ).pipe(
+    Layer.provideMerge(
+      agentRunLayer(ctx, { tools, callbacks: { onModelChanged: () => {} } }),
+    ),
+    Layer.provideMerge(Layer.succeed(RunLedger, ctx.session.ledger)),
+    Layer.provideMerge(LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT)),
+    Layer.provideMerge(testHttpClientLayer),
+  );
+}
+
 describe('run-scoped tool resolution', () => {
   setupPlatform({ workspacePath: process.cwd() });
 
@@ -106,26 +126,8 @@ describe('run-scoped tool resolution', () => {
           yield* runToolUse({ resume: false });
           return (yield* AgentRun).tools;
         }).pipe(
-          Effect.provide(
-            Layer.mergeAll(
-              observingInvokerLayer(seen),
-              followUpsLayer,
-              nativeToolTestLayer(),
-            ).pipe(
-              Layer.provideMerge(
-                agentRunLayer(ctx, {
-                  // Run-scoped tools, one of them shadowing a registered tool.
-                  tools: [shadowing, tool('second')],
-                  callbacks: { onModelChanged: () => {} },
-                }),
-              ),
-              Layer.provideMerge(Layer.succeed(RunLedger, session.ledger)),
-              Layer.provideMerge(
-                LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT),
-              ),
-              Layer.provideMerge(testHttpClientLayer),
-            ),
-          ),
+          // Run-scoped tools, one of them shadowing a registered tool.
+          Effect.provide(runLayer(ctx, [shadowing, tool('second')], seen)),
           Effect.orDie,
         );
 
@@ -145,6 +147,57 @@ describe('run-scoped tool resolution', () => {
         // did not offer is unknown, however the model came to name it.
         expect(dispatch.get('bash')).toBe(shadowing);
         expect(dispatch.has('grep')).toBe(false);
+        yield* session.dispose();
+      }),
+  );
+
+  it.effect(
+    'resumes with the recorded tools that still resolve and names each one gone',
+    () =>
+      Effect.gen(function* () {
+        const session = sessionWithInteractions({ emit: () => {} });
+        const runId = generateRunId();
+        publishTestRunStart(session, runId);
+        const warn = vi.fn<typeof noopTrace.warn>();
+        const config = AgentConfigSchema.parse({
+          agent: 'chat',
+          model: 'test-model',
+          agentCategory: AgentCategory.ToolUse,
+          workingDirectory: process.cwd(),
+        });
+        const ctx = validationLaunch(
+          { runId, session, logger: { ...noopTrace, warn } },
+          config,
+        );
+        yield* runToolUse({ resume: false }).pipe(
+          Effect.provide(runLayer(ctx, [tool('gone'), tool('kept')])),
+          Effect.orDie,
+        );
+
+        // `gone` vanished and `added` appeared since the run opened.
+        const resumed = yield* Effect.gen(function* () {
+          return yield* AgentRun;
+        }).pipe(
+          Effect.provide(runLayer(ctx, [tool('kept'), tool('added')])),
+          Effect.orDie,
+        );
+
+        expect(resumed.setting.tools.map(({ name }) => name)).toEqual([
+          'memory',
+          'plan',
+          'kept',
+        ]);
+        expect(resumed.tools.has('gone')).toBe(false);
+        expect(resumed.tools.has('added')).toBe(false);
+        expect(resumed.toolset.offeredTools).toEqual([
+          'memory',
+          'plan',
+          'gone',
+          'kept',
+        ]);
+        expect(warn).toHaveBeenCalledWith(
+          'Tool "gone" was offered to this run but is no longer available; the resumed run continues without it.',
+        );
         yield* session.dispose();
       }),
   );

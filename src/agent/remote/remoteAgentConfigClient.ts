@@ -18,13 +18,16 @@ export const fetchRemoteAgentConfigYaml = (
   accessToken: string,
 ): Effect.Effect<string, Error> =>
   Effect.tryPromise({
-    try: async () => {
+    try: async (signal) => {
       const data = await ky
         .post(SUPABASE_CONFIG.edgeFunctionUrl, {
           json: { agentName },
           headers: { Authorization: `Bearer ${accessToken}` },
           timeout: false,
-          signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+          signal: AbortSignal.any([
+            signal,
+            AbortSignal.timeout(FETCH_TIMEOUT_MS),
+          ]),
         })
         .json<unknown>();
       return EdgeFunctionResponseSchema.parse(data).config;

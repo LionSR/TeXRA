@@ -10,7 +10,10 @@ import {
   resumeRunWithRefusalNotice,
 } from '@controllers/session/resumeRunPresentation';
 import { withLogChannel } from '@logger/effectLog';
-import type { ProcessRuntime } from '@platform/processRuntime';
+import {
+  type ProcessRuntime,
+  withProcessServices,
+} from '@platform/processRuntime';
 import {
   AgentResumeFailed,
   type RecoveryContinuation,
@@ -105,9 +108,7 @@ export class DesktopProcessResumeOwner {
     // Effect may not require, so they come from this runtime's context on the
     // fiber that runs it. Every fault is still this owner's to report and
     // answer `false` for, as the caught rejection was.
-    return Effect.flatMap(runtime.contextEffect, (context) =>
-      Effect.provideContext(attempt, context),
-    ).pipe(
+    return withProcessServices(runtime, attempt).pipe(
       Effect.catchCause((cause) =>
         Effect.suspend(() => {
           const error = Cause.squash(cause);

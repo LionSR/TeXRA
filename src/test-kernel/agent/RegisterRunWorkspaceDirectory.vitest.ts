@@ -10,6 +10,7 @@ import {
   registerRun,
 } from '@agent/storage/runLifecycle';
 import { aggregateId, type RunId } from '@shared/schemas';
+import { DatabaseReadFailed } from '@shared/session/database';
 import {
   createTestSession,
   publishTestRunStart,
@@ -113,7 +114,10 @@ describe('run registration and finalization', () => {
       Effect.gen(function* () {
         yield* register();
         if (!alreadyOwned) yield* session.releaseRunLease(runId);
-        const failure = new Error('database admission rejected');
+        const failure = new DatabaseReadFailed({
+          path: 'session.db',
+          cause: new Error('database admission rejected'),
+        });
         vi.spyOn(session, 'acquireClaims').mockReturnValueOnce(
           Effect.fail(failure),
         );
