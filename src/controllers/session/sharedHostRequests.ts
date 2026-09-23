@@ -331,7 +331,7 @@ export function handleSharedHostRequest(
         return done;
       case 'restoreProposalConfig':
         yield* restoreIntoLauncher(
-          ports.runActions.restoreProposal(request.proposal),
+          yield* ports.runActions.restoreProposal(request.proposal),
         );
         return done;
       case 'latexdiff': {

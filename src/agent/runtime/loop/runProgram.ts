@@ -252,14 +252,12 @@ export const settleRun =
             yield* cell
               .append([haltedStepRow(cell.runId, state, outcome)])
               .pipe(
-                Effect.catch((error) =>
-                  error instanceof RunLedgerRefused
-                    ? Effect.sync(() =>
-                        logger.warn('Failed to record the run halt', {
-                          data: error,
-                        }),
-                      )
-                    : Effect.fail(error),
+                Effect.catchTag('RunLedgerRefused', (error) =>
+                  Effect.sync(() =>
+                    logger.warn('Failed to record the run halt', {
+                      data: error,
+                    }),
+                  ),
                 ),
               );
           });
@@ -289,14 +287,7 @@ export const stoppedBy =
   (logger: AgentTrace, label: string) =>
   (cause: Cause.Cause<Error>): Effect.Effect<never, Error> => {
     if (Cause.hasInterrupts(cause)) return Effect.failCause(cause);
-    const squashed = Cause.squash(cause);
-    const stopped =
-      squashed instanceof RunLedgerRefused
-        ? new Error(
-            `The run ledger refused a write (${squashed.reason}): ${squashed.detail}`,
-            { cause: squashed },
-          )
-        : ensureError(squashed);
+    const stopped = ensureError(Cause.squash(cause));
     logger.warn(`${label} stopped: ${stopped.message}`);
     return Effect.fail(stopped);
   };

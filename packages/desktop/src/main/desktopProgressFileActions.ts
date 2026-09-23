@@ -1,6 +1,6 @@
 import path from 'node:path';
 
-import { Data, Effect, FileSystem } from 'effect';
+import { Data, Effect, FileSystem, type PlatformError } from 'effect';
 
 import {
   getHelperModelName,
@@ -10,6 +10,7 @@ import {
 } from '@agent/runtime';
 import { createLatexRunDiscovery } from '@agent/storage';
 import { emitAppSignal } from '@eventBus/AppSignals';
+import type { NotificationFailed, PromptFailed } from '@hosts/uiHosts';
 import { acceptEditedFileReplace } from '@latex/acceptedFileTarget';
 import { openFirstLabelMatch } from '@latex/labelSearch';
 import { LaTeXdiffService } from '@latex/latexdiff';
@@ -23,7 +24,11 @@ import type {
   DiffRunOutcome,
 } from '@latex/latexdiff/types';
 import type { StateStore, StateReadFailed } from '@platform/interfaces';
-import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
+import {
+  type ProcessRuntime,
+  type ProcessServices,
+  withProcessServices,
+} from '@platform/processRuntime';
 import type { LatexdiffMathMarkupValue } from '@shared/constants/latexConfig';
 import type { OutputFileInfo, ReadonlyRoundIndexed } from '@shared/schemas';
 import type { Rejected } from '@shared/session/requestErrors';
@@ -84,7 +89,7 @@ interface DesktopProgressFileActionHost {
   startRun(request: ValidatedRunRequest): void;
   listWorkspaceCandidateFiles(): Effect.Effect<
     readonly string[],
-    Error,
+    PlatformError.PlatformError,
     ProcessServices
   >;
 }
@@ -155,32 +160,17 @@ export class DesktopProgressFileActions {
    * yields it already carries, so nothing settles here.
    */
   acceptEditedFile(baseFile: string, editedFile: string) {
-    return acceptEditedFileReplace(
+    return acceptEditedFileReplace<PromptFailed | NotificationFailed>(
       pathToLocationIn(this.host.session.roots.workspace, baseFile),
       pathToLocationIn(this.host.session.roots.workspace, editedFile),
       {
-        confirm: (message) =>
-          Effect.promise(() => this.ui.confirmAcceptFile(message)),
+        confirm: (message) => this.ui.confirmAcceptFile(message),
         emitWritten: (absolutePath) =>
           emitAppSignal('workspaceFilesWritten', {
             absolutePaths: [absolutePath],
           }),
         showInfo: (message) => this.ui.showInfoMessage(message),
       },
-    );
-  }
-
-  /**
-   * The window's services, handed to programs whose callers take none: the
-   * latexdiff core, the build display and the file reads below all read the
-   * process filesystem, and the ports this class satisfies declare no
-   * requirements. Nothing settles here — the caller still runs the program.
-   */
-  private withProcessServices<A, E>(
-    program: Effect.Effect<A, E, ProcessServices>,
-  ): Effect.Effect<A, E> {
-    return Effect.flatMap(this.host.runtime.contextEffect, (context) =>
-      Effect.provideContext(program, context),
     );
   }
 
@@ -258,11 +248,12 @@ export class DesktopProgressFileActions {
       }
 
       yield* this.openDiffOutput(result.diffPath);
-    }).pipe((program) => this.withProcessServices(program));
+    }).pipe((program) => withProcessServices(this.host.runtime, program));
   }
 
   findAndOpenLabel(label: string): Effect.Effect<boolean, Error> {
-    return this.withProcessServices(
+    return withProcessServices(
+      this.host.runtime,
       Effect.gen({ self: this }, function* () {
         const candidates = new Set(
           yield* this.host.listWorkspaceCandidateFiles(),
@@ -332,7 +323,7 @@ export class DesktopProgressFileActions {
           }),
         ),
       );
-    }).pipe((program) => this.withProcessServices(program));
+    }).pipe((program) => withProcessServices(this.host.runtime, program));
   }
 
   /**
@@ -356,7 +347,8 @@ export class DesktopProgressFileActions {
 
   /** Open a generated diff file via the desktop LaTeX build display. */
   private openDiffOutput(diffFilePath: string): Effect.Effect<void, Error> {
-    return this.withProcessServices(
+    return withProcessServices(
+      this.host.runtime,
       this.ui.openBuildDisplay(createExternalLocation(diffFilePath)),
     );
   }

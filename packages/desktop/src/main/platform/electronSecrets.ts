@@ -230,8 +230,13 @@ export class ElectronSecrets implements PlatformSecrets {
     return Effect.suspend(() => {
       if (this.warnedOnce.has(kind)) return Effect.void;
       this.warnedOnce.add(kind);
-      return Effect.ignore(
-        this.options.showWarningMessage?.(message) ?? Effect.void,
+      return (this.options.showWarningMessage?.(message) ?? Effect.void).pipe(
+        Effect.catch((error) =>
+          Effect.logWarning(
+            `Keychain warning could not be shown: ${message}`,
+            error,
+          ),
+        ),
       );
     });
   }

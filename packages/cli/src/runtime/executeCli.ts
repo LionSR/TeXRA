@@ -182,11 +182,11 @@ export function executeCliConfig<
       expectedCategory !== undefined &&
       result.output.category !== expectedCategory
     ) {
-      // Unreachable: `enforceCategory` above makes the launch throw before the
-      // run whenever the resolved agent setting disagrees, and the output's
-      // category is stamped from that same resolved setting. Kept as an invariant so the
-      // `ExecuteAgentResultForCategory<C>` narrowing below stays honest.
-      throw new Error(`Agent resolved to a non ${expectedCategory} run.`);
+      // Unreachable: `enforceCategory` above refuses the launch whenever the
+      // resolved agent setting disagrees, and the output's category is stamped
+      // from that same setting. Kept so the narrowing below stays honest.
+      const message = `Agent resolved to a non ${expectedCategory} run.`;
+      return yield* Effect.fail(new Error(message));
     }
 
     return {

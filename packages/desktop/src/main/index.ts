@@ -53,7 +53,7 @@ import {
   NotificationFailed,
   PromptFailed,
 } from '@hosts/uiHosts';
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import { DisposableStore } from '@platform/disposable';
 import type {
@@ -175,8 +175,6 @@ import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';
 
 const moduleDirname = import.meta.dirname;
 const desktopMainDir = findDesktopMainDir(moduleDirname);
-const credentialLog = createLog('Setup Credentials');
-
 /**
  * Maximum number of commits the renderer displays in the launcher banner.
  * Mirrors the extension's `texra.git.numberOfCommitsToShow` default (20). The
@@ -492,23 +490,31 @@ function createWindow(options: {
   // confirm button (defaulted, id 0) and a 'Cancel' button (id 1), collapsed
   // to a boolean. Used by confirmAcceptFile, the agent-settings confirm
   // prompt, the credential-settings confirm prompt, and settingsUi.confirmAction.
-  const confirmDialog = async (options: {
+  const confirmDialog = (options: {
     message: string;
     title?: string;
     detail?: string;
     confirmLabel?: string;
-  }): Promise<boolean> => {
-    const result = await dialog.showMessageBox(window, {
-      type: 'warning',
-      title: options.title,
-      message: options.message,
-      detail: options.detail,
-      buttons: [options.confirmLabel ?? 'OK', 'Cancel'],
-      defaultId: 0,
-      cancelId: 1,
-    });
-    return result.response === 0;
-  };
+  }): Effect.Effect<boolean, PromptFailed> =>
+    Effect.tryPromise({
+      try: () =>
+        dialog.showMessageBox(window, {
+          type: 'warning',
+          title: options.title,
+          message: options.message,
+          detail: options.detail,
+          buttons: [options.confirmLabel ?? 'OK', 'Cancel'],
+          defaultId: 0,
+          cancelId: 1,
+        }),
+      catch: (cause) =>
+        new PromptFailed({
+          reason: 'presentation-failed',
+          member: 'confirm',
+          message: `The confirmation dialog could not be shown: ${toErrorMessage(cause)}`,
+          cause,
+        }),
+    }).pipe(Effect.map((result) => result.response === 0));
   /**
    * Sole owner of the native unavailable-member prompt. Both the main-view
    * launch path and settings path route here so wording and button labels
@@ -602,14 +608,15 @@ function createWindow(options: {
     reportFailure: boolean,
   ): Effect.Effect<void, ExternalOpenFailed> =>
     previewHost.openExternal(url, { reportFailure }).pipe(
-      Effect.mapError(
-        (cause) =>
+      Effect.catchTag('PreviewUnavailable', (cause) =>
+        Effect.fail(
           new ExternalOpenFailed({
             kind: 'url',
             target: url,
-            message: `The desktop could not open ${url} in the default browser: ${toErrorMessage(cause)}`,
+            message: `The desktop could not open ${url} in the default browser: ${cause.message}`,
             cause,
           }),
+        ),
       ),
     );
   /**
@@ -1331,20 +1338,10 @@ function createWindow(options: {
               password: input.password,
             }),
           confirm: (message, promptOptions) =>
-            Effect.tryPromise({
-              try: () =>
-                confirmDialog({
-                  message,
-                  detail: promptOptions?.detail,
-                  confirmLabel: promptOptions?.confirmLabel,
-                }),
-              catch: (cause) =>
-                new PromptFailed({
-                  reason: 'host-unavailable',
-                  member: 'confirm',
-                  message: 'The desktop window would not show the dialog.',
-                  cause,
-                }),
+            confirmDialog({
+              message,
+              detail: promptOptions?.detail,
+              confirmLabel: promptOptions?.confirmLabel,
             }),
           info: (message) =>
             showInfoMessage(message).pipe(Effect.map(() => undefined)),
@@ -1500,8 +1497,7 @@ function createWindow(options: {
         hasUsableSetupCredential(
           activeProject().session.roots,
           options.secrets,
-          credentialLog.warn,
-        ),
+        ).pipe(withLogChannel('Setup Credentials')),
       // Launch the setup conversation when the user clicks "Run Setup" on the
       // setup card, mirroring the extension's `launchSetupAssistant` →
       // launch path: resolve a model the user's credentials can call,
@@ -1550,25 +1546,23 @@ function createWindow(options: {
             yield* binding.run.runValidated(request);
           }).pipe(
             Effect.provideContext(context),
-            Effect.catch((error) =>
-              Effect.gen(function* () {
-                if (error instanceof Cancelled) return;
-                // Setup continues after its initiating request has completed.
-                const primaryError = primaryAgentError(error);
-                yield* presentAgentFailure(
-                  setupSession.interactions,
-                  {
-                    kind: classifyAgentError(primaryError),
-                    message:
-                      primaryError instanceof Rejected
-                        ? primaryError.reason
-                        : toErrorMessage(primaryError),
-                  },
-                  { replayWhenAttached: true },
-                );
-                return yield* Effect.fail(error);
-              }),
-            ),
+            // Setup continues after its initiating request has completed, so
+            // the failure is presented here and the kickoff settles.
+            Effect.catch((error) => {
+              if (error instanceof Cancelled) return Effect.void;
+              const primaryError = primaryAgentError(error);
+              return presentAgentFailure(
+                setupSession.interactions,
+                {
+                  kind: classifyAgentError(primaryError),
+                  message:
+                    primaryError instanceof Rejected
+                      ? primaryError.reason
+                      : toErrorMessage(primaryError),
+                },
+                { replayWhenAttached: true },
+              );
+            }),
           );
         }),
       // Suspended so the "settings IPC not attached" guard raises when the

@@ -21,6 +21,7 @@ import * as path from 'node:path';
 
 import { Data, Effect } from 'effect';
 
+import { isFileNotFoundError } from '@common/errors/errorPredicates';
 import { withLogChannel } from '@logger/effectLog';
 import { generateShortId } from '@utils/core';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
@@ -70,17 +71,20 @@ interface WriteApprovalTempFilesInput {
   readonly proposedContent: string;
 }
 
-/** Best-effort temp cleanup; ENOENT/already-removed is expected and benign. */
+/** Best-effort temp cleanup: an already-removed file is expected and benign,
+ *  any other unlink fault is logged. */
 const removeTempFile = (target: string): Effect.Effect<void> =>
   Effect.tryPromise({
     try: () => unlink(target),
     catch: ensureError,
   }).pipe(
     Effect.catch((error) =>
-      Effect.logDebug(`Failed to unlink temp file ${target}`).pipe(
-        Effect.annotateLogs({ data: error }),
-        withLogChannel(CHANNEL),
-      ),
+      isFileNotFoundError(error)
+        ? Effect.void
+        : Effect.logWarning(`Failed to unlink temp file ${target}`).pipe(
+            Effect.annotateLogs({ data: error }),
+            withLogChannel(CHANNEL),
+          ),
     ),
   );
 
@@ -103,24 +107,21 @@ export const writeApprovalTempFiles = Effect.fn('writeApprovalTempFiles')(
       `${generateShortId()}-proposed${ext}`,
     );
 
+    const cleanup = Effect.all(
+      [removeTempFile(originalPath), removeTempFile(proposedPath)],
+      { concurrency: 'unbounded', discard: true },
+    );
     // Both sides start together and the first failure fails the stage, as the
     // `Promise.all` here did; a staged pair nobody can read is not a partial
-    // success to salvage.
+    // success to salvage, so the side that was written is removed with it.
     yield* Effect.all(
       [
         writeSide('original', originalPath, originalContent),
         writeSide('proposed', proposedPath, proposedContent),
       ],
       { concurrency: 'unbounded' },
-    );
+    ).pipe(Effect.onError(() => cleanup));
 
-    return {
-      originalPath,
-      proposedPath,
-      cleanup: Effect.all(
-        [removeTempFile(originalPath), removeTempFile(proposedPath)],
-        { concurrency: 'unbounded', discard: true },
-      ),
-    };
+    return { originalPath, proposedPath, cleanup };
   },
 );

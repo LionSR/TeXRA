@@ -375,7 +375,6 @@ export function createDesktopHostRequests(
         ),
       showInfo: (message) => host.showInfoMessage(message),
       showError: rejectRequestEffect,
-      logError: (message, error) => log.error(message, { data: error }),
     },
     sendFollowUp: (runId, text) => runActions.sendFollowUp(runId, text),
   });

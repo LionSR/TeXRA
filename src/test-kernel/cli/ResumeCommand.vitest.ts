@@ -430,7 +430,12 @@ describe('runResumeCommand', () => {
 
   it('identifies claim read failures separately from session loading', async () => {
     vi.spyOn(seededSession, 'claimOwner').mockReturnValue(
-      Effect.fail(new Error('claim disk offline')),
+      Effect.fail(
+        new DatabaseReadFailed({
+          path: 'session.db',
+          cause: new Error('claim disk offline'),
+        }),
+      ),
     );
 
     await expect(run(cliContext())).resolves.toBe(1);

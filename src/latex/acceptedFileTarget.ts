@@ -2,7 +2,7 @@
 import path from 'node:path';
 
 // Third-party imports
-import { Cause, Effect, Exit, FileSystem, type PlatformError } from 'effect';
+import { Effect, FileSystem, type PlatformError } from 'effect';
 
 // Local imports
 import { generateDiffFileName } from '@latex/latexdiff/diffFileNameManager';
@@ -10,7 +10,6 @@ import { withLogChannel } from '@logger/effectLog';
 import { WorkspaceFs } from '@platform/rootedFs';
 import type { FileLocation } from '@shared/schemas';
 import { normalizeFilePath } from '@utils/core';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   createExternalLocation,
   createRunStorageLocation,
@@ -288,24 +287,20 @@ export const cleanupAcceptedWorkspaceDiffFiles = Effect.fn(
   // rather than dropping them silently. `force` keeps an already-absent
   // companion a success, as the platform delete this replaced did.
   const workspaceFs = yield* WorkspaceFs;
-  const settled = yield* Effect.forEach(
+  const removed = yield* Effect.forEach(
     stale,
     (relativePath) =>
-      Effect.exit(workspaceFs.remove(relativePath, { force: true })),
+      workspaceFs.remove(relativePath, { force: true }).pipe(
+        Effect.as(true),
+        Effect.catch((error) =>
+          Effect.logWarning(
+            `Could not remove the stale diff file ${relativePath}: ${error.message}`,
+          ).pipe(withLogChannel(CHANNEL), Effect.as(false)),
+        ),
+      ),
     { concurrency: 'unbounded' },
   );
-  const removed: string[] = [];
-  for (const [index, relativePath] of stale.entries()) {
-    const result = settled[index];
-    if (Exit.isSuccess(result)) {
-      removed.push(relativePath);
-      continue;
-    }
-    yield* Effect.logWarning(
-      `Could not remove the stale diff file ${relativePath}: ${toErrorMessage(Cause.squash(result.cause))}`,
-    ).pipe(withLogChannel(CHANNEL));
-  }
-  return removed;
+  return stale.filter((_, index) => removed[index]);
 });
 
 export function getAcceptedFileTarget(

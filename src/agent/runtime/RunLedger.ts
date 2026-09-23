@@ -305,14 +305,14 @@ export const runLedgerLayer: Layer.Layer<
           })),
         )
         .pipe(
-          Effect.mapError((failure) =>
-            failure instanceof DatabaseNotOwner
-              ? new RunLedgerRefused({
-                  reason: 'not-owner',
-                  runId: run,
-                  detail: notOwnerDetail(failure),
-                })
-              : failure,
+          Effect.catchTag('DatabaseNotOwner', (failure) =>
+            Effect.fail(
+              new RunLedgerRefused({
+                reason: 'not-owner',
+                runId: run,
+                detail: notOwnerDetail(failure),
+              }),
+            ),
           ),
         );
     });
@@ -422,14 +422,14 @@ export const runLedgerLayer: Layer.Layer<
       // `not-owner`, nothing written (D6 b, R7); any other rollback stays the
       // write failure it is (F3).
       const committed = yield* events.publish(drafts).pipe(
-        Effect.mapError((failure) =>
-          failure instanceof DatabaseNotOwner
-            ? new RunLedgerRefused({
-                reason: 'not-owner',
-                runId: run,
-                detail: notOwnerDetail(failure),
-              })
-            : failure,
+        Effect.catchTag('DatabaseNotOwner', (failure) =>
+          Effect.fail(
+            new RunLedgerRefused({
+              reason: 'not-owner',
+              runId: run,
+              detail: notOwnerDetail(failure),
+            }),
+          ),
         ),
       );
       // The same fold over the same rows, at the commits the publisher

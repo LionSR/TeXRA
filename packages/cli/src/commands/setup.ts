@@ -1,7 +1,7 @@
 import { defineCommand } from 'citty';
 import { Effect } from 'effect';
 
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 import { RESEARCHER_ACCESS_AUTH } from '@ui/copy/accountAuth';
@@ -23,8 +23,6 @@ import {
   rejectHeadlessOnlyFlags,
 } from './_helpers/globalArgs';
 import { type CliContext } from '../runtime/cliContext';
-
-const credentialLog = createLog('Setup Credentials');
 
 /** Exported for the test kernel — the command's `run` is the only other caller. */
 export async function runSetup(context: CliContext): Promise<number> {
@@ -59,10 +57,8 @@ export async function runSetup(context: CliContext): Promise<number> {
     Effect.gen(function* () {
       const services = yield* initCliPlatform({ ...context, quietLogs: true });
       if (
-        yield* hasUsableSetupCredential(
-          services,
-          services.secrets,
-          credentialLog.warn,
+        yield* hasUsableSetupCredential(services, services.secrets).pipe(
+          withLogChannel('Setup Credentials'),
         )
       ) {
         return true;

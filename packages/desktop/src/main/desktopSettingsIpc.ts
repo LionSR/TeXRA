@@ -87,7 +87,10 @@ export interface DesktopSettingsUiHost extends Pick<
     title: string;
     prompt: string;
   }): Effect.Effect<string | undefined>;
-  confirmAction(message: string, confirmLabel?: string): Promise<boolean>;
+  confirmAction(
+    message: string,
+    confirmLabel?: string,
+  ): Effect.Effect<boolean, PromptFailed>;
   onError(error: unknown): void;
 }
 
@@ -149,17 +152,7 @@ export function createDesktopSettingsIpc(
   const memoryController = new SettingsMemoryController({
     prompt: {
       confirm: (message, promptOptions) =>
-        Effect.tryPromise({
-          try: async () =>
-            options.ui.confirmAction(message, promptOptions?.confirmLabel),
-          catch: (cause) =>
-            new PromptFailed({
-              reason: 'host-unavailable',
-              member: 'confirm',
-              message: 'The desktop window would not show the confirmation.',
-              cause,
-            }),
-        }),
+        options.ui.confirmAction(message, promptOptions?.confirmLabel),
       warning: (message) =>
         options.ui.showInfoMessage(message).pipe(Effect.map(() => undefined)),
     },
@@ -201,21 +194,18 @@ export function createDesktopSettingsIpc(
    * arrive.
    */
   function postMemoryPreview(storagePath: string) {
-    return Effect.map(
-      Effect.exit(memoryController.getMemoryPreviewMessage(storagePath)),
-      (previewed) => {
-        if (Exit.isSuccess(previewed)) {
-          options.postToRenderer(previewed.value);
-          return;
-        }
-        // A disposed runtime interrupts this read; the view it would repaint
-        // is going away with it, so there is no placeholder to post.
-        if (Cause.hasInterrupts(previewed.cause)) return;
-        options.ui.onError(Cause.squash(previewed.cause));
-        options.postToRenderer(
-          memoryController.getMemoryPreviewErrorMessage(storagePath),
-        );
-      },
+    // An interrupt (a disposed runtime) passes through: the view it would
+    // repaint is going away with it, so there is no placeholder to post.
+    return memoryController.getMemoryPreviewMessage(storagePath).pipe(
+      Effect.map((preview) => options.postToRenderer(preview)),
+      Effect.catch((error) =>
+        Effect.sync(() => {
+          options.ui.onError(error);
+          options.postToRenderer(
+            memoryController.getMemoryPreviewErrorMessage(storagePath),
+          );
+        }),
+      ),
     );
   }
 

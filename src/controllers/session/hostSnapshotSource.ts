@@ -272,8 +272,10 @@ export function createHostSnapshotSource(
         (load) => Effect.exit(load),
         { concurrency: 'unbounded' },
       );
+      // An interrupted load is not a failure to report.
       for (const exit of settled) {
-        if (Exit.isFailure(exit)) options.onError(Cause.squash(exit.cause));
+        if (Exit.isFailure(exit) && !Cause.hasInterruptsOnly(exit.cause))
+          options.onError(Cause.squash(exit.cause));
       }
       yield* publish;
     });

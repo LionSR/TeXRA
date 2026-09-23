@@ -8,8 +8,6 @@ import type { RunId } from '@shared/schemas';
 
 const RUN = 'ab12cd' as RunId;
 
-type LogEntry = { message: string; error: unknown };
-
 /** The controller's deps are file-local; derive them from its constructor. */
 type ProgressWorkflowFileActionsControllerDeps = ConstructorParameters<
   typeof ProgressWorkflowFileActionsController
@@ -18,7 +16,6 @@ type ProgressWorkflowFileActionsControllerDeps = ConstructorParameters<
 type RecordingHost = ProgressWorkflowFileActionsControllerDeps['host'] & {
   infos: string[];
   errors: string[];
-  logs: LogEntry[];
 };
 
 type RecordingDeps = ProgressWorkflowFileActionsControllerDeps & {
@@ -45,11 +42,9 @@ function createDeps(
 ): RecordingDeps {
   const infos: string[] = [];
   const errors: string[] = [];
-  const logs: LogEntry[] = [];
   const host: RecordingHost = {
     infos,
     errors,
-    logs,
     compareFiles: () => Effect.void,
     acceptEditedFile: () => Effect.void,
     mergeFile: () => Effect.void,
@@ -64,9 +59,6 @@ function createDeps(
       Effect.sync(() => {
         errors.push(message);
       }),
-    logError: (message, error) => {
-      logs.push({ message, error });
-    },
     ...overrides,
   };
 

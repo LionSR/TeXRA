@@ -80,7 +80,6 @@ const IDENTITY_CATCH_JOINS: Readonly<Record<string, number>> = {
   'packages/llm/src/openaiResponsesWebSocket.ts': 2,
   'packages/llm/src/transport.ts': 2,
   'src/latex/arxivProcessor.ts': 1,
-  'src/tools/github/githubClient.ts': 2,
 };
 
 /** The keys a foreign-rejection mapper is handed under: `Effect.try` /

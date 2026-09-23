@@ -9,7 +9,7 @@
 import { readFile, rm } from 'node:fs/promises';
 
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, FileSystem } from 'effect';
 
 // Local imports - types
 import type {
@@ -20,11 +20,11 @@ import type {
 import { fromHost, hostFailure } from '@controllers/session/hostCallFailure';
 import { NotificationFailed, type DiffSource } from '@hosts/uiHosts';
 import type { ProcessRuntime } from '@platform/processRuntime';
+import { withProcessServices } from '@platform/processRuntime';
 import type { HostRequestFailure } from '@shared/session/requestErrors';
 import type { BuildDisplayFn } from '@tools/approval/latexPreview';
 import { writeApprovalTempFiles } from '@tools/approval/tempFileManager';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
-import { createTexraTempDir } from '@utils/files/tempDir';
 
 import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';
 
@@ -48,7 +48,7 @@ export type DesktopToolEditApprovalUi = Pick<
    * else: settling here must not dismiss another request's pending preview
    * or an unrelated review, whichever of them the user is looking at.
    */
-  closeDiff(previewId: string): Effect.Effect<void, Error>;
+  closeDiff(previewId: string): Effect.Effect<void, never>;
 };
 
 interface DesktopToolEditApprovalHostOptions {
@@ -75,9 +75,13 @@ export class DesktopToolEditApprovalHost implements ToolEditApprovalHost {
     context: ToolEditPreviewContext,
   ): Effect.Effect<ToolEditPreview, HostRequestFailure> {
     const { ui } = this.options;
-    return fromHost('approval.createTempDir', () =>
-      createTexraTempDir('texra-tool-edit-'),
+    return withProcessServices(
+      this.options.runtime,
+      FileSystem.FileSystem.use((fs) =>
+        fs.makeTempDirectory({ prefix: 'texra-tool-edit-' }),
+      ),
     ).pipe(
+      Effect.mapError((cause) => hostFailure('approval.createTempDir', cause)),
       Effect.flatMap((tempDir) =>
         writeApprovalTempFiles({
           directory: tempDir,
@@ -181,13 +185,14 @@ class DesktopToolEditPreview implements ToolEditPreview {
    * another diff takes only its own off the Review workbench.
    */
   dispose(): Effect.Effect<void, HostRequestFailure> {
-    return this.ui.closeDiff(this.context.requestId).pipe(
-      Effect.mapError((cause) => hostFailure('approval.closeDiff', cause)),
-      Effect.andThen(
-        fromHost('approval.removeTempDir', () =>
-          rm(this.staged.tempDir, { recursive: true, force: true }),
+    return this.ui
+      .closeDiff(this.context.requestId)
+      .pipe(
+        Effect.andThen(
+          fromHost('approval.removeTempDir', () =>
+            rm(this.staged.tempDir, { recursive: true, force: true }),
+          ),
         ),
-      ),
-    );
+      );
   }
 }
