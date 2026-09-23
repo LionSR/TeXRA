@@ -126,7 +126,7 @@ import {
   type RunRows,
   type SharedRunRow,
 } from './runRows';
-import { createTranscriptFold } from './traceFold';
+import { applyTraceRow, createTranscriptFold } from './traceFold';
 import { isRunningStreamingTextEntry, StreamLog } from './traceEntries';
 
 import { emptySessionView } from './sessionView';
@@ -1811,22 +1811,7 @@ function foldTraceEvent(
   let run = runId === null ? undefined : view.runs.get(runId);
   if (!run) return false;
   const indexes = indexesOf(run.transcript);
-  if (event.type === 'run.activate') indexes.trace.status(RUN_PHASE.RUNNING);
-  else if (event.type === 'flow.step' && event.payload.step !== 'halted')
-    indexes.trace.status(
-      event.payload.step === 'waiting' ? RUN_PHASE.WAITING : RUN_PHASE.RUNNING,
-    );
-  else if (event.type === 'child.park')
-    indexes.trace.status(
-      event.phase === 'parked' ? RUN_PHASE.WAITING : RUN_PHASE.RUNNING,
-    );
-  else if (event.type === 'run.end') indexes.trace.status(event.outcome);
-  else if (isTranscriptEvent(event))
-    indexes.trace.record(event, {
-      at: event.at,
-      id: JSON.stringify([event.aggregateId, event.seq]),
-      debug: view.debug,
-    });
+  applyTraceRow(indexes.trace, event, view.debug);
   const change = indexes.source.drainEmission();
   for (const entry of [...change.appended, ...change.dirtied]) {
     run = { ...run, transcript: applyEntry(view, run, entry) };

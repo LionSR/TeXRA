@@ -114,7 +114,6 @@ import {
   NOT_RESUMABLE_MESSAGE,
   reflectionFlowState,
   reflectionSnapshotRow,
-  runtimeSnapshotRow,
   stepRow,
   type ReflectionFlowState,
   type ReflectionSnapshotPatch,
@@ -281,10 +280,6 @@ export const runReflection = Effect.fn('reflection.run')(function* (
   const commit = (state: RunState) =>
     Ref.set(latest, state).pipe(Effect.as(state));
   let workspace = AgentWorkspaceState.create();
-  // The run's error fact, runtime-owned: every snapshot names it, so the
-  // value a listing or a resume reads (`runtime.lastError`) is the value the
-  // live loop holds, and a resumed run that retries clears it for good.
-  let lastError: RetryErrorInfo | undefined;
   /**
    * One forced-compaction recovery per round: a turn that overflowed the
    * context window is retried once against a compacted history, and a second
@@ -308,12 +303,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
   const snapshot = (
     state: RunState,
     patch: Omit<ReflectionSnapshotPatch, 'state'>,
-  ) =>
-    reflectionSnapshotRow(runId, state, {
-      ...patch,
-      runtime: { lastError: lastError ?? null, ...patch.runtime },
-      state: flowState(),
-    });
+  ) => reflectionSnapshotRow(runId, state, { ...patch, state: flowState() });
   const coordinates = (state: RunState, continuationIndex?: number) => ({
     family: state.family,
     round: flow.currentRound,
@@ -334,14 +324,16 @@ export const runReflection = Effect.fn('reflection.run')(function* (
   const terminalCompileRejection = (): boolean =>
     flow.unresolvedCompileRejection === true &&
     flow.currentRound + 1 >= flow.totalRounds;
-  const resolveOutcome = (): RunOutcome =>
+  // The run's failure fact is read from the fold: the invoker commits it and
+  // a delivered response or a new round clears it.
+  const resolveOutcome = (state: RunState): RunOutcome =>
     deriveRunOutcome({
-      failed: lastError !== undefined || terminalCompileRejection(),
+      failed: state.lastError !== null || terminalCompileRejection(),
       cancelled: false,
     });
   /** The round loop's single continue/finalize decision. */
-  const shouldContinueNextRound = (): boolean =>
-    lastError === undefined &&
+  const shouldContinueNextRound = (state: RunState): boolean =>
+    state.lastError === null &&
     flow.continueRounds &&
     flow.currentRound + 1 < flow.totalRounds;
 
@@ -406,19 +398,13 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     // (rounds: 2 -> 1) takes effect on resume; a resumed run retries the
     // invocation its failure interrupted rather than failing again at once.
     flow = { ...persisted, totalRounds };
-    // The run's error fact resumes with it: the loop carries the durable
-    // `lastError` forward so the next snapshot restates it, and only a
-    // response that actually arrives clears it (below).
-    lastError = state.lastError ?? undefined;
     workspace = AgentWorkspaceState.fromSnapshot(persisted.workspaceSnapshot);
     outputState.rounds = roundsFromPersisted(state.roundOutputs);
     // Mid-round, the raw output file holds the text every earlier response
     // cycle produced; the next connector and continuation prompt read its tail.
     if (
       persisted.outputLocation !== null &&
-      (state.phase === 'model.ready' ||
-        state.phase === 'model.submitted' ||
-        state.phase === 'response.ready')
+      (state.phase === 'model.ready' || state.phase === 'model.submitted')
     ) {
       const path = persisted.outputLocation.absolutePath;
       const content = yield* fs.readFile(path).pipe(
@@ -1055,8 +1041,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
         if (state.phase === 'round.ready') state = yield* prepareRound(state);
         while (
           state.phase === 'model.ready' ||
-          state.phase === 'model.submitted' ||
-          state.phase === 'response.ready'
+          state.phase === 'model.submitted'
         ) {
           const unprocessed =
             state.openAttempt === null &&
@@ -1082,27 +1067,9 @@ export const runReflection = Effect.fn('reflection.run')(function* (
               return { state, kind: 'cancelled' } as const;
             }
             if (outcome.kind === 'failed') {
-              lastError = outcome.error;
-              // A failure the invoker's gate did not already commit (no
-              // retry was available) is committed here, so a listing and a
-              // resume read the run's error where the gate writes it.
-              if (state.lastError === null) {
-                state = yield* commit(
-                  yield* Effect.uninterruptible(
-                    ledger.appendBatch(runId, state, [
-                      runtimeSnapshotRow(runId, state, {
-                        lastError: outcome.error,
-                      }),
-                    ]),
-                  ),
-                );
-              }
               roundOutcome = RUN_OUTCOME.FAILED;
               return { state, kind: 'failed' } as const;
             }
-            // The retry succeeded: the run is no longer failed, and the next
-            // snapshot is what records that.
-            lastError = undefined;
             flow = {
               ...flow,
               runStateSnapshot: {
@@ -1196,10 +1163,13 @@ export const runReflection = Effect.fn('reflection.run')(function* (
       return yield* commit(
         yield* ledger.appendBatch(runId, current, [
           ...(closePrevious ? [stepRow(runId, ended, 'round.end')] : []),
+          // Entering a round admits a new attempt, so the run is no longer
+          // failed: a relaunched halted run moves past its recorded error.
           snapshot(current, {
             phase: 'round.ready',
             round: flow.currentRound,
             continuationIndex: 0,
+            runtime: { lastError: null },
           }),
         ]),
       );
@@ -1209,7 +1179,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
       roundEnded: boolean,
     ): Effect.fn.Return<LoopExit, Error> {
       yield* normalizeCompileRejectionPolicy();
-      const outcome = resolveOutcome();
+      const outcome = resolveOutcome(current);
       const state = yield* commit(
         yield* ledger.appendBatch(runId, current, [
           ...(roundEnded
@@ -1225,16 +1195,14 @@ export const runReflection = Effect.fn('reflection.run')(function* (
       if (state.phase === 'halted') {
         // A finished run launched again continues only if rounds remain
         // under the current configuration. The restored error fact does not
-        // decide this: relaunching is the admission of a new attempt, and it
-        // clears the error the way a consumed follow-up does in the tool-use
-        // loop, so the next snapshot no longer restates a failure the run has
-        // moved past.
+        // decide this: relaunching is the admission of a new attempt, and
+        // `enterRound` clears the error the way a consumed follow-up does in
+        // the tool-use loop.
         if (!(
           flow.continueRounds && flow.currentRound + 1 < flow.totalRounds
         )) {
-          return { state, outcome: resolveOutcome() } satisfies LoopExit;
+          return { state, outcome: resolveOutcome(state) } satisfies LoopExit;
         }
-        lastError = undefined;
         state = yield* enterRound(state, false);
       }
       // The configured total may have been lowered since the snapshot; the
@@ -1250,7 +1218,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
       if (exit.kind === 'failed') {
         return { state, outcome: RUN_OUTCOME.FAILED } satisfies LoopExit;
       }
-      if (!shouldContinueNextRound()) return yield* finish(state, true);
+      if (!shouldContinueNextRound(state)) return yield* finish(state, true);
       state = yield* enterRound(state, true);
     }
   });
@@ -1262,8 +1230,8 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     outcome,
     roundOutputs: roundsToPersisted(outputState),
     usage: at?.usage ?? EMPTY_RUN_USAGE_TOTALS,
-    ...(lastError !== undefined && outcome === RUN_OUTCOME.FAILED
-      ? { error: lastError }
+    ...(at?.lastError != null && outcome === RUN_OUTCOME.FAILED
+      ? { error: at.lastError }
       : {}),
   });
 

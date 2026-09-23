@@ -152,7 +152,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   let systemPrompt: string | undefined;
   let totalResponseTimeMs = 0;
   let response = '';
-  let lastError: RetryErrorInfo | undefined;
   // A `/compact` the host admitted: honoured at the next model boundary,
   // regardless of the threshold.
   let compactionRequested = false;
@@ -181,21 +180,10 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         : {}),
     };
   };
-  /**
-   * Every snapshot names the run's error fact, so the value `restore` reads
-   * back (`state.lastError`, the fold's runtime field) is the value the live
-   * loop holds: a failed turn resumes as failed, and a follow-up that
-   * recovers the run clears it for good.
-   */
   const snapshot = (
     state: RunState,
     patch: Omit<Parameters<typeof snapshotRow>[2], 'state'>,
-  ) =>
-    snapshotRow(runId, state, {
-      ...patch,
-      runtime: { lastError: lastError ?? null, ...patch.runtime },
-      state: flowState(state),
-    });
+  ) => snapshotRow(runId, state, { ...patch, state: flowState(state) });
 
   const publishTouchedFiles = (): void => {
     const paths = workspace.interactions.toSnapshot().edits.map((e) => e.path);
@@ -424,7 +412,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         flow.stateSlices.runStateSnapshot.totalResponseTimeMs;
     }
     systemPrompt = flow.systemPrompt;
-    lastError = state.lastError ?? undefined;
     if (flow.structured !== undefined) run.structured.value = flow.structured;
     logger.debug('Resuming tool-use run from the ledger.');
   };
@@ -644,11 +631,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           stageOutcome = RUN_OUTCOME.CANCELLED;
           return { state, outcome: 'cancelled' };
         }
-        if (outcome.kind === 'failed') {
-          lastError = outcome.error;
-          return { state, outcome: 'failed' };
-        }
-        lastError = undefined;
+        if (outcome.kind === 'failed') return { state, outcome: 'failed' };
         totalResponseTimeMs += outcome.responseTimeMs;
         yield* recordServedUsage(
           run,
@@ -701,14 +684,10 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
 
     let restoring = start.resume;
     for (;;) {
-      const parked =
-        state.phase === 'waiting' ||
-        state.phase === 'halted' ||
-        (state.phase === 'response.ready' &&
-          state.openAttempt === null &&
-          state.pendingResponse === null &&
-          state.step === 'waiting');
-      const afterError = lastError !== undefined;
+      const parked = state.phase === 'waiting' || state.phase === 'halted';
+      // The invoker commits the run's failure fact and the input that
+      // recovers the run clears it, so the fold is the one place to read it.
+      const afterError = state.lastError !== null;
       if (parked) {
         // A native child waits in this same run scope, just like its root.
         // Its delivery callback has already committed the preceding turn.
@@ -766,7 +745,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         if (consumed.instruction !== undefined) {
           userChannels[USER_VAR_INSTRUCTION] = consumed.instruction;
         }
-        lastError = undefined;
       }
       restoring = false;
       const turn: TurnExit = yield* start.turns
@@ -832,8 +810,8 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     files: workspace.interactions.toSnapshot().edits.map((e) => e.path),
     usage: at?.usage ?? EMPTY_RUN_USAGE_TOTALS,
     structured: run.structured.value,
-    ...(lastError !== undefined && outcome === RUN_OUTCOME.FAILED
-      ? { error: lastError }
+    ...(at?.lastError != null && outcome === RUN_OUTCOME.FAILED
+      ? { error: at.lastError }
       : {}),
   });
 

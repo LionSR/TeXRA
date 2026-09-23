@@ -877,9 +877,9 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
  * incremental one, and the two are the same computation: that equality is
  * what the ledger test pins. `null` out means no ledger row has folded.
  *
- * Returns a typed inconsistency rather than throwing or defaulting: a
- * snapshot that disagrees with the rows below it is corruption, not a state
- * to degrade into.
+ * Returns a typed inconsistency rather than throwing or defaulting: a row
+ * the fold cannot apply is corruption, not a state to degrade into. A
+ * snapshot restates no row fact, so it cannot disagree with the rows.
  */
 export function foldRunState(
   state: RunState | null,
