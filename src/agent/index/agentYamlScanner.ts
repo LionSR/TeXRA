@@ -14,7 +14,6 @@ import {
 } from '@agent/core/definition/AgentDataclass';
 import { parseYamlWith } from '@common/parsing/safeParseYaml';
 import { withLogChannel } from '@logger/effectLog';
-import { createLog } from '@logger/logUtils';
 import type { AgentSource } from '@shared/schemas';
 import type { AgentScanIssue } from '@shared/settingsView/settingsViewMessages';
 import { AgentCategory } from '@shared/schemas';
@@ -24,7 +23,6 @@ import { readNormalizedFile } from '@utils/files/fsDurability';
 import type { AgentEntry } from './agentEntry';
 
 const CHANNEL = 'agentRegistry';
-const log = createLog(CHANNEL);
 
 /**
  * One file- or directory-level scan failure. Scanning is a best-effort
@@ -100,7 +98,7 @@ export function scanDirectory(
         });
       }
     }
-    const unique = entriesWithUniqueNames(parsed, dir, issues);
+    const unique = yield* entriesWithUniqueNames(parsed, dir, issues);
     const definitions = new Map(
       unique.map((entry) => [entry.name, entry] as const),
     );
@@ -143,27 +141,29 @@ function entriesWithUniqueNames(
   entries: readonly ParsedAgentYaml[],
   dir: string,
   issues: AgentScanIssue[],
-): ParsedAgentYaml[] {
-  const byName = groupBy(entries, (entry) => entry.name);
+): Effect.Effect<ParsedAgentYaml[]> {
+  return Effect.gen(function* () {
+    const byName = groupBy(entries, (entry) => entry.name);
 
-  const unique: ParsedAgentYaml[] = [];
-  for (const [name, matches] of byName) {
-    if (matches.length > 1) {
-      const paths = matches.map((entry) => entry.path).join(', ');
-      log.warn(
-        `Duplicate agent name "${name}" in ${paths}; skipping all duplicates.`,
-      );
-      for (const match of matches) {
-        issues.push({
-          path: path.relative(dir, match.path),
-          message: `Duplicate agent name "${name}".`,
-        });
+    const unique: ParsedAgentYaml[] = [];
+    for (const [name, matches] of byName) {
+      if (matches.length > 1) {
+        const paths = matches.map((entry) => entry.path).join(', ');
+        yield* Effect.logWarning(
+          `Duplicate agent name "${name}" in ${paths}; skipping all duplicates.`,
+        ).pipe(withLogChannel(CHANNEL));
+        for (const match of matches) {
+          issues.push({
+            path: path.relative(dir, match.path),
+            message: `Duplicate agent name "${name}".`,
+          });
+        }
+        continue;
       }
-      continue;
+      unique.push(matches[0]);
     }
-    unique.push(matches[0]);
-  }
-  return unique;
+    return unique;
+  });
 }
 
 function readYamlDefinition(
@@ -266,6 +266,9 @@ function scanYaml(
   source: AgentSource,
   definitions: Map<string, ParsedAgentYaml>,
 ): Effect.Effect<AgentEntry, AgentScanError> {
+  // A malformed `rounds` is dropped, not fatal: the scan reports it once the
+  // entry is built.
+  let malformedRounds: string | undefined;
   return Effect.try({
     try: () => {
       const settingsBlock = inheritedDefinitionBlock(
@@ -305,9 +308,7 @@ function scanYaml(
             userRequestTemplateCount(rawPrompts.userRequest),
           );
         } else {
-          log.warn(
-            `Ignoring malformed rounds in ${entry.path}: ${toErrorMessage(parsedRounds.error)}`,
-          );
+          malformedRounds = `Ignoring malformed rounds in ${entry.path}: ${toErrorMessage(parsedRounds.error)}`;
         }
       }
 
@@ -330,5 +331,11 @@ function scanYaml(
         message: toErrorMessage(cause),
         cause,
       }),
-  });
+  }).pipe(
+    Effect.tap(() =>
+      malformedRounds === undefined
+        ? Effect.void
+        : Effect.logWarning(malformedRounds).pipe(withLogChannel(CHANNEL)),
+    ),
+  );
 }

@@ -12,7 +12,7 @@ import {
 import { helperCompletion, helperModel } from '@agent/runtime/helperModel';
 import { validateAgentYamlContent } from '@agent/runtime/agentLoad';
 import { renderAgentTemplateString } from '@agent/templates/agentTemplateRenderer';
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import type { AgentDirectories } from '@platform/interfaces';
 import type { LanguageModel } from '@platform/languageModel';
@@ -26,7 +26,7 @@ import { isNonEmptyString } from '@utils/text/stringUtils';
 import { extractTextFromTag } from '@utils/text/xmlExtraction';
 import type { HttpClient } from 'effect/unstable/http';
 
-const log = createLog('AgentCreator');
+const CHANNEL = 'AgentCreator';
 
 // ── Template parsing ────────────────────────────────────────
 //
@@ -334,22 +334,16 @@ function getSchemaReference(category: AgentCategory): string {
 }
 
 function buildSchemaRef(settingsSchema: z.ZodObject<z.ZodRawShape>): string {
+  const json = (schema: z.ZodType) =>
+    JSON.stringify(z.toJSONSchema(schema, TOOL_JSON_SCHEMA_OPTIONS), null, 2);
   return [
     '## Agent YAML Schema (JSON Schema)',
     '',
     '### settings',
-    JSON.stringify(
-      z.toJSONSchema(settingsSchema, TOOL_JSON_SCHEMA_OPTIONS),
-      null,
-      2,
-    ),
+    json(settingsSchema),
     '',
     '### prompts',
-    JSON.stringify(
-      z.toJSONSchema(AgentPromptSchema, TOOL_JSON_SCHEMA_OPTIONS),
-      null,
-      2,
-    ),
+    json(AgentPromptSchema),
   ].join('\n');
 }
 
@@ -454,20 +448,24 @@ const generateAgentYaml = Effect.fn('agentCreator.generateYaml')(function* (
       },
     });
 
-    log.info(`AI generation succeeded for ${blueprint.category} agent`);
+    yield* Effect.logInfo(
+      `AI generation succeeded for ${blueprint.category} agent`,
+    ).pipe(withLogChannel(CHANNEL));
     return candidate;
   }).pipe(Effect.scoped);
 
   return yield* attempt.pipe(
     Effect.retry({ times: AI_GENERATION_ATTEMPTS - 1 }),
-    Effect.catch((error) => {
-      log.warn(
+    Effect.tapError((error) =>
+      Effect.logWarning(
         `AI generation failed, using template: ${toErrorMessage(error)}`,
-      );
-      // Route through the shared renderer so both the Settings "new from
-      // template" flow and this fallback produce byte-identical output for
-      // matching inputs.
-      return Effect.try({
+      ).pipe(withLogChannel(CHANNEL)),
+    ),
+    // Route through the shared renderer so both the Settings "new from
+    // template" flow and this fallback produce byte-identical output for
+    // matching inputs.
+    Effect.catch(() =>
+      Effect.try({
         try: () =>
           ui.renderTemplate(blueprint.fallbackTemplate, blueprint.fallbackVars),
         catch: (cause) =>
@@ -476,8 +474,8 @@ const generateAgentYaml = Effect.fn('agentCreator.generateYaml')(function* (
             message: 'The fallback agent template could not be rendered.',
             cause,
           }),
-      });
-    }),
+      }),
+    ),
   );
 });
 

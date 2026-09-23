@@ -2,7 +2,7 @@
 
 import { Data, Effect, FileSystem } from 'effect';
 import { AgentRosterController } from '@agent/roster/AgentRosterController';
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import type { StateReadFailed } from '@platform/interfaces';
 import { AgentDirectories } from '@platform/interfaces';
 import type { GlobalStorageFs } from '@platform/rootedFs';
@@ -32,7 +32,7 @@ import { scanDirectory } from './agentYamlScanner';
 import { loadRemoteAgents } from './remoteAgentMeta';
 import type { AgentEntry } from './agentEntry';
 
-const log = createLog('agentRegistry');
+const CHANNEL = 'agentRegistry';
 
 /** Resolving an agent directory failed (I/O or a rejected configured path). */
 export class AgentCatalogLoadError extends Data.TaggedError(
@@ -209,7 +209,9 @@ function doLoad(
       cache.set(agentKeyOf(entry), entry);
     }
 
-    log.info(`Loaded ${cache.size} agents in ${Date.now() - startTime}ms`);
+    yield* Effect.logInfo(
+      `Loaded ${cache.size} agents in ${Date.now() - startTime}ms`,
+    ).pipe(withLogChannel(CHANNEL));
     return true;
   });
 }
@@ -321,16 +323,14 @@ export function invalidateRemoteAgentsAfterSignOut(): Effect.Effect<
     removeRemoteEntries();
     return refresh({ includeRemote: false });
   }).pipe(
-    Effect.catch((error: AgentCatalogLoadError | StateReadFailed) =>
-      Effect.sync(() => {
-        // An older in-flight remote load may have settled before the rebuild.
-        // Preserve the signed-out invariant even when local directory I/O fails.
-        removeRemoteEntries();
-        log.warn(
-          `Local agent catalog rebuild failed after sign-out: ${error.message}`,
-        );
-      }),
-    ),
+    Effect.catch((error: AgentCatalogLoadError | StateReadFailed) => {
+      // An older in-flight remote load may have settled before the rebuild.
+      // Preserve the signed-out invariant even when local directory I/O fails.
+      removeRemoteEntries();
+      return Effect.logWarning(
+        `Local agent catalog rebuild failed after sign-out: ${error.message}`,
+      ).pipe(withLogChannel(CHANNEL));
+    }),
   );
 }
 

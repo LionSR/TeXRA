@@ -19,7 +19,8 @@ import {
 } from '@agent/index/agentRegistry';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { registerAgentDirectoryRoots } from '@frontend/setup';
-import * as logger from '@logger/logUtils';
+import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
+import { setLogSink } from '@logger/logSink';
 import {
   AgentDirectories,
   AgentDirectoriesFailed,
@@ -36,6 +37,7 @@ import {
   unusedGlobalStorageFs,
 } from '@test/support/fsTestUtils';
 import { hostStores, installPlatform } from '@test/support/setupPlatform';
+import { captureLogEntries } from '@test/support/logSinkCapture';
 import type * as vscode from 'vscode';
 
 /**
@@ -323,7 +325,7 @@ describe('agent registry', () => {
   it.effect(
     'removes remote definitions even when the local rebuild fails',
     () => {
-      const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+      const logs = captureLogEntries();
       return Effect.gen(function* () {
         useAgentDirectories();
         yield* onGlobalStorage(refresh({ includeRemote: true }));
@@ -348,12 +350,13 @@ describe('agent registry', () => {
         expect(isRemoteAgent('orchestrator')).toBe(false);
         expect(yield* Fiber.join(invalidation)).toBeUndefined();
         expect(isRemoteAgent('orchestrator')).toBe(false);
-        expect(warn).toHaveBeenCalledWith(
-          'agentRegistry',
-          expect.stringContaining(
+        expect(
+          logs.has(
+            'WARN',
+            'agentRegistry',
             'Local agent catalog rebuild failed after sign-out',
           ),
-        );
+        ).toBe(true);
       }).pipe(
         Effect.ensuring(
           Effect.gen(function* () {
@@ -361,9 +364,10 @@ describe('agent registry', () => {
             yield* onGlobalStorage(refresh({ includeRemote: false })).pipe(
               Effect.orDie,
             );
-            warn.mockRestore();
+            setLogSink(null);
           }),
         ),
+        Effect.provide(effectDiagnosticsLayer('Trace')),
       );
     },
   );
