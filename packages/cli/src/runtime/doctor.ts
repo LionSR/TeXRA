@@ -15,7 +15,6 @@ import {
 import { workspaceTexraConfigPath } from '@platform/defaults/nodeStorage';
 import { TELEMETRY_ENABLED_KEY } from '@shared/schemas';
 import type { UsageLoggingOptOut } from '@telemetry/UsageLogService';
-import { TEXRA_CLI_SUPPORTED_NODE_RANGE } from '@tools/externalToolDefs';
 import { RESEARCHER_ACCESS } from '@ui/copy/onboarding';
 import { extractErrorMessage } from '@utils/errors/errorMessage';
 import { formatResultCount } from '@utils/text/stringUtils';
@@ -28,6 +27,7 @@ import {
   writeTextStdout,
 } from './logSinks';
 import { createCliStyle } from './style';
+import { TEXRA_CLI_SUPPORTED_NODE_RANGE } from './terminalRequirements';
 import type { CliAuthProfile } from './supabaseAuth';
 import type { CliContext } from './cliContext';
 import type { CliStyle } from './style';

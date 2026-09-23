@@ -11,7 +11,7 @@ import { Effect, Fiber } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 import { withProcessServices } from '@platform/processRuntime';
 import { testRuntime } from '@test/support/testProcessRuntime';
-import { findExternalToolDef } from '@tools/externalToolDefs';
+import { findToolPlugin } from '@tools/plugins';
 import { resolveWorkspaceRoot } from '@tools/lean/direct/leanServerPool';
 import { createLeanServerRoster } from '@tools/lean/leanServerRegistry';
 import { extractHoverText } from '@tools/lean/leanTypes';
@@ -114,7 +114,7 @@ describe('resolveWorkspaceRoot', () => {
 describe('Lean external tool status', () => {
   it.effect('counts only starting and running Lean servers as active', () =>
     Effect.gen(function* () {
-      const lean = findExternalToolDef('lean4');
+      const lean = findToolPlugin('lean4')?.availability;
       expect(lean?.statusLabel).toBeDefined();
 
       // The roster the host's adapter hands the probe, as the probe passes it on

@@ -18,7 +18,7 @@
  *   - OAuth session from `claude login` (Pro/Max subscription)
  *   - Bedrock / Vertex (configured via CLI/env vars)
  *
- * Requires the native `claude` CLI, checked in externalToolDefs.ts.
+ * Requires the native `claude` CLI, checked in pluginAvailability.ts.
  */
 
 // Third-party imports

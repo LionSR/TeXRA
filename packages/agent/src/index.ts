@@ -68,6 +68,7 @@ export type {
 export type {
   ITool,
   IToolRegistry,
+  ToolGuard,
   ToolHost,
 } from '@agent/core/tools/ToolTypes';
 export { MapToolRegistry } from '@agent/core/tools/ToolTypes';

@@ -1,5 +1,5 @@
 // `/tools` form. It mirrors `texra tools list` inside an active TUI session
-// and toggles integrations that are marked toggleable in EXTERNAL_TOOL_DEFS.
+// and toggles integrations that are marked toggleable in TOOL_PLUGINS.
 
 import { Text } from 'ink';
 

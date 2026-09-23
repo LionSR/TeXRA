@@ -11,10 +11,7 @@ import {
   hostStores,
   installPlatform,
 } from '@test/support/setupPlatform';
-import {
-  EXTERNAL_TOOL_DEFS,
-  findExternalToolDef,
-} from '@tools/externalToolDefs';
+import { TOOL_PLUGINS, findToolPlugin } from '@tools/plugins';
 import { seedDisabledToolDefaults } from '@tools/toolAvailability';
 
 const mocks = vi.hoisted(() => ({
@@ -38,9 +35,9 @@ const started = Effect.promise(
   () => new Promise<void>((resolve) => setTimeout(resolve, 0)),
 );
 
-const EXPECTED_DEFAULTS = EXTERNAL_TOOL_DEFS.filter(
-  (def) => def.toggleable,
-).map((def) => def.id);
+const EXPECTED_DEFAULTS = TOOL_PLUGINS.filter(
+  (plugin) => plugin.toggleable,
+).map((plugin) => plugin.id);
 
 describe('seedDisabledToolDefaults', () => {
   afterEach(() => installPlatform());
@@ -94,9 +91,11 @@ describe('external tool availability probes', () => {
   it.effect('an interrupted version probe aborts the process it spawned', () =>
     Effect.gen(function* () {
       mocks.execa.mockReturnValue(new Promise<never>(() => {}));
-      const texcount = findExternalToolDef('texcount');
+      const texcount = findToolPlugin('texcount');
       const fiber = yield* Effect.forkChild(
-        texcount!.check().pipe(Effect.provide(fakeProcessServices())),
+        texcount!
+          .availability!.check()
+          .pipe(Effect.provide(fakeProcessServices())),
       );
 
       yield* started;
@@ -113,12 +112,14 @@ describe('external tool availability probes', () => {
         vi.spyOn(globalThis, 'fetch').mockReturnValue(
           new Promise<Response>(() => {}),
         );
-        const zotero = findExternalToolDef('zotero');
+        const zotero = findToolPlugin('zotero');
         const fiber = yield* Effect.forkChild(
           // The port the group's own probe resolves out of the workspace
           // configuration, handed to `check` the way the availability layer
           // hands back a cached probe result.
-          zotero!.check(23119).pipe(Effect.provide(fakeProcessServices())),
+          zotero!
+            .availability!.check(23119)
+            .pipe(Effect.provide(fakeProcessServices())),
         );
 
         yield* started;

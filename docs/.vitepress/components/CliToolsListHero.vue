@@ -8,7 +8,7 @@
 //
 // Built on the <TermWindow> primitive; the shared --mk-* tokens resolve here
 // and the card flips with the docs light / dark theme. Ids, names, categories,
-// and notes match src/tools/externalToolDefs.ts + noteForTool (statusLabel ??
+// and notes match src/tools/plugins.ts + noteForTool (statusLabel ??
 // authNote ?? configNotes ?? installCommand): the undetected claude-agent row
 // shows its install command, codex shows its authNote, wolfram/lean4 their
 // configNotes. ENABLED prints '-' for non-toggleable tools (wolfram, lean4),

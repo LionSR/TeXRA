@@ -5,8 +5,8 @@
  * its `check` (availability), `statusLabel` (badge), and `detailCheck`
  * (human-readable detail) — caches the results, and broadcasts
  * `toolAvailabilityChanged` when inputs change so subscribed UIs refresh
- * without re-probing. Tool definitions (what to check + UI metadata) live in
- * {@link @tools/externalToolDefs}.
+ * without re-probing. What to check is each plugin's `availability` in
+ * {@link @tools/plugins}.
  *
  * Used by:
  *   - Tool dashboard — runs fresh checks via `runExternalToolChecks()`
@@ -27,14 +27,13 @@ import { emitAppSignal } from '@eventBus/AppSignals';
 import { withLogChannel } from '@logger/effectLog';
 import type { StateStore } from '@platform/interfaces';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import type { RegisteredToolName } from '@tools/registry';
-import {
-  EXTERNAL_TOOL_DEFS,
-  type ExternalToolDef,
-  type ToolProbeError,
-  type ToolProbeInputs,
-  type ToolProbeServices,
-} from '@tools/externalToolDefs';
+import { TOOL_PLUGINS, type ToolPlugin } from '@tools/plugins';
+import type {
+  ToolAvailabilityChecks,
+  ToolProbeError,
+  ToolProbeInputs,
+  ToolProbeServices,
+} from '@tools/toolProbes';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'toolAvailability';
@@ -46,7 +45,7 @@ const CHANNEL = 'toolAvailability';
 /** Result of running a single external tool check. */
 export interface ExternalToolCheckResult {
   readonly id: string;
-  readonly tools: readonly RegisteredToolName[];
+  readonly tools: readonly string[];
   readonly name: string;
   readonly status: 'available' | 'not-found' | 'unknown';
   /** Short status label for the dashboard badge, when the default is too generic. */
@@ -59,22 +58,21 @@ export interface ExternalToolCheckResult {
 // Check execution + cache
 // ============================================================
 
-/** The disabled tool names, from the process global state the caller holds. */
-export function getDisabledToolNames(
-  disabledIds: ReadonlySet<string>,
-): ReadonlySet<string> {
-  return new Set<string>(
-    EXTERNAL_TOOL_DEFS.filter((def) => disabledIds.has(def.id)).flatMap(
-      (def) => def.tools,
-    ),
-  );
-}
+/** A plugin with an external dependency to probe. */
+type ProbedToolPlugin = ToolPlugin & {
+  readonly availability: ToolAvailabilityChecks;
+};
+
+/** The plugins the availability layer probes, in manifest order. */
+const PROBED_PLUGINS = TOOL_PLUGINS.filter(
+  (plugin): plugin is ProbedToolPlugin => plugin.availability !== undefined,
+);
 
 /**
  * Seed the disabled-tool list for first-time users only, on any host.
  *
- * Every tool group flagged `toggleable: true` in EXTERNAL_TOOL_DEFS is
- * treated as opt-in and seeded as disabled on a fresh install. Callers pass
+ * Every plugin flagged `toggleable: true` in TOOL_PLUGINS is treated as
+ * opt-in and seeded as disabled on a fresh install. Callers pass
  * the global state store they already hold. DISABLED_TOOLS is its own
  * fresh-install signal, because this seed is the only thing that writes it
  * before the user does: an absent value means neither the seed nor the user
@@ -89,8 +87,8 @@ export const seedDisabledToolDefaults = Effect.fn('seedDisabledToolDefaults')(
     );
     if (disabledTools !== undefined) return;
 
-    const defaults = EXTERNAL_TOOL_DEFS.filter((def) => def.toggleable).map(
-      (def) => def.id,
+    const defaults = TOOL_PLUGINS.filter((plugin) => plugin.toggleable).map(
+      (plugin) => plugin.id,
     );
     yield* state.update(GlobalStateKey.DISABLED_TOOLS, defaults);
     yield* Effect.logInfo(
@@ -148,8 +146,8 @@ class ToolAvailabilityCache {
     // Every group probes at once and no group's failure cancels a sibling,
     // because each one resolves to a result of its own.
     return Effect.forEach(
-      EXTERNAL_TOOL_DEFS,
-      (def) => probeToolGroup(def, inputs),
+      PROBED_PLUGINS,
+      (plugin) => probeToolGroup(plugin, inputs),
       { concurrency: 'unbounded' },
     ).pipe(
       Effect.flatMap((results) => {
@@ -212,13 +210,10 @@ export function runExternalToolChecks(
 const probeToolGroup = Effect.fn('probeToolGroup')(function* (
   {
     id,
-    tools,
+    toolNames,
     name,
-    probe,
-    check,
-    statusLabel: getStatusLabel,
-    detailCheck,
-  }: ExternalToolDef,
+    availability: { probe, check, statusLabel: getStatusLabel, detailCheck },
+  }: ProbedToolPlugin,
   inputs: ToolProbeInputs,
 ): Effect.fn.Return<ExternalToolCheckResult, never, ToolProbeServices> {
   // Run check/status/detail from one shared probe result. Some groups
@@ -263,7 +258,7 @@ const probeToolGroup = Effect.fn('probeToolGroup')(function* (
       );
   return {
     id,
-    tools,
+    tools: toolNames,
     name,
     status,
     statusLabel,
@@ -328,7 +323,7 @@ export const refreshToolAvailability = Effect.fn('refreshToolAvailability')(
  *
  * Only includes tools whose external dependency is missing (not-found).
  * Disabled tools are NOT included — the caller handles those separately
- * via {@link getDisabledToolNames}.
+ * via `getDisabledToolNames` in `@tools/plugins`.
  *
  * Used by the agent tool resolver to avoid blocking the first tool-use
  * flow on network probes. External tools that are actually missing will
