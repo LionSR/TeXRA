@@ -20,6 +20,8 @@ const INPUT_PRICE = 3;
 const OUTPUT_PRICE = 15;
 const WRITE_5M_PRICE = INPUT_PRICE * 1.25;
 const WRITE_1H_PRICE = INPUT_PRICE * 2;
+/** Cache reads bill at the model's discount; 0.05x is Opus 5.5's rate. */
+const CACHE_DISCOUNT = 0.05;
 
 /** The turn's non-write cost: uncached input, the cache read, the output. */
 const UNCACHED_TOKENS = 1500;
@@ -27,7 +29,7 @@ const CACHED_TOKENS = 500;
 const OUTPUT_TOKENS = 400;
 const NON_WRITE_COST =
   (UNCACHED_TOKENS * INPUT_PRICE +
-    CACHED_TOKENS * INPUT_PRICE * 0.1 +
+    CACHED_TOKENS * INPUT_PRICE * CACHE_DISCOUNT +
     OUTPUT_TOKENS * OUTPUT_PRICE) /
   1e6;
 
@@ -43,6 +45,7 @@ const boundAnthropic: BoundModel = {
   config: buildTestModelConfig({
     inputPrice: INPUT_PRICE,
     outputPrice: OUTPUT_PRICE,
+    capabilities: { cacheDiscountFactor: CACHE_DISCOUNT },
   }),
   compatibilityKey: 'Anthropic',
   model: unusedModel,
@@ -108,5 +111,39 @@ describe('priceTurnUsage on an Anthropic turn', () => {
       12,
     );
     expect(priced?.cacheCreationTokens).toBe(breakdown.cacheCreationTokens);
+  });
+});
+
+describe('priceTurnUsage on a GPT-6 turn', () => {
+  const boundSol: BoundModel = {
+    ...boundAnthropic,
+    config: buildTestModelConfig({
+      fullName: 'gpt-6-sol',
+      inputPrice: 2,
+      outputPrice: 10,
+      capabilities: { cacheDiscountFactor: 0.1 },
+    }),
+  };
+  const usageAt = (inputTokens: number): TurnResult['usage'] => ({
+    inputTokens,
+    outputTokens: 1000,
+    totalTokens: inputTokens + 1000,
+    cachedInputTokens: 100_000,
+    reasoningTokens: null,
+    providerUsage: undefined,
+  });
+
+  it('bills the whole request at the long-context tier above 272K', () => {
+    const below = priceTurnUsage(boundSol, usageAt(272_000), 1, noopTrace);
+    const above = priceTurnUsage(boundSol, usageAt(272_001), 1, noopTrace);
+
+    expect(below?.cost).toBeCloseTo(
+      (172_000 * 2 + 100_000 * 0.2 + 1000 * 10) / 1e6,
+      12,
+    );
+    expect(above?.cost).toBeCloseTo(
+      (172_001 * 4 + 100_000 * 0.4 + 1000 * 15) / 1e6,
+      12,
+    );
   });
 });

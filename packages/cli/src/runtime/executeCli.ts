@@ -99,6 +99,14 @@ interface CliExecuteOptions {
   readonly canAdvertiseInterruptedRun?: (
     resumability: ResumableCheckpoint,
   ) => boolean;
+  /** The agent boundary the request runs through. Composition leaves it
+   *  unset and gets the agent runtime's own; a test harness injects its
+   *  stand-ins here rather than mocking agent modules. */
+  readonly agentRuns?: {
+    readonly launch: typeof runAgent;
+    readonly finalize: typeof finalizeRun;
+    readonly resumability: typeof deriveResumability;
+  };
 }
 
 type ExecuteAgentResultForCategory<C extends AgentCategory | undefined> =
@@ -250,19 +258,17 @@ export function executeCliToolUseConfig(
  * `AgentError` for the extension host) is consumed here into a non-zero exit
  * code instead of being rethrown — otherwise it reaches `bin/texra.ts`'s
  * crash handler and gets misreported as an unexpected crash, printed a
- * second time alongside a "please report it" line (issue #7645). Flows' own
- * rethrow stays untouched; only this CLI boundary stops propagating it
- * further. Only `AgentError` — the classified, already-handled shape — takes
- * this path; any other rejection (e.g. `registerRun` disk I/O,
- * `workspaceState.update` failures) is genuinely unexpected and is rethrown
- * so the crash handler still reports it.
+ * second time alongside a "please report it" line (issue #7645). Only
+ * `AgentError` — the classified, already-handled shape — takes this path;
+ * any other rejection (e.g. `registerRun` disk I/O, `workspaceState.update`
+ * failures) is genuinely unexpected and is rethrown so the crash handler
+ * still reports it.
  */
 export function executeCliRequest(
   // The run id is decided before launch: a shutdown stops the launch through
-  // the session's registry under it (`runs.kill`). `runAgent` tracks the
-  // launch handle (or attaches the stop latch to a parked predecessor)
-  // before the first resume lineage read, so this kill has a target from
-  // that first await on.
+  // the session's registry under it (`runs.kill`), which `runAgent` tracks
+  // (or attaches to a parked predecessor) before the first resume lineage
+  // read, so this kill has a target from that first await on.
   request: RunAgentRequest & { readonly runId: RunId },
   runContext: CliContext,
   options: CliExecuteOptions,
@@ -277,6 +283,12 @@ export function executeCliRequest(
   CliRunServices
 > {
   return Effect.gen(function* () {
+    const agentRuns = {
+      launch: runAgent,
+      finalize: finalizeRun,
+      resumability: deriveResumability,
+      ...options.agentRuns,
+    };
     const session = yield* options.session;
     session.setApprovalPolicy(runContext.approvalPolicy);
     const presentationHost = createCliRuntimeHost(options.runtime, runContext);
@@ -297,9 +309,8 @@ export function executeCliRequest(
         },
       }),
     );
-    // Present terminal-error toasts from the run's `result` event through the same
-    // presentationHost path the lifecycle used before (so ndjson / logger output is
-    // unchanged); the lifecycle no longer emits them directly.
+    // Present terminal-error toasts from the run's `result` event through the
+    // presentationHost path (so ndjson / logger output is unchanged).
     const detachResultToast = attachTerminalResultToast(
       session,
       session.interactions,
@@ -325,10 +336,9 @@ export function executeCliRequest(
     // Workflow-output publication and shutdown-driven interruption race on the
     // same synchronous tick (see tryCommitWorkflowOutputPublication and the
     // onShutdown handler below): at most one may own the terminal verdict for
-    // this launch. Modeling that as one variable makes "both committed and
-    // interrupted" unrepresentable instead of relying on two booleans staying
-    // in sync by hand. The artifact-failure and report-dedupe bookkeeping are
-    // only ever meaningful once interrupted, so they live on that variant too.
+    // this launch. One variable makes "both committed and interrupted"
+    // unrepresentable; the artifact-failure and report-dedupe bookkeeping are
+    // only ever meaningful once interrupted, so they live on that variant.
     type LaunchVerdict =
       | { readonly kind: 'undecided' }
       | { readonly kind: 'published' }
@@ -339,11 +349,9 @@ export function executeCliRequest(
         };
     let launchVerdict: LaunchVerdict = { kind: 'undecided' };
     // The lifecycle's `report` port is a plain callback the run loop calls as
-    // it settles; presentation is this host's own, so it goes straight to this
-    // host rather than travelling back through the session attachment. That
-    // routing is the attribution: a finalization notice is not the run's own
-    // failure, so it must not set `failurePresented` and silently suppress the
-    // classified `AgentError` message below (§15).
+    // it settles, routed straight to this host rather than through the session
+    // attachment: a finalization notice is not the run's own failure, so it
+    // must not set `failurePresented` and suppress the `AgentError` below (§15).
     const reportFinalizationFailure = (error: unknown): void => {
       presentationHost.emit('requestShowError', {
         message: toErrorMessage(error),
@@ -376,14 +384,14 @@ export function executeCliRequest(
         if (!runId) return false;
         const onFinalized = options.onInterruptedRunFinalized;
         const drain = Effect.gen(function* () {
-          const terminalStatusPersisted = (yield* finalizeRun(session, {
+          const terminalStatusPersisted = (yield* agentRuns.finalize(session, {
             runId,
             outcome: RUN_OUTCOME.CANCELLED,
             report: reportShutdownFinalizationFailure,
           })).ok;
           yield* session.releaseRunLease(runId);
           const resumability = terminalStatusPersisted
-            ? yield* deriveResumability(runId, session)
+            ? yield* agentRuns.resumability(runId, session)
             : undefined;
           // The lease was released just above, so the checkpoint alone decides
           // whether the recovery notice is usable.
@@ -409,8 +417,7 @@ export function executeCliRequest(
         // Record the original drain failure for the one-shot runtime adapter
         // below, which rethrows it into runAgent's artifact aggregate. This
         // memoized operation itself resolves false so the outer shutdown await
-        // cannot rethrow the same error over the primary run failure. A lost
-        // claim is the expected shutdown contention, not a drain failure.
+        // cannot rethrow the same error over the primary run failure.
         return yield* drain.pipe(
           Effect.catch((error: unknown) =>
             Effect.sync(() => {
@@ -426,8 +433,8 @@ export function executeCliRequest(
         );
       }),
     );
-    /** Memoized: the first interrupted caller drains, every later one reads
-     *  that same answer. An uninterrupted launch has nothing to finalize. */
+    /** Memoized: the first interrupted caller drains; later ones read that
+     *  answer. An uninterrupted launch has nothing to finalize. */
     const finalizeShutdownStatus = Effect.suspend(() =>
       launchVerdict.kind === 'interrupted'
         ? shutdownStatusFinalized
@@ -441,9 +448,9 @@ export function executeCliRequest(
         // launchVerdict and the assignment below in one synchronous turn.
         // Headless shutdown deliberately cascades into active children: a
         // detached child cannot outlive the exiting CLI process, so the
-        // detach-on-stop toggle is not consulted on this path — which is also
-        // why this stop's admission is decided here, before its settlement
-        // runs: only a detaching stop waits for the sever to interrupt.
+        // detach-on-stop toggle is not consulted here, and this stop's
+        // admission is decided before its settlement runs: only a detaching
+        // stop waits for the sever to interrupt.
         const stop =
           launchVerdict.kind !== 'published'
             ? session.runs.kill(launchRunId, {
@@ -468,7 +475,7 @@ export function executeCliRequest(
             let advertisesCheckpoint = false;
             if (interruptedRunId) {
               const inspection = yield* Effect.result(
-                deriveResumability(interruptedRunId, session),
+                agentRuns.resumability(interruptedRunId, session),
               );
               // The ordinary bounded shutdown path below remains authoritative
               // when checkpoint inspection itself is unavailable.
@@ -482,14 +489,11 @@ export function executeCliRequest(
             // Earlier shutdown handlers interrupt the live agent sessions. Wait
             // for runAgent to finish unwinding before the final drain releases
             // ownership, so no transcript or checkpoint writer can race the
-            // lease release. A provider or filesystem operation outside our
-            // abortable boundaries must not prevent termination indefinitely
-            // before recovery is known to be possible: the lifecycle host's
-            // phase deadline bounds this wait by interrupting it. Once
-            // durable resumability and lease availability have been
-            // established, however, keep shutdown alive until the promised
-            // recovery notice has been flushed — that wait is uninterruptible
-            // precisely because it outranks the deadline.
+            // lease release. The lifecycle host's phase deadline bounds this
+            // wait by interrupting it. Once durable resumability and lease
+            // availability have been established, however, keep shutdown alive
+            // until the promised recovery notice has been flushed — that wait
+            // is uninterruptible precisely because it outranks the deadline.
             if (advertisesCheckpoint && options.onInterruptedRunFinalized) {
               yield* Effect.uninterruptible(
                 Deferred.await(shutdownFinalizationDone),
@@ -519,7 +523,7 @@ export function executeCliRequest(
     );
     const openWorkflowOutput = options.openWorkflowOutput;
     const invoke = (): ReturnType<typeof runAgent> =>
-      runAgent(request, {
+      agentRuns.launch(request, {
         session,
         enforceCategory: options.enforceCategory,
         openWorkflowOutput:
@@ -596,13 +600,11 @@ export function executeCliRequest(
       } else if (!failurePresented && !hasErrorPresentationClaimed(err)) {
         // A failure before registration (agent or model resolution) has no
         // `result` event; one after registration is presented by the result
-        // toast, which sets `failurePresented`. Provide the direct fallback
-        // while the presentation host is still attached. A launch failure that
-        // already presented itself through a targeted notification
+        // toast, which sets `failurePresented`. A launch failure that already
+        // presented itself through a targeted notification
         // (model-not-recognized, agent-not-found) is marked claimed at its
-        // throw site -- this CLI-local `failurePresented` flag only tracks
-        // `requestShowError`, so it would otherwise re-surface that failure a
-        // second time here.
+        // throw site -- this CLI-local flag only tracks `requestShowError`, so
+        // it would otherwise re-surface that failure a second time here.
         const unhandled = terminalResult.reportUnhandled(() =>
           session.interactions.emit('requestShowError', {
             message: toErrorMessage(err),
@@ -649,9 +651,7 @@ export function executeCliRequest(
       }
       throw cleanupFailure;
     }
-    if (primaryRunFailure) {
-      throw primaryRunFailure.error;
-    }
+    if (primaryRunFailure) throw primaryRunFailure.error;
 
     if (!runResult.ok) {
       return {

@@ -214,9 +214,10 @@ export function createExtensionHostRequests(
     globalState,
     runtime,
   } = options;
-  const draftRequests = options.draftRequests.attach(session, (recording) =>
-    options.snapshot.setRecording(recording),
-  );
+  const draftRequests = options.draftRequests.attach(session, (recording) => {
+    // Recorder notifications can arrive outside a request fiber.
+    runtime.runFork(options.snapshot.setRecording(recording));
+  });
 
   /** The native picker of each multi-file launcher list. */
   const multipleFilePickers = createFileSelectionPickers(session);

@@ -17,7 +17,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.test-live.json"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "0.126.0",
+    "@anthropic-ai/sdk": "0.127.0",
     "@google/genai": "2.23.0",
     "openai": "7.20.0",
     "ws": "8.21.3"

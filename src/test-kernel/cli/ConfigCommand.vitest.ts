@@ -1,30 +1,27 @@
-import { Effect } from 'effect';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import * as path from 'node:path';
 
-import { InvalidAgentTeamError } from '@agent/index';
-import { testRuntime } from '@test/support/testProcessRuntime';
+import { Effect } from 'effect';
+import {
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
+
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
+import { REPO_ROOT } from '@test/support/repoScan';
+import { installedHost, setupPlatform } from '@test/support/setupPlatform';
+import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
+import { testRuntime } from '@test/support/testProcessRuntime';
 
 const mocks = vi.hoisted(() => ({
-  clearDefaultTeam: vi.fn(),
-  getVisibleAgents: vi.fn(),
   initCliPlatform: vi.fn(),
   installCliProcessRuntime: vi.fn(),
   readCliAgentRoster: vi.fn(),
-  // Every roster mutation is a composed Effect now, so the doubles answer with
-  // one: a bare `vi.fn()` returns undefined, which `runPromise` cannot run.
-  setAll: vi.fn(() => Effect.void),
-  setCustom: vi.fn(() => Effect.void),
-  // The roster refuses an unknown team in its own right, so these two are
-  // typed for the refusal the tests below fail them with.
-  setDefaultTeam: vi.fn<() => Effect.Effect<void, InvalidAgentTeamError>>(
-    () => Effect.void,
-  ),
-  setEnabledAgentKeys: vi.fn(() => Effect.void),
-  setInherited: vi.fn(() => Effect.void),
-  setTeam: vi.fn<() => Effect.Effect<void, InvalidAgentTeamError>>(
-    () => Effect.void,
-  ),
   setWorkspaceCliChatAgent: vi.fn(() => Effect.void),
 }));
 
@@ -36,20 +33,6 @@ vi.mock('@cli/runtime/initPlatform', async (importOriginal) => ({
 vi.mock('@cli/runtime/cliProcessRuntime', async () => ({
   installCliProcessRuntime: mocks.installCliProcessRuntime,
   disposeCliProcessRuntime: Effect.void,
-}));
-
-vi.mock('@agent/index', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agent/index')>()),
-  createWorkspaceAgentRosterController: () => ({
-    clearDefaultTeam: mocks.clearDefaultTeam,
-    getVisibleAgents: mocks.getVisibleAgents,
-    setAll: mocks.setAll,
-    setCustom: mocks.setCustom,
-    setDefaultTeam: mocks.setDefaultTeam,
-    setEnabledAgentKeys: mocks.setEnabledAgentKeys,
-    setInherited: mocks.setInherited,
-    setTeam: mocks.setTeam,
-  }),
 }));
 
 vi.mock('@cli/runtime/agentRoster', () => ({
@@ -64,29 +47,60 @@ vi.mock('@cli/runtime/cliConfig', async (importOriginal) => ({
 
 const { runCli } = await import('@cli/commands/root');
 
+const tempDirs = useTempDirs();
+
+// The roster controller runs real over the bundled catalogs: the installed
+// host's agent directories are the repo's resources, with an empty custom dir
+// standing in for a workspace without custom agents.
+let customAgentsDir: string;
+
+const bundledAgentDirectories = () => ({
+  custom: () => Effect.succeed(customAgentsDir),
+  builtIn: () =>
+    Effect.succeed(path.join(REPO_ROOT, 'packages/extension/resources/agents')),
+  builtInToolUse: () =>
+    Effect.succeed(
+      path.join(REPO_ROOT, 'packages/extension/resources/tool_use_agents'),
+    ),
+});
+
+beforeAll(async () => {
+  customAgentsDir = await makeTempDir('texra-config-agents-', tempDirs);
+});
+
+setupPlatform({}, { agentDirectories: bundledAgentDirectories() });
+
+/** The selection the real roster controller last persisted. */
+function readSelection(): Promise<unknown> {
+  return Effect.runPromise(
+    installedHost().roots.workspaceState.get(
+      WorkspaceStateKey.AGENT_ROSTER_SELECTION,
+    ),
+  );
+}
+
 describe('CLI config command', () => {
   let stdoutSpy: ReturnType<typeof vi.spyOn>;
   let stderrSpy: ReturnType<typeof vi.spyOn>;
+  let stderr = '';
 
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks();
-    // The roster controller and the roster read are mocked above, so the
-    // roots only have to be present.
+    stderr = '';
+    // The controller reads and writes the installed host's own stores; each
+    // test starts from an unset selection.
+    const host = installedHost();
+    await Effect.runPromise(
+      host.roots.workspaceState.update(
+        WorkspaceStateKey.AGENT_ROSTER_SELECTION,
+        undefined,
+      ),
+    );
     mocks.initCliPlatform.mockReturnValue(
-      Effect.succeed({ runtime: testRuntime(), roots: {} }),
+      Effect.succeed({ runtime: testRuntime(), roots: host.roots }),
     );
     mocks.installCliProcessRuntime.mockImplementation(async () =>
       testRuntime(),
-    );
-    mocks.getVisibleAgents.mockReturnValue(
-      Effect.succeed([
-        {
-          category: 'toolUse',
-          source: 'builtInToolUse',
-          name: 'assistant',
-          path: '/agents/assistant.yaml',
-        },
-      ]),
     );
     mocks.readCliAgentRoster.mockResolvedValue({
       selection: { kind: 'all' },
@@ -96,7 +110,9 @@ describe('CLI config command', () => {
       unresolvedNames: [],
     });
     stdoutSpy = spyOnStreamWrite(process.stdout);
-    stderrSpy = spyOnStreamWrite(process.stderr);
+    stderrSpy = spyOnStreamWrite(process.stderr, (chunk) => {
+      stderr += chunk;
+    });
   });
 
   afterEach(() => {
@@ -121,8 +137,13 @@ describe('CLI config command', () => {
       ]);
 
       expect(result.exitCode).toBe(0);
-      expect(mocks.setEnabledAgentKeys).toHaveBeenCalledWith(category, keys);
-      expect(mocks.setCustom).not.toHaveBeenCalled();
+      expect(await readSelection()).toEqual({
+        kind: 'custom',
+        agentKeys: {
+          workflow: category === 'workflow' ? keys : 'all',
+          toolUse: category === 'toolUse' ? keys : 'all',
+        },
+      });
     },
   );
 
@@ -140,11 +161,13 @@ describe('CLI config command', () => {
     ]);
 
     expect(result.exitCode).toBe(0);
-    expect(mocks.setCustom).toHaveBeenCalledWith({
-      workflow: ['builtInWorkflow:write'],
-      toolUse: ['builtInToolUse:assistant'],
+    expect(await readSelection()).toEqual({
+      kind: 'custom',
+      agentKeys: {
+        workflow: ['builtInWorkflow:write'],
+        toolUse: ['builtInToolUse:assistant'],
+      },
     });
-    expect(mocks.setEnabledAgentKeys).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -152,23 +175,17 @@ describe('CLI config command', () => {
       name: 'team',
       flag: '--team',
       value: 'missing-team',
-      mock: () => mocks.setTeam,
       message: 'Unknown agent team: missing-team',
     },
     {
       name: 'default team',
       flag: '--default-team',
       value: 'custom-team',
-      mock: () => mocks.setDefaultTeam,
       message: 'Only a built-in team can be the user default: custom-team',
     },
   ])(
     'reports an invalid $name id as a usage error',
-    async ({ flag, value, mock, message }) => {
-      mock().mockReturnValueOnce(
-        Effect.fail(new InvalidAgentTeamError(message)),
-      );
-
+    async ({ flag, value, message }) => {
       const result = await runCli([
         'config',
         'agents',
@@ -180,7 +197,10 @@ describe('CLI config command', () => {
       ]);
 
       expect(result.exitCode).toBe(2);
-      expect(mock()).toHaveBeenCalledWith(value);
+      // The real roster controller owns the refusal; its message names the
+      // value the command passed through.
+      expect(stderr).toContain(message);
+      expect(await readSelection()).toBeUndefined();
     },
   );
 
@@ -209,13 +229,16 @@ describe('CLI config command', () => {
       'config',
       'agents',
       '--default-agent',
-      'review',
+      'missing-agent',
       '--output-format',
       'json',
       '--no-input',
     ]);
 
     expect(result.exitCode).toBe(2);
+    expect(stderr).toContain(
+      'Default chat agent "missing-agent" is not in the effective workspace roster.',
+    );
     expect(mocks.setWorkspaceCliChatAgent).not.toHaveBeenCalled();
   });
 });
