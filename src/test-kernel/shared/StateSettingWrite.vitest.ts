@@ -4,6 +4,7 @@ import { Effect } from 'effect';
 import { describe, expect } from 'vitest';
 
 // Local imports
+import { TEXRA_APPROVAL_POLICY_CONFIG_KEY } from '@shared/approvalPolicy';
 import { BASH_APPROVAL_CONFIG_KEY } from '@shared/schemas';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { applyStateSettingUpdate } from '@shared/settingsView/handlers/stateSettingWrite';
@@ -125,5 +126,24 @@ describe('applyStateSettingUpdate', () => {
           error: expect.any(Error),
         });
       }),
+  );
+
+  it.effect('reports a throwing approval-policy hook with its own error', () =>
+    Effect.gen(function* () {
+      const thrown = new Error('hook failed');
+      expect(
+        yield* applyStateSettingUpdate(
+          TEXRA_APPROVAL_POLICY_CONFIG_KEY,
+          'ask',
+          {
+            stores: makeFakeSettingsStores().stores,
+            host: 'vscode',
+            onApprovalPolicyChanged: () => {
+              throw thrown;
+            },
+          },
+        ),
+      ).toMatchObject({ kind: 'failed', error: thrown });
+    }),
   );
 });

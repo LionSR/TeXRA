@@ -122,7 +122,7 @@ export function applyStateSettingUpdate(
         ) as TexraApprovalPolicy;
         yield* Effect.try({
           try: () => ports.onApprovalPolicyChanged?.(policy),
-          catch: (cause) => new StateSettingWriteFailed({ cause }),
+          catch: (cause) => cause,
         });
       }).pipe(
         Effect.mapError((cause) => new StateSettingWriteFailed({ cause })),
