@@ -34,7 +34,6 @@ import {
   Effect,
   Exit,
   FileSystem,
-  PlatformError,
   Ref,
   SynchronizedRef,
 } from 'effect';
@@ -76,7 +75,6 @@ import {
   PromptBuilder,
 } from '@agent/prompt/PromptBuilder';
 import { logUserMessage, type StageHandle } from '@agent/trace';
-import { isNotADirectoryError } from '@common/errors';
 import { LatexMediaManager } from '@latex/LatexMediaManager';
 import { getTeXCountStats } from '@latex/texcount';
 import type { WorkspaceFs } from '@platform/rootedFs';
@@ -112,6 +110,7 @@ import { readSettingFrom } from '@utils/config/platformSettings';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { pathToLocationIn } from '@utils/files/fileLocation';
 import { extractScratchpad } from '@utils/text/xmlExtraction';
+import { absentReason } from '@utils/files/fsEntryExists';
 import { AgentRun } from '../run/AgentRun';
 import { compactIfNeeded } from '../run/compaction';
 import { mediaInputParts, type InputPart } from '../run/mediaInput';
@@ -170,15 +169,6 @@ type RoundExit = {
   readonly state: RunState;
   readonly kind: 'completed' | 'failed' | 'cancelled';
 };
-
-/** ENOENT, or ENOTDIR on a parent, as `AbsoluteFS.exists`/`statIfExists` treated them. */
-function isAbsentFsPath(error: PlatformError.PlatformError): boolean {
-  return (
-    error.reason._tag === 'NotFound' ||
-    (error.reason._tag === 'BadResource' &&
-      isNotADirectoryError(error.reason.cause))
-  );
-}
 
 /** The finish reason of a completed turn; the editor arm reports none. */
 function finishReasonOf(
@@ -452,7 +442,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
         // round rebuilds it from the rows that follow. Any other failure to
         // read it — permissions, a directory, I/O — still fails the resume
         // rather than quietly continuing without the earlier responses.
-        Effect.catchIf(isAbsentFsPath, () => Effect.succeed('')),
+        Effect.catchIf(absentReason, () => Effect.succeed('')),
       );
       workspace.assembly.accumulatedOutput = content;
       workspace.assembly.lastResponse = content;
@@ -610,7 +600,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
       const actual = yield* fs.stat(path).pipe(
         Effect.map((info) => ByteSize.toNumberUnsafe(info.size)),
         // No file yet is the same as an empty one: both mean "write it".
-        Effect.catchIf(isAbsentFsPath, () => Effect.succeed(0)),
+        Effect.catchIf(absentReason, () => Effect.succeed(0)),
       );
       if (actual === expected + fragmentBytes && expected + fragmentBytes > 0) {
         logger.debug(
@@ -631,9 +621,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
         const existing = yield* fs
           .readFile(path)
           .pipe(
-            Effect.catchIf(isAbsentFsPath, () =>
-              Effect.succeed(Buffer.alloc(0)),
-            ),
+            Effect.catchIf(absentReason, () => Effect.succeed(Buffer.alloc(0))),
           );
         // The rewrite is byte-for-byte what the create and append paths above
         // would have left: the recorded offset counts bytes of the fragment, so

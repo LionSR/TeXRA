@@ -882,20 +882,26 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
                 : 'terminal',
             );
           });
+        // `recordHalt` fails when the ledger write does, so the release is
+        // an `ensuring` finalizer: a failed halt row must not keep the
+        // follow-up lease held for the rest of the process.
         if (Exit.isSuccess(exit)) {
           const outcome = exit.value.outcome;
-          yield* halt(exit.value.state, outcome);
-          return yield* release(
-            outcome === RUN_OUTCOME.COMPLETED ? 'terminal' : 'recoverable',
+          return yield* halt(exit.value.state, outcome).pipe(
+            Effect.ensuring(
+              release(
+                outcome === RUN_OUTCOME.COMPLETED ? 'terminal' : 'recoverable',
+              ),
+            ),
           );
         }
         const state = yield* Ref.get(latest);
-        if (Cause.hasInterrupts(exit.cause)) {
-          yield* halt(state, RUN_OUTCOME.CANCELLED);
-          return yield* release('recoverable');
-        }
-        yield* halt(state, RUN_OUTCOME.FAILED);
-        yield* release('recoverable');
+        yield* halt(
+          state,
+          Cause.hasInterrupts(exit.cause)
+            ? RUN_OUTCOME.CANCELLED
+            : RUN_OUTCOME.FAILED,
+        ).pipe(Effect.ensuring(release('recoverable')));
       }),
     );
 
