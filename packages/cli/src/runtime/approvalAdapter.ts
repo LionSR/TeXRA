@@ -24,7 +24,7 @@ import type {
 } from '@shared/schemas';
 import type { SessionView } from '@shared/session/sessionView';
 import { type ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import {
   settleExecutable,
   settleHumanInputDenial,
@@ -98,7 +98,7 @@ const askHeadlessUserQuestion = Effect.fn(
               questions: [question],
             });
           },
-          catch: (cause) => cause,
+          catch: ensureError,
         });
         const answer = yield* queueCliApprovalQuestion(context, {
           kind: 'approval',
@@ -109,7 +109,7 @@ const askHeadlessUserQuestion = Effect.fn(
         });
         const parsed = yield* Effect.try({
           try: () => parseUserQuestionAnswer(answer, question),
-          catch: (cause) => cause,
+          catch: ensureError,
         });
         if (parsed != null) answers[question.question] = parsed;
       }),

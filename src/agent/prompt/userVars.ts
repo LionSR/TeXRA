@@ -31,7 +31,7 @@ import { displayToStoragePath } from '@tools/memory/memoryUtils';
 import { filterNotNull, unique } from '@utils/core';
 import { isNonEmptyString } from '@utils/text/stringUtils';
 import { getListOfFiles, getPromptFileName } from '@utils/prompt';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import {
   listExternalRoots,
   type ExternalRootKind,
@@ -525,7 +525,7 @@ const getAttachedMemories = Effect.fn('userVars.getAttachedMemories')(
         // answer a failed read gives.
         Effect.try({
           try: () => path.join(storageRoot, displayToStoragePath(displayPath)),
-          catch: (error) => error,
+          catch: ensureError,
         }).pipe(
           Effect.flatMap((target) => readNormalizedFile(fs, target)),
           Effect.map((raw) => {

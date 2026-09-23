@@ -78,7 +78,7 @@ export function inspectSettingFrom<T>(
   return inspectSetting(
     requireEntry(key),
     stores,
-    processSettingHost,
+    processSettingHost(),
   ) as Effect.Effect<StoredSetting<T>, StateReadFailed>;
 }
 

@@ -28,6 +28,7 @@ import {
 } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { safeHomedir } from '@utils/system/platformPaths';
+import { ensureError } from '@utils/errors/errorMessage';
 
 // Local file imports
 import { createEnumStateGetter } from './support/enumConfig';
@@ -114,7 +115,7 @@ const hasClaudeOauthCredential = Effect.fn('hasClaudeOauthCredential')(
     // boolean, and this check runs before any root is resolved.
     const credentialFileExists = yield* Effect.tryPromise({
       try: () => access(path.join(configDir, '.credentials.json')),
-      catch: (error) => error,
+      catch: ensureError,
     }).pipe(
       Effect.as(true),
       // access(F_OK) succeeds when the file exists regardless of its read
@@ -133,7 +134,7 @@ const hasClaudeOauthCredential = Effect.fn('hasClaudeOauthCredential')(
               timeout: 1000,
               reject: false,
             }),
-          catch: (error) => error,
+          catch: ensureError,
         }).pipe(
           Effect.map((result) => result.exitCode),
           // Not found / `security` unavailable — try the next known service name.

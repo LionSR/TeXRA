@@ -15,6 +15,7 @@ import {
   type ResolvedBinaryCommand,
 } from '@utils/system/binaryResolver';
 import { withExtendedPath } from '@utils/system/platformPaths';
+import { ensureError } from '@utils/errors/errorMessage';
 
 const log = createLog('AudioUtils');
 
@@ -101,7 +102,7 @@ function resolveSoxCommand(
 function watchRecorderExit(subprocess: Subprocess): Effect.Effect<void> {
   return Effect.tryPromise({
     try: () => subprocess,
-    catch: (cause) => cause,
+    catch: ensureError,
   }).pipe(
     Effect.match({
       onSuccess: (result) => {
@@ -242,7 +243,7 @@ export function stopRecording(): Effect.Effect<string, AudioRecorderError> {
     // would hang the tool, which the old fixed sleep could not do.
     yield* Effect.tryPromise({
       try: () => active.process,
-      catch: (cause) => cause,
+      catch: ensureError,
     }).pipe(Effect.ignore, Effect.timeoutOption(SOX_SHUTDOWN_TIMEOUT_MS));
 
     const size = yield* Effect.try({

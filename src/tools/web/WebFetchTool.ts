@@ -9,7 +9,7 @@ import { ToolError, ToolResult } from '@shared/schemas';
 import { retryTransientFetch, toFetchToolError } from '@tools/timeouts';
 import { defineTool } from '@tools/core/define';
 import { executed } from '@tools/core/result';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { createHtmlToMarkdown } from '@utils/text/htmlToMarkdown';
 import { formatBytes } from '@utils/text/stringUtils';
 
@@ -68,7 +68,7 @@ const fetchPage = Effect.fn('WebFetchTool.fetchPage')((url: string) =>
       const signal = yield* Effect.abortSignal;
       const response = yield* Effect.tryPromise({
         try: () => ky.get(url, { timeout: false, signal, retry: 0 }),
-        catch: (error) => error,
+        catch: ensureError,
       });
 
       const lengthHeader = response.headers.get('content-length');
@@ -109,7 +109,7 @@ const fetchPage = Effect.fn('WebFetchTool.fetchPage')((url: string) =>
           }
           return Effect.try({
             try: () => decoder.decode(chunk, { stream: true }),
-            catch: (error) => error,
+            catch: ensureError,
           });
         }),
         Stream.runCollect,
@@ -119,7 +119,7 @@ const fetchPage = Effect.fn('WebFetchTool.fetchPage')((url: string) =>
       parts.push(
         yield* Effect.try({
           try: () => decoder.decode(),
-          catch: (error) => error,
+          catch: ensureError,
         }),
       );
       return { rawBody: parts.join(''), contentType };

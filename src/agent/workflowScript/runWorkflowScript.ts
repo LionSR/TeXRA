@@ -496,7 +496,7 @@ export function runWorkflowScript<R = never>(
                 },
               });
             },
-            catch: (error) => error,
+            catch: ensureError,
           }).pipe(Effect.catch(contractFault));
 
           if (issuedCallKeys.has(key)) {

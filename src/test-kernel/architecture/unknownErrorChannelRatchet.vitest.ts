@@ -67,6 +67,53 @@ function unknownErrorChannels(file: string): string[] {
   return sites;
 }
 
+/**
+ * The identity `catch` callbacks that stay: each joins a late promise
+ * rejection and compares the raw value by identity (to `signal.reason`, a
+ * primary failure, or a `ModelError`'s `cause`) before absorbing it, or
+ * narrows it to one tag and dies otherwise. Wrapping it would break the
+ * comparison, and no raw value reaches a typed channel. Counts are exact.
+ */
+const IDENTITY_CATCH_JOINS: Readonly<Record<string, number>> = {
+  'packages/agent/src/effect/runtime.ts': 1,
+  'packages/extension/src/frontend/lm/acquireVscodeLanguageModel.ts': 2,
+  'packages/llm/src/openaiResponsesWebSocket.ts': 2,
+  'packages/llm/src/transport.ts': 2,
+  'src/latex/arxivProcessor.ts': 1,
+  'src/tools/github/githubClient.ts': 2,
+};
+
+/** `catch: (e) => e` (annotated or not): the pass-through that hands a
+ *  foreign rejection on as `unknown` instead of constructing an `Error`. */
+function identityCatches(file: string): number {
+  const sourceFile = parseSourceFile(resolve(REPO_ROOT, file), {
+    setParentNodes: false,
+  });
+  let sites = 0;
+  const visit = (node: ts.Node): void => {
+    if (
+      ts.isPropertyAssignment(node) &&
+      ts.isIdentifier(node.name) &&
+      node.name.text === 'catch' &&
+      ts.isArrowFunction(node.initializer) &&
+      node.initializer.parameters.length === 1
+    ) {
+      const [param] = node.initializer.parameters;
+      const { body } = node.initializer;
+      if (
+        param !== undefined &&
+        ts.isIdentifier(param.name) &&
+        ts.isIdentifier(body) &&
+        body.text === param.name.text
+      )
+        sites += 1;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return sites;
+}
+
 describe('unknown Effect error-channel rule', () => {
   const roots = productionRoots();
 
@@ -84,6 +131,24 @@ describe('unknown Effect error-channel rule', () => {
         `${sites.map((site) => `  ${site}`).join('\n')}\n\n` +
         `Type the channel with the tagged error the path raises (Error for a ` +
         `host port; ensureError at a foreign boundary).`,
+    ).toEqual([]);
+  });
+
+  it('rejects a catch callback that passes the rejection on unchanged', () => {
+    const drifted = roots
+      .flatMap((root) => productionFilesUnder(root))
+      .map((file) => [file, identityCatches(file)] as const)
+      .filter(([file, sites]) => sites !== (IDENTITY_CATCH_JOINS[file] ?? 0))
+      .map(
+        ([file, sites]) =>
+          `  ${file}: ${IDENTITY_CATCH_JOINS[file] ?? 0} -> ${sites}`,
+      );
+    expect(
+      drifted,
+      `Identity catch callbacks (catch: (e) => e) drifted from IDENTITY_CATCH_JOINS:\n` +
+        `${drifted.join('\n')}\n\n` +
+        `Construct the failure instead: catch: ensureError, or the path's own ` +
+        `tagged error. A count that fell: lower or delete the entry.`,
     ).toEqual([]);
   });
 });

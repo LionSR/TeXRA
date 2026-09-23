@@ -21,7 +21,7 @@ import {
   type SettingsMessageFor,
 } from '@shared/settingsView/settingsViewMessages';
 import { hasExtension } from '@utils/core/pathCore';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
   postToWebview,
@@ -154,7 +154,7 @@ export class MemoryHandlers {
             const doc = await vscode.workspace.openTextDocument(fileUri);
             await vscode.window.showTextDocument(doc, { preview: false });
           },
-          catch: (cause) => cause,
+          catch: ensureError,
         });
       }),
     );

@@ -26,7 +26,7 @@ import type { GlobalStorageFs } from '@platform/rootedFs';
 import { AGENT_SOURCE } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'AgentLoad';
 const log = createLog(CHANNEL);
@@ -230,7 +230,7 @@ class AgentDirectoryManager {
             this.onAgentChange?.();
           }
         }),
-      catch: (error) => error,
+      catch: ensureError,
     }).pipe(
       Effect.map((watcher) => {
         watcher.on('error', (error) =>

@@ -16,6 +16,7 @@ import {
 import { selectFolder } from '@frontend/ui/dialogs';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import { WorkspaceFs } from '@platform/rootedFs';
+import { ensureError } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'SampleProjectCommands';
 
@@ -56,7 +57,7 @@ export async function createSampleProjectWithoutWorkspace(
           cp(path.join(extensionPath, 'resources', 'examples'), dest, {
             recursive: true,
           }),
-        catch: (err: unknown) => err,
+        catch: ensureError,
       });
     }
     yield* Effect.tryPromise({
@@ -67,7 +68,7 @@ export async function createSampleProjectWithoutWorkspace(
           { forceNewWindow: false },
         );
       },
-      catch: (err: unknown) => err,
+      catch: ensureError,
     });
   });
 

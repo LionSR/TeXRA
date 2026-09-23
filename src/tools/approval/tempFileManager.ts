@@ -23,7 +23,7 @@ import { Data, Effect } from 'effect';
 
 import { withLogChannel } from '@logger/effectLog';
 import { generateShortId } from '@utils/core';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'approval.tempFiles';
 
@@ -74,7 +74,7 @@ interface WriteApprovalTempFilesInput {
 const removeTempFile = (target: string): Effect.Effect<void> =>
   Effect.tryPromise({
     try: () => unlink(target),
-    catch: (error) => error,
+    catch: ensureError,
   }).pipe(
     Effect.catch((error) =>
       Effect.logDebug(`Failed to unlink temp file ${target}`).pipe(

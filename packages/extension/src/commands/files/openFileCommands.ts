@@ -12,6 +12,7 @@ import type { ProcessRuntime } from '@platform/processRuntime';
 import { withSessionFs, WorkspaceFs } from '@platform/rootedFs';
 import { workspaceAbsolutePath } from '@utils/files/workspaceFS';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
+import { ensureError } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'openFileCommands';
 
@@ -82,7 +83,7 @@ function openLabel(session: SessionHandle, label: string) {
             });
             revealPosition(editor, doc.positionAt(index));
           },
-          catch: (error) => error,
+          catch: ensureError,
         }),
     );
   });

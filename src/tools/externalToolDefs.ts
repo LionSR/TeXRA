@@ -57,7 +57,7 @@ import {
 } from '@utils/system/toolUtils';
 import { isGitRepository } from '@utils/git/isGitRepository';
 import { formatResultCount } from '@utils/text/stringUtils';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'externalToolDefs';
 
@@ -215,7 +215,7 @@ function fetchLocalhost(
       Effect.ignore(
         Effect.tryPromise({
           try: () => response.body?.cancel() ?? Promise.resolve(),
-          catch: (cause) => cause,
+          catch: ensureError,
         }),
       ).pipe(Effect.as({ ok: response.ok, status: response.status })),
     ),

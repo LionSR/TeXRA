@@ -1,7 +1,7 @@
 import { Effect } from 'effect';
 import { setLogSink } from '@logger/logSink';
 import { tryPlatform } from '@platform/platform';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 import { runCli } from '../commands/root';
 import { formatCrashReportLine, readCliBugsUrl } from '../runtime/cliContext';
@@ -35,7 +35,7 @@ await Effect.runPromise(
       const result = await runCli();
       process.exitCode = result.exitCode;
     },
-    catch: (error: unknown) => error,
+    catch: ensureError,
   }).pipe(
     Effect.catch((error: unknown) =>
       Effect.promise(async () => {
