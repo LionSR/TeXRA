@@ -46,7 +46,7 @@ import type { ZodType } from 'zod';
 
 /**
  * Called on the emitting turn to capture the binding and owner before detach.
- * Its returned delivery runs independently; it must recover its own failures.
+ * Its returned delivery runs in its owner scope and must recover failures.
  */
 export type PollEventListener = (text: string) => Effect.Effect<void>;
 
@@ -267,7 +267,7 @@ export abstract class PollingSourceBase<
   disposeAll(): void {
     this.subscriptions.clear();
     this.stopPolling();
-    // runShutdown already closed admission before this notifies listeners.
+    // In shutdown, register's shutdownRan guard blocks re-subscribe here.
     this.notifyKeysChanged();
   }
 
@@ -330,9 +330,9 @@ export abstract class PollingSourceBase<
    * subclasses that build per-listener text (e.g. annotation filtering) route
    * through here instead of calling the listener directly.
    *
-   * Capture before detach can re-key the maps; the source's delivery set owns
-   * the resulting fiber. Direct hook calls without a subscription use the
-   * caller's child scope. A throwing listener is logged here.
+   * Capture before detach can re-key the maps; subscribed deliveries belong
+   * to the source. Without a lifetime, a direct hook belongs to its caller
+   * so it cannot create unowned work. A throwing listener is logged here.
    */
   protected emitToListener(
     listener: PollEventListener,
