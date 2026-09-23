@@ -264,12 +264,7 @@ describe('DefaultDesktopCredentialSettingsController', () => {
       yield* Effect.gen(function* () {
         yield* withProcessServices(
           testRuntime(),
-          assertSupported(fixture.controller.profileHandlers.removeProviderKey)(
-            {
-              command: SETTINGS_VIEW_COMMANDS.REMOVE_PROVIDER_KEY,
-              provider: 'openai',
-            },
-          ),
+          fixture.controller.profileKeyController.removeProviderKey('openai'),
         );
       });
 
@@ -295,10 +290,7 @@ describe('DefaultDesktopCredentialSettingsController', () => {
         yield* Effect.gen(function* () {
           yield* withProcessServices(
             testRuntime(),
-            assertSupported(fixture.controller.profileHandlers.setProviderKey)({
-              command: SETTINGS_VIEW_COMMANDS.SET_PROVIDER_KEY,
-              provider: 'google',
-            }),
+            fixture.controller.profileKeyController.setProviderKey('google'),
           );
         });
 
@@ -340,10 +332,7 @@ describe('DefaultDesktopCredentialSettingsController', () => {
       yield* Effect.gen(function* () {
         yield* withProcessServices(
           testRuntime(),
-          assertSupported(fixture.controller.profileHandlers.setProviderKey)({
-            command: SETTINGS_VIEW_COMMANDS.SET_PROVIDER_KEY,
-            provider: 'openai',
-          }),
+          fixture.controller.profileKeyController.setProviderKey('openai'),
         );
       });
       expect(yield* secrets.get(secretName)).toBe('replacement');
@@ -351,12 +340,7 @@ describe('DefaultDesktopCredentialSettingsController', () => {
       yield* Effect.gen(function* () {
         yield* withProcessServices(
           testRuntime(),
-          assertSupported(fixture.controller.profileHandlers.removeProviderKey)(
-            {
-              command: SETTINGS_VIEW_COMMANDS.REMOVE_PROVIDER_KEY,
-              provider: 'openai',
-            },
-          ),
+          fixture.controller.profileKeyController.removeProviderKey('openai'),
         );
       });
       expect(deleteSpy).toHaveBeenCalledExactlyOnceWith(secretName);
@@ -380,10 +364,7 @@ describe('DefaultDesktopCredentialSettingsController', () => {
 
         yield* withProcessServices(
           testRuntime(),
-          assertSupported(fixture.controller.profileHandlers.setProviderKey)({
-            command: SETTINGS_VIEW_COMMANDS.SET_PROVIDER_KEY,
-            provider,
-          }),
+          fixture.controller.profileKeyController.setProviderKey(provider),
         );
 
         expect(fixture.subscriptionUsage.invalidate).toHaveBeenCalledWith(

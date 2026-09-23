@@ -27,10 +27,8 @@ import {
   buildToolDashboardItems,
   planToolTerminalAction,
 } from '@controllers/settingsView/ToolDashboardData';
-import {
-  ProviderKeyActionFailed,
-  SettingsProfileKeyController,
-} from '@controllers/settingsView/SettingsProfileKeyController';
+import { SettingsProfileKeyController } from '@controllers/settingsView/SettingsProfileKeyController';
+import { sharedSettingsCommands } from '@controllers/settingsView/sharedSettingsCommands';
 import { SettingsProfileController } from '@controllers/settingsView/SettingsProfileController';
 import { emitAppSignal } from '@eventBus/AppSignals';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
@@ -99,14 +97,10 @@ import {
 } from '@shared/utils/dispatcher';
 import { buildSettingsSnapshotMessage } from '@shared/settingsView/handlers/settingsSnapshot';
 import { loadRuntimeSkillDisplay } from '@skills/runtimeSkills';
-import {
-  getLastCheckResults,
-  refreshToolAvailability,
-} from '@tools/toolAvailability';
+import { getLastCheckResults } from '@tools/toolAvailability';
 import { goalList } from '@tools/goal';
 import { getProviderKeyUrl } from '@utils/config/providerConfig';
 import { allSettledVoid } from '@utils/core/allSettledVoid';
-import { ensureError } from '@utils/errors/errorMessage';
 import { setToolEnabled } from '@utils/config/constants';
 import { AgentHandlers } from './handlers/agentHandlers';
 import { LatexSettingsHandlers } from './handlers/latexSettingsHandlers';
@@ -144,6 +138,7 @@ export class SettingsViewMessageHandler {
   private readonly profileKeyController: SettingsProfileKeyController<ProcessServices>;
   /** The typed message and dialog surface this view reports and asks on. */
   private readonly subscriptionUsage: SubscriptionUsageService;
+  private readonly externalOpener = new VscodeExternalOpener();
 
   constructor(
     private readonly context: vscode.ExtensionContext,
@@ -186,7 +181,7 @@ export class SettingsViewMessageHandler {
     this.profileKeyController = new SettingsProfileKeyController({
       secrets,
       prompt: vscodeUi,
-      externalOpener: new VscodeExternalOpener(),
+      externalOpener: this.externalOpener,
       getProviderDisplayName: (provider) =>
         this.profileController.getProviderDisplayName(provider),
       getProviderKeyUrl: (provider) =>
@@ -302,22 +297,30 @@ export class SettingsViewMessageHandler {
         safeExecuteCommand(AUTH_COMMANDS.SIGN_IN, [], this.viewName),
       signOut: () =>
         safeExecuteCommand(AUTH_COMMANDS.SIGN_OUT, [], this.viewName),
-      setProviderKey: (message) =>
-        this.profileKeyController.setProviderKey(message.provider),
-      removeProviderKey: (message) =>
-        this.profileKeyController.removeProviderKey(message.provider),
-      openProviderKeyUrl: (message) =>
-        this.profileKeyController.openProviderKeyUrl(message.provider),
-      openExternalUrl: (message) => this.openExternalUrl(message.url),
-      setModelEnabled: (message) =>
-        this.setModelEnabled(message.modelName, message.enabled),
-      setModelReasoningLevel: (message) =>
-        this.modelSelectionController
-          .setReasoningLevel({
-            modelName: message.modelName,
-            level: message.level,
-          })
-          .pipe(Effect.andThen(this.postModelSelectionData())),
+      ...sharedSettingsCommands({
+        profileKeys: this.profileKeyController,
+        modelSelection: this.modelSelectionController,
+        externalOpener: this.externalOpener,
+        toolProbes: {
+          workspaceRoot: this.session.roots.workspace,
+          config: this.session.roots.config,
+        },
+        host: {
+          postModelSelection: () =>
+            this.withActiveWebview((w) => this.sendModelSelectionData(w)),
+          refreshModelCatalog: () =>
+            this.progressView.refreshCatalogs().pipe(Effect.asVoid),
+          // A failed key write leaves the profile and the Models tab showing
+          // the key as it was before the attempt.
+          reportProviderKeyFailure: (error) =>
+            Effect.andThen(
+              showLoggedErrorMessage(this.channel, error.message, error.cause),
+              this.withActiveWebview((w) =>
+                this.sendProfileAndModelSelectionData(w),
+              ),
+            ),
+        },
+      }),
       requestModelAccess: (message) =>
         this.handleRequestModelAccess(message.modelName, context),
       clearCopilotRoute: (message) =>
@@ -370,14 +373,8 @@ export class SettingsViewMessageHandler {
         ),
       updateStateSetting: (message) =>
         this.updateStateSetting(message.key, message.value),
-      openToolInstallUrl: (message) => this.openExternalUrl(message.url),
       installToolExtension: (message) =>
         this.latexHandlers.installExtension(message.extensionId),
-      recheckToolStatus: () =>
-        refreshToolAvailability({
-          workspaceRoot: this.session.roots.workspace,
-          config: this.session.roots.config,
-        }),
       toggleTool: (message) =>
         setToolEnabled(message.toolId, message.enabled, this.globalState).pipe(
           Effect.andThen(
@@ -528,15 +525,6 @@ export class SettingsViewMessageHandler {
             const report = Effect.gen({ self: this }, function* () {
               if (error instanceof UnsupportedCommandError) {
                 yield* vscodeUi.showInfoMessage(error.reason);
-              } else if (error instanceof ProviderKeyActionFailed) {
-                yield* showLoggedErrorMessage(
-                  this.channel,
-                  error.message,
-                  error.cause,
-                );
-                yield* this.withActiveWebview((webview) =>
-                  this.sendProfileAndModelSelectionData(webview),
-                );
               } else {
                 this.log.error('Error handling message', { data: error });
                 yield* vscodeUi.showErrorMessage(
@@ -657,11 +645,6 @@ export class SettingsViewMessageHandler {
       this.modelSelectionController.buildModelSelectionMessage(),
       (message) => postToWebview(webview, message),
     );
-  }
-
-  /** Post the model-selection payload to whichever webview is active. */
-  private postModelSelectionData() {
-    return this.withActiveWebview((w) => this.sendModelSelectionData(w));
   }
 
   private sendProfileAndModelSelectionData(webview: vscode.Webview) {
@@ -1047,23 +1030,5 @@ export class SettingsViewMessageHandler {
         items,
       });
     });
-  }
-
-  private openExternalUrl(url: string) {
-    return Effect.tryPromise({
-      try: () => vscode.env.openExternal(vscode.Uri.parse(url)),
-      catch: ensureError,
-    }).pipe(Effect.asVoid);
-  }
-
-  private setModelEnabled(modelName: string, enabled: boolean) {
-    return this.modelSelectionController
-      .setModelEnabled({ modelName, enabled })
-      .pipe(
-        Effect.andThen(this.postModelSelectionData()),
-        // The options cache is invalidated by the writer itself.
-        Effect.andThen(this.progressView.refreshCatalogs()),
-        Effect.asVoid,
-      );
   }
 }

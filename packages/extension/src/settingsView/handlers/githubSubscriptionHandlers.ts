@@ -27,7 +27,6 @@ import {
   type SettingsMessageFor,
 } from '@shared/settingsView/settingsViewMessages';
 import {
-  GITHUB_TOKEN_CREATE_URL,
   GITHUB_TOKEN_PROMPT,
   GITHUB_TOKEN_REMOVED_MESSAGE,
   GITHUB_TOKEN_SAVED_MESSAGE,
@@ -46,7 +45,6 @@ type GitTabHandlers = Pick<
   | typeof SETTINGS_VIEW_CMD.GET_GITHUB_TOKEN_STATUS
   | typeof SETTINGS_VIEW_CMD.SET_GITHUB_TOKEN
   | typeof SETTINGS_VIEW_CMD.REMOVE_GITHUB_TOKEN
-  | typeof SETTINGS_VIEW_CMD.OPEN_GITHUB_TOKEN_URL
   | typeof SETTINGS_VIEW_CMD.GET_PR_SUBSCRIPTIONS
   | typeof SETTINGS_VIEW_CMD.UNSUBSCRIBE_PR
   | typeof SETTINGS_VIEW_CMD.OPEN_PR_SUBSCRIPTION_STREAM
@@ -67,7 +65,6 @@ export class GitHubSubscriptionHandlers {
         ctx.withActiveWebview((w) => this.sendGitHubTokenStatus(w)),
       setGitHubToken: () => this.handleSetGitHubToken(),
       removeGitHubToken: () => this.handleRemoveGitHubToken(),
-      openGitHubTokenUrl: () => this.openGitHubTokenUrl(),
       getPRSubscriptions: () =>
         ctx.withActiveWebview((w) => this.sendPRSubscriptions(w)),
       unsubscribePR: (message) => this.handleUnsubscribePR(message),
@@ -124,12 +121,6 @@ export class GitHubSubscriptionHandlers {
         yield* this.ctx.withActiveWebview((w) => this.sendGitHubTokenStatus(w));
       }),
     );
-  }
-
-  private openGitHubTokenUrl() {
-    return Effect.promise(() =>
-      vscode.env.openExternal(vscode.Uri.parse(GITHUB_TOKEN_CREATE_URL)),
-    ).pipe(Effect.asVoid);
   }
 
   sendPRSubscriptions(webview: vscode.Webview) {

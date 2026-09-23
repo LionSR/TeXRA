@@ -1209,11 +1209,6 @@ function createWindow(options: {
     },
     promptForSecret: (input) =>
       promptController.request({ ...input, password: true }),
-    // Not previewHost.openExternal: that one shows an error dialog and
-    // rethrows a rewrapped error, which this surface's caller does not expect.
-    openExternal: async (url) => {
-      await shell.openExternal(url);
-    },
     onError: reportAsyncError,
   };
   const requireSettingsIpc = (): DesktopSettingsIpc => {
@@ -1428,12 +1423,6 @@ function createWindow(options: {
         renderer: {
           postToRenderer: postForActiveProject,
         },
-        // The Tools tab's handlers answer the renderer with a promise, so the
-        // settings IPC arm is where this program runs.
-        navigation: {
-          openExternal: (url) =>
-            runtime.runPromise(previewHost.openExternal(url)),
-        },
         commands: {
           run: async (command: string) => {
             if (projectBindings.get(project.key) !== documentBinding) return;
@@ -1466,6 +1455,11 @@ function createWindow(options: {
       toolingSettingsController,
       globalState: options.globalState,
       secrets: options.secrets,
+      // The one browser hand-off every settings URL takes, with the window's
+      // own "could not open" dialog.
+      externalOpener: {
+        openExternal: (url) => openExternalProgram(url, true),
+      },
       ui: settingsUi,
       session: project.session,
       runtime,
