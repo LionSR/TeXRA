@@ -1,26 +1,20 @@
 /**
- * The tool plugin manifest — the one list every tool belongs to.
+ * The tool plugin manifest — the one list every tool belongs to: a stable id
+ * plus dashboard copy, the opt-in toggle, the availability probe and the
+ * install/auth actions. Implementations live in `@tools/registry`, which maps
+ * each plugin id to its tool objects and fails the build when those names
+ * differ from `toolNames` here; keeping implementations out keeps this
+ * module's closure (and its readers') small.
  *
- * A plugin is a stable id plus the metadata that describes its tools: dashboard
- * copy, the opt-in toggle, the availability probe and the install/auth
- * actions. Its implementations are not here: `@tools/registry` maps each
- * plugin id to its tool objects, and a type check there fails the build when
- * the names it registers for a plugin differ from `toolNames` below. Keeping
- * this module free of tool implementations keeps its closure (and that of
- * the availability, bootstrap and settings modules that read it) small.
+ * Derived from this list: the Tools dashboard (in list order), the
+ * availability probes, the first-install toggle seed, the disabled-tool names
+ * the agent tool resolver withholds, install/auth terminal actions and
+ * `texra tools` guides.
  *
- * Derived from this list:
- *   - the Tools dashboard, in list order ({@link @controllers/settingsView/ToolDashboardData})
- *   - the availability probes and their cache ({@link @tools/toolAvailability})
- *   - the first-install toggle seed and the disabled-tool names the agent
- *     tool resolver withholds ({@link getDisabledToolNames})
- *   - the install/auth terminal actions and `texra tools` guides
- *
- * Rules: an id is persisted (it is the key in the disabled-tools list), so it
- * never changes and is never reused; every registered tool belongs to exactly
- * one plugin, which the type checks below and in the registry enforce. There
- * are no hooks, task kinds, plugin-owned state or event channels: a plugin is
- * data, and registration is re-established by code at every startup.
+ * Rules: an id is persisted (the disabled-tools key), so it never changes and
+ * is never reused; every tool belongs to exactly one plugin (checked below
+ * and in the registry). No hooks, task kinds, plugin-owned state or event
+ * channels: a plugin is data, re-registered by code at every startup.
  */
 
 // Local imports
@@ -52,7 +46,7 @@ export interface ToolPlugin {
   /** Stable, persisted identifier (the dashboard item id and toggle key). */
   readonly id: string;
   /** The registered tools this plugin provides; `@tools/registry` checks them. */
-  readonly toolNames: readonly string[];
+  readonly toolNames: readonly [string, ...string[]];
   /**
    * Present when the plugin has an external dependency: it is probed, its
    * tools are withheld while the dependency is missing, and the dashboard
@@ -60,7 +54,6 @@ export interface ToolPlugin {
    * and always available.
    */
   readonly availability?: ToolAvailabilityChecks;
-  // Dashboard UI metadata
   readonly name: string;
   readonly category: ToolCategory;
   readonly description: string;
@@ -269,7 +262,6 @@ const MANIFEST = [
     toggleable: true,
     availability: ALWAYS_AVAILABLE,
   },
-
   {
     // ID kept as `github-pr-subscription` for back-compat with persisted
     // disabled-tool preferences. The user-facing name has expanded to
@@ -292,7 +284,6 @@ const MANIFEST = [
     toggleable: true,
     availability: GITHUB_AVAILABILITY,
   },
-
   {
     id: 'external-inquiry',
     toolNames: ['inquiry'],
@@ -306,7 +297,6 @@ const MANIFEST = [
     toggleable: true,
     availability: ALWAYS_AVAILABLE,
   },
-
   {
     id: 'codex',
     toolNames: ['codex'],
@@ -339,7 +329,6 @@ const MANIFEST = [
     toggleable: true,
     availability: CODEX_AVAILABILITY,
   },
-
   {
     // ID kept as `claude-agent` for back-compat with persisted disabled-tool
     // preferences. The user-facing name has been rebranded to "Claude Code CLI"
@@ -378,7 +367,6 @@ const MANIFEST = [
     toggleable: true,
     availability: CLAUDE_CODE_AVAILABILITY,
   },
-
   // The system LaTeX and image dependencies are not tool groups: no agent
   // tool is gated on them, and they are surfaced by the LaTeX settings tab
   // (LaTeXTab.ts, SettingsViewMessageHandler.ts) and `texra doctor` instead.
@@ -473,6 +461,18 @@ type _ToolNamesAreUniqueAcrossPlugins = AssertNoSharedToolNames<{
     PluginToolName<Exclude<ToolPluginId, Id>>;
 }>;
 
+/**
+ * A toggleable plugin is probed (`ALWAYS_AVAILABLE` when it needs nothing
+ * installed), so switching it off withholds its tools; the error names the
+ * toggleable plugin ids with no `availability`.
+ */
+type _ToggleablePluginsAreProbed = AssertNever<
+  Exclude<
+    Extract<ToolPluginEntry, { readonly toggleable: true }>['id'],
+    Extract<ToolPluginEntry, { readonly availability: object }>['id']
+  >
+>;
+
 /** Look up a plugin by id. */
 export function findToolPlugin(id: string): ToolPlugin | undefined {
   return TOOL_PLUGINS.find((plugin) => plugin.id === id);
@@ -480,9 +480,10 @@ export function findToolPlugin(id: string): ToolPlugin | undefined {
 
 /**
  * The tool names withheld from every agent because the user switched their
- * plugin off. Only a plugin with an external dependency can be off: a
- * built-in one listed in the disabled ids is ignored (and every toggle
- * surface only writes `toggleable` ids).
+ * plugin off. Only a probed plugin can be off: a built-in one listed in the
+ * disabled ids is ignored. Every toggle surface writes only `toggleable` ids,
+ * and a toggleable plugin is always probed (checked above), so the seed and
+ * this derivation cover the same plugins.
  */
 export function getDisabledToolNames(
   disabledIds: ReadonlySet<string>,
