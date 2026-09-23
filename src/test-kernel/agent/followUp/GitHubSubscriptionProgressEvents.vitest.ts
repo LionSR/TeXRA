@@ -158,6 +158,10 @@ class RegistryTestSource {
     return [...this.keys];
   }
 
+  keyListenerCount(): number {
+    return this.keyListeners.size;
+  }
+
   onKeysChanged(listener: (keys: readonly string[]) => void): {
     dispose(): void;
   } {
@@ -265,6 +269,32 @@ describe('GitHub subscription app signals and follow-ups', () => {
         payload: { message: 'bad token' },
       });
       expect(host.events).toEqual([]);
+    }),
+  );
+
+  it.effect('dispose releases every binding and the source-key listener', () =>
+    Effect.gen(function* () {
+      const source = new RegistryTestSource();
+      const session = createTestSession();
+      const registry = createTestRegistry(source);
+      yield* Effect.addFinalizer(() => session.dispose());
+
+      yield* registry
+        .bind('stream-a' as RunId, 'owner/repo', session)
+        .pipe(
+          Effect.provideService(Secrets, fakeHostSecrets),
+          Effect.provideService(AgentResume, fakeHostAgentResume),
+          Effect.provideService(Lifecycle, fakeHostLifecycle),
+        );
+      expect(source.keyListenerCount()).toBe(1);
+
+      registry.dispose();
+
+      expect(source.activeKeys()).toEqual([]);
+      expect(source.keyListenerCount()).toBe(0);
+      expect(registry.list(['owner/repo'])).toEqual([
+        { key: 'owner/repo', runIds: [] },
+      ]);
     }),
   );
 
