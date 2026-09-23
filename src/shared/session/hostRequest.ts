@@ -88,7 +88,7 @@ export const HostRequestSchema = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('openSettings'),
     section: z.enum(['agents', 'teams', 'models']),
-    sessionType: z.enum(['toolUse', 'workflow']).nullish(),
+    sessionType: SessionTypeSchema.nullish(),
   }),
   /** The launcher's pickers: `fileType` chooses the dialog and names the
    *  `Surface.launch` field the paths return to. */

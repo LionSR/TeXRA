@@ -648,8 +648,7 @@ one the view you're touching already uses:
   base: this is the only view on the pattern, so the machinery lives in the one
   class that uses it.
   Commands are named constants in `src/shared/ipc.ts` (`COMMON_COMMANDS`,
-  `SETTINGS_VIEW_CMD`, `SETTINGS_VIEW_COMMANDS`) — use those, not string
-  literals. Frontend state lives in module-level reactive
+  `SETTINGS_VIEW_COMMANDS`) — use those, not string literals. Frontend state lives in module-level reactive
   signals declared in `settingsView/frontend/settingsState.ts`
   (`trackedSignal`); `settingsView/frontend/messageDispatcher.ts` holds the one
   outbound message-handler registry (`settingsViewHandlers`, typed

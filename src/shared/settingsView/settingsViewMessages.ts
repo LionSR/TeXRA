@@ -11,7 +11,7 @@ import { z } from 'zod';
 import { ReasoningEffort } from 'llm-zoo';
 import { ReasoningEffortSchema } from 'llm-zoo/schemas';
 
-import { SETTINGS_VIEW_CMD, SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   createDispatcher,
   type HandlerRegistry,
@@ -51,10 +51,6 @@ import {
   UpdateMemoryPreviewMessageSchema,
 } from './memoryViewMessages';
 import { commandOnly } from './messageFactories';
-
-// SETTINGS_VIEW_CMD is defined in ipc.ts to avoid a circular dependency;
-// re-exported here for consumers that expect it from the schema module.
-export { SETTINGS_VIEW_CMD } from '@shared/ipc';
 
 // Re-export the types and values needed by settings consumers from the
 // individual view-message modules so the historical settings surface (single
@@ -606,8 +602,6 @@ export const dispatchSettingsViewOutbound = createDispatcher(
   SettingsViewOutboundMessageSchema,
 );
 
-const CMD = SETTINGS_VIEW_CMD;
-
 /** Inbound message carrying a single boolean `enabled` toggle. */
 function enabledFlag<T extends string>(command: T) {
   return z.object({ command: z.literal(command), enabled: z.boolean() });
@@ -636,116 +630,116 @@ function agentCommand<T extends string>(command: T) {
 }
 
 // Provider key inbound messages (settings-only)
-const SetProviderKeyMessageSchema = providerCommand(CMD.SET_PROVIDER_KEY);
-
-const RemoveProviderKeyMessageSchema = providerCommand(CMD.REMOVE_PROVIDER_KEY);
-
-const OpenProviderKeyUrlMessageSchema = providerCommand(
-  CMD.OPEN_PROVIDER_KEY_URL,
+const SetProviderKeyMessageSchema = providerCommand(
+  SETTINGS_VIEW_COMMANDS.SET_PROVIDER_KEY,
 );
-
+const RemoveProviderKeyMessageSchema = providerCommand(
+  SETTINGS_VIEW_COMMANDS.REMOVE_PROVIDER_KEY,
+);
+const OpenProviderKeyUrlMessageSchema = providerCommand(
+  SETTINGS_VIEW_COMMANDS.OPEN_PROVIDER_KEY_URL,
+);
 const OpenExternalUrlMessageSchema = z.object({
-  command: z.literal(CMD.OPEN_EXTERNAL_URL),
+  command: z.literal(SETTINGS_VIEW_COMMANDS.OPEN_EXTERNAL_URL),
   url: z.url(),
 });
 
 // Model selection inbound messages
-const SetModelEnabledMessageSchema = modelCommand(CMD.SET_MODEL_ENABLED).extend(
-  { enabled: z.boolean() },
-);
+const SetModelEnabledMessageSchema = modelCommand(
+  SETTINGS_VIEW_COMMANDS.SET_MODEL_ENABLED,
+).extend({ enabled: z.boolean() });
 
 const SetModelReasoningLevelMessageSchema = modelCommand(
-  CMD.SET_MODEL_REASONING_LEVEL,
+  SETTINGS_VIEW_COMMANDS.SET_MODEL_REASONING_LEVEL,
 ).extend({
   /** The reasoning level to set, or undefined/null to reset to model default. */
   level: ReasoningEffortSchema.nullable(),
 });
-
-const RequestModelAccessMessageSchema = modelCommand(CMD.REQUEST_MODEL_ACCESS);
-
-const ClearCopilotRouteMessageSchema = modelCommand(CMD.CLEAR_COPILOT_ROUTE);
-
-// Agent selection inbound messages
-const OpenAgentYamlMessageSchema = agentCommand(CMD.OPEN_AGENT_YAML);
-
-const SetAgentEnabledMessageSchema = agentCommand(CMD.SET_AGENT_ENABLED).extend(
-  { category: AgentCategorySchema, enabled: z.boolean() },
+const RequestModelAccessMessageSchema = modelCommand(
+  SETTINGS_VIEW_COMMANDS.REQUEST_MODEL_ACCESS,
+);
+const ClearCopilotRouteMessageSchema = modelCommand(
+  SETTINGS_VIEW_COMMANDS.CLEAR_COPILOT_ROUTE,
 );
 
+// Agent selection inbound messages
+const OpenAgentYamlMessageSchema = agentCommand(
+  SETTINGS_VIEW_COMMANDS.OPEN_AGENT_YAML,
+);
+const SetAgentEnabledMessageSchema = agentCommand(
+  SETTINGS_VIEW_COMMANDS.SET_AGENT_ENABLED,
+).extend({ category: AgentCategorySchema, enabled: z.boolean() });
+
 const SetAllAgentsEnabledMessageSchema = z.object({
-  command: z.literal(CMD.SET_ALL_AGENTS_ENABLED),
+  command: z.literal(SETTINGS_VIEW_COMMANDS.SET_ALL_AGENTS_ENABLED),
   category: AgentCategorySchema,
   source: AgentSourceSchema,
   enabled: z.boolean(),
 });
-
 const OpenAgentFolderMessageSchema = z.object({
-  command: z.literal(CMD.OPEN_AGENT_FOLDER),
+  command: z.literal(SETTINGS_VIEW_COMMANDS.OPEN_AGENT_FOLDER),
   folderType: z.literal('custom'),
 });
-
 const CreateAgentMessageSchema = z.object({
-  command: z.literal(CMD.CREATE_AGENT),
+  command: z.literal(SETTINGS_VIEW_COMMANDS.CREATE_AGENT),
   category: AgentCategorySchema,
   mode: z.enum(['ai', 'template']).prefault('ai'),
 });
-
-const CustomizeAgentMessageSchema = agentCommand(CMD.CUSTOMIZE_AGENT);
-
+const CustomizeAgentMessageSchema = agentCommand(
+  SETTINGS_VIEW_COMMANDS.CUSTOMIZE_AGENT,
+);
 const DeleteCustomAgentMessageSchema = z.object({
-  command: z.literal(CMD.DELETE_CUSTOM_AGENT),
+  command: z.literal(SETTINGS_VIEW_COMMANDS.DELETE_CUSTOM_AGENT),
   agentName: z.string().min(1),
 });
-
-const RevealAgentFileMessageSchema = agentCommand(CMD.REVEAL_AGENT_FILE);
-
+const RevealAgentFileMessageSchema = agentCommand(
+  SETTINGS_VIEW_COMMANDS.REVEAL_AGENT_FILE,
+);
 const ViewRemoteAgentPromptMessageSchema = z.object({
-  command: z.literal(CMD.VIEW_REMOTE_AGENT_PROMPT),
+  command: z.literal(SETTINGS_VIEW_COMMANDS.VIEW_REMOTE_AGENT_PROMPT),
   agentName: z.string().min(1),
 });
 
 // Custom agent directory inbound messages
-const SetCustomAgentDirMessageSchema = commandOnly(CMD.SET_CUSTOM_AGENT_DIR);
+const SetCustomAgentDirMessageSchema = commandOnly(
+  SETTINGS_VIEW_COMMANDS.SET_CUSTOM_AGENT_DIR,
+);
 const ResetCustomAgentDirMessageSchema = commandOnly(
-  CMD.RESET_CUSTOM_AGENT_DIR,
+  SETTINGS_VIEW_COMMANDS.RESET_CUSTOM_AGENT_DIR,
 );
 
 // Agent team inbound messages
 const ApplyAgentModePresetMessageSchema = z.object({
-  command: z.literal(CMD.APPLY_AGENT_MODE_PRESET),
+  command: z.literal(SETTINGS_VIEW_COMMANDS.APPLY_AGENT_MODE_PRESET),
   presetId: z.string().min(1),
 });
-
 const SaveAgentModePresetMessageSchema = commandOnly(
-  CMD.SAVE_AGENT_MODE_PRESET,
+  SETTINGS_VIEW_COMMANDS.SAVE_AGENT_MODE_PRESET,
 );
-
 const DeleteAgentModePresetMessageSchema = z.object({
-  command: z.literal(CMD.DELETE_AGENT_MODE_PRESET),
+  command: z.literal(SETTINGS_VIEW_COMMANDS.DELETE_AGENT_MODE_PRESET),
   presetId: z.string().min(1),
 });
 
 // Tool dashboard inbound messages
 const OpenToolInstallUrlMessageSchema = z.object({
-  command: z.literal(CMD.OPEN_TOOL_INSTALL_URL),
+  command: z.literal(SETTINGS_VIEW_COMMANDS.OPEN_TOOL_INSTALL_URL),
   url: z.url(),
 });
-
 const InstallToolExtensionMessageSchema = z.object({
-  command: z.literal(CMD.INSTALL_TOOL_EXTENSION),
+  command: z.literal(SETTINGS_VIEW_COMMANDS.INSTALL_TOOL_EXTENSION),
   extensionId: z.string().min(1),
 });
-
-const RecheckToolStatusMessageSchema = commandOnly(CMD.RECHECK_TOOL_STATUS);
-
+const RecheckToolStatusMessageSchema = commandOnly(
+  SETTINGS_VIEW_COMMANDS.RECHECK_TOOL_STATUS,
+);
 const ToggleToolMessageSchema = z.object({
-  command: z.literal(CMD.TOGGLE_TOOL),
+  command: z.literal(SETTINGS_VIEW_COMMANDS.TOGGLE_TOOL),
   toolId: z.string().min(1),
   enabled: z.boolean(),
 });
-
 const RunToolCommandMessageSchema = z.object({
-  command: z.literal(CMD.RUN_TOOL_COMMAND),
+  command: z.literal(SETTINGS_VIEW_COMMANDS.RUN_TOOL_COMMAND),
   toolId: z.string().min(1),
   kind: z.enum(['install', 'auth']),
 });
@@ -755,63 +749,74 @@ export type ToolCommandKind = z.infer<
 
 // GitHub token messages (for PR subscription tool)
 const GetGitHubTokenStatusMessageSchema = commandOnly(
-  CMD.GET_GITHUB_TOKEN_STATUS,
+  SETTINGS_VIEW_COMMANDS.GET_GITHUB_TOKEN_STATUS,
 );
-
-const SetGitHubTokenMessageSchema = commandOnly(CMD.SET_GITHUB_TOKEN);
-
-const RemoveGitHubTokenMessageSchema = commandOnly(CMD.REMOVE_GITHUB_TOKEN);
-
-const OpenGitHubTokenUrlMessageSchema = commandOnly(CMD.OPEN_GITHUB_TOKEN_URL);
+const SetGitHubTokenMessageSchema = commandOnly(
+  SETTINGS_VIEW_COMMANDS.SET_GITHUB_TOKEN,
+);
+const RemoveGitHubTokenMessageSchema = commandOnly(
+  SETTINGS_VIEW_COMMANDS.REMOVE_GITHUB_TOKEN,
+);
+const OpenGitHubTokenUrlMessageSchema = commandOnly(
+  SETTINGS_VIEW_COMMANDS.OPEN_GITHUB_TOKEN_URL,
+);
 
 // ChatGPT subscription (Codex) sign-in messages
-const SignInChatGptMessageSchema = commandOnly(CMD.SIGN_IN_CHATGPT);
-const SignOutChatGptMessageSchema = commandOnly(CMD.SIGN_OUT_CHATGPT);
+const SignInChatGptMessageSchema = commandOnly(
+  SETTINGS_VIEW_COMMANDS.SIGN_IN_CHATGPT,
+);
+const SignOutChatGptMessageSchema = commandOnly(
+  SETTINGS_VIEW_COMMANDS.SIGN_OUT_CHATGPT,
+);
 const SetChatGptPreferSubscriptionMessageSchema = enabledFlag(
-  CMD.SET_CHATGPT_PREFER_SUBSCRIPTION,
+  SETTINGS_VIEW_COMMANDS.SET_CHATGPT_PREFER_SUBSCRIPTION,
 );
 // Grok (xAI) subscription sign-in messages
-const SignInGrokMessageSchema = commandOnly(CMD.SIGN_IN_GROK);
-const SignOutGrokMessageSchema = commandOnly(CMD.SIGN_OUT_GROK);
+const SignInGrokMessageSchema = commandOnly(
+  SETTINGS_VIEW_COMMANDS.SIGN_IN_GROK,
+);
+const SignOutGrokMessageSchema = commandOnly(
+  SETTINGS_VIEW_COMMANDS.SIGN_OUT_GROK,
+);
 const SetGrokPreferSubscriptionMessageSchema = enabledFlag(
-  CMD.SET_GROK_PREFER_SUBSCRIPTION,
+  SETTINGS_VIEW_COMMANDS.SET_GROK_PREFER_SUBSCRIPTION,
 );
 const GetSubscriptionUsageMessageSchema = z.object({
-  command: z.literal(CMD.GET_SUBSCRIPTION_USAGE),
+  command: z.literal(SETTINGS_VIEW_COMMANDS.GET_SUBSCRIPTION_USAGE),
   forceRefresh: z.boolean().optional(),
 });
-const GetPRSubscriptionsMessageSchema = commandOnly(CMD.GET_PR_SUBSCRIPTIONS);
-
+const GetPRSubscriptionsMessageSchema = commandOnly(
+  SETTINGS_VIEW_COMMANDS.GET_PR_SUBSCRIPTIONS,
+);
 const UnsubscribePRMessageSchema = z.object({
-  command: z.literal(CMD.UNSUBSCRIBE_PR),
+  command: z.literal(SETTINGS_VIEW_COMMANDS.UNSUBSCRIBE_PR),
   key: z.string().min(1),
 });
-
 const OpenPRSubscriptionStreamMessageSchema = z.object({
-  command: z.literal(CMD.OPEN_PR_SUBSCRIPTION_STREAM),
+  command: z.literal(SETTINGS_VIEW_COMMANDS.OPEN_PR_SUBSCRIPTION_STREAM),
   runId: RunIdSchema,
 });
 
 // LaTeX settings inbound messages
 const ApplyLatexSettingsMessageSchema = z.object({
-  command: z.literal(CMD.APPLY_LATEX_SETTINGS),
+  command: z.literal(SETTINGS_VIEW_COMMANDS.APPLY_LATEX_SETTINGS),
   field: z.enum(['outDir', 'autoRevealExclude']).optional(),
   reset: z.boolean().optional(),
 });
 const InstallLatexWorkshopMessageSchema = commandOnly(
-  CMD.INSTALL_LATEX_WORKSHOP,
+  SETTINGS_VIEW_COMMANDS.INSTALL_LATEX_WORKSHOP,
 );
 const RunInstallCommandMessageSchema = z.object({
-  command: z.literal(CMD.RUN_INSTALL_COMMAND),
+  command: z.literal(SETTINGS_VIEW_COMMANDS.RUN_INSTALL_COMMAND),
   installCommand: z.string().min(1),
 });
 
 // Experimental settings inbound messages
 const GetInlineCriticismEnabledMessageSchema = commandOnly(
-  CMD.GET_INLINE_CRITICISM_ENABLED,
+  SETTINGS_VIEW_COMMANDS.GET_INLINE_CRITICISM_ENABLED,
 );
 const SetInlineCriticismEnabledMessageSchema = enabledFlag(
-  CMD.SET_INLINE_CRITICISM_ENABLED,
+  SETTINGS_VIEW_COMMANDS.SET_INLINE_CRITICISM_ENABLED,
 );
 
 // Generic catalog-driven setting write. This boundary accepts exactly the
@@ -828,7 +833,7 @@ const StateSettingValueSchema = z.union([
 export type StateSettingValue = z.infer<typeof StateSettingValueSchema>;
 
 const UpdateStateSettingMessageSchema = z.object({
-  command: z.literal(CMD.UPDATE_STATE_SETTING),
+  command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING),
   key: z.string().min(1),
   value: StateSettingValueSchema.optional(),
 });
@@ -836,9 +841,11 @@ const UpdateStateSettingMessageSchema = z.object({
 // Navigation inbound messages
 // Settings-tab IPC is read-only: state transitions are owned by the
 // agent-side plan tool, not the user. Don't add mutation commands here.
-const GetGoalListMessageSchema = commandOnly(CMD.GET_GOAL_LIST);
+const GetGoalListMessageSchema = commandOnly(
+  SETTINGS_VIEW_COMMANDS.GET_GOAL_LIST,
+);
 const RevealGoalRunMessageSchema = z.object({
-  command: z.literal(CMD.REVEAL_GOAL_RUN),
+  command: z.literal(SETTINGS_VIEW_COMMANDS.REVEAL_GOAL_RUN),
   runId: RunIdSchema,
 });
 

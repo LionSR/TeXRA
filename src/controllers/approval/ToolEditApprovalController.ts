@@ -45,12 +45,8 @@ import {
   Rejected,
   type HostRequestFailure,
 } from '@shared/session/requestErrors';
-import type {
-  RequestDecision,
-  SessionEvent,
-  RunId,
-  ToolEditApprovalAction,
-} from '@shared/schemas';
+import type { RequestDecision, SessionEvent, RunId } from '@shared/schemas';
+import type { HostRequest } from '@shared/session/hostRequest';
 import {
   previewProposedLatex,
   runLatexdiff,
@@ -270,7 +266,7 @@ export class ToolEditApprovalController {
 
   handleAction(payload: {
     requestId: string;
-    action: ToolEditApprovalAction;
+    action: Extract<HostRequest, { kind: 'toolEdit' }>['action'];
     feedback?: string;
   }): Effect.Effect<void, never, PreviewServices> {
     return Effect.suspend(() => {

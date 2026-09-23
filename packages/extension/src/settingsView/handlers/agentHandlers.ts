@@ -36,11 +36,9 @@ import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import { NotificationFailed } from '@hosts/uiHosts';
 import type { ProcessServices } from '@platform/processRuntime';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { agentKey } from '@shared/schemas';
-import {
-  SETTINGS_VIEW_CMD,
-  type SettingsMessageFor,
-} from '@shared/settingsView/settingsViewMessages';
+import type { SettingsMessageFor } from '@shared/settingsView/settingsViewMessages';
 import {
   buildAgentSelectionMessage,
   buildCustomAgentDirMessage,
@@ -171,7 +169,7 @@ export class AgentHandlers {
   // ── Agent selection handlers ──
 
   handleSetAgentEnabled(
-    data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.SET_AGENT_ENABLED>,
+    data: SettingsMessageFor<typeof SETTINGS_VIEW_COMMANDS.SET_AGENT_ENABLED>,
   ) {
     return withHandlerErrorHandling(
       this.ctx,
@@ -188,7 +186,9 @@ export class AgentHandlers {
   }
 
   handleSetAllAgentsEnabled(
-    data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.SET_ALL_AGENTS_ENABLED>,
+    data: SettingsMessageFor<
+      typeof SETTINGS_VIEW_COMMANDS.SET_ALL_AGENTS_ENABLED
+    >,
   ) {
     return withHandlerErrorHandling(
       this.ctx,
@@ -204,7 +204,7 @@ export class AgentHandlers {
   }
 
   handleOpenAgentFolder(
-    data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.OPEN_AGENT_FOLDER>,
+    data: SettingsMessageFor<typeof SETTINGS_VIEW_COMMANDS.OPEN_AGENT_FOLDER>,
   ) {
     return withHandlerErrorHandling(
       this.ctx,
@@ -231,7 +231,9 @@ export class AgentHandlers {
   }
 
   handleViewRemoteAgentPrompt(
-    data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.VIEW_REMOTE_AGENT_PROMPT>,
+    data: SettingsMessageFor<
+      typeof SETTINGS_VIEW_COMMANDS.VIEW_REMOTE_AGENT_PROMPT
+    >,
   ) {
     return withHandlerErrorHandling(
       this.ctx,
@@ -261,7 +263,7 @@ export class AgentHandlers {
   }
 
   handleCreateAgent(
-    data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.CREATE_AGENT>,
+    data: SettingsMessageFor<typeof SETTINGS_VIEW_COMMANDS.CREATE_AGENT>,
   ) {
     return Effect.gen({ self: this }, function* () {
       if (data.mode === 'template') {
@@ -282,7 +284,7 @@ export class AgentHandlers {
   }
 
   handleDeleteCustomAgent(
-    data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.DELETE_CUSTOM_AGENT>,
+    data: SettingsMessageFor<typeof SETTINGS_VIEW_COMMANDS.DELETE_CUSTOM_AGENT>,
   ) {
     return this.runAgentFileAction(
       'deleteCustomAgent',
@@ -339,7 +341,9 @@ export class AgentHandlers {
   }
 
   handleApplyAgentModePreset(
-    data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.APPLY_AGENT_MODE_PRESET>,
+    data: SettingsMessageFor<
+      typeof SETTINGS_VIEW_COMMANDS.APPLY_AGENT_MODE_PRESET
+    >,
   ) {
     return withHandlerErrorHandling(
       this.ctx,
@@ -400,7 +404,9 @@ export class AgentHandlers {
   }
 
   handleDeleteAgentModePreset(
-    data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.DELETE_AGENT_MODE_PRESET>,
+    data: SettingsMessageFor<
+      typeof SETTINGS_VIEW_COMMANDS.DELETE_AGENT_MODE_PRESET
+    >,
   ) {
     return withHandlerErrorHandling(
       this.ctx,
