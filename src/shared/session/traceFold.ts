@@ -205,28 +205,20 @@ export function createTranscriptFold(
 
       case 'tool.end': {
         if (transcriptBoundaryClosed) return;
-        // .passthrough(): endToolUseCard documents its result as "forwarded
-        // as-is", and a producer (e.g. toolUseDispatch.ts's top-level
-        // `files`) can legitimately carry fields ToolUseLogSchema doesn't
-        // declare. A plain z.object() parse strips unknown keys even on
-        // success, which would silently drop them from the persisted row.
+        // .passthrough() keeps fields outside ToolUseLogSchema (e.g.
+        // toolUseDispatch.ts's `files`), matching endToolUseCard's "forwarded
+        // as-is" contract. On failure, keep the raw object rather than `{}`:
+        // every field is optional, so `{}` would "succeed" on
+        // normalizeToolUseData's re-parse and hide a malformed row instead of
+        // tripping its "Malformed tool payload" fallback.
         const parsedResult = ToolUseLogSchema.omit({ status: true })
           .passthrough()
           .safeParse(event.result);
-        // Every ToolUseLog field is optional, so collapsing a parse failure to
-        // `{}` would "succeed" trivially when normalizeToolUseData re-parses
-        // this row downstream — turning a malformed row into a silently empty
-        // one instead of the visible "Malformed tool payload" card that same
-        // re-parse already renders for a raw, still-invalid object. Keep the
-        // unvalidated object on parse failure so that existing fallback fires.
         let result: Partial<ToolUseLog>;
-        if (parsedResult.success) {
-          result = parsedResult.data;
-        } else if (isObject(event.result)) {
+        if (parsedResult.success) result = parsedResult.data;
+        else if (isObject(event.result))
           result = event.result as Partial<ToolUseLog>;
-        } else {
-          result = {};
-        }
+        else result = {};
         // Omit groupId on update: undefined would clobber the value stamped
         // at tool.start.
         const patch = {
