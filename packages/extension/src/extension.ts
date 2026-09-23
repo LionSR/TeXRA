@@ -822,10 +822,16 @@ async function activateExtension(context: vscode.ExtensionContext) {
     );
 
   context.subscriptions.push(
-    context.secrets.onDidChange((e) => {
-      if (e.key !== GITHUB_TOKEN_STORAGE_KEY) return;
-      // Re-probe so any subscribed UI (Tools tab) reflects the new token
-      // presence; getGitHubToken() now reads SecretStorage live (no cache).
+    // The VS Code store's half of `credentialChanged`: SecretStorage reports
+    // every committed write, this window's and other windows' alike, so the
+    // signal is emitted here rather than from `VscodeSecrets` itself.
+    context.secrets.onDidChange(({ key }) => {
+      emitAppSignal('credentialChanged', { key });
+    }),
+    // The GitHub token gates the `github_subscription` tool group; re-probe so
+    // the Tools tab and the next run's tool list see the new token presence.
+    subscribeAppSignal(runtime, 'credentialChanged', ({ key }) => {
+      if (key !== GITHUB_TOKEN_STORAGE_KEY) return;
       void runtime.runPromise(refreshToolAvailabilityLogged('secret change'));
     }),
     // Lean/LaTeX extension installed or removed → re-probe so the Tools tab

@@ -51,6 +51,26 @@ export interface AppSignalPayloads {
   githubTokenInvalid: { message: string };
 
   /**
+   * A write or removal of one secret-store entry settled. Emitted by the
+   * store itself, so every writer is covered — the settings controllers, the
+   * setup agent's `unset_api_key`, the GitHub token forms — without any of
+   * them remembering to. The file-backed stores (desktop, CLI) emit from
+   * their own commit finalizer; the VS Code store emits from
+   * `SecretStorage.onDidChange`, which also sees writes from other windows.
+   * The same stores hold OAuth tokens, sign-in nonces and Overleaf
+   * credentials, so a subscriber filters on `key` and ignores the rest: an
+   * OAuth refresh must not repaint the profile tab.
+   *
+   * Consumed by: extension and desktop (an `apiKey.*` change repaints the
+   * credential-dependent settings, launcher and model surfaces; the GitHub
+   * token re-probes tool availability), and the CLI chat TUI (an `apiKey.*`
+   * change bumps the subscription-preference version its status bar reads;
+   * the GitHub token re-probes tool availability, which the next run's tool
+   * list reads from cache).
+   */
+  credentialChanged: { key: string };
+
+  /**
    * The active GitHub subscriptions (PR, repo, or issue) or their stream owners
    * changed. Keyless on purpose: every listener re-reads the full subscription
    * list, so which kind changed carries no information.

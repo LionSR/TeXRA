@@ -20,6 +20,7 @@ import {
   PromptFailed,
   type MessageHost,
 } from '@hosts/uiHosts';
+import { apiProviderOfSecretName } from '@model/apiProviders';
 import type { StateStore } from '@platform/interfaces';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import { StorageFs, withSessionFs } from '@platform/rootedFs';
@@ -450,13 +451,6 @@ export function createDesktopSettingsIpc(
     });
   }
 
-  // Both writers below re-probe external tools: the GitHub token gates the
-  // `github_subscription` tool group, so without it the Tools tab keeps showing
-  // the group as unavailable until the user clicks Re-check. The extension gets
-  // this from `secrets.onDidChange`; the desktop has no secret-change event,
-  // but these two functions are the only places it writes the token, so the
-  // explicit calls cover the same ground. `refreshToolAvailability` emits
-  // `toolAvailabilityChanged`, which repaints the dashboard.
   function setGitHubToken() {
     return Effect.gen(function* () {
       const token = yield* options.ui.promptForSecret({
@@ -471,10 +465,6 @@ export function createDesktopSettingsIpc(
       });
       yield* options.ui.showInfoMessage(GITHUB_TOKEN_SAVED_MESSAGE);
       yield* postGitHubTokenStatus();
-      yield* refreshToolAvailability({
-        workspaceRoot: roots.workspace,
-        config: roots.config,
-      });
     });
   }
 
@@ -483,10 +473,6 @@ export function createDesktopSettingsIpc(
       yield* options.secrets.delete(GITHUB_TOKEN_STORAGE_KEY);
       yield* options.ui.showInfoMessage(GITHUB_TOKEN_REMOVED_MESSAGE);
       yield* postGitHubTokenStatus();
-      yield* refreshToolAvailability({
-        workspaceRoot: roots.workspace,
-        config: roots.config,
-      });
     });
   }
 
@@ -526,6 +512,29 @@ export function createDesktopSettingsIpc(
         options.ui.showErrorMessage(gitHubTokenRejectedMessage(message)),
       ),
     ),
+    // The secret store announces every committed write, whoever wrote it: the
+    // settings round-trip, the setup agent's `unset_api_key`, another window.
+    // A provider key repaints this window's credential surfaces; the GitHub
+    // token gates the `github_subscription` tool group, so it re-probes, and
+    // `toolAvailabilityChanged` repaints the Tools tab. Other entries (OAuth
+    // tokens, sign-in nonces) are ignored.
+    subscribeDesktopAppSignal(runtime, 'credentialChanged', ({ key }) => {
+      const provider = apiProviderOfSecretName(key);
+      if (provider !== undefined) {
+        runAsync(
+          options.credentialSettingsController.refreshAfterProviderKeyChange(
+            provider,
+          ),
+        );
+      } else if (key === GITHUB_TOKEN_STORAGE_KEY) {
+        runAsync(
+          refreshToolAvailability({
+            workspaceRoot: roots.workspace,
+            config: roots.config,
+          }),
+        );
+      }
+    }),
   );
 
   /**

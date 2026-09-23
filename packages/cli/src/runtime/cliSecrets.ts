@@ -5,6 +5,8 @@ import path from 'node:path';
 import { Effect } from 'effect';
 
 // Local imports
+import { emitAppSignal } from '@eventBus/AppSignals';
+import { invalidateApiKeyCache } from '@model/apiProviders';
 import {
   SecretsFailed,
   secretsGet,
@@ -111,7 +113,9 @@ export class CliSecrets implements PlatformSecrets {
    * One mutation of the secrets file. Taking this lane and opening the store
    * are both interruptible; the commit `JsonStore.set` runs behind the file's
    * own write lane is not, so a cancelled caller either never started the
-   * commit or observes a finished one.
+   * commit or observes a finished one. The key cache drop and the
+   * `credentialChanged` signal run on every exit, because a commit that
+   * landed still exits as interrupted when its caller was cancelled.
    */
   private mutate(
     operation: Extract<SecretsOperation, 'set' | 'delete'>,
@@ -131,6 +135,12 @@ export class CliSecrets implements PlatformSecrets {
             message: `Could not ${operation === 'set' ? 'store' : 'remove'} the CLI secret "${key}": ${toErrorMessage(cause)}`,
             cause,
           }),
+      ),
+      Effect.ensuring(
+        Effect.sync(() => {
+          invalidateApiKeyCache();
+          emitAppSignal('credentialChanged', { key });
+        }),
       ),
     );
   }

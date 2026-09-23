@@ -54,7 +54,7 @@ import {
 } from '@model/computeModelOptions';
 import {
   API_PROVIDERS,
-  invalidateApiKeyCache,
+  apiProviderOfSecretName,
   loadApiKeyStatusMap,
 } from '@model/apiProviders';
 import {
@@ -250,6 +250,14 @@ export class SettingsViewMessageHandler {
       // write.
       subscribeAppSignal(this.runtime, 'agentRosterChanged', () => {
         this.runtime.runFork(this.refreshAfterAgentMutation(undefined, true));
+      }),
+      // Every provider-key writer lands here, not just this view's own
+      // round-trip: the setup agent's `unset_api_key`, the command palette,
+      // another window. An OAuth or GitHub token write is not a provider key.
+      subscribeAppSignal(this.runtime, 'credentialChanged', ({ key }) => {
+        const provider = apiProviderOfSecretName(key);
+        if (provider === undefined) return;
+        this.runtime.runFork(this.refreshAfterProviderKeyChange(provider));
       }),
       subscribeAppSignal(this.runtime, 'languageModelsChanged', () => {
         this.runtime.runFork(
@@ -802,7 +810,6 @@ export class SettingsViewMessageHandler {
     provider: string,
   ): Effect.Effect<void, Error, ProcessServices> {
     return Effect.gen({ self: this }, function* () {
-      invalidateApiKeyCache();
       const usageProvider = codingPlanForApiProvider(provider)?.usageProvider;
       // The launcher's API-key banner reads the same credential probe from
       // the host snapshot.

@@ -105,6 +105,7 @@ export function createStubDesktopCredentialSettingsController(
     postStartupData: noOpEffect,
     postSubscriptionUsage: noOpEffect,
     refreshAfterProviderSettingChange: noOpEffect,
+    refreshAfterProviderKeyChange: noOpEffect,
     refreshAuthDependentData: noOpEffect,
     signInChatGpt: noOpEffect,
     ...overrides,

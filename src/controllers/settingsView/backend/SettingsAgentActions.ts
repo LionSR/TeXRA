@@ -96,6 +96,10 @@ function openAgentYamlErrorMessage(
 export function createSettingsAgentActions(
   options: SettingsAgentActionsOptions,
 ): AgentFileHandlers {
+  // A delete already in flight for this agent swallows a second click (#9487):
+  // the second request would otherwise open another confirmation and then
+  // report the agent the first one removed as not found.
+  const activeDeletions = new Set<string>();
   return {
     openAgentYaml: (message) =>
       Effect.gen(function* () {
@@ -183,37 +187,48 @@ export function createSettingsAgentActions(
       }),
 
     deleteCustomAgent: (message) =>
-      Effect.gen(function* () {
-        const entryPath = options.findAgent('custom', message.agentName)?.path;
-        if (!entryPath) {
-          yield* options.showErrorMessage(
-            `Custom agent not found: ${message.agentName}`,
+      Effect.suspend(() => {
+        if (activeDeletions.has(message.agentName)) return Effect.void;
+        activeDeletions.add(message.agentName);
+        return Effect.gen(function* () {
+          const entryPath = options.findAgent(
+            'custom',
+            message.agentName,
+          )?.path;
+          if (!entryPath) {
+            yield* options.showErrorMessage(
+              `Custom agent not found: ${message.agentName}`,
+            );
+            return;
+          }
+
+          const customDir = yield* options.getCustomAgentDirectory();
+          if (!isStrictlyWithin(customDir, entryPath)) {
+            yield* options.showErrorMessage(
+              'Refusing to delete: file is not inside the custom agents directory.',
+            );
+            return;
+          }
+
+          const confirmed = yield* options.confirmAction(
+            `Delete "${message.agentName}"? This cannot be undone.`,
+            'Delete',
           );
-          return;
-        }
+          if (!confirmed) return;
 
-        const customDir = yield* options.getCustomAgentDirectory();
-        if (!isStrictlyWithin(customDir, entryPath)) {
-          yield* options.showErrorMessage(
-            'Refusing to delete: file is not inside the custom agents directory.',
+          const fs = yield* FileSystem.FileSystem;
+          // `force` is the facade's delete: a path already gone is the
+          // post-condition, not a failure.
+          yield* fs.remove(entryPath, { force: true });
+          yield* options.showInfoMessage(
+            `Deleted custom agent: ${message.agentName}`,
           );
-          return;
-        }
-
-        const confirmed = yield* options.confirmAction(
-          `Delete "${message.agentName}"? This cannot be undone.`,
-          'Delete',
+          yield* options.refreshAfterMutation();
+        }).pipe(
+          Effect.ensuring(
+            Effect.sync(() => activeDeletions.delete(message.agentName)),
+          ),
         );
-        if (!confirmed) return;
-
-        const fs = yield* FileSystem.FileSystem;
-        // `force` is the facade's delete: a path already gone is the
-        // post-condition, not a failure.
-        yield* fs.remove(entryPath, { force: true });
-        yield* options.showInfoMessage(
-          `Deleted custom agent: ${message.agentName}`,
-        );
-        yield* options.refreshAfterMutation();
       }),
   };
 }

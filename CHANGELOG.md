@@ -74,6 +74,21 @@ All notable changes to this project will be documented in this file.
   request until the whole run ends.
 - A run whose model request you retried successfully no longer resumes as
   failed if TeXRA exits before the turn ends.
+- **Key changes show up everywhere at once.** When the setup agent removes an
+  API key, or a key is changed in another window, the Settings profile and
+  model tabs, the launcher's key banner and the model pickers now update right
+  away instead of showing the old key until something else repaints them. In
+  the CLI, saving or removing the GitHub token under `/config` re-checks tool
+  availability, so the GitHub tools are no longer reported as unavailable for
+  the next run.
+- **Desktop: Pack also copies the source PDF.** The toolbar's Pack action now
+  copies the source document's own files (its PDF) into `History/` and sweeps
+  its build files, as the VS Code extension already did, instead of packing
+  only the run's outputs.
+- **Deleting a team that no longer exists says so.** In the VS Code settings,
+  deleting a team preset that is already gone now reports "Unknown custom
+  team" instead of doing nothing, as the desktop app does. Double-clicking
+  Delete on a custom agent in the desktop app no longer asks twice.
 
 ### Extension (VS Code)
 

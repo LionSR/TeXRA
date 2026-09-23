@@ -90,8 +90,7 @@ export class SubscriptionHandlers {
   }
 
   /**
-   * Apply the subscription preference, warn when a more specific setting
-   * overrides the requested value, log failures, and always refresh the
+   * Apply the subscription preference, log failures, and always refresh the
    * settings view.
    */
   handleSetPreferSubscription(enabled: boolean) {
@@ -99,16 +98,7 @@ export class SubscriptionHandlers {
     return withHandlerErrorHandling(
       this.ctx,
       `Could not update the ${displayName} subscription preference`,
-      Effect.map(
-        this.provider.setPreferSubscription(this.stores, enabled),
-        (update) => {
-          if (update.effective !== enabled) {
-            void vscode.window.showWarningMessage(
-              `A more specific setting still keeps ${displayName} subscription ${update.effective ? 'enabled' : 'disabled'}.`,
-            );
-          }
-        },
-      ),
+      this.provider.setPreferSubscription(this.stores, enabled),
     ).pipe(Effect.andThen(this.refreshState()));
   }
 }

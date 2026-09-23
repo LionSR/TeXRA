@@ -4,7 +4,6 @@ import {
   subscriptionProvider,
   type SubscriptionProviderId,
 } from '@controllers/modelAccess/subscriptionProviders';
-import type { SubscriptionPreferenceUpdate } from '@model/subscriptionPreference';
 import type { ConfigWriteFailed } from '@platform/interfaces';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 
@@ -19,13 +18,8 @@ export function setCliSubscriptionPreference(
   stores: SettingsStores,
   providerId: SubscriptionProviderId,
   enabled: boolean,
-): Effect.Effect<SubscriptionPreferenceUpdate, ConfigWriteFailed | Error> {
+): Effect.Effect<void, ConfigWriteFailed | Error> {
   return subscriptionProvider(providerId)
     .setPreferSubscription(stores, enabled)
-    .pipe(
-      Effect.map((update) => {
-        bumpCodexPreferenceVersion();
-        return update;
-      }),
-    );
+    .pipe(Effect.andThen(Effect.sync(bumpCodexPreferenceVersion)));
 }

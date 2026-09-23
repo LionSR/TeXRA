@@ -192,12 +192,8 @@ beforeEach(() => {
   mocks.getXaiStatus.mockReturnValue(Effect.succeed({ signedIn: false }));
   mocks.isPreferCodexSubscription.mockReturnValue(false);
   mocks.isPreferXaiSubscription.mockReturnValue(false);
-  mocks.setPreferCodexSubscription.mockReturnValue(
-    Effect.succeed({ effective: false, target: 'global' }),
-  );
-  mocks.setPreferXaiSubscription.mockReturnValue(
-    Effect.succeed({ effective: false, target: 'global' }),
-  );
+  mocks.setPreferCodexSubscription.mockReturnValue(Effect.void);
+  mocks.setPreferXaiSubscription.mockReturnValue(Effect.void);
   mocks.shouldUseSubscriptionDeviceCode.mockReturnValue(false);
   mocks.hasUsableApiKey.mockReturnValue(Effect.succeed(false));
   mocks.lookupApiKeyOrigin.mockReturnValue(Effect.succeed('none'));
@@ -421,9 +417,7 @@ describe('CLI model access routes', () => {
           label: 'user@example.com',
         }),
       );
-      mocks.setPreferCodexSubscription.mockReturnValue(
-        Effect.succeed({ effective: true, target: 'global' }),
-      );
+      mocks.setPreferCodexSubscription.mockReturnValue(Effect.void);
       const writeProgress = vi.fn();
 
       const result = yield* updateCliModelAccess(
@@ -461,9 +455,7 @@ describe('CLI model access routes', () => {
         }),
       );
       mocks.isPreferCodexSubscription.mockReturnValue(true);
-      mocks.setPreferCodexSubscription.mockReturnValue(
-        Effect.succeed({ effective: false, target: 'global' }),
-      );
+      mocks.setPreferCodexSubscription.mockReturnValue(Effect.void);
 
       const result = yield* updateCliModelAccess(
         stores,
@@ -542,9 +534,7 @@ describe('CLI model access routes', () => {
           }),
         );
         mocks.isPreferCodexSubscription.mockReturnValue(true);
-        mocks.setPreferCodexSubscription.mockReturnValue(
-          Effect.succeed({ effective: false, target: 'global' }),
-        );
+        mocks.setPreferCodexSubscription.mockReturnValue(Effect.void);
         yield* updateCliModelAccess(
           stores,
           context,
@@ -563,9 +553,7 @@ describe('CLI model access routes', () => {
   it.effect('turns off a stale signed-out preference without signing in', () =>
     Effect.gen(function* () {
       mocks.isPreferCodexSubscription.mockReturnValue(true);
-      mocks.setPreferCodexSubscription.mockReturnValue(
-        Effect.succeed({ effective: false, target: 'global' }),
-      );
+      mocks.setPreferCodexSubscription.mockReturnValue(Effect.void);
 
       const status = yield* readCliModelAccessStatus(stores, secrets);
       const selection = buildCliModelAccessItems({

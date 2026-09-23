@@ -71,13 +71,13 @@ export function defineSubscriptionAuthCommand(
       );
       if (!signInResult.ok) return CliExitCode.ModelOrNetworkError;
 
-      const update = yield* provider.setPreferSubscription(services, true);
+      yield* provider.setPreferSubscription(services, true);
       const account = signInResult.value;
       const payload = {
         authenticated: true,
         email: account.email ?? null,
         ...options.loginPayloadExtras?.(account),
-        preferSubscription: update.effective,
+        preferSubscription: true,
       };
       const signedIn = ACCOUNT_OUTCOME.signedInAs(
         provider.displayName,
@@ -86,9 +86,7 @@ export function defineSubscriptionAuthCommand(
       emitCliResult(context, {
         json: payload,
         ndjson: { kind: ndjsonKind, ...payload },
-        text: update.effective
-          ? `${signedIn}\n${provider.displayName} subscription enabled for ${provider.modelFamily}.`
-          : `${signedIn}\n${provider.displayName} subscription preference could not be enabled because a more specific setting overrides the config.`,
+        text: `${signedIn}\n${provider.displayName} subscription enabled for ${provider.modelFamily}.`,
       });
       return CliExitCode.Success;
     });
@@ -138,7 +136,7 @@ export function defineSubscriptionAuthCommand(
         const update = signOutResult.value;
         const payload = {
           authenticated: false,
-          preferSubscription: update.preferenceUpdate?.effective ?? null,
+          preferSubscription: update.preferenceError ? null : false,
           ...(update.preferenceError
             ? { preferenceError: update.preferenceError }
             : {}),
