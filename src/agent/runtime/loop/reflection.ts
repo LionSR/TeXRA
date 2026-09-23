@@ -537,14 +537,14 @@ export const runReflection = Effect.fn('reflection.run')(function* (
    * The raw output of one response cycle, keyed by the folded
    * `continuationIndex`: a re-entry at the same cycle rewrites the same path
    * with the same bytes, so the write is idempotent by coordinate and needs
-   * no byte-offset bookkeeping.
+   * no byte-offset bookkeeping; raw/ is outside extracted round files.
    */
   const cycleLocationFor = (
     round: number,
     continuationIndex: number,
   ): AgentFileLocation =>
     fileService.createLocation(
-      `${workflowOutputRoundDir(round)}/${WORKFLOW_OUTPUT_BASENAME}.c${continuationIndex}.${WORKFLOW_RAW_OUTPUT_EXT}`,
+      `raw/${workflowOutputRoundDir(round)}/${WORKFLOW_OUTPUT_BASENAME}.c${continuationIndex}.${WORKFLOW_RAW_OUTPUT_EXT}`,
     ) as AgentFileLocation;
 
   /**

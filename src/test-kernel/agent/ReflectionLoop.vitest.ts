@@ -11,9 +11,17 @@ import '@test/support/defaultSessionTestSetup';
 // Third-party imports
 import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { dirname } from 'node:path';
+import { dirname, join } from 'node:path';
 import { it } from '@effect/vitest';
-import { Deferred, Effect, Exit, Fiber, Layer, SynchronizedRef } from 'effect';
+import {
+  Deferred,
+  Effect,
+  Exit,
+  Fiber,
+  FileSystem,
+  Layer,
+  SynchronizedRef,
+} from 'effect';
 import { describe, expect, vi } from 'vitest';
 
 // Local imports
@@ -99,6 +107,8 @@ const scripted = vi.hoisted(() => ({
   compileResults: new Map<number, CompileResult | undefined>(),
   /** Whether the round summary lists its outputs as files to open. */
   openFiles: false,
+  /** A valid extracted document with the former raw-cycle filename. */
+  collidingDocument: false,
 }));
 
 vi.mock('@agent/output/compileCheck', async (importOriginal) => ({
@@ -125,17 +135,27 @@ vi.mock('@agent/output/outputFileExtraction', async (importOriginal) => {
         outputState: OutputState,
         _deps: unknown,
         _xml: unknown,
-        _location: unknown,
+        outputLocation: { absolutePath: string },
         round: number,
       ) =>
-        Effect.sync(() => {
+        Effect.gen(function* () {
+          const source = scripted.collidingDocument
+            ? 'output.c0.xml'
+            : 'main.tex';
+          const absolutePath = scripted.collidingDocument
+            ? join(dirname(outputLocation.absolutePath), source)
+            : `/storage/executions/${scripted.runId}/r${round}/main.tex`;
+          if (scripted.collidingDocument) {
+            const fs = yield* FileSystem.FileSystem;
+            yield* fs.writeFileString(absolutePath, 'extracted document');
+          }
           ensureRoundData(outputState, round).outputs = [
             {
-              source: 'main.tex',
+              source,
               round,
               location: locate(
-                `/storage/executions/${scripted.runId}/r${round}/main.tex`,
-                `r${round}/main.tex`,
+                absolutePath,
+                `r${round}/${source}`,
                 scripted.runId as RunId,
               ),
               lineage: null,
@@ -507,6 +527,7 @@ function startedRun(session: SessionHandle): RunId {
   scripted.runId = runId;
   scripted.compileResults.clear();
   scripted.openFiles = false;
+  scripted.collidingDocument = false;
   publishTestRunStart(session, runId);
   return runId;
 }
@@ -941,6 +962,32 @@ describe('the output facts a reflection round publishes', () => {
     }),
   );
 
+  it.effect('keeps raw cycles separate from an output.c0.xml document', () =>
+    Effect.gen(function* () {
+      const session = yield* createProcessSession();
+      const runId = startedRun(session);
+      scripted.collidingDocument = true;
+
+      const { result, state } = yield* runLoop({ runId, session, rounds: 1 });
+      const canonical = flowOf(state).outputLocation?.absolutePath;
+      if (canonical === undefined) throw new Error('The round has no output.');
+      const roundDir = dirname(canonical);
+      const cycle = join(dirname(roundDir), 'raw', 'r0', 'output.c0.xml');
+      const extracted = join(roundDir, 'output.c0.xml');
+
+      expect(result.outcome).toBe(RUN_OUTCOME.COMPLETED);
+      expect(state.roundOutputs[0]?.outputs[0]?.location.absolutePath).toBe(
+        extracted,
+      );
+      expect(yield* Effect.promise(() => readFile(cycle, 'utf8'))).toBe(
+        'round 0 output',
+      );
+      expect(yield* Effect.promise(() => readFile(extracted, 'utf8'))).toBe(
+        'extracted document',
+      );
+    }),
+  );
+
   it.effect('publishes the run-wide output map, restored rounds included', () =>
     Effect.gen(function* () {
       const session = yield* createProcessSession();
@@ -1222,7 +1269,7 @@ describe('an interrupted reflection run', () => {
           const target =
             seed === 'canonical'
               ? canonical
-              : canonical.replace('output.xml', 'output.c0.xml');
+              : join(dirname(dirname(canonical)), 'raw', 'r0', 'output.c0.xml');
           await mkdir(dirname(target), { recursive: true });
           await writeFile(target, 'stale bytes from the crash');
         });
