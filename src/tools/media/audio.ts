@@ -47,7 +47,7 @@ class AudioRecorderError extends Data.TaggedError('AudioRecorderError')<{
  *  where the operation is named. */
 const recorderFailure =
   (operation: string) =>
-  <A>(self: Effect.Effect<A, unknown>): Effect.Effect<A, AudioRecorderError> =>
+  <A, E>(self: Effect.Effect<A, E>): Effect.Effect<A, AudioRecorderError> =>
     Effect.catch(self, (cause) => {
       const message = getSdkErrorMessage(cause);
       return Effect.logError(`Error in ${operation}: ${message}`).pipe(
