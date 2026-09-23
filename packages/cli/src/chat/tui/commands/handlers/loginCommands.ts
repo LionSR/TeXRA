@@ -55,25 +55,11 @@ const CHAT_LOGIN_USAGE = [
 ].join('\n');
 const CHAT_LOGOUT_USAGE = 'Usage: /logout chatgpt | grok | texra | all';
 
-export function loginStartMessage(args: CliLoginSlashArgs): string {
-  if (args.target === 'chatgpt') {
-    if (args.device) return CHATGPT_AUTH.startingDevice;
-    if (args.noBrowser) return CHATGPT_AUTH.startingNoBrowser;
-    return CHATGPT_AUTH.startingBrowser;
-  }
-  if (args.target === 'grok') {
-    if (args.device) return GROK_AUTH.startingDevice;
-    if (args.noBrowser) return GROK_AUTH.startingNoBrowser;
-    return GROK_AUTH.startingBrowser;
-  }
-  if (args.device) return RESEARCHER_ACCESS_AUTH.startingDevice;
-  if (args.noBrowser)
-    return RESEARCHER_ACCESS_AUTH.startingNoBrowser(args.provider);
-  return RESEARCHER_ACCESS_AUTH.startingBrowser(args.provider);
-}
-
-/** Sign-in outcome copy shared by the subscription auth objects. */
+/** Sign-in copy shared by the subscription auth objects. */
 interface SubscriptionAuthCopy {
+  readonly startingDevice: string;
+  readonly startingNoBrowser: string;
+  readonly startingBrowser: string;
   readonly signedInEnabled: (accountLabel: string) => string;
 }
 
@@ -81,6 +67,19 @@ const SUBSCRIPTION_AUTH_COPY: Record<
   SubscriptionProviderId,
   SubscriptionAuthCopy
 > = { chatgpt: CHATGPT_AUTH, grok: GROK_AUTH };
+
+export function loginStartMessage(args: CliLoginSlashArgs): string {
+  if (args.target === 'chatgpt' || args.target === 'grok') {
+    const copy = SUBSCRIPTION_AUTH_COPY[args.target];
+    if (args.device) return copy.startingDevice;
+    if (args.noBrowser) return copy.startingNoBrowser;
+    return copy.startingBrowser;
+  }
+  if (args.device) return RESEARCHER_ACCESS_AUTH.startingDevice;
+  if (args.noBrowser)
+    return RESEARCHER_ACCESS_AUTH.startingNoBrowser(args.provider);
+  return RESEARCHER_ACCESS_AUTH.startingBrowser(args.provider);
+}
 
 /**
  * Subscription sign-in from the chat TUI, mirroring `signOutSubscription`

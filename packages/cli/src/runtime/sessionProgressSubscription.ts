@@ -42,7 +42,10 @@ function childRow(child: RunView) {
  * written only when that derivation changes, so it carries no channel of its
  * own. It is ordered against the lines by the fold's own cursor: a view that
  * has folded past the tail's last written row waits for the tail, so a
- * roster never precedes a row it already reports.
+ * roster never precedes a row it already reports. Like the tail, it is scoped
+ * to the attach boundary: the rosters the fold holds at attach seed the
+ * comparison without being written, so a resumed session does not replay
+ * its earlier parents.
  *
  * Detaching drains: the tail runs to the ordinal captured at detach, so the
  * last line published before the run settled is on the wire before the
@@ -76,7 +79,12 @@ export function attachCliSessionProgressProjection(
   let stopAt: number | undefined;
   const drained = Deferred.makeUnsafe<void>();
 
-  /** The roster last written per parent, so an unchanged one writes no line. */
+  /** The ordinal the projection attached at: the tail's own boundary. */
+  const attachedAt = delivered;
+  /** The roster last derived per parent, so an unchanged one writes no line.
+   *  A fold level at or below `attachedAt` only seeds it: a resumed session's
+   *  earlier parents, settled or not, are history the tail does not replay
+   *  either, so only a roster a post-attach row changes is written. */
   const writtenRosters = new Map<RunId, string>();
   /** A fold ahead of the tail: its roster waits for the lines that produced
    *  it, so a roster never precedes the row it reports. */
@@ -101,9 +109,13 @@ export function attachCliSessionProgressProjection(
       const wire = JSON.stringify(children);
       if (writtenRosters.get(parentRunId) === wire) continue;
       writtenRosters.set(parentRunId, wire);
-      emit('run.children', { runId: parentRunId, children });
+      if (view.cursor > attachedAt)
+        emit('run.children', { runId: parentRunId, children });
     }
   };
+  // Seed from the fold as it stands at attach, before any fiber can see a
+  // later level: the plane's ordinal bounds the fold, so this writes nothing.
+  emitRosters();
 
   const settleIfDrained = (): void => {
     if (stopAt === undefined || delivered < stopAt) return;

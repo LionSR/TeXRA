@@ -1,4 +1,3 @@
-import { Effect } from 'effect';
 /**
  * Whether delegated subagents may run in a git worktree of their own
  * (`working_directory`); off by default, in which case subagents operate in
@@ -12,10 +11,8 @@ import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { readSettingFrom } from '@utils/config/platformSettings';
 
 export function isWorktreeSupportEnabled(stores: SettingsStores) {
-  return Effect.gen(function* () {
-    return yield* readSettingFrom<boolean>(
-      stores,
-      WorkspaceStateKey.GIT_WORKTREE_SUPPORT,
-    );
-  });
+  return readSettingFrom<boolean>(
+    stores,
+    WorkspaceStateKey.GIT_WORKTREE_SUPPORT,
+  );
 }

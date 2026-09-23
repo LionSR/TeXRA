@@ -400,7 +400,7 @@ const executeComplete = Effect.fn('PlanTool.executeComplete')(function* (
 function planCommand(
   ports: PlanPorts,
   input: PlanToolInput,
-): Effect.Effect<ToolResult, unknown> {
+): Effect.Effect<ToolResult, Error> {
   switch (input.command) {
     case 'update':
       return executeUpdate(ports, { objective: input.objective });

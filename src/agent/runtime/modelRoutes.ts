@@ -17,7 +17,6 @@ import {
 import { AgentError } from '@common/errors';
 import { attachMissingApiKeyError } from '@common/errors/sdkError/errorMetadata';
 import { withLogChannel } from '@logger/effectLog';
-import { createLog } from '@logger/logUtils';
 import {
   copilotRouteUnavailableReason,
   prefersCopilotRoute,
@@ -48,7 +47,6 @@ import { getUseOpenRouter } from '@utils/config/providerConfig';
 import type { HttpClient } from 'effect/unstable/http';
 
 const CHANNEL = 'modelRoutes';
-const log = createLog(CHANNEL);
 
 /**
  * The Grok subscription's OAuth token is accepted by xAI's own API surface
@@ -447,7 +445,7 @@ export const resolveModelCompatibilityKey = Effect.fn(
   if (shouldRouteModelThroughOpenRouter(config, useOpenRouter)) {
     return 'OpenRouterNative';
   }
-  return providerCompatibilityKey(config.provider);
+  return yield* providerCompatibilityKey(config.provider);
 });
 
 /**
@@ -458,11 +456,10 @@ export const resolveModelCompatibilityKey = Effect.fn(
  */
 function providerCompatibilityKey(
   provider: ModelProvider,
-): ModelCompatibilityKey | undefined {
+): Effect.Effect<ModelCompatibilityKey | undefined> {
   const key = PROVIDER_COMPATIBILITY_KEYS[provider];
-  if (!key) {
-    log.warn(`No model route is registered for provider ${provider}`);
-    return undefined;
-  }
-  return key;
+  if (key) return Effect.succeed(key);
+  return Effect.logWarning(
+    `No model route is registered for provider ${provider}`,
+  ).pipe(withLogChannel(CHANNEL), Effect.as(undefined));
 }

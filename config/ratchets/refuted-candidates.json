@@ -145,7 +145,7 @@
         {
           "file": "src/controllers/modelAccess/subscriptionUsage/subscriptionUsageParsing.ts",
           "symbol": "fetchSubscriptionUsage",
-          "signature": "export function fetchSubscriptionUsage(request: { readonly url: string; readonly headers: Record<string, string>; readonly signal: AbortSignal; }): Effect.Effect<unknown, unknown> {…}"
+          "signature": "export function fetchSubscriptionUsage(request: { readonly url: string; readonly headers: Record<string, string>; readonly signal: AbortSignal; }): Effect.Effect<unknown, Error> {…}"
         }
       ]
     },

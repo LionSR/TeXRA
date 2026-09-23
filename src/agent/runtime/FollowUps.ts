@@ -47,7 +47,7 @@ import { type InputPart, mediaInputParts } from './run/mediaInput';
 import {
   appendRow,
   rowAggregate,
-  runtimeSnapshotRow,
+  snapshotRow,
   stepRow,
   type Message,
 } from './loop/rows';
@@ -97,10 +97,25 @@ export const followUpsLayer: Layer.Layer<
     const ledger = yield* RunLedger;
     const { runId, session, logger } = run;
     const manager = session.followUps;
-    // The queue exists before the lease is claimed: nothing yields between
-    // the claim and the service that releases it.
+    // The lease is claimed at layer build and the layer scope releases it.
+    // The run's settleRun arm decides recoverable-vs-terminal on every exit
+    // after the run opened; this finalizer backstops the exits that never
+    // reach it, because a failed acquire or a thrown attach releases nothing
+    // under acquireUseRelease semantics, and the lease must not outlive the
+    // scope that claimed it (the run-loop design,
+    // .agents/docs/implemented/architecture/2026-09-21-effect-design-run-loop-programs.md).
     const created = yield* RunInput.make;
-    const lease = manager.claimLive(runId, 'flow');
+    let released = false;
+    const lease = yield* Effect.acquireRelease(
+      Effect.sync(() => manager.claimLive(runId, 'flow')),
+      (held) =>
+        Effect.sync(() => {
+          if (!released && held) {
+            released = true;
+            manager.release(held, 'recoverable');
+          }
+        }),
+    );
     const input = manager.attachInput(runId, created, lease);
     if (!input) {
       return yield* Effect.fail(
@@ -192,7 +207,7 @@ export const followUpsLayer: Layer.Layer<
             // The input that recovers a failed run clears the error fact in
             // the same transaction, so a resume taken between this batch and
             // the next turn's snapshot does not read the run as still failed.
-            runtimeSnapshotRow(runId, state, { lastError: null }),
+            snapshotRow(runId, state, { runtime: { lastError: null } }),
             stepRow(runId, state, 'turn.ready'),
           ]),
         ),
@@ -221,7 +236,9 @@ export const followUpsLayer: Layer.Layer<
       },
       wait: Effect.map(input.take, taken),
       release: (next) => {
-        if (lease) manager.release(lease, next);
+        if (released || !lease) return;
+        released = true;
+        manager.release(lease, next);
       },
       consume,
     };

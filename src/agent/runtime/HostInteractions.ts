@@ -264,10 +264,9 @@ export class SessionHostInteractions implements HostInteractions {
         );
       }
       // The replay loop warn-logs a replay that fails.
-      if (options.replayWhenAttached && !this.disposed) {
-        this.queuePresentationReplay(present);
-      }
-      return Effect.void;
+      return options.replayWhenAttached && !this.disposed
+        ? this.queuePresentationReplay(present)
+        : Effect.void;
     });
   }
 
@@ -352,17 +351,20 @@ export class SessionHostInteractions implements HostInteractions {
     return this.attachments.at(-1);
   }
 
-  private queuePresentationReplay(replay: PresentationProgram): void {
-    if (
-      this.pendingPresentationReplays.length >= MAX_PENDING_PRESENTATION_REPLAYS
-    ) {
-      this.pendingPresentationReplays.shift();
-      logger.warn(
-        `Dropped the oldest queued presentation notice: more than ${MAX_PENDING_PRESENTATION_REPLAYS} ` +
-          'notices are waiting for an interaction host to attach.',
-      );
-    }
+  private queuePresentationReplay(
+    replay: PresentationProgram,
+  ): Effect.Effect<void> {
+    const dropsOldest =
+      this.pendingPresentationReplays.length >=
+      MAX_PENDING_PRESENTATION_REPLAYS;
+    if (dropsOldest) this.pendingPresentationReplays.shift();
     this.pendingPresentationReplays.push(replay);
+    return dropsOldest
+      ? Effect.logWarning(
+          `Dropped the oldest queued presentation notice: more than ${MAX_PENDING_PRESENTATION_REPLAYS} ` +
+            'notices are waiting for an interaction host to attach.',
+        ).pipe(withLogChannel(CHANNEL))
+      : Effect.void;
   }
 
   private replayPendingPresentations(

@@ -3,7 +3,16 @@ import '@test/support/defaultSessionTestSetup';
 // Third-party imports
 import { randomUUID } from 'node:crypto';
 import { it } from '@effect/vitest';
-import { Deferred, Effect, Exit, Fiber, Layer, SynchronizedRef } from 'effect';
+import * as NodeFileSystem from '@effect/platform-node/NodeFileSystem';
+import {
+  Deferred,
+  Effect,
+  Exit,
+  Fiber,
+  FileSystem,
+  Layer,
+  SynchronizedRef,
+} from 'effect';
 import { describe, expect, vi } from 'vitest';
 
 // Local imports
@@ -20,7 +29,6 @@ import { turnText } from '@agent/runtime/run/turnText';
 import {
   appendRow,
   rowAggregate,
-  runtimeSnapshotRow,
   snapshotRow,
   stepRow,
 } from '@agent/runtime/loop/rows';
@@ -34,9 +42,10 @@ import { dispatchFactsFor } from '@agent/runtime/run/tools';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { UsageMonitor } from '@agent/runtime/UsageMonitor';
 import { TraceEmitter } from '@agent/trace';
+import type { RunCell } from '@agent/runtime/loop/runProgram';
 import {
   AgentCategory,
-  AgentRunStateSnapshotSchema,
+  EMPTY_RUN_USAGE_TOTALS,
   MESSAGE_TYPES,
   RUN_OUTCOME,
   RUN_PHASE,
@@ -142,11 +151,11 @@ function invokerLayer(script: readonly ScriptedTurn[], seen: InvokeRequest[]) {
     ModelInvoker,
     Effect.gen(function* () {
       const run = yield* AgentRun;
-      const ledger = yield* RunLedger;
       const aggregateId = rowAggregate(run.runId);
       return {
-        invoke: (state: RunState, request: InvokeRequest) =>
+        invoke: (cell: RunCell, request: InvokeRequest) =>
           Effect.gen(function* () {
+            const state = yield* cell.current;
             const scripted = script[seen.length];
             seen.push(request);
             if (scripted === undefined) {
@@ -157,10 +166,12 @@ function invokerLayer(script: readonly ScriptedTurn[], seen: InvokeRequest[]) {
             if ('failWith' in scripted) {
               // The runtime snapshot the invoker writes on a failed attempt:
               // the error a resumed run reads back off the fold.
-              const failed = yield* ledger.appendBatch(run.runId, state, [
-                runtimeSnapshotRow(run.runId, state, {
-                  lastError: scripted.failWith,
-                  declinedRoutes: [],
+              const failed = yield* cell.append([
+                snapshotRow(run.runId, state, {
+                  runtime: {
+                    lastError: scripted.failWith,
+                    declinedRoutes: [],
+                  },
                 }),
               ]);
               return {
@@ -172,7 +183,7 @@ function invokerLayer(script: readonly ScriptedTurn[], seen: InvokeRequest[]) {
             const bound = yield* SynchronizedRef.get(run.model);
             const invocation = { invocationId: randomUUID(), attempt: 1 };
             const responseId = randomUUID();
-            const next = yield* ledger.appendBatch(run.runId, state, [
+            const next = yield* cell.append([
               {
                 type: 'model.message',
                 aggregateId,
@@ -304,7 +315,11 @@ function agentRunTestLayer(init: LoopInit) {
   );
 }
 
-function loopProgram(init: LoopInit, requests: InvokeRequest[]) {
+function loopProgram(
+  init: LoopInit,
+  requests: InvokeRequest[],
+  processFs?: FileSystem.FileSystem,
+) {
   return runToolUse({
     resume: init.resume === true,
     ...(init.attachment ? { attachment: init.attachment } : {}),
@@ -316,6 +331,7 @@ function loopProgram(init: LoopInit, requests: InvokeRequest[]) {
         nativeToolTestLayer({
           run: { runId: init.runId, session: init.session, toolPolicy: {} },
         }),
+        ...(processFs ? [Layer.succeed(FileSystem.FileSystem, processFs)] : []),
       ).pipe(
         Layer.provideMerge(agentRunTestLayer(init)),
         Layer.provideMerge(
@@ -446,9 +462,10 @@ const seedCommittedResponse = Effect.fn('test.seedCommittedResponse')(
       requests: {},
       followUps: [],
       followUpIds: new Set(),
-      usage: AgentRunStateSnapshotSchema.parse({}).usageAccumulator.totals,
+      usage: EMPTY_RUN_USAGE_TOTALS,
       flow: null,
       roundOutputs: [],
+      overflowRecoveredAtRound: null,
     };
     const opened = yield* ledger.appendBatch(runId, null, [
       appendRow(runId, [
@@ -457,7 +474,10 @@ const seedCommittedResponse = Effect.fn('test.seedCommittedResponse')(
       snapshotRow(runId, fresh, {
         phase: 'model.ready',
         turn: 1,
-        state: { shouldSkipCycle: false, stateSlices: null },
+        state: {
+          family: 'toolUse',
+          state: { stateSlices: null },
+        },
       }),
     ]);
     const invocation = { invocationId: randomUUID(), attempt: 1 };
@@ -1139,6 +1159,67 @@ describe('an active goal at the wait', () => {
 });
 
 describe('the host wiring a run attaches', () => {
+  it.live(
+    'interrupts opening preparation and releases the follow-up lease',
+    () =>
+      Effect.gen(function* () {
+        const session = quietSession();
+        const runId = startedRun(session);
+        const processFs = yield* FileSystem.FileSystem;
+        const entered = yield* Deferred.make<void>();
+        const release = yield* Deferred.make<void>();
+        const interrupted = yield* Deferred.make<void>();
+        const detach = vi.fn();
+        const blockedFs = {
+          ...processFs,
+          exists: (target: string) =>
+            target.endsWith('/.texrarules')
+              ? Deferred.succeed(entered, undefined).pipe(
+                  Effect.andThen(Deferred.await(release)),
+                  Effect.onInterrupt(() =>
+                    Deferred.succeed(interrupted, undefined),
+                  ),
+                  Effect.andThen(processFs.exists(target)),
+                )
+              : processFs.exists(target),
+        };
+        const fiber = yield* Effect.forkChild(
+          loopProgram(
+            {
+              runId,
+              session,
+              script: [textTurn('never reached')],
+              attachment: { attach: () => {}, detach },
+            },
+            [],
+            blockedFs,
+          ),
+        );
+
+        const opening = yield* Deferred.await(entered).pipe(
+          Effect.timeoutOption('2 seconds'),
+        );
+        if (opening._tag === 'None') {
+          yield* Deferred.succeed(release, undefined);
+          yield* Fiber.interrupt(fiber);
+        }
+        expect(opening._tag).toBe('Some');
+        const stopping = yield* Effect.forkChild(Fiber.interrupt(fiber));
+        const cancelled = yield* Deferred.await(interrupted).pipe(
+          Effect.timeoutOption('2 seconds'),
+        );
+        yield* Deferred.succeed(release, undefined);
+        yield* Fiber.join(stopping);
+        expect(cancelled._tag).toBe('Some');
+        expect(detach).toHaveBeenCalledTimes(1);
+        const state = yield* session.ledger.load(runId).pipe(Effect.orDie);
+        expect(state?.phase ?? null).toBeNull();
+        const lease = session.followUps.claimLive(runId, 'flow');
+        expect(lease).not.toBeNull();
+        if (lease) session.followUps.release(lease, 'recoverable');
+      }).pipe(Effect.provide(NodeFileSystem.layer)),
+  );
+
   // The loop registers the flow context on the run handle and may interrupt
   // it in the same call. A throw anywhere after that first statement used to
   // strand the live context on the handle, because the pairing lived in the

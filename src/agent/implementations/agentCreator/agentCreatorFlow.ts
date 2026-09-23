@@ -26,6 +26,8 @@ import { isNonEmptyString } from '@utils/text/stringUtils';
 import { extractTextFromTag } from '@utils/text/xmlExtraction';
 import type { HttpClient } from 'effect/unstable/http';
 
+const CHANNEL = 'AgentCreator';
+
 // ── Template parsing ────────────────────────────────────────
 //
 // Parses the bundled agent-creator YAML templates and assembles the
@@ -59,6 +61,7 @@ type AgentPromptPair = z.infer<typeof ParsedCreatorYamlSchema>['prompts'];
 export interface CreatorConfig {
   workflow: AgentPromptPair;
   toolUse: AgentPromptPair;
+  retryPrompt: string;
   templates: {
     workflowSingle: string;
     toolUse: string;
@@ -101,6 +104,7 @@ export function buildCreatorConfig(files: CreatorTemplateFiles): CreatorConfig {
   return {
     workflow: wf.prompts,
     toolUse: tu.prompts,
+    retryPrompt: RETRY_PROMPT,
     templates: {
       workflowSingle: files.workflowSingle,
       toolUse: files.toolUseTpl,
@@ -330,22 +334,16 @@ function getSchemaReference(category: AgentCategory): string {
 }
 
 function buildSchemaRef(settingsSchema: z.ZodObject<z.ZodRawShape>): string {
+  const json = (schema: z.ZodType) =>
+    JSON.stringify(z.toJSONSchema(schema, TOOL_JSON_SCHEMA_OPTIONS), null, 2);
   return [
     '## Agent YAML Schema (JSON Schema)',
     '',
     '### settings',
-    JSON.stringify(
-      z.toJSONSchema(settingsSchema, TOOL_JSON_SCHEMA_OPTIONS),
-      null,
-      2,
-    ),
+    json(settingsSchema),
     '',
     '### prompts',
-    JSON.stringify(
-      z.toJSONSchema(AgentPromptSchema, TOOL_JSON_SCHEMA_OPTIONS),
-      null,
-      2,
-    ),
+    json(AgentPromptSchema),
   ].join('\n');
 }
 
@@ -407,7 +405,7 @@ const generateAgentYaml = Effect.fn('agentCreator.generateYaml')(function* (
   blueprint: AgentBlueprint,
   ui: AgentCreatorUI,
   stores: ModelOptionStores,
-): Effect.fn.Return<string, unknown, LanguageModel | HttpClient.HttpClient> {
+): Effect.fn.Return<string, Error, LanguageModel | HttpClient.HttpClient> {
   let lastValidationError: string | undefined;
 
   const attempt = Effect.gen(function* () {
@@ -427,7 +425,7 @@ const generateAgentYaml = Effect.fn('agentCreator.generateYaml')(function* (
     if (lastValidationError) {
       userMessage +=
         '\n' +
-        renderAgentTemplateString(RETRY_PROMPT, {
+        renderAgentTemplateString(config.retryPrompt, {
           VALIDATION_ERROR: lastValidationError,
         });
     }
@@ -452,7 +450,7 @@ const generateAgentYaml = Effect.fn('agentCreator.generateYaml')(function* (
 
     yield* Effect.logInfo(
       `AI generation succeeded for ${blueprint.category} agent`,
-    ).pipe(withLogChannel('AgentCreator'));
+    ).pipe(withLogChannel(CHANNEL));
     return candidate;
   }).pipe(Effect.scoped);
 
@@ -461,7 +459,7 @@ const generateAgentYaml = Effect.fn('agentCreator.generateYaml')(function* (
     Effect.tapError((error) =>
       Effect.logWarning(
         `AI generation failed, using template: ${toErrorMessage(error)}`,
-      ).pipe(withLogChannel('AgentCreator')),
+      ).pipe(withLogChannel(CHANNEL)),
     ),
     // Route through the shared renderer so both the Settings "new from
     // template" flow and this fallback produce byte-identical output for
@@ -497,7 +495,7 @@ export const runAgentCreator = Effect.fn('runAgentCreator')(function* (
   stores: ModelOptionStores,
 ): Effect.fn.Return<
   void,
-  unknown,
+  Error,
   | FileSystem.FileSystem
   | GlobalStorageFs
   | LanguageModel

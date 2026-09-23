@@ -85,9 +85,9 @@ async function installPlatform(
   );
 }
 
-// The write side of both views the edit flow reaches now that the
-// `WorkspaceFS` facade is gone: an absolute path writes through the process
-// filesystem, a workspace-relative one through the session's rooted view. One
+// The write side of both views the edit flow reaches: an absolute path writes
+// through the process `FileSystem`, a workspace-relative one through the
+// session's rooted `WorkspaceFs` view. One
 // recorder serves both, so a case asserts on what was applied either way.
 const workspaceWrites = vi.fn<(target: string, content: string) => void>();
 // The workspace-relative half of the read side, which no real directory backs.
@@ -282,7 +282,6 @@ describe('Tool edit approval gating', () => {
 
       assert.strictEqual(write.mock.lastCall?.[1], 'reviewed content');
       assert.match(result.output ?? '', /User adjustments to doc\.txt/);
-      assert.ok(result.userPatch);
       assert.strictEqual(result.edits?.[0]?.path, 'doc.txt');
       assert.strictEqual(result.edits?.[0]?.startLine, 1);
     }),

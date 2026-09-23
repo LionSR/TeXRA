@@ -73,18 +73,18 @@ export function createAgentResponseTextConnector(
       Effect.provideService(LanguageModel, languageModel),
       Effect.scoped,
       Effect.catch((err) => {
-        if (err instanceof HelperModelUnavailable) {
-          return Effect.logDebug(
-            `Skipping connector helper call: ${err.message}`,
-          ).pipe(withLogChannel(CHANNEL), Effect.as(DEFAULT_CONNECTOR));
-        }
-        const write =
-          classifyAgentError(err) === 'missing-api-key'
-            ? Effect.logDebug
-            : Effect.logError;
-        return write(
-          `Error resolving text connector: ${getSdkErrorMessage(err)}`,
-        ).pipe(withLogChannel(CHANNEL), Effect.as(DEFAULT_CONNECTOR));
+        const logged =
+          err instanceof HelperModelUnavailable
+            ? Effect.logDebug(`Skipping connector helper call: ${err.message}`)
+            : (classifyAgentError(err) === 'missing-api-key'
+                ? Effect.logDebug
+                : Effect.logError)(
+                `Error resolving text connector: ${getSdkErrorMessage(err)}`,
+              );
+        return logged.pipe(
+          withLogChannel(CHANNEL),
+          Effect.as(DEFAULT_CONNECTOR),
+        );
       }),
     );
 }

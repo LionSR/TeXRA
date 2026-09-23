@@ -51,12 +51,13 @@ import {
   modelInvokerLayer,
   type InvokeRequest,
 } from '@agent/runtime/ModelInvoker';
+import { makeRunCell } from '@agent/runtime/loop/runProgram';
 import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
 import type { BoundModel } from '@agent/runtime/run/modelBinding';
 import { classifyModelFailure } from '@agent/runtime/run/modelFailure';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { UsageMonitor } from '@agent/runtime/UsageMonitor';
-import { noopTrace, TraceEmitter, type AgentTrace } from '@agent/trace';
+import { TraceEmitter, type AgentTrace } from '@agent/trace';
 import { attachContextWindowError } from '@common/errors/sdkError/errorMetadata';
 import {
   LanguageModel,
@@ -64,7 +65,7 @@ import {
 } from '@platform/languageModel';
 import {
   AgentCategory,
-  AgentRunStateSnapshotSchema,
+  EMPTY_RUN_USAGE_TOTALS,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
   RUN_PHASE,
   type RunId,
@@ -75,6 +76,7 @@ import {
 } from '@shared/session/database';
 import { RunLedger, RunLedgerRefused } from '@shared/session/runLedger';
 import type { RunState } from '@shared/session/runStateFold';
+import { noopTrace } from '@test/support/noopTrace';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
@@ -334,17 +336,18 @@ const freshState = (): RunState => ({
   requests: {},
   followUps: [],
   followUpIds: new Set(),
-  usage: AgentRunStateSnapshotSchema.parse({}).usageAccumulator.totals,
+  usage: EMPTY_RUN_USAGE_TOTALS,
   flow: null,
   roundOutputs: [],
+  overflowRecoveredAtRound: null,
 });
 
 interface InvokerKit {
   readonly runId: RunId;
   /** The folded state of the freshly opened run. */
   readonly state: RunState;
-  /** `ModelInvoker` over this run's ledger, with nothing left to provide. */
-  readonly layer: Layer.Layer<ModelInvoker>;
+  /** `ModelInvoker` and this run's ledger, with nothing left to provide. */
+  readonly layer: Layer.Layer<ModelInvoker | RunLedger>;
 }
 
 /**
@@ -370,24 +373,27 @@ const openRun = Effect.fn('openRun')(function* (
     ]),
     snapshotRow(runId, freshState(), {
       phase: 'initial',
-      state: { shouldSkipCycle: false, stateSlices: null },
+      state: {
+        family: 'toolUse',
+        state: { stateSlices: null },
+      },
     }),
   ]);
   const bound = yield* SynchronizedRef.make(boundModel(model, overrides));
   const layer = modelInvokerLayer().pipe(
-    Layer.provide([
+    Layer.provide(
       Layer.succeed(AgentRun, agentRun(runId, session, logger, bound)),
-      Layer.succeed(RunLedger, session.ledger),
-    ]),
+    ),
+    Layer.merge(Layer.succeed(RunLedger, session.ledger)),
   );
   return { runId, state, layer };
 });
 
 /** One invocation on an opened run. */
-const invokeOn = ({ layer, state }: InvokerKit) =>
+const invokeOn = ({ layer, runId, state }: InvokerKit) =>
   Effect.gen(function* () {
     const invoker = yield* ModelInvoker;
-    return yield* invoker.invoke(state, REQUEST);
+    return yield* invoker.invoke(yield* makeRunCell(runId, state), REQUEST);
   }).pipe(
     // `invoke`'s debug-object sink writes through the process `FileSystem`;
     // this suite runs on `it.effect`'s own runtime, so the service comes from

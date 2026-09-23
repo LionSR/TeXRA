@@ -15,24 +15,6 @@ import { INSTRUCTION_PREFIX } from '@shared/state/stateKeys';
 const NEVER_REMIND = 'Never remind again';
 const CHANNEL = 'instruction';
 
-function handleInstructionChoice(
-  store: StateStore,
-  stateKey: string,
-  showSuppress: boolean,
-  actions: { title: string; callback: () => Effect.Effect<void> }[],
-  choice: string | undefined,
-): Effect.Effect<void, StateWriteFailed> {
-  if (!choice) return Effect.void;
-  // The dismissal write is the caller's own program: this prompt runs on
-  // whichever runtime settles the Effect, so there is no runtime to look up
-  // and no unpersistable choice to report.
-  if (showSuppress && choice === NEVER_REMIND) {
-    return store.update(stateKey, true);
-  }
-  const action = actions.find((a) => a.title === choice);
-  return action === undefined ? Effect.void : action.callback();
-}
-
 /** Show an instruction message that can be permanently dismissed. */
 export function showInstructionWithSuppress(
   store: StateStore,
@@ -56,9 +38,17 @@ export function showInstructionWithSuppress(
     // VS Code has accepted the dialog, not once the user dismisses it.
     const prompt = vscode.window.showInformationMessage(message, ...buttons);
     const settle = Effect.promise(() => Promise.resolve(prompt)).pipe(
-      Effect.flatMap((choice) =>
-        handleInstructionChoice(store, stateKey, showSuppress, actions, choice),
-      ),
+      Effect.flatMap((choice): Effect.Effect<void, StateWriteFailed> => {
+        if (!choice) return Effect.void;
+        // The dismissal write is the caller's own program: this prompt runs
+        // on whichever runtime settles the Effect, so there is no runtime to
+        // look up and no unpersistable choice to report.
+        if (showSuppress && choice === NEVER_REMIND) {
+          return store.update(stateKey, true);
+        }
+        const action = actions.find((a) => a.title === choice);
+        return action === undefined ? Effect.void : action.callback();
+      }),
     );
 
     if (!options.deferDismissal) return yield* settle;

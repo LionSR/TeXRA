@@ -205,7 +205,7 @@ export class WebFetchTool extends defineTool({
     },
   );
 
-  protected execute(input: WebFetchInput): Effect.Effect<ToolResult, unknown> {
+  protected execute(input: WebFetchInput): Effect.Effect<ToolResult, Error> {
     // The owning agent run's cancellation enters here as interruption —
     // without it, a cancelled run would wait out fetches (and their retries)
     // that only observe the internal timeout.

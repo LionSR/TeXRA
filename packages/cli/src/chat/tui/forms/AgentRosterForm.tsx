@@ -138,7 +138,7 @@ export function AgentRosterForm(
    *  that program, so one `runPromise` settles the pair and no promise-level
    *  catch has to stand in for the fold. */
   const write = (
-    action: () => Effect.Effect<void, unknown, ProcessServices>,
+    action: () => Effect.Effect<void, Error, ProcessServices>,
     nextMode = mode,
   ): void => {
     void props.runtime.runPromise(

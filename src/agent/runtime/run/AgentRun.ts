@@ -20,10 +20,7 @@ import type {
 } from '@agent/runtime/ToolServices';
 import type { AgentTrace, StageHandle } from '@agent/trace';
 import { resolveAgentTools } from '@agent/runtime/agentToolResolution';
-import {
-  NO_TOOL_INJECTIONS,
-  ToolInjections,
-} from '@agent/runtime/toolInjection';
+import { AGENT_TOOL_INJECTIONS } from '@agent/runtime/toolInjection';
 import type { UsageMonitor } from '@agent/runtime/UsageMonitor';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import { resolveRuntimeModelConfig } from '@model/runtimeModelRegistry';
@@ -40,11 +37,8 @@ import {
 } from '@shared/schemas';
 import { RunLedger } from '@shared/session/runLedger';
 import type { RunState } from '@shared/session/runStateFold';
-import { getDefaultToolRegistry } from '@tools/registry';
-import {
-  buildOverlayToolRegistry,
-  buildTerminalTool,
-} from '@tools/structuredOutput';
+import { buildTerminalTool } from '@tools/structuredOutput';
+import { processToolHost } from '@utils/config/platformSettings';
 import { ensureError } from '@utils/errors/errorMessage';
 import { RunFileService } from '@utils/files/runStorage';
 
@@ -74,8 +68,6 @@ function launchDeclinedRoutes(
 export interface ToolPolicy {
   /** Hide tools whose approval prompts cannot be answered in this host mode. */
   readonly approvalPromptsUnavailable?: boolean;
-  /** Hide tools unavailable because the current host/runtime cannot support them. */
-  readonly runtimeUnavailableTools?: readonly string[];
   /** Stop a tool-use run after one model/tool cycle instead of waiting. */
   readonly stopAfterCycle?: boolean;
 }
@@ -176,7 +168,7 @@ export const agentRunLayer = (
 ): Layer.Layer<
   AgentRun,
   Error,
-  RunLedger | LanguageModel | HttpClient.HttpClient | ToolInjections
+  RunLedger | LanguageModel | HttpClient.HttpClient
 > =>
   Layer.effect(
     AgentRun,
@@ -190,75 +182,44 @@ export const agentRunLayer = (
       // its own deadline rather than one after another.
       const scope = yield* Scope.fork(layerScope, 'parallel');
 
-      const baseRegistry = getDefaultToolRegistry();
       const { setting } = ctx;
-      // The process's conditional injections, read here rather than threaded
-      // through the launch. The reflection family injects none (memory and
-      // plan are tool-use infrastructure), so its run resolves tools from an
-      // empty list.
-      const injected = yield* ToolInjections;
-      const toolInjections =
-        setting.agentCategory === AgentCategory.ToolUse
-          ? injected
-          : NO_TOOL_INJECTIONS;
-      const resolvedTools = yield* resolveAgentTools({
-        tools: setting.tools,
-        registry: baseRegistry,
-        logger,
-        approvalPromptsUnavailable: ctx.toolPolicy.approvalPromptsUnavailable,
-        runtimeUnavailableTools: ctx.toolPolicy.runtimeUnavailableTools,
-        toolInjections,
-        stores: ctx.stores,
-        delegationScope: ctx.delegationAgentScope ?? undefined,
-      });
-      const overlayTools: ITool[] = [];
-      const overlayNames = new Set<string>();
-      const appendOverlayTool = (tool: ITool): void => {
-        const { name } = tool.definition;
-        const definitionIndex = resolvedTools.findIndex(
-          (definition) => definition.name === name,
-        );
-        if (
-          overlayNames.has(name) ||
-          baseRegistry.has(name) ||
-          definitionIndex !== -1
-        ) {
-          logger.warn(`Run-scoped tool "${name}" shadows an existing tool.`);
-        }
-        overlayNames.add(name);
-        const definition = { ...tool.definition, forceFunctionCall: true };
-        if (definitionIndex === -1) {
-          resolvedTools.push(definition);
-        } else {
-          resolvedTools[definitionIndex] = definition;
-        }
-        overlayTools.push(tool);
-      };
-      for (const tool of input.tools ?? []) appendOverlayTool(tool);
 
       // Unforced structured-output floor: when the config declares an output
-      // schema, a synthetic `submit_output` terminal tool joins the model
-      // facing list. The model finishes by calling it; its own Zod schema
+      // schema, a synthetic `submit_output` terminal tool joins the run's own
+      // tools. The model finishes by calling it; its own Zod schema
       // validates the call and `capture` records the value into the run's
       // slot, which the loop reads at exit.
       const structured: { value: JsonValue | undefined } = {
         value: undefined,
       };
-      let finalToolName: string | null = null;
       const outputSchema =
         config.agentCategory === AgentCategory.ToolUse
           ? config.outputSchema
           : undefined;
-      if (outputSchema) {
-        const terminalTool = buildTerminalTool(outputSchema, (value) => {
-          structured.value = value;
-        });
-        finalToolName = terminalTool.definition.name;
-        appendOverlayTool(terminalTool);
-      }
-      const tools = overlayTools.length
-        ? buildOverlayToolRegistry(baseRegistry, overlayTools)
-        : baseRegistry;
+      const terminalTool = outputSchema
+        ? buildTerminalTool(outputSchema, (value) => {
+            structured.value = value;
+          })
+        : undefined;
+      const finalToolName = terminalTool?.definition.name ?? null;
+      const { definitions, registry: tools } = yield* resolveAgentTools({
+        tools: setting.tools,
+        logger,
+        approvalPromptsUnavailable: ctx.toolPolicy.approvalPromptsUnavailable,
+        host: processToolHost(),
+        runTools: terminalTool
+          ? [...(input.tools ?? []), terminalTool]
+          : input.tools,
+        // The reflection family injects none: memory and plan are tool-use
+        // infrastructure.
+        toolInjections:
+          setting.agentCategory === AgentCategory.ToolUse
+            ? AGENT_TOOL_INJECTIONS
+            : [],
+        stores: ctx.stores,
+        workspaceRoot: session.roots.workspace,
+        delegationScope: ctx.delegationAgentScope ?? undefined,
+      });
 
       // The model of a resumed run is the one its latest snapshot names; a
       // fresh run binds the launch model under the route the launch context
@@ -301,7 +262,7 @@ export const agentRunLayer = (
         runId,
         session,
         config,
-        setting: { ...setting, tools: resolvedTools },
+        setting: { ...setting, tools: definitions },
         prompt: ctx.prompt,
         logger,
         parentStage: ctx.parentStage,

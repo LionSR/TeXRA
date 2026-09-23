@@ -35,19 +35,12 @@ import type { AgentEntry } from './agentEntry';
 const CHANNEL = 'agentRegistry';
 
 /** Resolving an agent directory failed (I/O or a rejected configured path). */
-class AgentCatalogLoadError extends Data.TaggedError(
+export class AgentCatalogLoadError extends Data.TaggedError(
   'AgentCatalogLoadError',
 )<{
   readonly message: string;
   readonly cause?: unknown;
 }> {}
-
-/** A catalog load: the failures and the services a directory scan reads. */
-type CatalogLoad<A> = Effect.Effect<
-  A,
-  AgentCatalogLoadError | StateReadFailed,
-  GlobalStorageFs | FileSystem.FileSystem | AgentDirectories
->;
 
 /**
  * Source priority for lookups (higher priority first). Every source must be
@@ -108,6 +101,13 @@ export interface LoadAgentsOptions {
   includeRemote?: boolean;
 }
 
+/**
+ * On {@link refresh}, `includeRemote: true` refetches remote metadata and
+ * `false` drops it. Omitted, it rescans only the local directories and keeps
+ * the remote entries the catalog already holds: a local edit costs no network.
+ */
+type RemoteMode = boolean | undefined;
+
 // =============================================================================
 // CORE API
 // =============================================================================
@@ -117,7 +117,13 @@ export interface LoadAgentsOptions {
  * Concurrent calls join the in-flight load through the lane and re-check what
  * it published, so only one scan runs.
  */
-export function loadAgents(options: LoadAgentsOptions = {}): CatalogLoad<void> {
+export function loadAgents(
+  options: LoadAgentsOptions = {},
+): Effect.Effect<
+  void,
+  AgentCatalogLoadError | StateReadFailed,
+  GlobalStorageFs | FileSystem.FileSystem | AgentDirectories
+> {
   const includeRemote = options.includeRemote ?? true;
   return onCatalogLoadLane(
     Effect.suspend(() =>
@@ -134,24 +140,15 @@ export function loadAgents(options: LoadAgentsOptions = {}): CatalogLoad<void> {
  * own caller — the lane hands the next entrant off regardless.
  */
 function queueLoad(
-  includeRemote: boolean,
+  includeRemote: RemoteMode,
   loadEpoch: number,
-): CatalogLoad<void> {
-  return Effect.suspend(() => {
-    if (loadEpoch !== epoch) return Effect.void;
-    return doLoad(includeRemote, loadEpoch).pipe(
-      Effect.map((loaded) => {
-        if (loaded) catalog = { includesRemote: includeRemote };
-      }),
-    );
-  });
-}
-
-function doLoad(
-  includeRemote: boolean,
-  loadEpoch: number,
-): CatalogLoad<boolean> {
+): Effect.Effect<
+  void,
+  AgentCatalogLoadError | StateReadFailed,
+  GlobalStorageFs | FileSystem.FileSystem | AgentDirectories
+> {
   return Effect.gen(function* () {
+    if (loadEpoch !== epoch) return;
     const startTime = Date.now();
 
     // Load from all sources in parallel
@@ -194,18 +191,26 @@ function doLoad(
       ...remoteEntries,
     ];
 
-    if (loadEpoch !== epoch) return false;
+    if (loadEpoch !== epoch) return;
 
+    // Carried-over remote entries are read at publish time, after every older
+    // load and any sign-out removal have settled.
+    const keptRemote =
+      includeRemote === undefined
+        ? [...cache.values()].filter((entry) => entry.source === 'remote')
+        : [];
     cache.clear();
     customScanIssues = Object.freeze(customScan.issues);
-    for (const entry of allEntries) {
+    for (const entry of [...allEntries, ...keptRemote]) {
       cache.set(agentKeyOf(entry), entry);
     }
+    catalog = {
+      includesRemote: includeRemote ?? catalog?.includesRemote ?? false,
+    };
 
     yield* Effect.logInfo(
       `Loaded ${cache.size} agents in ${Date.now() - startTime}ms`,
     ).pipe(withLogChannel(CHANNEL));
-    return true;
   });
 }
 
@@ -280,14 +285,21 @@ export function getCustomAgentScanIssues(): readonly AgentScanIssue[] {
  * still queued from before. The cache keeps serving the catalog it already
  * published until the new one lands, including when the refresh fails. The
  * epoch advances only once the refresh actually starts, so constructing a
- * refresh without running it is inert.
+ * refresh without running it is inert. An omitted `includeRemote` means a
+ * local rescan here, unlike {@link loadAgents} (see {@link RemoteMode}).
  */
-export function refresh(options: LoadAgentsOptions = {}): CatalogLoad<void> {
+export function refresh(
+  options: LoadAgentsOptions = {},
+): Effect.Effect<
+  void,
+  AgentCatalogLoadError | StateReadFailed,
+  GlobalStorageFs | FileSystem.FileSystem | AgentDirectories
+> {
   return Effect.suspend(() => {
-    const loadEpoch = ++epoch;
-    return onCatalogLoadLane(
-      queueLoad(options.includeRemote ?? true, loadEpoch),
-    );
+    // A local rescan is weaker than the loads queued before it, so it takes
+    // the current epoch instead of superseding a pending remote refetch.
+    const loadEpoch = options.includeRemote === undefined ? epoch : ++epoch;
+    return onCatalogLoadLane(queueLoad(options.includeRemote, loadEpoch));
   });
 }
 
@@ -310,17 +322,14 @@ export function invalidateRemoteAgentsAfterSignOut(): Effect.Effect<
     removeRemoteEntries();
     return refresh({ includeRemote: false });
   }).pipe(
-    Effect.catch((error: AgentCatalogLoadError | StateReadFailed) =>
-      Effect.gen(function* () {
-        // An older in-flight remote load may have settled before the rebuild.
-        // Preserve the signed-out invariant even when local directory I/O fails.
-        removeRemoteEntries();
-        yield* Effect.logWarning(
-          `Local agent catalog rebuild failed after sign-out: ${error.message}`,
-        );
-      }),
-    ),
-    withLogChannel(CHANNEL),
+    Effect.catch((error: AgentCatalogLoadError | StateReadFailed) => {
+      // An older in-flight remote load may have settled before the rebuild.
+      // Preserve the signed-out invariant even when local directory I/O fails.
+      removeRemoteEntries();
+      return Effect.logWarning(
+        `Local agent catalog rebuild failed after sign-out: ${error.message}`,
+      ).pipe(withLogChannel(CHANNEL));
+    }),
   );
 }
 
@@ -584,7 +593,11 @@ function sortAgentEntries(
  */
 export function computeAgentOptionsData(
   stores: AgentRosterStores,
-): CatalogLoad<AgentOptionsDataPayload> {
+): Effect.Effect<
+  AgentOptionsDataPayload,
+  AgentCatalogLoadError | StateReadFailed,
+  GlobalStorageFs | FileSystem.FileSystem | AgentDirectories
+> {
   return Effect.gen(function* () {
     yield* loadAgents();
     return {

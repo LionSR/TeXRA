@@ -88,7 +88,7 @@ describe('AgentRosterController', () => {
             'malformed roster selection',
           ),
         ).toBe(true);
-      }).pipe(Effect.provide(effectDiagnosticsLayer('Info'))),
+      }).pipe(Effect.provide(effectDiagnosticsLayer('Trace'))),
   );
 
   it.effect('uses the user default only for inherited workspaces', () =>

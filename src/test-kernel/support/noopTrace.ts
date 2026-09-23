@@ -1,16 +1,15 @@
 /**
- * No-op AgentTrace. Used as the default for SDK consumers who don't
- * subscribe to the run's event stream.
+ * No-op AgentTrace for suites whose code under test takes a trace they do
+ * not assert on.
  */
-import type { RunOutcome } from '@shared/schemas';
-import { generateShortId } from '@utils/core';
-
 import type {
   AgentTrace,
   StageHandle,
   StageOptions,
   StreamHandle,
-} from './AgentTrace';
+} from '@agent/trace/AgentTrace';
+import type { RunOutcome } from '@shared/schemas';
+import { generateShortId } from '@utils/core';
 
 const NOOP: () => void = () => undefined;
 

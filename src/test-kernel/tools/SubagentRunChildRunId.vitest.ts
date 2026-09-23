@@ -8,9 +8,9 @@ import { beforeEach, describe, expect, vi } from 'vitest';
 
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { FileInteractionState } from '@agent/core/state/AgentWorkspaceState';
-import { noopTrace } from '@agent/trace';
 import { Runs } from '@agent/runtime/runRegistry';
 import type { RunId } from '@shared/schemas';
+import { noopTrace } from '@test/support/noopTrace';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import { testRunRegistry } from '@test/support/runHandleFixtures';
 import { fakeProcessServices } from '@test/support/setupPlatform';
@@ -92,7 +92,6 @@ describe('executeSubagent child run launch', () => {
       logger: noopTrace,
       toolPolicy: {
         approvalPromptsUnavailable: false,
-        runtimeUnavailableTools: [],
       },
     },
   };

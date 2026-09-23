@@ -264,7 +264,7 @@ export function createHostSnapshotSource(
    *  its last value, and the snapshot still publishes what the others read,
    *  so a single unavailable source never leaves the shell blank. */
   const guarded = <R>(
-    ...loads: Effect.Effect<void, unknown, R>[]
+    ...loads: Effect.Effect<void, Error, R>[]
   ): Effect.Effect<void, never, R> =>
     Effect.gen(function* () {
       const settled = yield* Effect.forEach(
@@ -330,10 +330,10 @@ export function createHostSnapshotSource(
       });
     },
     setOnboarding: (state) =>
-      Effect.sync(() => {
-        if (state === onboarding) return false;
+      Effect.suspend(() => {
+        if (state === onboarding) return Effect.void;
         onboarding = state;
-        return true;
-      }).pipe(Effect.flatMap((changed) => (changed ? publish : Effect.void))),
+        return publish;
+      }),
   };
 }

@@ -7,7 +7,6 @@ import {
 } from '@agent/runtime/runClassification';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { withLogChannel } from '@logger/effectLog';
-import { createLog } from '@logger/logUtils';
 import { AgentResume } from '@platform/interfaces';
 import { ownerPid, type RunId } from '@shared/schemas';
 import {
@@ -104,7 +103,6 @@ export function presentFollowUpResult(
 }
 
 const CHANNEL = 'ToolUseFollowUp';
-const logger = createLog(CHANNEL);
 
 export function notifyFollowUpSent(runId: RunId, session: SessionHandle): void {
   session.followUps.notifySent(runId);
@@ -135,11 +133,14 @@ export function startFollowUpWake(
     // success path releases it in the `tap` above unless the host accepted the
     // resume, in which case the resumed run owns it.
     Effect.catch((error) =>
-      Effect.sync(() => {
-        logger.warn(`Resume attempt failed for run ${runId}`, { data: error });
-        session.followUps.release(recovery, 'recoverable');
-        return false;
-      }),
+      Effect.logWarning(`Resume attempt failed for run ${runId}`).pipe(
+        Effect.annotateLogs({ data: error }),
+        withLogChannel(CHANNEL),
+        Effect.map(() => {
+          session.followUps.release(recovery, 'recoverable');
+          return false;
+        }),
+      ),
     ),
   );
 }

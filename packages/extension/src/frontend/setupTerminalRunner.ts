@@ -28,6 +28,7 @@ import {
   type TerminalRunRequest,
   type TerminalRunResult,
 } from '@hosts/uiHosts';
+import { ensureError } from '@utils/errors/errorMessage';
 
 import { firstEventOrTimeout } from './vscode/vscodeEventWait';
 
@@ -207,8 +208,8 @@ function truncateTerminalOutput(output: string): string {
 function drainStreamTail(
   stream: AsyncIterable<string>,
   maxChars: number,
-): Effect.Effect<string, unknown> {
-  return Stream.fromAsyncIterable(stream, (cause) => cause).pipe(
+): Effect.Effect<string, Error> {
+  return Stream.fromAsyncIterable(stream, ensureError).pipe(
     Stream.runFold(
       () => '',
       (buf: string, chunk: string) => {

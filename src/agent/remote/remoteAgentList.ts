@@ -19,7 +19,6 @@ import { SUPABASE_CONFIG } from '@auth/config';
 import { SupabaseAuth } from '@auth/SupabaseAuth';
 import { parseJsonWith } from '@common/parsing/safeParseJson';
 import { withLogChannel } from '@logger/effectLog';
-import { createLog } from '@logger/logUtils';
 import { filterNotNull } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -31,7 +30,6 @@ import {
 import { RemoteAgentListItemSchema, type RemoteAgentListItem } from './types';
 
 export const CHANNEL = 'RemoteAgentLoader';
-const log = createLog(CHANNEL);
 
 const REMOTE_AGENT_LIST_COLUMNS =
   'id, name, description, tools, agent_category';
@@ -57,7 +55,9 @@ type RemoteAgentListQueryResult = {
 };
 
 /** Parse DB row to RemoteAgentListItem, returning null on validation failure. */
-function parseListItemRow(row: RemoteAgentListRow): RemoteAgentListItem | null {
+function parseListItemRow(
+  row: RemoteAgentListRow,
+): Effect.Effect<RemoteAgentListItem | null> {
   const result = RemoteAgentListItemSchema.safeParse({
     id: row.id,
     name: row.name,
@@ -67,13 +67,12 @@ function parseListItemRow(row: RemoteAgentListRow): RemoteAgentListItem | null {
   });
 
   if (!result.success) {
-    log.warn(
+    return Effect.logWarning(
       `Invalid metadata for agent "${row.name}": ${z.prettifyError(result.error)}`,
-    );
-    return null;
+    ).pipe(withLogChannel(CHANNEL), Effect.as(null));
   }
 
-  return result.data;
+  return Effect.succeed(result.data);
 }
 
 /**
@@ -100,7 +99,8 @@ export function listRemoteAgents(): Effect.Effect<RemoteAgentListItem[]> {
       });
     }
 
-    return (data ?? []).map(parseListItemRow).filter(filterNotNull);
+    const items = yield* Effect.forEach(data ?? [], parseListItemRow);
+    return items.filter(filterNotNull);
   }).pipe(
     Effect.catch((error: RemoteAgentListError) =>
       Effect.logWarning(`Error listing remote agents: ${error.message}`).pipe(

@@ -122,7 +122,7 @@ export class ReadFileTool extends defineTool({
     input: ReadInput,
   ): Effect.fn.Return<
     ToolResult,
-    unknown,
+    Error,
     ToolCall | Scope.Scope | FileSystem.FileSystem
   > {
     const call = yield* ToolCall;
@@ -159,7 +159,7 @@ export class ReadFileTool extends defineTool({
     // The resolution already entered the call's workspace frame, so the
     // absolute path it produced is what the process filesystem reads: a
     // workspace file and one under a registered external root are the same
-    // read here, as they were through the `WorkspaceFS` facade.
+    // read here, through the process `FileSystem`.
     const fs = yield* FileSystem.FileSystem;
 
     if (hasExtension(input.path, '.eml')) {
@@ -254,7 +254,7 @@ export class ReadFileTool extends defineTool({
     input: ReadInput,
     kind: AttachmentKind,
     resolved: WorkspacePathResolution,
-  ): Effect.fn.Return<ToolResult, unknown, ToolCall | FileSystem.FileSystem> {
+  ): Effect.fn.Return<ToolResult, Error, ToolCall | FileSystem.FileSystem> {
     const copy = ATTACHMENT_COPY[kind];
     const attachment = yield* buildFileAttachment({
       filePath: resolved.fsPath,

@@ -1,5 +1,5 @@
 import { it } from '@effect/vitest';
-import { Deferred, Effect, Fiber } from 'effect';
+import { Deferred, Effect, Exit, Fiber } from 'effect';
 import { describe, expect, vi } from 'vitest';
 
 import { parseWorkflowScript } from '@agent/workflowScript/parseScript';
@@ -13,10 +13,12 @@ import type {
 } from '@agent/workflowScript/types';
 import { runWorkflowScript } from '@agent/workflowScript/runWorkflowScript';
 import { WORKFLOW_SKIPPED_RESULT } from '@agent/workflowScript/types';
-import { runScriptInSandbox } from '@agent/workflowScript/sandbox';
+import {
+  runScriptInSandbox,
+  type SandboxHostBridge,
+} from '@agent/workflowScript/sandbox';
 import type { RunId, WorkflowCallProgress } from '@shared/schemas';
 import { WORKFLOW_CALL_UNFINISHED_NOTE } from '@ui/copy/workflowCall';
-import { ensureError } from '@utils/errors/errorMessage';
 
 const META = `export const meta = {
   name: 'test-flow',
@@ -104,9 +106,6 @@ function expectEffect<A, E, R>(effect: Effect.Effect<A, E, R>) {
 const sleep = (milliseconds: number): Effect.Effect<void> =>
   Effect.sleep(milliseconds);
 
-const fromPromise = <A>(promise: () => Promise<A>): Effect.Effect<A, Error> =>
-  Effect.tryPromise({ try: promise, catch: ensureError });
-
 /**
  * The child run id one attempt runs under. Interactive control is keyed
  * by the id the runner reports, so a fake runner announces one per attempt
@@ -118,9 +117,9 @@ function childRunIdFor(index: number, attempt = 1): RunId {
 
 const EMPTY_FILES_JSON = '{"inputFiles":[],"contextFiles":[],"mediaFiles":[]}';
 
-type SandboxBridge = Parameters<typeof runScriptInSandbox>[1];
-
-function sandboxBridge(overrides: Partial<SandboxBridge> = {}): SandboxBridge {
+function sandboxBridge(
+  overrides: Partial<SandboxHostBridge> = {},
+): SandboxHostBridge {
   return {
     asyncFns: {},
     syncFns: {},
@@ -1653,25 +1652,20 @@ return 'delivered'`);
     'does not time out a delivered result while preempting leftover work',
     () =>
       Effect.gen(function* () {
-        const onTimeout = vi.fn();
-        const result = yield* fromPromise(() =>
-          runScriptInSandbox(
-            `
+        const result = yield* runScriptInSandbox(
+          `
 Promise.resolve().then(() => {
   Promise.resolve().then(() => { while (true) {} })
 })
 return 'delivered'`,
-            sandboxBridge(),
-            {
-              filename: 'delivered-before-deadline.workflow.js',
-              timeoutMs: 40,
-              onTimeout,
-            },
-          ),
+          sandboxBridge(),
+          {
+            filename: 'delivered-before-deadline.workflow.js',
+            timeoutMs: 40,
+          },
         );
 
         expect(result).toBe('delivered');
-        expect(onTimeout).not.toHaveBeenCalled();
       }),
   );
 
@@ -1827,15 +1821,18 @@ return await parallel([
       const runner = (invocation: WorkflowAgentInvocation) =>
         Effect.gen(function* () {
           calls += 1;
-          invocation.signal.addEventListener('abort', () => {
-            sawAbort = true;
-          });
           // Wide margin over timeoutMs: the timeout timer must fire before this
           // runner resolves even under heavy CI scheduler pressure, or the
           // orphaned continuation could reach agent('two') before the abort.
           yield* sleep(150);
           return invocation.prompt;
-        });
+        }).pipe(
+          Effect.onInterrupt(() =>
+            Effect.sync(() => {
+              sawAbort = true;
+            }),
+          ),
+        );
       yield* expectEffect(
         runScript(
           `
@@ -1847,6 +1844,7 @@ return await agent('two')`,
       // Let the orphaned continuation reach its second agent() call.
       yield* sleep(250);
       expect(calls).toBe(1);
+      expect(sawAbort).toBe(true);
       // The endless guest continuation can win before the sibling is admitted;
       // either way the workflow is preempted at its wall-clock boundary.
     }),
@@ -1922,29 +1920,23 @@ while (true) {}`,
     'ignores a host promise that settles after its runtime is disposed',
     () =>
       Effect.gen(function* () {
-        let resolveHost!: (payload: string) => void;
-        const hostResult = new Promise<string>((resolve) => {
-          resolveHost = resolve;
-        });
-        const onTimeout = vi.fn();
+        const hostResult = yield* Deferred.make<string>();
 
         yield* expectEffect(
-          fromPromise(() =>
-            runScriptInSandbox(
-              `await agent('slow'); return 'unreachable'`,
-              sandboxBridge({ asyncFns: { agent: () => hostResult } }),
-              {
-                filename: 'late-host-promise.workflow.js',
-                timeoutMs: 30,
-                onTimeout,
-              },
-            ),
+          runScriptInSandbox(
+            `await agent('slow'); return 'unreachable'`,
+            sandboxBridge({
+              asyncFns: { agent: () => Deferred.await(hostResult) },
+            }),
+            {
+              filename: 'late-host-promise.workflow.js',
+              timeoutMs: 30,
+            },
           ),
         ).rejects.toThrow(/timed out/);
 
-        resolveHost('"late"');
+        yield* Deferred.succeed(hostResult, '"late"');
         yield* sleep(0);
-        expect(onTimeout).toHaveBeenCalledTimes(1);
 
         const nextRun = yield* runScript(`return 7`);
         expect(nextRun.result).toBe(7);
@@ -1956,17 +1948,15 @@ while (true) {}`,
     () =>
       Effect.gen(function* () {
         yield* expectEffect(
-          fromPromise(() =>
-            runScriptInSandbox(
-              `return await agent('malformed')`,
-              sandboxBridge({
-                asyncFns: { agent: () => Promise.resolve('{') },
-              }),
-              {
-                filename: 'malformed-host-result.workflow.js',
-                timeoutMs: 1_000,
-              },
-            ),
+          runScriptInSandbox(
+            `return await agent('malformed')`,
+            sandboxBridge({
+              asyncFns: { agent: () => Effect.succeed('{') },
+            }),
+            {
+              filename: 'malformed-host-result.workflow.js',
+              timeoutMs: 1_000,
+            },
           ),
         ).rejects.toThrow(/expecting property name|JSON|unexpected end/i);
       }),
@@ -2014,12 +2004,10 @@ while (true) {}`,
   it.live('rejects malformed args JSON while installing the bridge', () =>
     Effect.gen(function* () {
       yield* expectEffect(
-        fromPromise(() =>
-          runScriptInSandbox(`return args`, sandboxBridge({ argsJson: '{' }), {
-            filename: 'malformed-args.workflow.js',
-            timeoutMs: 1_000,
-          }),
-        ),
+        runScriptInSandbox(`return args`, sandboxBridge({ argsJson: '{' }), {
+          filename: 'malformed-args.workflow.js',
+          timeoutMs: 1_000,
+        }),
       ).rejects.toThrow(/expecting property name|JSON|unexpected end/i);
     }),
   );
@@ -2070,15 +2058,16 @@ while (true) values.push(new Uint8Array(1024 * 1024))`,
   it.effect('aborts in-flight agents when the call cap trips', () =>
     Effect.gen(function* () {
       let sawAbort = false;
-      const runner = (invocation: WorkflowAgentInvocation) =>
-        Effect.gen(function* () {
-          invocation.signal.addEventListener('abort', () => {
-            sawAbort = true;
-          });
-          // Park until the cap trips: concurrency 4 admits the fourth permit in
-          // the same scheduler pass, so nothing here waits on a clock.
-          return yield* Effect.never;
-        });
+      // Park until the cap trips: concurrency 4 admits the fourth permit in
+      // the same scheduler pass, so nothing here waits on a clock.
+      const runner = () =>
+        Effect.never.pipe(
+          Effect.onInterrupt(() =>
+            Effect.sync(() => {
+              sawAbort = true;
+            }),
+          ),
+        );
       yield* expectEffect(
         runScript(
           `
@@ -2214,28 +2203,29 @@ return await parallel([() => agent('running'), () => agent('queued')])`,
       }),
   );
 
-  it.effect('aborts guest run and the active child from a parent signal', () =>
+  it.effect('interrupting the run stops the guest and the active child', () =>
     Effect.gen(function* () {
-      const controller = new AbortController();
-      const childSignalGate = yield* Deferred.make<AbortSignal>();
+      const childStarted = yield* Deferred.make<void>();
+      let childInterrupted = false;
       const runFiber = yield* runWorkflowScript({
         script: `${META}return await agent('wait')`,
-        signal: controller.signal,
-        runAgent: (invocation) =>
-          Deferred.succeed(childSignalGate, invocation.signal).pipe(
+        runAgent: () =>
+          Deferred.succeed(childStarted, undefined).pipe(
             Effect.andThen(Effect.never),
+            Effect.onInterrupt(() =>
+              Effect.sync(() => {
+                childInterrupted = true;
+              }),
+            ),
           ),
       }).pipe(Effect.forkChild);
-      const childSignal = yield* Deferred.await(childSignalGate);
-      expect(childSignal).toBeDefined();
+      yield* Deferred.await(childStarted);
 
-      controller.abort(new DOMException('parent stopped', 'AbortError'));
+      yield* Fiber.interrupt(runFiber);
+      const exit = yield* Fiber.await(runFiber);
 
-      yield* expectEffect(Fiber.join(runFiber)).rejects.toMatchObject({
-        name: 'AbortError',
-        message: 'parent stopped',
-      });
-      expect(childSignal.aborted).toBe(true);
+      expect(Exit.hasInterrupts(exit)).toBe(true);
+      expect(childInterrupted).toBe(true);
     }),
   );
 
@@ -2589,7 +2579,6 @@ return await parallel([() => agent('running'), () => agent('queued')])`,
       Effect.gen(function* () {
         const started = new Set<number>();
         const aborted = new Set<number>();
-        const parent = new AbortController();
         const gates = yield* Effect.all([
           Deferred.make<void>(),
           Deferred.make<void>(),
@@ -2597,16 +2586,15 @@ return await parallel([() => agent('running'), () => agent('queued')])`,
         const runner = (invocation: WorkflowAgentInvocation) =>
           Effect.gen(function* () {
             started.add(invocation.index);
-            invocation.signal.addEventListener(
-              'abort',
-              () => {
-                aborted.add(invocation.index);
-              },
-              { once: true },
-            );
             yield* Deferred.succeed(gates[invocation.index]!, undefined);
             return yield* Effect.never;
-          });
+          }).pipe(
+            Effect.onInterrupt(() =>
+              Effect.sync(() => {
+                aborted.add(invocation.index);
+              }),
+            ),
+          );
 
         const recorded = recordCalls();
         const runFiber = yield* runScript(
@@ -2618,18 +2606,16 @@ return await parallel([
           {
             runAgent: runner,
             concurrency: 2,
-            signal: parent.signal,
             onEvent: recorded.onEvent,
           },
         ).pipe(Effect.forkChild);
 
         yield* Effect.forEach(gates, Deferred.await);
         expect(started.size).toBe(2);
-        parent.abort(new DOMException('parent stopped', 'AbortError'));
+        yield* Fiber.interrupt(runFiber);
+        const exit = yield* Fiber.await(runFiber);
 
-        yield* expectEffect(Fiber.join(runFiber)).rejects.toMatchObject({
-          name: 'AbortError',
-        });
+        expect(Exit.hasInterrupts(exit)).toBe(true);
         expect(aborted).toEqual(new Set([0, 1]));
         // The cancel sweep: each in-flight card settles `cancelled` with no
         // `error` (the abort is the run's fact, not the call's), and the stage

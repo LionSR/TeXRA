@@ -21,6 +21,7 @@ import {
   parseWorkingDirectory,
   resolveAndFormat,
 } from '@tools/pathResolution';
+import { ensureError } from '@utils/errors/errorMessage';
 
 import { ToolCall } from '../ToolCall';
 import type { RuntimeTool, ToolServices } from '../ToolServices';
@@ -32,7 +33,7 @@ import type { RuntimeTool, ToolServices } from '../ToolServices';
 const guardRefusal = Effect.fn('toolUse.guard')(function* (
   tool: RuntimeTool,
   rawInput: unknown,
-): Effect.fn.Return<ToolResult | undefined, unknown, ToolServices> {
+): Effect.fn.Return<ToolResult | undefined, Error, ToolServices> {
   const guard = tool.guard;
   if (!guard) return undefined;
   // The guard reads the call's own validated arguments, from the same schema
@@ -57,7 +58,7 @@ const guardRefusal = Effect.fn('toolUse.guard')(function* (
   // becoming a defect.
   const targets = yield* Effect.try({
     try: () => guard.writes?.(input) ?? [],
-    catch: (error) => error,
+    catch: ensureError,
   });
   for (const target of targets) {
     const { path, display } = yield* resolveAndFormat(
@@ -68,7 +69,7 @@ const guardRefusal = Effect.fn('toolUse.guard')(function* (
     );
     yield* Effect.try({
       try: () => assertWritable(path, display),
-      catch: (error) => error,
+      catch: ensureError,
     });
   }
 

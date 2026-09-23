@@ -79,7 +79,6 @@ export type ToolEditApprovalResult =
   | {
       readonly action: 'apply';
       readonly appliedContent: string;
-      readonly userPatch?: string;
       readonly lineChanges?: {
         readonly added: number;
         readonly removed: number;
@@ -331,9 +330,6 @@ function finalizeApprovalResult(
   }
 
   const { appliedContent } = result;
-  const userPatch =
-    result.userPatch ??
-    unifiedDiffText(request.proposedContent, appliedContent);
 
   // Compute startLine once here (convert 0-based to 1-based; null → line 1).
   const startLine =
@@ -341,7 +337,6 @@ function finalizeApprovalResult(
 
   return {
     ...result,
-    userPatch,
     lineChanges:
       result.lineChanges ??
       computeLineChangeSummary(request.originalContent, appliedContent),
@@ -365,10 +360,10 @@ interface WriteApprovedContentResult {
  * as read after the operation succeeds, so every approved-write caller keeps
  * the later-edit guard in sync.
  *
- * The path's own view of the filesystem is the one the old `WorkspaceFS` static
- * reached: a workspace-relative path through the session's confined workspace
- * view, an already-absolute one (an external root, a worktree) through the
- * process filesystem, which the static passed straight through.
+ * The path is written through its own view of the filesystem: a
+ * workspace-relative path through the session's confined `WorkspaceFs` view,
+ * an already-absolute one (an external root, a worktree) through the process
+ * `FileSystem`.
  */
 export const writeApprovedContent = Effect.fn('writeApprovedContent')(
   function* (
@@ -377,7 +372,7 @@ export const writeApprovedContent = Effect.fn('writeApprovedContent')(
     finalContent: string,
   ): Effect.fn.Return<
     WriteApprovedContentResult,
-    unknown,
+    Error,
     ToolCall | FileSystem.FileSystem | WorkspaceFs
   > {
     yield* ToolCall;

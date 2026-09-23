@@ -225,9 +225,22 @@ structured, cost }`), `null` on failure, or the truthy
   `parallel()` call, and a wall-clock timeout. The cap raises
   `WorkflowRunAbortError`, which `parallel()` does not convert to `null` — the
   whole run fails. The timeout is the sandbox's own error: guest execution is
-  interrupted, the run's `AbortSignal` (on every
-  `runAgent` invocation) fires, and new `agent()` calls are refused; runners
-  should cancel in-flight work on it.
+  interrupted and every in-flight `agent()` fiber is interrupted and awaited
+  before the run settles.
+- **Cancellation is interruption**: the engine and the sandbox take no
+  `AbortSignal`. The sandbox is one scoped Effect whose QuickJS runtime,
+  context, pending host promises, `agent()` fibers and deadline timer are
+  resources of its scope, so a result, a timeout, the first run-level fault,
+  or the caller interrupting the run all tear it down the same way: calls
+  interrupted (an admitted journal commit reaching its durability point
+  first), then the realm disposed, then the terminal sweep. Skip and retry
+  are a per-attempt `Deferred` decision the host's gesture and the runner's
+  settlement race for; a retry journals its supersession before it
+  interrupts the runner. The two signal edges live in the host, where the
+  child-run loop runs turns uninterruptibly and cancels them through a
+  signal: `workflowScriptStrategy` turns the loop's abort into an interrupt
+  of the run, and `executeSubagentInBand` turns an interrupt of its caller
+  into the in-band child's abort.
 - **Debuggability**: a thrown error inside a `parallel()` thunk
   (a script bug, as opposed to an `agent()` failure,
   which already resolves to `null` with its own `agent:end` event) rejects the

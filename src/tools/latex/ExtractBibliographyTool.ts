@@ -80,17 +80,15 @@ const extractBibliography = Effect.fn('ExtractBibliographyTool.execute')(
       );
       // `fsPath` records where the bibliography landed: workspace-relative
       // inside the session's folder, absolute for a path the caller chose
-      // outside it. So the confined view of this call's own workspace
-      // answers the first and the process filesystem the second, which is
-      // the split `WorkspaceFS` made by passing absolute paths through.
+      // outside it. So the confined `WorkspaceFs` view of this call's own
+      // workspace answers the first and the process `FileSystem` the second.
       const fs: FileSystem.FileSystem = nodePath.isAbsolute(resolved.fsPath)
         ? yield* FileSystem.FileSystem
         : yield* WorkspaceFs;
       // A path whose parent is not a directory is a missing bibliography, not
-      // a tool failure: that is `pathExists`'s reading. One difference from
-      // the old `lstat`-backed check is deliberate -- `exists` follows the
-      // link, so a dangling symlink reads as missing where the facade saw the
-      // entry itself.
+      // a tool failure: that is `pathExists`'s reading. `exists` follows the
+      // link, deliberately, so a dangling symlink reads as a missing
+      // bibliography.
       const exists = yield* pathExists(fs, resolved.fsPath);
       const target = exists ? bibliographyFiles : missingBibliographyFiles;
       if (!target.includes(resolved.absolute)) {

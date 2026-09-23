@@ -360,13 +360,8 @@ function reflectionSnapshot(
       ...runtime,
     },
     state: {
-      currentRound: 0,
       totalRounds: 4,
       workspaceSnapshot: AgentWorkspaceState.create().toSnapshot(),
-      outputLocation: null,
-      runStateSnapshot: { totalRounds: 4, totalResponseTimeMs: 0 },
-      continueRounds: true,
-      endTurn: false,
       ...state,
     },
   };
@@ -1436,18 +1431,16 @@ describe('CLI run command, workflow agents', () => {
         expect(
           canAdvertise?.({
             kind: 'checkpoint',
-            snapshot: reflectionSnapshot({
-              currentRound: 1,
-              totalRounds: 2,
-              unresolvedCompileRejection: true,
-            }),
+            snapshot: reflectionSnapshot(
+              { totalRounds: 2, unresolvedCompileRejection: true },
+              { round: 1 },
+            ),
           }),
         ).toBe(false);
         expect(
           canAdvertise?.({
             kind: 'checkpoint',
             snapshot: reflectionSnapshot({
-              currentRound: 0,
               totalRounds: 2,
               unresolvedCompileRejection: true,
             }),

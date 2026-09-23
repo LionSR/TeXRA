@@ -3,10 +3,7 @@ import { Effect } from 'effect';
 import { z } from 'zod';
 
 // Internal imports
-import type {
-  RuntimeTool as ITool,
-  RuntimeToolRegistry as IToolRegistry,
-} from '@agent/runtime/ToolServices';
+import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
 import { convertToolSchema } from '@agent/runtime/run/toolSchema';
 import {
   ToolError,
@@ -14,6 +11,7 @@ import {
   type JsonValue,
   type ToolResult,
 } from '@shared/schemas';
+import { ensureError } from '@utils/errors/errorMessage';
 
 // Local file imports
 import { defineTool } from './core/define';
@@ -190,7 +188,7 @@ export function normalizeStructuredOutputSchema(
 export function buildTerminalTool(
   input: z.ZodType | Record<string, unknown>,
   capture: (value: JsonValue) => void,
-): ITool<unknown, never> {
+): ITool<Error, never> {
   const { zodSchema } = normalizeStructuredOutputSchema(input);
 
   const GeneratedTool = defineTool<unknown, never>({
@@ -205,7 +203,7 @@ export function buildTerminalTool(
   class TerminalTool extends GeneratedTool {
     private captured = false;
 
-    protected execute(input: unknown): Effect.Effect<ToolResult, unknown> {
+    protected execute(input: unknown): Effect.Effect<ToolResult, Error> {
       return Effect.try({
         try: (): ToolResult => {
           if (this.captured) {
@@ -223,29 +221,10 @@ export function buildTerminalTool(
             output: 'Structured output captured.',
           };
         },
-        catch: (error) => error,
+        catch: ensureError,
       });
     }
   }
 
   return new TerminalTool();
-}
-
-/**
- * Overlay run-scoped tools on a base registry without mutating it. Overlay
- * tools win name collisions, and later entries win collisions within the
- * overlay. Concurrent runs can therefore share `base` without seeing one
- * another's injected or structured-output tools.
- */
-export function buildOverlayToolRegistry(
-  base: IToolRegistry,
-  tools: readonly ITool[],
-): IToolRegistry {
-  const overlay = new Map(
-    tools.map((tool) => [tool.definition.name, tool] as const),
-  );
-  return {
-    get: (name) => overlay.get(name) ?? base.get(name),
-    has: (name) => overlay.has(name) || base.has(name),
-  };
 }

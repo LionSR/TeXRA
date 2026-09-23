@@ -43,15 +43,12 @@ export function launchDesktopAgent(
   options: DesktopAgentLaunchOptions = {},
 ): Effect.Effect<void, Error> {
   const launch = Effect.gen(function* () {
-    const [{ runAgent }, { getDefaultUnavailableToolNames }] =
-      yield* Effect.tryPromise({
-        try: () =>
-          Promise.all([import('@agent/runtime'), import('@tools/registry')]),
-        catch: ensureError,
-      });
+    const { runAgent } = yield* Effect.tryPromise({
+      try: () => import('@agent/runtime'),
+      catch: ensureError,
+    });
     yield* runAgent(request, {
       session: context.session,
-      runtimeUnavailableTools: getDefaultUnavailableToolNames('desktop'),
       modelCompatibilityKey: options.modelCompatibilityKey,
       ownApiKeyFallback: options.ownApiKeyFallback,
       ...(options.preferHelperModel && { preferHelperModel: true }),

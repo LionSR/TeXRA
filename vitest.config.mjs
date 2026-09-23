@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
 import process from 'node:process';
@@ -78,28 +78,12 @@ const REACHES_A_HOST = [
   /from\s+['"]@test\/support\/(?:setupPlatform|setupFakePlatform|FakePlatform|FakeHosts|tempDirPlatform|nativeToolTestLayer|sessionTestUtils|defaultSessionTestSetup|sessionGraphTestSetup|testProcessRuntime|testWorkspaceRoots)['"]/,
   /import\s+['"]@test\/support\/(?:defaultSessionTestSetup|sessionGraphTestSetup)['"]/,
 ];
-// What the scan cannot see: a pair of suites sharing process terminal state.
-// Those are found by file-order shuffles and kept by name in the ratchet
-// baseline — shrink-only, a stale entry fails config load. The companion
-// `hostReadByModuleUnderTest` list is gone: five of its rows named modules
-// since fixed to take their host as a layer or a value, six were stale
-// because the scan above already sends those suites to `kernel` on an
-// import of a host-installing support module, and the last one reached the
-// harness's installed host through `nativeToolTestLayer`, which the scan now
-// names like the other support modules that read one.
-const KERNEL_BASELINE = 'config/ratchets/pure-tier-kernel-suites.json';
-const kernelBaseline = JSON.parse(
-  readFileSync(resolve(rootDir, KERNEL_BASELINE), 'utf8'),
-);
-const keptInKernel = new Set(kernelBaseline.shareTerminalState);
-const stale = [...keptInKernel].filter(
-  (file) => !existsSync(resolve(rootDir, file)),
-);
-if (stale.length > 0) {
-  throw new Error(
-    `${KERNEL_BASELINE} lists suites that no longer exist — remove them:\n  ${stale.join('\n  ')}`,
-  );
-}
+// What the scan cannot see is a suite that changes process-wide state a
+// library reads once — an environment variable chalk takes its color level
+// from, say. File-order shuffles find those, and the fix is in the suite: set
+// the state on the instance it lives on and restore it after, so the order
+// the shared registry loads files in cannot matter.
+//
 // Resolved to a file list rather than left as globs: Vitest applies a
 // project's `exclude` after its `include`, so `kernel` must exclude exactly
 // the files `pure` runs, not the directories they came from.
@@ -108,7 +92,6 @@ const pureSuites = globSync(
   { cwd: rootDir, posix: true },
 )
   .filter((file) => {
-    if (keptInKernel.has(file)) return false;
     const source = readFileSync(resolve(rootDir, file), 'utf8');
     return !REACHES_A_HOST.some((pattern) => pattern.test(source));
   })

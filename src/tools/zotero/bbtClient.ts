@@ -46,9 +46,9 @@ export const withZoteroPort =
     run: (
       input: I,
       port: number,
-    ) => Effect.Effect<ToolResult, unknown, ToolServices>,
+    ) => Effect.Effect<ToolResult, Error, ToolServices>,
   ) =>
-  (input: I): Effect.Effect<ToolResult, unknown, ToolServices> =>
+  (input: I): Effect.Effect<ToolResult, Error, ToolServices> =>
     Effect.gen(function* () {
       const call = yield* ToolCall;
       return yield* run(input, call.roots.config.get<number>(ZOTERO_PORT_KEY));

@@ -13,7 +13,7 @@ import {
 } from '@shared/schemas';
 import { DatabaseWriteFailed } from '@shared/session/database';
 import { RunLedgerRefused } from '@shared/session/runLedger';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 /**
  * Abstract base class for tool implementations.
@@ -25,7 +25,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
  *
  * Subclasses must implement the execute() method.
  */
-export abstract class BaseTool<T, R = never> implements ITool<unknown, R> {
+export abstract class BaseTool<T, R = never> implements ITool<Error, R> {
   readonly definition: ToolDefinition;
   private readonly schema: ZodType<T, unknown>;
 
@@ -40,16 +40,16 @@ export abstract class BaseTool<T, R = never> implements ITool<unknown, R> {
   /** Validate lazily in the caller's fiber; interruption never becomes a tool result. */
   call(
     rawInput: unknown,
-  ): Effect.Effect<ToolResult, unknown, Exclude<R, Scope.Scope>> {
+  ): Effect.Effect<ToolResult, Error, Exclude<R, Scope.Scope>> {
     const validate = Effect.try({
       try: () => this.schema.parse(rawInput),
-      catch: (error) => error,
+      catch: ensureError,
     }).pipe(
       Effect.catch((error) =>
         error instanceof z.core.$ZodAsyncError
           ? Effect.tryPromise({
               try: () => this.schema.parseAsync(rawInput),
-              catch: (cause) => cause,
+              catch: ensureError,
             })
           : Effect.fail(error),
       ),
@@ -89,5 +89,5 @@ export abstract class BaseTool<T, R = never> implements ITool<unknown, R> {
     );
   }
 
-  protected abstract execute(input: T): Effect.Effect<ToolResult, unknown, R>;
+  protected abstract execute(input: T): Effect.Effect<ToolResult, Error, R>;
 }

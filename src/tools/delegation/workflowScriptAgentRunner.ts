@@ -502,10 +502,6 @@ const recoverOrLaunchWorkflowChild = Effect.fn('recoverOrLaunchWorkflowChild')(
     AgentRunServices | Scope.Scope
   > {
     const { session } = call;
-    yield* Effect.try({
-      try: () => call.signal?.throwIfAborted(),
-      catch: ensureError,
-    });
     // The mark does not say where to start; it says what an absent id means. A
     // deleted attempt is collected in the end, and an id-by-id probe reads the
     // hole that leaves as an id that never started — it would launch into it
@@ -564,7 +560,6 @@ const recoverOrLaunchWorkflowChild = Effect.fn('recoverOrLaunchWorkflowChild')(
           session,
           runId,
           parentRunId: call.parentRunId,
-          signal: call.signal,
           prepare: call.prepare,
         });
         // The child's loop released its claim and its run lane as it ended, so
@@ -720,10 +715,6 @@ const recoverOrLaunchWorkflowChild = Effect.fn('recoverOrLaunchWorkflowChild')(
               ),
             );
           }
-          yield* Effect.try({
-            try: () => call.signal?.throwIfAborted(),
-            catch: ensureError,
-          });
           return {
             runId,
             result: { ...end, output: meta.output },
@@ -821,7 +812,6 @@ export function createWorkflowScriptAgentRunner(
         parentRunId: run.runId,
         checkpointId,
         key: invocation.key,
-        signal: invocation.signal,
         onLaunch: (childRunId) => {
           invocation.report({ childRunId });
         },
@@ -849,8 +839,6 @@ export function createWorkflowScriptAgentRunner(
               approvalPromptsUnavailable:
                 parent.run.toolPolicy.approvalPromptsUnavailable,
               onApprovalPolicyDenial: parent.run.onApprovalPolicyDenial,
-              runtimeUnavailableTools:
-                parent.run.toolPolicy.runtimeUnavailableTools,
               // Live inherited bypass values, matching LLM delegation: each
               // approval follows the parent's corresponding bypass. The run's own
               // stream inherits from the orchestrator, so nested delegation remains

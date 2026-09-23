@@ -435,7 +435,6 @@ const createCodexThread = Effect.fn('codex.createCodexThread')(function* (
   // efforts do not wait on a slow or hung Codex binary.
   const requestedEffort = yield* config.getCodexCliReasoningEffort(
     roots.workspaceState,
-    true,
   );
   const threadOptions: ThreadOptions = {
     ...workspace,
@@ -444,8 +443,8 @@ const createCodexThread = Effect.fn('codex.createCodexThread')(function* (
     model: config.CODEX_CLI_MODEL,
     modelReasoningEffort:
       requestedEffort === 'xhigh'
-        ? yield* config.getCodexCliReasoningEffort(
-            roots.workspaceState,
+        ? config.toCodexCliReasoningEffort(
+            requestedEffort,
             yield* config.codexBinarySupportsXhigh(codexPath),
           )
         : requestedEffort,

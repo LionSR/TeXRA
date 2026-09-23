@@ -38,6 +38,7 @@ import {
   unusedGlobalStorageFs,
 } from '@test/support/fsTestUtils';
 import { hostStores, installPlatform } from '@test/support/setupPlatform';
+import { captureLogEntries } from '@test/support/logSinkCapture';
 import type * as vscode from 'vscode';
 
 /**
@@ -308,6 +309,38 @@ describe('agent registry', () => {
     },
   );
 
+  it.effect(
+    'rescans locally without refetching or superseding a remote refetch',
+    () =>
+      Effect.gen(function* () {
+        useAgentDirectories();
+        yield* onGlobalStorage(refresh({ includeRemote: false }));
+        const fetchesBefore = listRemoteAgents.mock.calls.length;
+        const remoteStarted = yield* Deferred.make<void>();
+        const remoteGate = yield* Deferred.make<void>();
+        listRemoteAgents.mockImplementationOnce(() =>
+          Deferred.succeed(remoteStarted, undefined).pipe(
+            Effect.andThen(Deferred.await(remoteGate)),
+            Effect.as([ORCHESTRATOR_AGENT]),
+          ),
+        );
+
+        const remote = yield* Effect.forkChild(
+          onGlobalStorage(refresh({ includeRemote: true })),
+        );
+        yield* Deferred.await(remoteStarted);
+        const local = yield* Effect.forkChild(onGlobalStorage(refresh()), {
+          startImmediately: true,
+        });
+        yield* Deferred.succeed(remoteGate, undefined);
+        yield* Fiber.join(remote);
+        yield* Fiber.join(local);
+
+        expect(isRemoteAgent('orchestrator')).toBe(true);
+        expect(listRemoteAgents).toHaveBeenCalledTimes(fetchesBefore + 1);
+      }),
+  );
+
   it.effect('reloads local-only definitions after sign-out invalidation', () =>
     Effect.gen(function* () {
       useAgentDirectories();
@@ -368,6 +401,7 @@ describe('agent registry', () => {
             setLogSink(null);
           }),
         ),
+        Effect.provide(effectDiagnosticsLayer('Trace')),
       );
     },
   );

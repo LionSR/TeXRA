@@ -45,8 +45,8 @@ const withDiagnostics = <A, E, R>(
 /**
  * A `FileSystem` that reports every path as present and fails every read with
  * `message`: the injected read failure the Chinese-package probe must treat as
- * best-effort. The suite used to spy on `platform().fs.readFile`, which the
- * probe no longer reads through.
+ * best-effort. The probe reads through the context `FileSystem`, so the
+ * failure is injected as a layer.
  */
 function failingReadLayer(message: string): Layer.Layer<FileSystem.FileSystem> {
   return FileSystem.layerNoop({

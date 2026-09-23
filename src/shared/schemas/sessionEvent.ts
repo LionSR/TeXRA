@@ -441,7 +441,6 @@ const DisplaySessionEventDraftSchema = z.discriminatedUnion('type', [
  *  (`isDisplaySessionEvent` keeps them out of the transport by type). */
 const RunRecordEventDraftSchema = z.discriminatedUnion('type', [
   durable('run.record', { record: RunRecordFieldsSchema }),
-  durable('run.launchLabel', { label: z.string() }),
   durable('run.report', { report: z.string().nullable() }),
   durable('run.result', { result: ResultMetaSchema }),
   durable('run.workspaceFiles', { paths: RunWorkspaceFilesSchema }),
@@ -588,7 +587,7 @@ export type DisplaySessionEvent = z.infer<typeof DisplaySessionEventSchema>;
  * with any change to the stored shape of `SessionEventSchema`, which
  * `sessionEventFormat.vitest.ts` pins.
  */
-export const SESSION_EVENT_FORMAT = 11;
+export const SESSION_EVENT_FORMAT = 13;
 
 export const SessionEventSchema = z.discriminatedUnion('type', [
   ...DisplaySessionEventSchema.options,

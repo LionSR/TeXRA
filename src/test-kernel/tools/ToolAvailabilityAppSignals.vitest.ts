@@ -119,14 +119,21 @@ describe('tool availability app signals', () => {
         const { getUnavailableToolNamesCached, runExternalToolChecks } =
           yield* Effect.promise(() => import('@tools/toolAvailability'));
 
-        expect([...getUnavailableToolNamesCached()]).toEqual([]);
+        expect([...getUnavailableToolNamesCached(undefined)]).toEqual([]);
 
         yield* runExternalToolChecks(probeInputs);
 
         // Toggling a tool on or off never changes this set — it reports missing
         // external dependencies only — so there is nothing to rebuild after a
         // toggle, which is why the availability answer is derived on read.
-        expect([...getUnavailableToolNamesCached()]).toEqual(['missing']);
+        expect([...getUnavailableToolNamesCached(undefined)]).toEqual([
+          'missing',
+        ]);
+        // The probes read the workspace, so one workspace's results never
+        // answer for another's on a multi-project host.
+        expect([...getUnavailableToolNamesCached('/other/project')]).toEqual(
+          [],
+        );
       }).pipe(Effect.provide(probeServices)),
   );
 

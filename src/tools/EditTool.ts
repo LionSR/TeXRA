@@ -12,6 +12,7 @@ import {
   resolveWritableTarget,
 } from '@tools/fileEditFlow';
 import { pluralize } from '@utils/text/stringUtils';
+import { ensureError } from '@utils/errors/errorMessage';
 
 // Local file imports
 import { defineTool } from './core/define';
@@ -40,7 +41,7 @@ const edit = Effect.fn('EditFileTool.execute')(function* (
   input: EditInput,
 ): Effect.fn.Return<
   ToolResult,
-  unknown,
+  Error,
   ToolCall | FileSystem.FileSystem | WorkspaceFs
 > {
   const { old_str, new_str, replace_all } = input;
@@ -79,7 +80,7 @@ const edit = Effect.fn('EditFileTool.execute')(function* (
           `- Include more surrounding context to make old_str unique\n` +
           `- Set replace_all to true to replace every occurrence: { "replace_all": true }`,
       }),
-    catch: (error) => error,
+    catch: ensureError,
   });
 
   const occurrenceWord = pluralize(replacement.count, 'occurrence');

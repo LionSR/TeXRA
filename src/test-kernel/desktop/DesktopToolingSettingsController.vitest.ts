@@ -19,7 +19,10 @@ import { testRuntime } from '@test/support/testProcessRuntime';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { FakeConfigProvider, FakeStateStore } from '@test/support/FakePlatform';
 import type { ToolProbeInputs } from '@tools/externalToolDefs';
-import type { ExternalToolCheckResult } from '@tools/toolAvailability';
+import {
+  refreshToolAvailability,
+  type ExternalToolCheckResult,
+} from '@tools/toolAvailability';
 
 import { commandOf } from './desktopSettingsTestSupport';
 
@@ -135,7 +138,6 @@ function createFixture(
   const posted: unknown[] = [];
   const reportedErrors: unknown[] = [];
   const commands: string[] = [];
-  const openedUrls: string[] = [];
   const globalState = overrides.globalState ?? new FakeStateStore();
   const workspaceState = overrides.workspaceState ?? new FakeStateStore();
   const controller = new DefaultDesktopToolingSettingsController({
@@ -151,11 +153,6 @@ function createFixture(
       postToRenderer: (message) => {
         posted.push(message);
         hooks.onPost?.(message, posted);
-      },
-    },
-    navigation: {
-      openExternal: async (url) => {
-        openedUrls.push(url);
       },
     },
     commands: {
@@ -188,7 +185,6 @@ function createFixture(
     controller,
     commands,
     globalState,
-    openedUrls,
     posted,
     reportedErrors,
     workspaceState,
@@ -355,7 +351,7 @@ describe('DefaultDesktopToolingSettingsController', () => {
           emitAppSignal('toolAvailabilityChanged', undefined);
         });
         const posted = createDeferred();
-        const { controller } = createFixture({
+        createFixture({
           renderer: {
             postToRenderer: () => {
               events.push('renderer:post');
@@ -366,8 +362,9 @@ describe('DefaultDesktopToolingSettingsController', () => {
 
         yield* withProcessServices(
           testRuntime(),
-          assertSupported(controller.toolHandlers.recheckToolStatus)({
-            command: SETTINGS_VIEW_COMMANDS.RECHECK_TOOL_STATUS,
+          refreshToolAvailability({
+            workspaceRoot: undefined,
+            config: new FakeConfigProvider(),
           }),
         );
         yield* Effect.promise(() => posted.promise);
@@ -498,8 +495,9 @@ describe('DefaultDesktopToolingSettingsController', () => {
 
         yield* withProcessServices(
           testRuntime(),
-          assertSupported(controller.toolHandlers.recheckToolStatus)({
-            command: SETTINGS_VIEW_COMMANDS.RECHECK_TOOL_STATUS,
+          refreshToolAvailability({
+            workspaceRoot: undefined,
+            config: new FakeConfigProvider(),
           }),
         );
 

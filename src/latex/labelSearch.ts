@@ -19,11 +19,11 @@ import escapeRegExp from 'escape-string-regexp';
  * Host-neutral: callers supply their own file lister, reader, and open
  * handler, so the VS Code command and the desktop bridge share one scan.
  */
-export function openFirstLabelMatch(
+export function openFirstLabelMatch<ReadError, MatchError>(
   label: string,
   files: Iterable<string>,
-  read: (file: string) => Effect.Effect<string, unknown>,
-  onMatch: (file: string, index: number) => Effect.Effect<unknown, unknown>,
+  read: (file: string) => Effect.Effect<string, ReadError>,
+  onMatch: (file: string, index: number) => Effect.Effect<unknown, MatchError>,
 ): Effect.Effect<boolean> {
   // A regex matching `\label{<label>}` for a literal label string.
   const pattern = new RegExp(`\\\\label\\{${escapeRegExp(label)}\\}`, 'm');

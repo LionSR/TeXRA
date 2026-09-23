@@ -496,9 +496,7 @@ function buildClaudeAgentLaunch(params: {
           }
         : undefined,
     isTurnError: (turn) => turn.isError,
-    onTurnError: (turn, log) => {
-      if (turn.errorMessage) log.error(turn.errorMessage);
-    },
+    turnErrorMessage: (turn) => turn.errorMessage || undefined,
     formatDelivery: (turn, wallTimeMs, lastPrompt) =>
       formatDelivery({
         tag: DELIVERY_TAG.claudeAgentResult,

@@ -43,10 +43,6 @@ import {
   executeAgent,
   resumeToolUseFromResumeData,
 } from '@agent/runtime/executeAgent';
-import {
-  AGENT_TOOL_INJECTIONS,
-  ToolInjections,
-} from '@agent/runtime/toolInjection';
 import { EditorModel } from '@agent/runtime/run/modelBinding';
 import { createSessionApprovals } from '@agent/runtime/runApprovalQueue';
 import { RunRegistry } from '@agent/runtime/runRegistry';
@@ -141,6 +137,12 @@ import { WorkspaceRoots } from './WorkspaceRoots';
 
 const CHANNEL = 'sessionLayer';
 
+/** Log a failure on this channel, with the failure attached as its `data`. */
+const logFailure =
+  (message: string, log = Effect.logWarning) =>
+  (data: unknown) =>
+    log(message).pipe(Effect.annotateLogs({ data }), withLogChannel(CHANNEL));
+
 /** How often the owners the view names are re-probed (PRD 5.2). */
 const OWNER_LIVENESS_PROBE_INTERVAL = '5 seconds';
 
@@ -186,17 +188,6 @@ class Session extends Context.Service<Session, SessionHandle>()(
  * `closeSession` needs that, a synchronous read cannot have it.
  */
 type HeldSessions = Map<SessionKey, SessionHandle>;
-
-/** The held session whose key names `root`, if one does. */
-function heldSessionSync(
-  held: HeldSessions,
-  root: string,
-): SessionHandle | undefined {
-  for (const [key, session] of held) {
-    if (key.storage === root) return session;
-  }
-  return undefined;
-}
 
 /** The owner ids of the non-terminal runs another process wrote. */
 function foreignOwners(view: SessionView, self: OwnerId): OwnerId[] {
@@ -452,12 +443,9 @@ const sessionHandleLayer = (
                     // The settle's failure is what the caller hears; a release
                     // that also failed leaves the claims to the next process's
                     // liveness proof, and says so.
-                    Effect.catch((error) =>
-                      Effect.logWarning(
+                    Effect.catch(
+                      logFailure(
                         'Registration claims were not released after its settle failed.',
-                      ).pipe(
-                        Effect.annotateLogs({ data: error }),
-                        withLogChannel(CHANNEL),
                       ),
                     ),
                   ),
@@ -557,12 +545,9 @@ const sessionHandleLayer = (
               session
                 .settlePublications()
                 .pipe(
-                  Effect.catch((error) =>
-                    Effect.logWarning(
+                  Effect.catch(
+                    logFailure(
                       `Session ${key.storage} left a failed publication behind as it closed.`,
-                    ).pipe(
-                      Effect.annotateLogs({ data: error }),
-                      withLogChannel(CHANNEL),
                     ),
                   ),
                 ),
@@ -631,10 +616,11 @@ const sessionHandleLayer = (
             Effect.andThen(SubscriptionRef.set(delivered, event.commit)),
           ),
         ),
-        Effect.tapError((error) =>
-          Effect.logError(
+        Effect.tapError(
+          logFailure(
             `Session ${key.storage} stopped delivering committed rows: the log could not be read.`,
-          ).pipe(Effect.annotateLogs({ data: error }), withLogChannel(CHANNEL)),
+            Effect.logError,
+          ),
         ),
         Effect.onExit((exit) => Deferred.done(tailEnded, exit)),
         Effect.forkIn(consumerScope),
@@ -646,28 +632,24 @@ const sessionHandleLayer = (
       yield* Stream.runForEach(session.folded(anchor), (event) =>
         session.receiveFoldedEvent(event),
       ).pipe(
-        Effect.catch((error) =>
-          Effect.logError(
+        Effect.catch(
+          logFailure(
             `Session ${key.storage} stopped delivering folded rows: the log could not be read.`,
-          ).pipe(Effect.annotateLogs({ data: error }), withLogChannel(CHANNEL)),
+            Effect.logError,
+          ),
         ),
         Effect.forkIn(consumerScope),
       );
       yield* sweepLeftoverRuns(session, initialListing).pipe(
-        Effect.catch((error) =>
-          Effect.logWarning('Background-shell cleanup failed.').pipe(
-            Effect.annotateLogs({ data: error }),
-            withLogChannel(CHANNEL),
-          ),
-        ),
+        Effect.catch(logFailure('Background-shell cleanup failed.')),
         Effect.forkScoped,
       );
       // The session owns retries and waits for in-flight removal on close.
       yield* collectPendingDeletions(eventLog, key.storage).pipe(
-        Effect.catch((error) =>
-          Effect.logWarning(
+        Effect.catch(
+          logFailure(
             'Deletion records could not be read; cleanup remains pending.',
-          ).pipe(Effect.annotateLogs({ data: error }), withLogChannel(CHANNEL)),
+          ),
         ),
         Effect.repeat({ schedule: Schedule.spaced('30 seconds') }),
         Effect.forkScoped,
@@ -789,13 +771,9 @@ const listSessions = Effect.gen(function* () {
 const unopenedEntry =
   (key: SessionKey) =>
   (error: SessionOpenError): Effect.Effect<Option.Option<never>> =>
-    Effect.logWarning(
-      `Session ${key.storage} failed to open; it holds no session.`,
-    ).pipe(
-      Effect.annotateLogs({ data: error }),
-      withLogChannel(CHANNEL),
-      Effect.as(Option.none()),
-    );
+    logFailure(`Session ${key.storage} failed to open; it holds no session.`)(
+      error,
+    ).pipe(Effect.as(Option.none()));
 
 /** The session held for `root`, if the map holds one: an entry still building
  *  is waited for, never skipped, which is what lets a close issued right after
@@ -850,25 +828,13 @@ const closeSession = (root: string) =>
     runs.closeAdmissions();
     // Every touch of the session's storage runs in its scope: the stop writes
     // each run's outcome under the session's roots, and the flush writes its
-    // stores there. A child with a handle is stopped by its parent's cascade;
-    // a native child between turns has no handle, and its kill interrupts the
-    // loop the registry retains for it.
+    // stores there.
+    // A settlement fails when a fact the stop owed storage was refused.
+    // `close` answers a `SessionCloseReport` and names no error, so that
+    // travels the same defect channel the flush below documents, rather than
+    // being widened into this close's type.
     const termination = yield* Effect.forkDetach(
-      Effect.all(
-        runs.getActiveIds().flatMap((runId) => {
-          if (runs.getHandle(runId)?.isChild) return [];
-          // A settlement fails when a fact the stop owed storage was refused.
-          // `close` answers a `SessionCloseReport` and names no error, so that
-          // travels the same defect channel the flush below documents, rather
-          // than being widened into this close's type.
-          return [
-            runs
-              .kill(runId, { detachActiveChildren: false })
-              .settlement.pipe(Effect.orDie),
-          ];
-        }),
-        { concurrency: 'unbounded', discard: true },
-      ),
+      runs.stopAll().pipe(Effect.orDie),
       { startImmediately: true },
     );
     // The entry remains owned until waiting metadata finalization, not merely
@@ -877,11 +843,8 @@ const closeSession = (root: string) =>
       Effect.andThen(runs.awaitDrained()),
     );
     // Nothing joins the detached fibers below: each logs its own failure.
-    const logDetached = (what: string) => (cause: unknown) =>
-      Effect.logError(`Session ${root}: ${what}`).pipe(
-        Effect.annotateLogs({ data: cause }),
-        withLogChannel(CHANNEL),
-      );
+    const logDetached = (what: string) =>
+      logFailure(`Session ${root}: ${what}`, Effect.logError);
     // One budget for the whole close: the shutdown-phase deadline, forked
     // once so the flush below shares what settlement left.
     const budget = yield* Effect.forkChild(
@@ -1125,7 +1088,6 @@ export function installProcessRuntime({
       ? Layer.empty
       : ToolMissingReporter.layer(toolMissingReporter),
     SetupPlatform.layer(setup),
-    ToolInjections.layer(AGENT_TOOL_INJECTIONS),
     Layer.succeed(AgentEngine)({ executeAgent, resumeToolUseFromResumeData }),
     // Built with this runtime: a replacement starts with empty tables.
     gitHubSubscriptionsLayer,
@@ -1186,7 +1148,7 @@ export function installProcessRuntime({
   initSessionOwner({
     runtime,
     open: (open) => onThisRuntime(openSession(open)),
-    current: (root) => heldSessionSync(held, root),
+    current: (root) => [...held].find(([key]) => key.storage === root)?.[1],
     held: () => [...held.values()],
     list: () => onThisRuntime(listSessions),
     close: (root) => onThisRuntime(closeSession(root)),

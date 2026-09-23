@@ -12,6 +12,7 @@
 import { createLog } from '@logger/logUtils';
 import {
   RUN_OUTCOME,
+  type LogLevel,
   type RunOutcome,
   type ToolCallStatus,
 } from '@shared/schemas';
@@ -93,11 +94,7 @@ export class TraceEmitter implements AgentTrace {
     this.emitLog('error', message, options);
   }
 
-  private emitLog(
-    level: 'debug' | 'info' | 'warn' | 'error',
-    message: string,
-    options: LogOptions,
-  ): void {
+  private emitLog(level: LogLevel, message: string, options: LogOptions): void {
     this.emit({
       type: 'log',
       level,

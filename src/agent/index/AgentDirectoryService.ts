@@ -7,7 +7,6 @@ import { Effect, FileSystem } from 'effect';
 // Local imports
 import { CUSTOM_AGENTS_STORAGE_DIR } from '@common/storage/storageLayout';
 import { withLogChannel } from '@logger/effectLog';
-import { createLog } from '@logger/logUtils';
 import {
   AgentDirectoriesFailed,
   type AgentDirectoriesPort,
@@ -51,18 +50,14 @@ export interface AgentDirectoryServiceOptions {
 }
 
 export class AgentDirectoryService {
-  private readonly log: ReturnType<typeof createLog>;
-
-  constructor(private readonly options: AgentDirectoryServiceOptions) {
-    this.log = createLog(options.channel);
-  }
+  constructor(private readonly options: AgentDirectoryServiceOptions) {}
 
   builtIn(): Effect.Effect<string, AgentDirectoriesFailed> {
-    return Effect.sync(() => this.packagedDir(BUILTIN_WORKFLOW_AGENTS_DIR));
+    return this.packagedDir(BUILTIN_WORKFLOW_AGENTS_DIR);
   }
 
   builtInToolUse(): Effect.Effect<string, AgentDirectoriesFailed> {
-    return Effect.sync(() => this.packagedDir(BUILTIN_TOOL_USE_AGENTS_DIR));
+    return this.packagedDir(BUILTIN_TOOL_USE_AGENTS_DIR);
   }
 
   custom(): Effect.Effect<
@@ -115,10 +110,13 @@ export class AgentDirectoryService {
    * The packaged directory itself. It ships read-only with the host and every
    * consumer registers it `writable: false`, so there is nothing to create.
    */
-  private packagedDir(dirName: string): string {
-    const basePath = path.join(this.options.resourcesPath, dirName);
-    this.log.debug(`Using built-in ${dirName} directory: ${basePath}`);
-    return basePath;
+  private packagedDir(dirName: string): Effect.Effect<string> {
+    return Effect.suspend(() => {
+      const basePath = path.join(this.options.resourcesPath, dirName);
+      return Effect.logDebug(
+        `Using built-in ${dirName} directory: ${basePath}`,
+      ).pipe(withLogChannel(this.options.channel), Effect.as(basePath));
+    });
   }
 
   private ensureDefaultCustomDir(): Effect.Effect<

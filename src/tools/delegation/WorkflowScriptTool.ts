@@ -139,9 +139,8 @@ function workflowScriptDraftStem(id: string): string {
 /**
  * The view of a resolved tool path's own filesystem: a workspace-relative
  * path (`fsPath` stays relative inside the session's folder) goes through the
- * session's confined workspace view, and an absolute one — a path the caller
- * chose outside the workspace — through the process filesystem, which is the
- * split the old `WorkspaceFS` static made by passing absolute paths through.
+ * session's confined `WorkspaceFs` view, and an absolute one — a path the
+ * caller chose outside the workspace — through the process `FileSystem`.
  */
 const fileSystemAt = (
   fsPath: string,
@@ -291,7 +290,7 @@ Durability: the journal is keyed by meta.name and the agent field within this se
 }) {
   protected execute(
     input: WorkflowScriptToolInput,
-  ): Effect.Effect<ToolResult, unknown, ToolServices> {
+  ): Effect.Effect<ToolResult, Error, ToolServices> {
     return Effect.gen(function* () {
       const parent = requireDelegationParent(
         'delegate_multi_agents',
@@ -519,7 +518,6 @@ Durability: the journal is keyed by meta.name and the agent field within this se
                         workingDirectory,
                       }),
                     },
-                    meta.name,
                     {
                       category: runConfig.agentCategory,
                       checkpointId,

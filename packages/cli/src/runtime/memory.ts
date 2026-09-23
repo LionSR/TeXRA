@@ -107,7 +107,7 @@ export const loadCliMemoryDetail = Effect.fn('cli.loadCliMemoryDetail')(
  */
 export function runCliMemory<A>(
   roots: Pick<WorkspaceRoots, 'workspace' | 'storage' | 'globalStorage'>,
-  program: Effect.Effect<A, unknown, StorageFs>,
+  program: Effect.Effect<A, Error, StorageFs>,
 ) {
   return withSessionFs(roots, Effect.orDie(program));
 }

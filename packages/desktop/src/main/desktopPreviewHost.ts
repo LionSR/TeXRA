@@ -11,7 +11,7 @@ import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { FileLocation } from '@shared/schemas';
 import type { BuildDisplayFn } from '@tools/approval/latexPreview';
 import { createExternalLocation } from '@utils/files/fileLocation';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
   DESKTOP_PDF_COMMANDS,
@@ -46,13 +46,13 @@ interface DesktopPreviewHost {
   openExternal(url: string): Effect.Effect<void, PreviewUnavailable>;
   /**
    * `reportFailure: false` leaves the dialog out and hands the caller the
-   * shell's own rejection, the value it was thrown with — which is why that
-   * form's channel is `unknown` and the default form's is not.
+   * shell's own rejection as an `Error` — which is why that form's channel is
+   * wider than the default form's.
    */
   openExternal(
     url: string,
     options: { readonly reportFailure?: boolean },
-  ): Effect.Effect<void, unknown>;
+  ): Effect.Effect<void, Error>;
   /** Open a workspace file in the OS default application. */
   openPath(filePath: string): Effect.Effect<void, PreviewUnavailable>;
   /**
@@ -132,10 +132,10 @@ export function createDesktopPreviewHost(
   function openExternalProgram(
     url: string,
     reportFailure: boolean,
-  ): Effect.Effect<void, unknown> {
+  ): Effect.Effect<void, Error> {
     return Effect.tryPromise({
       try: () => options.shell.openExternal(url),
-      catch: (error) => error,
+      catch: ensureError,
     }).pipe(
       Effect.catch((error) =>
         reportFailure
@@ -154,11 +154,11 @@ export function createDesktopPreviewHost(
   function openExternal(
     url: string,
     options: { readonly reportFailure?: boolean },
-  ): Effect.Effect<void, unknown>;
+  ): Effect.Effect<void, Error>;
   function openExternal(
     url: string,
     { reportFailure = true }: { readonly reportFailure?: boolean } = {},
-  ): Effect.Effect<void, unknown> {
+  ): Effect.Effect<void, Error> {
     return openExternalProgram(url, reportFailure);
   }
 
@@ -184,7 +184,11 @@ export function createDesktopPreviewHost(
   function buildDisplayProgram(
     roots: WorkspaceRoots,
     fileLocation: FileLocation,
-  ): Effect.Effect<void, unknown, FileSystem.FileSystem | Path.Path> {
+  ): Effect.Effect<
+    void,
+    PreviewUnavailable,
+    FileSystem.FileSystem | Path.Path
+  > {
     return Effect.gen(function* () {
       const sourcePath = fileLocation.absolutePath;
       yield* ensurePathExists(sourcePath);

@@ -42,13 +42,13 @@ export type DesktopToolEditApprovalUi = Pick<
     proposed: DiffSource,
     title: string,
     previewId: string,
-  ): Effect.Effect<void, unknown>;
+  ): Effect.Effect<void, Error>;
   /**
    * Take this request's staged diff off the Review workbench and nothing
    * else: settling here must not dismiss another request's pending preview
    * or an unrelated review, whichever of them the user is looking at.
    */
-  closeDiff(previewId: string): Effect.Effect<void, unknown>;
+  closeDiff(previewId: string): Effect.Effect<void, Error>;
 };
 
 interface DesktopToolEditApprovalHostOptions {
@@ -166,9 +166,6 @@ class DesktopToolEditPreview implements ToolEditPreview {
   }
 
   openProposed(): Effect.Effect<void, HostRequestFailure> {
-    // #12734's Effect-typed `openPath` reaches the controller as the program
-    // it is: `ToolEditPreview` is no longer a Promise-shaped core port, so
-    // the run this settled on is gone with the face that needed it.
     return this.ui.openPath(this.staged.proposedPath);
   }
 

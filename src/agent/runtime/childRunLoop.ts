@@ -5,7 +5,6 @@ import { Cause, Deferred, Effect, Exit, Fiber, Queue, Result } from 'effect';
 
 import { finalizeRun } from '@agent/storage';
 import type { AgentTrace, StageHandle } from '@agent/trace';
-import { createChannelTrace } from '@agent/trace';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { finalizeRunTerminal } from '@agent/runtime/AgentRunLifecycle';
 import { childRunBudgetFor } from '@agent/runtime/childRunBudget';
@@ -28,6 +27,7 @@ import {
 import { persistChildRunDelivery } from '@agent/storage/childRunDeliveryPersistence';
 import { classifyAgentError } from '@common/errors';
 import { isUserAbort } from '@common/errors/sdkError/errorPatterns';
+import { withLogChannel } from '@logger/effectLog';
 import { AgentResume } from '@platform/interfaces';
 import {
   RUN_OUTCOME,
@@ -174,7 +174,7 @@ export interface ChildRunStrategy<TTurn, R = never> {
   /**
    * Produce the first turn's outcome. Throws on hard failure. `R` names the
    * process services a turn reads (the native strategy's engine turns read
-   * `ToolInjections` and `AppState`); the loop forwards it to its caller,
+   * `AppState`); the loop forwards it to its caller,
    * where the process runtime provides them.
    */
   launch(
@@ -209,8 +209,8 @@ export interface ChildRunStrategy<TTurn, R = never> {
   /** An interrupted interactive turn has no new result to settle. */
   isTurnInterrupted?(turn: TTurn): boolean;
 
-  /** Log a turn-level error message for a non-throwing failure. */
-  onTurnError?(turn: TTurn, logger: AgentTrace): void;
+  /** The error message to log for a non-throwing failure, if it has one. */
+  turnErrorMessage?(turn: TTurn): string | undefined;
 
   /** After loop setup, before the initial turn starts. */
   onLoopStart?(session: SessionHandle): void;
@@ -355,22 +355,54 @@ class ChildRunInterruptible implements RunInterruptHandler {
   }
 }
 
+const CHANNEL = 'childRunLoop';
+
+const EFFECT_LOG = {
+  debug: Effect.logDebug,
+  info: Effect.logInfo,
+  warn: Effect.logWarning,
+  error: Effect.logError,
+} as const;
+
+/**
+ * Write one loop diagnostic. An agent-CLI child presents them on its own
+ * trace; every other child has no loop-owned stream, so they go to the
+ * process log under this module's channel.
+ */
+function loopLog(
+  trace: AgentTrace | undefined,
+  level: keyof typeof EFFECT_LOG,
+  message: string,
+  data?: unknown,
+): Effect.Effect<void> {
+  if (trace) {
+    return Effect.sync(() =>
+      trace[level](message, data === undefined ? undefined : { data }),
+    );
+  }
+  const entry = EFFECT_LOG[level](message).pipe(withLogChannel(CHANNEL));
+  return data === undefined ? entry : Effect.annotateLogs(entry, { data });
+}
+
 /** Log a turn summary (duration + token usage) to the child stream. */
-function logTurnSummary(
-  logger: AgentTrace,
+const logTurnSummary = (
+  trace: AgentTrace | undefined,
   wallTimeMs: number,
   usage: TurnUsage | null | undefined,
-): void {
-  logger.info(`Turn completed in ${formatDuration(wallTimeMs)}`);
-  if (usage) {
-    logger.info('Tokens', {
-      data: {
+): Effect.Effect<void> =>
+  Effect.gen(function* () {
+    yield* loopLog(
+      trace,
+      'info',
+      `Turn completed in ${formatDuration(wallTimeMs)}`,
+    );
+    if (usage) {
+      yield* loopLog(trace, 'info', 'Tokens', {
         input: usage.input_tokens ?? 0,
         output: usage.output_tokens ?? 0,
-      },
-    });
-  }
-}
+      });
+    }
+  });
 
 /** Outcome of a single turn attempt, flattening the loop's inner try/catch. */
 type TurnAttempt<TTurn> =
@@ -387,20 +419,23 @@ function attemptTurn<TTurn, R>(
   strategy: ChildRunStrategy<TTurn, R>,
   runner: (signal: AbortSignal) => Effect.Effect<TTurn, Error, R>,
   loop: ChildRunInterruptible,
-  logger: AgentTrace,
+  trace: AgentTrace | undefined,
   startedAt: number,
 ): Effect.Effect<TurnAttempt<TTurn>, never, R> {
   return Effect.gen(function* () {
     const attempt = yield* Effect.exit(
       Effect.gen(function* () {
         const turn = yield* runner(loop.signal);
-        logTurnSummary(
-          logger,
+        yield* logTurnSummary(
+          trace,
           Date.now() - startedAt,
           strategy.getUsage?.(turn),
         );
         const turnIsError = strategy.isTurnError?.(turn) === true;
-        if (turnIsError) strategy.onTurnError?.(turn, logger);
+        const turnError = turnIsError
+          ? strategy.turnErrorMessage?.(turn)
+          : undefined;
+        if (turnError) yield* loopLog(trace, 'error', turnError);
         return { kind: 'completed' as const, turn, turnIsError };
       }),
     );
@@ -409,7 +444,7 @@ function attemptTurn<TTurn, R>(
     if (loop.isInterrupted() || isUserAbort(caught)) {
       return { kind: 'interrupted' as const };
     }
-    logger.error(toErrorMessage(caught));
+    yield* loopLog(trace, 'error', toErrorMessage(caught));
     return { kind: 'failed' as const, err: caught };
   });
 }
@@ -445,7 +480,7 @@ type ChildLoopTerminationCause = 'interrupted' | 'turn_failed' | 'terminal';
  * driver diagnostics; the child's output remains its provider's narrative.
  */
 function emitTurnDiagnostic(
-  logger: AgentTrace,
+  trace: AgentTrace | undefined,
   event: 'turn.accepted' | 'turn.delivered' | 'loop.terminated',
   params: {
     runId: RunId;
@@ -453,15 +488,13 @@ function emitTurnDiagnostic(
     queueOwner?: FollowUpConsumerLease;
     interruptionCause?: ChildLoopTerminationCause;
   },
-): void {
+): Effect.Effect<void> {
   const { runId, turn, queueOwner, interruptionCause } = params;
-  logger.debug(`childRunLoop ${event}`, {
-    data: {
-      runId,
-      ...(turn ? { attemptId: turn.key, turnIndex: turn.index } : {}),
-      ...(queueOwner ? { queueOwner: queueOwner.kind } : {}),
-      ...(interruptionCause ? { interruptionCause } : {}),
-    },
+  return loopLog(trace, 'debug', `childRunLoop ${event}`, {
+    runId,
+    ...(turn ? { attemptId: turn.key, turnIndex: turn.index } : {}),
+    ...(queueOwner ? { queueOwner: queueOwner.kind } : {}),
+    ...(interruptionCause ? { interruptionCause } : {}),
   });
 }
 
@@ -558,12 +591,16 @@ interface PendingChildDelivery {
  * enqueue site and the deferred wake site, which resolve the target at
  * different times.
  */
-function warnDetachedChildDelivery(logger: AgentTrace, runId: RunId): void {
-  logger.warn(
+const warnDetachedChildDelivery = (
+  trace: AgentTrace | undefined,
+  runId: RunId,
+): Effect.Effect<void> =>
+  loopLog(
+    trace,
+    'warn',
     'Turn result not delivered: child was detached from its orchestrator. The result remains in the run report.',
-    { data: { runId } },
+    { runId },
   );
-}
 
 /**
  * Format, persist, and enqueue one turn's outcome on the parent's follow-up
@@ -580,7 +617,7 @@ const deliverTurn = Effect.fn('childRunLoop.deliverTurn')(function* <
   session: SessionHandle;
   strategy: ChildRunStrategy<TTurn, R>;
   runId: RunId;
-  logger: AgentTrace;
+  trace: AgentTrace | undefined;
   turn: TTurn | null;
   turnKey: AttemptKey;
   /** The queued follow-ups this turn ran as its prompt. */
@@ -596,7 +633,7 @@ const deliverTurn = Effect.fn('childRunLoop.deliverTurn')(function* <
   const {
     strategy,
     runId,
-    logger,
+    trace,
     turn,
     turnKey,
     err,
@@ -636,7 +673,7 @@ const deliverTurn = Effect.fn('childRunLoop.deliverTurn')(function* <
   if (Exit.isSuccess(persisted) && strategy.deliveryMode !== 'persistOnly') {
     const targetRunId = parent.current ?? undefined;
     if (!targetRunId) {
-      warnDetachedChildDelivery(logger, runId);
+      yield* warnDetachedChildDelivery(trace, runId);
     } else if (prepareParentDelivery?.() !== false) {
       // Admit the parent row before consuming the prompt: a crash after
       // settlement then still leaves the result on the parent, and a crash
@@ -654,15 +691,11 @@ const deliverTurn = Effect.fn('childRunLoop.deliverTurn')(function* <
         { liveOffer: finalizing ? 'deferred' : 'immediate' },
       );
       if (submitted.kind === 'refused') {
-        logger.warn(
+        yield* loopLog(
+          trace,
+          'warn',
           `Turn result not delivered: parent run is unavailable (${submitted.reason ?? 'not_resumable'}). The result remains in the run report.`,
-          {
-            data: {
-              runId,
-              parentRunId: targetRunId,
-              reason: submitted.reason,
-            },
-          },
+          { runId, parentRunId: targetRunId, reason: submitted.reason },
         );
       } else {
         pending = {
@@ -711,24 +744,25 @@ const submitPendingDelivery = Effect.fn('submitPendingDelivery')(function* (
   pending: PendingChildDelivery | undefined,
   session: SessionHandle,
   runId: RunId,
-  logger: AgentTrace,
+  trace: AgentTrace | undefined,
 ): Effect.fn.Return<void, Error, AgentResume> {
   if (!pending) return;
   const targetRunId = pending.parent.current ?? undefined;
   if (!targetRunId) {
-    warnDetachedChildDelivery(logger, runId);
+    yield* warnDetachedChildDelivery(trace, runId);
     return;
   }
   /** The parent could not be resumed; its result still awaits an explicit resume. */
-  const warnParentNotResumed = (): void =>
-    logger.warn(
-      'Turn result queued for the parent, but the parent could not be resumed; an explicit Resume delivers it.',
-      { data: { runId, parentRunId: targetRunId } },
-    );
+  const warnParentNotResumed = loopLog(
+    trace,
+    'warn',
+    'Turn result queued for the parent, but the parent could not be resumed; an explicit Resume delivers it.',
+    { runId, parentRunId: targetRunId },
+  );
   const recovery = pending.recovery;
   if (recovery) {
     const resumed = yield* startFollowUpWake(targetRunId, recovery, session);
-    if (!resumed) warnParentNotResumed();
+    if (!resumed) yield* warnParentNotResumed;
   }
   // Duplicate-safe: the parent row was admitted before the child prompt
   // was consumed. This wake still goes through submitFollowUp so a mocked
@@ -738,18 +772,14 @@ const submitPendingDelivery = Effect.fn('submitPendingDelivery')(function* (
     session,
   });
   if (delivery.status === 'failed') {
-    logger.warn(
+    yield* loopLog(
+      trace,
+      'warn',
       `Turn result not delivered: parent run is unavailable (${delivery.reason}). The result remains in the run report.`,
-      {
-        data: {
-          runId,
-          parentRunId: targetRunId,
-          reason: delivery.reason,
-        },
-      },
+      { runId, parentRunId: targetRunId, reason: delivery.reason },
     );
   } else if (delivery.status === 'queued' && delivery.wake === 'failed') {
-    warnParentNotResumed();
+    yield* warnParentNotResumed;
   }
 });
 
@@ -837,8 +867,9 @@ export function startChildRunLoop<TTurn, R = never>(
       ? yield* childRunBudgetFor(runSession, runs)
       : undefined;
     const { childRun, parentRunId, runId, agentName, strategy } = params;
-    // Native runs own their trace; driver diagnostics use a channel trace.
-    const logger = childRun?.logger ?? createChannelTrace('childRunLoop');
+    // An agent-CLI child presents on its own trace; `loopLog` sends every
+    // other child's driver diagnostics to the process log.
+    const trace = childRun?.logger;
     const loop = new ChildRunInterruptible(
       strategy.ownsBackgroundProcess === true,
     );
@@ -944,9 +975,7 @@ export function startChildRunLoop<TTurn, R = never>(
               .getHandle(runId)
               ?.attachInterruptHandler(loop);
           }
-          sessionStage = childRun
-            ? logger.openStage(strategy.stageLabel)
-            : undefined;
+          sessionStage = trace?.openStage(strategy.stageLabel);
         });
       }),
     );
@@ -1055,10 +1084,9 @@ export function startChildRunLoop<TTurn, R = never>(
             const runNotice = (notice: Effect.Effect<void, Error>) =>
               notice.pipe(
                 Effect.catch((error) =>
-                  Effect.sync(() => {
-                    logger.warn('Child progress was not queued', {
-                      data: { runId, error },
-                    });
+                  loopLog(trace, 'warn', 'Child progress was not queued', {
+                    runId,
+                    error,
                   }),
                 ),
               );
@@ -1094,7 +1122,7 @@ export function startChildRunLoop<TTurn, R = never>(
               turnIndex += 1;
               turnStartedAt = Date.now();
               const turnKey = { key: attemptId, index: turnIndex };
-              emitTurnDiagnostic(logger, 'turn.accepted', {
+              yield* emitTurnDiagnostic(trace, 'turn.accepted', {
                 runId,
                 turn: turnKey,
                 queueOwner: queueLease,
@@ -1126,7 +1154,7 @@ export function startChildRunLoop<TTurn, R = never>(
                   strategy,
                   runId,
                   parent,
-                  logger,
+                  trace,
                   turn,
                   turnKey,
                   consumed,
@@ -1166,7 +1194,7 @@ export function startChildRunLoop<TTurn, R = never>(
                     delivery,
                     runSession,
                     runId,
-                    logger,
+                    trace,
                   );
                 }).pipe(Effect.uninterruptible),
             };
@@ -1180,7 +1208,7 @@ export function startChildRunLoop<TTurn, R = never>(
                 strategy,
                 strategy.continuous ? runner : gateTurn(runner),
                 loop,
-                logger,
+                trace,
                 turnStartedAt,
               );
               if (attempt.kind === 'interrupted') break;
@@ -1212,7 +1240,7 @@ export function startChildRunLoop<TTurn, R = never>(
                 finalizing,
               );
               const turnKey = { key: attemptId, index: turnIndex };
-              emitTurnDiagnostic(logger, 'turn.delivered', {
+              yield* emitTurnDiagnostic(trace, 'turn.delivered', {
                 runId,
                 turn: turnKey,
                 queueOwner: queueLease,
@@ -1236,7 +1264,7 @@ export function startChildRunLoop<TTurn, R = never>(
               }
 
               // Process strategies wake the parent before waiting for input.
-              yield* submitPendingDelivery(delivery, runSession, runId, logger);
+              yield* submitPendingDelivery(delivery, runSession, runId, trace);
               if (loop.isInterrupted()) break;
 
               // The park is durable before the block, so a follow-up arriving
@@ -1274,7 +1302,7 @@ export function startChildRunLoop<TTurn, R = never>(
           let terminationCause: ChildLoopTerminationCause = 'terminal';
           if (loop.isInterrupted()) terminationCause = 'interrupted';
           else if (sawTurnFailure) terminationCause = 'turn_failed';
-          emitTurnDiagnostic(logger, 'loop.terminated', {
+          yield* emitTurnDiagnostic(trace, 'loop.terminated', {
             runId,
             queueOwner: queueLease,
             interruptionCause: terminationCause,
@@ -1287,9 +1315,7 @@ export function startChildRunLoop<TTurn, R = never>(
               catch: ensureError,
             }).pipe(
               Effect.catch((error) =>
-                Effect.sync(() => {
-                  logger.warn('Child cost observer failed', { data: error });
-                }),
+                loopLog(trace, 'warn', 'Child cost observer failed', error),
               ),
             ),
             { startImmediately: true },
@@ -1342,13 +1368,16 @@ export function startChildRunLoop<TTurn, R = never>(
       );
       const released = yield* Effect.exit(runSession.releaseRunLease(runId));
       if (Exit.isFailure(released)) {
-        logger.warn('Failed to persist final child-run artifacts', {
-          data: { runId, error: Cause.squash(released.cause) },
-        });
+        yield* loopLog(
+          trace,
+          'warn',
+          'Failed to persist final child-run artifacts',
+          { runId, error: Cause.squash(released.cause) },
+        );
       }
       // The parent may immediately read this child; release its claim first.
       const delivery = yield* Effect.exit(
-        submitPendingDelivery(pendingDelivery, runSession, runId, logger),
+        submitPendingDelivery(pendingDelivery, runSession, runId, trace),
       );
       const activation = yield* Effect.exit(
         Effect.sync(releaseChildActivation),

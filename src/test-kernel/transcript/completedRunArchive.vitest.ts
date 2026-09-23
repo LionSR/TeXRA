@@ -538,7 +538,7 @@ describe('completedRunArchive facade', () => {
                 lastError: null,
                 declinedRoutes: [],
               },
-              state: { shouldSkipCycle: false, stateSlices: null },
+              state: { stateSlices: null },
             }),
           },
         ]);
@@ -684,7 +684,7 @@ describe('completedRunArchive facade', () => {
           'Conversation pagination is message-based. Use offset and limit',
         );
         // Use the installed session owner's services, including its persistent
-        // project database map and the resume path's ToolInjections.
+        // project database map.
       }).pipe((program) => withProcessServices(testRuntime(), program)),
   );
 

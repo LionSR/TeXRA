@@ -124,7 +124,7 @@ export function runGuardedLatexCommand<R = never>(
   options: GuardedLatexCommandOptions,
   operation: (
     guardResult: ActiveFileGuardSuccess,
-  ) => Effect.Effect<void, unknown, R>,
+  ) => Effect.Effect<void, Error, R>,
 ): Effect.Effect<void, never, R> {
   const { channel, action, saveDocument = false, errorMessage } = options;
 

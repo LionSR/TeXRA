@@ -43,7 +43,6 @@ import { readChildTurnState } from '@agent/storage/runRecords';
 import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { FileInteractionState } from '@agent/core/state/AgentWorkspaceState';
-import { noopTrace } from '@agent/trace';
 import { RunHandle } from '@agent/runtime/RunHandle';
 import type { BoundModel } from '@agent/runtime/run/modelBinding';
 import type { Message } from '@agent/runtime/loop/rows';
@@ -72,6 +71,7 @@ import {
   type RunId,
   AgentCategory,
 } from '@shared/schemas';
+import { noopTrace } from '@test/support/noopTrace';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
@@ -511,7 +511,7 @@ async function launchWaitingChild(options: {
     workingDirectory: process.cwd(),
   });
   await Effect.runPromise(
-    registerRun(session, PARENT_RUN_ID, parentConfig, PARENT_AGENT, {
+    registerRun(session, PARENT_RUN_ID, parentConfig, {
       identity: { kind: 'agent', agent: PARENT_AGENT },
       parentRunId: OUTER_RUN_ID,
     }),
@@ -547,7 +547,6 @@ async function launchWaitingChild(options: {
       logger: noopTrace,
       toolPolicy: {
         approvalPromptsUnavailable: false,
-        runtimeUnavailableTools: [],
       },
     },
   };
@@ -1108,7 +1107,6 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
             session,
             toolPolicy: {
               approvalPromptsUnavailable: false,
-              runtimeUnavailableTools: [],
             },
           },
         });

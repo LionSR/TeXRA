@@ -3,6 +3,7 @@
  * coordinator machine, and the tagged request failures of `oauthRequest.ts`,
  * as the caller's provider-specific auth error.
  */
+import { ensureError } from '@utils/errors/errorMessage';
 import {
   SubscriptionOAuthError,
   type SubscriptionOAuthErrorKind,
@@ -22,18 +23,19 @@ export type ProviderAuthErrorCtor = new (
   options?: ErrorOptions,
 ) => ProviderAuthError;
 
-/** The provider error type for a machine failure; unrelated errors pass through. */
+/** The provider error type for a machine failure; unrelated errors pass
+ *  through, a non-Error rejection wrapped as one. */
 export function toProviderAuthError(
   error: unknown,
   ErrorType: ProviderAuthErrorCtor,
-): unknown {
+): Error {
   if (error instanceof ErrorType) return error;
   if (error instanceof SubscriptionOAuthError) {
     return new ErrorType(error.message, error.kind, error.status, {
       cause: error,
     });
   }
-  return error;
+  return ensureError(error);
 }
 
 /**

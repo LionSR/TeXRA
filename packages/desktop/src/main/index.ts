@@ -77,7 +77,7 @@ import { Cancelled, Rejected } from '@shared/session/requestErrors';
 import { registerRuntimeShutdownHandlers } from '@tools/agentCliSessionStores';
 import { refreshToolAvailability } from '@tools/toolAvailability';
 import { killActiveRecording } from '@tools/media/audio';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import {
   readGitEnvironmentSummary,
   readRecentCommits,
@@ -736,6 +736,13 @@ function createWindow(options: {
         (binding) => binding.snapshot.refreshAuth,
         { concurrency: 'unbounded', discard: true },
       );
+      // Sign-in: a signed-out load already stamped the catalog as including
+      // remote, so only a forced refetch picks up the new account's agents.
+      // Sign-out also lands here, after the coordinator dropped the remote
+      // entries; refetching then would re-stamp a signed-out catalog.
+      if (!teamSignInPending && (yield* options.supabaseAuth.authenticated)) {
+        yield* refresh({ includeRemote: true });
+      }
       yield* settingsIpcRef.current?.refreshAuthDependentData({
         deferAgentCatalogRefresh: teamSignInPending,
       }) ?? Effect.void;
@@ -768,11 +775,11 @@ function createWindow(options: {
     chooseDesktopOAuthProvider((messageBoxOptions) =>
       dialog.showMessageBox(window, messageBoxOptions),
     );
-  const signIn = (): Effect.Effect<void, unknown> =>
+  const signIn = (): Effect.Effect<void, Error> =>
     Effect.gen(function* () {
       const provider = yield* Effect.tryPromise({
         try: chooseOAuthProvider,
-        catch: (cause) => cause,
+        catch: ensureError,
       });
       if (provider === undefined) return;
       yield* desktopAuth.signIn(provider);
@@ -863,7 +870,7 @@ function createWindow(options: {
             defaultPath: folderPickerDefaultPath(),
             properties: ['openDirectory'],
           }),
-        catch: (cause) => cause,
+        catch: ensureError,
       });
       const selectedPath = result.canceled ? undefined : result.filePaths[0];
       if (!selectedPath) return;
@@ -1209,11 +1216,6 @@ function createWindow(options: {
     },
     promptForSecret: (input) =>
       promptController.request({ ...input, password: true }),
-    // Not previewHost.openExternal: that one shows an error dialog and
-    // rethrows a rewrapped error, which this surface's caller does not expect.
-    openExternal: async (url) => {
-      await shell.openExternal(url);
-    },
     onError: reportAsyncError,
   };
   const requireSettingsIpc = (): DesktopSettingsIpc => {
@@ -1428,12 +1430,6 @@ function createWindow(options: {
         renderer: {
           postToRenderer: postForActiveProject,
         },
-        // The Tools tab's handlers answer the renderer with a promise, so the
-        // settings IPC arm is where this program runs.
-        navigation: {
-          openExternal: (url) =>
-            runtime.runPromise(previewHost.openExternal(url)),
-        },
         commands: {
           run: async (command: string) => {
             if (projectBindings.get(project.key) !== documentBinding) return;
@@ -1466,6 +1462,12 @@ function createWindow(options: {
       toolingSettingsController,
       globalState: options.globalState,
       secrets: options.secrets,
+      // The one browser hand-off every settings URL takes. Its failure
+      // reaches the settings IPC's own report, so the opener shows no dialog
+      // of its own: one failed open, one dialog.
+      externalOpener: {
+        openExternal: (url) => openExternalProgram(url, false),
+      },
       ui: settingsUi,
       session: project.session,
       runtime,
@@ -1532,7 +1534,7 @@ function createWindow(options: {
             }
             const { buildDesktopSetupRunRequest } = yield* Effect.tryPromise({
               try: () => import('@controllers/onboarding/setupLaunch'),
-              catch: (error) => error,
+              catch: ensureError,
             });
             const request = yield* buildDesktopSetupRunRequest(
               setupSession.roots,

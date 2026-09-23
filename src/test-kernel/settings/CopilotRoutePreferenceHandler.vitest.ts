@@ -333,7 +333,7 @@ describe('Copilot route preference handler', () => {
         const port = {
           ...languageModelPort([]),
           selectModels: vi
-            .fn<() => Effect.Effect<readonly LanguageModelInfo[], unknown>>()
+            .fn<() => Effect.Effect<readonly LanguageModelInfo[], Error>>()
             .mockReturnValueOnce(Effect.promise(() => ordinary.promise))
             .mockReturnValueOnce(Effect.promise(() => forced.promise)),
         };

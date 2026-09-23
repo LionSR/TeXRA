@@ -57,7 +57,7 @@ export type ConcreteToolClass<T, R = never> = new () => BaseTool<T, R> &
 /** The run body a tool definition may carry inline. */
 export type ToolExecute<T, R> = (
   input: T,
-) => Effect.Effect<ToolResult, unknown, R>;
+) => Effect.Effect<ToolResult, Error, R>;
 
 export type DefineToolOptions<T, R = never> = {
   name: string;

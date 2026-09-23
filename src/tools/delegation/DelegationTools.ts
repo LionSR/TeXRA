@@ -133,7 +133,7 @@ Optional auto-attach from the input LaTeX:
 }) {
   protected execute(
     input: WorkflowAgentInput,
-  ): Effect.Effect<ToolResult, unknown, ToolServices> {
+  ): Effect.Effect<ToolResult, Error, ToolServices> {
     return Effect.gen(function* () {
       const call = requireDelegationParent(
         'delegate_workflow',
@@ -256,7 +256,7 @@ Git worktree support: resolved from the active workspace at runtime.`,
 }) {
   protected execute(
     input: DelegateAgentInput,
-  ): Effect.Effect<ToolResult, unknown, ToolServices> {
+  ): Effect.Effect<ToolResult, Error, ToolServices> {
     const resumeAgent = this.resumeAgent;
     return Effect.gen(function* () {
       const call = requireDelegationParent('delegate_agent', yield* ToolCall);

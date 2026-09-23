@@ -13,9 +13,10 @@ import {
 } from '@controllers/modelAccess/subscriptionProviders';
 import { SubscriptionUsageService } from '@controllers/modelAccess/subscriptionUsage/SubscriptionUsageService';
 import {
-  ProviderKeyActionFailed,
   SettingsProfileKeyController,
+  type ProviderKeyActionFailed,
 } from '@controllers/settingsView/SettingsProfileKeyController';
+import type { SharedSettingsCommandPorts } from '@controllers/settingsView/sharedSettingsCommands';
 import { SettingsProfileController } from '@controllers/settingsView/SettingsProfileController';
 import { SettingsModelSelectionController } from '@controllers/settingsView/SettingsModelSelectionController';
 import type {
@@ -110,7 +111,7 @@ interface DesktopCredentialSettingsControllerOptions extends SettingsStatePorts 
   };
   readonly notifications: MessageHost;
   readonly auth: {
-    signIn(): Effect.Effect<void, unknown>;
+    signIn(): Effect.Effect<void, Error>;
     signOut(): Promise<void>;
   };
   readonly subscriptionUsage?: Pick<
@@ -140,12 +141,7 @@ interface DesktopCredentialSettingsControllerOptions extends SettingsStatePorts 
 
 type DesktopProfileHandlers = Pick<
   SettingsViewInboundHandlerRegistry,
-  | typeof SETTINGS_VIEW_COMMANDS.SIGN_IN
-  | typeof SETTINGS_VIEW_COMMANDS.SIGN_OUT
-  | typeof SETTINGS_VIEW_COMMANDS.SET_PROVIDER_KEY
-  | typeof SETTINGS_VIEW_COMMANDS.REMOVE_PROVIDER_KEY
-  | typeof SETTINGS_VIEW_COMMANDS.OPEN_PROVIDER_KEY_URL
-  | typeof SETTINGS_VIEW_COMMANDS.OPEN_EXTERNAL_URL
+  typeof SETTINGS_VIEW_COMMANDS.SIGN_IN | typeof SETTINGS_VIEW_COMMANDS.SIGN_OUT
 >;
 
 type DesktopChatGptHandlers = Pick<
@@ -177,6 +173,12 @@ export interface DesktopCredentialSettingsController {
   readonly chatGptHandlers: DesktopChatGptHandlers;
   readonly grokHandlers: DesktopGrokHandlers;
   readonly modelSelectionController: SettingsModelSelectionController<LanguageModel>;
+  /** The provider-key arms are the shared settings body's; this controller
+   *  owns the key policy and the window's report of a failed key write. */
+  readonly profileKeyController: SharedSettingsCommandPorts['profileKeys'];
+  reportProviderKeyFailure(
+    error: ProviderKeyActionFailed,
+  ): Effect.Effect<void, Error, ProcessServices>;
   /**
    * The posts and refreshes below are programs, so a key write and the
    * repaint it triggers are one run at the window's IPC, not a chain of them.
@@ -197,7 +199,7 @@ export interface DesktopCredentialSettingsController {
   ): Effect.Effect<void, Error, ProcessServices>;
   refreshAuthDependentData(): Effect.Effect<void, Error, ProcessServices>;
   /** Also driven by the desktop welcome card, not just the Settings view. */
-  signInChatGpt(): Effect.Effect<void, unknown, ProcessServices>;
+  signInChatGpt(): Effect.Effect<void, Error, ProcessServices>;
 }
 
 /** Owns desktop credential mutation, authentication, and dependent refreshes. */
@@ -206,9 +208,9 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
   readonly chatGptHandlers: DesktopChatGptHandlers;
   readonly grokHandlers: DesktopGrokHandlers;
   readonly modelSelectionController: SettingsModelSelectionController<LanguageModel>;
+  readonly profileKeyController: SettingsProfileKeyController<ProcessServices>;
 
   private readonly profileController: SettingsProfileController;
-  private readonly profileKeyController: SettingsProfileKeyController<ProcessServices>;
   private readonly subscriptionUsage: Pick<
     SubscriptionUsageService,
     'getAllUsage' | 'invalidate'
@@ -268,26 +270,6 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
           try: () => options.auth.signOut(),
           catch: ensureError,
         }),
-      setProviderKey: (message) =>
-        this.profileKeyController
-          .setProviderKey(message.provider)
-          .pipe(
-            Effect.catchTag('ProviderKeyActionFailed', (error) =>
-              this.reportKeyFailure(error),
-            ),
-          ),
-      removeProviderKey: (message) =>
-        this.profileKeyController
-          .removeProviderKey(message.provider)
-          .pipe(
-            Effect.catchTag('ProviderKeyActionFailed', (error) =>
-              this.reportKeyFailure(error),
-            ),
-          ),
-      openProviderKeyUrl: (message) =>
-        this.profileKeyController.openProviderKeyUrl(message.provider),
-      openExternalUrl: (message) =>
-        options.externalOpener.openExternal(message.url),
     };
     // Each arm is a settings-view message, so the subscription programs settle
     // here exactly as the profile arms above do.
@@ -305,7 +287,7 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
     };
   }
 
-  private reportKeyFailure(error: ProviderKeyActionFailed) {
+  reportProviderKeyFailure(error: ProviderKeyActionFailed) {
     return Effect.gen({ self: this }, function* () {
       yield* this.options.notifications.showErrorMessage(
         `${error.message}: ${toErrorMessage(error.cause)}`,
@@ -456,7 +438,7 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
     ) => string,
     work: (
       provider: ReturnType<typeof subscriptionProvider>,
-    ) => Effect.Effect<void, unknown, ProcessServices>,
+    ) => Effect.Effect<void, Error, ProcessServices>,
   ) {
     const provider = subscriptionProvider(providerId);
     const options = this.options;

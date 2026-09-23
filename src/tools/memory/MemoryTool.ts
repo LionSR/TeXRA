@@ -181,7 +181,7 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
 }) {
   protected execute(
     input: MemoryToolInput,
-  ): Effect.Effect<ToolResult, unknown, ToolServices> {
+  ): Effect.Effect<ToolResult, Error, ToolServices> {
     return Effect.gen({ self: this }, function* () {
       const call = yield* ToolCall;
       const runs = yield* Runs;

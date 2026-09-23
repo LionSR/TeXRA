@@ -7,7 +7,6 @@
 
 import { Effect, FileSystem, PlatformError } from 'effect';
 
-import { isNotADirectoryError } from '@common/errors';
 import { withLogChannel } from '@logger/effectLog';
 import {
   fileLocationDisplayPath,
@@ -20,6 +19,7 @@ import { locateInWorkspace } from '@utils/files/workspaceFS';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { diffLineChanges } from '@utils/text/diff';
 import { countLines, normalizeLineEndings } from '@utils/text/stringUtils';
+import { absentReason } from '@utils/files/fsEntryExists';
 
 import { traceFileLineage } from './lineageMapping';
 import { ensureRoundData, type OutputState } from './outputState';
@@ -59,12 +59,15 @@ function computeDiffStats(
       const message = `Failed to compute diff stats: ${toErrorMessage(err)}`;
       // The reads fail as `PlatformError`s, whose `reason` carries the
       // errno classification the raw Node error used to.
-      const notFound =
+      const write =
         err instanceof PlatformError.PlatformError &&
-        err.reason._tag === 'NotFound';
-      return (
-        notFound ? Effect.logDebug(message) : Effect.logWarning(message)
-      ).pipe(withLogChannel(CHANNEL), Effect.as<DiffStats>({}));
+        err.reason._tag === 'NotFound'
+          ? Effect.logDebug
+          : Effect.logWarning;
+      return write(message).pipe(
+        withLogChannel(CHANNEL),
+        Effect.as<DiffStats>({}),
+      );
     }),
   );
 }
@@ -92,13 +95,7 @@ function toWorkspaceOrigin(
     // a file counts and a dangling one (or a directory) does not.
     const isFile = yield* fs.stat(resolved.absolutePath).pipe(
       Effect.map((info) => info.type === 'File'),
-      Effect.catchIf(
-        (error) =>
-          error.reason._tag === 'NotFound' ||
-          (error.reason._tag === 'BadResource' &&
-            isNotADirectoryError(error.reason.cause)),
-        () => Effect.succeed(false),
-      ),
+      Effect.catchIf(absentReason, () => Effect.succeed(false)),
     );
     if (resolved.kind !== 'workspace' || !isFile) {
       return loc;

@@ -128,7 +128,6 @@ describe('PRPollingSource annotation drain', () => {
           'repo',
           42,
           expect.anything(),
-          expect.anything(),
           expect.any(Number),
         );
         expect(state.currentShaState?.pendingAnnotationRuns).toEqual([run]);

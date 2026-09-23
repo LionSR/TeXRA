@@ -11,9 +11,17 @@ import '@test/support/defaultSessionTestSetup';
 // Third-party imports
 import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { dirname } from 'node:path';
+import { dirname, join } from 'node:path';
 import { it } from '@effect/vitest';
-import { Deferred, Effect, Exit, Fiber, Layer, SynchronizedRef } from 'effect';
+import {
+  Deferred,
+  Effect,
+  Exit,
+  Fiber,
+  FileSystem,
+  Layer,
+  SynchronizedRef,
+} from 'effect';
 import { describe, expect, vi } from 'vitest';
 
 // Local imports
@@ -24,9 +32,9 @@ import {
 } from '@agent/core/definition/AgentDataclass';
 import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
 import {
-  reflectionFlowState,
+  familyState,
   rowAggregate,
-  runtimeSnapshotRow,
+  snapshotRow,
   stepRow,
 } from '@agent/runtime/loop/rows';
 import { runReflection } from '@agent/runtime/loop/reflection';
@@ -37,6 +45,8 @@ import { turnText } from '@agent/runtime/run/turnText';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { UsageMonitor } from '@agent/runtime/UsageMonitor';
 import { TraceEmitter } from '@agent/trace';
+import { Runs } from '@agent/runtime/runRegistry';
+import type { RunCell } from '@agent/runtime/loop/runProgram';
 import { StateReadFailed } from '@platform/interfaces';
 import {
   LanguageModel,
@@ -50,6 +60,10 @@ import {
   type RetryErrorInfo,
   type RunId,
 } from '@shared/schemas';
+import {
+  WORKFLOW_RAW_OUTPUT_EXT,
+  workflowOutputPath,
+} from '@shared/constants/workflowOutput';
 import { RunLedger } from '@shared/session/runLedger';
 import type { RunState } from '@shared/session/runStateFold';
 import { StreamLog } from '@shared/session/traceEntries';
@@ -98,6 +112,8 @@ const scripted = vi.hoisted(() => ({
   compileResults: new Map<number, CompileResult | undefined>(),
   /** Whether the round summary lists its outputs as files to open. */
   openFiles: false,
+  /** A valid extracted document with the former raw-cycle filename. */
+  collidingDocument: false,
 }));
 
 vi.mock('@agent/output/compileCheck', async (importOriginal) => ({
@@ -124,17 +140,27 @@ vi.mock('@agent/output/outputFileExtraction', async (importOriginal) => {
         outputState: OutputState,
         _deps: unknown,
         _xml: unknown,
-        _location: unknown,
+        outputLocation: { absolutePath: string },
         round: number,
       ) =>
-        Effect.sync(() => {
+        Effect.gen(function* () {
+          const source = scripted.collidingDocument
+            ? 'output.c0.xml'
+            : 'main.tex';
+          const absolutePath = scripted.collidingDocument
+            ? join(dirname(outputLocation.absolutePath), source)
+            : `/storage/executions/${scripted.runId}/r${round}/main.tex`;
+          if (scripted.collidingDocument) {
+            const fs = yield* FileSystem.FileSystem;
+            yield* fs.writeFileString(absolutePath, 'extracted document');
+          }
           ensureRoundData(outputState, round).outputs = [
             {
-              source: 'main.tex',
+              source,
               round,
               location: locate(
-                `/storage/executions/${scripted.runId}/r${round}/main.tex`,
-                `r${round}/main.tex`,
+                absolutePath,
+                `r${round}/${source}`,
                 scripted.runId as RunId,
               ),
               lineage: null,
@@ -317,19 +343,21 @@ function invokerLayer(init: LoopInit, requests: InvokeRequest[]) {
     ModelInvoker,
     Effect.gen(function* () {
       const run = yield* AgentRun;
-      const ledger = yield* RunLedger;
       const aggregateId = rowAggregate(run.runId);
       return {
-        invoke: (state: RunState, request: InvokeRequest) =>
+        invoke: (cell: RunCell, request: InvokeRequest) =>
           Effect.gen(function* () {
+            const state = yield* cell.current;
             const turnScript = init.turns?.[requests.length] ?? COMPLETE;
             requests.push(request);
             if (init.beforeResponse) yield* init.beforeResponse(request.round);
             if ('failWith' in turnScript) {
-              const failed = yield* ledger.appendBatch(run.runId, state, [
-                runtimeSnapshotRow(run.runId, state, {
-                  lastError: turnScript.failWith,
-                  declinedRoutes: [],
+              const failed = yield* cell.append([
+                snapshotRow(run.runId, state, {
+                  runtime: {
+                    lastError: turnScript.failWith,
+                    declinedRoutes: [],
+                  },
                 }),
               ]);
               return {
@@ -345,7 +373,7 @@ function invokerLayer(init: LoopInit, requests: InvokeRequest[]) {
               turnScript.text ?? `round ${request.round} output`,
               turnScript.finish,
             );
-            const next = yield* ledger.appendBatch(run.runId, state, [
+            const next = yield* cell.append([
               {
                 type: 'model.message',
                 aggregateId,
@@ -371,7 +399,11 @@ function invokerLayer(init: LoopInit, requests: InvokeRequest[]) {
               // As the invoker does: the response retires a recorded failure.
               ...(state.lastError === null
                 ? []
-                : [runtimeSnapshotRow(run.runId, state, { lastError: null })]),
+                : [
+                    snapshotRow(run.runId, state, {
+                      runtime: { lastError: null },
+                    }),
+                  ]),
               stepRow(run.runId, state, 'response.ready'),
             ]);
             if (init.afterResponse) yield* init.afterResponse(request.round);
@@ -448,6 +480,7 @@ function loopProgram(init: LoopInit, requests: InvokeRequest[]) {
       invokerLayer(init, requests).pipe(
         Layer.provideMerge(agentRunTestLayer(init)),
         Layer.provideMerge(Layer.succeed(RunLedger)(init.session.ledger)),
+        Layer.provideMerge(Layer.succeed(Runs)(init.session.runs)),
         Layer.provideMerge(rootedFsLayer(init.session.roots)),
         Layer.provideMerge(
           LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT),
@@ -507,6 +540,7 @@ function startedRun(session: SessionHandle): RunId {
   scripted.runId = runId;
   scripted.compileResults.clear();
   scripted.openFiles = false;
+  scripted.collidingDocument = false;
   publishTestRunStart(session, runId);
   return runId;
 }
@@ -551,9 +585,21 @@ function userTexts(state: RunState): string[] {
   );
 }
 
+/** The canonical raw output a round's pipeline reads, as the loop derives it
+ *  from the round. */
+function canonicalOutputOf(
+  session: SessionHandle,
+  runId: RunId,
+  round: number,
+): string {
+  return new RunFileService(runId, session.roots).createLocation(
+    workflowOutputPath({ ext: WORKFLOW_RAW_OUTPUT_EXT, round }),
+  ).absolutePath;
+}
+
 /** The persisted reflection state of a folded run. */
 function flowOf(state: RunState) {
-  const flow = reflectionFlowState(state);
+  const flow = familyState(state, 'reflection');
   if (flow === null) throw new Error('The run persisted no reflection state.');
   return flow;
 }
@@ -941,6 +987,31 @@ describe('the output facts a reflection round publishes', () => {
     }),
   );
 
+  it.effect('keeps raw cycles separate from an output.c0.xml document', () =>
+    Effect.gen(function* () {
+      const session = yield* createProcessSession();
+      const runId = startedRun(session);
+      scripted.collidingDocument = true;
+
+      const { result, state } = yield* runLoop({ runId, session, rounds: 1 });
+      const canonical = canonicalOutputOf(session, runId, 0);
+      const roundDir = dirname(canonical);
+      const cycle = join(dirname(roundDir), 'raw', 'r0', 'output.c0.xml');
+      const extracted = join(roundDir, 'output.c0.xml');
+
+      expect(result.outcome).toBe(RUN_OUTCOME.COMPLETED);
+      expect(state.roundOutputs[0]?.outputs[0]?.location.absolutePath).toBe(
+        extracted,
+      );
+      expect(yield* Effect.promise(() => readFile(cycle, 'utf8'))).toBe(
+        'round 0 output',
+      );
+      expect(yield* Effect.promise(() => readFile(extracted, 'utf8'))).toBe(
+        'extracted document',
+      );
+    }),
+  );
+
   it.effect('publishes the run-wide output map, restored rounds included', () =>
     Effect.gen(function* () {
       const session = yield* createProcessSession();
@@ -1079,17 +1150,16 @@ describe('a token-limited reflection response', () => {
         ],
       });
 
-      const location = flowOf(state).outputLocation;
-      if (location === null) throw new Error('The round kept no output.');
+      const canonical = canonicalOutputOf(session, runId, state.round);
       // Every cycle asks the policy how it joins onto what came before; the
       // first has nothing before it, so its connector is never written.
       expect(connectResponseText.mock.calls).toEqual([
         ['', 'left'],
         ['left', 'right'],
       ]);
-      expect(
-        yield* Effect.promise(() => readFile(location.absolutePath, 'utf-8')),
-      ).toBe('left\nright');
+      expect(yield* Effect.promise(() => readFile(canonical, 'utf-8'))).toBe(
+        'left\nright',
+      );
     }),
   );
 
@@ -1136,7 +1206,7 @@ describe('an interrupted reflection run', () => {
       expect(state.step).toBe('halted');
       expect(state.outcome).toBe(RUN_OUTCOME.CANCELLED);
       // The round the stop interrupted is still the round a resume reopens.
-      expect(flowOf(state).currentRound).toBe(0);
+      expect(state.round).toBe(0);
 
       const resumed = yield* runLoop({
         runId,
@@ -1174,7 +1244,7 @@ describe('an interrupted reflection run', () => {
           RUN_OUTCOME.CANCELLED,
         ]);
         expect(halted.outcome).toBe(RUN_OUTCOME.CANCELLED);
-        expect(flowOf(halted).currentRound).toBe(1);
+        expect(halted.round).toBe(1);
         expect(halted.roundOutputs[0]?.outputs).toHaveLength(1);
 
         const resumed = yield* runLoop({
@@ -1191,30 +1261,18 @@ describe('an interrupted reflection run', () => {
   /**
    * C15: a crash between the committed response row and the round's raw
    * output write. The response is paid for and durable, so resume reprocesses
-   * it. The recorded byte offset prevents a duplicate append and repairs
-   * different-length debris, but equal-length conflicting bytes are
-   * indistinguishable from the completed write.
+   * it. The reprocessed cycle writes its own path wholesale, keyed by the
+   * folded continuationIndex, so debris a crash left in the cycle file or in
+   * the canonical output is rewritten from the coordinate, never reconciled
+   * by length.
    */
   it.effect.each([
-    { name: 'missing file', seed: null, expected: 'round 0 output' },
-    {
-      name: 'completed write',
-      seed: 'round 0 output',
-      expected: 'round 0 output',
-    },
-    {
-      name: 'different-length debris',
-      seed: 'stale bytes from the crash',
-      expected: 'round 0 output',
-    },
-    {
-      name: 'same-length debris',
-      seed: 'stale 0 output',
-      expected: 'stale 0 output',
-    },
+    { name: 'missing file', seed: null },
+    { name: 'canonical debris', seed: 'canonical' },
+    { name: 'cycle debris', seed: 'cycle' },
   ])(
-    'reconciles a reprocessed response by the recorded output byte length ($name)',
-    ({ seed, expected }) =>
+    'rewrites a reprocessed response from its coordinate ($name)',
+    ({ seed }) =>
       Effect.gen(function* () {
         const session = yield* createProcessSession();
         const runId = startedRun(session);
@@ -1223,22 +1281,25 @@ describe('an interrupted reflection run', () => {
           0,
           'afterResponse',
         );
-        // The response row is committed and no snapshot has recorded a
-        // write: the offset resume reconciles against is zero.
+        // The response row is committed; its cycle file is not yet written.
         expect(halted.lastTurn).not.toBeNull();
-        expect(flowOf(halted).rawOutputBytes).toBe(0);
-        const path = flowOf(halted).outputLocation?.absolutePath;
-        if (path === undefined) throw new Error('The round has no output.');
+        const canonical = canonicalOutputOf(session, runId, halted.round);
         yield* Effect.promise(async () => {
           if (seed === null) return;
-          await mkdir(dirname(path), { recursive: true });
-          await writeFile(path, seed);
+          const target =
+            seed === 'canonical'
+              ? canonical
+              : join(dirname(dirname(canonical)), 'raw', 'r0', 'output.c0.xml');
+          await mkdir(dirname(target), { recursive: true });
+          await writeFile(target, 'stale bytes from the crash');
         });
 
         yield* runLoop({ runId, session, rounds: 1, resume: true });
 
-        const content = yield* Effect.promise(() => readFile(path, 'utf-8'));
-        expect(content).toBe(expected);
+        const content = yield* Effect.promise(() =>
+          readFile(canonical, 'utf-8'),
+        );
+        expect(content).toBe('round 0 output');
       }),
   );
 });

@@ -292,7 +292,11 @@ export async function notifyCliUpdate(context: CliContext): Promise<void> {
   // would only move the identical crash a few statements down while hiding
   // why. The check's own best-effort silence is the `Effect.ignoreCause`
   // below, which covers the part that actually runs on the runtime.
+  // The install is first-call-wins and `chat` reaches here before `runChat`,
+  // so this call must carry the same options: without `resourcesPath` the
+  // built-in agent directories resolve against the cwd and come up empty.
   const runtime = await installCliProcessRuntime(context.storageRoot, {
+    resourcesPath: context.resourcesPath,
     minimumLogLevel: context.minimumLogLevel,
   });
   const check = Effect.gen(function* () {

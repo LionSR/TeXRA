@@ -14,6 +14,7 @@ import {
   Stream,
   SubscriptionRef,
 } from 'effect';
+import { TestClock } from 'effect/testing';
 import { beforeEach, describe, expect, onTestFinished, vi } from 'vitest';
 
 interface RunAgentOptions {
@@ -180,6 +181,7 @@ vi.mock('@transcript/StreamLogStore', () => ({
 }));
 
 // Local imports - package API under test
+import { SHUTDOWN_PHASE_DEADLINE_MS } from '@platform/defaults/lifecycleHost';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { RunId } from '@shared/schemas';
 import type { SessionView as RuntimeSessionView } from '@shared/session/sessionView';
@@ -511,6 +513,35 @@ describe('agent package sessions', () => {
         for (const order of mocks.closeSession.mock.invocationCallOrder) {
           expect(order).toBeLessThan(disposal as number);
         }
+      }),
+  );
+
+  it.effect(
+    'settles every root it closes under one shutdown deadline, not one each (#12804)',
+    () =>
+      Effect.gen(function* () {
+        // Each close spends its whole budget, as a close with a run still
+        // live past it does.
+        const spendBudget = () =>
+          Effect.sleep(SHUTDOWN_PHASE_DEADLINE_MS).pipe(
+            Effect.as({ settled: false, abandoned: [] as string[] }),
+          );
+        mocks.closeSession
+          .mockImplementationOnce(spendBudget)
+          .mockImplementationOnce(spendBudget);
+        const released = yield* Effect.forkChild(
+          Effect.gen(function* () {
+            const sessions = yield* Sessions;
+            yield* sessions.open();
+            yield* sessions.open({ storage: '/other-storage' } as never);
+          }).pipe(Effect.scoped, Effect.provide(Sessions.layer(PLATFORM))),
+        );
+
+        yield* TestClock.adjust(`${SHUTDOWN_PHASE_DEADLINE_MS} millis`);
+
+        expect(released.pollUnsafe()).toBeDefined();
+        expect(mocks.closeSession).toHaveBeenCalledTimes(2);
+        expect(mocks.disposeRuntime).toHaveBeenCalledOnce();
       }),
   );
 

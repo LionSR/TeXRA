@@ -77,7 +77,7 @@ export interface LeanLanguageServicesShape {
   fetchDiagnosticsForFile(
     file: string,
     runId?: RunId,
-  ): Effect.Effect<FetchDiagnosticsResult, unknown>;
+  ): Effect.Effect<FetchDiagnosticsResult>;
   /**
    * Move the host editor cursor to the first error in `diagnostics`, when the
    * host has an editor to move (VS Code). A host capability, not a query:
@@ -88,11 +88,11 @@ export interface LeanLanguageServicesShape {
   navigateToFirstError?(
     filePath: string,
     diagnostics: LeanDiagnostic[],
-  ): Effect.Effect<void, unknown>;
+  ): Effect.Effect<void>;
   executeProjectCommand(
     command: LeanProjectCommand,
     runId?: RunId,
-  ): Effect.Effect<void, unknown>;
+  ): Effect.Effect<void, Error>;
   /**
    * Stop the per-worktree servers attributed to an agent run that ended.
    * A host capability like {@link navigateToFirstError}: the direct

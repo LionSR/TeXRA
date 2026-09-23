@@ -49,14 +49,11 @@ import {
 import { ensureError } from '@utils/errors/errorMessage';
 
 /**
- * `BaseFS.isFile` without the facade.
- *
- * The facade's `isFile` is the FileType bitmask after a lstat that, for a
- * link, ORs in the target's type: a symlink to a file is a file, a circular
- * link is not. `fs.stat` follows, so a symlink to a file answers `File`, a
- * dangling target is `NotFound`/`ENOTDIR`, and a circular link raises `ELOOP`
- * (`BadResource`) — those absences match `statIfExists`, and any other
- * failure still propagates.
+ * Whether `target` is a file, following links: a symlink to a file is a
+ * file, a dangling or circular link is not. `fs.stat` follows, so a symlink
+ * to a file answers `File`, a dangling target is `NotFound`/`ENOTDIR`, and a
+ * circular link raises `ELOOP` (`BadResource`) — those absences match
+ * `statIfExists`, and any other failure still propagates.
  */
 const fileAt = (fs: FileSystem.FileSystem, target: string) =>
   fs.stat(target).pipe(
@@ -199,7 +196,7 @@ Parameters map directly to subagent-result delivery attributes:
 }) {
   protected execute(
     input: AcceptRunFilesInput,
-  ): Effect.Effect<ToolResult, unknown, ToolServices> {
+  ): Effect.Effect<ToolResult, Error, ToolServices> {
     const acceptFiles = (call: ToolCallShape) => this.acceptFiles(input, call);
     return Effect.gen(function* () {
       const call = yield* ToolCall;
@@ -229,7 +226,7 @@ Parameters map directly to subagent-result delivery attributes:
       call: ToolCallShape,
     ): Effect.fn.Return<
       ToolResult,
-      unknown,
+      Error,
       ToolCall | FileSystem.FileSystem | WorkspaceFs
     > {
       const { execution_id: runId, files, strip_criticize } = input;
