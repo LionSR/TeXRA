@@ -72,9 +72,9 @@ interface DesktopOnboardingIpcOptions {
   hasCredential: () => Effect.Effect<boolean, never, LanguageModel>;
   /** Launch the setup conversation when the user clicks "Run Setup". The
    *  program is forked below, so its own failure is the host's to word. */
-  kickoffSetup: () => Effect.Effect<void, unknown>;
+  kickoffSetup: () => Effect.Effect<void, Error>;
   /** Run ChatGPT sign-in flow from the welcome card. */
-  signInWithChatGpt: () => Effect.Effect<void, unknown, ProcessServices>;
+  signInWithChatGpt: () => Effect.Effect<void, Error, ProcessServices>;
   onAsyncError: (error: unknown) => void;
   /** The process runtime the composition root built; the funnel refresh runs
    *  on it rather than on a looked-up one. */

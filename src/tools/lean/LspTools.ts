@@ -133,7 +133,7 @@ const catchLeanFailure = (
   message: (cause: unknown) => string,
   summary: string,
 ) =>
-  Effect.catchCause((cause: Cause.Cause<unknown>) => {
+  Effect.catchCause((cause: Cause.Cause<Error>) => {
     if (Cause.hasInterrupts(cause)) return Effect.failCause(cause);
     const error = Cause.squash(cause);
     return Effect.fail(
@@ -162,7 +162,7 @@ Tips:
 }) {
   protected execute(
     input: LeanDiagnosticsInput,
-  ): Effect.Effect<ToolResult, unknown, ToolCall | LeanLanguageServices> {
+  ): Effect.Effect<ToolResult, Error, ToolCall | LeanLanguageServices> {
     const { command, file } = input;
     return this.diagnose(file, command).pipe(
       catchLeanFailure(
@@ -244,7 +244,7 @@ In VS Code, these commands use the Lean 4 extension. CLI and desktop provide the
   schema: LeanFileInputSchema,
   execute: (
     input: LeanFileInput,
-  ): Effect.Effect<ToolResult, unknown, ToolCall | LeanLanguageServices> => {
+  ): Effect.Effect<ToolResult, Error, ToolCall | LeanLanguageServices> => {
     const { command, file } = input;
     const { description } = LEAN_FILE_COMMANDS[command];
     return Effect.gen(function* () {
@@ -281,7 +281,7 @@ In VS Code, these commands use the Lean 4 extension. CLI and desktop provide the
   schema: LeanProjectInputSchema,
   execute: (
     input: LeanProjectInput,
-  ): Effect.Effect<ToolResult, unknown, ToolCall | LeanLanguageServices> => {
+  ): Effect.Effect<ToolResult, Error, ToolCall | LeanLanguageServices> => {
     const { command } = input;
     const { description } = LEAN_PROJECT_COMMANDS[command];
     return Effect.gen(function* () {
@@ -326,7 +326,7 @@ In VS Code, this uses the Lean 4 extension. CLI and desktop provide the correspo
 }) {
   protected execute(
     input: LeanInspectInput,
-  ): Effect.Effect<ToolResult, unknown, ToolCall | LeanLanguageServices> {
+  ): Effect.Effect<ToolResult, Error, ToolCall | LeanLanguageServices> {
     const { type, file, line, column } = input;
     // Convert to 0-indexed for LSP
     const line0 = line - 1;
@@ -345,7 +345,7 @@ In VS Code, this uses the Lean 4 extension. CLI and desktop provide the correspo
       ) => Effect.Effect<LspResult<T>>,
       empty: { readonly message: string; readonly summary: string },
       render: (data: T) => ToolResult,
-    ): Effect.Effect<ToolResult, unknown, ToolCall | LeanLanguageServices> =>
+    ): Effect.Effect<ToolResult, Error, ToolCall | LeanLanguageServices> =>
       Effect.gen(function* () {
         const call = yield* ToolCall;
         const services = yield* LeanLanguageServices;
@@ -364,7 +364,7 @@ In VS Code, this uses the Lean 4 extension. CLI and desktop provide the correspo
     // ToolError carrying the summary that names which inspection failed.
     let program: Effect.Effect<
       ToolResult,
-      unknown,
+      Error,
       ToolCall | LeanLanguageServices
     >;
     switch (type) {

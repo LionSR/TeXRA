@@ -38,7 +38,7 @@ export interface LanguageModelPort {
   isAvailable(): boolean;
   selectModels(
     selector?: LanguageModelSelector,
-  ): Effect.Effect<readonly LanguageModelInfo[], unknown>;
+  ): Effect.Effect<readonly LanguageModelInfo[], Error>;
   /**
    * The host's catalogue or the caller's access to it changed. One event,
    * because every consumer recomputes the same derived value from both:

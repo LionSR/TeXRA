@@ -125,11 +125,7 @@ export interface SubscriptionProvider {
    */
   signIn(
     options: SubscriptionSignInOptions,
-  ): Effect.Effect<
-    SubscriptionAccount,
-    unknown,
-    HttpClient.HttpClient | Secrets
-  >;
+  ): Effect.Effect<SubscriptionAccount, Error, HttpClient.HttpClient | Secrets>;
   /**
    * The sign-out program. A host runs it at its own edge; a failure is the
    * provider's own auth error or the secret store's rejection.
@@ -179,11 +175,11 @@ interface SubscriptionProviderBindings<Coordinator, Session> extends Pick<
   readonly loginWithDeviceCode: (options: {
     coordinator: Coordinator;
     onPrompt: (prompt: SubscriptionDeviceCodePrompt) => void;
-  }) => Effect.Effect<Session, unknown, HttpClient.HttpClient>;
+  }) => Effect.Effect<Session, Error, HttpClient.HttpClient>;
   readonly loginWithLoopback: (options: {
     coordinator: Coordinator;
     openBrowser: (url: string) => Effect.Effect<void, Error>;
-  }) => Effect.Effect<Session, unknown, HttpClient.HttpClient>;
+  }) => Effect.Effect<Session, Error, HttpClient.HttpClient>;
   readonly accountLabel: (
     account:
       | { readonly email?: string | null; readonly accountId?: string | null }

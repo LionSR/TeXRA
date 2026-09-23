@@ -164,7 +164,7 @@ export function fetchGlmCodingPlanUsage(
   apiKey: string,
   signal: AbortSignal,
   usageUrl = GLM_CODING_PLAN_USAGE_URL,
-): Effect.Effect<ParsedSubscriptionUsage, unknown> {
+): Effect.Effect<ParsedSubscriptionUsage, Error> {
   return Effect.map(
     fetchSubscriptionUsage({
       url: usageUrl,

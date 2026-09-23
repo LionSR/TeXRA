@@ -290,7 +290,7 @@ Durability: the journal is keyed by meta.name and the agent field within this se
 }) {
   protected execute(
     input: WorkflowScriptToolInput,
-  ): Effect.Effect<ToolResult, unknown, ToolServices> {
+  ): Effect.Effect<ToolResult, Error, ToolServices> {
     return Effect.gen(function* () {
       const parent = requireDelegationParent(
         'delegate_multi_agents',

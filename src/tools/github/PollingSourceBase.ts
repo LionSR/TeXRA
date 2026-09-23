@@ -152,7 +152,7 @@ export abstract class PollingSourceBase<
   protected abstract pollOne(
     key: K,
     state: S,
-  ): Effect.Effect<void, unknown, Secrets>;
+  ): Effect.Effect<void, Error, Secrets>;
 
   /** Optional subclass hook that runs after all subscription polls settle. */
   protected afterTick(

@@ -927,7 +927,7 @@ export class SettingsViewMessageHandler {
       if (Exit.isSuccess(result)) {
         // Two different programs: the notice is a host dialog, the preference
         // is a state write. The boundary composes whichever it chose.
-        const settle: Effect.Effect<unknown, unknown> =
+        const settle: Effect.Effect<unknown, Error> =
           !route || route.access === 'unavailable'
             ? showLoggedInfoMessage(
                 this.channel,

@@ -196,7 +196,7 @@ Parameters map directly to subagent-result delivery attributes:
 }) {
   protected execute(
     input: AcceptRunFilesInput,
-  ): Effect.Effect<ToolResult, unknown, ToolServices> {
+  ): Effect.Effect<ToolResult, Error, ToolServices> {
     const acceptFiles = (call: ToolCallShape) => this.acceptFiles(input, call);
     return Effect.gen(function* () {
       const call = yield* ToolCall;
@@ -226,7 +226,7 @@ Parameters map directly to subagent-result delivery attributes:
       call: ToolCallShape,
     ): Effect.fn.Return<
       ToolResult,
-      unknown,
+      Error,
       ToolCall | FileSystem.FileSystem | WorkspaceFs
     > {
       const { execution_id: runId, files, strip_criticize } = input;

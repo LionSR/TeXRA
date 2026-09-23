@@ -88,10 +88,7 @@ export const resolveRunLiveness = Effect.fn('resolveRunLiveness')(function* (
   const handle = runs.getHandle(runId);
   if (handle) return { kind: 'live', info: runs.getStatus(handle) };
 
-  return yield* Effect.gen(function* (): Effect.fn.Return<
-    RunLiveness,
-    unknown
-  > {
+  return yield* Effect.gen(function* (): Effect.fn.Return<RunLiveness, Error> {
     const outcome =
       knownOutcome === undefined
         ? ((yield* getRunRecords(session, runId).readRunEnd())?.outcome ?? null)

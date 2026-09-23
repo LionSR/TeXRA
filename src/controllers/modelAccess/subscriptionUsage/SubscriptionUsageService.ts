@@ -72,12 +72,12 @@ type SubscriptionUsageUnavailableReason = Extract<
 
 interface SubscriptionUsageAdapter {
   /** Credential-derived request variant (today: the GLM region flag). */
-  readonly resolveVariant?: () => Effect.Effect<boolean, unknown>;
+  readonly resolveVariant?: () => Effect.Effect<boolean, Error>;
   readonly fetch: (
     variant: boolean | undefined,
   ) => Effect.Effect<
     ParsedSubscriptionUsage | null,
-    unknown,
+    Error,
     HttpClient.HttpClient
   >;
 }
@@ -211,7 +211,7 @@ export class SubscriptionUsageService {
     const adapter = this.adapters[provider];
     return Effect.matchCauseEffect(
       Effect.suspend(
-        (): Effect.Effect<boolean | undefined, unknown> =>
+        (): Effect.Effect<boolean | undefined, Error> =>
           adapter.resolveVariant?.() ?? Effect.succeed(undefined),
       ),
       {

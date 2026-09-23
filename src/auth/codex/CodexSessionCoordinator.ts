@@ -121,7 +121,7 @@ export class CodexSessionCoordinator extends SubscriptionOAuthCoordinator<CodexS
   completeDeviceLogin(params: {
     authorizationCode: string;
     codeVerifier: string;
-  }): Effect.Effect<CodexSession, unknown, HttpClient.HttpClient> {
+  }): Effect.Effect<CodexSession, Error, HttpClient.HttpClient> {
     return this.loginWithCode({
       code: params.authorizationCode,
       verifier: params.codeVerifier,

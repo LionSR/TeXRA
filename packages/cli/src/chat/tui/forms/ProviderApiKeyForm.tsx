@@ -87,7 +87,7 @@ interface ProviderApiKeyFormProps {
   readonly onSave: (
     provider: ApiProvider,
     key: string,
-  ) => Effect.Effect<string | void, unknown>;
+  ) => Effect.Effect<string | void, Error>;
   /** The runtime that program settles on, from the surface that mounted this
    *  form — Ink components run no Effect of their own. */
   readonly runtime: ProcessRuntime;

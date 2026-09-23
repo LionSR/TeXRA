@@ -177,6 +177,6 @@ export const CrossrefSearchTool = defineTool({
   description:
     'Search Crossref works or look up detailed metadata for a DOI. Use command="search" with query, or command="doi" with doi.',
   schema: CrossrefSearchInputSchema,
-  execute: (input: CrossrefSearchInput): Effect.Effect<ToolResult, unknown> =>
+  execute: (input: CrossrefSearchInput): Effect.Effect<ToolResult, Error> =>
     input.command === 'doi' ? lookupDoi(input.doi) : searchWorks(input),
 });

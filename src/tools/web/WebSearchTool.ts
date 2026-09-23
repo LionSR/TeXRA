@@ -185,7 +185,7 @@ export const WebSearchTool = defineTool({
   description:
     'Search the web and return top results. Uses the native provider search tool when available; falls back to DuckDuckGo Instant Answers API.',
   schema: WebSearchInputSchema,
-  execute: (input: WebSearchInput): Effect.Effect<ToolResult, unknown> => {
+  execute: (input: WebSearchInput): Effect.Effect<ToolResult, Error> => {
     // The owning agent run's cancellation enters here as interruption —
     // without it, a cancelled run would wait out searches (and their
     // retries) that only observe the internal timeout.

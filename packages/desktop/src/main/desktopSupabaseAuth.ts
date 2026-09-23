@@ -60,10 +60,10 @@ export interface DesktopSupabaseAuthHost extends Pick<
 > {
   /** The window's `openExternal` with its own "could not open" dialog
    *  suppressed: this flow words a missing browser itself. */
-  openExternalUrl(url: string): Effect.Effect<void, unknown>;
+  openExternalUrl(url: string): Effect.Effect<void, Error>;
   /** Repaint every surface an account change touches. A program, so the
    *  callback that commits a session runs it inside its own fiber. */
-  onSessionChanged(): Effect.Effect<void, unknown, ProcessServices>;
+  onSessionChanged(): Effect.Effect<void, Error, ProcessServices>;
 }
 
 interface DesktopSupabaseAuthOptions {

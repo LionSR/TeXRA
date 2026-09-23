@@ -145,10 +145,10 @@ export type ShutdownPhase =
 /**
  * One registered shutdown handler: the program the drain runs at its phase,
  * not a callback it calls. A failure is reported to the drain's `onError`,
- * which is why the channel is open here: the drain is the boundary that
- * reports it, and no caller of `runShutdown` adopts it.
+ * which is why the channel is any `Error` here: the drain is the boundary
+ * that reports it, and no caller of `runShutdown` adopts it.
  */
-export type ShutdownHandler = Effect.Effect<void, unknown>;
+export type ShutdownHandler = Effect.Effect<void, Error>;
 
 export interface LifecycleHost {
   /**

@@ -40,7 +40,7 @@ const CHANNEL = 'latexPreview';
 export type BuildDisplayFn = (
   location: FileLocation,
   options?: { preserveFocus?: boolean },
-) => Effect.Effect<void, unknown, PreviewServices>;
+) => Effect.Effect<void, Error, PreviewServices>;
 
 interface LatexPreviewDisplayOptions {
   openBuildDisplay: BuildDisplayFn;
@@ -151,7 +151,7 @@ const registerCleanup = (
 const withLatexOperation = (
   entry: LatexPreviewEntry,
   operationName: string,
-  operation: Effect.Effect<void, unknown, PreviewServices>,
+  operation: Effect.Effect<void, Error, PreviewServices>,
 ): Effect.Effect<void, never, PreviewServices> =>
   Effect.suspend(() => {
     if (entry.latexOperationInProgress) return Effect.void;
@@ -214,7 +214,7 @@ const createTempFileWithCleanup = Effect.fn('createTempFileWithCleanup')(
     entry: LatexPreviewEntry,
     content: string,
     suffix: string,
-  ): Effect.fn.Return<string, unknown, PreviewServices> {
+  ): Effect.fn.Return<string, Error, PreviewServices> {
     const workspacePath = entry.request.roots.workspace;
     if (!workspacePath) {
       return yield* Effect.fail(new Error('No workspace folder open'));

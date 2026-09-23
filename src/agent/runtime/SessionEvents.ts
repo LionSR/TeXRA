@@ -31,7 +31,12 @@ import {
   type SessionEventDraft,
   type RunId,
 } from '@shared/schemas';
-import { Database, type DatabaseReadFailed } from '@shared/session/database';
+import {
+  Database,
+  type DatabaseNotOwner,
+  type DatabaseReadFailed,
+  type DatabaseWriteFailed,
+} from '@shared/session/database';
 import {
   SessionEvents,
   type Append,
@@ -42,11 +47,25 @@ import {
 const CHANNEL = 'sessionEvents';
 const logger = createLog(CHANNEL);
 
-/** One unit of the publisher's work: a job over the log's append, and the
- *  deferred its enqueuer waits on, if any. */
-interface PublicationJob {
-  readonly run: (append: Append) => Effect.Effect<unknown, unknown>;
-  readonly done: Deferred.Deferred<unknown, unknown>;
+/** One unit of the publisher's work: a job over the log's append that
+ *  settles the deferred its enqueuer waits on with the job's own exit. */
+type PublicationJob = (append: Append) => Effect.Effect<void>;
+
+/** What a detached job may refuse with: the log append's own failures. */
+type DetachedJobFailure =
+  DatabaseNotOwner | DatabaseReadFailed | DatabaseWriteFailed;
+
+/** Run `job` and complete `done` with however it ended. */
+function settling<A, E>(
+  job: (append: Append) => Effect.Effect<A, E>,
+  done: Deferred.Deferred<A, E>,
+): PublicationJob {
+  return (append) =>
+    job(append).pipe(
+      Effect.exit,
+      Effect.flatMap((exit) => Deferred.done(done, exit)),
+      Effect.asVoid,
+    );
 }
 
 /** The log's append, reporting the last commit each call produced. */
@@ -139,14 +158,7 @@ export const sessionEventsLayer = Layer.effect(
     const inbox = yield* Queue.unbounded<PublicationJob, Cause.Done>();
     const consumer = yield* Effect.forkScoped(
       Stream.fromQueue(inbox).pipe(
-        Stream.runForEach((job) =>
-          Effect.uninterruptible(
-            job.run(append).pipe(
-              Effect.exit,
-              Effect.flatMap((exit) => Deferred.done(job.done, exit)),
-            ),
-          ),
-        ),
+        Stream.runForEach((job) => Effect.uninterruptible(job(append))),
       ),
     );
     // Registered after the fork, so it runs before the fork's own finalizer:
@@ -175,10 +187,7 @@ export const sessionEventsLayer = Layer.effect(
     ): Effect.Effect<A, E> =>
       Effect.gen(function* () {
         const done = yield* Deferred.make<A, E>();
-        const admitted = enqueue({
-          run: job,
-          done: done as unknown as PublicationJob['done'],
-        });
+        const admitted = enqueue(settling(job, done));
         if (!admitted) {
           return yield* Effect.die(
             new Error('Session publication after the plane closed'),
@@ -197,29 +206,36 @@ export const sessionEventsLayer = Layer.effect(
      *  happened and belongs to whoever enqueued it (`SessionHandle` keeps it
      *  for the drain that decides its run's terminal row), so this cohort
      *  reports position and never failure. */
-    const pending = new Set<Deferred.Deferred<CommitOrdinal | null, unknown>>();
+    const pending = new Set<
+      Deferred.Deferred<CommitOrdinal | null, DetachedJobFailure>
+    >();
     const detach: SessionEventsShape['detach'] = (job) => {
-      const done = Deferred.makeUnsafe<CommitOrdinal | null, unknown>();
+      const done = Deferred.makeUnsafe<
+        CommitOrdinal | null,
+        DetachedJobFailure
+      >();
       pending.add(done);
       let committed: CommitOrdinal | null = null;
-      const admitted = enqueue({
-        run: (append) =>
-          job(
-            trackingAppend(append, (commit) => {
-              committed = commit;
-            }),
-          ).pipe(
-            Effect.map(() => committed),
-            Effect.tapCause((cause) =>
-              Effect.logError('Session publication failed').pipe(
-                Effect.annotateLogs({ data: cause }),
-                withLogChannel(CHANNEL),
+      const admitted = enqueue(
+        settling(
+          (append) =>
+            job(
+              trackingAppend(append, (commit) => {
+                committed = commit;
+              }),
+            ).pipe(
+              Effect.map(() => committed),
+              Effect.tapCause((cause) =>
+                Effect.logError('Session publication failed').pipe(
+                  Effect.annotateLogs({ data: cause }),
+                  withLogChannel(CHANNEL),
+                ),
               ),
+              Effect.onExit(() => Effect.sync(() => pending.delete(done))),
             ),
-            Effect.onExit(() => Effect.sync(() => pending.delete(done))),
-          ),
-        done: done as unknown as PublicationJob['done'],
-      });
+          done,
+        ),
+      );
       if (!admitted) {
         pending.delete(done);
         logger.warn('Session publication dropped: the plane has closed');

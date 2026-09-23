@@ -14,7 +14,7 @@
 
 import * as path from 'node:path';
 
-import { Effect, FileSystem } from 'effect';
+import { Effect, FileSystem, type PlatformError } from 'effect';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { withLogChannel } from '@logger/effectLog';
@@ -51,7 +51,11 @@ export const listRunGeneratedFiles = Effect.fn('listRunGeneratedFiles')(
   function* (
     runId: RunId,
     session: SessionHandle,
-  ): Effect.fn.Return<RunGeneratedFile[], unknown, FileSystem.FileSystem> {
+  ): Effect.fn.Return<
+    RunGeneratedFile[],
+    PlatformError.PlatformError,
+    FileSystem.FileSystem
+  > {
     const fs = yield* FileSystem.FileSystem;
     const runDir = runDirUnder(session.roots.storage, runId);
     if (!(yield* fs.exists(runDir))) return [];
@@ -64,7 +68,11 @@ function walkRunStorage(
   basePath: string,
   relativePath: string,
   maxDepth: number,
-): Effect.Effect<RunGeneratedFile[], unknown, FileSystem.FileSystem> {
+): Effect.Effect<
+  RunGeneratedFile[],
+  PlatformError.PlatformError,
+  FileSystem.FileSystem
+> {
   return Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const fullPath = relativePath

@@ -236,7 +236,7 @@ function pendingRunClaim(): {
    *  continuations before the next assertion reads what they wrote. */
   readonly settle: () => Promise<void>;
 } {
-  const claim = Deferred.makeUnsafe<void, unknown>();
+  const claim = Deferred.makeUnsafe<void, Error>();
   return {
     settled: Deferred.await(claim),
     settle: async (): Promise<void> => {

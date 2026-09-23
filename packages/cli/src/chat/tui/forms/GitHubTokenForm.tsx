@@ -78,8 +78,8 @@ interface GitHubTokenFormProps {
   readonly availableRows?: number;
   readonly statusView?: GitHubTokenStatusView;
   /** The credential writes as programs; this form owns their one run. */
-  readonly onSave: (token: string) => Effect.Effect<void, unknown>;
-  readonly onRemove: () => Effect.Effect<void, unknown>;
+  readonly onSave: (token: string) => Effect.Effect<void, Error>;
+  readonly onRemove: () => Effect.Effect<void, Error>;
   /** The runtime those programs settle on, from the surface that mounted this
    *  form — Ink components run no Effect of their own. */
   readonly runtime: ProcessRuntime;
@@ -95,7 +95,7 @@ export function GitHubTokenForm(
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string>();
 
-  const runAction = (action: () => Effect.Effect<void, unknown>): void => {
+  const runAction = (action: () => Effect.Effect<void, Error>): void => {
     setSaving(true);
     void props.runtime.runPromise(
       Effect.matchCause(Effect.suspend(action), {

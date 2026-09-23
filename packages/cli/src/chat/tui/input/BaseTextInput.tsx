@@ -68,7 +68,7 @@ interface BaseTextInputProps {
      *  input owns the one run, under the timeout below. */
     readonly probe: (
       attempt: ImagePasteAttempt,
-    ) => Effect.Effect<string | null, unknown, ProcessServices>;
+    ) => Effect.Effect<string | null, Error, ProcessServices>;
     readonly runtime: ProcessRuntime;
     readonly onError?: (error: unknown) => void;
   };

@@ -125,7 +125,7 @@ interface DesktopHostRequestsOptions {
   postSurfaceAction(action: SurfaceActionMessage['action']): void;
   /** Start the browser sign-in. The failure is the sign-in's own; the arm
    *  below names it for the request dialog. */
-  signIn(): Effect.Effect<void, unknown>;
+  signIn(): Effect.Effect<void, Error>;
   getCustomAgentDirectory(): Effect.Effect<
     string,
     AgentDirectoriesFailed,

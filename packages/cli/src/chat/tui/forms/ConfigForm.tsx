@@ -158,11 +158,11 @@ interface ConfigFormProps {
   readonly writeValue: (
     entry: SurfacedSettingEntry,
     value: unknown,
-  ) => Effect.Effect<void, unknown>;
+  ) => Effect.Effect<void, Error>;
   /** Reset a setting to its default (delete the key). */
   readonly resetValue: (
     entry: SurfacedSettingEntry,
-  ) => Effect.Effect<void, unknown>;
+  ) => Effect.Effect<void, Error>;
   /** The runtime the writes above settle on, from the surface that mounted
    *  this form — Ink components run no Effect of their own. */
   readonly runtime: ProcessRuntime;
@@ -275,7 +275,7 @@ export function ConfigForm(props: ConfigFormProps): React.JSX.Element {
   const runWrite = (
     entry: SurfacedSettingEntry,
     optimisticValue: unknown,
-    action: () => Effect.Effect<void, unknown>,
+    action: () => Effect.Effect<void, Error>,
   ): void => {
     const previous = effective(entry);
     setOverrides((current) => ({ ...current, [entry.key]: optimisticValue }));

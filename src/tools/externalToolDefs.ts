@@ -22,7 +22,7 @@ import {
 import { withLogChannel } from '@logger/effectLog';
 import { apiKeyEnvName, lookupApiKeyOrigin } from '@model/apiProviders';
 import type { ConfigProvider } from '@platform/interfaces';
-import { Secrets } from '@platform/secrets';
+import { Secrets, type SecretsFailed } from '@platform/secrets';
 import type { ToolCategory } from '@shared/settingsView/settingsViewMessages';
 import { DELEGATE_MULTI_AGENTS_TOOL_NAME } from '@shared/constants/delegationTools';
 import type { RegisteredToolName } from '@tools/registry';
@@ -102,6 +102,9 @@ class ToolProbeFailed extends Data.TaggedError('ToolProbeFailed')<{
   readonly cause?: unknown;
 }> {}
 
+/** What a group's availability callbacks may fail with. */
+export type ToolProbeError = ToolProbeFailed | SecretsFailed;
+
 // ============================================================
 // Type
 // ============================================================
@@ -141,19 +144,19 @@ export interface ExternalToolDef {
    */
   readonly probe?: (
     inputs: ToolProbeInputs,
-  ) => Effect.Effect<unknown, unknown, ToolProbeServices>;
+  ) => Effect.Effect<unknown, ToolProbeError, ToolProbeServices>;
   /** Returns true if the external dependency is available. */
   readonly check: (
     probeResult?: unknown,
-  ) => Effect.Effect<boolean, unknown, ToolProbeServices>;
+  ) => Effect.Effect<boolean, ToolProbeError, ToolProbeServices>;
   /** Optional detailed status string resolved at check time (shown below description). */
   readonly detailCheck?: (
     probeResult?: unknown,
-  ) => Effect.Effect<string | undefined, unknown, ToolProbeServices>;
+  ) => Effect.Effect<string | undefined, ToolProbeError, ToolProbeServices>;
   /** Optional short status label for the dashboard badge. */
   readonly statusLabel?: (
     probeResult?: unknown,
-  ) => Effect.Effect<string | undefined, unknown, ToolProbeServices>;
+  ) => Effect.Effect<string | undefined, ToolProbeError, ToolProbeServices>;
   // Dashboard UI metadata
   readonly name: string;
   readonly category: ToolCategory;
@@ -395,12 +398,12 @@ function probeSdkBinaryStatus(config: {
 function prerequisitesChecks<T>(config: {
   probe: (
     inputs: ToolProbeInputs,
-  ) => Effect.Effect<T, unknown, ToolProbeServices>;
+  ) => Effect.Effect<T, ToolProbeError, ToolProbeServices>;
   /**
    * Re-derives `T` on a cache miss, which the callbacks reach carrying no
    * probe inputs — so each entry says here what it answers without a workspace.
    */
-  fallback: () => Effect.Effect<T, unknown, ToolProbeServices>;
+  fallback: () => Effect.Effect<T, ToolProbeError, ToolProbeServices>;
   check: (prereqs: T) => boolean;
   statusLabel: (prereqs: T) => string | undefined;
   detailCheck: (prereqs: T) => string | undefined;
@@ -408,7 +411,7 @@ function prerequisitesChecks<T>(config: {
   const { probe, fallback, check, statusLabel, detailCheck } = config;
   const resolve = (
     probeResult: unknown,
-  ): Effect.Effect<T, unknown, ToolProbeServices> =>
+  ): Effect.Effect<T, ToolProbeError, ToolProbeServices> =>
     probeResult === undefined ? fallback() : Effect.succeed(probeResult as T);
   return {
     probe,

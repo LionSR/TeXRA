@@ -213,7 +213,7 @@ export interface ChatSessionController {
    * when the resume resolution and rehydration are complete, but the
    * continued run itself stays pending until the agent finishes or suspends.
    */
-  resume(id: RunId): Effect.Effect<void, unknown>;
+  resume(id: RunId): Effect.Effect<void, Error>;
 
   /** Request stop of the root run using the configured child policy. */
   stop(): void;
@@ -249,7 +249,7 @@ export interface ChatSessionController {
     line: string,
     mediaFiles?: readonly string[],
     images?: readonly PastedImageEntry[],
-  ): Effect.Effect<void, unknown, ProcessServices>;
+  ): Effect.Effect<void, Error, ProcessServices>;
   /** Reserve a skill activation for the next submitted message. */
   activateSkill(selection: SkillActivation): void;
   /** Drop every reserved skill activation. */
@@ -643,7 +643,7 @@ export function createChatSessionController(
     // the claim holds the `await` of a `Deferred` the run chain completes.
     // Awaiting the deferred is a plain suspension, so a run parked at the WAIT
     // node leaves the slot pending exactly as before.
-    const claimedRun = Deferred.makeUnsafe<void, unknown>();
+    const claimedRun = Deferred.makeUnsafe<void, Error>();
     // Native launch may resolve its stream on this turn. Claim first so
     // marking the run pending cannot erase that run or a reentrant stop.
     session.markRunPending(Deferred.await(claimedRun));
@@ -729,7 +729,7 @@ export function createChatSessionController(
   // `restoreInterruptedRecovery` pairing, where a double hand-back or a missed
   // restore silently loses the follow-ups typed during an interruption. Don't
   // merge these two bodies.
-  const resume = (id: RunId): Effect.Effect<void, unknown> =>
+  const resume = (id: RunId): Effect.Effect<void, Error> =>
     // `Effect.suspend` is what keeps the claim handshake synchronous: its
     // body is this program's first step, so the availability check and the
     // claim are one uninterrupted synchronous callback (see
@@ -737,7 +737,7 @@ export function createChatSessionController(
     // concurrent tryResumeRun() (or another resume()) can never observe this
     // call suspended between "checked available" and "claimed".
     Effect.suspend(() => {
-      const claimedRun = Deferred.makeUnsafe<void, unknown>();
+      const claimedRun = Deferred.makeUnsafe<void, Error>();
       if (!session.tryClaimRootRunSlot(Deferred.await(claimedRun))) {
         // The slot is taken, so the deferred this attempt made is dropped
         // unsettled: nothing holds it, and no fiber is parked on it.
@@ -1140,14 +1140,14 @@ export function createChatSessionController(
     instruction: string,
     mediaFiles?: readonly string[],
     displayInstruction?: string,
-  ): Effect.Effect<boolean, unknown, ProcessServices> =>
+  ): Effect.Effect<boolean, Error, ProcessServices> =>
     Effect.suspend(() => {
       followUpQueue.clear();
       let started = false;
       // The slot is claimed before the program runs, the way every other launch
       // path claims it: `startRootRun` below re-claims it for the run it mints,
       // and a refusal on the way there settles this deferred instead.
-      const startSettled = Deferred.makeUnsafe<void, unknown>();
+      const startSettled = Deferred.makeUnsafe<void, Error>();
       session.markRunPending(Deferred.await(startSettled));
       return recoverRun(
         Effect.gen(function* () {

@@ -372,7 +372,7 @@ export const writeApprovedContent = Effect.fn('writeApprovedContent')(
     finalContent: string,
   ): Effect.fn.Return<
     WriteApprovedContentResult,
-    unknown,
+    Error,
     ToolCall | FileSystem.FileSystem | WorkspaceFs
   > {
     yield* ToolCall;

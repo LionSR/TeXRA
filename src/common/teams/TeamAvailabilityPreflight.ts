@@ -53,7 +53,7 @@ export interface TeamAvailabilityPreflightOptions<T, R = never> {
   ) => Effect.Effect<TeamAvailabilityChoice | undefined, TeamCatalogPortFailed>;
   readonly signIn: () => Effect.Effect<boolean, SignInFailed>;
   /** Force a remote catalog refresh; the failure channel is the refresh's own. */
-  readonly refreshRemote: () => Effect.Effect<void, unknown, R>;
+  readonly refreshRemote: () => Effect.Effect<void, Error, R>;
   /** Recompute the planned value against the refreshed catalog. */
   readonly replan: () => Effect.Effect<T, Error, R>;
   /** The caller already forced a remote catalog fetch for `initial`. */
@@ -76,7 +76,7 @@ function unavailableTexraHostedNames<T, R>(
  */
 export function preflightTeamAvailability<T, R = never>(
   options: TeamAvailabilityPreflightOptions<T, R>,
-): Effect.Effect<TeamAvailabilityPreflightResult<T>, unknown, R> {
+): Effect.Effect<TeamAvailabilityPreflightResult<T>, Error, R> {
   return Effect.gen(function* () {
     const refreshAndRecheck = Effect.gen(function* () {
       yield* options.refreshRemote();

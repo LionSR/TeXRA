@@ -83,7 +83,7 @@ export function parseKimiCodeUsage(body: unknown): ParsedSubscriptionUsage {
 export function fetchKimiCodeUsage(
   apiKey: string,
   signal: AbortSignal,
-): Effect.Effect<ParsedSubscriptionUsage, unknown> {
+): Effect.Effect<ParsedSubscriptionUsage, Error> {
   return Effect.map(
     fetchSubscriptionUsage({
       url: KIMI_CODE_USAGE_URL,

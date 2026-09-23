@@ -19,6 +19,7 @@ import {
   type AcceptedToolEditApprovalResult,
 } from '@tools/approval/toolEditApproval';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
+import { ensureError } from '@utils/errors/errorMessage';
 
 /**
  * Count non-overlapping occurrences of `needle` in `haystack`.
@@ -113,7 +114,7 @@ export const resolveWritableTarget = Effect.fn('resolveWritableTarget')(
     options: ResolveWritableTargetOptions = {},
   ): Effect.fn.Return<
     WritableTargetPreparation,
-    unknown,
+    Error,
     ToolCall | FileSystem.FileSystem
   > {
     // Resolution and the caller's own validation both reject with a ToolError
@@ -140,7 +141,7 @@ export const resolveWritableTarget = Effect.fn('resolveWritableTarget')(
           displayPath: display,
         };
       },
-      catch: (error) => error,
+      catch: ensureError,
     });
 
     // Shared read-before-edit gate, then the current content. The gate asks
@@ -268,7 +269,7 @@ export const applyApprovedFileEdit = Effect.fn('applyApprovedFileEdit')(
     present,
   }: ApprovedFileEditRequest): Effect.fn.Return<
     ToolResult,
-    unknown,
+    Error,
     ToolCall | FileSystem.FileSystem | WorkspaceFs
   > {
     const approval = yield* requestToolEditApproval({

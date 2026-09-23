@@ -95,7 +95,7 @@ type FormActionHandler<T> = (
 type ApiKeySaveHandler = (
   provider: ApiProvider,
   key: string,
-) => Effect.Effect<string | void, unknown>;
+) => Effect.Effect<string | void, Error>;
 type ErrorHandler = (error: unknown) => void;
 type SelectionCompletion = 'afterAction' | 'beforeAction' | 'busy';
 

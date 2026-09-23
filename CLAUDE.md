@@ -61,12 +61,11 @@ Things the tree won't tell you:
   `BOUNDARY_RUNTIME_ENTRIES`, and ESLint's
   `no-warning-comments` fails on any `@adapter-until` marker, since the owner
   ruled there are no temporary adapters), and `store-public-surface` (the
-  frozen public method set of the run log store). Three more budget the code itself rather than an
-  import edge — `file-size-baseline` (a per-file line budget over 500 lines),
-  `refuted-candidates` (the costed-and-refused refactors, with their ruling
-  anchors) and `unknown-error-baseline` (per-file counts of
-  `Effect.Effect<..., unknown, ...>`); AGENTS.md "Directory organization" has
-  the rules. The invariant to hold is "never widen a
+  frozen public method set of the run log store). Two more budget the code
+  itself rather than an import edge — `file-size-baseline` (a per-file line
+  budget over 500 lines) and `refuted-candidates` (the costed-and-refused
+  refactors, with their ruling anchors); AGENTS.md "Directory organization"
+  has the rules. The invariant to hold is "never widen a
   baseline"; the open work is the Tier-1 public manifest and shrinking the
   frozen lists, not
   another lint rule. npm publication is deliberately held until a named external
@@ -74,8 +73,12 @@ Things the tree won't tell you:
   `src/test-kernel/architecture/` (including
   `approvalPolicyAuthorityRatchet.vitest.ts`, and
   `sharedSchemasDeepImportRatchet.vitest.ts`, which forbids every
-  `@shared/schemas/<leaf>` import outright) also pin single-authority
-  invariants with hardcoded rules rather than baseline JSON.
+  `@shared/schemas/<leaf>` import outright, and
+  `unknownErrorChannelRatchet.vitest.ts`, which forbids an
+  `Effect.Effect`/`Effect.fn.Return` error channel spelled `unknown` — type it
+  with the tagged error the path raises, `Error` at a host port, and
+  `ensureError` at a foreign boundary) also pin single-authority invariants
+  with hardcoded rules rather than baseline JSON.
 - **`src/utils/` is host-agnostic, not universally browser-safe.** Only the
   `BROWSER_SAFE_UTILS` allowlist in `eslint.config.mjs` (`@utils/core`,
   `@utils/errors/errorMessage`,

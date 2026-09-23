@@ -258,11 +258,12 @@ a decrease is always welcome. Kernel architecture tests under
 hardcoded allowlists rather than baseline JSON. The remaining boundary work is the Tier-1 public manifest and shrinking the
 frozen deep-import lists, not another lint rule.
 
-Three of those baselines budget the code itself rather than an import edge, and all three run in the pure tier:
+Two of those baselines budget the code itself rather than an import edge, and both run in the pure tier:
 
 - `file-size-baseline.json` — a per-file line budget for every production file over 500 lines (`fileSizeRatchet.vitest.ts`): growth fails, a new oversized file fails, and an entry whose file is gone or has fallen to the threshold fails, which is the one way deleting lines breaks the suite: drop the entry in the same PR. A file that shrank but stayed over the threshold keeps its budget.
 - `refuted-candidates.json` — the refactor candidates that were investigated, costed and refused, with their ruling anchors (`refutedCandidatesRatchet.vitest.ts` pins each symbol's shape; `.github/workflows/refuted-candidates.yml` fails a PR whose diff touches one without citing its ruling id in the body). Re-proposing a refused candidate as specified is what it stops; landing one on new evidence cites the id and rewrites the entry.
-- `unknown-error-baseline.json` — a per-file count of `Effect.Effect<..., unknown, ...>` signatures (`unknownErrorChannelRatchet.vitest.ts`), exact and shrink-only like the effect-migration ratchet: type the channel with the tagged error the path already raises and lower the entry in the same PR.
+
+A third code budget reached zero and is now a hardcoded rule: `unknownErrorChannelRatchet.vitest.ts` fails on any production `Effect.Effect<A, unknown, R>` or `Effect.fn.Return<A, unknown, R>`. Type the channel with the tagged error the path already raises; a port whose hosts each fail with their own surface's error takes `Error`; a foreign rejection becomes an `Error` at its boundary with `ensureError` (`@utils/errors/errorMessage`), never a `catch: (e) => e` pass-through; a combinator that absorbs any failure is generic in it.
 
 - `packages/extension/src/frontend/` contains extension-host utilities that power shared UI flows (agent directories, file listers, instruction banners, tool workflows). Prefer these helpers over duplicating logic in commands or webviews.
   - `frontend/system/` - VS Code command utilities (`safeExecuteCommand`)

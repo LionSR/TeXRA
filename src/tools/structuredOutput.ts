@@ -11,6 +11,7 @@ import {
   type JsonValue,
   type ToolResult,
 } from '@shared/schemas';
+import { ensureError } from '@utils/errors/errorMessage';
 
 // Local file imports
 import { defineTool } from './core/define';
@@ -187,7 +188,7 @@ export function normalizeStructuredOutputSchema(
 export function buildTerminalTool(
   input: z.ZodType | Record<string, unknown>,
   capture: (value: JsonValue) => void,
-): ITool<unknown, never> {
+): ITool<Error, never> {
   const { zodSchema } = normalizeStructuredOutputSchema(input);
 
   const GeneratedTool = defineTool<unknown, never>({
@@ -202,7 +203,7 @@ export function buildTerminalTool(
   class TerminalTool extends GeneratedTool {
     private captured = false;
 
-    protected execute(input: unknown): Effect.Effect<ToolResult, unknown> {
+    protected execute(input: unknown): Effect.Effect<ToolResult, Error> {
       return Effect.try({
         try: (): ToolResult => {
           if (this.captured) {
@@ -220,7 +221,7 @@ export function buildTerminalTool(
             output: 'Structured output captured.',
           };
         },
-        catch: (error) => error,
+        catch: ensureError,
       });
     }
   }

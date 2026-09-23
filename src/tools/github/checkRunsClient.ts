@@ -12,6 +12,7 @@
 import { Cause, Effect } from 'effect';
 
 import type { Secrets } from '@platform/secrets';
+import { ensureError } from '@utils/errors/errorMessage';
 
 import {
   AnnotationFetchBudget,
@@ -132,7 +133,7 @@ export const fetchAllCheckRuns = Effect.fn('fetchAllCheckRuns')(
     repo: string,
     sha: string,
     cache: CheckRunsCache | undefined,
-  ): Effect.fn.Return<FetchAllCheckRunsResult, unknown, Secrets> {
+  ): Effect.fn.Return<FetchAllCheckRunsResult, Error, Secrets> {
     const basePath = `/repos/${owner}/${repo}/commits/${sha}/check-runs?per_page=${CHECK_RUNS_PAGE_SIZE}`;
 
     // Seed a scratch cache we'll stage on the return value. We rebuild from
@@ -160,7 +161,7 @@ export const fetchAllCheckRuns = Effect.fn('fetchAllCheckRuns')(
         total: number | undefined;
         was304: boolean;
       },
-      unknown,
+      Error,
       Secrets
     > {
       const pageEtag = cache?.pages.get(page)?.etag;
@@ -323,7 +324,7 @@ export const fetchAllCheckRuns = Effect.fn('fetchAllCheckRuns')(
     // without replacing an interrupted request's joined cleanup cause.
     Cause.hasInterrupts(cause)
       ? Effect.failCause(cause)
-      : Effect.fail(Cause.squash(cause)),
+      : Effect.fail(ensureError(Cause.squash(cause))),
   ),
 );
 
@@ -341,7 +342,7 @@ export const fetchAnnotations = Effect.fn('fetchAnnotations')(
     checkRunId: number,
     budget: AnnotationFetchBudget,
     now?: number,
-  ): Effect.fn.Return<GhCheckAnnotation[], unknown, Secrets> {
+  ): Effect.fn.Return<GhCheckAnnotation[], Error, Secrets> {
     const annotations: GhCheckAnnotation[] = [];
     for (let page = 1; page <= MAX_ANNOTATION_PAGES_PER_RUN; page += 1) {
       if (!(yield* budget.tryClaim(now))) {
@@ -363,6 +364,6 @@ export const fetchAnnotations = Effect.fn('fetchAnnotations')(
     // cause of interruption with any joined cleanup failure.
     Cause.hasInterrupts(cause)
       ? Effect.failCause(cause)
-      : Effect.fail(Cause.squash(cause)),
+      : Effect.fail(ensureError(Cause.squash(cause))),
   ),
 );

@@ -25,6 +25,7 @@ import {
   type ExecOutput,
 } from '@utils/system/execCore';
 import { IS_WINDOWS } from '@utils/system/platformPaths';
+import { ensureError } from '@utils/errors/errorMessage';
 
 const FORCE_KILL_DELAY_MS = 5_000;
 
@@ -167,7 +168,7 @@ export function executeCommand(
 function runCommand(
   command: string | string[],
   options: ExecuteCommandBaseOptions,
-): Effect.Effect<ExecResult, unknown, Scope.Scope> {
+): Effect.Effect<ExecResult, Error, Scope.Scope> {
   return Effect.gen(function* () {
     if (options.signal?.aborted) {
       return resultFromProcessOutput(null, 'Command aborted by user', 130);
@@ -256,7 +257,7 @@ function runCommand(
           ...(useDetached ? { detached: true } : {}),
         });
       },
-      catch: (error) => error,
+      catch: ensureError,
     });
 
     // A command that ran to completion — including one its abort signal or
@@ -366,12 +367,12 @@ function runCommand(
           subscribeDecodedOutput(subprocess.stderr, encoding, options.onStderr);
         }
       },
-      catch: (error) => error,
+      catch: ensureError,
     });
 
     const result = yield* Effect.tryPromise({
       try: () => subprocess,
-      catch: (error) => error,
+      catch: ensureError,
     }).pipe(Effect.onInterrupt(() => Effect.sync(onInterrupt)));
 
     const stdout = (result.stdout as string) ?? '';

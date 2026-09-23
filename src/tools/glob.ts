@@ -55,7 +55,7 @@ interface GlobPorts extends WorkspacePathPorts {
 const runGlob = Effect.fn('GlobTool.execute')(function* (
   ports: GlobPorts,
   input: GlobInput,
-): Effect.fn.Return<ToolResult, unknown, FileSystem.FileSystem> {
+): Effect.fn.Return<ToolResult, Error, FileSystem.FileSystem> {
   const root = ports.toolRoot();
   const { path, display } = yield* resolveAndFormat(
     ports.settings,
@@ -96,7 +96,7 @@ const runGlob = Effect.fn('GlobTool.execute')(function* (
   const fs = yield* FileSystem.FileSystem;
   const statMatch = Effect.fn('GlobTool.statMatch')(function* (
     match: string,
-  ): Effect.fn.Return<GlobMatchInfo | null, unknown> {
+  ): Effect.fn.Return<GlobMatchInfo | null, Error> {
     const resolved = yield* resolveWorkspaceRelativePath(
       ports.settings,
       ports.workspaceRoot,
