@@ -154,7 +154,7 @@ describe('codex tool - atomic resume fallback', () => {
         );
 
         expect(
-          yield* new CodexTool().call({
+          yield* CodexTool.call({
             prompt: 'launch Codex',
             sandbox_mode: 'workspace-write',
           }),
@@ -188,7 +188,7 @@ describe('codex tool - atomic resume fallback', () => {
     () =>
       Effect.gen(function* () {
         expect(
-          yield* new CodexTool().call({
+          yield* CodexTool.call({
             prompt: 'resume Codex',
             sandbox_mode: 'workspace-write',
             thread_id: 'stale-thread',
@@ -242,7 +242,7 @@ describe('codex tool - atomic resume fallback', () => {
             return release;
           });
 
-        const tool = new CodexTool();
+        const tool = CodexTool;
         const first = yield* Effect.forkChild(
           tool.call({
             prompt: 'continue the refactor',

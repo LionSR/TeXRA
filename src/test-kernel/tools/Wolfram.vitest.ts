@@ -49,7 +49,7 @@ function dispatchWolfram(runId: RunId, code: string) {
     );
 
     const result = yield* Effect.forkChild(
-      guardedToolCall(new WolframTool(), { code }).pipe(
+      guardedToolCall(WolframTool, { code }).pipe(
         Effect.provide(
           nativeToolTestLayer({
             run: { session: session, runId: runId, toolPolicy: {} },

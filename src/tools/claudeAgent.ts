@@ -526,7 +526,63 @@ function buildClaudeAgentLaunch(params: {
 // Tool
 // ============================================================================
 
-export class ClaudeAgentTool extends defineTool({
+function executeClaudeAgentTool(input: ClaudeAgentInput) {
+  return Effect.gen(function* () {
+    return yield* reraiseAgentCliCallFailure(run(input, yield* ToolCall));
+  });
+}
+
+const run = Effect.fn('ClaudeAgentTool.run')(function* (
+  input: ClaudeAgentInput,
+  toolCall: ToolCallShape,
+): Effect.fn.Return<
+  ToolResult,
+  AgentCliToolFailure,
+  Secrets | ToolCall | Runs | AgentResume
+> {
+  const config = yield* getClaudeAgentConfig;
+  const { workspaceState } = toolCall.roots;
+  const permissionMode = yield* claudeAgentPermissionMode(
+    input,
+    workspaceState,
+  );
+  const model =
+    input.model ?? (yield* config.getClaudeAgentModel(workspaceState));
+  const effort =
+    input.effort ?? (yield* config.getClaudeAgentEffort(workspaceState));
+  const sessionId = input.session_id ?? undefined;
+  const isFork = input.fork_session === true;
+
+  return yield* dispatchAgentCliTool({
+    toolCall,
+    agentName: CLAUDE_AGENT_NAME,
+    store: claudeAgentSessionsFor,
+    // A fork always launches a distinct TeXRA child. Queueing onto the
+    // source session would mutate the original instead of branching it.
+    resumeId: isFork ? undefined : sessionId,
+    sourceId: isFork ? sessionId : undefined,
+    prompt: input.prompt,
+    labels: {
+      notActiveLabel: 'Claude Code CLI session',
+      idParamName: 'session_id',
+      summaryLabel: 'Claude Code CLI',
+      queuedLabel: 'Claude Code session',
+    },
+    launch: (context) =>
+      launchClaudeAgentSession(
+        input,
+        permissionMode,
+        model,
+        effort,
+        context.parentRunId,
+        context.parentWorkingDirectory,
+        context.releaseFallbackClaim,
+        context.session,
+      ),
+  });
+});
+
+export const ClaudeAgentTool = defineTool({
   name: CLAUDE_AGENT_NAME,
   requiresApproval: true,
   description:
@@ -544,66 +600,8 @@ export class ClaudeAgentTool extends defineTool({
         claudeAgentPermissionMode(input, state),
       ),
   },
-}) {
-  protected execute(input: ClaudeAgentInput) {
-    return Effect.gen({ self: this }, function* () {
-      return yield* reraiseAgentCliCallFailure(
-        this.run(input, yield* ToolCall),
-      );
-    });
-  }
-
-  private readonly run = Effect.fn('ClaudeAgentTool.run')(function* (
-    this: ClaudeAgentTool,
-    input: ClaudeAgentInput,
-    toolCall: ToolCallShape,
-  ): Effect.fn.Return<
-    ToolResult,
-    AgentCliToolFailure,
-    Secrets | ToolCall | Runs | AgentResume
-  > {
-    const config = yield* getClaudeAgentConfig;
-    const { workspaceState } = toolCall.roots;
-    const permissionMode = yield* claudeAgentPermissionMode(
-      input,
-      workspaceState,
-    );
-    const model =
-      input.model ?? (yield* config.getClaudeAgentModel(workspaceState));
-    const effort =
-      input.effort ?? (yield* config.getClaudeAgentEffort(workspaceState));
-    const sessionId = input.session_id ?? undefined;
-    const isFork = input.fork_session === true;
-
-    return yield* dispatchAgentCliTool({
-      toolCall,
-      agentName: CLAUDE_AGENT_NAME,
-      store: claudeAgentSessionsFor,
-      // A fork always launches a distinct TeXRA child. Queueing onto the
-      // source session would mutate the original instead of branching it.
-      resumeId: isFork ? undefined : sessionId,
-      sourceId: isFork ? sessionId : undefined,
-      prompt: input.prompt,
-      labels: {
-        notActiveLabel: 'Claude Code CLI session',
-        idParamName: 'session_id',
-        summaryLabel: 'Claude Code CLI',
-        queuedLabel: 'Claude Code session',
-      },
-      launch: (context) =>
-        launchClaudeAgentSession(
-          input,
-          permissionMode,
-          model,
-          effort,
-          context.parentRunId,
-          context.parentWorkingDirectory,
-          context.releaseFallbackClaim,
-          context.session,
-        ),
-    });
-  });
-}
+  execute: executeClaudeAgentTool,
+});
 
 const launchClaudeAgentSession = Effect.fn(
   'claudeAgent.launchClaudeAgentSession',

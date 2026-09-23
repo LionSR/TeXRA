@@ -84,7 +84,7 @@ export type AgentCliToolFailure = ToolError | AgentCliCallFailed;
 
 /**
  * Re-raise a collaborator's rejection as its own cause: pipe this at the
- * tool's native `execute()` edge so BaseTool normalizes the original error
+ * tool's native `execute()` edge so defineTool normalizes the original error
  * without hiding the collaborator's diagnostics.
  */
 export const reraiseAgentCliCallFailure = <A, R>(

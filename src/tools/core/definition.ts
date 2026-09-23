@@ -1,68 +1,41 @@
 // Type imports
-import type { ToolGuard, ToolHost } from '@agent/core/tools/ToolTypes';
-import type { ToolDefinition, ToolResult } from '@shared/schemas';
+import { Cause, Effect, type Scope } from 'effect';
+import { z, ZodError, type ZodType } from 'zod';
+import type { ITool, ToolGuard, ToolHost } from '@agent/core/tools/ToolTypes';
+import {
+  DIAGNOSTIC_TYPE_VALIDATION_ERROR,
+  formatZodIssuesForDiagnostics,
+  ToolError,
+  type ToolDefinition,
+  type ToolResult,
+} from '@shared/schemas';
+import { DatabaseWriteFailed } from '@shared/session/database';
+import { RunLedgerRefused } from '@shared/session/runLedger';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
-// Local file imports
-import { BaseTool } from './base';
+// Third-party imports
 
-// Third-party type imports
-import type { Effect } from 'effect';
-import type { ZodType } from 'zod';
+/** The run body a tool definition carries. */
+type ToolExecute<T, R> = (input: T) => Effect.Effect<ToolResult, Error, R>;
 
-const EXECUTION_FLAGS = ['parallelSafe', 'requiresApproval', 'slow'] as const;
-
-type ExecutionFlag = (typeof EXECUTION_FLAGS)[number];
-type DefineToolFlags = { [K in ExecutionFlag]?: boolean };
-type DefinedToolFlags = {
-  readonly [K in ExecutionFlag]: boolean | undefined;
-};
 /**
- * Written as an anonymous object type, not an `interface`: `defineTool` now
- * returns the tool class rather than being subclassed, so this shape lands
- * in the emitted type of every tool the SDK writes a `.d.ts` for. A named
- * interface would have to be exported to be referenced there (TS4058); an
- * anonymous type is inlined and needs no name.
+ * A defined tool: plain data plus a `call` that validates and normalizes
+ * failures. An anonymous object type so the SDK's `.d.ts` inlines it.
  */
-type DefinedToolDeclarations<T, R> = {
+export type DefinedTool<T, R = never> = Omit<ITool<Error, R>, 'call'> & {
+  call(
+    rawInput: unknown,
+  ): Effect.Effect<ToolResult, Error, Exclude<R, Scope.Scope>>;
+  readonly parallelSafe: boolean | undefined;
+  readonly requiresApproval: boolean | undefined;
+  readonly slow: boolean | undefined;
   readonly unavailableHosts: readonly ToolHost[] | undefined;
   readonly guard: ToolGuard<T, R> | undefined;
 };
 
-/**
- * The abstract class `defineTool` hands back when the definition carries no
- * `execute`: a `BaseTool<T>` with the declared execution flags, constructible
- * only through a subclass that implements `execute`.
- *
- * Spelling this out is what keeps `defineTool`'s return type *nameable*.
- * Without it the return type is an anonymous class expression, and every
- * `class X extends defineTool(...)` becomes undeclarable — TypeScript emits
- * `TS4094: Property 'execute' of exported anonymous class type may not be
- * private or protected` for each one, because a `.d.ts` has no syntax for a
- * protected member on an anonymous class type. Naming the type sidesteps that
- * without widening `BaseTool.execute` to public.
- */
-export type DefinedToolClass<T, R = never> = abstract new () => BaseTool<T, R> &
-  DefinedToolFlags &
-  DefinedToolDeclarations<T, R>;
-
-/**
- * The concrete counterpart, returned when the definition supplies `execute`:
- * directly `new`-able, so a tool whose body only forwards to a module-level
- * function needs no subclass at all.
- */
-export type ConcreteToolClass<T, R = never> = new () => BaseTool<T, R> &
-  DefinedToolFlags &
-  DefinedToolDeclarations<T, R>;
-
-/** The run body a tool definition may carry inline. */
-export type ToolExecute<T, R> = (
-  input: T,
-) => Effect.Effect<ToolResult, Error, R>;
-
 export type DefineToolOptions<T, R = never> = {
   name: string;
-  /** Static description string or function for lazy evaluation */
-  description: string | (() => string);
+  description: string;
   schema: ZodType<T, unknown>;
   /** Roster namespace a delegation tool's description is annotated from. */
   availabilityCategory?: ToolDefinition['availabilityCategory'];
@@ -74,72 +47,88 @@ export type DefineToolOptions<T, R = never> = {
    * in `agent/runtime/loop/toolGuard.ts`.
    *
    * `NoInfer<R>`: the guard is checked against the requirement channel the
-   * tool already has, it never sets it. Without that, a definition that
-   * carries a guard would infer `R` from the guard's own (narrow) needs and
-   * every such tool's `execute` would be checked against a channel far
-   * smaller than the runtime actually provides.
+   * tool already has, it never sets it.
    */
   guard?: ToolGuard<T, NoInfer<R>>;
-  /**
-   * The tool's run body. Supply it when the body needs nothing from the
-   * instance; omit it to get an abstract class and implement `execute` in a
-   * subclass (the shape tools that read `this` still need).
-   */
-  execute?: ToolExecute<T, R>;
-} & DefineToolFlags;
+  execute: ToolExecute<T, R>;
+  parallelSafe?: boolean;
+  requiresApproval?: boolean;
+  slow?: boolean;
+};
 
 /**
- * Define a tool with type-safe schema and either a static or dynamic description.
- *
- * Use a function for description when the content depends on data that's loaded
- * asynchronously (e.g., agent registry) - the function is called lazily when
- * the tool definition is accessed.
+ * Define a tool: validate the model's input against `schema`, run `execute`,
+ * and turn ordinary failures into `{ status: 'error' }` feedback.
+ * Interruption, ledger refusals and database write failures propagate.
  */
 export function defineTool<T, R = never>(
-  def: DefineToolOptions<T, R> & { execute: ToolExecute<T, R> },
-): ConcreteToolClass<T, R>;
-export function defineTool<T, R = never>(
   def: DefineToolOptions<T, R>,
-): DefinedToolClass<T, R>;
-export function defineTool<T, R = never>(
-  def: DefineToolOptions<T, R>,
-): DefinedToolClass<T, R> {
-  const getDescription = (): string =>
-    typeof def.description === 'function' ? def.description() : def.description;
-
-  abstract class GeneratedTool extends BaseTool<T, R> {
-    // The return annotation checks these fields against EXECUTION_FLAGS.
-    readonly parallelSafe = def.parallelSafe;
-    readonly requiresApproval = def.requiresApproval;
-    readonly slow = def.slow;
-    readonly unavailableHosts = def.unavailableHosts;
-    readonly guard = def.guard;
-
-    constructor() {
-      super(
-        {
-          name: def.name,
-          description: getDescription(),
-          // The Zod schema is the tool's only parameter representation; the
-          // provider converters derive JSON Schema from it per request.
-          zodSchema: def.schema,
-          ...(def.availabilityCategory && {
-            availabilityCategory: def.availabilityCategory,
+): DefinedTool<T, R> {
+  const validate = (rawInput: unknown) =>
+    Effect.try({
+      try: () => def.schema.parse(rawInput),
+      catch: ensureError,
+    }).pipe(
+      Effect.catch((error) =>
+        error instanceof z.core.$ZodAsyncError
+          ? Effect.tryPromise({
+              try: () => def.schema.parseAsync(rawInput),
+              catch: ensureError,
+            })
+          : Effect.fail(error),
+      ),
+    );
+  return {
+    definition: {
+      name: def.name,
+      description: def.description,
+      // The Zod schema is the tool's only parameter representation; the
+      // provider converters derive JSON Schema from it per request.
+      zodSchema: def.schema,
+      ...(def.availabilityCategory && {
+        availabilityCategory: def.availabilityCategory,
+      }),
+    },
+    parallelSafe: def.parallelSafe,
+    requiresApproval: def.requiresApproval,
+    slow: def.slow,
+    unavailableHosts: def.unavailableHosts,
+    guard: def.guard,
+    // Validate lazily in the caller's fiber; interruption never becomes a
+    // tool result.
+    call: (rawInput) =>
+      Effect.scoped(
+        validate(rawInput).pipe(
+          Effect.flatMap(def.execute),
+          Effect.catchCause((cause) => {
+            if (Cause.hasInterrupts(cause)) return Effect.failCause(cause);
+            const error = Cause.squash(cause);
+            if (
+              error instanceof DatabaseWriteFailed ||
+              error instanceof RunLedgerRefused
+            )
+              return Effect.failCause(cause);
+            if (error instanceof ZodError) {
+              return Effect.succeed<ToolResult>({
+                status: 'error',
+                error: `Invalid input:\n${z.prettifyError(error)}`,
+                diagnostics: {
+                  type: DIAGNOSTIC_TYPE_VALIDATION_ERROR,
+                  formatted: formatZodIssuesForDiagnostics(error.issues),
+                },
+              });
+            }
+            return Effect.succeed<ToolResult>({
+              status: 'error',
+              error: toErrorMessage(error).trim() || 'Tool execution failed.',
+              ...(error instanceof ToolError &&
+                error.summary !== undefined && { summary: error.summary }),
+              ...(error instanceof Error && {
+                diagnostics: { name: error.name },
+              }),
+            });
           }),
-        },
-        def.schema,
-      );
-    }
-  }
-
-  if (!def.execute) return GeneratedTool;
-  // Re-declared with the narrowed type: a class field initializer does not
-  // inherit the control-flow narrowing of the captured binding.
-  const run: ToolExecute<T, R> = def.execute;
-
-  // The definition's body *is* the tool's `execute`, bound as a field rather
-  // than a method that forwards to it: a call reaches the body directly.
-  return class DefinedTool extends GeneratedTool {
-    protected readonly execute = run;
+        ),
+      ),
   };
 }

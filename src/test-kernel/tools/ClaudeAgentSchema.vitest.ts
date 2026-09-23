@@ -6,7 +6,7 @@ import { ClaudeAgentTool } from '@tools/claudeAgent';
 
 describe('ClaudeAgentTool schema', () => {
   it('requires a source session when session forking is requested', () => {
-    const schema = new ClaudeAgentTool().definition.zodSchema!;
+    const schema = ClaudeAgentTool.definition.zodSchema!;
     const result = schema.safeParse({
       prompt: 'branch this conversation',
       fork_session: true,

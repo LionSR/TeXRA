@@ -48,7 +48,7 @@ describe('BashTool error feedback', () => {
           }),
         );
 
-        const result = yield* new BashTool().call({ command: 'echo long' });
+        const result = yield* BashTool.call({ command: 'echo long' });
         expect(result.status).toBe('error');
         expect(result.error).toContain('Command failed');
         expect(result.error).toContain('stderr failure details');
@@ -97,7 +97,7 @@ describe('BashTool error feedback', () => {
           }),
         );
 
-        const result = yield* new BashTool().call({
+        const result = yield* BashTool.call({
           command: 'missing-command',
         });
         expect(result.status).toBe('error');
@@ -119,7 +119,7 @@ describe('BashTool error feedback', () => {
     Effect.gen(function* () {
       const executeSpy = vi.spyOn(execUtils, 'executeCommand');
 
-      const result = yield* new BashTool().call({
+      const result = yield* BashTool.call({
         command:
           'nohup python verify_residual_order.py > verify_residual_order_run.log 2>&1 &\necho "PID: $!"',
       });
@@ -153,7 +153,7 @@ describe('BashTool error feedback', () => {
         }),
       );
 
-      const result = yield* new BashTool().call({
+      const result = yield* BashTool.call({
         command: 'nohup longtask; echo done &',
       });
 

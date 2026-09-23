@@ -298,9 +298,9 @@ function callToolInput(
   },
   stopAfterCycle = false,
 ) {
-  return new WorkflowScriptTool()
-    .call(input)
-    .pipe(Effect.provide(toolLayer(stopAfterCycle)));
+  return WorkflowScriptTool.call(input).pipe(
+    Effect.provide(toolLayer(stopAfterCycle)),
+  );
 }
 
 beforeEach(async () => {
@@ -513,7 +513,7 @@ return null`;
   );
 
   it('pins the provider schema shape at the model-facing boundary', () => {
-    const definition = new WorkflowScriptTool().definition;
+    const definition = WorkflowScriptTool.definition;
     const providerSchema = convertToolSchema(definition);
     const providerProperties = providerSchema?.properties as
       Record<string, { description?: string }> | undefined;
@@ -553,14 +553,12 @@ return null`;
 
   it.effect('rejects invalid JSON arguments at the schema boundary', () =>
     Effect.gen(function* () {
-      const result = yield* new WorkflowScriptTool()
-        .call({
-          agent: 'correct',
-          script,
-          scriptPath: null,
-          args: { invalid: undefined },
-        })
-        .pipe(Effect.provide(nativeToolTestLayer()));
+      const result = yield* WorkflowScriptTool.call({
+        agent: 'correct',
+        script,
+        scriptPath: null,
+        args: { invalid: undefined },
+      }).pipe(Effect.provide(nativeToolTestLayer()));
 
       expect(result.status).toBe('error');
       expect(result.diagnostics).toMatchObject({ type: 'validation_error' });
@@ -570,13 +568,11 @@ return null`;
 
   it.effect('requires a launched tool context', () =>
     Effect.gen(function* () {
-      const outside = yield* new WorkflowScriptTool()
-        .call({
-          agent: 'correct',
-          script,
-          scriptPath: null,
-        })
-        .pipe(Effect.provide(nativeToolTestLayer()));
+      const outside = yield* WorkflowScriptTool.call({
+        agent: 'correct',
+        script,
+        scriptPath: null,
+      }).pipe(Effect.provide(nativeToolTestLayer()));
       expect(outside).toMatchObject({
         status: 'error',
         error: expect.stringContaining('active launched agent session'),
@@ -760,9 +756,9 @@ return null`;
           scriptPath: '.texra/workflow-scripts/stale.mjs',
         },
       ]) {
-        const result = yield* new WorkflowScriptTool()
-          .call(input)
-          .pipe(Effect.provide(nativeToolTestLayer()));
+        const result = yield* WorkflowScriptTool.call(input).pipe(
+          Effect.provide(nativeToolTestLayer()),
+        );
         expect(result).toMatchObject({
           status: 'error',
           diagnostics: { type: 'validation_error' },

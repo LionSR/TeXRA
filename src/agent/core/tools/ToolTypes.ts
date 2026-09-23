@@ -43,10 +43,10 @@ export interface ToolGuard<T, R = never> {
 
 /**
  * Contract for tool implementations.
- * BaseTool provides the canonical implementation with Zod validation. Expected
+ * `defineTool` provides the canonical implementation with Zod validation. Expected
  * tool failures are returned as literal `{ status: 'error', error: ... }`
  * ToolResult values; unexpected/programmer failures should throw and let
- * BaseTool convert them at the boundary.
+ * `defineTool` convert them at the boundary.
  */
 export interface ITool<E = unknown, R = never> {
   readonly definition: ToolDefinition;

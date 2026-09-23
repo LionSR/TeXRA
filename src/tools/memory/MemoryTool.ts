@@ -138,7 +138,7 @@ const MemoryToolInputSchema = z.discriminatedUnion('command', [
 ]);
 
 /** Derived from MemoryToolInputSchema - single source of truth */
-export type MemoryToolInput = z.infer<typeof MemoryToolInputSchema>;
+type MemoryToolInput = z.infer<typeof MemoryToolInputSchema>;
 
 /** Canonical pair of display path (`/memories/...`) and storage path. */
 type MemoryLocation = { display: string; storage: string };
@@ -169,134 +169,122 @@ function formatListingRow(
 /**
  * Memory tool for managing persistent context files under /memories.
  */
-export class MemoryTool extends defineTool({
-  name: 'memory',
-  description: `Manage persistent memory files under /memories (view, create, str_replace, insert, delete, rename, pin, unpin).
+function executeMemoryTool(
+  input: MemoryToolInput,
+): Effect.Effect<ToolResult, Error, ToolServices> {
+  return Effect.gen(function* () {
+    const call = yield* ToolCall;
+    const runs = yield* Runs;
+    const runId = call.run?.runId;
+    const invocation = {
+      runId,
+      agentName:
+        runId === undefined ? undefined : runs.getHandle(runId)?.agentName,
+    } satisfies MemoryInvocation;
+    return yield* run(input, invocation);
+  }).pipe(Effect.catchTag('PlatformError', (error) => Effect.die(error)));
+}
 
-\`view\` with no path defaults to the /memories root listing; \`rename\` uses old_path/new_path instead of path; all other commands require path.
-Directory listings are paginated: use offset/limit to page through results (default: offset ${LISTING_DEFAULT_OFFSET}, limit ${LISTING_DEFAULT_LIMIT}).
+const run = Effect.fn('MemoryTool.run')(function* (
+  input: MemoryToolInput,
+  invocation: MemoryInvocation,
+) {
+  // Normalize a raw display path into a `{ display, storage }` pair at the
+  // dispatch boundary. Fails with a ToolError if the path is outside
+  // `/memories`.
+  const locate = (raw: string): Effect.Effect<MemoryLocation, ToolError> =>
+    Effect.try({
+      try: () => {
+        const storage = displayToStoragePath(raw);
+        return { display: toDisplayPath(storage), storage };
+      },
+      catch: (cause) => new ToolError(toErrorMessage(cause), { cause }),
+    });
 
-Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies, pitfalls, best practices). Pinned memories are always loaded at session start. Use \`unpin\` to remove the pinned status. Maximum ${MAX_PINNED_MEMORIES} pinned memories allowed.`,
-  schema: MemoryToolInputSchema,
-}) {
-  protected execute(
-    input: MemoryToolInput,
-  ): Effect.Effect<ToolResult, Error, ToolServices> {
-    return Effect.gen({ self: this }, function* () {
-      const call = yield* ToolCall;
-      const runs = yield* Runs;
-      const runId = call.run?.runId;
-      const invocation = {
-        runId,
-        agentName:
-          runId === undefined ? undefined : runs.getHandle(runId)?.agentName,
-      } satisfies MemoryInvocation;
-      return yield* this.run(input, invocation);
-    }).pipe(Effect.catchTag('PlatformError', (error) => Effect.die(error)));
-  }
-
-  private readonly run = Effect.fn('MemoryTool.run')(function* (
-    this: MemoryTool,
-    input: MemoryToolInput,
-    invocation: MemoryInvocation,
-  ) {
-    // Normalize a raw display path into a `{ display, storage }` pair at the
-    // dispatch boundary. Fails with a ToolError if the path is outside
-    // `/memories`.
-    const locate = (raw: string): Effect.Effect<MemoryLocation, ToolError> =>
-      Effect.try({
-        try: () => {
-          const storage = displayToStoragePath(raw);
-          return { display: toDisplayPath(storage), storage };
-        },
-        catch: (cause) => new ToolError(toErrorMessage(cause), { cause }),
-      });
-
-    switch (input.command) {
-      case 'view':
-        // `path` defaults to the memory root so an omitted path lists
-        // /memories instead of erroring - the model's first call in a
-        // fresh session is reliably a bare `view` with no path.
-        return yield* this.view(
-          yield* locate(input.path ?? MEMORY_DISPLAY_ROOT),
-          input.view_range ?? undefined,
-          input.offset,
-          input.limit,
-        );
-      case 'create':
-        return yield* this.create(
-          yield* locate(input.path),
-          input.file_text,
-          invocation,
-        );
-      case 'str_replace':
-        return yield* this.strReplace(
-          yield* locate(input.path),
-          input.old_str,
-          input.new_str,
-          invocation,
-        );
-      case 'insert': {
-        // Schema-enforced: the branch's .refine() rejects insert_text and
-        // new_str both being absent before execute() is ever reached.
-        const insertText = (input.insert_text ?? input.new_str)!;
-        return yield* this.insert(
-          yield* locate(input.path),
-          input.insert_line,
-          insertText,
-          invocation,
-        );
-      }
-      case 'delete':
-        return yield* this.delete(yield* locate(input.path));
-      case 'rename':
-        return yield* this.rename(
-          yield* locate(input.old_path),
-          yield* locate(input.new_path),
-        );
-      case 'pin':
-        return yield* this.pin(yield* locate(input.path));
-      case 'unpin':
-        return yield* this.unpin(yield* locate(input.path));
+  switch (input.command) {
+    case 'view':
+      // `path` defaults to the memory root so an omitted path lists
+      // /memories instead of erroring - the model's first call in a
+      // fresh session is reliably a bare `view` with no path.
+      return yield* view(
+        yield* locate(input.path ?? MEMORY_DISPLAY_ROOT),
+        input.view_range ?? undefined,
+        input.offset,
+        input.limit,
+      );
+    case 'create':
+      return yield* create(
+        yield* locate(input.path),
+        input.file_text,
+        invocation,
+      );
+    case 'str_replace':
+      return yield* strReplace(
+        yield* locate(input.path),
+        input.old_str,
+        input.new_str,
+        invocation,
+      );
+    case 'insert': {
+      // Schema-enforced: the branch's .refine() rejects insert_text and
+      // new_str both being absent before execute() is ever reached.
+      const insertText = (input.insert_text ?? input.new_str)!;
+      return yield* insert(
+        yield* locate(input.path),
+        input.insert_line,
+        insertText,
+        invocation,
+      );
     }
-  });
-
-  /** Write a memory file with fresh attribution frontmatter, preserving pinned status from existing file. */
-  private readonly writeAttributed = Effect.fn('MemoryTool.writeAttributed')(
-    (
-      resolvedPath: string,
-      content: string,
-      invocation: MemoryInvocation,
-      existingMeta?: MemoryFileMeta | null,
-    ) =>
-      writeMemoryFile(
-        resolvedPath,
-        content,
-        createMeta(invocation.agentName, invocation.runId, existingMeta),
-      ),
-  );
-
-  /** Return early result if the file hasn't been viewed yet. */
-  private requireViewBeforeModify(
-    inputPath: string,
-    operation = 'editing',
-  ): Effect.Effect<ToolResult | null, never, ToolServices> {
-    return requireFileReadForEdit(
-      inputPath,
-      true,
-      `Modifications to memory files require viewing the file first. Please use the view command before ${operation}.`,
-    );
+    case 'delete':
+      return yield* deleteMemory(yield* locate(input.path));
+    case 'rename':
+      return yield* rename(
+        yield* locate(input.old_path),
+        yield* locate(input.new_path),
+      );
+    case 'pin':
+      return yield* pin(yield* locate(input.path));
+    case 'unpin':
+      return yield* unpin(yield* locate(input.path));
   }
+});
 
-  /**
-   * Fail unless `resolvedPath` names an existing regular file. A missing
-   * path and a directory are the same user-facing mistake, and an
-   * unreadable stat is reported as that mistake too — the same collapse
-   * the previous `try { stat } catch { throw ToolError }` made.
-   */
-  private readonly requireEditableFile = Effect.fn(
-    'MemoryTool.requireEditableFile',
-  )(function* (resolvedPath: string, inputPath: string) {
+/** Write a memory file with fresh attribution frontmatter, preserving pinned status from existing file. */
+const writeAttributed = Effect.fn('MemoryTool.writeAttributed')(
+  (
+    resolvedPath: string,
+    content: string,
+    invocation: MemoryInvocation,
+    existingMeta?: MemoryFileMeta | null,
+  ) =>
+    writeMemoryFile(
+      resolvedPath,
+      content,
+      createMeta(invocation.agentName, invocation.runId, existingMeta),
+    ),
+);
+
+/** Return early result if the file hasn't been viewed yet. */
+function requireViewBeforeModify(
+  inputPath: string,
+  operation = 'editing',
+): Effect.Effect<ToolResult | null, never, ToolServices> {
+  return requireFileReadForEdit(
+    inputPath,
+    true,
+    `Modifications to memory files require viewing the file first. Please use the view command before ${operation}.`,
+  );
+}
+
+/**
+ * Fail unless `resolvedPath` names an existing regular file. A missing
+ * path and a directory are the same user-facing mistake, and an
+ * unreadable stat is reported as that mistake too — the same collapse
+ * the previous `try { stat } catch { throw ToolError }` made.
+ */
+const requireEditableFile = Effect.fn('MemoryTool.requireEditableFile')(
+  function* (resolvedPath: string, inputPath: string) {
     const errorMsg = `The path ${inputPath} does not exist or is a directory.`;
     const stats = yield* statMemoryEntry(resolvedPath).pipe(
       // Keep the cause on ToolError and in the log so permission faults stay visible.
@@ -314,304 +302,286 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
     if (stats.type === 'Directory') {
       return yield* Effect.fail(new ToolError(errorMsg));
     }
-  });
+  },
+);
 
-  private readonly view = Effect.fn('MemoryTool.view')(function* (
-    this: MemoryTool,
-    loc: MemoryLocation,
-    viewRange: [number, number] | undefined,
-    offset: number,
-    limit: number,
-  ) {
-    const { display: inputPath, storage: resolvedPath } = loc;
-    const exists = yield* memoryPathExists(resolvedPath);
+const view = Effect.fn('MemoryTool.view')(function* (
+  loc: MemoryLocation,
+  viewRange: [number, number] | undefined,
+  offset: number,
+  limit: number,
+) {
+  const { display: inputPath, storage: resolvedPath } = loc;
+  const exists = yield* memoryPathExists(resolvedPath);
 
-    // Handle non-existent root directory gracefully - return empty listing
-    // instead of error (consistent with MemoryViewMessageHandler behavior)
-    if (!exists) {
-      if (resolvedPath === MEMORY_STORAGE_DIR) {
-        return executed(
-          `The memory directory is empty. This is a fresh start - use the create command to add memory files.`,
-          'Viewed empty memory directory',
-        );
-      }
-      return yield* Effect.fail(
-        new ToolError(
-          `The path ${inputPath} does not exist. Please provide a valid path.`,
-        ),
-      );
-    }
-
-    const stats = yield* statMemoryEntry(resolvedPath);
-    if (stats.type === 'Directory') {
-      const allEntries = yield* this.buildDirectoryListing(resolvedPath, stats);
-      yield* recordToolFileRead(inputPath);
-
-      const { page, start, end, total } = paginateToolListing(
-        allEntries,
-        offset,
-        limit,
-      );
-
-      const header = `Contents of ${inputPath} (showing ${start}–${end} of ${total}, up to ${DIRECTORY_LISTING_DEPTH} levels deep):`;
+  // Handle non-existent root directory gracefully - return empty listing
+  // instead of error (consistent with MemoryViewMessageHandler behavior)
+  if (!exists) {
+    if (resolvedPath === MEMORY_STORAGE_DIR) {
       return executed(
-        `${header}\nSIZE\tMODIFIED\tBY\tPATH\n${page.join('\n')}${formatPaginationHint(end, total)}`,
-        `Listed directory: ${inputPath} (${start}–${end} of ${total})`,
+        `The memory directory is empty. This is a fresh start - use the create command to add memory files.`,
+        'Viewed empty memory directory',
       );
     }
+    return yield* Effect.fail(
+      new ToolError(
+        `The path ${inputPath} does not exist. Please provide a valid path.`,
+      ),
+    );
+  }
 
-    const { meta, content } = yield* readMemoryFile(resolvedPath);
-    yield* recordToolFileRead(inputPath);
-    const lines = splitContentLines(content);
-
-    // Build metadata suffix for the summary
-    const metaParts: string[] = [];
-    if (meta) {
-      metaParts.push(`last modified by: ${formatAttribution(meta)}`);
-      if (meta.pinned) metaParts.push('pinned');
-    }
-    const summarySuffix =
-      metaParts.length > 0 ? ` (${metaParts.join(', ')})` : '';
-
-    return formatFileView({
-      path: inputPath,
-      lines,
-      viewRange,
-      summarySuffix,
-    });
-  });
-
-  private readonly create = Effect.fn('MemoryTool.create')(function* (
-    this: MemoryTool,
-    loc: MemoryLocation,
-    fileText: string,
-    invocation: MemoryInvocation,
-  ) {
-    const { display: inputPath, storage: resolvedPath } = loc;
-    const exists = yield* memoryPathExists(resolvedPath);
-    if (exists) {
-      return yield* Effect.fail(
-        new ToolError(`File ${inputPath} already exists.`),
-      );
-    }
-
-    // Relative to the session's storage root, which the view captured when
-    // its layer was built, so no path here names a root of its own.
-    const storageFs = yield* StorageFs;
-    yield* storageFs.makeDirectory(MEMORY_STORAGE_DIR, { recursive: true });
-    yield* storageFs.makeDirectory(path.dirname(resolvedPath), {
-      recursive: true,
-    });
-    yield* this.writeAttributed(resolvedPath, fileText, invocation);
+  const stats = yield* statMemoryEntry(resolvedPath);
+  if (stats.type === 'Directory') {
+    const allEntries = yield* buildDirectoryListing(resolvedPath, stats);
     yield* recordToolFileRead(inputPath);
 
-    return executed(
-      `File created successfully at: ${inputPath}`,
-      `Created memory file: ${inputPath}`,
+    const { page, start, end, total } = paginateToolListing(
+      allEntries,
+      offset,
+      limit,
     );
+
+    const header = `Contents of ${inputPath} (showing ${start}–${end} of ${total}, up to ${DIRECTORY_LISTING_DEPTH} levels deep):`;
+    return executed(
+      `${header}\nSIZE\tMODIFIED\tBY\tPATH\n${page.join('\n')}${formatPaginationHint(end, total)}`,
+      `Listed directory: ${inputPath} (${start}–${end} of ${total})`,
+    );
+  }
+
+  const { meta, content } = yield* readMemoryFile(resolvedPath);
+  yield* recordToolFileRead(inputPath);
+  const lines = splitContentLines(content);
+
+  // Build metadata suffix for the summary
+  const metaParts: string[] = [];
+  if (meta) {
+    metaParts.push(`last modified by: ${formatAttribution(meta)}`);
+    if (meta.pinned) metaParts.push('pinned');
+  }
+  const summarySuffix =
+    metaParts.length > 0 ? ` (${metaParts.join(', ')})` : '';
+
+  return formatFileView({
+    path: inputPath,
+    lines,
+    viewRange,
+    summarySuffix,
+  });
+});
+
+const create = Effect.fn('MemoryTool.create')(function* (
+  loc: MemoryLocation,
+  fileText: string,
+  invocation: MemoryInvocation,
+) {
+  const { display: inputPath, storage: resolvedPath } = loc;
+  const exists = yield* memoryPathExists(resolvedPath);
+  if (exists) {
+    return yield* Effect.fail(
+      new ToolError(`File ${inputPath} already exists.`),
+    );
+  }
+
+  // Relative to the session's storage root, which the view captured when
+  // its layer was built, so no path here names a root of its own.
+  const storageFs = yield* StorageFs;
+  yield* storageFs.makeDirectory(MEMORY_STORAGE_DIR, { recursive: true });
+  yield* storageFs.makeDirectory(path.dirname(resolvedPath), {
+    recursive: true,
+  });
+  yield* writeAttributed(resolvedPath, fileText, invocation);
+  yield* recordToolFileRead(inputPath);
+
+  return executed(
+    `File created successfully at: ${inputPath}`,
+    `Created memory file: ${inputPath}`,
+  );
+});
+
+const strReplace = Effect.fn('MemoryTool.strReplace')(function* (
+  loc: MemoryLocation,
+  oldStr: string,
+  newStr: string,
+  invocation: MemoryInvocation,
+) {
+  const { display: inputPath, storage: resolvedPath } = loc;
+  if (oldStr.length === 0) {
+    return yield* Effect.fail(
+      new ToolError(
+        `old_str must not be empty for ${inputPath}. Provide the exact text to replace.`,
+      ),
+    );
+  }
+
+  yield* requireEditableFile(resolvedPath, inputPath);
+
+  const readGate = yield* requireViewBeforeModify(inputPath);
+  if (readGate) return readGate;
+
+  const { content, meta } = yield* readMemoryFile(resolvedPath);
+  const replacement = replaceLiteralMatches({
+    content,
+    search: oldStr,
+    replacement: newStr,
+    mode: 'unique',
+    notFoundError: () =>
+      `The provided old_str was not found in ${inputPath}. Ensure it matches the file content exactly.`,
+    multipleMatchesError: ({ lineNumbers }) =>
+      `old_str is not unique within ${inputPath} (found in lines ${lineNumbers.join(', ')}). Include more surrounding context to make it unique.`,
   });
 
-  private readonly strReplace = Effect.fn('MemoryTool.strReplace')(function* (
-    this: MemoryTool,
-    loc: MemoryLocation,
-    oldStr: string,
-    newStr: string,
-    invocation: MemoryInvocation,
-  ) {
-    const { display: inputPath, storage: resolvedPath } = loc;
-    if (oldStr.length === 0) {
-      return yield* Effect.fail(
-        new ToolError(
-          `old_str must not be empty for ${inputPath}. Provide the exact text to replace.`,
-        ),
-      );
-    }
+  const updated = replacement.content;
+  yield* writeAttributed(resolvedPath, updated, invocation, meta);
+  yield* recordToolFileRead(inputPath);
 
-    yield* this.requireEditableFile(resolvedPath, inputPath);
+  const updatedLines = updated.split('\n');
+  const numbered = formatLinesWithNumbers(updatedLines);
 
-    const readGate = yield* this.requireViewBeforeModify(inputPath);
-    if (readGate) return readGate;
+  return executed(
+    `The file has been edited.\n${numbered.join('\n')}`,
+    `Replaced text in: ${inputPath}`,
+  );
+});
 
-    const { content, meta } = yield* readMemoryFile(resolvedPath);
-    const replacement = replaceLiteralMatches({
-      content,
-      search: oldStr,
-      replacement: newStr,
-      mode: 'unique',
-      notFoundError: () =>
-        `The provided old_str was not found in ${inputPath}. Ensure it matches the file content exactly.`,
-      multipleMatchesError: ({ lineNumbers }) =>
-        `old_str is not unique within ${inputPath} (found in lines ${lineNumbers.join(', ')}). Include more surrounding context to make it unique.`,
-    });
+const insert = Effect.fn('MemoryTool.insert')(function* (
+  loc: MemoryLocation,
+  insertLine: number,
+  insertText: string,
+  invocation: MemoryInvocation,
+) {
+  const { display: inputPath, storage: resolvedPath } = loc;
+  yield* requireEditableFile(resolvedPath, inputPath);
 
-    const updated = replacement.content;
-    yield* this.writeAttributed(resolvedPath, updated, invocation, meta);
-    yield* recordToolFileRead(inputPath);
+  const readGate = yield* requireViewBeforeModify(inputPath);
+  if (readGate) return readGate;
 
-    const updatedLines = updated.split('\n');
-    const numbered = formatLinesWithNumbers(updatedLines);
+  const { content, meta } = yield* readMemoryFile(resolvedPath);
+  const lines = content.split('\n');
+  const totalLines = lines.length;
+  if (insertLine < 0 || insertLine > totalLines) {
+    return yield* Effect.fail(
+      new ToolError(
+        `Invalid \`insert_line\` parameter: ${insertLine}. It should be within the range of lines of the file: [0, ${totalLines}].`,
+      ),
+    );
+  }
 
+  const insertLines = insertText.split('\n');
+  const updatedLines = [
+    ...lines.slice(0, insertLine),
+    ...insertLines,
+    ...lines.slice(insertLine),
+  ];
+
+  yield* writeAttributed(
+    resolvedPath,
+    updatedLines.join('\n'),
+    invocation,
+    meta,
+  );
+  yield* recordToolFileRead(inputPath);
+
+  return executed(
+    `The file ${inputPath} has been edited.`,
+    `Inserted text at line ${insertLine} in: ${inputPath}`,
+  );
+});
+
+const deleteMemory = Effect.fn('MemoryTool.delete')(function* (
+  loc: MemoryLocation,
+) {
+  const { display: inputPath, storage: resolvedPath } = loc;
+  const exists = yield* memoryPathExists(resolvedPath);
+  if (!exists) {
+    return yield* Effect.fail(
+      new ToolError(`The path ${inputPath} does not exist.`),
+    );
+  }
+
+  const readGate = yield* requireViewBeforeModify(inputPath, 'deleting');
+  if (readGate) return readGate;
+
+  yield* deleteMemoryPath(resolvedPath);
+  return executed(`Successfully deleted ${inputPath}`, `Deleted: ${inputPath}`);
+});
+
+const rename = Effect.fn('MemoryTool.rename')(function* (
+  oldLoc: MemoryLocation,
+  newLoc: MemoryLocation,
+) {
+  const { display: oldPathInput, storage: resolvedOldPath } = oldLoc;
+  const { display: newPathInput, storage: resolvedNewPath } = newLoc;
+
+  const oldExists = yield* memoryPathExists(resolvedOldPath);
+  if (!oldExists) {
+    return yield* Effect.fail(
+      new ToolError(`The path ${oldPathInput} does not exist.`),
+    );
+  }
+
+  const readGate = yield* requireViewBeforeModify(oldPathInput, 'renaming');
+  if (readGate) return readGate;
+
+  const newExists = yield* memoryPathExists(resolvedNewPath);
+  if (newExists) {
+    return yield* Effect.fail(
+      new ToolError(`The destination ${newPathInput} already exists.`),
+    );
+  }
+
+  yield* renameMemoryPath(resolvedOldPath, resolvedNewPath);
+  return executed(
+    `Successfully renamed ${oldPathInput} to ${newPathInput}`,
+    `Renamed: ${oldPathInput} to ${newPathInput}`,
+  );
+});
+
+const pin = Effect.fn('MemoryTool.pin')(function* (loc: MemoryLocation) {
+  const { display: inputPath, storage: resolvedPath } = loc;
+  yield* requireEditableFile(resolvedPath, inputPath);
+
+  const result = yield* setMemoryPinned(resolvedPath, true);
+  if (result.status === 'already') {
     return executed(
-      `The file has been edited.\n${numbered.join('\n')}`,
-      `Replaced text in: ${inputPath}`,
+      `The memory file ${inputPath} is already pinned.`,
+      `Already pinned: ${inputPath}`,
     );
-  });
-
-  private readonly insert = Effect.fn('MemoryTool.insert')(function* (
-    this: MemoryTool,
-    loc: MemoryLocation,
-    insertLine: number,
-    insertText: string,
-    invocation: MemoryInvocation,
-  ) {
-    const { display: inputPath, storage: resolvedPath } = loc;
-    yield* this.requireEditableFile(resolvedPath, inputPath);
-
-    const readGate = yield* this.requireViewBeforeModify(inputPath);
-    if (readGate) return readGate;
-
-    const { content, meta } = yield* readMemoryFile(resolvedPath);
-    const lines = content.split('\n');
-    const totalLines = lines.length;
-    if (insertLine < 0 || insertLine > totalLines) {
-      return yield* Effect.fail(
-        new ToolError(
-          `Invalid \`insert_line\` parameter: ${insertLine}. It should be within the range of lines of the file: [0, ${totalLines}].`,
-        ),
-      );
-    }
-
-    const insertLines = insertText.split('\n');
-    const updatedLines = [
-      ...lines.slice(0, insertLine),
-      ...insertLines,
-      ...lines.slice(insertLine),
-    ];
-
-    yield* this.writeAttributed(
-      resolvedPath,
-      updatedLines.join('\n'),
-      invocation,
-      meta,
+  }
+  if (result.status === 'cap-reached') {
+    return yield* Effect.fail(
+      new ToolError(
+        `Cannot pin ${inputPath}: maximum of ${MAX_PINNED_MEMORIES} pinned memories reached. Unpin an existing memory first.`,
+      ),
     );
-    yield* recordToolFileRead(inputPath);
+  }
 
+  return executed(
+    `Successfully pinned ${inputPath} as a core long-term memory. (${result.pinnedCount}/${MAX_PINNED_MEMORIES} pinned)`,
+    `Pinned memory: ${inputPath}`,
+  );
+});
+
+const unpin = Effect.fn('MemoryTool.unpin')(function* (loc: MemoryLocation) {
+  const { display: inputPath, storage: resolvedPath } = loc;
+  yield* requireEditableFile(resolvedPath, inputPath);
+
+  const result = yield* setMemoryPinned(resolvedPath, false);
+  if (result.status === 'already') {
     return executed(
-      `The file ${inputPath} has been edited.`,
-      `Inserted text at line ${insertLine} in: ${inputPath}`,
+      `The memory file ${inputPath} is not pinned.`,
+      `Not pinned: ${inputPath}`,
     );
-  });
+  }
 
-  private readonly delete = Effect.fn('MemoryTool.delete')(function* (
-    this: MemoryTool,
-    loc: MemoryLocation,
-  ) {
-    const { display: inputPath, storage: resolvedPath } = loc;
-    const exists = yield* memoryPathExists(resolvedPath);
-    if (!exists) {
-      return yield* Effect.fail(
-        new ToolError(`The path ${inputPath} does not exist.`),
-      );
-    }
+  return executed(
+    `Successfully unpinned ${inputPath}.`,
+    `Unpinned memory: ${inputPath}`,
+  );
+});
 
-    const readGate = yield* this.requireViewBeforeModify(inputPath, 'deleting');
-    if (readGate) return readGate;
-
-    yield* deleteMemoryPath(resolvedPath);
-    return executed(
-      `Successfully deleted ${inputPath}`,
-      `Deleted: ${inputPath}`,
-    );
-  });
-
-  private readonly rename = Effect.fn('MemoryTool.rename')(function* (
-    this: MemoryTool,
-    oldLoc: MemoryLocation,
-    newLoc: MemoryLocation,
-  ) {
-    const { display: oldPathInput, storage: resolvedOldPath } = oldLoc;
-    const { display: newPathInput, storage: resolvedNewPath } = newLoc;
-
-    const oldExists = yield* memoryPathExists(resolvedOldPath);
-    if (!oldExists) {
-      return yield* Effect.fail(
-        new ToolError(`The path ${oldPathInput} does not exist.`),
-      );
-    }
-
-    const readGate = yield* this.requireViewBeforeModify(
-      oldPathInput,
-      'renaming',
-    );
-    if (readGate) return readGate;
-
-    const newExists = yield* memoryPathExists(resolvedNewPath);
-    if (newExists) {
-      return yield* Effect.fail(
-        new ToolError(`The destination ${newPathInput} already exists.`),
-      );
-    }
-
-    yield* renameMemoryPath(resolvedOldPath, resolvedNewPath);
-    return executed(
-      `Successfully renamed ${oldPathInput} to ${newPathInput}`,
-      `Renamed: ${oldPathInput} to ${newPathInput}`,
-    );
-  });
-
-  private readonly pin = Effect.fn('MemoryTool.pin')(function* (
-    this: MemoryTool,
-    loc: MemoryLocation,
-  ) {
-    const { display: inputPath, storage: resolvedPath } = loc;
-    yield* this.requireEditableFile(resolvedPath, inputPath);
-
-    const result = yield* setMemoryPinned(resolvedPath, true);
-    if (result.status === 'already') {
-      return executed(
-        `The memory file ${inputPath} is already pinned.`,
-        `Already pinned: ${inputPath}`,
-      );
-    }
-    if (result.status === 'cap-reached') {
-      return yield* Effect.fail(
-        new ToolError(
-          `Cannot pin ${inputPath}: maximum of ${MAX_PINNED_MEMORIES} pinned memories reached. Unpin an existing memory first.`,
-        ),
-      );
-    }
-
-    return executed(
-      `Successfully pinned ${inputPath} as a core long-term memory. (${result.pinnedCount}/${MAX_PINNED_MEMORIES} pinned)`,
-      `Pinned memory: ${inputPath}`,
-    );
-  });
-
-  private readonly unpin = Effect.fn('MemoryTool.unpin')(function* (
-    this: MemoryTool,
-    loc: MemoryLocation,
-  ) {
-    const { display: inputPath, storage: resolvedPath } = loc;
-    yield* this.requireEditableFile(resolvedPath, inputPath);
-
-    const result = yield* setMemoryPinned(resolvedPath, false);
-    if (result.status === 'already') {
-      return executed(
-        `The memory file ${inputPath} is not pinned.`,
-        `Not pinned: ${inputPath}`,
-      );
-    }
-
-    return executed(
-      `Successfully unpinned ${inputPath}.`,
-      `Unpinned memory: ${inputPath}`,
-    );
-  });
-
-  /** Rows for an already-stat'ed directory; `rootStats` is the caller's snapshot so the root row and the is-a-directory decision are one observation. */
-  private readonly buildDirectoryListing = Effect.fn(
-    'MemoryTool.buildDirectoryListing',
-  )(function* (resolvedPath: string, rootStats: FileSystem.File.Info) {
+/** Rows for an already-stat'ed directory; `rootStats` is the caller's snapshot so the root row and the is-a-directory decision are one observation. */
+const buildDirectoryListing = Effect.fn('MemoryTool.buildDirectoryListing')(
+  function* (resolvedPath: string, rootStats: FileSystem.File.Info) {
     const entries = yield* Stream.runCollect(
       walkMemoryDirectory(resolvedPath, '', {
         maxDepth: DIRECTORY_LISTING_DEPTH,
@@ -634,5 +604,17 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
         ),
       ),
     ];
-  });
-}
+  },
+);
+
+export const MemoryTool = defineTool({
+  name: 'memory',
+  description: `Manage persistent memory files under /memories (view, create, str_replace, insert, delete, rename, pin, unpin).
+
+\`view\` with no path defaults to the /memories root listing; \`rename\` uses old_path/new_path instead of path; all other commands require path.
+Directory listings are paginated: use offset/limit to page through results (default: offset ${LISTING_DEFAULT_OFFSET}, limit ${LISTING_DEFAULT_LIMIT}).
+
+Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies, pitfalls, best practices). Pinned memories are always loaded at session start. Use \`unpin\` to remove the pinned status. Maximum ${MAX_PINNED_MEMORIES} pinned memories allowed.`,
+  schema: MemoryToolInputSchema,
+  execute: executeMemoryTool,
+});
