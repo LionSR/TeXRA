@@ -118,20 +118,10 @@ export interface ToolRow extends TranscriptRowBase {
   readonly model: ToolRowModel;
 }
 
-interface WebSearchResultRef {
-  readonly url?: string;
-  readonly title?: string;
-  readonly domain?: string;
-}
-
 export interface WebSearchRow extends TranscriptRowBase {
   readonly kind: 'webSearch';
-  /** `Anthropic Search: "quantum error correction" (searching...)` */
+  /** `Web Search: "quantum error correction"` */
   readonly label: string;
-  readonly results: readonly WebSearchResultRef[];
-  readonly status?: string;
-  readonly failed: boolean;
-  readonly inProgress: boolean;
 }
 
 /** A file that came through the media pipeline as visual/audio model input. */
@@ -322,7 +312,6 @@ export function isSettledRow(
     case 'compactionActivity':
       return row.block.finalized;
     case 'webSearch':
-      return !row.inProgress;
     case 'user':
     case 'error':
     case 'fileList':

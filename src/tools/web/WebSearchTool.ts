@@ -184,7 +184,7 @@ export const WebSearchTool = defineTool({
   slow: true,
   parallelSafe: true,
   description:
-    'Search the web and return top results. Uses the native provider search tool when available; falls back to DuckDuckGo Instant Answers API.',
+    'Search the web and return top results from the DuckDuckGo Instant Answers API.',
   schema: WebSearchInputSchema,
   execute: (input: WebSearchInput): Effect.Effect<ToolResult, Error> => {
     // The owning agent run's cancellation enters here as interruption —

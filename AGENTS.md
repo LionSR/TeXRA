@@ -620,7 +620,7 @@ A run is one Effect program in `src/agent/runtime/loop/`, no cursor and no graph
 **Error handling and types**
 
 - Format and surface errors through `logErrorMessage`, `showLoggedErrorMessage`, and `showLoggedMessageWithDocs` in `packages/extension/src/frontend/ui/errorHandlingUtils.ts` for consistent telemetry and documentation links.
-- Keep shared type definitions colocated with their domains (e.g., `src/agent/types`) and derive runtime-safe interfaces with `zod` plus `z.infer`.
+- Keep shared type definitions colocated with their domains (e.g., `src/agent/core/state`) and derive runtime-safe interfaces with `zod` plus `z.infer`.
 
 **Miscellaneous**
 

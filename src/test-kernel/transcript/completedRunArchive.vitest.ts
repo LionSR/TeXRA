@@ -194,12 +194,7 @@ async function writeArchiveFixture(runId: RunId): Promise<void> {
       text: 'Consider the boundary terms.',
     }),
     logRow(MESSAGE_TYPES.WEB_SEARCH, {
-      data: {
-        query: 'sobolev constant',
-        results: [{ url: 'https://example.org/a', title: 'Sobolev notes' }],
-        provider: 'anthropic',
-        status: 'completed',
-      },
+      data: { query: 'sobolev constant' },
     }),
     logRow(MESSAGE_TYPES.TOOL_USE, {
       data: {
@@ -440,10 +435,6 @@ describe('completedRunArchive facade', () => {
           },
           { kind: 'thinking', text: 'Consider the boundary terms.' },
           { kind: 'web-search', query: 'sobolev constant' },
-          {
-            kind: 'web-search-results',
-            results: [{ url: 'https://example.org/a', title: 'Sobolev notes' }],
-          },
           {
             kind: 'tool-call',
             name: 'write_file',

@@ -232,9 +232,8 @@ export const resolveAgentTools = Effect.fn('resolveAgentTools')(function* ({
       logger.warn(`Run-scoped tool "${name}" shadows an existing tool.`);
     }
     overlay.set(name, tool);
-    const definition = { ...tool.definition, forceFunctionCall: true };
-    if (index === -1) definitions.push(definition);
-    else definitions[index] = definition;
+    if (index === -1) definitions.push(tool.definition);
+    else definitions[index] = tool.definition;
   }
   // Dispatch answers only the names the model was offered: a registered tool
   // the run withheld (disabled, undeclared, host-excluded, or gated on an

@@ -252,20 +252,6 @@ const TOKENS_FREED_ACTIONS = new Set([
 const MAX_TOKENS_REDUCED_DISPLAY_THRESHOLD = 32_768;
 
 // ---------------------------------------------------------------------------
-// Web tools
-// ---------------------------------------------------------------------------
-
-const WEB_SEARCH_PROVIDER_LABEL: Readonly<Record<string, string>> = {
-  anthropic: 'Anthropic',
-  openai: 'OpenAI',
-};
-
-const WEB_SEARCH_STATUS_SUFFIX: Readonly<Record<string, string>> = {
-  in_progress: ' (searching...)',
-  failed: ' (failed)',
-};
-
-// ---------------------------------------------------------------------------
 // Phase / group rows
 // ---------------------------------------------------------------------------
 
@@ -381,18 +367,11 @@ export function projectTranscriptRow(
     }
 
     case MESSAGE_TYPES.WEB_SEARCH: {
-      const { query, results, provider, status } = entry.data;
-      const providerLabel =
-        WEB_SEARCH_PROVIDER_LABEL[provider ?? 'web'] ?? 'Web';
-      const suffix = WEB_SEARCH_STATUS_SUFFIX[status ?? ''] ?? '';
+      const { query } = entry.data;
       return {
         ...rowBase(entry),
         kind: 'webSearch',
-        label: `${providerLabel} Search${query ? `: "${query}"` : ''}${suffix}`,
-        results: results ?? [],
-        ...(status !== undefined ? { status } : {}),
-        failed: status === 'failed',
-        inProgress: status === 'in_progress',
+        label: `Web Search${query ? `: "${query}"` : ''}`,
       };
     }
 

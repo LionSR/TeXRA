@@ -131,7 +131,7 @@ const BUILTIN_TOOLS: (Omit<
     name: 'Web Search & Fetch',
     category: 'web',
     description:
-      'Search the web and fetch or extract content from URLs. Uses native provider tools when available, and DuckDuckGo Instant Answers otherwise.',
+      'Search the web with DuckDuckGo Instant Answers and fetch or extract content from URLs.',
     toolNames: ['web_search', 'web_fetch'],
   },
   {

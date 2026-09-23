@@ -498,7 +498,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
                 },
               ]),
             ]);
-            workspace.resetServerToolContent();
             workspace.resetReasoning();
             return { state: next, done: false };
           }
@@ -506,7 +505,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
             workspace.assembly.lastResponse = text;
             if (live) logger.responseFinalized(text);
           }
-          workspace.resetServerToolContent();
           workspace.resetReasoning();
           if (
             run.finalToolName !== null &&
