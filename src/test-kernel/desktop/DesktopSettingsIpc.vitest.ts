@@ -146,6 +146,9 @@ function createSettingsFixture(overrides: SettingsFixtureOverrides = {}) {
       }),
     globalState,
     secrets,
+    externalOpener: overrides.externalOpener ?? {
+      openExternal: () => Effect.void,
+    },
     ui: createStubDesktopSettingsUiHost(ui),
     session,
     postToRenderer,

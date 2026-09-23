@@ -31,9 +31,7 @@ const NO_EXTENSION_HOSTING =
 
 type DesktopToolHandlers = Pick<
   SettingsViewInboundHandlerRegistry,
-  | typeof SETTINGS_VIEW_COMMANDS.OPEN_TOOL_INSTALL_URL
   | typeof SETTINGS_VIEW_COMMANDS.INSTALL_TOOL_EXTENSION
-  | typeof SETTINGS_VIEW_COMMANDS.RECHECK_TOOL_STATUS
   | typeof SETTINGS_VIEW_COMMANDS.TOGGLE_TOOL
   | typeof SETTINGS_VIEW_COMMANDS.RUN_TOOL_COMMAND
 >;
@@ -53,9 +51,6 @@ interface DefaultDesktopToolingSettingsControllerOptions extends SettingsStatePo
   readonly onError: (error: unknown) => void;
   readonly renderer: {
     postToRenderer(message: unknown): void;
-  };
-  readonly navigation: {
-    openExternal(url: string): Promise<void>;
   };
   readonly commands: {
     run(command: string): Promise<void>;
@@ -87,14 +82,8 @@ export class DefaultDesktopToolingSettingsController implements DesktopToolingSe
     private readonly options: DefaultDesktopToolingSettingsControllerOptions,
   ) {
     this.toolHandlers = {
-      openToolInstallUrl: (message) =>
-        Effect.tryPromise({
-          try: () => options.navigation.openExternal(message.url),
-          catch: ensureError,
-        }),
       installToolExtension: unsupported(NO_EXTENSION_HOSTING),
       // Each arm is a settings-view message, so its program settles here.
-      recheckToolStatus: () => refreshToolAvailability(this.probeInputs),
       toggleTool: (message) => this.toggleTool(message.toolId, message.enabled),
       runToolCommand: (message) => this.runToolCommand(message),
     };
@@ -107,7 +96,7 @@ export class DefaultDesktopToolingSettingsController implements DesktopToolingSe
         this.runLatexInstallCommand(message.installCommand),
     };
     // Every re-probe repaints the Tools tab, whoever triggered it — the
-    // Re-check button, a GitHub token write, or any future core-side input
+    // shared Re-check arm, a GitHub token write, or any future core-side input
     // change. Subscribing here rather than posting after each call site is
     // what makes the dashboard follow availability instead of following the
     // one path that remembered to re-post.
