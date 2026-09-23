@@ -207,7 +207,7 @@ const removeExternalDiffPatchDirs: Effect.Effect<void> = Effect.suspend(() => {
     (tempDir) =>
       Effect.tryPromise({
         try: () => rm(tempDir, { recursive: true, force: true }),
-        catch: (reason) => reason,
+        catch: ensureError,
       }).pipe(
         Effect.catch((reason: unknown) =>
           Effect.sync(() => {
@@ -1821,7 +1821,7 @@ function createWindow(options: {
     runtime.runSync(
       Effect.try({
         try: () => windowResources.dispose(),
-        catch: (error) => error,
+        catch: ensureError,
       }).pipe(
         Effect.catch((error) =>
           Effect.sync(() => reportBackgroundError(error)),

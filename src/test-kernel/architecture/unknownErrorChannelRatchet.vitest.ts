@@ -67,6 +67,85 @@ function unknownErrorChannels(file: string): string[] {
   return sites;
 }
 
+/**
+ * The identity `catch` callbacks that stay: each joins a late promise
+ * rejection and compares the raw value by identity (to `signal.reason`, a
+ * primary failure, or a `ModelError`'s `cause`) before absorbing it, or
+ * narrows it to one tag and dies otherwise. Wrapping it would break the
+ * comparison, and no raw value reaches a typed channel. Counts are exact.
+ */
+const IDENTITY_CATCH_JOINS: Readonly<Record<string, number>> = {
+  'packages/agent/src/effect/runtime.ts': 1,
+  'packages/extension/src/frontend/lm/acquireVscodeLanguageModel.ts': 2,
+  'packages/llm/src/openaiResponsesWebSocket.ts': 2,
+  'packages/llm/src/transport.ts': 2,
+  'src/latex/arxivProcessor.ts': 1,
+  'src/tools/github/githubClient.ts': 2,
+};
+
+/** The keys a foreign-rejection mapper is handed under: `Effect.try` /
+ *  `tryPromise` take `catch`, `Stream.fromReadableStream` takes `onError`. */
+const FAILURE_MAPPER_KEYS = new Set(['catch', 'onError']);
+
+/** `(e) => e`, `(e: unknown) => e`, `(e) => { return e; }` or the
+ *  `function` spelling of either: a mapper that hands the value on. */
+function isIdentityMapper(node: ts.Node | undefined): boolean {
+  if (
+    node === undefined ||
+    !(ts.isArrowFunction(node) || ts.isFunctionExpression(node)) ||
+    node.parameters.length !== 1
+  )
+    return false;
+  const [param] = node.parameters;
+  if (param === undefined || !ts.isIdentifier(param.name)) return false;
+  let returned: ts.Node | undefined = node.body;
+  if (ts.isBlock(node.body)) {
+    const [only] = node.body.statements;
+    returned =
+      node.body.statements.length === 1 &&
+      only !== undefined &&
+      ts.isReturnStatement(only)
+        ? only.expression
+        : undefined;
+  }
+  while (returned !== undefined && ts.isParenthesizedExpression(returned))
+    returned = returned.expression;
+  return (
+    returned !== undefined &&
+    ts.isIdentifier(returned) &&
+    returned.text === param.name.text
+  );
+}
+
+/** Identity failure mappers in one file: under a `catch` / `onError` key, or
+ *  as `Stream.fromAsyncIterable`'s positional error mapper. Each hands a
+ *  foreign rejection on as `unknown` instead of constructing an `Error`. */
+function identityCatches(file: string): number {
+  const sourceFile = parseSourceFile(resolve(REPO_ROOT, file), {
+    setParentNodes: false,
+  });
+  let sites = 0;
+  const visit = (node: ts.Node): void => {
+    if (
+      ts.isPropertyAssignment(node) &&
+      ts.isIdentifier(node.name) &&
+      FAILURE_MAPPER_KEYS.has(node.name.text) &&
+      isIdentityMapper(node.initializer)
+    )
+      sites += 1;
+    if (
+      ts.isCallExpression(node) &&
+      ts.isPropertyAccessExpression(node.expression) &&
+      node.expression.name.text === 'fromAsyncIterable' &&
+      isIdentityMapper(node.arguments[1])
+    )
+      sites += 1;
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return sites;
+}
+
 describe('unknown Effect error-channel rule', () => {
   const roots = productionRoots();
 
@@ -84,6 +163,24 @@ describe('unknown Effect error-channel rule', () => {
         `${sites.map((site) => `  ${site}`).join('\n')}\n\n` +
         `Type the channel with the tagged error the path raises (Error for a ` +
         `host port; ensureError at a foreign boundary).`,
+    ).toEqual([]);
+  });
+
+  it('rejects a catch callback that passes the rejection on unchanged', () => {
+    const drifted = roots
+      .flatMap((root) => productionFilesUnder(root))
+      .map((file) => [file, identityCatches(file)] as const)
+      .filter(([file, sites]) => sites !== (IDENTITY_CATCH_JOINS[file] ?? 0))
+      .map(
+        ([file, sites]) =>
+          `  ${file}: ${IDENTITY_CATCH_JOINS[file] ?? 0} -> ${sites}`,
+      );
+    expect(
+      drifted,
+      `Identity failure mappers (catch/onError: (e) => e) drifted from IDENTITY_CATCH_JOINS:\n` +
+        `${drifted.join('\n')}\n\n` +
+        `Construct the failure instead: catch: ensureError, or the path's own ` +
+        `tagged error. A count that fell: lower or delete the entry.`,
     ).toEqual([]);
   });
 });

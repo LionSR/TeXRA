@@ -45,6 +45,7 @@ import {
   normalizeLineEndings,
   splitContentLines,
 } from '@utils/text/stringUtils';
+import { ensureError } from '@utils/errors/errorMessage';
 
 const FRONTMATTER_SCAN_BYTES = 16 * 1024;
 const PREVIEW_SCAN_BYTES = 64 * 1024;
@@ -165,7 +166,7 @@ const readMemoryMeta = Effect.fn('memoryFileSystem.readMemoryMeta')(
       Effect.flatMap(({ text }) =>
         Effect.try({
           try: () => parseFrontmatter(text).meta,
-          catch: (cause) => cause,
+          catch: ensureError,
         }),
       ),
       Effect.catch((cause) =>

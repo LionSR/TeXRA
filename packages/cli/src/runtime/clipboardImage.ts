@@ -32,7 +32,7 @@ import {
   savePastedImageBuffer,
 } from '@utils/files/pastedImageUtils';
 import { createTexraTempDir } from '@utils/files/tempDir';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 const execFileAsync = promisify(execFile);
 const MAX_IMAGE_BYTES = 64 * 1024 * 1024;
@@ -131,11 +131,11 @@ function readClipboardPngLinux(): Effect.Effect<ClipboardRead> {
               encoding: 'buffer',
               maxBuffer: MAX_IMAGE_BYTES,
             }),
-          // Raw passthrough: `Effect.result` absorbs the rejection into the
-          // value channel, and the classifiers below (`isMaxBufferError`,
-          // `isFileNotFoundError`) read the raw error's `code`, which a
-          // tagged wrapper would strip.
-          catch: (error: unknown) => error,
+          // `Effect.result` absorbs the rejection into the value channel, and
+          // the classifiers below (`isMaxBufferError`, `isFileNotFoundError`)
+          // read the raw error's `code`, which a tagged wrapper would strip:
+          // `ensureError` hands an `Error` back as itself.
+          catch: ensureError,
         }),
       );
       if (outcome._tag === 'Success') {

@@ -102,6 +102,7 @@ import { goalList } from '@tools/goal';
 import { getProviderKeyUrl } from '@utils/config/providerConfig';
 import { allSettledVoid } from '@utils/core/allSettledVoid';
 import { setToolEnabled } from '@utils/config/constants';
+import { ensureError } from '@utils/errors/errorMessage';
 import { AgentHandlers } from './handlers/agentHandlers';
 import { LatexSettingsHandlers } from './handlers/latexSettingsHandlers';
 import { MemoryHandlers } from './handlers/memoryHandlers';
@@ -420,7 +421,7 @@ export class SettingsViewMessageHandler {
               command: SETTINGS_VIEW_COMMANDS.UPDATE_GOAL_LIST,
               items: goalList(this.session),
             }),
-          catch: (error) => error,
+          catch: ensureError,
         }).pipe(
           Effect.flatMap((delivered) =>
             delivered

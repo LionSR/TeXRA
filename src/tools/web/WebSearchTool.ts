@@ -9,6 +9,7 @@ import { retryTransientFetch, toFetchToolError } from '@tools/timeouts';
 import { defineTool } from '@tools/core/define';
 import { nullishWithDefault } from '@tools/core/inputSchema';
 import { executed } from '@tools/core/result';
+import { ensureError } from '@utils/errors/errorMessage';
 
 const DDG_TIMEOUT_MS = 15_000; // 15 s
 const DDG_RETRIES = 2;
@@ -88,7 +89,7 @@ const searchDuckDuckGo = Effect.fn('WebSearchTool.searchDuckDuckGo')(
                 retry: 0,
               })
               .json<unknown>(),
-          catch: (cause) => cause,
+          catch: ensureError,
         });
         // Validate the body at the boundary. A malformed shape is not
         // transient, so it is not retried; the classification below surfaces

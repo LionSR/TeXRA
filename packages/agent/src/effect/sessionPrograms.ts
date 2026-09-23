@@ -289,7 +289,7 @@ function start(
       current?.interrupt();
       return current;
     };
-    const spawned: Fiber.Fiber<unknown, unknown>[] = [];
+    const spawned: Fiber.Fiber<unknown, Error>[] = [];
     return yield* Effect.uninterruptibleMask((restore) =>
       Effect.gen(function* () {
         const runFiber = yield* Effect.forkDetach(

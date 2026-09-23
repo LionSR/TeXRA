@@ -11,6 +11,7 @@ import { emitAppSignal } from '@eventBus/AppSignals';
 import { withLogChannel } from '@logger/effectLog';
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import type { AgentSource } from '@shared/schemas';
+import { ensureError } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'AgentRegister';
 
@@ -41,7 +42,7 @@ export const promptToAddAgentToConfig = Effect.fnUntraced(function* (
         'Add Agent',
         'Cancel',
       ),
-    catch: (cause: unknown) => cause,
+    catch: ensureError,
   });
   if (choice !== 'Add Agent') return;
 

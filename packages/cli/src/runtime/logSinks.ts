@@ -350,7 +350,7 @@ export class NdjsonStdoutSink implements LogSink {
       if (this.isClosed()) return;
       const writeResult = yield* Effect.try({
         try: () => this.stdout.write(`${JSON.stringify(record)}\n`),
-        catch: (cause) => cause,
+        catch: ensureError,
       }).pipe(
         Effect.catch((cause: unknown) =>
           Effect.sync(() => {

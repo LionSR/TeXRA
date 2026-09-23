@@ -4,6 +4,7 @@ import * as vscode from 'vscode';
 
 // Local imports
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
+import { ensureError } from '@utils/errors/errorMessage';
 
 const DEFAULT_CHANNEL = 'commandUtils';
 
@@ -16,7 +17,7 @@ export function safeExecuteCommand<T>(
 ): Effect.Effect<T | undefined> {
   return Effect.tryPromise({
     try: async () => vscode.commands.executeCommand<T>(command, ...args),
-    catch: (err: unknown) => err,
+    catch: ensureError,
   }).pipe(
     Effect.catch((err) =>
       showLoggedErrorMessage(

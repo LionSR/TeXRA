@@ -49,7 +49,7 @@ import {
 } from '@shared/session/runStateFold';
 import { generateShortId, getBasename, groupBy } from '@utils/core';
 import { isNonEmptyString } from '@utils/text/stringUtils';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { pathToLocationIn } from '@utils/files/fileLocation';
 import { entryExists } from '@utils/files/fsEntryExists';
 
@@ -468,7 +468,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     // the projection of an error result cannot itself fail.
     const extracted = yield* Effect.try({
       try: () => extractToolAttachments(result),
-      catch: (error) => error,
+      catch: ensureError,
     }).pipe(
       Effect.catch((error) =>
         Effect.sync(() => {

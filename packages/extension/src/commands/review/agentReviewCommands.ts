@@ -32,6 +32,7 @@ import {
 } from '@frontend/ui/errorHandlingUtils';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import { formatResultCount } from '@utils/text/stringUtils';
+import { ensureError } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'AgentReview';
 
@@ -71,7 +72,7 @@ async function handleOpenIssue(
         editor.revealRange(range, vscode.TextEditorRevealType.InCenter);
         editor.selection = new vscode.Selection(range.start, range.start);
       },
-      catch: (err: unknown) => err,
+      catch: ensureError,
     }).pipe(
       Effect.catch((err) =>
         showLoggedErrorMessage(

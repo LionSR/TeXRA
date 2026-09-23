@@ -28,6 +28,7 @@ import {
   writeSetting,
   type SettingsStores,
 } from '@shared/config/settingsAccess';
+import { ensureError } from '@utils/errors/errorMessage';
 
 /** Outcome of {@link applyStateSettingUpdate}, for host-specific UI feedback. */
 export type StateSettingUpdateResult =
@@ -122,7 +123,7 @@ export function applyStateSettingUpdate(
         ) as TexraApprovalPolicy;
         yield* Effect.try({
           try: () => ports.onApprovalPolicyChanged?.(policy),
-          catch: (cause) => cause,
+          catch: ensureError,
         });
       }).pipe(
         Effect.mapError((cause) => new StateSettingWriteFailed({ cause })),

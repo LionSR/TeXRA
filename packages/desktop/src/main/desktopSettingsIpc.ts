@@ -272,7 +272,7 @@ export function createDesktopSettingsIpc(
       const listed = yield* Effect.exit(
         Effect.try({
           try: () => goalList(options.session),
-          catch: (cause) => cause,
+          catch: ensureError,
         }),
       );
       if (Exit.isSuccess(listed)) {

@@ -26,7 +26,7 @@ import {
   pathExists,
   readDirectoryTypedTolerant,
 } from '@utils/files/fsDurability';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { hasExtension } from '@utils/core/pathCore';
 import { normaliseArxivIdentifier } from './arxivIdentifier';
 import { indentLatexFilesInDirectory } from './formatter/indentDirectory';
@@ -365,7 +365,7 @@ class ArxivSourceProcessor {
       if (disposition) {
         filename = yield* Effect.try({
           try: () => parseContentDisposition(disposition).parameters.filename,
-          catch: (error) => error,
+          catch: ensureError,
         }).pipe(
           Effect.catch((error) =>
             // Malformed header; the content-type fallback below handles it.

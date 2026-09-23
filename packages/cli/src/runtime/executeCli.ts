@@ -401,13 +401,13 @@ export function executeCliRequest(
                   resumability,
                   options.canAdvertiseInterruptedRun,
                 ),
-              catch: (error: unknown) => error,
+              catch: ensureError,
             });
             if (advertise) {
               yield* Deferred.succeed(recoveryNoticeStarted, undefined);
               yield* Effect.tryPromise({
                 try: () => Promise.resolve(onFinalized(runId)),
-                catch: (error: unknown) => error,
+                catch: ensureError,
               });
             }
           }
