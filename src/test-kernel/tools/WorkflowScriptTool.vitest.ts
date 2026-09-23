@@ -601,7 +601,6 @@ return null`;
           // The durable record is honest: workflow name, launch summary, and the
           // real delegation model. It has no fabricated agent identity or category.
           registrationRecordFor('tool-test'),
-          'tool-test',
           registrationOptionsFor('tool-test'),
         );
         expect(mocks.createChildRun).toHaveBeenCalledWith(
@@ -701,7 +700,6 @@ return null`;
         testDefaultSession(),
         runIdFor('edited-tool-test'),
         registrationRecordFor('edited-tool-test'),
-        'edited-tool-test',
         registrationOptionsFor('edited-tool-test'),
       );
     }),
@@ -944,7 +942,6 @@ return null`;
         testDefaultSession(),
         runIdFor('tool-test'),
         registrationRecordFor('tool-test', 'served-model'),
-        'tool-test',
         registrationOptionsFor('tool-test'),
       );
     }),
