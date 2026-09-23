@@ -1,11 +1,12 @@
 import { it } from '@effect/vitest';
-import { beforeEach, describe, expect, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 import { Effect } from 'effect';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
 import { CODEX_SESSION_SECRET_KEY } from '@auth/codex/codexConstants';
 import { installTexraAccountProbes } from '@controllers/modelAccess/installTexraAccountProbes';
-import * as logger from '@logger/logUtils';
+import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
+import { setLogSink } from '@logger/logSink';
 import {
   modelOptionsFrom,
   modelUnavailableReasonFrom,
@@ -28,6 +29,7 @@ import {
 import { FAST_FIRST_RESPONSE_HINT } from '@shared/constants/providers';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';
+import { captureLogEntries } from '@test/support/logSinkCapture';
 import {
   fakeHostLanguageModel,
   hostStores,
@@ -154,6 +156,10 @@ describe('model availability', () => {
     installTexraAccountProbes(hostStores().secrets);
   });
 
+  afterEach(() => {
+    setLogSink(null);
+  });
+
   it.effect.each([
     { model: 'gpt56', override: undefined, expected: 'Default (Medium)' },
     { model: 'gpt56', override: 'low', expected: 'Low' },
@@ -259,7 +265,7 @@ describe('model availability', () => {
           ),
         );
         invalidateApiKeyCache();
-        const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+        const logs = captureLogEntries();
 
         const [gpt55, gpt56] = modelOptionsFrom(
           yield* availabilityInputs(hostStores(), ['gpt55', 'gpt56']),
@@ -267,24 +273,18 @@ describe('model availability', () => {
 
         expect(gpt55.availability).toBe('missing-key');
         expect(gpt56.availability).toBe('missing-key');
-        expect(warn).toHaveBeenCalledTimes(3);
-        expect(warn).toHaveBeenCalledWith(
-          'computeModelOptions',
-          'Failed to read OpenAI API key status; treating it as unavailable.',
-          { data: readError },
-        );
-        expect(warn).toHaveBeenCalledWith(
-          'computeModelOptions',
-          'Failed to read OpenRouter API key status; treating it as unavailable.',
-          { data: readError },
-        );
-        expect(warn).toHaveBeenCalledWith(
-          'computeModelOptions',
+        const warnings = logs.at('WARN', 'computeModelOptions');
+        expect(warnings.map((entry) => entry.message).sort()).toEqual([
           'Failed to read Kimi Code API key status; treating it as unavailable.',
-          { data: readError },
-        );
-        warn.mockRestore();
-      }),
+          'Failed to read OpenAI API key status; treating it as unavailable.',
+          'Failed to read OpenRouter API key status; treating it as unavailable.',
+        ]);
+        for (const entry of warnings) {
+          expect(String(entry.annotations['data'])).toContain(
+            'credential store unavailable',
+          );
+        }
+      }).pipe(Effect.provide(effectDiagnosticsLayer('Trace'))),
   );
 
   it.effect(
@@ -308,7 +308,7 @@ describe('model availability', () => {
           installPlatform({}, { secrets, globalState }),
         );
         invalidateApiKeyCache();
-        const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+        const logs = captureLogEntries();
 
         const rows = modelOptionsFrom(
           yield* availabilityInputs(hostStores(), ['haiku3', 'haiku35']),
@@ -319,7 +319,7 @@ describe('model availability', () => {
           'retired',
         ]);
         // Only the two routing keys every call resolves up front.
-        expect(warn).toHaveBeenCalledTimes(2);
+        expect(logs.at('WARN', 'computeModelOptions')).toHaveLength(2);
 
         // Two models that do reach the Copilot branch: one preference read each.
         const keyed = modelOptionsFrom(
@@ -328,8 +328,7 @@ describe('model availability', () => {
 
         expect(keyed).toHaveLength(2);
         expect(globalState.copilotPreferenceReads).toBe(2);
-        warn.mockRestore();
-      }),
+      }).pipe(Effect.provide(effectDiagnosticsLayer('Trace'))),
   );
 
   it.effect(

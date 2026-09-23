@@ -392,8 +392,7 @@ export class SettingsViewMessageHandler {
             ),
           ),
         ),
-      runToolCommand: (message) =>
-        Effect.sync(() => this.handleRunToolCommand(message)),
+      runToolCommand: (message) => this.handleRunToolCommand(message),
       ...this.latexHandlers.handlers,
       getInlineCriticismEnabled: () =>
         this.withActiveWebview((w) => this.sendInlineCriticismEnabled(w)),
@@ -447,22 +446,26 @@ export class SettingsViewMessageHandler {
 
   private handleRunToolCommand(
     data: SettingsMessageFor<typeof SETTINGS_VIEW_COMMANDS.RUN_TOOL_COMMAND>,
-  ): void {
-    const action = planToolTerminalAction({
-      toolId: data.toolId,
-      commandKind: data.kind,
-    });
-    if (action.kind === 'none') {
-      this.log.debug('No command for tool', {
-        data: { ...data, reason: action.reason },
+  ): Effect.Effect<void> {
+    return Effect.suspend(() => {
+      const action = planToolTerminalAction({
+        toolId: data.toolId,
+        commandKind: data.kind,
       });
-      return;
-    }
-    const terminal = vscode.window.createTerminal({
-      name: action.name,
+      if (action.kind === 'none') {
+        return Effect.logDebug('No command for tool').pipe(
+          Effect.annotateLogs({ data: { ...data, reason: action.reason } }),
+          withLogChannel(this.channel),
+        );
+      }
+      return Effect.sync(() => {
+        const terminal = vscode.window.createTerminal({
+          name: action.name,
+        });
+        terminal.show();
+        terminal.sendText(action.command);
+      });
     });
-    terminal.show();
-    terminal.sendText(action.command);
   }
 
   // ============================================================
@@ -522,43 +525,50 @@ export class SettingsViewMessageHandler {
   ): Promise<void> {
     this.activeView = webviewView;
     const parsed = SettingsViewInboundMessageSchema.safeParse(message);
-    if (!parsed.success) {
-      this.log.debug('Message validation failed', { data: parsed.error });
-      return Promise.resolve();
-    }
-    return this.runtime.runPromise(
-      withSessionFs(
-        this.session.roots,
-        settingsViewProgram(parsed.data, this.handlerRegistry),
-      ).pipe(
-        Effect.catchCause((cause) =>
-          Effect.gen({ self: this }, function* () {
-            if (Cause.hasInterruptsOnly(cause)) return;
-            const error = Cause.squash(cause);
-            const report = Effect.gen({ self: this }, function* () {
-              if (error instanceof UnsupportedCommandError) {
-                yield* vscodeUi.showInfoMessage(error.reason);
-              } else {
-                this.log.error('Error handling message', { data: error });
-                yield* vscodeUi.showErrorMessage(
-                  `TeXRA could not handle a ${this.viewName} message. See the TeXRA output for details.`,
+    // An invalid message is dropped at the edge, on the arm's one run.
+    const program = parsed.success
+      ? withSessionFs(
+          this.session.roots,
+          settingsViewProgram(parsed.data, this.handlerRegistry),
+        ).pipe(
+          Effect.catchCause((cause) =>
+            Effect.gen({ self: this }, function* () {
+              if (Cause.hasInterruptsOnly(cause)) return;
+              const error = Cause.squash(cause);
+              const report = Effect.gen({ self: this }, function* () {
+                if (error instanceof UnsupportedCommandError) {
+                  yield* vscodeUi.showInfoMessage(error.reason);
+                } else {
+                  yield* Effect.logError('Error handling message').pipe(
+                    Effect.annotateLogs({ data: error }),
+                    withLogChannel(this.channel),
+                  );
+                  yield* vscodeUi.showErrorMessage(
+                    `TeXRA could not handle a ${this.viewName} message. See the TeXRA output for details.`,
+                  );
+                }
+              });
+              const reported = yield* Effect.exit(report);
+              if (
+                Exit.isFailure(reported) &&
+                !Cause.hasInterruptsOnly(reported.cause)
+              ) {
+                yield* Effect.logError(
+                  'Failed to report settings message error',
+                ).pipe(
+                  Effect.annotateLogs({ data: Cause.squash(reported.cause) }),
+                  withLogChannel(this.channel),
                 );
               }
-            });
-            const reported = yield* Effect.exit(report);
-            if (
-              Exit.isFailure(reported) &&
-              !Cause.hasInterruptsOnly(reported.cause)
-            ) {
-              this.log.error('Failed to report settings message error', {
-                data: Cause.squash(reported.cause),
-              });
-            }
-          }),
-        ),
-        Effect.asVoid,
-      ),
-    );
+            }),
+          ),
+          Effect.asVoid,
+        )
+      : Effect.logDebug('Message validation failed').pipe(
+          Effect.annotateLogs({ data: parsed.error }),
+          withLogChannel(this.channel),
+        );
+    return this.runtime.runPromise(program);
   }
 
   // ============================================================

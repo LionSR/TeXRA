@@ -37,7 +37,7 @@ export function reasoningEffortOverrides(state: StateStore) {
       // A stored value outside llm-zoo's vocabulary cannot route a request, so
       // the model falls back to its catalog default; say so through the
       // module's host sink rather than dropping the entry silently.
-      warnModelAvailability(
+      yield* warnModelAvailability(
         `Stored reasoning level "${value}" for model ${model} is not one of llm-zoo's efforts; using the model's default.`,
         parsed.error,
       );

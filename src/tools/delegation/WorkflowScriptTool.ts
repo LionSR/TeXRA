@@ -589,12 +589,13 @@ function executeWorkflowScriptTool(
                       // failures here as trace diagnostics; the child loop already owns
                       // its one user-facing result/error delivery.
                       ...(!stopAfterCycle && {
-                        onLoopFailed: (error: unknown): void => {
-                          childRun.logger.error(
-                            `Workflow script '${meta.name}' run loop failed after launch`,
-                            { data: error },
-                          );
-                        },
+                        onLoopFailed: (error: unknown) =>
+                          Effect.sync(() =>
+                            childRun.logger.error(
+                              `Workflow script '${meta.name}' run loop failed after launch`,
+                              { data: error },
+                            ),
+                          ),
                       }),
                     };
                   }),

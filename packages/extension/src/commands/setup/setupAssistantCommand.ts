@@ -16,7 +16,6 @@ import {
 } from '@controllers/onboarding/setupLaunch';
 import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
 import { withLogChannel } from '@logger/effectLog';
-import { createLog } from '@logger/logUtils';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import type {
   StateReadFailed,
@@ -38,8 +37,7 @@ import { getUseOpenRouter } from '@utils/config/providerConfig';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'SetupAssistant';
-const log = createLog(CHANNEL);
-const credentialLog = createLog('Setup Credentials');
+const CREDENTIAL_CHANNEL = 'Setup Credentials';
 
 interface LaunchModelResolution {
   model: string;
@@ -124,7 +122,20 @@ export function hasAnyUsableSetupCredential(
   stores: SettingsStores,
   secrets: PlatformSecrets,
 ): Effect.Effect<boolean, never, LanguageModel> {
-  return hasUsableSetupCredential(stores, secrets, credentialLog.warn);
+  // The probe's failure hook is synchronous: it records each failure and the
+  // program logs them once the probe settles, whichever way it settles.
+  return Effect.suspend(() => {
+    const probeFailures: string[] = [];
+    return hasUsableSetupCredential(stores, secrets, (message) => {
+      probeFailures.push(message);
+    }).pipe(
+      Effect.ensuring(
+        Effect.forEach(probeFailures, (message) => Effect.logWarning(message), {
+          discard: true,
+        }).pipe(withLogChannel(CREDENTIAL_CHANNEL)),
+      ),
+    );
+  });
 }
 
 const ensureCredentialOrPrompt = Effect.fn('ensureCredentialOrPrompt')(
@@ -347,14 +358,19 @@ export function launchSetupAssistant(
       // That is a cancellation, not a launch failure: re-raise it so no
       // error notification appears during teardown.
       if (Cause.hasInterrupts(cause)) return Effect.failCause(cause);
-      return Effect.sync(() => {
-        const error = Cause.squash(cause);
-        log.error('Setup assistant failed to launch.', { data: error });
-        void vscode.window.showErrorMessage(
-          `Failed to launch setup assistant: ${toErrorMessage(error)}`,
-        );
-        return 'not-started' as const;
-      });
+      const error = Cause.squash(cause);
+      return Effect.logError('Setup assistant failed to launch.').pipe(
+        Effect.annotateLogs({ data: error }),
+        withLogChannel(CHANNEL),
+        Effect.andThen(
+          Effect.sync(() => {
+            void vscode.window.showErrorMessage(
+              `Failed to launch setup assistant: ${toErrorMessage(error)}`,
+            );
+            return 'not-started' as const;
+          }),
+        ),
+      );
     }),
   );
 }

@@ -395,19 +395,19 @@ function issue(
       // `match` recovers only the typed refusal; a collaborator that rejects
       // defects, and fire-and-forget would leave it an unhandled rejection.
       // A pure interruption is teardown, not a failure to report.
-      Effect.catchCause((cause) =>
-        Effect.sync(() => {
-          if (Cause.hasInterruptsOnly(cause)) return;
-          // The durable request never recorded the decision; reopen it the
-          // same way a typed refusal does, or `currentApproval` keeps
-          // filtering it out and the run waits with no UI.
-          const next = new Set(decided.get());
-          next.delete(requestId);
-          decided.set(next);
-          onRefused?.();
-          appendLocalAssistantTranscript(reportRequestDefect(cause), runId);
-        }),
-      ),
+      Effect.catchCause((cause) => {
+        if (Cause.hasInterruptsOnly(cause)) return Effect.void;
+        // The durable request never recorded the decision; reopen it the
+        // same way a typed refusal does, or `currentApproval` keeps
+        // filtering it out and the run waits with no UI.
+        const next = new Set(decided.get());
+        next.delete(requestId);
+        decided.set(next);
+        onRefused?.();
+        return Effect.map(reportRequestDefect(cause), (message) =>
+          appendLocalAssistantTranscript(message, runId),
+        );
+      }),
     ),
   );
 }

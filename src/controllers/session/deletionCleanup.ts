@@ -8,14 +8,12 @@ import { Effect, type Context } from 'effect';
 import { isFileNotFoundError } from '@common/errors';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { withLogChannel } from '@logger/effectLog';
-import { createLog } from '@logger/logUtils';
 import type { RunId } from '@shared/schemas';
 import type { Database } from '@shared/session/database';
 import { isPathWithin } from '@utils/core/pathCore';
 import { ensureError } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'DeletionCleanup';
-const log = createLog(CHANNEL);
 
 /**
  * Remove each run's run directory under the storage root it was
@@ -36,31 +34,40 @@ const log = createLog(CHANNEL);
  * owns that remaining contract (#12139).
  */
 const removeRunDirectories = (storage: string, runIds: readonly RunId[]) =>
-  Effect.tryPromise({
-    try: async () => {
-      const runs = path.join(
-        realpathSync.native(storage),
-        WORKSPACE_STORAGE_LAYOUT.runs,
-      );
-      // Throws ENOENT when the runs directory is absent, which the caller
-      // below reads as "nothing generated to remove".
-      if (realpathSync.native(runs) !== runs) {
-        throw new Error(
-          `Refusing generated-file cleanup: ${runs} does not resolve to itself`,
+  Effect.gen(function* () {
+    const runs = yield* Effect.try({
+      try: () => {
+        const runs = path.join(
+          realpathSync.native(storage),
+          WORKSPACE_STORAGE_LAYOUT.runs,
         );
-      }
-      for (const runId of runIds) {
+        // Throws ENOENT when the runs directory is absent, which the caller
+        // below reads as "nothing generated to remove".
+        if (realpathSync.native(runs) !== runs) {
+          throw new Error(
+            `Refusing generated-file cleanup: ${runs} does not resolve to itself`,
+          );
+        }
+        return runs;
+      },
+      catch: ensureError,
+    });
+    yield* Effect.forEach(
+      runIds,
+      (runId) => {
         const target = path.join(runs, runId);
         if (!isPathWithin(runs, target)) {
-          log.warn(
+          return Effect.logWarning(
             `Refusing to remove ${target}: outside the admitted storage root`,
-          );
-          continue;
+          ).pipe(withLogChannel(CHANNEL));
         }
-        await rm(target, { recursive: true, force: true });
-      }
-    },
-    catch: ensureError,
+        return Effect.tryPromise({
+          try: () => rm(target, { recursive: true, force: true }),
+          catch: ensureError,
+        });
+      },
+      { discard: true },
+    );
   }).pipe(
     Effect.uninterruptible,
     Effect.catchIf(isFileNotFoundError, () => Effect.void),

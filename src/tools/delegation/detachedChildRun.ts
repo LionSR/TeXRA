@@ -65,7 +65,7 @@ export interface DetachedChildRunLaunch<TTurn, R = never> {
    * Attach a completion error trace so a late loop failure is diagnosed. Omit
    * when the caller awaits completion in-band (no unhandled rejection).
    */
-  readonly onLoopFailed?: (error: unknown) => void;
+  readonly onLoopFailed?: (error: unknown) => Effect.Effect<void>;
 }
 
 /**
@@ -183,9 +183,7 @@ export function startDetachedChildRunLoop<TTurn, R = never>(
         const onLoopFailed = launch.onLoopFailed;
         yield* Effect.forkDetach(
           Fiber.join(completion).pipe(
-            Effect.catchCause((cause) =>
-              Effect.sync(() => onLoopFailed(Cause.squash(cause))),
-            ),
+            Effect.catchCause((cause) => onLoopFailed(Cause.squash(cause))),
           ),
         );
       }

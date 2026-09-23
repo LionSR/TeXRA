@@ -1,8 +1,10 @@
+import { Effect } from 'effect';
+
 /** Diagnostic sink for model-picker availability degradation. */
 export type ModelAvailabilityWarningSink = (
   message: string,
   error: unknown,
-) => void;
+) => Effect.Effect<void>;
 
 /**
  * The sink until a host installs its own: the console, mirroring
@@ -12,13 +14,14 @@ export type ModelAvailabilityWarningSink = (
  * that no longer parses), and a host that never called
  * `setModelAvailabilityWarningSink` must not turn one into silence.
  *
- * The console rather than the logger: this module's callers are synchronous
- * registry readers with no Effect to yield, and `src/model` has no import
- * edge to `src/logger`.
+ * The console rather than the logger or `platform()`: `src/model` has no
+ * import edge to `src/logger`, and `platform()` is the ambient locator the
+ * Effect migration is retiring.
  */
-const consoleWarningSink: ModelAvailabilityWarningSink = (message, error) => {
-  console.warn(`[modelAvailability] ${message}`, error);
-};
+const consoleWarningSink: ModelAvailabilityWarningSink = (message, error) =>
+  Effect.sync(() => {
+    console.warn(`[modelAvailability] ${message}`, error);
+  });
 
 /** The host-installed sink; the console until a host installs one. */
 let warningSink: ModelAvailabilityWarningSink = consoleWarningSink;
@@ -31,6 +34,10 @@ export function setModelAvailabilityWarningSink(
 }
 
 /** Report a model-picker availability warning. */
-export function warnModelAvailability(message: string, error: unknown): void {
-  warningSink(message, error);
+export function warnModelAvailability(
+  message: string,
+  error: unknown,
+): Effect.Effect<void> {
+  // Resolve the sink when the report runs, not when it is built.
+  return Effect.suspend(() => warningSink(message, error));
 }

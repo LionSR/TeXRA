@@ -439,13 +439,10 @@ function readProviderKeyStatuses(
     (provider) =>
       hasUsableApiKey(secrets, provider).pipe(
         Effect.catchTag('SecretsFailed', (failure) =>
-          Effect.sync(() => {
-            warnModelAvailability(
-              `Failed to read ${providerDisplayName(provider)} API key status; treating it as unavailable.`,
-              failure.cause,
-            );
-            return false;
-          }),
+          warnModelAvailability(
+            `Failed to read ${providerDisplayName(provider)} API key status; treating it as unavailable.`,
+            failure.cause,
+          ).pipe(Effect.as(false)),
         ),
         Effect.map((usable) => [provider, usable] as const),
       ),
@@ -599,7 +596,7 @@ function readModelSelection(state: Pick<StateStore, 'get'>) {
     if (stored === undefined) return EMPTY_MODEL_SELECTION;
     const parsed = ModelSelectionSchema.safeParse(stored);
     if (parsed.success) return parsed.data;
-    warnModelAvailability(
+    yield* warnModelAvailability(
       `Invalid stored ${GlobalStateKey.MODEL_SELECTION}; showing the default models.`,
       z.prettifyError(parsed.error),
     );

@@ -17,7 +17,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 /** True when any provider has a usable API key in secret storage or the environment. */
 function hasAnyUsableProviderApiKey(
   secrets: PlatformSecrets,
-  onProbeFailure: (message: string) => void,
+  onProbeFailure: (message: string) => Effect.Effect<void>,
 ): Effect.Effect<boolean> {
   return Effect.gen(function* () {
     for (const provider of API_PROVIDERS) {
@@ -72,14 +72,11 @@ export const setupCredentialProbeFailed =
  */
 export function probeSetupCredential<R>(
   check: Effect.Effect<boolean, SetupCredentialProbeFailed, R>,
-  onProbeFailure: (message: string) => void,
+  onProbeFailure: (message: string) => Effect.Effect<void>,
 ): Effect.Effect<boolean, never, R> {
   return check.pipe(
     Effect.catchTag('SetupCredentialProbeFailed', (failure) =>
-      Effect.sync(() => {
-        onProbeFailure(failure.message);
-        return false;
-      }),
+      onProbeFailure(failure.message).pipe(Effect.as(false)),
     ),
   );
 }
@@ -94,7 +91,7 @@ export function probeSetupCredential<R>(
  */
 export function setupSubscriptionModel(
   stores: SettingsStores,
-  onProbeFailure: (message: string) => void,
+  onProbeFailure: (message: string) => Effect.Effect<void>,
 ): Effect.Effect<string | null, never, LanguageModel> {
   return Effect.gen(function* () {
     const hasChatGptSubscription = yield* probeSetupCredential(
@@ -124,12 +121,16 @@ export function hasUsableSetupCredential(
   secrets: PlatformSecrets,
   onProbeFailure: (message: string) => void,
 ): Effect.Effect<boolean, never, LanguageModel> {
+  // The host reporters are synchronous log writers shared by the three hosts;
+  // the scan itself reports through an Effect.
+  const reportProbeFailure = (message: string) =>
+    Effect.sync(() => onProbeFailure(message));
   return Effect.gen(function* () {
     const subscriptionModel = yield* setupSubscriptionModel(
       stores,
-      onProbeFailure,
+      reportProbeFailure,
     );
     if (subscriptionModel !== null) return true;
-    return yield* hasAnyUsableProviderApiKey(secrets, onProbeFailure);
+    return yield* hasAnyUsableProviderApiKey(secrets, reportProbeFailure);
   });
 }

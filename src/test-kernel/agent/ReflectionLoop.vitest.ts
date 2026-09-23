@@ -1134,7 +1134,7 @@ describe('a token-limited reflection response', () => {
       const session = yield* createProcessSession({
         responseTextProcessing: {
           normalizeResponseText: (text: string) => text,
-          postProcessResponse: (text: string) => text,
+          postProcessResponse: (text: string) => Effect.succeed(text),
           connectResponseText,
         },
       });

@@ -424,10 +424,7 @@ const createCodexThread = Effect.fn('codex.createCodexThread')(function* (
   workingDir?: string,
 ) {
   const CodexClass = yield* importCodexClass();
-  const codexPath = yield* Effect.try({
-    try: findCodexBinaryPath,
-    catch: ensureError,
-  });
+  const codexPath = yield* findCodexBinaryPath();
   const codex = new CodexClass({ codexPathOverride: codexPath });
   const config = yield* getCodexConfig;
   // Resumed threads keep their stored workspace unless explicitly overridden.

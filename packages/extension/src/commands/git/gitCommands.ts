@@ -18,7 +18,6 @@ import {
   type OverleafRemote,
 } from '@latex/overleafProject';
 import { withLogChannel } from '@logger/effectLog';
-import { createLog } from '@logger/logUtils';
 import { WorkspaceFs } from '@platform/rootedFs';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
@@ -34,7 +33,6 @@ import { makeMachineGitEnv } from '@utils/system/gitEnv';
 import { isGitRepository } from '@utils/git/isGitRepository';
 
 const CHANNEL = 'gitCommands';
-const log = createLog(CHANNEL);
 
 export function registerGitCommands(
   context: vscode.ExtensionContext,
@@ -88,6 +86,7 @@ const getRecentCommits = Effect.fn('gitCommands.getRecentCommits')(function* (
     'texra.git.numberOfCommitsToShow',
   );
 
+  let readFailure: string | undefined;
   const commits = yield* readRecentCommitLabels(
     workspacePath,
     numberOfCommits,
@@ -96,11 +95,18 @@ const getRecentCommits = Effect.fn('gitCommands.getRecentCommits')(function* (
       settings: session.roots,
       // A failed `git log` comes back as undefined and is answered as an
       // empty list; without this hook that failure would be invisible in this
-      // host (the desktop host passes its own onError to the same read).
-      onError: (error) =>
-        log.warn(`recent commit read failed: ${toErrorMessage(error)}`),
+      // host (the desktop host passes its own onError to the same read). The
+      // hook is synchronous, so it records the failure for the log below.
+      onError: (error) => {
+        readFailure = toErrorMessage(error);
+      },
     },
   );
+  if (readFailure !== undefined) {
+    yield* Effect.logWarning(`recent commit read failed: ${readFailure}`).pipe(
+      withLogChannel(CHANNEL),
+    );
+  }
   return commits ?? [];
 });
 
@@ -188,7 +194,7 @@ const GIT_INSTALL_OPTIONS: Partial<
 
 const GIT_DOWNLOAD_URL = 'https://git-scm.com/downloads';
 
-async function promptGitMissing(): Promise<void> {
+const promptGitMissing = Effect.fnUntraced(function* () {
   const option = GIT_INSTALL_OPTIONS[process.platform] ?? null;
   const command =
     option &&
@@ -214,18 +220,20 @@ async function promptGitMissing(): Promise<void> {
     ? (['Copy Command', 'Run in Terminal', 'Open git-scm.com'] as const)
     : (['Open git-scm.com'] as const);
 
-  log.error(message);
-  const selected = await vscode.window.showErrorMessage(message, ...actions);
-  if (selected === 'Copy Command' && command) {
-    await vscode.env.clipboard.writeText(command);
-  } else if (selected === 'Run in Terminal' && command) {
-    const terminal = vscode.window.createTerminal('Install Git');
-    terminal.show();
-    terminal.sendText(command);
-  } else if (selected === 'Open git-scm.com') {
-    void vscode.env.openExternal(vscode.Uri.parse(GIT_DOWNLOAD_URL));
-  }
-}
+  yield* Effect.logError(message).pipe(withLogChannel(CHANNEL));
+  yield* Effect.promise(async () => {
+    const selected = await vscode.window.showErrorMessage(message, ...actions);
+    if (selected === 'Copy Command' && command) {
+      await vscode.env.clipboard.writeText(command);
+    } else if (selected === 'Run in Terminal' && command) {
+      const terminal = vscode.window.createTerminal('Install Git');
+      terminal.show();
+      terminal.sendText(command);
+    } else if (selected === 'Open git-scm.com') {
+      void vscode.env.openExternal(vscode.Uri.parse(GIT_DOWNLOAD_URL));
+    }
+  });
+});
 
 /** Wire the shared Overleaf/ShareLaTeX clone workflow to VS Code's secret
  *  storage, input prompts, and terminal/progress UI. All decision logic
@@ -252,18 +260,22 @@ function buildOverleafClonePorts(
         true,
       ),
     showInvalidToken: (spec, message) =>
-      Effect.promise(async () => {
-        log.error(message);
-        const action = await vscode.window.showErrorMessage(
-          message,
-          ...(spec.tokenHint ? (['How to get a token'] as const) : []),
-        );
-        if (action === 'How to get a token') {
-          void vscode.env.openExternal(
-            vscode.Uri.parse(OVERLEAF_TOKEN_DOCS_URL),
-          );
-        }
-      }),
+      Effect.logError(message).pipe(
+        withLogChannel(CHANNEL),
+        Effect.andThen(
+          Effect.promise(async () => {
+            const action = await vscode.window.showErrorMessage(
+              message,
+              ...(spec.tokenHint ? (['How to get a token'] as const) : []),
+            );
+            if (action === 'How to get a token') {
+              void vscode.env.openExternal(
+                vscode.Uri.parse(OVERLEAF_TOKEN_DOCS_URL),
+              );
+            }
+          }),
+        ),
+      ),
 
     isGitAvailable: () =>
       Effect.sync(
@@ -273,14 +285,20 @@ function buildOverleafClonePorts(
             cwd: process.cwd(),
           }).success,
       ),
-    showGitMissing: () => Effect.promise(() => promptGitMissing()),
+    showGitMissing: () => promptGitMissing(),
     listWorkspaceEntries: (workspacePath) =>
       workspaceFs.readDirectory(workspacePath),
     showWorkspaceUnreadable: (e) =>
-      Effect.sync(() => {
-        log.error(`readDir failed: ${toErrorMessage(e)}`);
-        void vscode.window.showErrorMessage('Cannot read workspace folder.');
-      }),
+      Effect.logError(`readDir failed: ${toErrorMessage(e)}`).pipe(
+        withLogChannel(CHANNEL),
+        Effect.andThen(
+          Effect.sync(() => {
+            void vscode.window.showErrorMessage(
+              'Cannot read workspace folder.',
+            );
+          }),
+        ),
+      ),
     showWorkspaceNotEmpty: () =>
       Effect.forkDetach(
         showLoggedMessage(CHANNEL, 'Workspace folder must be empty.'),

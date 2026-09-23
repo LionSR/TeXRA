@@ -27,7 +27,7 @@ import {
   type SubscriptionAccount,
 } from '@controllers/modelAccess/subscriptionProviders';
 import { planOnboardingFunnelTransition } from '@controllers/onboarding/onboardingFunnel';
-import { createLog, warn as logWarning } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import {
   API_PROVIDERS,
   apiKeyEnvName,
@@ -94,16 +94,17 @@ interface OnboardingGateContext {
 }
 
 const LOG_CHANNEL = 'CLI Onboarding';
-const credentialLog = createLog('Setup Credentials');
+const CREDENTIAL_CHANNEL = 'Setup Credentials';
 
 /**
  * The gate degrades to "not configured yet" when a state read or write fails,
  * which at worst re-prompts. Say why in the log so a read-only home directory
  * is diagnosable rather than looking like the gate's normal behavior.
  */
-function warnOnboardingFailure(action: string, error: unknown): void {
-  logWarning(LOG_CHANNEL, `${action} failed: ${toErrorMessage(error)}`);
-}
+const warnOnboardingFailure = (action: string, error: StateWriteFailed) =>
+  Effect.logWarning(`${action} failed: ${toErrorMessage(error)}`).pipe(
+    withLogChannel(LOG_CHANNEL),
+  );
 
 const SKIP_SUMMARY =
   "Setup skipped — run `texra login` or `texra setup` when you're ready.";
@@ -151,10 +152,15 @@ export const maybeRunCliOnboarding = Effect.fn('maybeRunCliOnboarding')(
       return NO_ONBOARDING_RESULT;
     }
     const { globalState } = services;
+    // The probe reports failures synchronously; this program logs them.
+    const fails: string[] = [];
     const hasCredential = yield* hasUsableSetupCredential(
       services,
       services.secrets,
-      credentialLog.warn,
+      (message) => fails.push(message),
+    ).pipe(
+      Effect.ensuring(Effect.forEach(fails, (m) => Effect.logWarning(m))),
+      withLogChannel(CREDENTIAL_CHANNEL),
     );
     // Route through the same funnel-transition planner the extension/desktop
     // hosts use, rather than a hand-copied precedence ladder. `selectSetupAgent`
@@ -173,9 +179,7 @@ export const maybeRunCliOnboarding = Effect.fn('maybeRunCliOnboarding')(
         // The handler names the channel's whole error type, so a widened
         // channel fails to compile rather than being absorbed unlogged.
         Effect.catch((error: StateWriteFailed) =>
-          Effect.sync(() =>
-            warnOnboardingFailure('Clearing the stale skip flag', error),
-          ),
+          warnOnboardingFailure('Clearing the stale skip flag', error),
         ),
       );
     }
@@ -258,12 +262,14 @@ const runOnboardingFlow = Effect.fn('runOnboardingFlow')(function* (options: {
     yield* setOnboardingDeclined(options.stores.globalState, true).pipe(
       // Handler param names the whole channel, so widening it fails to compile.
       Effect.catch((error: StateWriteFailed) =>
-        Effect.sync(() => {
-          warnOnboardingFailure('Saving the skip flag', error);
-          writeTextStderr(
-            "Note: couldn't save your choice, so you may be asked again next time.",
-          );
-        }),
+        Effect.andThen(
+          warnOnboardingFailure('Saving the skip flag', error),
+          Effect.sync(() =>
+            writeTextStderr(
+              "Note: couldn't save your choice, so you may be asked again next time.",
+            ),
+          ),
+        ),
       ),
     );
   } else if (resolution.configured) {
@@ -274,9 +280,7 @@ const runOnboardingFlow = Effect.fn('runOnboardingFlow')(function* (options: {
     yield* setOnboardingDeclined(options.stores.globalState, false).pipe(
       // Handler param names the whole channel, so widening it fails to compile.
       Effect.catch((error: StateWriteFailed) =>
-        Effect.sync(() =>
-          warnOnboardingFailure('Clearing the stale skip flag', error),
-        ),
+        warnOnboardingFailure('Clearing the stale skip flag', error),
       ),
     );
   }

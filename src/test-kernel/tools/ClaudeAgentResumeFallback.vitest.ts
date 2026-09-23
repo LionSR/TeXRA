@@ -117,7 +117,7 @@ describe('claude_agent tool launch and resume fallback', () => {
 
     mocks.registerRun.mockReturnValue(Effect.void);
     mocks.buildClaudeAgentEnv.mockReturnValue(Effect.succeed({}));
-    mocks.findClaudeBinaryPath.mockReturnValue(undefined);
+    mocks.findClaudeBinaryPath.mockReturnValue(Effect.succeed(undefined));
     mocks.createChildRun.mockReturnValue(
       Effect.succeed(createFakeAgentCliChildRun(childRunId)),
     );
@@ -163,9 +163,9 @@ describe('claude_agent tool launch and resume fallback', () => {
 
   it.live('does not create a run when Claude binary discovery fails', () =>
     Effect.gen(function* () {
-      mocks.findClaudeBinaryPath.mockImplementation(() => {
-        throw new Error('Claude binary lookup failed');
-      });
+      mocks.findClaudeBinaryPath.mockReturnValue(
+        Effect.fail(new Error('Claude binary lookup failed')),
+      );
 
       const result = yield* ClaudeAgentTool.call({
         prompt: 'must not create a stale child',

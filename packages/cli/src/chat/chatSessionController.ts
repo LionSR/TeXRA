@@ -1335,11 +1335,12 @@ export function createChatSessionController(
               // rejects defects. Read the defect the way `SessionBridge`
               // answers `Internal`: logged, worded, the message handed back.
               Effect.catchCause((cause) =>
-                Effect.sync(() =>
-                  Cause.hasInterruptsOnly(cause)
-                    ? { interrupted: true as const }
-                    : { defect: reportRequestDefect(cause) },
-                ),
+                Effect.gen(function* () {
+                  if (Cause.hasInterruptsOnly(cause)) {
+                    return { interrupted: true as const };
+                  }
+                  return { defect: yield* reportRequestDefect(cause) };
+                }),
               ),
             );
           if ('value' in outcome && outcome.value.kind === 'followUp') {

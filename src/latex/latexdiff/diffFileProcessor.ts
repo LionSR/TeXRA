@@ -2,6 +2,7 @@ import { Effect, FileSystem, PlatformError } from 'effect';
 
 import type { ConfigProvider } from '@platform/interfaces';
 import replacementEngine, {
+  logReplacementDiagnostics,
   type ReplacementConfigRead,
 } from '@replacement/engine';
 import type { FileLocation } from '@shared/schemas';
@@ -86,10 +87,12 @@ export class DiffFileProcessor {
       );
       processedContent = this.processStarEnvironments(processedContent);
       processedContent = this.processLineByLine(processedContent);
-      processedContent = replacementEngine.applyAll(
+      const replaced = replacementEngine.applyAll(
         processedContent,
         this.readReplacementConfig,
       );
+      yield* logReplacementDiagnostics(replaced.diagnostics);
+      processedContent = replaced.text;
       for (const [pattern, replacement] of DOCUMENT_END_FIXES) {
         processedContent = processedContent.replace(pattern, replacement);
       }

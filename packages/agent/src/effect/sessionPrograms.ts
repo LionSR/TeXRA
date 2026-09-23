@@ -48,7 +48,7 @@ import type { AgentFlowResult } from '@agent/runtime/AgentFlowResult';
 
 // The composition root supplies its existing scoped services privately;
 // public Session capabilities carry no process implementation types.
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import type { AgentDirectories } from '@platform/interfaces';
 import type { ProcessServices } from '@platform/processRuntime';
 import type { GlobalStorageFs } from '@platform/rootedFs';
@@ -74,7 +74,7 @@ import type { Sessions, Session, Run, StartInput } from './sessions.js';
  *  contract broke, and a caller waiting on admission must hear it. */
 const NEVER_ENTERED = 'The run ended without entering the session.';
 
-const log = createLog('agentPackage');
+const CHANNEL = 'agentPackage';
 
 /**
  * How many trace events a run holds for a reader that has yet to attach.
@@ -125,18 +125,16 @@ function denyRetryRequests(handle: RuntimeSessionHandle): Effect.Effect<void> {
             decision: { action: 'deny', reason: RETRY_DENIAL },
           })
           .pipe(
-            Effect.catch((error) =>
-              Effect.sync(() => {
-                // A refused write answered nothing: the request stays
-                // pending, so this listener must forget it or no later
-                // level would ever deny it again and the run would wait
-                // for a surface that never comes.
-                answered.delete(pending.requestId);
-                log.warn(
-                  `The retry denial for request ${pending.requestId} was refused: ${toErrorMessage(error)}`,
-                );
-              }),
-            ),
+            Effect.catch((error) => {
+              // A refused write answered nothing: the request stays
+              // pending, so this listener must forget it or no later
+              // level would ever deny it again and the run would wait
+              // for a surface that never comes.
+              answered.delete(pending.requestId);
+              return Effect.logWarning(
+                `The retry denial for request ${pending.requestId} was refused: ${toErrorMessage(error)}`,
+              ).pipe(withLogChannel(CHANNEL));
+            }),
           );
       },
       { discard: true },
@@ -258,6 +256,11 @@ function start(
     ): Effect.Effect<void> =>
       Effect.gen(function* () {
         release();
+        if (buffered > TRACE_HANDOVER_EVENTS) {
+          yield* Effect.logWarning(
+            `Run ${runId} buffered ${TRACE_HANDOVER_EVENTS} trace events with no reader attached; its trace was detached. Iterate the run's events in the turn that starts it, or await only its result.`,
+          ).pipe(withLogChannel(CHANNEL));
+        }
         // A run nobody read retains nothing: what it buffered goes with it.
         if (!reading) yield* Effect.orDie(Queue.clear(trace));
         if (Exit.isFailure(exit)) {
@@ -303,10 +306,7 @@ function start(
               onRunResolved: (_, runTrace) => {
                 detach = runTrace.subscribe((event) => {
                   if (!reading && (buffered += 1) > TRACE_HANDOVER_EVENTS) {
-                    log.warn(
-                      `Run ${runId} buffered ${TRACE_HANDOVER_EVENTS} trace events with no reader attached; detaching its trace. Iterate the run's events in the turn that starts it, or await only its result.`,
-                    );
-                    release();
+                    release(); // `settle` logs it: no fiber here to log from.
                     return;
                   }
                   Queue.offerUnsafe(trace, event);
@@ -318,14 +318,14 @@ function start(
               tools: input.tools,
             },
           ).pipe(
-            // The embedder owns this runtime. Provide the process's existing
-            // context so native tool I/O shares its scoped clients and stores.
-            Effect.provide(services),
             Effect.mapError(
               (cause) =>
                 new RunFailure({ cause, message: toErrorMessage(cause) }),
             ),
             Effect.onExit(settle),
+            // The embedder owns this runtime. Provide the process's existing
+            // context: tool I/O shares its scoped clients, `settle` its logger.
+            Effect.provide(services),
           ),
           { startImmediately: true },
         );
@@ -470,7 +470,7 @@ export function makeSessions(
             root,
             yield* Effect.forkDetach(
               Effect.ensuring(
-                denyRetryRequests(handle),
+                denyRetryRequests(handle).pipe(Effect.provide(services)),
                 Effect.sync(() => deniers.delete(root)),
               ),
             ),

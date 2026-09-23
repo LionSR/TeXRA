@@ -1,7 +1,7 @@
 import { defineCommand } from 'citty';
 import { Effect } from 'effect';
 
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 import { RESEARCHER_ACCESS_AUTH } from '@ui/copy/accountAuth';
@@ -24,7 +24,7 @@ import {
 } from './_helpers/globalArgs';
 import { type CliContext } from '../runtime/cliContext';
 
-const credentialLog = createLog('Setup Credentials');
+const CREDENTIAL_CHANNEL = 'Setup Credentials';
 
 /** Exported for the test kernel — the command's `run` is the only other caller. */
 export async function runSetup(context: CliContext): Promise<number> {
@@ -58,15 +58,17 @@ export async function runSetup(context: CliContext): Promise<number> {
   const credentialed = await runtime.runPromise(
     Effect.gen(function* () {
       const services = yield* initCliPlatform({ ...context, quietLogs: true });
-      if (
-        yield* hasUsableSetupCredential(
-          services,
-          services.secrets,
-          credentialLog.warn,
-        )
-      ) {
-        return true;
-      }
+      // The probe reports failures synchronously; this program logs them.
+      const fails: string[] = [];
+      const hasCredential = yield* hasUsableSetupCredential(
+        services,
+        services.secrets,
+        (message) => fails.push(message),
+      ).pipe(
+        Effect.ensuring(Effect.forEach(fails, (m) => Effect.logWarning(m))),
+        withLogChannel(CREDENTIAL_CHANNEL),
+      );
+      if (hasCredential) return true;
       const { runCliOnboarding } = yield* Effect.promise(
         () => import('../onboarding/runOnboarding'),
       );

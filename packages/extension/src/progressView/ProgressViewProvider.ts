@@ -244,10 +244,18 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
         })) ?? [],
       // Already an Effect program: the typed port lets the banner read it
       // directly instead of settling it on the runtime first.
+      // Its failure hook is synchronous, so failures are logged on settling.
       apiKeyBanner: () =>
-        hasUsableSetupCredential(this.session.roots, this.secrets, (message) =>
-          log.warn(message),
-        ).pipe(
+        Effect.suspend(() => {
+          const warns: string[] = [];
+          const { roots } = this.session;
+          return hasUsableSetupCredential(roots, this.secrets, (m) => {
+            warns.push(m);
+          }).pipe(
+            Effect.ensuring(Effect.forEach(warns, (m) => Effect.logWarning(m))),
+            withLogChannel(CHANNEL),
+          );
+        }).pipe(
           Effect.map((usable) => ({ visible: !usable })),
           Effect.mapError(
             (cause) =>

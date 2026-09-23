@@ -53,7 +53,7 @@ import {
   NotificationFailed,
   PromptFailed,
 } from '@hosts/uiHosts';
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import { DisposableStore } from '@platform/disposable';
 import type {
@@ -175,7 +175,6 @@ import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';
 
 const moduleDirname = import.meta.dirname;
 const desktopMainDir = findDesktopMainDir(moduleDirname);
-const credentialLog = createLog('Setup Credentials');
 
 /**
  * Maximum number of commits the renderer displays in the launcher banner.
@@ -1494,14 +1493,19 @@ function createWindow(options: {
     {
       state: options.globalState,
       // Single source of truth for "does the user have a usable credential",
-      // shared by every host (extension, desktop, CLI) so this credential-gating
-      // logic can't drift between them.
-      hasCredential: () =>
-        hasUsableSetupCredential(
+      // shared by every host so the gating can't drift between them. The
+      // probe reports failures synchronously; this program logs them.
+      hasCredential: () => {
+        const fails: string[] = [];
+        return hasUsableSetupCredential(
           activeProject().session.roots,
           options.secrets,
-          credentialLog.warn,
-        ),
+          (message) => fails.push(message),
+        ).pipe(
+          Effect.ensuring(Effect.forEach(fails, (m) => Effect.logWarning(m))),
+          withLogChannel('Setup Credentials'),
+        );
+      },
       // Launch the setup conversation when the user clicks "Run Setup" on the
       // setup card, mirroring the extension's `launchSetupAssistant` →
       // launch path: resolve a model the user's credentials can call,

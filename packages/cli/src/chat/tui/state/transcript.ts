@@ -8,9 +8,9 @@
  * residency cap drops never shifts a notice.
  */
 import { signal } from '@lit-labs/signals';
-import { Cause } from 'effect';
+import { Cause, Effect } from 'effect';
 
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import type { RunId } from '@shared/schemas';
 import type { RequestError } from '@shared/session/requestErrors';
 import { transcriptText, type TranscriptRow } from '@ui/transcript';
@@ -234,16 +234,22 @@ export function appendLocalRequestRefusal(
   appendLocalAssistantTranscript(describeRequestError(error), runId);
 }
 
-const log = createLog('cli.transcript');
+const CHANNEL = 'cli.transcript';
 
 /**
  * A runtime request that defected in process: `SessionBridge` logs the cause
  * and answers `Internal`; with no bridge in the middle the same defect is
  * logged here and worded for the surface that issued the request.
  */
-export function reportRequestDefect(cause: Cause.Cause<unknown>): string {
-  log.error(`Runtime request failed: ${toErrorMessage(Cause.squash(cause))}`);
-  return 'The request failed inside TeXRA; see the log.';
+export function reportRequestDefect(
+  cause: Cause.Cause<unknown>,
+): Effect.Effect<string> {
+  return Effect.logError(
+    `Runtime request failed: ${toErrorMessage(Cause.squash(cause))}`,
+  ).pipe(
+    withLogChannel(CHANNEL),
+    Effect.as('The request failed inside TeXRA; see the log.'),
+  );
 }
 
 registerCliStateResetHook(() => {

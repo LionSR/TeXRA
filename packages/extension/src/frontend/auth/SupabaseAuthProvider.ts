@@ -28,7 +28,7 @@ import {
   type AuthCallbackTransport,
   type SignInCallbackOutcome,
 } from '@controllers/auth/supabaseSignIn';
-import * as logger from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import type { AgentDirectories } from '@platform/interfaces';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { GlobalStorageFs } from '@platform/rootedFs';
@@ -38,7 +38,6 @@ import type { HttpClient } from 'effect/unstable/http';
 import type { SupabaseUriHandler } from './UriHandler';
 
 const CHANNEL = 'SupabaseAuthProvider';
-const log = logger.createLog(CHANNEL);
 
 export const AUTH_URI_HANDLER_NOT_INITIALIZED =
   'OAuth handler not initialized. Restart the extension.';
@@ -228,12 +227,12 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
 
       return yield* this.resolveUsableSession(session).pipe(
         Effect.catchCause((cause) =>
-          Effect.sync(() => {
-            log.error(
-              `Error loading session: ${toErrorMessage(settleFailure(cause))}`,
-            );
-            return [] as vscode.AuthenticationSession[];
-          }),
+          Effect.logError(
+            `Error loading session: ${toErrorMessage(settleFailure(cause))}`,
+          ).pipe(
+            withLogChannel(CHANNEL),
+            Effect.as([] as vscode.AuthenticationSession[]),
+          ),
         ),
       );
     });

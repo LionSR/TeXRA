@@ -534,12 +534,13 @@ const executeBackground = Effect.fn('BashTool.executeBackground')(function* (
               // Nobody awaits this run: own late loop failures here as trace
               // diagnostics, since the loop already owns its one user-facing
               // result delivery.
-              onLoopFailed: (error: unknown): void => {
-                childRun.logger.error(
-                  'Background command run loop failed after launch',
-                  { data: error },
-                );
-              },
+              onLoopFailed: (error: unknown) =>
+                Effect.sync(() =>
+                  childRun.logger.error(
+                    'Background command run loop failed after launch',
+                    { data: error },
+                  ),
+                ),
             };
           }),
       });

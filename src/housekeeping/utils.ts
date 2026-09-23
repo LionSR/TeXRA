@@ -2,12 +2,11 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { Data, Effect, FileSystem } from 'effect';
+import { Data, Effect, FileSystem, Stream } from 'effect';
 import { globIterate } from 'glob';
 
 // Local imports
 import { withLogChannel } from '@logger/effectLog';
-import { createLog } from '@logger/logUtils';
 import { relativeToRoot } from '@platform/defaults/nodeWorkspace';
 import type { FileOpResult } from '@shared/schemas';
 import { type RootedFileSystem } from '@utils/files/rootedFileSystem';
@@ -15,8 +14,6 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { normalizeFilePath } from '@utils/core';
 
 import { CHANNEL } from './constants';
-
-const log = createLog(CHANNEL);
 
 /**
  * Every housekeeping failure reaches the host as the same result shape: the
@@ -119,7 +116,6 @@ async function* findFilesFromPatterns(
           const relativePath = normalizeFilePath(
             relativeToRoot(workspaceRoot, match) ?? match,
           );
-          log.debug(`Found file: ${relativePath}`);
           yield relativePath;
 
           if (!isGlob) {
@@ -154,20 +150,17 @@ export const collectFilesFromPatterns = Effect.fn(
   yield* Effect.logDebug(
     `Finding files in ${inputDir} using patterns ${patterns} and extensions ${extensions}`,
   ).pipe(withLogChannel(CHANNEL));
-  return yield* Effect.tryPromise({
-    try: async () => {
-      const files = new Set<string>();
-      for await (const file of findFilesFromPatterns(
-        workspaceRoot,
-        inputDir,
-        patterns,
-        extensions,
-      )) {
-        files.add(file);
-      }
-      return files;
-    },
-    catch: (cause) =>
+  return yield* Stream.fromAsyncIterable(
+    findFilesFromPatterns(workspaceRoot, inputDir, patterns, extensions),
+    (cause) =>
       new GlobFailed({ pattern: `${inputDir}: ${patterns.join(', ')}`, cause }),
-  });
+  ).pipe(
+    Stream.tap((file) =>
+      Effect.logDebug(`Found file: ${file}`).pipe(withLogChannel(CHANNEL)),
+    ),
+    Stream.runFold(
+      () => new Set<string>(),
+      (files, file) => files.add(file),
+    ),
+  );
 });

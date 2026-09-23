@@ -210,17 +210,17 @@ function importProbedSdk(
 
 /** Resolve a CLI's native binary as a classified probe. */
 function findProbedBinary(
-  findBinary: () => string | undefined,
+  findBinary: () => Effect.Effect<string | undefined, Error>,
 ): Effect.Effect<string | undefined, ToolProbeFailed> {
-  return Effect.try({
-    try: findBinary,
-    catch: (cause) =>
+  return Effect.mapError(
+    findBinary(),
+    (cause) =>
       new ToolProbeFailed({
         reason: 'binary-lookup-failed',
         message: toErrorMessage(cause),
         cause,
       }),
-  });
+  );
 }
 
 /** Appended to install hints when running under WSL, where side matters. */
@@ -234,7 +234,7 @@ function wslInstallHint(): string {
  */
 export function probeSdkBinaryAvailable(
   importSdk: () => Effect.Effect<unknown, Error>,
-  findBinary: () => string | undefined,
+  findBinary: () => Effect.Effect<string | undefined, Error>,
 ): Effect.Effect<boolean> {
   return Effect.gen(function* () {
     yield* importProbedSdk(importSdk);
@@ -254,7 +254,7 @@ type SdkBinaryStatus =
  */
 export function probeSdkBinaryStatus(config: {
   importSdk: () => Effect.Effect<unknown, Error>;
-  findBinary: () => string | undefined;
+  findBinary: () => Effect.Effect<string | undefined, Error>;
   missingPackageMessage: string;
   importFailedLabel: string;
   binaryNotFoundMessage: string;

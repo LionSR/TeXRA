@@ -12,13 +12,11 @@ import { Effect } from 'effect';
 
 import { getCodexStatus } from '@auth/codex';
 import { getXaiStatus } from '@auth/xai';
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import { setModelAvailabilityWarningSink } from '@model/modelAvailabilityWarning';
 import { setCodexSignedInProbe } from '@model/codex/codexSubscription';
 import { setXaiSignedInProbe } from '@model/xai/xaiSubscription';
 import type { PlatformSecrets } from '@platform/secrets';
-
-const log = createLog('computeModelOptions');
 
 /**
  * Install ChatGPT / Grok signed-in state and model-picker diagnostics. Idempotent;
@@ -33,7 +31,10 @@ export function installTexraAccountProbes(secrets: PlatformSecrets): void {
   setXaiSignedInProbe(() =>
     Effect.map(getXaiStatus(secrets), (status) => status.signedIn),
   );
-  setModelAvailabilityWarningSink((message, error) => {
-    log.warn(message, { data: error });
-  });
+  setModelAvailabilityWarningSink((message, error) =>
+    Effect.logWarning(message).pipe(
+      Effect.annotateLogs({ data: error }),
+      withLogChannel('computeModelOptions'),
+    ),
+  );
 }

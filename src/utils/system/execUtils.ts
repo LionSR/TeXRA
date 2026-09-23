@@ -7,7 +7,6 @@ import { quote as shellQuote } from 'shell-quote';
 
 // Internal imports
 import { withLogChannel } from '@logger/effectLog';
-import { createLog } from '@logger/logUtils';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { ExecResult } from '@shared/schemas';
 import { getGitAuthorEnv } from '@utils/system/gitAuthorEnv';
@@ -15,10 +14,10 @@ import { onAbort as onAbortSignal } from '@utils/core';
 import {
   CHANNEL,
   commandEnv,
+  commandStderrLogLine,
   deriveCommandStderr,
-  logCommandStderr,
-  logExecutionErrorAndBuildResult,
   normalizeEncoding,
+  resultFromExecutionError,
   resultFromProcessOutput,
   signalProcessGroup,
   type ExecEncoding,
@@ -26,7 +25,7 @@ import {
   type ExecOutput,
 } from '@utils/system/execCore';
 import { IS_WINDOWS } from '@utils/system/platformPaths';
-import { ensureError } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 const FORCE_KILL_DELAY_MS = 5_000;
 
@@ -161,7 +160,14 @@ export function executeCommand(
 ): Effect.Effect<ExecResult> {
   return Effect.scoped(runCommand(command, options)).pipe(
     Effect.catch((error) =>
-      Effect.succeed(logExecutionErrorAndBuildResult(error, options)),
+      Effect.as(
+        options.quiet
+          ? Effect.void
+          : Effect.logError(
+              `Error executing command: ${toErrorMessage(error)}`,
+            ).pipe(withLogChannel(options.channel ?? CHANNEL)),
+        resultFromExecutionError(error),
+      ),
     ),
   );
 }
@@ -182,8 +188,6 @@ function runCommand(
 
     const encoding = normalizeEncoding(options.encoding);
     const channel = options.channel ?? CHANNEL;
-    // Threaded into `logCommandStderr`, which is not an Effect program.
-    const log = createLog(channel);
     const isArrayForm = Array.isArray(command);
     const teardown: CommandTeardown = {
       shellTimedOut: false,
@@ -398,8 +402,11 @@ function runCommand(
             shouldUseShortMessage,
           );
 
-    if (!options.quiet) {
-      logCommandStderr(log, normalizedStderr, options.truncate);
+    const stderrLine = options.quiet
+      ? undefined
+      : commandStderrLogLine(normalizedStderr, options.truncate);
+    if (stderrLine !== undefined) {
+      yield* Effect.logDebug(stderrLine).pipe(withLogChannel(channel));
     }
 
     return resultFromProcessOutput(stdout, normalizedStderr, exitCode, {

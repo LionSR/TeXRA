@@ -195,7 +195,7 @@ describe('agent creator orchestration', () => {
             .join('');
         }),
     );
-    mocks.validateAgentYamlContent.mockImplementation(() => undefined);
+    mocks.validateAgentYamlContent.mockImplementation(() => Effect.void);
   });
 
   afterEach(async () => {
@@ -241,10 +241,10 @@ describe('agent creator orchestration', () => {
             generatedResponse('<yaml>valid: true</yaml>'),
           );
         mocks.validateAgentYamlContent
-          .mockImplementationOnce(() => {
-            throw new Error('missing prompts');
-          })
-          .mockImplementationOnce(() => undefined);
+          .mockImplementationOnce(() =>
+            Effect.fail(new Error('missing prompts')),
+          )
+          .mockImplementationOnce(() => Effect.void);
 
         yield* createAgent(ui);
 

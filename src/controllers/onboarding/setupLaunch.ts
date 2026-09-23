@@ -4,7 +4,7 @@ import {
   validateRunRequest,
   type ValidatedRunRequest,
 } from '@agent/core/state/runRequests';
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import { hasUsableApiKey, API_PROVIDERS } from '@model/apiProviders';
 import { SETUP_MODEL_BY_PROVIDER } from '@model/setupModelDefaults';
 import {
@@ -27,7 +27,8 @@ import { AgentCategory } from '@shared/schemas';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 
-const credentialLog = createLog('Setup Credentials');
+const reportProbeFailure = (message: string): Effect.Effect<void> =>
+  Effect.logWarning(message).pipe(withLogChannel('Setup Credentials'));
 
 /** Instruction handed to the setup agent when launched. Shared by every host. */
 export const SETUP_INSTRUCTION =
@@ -48,7 +49,7 @@ export function selectSetupCredentialModelExcludingOpenRouter(
     if (!useOpenRouter) {
       const subscriptionModel = yield* setupSubscriptionModel(
         stores,
-        credentialLog.warn,
+        reportProbeFailure,
       );
       if (subscriptionModel !== null) return subscriptionModel;
     }
@@ -65,7 +66,7 @@ export function selectSetupCredentialModelExcludingOpenRouter(
         hasUsableApiKey(secrets, provider).pipe(
           Effect.mapError(setupCredentialProbeFailed(`${provider} API key`)),
         ),
-        credentialLog.warn,
+        reportProbeFailure,
       );
       if (hasApiKey) return model;
     }
@@ -98,7 +99,7 @@ export function resolveSetupLaunchModel(
       hasUsableApiKey(secrets, 'openRouter').pipe(
         Effect.mapError(setupCredentialProbeFailed('OpenRouter API key')),
       ),
-      credentialLog.warn,
+      reportProbeFailure,
     );
     const openRouterModel = hasOpenRouterKey
       ? SETUP_MODEL_BY_PROVIDER.openRouter
