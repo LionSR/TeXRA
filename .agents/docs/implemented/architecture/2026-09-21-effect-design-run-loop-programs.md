@@ -1,6 +1,6 @@
 ---
 created: 2026-09-21
-status: proposed
+status: implemented — PR-A #13029, PR-B #13029, PR-C and PR-D #13040; PR-C part (c) superseded by #13027's output.produced row. Moved from proposed/ 2026-09-23.
 ---
 
 # One run program family: acquireUseRelease at two scales, one state cell, reflection output as folded run.fact rows
@@ -60,11 +60,16 @@ export interface RunCell {
    *  back. Read-append-write is one uninterruptible region, so a stop can
    *  never leave the cell behind the rows. */
   readonly append: (
-    rows: readonly RunLedgerDraft[],
+    rows:
+      | readonly RunLedgerDraft[]
+      | ((state: RunState) => readonly RunLedgerDraft[]),
   ) => Effect.Effect<RunState, RunLedgerRefused | DatabaseWriteFailed>;
-  /** Adopt a state a run service already committed against (ModelInvoker,
-   *  dispatchPendingResponse, FollowUps.consume, compactIfNeeded). */
+  /** Adopt a state a run service already committed against
+   *  (FollowUps.consume, compactIfNeeded). */
   readonly adopt: (state: RunState) => Effect.Effect<RunState>;
+  /** Fold a row another writer committed (a `request.decided`) onto the
+   *  latest state under the cell's lock. */
+  readonly fold: (row: SessionEvent, what: string) => Effect.Effect<RunState>;
 }
 
 export const makeRunCell = (
@@ -73,7 +78,7 @@ export const makeRunCell = (
 ): Effect.Effect<RunCell, never, RunLedger>;
 ```
 
-`Ref`, not `SynchronizedRef`: one fiber owns a run (the loop, the invoker and the dispatcher all run on it), so a lock would be a primitive bought against no contention. The cell is seeded with a non-null `RunState` because it is created inside acquire, after the run is opened or restored, which is what removes the null branch from every reader.
+`Ref`, not `SynchronizedRef`: one fiber owns a run (the loop, the invoker and the dispatcher all run on it), so a lock would be a primitive bought against no contention. (Amended by PR-D, and the snippet above shows the amended shape: the premise does not hold for the dispatcher, whose parallel partition settles calls on sibling fibers that each fold onto the one before, which is why `toolUseDispatch` held its own `SynchronizedRef`. Once the cell reaches dispatch it is that `SynchronizedRef`, and `append` also takes a `(state) => rows` builder so rows that read the state are built from the state they commit against. The whole region, lock wait included, is uninterruptible: a settlement queued behind a sibling when the run stops belongs to a tool that already ran, and committing it keeps a resume from running it twice. A decision row another writer committed is folded under the same lock by `fold`, never read-then-`adopt`, so no append between the two is lost.) The cell is seeded with a non-null `RunState` because it is created inside acquire, after the run is opened or restored, which is what removes the null branch from every reader.
 
 Every `state = yield* commit(yield* ledger.appendBatch(runId, state, rows))` becomes `state = yield* cell.append(rows)`. `RunLedger` stays stateless by construction (runLedger.ts header: the loop holds the RunState); the cell lives on the run, not on the session-root service.
 
@@ -392,6 +397,7 @@ The residual process-local facts after this design, named so they are not redisc
 2. PR-B, the raw output becomes idempotent by coordinate. Write each response cycle to its own path keyed by the folded continuationIndex; concatenate in index order at the head of produceOutput into the canonical outputLocationFor(round); delete writeOutputFragment's stat/compare/rewrite ladder and the offset read-back in restore; stop writing flow.rawOutputBytes (the field is already .optional() at runFlowState.ts:339, so not writing it is legal and needs no bump; it is deleted in PR-C). Confirm nothing in the CLI or desktop surfaces a per-round raw path by name before landing, since this changes the on-disk layout under .texra.
    files: src/agent/runtime/loop/reflection.ts
 3. PR-C, the persisted vocabulary shrink and reflection output as rows. This PR carries the single format bump. (a) Add RunUsageTotals.totalResponseTimeMs and fold it from each response row; delete AgentRunStateSnapshotSchema, PersistedUsageAccumulatorSchema, LedgerRunStateSnapshotSchema, both .extend splices, both usageSnapshot closures and both accumulators; change UsageMonitor.recordUsage to take RunState. (b) Delete the twelve dead or derivable snapshot fields listed in the deletes; keep totalRounds; recompute outputLocation, endTurn and currentRound; fix packages/cli/src/runtime/toolUseResumeData.ts:46 to read snapshot.runtime.round. (c) Add OutputFactDraft to RunLedgerDraft, remove 'run.fact' from IGNORED_ROW_TYPES, add the latest-wins fold arm in runRows.ts and RunState.output; make publishOutput, produceOutput and publishMissingOutputs return drafts that enterRound and finish put at the head of their batch; keep the emitCompileFailures gate; hydrate outputState.rounds from state.output in restore; delete roundsToPersisted/roundsFromPersisted and RoundOutput.rawOutput. (d) Add 'context-window' to ModelCompactionPayloadSchema.cause and fold RunState.overflowRecoveredAtRound, replacing reflection's process-local contextWindowRecoveryAttempted. (e) Bump SESSION_EVENT_FORMAT once and regenerate the fingerprint snapshot. Test churn is fixture edits across roughly a dozen kernel suites (sessionFold, ResumeCommand, HistoryStatus, ToolUseResumeData, ExecuteCli, WorkflowRunCommand, SessionResumeRetrieval, completedRunArchive, ExecutionsToolResumability, ToolUseDispatchParallel, sessionEvents, followUp/ToolUseWait); edit them, do not add files. [FORMAT BUMP]
+   Landed as (a), (b), (d) and (e), at SESSION_EVENT_FORMAT 12; `addTurnUsage` moved to `runFlowState.ts` beside `NormalizedUsage` to keep `runStateFold.ts` under its file-size budget. (c) is superseded, not taken: #13027 (dba36728d1) had already moved reflection output onto a folded `output.produced` row that the loop commits through its cell, and snapshots no longer restate the round collection. That contradicts this design's "no new row type" ruling, and it is the owner's ruling now, so `roundsToPersisted` survives as the row's writer.
    files: src/shared/schemas/usage.ts, src/shared/schemas/runFlowState.ts, src/shared/schemas/runLedgerEvent.ts, src/shared/schemas/output.ts, src/shared/schemas/sessionEvent.ts, src/shared/session/runRows.ts, src/shared/session/runStateFold.ts, src/shared/session/sessionFold.ts, src/agent/runtime/UsageMonitor.ts, src/agent/runtime/loop/reflection.ts, src/agent/runtime/loop/toolUse.ts, src/agent/runtime/loop/rows.ts, src/agent/runtime/run/compaction.ts, src/agent/implementations/flows/reflection/output/outputState.ts, src/agent/implementations/flows/reflection/output/outputFileExtraction.ts, src/agent/implementations/flows/reflection/output/roundSummary.ts, src/agent/runtime/executeAgent.ts, packages/cli/src/runtime/toolUseResumeData.ts, src/test-kernel/schemas/**snapshots**/sessionEventFormat.json
 4. PR-D, the cell reaches the run services. Thread RunCell into ModelInvoker (invoke drops its state parameter) and toolUseDispatch (dispatchPendingResponse likewise), and delete the nine hand-written Effect.uninterruptible(appendBatch(...)) wrappers at ModelInvoker.ts:536, 596, 727, 1025, 1108, 1126, 1241, toolUseDispatch.ts:283 and reflection.ts:1125, which RunCell.append subsumes. This changes two public signatures with two callers each, so it stays its own PR.
    files: src/agent/runtime/ModelInvoker.ts, src/agent/runtime/loop/toolUseDispatch.ts, src/agent/runtime/loop/toolUse.ts, src/agent/runtime/loop/reflection.ts, src/agent/runtime/loop/runProgram.ts

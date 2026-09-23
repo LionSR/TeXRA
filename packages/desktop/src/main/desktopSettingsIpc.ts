@@ -10,6 +10,7 @@ import {
   type SettingsViewInboundHandlerRegistry,
 } from '@controllers/settingsView/settingsViewDispatch';
 import { SettingsMemoryController } from '@controllers/settingsView/SettingsMemoryController';
+import { sharedSettingsCommands } from '@controllers/settingsView/sharedSettingsCommands';
 import {
   listGitHubSubscriptionEntries,
   noActiveGitHubSubscriptionMessage,
@@ -18,6 +19,7 @@ import {
 import {
   NotificationFailed,
   PromptFailed,
+  type ExternalOpener,
   type MessageHost,
 } from '@hosts/uiHosts';
 import { apiProviderOfSecretName } from '@model/apiProviders';
@@ -48,7 +50,6 @@ import { loadRuntimeSkillDisplay } from '@skills/runtimeSkills';
 import { goalList } from '@tools/goal';
 import { refreshToolAvailability } from '@tools/toolAvailability';
 import {
-  GITHUB_TOKEN_CREATE_URL,
   GITHUB_TOKEN_PROMPT,
   GITHUB_TOKEN_REMOVED_MESSAGE,
   GITHUB_TOKEN_SAVED_MESSAGE,
@@ -91,7 +92,6 @@ export interface DesktopSettingsUiHost extends Pick<
     title: string;
     prompt: string;
   }): Effect.Effect<string | undefined>;
-  openExternal(url: string): Promise<void>;
   confirmAction(message: string, confirmLabel?: string): Promise<boolean>;
   onError(error: unknown): void;
 }
@@ -109,6 +109,9 @@ export interface DesktopSettingsIpcOptions {
    * removed.
    */
   secrets: PlatformSecrets;
+  /** The browser hand-off behind every settings URL: provider docs, tool
+   *  install pages, the GitHub token page. */
+  externalOpener: ExternalOpener;
   ui: DesktopSettingsUiHost;
   /**
    * The session of the paper this settings surface serves. Its roots supply
@@ -320,15 +323,6 @@ export function createDesktopSettingsIpc(
         ],
         { concurrency: 'unbounded', discard: true },
       );
-    });
-  }
-
-  function updateModelEnabled(input: { modelName: string; enabled: boolean }) {
-    return Effect.gen(function* () {
-      yield* modelSelectionController.setModelEnabled(input);
-      yield* postModelSelectionData();
-      // The options cache is invalidated by the writer itself.
-      yield* options.credentialSettingsController.refreshModelOptions();
     });
   }
 
@@ -598,26 +592,28 @@ export function createDesktopSettingsIpc(
         memoryController.setMemoryPinned(message.storagePath, false),
       ),
     ...options.credentialSettingsController.profileHandlers,
-    setModelEnabled: (message) => updateModelEnabled(message),
-    setModelReasoningLevel: (message) =>
-      Effect.andThen(
-        modelSelectionController.setReasoningLevel(message),
-        postModelSelectionData(),
-      ),
+    ...sharedSettingsCommands({
+      profileKeys: options.credentialSettingsController.profileKeyController,
+      modelSelection: modelSelectionController,
+      externalOpener: options.externalOpener,
+      toolProbes: { workspaceRoot: roots.workspace, config },
+      host: {
+        postModelSelection: postModelSelectionData,
+        refreshModelCatalog: () =>
+          options.credentialSettingsController.refreshModelOptions(),
+        reportProviderKeyFailure: (error) =>
+          options.credentialSettingsController.reportProviderKeyFailure(error),
+      },
+    }),
     requestModelAccess: unsupported('Copilot models require VS Code.'),
     clearCopilotRoute: unsupported('Copilot models require VS Code.'),
     ...options.agentSettingsController.handlers,
     // Mirrors the extension's `GitHubSubscriptionHandlers`. The token store and
     // the subscription registry are host-agnostic (`@tools/github`); only the
-    // secret prompt, the browser hand-off, and the run reveal differ here.
+    // secret prompt and the run reveal differ here.
     getGitHubTokenStatus: () => postGitHubTokenStatus(),
     setGitHubToken: () => setGitHubToken(),
     removeGitHubToken: () => removeGitHubToken(),
-    openGitHubTokenUrl: () =>
-      Effect.tryPromise({
-        try: () => options.ui.openExternal(GITHUB_TOKEN_CREATE_URL),
-        catch: ensureError,
-      }),
     getPRSubscriptions: () => postGitHubSubscriptions(),
     unsubscribePR: unsubscribeGitHub,
     openPRSubscriptionStream: (message) => revealRun(message.runId),

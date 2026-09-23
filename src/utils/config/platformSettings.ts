@@ -72,7 +72,7 @@ export function readConfigSettingFrom<T>(
  * the declared `ConfigWriteFailed | Error` channel: it is raised inside
  * `writeSetting`, so it will not arrive as a catchable failure. Callers must
  * pass a value they already know is valid. User input is validated upstream — a
- * setting write resolves through `resolveStateSettingWrite`, which `safeParse`s
+ * setting write resolves through `applyStateSettingUpdate`, which `safeParse`s
  * before reaching the shared path — and a malformed catalog row is a bug to
  * fix rather than a condition to catch.
  *

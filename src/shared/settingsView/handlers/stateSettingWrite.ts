@@ -3,8 +3,8 @@
 // desktop settings views plus the CLI `/config` panel.
 //
 // The hosts share persistence through settingsAccess and own only the
-// post-write side effects for each outbound snapshot. This resolver owns the
-// subtle boundary rules once:
+// post-write side effects for each outbound snapshot.
+// `applyStateSettingUpdate` owns the subtle boundary rules once:
 //   - a value-less message is a no-op (the catalog schemas `.prefault()`, so
 //     parsing `undefined` would silently write a default),
 //   - null explicitly resets a setting while an omitted value remains a no-op,
@@ -28,46 +28,6 @@ import {
   writeSetting,
   type SettingsStores,
 } from '@shared/config/settingsAccess';
-
-/**
- * A validated state-setting write/reset, a rejected catalog value, or `null`
- * when the message must be ignored (value-less, unknown key, or a catalog row
- * this settings view does not own).
- */
-type StateSettingWrite =
-  | {
-      readonly kind: 'write';
-      readonly entry: SettingsViewStateSettingEntry;
-      readonly value: unknown;
-    }
-  | {
-      readonly kind: 'reset';
-      readonly entry: SettingsViewStateSettingEntry;
-    }
-  | {
-      readonly kind: 'rejected';
-      readonly entry: SettingsViewStateSettingEntry;
-      readonly error: Error;
-    }
-  | null;
-
-/**
- * Validate a `{key, value}` write against the unified settings-view catalog and
- * identify its rebroadcast owner, or return `null` to ignore it. This function
- * performs no I/O.
- */
-function resolveStateSettingWrite(
-  key: string,
-  value: unknown,
-): StateSettingWrite {
-  if (value === undefined) return null;
-  const entry = settingsViewSettingByKey(key);
-  if (!entry) return null;
-  if (value === null) return { kind: 'reset', entry };
-  const parsed = entry.schema.safeParse(value);
-  if (!parsed.success) return { kind: 'rejected', entry, error: parsed.error };
-  return { kind: 'write', entry, value: parsed.data };
-}
 
 /** Outcome of {@link applyStateSettingUpdate}, for host-specific UI feedback. */
 export type StateSettingUpdateResult =
@@ -132,52 +92,47 @@ export function applyStateSettingUpdate(
   value: unknown,
   ports: StateSettingUpdatePorts,
 ): Effect.Effect<StateSettingUpdateResult> {
-  const write = resolveStateSettingWrite(key, value);
-  if (!write) return Effect.succeed({ kind: 'ignored' });
-  if (write.kind === 'rejected') {
-    return Effect.succeed({
-      kind: 'rejected',
-      entry: write.entry,
-      error: write.error,
-    });
+  if (value === undefined) return Effect.succeed({ kind: 'ignored' });
+  const entry = settingsViewSettingByKey(key);
+  if (!entry) return Effect.succeed({ kind: 'ignored' });
+  const parsed = value === null ? null : entry.schema.safeParse(value);
+  if (parsed && !parsed.success) {
+    return Effect.succeed({ kind: 'rejected', entry, error: parsed.error });
   }
   if (
-    write.entry.slots[ports.host] === 'config' &&
-    write.entry.configTarget !== 'global' &&
-    ports.requiresOpenWorkspace?.(write.entry)
+    entry.slots[ports.host] === 'config' &&
+    entry.configTarget !== 'global' &&
+    ports.requiresOpenWorkspace?.(entry)
   ) {
-    return Effect.succeed({ kind: 'workspace-required', entry: write.entry });
+    return Effect.succeed({ kind: 'workspace-required', entry });
   }
   const persist =
-    write.kind === 'reset'
-      ? resetSetting(write.entry, ports.stores, ports.host)
-      : writeSetting(write.entry, write.value, ports.stores, ports.host);
+    parsed === null
+      ? resetSetting(entry, ports.stores, ports.host)
+      : writeSetting(entry, parsed.data, ports.stores, ports.host);
   return persist.pipe(
     Effect.mapError((cause) => new StateSettingWriteFailed({ cause })),
     Effect.andThen(
       Effect.gen(function* () {
-        if (write.entry.key !== TEXRA_APPROVAL_POLICY_CONFIG_KEY) return;
-        const policy =
-          write.kind === 'reset'
-            ? ((yield* readSetting(
-                write.entry,
-                ports.stores,
-                ports.host,
-              )) as TexraApprovalPolicy)
-            : (write.value as TexraApprovalPolicy);
+        if (entry.key !== TEXRA_APPROVAL_POLICY_CONFIG_KEY) return;
+        const policy = (
+          parsed === null
+            ? yield* readSetting(entry, ports.stores, ports.host)
+            : parsed.data
+        ) as TexraApprovalPolicy;
         yield* Effect.try({
           try: () => ports.onApprovalPolicyChanged?.(policy),
-          catch: (cause) => new StateSettingWriteFailed({ cause }),
+          catch: (cause) => cause,
         });
       }).pipe(
         Effect.mapError((cause) => new StateSettingWriteFailed({ cause })),
       ),
     ),
-    Effect.as({ kind: 'applied', entry: write.entry } as const),
+    Effect.as({ kind: 'applied', entry } as const),
     Effect.catchTag('StateSettingWriteFailed', (failure) =>
       Effect.succeed({
         kind: 'failed',
-        entry: write.entry,
+        entry,
         error: failure.cause,
       } as const),
     ),

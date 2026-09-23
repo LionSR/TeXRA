@@ -538,7 +538,7 @@ describe('completedRunArchive facade', () => {
                 lastError: null,
                 declinedRoutes: [],
               },
-              state: { shouldSkipCycle: false, stateSlices: null },
+              state: { stateSlices: null },
             }),
           },
         ]);

@@ -322,40 +322,20 @@ function envValue(
   return isNonEmptyString(value) ? value : undefined;
 }
 
-function pickEnvModel(
+/** An env-tier value through its own parse; an invalid one warns and yields nothing. */
+function pickEnv<T extends string>(
   env: Record<string, string | undefined>,
+  key: string,
+  parse: (candidate: string) => T | undefined,
   warnings: string[],
-): string | undefined {
-  const model = envValue(env, 'TEXRA_MODEL');
-  if (!model) return undefined;
-  if (isCliSupportedModelId(model)) return model;
-  warnings.push(`Ignoring invalid TEXRA_MODEL "${model}".`);
-  return undefined;
-}
-
-function pickEnvApprovalPolicy(
-  env: Record<string, string | undefined>,
-  warnings: string[],
-): TexraApprovalPolicy | undefined {
-  const candidate = envValue(env, 'TEXRA_APPROVAL_POLICY');
+): T | undefined {
+  const candidate = envValue(env, key);
   if (!candidate) return undefined;
-  const parsed = parseTexraApprovalPolicy(candidate);
-  if (parsed) return parsed;
-  warnings.push(`Ignoring invalid TEXRA_APPROVAL_POLICY "${candidate}".`);
-  return undefined;
-}
-
-function pickEnvOutputFormat(
-  env: Record<string, string | undefined>,
-  warnings: string[],
-): CliOutputFormat | undefined {
-  const candidate = envValue(env, 'TEXRA_OUTPUT_FORMAT');
-  if (!candidate) return undefined;
-  if ((CLI_OUTPUT_FORMATS as readonly string[]).includes(candidate)) {
-    return candidate as CliOutputFormat;
+  const parsed = parse(candidate);
+  if (parsed === undefined) {
+    warnings.push(`Ignoring invalid ${key} "${candidate}".`);
   }
-  warnings.push(`Ignoring invalid TEXRA_OUTPUT_FORMAT "${candidate}".`);
-  return undefined;
+  return parsed;
 }
 
 export const resolveCliCwd = Effect.fn('cliContext.resolveCliCwd')(function* (
@@ -404,7 +384,12 @@ export const buildCliContext = Effect.fn('cliContext.buildCliContext')(
       init.storageRoot,
     );
     const configWarnings = [...warnings];
-    const envModel = pickEnvModel(env, configWarnings);
+    const envModel = pickEnv(
+      env,
+      'TEXRA_MODEL',
+      (model) => (isCliSupportedModelId(model) ? model : undefined),
+      configWarnings,
+    );
     // `--no-color` is an explicit force-disable: layer it onto the ambient
     // per-stream gates rather than recomputing them, so `NO_COLOR`/
     // `FORCE_COLOR`/TTY precedence stays in one place (`resolveStreamColor`).
@@ -421,14 +406,27 @@ export const buildCliContext = Effect.fn('cliContext.buildCliContext')(
       init.globalArgs.approvalPolicy ??
       (noInput
         ? TEXRA_APPROVAL_POLICY_NO_INPUT_DEFAULT
-        : (pickEnvApprovalPolicy(env, configWarnings) ??
+        : (pickEnv(
+            env,
+            'TEXRA_APPROVAL_POLICY',
+            parseTexraApprovalPolicy,
+            configWarnings,
+          ) ??
           readCliConfigSetting<TexraApprovalPolicy>(
             config,
             TEXRA_APPROVAL_POLICY_CONFIG_KEY,
           )));
     const outputFormat: CliOutputFormat =
       init.globalArgs.outputFormat ??
-      pickEnvOutputFormat(env, configWarnings) ??
+      pickEnv(
+        env,
+        'TEXRA_OUTPUT_FORMAT',
+        (format): CliOutputFormat | undefined =>
+          (CLI_OUTPUT_FORMATS as readonly string[]).includes(format)
+            ? (format as CliOutputFormat)
+            : undefined,
+        configWarnings,
+      ) ??
       readCliConfigSetting<CliOutputFormat>(
         config,
         CLI_OUTPUT_FORMAT_CONFIG_KEY,

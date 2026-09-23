@@ -330,10 +330,10 @@ export function createHostSnapshotSource(
       });
     },
     setOnboarding: (state) =>
-      Effect.sync(() => {
-        if (state === onboarding) return false;
+      Effect.suspend(() => {
+        if (state === onboarding) return Effect.void;
         onboarding = state;
-        return true;
-      }).pipe(Effect.flatMap((changed) => (changed ? publish : Effect.void))),
+        return publish;
+      }),
   };
 }

@@ -1,10 +1,11 @@
 /**
  * Conversation compaction for the tool-use loop: a run-scoped step beside
  * the loop that writes the one row that shortens history, `model.compaction`
- * with cause `context-limit`, from the ledger-retained history and nothing
- * else. The trigger is the compaction threshold setting measured against the
- * bound model's context window (a live input estimate where the provider
- * offers one, a text-length estimate otherwise) or a `/compact` request; the
+ * with cause `context-limit` (or `context-window` when a turn overflowed the
+ * window), from the ledger-retained history and nothing else. The trigger is
+ * the compaction threshold setting measured against the bound model's
+ * context window (a live input estimate where the provider offers one, a
+ * text-length estimate otherwise), a `/compact` request, or an overflow; the
  * replacement is a summary the bound model itself produces through a
  * throwaway `generateTurn`, folded back as one user message. Every skip and
  * every failure is logged and shown as a compaction activity, never silent.
@@ -148,9 +149,21 @@ interface CompactionInput {
    *  estimate counts the request as it will be sent. */
   readonly system: string | undefined;
   readonly tools: TurnRequest['tools'];
-  /** A `/compact` request: compact regardless of the threshold. */
-  readonly force: boolean;
+  /**
+   * Compact regardless of the threshold: a `/compact` request, or a turn that
+   * overflowed the context window (recorded as cause `context-window`, which
+   * the fold reads as the round's one overflow recovery). `null` leaves the
+   * decision to the threshold.
+   */
+  readonly force: 'request' | 'overflow' | null;
 }
+
+/** Why a compaction runs, as its debug line names it. */
+const COMPACTION_REASON = {
+  request: 'manually requested',
+  overflow: 'context window exceeded',
+  threshold: 'token threshold exceeded',
+} as const;
 
 /**
  * Compact the run's history when it reaches the configured share of the
@@ -171,16 +184,18 @@ export const compactIfNeeded = Effect.fn('compaction.check')(function* (
     input.stores,
     MODEL_COMPACTION_THRESHOLD_SETTING.configKey,
   );
-  if (!force && percent <= 0) return state;
+  if (force === null && percent <= 0) return state;
   const conversation = state.messages;
   if (conversation.length <= 2) {
-    if (force) logger.debug('Conversation too short for compaction, skipping');
+    if (force !== null) {
+      logger.debug('Conversation too short for compaction, skipping');
+    }
     return state;
   }
   const contextWindow = bound.contextWindow;
   let tokensBefore: number;
   let tokensBeforeIsEstimate = false;
-  if (force) {
+  if (force !== null) {
     tokensBefore = estimateTokensFromText(historyText(conversation));
     tokensBeforeIsEstimate = true;
   } else {
@@ -228,9 +243,7 @@ export const compactIfNeeded = Effect.fn('compaction.check')(function* (
   }
 
   logger.debug(
-    force
-      ? 'Compacting conversation (manually requested)'
-      : 'Compacting conversation (token threshold exceeded)',
+    `Compacting conversation (${COMPACTION_REASON[force ?? 'threshold']})`,
     {
       data: {
         inputTokens: tokensBefore,
@@ -303,7 +316,7 @@ export const compactIfNeeded = Effect.fn('compaction.check')(function* (
       payload: {
         keepPrefix: 0,
         messages: [replacement],
-        cause: 'context-limit',
+        cause: force === 'overflow' ? 'context-window' : 'context-limit',
         continuation: null,
         continuationDropped:
           state.continuation === null ? null : 'history-replaced',

@@ -13,9 +13,9 @@ import { TurnProtocolSchema } from '@texra-ai/llm/turn';
 
 import { JsonValueSchema } from './jsonValue';
 import { LineCountSchema } from './lineChanges';
-import { AgentFileLocationSchema, FileLocationSchema } from './output';
+import { FileLocationSchema } from './output';
 import {
-  RunUsageTotalsSchema,
+  type RunUsageTotals,
   TokenCountSchema,
   TokenUsageStatsSchema,
   UsageRouteSchema,
@@ -67,24 +67,41 @@ export const NormalizedUsageSchema = TokenUsageStatsSchema.pick({
 export type NormalizedUsage = z.infer<typeof NormalizedUsageSchema>;
 
 /**
- * Persisted shape of the snapshot's `usageAccumulator` field. Only the
- * most-recent round's usage is needed at runtime, so `latestUsage` is the one
- * carrier and strict parsing rejects a blob carrying anything else: a snapshot
- * that does not match this shape fails loudly through the existing
- * resume-parse failure path instead of silently dropping usage.
+ * The priced usage the writer stamped on one completed turn, summed into the
+ * run totals. The package's `turn.usage` is deliberately not the input: it
+ * carries token counts and provider-specific extras but no runtime price, so
+ * folding it would make a resumed run's `totalCost` the sum of `tool.result`
+ * add operations alone. Every field of the totals is named here, so a new
+ * metric on either schema is a compile error rather than a silent zero.
  */
-const PersistedUsageAccumulatorSchema = z.strictObject({
-  totals: RunUsageTotalsSchema.prefault({}),
-  latestUsage: NormalizedUsageSchema.nullable().prefault(null),
-});
-export const AgentRunStateSnapshotSchema = z.object({
-  totalRounds: z.int().nonnegative().prefault(0),
-  totalResponseTimeMs: z.number().nonnegative().prefault(0),
-  usageAccumulator: PersistedUsageAccumulatorSchema.prefault({}),
-});
-export type AgentRunStateSnapshot = z.output<
-  typeof AgentRunStateSnapshotSchema
->;
+export function addTurnUsage(
+  totals: RunUsageTotals,
+  usage: NormalizedUsage | null,
+): RunUsageTotals {
+  if (usage === null) return totals;
+  return {
+    firstInputTokens:
+      totals.firstInputTokens === 0
+        ? usage.inputTokens
+        : totals.firstInputTokens,
+    totalInputTokens: totals.totalInputTokens + usage.inputTokens,
+    totalOutputTokens: totals.totalOutputTokens + usage.outputTokens,
+    totalCost: totals.totalCost + usage.cost,
+    totalCacheReadInputTokens:
+      totals.totalCacheReadInputTokens + (usage.cachedInputTokens ?? 0),
+    totalCacheMissInputTokens:
+      totals.totalCacheMissInputTokens + (usage.cacheMissInputTokens ?? 0),
+    totalCacheCreationInputTokens:
+      totals.totalCacheCreationInputTokens + (usage.cacheCreationTokens ?? 0),
+    totalReasoningTokens:
+      totals.totalReasoningTokens + (usage.reasoningTokens ?? 0),
+    totalToolUsePromptTokens:
+      totals.totalToolUsePromptTokens + (usage.toolUsePromptTokens ?? 0),
+    totalServerToolRequests:
+      totals.totalServerToolRequests + (usage.serverToolRequests ?? 0),
+    totalResponseTimeMs: totals.totalResponseTimeMs + usage.responseTimeMs,
+  };
+}
 
 // ------------------------------------------------------------ workspace
 
@@ -262,8 +279,7 @@ export const ModelCompatibilityKeySchema = z.enum(MODEL_COMPATIBILITY_KEYS);
 
 // -------------------------------------------------------- family cores
 
-export const StateSlicesSchema = z.object({
-  runStateSnapshot: AgentRunStateSnapshotSchema,
+const StateSlicesSchema = z.object({
   workspaceSnapshot: AgentWorkspaceStateSnapshotSchema,
   userChannels: UserVariableChannelsSchema,
 });
@@ -281,17 +297,6 @@ export const StateSlicesSchema = z.object({
  * failing loudly.
  */
 export const ToolUseSnapshotStateSchema = z.object({
-  /**
-   * A stale copy of the model the run launched on: after a `/model` switch
-   * it still names the old model. Resume reads `runtime.modelId`; this is
-   * only the fallback `buildSnapshot` uses when the fold has no model id.
-   * Queued for removal at the next forced format bump.
-   */
-  modelId: z.string().optional(),
-  /** Provider-message format of the persisted messages. Absent for an
-   *  untagged run. */
-  modelCompatibilityKey: ModelCompatibilityKeySchema.optional(),
-  shouldSkipCycle: z.boolean(),
   stateSlices: StateSlicesSchema.nullable(),
   /** Per-call system text for providers that do not embed it in messages. */
   systemPrompt: z.string().optional(),
@@ -300,38 +305,22 @@ export const ToolUseSnapshotStateSchema = z.object({
 });
 
 /**
- * The message-free core of one reflection flow's shared state: every field
- * of `ReflectionFlowStateSchema` except `context`, which the agent module
- * adds. `workspaceSnapshot` and `runStateSnapshot` are top-level here:
- * reflection has no `stateSlices` and no `userChannels`.
+ * The message-free core of one reflection flow's shared state: the round
+ * budget, the workspace (top-level: reflection has no `stateSlices` and no
+ * `userChannels`) and the compile-rejection facts no row carries. The round
+ * is `runtime.round`, the output location is derived from it, and whether
+ * the round's response ended the turn is derived from the folded last turn.
  */
 export const ReflectionSnapshotStateSchema = z.object({
-  currentRound: z.int().nonnegative(),
+  /** The round budget. No row carries it; the CLI's continuability read
+   *  compares `runtime.round` against it. */
   totalRounds: z.int().nonnegative(),
 
   workspaceSnapshot: AgentWorkspaceStateSnapshotSchema,
-  outputLocation: AgentFileLocationSchema.nullable(),
-
-  runStateSnapshot: AgentRunStateSnapshotSchema,
-
-  continueRounds: z.boolean(),
-  endTurn: z.boolean(),
-
-  /** No writer: the reflection loop records the provider-message format on
-   *  `runtime.modelCompatibilityKey`. Queued for removal at the next forced
-   *  format bump. */
-  modelCompatibilityKey: ModelCompatibilityKeySchema.optional(),
 
   /** One-shot compile-failure feedback injected into the next round prompt. */
   compileFailureContext: z.string().optional(),
 
   /** Rejected compile result awaiting an explicit successful compile. */
   unresolvedCompileRejection: z.boolean().optional(),
-
-  /**
-   * Byte length of the round's raw output file after the last processed
-   * response. A replayed response completes a partial write or skips one
-   * already complete instead of appending its text twice.
-   */
-  rawOutputBytes: z.int().nonnegative().optional(),
 });
