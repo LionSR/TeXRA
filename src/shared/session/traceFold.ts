@@ -203,7 +203,7 @@ export function createTranscriptFold(
 
       case 'tool.end': {
         if (transcriptBoundaryClosed) return;
-        const result = (event.result ?? {}) as Partial<ToolUseLog>;
+        const result = event.result ?? {};
         // Omit groupId on update: undefined would clobber the value stamped
         // at tool.start.
         const patch = {
@@ -211,7 +211,7 @@ export function createTranscriptFold(
           data: {
             ...result,
             status: event.status,
-          } as ToolUseLog,
+          } satisfies ToolUseLog,
         } satisfies StreamLogUpdatePatch;
         if (event.status === TOOL_CALL_STATUS.IN_PROGRESS) {
           if (!activeToolEntries.has(event.logId)) return;
