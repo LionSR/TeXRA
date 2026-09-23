@@ -264,8 +264,14 @@ await runtime.runPromise(
     // nothing answers it unless this process does. Deny each one once.
     const answered = new Set<string>();
     const retryDenier = yield* Effect.forkChild(
-      Stream.runForEach(session.viewChanges, (view) =>
-        Effect.forEach(
+      Stream.runForEach(session.viewChanges, (view) => {
+        // Forget what the fold no longer lists, so the set tracks only
+        // live requests over a long-lived session.
+        const live = new Set(view.requests.map((pending) => pending.requestId));
+        for (const requestId of answered) {
+          if (!live.has(requestId)) answered.delete(requestId);
+        }
+        return Effect.forEach(
           view.requests.filter(
             (pending) =>
               pending.payload.kind === 'retry' &&
@@ -289,8 +295,8 @@ await runtime.runPromise(
               );
           },
           { discard: true },
-        ),
-      ),
+        );
+      }),
     );
     yield* loadAgents({ includeRemote: false });
 
