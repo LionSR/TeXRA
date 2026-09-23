@@ -15,6 +15,7 @@ import {
   type LogLevel,
   type RunOutcome,
   type ToolCallStatus,
+  type ToolUseLog,
 } from '@shared/schemas';
 import { generateShortId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -144,7 +145,11 @@ export class TraceEmitter implements AgentTrace {
   }
 
   toolEnd(
-    input: { logId: string; status: ToolCallStatus; result?: unknown },
+    input: {
+      logId: string;
+      status: ToolCallStatus;
+      result?: Omit<ToolUseLog, 'status'>;
+    },
     options: StagedEmitOptions = {},
   ): void {
     this.emit({

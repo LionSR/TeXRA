@@ -11,7 +11,7 @@
  * without TeXRA-specific sugar; they reduce to the same `toolStart` /
  * `toolEnd` emissions.
  */
-import type { ToolCallStatus } from '@shared/schemas';
+import type { ToolCallStatus, ToolUseLog } from '@shared/schemas';
 import { generateShortId } from '@utils/core';
 
 import type { AgentTrace } from './AgentTrace';
@@ -47,7 +47,7 @@ export function startToolUseCard(
 export function endToolUseCard(
   trace: AgentTrace,
   ref: ToolUseCardRef,
-  result: unknown,
+  result: Omit<ToolUseLog, 'status'>,
   status: ToolCallStatus = 'completed',
 ): void {
   trace.toolEnd({ logId: ref.logId, status, result }, { stageId: ref.groupId });
@@ -60,11 +60,7 @@ export function endToolUseCard(
  */
 export function emitToolUseCard(
   trace: AgentTrace,
-  payload: {
-    toolName?: string;
-    input?: unknown;
-    status?: ToolCallStatus;
-  } & Record<string, unknown>,
+  payload: ToolUseLog,
   stageId?: string,
 ): ToolUseCardRef {
   const ref = startToolUseCard(
