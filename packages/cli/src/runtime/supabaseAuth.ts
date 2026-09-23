@@ -5,7 +5,6 @@ import { Effect, FileSystem } from 'effect';
 import { invalidateRemoteAgentsAfterSignOut } from '@agent/index';
 import { unwrapAuthPortCause } from '@auth/authProgram';
 import { DEFAULT_OAUTH_PROVIDER, type OAuthProvider } from '@auth/config';
-import { refreshRemoteAgentCatalogAfterSignOut } from '@auth/authFlowEffects';
 import { createSupabaseAuth, type SupabaseAuthShape } from '@auth/SupabaseAuth';
 import {
   toStorableSupabaseSession,
@@ -238,11 +237,7 @@ export function signOutCliSupabase(): Effect.Effect<
     yield* authCoordinator
       .clearSession()
       .pipe(Effect.mapError(unwrapAuthPortCause));
-    yield* refreshRemoteAgentCatalogAfterSignOut(
-      invalidateRemoteAgentsAfterSignOut(),
-      (message) =>
-        Effect.sync(() => activeAuthLog?.warn?.('cli-auth', message)),
-    );
+    yield* invalidateRemoteAgentsAfterSignOut();
   });
 }
 

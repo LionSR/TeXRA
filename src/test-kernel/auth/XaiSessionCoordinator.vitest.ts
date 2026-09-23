@@ -3,11 +3,11 @@ import { Deferred, Effect } from 'effect';
 import { afterEach, describe, expect, vi } from 'vitest';
 
 import { XaiAuthError } from '@auth/xai';
-import {
-  XaiSessionCoordinator,
-  type XaiOAuthClient,
-  type XaiSessionStorage,
-} from '@auth/xai/XaiSessionCoordinator';
+import { XaiSessionCoordinator } from '@auth/xai/XaiSessionCoordinator';
+import type {
+  SubscriptionOAuthClient,
+  SubscriptionSessionStorage,
+} from '@auth/oauth/SubscriptionOAuthCoordinator';
 import type { XaiSession, XaiTokenResponse } from '@auth/xai/xaiSessionTypes';
 import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
 import { setLogSink } from '@logger/logSink';
@@ -16,7 +16,7 @@ import { captureLogEntries } from '@test/support/logSinkCapture';
 const NOW = 1_900_000_000_000;
 const FIVE_MIN = 5 * 60 * 1000;
 
-function memoryStorage(initial?: XaiSession): XaiSessionStorage & {
+function memoryStorage(initial?: XaiSession): SubscriptionSessionStorage & {
   peek: () => XaiSession | undefined;
 } {
   let value = initial ? JSON.stringify(initial) : undefined;
@@ -54,13 +54,15 @@ function tokens(overrides: Partial<XaiTokenResponse> = {}): XaiTokenResponse {
 }
 
 function makeCoordinator(options: {
-  storage: XaiSessionStorage;
-  client?: XaiOAuthClient;
+  storage: SubscriptionSessionStorage;
+  client?: SubscriptionOAuthClient;
 }): XaiSessionCoordinator {
   return new XaiSessionCoordinator({ ...options, now: () => NOW });
 }
 
-function makeClient(overrides: Partial<XaiOAuthClient> = {}): XaiOAuthClient {
+function makeClient(
+  overrides: Partial<SubscriptionOAuthClient> = {},
+): SubscriptionOAuthClient {
   return {
     exchangeAuthorizationCode: vi.fn(),
     refreshTokens: vi.fn(),
@@ -103,7 +105,7 @@ describe('XaiSessionCoordinator', () => {
     ({ stored, warning }) =>
       Effect.gen(function* () {
         const logs = captureLogEntries();
-        const storage: XaiSessionStorage = {
+        const storage: SubscriptionSessionStorage = {
           get: () => Effect.succeed(stored),
           store: () => Effect.void,
           delete: () => Effect.void,

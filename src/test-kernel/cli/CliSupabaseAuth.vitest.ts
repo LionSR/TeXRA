@@ -360,19 +360,16 @@ describe('CLI Supabase auth', () => {
 
   it.effect('completes sign-out when the local catalog rebuild fails', () =>
     Effect.gen(function* () {
-      const warn = vi.fn();
-      const { initializeCliSupabaseAuth, signOutCliSupabase } =
-        yield* Effect.promise(() => loadSupabaseAuth());
-      initializeCliSupabaseAuth(cliSecrets, {
-        debug: vi.fn(),
-        info: vi.fn(),
-        warn,
-        error: vi.fn(),
-      });
+      const { signOutCliSupabase } = yield* Effect.promise(() =>
+        loadSupabaseAuth(),
+      );
+      // The module graph `loadSupabaseAuth` reset and reloaded, so the spy
+      // lands on the logger the agent registry writes through.
+      const logger = yield* Effect.promise(() => import('@logger/logUtils'));
+      const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
       const { globalStorage } = createFakeWorkspaceRoots();
-      // The real invalidation catches its typed load failures itself, so only
-      // a defect reaches the CLI's warn channel: the directory port dying
-      // mid-rebuild is one.
+      // The invalidation owns the best-effort guard, defects included: the
+      // directory port dying mid-rebuild must not fail sign-out.
       const rebuildDies = {
         custom: () => Effect.die(new Error('local rebuild failed')),
         builtIn: () => Effect.die(new Error('local rebuild failed')),
@@ -389,9 +386,10 @@ describe('CLI Supabase auth', () => {
 
       expect(mocks.authCoordinator.clearSession).toHaveBeenCalledOnce();
       expect(warn).toHaveBeenCalledWith(
-        'cli-auth',
-        'Local agent catalog refresh failed after sign-out: local rebuild failed',
+        'agentRegistry',
+        'Local agent catalog rebuild failed after sign-out: local rebuild failed',
       );
+      warn.mockRestore();
     }),
   );
 });

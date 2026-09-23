@@ -34,13 +34,11 @@ import {
 } from './codexSessionTypes';
 import type { HttpClient } from 'effect/unstable/http';
 
-export type CodexSessionStorage = SubscriptionSessionStorage;
-export type CodexOAuthClient = SubscriptionOAuthClient;
 export type CodexSessionStatus = SubscriptionSessionStatus;
 
 export interface CodexSessionCoordinatorInit {
-  storage: CodexSessionStorage;
-  client?: CodexOAuthClient;
+  storage: SubscriptionSessionStorage;
+  client?: SubscriptionOAuthClient;
   now?: () => number;
 }
 

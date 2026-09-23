@@ -16,9 +16,7 @@ import {
 } from './supabaseSessionTypes';
 import {
   classifyAuthFailureStatus,
-  type AuthTokenProvider,
   type SessionRefreshFailure,
-  type SessionTokens,
   type StoredSessionState,
 } from './TokenProvider';
 import type { SupabaseClient as Client } from '@supabase/supabase-js';
@@ -60,7 +58,7 @@ const NOOP_SUPABASE_SESSION_LOG: Required<SupabaseSessionLog> = {
  * surface settles the rest on its own runtime, unwrapping the port's own
  * error (`unwrapAuthPortCause`, `settleFailure`).
  */
-export class SupabaseSessionCoordinator implements AuthTokenProvider {
+export class SupabaseSessionCoordinator {
   private refreshInFlight: Deferred.Deferred<SupabaseSession | null> | null =
     null;
   private sessionMutationVersion = 0;
@@ -145,20 +143,13 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
     );
   }
 
+  /**
+   * The most recent refresh failure: `invalid` means the credential was
+   * authoritatively rejected; `transient` covers transport and service
+   * failures for which reconnecting would be premature.
+   */
   getLastRefreshFailure(): SessionRefreshFailure | null {
     return this.lastRefreshFailure;
-  }
-
-  /** Get access and refresh tokens from secure storage. */
-  getSessionTokens(): Effect.Effect<SessionTokens | null> {
-    return Effect.map(this.freshSession(), (session) =>
-      session
-        ? {
-            accessToken: session.accessToken,
-            refreshToken: session.refreshToken,
-          }
-        : null,
-    );
   }
 
   /** Convert a PKCE OAuth callback into a host-neutral session record. */

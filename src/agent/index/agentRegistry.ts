@@ -1,10 +1,9 @@
 /** Agent Registry - Flat agent metadata cache with source-priority lookup. */
 
-import { Data, Effect, FileSystem } from 'effect';
+import { Cause, Data, Effect, FileSystem } from 'effect';
 import { AgentRosterController } from '@agent/roster/AgentRosterController';
 import { withLogChannel } from '@logger/effectLog';
-import type { StateReadFailed } from '@platform/interfaces';
-import { AgentDirectories } from '@platform/interfaces';
+import { AgentDirectories, type StateReadFailed } from '@platform/interfaces';
 import type { GlobalStorageFs } from '@platform/rootedFs';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type {
@@ -28,6 +27,7 @@ import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { hasDelegationTool } from '@shared/constants/delegationTools';
 import { byName } from '@utils/core';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { scanDirectory } from './agentYamlScanner';
 import { loadRemoteAgents } from './remoteAgentMeta';
 import type { AgentEntry } from './agentEntry';
@@ -323,12 +323,12 @@ export function invalidateRemoteAgentsAfterSignOut(): Effect.Effect<
     removeRemoteEntries();
     return refresh({ includeRemote: false });
   }).pipe(
-    Effect.catch((error: AgentCatalogLoadError | StateReadFailed) => {
-      // An older in-flight remote load may have settled before the rebuild.
-      // Preserve the signed-out invariant even when local directory I/O fails.
+    Effect.catchCause((cause) => {
+      // Best effort, defects included: a stale catalog never blocks sign-out.
+      // Re-remove: an older remote load may have settled before the rebuild.
       removeRemoteEntries();
       return Effect.logWarning(
-        `Local agent catalog rebuild failed after sign-out: ${error.message}`,
+        `Local agent catalog rebuild failed after sign-out: ${toErrorMessage(Cause.squash(cause))}`,
       ).pipe(withLogChannel(CHANNEL));
     }),
   );
