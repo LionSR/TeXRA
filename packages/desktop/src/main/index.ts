@@ -736,9 +736,13 @@ function createWindow(options: {
         (binding) => binding.snapshot.refreshAuth,
         { concurrency: 'unbounded', discard: true },
       );
-      // A signed-out load already stamped the catalog as including remote,
-      // so only a forced refetch picks up the new account's agents.
-      if (!teamSignInPending) yield* refresh({ includeRemote: true });
+      // Sign-in: a signed-out load already stamped the catalog as including
+      // remote, so only a forced refetch picks up the new account's agents.
+      // Sign-out also lands here, after the coordinator dropped the remote
+      // entries; refetching then would re-stamp a signed-out catalog.
+      if (!teamSignInPending && (yield* options.supabaseAuth.authenticated)) {
+        yield* refresh({ includeRemote: true });
+      }
       yield* settingsIpcRef.current?.refreshAuthDependentData({
         deferAgentCatalogRefresh: teamSignInPending,
       }) ?? Effect.void;

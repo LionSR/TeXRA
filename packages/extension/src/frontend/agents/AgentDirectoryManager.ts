@@ -198,7 +198,7 @@ class AgentDirectoryManager {
           } else if (source === AGENT_SOURCE.CUSTOM) {
             // VS Code warns on a recursive watcher outside the workspace
             // (#3402), so an external custom directory takes Node's.
-            this.watchExternalDirectory(directory);
+            yield* this.watchExternalDirectory(directory);
           }
         }
         log.info(
@@ -222,24 +222,32 @@ class AgentDirectoryManager {
     this.watcherDisposables.push(watcher);
   }
 
-  private watchExternalDirectory(directory: string): void {
-    try {
-      const watcher = watch(directory, { recursive: true }, (event, name) => {
-        if (event === 'rename' || !name || name.endsWith('.yaml')) {
-          this.onAgentChange?.();
-        }
-      });
-      watcher.on('error', (error) =>
-        log.warn(
-          `Agent directory watcher failed for ${directory}: ${toErrorMessage(error)}`,
+  private watchExternalDirectory(directory: string) {
+    return Effect.try({
+      try: () =>
+        watch(directory, { recursive: true }, (event, name) => {
+          if (event === 'rename' || !name || name.endsWith('.yaml')) {
+            this.onAgentChange?.();
+          }
+        }),
+      catch: (error) => error,
+    }).pipe(
+      Effect.map((watcher) => {
+        watcher.on('error', (error) =>
+          log.warn(
+            `Agent directory watcher failed for ${directory}: ${toErrorMessage(error)}`,
+          ),
+        );
+        this.watcherDisposables.push({ dispose: () => watcher.close() });
+      }),
+      Effect.catch((error) =>
+        Effect.sync(() =>
+          log.warn(
+            `Unable to watch agent directory ${directory}: ${toErrorMessage(error)}`,
+          ),
         ),
-      );
-      this.watcherDisposables.push({ dispose: () => watcher.close() });
-    } catch (error) {
-      log.warn(
-        `Unable to watch agent directory ${directory}: ${toErrorMessage(error)}`,
-      );
-    }
+      ),
+    );
   }
 
   private disposeAgentWatchers(): void {
