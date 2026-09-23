@@ -20,6 +20,7 @@ import {
   type Path,
 } from 'effect';
 import type { ToolInjections } from '@agent/runtime/toolInjection';
+import type { AgentEngine } from '@agent/runtime/AgentEngine';
 import type { SupabaseAuth } from '@auth/SupabaseAuth';
 import type { ProcessIdentity } from '@shared/session/sessionEvents';
 import type {
@@ -78,6 +79,7 @@ export type ProcessServices =
   | Lifecycle
   | SetupPlatform
   | ToolInjections
+  | AgentEngine
   | LeanLanguageServices
   | GitHubSubscriptions
   | UsageLog

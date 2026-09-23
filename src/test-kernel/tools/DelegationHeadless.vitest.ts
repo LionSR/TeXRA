@@ -13,6 +13,7 @@ import {
 } from 'vitest';
 
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
+import { AgentEngine } from '@agent/runtime/AgentEngine';
 import type { ToolCallShape } from '@agent/runtime/ToolCall';
 import type { RunHandle } from '@agent/runtime/RunHandle';
 import { Runs } from '@agent/runtime/runRegistry';
@@ -37,7 +38,6 @@ import {
   executeSubagentInBand as executeSubagentInBandEffect,
   SubagentDurabilityError,
 } from '@tools/delegation/inBandSubagentRun';
-import { provideAgentEngine } from '@tools/delegation/nativeSubagentStrategy';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 const mocks = vi.hoisted(() => ({
@@ -174,6 +174,8 @@ function parentRunContext(
 }
 
 /** The shared delegation call used by nearly every case. */
+let testEngine: AgentEngine['Service'];
+
 function callDelegateReview(call = parentRunContext()) {
   return new DelegateAgentTool()
     .call({
@@ -184,7 +186,10 @@ function callDelegateReview(call = parentRunContext()) {
       working_directory: null,
       execution_id: null,
     })
-    .pipe(Effect.provide(nativeToolTestLayer(call)));
+    .pipe(
+      Effect.provideService(AgentEngine, testEngine),
+      Effect.provide(nativeToolTestLayer(call)),
+    );
 }
 
 const waitForChildrenEffect = Effect.fn('waitForTestChildren')(function* (
@@ -316,6 +321,7 @@ function runInBand(
     signal,
     prepare: () => Effect.succeed(prepared),
   }).pipe(
+    Effect.provideService(AgentEngine, testEngine),
     Effect.provide(fakeProcessServices()),
     Effect.provideService(Runs, prepared.session.runs),
   );
@@ -444,7 +450,6 @@ function recordTerminalFact(
 }
 
 describe('headless delegation', () => {
-  let restoreAgentEngine = (): void => {};
   /**
    * The claim release the session's exit choreography ends with. The failure
    * paths fail it rather than `releaseRunLease` itself, so the drain, the
@@ -474,7 +479,7 @@ describe('headless delegation', () => {
           await Effect.runPromise(session.settlePublications());
         }),
     );
-    restoreAgentEngine = provideAgentEngine({
+    testEngine = {
       executeAgent: (definition, runId, options) =>
         Effect.tryPromise({
           try: async () => {
@@ -511,7 +516,7 @@ describe('headless delegation', () => {
           try: () => mocks.resumeToolUseTurn(...args),
           catch: ensureError,
         }),
-    });
+    };
     mocks.getVisibleAgents.mockReturnValue(
       Effect.succeed([
         {
@@ -582,7 +587,10 @@ describe('headless delegation', () => {
               session: prepared.session,
               signal,
               prepare: () => Effect.succeed(prepared),
-            }).pipe(Effect.provideService(Runs, prepared.session.runs)),
+            }).pipe(
+              Effect.provideService(Runs, prepared.session.runs),
+              Effect.provideService(AgentEngine, testEngine),
+            ),
             fakeProcessServices(),
           );
         expect(yield* Effect.flip(run())).toMatchObject({
@@ -622,7 +630,6 @@ describe('headless delegation', () => {
     session.followUps.terminalize(PARENT_RUN_ID);
     session.followUps.terminalize(CHILD_RUN_ID);
     await waitForChildren(session);
-    restoreAgentEngine();
     await Effect.runPromise(inBandSession.dispose());
   });
 

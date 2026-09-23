@@ -27,7 +27,6 @@ import {
 import { RunLedger } from '@shared/session/runLedger';
 import { emptyRunEndOutput } from '@shared/schemas';
 import type { RunState } from '@shared/session/runStateFold';
-import { provideAgentEngine } from '@tools/delegation/nativeSubagentStrategy';
 import { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import { ensureRunDirUnder } from '@utils/files/runStorageFs';
 import { ensureError } from '@utils/errors/errorMessage';
@@ -738,12 +737,3 @@ export function resumeToolUseFromResumeData(
     options.turns ? program : runs.launchRun(identity.runId, program)
   ).pipe(Effect.provideService(Runs, runs));
 }
-
-// Close the delegation recursion: the delegation tools drive child runs
-// through `nativeSubagentStrategy`, whose engine calls are provided here —
-// the one direction that cannot be a static import, because this module's
-// flow drivers statically import the tool registry that includes those tools.
-provideAgentEngine({
-  executeAgent,
-  resumeToolUseFromResumeData,
-});

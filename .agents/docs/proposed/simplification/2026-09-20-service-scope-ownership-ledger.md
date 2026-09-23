@@ -1,7 +1,7 @@
 # Service scopes and ownership: the investigation ledger
 
 Date: 2026-09-20
-Status: proposed
+Status: proposed; R5 amended 2026-09-22
 Baseline: `main` at `3378a967`, re-verified at `e33e64f9` on the survey branch.
 Origin: a `find-simplification` pass over the service-injection map recorded in
 [the post-refactor survey](../architecture/2026-09-20-post-refactor-architecture-survey.md).
@@ -116,25 +116,29 @@ language-model bridge, because `run: undefined` is a real state.
 | P3  | **`appState` required; `refusingStateStore()` for the CLI `clone` entry.** The optionality has exactly one omitter (`cliProcessRuntime.ts:83-91,120-131`, a possibly read-only root), and the `Layer.empty as Layer.Layer<AppState>` cast at `sessionLayer.ts:1077-1082` fakes a service into the type. A ~10-line store whose `update` fails `StateWriteFailed` and whose synchronous `get` throws a defect naming the clone entry turns the untyped missing-service defect into a tagged refusal on writes and keeps reads as loud as the omitted layer; a `get` that returned its fallback would silently read as absent state. | `sessionLayer.ts:1077-1082`; `cliProcessRuntime.ts` `options?: { appState: 'omit' }`, `omitAppState`, the spread                                                                                                                                                                                                                                                                                                          | the cast and its comment, the optional field and its doc, the CLI option, both ternaries; ≈ −45/+12 LoC, −2 optional fields, +1 const                                                 | #12422                                      |
 | P4  | **Provide the identity layer outside `Layer.fresh`.** `services` is passed twice (`sessionLayer.ts:1088,1089`); inside the entry's `Layer.fresh` (`:733-737`) the eleven layers rebuild per session, three of them real effects (`ProcessIdentity`, `InquiryRecords`, `UpdateCheckRecords`). The `fresh` exists for the sources and the database (`:719-726`), not for identity.                                                                                                                                                                                                                                                   | `sessionLayer.ts:727-744,1085-1111`                                                                                                                                                                                                                                                                                                                                                                                       | the `identity` parameter on `Sessions.layer` and `sessionLayer`, ≈ −8 LoC, three rebuilds per open. Must be proven by a test, not by reading: `Layer.fresh` scoping is subtle         | #12422                                      |
 | P5  | **Delete the SDK `Runtime` tag.** Declared at `packages/agent/src/effect/runtime.ts:264`, exported from `effect.ts:23`, provided by its own `Runtime.layer` at `:285`, never `yield*`ed anywhere in the repo. The SDK surface is frozen but unpublished, so this shrinks the frozen set.                                                                                                                                                                                                                                                                                                                                           | `runtime.ts:264-286`, `effect.ts:23`                                                                                                                                                                                                                                                                                                                                                                                      | 1 service class, 1 public export, 1 `Context.add`; `Runtime.layer` becomes `Sessions.layer(platform)`; ≈ −25 LoC                                                                      | agent SDK Tier-1 manifest work              |
-| P6  | **Six installed-port slots with `set*` installers**, the shape the 2026-09-19 ruling retired for process roots: `runtimeModelRegistry.ts:61`, `modelAvailabilityWarning.ts:8`, `runtimeSkills.ts:32`, `InlineCommentTool.ts:60`, `nativeSubagentStrategy.ts:89`, `shortcutPreferences.ts:42`. Each needs its own consumer read before it is priced; listed as a lane, not costed.                                                                                                                                                                                                                                                  | the six files                                                                                                                                                                                                                                                                                                                                                                                                             | up to 6 `let`s, 6 installers, 6 host calls; ≈ −60 LoC if all six clear                                                                                                                | #12071                                      |
+| P6  | **Remaining module-level state to assess:** `runtimeModelRegistry.ts`, `modelAvailabilityWarning.ts`, `runtimeSkills.ts`, and `shortcutPreferences.ts`. The earlier survey also listed the inline-comment provider and agent-engine slots; both now use process services. These four shapes differ, so read each consumer before proposing or pricing a change.                                                                                                                                                                                                                                                                    | the four remaining files                                                                                                                                                                                                                                                                                                                                                                                                  | No combined line estimate before the consumer audit                                                                                                                                   | #12071                                      |
 
-### 3.2 Needs a ruling, not a PR
+### 3.2 R5 decision: admit the process service
 
-**R5, `AgentEngine` as a process service.** The cycle
+**R5, `AgentEngine` as a process service.** On 2026-09-22 the owner requested
+the direct replacement through #12888. This revises the earlier "ask; do not
+open a PR" gate for this one candidate. The #10475 ban on an explicit engine
+parameter still stands: neither the tool registry nor the SDK surface gains
+that parameter. The cycle
 `@tools/registry → DelegationTools → subagentRun → nativeSubagentStrategy → executeAgent → AgentRun → getDefaultToolRegistry → @tools/registry`
-is real (`nativeSubagentStrategy.ts:66-74`, `AgentRun.ts:39`). A tag module
+would recur with a value import of `executeAgent` from the strategy
+(`AgentRun.ts` still imports the registry). A tag module
 with type-only imports breaks it, since erased imports contribute no bundle
 input and `toolRegistryCycle.vitest.ts:26-28` counts bundle inputs;
 provision as a `ProcessServices` arm beside `ToolInjections`
-(`processRuntime.ts:22,58`) from `installProcessRuntime` widens no host
-import baseline. The #10475 in-file ruling and the 2026-08-16 audit's
-constraint §4 forbid converting the slot to an **explicit parameter**; a
-context tag is not that, and it satisfies both of the ruling's stated
-reasons. But the constraint is categorical and the LoC gain is about zero:
-the win is that the module slot, the import side effect
-(`executeAgent.ts:788-795`) and the throwing accessor become unrepresentable.
-A reviewer will call it a construct for a construct under §14 R6 unless the
-maintainer names that defect class as worth a tag. Ask; do not open a PR.
+(`processRuntime.ts`'s `ProcessServices` union) from `installProcessRuntime` widens no host
+import baseline. A type-only `AgentEngine` contract in the process context
+breaks the cycle and keeps its implementation at the existing composition
+root. The gain is ownership, not line count: the mutable module slot, the
+import-time side effect, and the load-order exception disappear with the same
+change. The service is supplied once per process, and a test substitutes it
+through an Effect layer instead of mutating production module state. This is
+the named defect class that justifies the one new tag under §14 R6.
 
 ### 3.3 Refuted, with the evidence
 

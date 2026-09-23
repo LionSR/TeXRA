@@ -38,6 +38,11 @@ import { FetchHttpClient, type HttpClient } from 'effect/unstable/http';
 
 import { proveOwnerLiveness } from '@agent/storage/leaseOwnerLiveness';
 import { finalizeRun } from '@agent/storage/runLifecycle';
+import { AgentEngine } from '@agent/runtime/AgentEngine';
+import {
+  executeAgent,
+  resumeToolUseFromResumeData,
+} from '@agent/runtime/executeAgent';
 import {
   AGENT_TOOL_INJECTIONS,
   ToolInjections,
@@ -1099,11 +1104,7 @@ export function installProcessRuntime({
     ProcessIdentity,
     Effect.map(processStart, (start) => ({ ownerId: processOwnerId(start) })),
   );
-  // The entry's handle on the global root, held for the process's life: the
-  // records below are `Layer.effect`s over it, and it is provided outside the
-  // session family so the entry's `Layer.fresh` cannot rebuild it per root. A
-  // global root the entry meant to open and that will not open is a defect,
-  // not a per-record failure: nothing downstream has an answer for it.
+  // Keep the global handle outside session `Layer.fresh`; open failure is fatal.
   const globalDatabase = globalDatabaseOption.pipe(
     Layer.provide(identity),
     Layer.orDie,
@@ -1122,6 +1123,7 @@ export function installProcessRuntime({
       : ToolMissingReporter.layer(toolMissingReporter),
     SetupPlatform.layer(setup),
     ToolInjections.layer(AGENT_TOOL_INJECTIONS),
+    Layer.succeed(AgentEngine)({ executeAgent, resumeToolUseFromResumeData }),
     // Built with this runtime: a replacement starts with empty tables.
     gitHubSubscriptionsLayer,
     editorModel === undefined
@@ -1134,11 +1136,7 @@ export function installProcessRuntime({
     Layer.provideMerge(appState.pipe(Layer.orDie)),
     Layer.provideMerge(identity),
   );
-  // The map's services on the caller's own fiber: an Effect-native opener (the
-  // SDK) runs these where it stands, so the owner adds no run site of its own.
-  // Supply only the owned session family: the caller retains its tracer,
-  // logger and other independently provided services. `current`, the owner's
-  // one synchronous face, reads the held map instead.
+  // Give an opener only this runtime's Sessions on its own fiber.
   const onThisRuntime = <A, E>(
     effect: Effect.Effect<A, E, Sessions>,
   ): Effect.Effect<A, E> =>
@@ -1146,8 +1144,7 @@ export function installProcessRuntime({
       Effect.provideService(effect, Sessions, Context.get(context, Sessions)),
     );
   const held: HeldSessions = new Map();
-  // A handle's own `dispose` releases its entry here, on the disposing
-  // fiber: the release settles when the entry has unwound.
+  // Handle disposal releases its session entry on the disposing fiber.
   const release = (key: SessionKey): Effect.Effect<void> =>
     onThisRuntime(Effect.flatMap(Sessions, (s) => s.invalidate(key)));
   const runtime = withForkFailureReporting(
