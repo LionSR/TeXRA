@@ -125,7 +125,7 @@ import {
   recordServedUsage,
   usageSnapshot,
 } from './runProgram';
-import { recordHalt, runStopError } from './runExit';
+import { exitOutcome, recordHalt, runStopError } from './runExit';
 import type { HttpClient } from 'effect/unstable/http';
 
 // Reflection owns conversation limits and document completion, not the provider.
@@ -1277,15 +1277,13 @@ export const runReflection = Effect.fn('reflection.run')(function* (
   const finalize = (exit: Exit.Exit<LoopExit, Error>) =>
     Effect.uninterruptible(
       Effect.gen(function* () {
-        const halt = recordHalt({ ledger, logger, runId }, coordinates);
-        if (Exit.isSuccess(exit)) {
-          return yield* halt(exit.value.state, exit.value.outcome);
-        }
-        const state = yield* Ref.get(latest);
-        if (Cause.hasInterrupts(exit.cause)) {
-          return yield* halt(state, RUN_OUTCOME.CANCELLED);
-        }
-        yield* halt(state, RUN_OUTCOME.FAILED);
+        const state = Exit.isSuccess(exit)
+          ? exit.value.state
+          : yield* Ref.get(latest);
+        yield* recordHalt({ ledger, logger, runId }, coordinates)(
+          state,
+          exitOutcome(exit),
+        );
       }),
     );
 

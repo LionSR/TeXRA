@@ -67,6 +67,11 @@ All notable changes to this project will be documented in this file.
   subscription** when the account's plan is not known.
 - Generated agent definitions, session titles and helper answers no longer inherit document text-replacement rules.
 - Messages you queue for a run are no longer lost when you stop the run or TeXRA exits unexpectedly: they stay queued and are delivered once the run resumes.
+- A run whose final save failed can be resumed again in the same session;
+  before, it stayed marked as busy until TeXRA restarted.
+- Resuming a run in VS Code or the desktop app returns as soon as the run
+  has taken your message and is waiting, instead of holding the Resume
+  request until the whole run ends.
 
 ### Extension (VS Code)
 

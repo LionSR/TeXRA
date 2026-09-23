@@ -1,4 +1,4 @@
-import { Deferred, Effect, Fiber, Result } from 'effect';
+import { Cause, Deferred, Effect, Exit, Fiber, Result } from 'effect';
 
 /**
  * The one resume entry point. Every host continues a persisted run through
@@ -35,7 +35,7 @@ import {
   DatabaseWriteFailed,
 } from '@shared/session/database';
 import { RunLedgerRefused } from '@shared/session/runLedger';
-import { foldRunState } from '@shared/session/runStateFold';
+import { foldRunState, type RunState } from '@shared/session/runStateFold';
 import { createNativeSubagentStrategy } from '@tools/delegation/nativeSubagentStrategy';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -56,12 +56,15 @@ import {
 import type { SessionHandle } from './SessionHandle';
 import type { AgentRunServices } from './toolInjection';
 
-/** A resume settles at a child's idle turn or at run termination, after admitted input is consumed. */
+type ResumeRunCompletion = Effect.Effect<AgentFlowResult['outcome'], Error>;
+/** A resume settles at the run's idle turn or at run termination, after admitted input is consumed. */
 export type ResumeRunResult =
   | {
       readonly started: true;
       readonly delivered: boolean;
       readonly outcome?: AgentFlowResult['outcome'] | typeof RUN_PHASE.WAITING;
+      /** A root's lifetime past its idle acknowledgement; children have none. */
+      readonly completion?: ResumeRunCompletion;
     }
   | { readonly failed: FollowUpFailureReason };
 
@@ -276,6 +279,11 @@ const resumeRunWithRecoveryProvenance = Effect.fn(
   return WORKFLOW_STARTED;
 });
 
+const warnUnreadable = (runId: RunId, failure: unknown): Effect.Effect<void> =>
+  Effect.logWarning(
+    `Run ${runId}: its queued follow-ups could not be read; keeping it recoverable`,
+  ).pipe(Effect.annotateLogs({ data: failure }), withLogChannel(CHANNEL));
+
 /**
  * Give back recovery no generation took over. Empty provisional leases end
  * the entry; durable queued input or an unreadable fold keeps it recoverable.
@@ -287,23 +295,19 @@ const releaseUnstartedRecovery = Effect.fn('releaseUnstartedRecovery')(
     provisional: boolean,
   ) {
     if (!session.followUps.useRecovery(recovery)) return;
-    const warnUnreadable = (failure: unknown): Effect.Effect<void> =>
-      Effect.logWarning(
-        `Run ${recovery.runId}: its queued follow-ups could not be read; keeping it recoverable`,
-      ).pipe(Effect.annotateLogs({ data: failure }), withLogChannel(CHANNEL));
     let queued = true;
     if (provisional) {
       const rows = yield* Effect.result(
         session.readAggregate(aggregateId('run', recovery.runId)),
       );
       if (Result.isFailure(rows)) {
-        yield* warnUnreadable(rows.failure);
+        yield* warnUnreadable(recovery.runId, rows.failure);
       } else {
         const folded = foldRunState(null, rows.success);
         if (Result.isSuccess(folded)) {
           queued = (folded.success?.followUps.length ?? 0) > 0;
         } else {
-          yield* warnUnreadable(folded.failure);
+          yield* warnUnreadable(recovery.runId, folded.failure);
         }
       }
     }
@@ -348,8 +352,9 @@ function refusalFor(
 }
 
 /**
- * Admit input under recovery, then launch. Child drivers take queue ownership;
- * their first idle turn acknowledges this batch without ending their lifetime.
+ * Admit input under recovery, then launch. The launched run owns the queue
+ * (a child through its delivery driver, a root through its own exit) and
+ * acknowledges this batch at its first idle turn without ending its lifetime.
  */
 const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
   session: SessionHandle,
@@ -367,12 +372,11 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
   }
 
   let cancelledAtFlowAttachment = false;
-  let refusedElsewhere = false;
-  let runResult: AgentFlowResult | undefined;
-  let undelivered = false;
-  let childOwnsQueue = false;
-  let childWaiting = false;
-  let admittedInputIds: ReadonlySet<string> | undefined;
+  let runOwnsQueue = false;
+  let rootCompletion: ResumeRunCompletion | undefined;
+  const admitted = new Set<string>();
+  const isAdmitted = (input: { readonly followUpId: string }): boolean =>
+    admitted.has(input.followUpId);
   const queuedInput = Effect.gen(function* () {
     const folded = foldRunState(
       null,
@@ -381,6 +385,20 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
     if (Result.isFailure(folded)) return yield* Effect.fail(folded.failure);
     return folded.success?.followUps ?? [];
   });
+  // A root holds no lease of its own: its exit releases this one by the rows.
+  const releaseRecovery = (exit: Exit.Exit<AgentFlowResult, Error>) =>
+    queuedInput.pipe(
+      Effect.map((queued) => queued.length > 0),
+      Effect.catchCause((cause) =>
+        warnUnreadable(runId, Cause.squash(cause)).pipe(Effect.as(true)),
+      ),
+      Effect.map((queued) =>
+        followUps.release(
+          queueLease,
+          Exit.isSuccess(exit) && !queued ? 'terminal' : 'recoverable',
+        ),
+      ),
+    );
   const resumed = yield* Effect.result(
     Effect.gen(function* () {
       // Admit the whole batch atomically, or leave it with the caller.
@@ -391,15 +409,14 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
           extra,
           'live_owner',
         );
-        if (submitted.kind === 'refused') {
-          refusedElsewhere = true;
-          return undefined;
-        }
+        if (submitted.kind === 'refused') return 'owned_elsewhere' as const;
       }
       yield* Effect.try({
         try: () => options.onFollowUpQueueReady?.(queueLease),
         catch: ensureError,
       });
+      for (const input of yield* queuedInput) admitted.add(input.followUpId);
+      const idle = yield* Deferred.make<void>();
       const launchOptions = {
         session,
         approvalPromptsUnavailable: options.approvalPromptsUnavailable,
@@ -410,74 +427,56 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
           cancelledAtFlowAttachment = true;
         },
       };
+      const onIdle = (state: RunState): void => {
+        if (!state.followUps.some(isAdmitted))
+          Deferred.doneUnsafe(idle, Effect.void);
+      };
       const parentRunId = yield* persistedParentRunId(session, runId);
-      if (parentRunId === undefined)
-        return yield* resumeToolUseFromResumeData(resume, launchOptions);
-      admittedInputIds = new Set(
-        (yield* queuedInput).map((input) => input.followUpId),
-      );
-      const idle = yield* Deferred.make<void>();
-      const completion = yield* startChildRunLoop({
-        session,
-        runId,
-        parentRunId,
-        queueLease,
-        agentName: resume.agentConfig.agent,
-        budgeted: true,
-        strategy: createNativeSubagentStrategy({
-          ...launchOptions,
+      let completion: Fiber.Fiber<AgentFlowResult | undefined, Error>;
+      if (parentRunId === undefined) {
+        const root = yield* Effect.forkDetach(
+          resumeToolUseFromResumeData(resume, {
+            ...launchOptions,
+            onIdle,
+          }).pipe(Effect.onExit(releaseRecovery)),
+        );
+        rootCompletion = Fiber.join(root).pipe(Effect.map((r) => r.outcome));
+        completion = root;
+      } else {
+        completion = yield* startChildRunLoop({
+          session,
           runId,
           parentRunId,
+          queueLease,
           agentName: resume.agentConfig.agent,
-          startedAt: Date.now(),
-          workingDirectory: resume.agentConfig.workingDirectory ?? undefined,
-          userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
-          resume: {
-            identity: resume,
-            options: {
-              ...launchOptions,
-              onIdle: (state) => {
-                if (
-                  !state.followUps.some((input) =>
-                    admittedInputIds!.has(input.followUpId),
-                  )
-                )
-                  Deferred.doneUnsafe(idle, Effect.void);
-              },
-            },
-          },
-        }),
-      });
-      // The driver owns this queue until termination. Interrupting either
+          budgeted: true,
+          strategy: createNativeSubagentStrategy({
+            ...launchOptions,
+            runId,
+            parentRunId,
+            agentName: resume.agentConfig.agent,
+            startedAt: Date.now(),
+            workingDirectory: resume.agentConfig.workingDirectory ?? undefined,
+            userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
+            resume: { identity: resume, options: { ...launchOptions, onIdle } },
+          }),
+        });
+      }
+      // The run owns this queue until termination. Interrupting either
       // observation below cannot interrupt that transferred run lifetime.
-      childOwnsQueue = true;
+      runOwnsQueue = true;
       return yield* Effect.raceFirst(
         Deferred.await(idle).pipe(
-          Effect.as(undefined),
-          Effect.tap(() =>
-            Effect.sync(() => {
-              childWaiting = true;
-            }),
-          ),
+          Effect.as(RUN_PHASE.WAITING),
           Effect.interruptible,
         ),
         Fiber.join(completion).pipe(Effect.interruptible),
       );
     }),
   ).pipe(
-    Effect.tap((result) =>
-      Effect.sync(() => {
-        if (Result.isSuccess(result)) runResult = result.success;
-      }),
-    ),
     Effect.ensuring(
       Effect.sync(() => {
-        if (childOwnsQueue) return;
-        undelivered = followUps.hasQueued(queueLease);
-        followUps.release(
-          queueLease,
-          !runResult || undelivered ? 'recoverable' : 'terminal',
-        );
+        if (!runOwnsQueue) followUps.release(queueLease, 'recoverable');
       }),
     ),
   );
@@ -486,15 +485,16 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
     if (refusal) return refusal;
     return yield* Effect.fail(resumed.failure);
   }
-  if (refusedElsewhere) return { failed: 'owned_elsewhere' };
+  const settled = resumed.success;
+  if (settled === 'owned_elsewhere') return { failed: settled };
   if (cancelledAtFlowAttachment) return REFUSED;
-  if (childOwnsQueue && !childWaiting)
-    undelivered = (yield* queuedInput).some((input) =>
-      admittedInputIds!.has(input.followUpId),
-    );
+  const waiting = settled === RUN_PHASE.WAITING;
+  const undelivered =
+    runOwnsQueue && !waiting && (yield* queuedInput).some(isAdmitted);
   return {
     started: true,
     delivered: !undelivered,
-    outcome: childWaiting ? RUN_PHASE.WAITING : runResult?.outcome,
+    outcome: waiting ? settled : settled?.outcome,
+    ...(rootCompletion && { completion: rootCompletion }),
   };
 });

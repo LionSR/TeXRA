@@ -7,7 +7,7 @@ import type { ToolUseFlowResult } from '@agent/runtime/AgentFlowResult';
 import type { ResumeToolUseFromResumeDataOptions } from '@agent/runtime/executeAgent';
 import { resumeRun, resumeClaimedRun } from '@agent/runtime/resumeRun';
 import type { RunId } from '@shared/schemas';
-import { AgentCategory, RUN_OUTCOME } from '@shared/schemas';
+import { AgentCategory, aggregateId, RUN_OUTCOME } from '@shared/schemas';
 import { DatabaseReadFailed } from '@shared/session/database';
 import { RunLedgerRefused } from '@shared/session/runLedger';
 import { runHeldMessage } from '@shared/runs/runStatusDisplay';
@@ -104,6 +104,14 @@ const resumedFlowTakes = (session: ReturnType<typeof createTestSession>) =>
     const batch = input.hasQueued() ? yield* input.take : null;
     if (batch !== null && !batch.synthetic) {
       taken.push(...batch.followUps.map((followUp) => followUp.content.text));
+      // What the loop's consume commits: the rows stop queueing the batch.
+      yield* session.commit(
+        batch.followUps.map((followUp) => ({
+          type: 'followup.consumed' as const,
+          aggregateId: aggregateId('run', RUN),
+          followUpId: followUp.followUpId,
+        })),
+      );
     }
   });
 
@@ -207,7 +215,7 @@ describe('resumeRun tool-use queue ownership', () => {
         ).toEqual({ kind: 'queued' });
 
         yield* Deferred.succeed(config, snapshot().agentConfig);
-        expect(yield* Fiber.join(resumed)).toEqual({
+        expect(yield* Fiber.join(resumed)).toMatchObject({
           started: true,
           delivered: true,
           outcome: RUN_OUTCOME.COMPLETED,
@@ -263,7 +271,7 @@ describe('resumeRun tool-use queue ownership', () => {
                 ).toEqual({ kind: 'queued' });
               }),
           }),
-        ).toEqual({
+        ).toMatchObject({
           started: true,
           delivered: true,
           outcome: RUN_OUTCOME.COMPLETED,
@@ -406,13 +414,19 @@ describe('resumeRun tool-use queue ownership', () => {
       }
       const recovery = submission.lease;
 
-      expect(
-        yield* resumeOne(RUN, { session, recovery, executeWorkflow }),
-      ).toEqual({
+      const result = yield* resumeOne(RUN, {
+        session,
+        recovery,
+        executeWorkflow,
+      });
+      expect(result).toMatchObject({
         started: true,
         delivered: true,
         outcome: RUN_OUTCOME.COMPLETED,
       });
+      // A root's lifetime is the caller's to await past the acknowledgement.
+      if (!('started' in result)) throw new Error('resume refused');
+      expect(yield* result.completion!).toBe(RUN_OUTCOME.COMPLETED);
       expect(resumeToolUseFromResumeDataMock).toHaveBeenCalledOnce();
     }),
   );
