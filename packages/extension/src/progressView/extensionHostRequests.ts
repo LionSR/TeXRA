@@ -58,6 +58,7 @@ import type { HostDraftRequests } from '@controllers/session/hostDraftRequests';
 import type { HostSnapshotSource } from '@controllers/session/hostSnapshotSource';
 import {
   handleSharedHostRequest,
+  isSharedHostRequest,
   type SharedHostRequestBindings,
   type SharedHostRequestPorts,
 } from '@controllers/session/sharedHostRequests';
@@ -82,7 +83,11 @@ import type {
   StateWriteFailed,
 } from '@platform/interfaces';
 import type { LanguageModel } from '@platform/languageModel';
-import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
+import {
+  withProcessServices,
+  type ProcessRuntime,
+  type ProcessServices,
+} from '@platform/processRuntime';
 import {
   withSessionFs,
   WorkspaceFs,
@@ -258,9 +263,7 @@ export function createExtensionHostRequests(
             }),
       ),
     );
-    return Effect.flatMap(runtime.contextEffect, (context) =>
-      Effect.provideContext(launch, context),
-    );
+    return withProcessServices(runtime, launch);
   };
 
   const runActions = runtime.runSync(
@@ -268,14 +271,12 @@ export function createExtensionHostRequests(
       session,
       runAgentRequest,
       loadModelOptions: () =>
-        Effect.flatMap(runtime.contextEffect, (context) =>
-          Effect.provideContext(
-            readModelAvailabilityInputs({
-              ...session.roots,
-              secrets,
-            }).pipe(Effect.map(modelOptionsFrom)),
-            context,
-          ),
+        withProcessServices(
+          runtime,
+          readModelAvailabilityInputs({
+            ...session.roots,
+            secrets,
+          }).pipe(Effect.map(modelOptionsFrom)),
         ),
       // The set-key quick pick is a VS Code command: it either runs or
       // faults, so its rejection is the one failure, as `ApiKeyPromptFailed`.
@@ -839,40 +840,10 @@ export function createExtensionHostRequests(
     ProcessServices | StorageFs | WorkspaceFs
   > {
     return Effect.gen(function* () {
+      if (isSharedHostRequest(request)) {
+        return yield* handleSharedHostRequest(sharedRequests, request, port);
+      }
       switch (request.kind) {
-        case 'openFile':
-        case 'openLabel':
-        case 'openRunStorage':
-        case 'exportTranscript':
-        case 'restoreIntoLauncher':
-        case 'resume':
-        case 'runNew':
-        case 'runCompileFixer':
-        case 'useOwnApiKey':
-        case 'latexdiff':
-        case 'pack':
-        case 'clean':
-        case 'latexdiffs':
-        case 'record':
-        case 'openDashboard':
-        case 'refreshCommits':
-        case 'refreshFiles':
-        case 'openSettings':
-        case 'polish':
-        case 'savePastedImage':
-        case 'toolEdit':
-        case 'setActiveView':
-        case 'fileAction':
-        case 'restoreProposalConfig':
-        case 'apiKeyBanner':
-        case 'agentConfigBanner':
-        case 'recheckDependencies':
-        case 'openInstallGuide':
-        case 'signIn':
-        case 'dismissBanner':
-        case 'gettingStarted':
-        case 'onboarding':
-          return yield* handleSharedHostRequest(sharedRequests, request, port);
         case 'popOut':
           yield* options.popOutToEditor();
           return done;

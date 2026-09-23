@@ -73,11 +73,6 @@ export interface DesktopSettingsUiHost extends Pick<
   'showInfoMessage' | 'showErrorMessage'
 > {
   openPath(filePath: string): Effect.Effect<void, Error>;
-  /**
-   * Select the run as the window's active run. `'unavailable'` covers a
-   * presentation that could not be reached at all; the reveal is then reported
-   * through {@link DesktopSettingsUiHost.onError} rather than here.
-   */
   /** Select a run in the shown paper's surface: `missing` when the view
    *  no longer holds it, `unavailable` when no paper is shown. */
   revealRun(runId: RunId): Promise<'revealed' | 'missing' | 'unavailable'>;
@@ -552,13 +547,12 @@ export function createDesktopSettingsIpc(
 
   function unsubscribeGitHub(data: { key: string }) {
     return Effect.gen(function* () {
-      yield* Effect.gen(function* () {
-        const removed = yield* unsubscribeGitHubKey(data.key);
-        const absent = noActiveGitHubSubscriptionMessage(data.key);
-        yield* removed === 0
-          ? options.ui.showInfoMessage(absent)
-          : postGitHubSubscriptions();
-      });
+      const removed = yield* unsubscribeGitHubKey(data.key);
+      yield* removed === 0
+        ? options.ui.showInfoMessage(
+            noActiveGitHubSubscriptionMessage(data.key),
+          )
+        : postGitHubSubscriptions();
     });
   }
 
