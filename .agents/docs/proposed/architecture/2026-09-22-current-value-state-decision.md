@@ -2,19 +2,19 @@
 
 Date: 2026-09-22
 
-Status: proposed; owner decision pending
+Status: accepted 2026-09-22; implementation pending
 
-Baseline: `origin/main` `c7df1f69a0ad385df0846c98102380b089aac45e`; #13008 and #13009 merged.
+Audit baseline: `origin/main` `c7df1f69a0ad385df0846c98102380b089aac45e`; #13008 and #13009 merged.
 
 Tracking: [#11867](https://github.com/LionSR/TeXRA/issues/11867), [#12880](https://github.com/LionSR/TeXRA/issues/12880).
 
-## Decision requested
+## Accepted decision
 
-Approve one `current_value` SQLite table for the four latest-value families below, with their writes removed from `event` and `event_sequence` in the same change. This is a bounded-state replacement, not a second authority. Keep the run/session event journal and the already bounded `input_history` table. Do not build a migration, dual writer, legacy reader, or adapter. Until approval, this document makes no schema change.
+Use one `current_value` SQLite table for the four latest-value families below, with their writes removed from `event` and `event_sequence` in the same change. This is a bounded-state replacement, not a second authority. Keep the run/session event journal and the already bounded `input_history` table. Do not build a migration, dual writer, legacy reader, or adapter. This decision document makes no schema change.
 
 The benefit is structural: a repeatedly changed application key or inquiry thread currently retains every prior value. The replacement retains one row per live key. The cost is a small direct SQL surface and one write-order column for inquiry listing. No production caller identified below needs the discarded value history. This recommendation is based on source paths and a synthetic storage experiment, not a measurement of real user databases or update rates.
 
-## Current contract and consumers
+## Contract and consumers at the audit baseline
 
 `SessionEventDraftSchema` admits one `state.value.set` arm. Its `StoredValueSchema` binds four families to their aggregate kind, and `Database.appendPrepared` temporarily claims each aggregate, increments `event_sequence.seq`, appends an `event` row with a global `commit`, then releases the claim. The connection's `BEGIN IMMEDIATE` transaction serializes writes. A successful write advances the local `level` even when no event is appended; the 250 ms `PRAGMA data_version` poll wakes another connection after a foreign commit. `SESSION_EVENT_FORMAT` is 9; a mismatched store is cleared at open under the present 1.0 format policy.
 
@@ -37,7 +37,7 @@ Use the existing transaction helper for direct writes. For application state, re
 
 Retire the `state.value.set` union arm and `StoredValue` event envelope, `borrowsClaim`, its temporary claim/release branch, the latest-event read helpers for these families, `readDesktopProjects`' event-shaped return, and their `event_sequence` rows. Simplify the application-state writer to a direct database method. Keep run and project inquiry _display_ events; they represent different facts. Update the CLI's refusing global-service shape and architecture tests for the changed interface. Remove compatibility-specific tests for the retired event arm; preserve behavior tests at the durable store boundary.
 
-The current event format must be bumped with the schema switch. At open, the existing mismatch transaction must drop/recreate the new table along with the event tables and must account for it in the cleared-store report. There is no v9-to-new-format reader or copy. This follows the accepted fresh 1.0 format policy, but clearing v9 state is a material consequence to state plainly in the implementation PR. Pre-1.0 legacy files remain untouched.
+The event format current at implementation must be bumped with the schema switch. At open, the existing mismatch transaction must drop/recreate the new table along with the event tables and must account for it in the cleared-store report. There is no earlier-format reader or copy. This follows the accepted fresh 1.0 format policy, but clearing the prior format's state is a material consequence to state plainly in the implementation PR. Pre-1.0 legacy files remain untouched.
 
 ## Storage experiment and limits
 
@@ -53,4 +53,4 @@ Reproduction: in a temporary SQLite database, create the `event_sequence`, `even
 - Inquiry listing preserves latest-write order with a deterministic tie-free revision. Event readers and cursors receive only real event commits; local and foreign current-row commits still wake subscribers through the existing level/data-version mechanism.
 - Current-format mismatch clears the entire new schema atomically and reports the actual cleared state; no migration or dual writer is added. Applicable format, typecheck, lint, pure and full tests pass at the final head.
 
-Pending owner decision: approve this bounded table and the current-format reset consequence before implementation. If real workload evidence shows these keys rarely change and the schema/reset cost outweighs the bounded-growth benefit, close this proposal as a documented no-op; the source audit does not justify claiming a measured runtime win.
+The owner accepted this bounded table and the current-format reset consequence on 2026-09-22. Implementation remains a separate change with the acceptance gates above. The source audit does not justify claiming a measured runtime win.
