@@ -231,7 +231,7 @@ function withScriptReference(
 /**
  * Execute a durable, deterministic workflow script from an agent whose tool
  * list names it. Gated by the "Multi-Agent Workflow" dashboard switch (id
- * `workflow-script` in {@link @tools/externalToolDefs}), which
+ * `workflow-script` in {@link @tools/plugins}), which
  * `resolveAgentTools()` enforces regardless of any agent's configured tools -
  * new installs start with the switch off.
  */

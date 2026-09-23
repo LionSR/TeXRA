@@ -20,7 +20,7 @@ import type { SettingsModelSelectionController } from '@controllers/settingsView
 import type { SettingsViewInboundHandlerRegistry } from '@controllers/settingsView/settingsViewDispatch';
 import type { ExternalOpener } from '@hosts/uiHosts';
 import type { ProcessServices } from '@platform/processRuntime';
-import type { ToolProbeInputs } from '@tools/externalToolDefs';
+import type { ToolProbeInputs } from '@tools/toolProbes';
 import { GITHUB_TOKEN_CREATE_URL } from '@tools/github/githubAuth';
 import { refreshToolAvailability } from '@tools/toolAvailability';
 

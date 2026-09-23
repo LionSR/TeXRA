@@ -47,11 +47,9 @@ import {
 import type { LanguageModel } from '@platform/languageModel';
 import type { AgentDelegationScope, ToolDefinition } from '@shared/schemas';
 import { hasDelegationTool } from '@shared/constants/delegationTools';
+import { getDisabledToolNames } from '@tools/plugins';
 import { getDefaultToolRegistry } from '@tools/registry';
-import {
-  getDisabledToolNames,
-  getUnavailableToolNamesCached,
-} from '@tools/toolAvailability';
+import { getUnavailableToolNamesCached } from '@tools/toolAvailability';
 import {
   annotateDelegationAvailability,
   availableModelNamesFromOptions,

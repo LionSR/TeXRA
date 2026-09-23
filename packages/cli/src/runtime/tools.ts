@@ -3,15 +3,12 @@ import { Effect } from 'effect';
 // Local imports
 import {
   buildToolDashboardItems,
-  isExternalToolDefVisible,
+  isToolPluginVisible,
 } from '@controllers/settingsView/ToolDashboardData';
 import type { StateStore } from '@platform/interfaces';
 import type { ToolDashboardItem } from '@shared/settingsView/settingsViewMessages';
-import {
-  findExternalToolDef,
-  type ExternalToolDef,
-  type ToolProbeInputs,
-} from '@tools/externalToolDefs';
+import { findToolPlugin, type ToolPlugin } from '@tools/plugins';
+import type { ToolProbeInputs } from '@tools/toolProbes';
 import { setToolEnabled } from '@utils/config/constants';
 
 type CliToolGuideKind = 'install' | 'auth';
@@ -43,9 +40,10 @@ export function readCliToolStatus(probeInputs: ToolProbeInputs, id: string) {
   );
 }
 
-function findCliToolDef(id: string): ExternalToolDef | undefined {
-  const def = findExternalToolDef(id);
-  return def && isExternalToolDefVisible(def, 'cli') ? def : undefined;
+/** A probed plugin the CLI's dashboard lists; built-in plugins need no setup. */
+function findCliToolDef(id: string): ToolPlugin | undefined {
+  const def = findToolPlugin(id);
+  return def?.availability && isToolPluginVisible(def, 'cli') ? def : undefined;
 }
 
 export function readCliToolGuide(

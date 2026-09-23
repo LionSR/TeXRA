@@ -14,7 +14,7 @@
  * OPENAI_API_KEY, config files).
  *
  * Requires the Codex CLI binary — gated by the availability check in
- * externalToolDefs.ts.
+ * pluginAvailability.ts.
  */
 
 // Third-party imports

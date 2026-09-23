@@ -261,7 +261,7 @@ agent's tool list
 (`packages/extension/resources/tool_use_agents/orchestrator.yaml`); explicitly naming the tool in an
 agent's configuration is one half of the consent boundary for automated
 workflow fan-out. The other half is global: the "Multi-Agent Workflow" toggle
-in the Tools dashboard (`src/tools/externalToolDefs.ts`, id `workflow-script`)
+in the Tools dashboard (`src/tools/plugins.ts`, id `workflow-script`)
 strips `delegate_multi_agents` from every agent's resolved tools when
 switched off, regardless of what any individual agent configuration names —
 and new installs start with the switch off.

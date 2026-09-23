@@ -18,7 +18,7 @@ import { assertSupported, isUnsupported } from '@shared/utils/dispatcher';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { FakeConfigProvider, FakeStateStore } from '@test/support/FakePlatform';
-import type { ToolProbeInputs } from '@tools/externalToolDefs';
+import type { ToolProbeInputs } from '@tools/toolProbes';
 import {
   refreshToolAvailability,
   type ExternalToolCheckResult,

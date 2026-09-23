@@ -14,7 +14,7 @@ import type {
   ToolDashboardItem,
 } from '@shared/settingsView/settingsViewMessages';
 import { unsupported } from '@shared/utils/dispatcher';
-import type { ToolProbeInputs } from '@tools/externalToolDefs';
+import type { ToolProbeInputs } from '@tools/toolProbes';
 import {
   getLastCheckResults,
   refreshToolAvailability,

@@ -5,7 +5,7 @@ import { afterEach, describe, expect, vi } from 'vitest';
 
 import type { ConfigProvider } from '@platform/interfaces';
 import { Secrets, type PlatformSecrets } from '@platform/secrets';
-import type { ToolProbeInputs } from '@tools/externalToolDefs';
+import type { ToolProbeInputs } from '@tools/toolProbes';
 import { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import { SetupPlatform } from '@tools/setup/platform';
 import { createFakeSetupPlatform } from './setup/fixtures';
@@ -40,30 +40,32 @@ const secretsLayer = Secrets.layer({
   getEnv: unreadSecret,
 } satisfies PlatformSecrets);
 
-/** The services a group's availability callbacks may read. */
+/** The services a plugin's availability callbacks may read. */
 const probeServices = Layer.mergeAll(
   secretsLayer,
   SetupPlatform.layer(createFakeSetupPlatform()),
-  // The mocked defs declare no Lean group, so nothing here reads the port.
+  // The mocked plugins declare no Lean plugin, so nothing here reads the port.
   Layer.mock(LeanLanguageServices, { listServers: () => [] }),
 );
 
 afterEach(() => {
-  vi.doUnmock('@tools/externalToolDefs');
+  vi.doUnmock('@tools/plugins');
   vi.resetModules();
 });
 
 describe('tool availability app signals', () => {
   it.effect('emits toolAvailabilityChanged after a refresh', () =>
     Effect.gen(function* () {
-      vi.doMock('@tools/externalToolDefs', () => ({
-        EXTERNAL_TOOL_DEFS: [
+      vi.doMock('@tools/plugins', () => ({
+        TOOL_PLUGINS: [
           {
             id: 'test-tool',
-            tools: [],
+            toolNames: [],
             name: 'Test tool',
             category: 'ai-agents',
-            check: vi.fn(() => Effect.succeed(true)),
+            availability: {
+              check: vi.fn(() => Effect.succeed(true)),
+            },
           },
         ],
       }));
@@ -97,22 +99,26 @@ describe('tool availability app signals', () => {
     'derives unavailable tool names from the last probe results, with no cache to refresh',
     () =>
       Effect.gen(function* () {
-        vi.doMock('@tools/externalToolDefs', () => ({
-          EXTERNAL_TOOL_DEFS: [
+        vi.doMock('@tools/plugins', () => ({
+          TOOL_PLUGINS: [
             {
               id: 'present-tool',
-              tools: ['present'],
+              toolNames: ['present'],
               name: 'Present tool',
               category: 'ai-agents',
-              check: vi.fn(() => Effect.succeed(true)),
+              availability: {
+                check: vi.fn(() => Effect.succeed(true)),
+              },
             },
             {
               id: 'missing-tool',
-              tools: ['missing'],
+              toolNames: ['missing'],
               name: 'Missing tool',
               category: 'ai-agents',
               toggleable: true,
-              check: vi.fn(() => Effect.succeed(false)),
+              availability: {
+                check: vi.fn(() => Effect.succeed(false)),
+              },
             },
           ],
         }));
@@ -141,28 +147,32 @@ describe('tool availability app signals', () => {
     'distinguishes failed probes from missing tools without hiding optional-status failures',
     () =>
       Effect.gen(function* () {
-        vi.doMock('@tools/externalToolDefs', () => ({
-          EXTERNAL_TOOL_DEFS: [
+        vi.doMock('@tools/plugins', () => ({
+          TOOL_PLUGINS: [
             {
               id: 'broken-probe',
-              tools: ['broken'],
+              toolNames: ['broken'],
               name: 'Broken probe',
               category: 'ai-agents',
-              probe: vi.fn(() =>
-                Effect.fail(new Error('invalid local configuration')),
-              ),
-              check: vi.fn(() => Effect.succeed(true)),
-              statusLabel: vi.fn(() => Effect.succeed('Needs setup')),
+              availability: {
+                probe: vi.fn(() =>
+                  Effect.fail(new Error('invalid local configuration')),
+                ),
+                check: vi.fn(() => Effect.succeed(true)),
+                statusLabel: vi.fn(() => Effect.succeed('Needs setup')),
+              },
             },
             {
               id: 'broken-detail',
-              tools: ['present'],
+              toolNames: ['present'],
               name: 'Broken detail',
               category: 'ai-agents',
-              check: vi.fn(() => Effect.succeed(true)),
-              detailCheck: vi.fn(() =>
-                Effect.fail(new Error('status command crashed')),
-              ),
+              availability: {
+                check: vi.fn(() => Effect.succeed(true)),
+                detailCheck: vi.fn(() =>
+                  Effect.fail(new Error('status command crashed')),
+                ),
+              },
             },
           ],
         }));

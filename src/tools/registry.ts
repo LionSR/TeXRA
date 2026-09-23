@@ -9,6 +9,7 @@ import {
   DELEGATE_MULTI_AGENTS_TOOL_NAME,
   type CanonicalDelegationToolName,
 } from '@shared/constants/delegationTools';
+import type { PluginToolName, ToolPluginId } from '@tools/plugins';
 
 // Local file imports
 import { BashTool } from './bash';
@@ -94,65 +95,70 @@ import { ReadConfigTool, UpdateConfigTool } from './setup/ConfigTools';
 import { SendToTerminalTool } from './setup/SendToTerminalTool';
 import { ApplyTeamTool } from './setup/ApplyTeamTool';
 
-/** Singleton IToolRegistry instance for the default tools. */
-let defaultRegistryInstance: IToolRegistry | null = null;
-let defaultToolsInstance: DefaultTools | null = null;
-
 /**
- * Canonical tool factory — single source of truth for all registered tools.
- * `RegisteredToolName` is derived from the return-type keys, so adding/renaming
- * a tool here automatically propagates to the dashboard and availability
- * checks at compile time.
- *
- * Defined as a function (not a module-scope const) so tool constructors
- * run lazily on first `getDefaultToolRegistry()` call rather than eagerly
- * on import. This keeps imports side-effect-free.
+ * Every plugin's tool objects, keyed by plugin id then tool name. The
+ * `satisfies` clause is the manifest check: each plugin in `TOOL_PLUGINS` must
+ * appear here with exactly the tools its `toolNames` declares — a missing or
+ * extra name, or an unknown plugin id, is a compile error.
  */
-function createDefaultTools() {
-  return {
-    diagnostics: DiagnosticsTool,
-    inline_comment: InlineCommentTool,
-    report_review_issue: ReportReviewIssueTool,
+const PLUGIN_TOOLS = {
+  'file-ops': {
     bash: BashTool,
     read_file: ReadFileTool,
     write_file: WriteFileTool,
     edit_file: EditFileTool,
     glob: GlobTool,
     grep: GrepTool,
-    download_arxiv_source: ArxivDownloadTool,
-    arxiv_metadata: ArxivMetadataTool,
-    arxiv_search: ArxivSearchTool,
+  },
+  'latex-extract': {
     extract_figures: ExtractLatexFiguresTool,
-    extract_bib_entries: ExtractBibliographyTool,
     extract_tikz_figures: ExtractTikzFiguresTool,
-    crossref_search: CrossrefSearchTool,
-    zotero_add: ZoteroAddTool,
-    zotero_collections: ZoteroCollectionsTool,
-    zotero_search: ZoteroSearchTool,
-    zotero_export: ZoteroExportTool,
-    wolfram: WolframTool,
-    texcount: TexcountTool,
-    web_fetch: WebFetchTool,
-    web_search: WebSearchTool,
+    extract_bib_entries: ExtractBibliographyTool,
+  },
+  'latex-diagnostics': { diagnostics: DiagnosticsTool },
+  arxiv: {
+    arxiv_search: ArxivSearchTool,
+    arxiv_metadata: ArxivMetadataTool,
+    download_arxiv_source: ArxivDownloadTool,
+  },
+  crossref: { crossref_search: CrossrefSearchTool },
+  web: { web_search: WebSearchTool, web_fetch: WebFetchTool },
+  'memory-workflow': {
+    memory: MemoryTool,
     todo_write: TodoWriteTool,
     plan: PlanTool,
-    memory: MemoryTool,
-    open_pdf: OpenPdfTool,
+    delegate_workflow: WorkflowAgentTool,
+    delegate_agent: DelegateAgentTool,
+    executions: ExecutionsTool,
+    accept_run_files: AcceptRunFilesTool,
+  },
+  texcount: { texcount: TexcountTool },
+  wolfram: { wolfram: WolframTool },
+  zotero: {
+    zotero_collections: ZoteroCollectionsTool,
+    zotero_search: ZoteroSearchTool,
+    zotero_add: ZoteroAddTool,
+    zotero_export: ZoteroExportTool,
+  },
+  lean4: {
     lean_diagnostics: LeanDiagnosticsTool,
     lean_file: LeanFileTool,
     lean_project: LeanProjectTool,
     lean_inspect: LeanInspectTool,
-    lean_loogle: LeanLoogleTool,
-    codex: CodexTool,
-    [CLAUDE_AGENT_NAME]: ClaudeAgentTool,
-    delegate_workflow: WorkflowAgentTool,
-    [DELEGATE_MULTI_AGENTS_TOOL_NAME]: WorkflowScriptTool,
-    delegate_agent: DelegateAgentTool,
-    executions: ExecutionsTool,
-    accept_run_files: AcceptRunFilesTool,
-    inquiry: ExternalInquiryTool,
+  },
+  'workflow-script': { [DELEGATE_MULTI_AGENTS_TOOL_NAME]: WorkflowScriptTool },
+  'github-pr-subscription': { github_subscription: GitHubSubscriptionTool },
+  'external-inquiry': { inquiry: ExternalInquiryTool },
+  codex: { codex: CodexTool },
+  'claude-agent': { [CLAUDE_AGENT_NAME]: ClaudeAgentTool },
+  core: {
+    inline_comment: InlineCommentTool,
+    report_review_issue: ReportReviewIssueTool,
+    open_pdf: OpenPdfTool,
     ask_user_question: AskUserQuestionTool,
-    github_subscription: GitHubSubscriptionTool,
+    lean_loogle: LeanLoogleTool,
+  },
+  setup: {
     probe_environment: ProbeEnvironmentTool,
     verify_setup: VerifySetupTool,
     unset_api_key: UnsetApiKeyTool,
@@ -163,18 +169,22 @@ function createDefaultTools() {
     update_config: UpdateConfigTool,
     send_to_terminal: SendToTerminalTool,
     apply_team: ApplyTeamTool,
-  } satisfies Record<string, ITool>;
-}
+  },
+} as const satisfies {
+  readonly [Id in ToolPluginId]: {
+    readonly [Name in PluginToolName<Id>]: ITool;
+  };
+};
 
-type DefaultTools = ReturnType<typeof createDefaultTools>;
-
-function getDefaultTools(): DefaultTools {
-  defaultToolsInstance ??= createDefaultTools();
-  return defaultToolsInstance;
-}
+type PluginTools = typeof PLUGIN_TOOLS;
 
 /** Union of all tool names registered in the default registry. */
-export type RegisteredToolName = keyof DefaultTools;
+export type RegisteredToolName = {
+  [Id in ToolPluginId]: keyof PluginTools[Id];
+}[ToolPluginId];
+
+/** Singleton IToolRegistry instance for the default tools. */
+let defaultRegistryInstance: IToolRegistry | null = null;
 
 /**
  * Compile-time guard: every canonical tool with specialized display treatment
@@ -192,14 +202,24 @@ type _CanonicalDelegationNamesAreRegistered = AssertNever<
 
 /** Lazy singleton accessor for the default tool registry. */
 export function getDefaultToolRegistry(): IToolRegistry {
-  defaultRegistryInstance ??= new MapToolRegistry(getDefaultTools());
+  if (defaultRegistryInstance) return defaultRegistryInstance;
+  // Flattening cannot overwrite a tool: the manifest rules out a name two
+  // plugins share.
+  const tools: Record<string, ITool> = Object.assign(
+    {},
+    ...Object.values(PLUGIN_TOOLS),
+  );
+  defaultRegistryInstance = new MapToolRegistry(tools);
   return defaultRegistryInstance;
 }
 
 /** Whether a registered tool declares itself unavailable on a product host. */
 export function isDefaultToolUnavailableOnHost(
-  name: RegisteredToolName,
+  name: string,
   host: ToolHost,
 ): boolean {
-  return getDefaultTools()[name].unavailableHosts?.includes(host) === true;
+  return (
+    getDefaultToolRegistry().get(name)?.unavailableHosts?.includes(host) ===
+    true
+  );
 }
