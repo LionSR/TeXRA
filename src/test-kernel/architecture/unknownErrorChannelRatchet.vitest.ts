@@ -83,7 +83,42 @@ const IDENTITY_CATCH_JOINS: Readonly<Record<string, number>> = {
   'src/tools/github/githubClient.ts': 2,
 };
 
-/** `catch: (e) => e` (annotated or not): the pass-through that hands a
+/** The keys a foreign-rejection mapper is handed under: `Effect.try` /
+ *  `tryPromise` take `catch`, `Stream.fromReadableStream` takes `onError`. */
+const FAILURE_MAPPER_KEYS = new Set(['catch', 'onError']);
+
+/** `(e) => e`, `(e: unknown) => e`, `(e) => { return e; }` or the
+ *  `function` spelling of either: a mapper that hands the value on. */
+function isIdentityMapper(node: ts.Node | undefined): boolean {
+  if (
+    node === undefined ||
+    !(ts.isArrowFunction(node) || ts.isFunctionExpression(node)) ||
+    node.parameters.length !== 1
+  )
+    return false;
+  const [param] = node.parameters;
+  if (param === undefined || !ts.isIdentifier(param.name)) return false;
+  let returned: ts.Node | undefined = node.body;
+  if (ts.isBlock(node.body)) {
+    const [only] = node.body.statements;
+    returned =
+      node.body.statements.length === 1 &&
+      only !== undefined &&
+      ts.isReturnStatement(only)
+        ? only.expression
+        : undefined;
+  }
+  while (returned !== undefined && ts.isParenthesizedExpression(returned))
+    returned = returned.expression;
+  return (
+    returned !== undefined &&
+    ts.isIdentifier(returned) &&
+    returned.text === param.name.text
+  );
+}
+
+/** Identity failure mappers in one file: under a `catch` / `onError` key, or
+ *  as `Stream.fromAsyncIterable`'s positional error mapper. Each hands a
  *  foreign rejection on as `unknown` instead of constructing an `Error`. */
 function identityCatches(file: string): number {
   const sourceFile = parseSourceFile(resolve(REPO_ROOT, file), {
@@ -94,20 +129,17 @@ function identityCatches(file: string): number {
     if (
       ts.isPropertyAssignment(node) &&
       ts.isIdentifier(node.name) &&
-      node.name.text === 'catch' &&
-      ts.isArrowFunction(node.initializer) &&
-      node.initializer.parameters.length === 1
-    ) {
-      const [param] = node.initializer.parameters;
-      const { body } = node.initializer;
-      if (
-        param !== undefined &&
-        ts.isIdentifier(param.name) &&
-        ts.isIdentifier(body) &&
-        body.text === param.name.text
-      )
-        sites += 1;
-    }
+      FAILURE_MAPPER_KEYS.has(node.name.text) &&
+      isIdentityMapper(node.initializer)
+    )
+      sites += 1;
+    if (
+      ts.isCallExpression(node) &&
+      ts.isPropertyAccessExpression(node.expression) &&
+      node.expression.name.text === 'fromAsyncIterable' &&
+      isIdentityMapper(node.arguments[1])
+    )
+      sites += 1;
     ts.forEachChild(node, visit);
   };
   visit(sourceFile);
@@ -145,7 +177,7 @@ describe('unknown Effect error-channel rule', () => {
       );
     expect(
       drifted,
-      `Identity catch callbacks (catch: (e) => e) drifted from IDENTITY_CATCH_JOINS:\n` +
+      `Identity failure mappers (catch/onError: (e) => e) drifted from IDENTITY_CATCH_JOINS:\n` +
         `${drifted.join('\n')}\n\n` +
         `Construct the failure instead: catch: ensureError, or the path's own ` +
         `tagged error. A count that fell: lower or delete the entry.`,

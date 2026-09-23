@@ -94,7 +94,7 @@ const fetchPage = Effect.fn('WebFetchTool.fetchPage')((url: string) =>
       let total = 0;
       const parts = yield* Stream.fromReadableStream({
         evaluate: () => body,
-        onError: (error) => error,
+        onError: ensureError,
         releaseLockOnEnd: true,
       }).pipe(
         Stream.mapEffect((chunk) => {
