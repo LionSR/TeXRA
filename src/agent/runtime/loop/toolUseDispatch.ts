@@ -432,6 +432,9 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
               toolCallId: fact.callId,
               hooks: { onToolOutput, recordSubagentCost },
             }),
+            // The services of the run's plugins' layers, from its pinned
+            // composition.
+            Effect.provide(run.composition.services),
           ),
         ),
       );

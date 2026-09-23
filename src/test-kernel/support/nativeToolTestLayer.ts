@@ -1,5 +1,5 @@
 /** Explicit call capabilities over the test host's existing process services. */
-import { Layer } from 'effect';
+import { Context, Layer } from 'effect';
 
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { FileInteractionState } from '@agent/core/state/AgentWorkspaceState';
@@ -10,6 +10,8 @@ import { noopTrace } from '@test/support/noopTrace';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { testRunRegistry } from '@test/support/runHandleFixtures';
+import { toolTable } from '@tools/toolTable';
+import { CompositionKey, type PinnedComposition } from '@tools/compositions';
 
 type CallRun = NonNullable<ToolCallShape['run']>;
 
@@ -17,6 +19,20 @@ type CallRun = NonNullable<ToolCallShape['run']>;
  *  else of the run the case under test actually reads. */
 type TestCallRun = Pick<CallRun, 'session' | 'runId' | 'toolPolicy'> &
   Partial<CallRun>;
+
+/** A pinned composition with no plugins, for a run fixture offered none. */
+export const emptyPinnedComposition: PinnedComposition = {
+  key: new CompositionKey('0'.repeat(64), {
+    plugins: [],
+    disabled: [],
+    host: null,
+    approvalPromptsUnavailable: false,
+    tools: [],
+    injected: [],
+  }),
+  table: toolTable({}),
+  services: Context.empty(),
+};
 
 /** Each invocation owns its tracker; tests may supply a run and the roots it
  *  answers for. The call's `Runs` are its run's session's; a call outside any
@@ -40,6 +56,7 @@ export function nativeToolTestLayer(
       run: run && {
         config: AgentConfigSchema.parse({ agent: 'test', model: 'test-model' }),
         logger: noopTrace,
+        composition: emptyPinnedComposition,
         ...run,
       },
       ...call,

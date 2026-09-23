@@ -15,6 +15,7 @@ import { Runs } from '@agent/runtime/runRegistry';
 import type { WorkflowAgentInvocation } from '@agent/workflowScript/types';
 import type { AgentEntry } from '@agent/index/agentEntry';
 import { RunUsageTotalsSchema, type RunEnd, type RunId } from '@shared/schemas';
+import { emptyPinnedComposition } from '@test/support/nativeToolTestLayer';
 import { noopTrace } from '@test/support/noopTrace';
 import { createFakeWorkspaceRoots, fakePath } from '@test/support/FakePlatform';
 import { fakeProcessServices } from '@test/support/setupPlatform';
@@ -268,6 +269,7 @@ function parentContext(): DelegationParent {
       toolPolicy: {
         approvalPromptsUnavailable: true,
       },
+      composition: emptyPinnedComposition,
     },
   };
 }

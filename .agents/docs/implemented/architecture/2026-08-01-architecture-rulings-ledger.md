@@ -285,6 +285,10 @@ satisfy a literal reading of decision 8. A fourth lifetime without a carrier
 row in §8.1. Reintroducing a process-global lookup for anything a session or
 run layer already provides.
 
+**Amendment (2026-09-23).** A fourth lifetime, the composition, now has its
+carrier row in §8.1: a `Compositions` `LayerMap` entry keyed by composition
+hash, held by the runs that pinned it (see the composition ruling below).
+
 ## The four permanent `AbortController` residents (ruled 2026-09-18; named in the ratchet by [#12700](https://github.com/LionSR/TeXRA/pull/12700))
 
 **Question.** The `new AbortController(` ratchet row is a shrink-only count.
@@ -825,3 +829,46 @@ Collapsing these effects would either omit host refresh work or repeat it.
 
 **Forbids.** A shared post-auth invalidation coordinator across hosts, and a
 second guard around `invalidateRemoteAgentsAfterSignOut` at a call site.
+
+---
+
+## A run pins one composition from a process `Compositions` `LayerMap`; plugins may own layers (ruled 2026-09-23)
+
+**Question.** The plugin architecture (the owner decision of 2026-09-23 in the
+`defineTool` amendment above) makes a run's toolset a composition value
+(`src/tools/composition.ts`). How long does a composition live, who holds
+it, and where may a plugin's resources live?
+
+**Ruling.** A composition is a fourth lifetime, carried by one process
+service: `Compositions` (`src/tools/compositions.ts`), a `LayerMap` keyed by
+composition hash and provided with the `ToolRegistry` by
+`installProcessRuntime`. A run pins its composition in its own layer scope
+(`resolveAgentTools`, from `AgentRun`) and holds it for its lifetime; a
+delegated child (LLM delegation, workflow-script `agent()`, the native
+subagent strategy) joins the key its parent pinned, passed through the
+child's launch options beside the approval gate, instead of resolving the
+switches again. A resumed run resolves its own under the recorded-toolset
+rule. A composition whose switches differ builds beside the one in use; an
+entry closes when the last run holding it ends (reference counting, no idle
+retention); a failed build caches nothing. An entry holds the plugin table
+restricted to the composition's plugins and the services of those plugins'
+layers, which reach the run's tool calls. A plugin that owns resources
+declares `layer` in the manifest and its layer is one object in the
+`@tools/registry` table, so every entry builds through the map's one
+`MemoMap` and compositions that share a plugin share one build of its layer.
+
+**Evidence.** The prototype check built one plugin layer once across two
+compositions, rebuilt only the changed plugin on a new key, and closed each
+plugin layer with the last composition holding it. The toolsets offered by
+every shipped tool-use agent across hosts, switches, the approval gate and
+both families were unchanged by the move (the behavior dump in the PR that
+landed it). The Lean
+server pool stays a process service: its port differs by host (the VS Code
+bridge against the direct pool), the Tools dashboard and the lean4 probe read
+it outside any run, and the probe decides whether lean4 is in a composition
+at all, so the pool cannot live inside the entries it gates.
+
+**Forbids.** A second composition cache, an idle-time-to-live on the map
+standing in for the holders' count, `Layer.fresh` on a plugin layer, a
+plugin layer constructed per composition (its identity is what makes it
+shared), and a child re-resolving its parent's plugin set.

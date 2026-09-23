@@ -38,7 +38,11 @@ import {
 } from '@shared/schemas';
 import { RunLedger } from '@shared/session/runLedger';
 import type { RunState } from '@shared/session/runStateFold';
-import { compositionHash } from '@tools/composition';
+import type {
+  CompositionKey,
+  Compositions,
+  PinnedComposition,
+} from '@tools/compositions';
 import { buildTerminalTool } from '@tools/structuredOutput';
 import type { ToolRegistry } from '@tools/toolTable';
 import { processToolHost } from '@utils/config/platformSettings';
@@ -74,6 +78,8 @@ export interface ToolPolicy {
   readonly approvalPromptsUnavailable?: boolean;
   /** Stop a tool-use run after one model/tool cycle instead of waiting. */
   readonly stopAfterCycle?: boolean;
+  /** The composition a delegated child joins: the one its parent pinned. */
+  readonly composition?: CompositionKey;
 }
 
 interface RunCallbacks {
@@ -107,6 +113,12 @@ export interface AgentRunShape {
   readonly initialUserMessageForTranscript: string | undefined;
   readonly fileService: RunFileService;
   readonly tools: IToolRegistry;
+  /**
+   * The composition the run pinned (or joined, as a delegated child) for its
+   * lifetime: its children join it, and its plugins' services reach its
+   * tool calls.
+   */
+  readonly composition: PinnedComposition;
   /** The toolset the run was offered at open, which a tool-use snapshot
    *  records; a resumed run carries its recorded set forward unchanged. */
   readonly toolset: ReturnType<typeof offeredToolset>;
@@ -175,7 +187,11 @@ export const agentRunLayer = (
 ): Layer.Layer<
   AgentRun,
   Error,
-  RunLedger | LanguageModel | HttpClient.HttpClient | ToolRegistry
+  | RunLedger
+  | LanguageModel
+  | HttpClient.HttpClient
+  | ToolRegistry
+  | Compositions
 > =>
   Layer.effect(
     AgentRun,
@@ -209,6 +225,8 @@ export const agentRunLayer = (
           })
         : undefined;
       const finalToolName = terminalTool?.definition.name ?? null;
+      // The composition is pinned in this layer's scope, so the run holds it
+      // until its layer is released; a delegated child joins its parent's.
       const resolved = yield* resolveAgentTools({
         tools: setting.tools,
         logger,
@@ -223,9 +241,10 @@ export const agentRunLayer = (
         stores: ctx.stores,
         workspaceRoot: session.roots.workspace,
         delegationScope: ctx.delegationAgentScope ?? undefined,
+        inherited: ctx.toolPolicy.composition,
       });
       yield* Effect.logDebug(
-        `Run ${runId} tool composition ${compositionHash(resolved.composition)}`,
+        `Run ${runId} pinned tool composition ${resolved.pinned.key.hash}`,
       ).pipe(
         Effect.annotateLogs({ data: resolved.composition }),
         withLogChannel('AgentRun'),
@@ -334,6 +353,7 @@ export const agentRunLayer = (
         initialUserMessageForTranscript: ctx.initialUserMessageForTranscript,
         fileService: new RunFileService(runId, session.roots),
         tools,
+        composition: resolved.pinned,
         toolset,
         finalToolName,
         structured,

@@ -10,6 +10,7 @@ import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { FileInteractionState } from '@agent/core/state/AgentWorkspaceState';
 import { Runs } from '@agent/runtime/runRegistry';
 import type { RunId } from '@shared/schemas';
+import { emptyPinnedComposition } from '@test/support/nativeToolTestLayer';
 import { noopTrace } from '@test/support/noopTrace';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import { testRunRegistry } from '@test/support/runHandleFixtures';
@@ -93,6 +94,7 @@ describe('executeSubagent child run launch', () => {
       toolPolicy: {
         approvalPromptsUnavailable: false,
       },
+      composition: emptyPinnedComposition,
     },
   };
 

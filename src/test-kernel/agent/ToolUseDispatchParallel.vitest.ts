@@ -74,7 +74,10 @@ import { RunLedger } from '@shared/session/runLedger';
 import type { RunState } from '@shared/session/runStateFold';
 import { noopTrace } from '@test/support/noopTrace';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
-import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
+import {
+  nativeToolTestLayer,
+  emptyPinnedComposition,
+} from '@test/support/nativeToolTestLayer';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { hostStores, setupPlatform } from '@test/support/setupPlatform';
@@ -267,6 +270,7 @@ function agentRun(
     tools,
     finalToolName: null,
     toolset: { offeredTools: [], toolsetHash: '0'.repeat(64) },
+    composition: emptyPinnedComposition,
     structured: { value: undefined },
     model,
     scope: Scope.makeUnsafe(),

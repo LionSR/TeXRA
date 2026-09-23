@@ -43,7 +43,10 @@ import { RunLedger } from '@shared/session/runLedger';
 import type { RunState } from '@shared/session/runStateFold';
 import { StreamLog } from '@shared/session/traceEntries';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
-import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
+import {
+  nativeToolTestLayer,
+  emptyPinnedComposition,
+} from '@test/support/nativeToolTestLayer';
 import { hostStores } from '@test/support/setupPlatform';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import {
@@ -318,6 +321,7 @@ function agentRunTestLayer(init: LoopInit) {
         tools: new MapToolRegistry(tools),
         finalToolName: init.finalToolName ?? null,
         toolset: { offeredTools: [], toolsetHash: '0'.repeat(64) },
+        composition: emptyPinnedComposition,
         structured: init.structured ?? { value: undefined },
         model,
         scope,

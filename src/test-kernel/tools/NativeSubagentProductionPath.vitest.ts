@@ -74,7 +74,10 @@ import { noopTrace } from '@test/support/noopTrace';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
-import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
+import {
+  nativeToolTestLayer,
+  emptyPinnedComposition,
+} from '@test/support/nativeToolTestLayer';
 import {
   createTempDirPlatform,
   makeTempDir,
@@ -545,6 +548,7 @@ async function launchWaitingChild(options: {
       toolPolicy: {
         approvalPromptsUnavailable: false,
       },
+      composition: emptyPinnedComposition,
     },
   };
   const launch = await testRuntime().runPromise(

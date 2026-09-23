@@ -32,6 +32,7 @@ import type { UsageLog } from '@shared/usageLog';
 import type { GitHubSubscriptions } from '@tools/github/subscriptionBindings';
 import type { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import type { SetupPlatform } from '@tools/setup/platform';
+import type { Compositions } from '@tools/compositions';
 import type { ToolRegistry } from '@tools/toolTable';
 import type { HttpClient } from 'effect/unstable/http';
 
@@ -59,8 +60,9 @@ import type { Secrets } from './secrets';
  * `ProjectDatabases`, whose project-scoped borrows share each persistent
  * connection between application state and a session graph,
  * `GitHubSubscriptions`, the run-ownership tables the subscription tool and
- * the settings Git tab share, and `ToolRegistry`, the plugin table every
- * run's offered tools are rebuilt from.
+ * the settings Git tab share, `ToolRegistry`, the plugin table every run's
+ * offered tools are rebuilt from, and `Compositions`, the open compositions
+ * the runs pin over it.
  */
 export type ProcessServices =
   | ProcessIdentity
@@ -84,7 +86,8 @@ export type ProcessServices =
   | GitHubSubscriptions
   | UsageLog
   | SupabaseAuth
-  | ToolRegistry;
+  | ToolRegistry
+  | Compositions;
 
 export type ProcessRuntime = ManagedRuntime.ManagedRuntime<
   ProcessServices,

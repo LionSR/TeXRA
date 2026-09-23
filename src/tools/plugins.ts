@@ -14,8 +14,8 @@
  *
  * Rules: an id is persisted (the disabled-tools key), so it never changes and
  * is never reused; every tool belongs to exactly one plugin (checked below
- * and in the registry). No hooks, task kinds, plugin-owned state or event
- * channels: a plugin is data, re-registered by code at every startup.
+ * and in the registry). No hooks, task kinds or event channels, and no state
+ * but a `layer`: a plugin is data, re-registered by code at every startup.
  */
 
 // Local imports
@@ -75,6 +75,9 @@ export interface ToolPlugin {
    * every agent.
    */
   readonly toggleable?: boolean;
+  /** Owns resources: a layer in `@tools/registry`, built while an open
+   *  composition includes the plugin (`@tools/compositions`). */
+  readonly layer?: true;
   readonly installGuide?: string;
   readonly installUrl?: string;
   /** VS Code extension ID — when present, the dashboard offers a direct "Install" button. */
@@ -441,7 +444,7 @@ const MANIFEST = [
  */
 export const TOOL_PLUGINS: readonly ToolPlugin[] = MANIFEST;
 
-type ToolPluginEntry = (typeof MANIFEST)[number];
+export type ToolPluginEntry = (typeof MANIFEST)[number];
 
 /** Every plugin id in the manifest. */
 export type ToolPluginId = ToolPluginEntry['id'];

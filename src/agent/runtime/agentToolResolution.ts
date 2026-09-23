@@ -5,8 +5,11 @@
  * the plugins still on (the user's dashboard switches and the dependency
  * probes applied), the host and approval gates, the agent's declared tools
  * and the tools the manifest injects while their setting is on (none for
- * reflection). The offered registry is rebuilt from the composition's plugin
- * list over the process's `ToolRegistry` table, in this order:
+ * reflection). The run pins its composition in the process's `Compositions`
+ * for the scope it resolves in (the run's), or joins the one its parent
+ * pinned: a delegated child's plugins are its parent's, whatever the
+ * switches say now. The offered registry is rebuilt from the pinned
+ * composition's table, in this order:
  *   1. The declared tools, in declaration order, each with the table's own
  *      contract (description, parameter schema). A tool the host cannot run
  *      (its `unavailableHosts`; every such tool when no host was named) or
@@ -43,7 +46,8 @@ import {
 import type { LanguageModel } from '@platform/languageModel';
 import type { AgentDelegationScope, ToolDefinition } from '@shared/schemas';
 import { hasDelegationTool } from '@shared/constants/delegationTools';
-import { compositionFor } from '@tools/composition';
+import { compositionFor, compositionHash } from '@tools/composition';
+import { CompositionKey, Compositions } from '@tools/compositions';
 import { findToolPlugin } from '@tools/plugins';
 import { getUnavailableToolNamesCached } from '@tools/toolAvailability';
 import { ToolRegistry } from '@tools/toolTable';
@@ -83,6 +87,8 @@ interface ResolveAgentToolsInput {
   workspaceRoot: string | undefined;
   /** The run's pinned delegation roster scope, when this is a delegated run. */
   delegationScope?: AgentDelegationScope;
+  /** The composition the parent pinned, which a delegated child joins. */
+  inherited?: CompositionKey;
 }
 
 /**
@@ -121,8 +127,9 @@ function availableDelegationModelNamesForTools(
 }
 
 /**
- * Resolve the effective tool list for a single agent run: its composition,
- * and the offered definitions and registry built from it.
+ * Resolve the effective tool list for a single agent run: the composition it
+ * pinned (held until the caller's scope closes), and the offered definitions
+ * and registry built from it.
  */
 export const resolveAgentTools = Effect.fn('resolveAgentTools')(function* ({
   tools,
@@ -134,6 +141,7 @@ export const resolveAgentTools = Effect.fn('resolveAgentTools')(function* ({
   stores,
   workspaceRoot,
   delegationScope,
+  inherited,
 }: ResolveAgentToolsInput) {
   const table = yield* ToolRegistry;
   const injected: string[] = [];
@@ -147,10 +155,14 @@ export const resolveAgentTools = Effect.fn('resolveAgentTools')(function* ({
       }
     }
   }
-  const composition = compositionFor({
+  const own = compositionFor({
     table,
-    disabledIds: yield* getDisabledToolIds(stores.globalState),
-    unavailableTools: getUnavailableToolNamesCached(workspaceRoot),
+    disabledIds: inherited
+      ? new Set<string>()
+      : yield* getDisabledToolIds(stores.globalState),
+    unavailableTools: inherited
+      ? new Set<string>()
+      : getUnavailableToolNamesCached(workspaceRoot),
     host,
     approvalPromptsUnavailable,
     tools: (Array.isArray(tools) ? tools : []).map((toolConfig) =>
@@ -158,9 +170,21 @@ export const resolveAgentTools = Effect.fn('resolveAgentTools')(function* ({
     ),
     injected,
   });
-  // The tools the composition may offer, rebuilt from its plugin list.
+  // A child's plugins are the ones its parent pinned; its declared tools,
+  // injections and gates are its own.
+  const composition = inherited
+    ? {
+        ...own,
+        plugins: inherited.composition.plugins,
+        disabled: inherited.composition.disabled,
+      }
+    : own;
+  const pinned = yield* (yield* Compositions).pin(
+    inherited ?? new CompositionKey(compositionHash(composition), composition),
+  );
+  // The tools the composition may offer: its pinned table.
   const enabled = new Map(
-    composition.plugins.flatMap((id) => [...(table.plugins.get(id) ?? [])]),
+    [...pinned.table.plugins.values()].flatMap((tools) => [...tools]),
   );
 
   /** The host and approval gates, shared by declared and injected tools. */
@@ -254,5 +278,6 @@ export const resolveAgentTools = Effect.fn('resolveAgentTools')(function* ({
     definitions,
     registry: new MapToolRegistry(offered),
     composition,
+    pinned,
   };
 });

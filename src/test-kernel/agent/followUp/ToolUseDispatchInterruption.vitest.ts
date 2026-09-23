@@ -43,7 +43,10 @@ import {
 import { RunLedger } from '@shared/session/runLedger';
 import type { RunState } from '@shared/session/runStateFold';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
-import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
+import {
+  nativeToolTestLayer,
+  emptyPinnedComposition,
+} from '@test/support/nativeToolTestLayer';
 import { hostStores } from '@test/support/setupPlatform';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
@@ -246,6 +249,7 @@ function agentRunTestLayer(init: HarnessInit) {
         tools: new MapToolRegistry(init.tools),
         finalToolName: null,
         toolset: { offeredTools: [], toolsetHash: '0'.repeat(64) },
+        composition: emptyPinnedComposition,
         structured: { value: undefined },
         model,
         scope,

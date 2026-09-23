@@ -60,7 +60,10 @@ import { RunLedger } from '@shared/session/runLedger';
 import type { RunState } from '@shared/session/runStateFold';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRunHandle } from '@test/support/runHandleFixtures';
-import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
+import {
+  nativeToolTestLayer,
+  emptyPinnedComposition,
+} from '@test/support/nativeToolTestLayer';
 import { hostStores } from '@test/support/setupPlatform';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import {
@@ -291,6 +294,7 @@ function agentRunTestLayer(init: LoopInit) {
         tools: new MapToolRegistry({}),
         finalToolName: init.finalToolName ?? null,
         toolset: { offeredTools: [], toolsetHash: '0'.repeat(64) },
+        composition: emptyPinnedComposition,
         structured: { value: undefined },
         model,
         scope,
