@@ -46,20 +46,21 @@ export class AgentCatalogLoadError extends Data.TaggedError(
  * Source priority for lookups (higher priority first). Every source must be
  * listed, not omitted: `deduplicateByName` compares `indexOf`, and an absent
  * source scores `-1`, ranking it first by accident instead of by decision.
+ * Bundled outranks remote, so a stale hosted row never shadows a bundled name.
  */
 const LOOKUP_PRIORITY: AgentSource[] = [
   'custom',
-  'remote',
   'builtInWorkflow',
   'builtInToolUse',
+  'remote',
 ];
 
 /** Source priority for tool-use sessions (prefers tool-use agents over workflow). */
 const TOOL_USE_LOOKUP_PRIORITY: AgentSource[] = [
   'custom',
-  'remote',
   'builtInToolUse',
   'builtInWorkflow',
+  'remote',
 ];
 
 // =============================================================================
@@ -521,10 +522,8 @@ export function resolveAgentForLaunch(
 }
 
 /**
- * Deduplicate agents by name, keeping only the highest priority source.
- * Priority: custom > remote > builtInWorkflow > builtInToolUse.
- * When the same agent name exists in multiple sources (e.g. local + remote),
- * only the highest-priority version appears in the dropdown.
+ * Deduplicate agents by name, keeping only the highest-priority source
+ * (custom > builtInWorkflow > builtInToolUse > remote) for the dropdown.
  */
 function deduplicateByName(entries: AgentEntry[]): AgentEntry[] {
   const byKey = new Map<string, AgentEntry>();

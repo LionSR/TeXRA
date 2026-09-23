@@ -58,7 +58,8 @@ All notable changes to this project will be documented in this file.
   works on a fresh install. `presenter` is now the interactive deck builder
   that compiles your slides and checks every page visually; to turn a
   finished paper into a deck in one pass, use the `paper2slide` workflow
-  agent.
+  agent. A built-in agent now takes precedence over a hosted agent with
+  the same name, so signed-in users run the built-in copies too.
 
 ### Bug Fixes
 

@@ -268,7 +268,11 @@ describe('agent registry', () => {
               yield* Deferred.await(staleLoadGate);
               return [remoteAgentFixture('stale-agent', 'staleAgent', 'Stale')];
             }
-            return [remoteAgentFixture('fresh-agent', 'freshAgent', 'Fresh')];
+            return [
+              remoteAgentFixture('fresh-agent', 'freshAgent', 'Fresh'),
+              // A hosted row left behind for a name the bundle now ships.
+              remoteAgentFixture('hosted-orchestrator', 'orchestrator', 'Old'),
+            ];
           }),
         );
 
@@ -291,6 +295,7 @@ describe('agent registry', () => {
         expect(listRemoteAgents).toHaveBeenCalledTimes(2);
         expect(getAgent('freshAgent')?.source).toBe('remote');
         expect(getAgent('staleAgent')).toBeUndefined();
+        expect(getAgent('orchestrator')?.source).toBe('builtInToolUse');
       }).pipe(
         Effect.ensuring(
           Effect.gen(function* () {
