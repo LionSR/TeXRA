@@ -9,7 +9,7 @@ import {
   AgentPromptSchema,
   AgentToolUseSettingSchema,
 } from '@agent/core/definition/AgentDataclass';
-import { MapToolRegistry, type ITool } from '@agent/core/tools/ToolTypes';
+import type { ITool } from '@agent/core/tools/ToolTypes';
 import { resolveAgentTools } from '@agent/runtime/agentToolResolution';
 import { followUpsLayer } from '@agent/runtime/FollowUps';
 import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
@@ -28,6 +28,8 @@ import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import { hostStores, setupPlatform } from '@test/support/setupPlatform';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
+import { toolRegistryLayer } from '@tools/registry';
+import { ToolRegistry, toolTable } from '@tools/toolTable';
 import { generateRunId } from '@utils/core';
 
 import { sessionWithInteractions } from './progressTestUtils';
@@ -92,6 +94,7 @@ function runLayer(
     Layer.provideMerge(Layer.succeed(RunLedger, ctx.session.ledger)),
     Layer.provideMerge(LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT)),
     Layer.provideMerge(testHttpClientLayer),
+    Layer.provideMerge(toolRegistryLayer),
   );
 }
 
@@ -216,22 +219,28 @@ describe('run-scoped tool resolution', () => {
             { name: 'wolfram' },
           ],
         }).tools,
-        registry: new MapToolRegistry({
-          bash: approvalGatedTool('bash'),
-          grep: tool('grep'),
-          inquiry: { ...tool('inquiry'), unavailableHosts: ['cli'] },
-          write_file: approvalGatedTool('write_file'),
-          wolfram: approvalGatedTool('wolfram'),
-        }),
         logger: noopTrace,
         approvalPromptsUnavailable: true,
         host: 'cli',
         // No conditional injections: this pins the declared-tool gates alone.
-        toolInjections: [],
+        injectTools: false,
         stores: hostStores(),
         workspaceRoot: undefined,
       }).pipe(
         Effect.provide(LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT)),
+        Effect.provide(
+          Layer.succeed(ToolRegistry)(
+            toolTable({
+              test: {
+                bash: approvalGatedTool('bash'),
+                grep: tool('grep'),
+                inquiry: { ...tool('inquiry'), unavailableHosts: ['cli'] },
+                write_file: approvalGatedTool('write_file'),
+                wolfram: approvalGatedTool('wolfram'),
+              },
+            }),
+          ),
+        ),
       );
 
       expect(resolved.definitions.map(({ name }) => name)).toEqual(['grep']);

@@ -7,9 +7,10 @@
  * module's closure (and its readers') small.
  *
  * Derived from this list: the Tools dashboard (in list order), the
- * availability probes, the first-install toggle seed, the disabled-tool names
- * the agent tool resolver withholds, install/auth terminal actions and
- * `texra tools` guides.
+ * availability probes, the first-install toggle seed, the switched-off
+ * plugins and the injected tools of a run's tool composition
+ * (`@tools/composition`), install/auth terminal actions and `texra tools`
+ * guides.
  *
  * Rules: an id is persisted (the disabled-tools key), so it never changes and
  * is never reused; every tool belongs to exactly one plugin (checked below
@@ -20,6 +21,8 @@
 // Local imports
 import type { ToolCategory } from '@shared/settingsView/settingsViewMessages';
 import { DELEGATE_MULTI_AGENTS_TOOL_NAME } from '@shared/constants/delegationTools';
+import { GOAL_FEATURE_FLAG_KEY } from '@shared/schemas';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 import {
   MAX_CONCURRENT_PR_SUBSCRIPTIONS,
   MAX_CONCURRENT_REPO_SUBSCRIPTIONS,
@@ -59,6 +62,13 @@ export interface ToolPlugin {
   readonly description: string;
   /** Checked for availability but listed on no Tools dashboard. */
   readonly hidden?: boolean;
+  /**
+   * Tools of this plugin offered to every tool-use agent, declared or not,
+   * while a boolean catalog setting is on: tool name to setting key. An
+   * injected tool still passes the host and approval gates; reflection runs
+   * get none.
+   */
+  readonly injectedWhen?: Readonly<Record<string, string>>;
   /**
    * Opt-in: the dashboard shows an enable/disable toggle, a fresh install
    * seeds the plugin disabled, and while disabled its tools are withheld from
@@ -142,6 +152,14 @@ const MANIFEST = [
       'executions',
       'accept_run_files',
     ],
+    injectedWhen: {
+      memory: GlobalStateKey.MEMORY_ENABLED,
+      // The `plan` tool owns planning and the goal lifecycle (update, pause,
+      // complete), so any tool-use agent can drive the goal loop while goal
+      // is on. The goal continuation itself is the tool-use loop's
+      // (`maybeBuildGoalContinuation`), not an injection.
+      plan: GOAL_FEATURE_FLAG_KEY,
+    },
     name: 'Memory, Tasks & Delegation',
     category: 'workflow',
     description:
@@ -476,22 +494,4 @@ type _ToggleablePluginsAreProbed = AssertNever<
 /** Look up a plugin by id. */
 export function findToolPlugin(id: string): ToolPlugin | undefined {
   return TOOL_PLUGINS.find((plugin) => plugin.id === id);
-}
-
-/**
- * The tool names withheld from every agent because the user switched their
- * plugin off. Only a probed plugin can be off: a built-in one listed in the
- * disabled ids is ignored. Every toggle surface writes only `toggleable` ids,
- * and a toggleable plugin is always probed (checked above), so the seed and
- * this derivation cover the same plugins.
- */
-export function getDisabledToolNames(
-  disabledIds: ReadonlySet<string>,
-): ReadonlySet<string> {
-  return new Set<string>(
-    TOOL_PLUGINS.filter(
-      (plugin) =>
-        plugin.availability !== undefined && disabledIds.has(plugin.id),
-    ).flatMap((plugin) => plugin.toolNames),
-  );
 }

@@ -1,5 +1,5 @@
 import { it } from '@effect/vitest';
-import { beforeEach, describe, expect } from 'vitest';
+import { describe, expect } from 'vitest';
 import { Effect } from 'effect';
 
 import { resolveAgentTools } from '@agent/runtime/agentToolResolution';
@@ -10,7 +10,7 @@ import {
 import type { ToolDefinition } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { hostStores, installPlatform } from '@test/support/setupPlatform';
-import { getDefaultToolRegistry } from '@tools/registry';
+import { toolRegistryLayer } from '@tools/registry';
 
 const logger = { warn: () => {} };
 
@@ -19,29 +19,18 @@ function toolDefs(names: readonly string[]): ToolDefinition[] {
 }
 
 describe('tool-use tool resolution', () => {
-  // The injections this run resolves with: the production shape, built here
-  // rather than taken from the process list.
-  let injected: readonly {
-    readonly toolName: 'update_config';
-    readonly shouldInject: () => Effect.Effect<boolean>;
-  }[] = [];
-
-  beforeEach(() => {
-    injected = [];
-  });
-
   function resolveNames(
     names: readonly string[],
     options: {
       approvalPromptsUnavailable: boolean;
       host?: 'cli' | 'desktop' | 'extension' | undefined;
+      injectTools?: boolean;
     },
   ) {
     return resolveAgentTools({
       tools: toolDefs(names),
-      registry: getDefaultToolRegistry(),
       logger,
-      toolInjections: injected,
+      injectTools: false,
       stores: hostStores(),
       workspaceRoot: undefined,
       host: 'extension',
@@ -51,6 +40,7 @@ describe('tool-use tool resolution', () => {
       // The delegation-annotation availability read yields `LanguageModel`;
       // this host has no editor models.
       Effect.provide(LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT)),
+      Effect.provide(toolRegistryLayer),
     );
   }
 
@@ -126,16 +116,14 @@ describe('tool-use tool resolution', () => {
     'filters injected approval-gated tools when approval prompts are unavailable',
     () =>
       Effect.gen(function* () {
-        injected = [
-          {
-            toolName: 'update_config',
-            shouldInject: () => Effect.succeed(true),
-          },
-        ];
-
+        // Memory and goal are on by default, so both are injected; `plan` is
+        // approval-gated.
         expect(
-          yield* resolveNames(['grep'], { approvalPromptsUnavailable: true }),
-        ).toEqual(['grep']);
+          yield* resolveNames(['grep'], {
+            approvalPromptsUnavailable: true,
+            injectTools: true,
+          }),
+        ).toEqual(['grep', 'memory']);
       }),
   );
 });

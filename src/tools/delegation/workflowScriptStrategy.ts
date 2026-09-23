@@ -15,7 +15,7 @@ import { Cause, Effect, Exit, FileSystem, type Scope } from 'effect';
 
 // Local imports
 import type { AgentTrace } from '@agent/trace';
-import type { AgentRunServices } from '@agent/runtime/toolInjection';
+import type { AgentRunServices } from '@agent/runtime/runRegistry';
 import { runPersistedWorkflowScript } from '@agent/workflowScript/checkpoint';
 import type {
   WorkflowAgentInvocation,

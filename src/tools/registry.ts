@@ -1,15 +1,16 @@
+// Third-party imports
+import { Layer } from 'effect';
+
 // Local imports
-import { MapToolRegistry, type ToolHost } from '@agent/core/tools/ToolTypes';
-import type {
-  RuntimeTool as ITool,
-  RuntimeToolRegistry as IToolRegistry,
-} from '@agent/runtime/ToolServices';
+import type { ToolHost } from '@agent/core/tools/ToolTypes';
+import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
 import type { CanonicalToolDisplayName } from '@shared/tools/toolKind';
 import {
   DELEGATE_MULTI_AGENTS_TOOL_NAME,
   type CanonicalDelegationToolName,
 } from '@shared/constants/delegationTools';
 import type { PluginToolName, ToolPluginId } from '@tools/plugins';
+import { ToolRegistry, toolTable } from '@tools/toolTable';
 
 // Local file imports
 import { BashTool } from './bash';
@@ -178,13 +179,10 @@ const PLUGIN_TOOLS = {
 
 type PluginTools = typeof PLUGIN_TOOLS;
 
-/** Union of all tool names registered in the default registry. */
+/** Union of all registered tool names. */
 export type RegisteredToolName = {
   [Id in ToolPluginId]: keyof PluginTools[Id];
 }[ToolPluginId];
-
-/** Singleton IToolRegistry instance for the default tools. */
-let defaultRegistryInstance: IToolRegistry | null = null;
 
 /**
  * Compile-time guard: every canonical tool with specialized display treatment
@@ -200,26 +198,18 @@ type _CanonicalDelegationNamesAreRegistered = AssertNever<
   Exclude<CanonicalDelegationToolName, RegisteredToolName>
 >;
 
-/** Lazy singleton accessor for the default tool registry. */
-export function getDefaultToolRegistry(): IToolRegistry {
-  if (defaultRegistryInstance) return defaultRegistryInstance;
-  // Flattening cannot overwrite a tool: the manifest rules out a name two
-  // plugins share.
-  const tools: Record<string, ITool> = Object.assign(
-    {},
-    ...Object.values(PLUGIN_TOOLS),
-  );
-  defaultRegistryInstance = new MapToolRegistry(tools);
-  return defaultRegistryInstance;
-}
+/**
+ * Every plugin's tools, for readers outside a run (the Tools dashboard, the
+ * VS Code language-model tools); a run reads the same table as the
+ * `ToolRegistry` service. Flattening cannot overwrite a tool: the manifest
+ * rules out a name two plugins share.
+ */
+export const TOOL_TABLE = toolTable(PLUGIN_TOOLS);
+
+/** The process's `ToolRegistry`, which `installProcessRuntime` provides. */
+export const toolRegistryLayer = Layer.succeed(ToolRegistry)(TOOL_TABLE);
 
 /** Whether a registered tool declares itself unavailable on a product host. */
-export function isDefaultToolUnavailableOnHost(
-  name: string,
-  host: ToolHost,
-): boolean {
-  return (
-    getDefaultToolRegistry().get(name)?.unavailableHosts?.includes(host) ===
-    true
-  );
+export function isToolUnavailableOnHost(name: string, host: ToolHost): boolean {
+  return TOOL_TABLE.get(name)?.unavailableHosts?.includes(host) === true;
 }

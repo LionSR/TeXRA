@@ -141,7 +141,6 @@ vi.mock('@tools/delegation/delegationAvailability', async (importOriginal) => ({
 }));
 
 import { WorkflowScriptTool } from '@tools/delegation/WorkflowScriptTool';
-import { getDefaultToolRegistry } from '@tools/registry';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 
 const parentRunId = '7154c4700700' as RunId;

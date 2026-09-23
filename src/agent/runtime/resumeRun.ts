@@ -54,7 +54,7 @@ import {
   type ToolUseResumeData,
 } from './SessionResumeRetrieval';
 import type { SessionHandle } from './SessionHandle';
-import type { AgentRunServices } from './toolInjection';
+import type { AgentRunServices } from './runRegistry';
 
 type ResumeRunCompletion = Effect.Effect<AgentFlowResult['outcome'], Error>;
 /** A resume settles at the run's idle turn or at run termination, after admitted input is consumed. */

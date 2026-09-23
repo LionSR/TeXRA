@@ -58,6 +58,7 @@ import {
   type LeanLanguageServicesShape,
 } from '@tools/lean/leanLanguageServices';
 import type { SetupPlatform, SetupPlatformShape } from '@tools/setup/platform';
+import { ToolRegistry, toolTable } from '@tools/toolTable';
 import {
   createFakePlatform,
   createFakeWorkspaceRoots,
@@ -420,6 +421,10 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     NodePath.layer,
     Layer.mock(UpdateCheckRecords, {}),
     Layer.mock(AgentEngine, {}),
+    // An empty tool table (the real one loads every tool): a suite that
+    // resolves a run's tools runs on the session graph's runtime or provides
+    // `toolRegistryLayer`.
+    Layer.succeed(ToolRegistry)(toolTable({})),
     // The records above are mocked, so the bare runtime's global-root handle
     // is too: a suite that reads it provides its own innermost.
     Layer.mock(GlobalDatabase, {}),

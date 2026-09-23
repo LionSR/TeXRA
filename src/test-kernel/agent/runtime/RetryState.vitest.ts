@@ -52,6 +52,7 @@ import {
   type InvokeRequest,
 } from '@agent/runtime/ModelInvoker';
 import { makeRunCell } from '@agent/runtime/loop/runProgram';
+import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
 import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
 import type { BoundModel } from '@agent/runtime/run/modelBinding';
 import { classifyModelFailure } from '@agent/runtime/run/modelFailure';
@@ -82,7 +83,6 @@ import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { hostStores, installPlatform } from '@test/support/setupPlatform';
-import { getDefaultToolRegistry } from '@tools/registry';
 import { isObject } from '@utils/core';
 import { RunFileService } from '@utils/files/runStorage';
 
@@ -288,7 +288,7 @@ function agentRun(
     userVarChannels: {},
     initialUserMessageForTranscript: undefined,
     fileService: new RunFileService(runId, session.roots),
-    tools: getDefaultToolRegistry(),
+    tools: new MapToolRegistry({}),
     finalToolName: null,
     toolset: { offeredTools: [], toolsetHash: '0'.repeat(64) },
     structured: { value: undefined },

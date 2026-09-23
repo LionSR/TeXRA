@@ -323,7 +323,7 @@ export const refreshToolAvailability = Effect.fn('refreshToolAvailability')(
  *
  * Only includes tools whose external dependency is missing (not-found).
  * Disabled tools are NOT included — the caller handles those separately
- * via `getDisabledToolNames` in `@tools/plugins`.
+ * as the switched-off plugins of the run's composition (`@tools/composition`).
  *
  * Used by the agent tool resolver to avoid blocking the first tool-use
  * flow on network probes. External tools that are actually missing will

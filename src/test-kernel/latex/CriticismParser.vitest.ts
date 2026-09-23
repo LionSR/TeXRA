@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { parseCriticismAnnotations } from '@latex/criticismParser';
-import { getDefaultToolRegistry } from '@tools/registry';
+import { TOOL_TABLE } from '@tools/registry';
 
 describe('parseCriticismAnnotations', () => {
   it('accepts whitespace before arguments and severity zero', () => {
@@ -48,8 +48,7 @@ describe('DiagnosticsTool add-command input validation', () => {
   it('rejects empty paths and accepts severity zero', () => {
     // The tool's own input schema, reached through its registered definition
     // rather than its implementation module.
-    const schema =
-      getDefaultToolRegistry().get('diagnostics')!.definition.zodSchema!;
+    const schema = TOOL_TABLE.get('diagnostics')!.definition.zodSchema!;
 
     expect(() =>
       schema.parse({
