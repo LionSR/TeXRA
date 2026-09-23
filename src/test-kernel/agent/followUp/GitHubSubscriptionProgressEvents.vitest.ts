@@ -420,10 +420,9 @@ describe('GitHub subscription app signals and follow-ups', () => {
         expect(unhandledRejection).not.toHaveBeenCalled();
         const [warning] = logs.at('WARN', 'test subscriptions');
         expect(warning?.message).toBe(
-          'Failed to deliver subscription follow-up',
+          `Failed to deliver subscription follow-up for owner/repo (run ${runId})`,
         );
-        expect(warning?.annotations.data).toContain('owner/repo');
-        expect(warning?.annotations.data).toContain(runId);
+        expect(warning?.annotations.data).toContain('delivery failed');
       }),
   );
 });

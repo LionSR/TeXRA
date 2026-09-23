@@ -197,7 +197,7 @@ export function startRecording(
         });
         return { process: subprocess, path: absPath };
       },
-      catch: (cause) => cause,
+      catch: ensureError,
     }).pipe(recorderFailure('startRecording'));
     if (!started) {
       return yield* new AudioRecorderError({
@@ -240,7 +240,7 @@ export function stopRecording(): Effect.Effect<string, AudioRecorderError> {
 
     yield* Effect.try({
       try: () => active.process.kill('SIGTERM'),
-      catch: (cause) => cause,
+      catch: ensureError,
     }).pipe(recorderFailure('stopRecording'));
 
     // Await the process this module already holds rather than guessing how
@@ -255,7 +255,7 @@ export function stopRecording(): Effect.Effect<string, AudioRecorderError> {
 
     const size = yield* Effect.try({
       try: () => (existsSync(active.path) ? statSync(active.path).size : null),
-      catch: (cause) => cause,
+      catch: ensureError,
     }).pipe(recorderFailure('stopRecording'));
     if (size === null) {
       return yield* new AudioRecorderError({
@@ -299,6 +299,6 @@ export function transcribeRecording(
       });
       return result.text;
     },
-    catch: (cause) => cause,
+    catch: ensureError,
   }).pipe(recorderFailure('transcribeRecording'));
 }
