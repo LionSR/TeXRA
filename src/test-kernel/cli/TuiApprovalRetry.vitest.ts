@@ -99,7 +99,6 @@ import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { testRunHandle } from '@test/support/runHandleFixtures';
 import { setGoalSessionAutoApproval } from '@tools/goal';
-import { proposalApprovals } from '@tools/approval';
 import { requestToolEditApproval } from '@tools/approval/toolEditApproval';
 import { bashApprovalRequest } from '../agent/progressTestUtils';
 
@@ -568,7 +567,7 @@ describe('TUI request decisions', () => {
         });
         yield* waitFor(() => {
           expect(
-            proposalApprovals(testDefaultSession()).isBypassed(runId),
+            testDefaultSession().approvals.proposal.isBypassed(runId),
           ).toBe(true);
           expect(
             testDefaultSession().approvals.toolEdit.bypass.isBypassed(runId),
@@ -647,7 +646,7 @@ describe('TUI request decisions', () => {
         decideCurrent({ action: 'approve' });
 
         expect(yield* Fiber.join(pending)).toEqual({ action: 'approve' });
-        expect(proposalApprovals(testDefaultSession()).isBypassed(runId)).toBe(
+        expect(testDefaultSession().approvals.proposal.isBypassed(runId)).toBe(
           false,
         );
         expect(

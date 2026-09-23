@@ -2,11 +2,10 @@ import '@test/support/sessionGraphTestSetup';
 
 import { Effect } from 'effect';
 import type { AgentTrace } from '@agent/trace';
-import { openSessionEffect } from '@agent/runtime/sessionGraph';
-import {
-  forEachLiveSession,
-  type SessionHandle,
-  type SessionHandleInit,
+import { heldSessions, openSessionEffect } from '@agent/runtime/sessionGraph';
+import type {
+  SessionHandle,
+  SessionHandleInit,
 } from '@agent/runtime/SessionHandle';
 import { aggregateId, type RunId, type RunPhase } from '@shared/schemas';
 import { isTranscriptEvent } from '@shared/schemas';
@@ -64,10 +63,9 @@ export function createProcessSession(
 ): Effect.Effect<SessionHandle, SessionOpenError> {
   return Effect.gen(function* () {
     const roots = testWorkspaceRoots();
-    const predecessors: SessionHandle[] = [];
-    forEachLiveSession((live) => {
-      if (live.roots.storage === roots.storage) predecessors.push(live);
-    });
+    const predecessors = heldSessions().filter(
+      (live) => live.roots.storage === roots.storage,
+    );
     yield* Effect.forEach(predecessors, (live) => live.dispose(), {
       discard: true,
     });

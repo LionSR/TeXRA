@@ -113,7 +113,10 @@ function executeWorkflowAgentTool(
   input: WorkflowAgentInput,
 ): Effect.Effect<ToolResult, Error, ToolServices> {
   return Effect.gen(function* () {
-    const call = requireDelegationParent('delegate_workflow', yield* ToolCall);
+    const call = yield* requireDelegationParent(
+      'delegate_workflow',
+      yield* ToolCall,
+    );
     const agent = yield* requireVisibleAgent(
       call.roots,
       'workflow',
@@ -229,7 +232,10 @@ function executeDelegateAgentTool(
   input: DelegateAgentInput,
 ): Effect.Effect<ToolResult, Error, ToolServices> {
   return Effect.gen(function* () {
-    const call = requireDelegationParent('delegate_agent', yield* ToolCall);
+    const call = yield* requireDelegationParent(
+      'delegate_agent',
+      yield* ToolCall,
+    );
     // The `working_directory` opt-in, over this call's project: the schema
     // parses the path, the session it runs on says whether worktrees are
     // enabled for it.

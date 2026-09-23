@@ -1246,7 +1246,7 @@ export class SessionHandle {
    * the session's runs, whenever it releases the session (a `closeSession`,
    * the runtime's disposal, {@link dispose}). On owner-release paths
    * (`closeSession`, runtime disposal) the owner has already dropped the
-   * session from the set {@link forEachLiveSession} reads by then;
+   * session from the set {@link heldSessions} reads by then;
    * {@link dispose} unwinds first and drops the session afterwards.
    */
   unwind(): Effect.Effect<void> {
@@ -1269,16 +1269,6 @@ export class SessionHandle {
       );
     });
   }
-}
-
-/** Visit every session the process's owner holds — for process-shutdown
- * sweeps that must reach session-keyed registries (e.g. the agent-CLI session
- * stores). The owner's held set is the only list of live sessions; no module
- * keeps a second one. */
-export function forEachLiveSession(
-  callback: (session: SessionHandle) => void,
-): void {
-  for (const session of heldSessions()) callback(session);
 }
 
 /**

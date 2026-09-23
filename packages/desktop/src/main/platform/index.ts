@@ -2,7 +2,7 @@ import { join } from 'node:path';
 import { app } from 'electron';
 import { Cause, Effect, Exit, Layer, Scope } from 'effect';
 
-import { createPlatformAgentDirectories } from '@agent/index';
+import { AgentDirectoryService } from '@agent/index';
 import { createSupabaseAuth, type SupabaseAuthShape } from '@auth/SupabaseAuth';
 import { bootstrapHost } from '@controllers/hostBootstrap';
 import {
@@ -159,15 +159,17 @@ export async function initializeElectronPlatform(
   const resourcesPath = resolveResourcesPath(mainDirname);
   const agentDirectoriesLayer = Layer.effect(
     AgentDirectories,
-    Effect.map(AppState, (state) =>
-      createPlatformAgentDirectories({
-        channel: 'desktop',
-        resourcesPath,
-        customDirectoryStore: {
-          get: () =>
-            state.get<string | undefined>(GlobalStateKey.CUSTOM_AGENT_DIR),
-        },
-      }),
+    Effect.map(
+      AppState,
+      (state) =>
+        new AgentDirectoryService({
+          channel: 'desktop',
+          resourcesPath,
+          customDirectoryStore: {
+            get: () =>
+              state.get<string | undefined>(GlobalStateKey.CUSTOM_AGENT_DIR),
+          },
+        }),
     ),
   );
   const setupAuth = createDesktopSetupAuth();

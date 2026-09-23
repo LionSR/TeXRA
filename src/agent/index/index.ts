@@ -16,7 +16,6 @@ export {
   agentSourceDirectory,
 } from './AgentDirectoryService';
 
-export { createPlatformAgentDirectories } from './platformAgentDirectories';
 export { BUNDLED_AGENT_DIRECTORY_NAMES } from './BundledAgentDirectories';
 
 export {

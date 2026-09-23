@@ -59,11 +59,12 @@ vi.mock('@effect/sql-sqlite-node/SqliteClient', async (importOriginal) => ({
 import { TraceEmitter, type ResultEvent } from '@agent/trace';
 import { runLedgerLayer } from '@agent/runtime/RunLedger';
 import { sessionEventsLayer } from '@agent/runtime/SessionEvents';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
-  forEachLiveSession,
-  type SessionHandle,
-} from '@agent/runtime/SessionHandle';
-import { closeSession, openSessionEffect } from '@agent/runtime/sessionGraph';
+  closeSession,
+  heldSessions,
+  openSessionEffect,
+} from '@agent/runtime/sessionGraph';
 import { createSessionApprovals } from '@agent/runtime/runApprovalQueue';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { inquiryRecordsLayer } from '@controllers/session/inquiryRecords';
@@ -742,13 +743,8 @@ describe('Sessions owner', () => {
       roots: createFakeWorkspaceRoots({ storagePath }),
       transcriptMode: { kind: 'ephemeral', reason: 'sessions owner test' },
     });
-  const isLive = (session: SessionHandle): boolean => {
-    let live = false;
-    forEachLiveSession((candidate) => {
-      live ||= candidate === session;
-    });
-    return live;
-  };
+  const isLive = (session: SessionHandle): boolean =>
+    heldSessions().includes(session);
   const track = (session: SessionHandle, runId: RunId) =>
     session.runs.track(testRunHandle({ runId, agent: 'chat' }));
 

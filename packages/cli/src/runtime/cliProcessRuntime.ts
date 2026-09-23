@@ -41,7 +41,7 @@
 import { Effect, Layer } from 'effect';
 
 import { installedProcessRuntime } from '@agent/runtime';
-import { createPlatformAgentDirectories } from '@agent/index';
+import { AgentDirectoryService } from '@agent/index';
 import { SignInFailed } from '@common/errors/signInFailed';
 import { appStateStoreFromDatabase } from '@controllers/session/appStateStore';
 import { globalDatabaseLayer } from '@controllers/session/Database';
@@ -241,7 +241,7 @@ export function installCliProcessRuntime(
         );
       },
     });
-    const agentDirectories = createPlatformAgentDirectories({
+    const agentDirectories = new AgentDirectoryService({
       channel: 'cli',
       resourcesPath: options?.resourcesPath ?? '',
       customDirectoryStore: { get: () => Effect.succeed(undefined) },

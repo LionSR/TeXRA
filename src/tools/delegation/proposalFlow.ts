@@ -11,52 +11,47 @@ import { Cause, Effect, Exit } from 'effect';
 // Local imports
 import {
   findAgentByIdentifier,
+  resolveDelegationScopeAgents,
   type AgentRosterStores,
 } from '@agent/index/agentRegistry';
 import type { ToolCallShape } from '@agent/runtime/ToolCall';
 import type {
   AgentDelegationScope,
   RequestDecision,
+  ToolError,
   ToolResult,
   ToolUseAgentProposal,
   WorkflowAgentProposal,
 } from '@shared/schemas';
-import { AgentCategory, ToolError } from '@shared/schemas';
+import { AgentCategory } from '@shared/schemas';
 import type {
   DatabaseNotOwner,
   DatabaseWriteFailed,
 } from '@shared/session/database';
 import { refusalOf } from '@shared/session/approvalDecision';
-import { proposalApprovals } from '@tools/approval';
 import { errorResult, executed } from '@tools/core/result';
+import { requireToolRun, type ToolRun } from '@tools/core/toolRun';
 import { generateShortId } from '@utils/core';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import {
-  getDelegationAgent,
-  getDelegationAgents,
-  selectAvailableDelegationModel,
-} from './delegationAvailability';
+import { selectAvailableDelegationModel } from './delegationAvailability';
 
 // Local file imports
 import { executeSubagent } from './subagentRun';
 
 /** Invocation capabilities required by a delegation tool after its entry check. */
 export interface DelegationParent extends ToolCallShape {
-  readonly run: NonNullable<ToolCallShape['run']>;
+  readonly run: ToolRun;
 }
 
 /** Narrow a generic tool call to the capabilities every delegation path needs. */
 export function requireDelegationParent(
   toolName: string,
   call: ToolCallShape,
-): DelegationParent {
-  if (!call.run) {
-    throw new ToolError(
-      `${toolName} requires an active launched agent session.`,
-    );
-  }
-  return { ...call, run: call.run };
+): Effect.Effect<DelegationParent, ToolError> {
+  return requireToolRun(toolName, call).pipe(
+    Effect.map((run) => ({ ...call, run })),
+  );
 }
 
 const DEFAULT_DELEGATION_REJECTION_FEEDBACK = [
@@ -76,7 +71,7 @@ export const requireVisibleAgent = Effect.fn('requireVisibleAgent')(function* (
   name: string,
   scope?: AgentDelegationScope,
 ) {
-  const agents = yield* getDelegationAgents(stores, category, scope);
+  const agents = yield* resolveDelegationScopeAgents(stores, scope, category);
   const agent = findAgentByIdentifier(agents, name);
   if (agent) return agent;
   return yield* Effect.fail(
@@ -96,7 +91,7 @@ export const requireWorkflowOrToolUseAgent = Effect.fn(
 ) {
   const available: string[] = [];
   for (const category of [AgentCategory.Workflow, AgentCategory.ToolUse]) {
-    const agents = yield* getDelegationAgents(stores, category, scope);
+    const agents = yield* resolveDelegationScopeAgents(stores, scope, category);
     const agent = findAgentByIdentifier(agents, name);
     if (agent) return agent;
     available.push(
@@ -190,7 +185,7 @@ export const requestDelegationProposal = Effect.fn('requestDelegationProposal')(
     DatabaseNotOwner | DatabaseWriteFailed
   > {
     const { session, runId } = parent.run;
-    if (proposalApprovals(session).isBypassed(runId)) {
+    if (session.approvals.proposal.isBypassed(runId)) {
       return { result: { action: 'approve' }, autoApproved: true };
     }
 
@@ -278,11 +273,13 @@ export const proposeAndExecute = Effect.fn('proposeAndExecute')(function* (
   const agentOverride =
     result.agent && result.agent !== proposal.agent ? result.agent : undefined;
   const resolvedAgentOverride = agentOverride
-    ? yield* getDelegationAgent(
-        parent.roots,
-        proposal.agentCategory,
+    ? findAgentByIdentifier(
+        yield* resolveDelegationScopeAgents(
+          parent.roots,
+          parent.run.delegationAgentScope ?? undefined,
+          proposal.agentCategory,
+        ),
         agentOverride,
-        parent.run.delegationAgentScope ?? undefined,
       )
     : undefined;
 

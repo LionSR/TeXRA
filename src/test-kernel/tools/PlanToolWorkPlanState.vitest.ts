@@ -18,7 +18,7 @@ import { installPlatform as installFakePlatform } from '@test/support/setupPlatf
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { FakeConfigProvider } from '@test/support/FakePlatform';
 import { clearGoal, goalOf, startGoal } from '@tools/goal';
-import { proposalApprovals, releaseRunResources } from '@tools/approval';
+import { releaseRunResources } from '@tools/approval';
 import { PlanTool } from '@tools/plan/PlanTool';
 import { generateRunId } from '@utils/core';
 
@@ -171,7 +171,7 @@ describe('PlanTool — update (plan approval)', () => {
           );
 
           session.approvals.setDelegatedWorkBypasses(runId, true);
-          expect(proposalApprovals(session).isBypassed(runId)).toBe(true);
+          expect(session.approvals.proposal.isBypassed(runId)).toBe(true);
 
           const resultFiber = yield* Effect.forkScoped(
             PlanTool.call({ command: 'update', ...followUpPlan }).pipe(

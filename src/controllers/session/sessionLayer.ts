@@ -179,7 +179,7 @@ class Session extends Context.Service<Session, SessionHandle>()(
 /**
  * The sessions the owner holds, outside the map: what the owner's synchronous
  * `current` and `held` read, and so the process's one list of live sessions
- * (`heldSessions`, `forEachLiveSession`) — no module keeps a second one. An
+ * (`heldSessions`) — no module keeps a second one. An
  * entry is written once its handle exists and removed as the first step of its
  * release, so a root whose session is still building, or already unwinding,
  * reads as having none. Keyed by the entry's `SessionKey` and matched on its

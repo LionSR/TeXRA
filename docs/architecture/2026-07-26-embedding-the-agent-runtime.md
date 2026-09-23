@@ -70,8 +70,8 @@ supplies each one there rather than in the platform literal:
   canonicalizes the workspace path and picks the config provider.
 
 `agentDirectories` is the port that names the three directories the registry
-scans. `createPlatformAgentDirectories`
-(`src/agent/index/platformAgentDirectories.ts:20-33`) builds one over a
+scans. `new AgentDirectoryService({...})`
+(`src/agent/index/AgentDirectoryService.ts:58-60`) builds one over a
 packaged resources tree; its `builtIn()` and `builtInToolUse()` read that tree
 in place. Nothing is copied into global storage, so there is no bundle-copy
 step to run and no version state key to keep.
@@ -126,7 +126,7 @@ sit in. There is no copy step: `builtIn()` and `builtInToolUse()` resolve
 inside `resourcesPath`, and the files are read where they are.
 
 ```ts
-const agentDirectories = createPlatformAgentDirectories({
+const agentDirectories = new AgentDirectoryService({
   channel: 'my-embedder',
   resourcesPath, // dir containing agents/, tool_use_agents/, skills/
   customDirectoryStore: { get: () => Effect.succeed(undefined) },
@@ -204,7 +204,7 @@ import { initPlatform } from '@platform/platform';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { createNodeWorkspaceRoots } from '@platform/defaults/nodeHost';
 import { directLeanLanguageServices } from '@tools/lean/direct/directLspAdapter';
-import { createPlatformAgentDirectories } from '@agent/index/platformAgentDirectories';
+import { AgentDirectoryService } from '@agent/index';
 import { installProcessRuntime } from '@controllers/session/sessionLayer';
 import { nodeProcesses } from '@platform/defaults/nodeProcesses';
 import { bootstrapHost } from '@controllers/hostBootstrap';
@@ -216,7 +216,7 @@ import { AgentCategory } from '@shared/schemas/agent';
 
 // Step 1 — the platform is two members; everything else has another owner.
 const lifecycle = createLifecycleHost();
-const agentDirectories = createPlatformAgentDirectories({
+const agentDirectories = new AgentDirectoryService({
   channel: 'my-embedder',
   resourcesPath, // dir containing agents/, tool_use_agents/, skills/
   customDirectoryStore: { get: () => Effect.succeed(undefined) },
@@ -424,9 +424,9 @@ one agent, an embedder cannot either.
   can skip the packaged resources tree entirely and point `custom()` at your
   own directory of YAML.
 - **Choosing where custom agents live.** The CLI builds its port with
-  `createPlatformAgentDirectories({ channel: 'cli', customDirectoryStore: … })`
-  (`packages/cli/src/runtime/cliProcessRuntime.ts:246-250`,
-  `src/agent/index/platformAgentDirectories.ts:25-57`). An embedder is free to
+  `new AgentDirectoryService({ channel: 'cli', customDirectoryStore: … })`
+  (`packages/cli/src/runtime/cliProcessRuntime.ts:244-248`,
+  `src/agent/index/AgentDirectoryService.ts`). An embedder is free to
   supply a three-line literal instead:
 
   ```ts
@@ -574,7 +574,7 @@ The caller knows which case it is in, and says so with
   depend on this choice (`src/agent/runtime/toolInjection.ts`).
 
 There is no separate agent-bundle bootstrap to run or skip. The installed
-`AgentDirectoriesPort` is the whole of it: `createPlatformAgentDirectories`
+`AgentDirectoriesPort` is the whole of it: `AgentDirectoryService`
 resolves `builtIn()` and `builtInToolUse()` inside the `resourcesPath` it was
 given and the files are read where they sit, so a port pointed at a tree that
 does not hold them leaves `loadAgents` with no packaged agents (§2).
