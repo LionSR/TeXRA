@@ -154,7 +154,7 @@ interface OutputExecResult {
 
 type RoundExit = {
   readonly state: RunState;
-  readonly kind: 'completed' | 'failed' | 'cancelled';
+  readonly kind: RunOutcome;
 };
 
 /** The finish reason of a completed turn; the editor arm reports none. */

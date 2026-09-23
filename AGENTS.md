@@ -142,11 +142,12 @@ Membership is computed from the suite's source, not declared. A suite under a
 `pure` directory is `pure` unless it calls `vi.mock` / `vi.doMock` on a
 repository module, imports `@platform/*` or a support module that installs or
 reads a host, or brings its own DOM (`lit`, `jsdom`) — then it is `kernel`. What
-a source scan cannot see — a pair of suites sharing terminal state — is found by
-file-order shuffles and kept by name in
-`config/ratchets/pure-tier-kernel-suites.json`, shrink-only. A module under test
-that reads `platform()` or the workspace roots itself is not an entry there: it
-is a production defect, and the fix is to make it take its host as a layer or a
+a source scan cannot see — a suite that changes process-wide state a library
+reads once, such as the environment chalk takes its color level from — is found
+by file-order shuffles and fixed in the suite: set the state on the instance it
+lives on and restore it after. There is no list of exempt suites. A module
+under test that reads `platform()` or the workspace roots itself is a
+production defect, and the fix is to make it take its host as a layer or a
 value. So the practical
 rule for a new suite: test the module directly, provide dependencies as values
 or layers, and do not mock repository modules. A `vi.mock` is what moves your

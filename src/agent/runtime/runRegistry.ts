@@ -320,6 +320,22 @@ export class RunRegistry {
     return this.stopper.kill(runId, options);
   }
 
+  /** Stop every top-level run, cascading into its children: the sweep a
+   *  session close and a project close both run. A child with a handle is
+   *  stopped by its parent's cascade; a native child between turns has no
+   *  handle, and its kill interrupts the loop the registry retains for it.
+   *  The kills are issued now; the answer joins their settlements, and
+   *  fails as the first refused one does, for the caller to map into its
+   *  own error channel. */
+  stopAll(): Effect.Effect<void, Error> {
+    const settlements = this.getActiveIds().flatMap((runId) =>
+      this.getHandle(runId)?.isChild
+        ? []
+        : [this.kill(runId, { detachActiveChildren: false }).settlement],
+    );
+    return Effect.all(settlements, { concurrency: 'unbounded', discard: true });
+  }
+
   /** Stop a visible agent run and apply the caller's declared child policy:
    *  the one gesture hosts call, whose choreography is `RunStopper`'s. */
   stopAgentRun(

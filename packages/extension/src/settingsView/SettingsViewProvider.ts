@@ -26,10 +26,28 @@ import type { SettingsTabPanelName } from '@shared/settingsView/settingsViewMess
 // Local file imports
 import { SettingsViewMessageHandler } from './SettingsViewMessageHandler';
 
+function isReadyMessage(message: unknown): boolean {
+  return (
+    typeof message === 'object' &&
+    message !== null &&
+    'command' in message &&
+    message.command === SETTINGS_VIEW_COMMANDS.WEBVIEW_READY
+  );
+}
+
 export class SettingsViewProvider {
   public static readonly viewType = 'texra.settingsView';
   private _view?: vscode.WebviewPanel;
   private _viewDisposables = new DisposableStore();
+  /** Whether the panel's frontend has posted `WEBVIEW_READY`. Until then a
+   *  message posted to it is dropped, since its document may not have
+   *  loaded or mounted a listener yet (#12495). */
+  private viewReady = false;
+  /** The latest tab asked for before the panel was ready, posted on ready. */
+  private pendingTab?: {
+    tab: SettingsTabPanelName;
+    agentSubTab?: AgentCategory;
+  };
   private readonly contentProvider: BundledViewContentProvider;
   private readonly messageHandler: SettingsViewMessageHandler;
 
@@ -137,13 +155,23 @@ export class SettingsViewProvider {
 
     // this._view can be undefined here: the awaited sendAllData above yields,
     // and disposing the dashboard panel during that await runs cleanupView.
-    if (tab != null && this._view) {
-      await this._view.webview.postMessage({
-        command: SETTINGS_VIEW_COMMANDS.SET_TAB,
-        tab,
-        ...(agentSubTab && { agentSubTab }),
-      });
+    if (tab == null || !this._view) return;
+    if (this.viewReady) {
+      await this.postTab(this._view.webview, { tab, agentSubTab });
+    } else {
+      this.pendingTab = { tab, agentSubTab };
     }
+  }
+
+  private async postTab(
+    webview: vscode.Webview,
+    { tab, agentSubTab }: NonNullable<SettingsViewProvider['pendingTab']>,
+  ): Promise<void> {
+    await webview.postMessage({
+      command: SETTINGS_VIEW_COMMANDS.SET_TAB,
+      tab,
+      ...(agentSubTab && { agentSubTab }),
+    });
   }
 
   /**
@@ -163,9 +191,16 @@ export class SettingsViewProvider {
         ),
       ),
     );
-    return panel.webview.onDidReceiveMessage((message) =>
-      this.messageHandler.handleMessage(message, panel),
-    );
+    return panel.webview.onDidReceiveMessage(async (message) => {
+      await this.messageHandler.handleMessage(message, panel);
+      if (this._view !== panel || !isReadyMessage(message)) return;
+      // The ready handler has repainted the view; the tab asked for while it
+      // loaded goes after that data, as a reveal of a live panel orders them.
+      this.viewReady = true;
+      const pending = this.pendingTab;
+      this.pendingTab = undefined;
+      if (pending) await this.postTab(panel.webview, pending);
+    });
   }
 
   private cleanupView(): void {
@@ -175,6 +210,8 @@ export class SettingsViewProvider {
       disposables.dispose();
     } finally {
       this._view = undefined;
+      this.viewReady = false;
+      this.pendingTab = undefined;
       this.messageHandler.clearActiveView();
     }
   }

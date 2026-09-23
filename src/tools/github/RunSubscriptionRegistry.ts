@@ -78,14 +78,35 @@ export class RunSubscriptionRegistry<K extends string, Input> {
    * anything" in O(1) instead of scanning every run's every binding.
    */
   private readonly bindingCountBySession = new Map<SessionHandle, number>();
+  private readonly keysListener: Disposable;
 
   constructor(private readonly opts: RunSubscriptionRegistryOptions<K, Input>) {
     this.logger = opts.logger ?? createLog(opts.name);
     // Source-key changes are internal bookkeeping. The registry emits the UI
     // signal only after its binding map has reached the corresponding state.
-    opts.source.onKeysChanged((keys) => {
+    this.keysListener = opts.source.onKeysChanged((keys) => {
       this.pruneMissingSourceKeys(keys);
     });
+  }
+
+  /**
+   * Release everything this registry holds on the polling source and the
+   * sessions: the source-key listener, every session release hook, and every
+   * binding's subscription. The owning runtime's layer runs it on disposal,
+   * so a replacement runtime inherits no listener on the module-singleton
+   * sources (#12933).
+   */
+  dispose(): void {
+    this.keysListener.dispose();
+    for (const detach of this.releaseHooks.values()) detach();
+    this.releaseHooks.clear();
+    this.bindingCountBySession.clear();
+    const bindings = [...this.perRun.values()].flatMap((bound) => [
+      ...bound.values(),
+    ]);
+    this.perRun.clear();
+    for (const binding of bindings) binding.disposable.dispose();
+    if (bindings.length > 0) this.emitBindingsChanged();
   }
 
   /**
