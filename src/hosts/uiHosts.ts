@@ -19,8 +19,8 @@ export interface DiffSource {
  * `vscode.diff`, the desktop failing to read a side or to hand a patch file to
  * the OS editor — reaches the caller through the failure channel instead of as
  * a rejection a lift had to re-tag, and interrupting the fiber that opened a
- * diff abandons the wait instead of detaching from it. The error stays
- * `unknown`: each implementation fails with what its surface raised (a VS Code
+ * diff abandons the wait instead of detaching from it. The error is any
+ * `Error`: each implementation fails with what its surface raised (a VS Code
  * command rejection, an `ExternalOpenFailed`, a filesystem error), and the
  * callers that need a tag map it into their own.
  */
@@ -30,7 +30,7 @@ export interface DiffViewHost {
     original: DiffSource,
     proposed: DiffSource,
     title: string,
-  ): Effect.Effect<void, unknown>;
+  ): Effect.Effect<void, Error>;
 }
 
 /**

@@ -26,6 +26,7 @@ import type { RegisteredToolName } from '@tools/registry';
 import {
   EXTERNAL_TOOL_DEFS,
   type ExternalToolDef,
+  type ToolProbeError,
   type ToolProbeInputs,
   type ToolProbeServices,
 } from '@tools/externalToolDefs';
@@ -260,7 +261,7 @@ function resolveOptionalStatus(
   getStatus:
     | ((
         probeResult?: unknown,
-      ) => Effect.Effect<string | undefined, unknown, ToolProbeServices>)
+      ) => Effect.Effect<string | undefined, ToolProbeError, ToolProbeServices>)
     | undefined,
   probeResult: unknown,
   toolName: string,

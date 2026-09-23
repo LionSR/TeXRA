@@ -31,7 +31,7 @@ interface DesktopDiffHostOptions extends DesktopOverlayPostOptions {
    * Falls back to the OS default editor (writes a `.diff` patch file and
    * calls `openPath`). Used when the renderer overlay is unavailable.
    */
-  openPath(filePath: string): Effect.Effect<void, unknown>;
+  openPath(filePath: string): Effect.Effect<void, Error>;
   /**
    * Records the temp directory holding an external-editor patch file. The
    * directory cannot be removed as soon as `openPath` settles because the OS
@@ -61,7 +61,7 @@ interface ProjectDiffHost extends DiffViewHost {
     proposed: DiffSource,
     title: string,
     previewId?: string,
-  ): Effect.Effect<void, unknown>;
+  ): Effect.Effect<void, Error>;
   /**
    * Close the diff `previewId` names: the renderer's `desktop:closeDiff`,
    * the counterpart of the `desktop:showDiff` that opened it. The Review
@@ -107,7 +107,7 @@ export function createDesktopDiffHost(
     proposed: DiffSource,
     title: string,
     previewId: string = nanoid(),
-  ): Effect.Effect<void, unknown> {
+  ): Effect.Effect<void, Error> {
     return withProcessServices(
       Effect.gen(function* () {
         const fs = yield* FileSystem.FileSystem;

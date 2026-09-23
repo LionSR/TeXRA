@@ -4,6 +4,7 @@ import { z } from 'zod';
 
 import type { SubscriptionUsageWindow } from '@shared/schemas';
 import { clamp, isObject } from '@utils/core';
+import { ensureError } from '@utils/errors/errorMessage';
 
 export type JsonObject = Record<string, unknown>;
 
@@ -26,7 +27,7 @@ export class SubscriptionUsageHttpError extends Error {
  * threaded here to reach it. Only the URL and headers differ per provider, so
  * the GET, the abort wiring, and the non-OK status assertion live here; the
  * decoded body goes back to the adapter's own `parseX`. The failure channel
- * stays `unknown` so the transport's own rejection travels unwrapped into the
+ * is the transport's own `Error`, so its rejection travels unwrapped into the
  * service's classification of it (`SyntaxError` -> malformed body,
  * `SubscriptionUsageHttpError` -> refused).
  */
@@ -34,7 +35,7 @@ export function fetchSubscriptionUsage(request: {
   readonly url: string;
   readonly headers: Record<string, string>;
   readonly signal: AbortSignal;
-}): Effect.Effect<unknown, unknown> {
+}): Effect.Effect<unknown, Error> {
   return Effect.flatMap(FetchHttpClient.Fetch, (fetch) =>
     Effect.tryPromise({
       try: () =>
@@ -43,13 +44,13 @@ export function fetchSubscriptionUsage(request: {
           headers: request.headers,
           signal: request.signal,
         }),
-      catch: (cause) => cause,
+      catch: ensureError,
     }).pipe(
       Effect.flatMap((response) =>
         response.ok
           ? Effect.tryPromise({
               try: () => response.json(),
-              catch: (cause) => cause,
+              catch: ensureError,
             })
           : Effect.fail(new SubscriptionUsageHttpError(response.status)),
       ),

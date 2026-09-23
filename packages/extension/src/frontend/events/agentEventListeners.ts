@@ -34,14 +34,14 @@ import {
   type RequestShowInstructionPayload,
   type ShowAgentConfigBannerPayload,
 } from '@shared/schemas';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'agentEventListeners';
 
 /** Warn-log a step whose failure is a diagnostic rather than non-delivery,
  *  and carry on with the step after it. */
-function warnOnFailure(
-  program: Effect.Effect<void, unknown>,
+function warnOnFailure<E>(
+  program: Effect.Effect<void, E>,
   what: string,
 ): Effect.Effect<void> {
   return program.pipe(
@@ -57,7 +57,7 @@ const revealProgressView = Effect.tryPromise({
   try: async () => {
     await vscode.commands.executeCommand('texra.showProgressView');
   },
-  catch: (cause) => cause,
+  catch: ensureError,
 });
 
 /**
@@ -87,7 +87,7 @@ const INSTRUCTION_ACTION_VIEW: Record<
 
 function handleRequestShowError({
   message,
-}: RequestShowErrorPayload): Effect.Effect<void, unknown> {
+}: RequestShowErrorPayload): Effect.Effect<void, Error> {
   // `showErrorMessage` settles only on dismissal, which no caller waits on:
   // the session forks this program, so the handoff and a post-handoff
   // rejection (the extension host tearing down) are reported there rather
@@ -96,14 +96,14 @@ function handleRequestShowError({
     try: async () => {
       await vscode.window.showErrorMessage(message);
     },
-    catch: (cause) => cause,
+    catch: ensureError,
   });
 }
 
 function handleRequestShowInstruction(
   globalState: StateStore,
   payload: RequestShowInstructionPayload,
-): Effect.Effect<void, unknown> {
+): Effect.Effect<void, Error> {
   const actions = (payload.actions ?? []).map((token) => {
     const view = INSTRUCTION_ACTION_VIEW[token];
     return {
@@ -155,7 +155,7 @@ function handleShowAgentConfigBanner(
 function handleRequestEnsureProgressView(
   payload: RequestEnsureProgressViewPayload,
   progressViewProvider: ProgressViewProvider,
-): Effect.Effect<void, unknown> {
+): Effect.Effect<void, Error> {
   return Effect.gen(function* () {
     if (progressViewProvider.isViewVisible()) return;
 
@@ -191,7 +191,7 @@ function handleRequestEnsureProgressView(
           },
           'Show Progress View',
         ),
-      catch: (cause) => cause,
+      catch: ensureError,
     });
     if (!selection) return;
     // The toast handoff already established delivery; a failed retry is

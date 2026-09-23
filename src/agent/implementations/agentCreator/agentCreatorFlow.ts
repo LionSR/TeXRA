@@ -411,7 +411,7 @@ const generateAgentYaml = Effect.fn('agentCreator.generateYaml')(function* (
   blueprint: AgentBlueprint,
   ui: AgentCreatorUI,
   stores: ModelOptionStores,
-): Effect.fn.Return<string, unknown, LanguageModel | HttpClient.HttpClient> {
+): Effect.fn.Return<string, Error, LanguageModel | HttpClient.HttpClient> {
   let lastValidationError: string | undefined;
 
   const attempt = Effect.gen(function* () {
@@ -497,7 +497,7 @@ export const runAgentCreator = Effect.fn('runAgentCreator')(function* (
   stores: ModelOptionStores,
 ): Effect.fn.Return<
   void,
-  unknown,
+  Error,
   | FileSystem.FileSystem
   | GlobalStorageFs
   | LanguageModel

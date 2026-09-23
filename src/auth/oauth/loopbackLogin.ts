@@ -43,7 +43,7 @@ interface LoopbackOAuthCoordinator<S> {
     code: string;
     verifier: string;
     redirectUri: string;
-  }): Effect.Effect<S, unknown, HttpClient.HttpClient>;
+  }): Effect.Effect<S, Error, HttpClient.HttpClient>;
 }
 
 export interface OAuthLoopbackLoginOptions<S> {
@@ -54,7 +54,7 @@ export interface OAuthLoopbackLoginOptions<S> {
    * {@link LoopbackTransportUnavailableError} — reaches the caller through
    * the error channel instead of a rejection this flow has to re-wrap.
    */
-  openBrowser: (url: string) => Effect.Effect<void, unknown>;
+  openBrowser: (url: string) => Effect.Effect<void, Error>;
   /** Registered callback ports, tried in order. */
   ports: readonly number[];
   /** Path segment of the registered redirect URI (e.g. `/auth/callback`). */
@@ -181,7 +181,7 @@ function decideCallback(
  */
 function loginWithOAuthLoopback<S>(
   options: OAuthLoopbackLoginOptions<S>,
-): Effect.Effect<S, unknown, HttpClient.HttpClient> {
+): Effect.Effect<S, Error, HttpClient.HttpClient> {
   const { coordinator, openBrowser, ports, callbackPath, displayName } =
     options;
   // The setup prefix is uninterruptible: it binds the server, arms the
@@ -304,6 +304,6 @@ export function defineLoopbackLogin<S>(constants: {
 }) {
   return (
     options: Pick<OAuthLoopbackLoginOptions<S>, 'coordinator' | 'openBrowser'>,
-  ): Effect.Effect<S, unknown, HttpClient.HttpClient> =>
+  ): Effect.Effect<S, Error, HttpClient.HttpClient> =>
     loginWithOAuthLoopback({ ...options, ...constants });
 }

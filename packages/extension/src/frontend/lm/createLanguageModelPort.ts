@@ -10,7 +10,7 @@ import {
   type LanguageModelInfo,
   type LanguageModelPort,
 } from '@platform/languageModel';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'LanguageModelPort';
 
@@ -60,10 +60,11 @@ export function createLanguageModelPort(
           (await selectChatModels(selector)).map((model) =>
             toModelInfo(model, accessInformation),
           ),
-        // The editor's own error travels on unchanged: the one production
-        // consumer (`runtimeModelRegistry`) hands it to the caller that asked
-        // for discovery, which reads its message.
-        catch: (cause) => cause,
+        // The editor's own error travels on unchanged (a non-Error rejection
+        // is wrapped): the one production consumer (`runtimeModelRegistry`)
+        // hands it to the caller that asked for discovery, which reads its
+        // message.
+        catch: ensureError,
       }).pipe(
         Effect.tapError((error) =>
           Effect.logWarning(
