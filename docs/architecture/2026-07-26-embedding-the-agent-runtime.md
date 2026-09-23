@@ -16,8 +16,9 @@ has a measurable baseline.
 Every claim below is cited to `file:line`. The original baseline was verified
 at the PR base (`5fc03f9436`); review corrections were rechecked against
 `origin/main` (`97543989b5`). None of the 50 cited files changed between those
-snapshots. Where the code is awkward, this note says so rather than describing
-an intended future shape.
+snapshots. §1, §2, §3 and §5 were rewritten against `main` at `bac10c1` for
+#12950, after the request model and the host bootstrap moved. Where the code is
+awkward, this note says so rather than describing an intended future shape.
 
 ---
 
@@ -25,9 +26,10 @@ an intended future shape.
 
 The sections below separate minimum launch requirements from shipped-feature
 parity. A raw agent loop needs an initialized platform, usable credentials,
-agent directories, a session, and a populated registry. When response-bearing
-interactions are possible, the session also needs an interactions attachment;
-there is no separate presentation-host argument. The direct Lean language
+agent directories, a session, and a populated registry. When a run can open
+requests, something must also decide them (§3); presentation goes through the
+session's interactions attachment, and there is no separate presentation-host
+argument. The direct Lean language
 services the shipped Node hosts pass to `installProcessRuntime` are a
 shipped-feature choice; the raw loop only needs some `LeanLanguageServices`
 layer there.
@@ -256,7 +258,9 @@ await runtime.runPromise(
       emit: (event, payload) => {
         console.error(`[texra] ${event}`, payload);
       },
-    }); // see §3 — DO NOT SKIP
+    });
+    // §3 — DO NOT SKIP: approvalPromptsUnavailable below removes the tools
+    // that open requests; a `retry` still needs a decider over viewChanges.
     yield* loadAgents({ includeRemote: false });
 
     const validated = validateRunRequest({
@@ -406,179 +410,112 @@ documentation.
 
 ---
 
-## 3. The headless minimum for interactions — the one section to read
+## 3. The headless minimum for requests — the one section to read
 
-**A host must answer every blocking request its runs can raise. Attaching
-nothing, or attaching a host that omits the method a run calls, parks that
-run.** The mostly-optional method signatures suggest otherwise, and this is
-the single highest-consequence fact in this document.
+**Every request a run opens waits until something writes its decision. The
+runtime writes none for you, and attaching host interactions does not answer
+anything.** A headless embedder must either remove the requests its runs can
+raise or answer them itself. This is the single highest-consequence fact in
+this document.
 
 ### The mechanism
 
-Every blocking interaction goes through `SessionHostInteractions.enqueue`
-(`src/agent/runtime/HostInteractions.ts:784-814`), which adds the pending
-record to `this.pending` and then calls `dispatch`:
+A run that needs a person commits a `request.opened` row carrying what a
+surface shows (a diff, a command, a question) and parks. The row is answered
+by a `request.decided` row (`src/shared/schemas/sessionEvent.ts:407-421`).
+"Pending" is nothing but the fold: an opened request with no decision is
+listed in the session view's `requests`
+(`src/shared/session/sessionView.ts:256`;
+`src/shared/session/sessionFold.ts:1621-1640`), which a host reads through
+`SessionHandle.view` or the level stream `SessionHandle.viewChanges`
+(`src/agent/runtime/SessionHandle.ts:208-217`).
+
+Any surface decides by sending one command through the session's request
+handler:
 
 ```ts
-// src/agent/runtime/HostInteractions.ts:811-812
-this.pending.add(pending);
-this.dispatch(pending);
+yield *
+  session.requests.request({
+    kind: 'request.decide',
+    runId,
+    requestId,
+    decision: { action: 'deny', reason: 'Nobody to ask.' },
+  });
 ```
 
-`dispatch` starts with:
+(`src/shared/session/runtimeRequest.ts:42-52`). The decision lands as the
+run's `request.decided` row, and the run continues from it.
 
-```ts
-// src/agent/runtime/HostInteractions.ts:901-906
-private dispatch(pending: PendingSessionInteraction): void {
-  const attachment = this.activeAttachment;
-  if (!attachment) {
-    this.warnParked(pending);
-    return;
-  }
-```
+`HostInteractions` is not part of this path. It is a presentation port —
+events, diagnostics, PDFs, the tool-edit preview a durable payload cannot
+carry — and no method on it returns a decision
+(`src/agent/runtime/HostInteractions.ts:85-91`). Attaching a host with
+`session.interactions.use(...)` is how a host sees what a run does; it never
+unparks a run.
 
-The pending promise has already been created and registered. With no
-attachment, `dispatch` logs a warning and returns **without settling it**.
+### The request kinds
 
-With an attachment whose method is simply _omitted_, the optional call yields
-`undefined`, and the next branch settles only a request that names no run
-(`src/agent/runtime/HostInteractions.ts:914-933`):
+The payload union is the vocabulary: `toolEdit`, `bash`, `retry`,
+`proposal`, `planApproval`, `externalInquiry`, `userQuestion`
+(`src/shared/schemas/progressView/data.ts:133-156`). Every kind but
+`externalInquiry` parks the tool or turn that opened it
+(`requestParksItsCaller`, `:171-175`); an external inquiry is answered later
+and parks nothing.
 
-```ts
-if (!result) {
-  if (pending.fact) {
-    // run-scoped: stays pending for a decision on its approval row
-    return;
-  }
-  this.deletePending(pending);
-  pending.settle(pending.cancellationResult());
-  return;
-}
-```
+### Removing the requests: `approvalPromptsUnavailable`
 
-A run-scoped request stays pending until a surface settles it through the
-session (`settleRequest` / `settleRetry`), a cancel reaches it, or the session
-is disposed. For an embedder with no surface, that is a hang.
+`runAgent`'s `approvalPromptsUnavailable: true` withholds every
+`requiresApproval` tool from the model before the first turn, so a run cannot
+open the requests those tools would raise. `executeAgent` threads the option
+into the run context on a fresh launch and on a resume
+(`src/agent/runtime/executeAgent.ts:478`, `:632`); the run layer forwards it
+to tool resolution (`src/agent/runtime/run/AgentRun.ts:208`); and
+`resolveAgentTools` drops the gated tools
+(`src/agent/runtime/agentToolResolution.ts:142-148`). The tools that open
+`toolEdit`, `bash`, `proposal`, `planApproval`, `externalInquiry` and
+`userQuestion` requests all declare `requiresApproval: true`. This is a loud,
+defined degradation — an agent that cannot ask is not given the tools that
+ask — rather than a hang.
 
-Nothing in the runtime attaches interactions for you. A fresh `SessionHandle`
-constructs an empty `SessionHostInteractions`
-(`src/agent/runtime/SessionHandle.ts:165`), and hosts call `.use(...)` on it
-directly (`SessionHostInteractions.use`,
-`src/agent/runtime/HostInteractions.ts:429`). The former
-`SessionHandle.useHostInteractions` pass-through was deleted in #11380.
+The CLI derives the flag from its approval policy
+(`packages/cli/src/runtime/approval/settleApprovals.ts:59` —
+`cliApprovalPromptsUnavailable`) and passes it to its `runAgent` call
+(`packages/cli/src/runtime/executeCli.ts:556`).
 
-### The affected calls
+### Answering the rest: `retry`
 
-Six request kinds park when unattached or unanswered —
-`requestToolEditApproval`, `requestBashApproval`, `requestPlanApproval`,
-`requestAgentProposal`, `requestRetry`, `askUserQuestion`
-(`src/agent/runtime/HostInteractions.ts:564-630`).
+`retry` has no tool behind it. The model invoker opens one on a
+user-retryable provider failure, so the flag cannot remove it, and a headless
+embedder must answer it. The `@texra-ai/agent` package's own sessions do
+exactly this: a listener over `viewChanges` denies each pending `retry`
+with the decide command above (`denyRetryRequests`,
+`packages/agent/src/effect/sessionPrograms.ts:91-146`). It keeps the set of
+requests it has answered, prunes it as the fold drops them, and forgets a
+request whose decision was refused so a later level denies it again. Copy
+that shape.
 
-`openExternalInquiry` is deliberately excluded: it reads
-`this.activeAttachment?.interactions.openExternalInquiry?.(request)` directly
-(`src/agent/runtime/HostInteractions.ts:632-641`), and its comment explicitly
-says this is to avoid "parking the agent while no UI is attached".
+The headless CLI does the same for every kind, answering from policy first
+and from a terminal prompt otherwise
+(`createHeadlessCliHostInteractions`,
+`packages/cli/src/runtime/approvalAdapter.ts:141`).
 
-### Escape hatches, and why they are not a substitute
+### What ends a wait without a decision
 
-- **Attaching later unblocks.** `use()` calls `activateCurrentAttachment`,
-  which redispatches everything still pending
-  (`src/agent/runtime/HostInteractions.ts:621-639`). Parking is not permanent
-  _if_ a host eventually attaches.
-- **Interrupting a retained run handle settles pending interactions.**
-  `RunAgentOptions.onRun` exposes an `AgentRunHandle`
-  (`src/agent/runtime/runAgent.ts:31-46`;
-  `src/agent/runtime/RunHandle.ts`). Retain it and call
-  `handle.interrupt()` to abort the run; both workflow and tool-use
-  interruption call `runSession.interactions.cancel`
-  (`src/agent/runtime/executeAgent.ts`; `src/agent/runtime/loop/toolUse.ts`).
-  This is the supported cancellation path, not a substitute for attaching a
-  host to a run that should continue.
-- **Direct `cancel()` / `dispose()` also settle without an attachment.**
-  `cancel` falls through to `settleFallbacks()` synchronously when there is no
-  active attachment (`src/agent/runtime/HostInteractions.ts:549-555`), and
-  `dispose()` settles anything still owned
-  (`src/agent/runtime/HostInteractions.ts:558-589`). These direct methods are
-  available to an embedder that owns the session.
-- **`approvalPromptsUnavailable: true` narrows the problem, it does not solve
-  it.** That option filters `requiresApproval` tools out of the model-facing
-  tool list before invocation
-  (`src/agent/runtime/agentToolResolution.ts:150-157`, threaded through
-  the run's `AgentRun` service, `src/agent/runtime/run/AgentRun.ts`). It does not
-  touch `requestRetry` or `askUserQuestion`, and it does not change dispatch.
-  The CLI sets it for `policy === 'never'` and for headless `ask`
-  (`packages/cli/src/runtime/approval/settleApprovals.ts` —
-  `cliApprovalPromptsUnavailable`) _in addition
-  to_ attaching real interactions.
+Interrupting the run through a retained `AgentRunHandle`
+(`RunAgentOptions.onRun`; `src/agent/runtime/RunHandle.ts:49`) ends the
+run, and the fold drops a closed run's open requests with it
+(`src/shared/session/sessionFold.ts:1858-1860`). That is
+the cancellation path, not a substitute for answering a run that should
+continue.
 
-### The typed shape
+### Why there is no runtime default
 
-`cancel` is the one **required** member of `HostInteractions`
-(`src/agent/runtime/HostInteractions.ts:389`); every other member — the seven
-request methods plus `emit`, `dispose`, the diagnostics readers, and
-`setApprovalBypassState` — is optional
-(`src/agent/runtime/HostInteractions.ts:347-390`). So the compiler forces you
-to write `{ cancel: … }`, and nothing more. The trap is not a badly-typed
-object: it is **never calling `interactions.use`**, or attaching a host that
-omits a request method a run will call. No type catches either.
-
-### The headless embedder contract (issue #9256)
-
-Issue #9256 asked what a session should do when no interaction host is ever
-attached at all. The ruling: **no runtime semantic change.** Parking (above)
-stays — it is what lets a desktop per-window reattach pick up a request that
-parked before it attached — and the runtime installs no default attachment.
-Instead, the contract is on the caller: attach a host that answers each
-request kind a run can raise, and use `approvalPromptsUnavailable: true` to
-remove the approval kinds, the most common ones. The flag does not reach
-`requestRetry`, so a headless host answers it itself; the package's own
-headless host denies it (`packages/agent/src/effect/sessions.ts:199-213`).
-
-**`approvalPromptsUnavailable: true` is the real headless answer for that
-case**, not merely a partial mitigation: an agent that cannot be asked simply
-is not given the tools that require asking, which is a defined, loud
-degradation instead of a hang. Trace the wiring end to end:
-
-- `executeAgent` threads `options.approvalPromptsUnavailable` into the run
-  context on both a fresh launch and a resume
-  (`src/agent/runtime/executeAgent.ts:392-396`, `:547-550`).
-- The run layer reads it off the launch context's tool policy and forwards it
-  to tool resolution (`src/agent/runtime/run/AgentRun.ts`).
-- `resolveAgentTools`'s shared gate drops any tool with
-  `requiresApproval: true` once the flag is set, before the model ever sees it
-  in its tool list (`src/agent/runtime/agentToolResolution.ts:150-157`).
-
-The worked example is the CLI's own headless path: it derives the flag from
-policy and mode (`packages/cli/src/runtime/approval/settleApprovals.ts` —
-`cliApprovalPromptsUnavailable`)
-and passes it straight into the real `runAgent` call
-(`packages/cli/src/runtime/executeCli.ts`). As the "Escape hatches"
-note above says, the flag does not touch `requestRetry` or `askUserQuestion`
-dispatch — it only narrows which tools can raise the approval kinds that were
-the reachable hang.
-
-**The diagnostic for getting it wrong anyway:** an unattached `dispatch` logs
-a warning before returning, naming the parked request kind and run and
-prescribing a host that answers requests
-(`src/agent/runtime/HostInteractions.ts:901-906` calls `warnParked`, defined
-at `:947-958`). A request parked because the attached host omits its method
-is logged at `info` (`:914-924`).
-
-**Why there is no runtime default.** `activeAttachment` is the most recently
-attached host (`this.attachments.at(-1)`,
-`src/agent/runtime/HostInteractions.ts:573-575`); detaching reactivates
-whatever is left, or re-parks anything still pending if nothing is
-(`:381-389`, `:603-626`). A permanent default-denier occupying that stack
-would instead settle every live approval the instant the real host detached —
-and desktop attaches and detaches per window, one `DesktopProgressBridge`
-per `BrowserWindow` calling `interactions.use` on the one process-owned
-session and disposing it on close
-(`packages/desktop/src/main/desktopAgentRun.ts`;
-`packages/desktop/src/main/index.ts:583-621`). Closing one window would
-silently deny a pending tool-edit diff. A latch that auto-denies before any
-host has ever attached fares no better: the runtime cannot know whether a
-UI is coming; the caller can, and `approvalPromptsUnavailable` is how it
-says so.
+A request is a durable row, answerable by any surface that folds the session
+— the TUI, a reattached desktop window, a resumed process. A built-in
+decider could not tell a session nobody watches from one whose surface has
+not attached yet, and it would answer requests a person was meant to see.
+The caller knows which case it is in, and says so with
+`approvalPromptsUnavailable` plus a decider for `retry`.
 
 ---
 
@@ -685,9 +622,8 @@ host.
    inside a process that already hosts TeXRA means reusing
    `tryDefaultSession()` or owning your own `SessionHandle`.
 5. **Some failure modes cluster at run time, not startup.** A missing
-   `loadAgents` throws at agent resolution, and a missing interactions
-   attachment, or a host that omits a request method the run calls, parks the
-   run mid-way. Neither fails fast at bootstrap.
+   `loadAgents` throws at agent resolution, and a request nobody decides
+   parks the run mid-way (§3). Neither fails fast at bootstrap.
 
 ## 7. Related documents
 
