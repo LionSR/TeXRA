@@ -9,6 +9,7 @@ import '@awesome.me/webawesome/dist/components/badge/badge.js';
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/dropdown/dropdown.js';
 import '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
+import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 import { html, nothing, type TemplateResult } from 'lit';
 
 import type { ProjectDisplay } from '@shared/session/hostSnapshot';
@@ -172,6 +173,15 @@ function childRunsAccess(
 }
 
 /**
+ * DOM id of one per-project sidebar control, the anchor its `<wa-tooltip>`
+ * resolves via `for`. The project key is a filesystem path, so it is
+ * URI-encoded to keep the id free of whitespace.
+ */
+function projectControlDomId(key: string, control: 'fold' | 'close'): string {
+  return `shell-project-${control}-${encodeURIComponent(key)}`;
+}
+
+/**
  * One section per open project: the row, then that project's own run tree
  * beneath it unless the user folded the section shut (`Shell.collapsed`).
  * The row chooses the project; the chevron folds the section; the close
@@ -188,6 +198,7 @@ function projectSection(
   const active = key === model.shell.active;
   const collapsed = model.shell.collapsed.includes(key);
   const foldLabel = `${collapsed ? 'Expand' : 'Collapse'} ${name}`;
+  const foldId = projectControlDomId(key, 'fold');
   // The tree has one home at a time: the Subagents tab holds the shown
   // project's, and this section then lists its top-level runs only.
   const flattened = active && model.subagentsOpen;
@@ -212,20 +223,23 @@ function projectSection(
       </wa-button>
       ${collapsed ? projectBadge(project.view) : nothing}
       <wa-button
+        id=${foldId}
         type="button"
         class="shell-project-fold icon-button is-size-s"
         appearance="plain"
         size="s"
-        title=${foldLabel}
         aria-label=${foldLabel}
         aria-expanded=${collapsed ? 'false' : 'true'}
         @click=${() => callbacks.onToggleProjectCollapsed(key)}
       >
         ${waIcon(collapsed ? 'chevron-right' : 'chevron-down')}
       </wa-button>
+      <wa-tooltip for=${foldId}>${foldLabel}</wa-tooltip>
       ${renderIconActionButton({
+        id: projectControlDomId(key, 'close'),
         icon: 'xmark',
         label: `Close ${name}`,
+        tooltip: `Close ${name}`,
         className: 'shell-project-close icon-button is-size-s',
         onClick: () => callbacks.onCloseProject(key),
       })}
@@ -334,17 +348,15 @@ export function shellSidebarTemplate(
       <header class="shell-sidebar-brand">
         <div class="shell-sidebar-logo" aria-hidden="true">T</div>
         <span class="shell-sidebar-product">TeXRA</span>
-        <wa-button
-          type="button"
-          class="shell-sidebar-brand-menu icon-button is-size-s"
-          appearance="plain"
-          size="s"
-          aria-label=${model.commandsLabel}
-          title=${model.commandsLabel}
-          @click=${callbacks.onSearch}
-        >
-          ${waIcon('chevron-down')}
-        </wa-button>
+        ${renderIconActionButton({
+          id: 'shellSidebarCommands',
+          icon: 'chevron-down',
+          label: model.commandsLabel,
+          tooltip: model.commandsLabel,
+          className: 'shell-sidebar-brand-menu icon-button',
+          size: 's',
+          onClick: callbacks.onSearch,
+        })}
       </header>
 
       <nav class="shell-sidebar-primary" aria-label="Task actions">
@@ -638,8 +650,10 @@ export function workbenchTabsTemplate(
                 }
               </wa-button>
               ${renderIconActionButton({
+                id: `${workbenchTabDomId(tab.id, session)}-close`,
                 icon: 'xmark',
                 label: `Close ${tab.title}`,
+                tooltip: `Close ${tab.title}`,
                 className:
                   'shell-workbench-tab-close icon-button is-size-s focus-ring-inset',
                 onClick: (event) => {
@@ -684,17 +698,15 @@ export function workbenchTabsTemplate(
           `;
         })}
       </div>
-      <wa-button
-        type="button"
-        class="shell-workbench-close icon-button is-size-m focus-ring-inset"
-        appearance="plain"
-        size="s"
-        aria-label=${`Hide ${placement} panel`}
-        title=${`Hide ${placement} panel`}
-        @click=${callbacks.onHide}
-      >
-        ${waIcon(hideDirection)}
-      </wa-button>
+      ${renderIconActionButton({
+        id: `${workbenchPanelDomId(placement, session)}-hide`,
+        icon: hideDirection,
+        label: `Hide ${placement} panel`,
+        tooltip: `Hide ${placement} panel`,
+        className: 'shell-workbench-close icon-button focus-ring-inset',
+        size: 'm',
+        onClick: callbacks.onHide,
+      })}
     </div>
   `;
 }

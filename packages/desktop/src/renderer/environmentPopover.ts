@@ -1,5 +1,6 @@
 import { html, nothing, type TemplateResult } from 'lit';
 
+import { renderIconActionButton } from '@ui/wa/actionButtons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 import { workspaceName, type WorkbenchTab } from '../shared/desktopShellState';
@@ -57,18 +58,16 @@ export function createEnvironmentPopover({
       >
         <div class="shell-environment-heading">
           <span>Environment</span>
-          <wa-button
-            type="button"
-            class="shell-environment-refresh icon-button is-size-m"
-            appearance="plain"
-            size="s"
-            aria-label="Refresh environment"
-            title="Refresh environment"
-            ?disabled=${environmentLoading}
-            @click=${requestEnvironmentSummary}
-          >
-            ${waIcon(environmentLoading ? 'spinner' : 'rotate-right')}
-          </wa-button>
+          ${renderIconActionButton({
+            id: 'shellEnvironmentRefresh',
+            icon: environmentLoading ? 'spinner' : 'rotate-right',
+            label: 'Refresh environment',
+            tooltip: 'Refresh environment',
+            className: 'shell-environment-refresh icon-button',
+            size: 'm',
+            disabled: environmentLoading,
+            onClick: requestEnvironmentSummary,
+          })}
         </div>
         <div class="shell-environment-section">
           <div class="shell-environment-row">
