@@ -391,6 +391,14 @@ function invokerLayer(init: LoopInit, requests: InvokeRequest[]) {
                   usage: null,
                 },
               },
+              // As the invoker does: the response retires a recorded failure.
+              ...(state.lastError === null
+                ? []
+                : [
+                    snapshotRow(run.runId, state, {
+                      runtime: { lastError: null },
+                    }),
+                  ]),
               stepRow(run.runId, state, 'response.ready'),
             ]);
             if (init.afterResponse) yield* init.afterResponse(request.round);

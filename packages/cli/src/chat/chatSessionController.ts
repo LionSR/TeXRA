@@ -842,7 +842,7 @@ export function createChatSessionController(
               isCancellationRequested: () => session.stopRequested,
             });
             if ('started' in result) {
-              settleResumedTurn(result.outcome ?? RUN_OUTCOME.COMPLETED);
+              yield* settleResumedTurn(result);
             } else if (session.stopRequested) {
               session.runExitCode = CliExitCode.Interrupted;
             } else {
@@ -876,18 +876,19 @@ export function createChatSessionController(
       });
     });
 
-  /**
-   * One settlement site for a successfully resumed turn: finalize the
-   * transcript projection, map the outcome to the exit code, and announce
-   * completion. A subagent parking back to WAITING is a completed turn, not
-   * a finished agent, so it never fires `agentFinished`.
-   */
-  const settleResumedTurn = (outcome: TurnOutcome): void => {
+  /** Settle a resumed turn. A root acknowledges at idle, so its `completion`
+   *  holds this chain, and the root-run slot it settles, until the run ends.
+   *  A subagent back at WAITING is a completed turn: no `agentFinished`. */
+  const settleResumedTurn = Effect.fn('settleResumedTurn')(function* (result: {
+    readonly outcome?: TurnOutcome;
+    readonly completion?: Effect.Effect<TurnOutcome, Error>;
+  }) {
+    const outcome =
+      (result.completion ? yield* result.completion : result.outcome) ??
+      RUN_OUTCOME.COMPLETED;
     session.runExitCode = runOutcomeExitCode(outcome);
-    if (outcome !== RUN_PHASE.WAITING) {
-      notify('agentFinished');
-    }
-  };
+    if (outcome !== RUN_PHASE.WAITING) notify('agentFinished');
+  });
 
   /**
    * The controller's implementation of the CLI's agent-resume port.
@@ -1006,7 +1007,7 @@ export function createChatSessionController(
         });
 
         if ('started' in result && result.delivered) {
-          settleResumedTurn(result.outcome ?? RUN_OUTCOME.COMPLETED);
+          yield* settleResumedTurn(result);
           return true;
         }
         if (isCancellationRequested()) {

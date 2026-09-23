@@ -46,8 +46,8 @@ const codexMocks = vi.hoisted(() => ({
     }): Effect.Effect<{ email: string }, unknown> =>
       Effect.succeed({ email: 'user@example.com' }),
   ),
-  setPreferSubscription: vi.fn((_stores: unknown, enabled: boolean) =>
-    Effect.succeed({ effective: enabled }),
+  setPreferSubscription: vi.fn(
+    (_stores: unknown, _enabled: boolean) => Effect.void,
   ),
   signOut: vi.fn(() => Effect.void),
 }));
@@ -241,10 +241,7 @@ describe('DefaultDesktopCredentialSettingsController', () => {
     codexMocks.loginWithDeviceCode.mockReturnValue(
       Effect.succeed({ email: 'user@example.com' }),
     );
-    codexMocks.setPreferSubscription.mockImplementation(
-      (_stores: unknown, enabled: boolean) =>
-        Effect.succeed({ effective: enabled }),
-    );
+    codexMocks.setPreferSubscription.mockImplementation(() => Effect.void);
     codexMocks.signOut.mockReturnValue(Effect.void);
   });
 
@@ -402,31 +399,6 @@ describe('DefaultDesktopCredentialSettingsController', () => {
 
   // Provider toggles are written by the shared catalog path
   // (`UPDATE_STATE_SETTING`); this pins the desktop refresh that path triggers.
-
-  it.effect(
-    'warns when a more specific setting overrides the requested subscription toggle',
-    () =>
-      Effect.gen(function* () {
-        const fixture = yield* Effect.promise(() => createFixture());
-        codexMocks.setPreferSubscription.mockReturnValueOnce(
-          Effect.succeed({ effective: false }),
-        );
-
-        yield* withProcessServices(
-          testRuntime(),
-          assertSupported(
-            fixture.controller.chatGptHandlers.setChatGptPreferSubscription,
-          )({
-            command: SETTINGS_VIEW_COMMANDS.SET_CHATGPT_PREFER_SUBSCRIPTION,
-            enabled: true,
-          }),
-        );
-        expect(fixture.warnings).toEqual([
-          'A more specific setting still keeps ChatGPT subscription disabled.',
-        ]);
-        expect(fixture.infos).toEqual([]);
-      }),
-  );
 
   it.effect(
     'refreshes ChatGPT preferences and reports authentication outcomes',

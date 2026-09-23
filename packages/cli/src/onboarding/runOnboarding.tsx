@@ -513,16 +513,9 @@ function ChatGptProgressStep(props: {
               },
             },
           );
-          const update = yield* subscriptionProvider('chatgpt')
+          yield* subscriptionProvider('chatgpt')
             .setPreferSubscription(stores, true)
             .pipe(Effect.mapError(ensureError));
-          if (!update.effective) {
-            if (!isCancelled())
-              props.onError(
-                'Signed in with ChatGPT, but a more specific setting keeps the subscription disabled. Add a provider API key instead.',
-              );
-            return;
-          }
           if (!isCancelled()) props.onSuccess(account);
         }).pipe(
           Effect.catchCause((cause) =>

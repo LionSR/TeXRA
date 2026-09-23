@@ -72,16 +72,14 @@ export class RunRegistry {
    * only once the view has folded it.
    *
    * A `run.end` folded to `cancelled` also closes the admission window its
-   * stop left, which is why the caller runs what this returns: the stop's
+   * stop left, so this interrupts the children admitted in it: the stop's
    * in-flight token lifts when its settlement does, before this fold
    * ({@link RunStopper.sweepChildrenOfFoldedStop}).
    */
-  handleStatus(runId: RunId): Effect.Effect<void> {
-    if (this.disposed) return Effect.void;
-    const sweep = this.stopper.sweepChildrenOfFoldedStop(runId);
-    if (!this.roster.handle(runId)) return sweep;
-    this.roster.notifyWaiters(runId);
-    return sweep;
+  handleStatus(runId: RunId): void {
+    if (this.disposed) return;
+    this.stopper.sweepChildrenOfFoldedStop(runId);
+    if (this.roster.handle(runId)) this.roster.notifyWaiters(runId);
   }
 
   dispose(): void {

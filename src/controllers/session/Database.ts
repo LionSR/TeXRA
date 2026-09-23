@@ -28,6 +28,7 @@ import * as Reactivity from 'effect/unstable/reactivity/Reactivity';
 import {
   Cause,
   Clock,
+  Duration,
   Scope,
   Effect,
   Exit,
@@ -387,6 +388,13 @@ export const databaseLayer = (
       let version = (yield* sql
         .unsafe<Record<string, unknown>>(dataVersion, [])
         .pipe(mapDatabaseFailure(openFailed)))[0]?.data_version;
+      // A failed read (a busy wait past the timeout, an I/O error) is logged
+      // and the poll backs off, doubling from 250 ms to at most 30 s over a
+      // streak of failures and resetting on the first healthy tick, so a
+      // blip neither ends change notification nor slows it afterwards. The
+      // version is checkpointed only once the commit behind it is read, so a
+      // tick that fails between the two reads retries both.
+      let failures = 0;
       yield* Effect.forkScoped(
         Stream.tick('250 millis').pipe(
           Stream.runForEach(() =>
@@ -399,14 +407,29 @@ export const databaseLayer = (
                   ))[0]?.data_version;
                 }),
               );
-              if (next === version) return;
-              version = next;
-              yield* SubscriptionRef.set(
-                observedCommit,
-                yield* query(currentCommit),
-              );
-              yield* SubscriptionRef.update(level, (wake) => wake + 1);
-            }),
+              if (next !== version) {
+                const commit = yield* query(currentCommit);
+                version = next;
+                yield* SubscriptionRef.set(observedCommit, commit);
+                yield* SubscriptionRef.update(level, (wake) => wake + 1);
+              }
+              failures = 0;
+            }).pipe(
+              Effect.catch((error) => {
+                failures += 1;
+                return Effect.logWarning(
+                  'The session database change poll failed; retrying.',
+                ).pipe(
+                  Effect.annotateLogs({ data: error }),
+                  withLogChannel(CHANNEL),
+                  Effect.andThen(
+                    Effect.sleep(
+                      Duration.millis(Math.min(250 * 2 ** failures, 30_000)),
+                    ),
+                  ),
+                );
+              }),
+            ),
           ),
         ),
       );

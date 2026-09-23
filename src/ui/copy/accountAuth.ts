@@ -30,8 +30,6 @@ export const CHATGPT_AUTH = {
   startingBrowser: 'Opening browser for ChatGPT sign-in...',
   signedInEnabled: (accountLabel: string): string =>
     `Signed in with ChatGPT as ${accountLabel} (Codex models enabled).`,
-  signedInOverrideDisabled: (accountLabel: string, target: string): string =>
-    `Signed in with ChatGPT as ${accountLabel} (Codex models remain disabled because a more specific setting overrides ${target} config).`,
 } as const;
 
 /** Grok / xAI subscription account. */
@@ -47,8 +45,6 @@ export const GROK_AUTH = {
   startingBrowser: 'Opening browser for Grok sign-in...',
   signedInEnabled: (accountLabel: string): string =>
     `Signed in with Grok as ${accountLabel} (xAI models enabled).`,
-  signedInOverrideDisabled: (accountLabel: string, target: string): string =>
-    `Signed in with Grok as ${accountLabel} (xAI models remain disabled because a more specific setting overrides ${target} config).`,
 } as const;
 
 /**

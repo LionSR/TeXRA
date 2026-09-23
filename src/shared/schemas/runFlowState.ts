@@ -282,8 +282,10 @@ export const StateSlicesSchema = z.object({
  */
 export const ToolUseSnapshotStateSchema = z.object({
   /**
-   * The model the run is on, mirroring the run's live model binding. This is
-   * the resume SSOT for model identity.
+   * A stale copy of the model the run launched on: after a `/model` switch
+   * it still names the old model. Resume reads `runtime.modelId`; this is
+   * only the fallback `buildSnapshot` uses when the fold has no model id.
+   * Queued for removal at the next forced format bump.
    */
   modelId: z.string().optional(),
   /** Provider-message format of the persisted messages. Absent for an
@@ -315,8 +317,9 @@ export const ReflectionSnapshotStateSchema = z.object({
   continueRounds: z.boolean(),
   endTurn: z.boolean(),
 
-  /** Provider-message format used by the persisted `context` messages.
-   *  Absent for an untagged run. */
+  /** No writer: the reflection loop records the provider-message format on
+   *  `runtime.modelCompatibilityKey`. Queued for removal at the next forced
+   *  format bump. */
   modelCompatibilityKey: ModelCompatibilityKeySchema.optional(),
 
   /** One-shot compile-failure feedback injected into the next round prompt. */

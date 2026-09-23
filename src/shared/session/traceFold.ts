@@ -12,6 +12,7 @@ import {
   RUN_PHASE,
   TOOL_CALL_STATUS,
   isTerminalWorkflowCallProgress,
+  isTranscriptEvent,
   type LogLevel,
   type MessageType,
   type ToolUseLog,
@@ -19,6 +20,7 @@ import {
   type WorkflowCallProgress,
   type TranscriptEvent,
   type RunPhase,
+  type SessionEvent,
 } from '@shared/schemas';
 import { roundedUtilizationPercent } from '@shared/runs/contextUtilization';
 import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
@@ -441,6 +443,33 @@ export function createTranscriptFold(
     activeToolEntries.clear();
   };
   return { record, status };
+}
+
+/**
+ * One committed row onto a transcript fold: the lifecycle rows move its
+ * status, and a transcript row is recorded under its durable coordinates.
+ * The one projection both the resident cache and the session view apply.
+ */
+export function applyTraceRow(
+  fold: ReturnType<typeof createTranscriptFold>,
+  event: SessionEvent,
+  debug: boolean,
+): void {
+  if (event.type === 'run.activate') fold.status(RUN_PHASE.RUNNING);
+  else if (event.type === 'flow.step') {
+    if (event.payload.step === 'waiting') fold.status(RUN_PHASE.WAITING);
+    else if (event.payload.step !== 'halted') fold.status(RUN_PHASE.RUNNING);
+  } else if (event.type === 'child.park') {
+    fold.status(
+      event.phase === 'parked' ? RUN_PHASE.WAITING : RUN_PHASE.RUNNING,
+    );
+  } else if (event.type === 'run.end') fold.status(event.outcome);
+  else if (isTranscriptEvent(event))
+    fold.record(event, {
+      at: event.at,
+      id: JSON.stringify([event.aggregateId, event.seq]),
+      debug,
+    });
 }
 /**
  * Maps a domain key onto a known MessageType; keys not listed fall back to the

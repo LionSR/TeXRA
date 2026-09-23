@@ -61,19 +61,13 @@ import {
   type DeclinableUsageRoute,
   type InvocationRef,
   type NormalizedUsage,
-  type PendingRetry,
   type ProviderError,
   type RequestDecision,
   type RetryErrorInfo,
-  type SnapshotRuntime,
 } from '@shared/schemas';
 import { DatabaseWriteFailed } from '@shared/session/database';
 import { RunLedger, RunLedgerRefused } from '@shared/session/runLedger';
-import {
-  foldRunState,
-  type RunLedgerDraft,
-  type RunState,
-} from '@shared/session/runStateFold';
+import { foldRunState, type RunState } from '@shared/session/runStateFold';
 import { generateShortId } from '@utils/core';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import { ensureError } from '@utils/errors/errorMessage';
@@ -93,6 +87,7 @@ import { dispatchFactsFor } from './run/tools';
 import {
   redactedForFact,
   retryRow,
+  retryRows,
   rowAggregate,
   snapshotRow,
   stepRow,
@@ -282,17 +277,6 @@ export const modelInvokerLayer = (): Layer.Layer<
           },
           fileOptions: { continuationCount: round, baseName },
         });
-
-      /** The rows one move of the retry gate commits: the permit on its own
-       *  row, the failure it presents on the snapshot that owns `lastError`. */
-      const retryRows = (
-        state: RunState,
-        permit: PendingRetry | null,
-        runtime: Partial<Pick<SnapshotRuntime, 'lastError' | 'declinedRoutes'>>,
-      ): readonly RunLedgerDraft[] => [
-        retryRow(runId, permit),
-        snapshotRow(runId, state, { runtime }),
-      ];
 
       /** Recheck the binding's background policy against live session settings. */
       const backgroundRequested = (bound: BoundModel) =>
@@ -532,7 +516,9 @@ export const modelInvokerLayer = (): Layer.Layer<
           logger,
           generateShortId,
         );
-        // The completed turn, committed once before any local tool runs.
+        // The completed turn, committed once before any local tool runs. A
+        // response retires the failure a retry was recovering from in the
+        // same transaction, so no resume reads a delivered turn as failed.
         const next = yield* Effect.uninterruptible(
           ledger.appendBatch(runId, state, [
             {
@@ -547,6 +533,9 @@ export const modelInvokerLayer = (): Layer.Layer<
                 usage,
               },
             },
+            ...(state.lastError === null
+              ? []
+              : [snapshotRow(runId, state, { runtime: { lastError: null } })]),
             stepRow(runId, state, 'response.ready'),
           ]),
         );
@@ -1035,7 +1024,7 @@ export const modelInvokerLayer = (): Layer.Layer<
                 payload: redactedForFact({ kind: 'retry', data: request }),
                 thread: null,
               },
-              ...retryRows(state, pendingRetry('waiting'), {
+              ...retryRows(runId, state, pendingRetry('waiting'), {
                 lastError: info,
               }),
             ]),
@@ -1106,7 +1095,7 @@ export const modelInvokerLayer = (): Layer.Layer<
           );
           state = yield* Effect.uninterruptible(
             ledger.appendBatch(runId, state, [
-              ...retryRows(state, pendingRetry('authorized'), {
+              ...retryRows(runId, state, pendingRetry('authorized'), {
                 lastError: info,
                 declinedRoutes,
               }),
@@ -1123,7 +1112,7 @@ export const modelInvokerLayer = (): Layer.Layer<
         // Either answer clears the gate, keeping the failure it recorded.
         state = yield* Effect.uninterruptible(
           ledger.appendBatch(runId, state, [
-            ...retryRows(state, null, { lastError: info }),
+            ...retryRows(runId, state, null, { lastError: info }),
           ]),
         );
         return decision.action === 'deny'
@@ -1305,6 +1294,13 @@ export const modelInvokerLayer = (): Layer.Layer<
               logger,
               'Model request failed (no retry available)',
               failure.formatted,
+            );
+            // The invoker is the one writer of the run's failure fact.
+            const failed = snapshotRow(runId, state, {
+              runtime: { lastError: failure.info },
+            });
+            state = yield* Effect.uninterruptible(
+              ledger.appendBatch(runId, state, [failed]),
             );
             return { kind: 'failed', state, error: failure.info };
           }

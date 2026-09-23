@@ -16,7 +16,12 @@ import {
 import { MapToolRegistry, type ITool } from '@agent/core/tools/ToolTypes';
 import { followUpsLayer } from '@agent/runtime/FollowUps';
 import { ModelInvoker, type InvokeRequest } from '@agent/runtime/ModelInvoker';
-import { rowAggregate, stepRow, type Message } from '@agent/runtime/loop/rows';
+import {
+  rowAggregate,
+  snapshotRow,
+  stepRow,
+  type Message,
+} from '@agent/runtime/loop/rows';
 import { runToolUse } from '@agent/runtime/loop/toolUse';
 import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
 import type { BoundModel } from '@agent/runtime/run/modelBinding';
@@ -185,9 +190,14 @@ function invokerLayer(script: readonly ScriptedTurn[], seen: InvokeRequest[]) {
               return { kind: 'cancelled' as const, state };
             }
             if ('failWith' in scripted) {
+              // As the invoker does: the failure commits before it returns.
               return {
                 kind: 'failed' as const,
-                state,
+                state: yield* ledger.appendBatch(run.runId, state, [
+                  snapshotRow(run.runId, state, {
+                    runtime: { lastError: scripted.failWith },
+                  }),
+                ]),
                 error: scripted.failWith,
               };
             }

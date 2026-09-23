@@ -390,7 +390,7 @@ beforeEach(() => {
   );
   mocks.setCliSubscriptionPreference.mockImplementation((_id, enabled) => {
     mocks.preferSubscription = enabled;
-    return Effect.succeed({ effective: enabled, target: 'global' });
+    return Effect.void;
   });
   mocks.setGLMCodingPlan.mockImplementation((enabled) => {
     mocks.glmCodingPlan = enabled;

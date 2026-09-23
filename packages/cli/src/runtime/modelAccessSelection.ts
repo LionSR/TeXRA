@@ -128,7 +128,7 @@ const updateSubscriptionCliModelAccess = Effect.fn(
   const secrets = yield* Secrets;
   const { displayName, modelFamily } = provider;
   if (selection.state === 'off') {
-    const update = yield* provider.setPreferSubscription(stores, false).pipe(
+    yield* provider.setPreferSubscription(stores, false).pipe(
       Effect.mapError(
         (cause) =>
           new ModelAccessPreferenceFailed({
@@ -140,9 +140,7 @@ const updateSubscriptionCliModelAccess = Effect.fn(
       ),
     );
     return {
-      message: update.effective
-        ? `${displayName} subscription preference remains enabled because a more specific setting overrides ${update.target} config.`
-        : `Prefer ${displayName} subscription disabled for ${modelFamily}.`,
+      message: `Prefer ${displayName} subscription disabled for ${modelFamily}.`,
     } satisfies CliModelAccessSelectionResult;
   }
 
@@ -160,7 +158,7 @@ const updateSubscriptionCliModelAccess = Effect.fn(
     accountLabel = account.label;
   }
 
-  const update = yield* provider.setPreferSubscription(stores, true).pipe(
+  yield* provider.setPreferSubscription(stores, true).pipe(
     Effect.mapError(
       (cause) =>
         new ModelAccessPreferenceFailed({
@@ -183,9 +181,7 @@ const updateSubscriptionCliModelAccess = Effect.fn(
     ),
   );
   return {
-    message: update.effective
-      ? `Prefer ${displayName} subscription enabled for ${modelFamily} (${accountLabel}).`
-      : `${displayName} sign-in succeeded, but a more specific setting keeps subscription access disabled.`,
+    message: `Prefer ${displayName} subscription enabled for ${modelFamily} (${accountLabel}).`,
   } satisfies CliModelAccessSelectionResult;
 });
 

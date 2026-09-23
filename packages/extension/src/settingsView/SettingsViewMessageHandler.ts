@@ -47,6 +47,7 @@ import {
 } from '@frontend/ui/errorHandlingUtils';
 import { subscribeAppSignal } from '@frontend/events/appSignalSubscriptions';
 import { subscribeGoalStateChanges } from '@frontend/events/runFactSubscriptions';
+import { withLogChannel } from '@logger/effectLog';
 import { createLog, type Log } from '@logger/logUtils';
 import {
   modelOptionsFrom,
@@ -54,7 +55,7 @@ import {
 } from '@model/computeModelOptions';
 import {
   API_PROVIDERS,
-  invalidateApiKeyCache,
+  apiProviderOfSecretName,
   loadApiKeyStatusMap,
 } from '@model/apiProviders';
 import {
@@ -250,6 +251,14 @@ export class SettingsViewMessageHandler {
       // write.
       subscribeAppSignal(this.runtime, 'agentRosterChanged', () => {
         this.runtime.runFork(this.refreshAfterAgentMutation(undefined, true));
+      }),
+      // Every provider-key writer lands here, not just this view's own
+      // round-trip: the setup agent's `unset_api_key`, the command palette,
+      // another window. An OAuth or GitHub token write is not a provider key.
+      subscribeAppSignal(this.runtime, 'credentialChanged', ({ key }) => {
+        const provider = apiProviderOfSecretName(key);
+        if (provider === undefined) return;
+        this.runtime.runFork(this.refreshAfterProviderKeyChange(provider));
       }),
       subscribeAppSignal(this.runtime, 'languageModelsChanged', () => {
         this.runtime.runFork(
@@ -561,10 +570,32 @@ export class SettingsViewMessageHandler {
     return Effect.gen({ self: this }, function* () {
       // Tool dashboard involves network I/O (Zotero probe, etc.) — fire on a
       // detached fiber so it doesn't block the initial render. The frontend
-      // shows a loading spinner until data arrives.
-      yield* Effect.forkDetach(this.sendToolDashboardData(webview), {
-        startImmediately: true,
-      });
+      // shows a loading spinner until data arrives, so a failed build still
+      // posts an empty dashboard to end it, and nothing joins this fiber, so
+      // each failure is logged on it.
+      yield* Effect.forkDetach(
+        this.sendToolDashboardData(webview).pipe(
+          Effect.catch((error) =>
+            Effect.logWarning(
+              'The tool dashboard could not be built; showing it empty.',
+            ).pipe(
+              Effect.annotateLogs({ data: error }),
+              withLogChannel(this.channel),
+              Effect.andThen(
+                postToWebview(webview, {
+                  command: SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD,
+                  items: [],
+                }),
+              ),
+            ),
+          ),
+          Effect.ignore({
+            log: 'Warn',
+            message: 'The empty tool dashboard could not be posted either.',
+          }),
+        ),
+        { startImmediately: true },
+      );
 
       yield* postToWebview(webview, {
         command: SETTINGS_VIEW_COMMANDS.SET_UNSUPPORTED_COMMANDS,
@@ -802,7 +833,6 @@ export class SettingsViewMessageHandler {
     provider: string,
   ): Effect.Effect<void, Error, ProcessServices> {
     return Effect.gen({ self: this }, function* () {
-      invalidateApiKeyCache();
       const usageProvider = codingPlanForApiProvider(provider)?.usageProvider;
       // The launcher's API-key banner reads the same credential probe from
       // the host snapshot.

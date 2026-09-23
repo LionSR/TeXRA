@@ -73,7 +73,7 @@
     "src/agent/runtime/loop/reflection.ts": 1253,
     "src/agent/runtime/loop/toolUse.ts": 843,
     "src/agent/runtime/loop/toolUseDispatch.ts": 989,
-    "src/agent/runtime/ModelInvoker.ts": 1317,
+    "src/agent/runtime/ModelInvoker.ts": 1313,
     "src/agent/runtime/run/modelBinding.ts": 1191,
     "src/agent/runtime/SessionHandle.ts": 1444,
     "src/agent/workflowScript/runWorkflowScript.ts": 988,

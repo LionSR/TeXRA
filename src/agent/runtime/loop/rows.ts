@@ -221,6 +221,17 @@ export function retryRow(
   };
 }
 
+/** One move of the retry gate: the permit on its own row, and the failure it
+ *  presents on the snapshot that owns `lastError`. */
+export function retryRows(
+  runId: RunId,
+  state: RunState,
+  permit: PendingRetry | null,
+  runtime: Partial<Pick<SnapshotRuntime, 'lastError' | 'declinedRoutes'>>,
+): readonly RunLedgerDraft[] {
+  return [retryRow(runId, permit), snapshotRow(runId, state, { runtime })];
+}
+
 /** Each arm of a draft union keeps its own required fields. */
 type Unqualified<T> = T extends unknown ? Omit<T, 'aggregateId'> : never;
 

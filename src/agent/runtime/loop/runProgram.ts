@@ -189,24 +189,24 @@ export type RunExit = {
 };
 
 /**
- * The one verdict: the body's own value when it returned, and on a failure
- * cause a stop only when every reason is an interrupt — a run that failed and
- * was then interrupted while unwinding is FAILED, never CANCELLED.
+ * The one verdict: the body's own value when it returned. Any interrupt in
+ * a failure cause is a stop, even when a finalizer then failed
+ * (`Interrupt` + `Die`): `runUntilStopped` already reports that run
+ * `CANCELLED`, so the halt row agrees.
  */
 const runVerdict = (exit: Exit.Exit<RunExit, Error>): RunOutcome | null =>
   Exit.match(exit, {
     onSuccess: (value) => value.outcome,
     onFailure: (cause) =>
-      Cause.hasInterruptsOnly(cause)
-        ? RUN_OUTCOME.CANCELLED
-        : RUN_OUTCOME.FAILED,
+      Cause.hasInterrupts(cause) ? RUN_OUTCOME.CANCELLED : RUN_OUTCOME.FAILED,
   });
 
 /**
  * The exit protocol, as the release arm of the run's acquireUseRelease: the
  * halt row and, where a family holds one, the input lease. A refused halt
- * write warns; a database write failure reaches the caller. The lease is
- * released in either case.
+ * write warns; a database write failure reaches the caller. The lease hangs
+ * off that write's own exit: a failed halt still frees it, as `recoverable`,
+ * because no terminal row landed.
  */
 export const settleRun =
   (
@@ -220,47 +220,52 @@ export const settleRun =
     exit: Exit.Exit<RunExit, Error>,
   ): Effect.Effect<void, DatabaseWriteFailed, Runs> => {
     const outcome = runVerdict(exit);
-    const releaseLease =
-      lease === null
+    const halt =
+      outcome === null
         ? Effect.void
         : Effect.gen(function* () {
-            const runs = yield* Runs;
-            lease.release(
-              outcome === RUN_OUTCOME.COMPLETED &&
-                !runs.hasActiveChildren(cell.runId)
-                ? 'terminal'
-                : 'recoverable',
-            );
+            const state = yield* cell.current;
+            yield* cell
+              .append([haltedStepRow(cell.runId, state, outcome)])
+              .pipe(
+                Effect.catch((error) =>
+                  error instanceof RunLedgerRefused
+                    ? Effect.sync(() =>
+                        logger.warn('Failed to record the run halt', {
+                          data: error,
+                        }),
+                      )
+                    : Effect.fail(error),
+                ),
+              );
           });
-    return Effect.gen(function* () {
-      if (outcome !== null) {
-        const state = yield* cell.current;
-        yield* cell
-          .append([haltedStepRow(cell.runId, state, outcome)])
-          .pipe(
-            Effect.catch((error) =>
-              error instanceof RunLedgerRefused
-                ? Effect.sync(() =>
-                    logger.warn('Failed to record the run halt', {
-                      data: error,
-                    }),
-                  )
-                : Effect.fail(error),
-            ),
-          );
-      }
-    }).pipe(Effect.ensuring(releaseLease));
+    return halt.pipe(
+      Effect.onExit((halted) =>
+        lease === null
+          ? Effect.void
+          : Effect.gen(function* () {
+              const runs = yield* Runs;
+              lease.release(
+                Exit.isSuccess(halted) &&
+                  outcome === RUN_OUTCOME.COMPLETED &&
+                  !runs.hasActiveChildren(cell.runId)
+                  ? 'terminal'
+                  : 'recoverable',
+              );
+            }),
+      ),
+    );
   };
 
 /**
- * The caller's error for a run that ended in a failure cause; a pure
- * interrupt cause is re-raised unchanged. A failure with an interrupt riding
- * alongside is a failure: the halt already recorded it as one.
+ * The caller's error for a run that ended in a failure cause. Any interrupt
+ * in the cause is re-raised unchanged, so a stop that also hit a finalizer
+ * stays a cancellation. Anything else becomes the caller's error.
  */
 export const stoppedBy =
   (logger: AgentTrace, label: string) =>
   (cause: Cause.Cause<Error>): Effect.Effect<never, Error> => {
-    if (Cause.hasInterruptsOnly(cause)) return Effect.failCause(cause);
+    if (Cause.hasInterrupts(cause)) return Effect.failCause(cause);
     const squashed = Cause.squash(cause);
     const stopped =
       squashed instanceof RunLedgerRefused
@@ -291,7 +296,7 @@ export const stagedBy =
             Exit.match(exit, {
               onSuccess: outcomeOf,
               onFailure: (cause) =>
-                Cause.hasInterruptsOnly(cause)
+                Cause.hasInterrupts(cause)
                   ? RUN_OUTCOME.CANCELLED
                   : RUN_OUTCOME.FAILED,
             }),

@@ -625,16 +625,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           return { state, outcome: 'cancelled' } as const;
         }
         if (outcome.kind === 'failed') {
-          // A failure the invoker's gate did not already commit (no retry was
-          // available) is committed here, so a listing and a resume read the
-          // run's error where the gate writes it.
-          if (state.lastError === null) {
-            state = yield* cell.append([
-              snapshotRow(runId, state, {
-                runtime: { lastError: outcome.error },
-              }),
-            ]);
-          }
           return { state, outcome: 'failed' } as const;
         }
         totalResponseTimeMs += outcome.responseTimeMs;
@@ -685,13 +675,9 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       let restoring = start.resume;
       for (;;) {
         let state = yield* cell.current;
-        const parked =
-          state.phase === 'waiting' ||
-          state.phase === 'halted' ||
-          (state.phase === 'response.ready' &&
-            state.openAttempt === null &&
-            state.pendingResponse === null &&
-            state.step === 'waiting');
+        const parked = state.phase === 'waiting' || state.phase === 'halted';
+        // The invoker commits the run's failure fact and the input that
+        // recovers the run clears it, so the fold is the one place to read it.
         const afterError = state.lastError !== null;
         if (parked) {
           // A native child waits in this same run scope, just like its root.
@@ -705,11 +691,10 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           }
           let batch: FollowUpBatch | null = null;
           if (batch === null) {
-            if (afterError) {
-              if (!isChild()) yield* pauseActiveGoal();
-            } else {
-              run.callbacks.onIdle?.(state);
-            }
+            if (afterError && !isChild()) yield* pauseActiveGoal();
+            // Every park is idle, a failed turn's included: a resume
+            // acknowledges at the first one.
+            run.callbacks.onIdle?.(state);
             if (run.toolPolicy.stopAfterCycle) {
               return finish(
                 state,
@@ -775,16 +760,10 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         // a viewer cut at either step sees the fields, and a stop between the
         // turn and its wait cannot leave the turn unended. The `waiting` step
         // parks the run (one run model, 3.3), so the streaming rows still open
-        // close in its batch: a parked transcript never streams. The snapshot
-        // carries the failed turn's error; the turn that recovered from one
-        // clears it here for good.
+        // close in its batch: a parked transcript never streams. The invoker
+        // owns `lastError`; this snapshot does not restate it.
         state = yield* cell.append([
-          snapshot(state, {
-            phase: 'waiting',
-            runtime: {
-              lastError: turn.outcome === 'failed' ? state.lastError : null,
-            },
-          }),
+          snapshot(state, { phase: 'waiting' }),
           stepRow(runId, state, 'turn.end'),
           ...session.streamClosureFacts(runId),
           stepRow(runId, state, 'waiting'),

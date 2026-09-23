@@ -67,6 +67,35 @@ All notable changes to this project will be documented in this file.
   subscription** when the account's plan is not known.
 - Generated agent definitions, session titles and helper answers no longer inherit document text-replacement rules.
 - Messages you queue for a run are no longer lost when you stop the run or TeXRA exits unexpectedly: they stay queued and are delivered once the run resumes.
+- A run whose final save failed can be resumed again in the same session;
+  before, it stayed marked as busy until TeXRA restarted.
+- Resuming a run in VS Code or the desktop app returns as soon as the run
+  has taken your message and is waiting, instead of holding the Resume
+  request until the whole run ends.
+- A run whose model request you retried successfully no longer resumes as
+  failed if TeXRA exits before the turn ends.
+- **Key changes show up everywhere at once.** When the setup agent removes an
+  API key, or a key is changed in another window, the Settings profile and
+  model tabs, the launcher's key banner and the model pickers now update right
+  away instead of showing the old key until something else repaints them. In
+  the CLI, saving or removing the GitHub token under `/config` re-checks tool
+  availability, so the GitHub tools are no longer reported as unavailable for
+  the next run.
+- **Desktop: Pack also copies the source PDF.** The toolbar's Pack action now
+  copies the source document's own files (its PDF) into `History/` and sweeps
+  its build files, as the VS Code extension already did, instead of packing
+  only the run's outputs.
+- **Deleting a team that no longer exists says so.** In the VS Code settings,
+  deleting a team preset that is already gone now reports "Unknown custom
+  team" instead of doing nothing, as the desktop app does. Double-clicking
+  Delete on a custom agent in the desktop app no longer asks twice.
+- One failed read of a workspace's session history (for example while another
+  TeXRA window holds it busy) no longer stops that window from seeing runs
+  the other windows write; it recovers and logs a warning. A workspace whose
+  close outlived its budget is also released once its runs settle, even when
+  one of their stops failed, instead of refusing new runs until a restart.
+- The Settings view's tool dashboard no longer spins forever when it cannot be
+  loaded; it shows an empty dashboard and logs why.
 
 ### Extension (VS Code)
 

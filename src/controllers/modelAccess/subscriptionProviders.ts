@@ -34,7 +34,6 @@ import { codexAccountLabel } from '@auth/codex/codexSessionTypes';
 import { LoopbackTransportUnavailableError } from '@auth/oauth/loopbackLogin';
 import type { SubscriptionSessionStatus } from '@auth/oauth/SubscriptionOAuthCoordinator';
 import { createLog } from '@logger/logUtils';
-import type { SubscriptionPreferenceUpdate } from '@model/subscriptionPreference';
 import {
   isPreferCodexSubscription,
   setPreferCodexSubscription,
@@ -143,14 +142,14 @@ export interface SubscriptionProvider {
   getStatus(secrets: PlatformSecrets): Effect.Effect<SubscriptionAccount>;
   isPreferSubscription(stores: SettingsStores): boolean;
   /**
-   * Persist the preference and report the scope it landed in. An `Effect`, like
+   * Persist the preference. An `Effect`, like
    * every other write of a catalog-backed setting, so a host runs it at its own
    * edge and owns the failure.
    */
   setPreferSubscription(
     stores: SettingsStores,
     enabled: boolean,
-  ): Effect.Effect<SubscriptionPreferenceUpdate, ConfigWriteFailed | Error>;
+  ): Effect.Effect<void, ConfigWriteFailed | Error>;
 }
 
 /** Fields the flow reads off a provider session; providers carry more. */
@@ -189,7 +188,7 @@ interface SubscriptionProviderBindings<Coordinator, Session> {
   readonly setPrefer: (
     stores: SettingsStores,
     enabled: boolean,
-  ) => Effect.Effect<SubscriptionPreferenceUpdate, ConfigWriteFailed | Error>;
+  ) => Effect.Effect<void, ConfigWriteFailed | Error>;
 }
 
 /**

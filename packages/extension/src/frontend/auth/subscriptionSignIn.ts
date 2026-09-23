@@ -133,7 +133,7 @@ export function signInWithSubscription(
       ),
     );
 
-    const update = yield* provider
+    yield* provider
       .setPreferSubscription(stores, true)
       .pipe(
         Effect.mapError(
@@ -141,16 +141,10 @@ export function signInWithSubscription(
         ),
       );
 
-    if (update.effective) {
-      void vscode.window.showInformationMessage(
-        `${ACCOUNT_OUTCOME.signedInAs(displayName, account.label)} ${displayName} subscription is enabled for ${modelFamily}.`,
-      );
-      return true;
-    }
-    void vscode.window.showWarningMessage(
-      `Signed in with ${displayName} as ${account.label}, but a more specific setting kept the subscription preference disabled.`,
+    void vscode.window.showInformationMessage(
+      `${ACCOUNT_OUTCOME.signedInAs(displayName, account.label)} ${displayName} subscription is enabled for ${modelFamily}.`,
     );
-    return false;
+    return true;
   }).pipe(
     Effect.catchTag('SubscriptionSignInFailed', (failure) =>
       failure.cause instanceof SubscriptionSignInCancelled

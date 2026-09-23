@@ -62,22 +62,17 @@ export class RunStopper {
       };
     }
     const visited = new Set<string>();
-    const settlements: Effect.Effect<void, Error>[] = [];
     let reached = false;
-    const stopRoot = (): Effect.Effect<void, Error> => {
+    const stopRoot = (): Effect.Effect<void> => {
       reached = this.terminate(
         handle,
         visited,
         options.detachActiveChildren !== true,
-        settlements,
       );
       // Always notify waiters — even if terminate() returned false (e.g. PID
       // not yet assigned), callers blocking on this run should be unblocked.
       this.roster.notifyWaiters(runId);
-      return Effect.all(settlements, {
-        concurrency: 'unbounded',
-        discard: true,
-      });
+      return Effect.void;
     };
     return {
       accepted: () => reached,
@@ -238,10 +233,9 @@ export class RunStopper {
             // Shared across the child sweep and the root cascade so each run in
             // the chain is interrupted exactly once.
             const visited = new Set<string>();
-            const settlements: Effect.Effect<void, Error>[] = [];
 
             if (options.detachActiveChildren !== true) {
-              this.interruptActiveChildren(runId, visited, true, settlements);
+              this.interruptActiveChildren(runId, visited, true);
             }
 
             let stopped = rootHandle
@@ -249,7 +243,6 @@ export class RunStopper {
                   rootHandle,
                   visited,
                   options.detachActiveChildren !== true,
-                  settlements,
                 )
               : false;
             if (!rootHandle) {
@@ -261,10 +254,7 @@ export class RunStopper {
             }
             // A reached handle or child driver owns terminal finalization.
             // Only an ownerless stop needs to write the terminal fact here.
-            const all: Effect.Effect<void, Error>[] = stopped
-              ? settlements
-              : [...settlements, this.finalizeOwnerlessStop(runId)];
-            return Effect.all(all, { concurrency: 'unbounded', discard: true });
+            return stopped ? Effect.void : this.finalizeOwnerlessStop(runId);
           }),
         ),
       ),
@@ -304,19 +294,12 @@ export class RunStopper {
    * so the only child this reaches is one registered in the window between
    * the stop's settlement and the fold ({@link assertStopNotFolded} refuses
    * every later one). The scan itself runs here, at the fold, where the row
-   * that closed the window reads its children; the settlements it collects
-   * are composed, never run: the caller executes the returned program on the
-   * runtime that delivered the fold, and forks the child teardowns it
-   * collects, which cannot fail (their recovery is logged inside).
+   * that closed the window reads its children and interrupts them there;
+   * each interrupted driver settles its own run.
    */
-  sweepChildrenOfFoldedStop(runId: RunId): Effect.Effect<void> {
-    if (!this.stopFolded(runId)) return Effect.void;
-    const settlements: Effect.Effect<void, Error>[] = [];
-    this.interruptActiveChildren(runId, new Set(), true, settlements);
-    if (settlements.length === 0) return Effect.void;
-    return Effect.forkDetach(
-      Effect.all(settlements, { concurrency: 'unbounded', discard: true }),
-    ).pipe(Effect.asVoid);
+  sweepChildrenOfFoldedStop(runId: RunId): void {
+    if (!this.stopFolded(runId)) return;
+    this.interruptActiveChildren(runId, new Set(), true);
   }
 
   /** Interrupt all active subagents of a parent run, including descendants. */
@@ -324,7 +307,6 @@ export class RunStopper {
     parentRunId: RunId,
     visited: Set<string>,
     cascadeChildren: boolean,
-    settlements: Effect.Effect<void, Error>[],
   ): void {
     // Preparation and final delivery outlive the engine handle; stop their
     // activation as well as the live run below. The activation is keyed
@@ -337,7 +319,7 @@ export class RunStopper {
     }
     for (const handle of this.roster.allHandles()) {
       if (handle.isOwnedBy(parentRunId)) {
-        this.terminate(handle, visited, cascadeChildren, settlements);
+        this.terminate(handle, visited, cascadeChildren);
       }
     }
   }
@@ -346,12 +328,11 @@ export class RunStopper {
     handle: RunHandle,
     visited: Set<string>,
     cascadeChildren: boolean,
-    settlements: Effect.Effect<void, Error>[],
   ): boolean {
     if (visited.has(handle.runId)) return false;
     visited.add(handle.runId);
     if (cascadeChildren) {
-      this.interruptActiveChildren(handle.runId, visited, true, settlements);
+      this.interruptActiveChildren(handle.runId, visited, true);
     }
     // A child run is its loop, not only the turn this handle runs:
     // stopping it ends the loop too, so the interrupted turn is not delivered

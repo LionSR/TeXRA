@@ -389,11 +389,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     // produced; the next connector and continuation prompt read their tail.
     // `continuationIndex` is folded state, so no directory enumeration is
     // needed to find them.
-    if (
-      state.phase === 'model.ready' ||
-      state.phase === 'model.submitted' ||
-      state.phase === 'response.ready'
-    ) {
+    if (state.phase === 'model.ready' || state.phase === 'model.submitted') {
       const content = yield* readRawOutput(
         state.round,
         state.continuationIndex,
@@ -998,8 +994,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
         state = yield* prepareRound(state, cell);
       while (
         state.phase === 'model.ready' ||
-        state.phase === 'model.submitted' ||
-        state.phase === 'response.ready'
+        state.phase === 'model.submitted'
       ) {
         const unprocessed =
           state.openAttempt === null &&
@@ -1024,16 +1019,6 @@ export const runReflection = Effect.fn('reflection.run')(function* (
             return { state, kind: 'cancelled' } as const;
           }
           if (outcome.kind === 'failed') {
-            // A failure the invoker's gate did not already commit (no
-            // retry was available) is committed here, so a listing and a
-            // resume read the run's error where the gate writes it.
-            if (state.lastError === null) {
-              state = yield* cell.append([
-                snapshotRow(runId, state, {
-                  runtime: { lastError: outcome.error },
-                }),
-              ]);
-            }
             return { state, kind: 'failed' } as const;
           }
           flow = {

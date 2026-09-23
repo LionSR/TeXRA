@@ -69,11 +69,9 @@ describe('CLI auth command', () => {
     mocks.installCliProcessRuntime
       .mockReset()
       .mockImplementation(async () => testRuntime());
-    mocks.signOutCliSubscription.mockReset().mockReturnValue(
-      Effect.succeed({
-        preferenceUpdate: { effective: false, target: 'global' },
-      }),
-    );
+    mocks.signOutCliSubscription
+      .mockReset()
+      .mockReturnValue(Effect.succeed({}));
     stdoutSpy = spyOnStreamWrite(process.stdout, (text) => {
       stdout += text;
     });

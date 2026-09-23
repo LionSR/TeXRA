@@ -48,7 +48,7 @@ import {
   latexdiffPackMessage,
   runPackLatexdiffvc,
 } from '@housekeeping/packLatexdiffvc';
-import { runCleanRunDir, runPackRunDir } from '@housekeeping/runDirOps';
+import { packRunOutputs, runCleanRunDir } from '@housekeeping/runDirOps';
 import { LaTeXdiffService } from '@latex/latexdiff';
 import {
   modelOptionsFrom,
@@ -456,7 +456,7 @@ export function createDesktopHostRequests(
       }
       const ran = yield* Effect.exit(
         operation === 'pack'
-          ? runPackRunDir(runId as RunId, agent, model, inputFile)
+          ? packRunOutputs(request)
           : runCleanRunDir(runId as RunId),
       );
       if (Exit.isFailure(ran)) {

@@ -311,11 +311,7 @@ function mockSignOuts(): {
     .mockReturnValue(Effect.void);
   const signOutChatGpt = vi
     .spyOn(subscriptionLogin, 'signOutCliSubscription')
-    .mockReturnValue(
-      Effect.succeed({
-        preferenceUpdate: { effective: false, target: 'global' as const },
-      }),
-    );
+    .mockReturnValue(Effect.succeed({}));
   mockModelAccessOverview();
   return { signOutSupabase, signOutChatGpt };
 }
@@ -640,7 +636,7 @@ describe('handleTuiSlashCommand', () => {
         }),
       );
       vi.spyOn(codexSubscription, 'setPreferCodexSubscription').mockReturnValue(
-        Effect.succeed({ effective: true, target: 'global' }),
+        Effect.void,
       );
 
       const handled = yield* dispatchSlash('/login chatgpt', createContext());
