@@ -58,7 +58,7 @@ The full per-provider key reference (the API Configuration table, Set / Get / Re
 
 ::: tip Signing in to TeXRA
 **TeXRA: Sign In** is separate from model access: your TeXRA account unlocks the hosted
-research-agent catalog (remote agents such as the orchestrator), and those agents still run on the credential
+research-agent catalog (remote workflow agents such as `generic` and `devise`), and those agents still run on the credential
 you configured above. Read the [Remote agents guide](./remote-agents.md).
 :::
 

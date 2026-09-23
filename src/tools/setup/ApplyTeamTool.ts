@@ -8,7 +8,7 @@
  *
  * The roster write goes through the same shared application path
  * (`applyTeamRosterWithPreflight`) as the Settings "apply team" action, so the
- * two can't drift. Account-served leads (orchestrators) that aren't in the
+ * two can't drift. Account-served members (remote workflow agents) that aren't in the
  * registry yet (signed out) are reported as "after sign-in" rather than
  * silently dropped.
  */
@@ -170,12 +170,12 @@ const applyTeam = Effect.fn('ApplyTeamTool.execute')(function* (
   // that didn't resolve are not dropped: the roster stores the team
   // reference and re-resolves `preset.agents` on every read, so a member
   // activates the moment it appears. `unresolvedNames` is preflight
-  // evidence, not stored state. Account-served leads are absent until
+  // evidence, not stored state. Account-served members are absent until
   // sign-in — say so instead of letting it read as a silent failure; check
   // registry resolution, never auth.
   const activeWorkflow = keys.workflow;
   const activeToolUse = keys.toolUse;
-  const pendingRemoteLeads = unresolvedNames.filter((name) =>
+  const pendingRemoteMembers = unresolvedNames.filter((name) =>
     texraHostedNames.has(name),
   );
   const pendingOther = unresolvedNames.filter(
@@ -183,8 +183,8 @@ const applyTeam = Effect.fn('ApplyTeamTool.execute')(function* (
   );
 
   const signInNote =
-    pendingRemoteLeads.length > 0
-      ? `The ${pendingRemoteLeads.join(' and ')} lead is TeXRA-hosted. It joins the roster automatically after sign-in.`
+    pendingRemoteMembers.length > 0
+      ? `TeXRA-hosted members join the roster automatically after sign-in: ${pendingRemoteMembers.join(', ')}.`
       : undefined;
 
   const lines = [

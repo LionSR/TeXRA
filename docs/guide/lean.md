@@ -57,15 +57,15 @@ Open **Dashboard → Tools** (<wa-icon library="texra" name="tools"></wa-icon>) 
 
 ## Choosing an agent
 
-The built-in `lean` agent is always available. The **Lean Project** team adds a `leanOrchestrator` plus the Lean specialists it delegates to (`leanSearch`, `leanSimplifier`, `leanBlueprint`). All of these are [remote agents](./remote-agents.md), so [sign in](./remote-agents.md) to sync them. The team also bundles the `latexFixer` and `progressCheck` helpers.
+All the Lean agents ship with TeXRA and need no sign-in. The `lean` agent handles day-to-day proof work. The **Lean Project** team adds a `leanOrchestrator` plus the Lean specialists it delegates to (`leanSearch`, `leanSimplifier`, `leanBlueprint`), and also bundles the `latexFixer` and `progressCheck` helpers.
 
-| Agent              | Availability       | Best for                                                                 |
-| ------------------ | ------------------ | ------------------------------------------------------------------------ |
-| `lean`             | Built-in           | Writing and debugging proofs; iterating until a file compiles            |
-| `leanSearch`       | Remote / Lean team | Finding the right Mathlib lemma, exploring APIs, formalization questions |
-| `leanSimplifier`   | Remote / Lean team | Cleaning up proofs to Mathlib-quality, upstream-ready standards          |
-| `leanBlueprint`    | Remote / Lean team | Building dependency-tracked LeanBlueprint LaTeX that bridges math ↔ Lean |
-| `leanOrchestrator` | Remote / Lean team | Coordinating a whole formalization project across the agents above       |
+| Agent              | Availability         | Best for                                                                 |
+| ------------------ | -------------------- | ------------------------------------------------------------------------ |
+| `lean`             | Built-in             | Writing and debugging proofs; iterating until a file compiles            |
+| `leanSearch`       | Built-in / Lean team | Finding the right Mathlib lemma, exploring APIs, formalization questions |
+| `leanSimplifier`   | Built-in / Lean team | Cleaning up proofs to Mathlib-quality, upstream-ready standards          |
+| `leanBlueprint`    | Built-in / Lean team | Building dependency-tracked LeanBlueprint LaTeX that bridges math ↔ Lean |
+| `leanOrchestrator` | Built-in / Lean team | Coordinating a whole formalization project across the agents above       |
 
 To load the full set, open the **Teams** tab and select the **Lean Project** team. If you're formalizing a paper that is also part LaTeX, the **Mathematician** team bundles the `lean` agent alongside the LaTeX and research agents.
 
@@ -147,11 +147,10 @@ The setup commands drive the Lean 4 extension's installers, so they only work in
 
 **Diagnostics look stale**: ask the agent to run `lean_file` with `restart`, or `lean_project` with `restart_server`. A missing Mathlib cache can also cause long stalls; run `fetch_cache`.
 
-**The Lean Project agents aren't in my list**: `leanSearch`, `leanSimplifier`, `leanBlueprint`, and `leanOrchestrator` are remote agents. [Sign in](./remote-agents.md) and select the **Lean Project** team to sync them. The built-in `lean` agent works without signing in.
+**The Lean Project agents aren't in my list**: `leanSearch`, `leanSimplifier`, `leanBlueprint`, and `leanOrchestrator` are built in, but your current team's roster may hide them. Select the **Lean Project** team, or show them one by one from the **Agents** tab.
 
 ## Next steps
 
 - [Built-in agents](./built-in-agents.md): full reference for the `lean` agent and others
-- [Remote agents](./remote-agents.md): sign in to unlock the Lean Project specialist agents
 - [Research tools](./research-tools.md): literature search, citations, and Wolfram verification
 - [Workflow agents](./agent-architecture.md): how the orchestrator coordinates multi-agent runs

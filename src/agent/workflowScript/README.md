@@ -258,7 +258,7 @@ and rerun the file instead of reproducing the full script. Phase metadata
 accepts both title strings and `{ title }` objects and normalizes them
 to one internal representation. It ships in the built-in `orchestrator`
 agent's tool list
-(`prompts/agents/remote/tool_use/orchestrator.yaml`); explicitly naming the tool in an
+(`packages/extension/resources/tool_use_agents/orchestrator.yaml`); explicitly naming the tool in an
 agent's configuration is one half of the consent boundary for automated
 workflow fan-out. The other half is global: the "Multi-Agent Workflow" toggle
 in the Tools dashboard (`src/tools/externalToolDefs.ts`, id `workflow-script`)
