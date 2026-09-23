@@ -41,6 +41,10 @@ import {
 // Local imports
 import { isLatexFile } from '@common/files/fileTypeUtils';
 import { createLog } from '@logger/logUtils';
+import {
+  Rejected,
+  type HostRequestFailure,
+} from '@shared/session/requestErrors';
 import type {
   RequestDecision,
   SessionEvent,
@@ -78,15 +82,15 @@ export interface ToolEditPreview {
    * the view is on screen; a host whose view failure must fail the request
    * fails instead.
    */
-  present(): Effect.Effect<void, unknown>;
+  present(): Effect.Effect<void, HostRequestFailure>;
   /** Re-open the diff view after the user dismissed it. */
-  showDiff(): Effect.Effect<void, unknown>;
+  showDiff(): Effect.Effect<void, HostRequestFailure>;
   /** Open the proposed copy in the host's plain file viewer. */
-  openProposed(): Effect.Effect<void, unknown>;
+  openProposed(): Effect.Effect<void, HostRequestFailure>;
   /** Proposed content including edits the user made in the host's view. */
-  readProposedContent(): Effect.Effect<string, unknown>;
+  readProposedContent(): Effect.Effect<string, HostRequestFailure>;
   /** Close the view and remove everything staged for this request. */
-  dispose(): Effect.Effect<void, unknown>;
+  dispose(): Effect.Effect<void, HostRequestFailure>;
 }
 
 export interface ToolEditPreviewContext {
@@ -107,7 +111,7 @@ export interface ToolEditApprovalHost {
   stagePreview(
     request: ToolEditApprovalRequest,
     context: ToolEditPreviewContext,
-  ): Effect.Effect<ToolEditPreview, unknown>;
+  ): Effect.Effect<ToolEditPreview, HostRequestFailure>;
   /**
    * Reopen the host surface containing the pending request's controls, for a
    * host that has one to reopen: the VS Code progress view is a panel the
@@ -115,7 +119,7 @@ export interface ToolEditApprovalHost {
    * open. Optional rather than a no-op on the hosts that reveal nothing,
    * which is what the rest of this repo's host ports do (`HostInteractions`).
    */
-  revealApprovalSurface?(): Effect.Effect<void, unknown>;
+  revealApprovalSurface?(): Effect.Effect<void, HostRequestFailure>;
   /**
    * The host's build display: the program the LaTeX preview programs yield,
    * forked below so a release still holds a handle on it once a preview
@@ -132,7 +136,7 @@ export interface ToolEditApprovalHost {
     runId: RunId,
     requestId: string,
     decision: RequestDecision,
-  ): Effect.Effect<void, unknown>;
+  ): Effect.Effect<void, HostRequestFailure>;
 }
 
 interface ToolEditApprovalControllerOptions {
@@ -141,21 +145,10 @@ interface ToolEditApprovalControllerOptions {
 
 /** What both phases of one request name, whichever phase a release finds. */
 interface TrackedToolEditApproval {
-  /**
-   * How the {@link ToolEditApprovalController.present} call for this request
-   * ended, unfilled while it is still running: everything that call is
-   * waiting for, from `stagePreview` through either the disposal of a preview
-   * whose entry was gone by the time it finished or the promotion to a staged
-   * entry and the opening of the host's view on it. Both phases name the same
-   * one, and {@link ToolEditApprovalController.release} waits for it, so a
-   * release that lands mid-staging or while the view is opening still returns
-   * with nothing left staged and nothing still opening.
-   *
-   * It carries the `Exit` that ended that call rather than failing with it:
-   * `present` raises that failure to its own caller, and a second raise here
-   * would be one with nobody left to handle it.
-   */
-  readonly inFlight: Deferred.Deferred<Exit.Exit<void, unknown>>;
+  /** The full staging/presentation exit, shared by both request phases.
+   * Release joins it before cleanup, including when staging is in flight.
+   * Carrying Exit prevents a second, unhandled raise of a presentation error. */
+  readonly inFlight: Deferred.Deferred<Exit.Exit<void, HostRequestFailure>>;
 }
 
 /**
@@ -233,11 +226,13 @@ export class ToolEditApprovalController {
    */
   present(
     request: ToolEditApprovalRequest,
-  ): Effect.Effect<void, unknown, PreviewServices> {
+  ): Effect.Effect<void, HostRequestFailure, PreviewServices> {
     return Effect.suspend(() => {
       if (this.disposed) {
         return Effect.fail(
-          new Error('Tool edit approval controller is disposed.'),
+          new Rejected({
+            reason: 'Tool edit approval controller is disposed.',
+          }),
         );
       }
 
@@ -247,7 +242,8 @@ export class ToolEditApprovalController {
       // Filled by the staging below and published here, before the entry
       // that names it: a release finds either no entry at all or an entry
       // with the staging's outcome to wait for, never one with neither.
-      const inFlight = Deferred.makeUnsafe<Exit.Exit<void, unknown>>();
+      const inFlight =
+        Deferred.makeUnsafe<Exit.Exit<void, HostRequestFailure>>();
       const initialization: InitializingToolEditApproval = {
         phase: 'initializing',
         request,
@@ -267,7 +263,7 @@ export class ToolEditApprovalController {
         ),
       ).pipe(
         Effect.andThen(Deferred.await(inFlight)),
-        Effect.flatMap((exit): Effect.Effect<void, unknown> => exit),
+        Effect.flatMap((exit): Effect.Effect<void, HostRequestFailure> => exit),
       );
     });
   }
@@ -382,7 +378,7 @@ export class ToolEditApprovalController {
   private stage(
     request: ToolEditApprovalRequest,
     initialization: InitializingToolEditApproval,
-  ): Effect.Effect<void, unknown, PreviewServices> {
+  ): Effect.Effect<void, HostRequestFailure, PreviewServices> {
     const { requestId, relativePath } = request.permission;
     return this.options.host
       .stagePreview(request, {
@@ -519,11 +515,11 @@ export class ToolEditApprovalController {
   private send(
     request: ToolEditApprovalRequest,
     decision: RequestDecision,
-  ): Effect.Effect<void, unknown> {
+  ): Effect.Effect<void, HostRequestFailure> {
     return Effect.suspend(() => {
       const runId = request.runId;
       if (!runId) {
-        return Effect.fail(
+        return Effect.die(
           new Error(
             `Tool edit request ${request.permission.requestId} names no run to decide on.`,
           ),
@@ -642,7 +638,7 @@ export class ToolEditApprovalController {
    */
   private admit(
     entry: PendingToolEditApproval,
-    action: () => Effect.Effect<void, unknown, PreviewServices>,
+    action: () => Effect.Effect<void, HostRequestFailure, PreviewServices>,
   ): Effect.Effect<void, never, PreviewServices> {
     const withdraw = this.track(entry);
     return Effect.suspend(action).pipe(
@@ -722,7 +718,7 @@ export class ToolEditApprovalController {
 
   private previewProposed(
     entry: PendingToolEditApproval,
-  ): Effect.Effect<void, unknown, PreviewServices> {
+  ): Effect.Effect<void, HostRequestFailure, PreviewServices> {
     return Effect.suspend(() =>
       isLatexFile(entry.request.path)
         ? previewProposedLatex(entry, {
@@ -734,7 +730,7 @@ export class ToolEditApprovalController {
 
   private approve(
     entry: PendingToolEditApproval,
-  ): Effect.Effect<void, unknown, PreviewServices> {
+  ): Effect.Effect<void, HostRequestFailure, PreviewServices> {
     return entry.preview.readProposedContent().pipe(
       Effect.matchCauseEffect({
         onFailure: (cause) =>
