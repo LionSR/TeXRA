@@ -180,11 +180,9 @@ const RunViewCommonSchema = z.object({
    *  any other run's newest user instruction or settled model reply. */
   latestLine: z.string().nullable(),
   transcript: TranscriptViewSchema,
-  // Shared by both categories: the `missingOutputs` and `compileFailures`
-  // run facts apply to either arm alike (sessionFold.ts). Each row of those
-  // facts carries the run's whole round map, so a cold listing read — which
-  // delivers only the newest row per run and fact key — leaves the same
-  // rounds here as a full aggregate replay.
+  // Shared by both categories: `output.produced` carries the complete round
+  // collection for missing outputs and compile failures. A cold listing read
+  // delivers its newest row per run, yielding the same maps as full replay.
 
   missingOutputs: RoundKeyedOutputSidecarValueSchemas.missingOutputs,
   compileFailures: RoundKeyedOutputSidecarValueSchemas.compileFailures,

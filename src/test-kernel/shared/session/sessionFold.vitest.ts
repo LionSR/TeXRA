@@ -794,11 +794,9 @@ describe('sessionFold', () => {
   });
 
   it('takes each round map from the newest row, on a cold read and on replay', () => {
-    // The `outputFiles`, `missingOutputs` and `compileFailures` run facts
-    // are latest-only listing keys of their own — the listing groups by the
-    // fact key beside the row type — so a cold read hands the fold one row
-    // of each per run. Every row therefore carries the run's whole round map
-    // (`OutputState`), and the fold replaces rather than merges.
+    // `output.produced` is a latest-only listing key, so a cold read hands
+    // the fold one row per run. It carries the whole round collection, and
+    // the fold replaces rather than merges the derived maps.
     const log = new Log();
     const start = log.emit(CHILD, 3000, {
       type: 'run.start',

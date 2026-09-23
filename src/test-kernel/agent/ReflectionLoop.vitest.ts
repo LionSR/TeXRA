@@ -175,7 +175,6 @@ vi.mock('@agent/output/roundSummary', async () => {
         Effect.sync(() => {
           const outputs = ensureRoundData(outputState, round).outputs;
           return {
-            fileInfos: outputs,
             filesToOpen: scripted.openFiles
               ? outputs.map((output) => output.location)
               : [],
