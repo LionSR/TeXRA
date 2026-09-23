@@ -7,7 +7,6 @@ import { Cause, Effect, Exit, FileSystem, type PlatformError } from 'effect';
 // Local imports
 import { generateDiffFileName } from '@latex/latexdiff/diffFileNameManager';
 import { withLogChannel } from '@logger/effectLog';
-import { createLog } from '@logger/logUtils';
 import { WorkspaceFs } from '@platform/rootedFs';
 import type { FileLocation } from '@shared/schemas';
 import { normalizeFilePath } from '@utils/core';
@@ -22,7 +21,6 @@ import { getExtensionLowercase } from '@utils/core/pathCore';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
 
 const CHANNEL = 'AcceptedFileTarget';
-const log = createLog(CHANNEL);
 
 export type AcceptedFileTarget = {
   targetLocation: FileLocation;
@@ -296,14 +294,18 @@ export const cleanupAcceptedWorkspaceDiffFiles = Effect.fn(
       Effect.exit(workspaceFs.remove(relativePath, { force: true })),
     { concurrency: 'unbounded' },
   );
-  return stale.filter((relativePath, index) => {
+  const removed: string[] = [];
+  for (const [index, relativePath] of stale.entries()) {
     const result = settled[index];
-    if (Exit.isSuccess(result)) return true;
-    log.warn(
+    if (Exit.isSuccess(result)) {
+      removed.push(relativePath);
+      continue;
+    }
+    yield* Effect.logWarning(
       `Could not remove the stale diff file ${relativePath}: ${toErrorMessage(Cause.squash(result.cause))}`,
-    );
-    return false;
-  });
+    ).pipe(withLogChannel(CHANNEL));
+  }
+  return removed;
 });
 
 export function getAcceptedFileTarget(
