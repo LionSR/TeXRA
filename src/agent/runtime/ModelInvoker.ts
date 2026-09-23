@@ -89,7 +89,7 @@ import {
   retryRow,
   retryRows,
   rowAggregate,
-  runtimeSnapshotRow,
+  snapshotRow,
   stepRow,
 } from './loop/rows';
 import type { HttpClient } from 'effect/unstable/http';
@@ -535,7 +535,7 @@ export const modelInvokerLayer = (): Layer.Layer<
             },
             ...(state.lastError === null
               ? []
-              : [runtimeSnapshotRow(runId, state, { lastError: null })]),
+              : [snapshotRow(runId, state, { runtime: { lastError: null } })]),
             stepRow(runId, state, 'response.ready'),
           ]),
         );
@@ -1295,12 +1295,12 @@ export const modelInvokerLayer = (): Layer.Layer<
               'Model request failed (no retry available)',
               failure.formatted,
             );
-            // The terminal failure commits before the loop sees it: the
-            // invoker is the one writer of the run's failure fact.
+            // The invoker is the one writer of the run's failure fact.
+            const failed = snapshotRow(runId, state, {
+              runtime: { lastError: failure.info },
+            });
             state = yield* Effect.uninterruptible(
-              ledger.appendBatch(runId, state, [
-                runtimeSnapshotRow(runId, state, { lastError: failure.info }),
-              ]),
+              ledger.appendBatch(runId, state, [failed]),
             );
             return { kind: 'failed', state, error: failure.info };
           }
