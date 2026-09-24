@@ -665,41 +665,6 @@ describe('createChatSessionController', () => {
     expect(session.runExitCode).toBe(CliExitCode.Success);
   });
 
-  it('stops the focused root while preserving its agent children', () => {
-    const session = makeSession({
-      runId: 'b00001' as RunId,
-    });
-    const ctrl = createChatSessionController(makeInit({ session }));
-
-    ctrl.stopRun('b00001' as RunId);
-
-    expect(session.stopRequested).toBe(true);
-    expect(session.interruptedRunId).toBe('b00001');
-    expect(mocks.request).toHaveBeenCalledWith({
-      kind: 'run.stop',
-      runId: 'b00001',
-      detachActiveChildren: true,
-    });
-    expect(mocks.workspaceGet).not.toHaveBeenCalled();
-  });
-
-  it('stops one focused child without stopping the root session', () => {
-    const session = makeSession({
-      runId: 'b00001' as RunId,
-    });
-    const ctrl = createChatSessionController(makeInit({ session }));
-
-    ctrl.stopRun('ca0001' as RunId);
-
-    expect(session.stopRequested).toBe(false);
-    expect(session.interruptedRunId).toBeUndefined();
-    expect(mocks.request).toHaveBeenCalledWith({
-      kind: 'run.stop',
-      runId: 'ca0001',
-      detachActiveChildren: true,
-    });
-  });
-
   it.live(
     'keeps detached-child approvals answerable after the stopped root finalizes',
     () =>
@@ -773,7 +738,14 @@ describe('createChatSessionController', () => {
           vi.waitFor(() => expect(runs.getHandle(childRun)).toBeDefined()),
         );
 
-        ctrl.stopRun(rootRun);
+        // The stop Ctrl-C sends under "Keep subagents running": the root
+        // stops and its live children detach.
+        const owner = mocks.sessionStub() as SessionHandle;
+        yield* owner.requests.request({
+          kind: 'run.stop',
+          runId: rootRun,
+          detachActiveChildren: true,
+        });
         yield* Effect.promise(() => awaitRunSettled(session));
 
         expect(session.runCompleted).toBe(true);
@@ -865,7 +837,7 @@ describe('createChatSessionController', () => {
     const config = makeRunRequest('Check presenter ownership.');
     ctrl.startRootRun(config);
     session.runId = 'a0000a' as RunId;
-    ctrl.stopRun('a0000a' as RunId);
+    ctrl.stop();
     for (const present of resultPresenters) present('Failure A');
     runA.resolve({
       category: 'toolUse',

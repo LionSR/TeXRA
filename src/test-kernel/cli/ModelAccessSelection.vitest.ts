@@ -10,7 +10,6 @@ import {
   buildCliModelAccessItems,
   formatCliModelAccessRoute,
   formatCliModelAccessRouteInline,
-  parseCliModelAccessSelection,
   resolveCliModelAccessRoute,
   shortCliModelAccessRoute,
 } from '@cli/runtime/modelAccessRoute';
@@ -204,24 +203,6 @@ beforeEach(() => {
 });
 
 describe('CLI model access routes', () => {
-  it.each([
-    ['chatgpt', subscriptionPreference('chatgpt', 'on')],
-    ['subscription', subscriptionPreference('chatgpt', 'on')],
-    ['grok', subscriptionPreference('grok', 'on')],
-    ['xai', subscriptionPreference('grok', 'on')],
-    ['kimi', subscriptionPreference('kimi-code', 'on')],
-    ['kimicode', subscriptionPreference('kimi-code', 'on')],
-    ['kimi-code', subscriptionPreference('kimi-code', 'on')],
-    ['glm', subscriptionPreference('glm-code', 'on')],
-    ['glmcode', subscriptionPreference('glm-code', 'on')],
-    ['glm-code', subscriptionPreference('glm-code', 'on')],
-    ['glm-coding', subscriptionPreference('glm-code', 'on')],
-    ['glm-coding-plan', subscriptionPreference('glm-code', 'on')],
-    ['direct', undefined],
-  ])('parses the route or compatibility spelling %s', (input, expected) => {
-    expect(parseCliModelAccessSelection(input)).toEqual(expected);
-  });
-
   it('uses observed access before the prospective route', () => {
     expect(
       resolveCliModelAccessRoute({

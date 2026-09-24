@@ -1312,8 +1312,8 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
 
   // --- External tool integrations ------------------------------------------
   // This is a list-backed global-state domain. `/config` delegates editing to
-  // the existing `/tools` form so the catalog owns discoverability while the
-  // tool dashboard remains the single editor for per-integration toggles.
+  // the tools form so the catalog owns discoverability while the tool
+  // dashboard remains the single editor for per-integration toggles.
   surfacedSetting({
     key: GlobalStateKey.DISABLED_TOOLS,
     schema: z.array(z.string()).prefault([]),

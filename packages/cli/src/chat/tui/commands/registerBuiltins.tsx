@@ -18,45 +18,45 @@ import type { PlatformSecrets } from '@platform/secrets';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import { type RunId } from '@shared/schemas';
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import { OWN_API_KEYS } from '@ui/copy/modelAccess';
-import { RESEARCHER_ACCESS_AUTH } from '@ui/copy/accountAuth';
 
 import {
   AccountAccessForm,
   type AccountAccessFormValue,
 } from '../forms/AccountAccessForm';
 import { AgentListForm } from '../forms/AgentListForm';
-import { ApprovalPolicyForm } from '../forms/ApprovalPolicyForm';
+import {
+  ApprovalPolicyForm,
+  type ApprovalFormValue,
+} from '../forms/ApprovalPolicyForm';
 import { CliConfigForm } from '../forms/CliConfigForm';
 import { MemoryListForm } from '../forms/MemoryListForm';
 import { EnabledModelsForm } from '../forms/EnabledModelsForm';
-import { GoalModeForm } from '../forms/GoalModeForm';
 import { ModelListForm } from '../forms/ModelListForm';
 import { ProviderApiKeyForm } from '../forms/ProviderApiKeyForm';
 import { ResumeListForm } from '../forms/ResumeListForm';
 import { SkillsListForm, type SkillActivation } from '../forms/SkillsListForm';
-import { ToolsListForm } from '../forms/ToolsListForm';
 import {
   goalAutoApproveAll,
   patchSessionMeta,
+  selectedRunId,
   sessionMeta,
   setTransientNotice,
   setCliSessionModelOverride,
 } from '../state/cliState';
+import { currentView, runViewOf } from '../state/sessionView';
 import { appendLocalAssistantTranscript } from '../state/transcript';
 import {
   applyCliModelSelection,
   applyInitialCliAgentSelection,
 } from './handlers/agentModelCommands';
 import {
-  applyCliModelAccessInput,
   applyCliModelAccessSelection,
   applyCliProviderApiKey,
-  showCliAuthStatus,
+  showCliAccountStatus,
 } from './handlers/modelAccessCommands';
 import {
   applyCliApprovalPolicySelection,
-  YOLO_USAGE,
+  setCliRunBypass,
 } from './handlers/approvalCommand';
 import {
   loginFromChat,
@@ -73,7 +73,6 @@ import {
 } from './handlers/memoryCommands';
 import {
   requestCliSessionCompaction,
-  showCliGoalModeHelp,
   showCliSessionStatus,
   showCliSlashCommandHelp,
   showCliWorkPlan,
@@ -239,14 +238,56 @@ export function registerBuiltinSlashCommands(options: {
 
   function ApprovalPolicyFormAdapter(props: SlashFormProps): React.JSX.Element {
     const current = options.getApprovalPolicy?.() ?? 'ask';
+    // The run the status bar describes: its bypass badges are how a toggle
+    // here reads as applied.
+    const runId = runViewOf(currentView(), selectedRunId.get())?.id;
+    const bypasses =
+      runId === undefined
+        ? undefined
+        : currentView().policy.get(runId)?.bypasses;
+    const bypassState = (kind: 'bash' | 'toolEdit'): boolean | undefined =>
+      runId === undefined ? undefined : bypasses?.[kind] === true;
     return (
       <ApprovalPolicyForm
         availableRows={props.availableRows}
         currentPolicy={current}
-        onSelect={formSelectionHandler<TexraApprovalPolicy>({
+        toggles={{
+          bash: bypassState('bash'),
+          toolEdit: bypassState('toolEdit'),
+          goal: goalAutoApproveAll.get(),
+        }}
+        onSelect={formSelectionHandler<ApprovalFormValue>({
           runtime,
-          action: (value) =>
-            Effect.sync(() => options.onApprovalPolicySelect?.(value)),
+          action: (value) => {
+            switch (value) {
+              case 'goal':
+                return Effect.sync(() => {
+                  const enabled = !goalAutoApproveAll.get();
+                  goalAutoApproveAll.set(enabled);
+                  appendLocalAssistantTranscript(
+                    `Goal mode approves all work: ${enabled ? 'on' : 'off'}`,
+                  );
+                });
+              case 'bash':
+              case 'toolEdit':
+                return runId === undefined
+                  ? Effect.void
+                  : setCliRunBypass(
+                      options.runtimeSession,
+                      runId,
+                      value,
+                      !bypassState(value),
+                    );
+              case 'ask':
+              case 'never':
+              case 'yolo':
+                return Effect.sync(() =>
+                  options.onApprovalPolicySelect?.(value),
+                );
+              default:
+                return value satisfies never;
+            }
+          },
           onDone: props.onDone,
           onError: options.onError,
           completion: 'beforeAction',
@@ -254,20 +295,6 @@ export function registerBuiltinSlashCommands(options: {
           echoOnPersist: props.echoOnPersist,
         })}
         onCancel={() => props.onDone(undefined)}
-      />
-    );
-  }
-
-  function GoalModeFormAdapter(props: SlashFormProps): React.JSX.Element {
-    return (
-      <GoalModeForm
-        autoApproveAll={goalAutoApproveAll.get()}
-        availableRows={props.availableRows}
-        onToggle={(enabled) => {
-          goalAutoApproveAll.set(enabled);
-          props.onDone(enabled);
-        }}
-        onClose={() => props.onDone(undefined)}
       />
     );
   }
@@ -307,19 +334,6 @@ export function registerBuiltinSlashCommands(options: {
           onPersist: props.onPersist,
           echoOnPersist: props.echoOnPersist,
         })}
-        onClose={() => props.onDone(undefined)}
-      />
-    );
-  }
-
-  function ToolsListFormAdapter(props: SlashFormProps): React.JSX.Element {
-    return (
-      <ToolsListForm
-        state={stores.globalState}
-        runtime={runtime}
-        workspaceRoot={options.runtimeSession.roots.workspace}
-        config={options.runtimeSession.roots.config}
-        availableRows={props.availableRows}
         onClose={() => props.onDone(undefined)}
       />
     );
@@ -433,7 +447,6 @@ export function registerBuiltinSlashCommands(options: {
           category: 'configuration',
           echo: 'never',
           formComponent: ConfigFormAdapter,
-          formEscapeAction: 'close',
         },
       ],
     };
@@ -495,19 +508,10 @@ export function registerBuiltinSlashCommands(options: {
       pluginId: 'model-access',
       commands: [
         {
-          name: 'api',
-          description: `Sign in, choose ChatGPT, Grok, Kimi Code, GLM, or ${OWN_API_KEYS.inline}`,
-          category: 'account',
-          echo: 'ifPersists',
-          handler: (remainder, context) =>
-            applyCliModelAccessInput(stores, remainder, context),
-          formComponent: AccountAccessFormAdapter,
-        },
-        {
           name: 'key',
           description: 'Add a provider API key with masked input',
           aliases: ['keys'],
-          category: 'configuration',
+          category: 'account',
           echo: 'never',
           // A remainder never reaches the form: it could be the key itself,
           // so it is refused and dropped rather than pre-filled.
@@ -521,36 +525,20 @@ export function registerBuiltinSlashCommands(options: {
               openCliSlashCommandForm('key', '');
             }),
           formComponent: ProviderApiKeyFormAdapter,
-          formEscapeAction: 'close',
           redactInput: true,
         },
         {
-          name: 'auth',
-          description: 'Show signed-in accounts and active model access',
-          category: 'account',
-          echo: 'ifPersists',
-          handler: () => showCliAuthStatus(stores, secrets),
-        },
-        {
           name: 'login',
-          description: RESEARCHER_ACCESS_AUTH.slashLoginDescription,
+          description: 'Sign in or out, and choose subscriptions or API keys',
           category: 'account',
-          // The form can complete a sign-out or a preference toggle too, so
+          // One form owns sign-in, sign-out, and subscription preferences, so
           // the typed command is not an accurate transcript row; outcomes are
-          // written by loginFromChat itself.
+          // written by the form's handlers.
           echo: 'never',
           handler: (remainder, context) =>
-            loginFromChat(remainder, stores, runtime, context.cliContext),
-          formComponent: AccountAccessFormAdapter,
-        },
-        {
-          name: 'logout',
-          description: 'Sign out of one account or all accounts',
-          category: 'account',
-          // Same merged-form mismatch as /login: the typed command does not
-          // describe what the form actually did.
-          echo: 'never',
-          handler: (remainder) => logoutFromChat(remainder, stores, secrets),
+            remainder.trim().toLowerCase() === 'status'
+              ? showCliAccountStatus(stores, secrets)
+              : loginFromChat(remainder, stores, runtime, context.cliContext),
           formComponent: AccountAccessFormAdapter,
         },
       ],
@@ -560,7 +548,7 @@ export function registerBuiltinSlashCommands(options: {
       commands: [
         {
           name: 'approval',
-          description: 'Switch approval policy',
+          description: 'Set the approval policy and auto-approvals',
           category: 'configuration',
           echo: 'ifPersists',
           handler: (remainder, context) =>
@@ -569,21 +557,6 @@ export function registerBuiltinSlashCommands(options: {
             ),
           formRemainders: ['status'],
           formComponent: ApprovalPolicyFormAdapter,
-          formEscapeAction: 'cancel',
-        },
-        {
-          name: 'yolo',
-          description: 'Auto-approve privileged actions',
-          category: 'configuration',
-          echo: 'ifPersists',
-          handler: (remainder, context) =>
-            Effect.sync(() =>
-              applyCliApprovalPolicySelection(
-                remainder || 'yolo',
-                context,
-                YOLO_USAGE,
-              ),
-            ),
         },
       ],
     },
@@ -604,15 +577,6 @@ export function registerBuiltinSlashCommands(options: {
           echo: 'never',
           handler: () =>
             Effect.sync(() => showCliWorkPlan(options.runtimeSession)),
-        },
-        {
-          name: 'goal',
-          description: 'Configure autonomous goal mode',
-          aliases: ['goals'],
-          category: 'session',
-          echo: 'never',
-          handler: () => Effect.sync(showCliGoalModeHelp),
-          formComponent: GoalModeFormAdapter,
         },
         {
           name: 'resume',
@@ -656,13 +620,6 @@ export function registerBuiltinSlashCommands(options: {
           category: 'configuration',
           echo: 'never',
           formComponent: SkillsListFormAdapter,
-        },
-        {
-          name: 'tools',
-          description: 'List or toggle external integrations',
-          category: 'configuration',
-          echo: 'never',
-          formComponent: ToolsListFormAdapter,
         },
       ],
     },

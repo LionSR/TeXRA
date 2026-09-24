@@ -171,6 +171,23 @@ All notable changes to this project will be documented in this file.
 
 #### Breaking Changes
 
+- **Fewer chat slash commands** — `/api`, `/auth` and `/logout` fold into
+  `/login`, whose form already signed you in and out and set subscription
+  preferences; `/login status` prints what `/auth` did. The typed
+  preference shortcuts `/api chatgpt`, `/api grok`, `/api kimi-code` and
+  `/api glm-code` are gone with it: set which subscription serves a
+  provider's models from the `/login` form or `/config`. `/login chatgpt` and
+  `/login grok` still sign in. `/yolo` and `/goal`
+  fold into `/approval`, which also gains per-session **Auto-approve
+  commands** and **Auto-approve edits** toggles (the same grant as answering
+  a prompt with "approve for session"). `/tools` lives under `/config` →
+  Tools.
+- **Esc no longer stops the running agent** — it closes panels and returns to
+  the parent session. Stop a run with Ctrl-C, or with `k` in the session list.
+- **A quieter status bar** — the key row names keys only (`Tab`, `Ctrl-T`,
+  `/` for commands, `Ctrl-C`) and no longer repeats the open panel's own
+  keys; "API keys" and the chat turn counter are no longer shown, and the
+  auto-approve policy reads `auto-approve` instead of `yolo`.
 - **`defineTool` returns a tool object, not a class** — `@texra-ai/agent`'s
   `defineTool` now takes `execute` in its definition and returns the tool
   itself, ready to pass in `tools`. Subclassing it and calling `new` no longer
@@ -192,7 +209,7 @@ All notable changes to this project will be documented in this file.
   Bare `texra` starts a chat session when stdin and stdout are both terminals,
   and prints help when either is not. What the launcher offered lives in that
   session: `/agent` for the root agent, `/model` for its model, `/resume` for
-  history, `/api` for sign-in and keys, `/config` for settings. Start a
+  history, `/login` for sign-in and keys, `/config` for settings. Start a
   **multi-agent team** with `texra multi-agent run <preset>`; a resumed team
   session still carries its scoped roster. The launcher's team step was the one
   way to start a preset-scoped team in the interactive TUI, and that path is

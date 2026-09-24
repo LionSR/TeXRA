@@ -217,9 +217,6 @@ export interface ChatSessionController {
   /** Request stop of the root run using the configured child policy. */
   stop(): void;
 
-  /** Stop one user-focused stream while preserving other agent runs. */
-  stopRun(runId: RunId): void;
-
   /**
    * Atomically admit a message into an interrupted root conversation.
    * Messages arriving during teardown share one resume and are replayed in
@@ -1116,16 +1113,6 @@ export function createChatSessionController(
     interruptActiveRun();
   };
 
-  const stopRun = (runId: RunId): void => {
-    if (runId === session.runId) {
-      requestStop();
-      session.interruptedRunId = runId;
-    }
-    runtime.runFork(
-      request({ kind: 'run.stop', runId, detachActiveChildren: true }),
-    );
-  };
-
   const startSession = (
     instruction: string,
     mediaFiles?: readonly string[],
@@ -1430,7 +1417,6 @@ export function createChatSessionController(
     startRootRun,
     resume,
     stop,
-    stopRun,
     admitInterruptedFollowUp,
     clearInterruptedRecovery: () => {
       void supersedeInterruptedRecovery();

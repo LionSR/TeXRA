@@ -59,7 +59,6 @@ function labelOf<T extends string>(item: PromptMessageItem<T>): T {
  */
 function openDialog<T>(
   commandName: string,
-  escapeAction: string,
   render: (
     answer: (value: T | undefined) => void,
     availableRows: number,
@@ -73,7 +72,6 @@ function openDialog<T>(
       let settled = false;
       const form = {
         commandName,
-        escapeAction,
         render: (onDone: () => void, availableRows: number) =>
           render((value) => {
             if (settled) return;
@@ -94,7 +92,7 @@ function chooseItem<T extends string>(
   options: PromptMessageOptions<T>,
   items: readonly PromptMessageItem<T>[],
 ): Effect.Effect<T | undefined> {
-  return openDialog<T>('message', 'dismiss', (answer, availableRows) => (
+  return openDialog<T>('message', (answer, availableRows) => (
     <ListForm<T>
       title={title}
       availableRows={availableRows}
@@ -180,7 +178,7 @@ class TuiUiHost implements MessageHost, PromptHost {
   input(
     options: PromptInputOptions,
   ): Effect.Effect<string | undefined, PromptFailed> {
-    return openDialog<string>('input', 'cancel', (answer) => (
+    return openDialog<string>('input', (answer) => (
       <CredentialEntryForm
         title={options.prompt ?? 'Enter a value'}
         masked={options.password ?? false}

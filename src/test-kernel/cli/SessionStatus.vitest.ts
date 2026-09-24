@@ -103,7 +103,7 @@ describe('CLI session status formatter', () => {
     expect(status).toContain(
       [
         'model access: ChatGPT subscription',
-        'approval: Control Bash and edit prompts independently.',
+        'approval: Ask before commands and edits.',
       ].join('\n'),
     );
   });

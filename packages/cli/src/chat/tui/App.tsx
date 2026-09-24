@@ -30,7 +30,6 @@ import { SESSION_LIST } from '@ui/copy/nestedRuns';
 import {
   approvalVisibleForSelection,
   ESC_META_CHORD_INTERRUPT_DELAY_MS,
-  foregroundEscapeAction,
   foregroundMaxRowsForKind,
   foregroundSurfaceKind,
   triggerAppCtrlC,
@@ -148,12 +147,8 @@ export interface AppProps {
     runId: RunId,
     action: WorkflowControlAction,
   ) => void;
-  /** Whether bare Escape may stop the identified focused run. */
-  readonly canInterruptRun: (runId: RunId) => boolean;
   readonly colorEnabled?: boolean;
   readonly commandName?: string;
-  /** Stop only the focused run captured by bare Escape. */
-  readonly onInterruptRun: (runId: RunId) => void;
   readonly onStaticTranscriptChange?: () => void;
   /** Hand the second Ctrl+C (the one no draft consumed) to the host's SIGINT
    *  policy. Required: the App owns draft discard, never process lifecycle. */
@@ -231,8 +226,6 @@ export function App(props: AppProps): React.JSX.Element {
     !appInputDisabled && !slashPaletteOpen && !reverseSearchOpen;
   const escapeInterruptState: EscapeInterruptState = {
     shortcutsActive: focusShortcutsActive,
-    canInterruptRun: props.canInterruptRun,
-    onInterruptRun: props.onInterruptRun,
   };
   const escapeInterruptStateRef = useRef(escapeInterruptState);
   useLayoutEffect(() => {
@@ -468,24 +461,16 @@ export function App(props: AppProps): React.JSX.Element {
 
   const parentIdOf = (runId: RunId): RunId | undefined =>
     runViewOf(currentView(), runId)?.parentId ?? undefined;
+  // Bare Escape only navigates: it never stops a run (Ctrl-C does), so an
+  // extra Escape after closing a panel cannot cost the user their turn.
   const bareEscapeActive = (runId: RunId): boolean =>
-    appOwnsEscape() &&
-    (parentIdOf(runId) !== undefined ||
-      escapeInterruptStateRef.current.canInterruptRun(runId));
+    appOwnsEscape() && parentIdOf(runId) !== undefined;
 
   const handleBareEscape = (runId: RunId): boolean => {
     if (selectedRunIdSignal.get() !== runId || !bareEscapeActive(runId)) {
       return false;
     }
-    const parentId = parentIdOf(runId);
-    if (parentId !== undefined) {
-      focusRunAndPromoteApprovals(parentId);
-      return true;
-    }
-    // `bareEscapeActive` already proved `canInterruptRun(runId)` for a
-    // parentless run: `parentRun` never stores an undefined value, so
-    // once `.get()` returned undefined the `has` disjunct is false too.
-    escapeInterruptStateRef.current.onInterruptRun(runId);
+    focusRunAndPromoteApprovals(parentIdOf(runId)!);
     return true;
   };
 
@@ -623,12 +608,13 @@ export function App(props: AppProps): React.JSX.Element {
       return;
     }
 
-    // Bare Escape walks to the immediate parent before falling back to the
-    // root run's existing interruption behavior.
+    // Bare Escape walks to the immediate parent. It is deferred even where
+    // it has nowhere to go, so an `Esc 1..9` chord on the root still resolves;
+    // `handleBareEscape` re-checks for a parent when the timer fires.
     if (
       isEscapeInput(input, key) &&
       activeRunId !== undefined &&
-      bareEscapeActive(activeRunId)
+      appOwnsEscape()
     ) {
       deferOrHandleBareEscape(activeRunId);
     }
@@ -665,13 +651,6 @@ export function App(props: AppProps): React.JSX.Element {
                 !childInputHidden && unavailableDetail === undefined
               }
               commandName={props.commandName}
-              foregroundEscapeAction={foregroundEscapeAction({
-                activeFormEscapeAction: formBusy
-                  ? 'cancel'
-                  : foregroundForm?.escapeAction,
-                approvalKind,
-                foregroundKind,
-              })}
               foregroundInputActive={
                 foregroundOpen || reverseSearchOpen || slashPaletteOpen
               }
@@ -683,7 +662,6 @@ export function App(props: AppProps): React.JSX.Element {
               }
               childNavigationAvailable={childListAvailable}
               runningSessions={childRunningCount}
-              runFocusAvailable={sessions.length > 0}
               transcriptAvailable={(activeRun?.transcript.rows.length ?? 0) > 0}
             />
           </>

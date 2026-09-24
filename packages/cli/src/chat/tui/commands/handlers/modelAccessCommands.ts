@@ -3,10 +3,7 @@ import { Effect } from 'effect';
 import { loadCliDetailedAccountStatusLines } from '@cli/runtime/apiStatus';
 import { bumpCodexPreferenceVersion } from '@cli/chat/tui/state/cliState';
 import { commitCliProviderApiKey } from '@cli/chat/tui/hosts/cliProviderKeys';
-import {
-  parseCliModelAccessSelection,
-  type CliModelAccessSelection,
-} from '@cli/runtime/modelAccessRoute';
+import { type CliModelAccessSelection } from '@cli/runtime/modelAccessRoute';
 import { updateCliModelAccess } from '@cli/runtime/modelAccessSelection';
 
 import type { ApiProvider } from '@model/apiProviders';
@@ -19,9 +16,6 @@ import {
   type SlashCommandContext,
   transcriptSlashCommandOutput,
 } from './slashContext';
-
-const MODEL_ACCESS_USAGE =
-  'Usage: /api chatgpt | grok | kimi-code | glm-code | status';
 
 /**
  * Save a provider key through the shared key controller and answer the extra
@@ -40,7 +34,7 @@ export const applyCliProviderApiKey = Effect.fn('applyCliProviderApiKey')(
     const codingPlan = codingPlanForApiProvider(provider);
     if (!codingPlan) return undefined;
     if (!codingPlan.exclusiveCredential) {
-      return `Tip: ${codingPlan.retryFallbackName} is the default; enable '${codingPlan.preferenceLabel}' with \`/api ${codingPlan.cliProvider}\` or in \`/config\` to use ${codingPlan.displayName}.`;
+      return `Tip: ${codingPlan.retryFallbackName} is the default; enable '${codingPlan.preferenceLabel}' in \`/login\` or \`/config\` to use ${codingPlan.displayName}.`;
     }
     // The coding-only models route through the subscription automatically;
     // dual-backend K3 needs the opt-in switch, which is only discoverable if
@@ -75,38 +69,10 @@ export const applyCliModelAccessSelection = Effect.fn(
   output.appendOutcome(collapseWhitespace(access.message));
 });
 
-export const applyCliModelAccessInput = Effect.fn('applyCliModelAccessInput')(
-  function* (
-    stores: SettingsStores,
-    routeInput: string,
-    context: SlashCommandContext,
-    output: SlashCommandOutput = transcriptSlashCommandOutput,
-  ) {
-    const normalized = routeInput.trim().toLowerCase();
-
-    if (!normalized || normalized === 'status') {
-      const lines = yield* loadCliDetailedAccountStatusLines(
-        context.stores,
-        context.secrets,
-      );
-      output.appendOutcome(lines.join('\n'));
-      return;
-    }
-
-    const selection = parseCliModelAccessSelection(normalized);
-    if (!selection) {
-      output.setNotice(MODEL_ACCESS_USAGE);
-      return;
-    }
-
-    yield* applyCliModelAccessSelection(stores, selection, context, output);
+/** `/login status`: every sign-in, route preference, and quota in one list. */
+export const showCliAccountStatus = Effect.fn('showCliAccountStatus')(
+  function* (stores: SettingsStores, secrets: PlatformSecrets) {
+    const lines = yield* loadCliDetailedAccountStatusLines(stores, secrets);
+    transcriptSlashCommandOutput.appendOutcome(lines.join('\n'));
   },
 );
-
-export const showCliAuthStatus = Effect.fn('showCliAuthStatus')(function* (
-  stores: SettingsStores,
-  secrets: PlatformSecrets,
-) {
-  const lines = yield* loadCliDetailedAccountStatusLines(stores, secrets);
-  transcriptSlashCommandOutput.appendOutcome(lines.join('\n'));
-});

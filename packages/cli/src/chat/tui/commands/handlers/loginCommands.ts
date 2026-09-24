@@ -52,6 +52,7 @@ const CHAT_LOGIN_USAGE = [
   'Usage: /login [texra [github | google]] [--no-browser] [--device] [--select-account] [--login-hint <account>]',
   '       /login chatgpt [--no-browser] [--device]',
   '       /login grok [--no-browser] [--device]',
+  '       /login status',
 ].join('\n');
 const CHAT_LOGOUT_USAGE = 'Usage: /logout chatgpt | grok | texra | all';
 

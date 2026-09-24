@@ -1,9 +1,5 @@
 import { shortCliModelAccessRoute } from '@cli/runtime/modelAccessRoute';
 import {
-  defaultShortcutModifierLabel,
-  metaChordLabel,
-} from '@cli/runtime/shortcutLabels';
-import {
   firstFittingCandidate,
   textDisplayWidth,
   truncateSummaryToWidth,
@@ -30,12 +26,7 @@ import {
   formatFlowPositionLabel,
 } from '@shared/runs/runStatusDisplay';
 import type { RunView, SessionView } from '@shared/session/sessionView';
-import {
-  FOREGROUND_OWNERSHIP,
-  RUNNING_SESSION,
-  SESSION_LIST,
-  SUBAGENT,
-} from '@ui/copy/nestedRuns';
+import { RUNNING_SESSION, SESSION_LIST, SUBAGENT } from '@ui/copy/nestedRuns';
 import { APPROVAL_BYPASS_BADGE } from '@ui/copy/approvalBypass';
 import { assertNever, filterNotNullish, unique } from '@utils/core';
 import {
@@ -191,8 +182,6 @@ interface StatusBarTurnInput {
 interface StatusBarForegroundInput {
   /** True while a modal, form, palette, or search surface owns input. */
   readonly inputActive?: boolean;
-  /** Label for the foreground surface's Escape action while `inputActive`. */
-  readonly escapeAction?: string;
 }
 
 interface StatusBarChildListInput {
@@ -203,19 +192,12 @@ interface StatusBarChildListInput {
 }
 
 interface StatusBarShortcutsInput {
-  readonly agentSelectionAvailable?: boolean;
   /** True when slash commands and text entry are actionable in this view. */
   readonly chatInputAvailable: boolean;
   /** True when bare Escape can focus the active run's immediate parent. */
   readonly parentNavigationAvailable?: boolean;
   /** True when the persistent child list has a session row. */
   readonly childNavigationAvailable?: boolean;
-  /** True when Alt/Esc-1..9 has at least one run target. */
-  readonly runFocusAvailable?: boolean;
-  readonly modifierLabel?: string;
-  /** Advertise Shift+Enter for newline when the Kitty keyboard protocol is
-   *  active; otherwise the universal Ctrl-J is the only reliable binding. */
-  readonly shiftEnterNewline?: boolean;
   /** True when the focused run has output that can be printed in full. */
   readonly transcriptAvailable?: boolean;
 }
@@ -225,7 +207,10 @@ interface StatusBarDisplay {
   readonly bindings: string;
 }
 
-function accessModeSegment(access: UsageRoute | undefined): StatusBarSegment {
+// Own API keys are the default route, so only a subscription earns a segment.
+function accessModeSegment(
+  access: UsageRoute | undefined,
+): StatusBarSegment | undefined {
   const label = shortCliModelAccessRoute(access);
   return label === 'subscription'
     ? {
@@ -234,11 +219,7 @@ function accessModeSegment(access: UsageRoute | undefined): StatusBarSegment {
         compactText: 'sub',
         compactPriority: STATUS_BAR_COMPACT_PRIORITY.accessMode,
       }
-    : {
-        text: label,
-        color: 'dim',
-        compactPriority: STATUS_BAR_COMPACT_PRIORITY.accessMode,
-      };
+    : undefined;
 }
 
 function subscriptionQuotaSegment(
@@ -554,124 +535,43 @@ function statusBarBindingRow(
 }
 
 // Every bindings row below is a widest-first `firstFittingCandidate` cascade.
-//
-// No module-level memo: the bindings cascade below eagerly builds ~13
-// candidate rows and stringWidth-measures them until one fits, and its inputs
-// are a handful of flags that change far less often than the StatusBar
-// re-renders. Any render-path caching belongs in the React component
-// (`useMemo`), not in this pure module — module-scoped `let`s survive across
-// vitest cases and silently alias inputs if a joined value ever contains '|'.
+// The chat row names keys only; commands are one `/` away in the palette and
+// `/help`, so the bar never advertises individual slash commands.
 function statusBarBindingsText(
   {
-    agentSelectionAvailable = false,
     chatInputAvailable,
     childNavigationAvailable = false,
     parentNavigationAvailable = false,
-    runFocusAvailable = false,
-    modifierLabel = defaultShortcutModifierLabel(),
-    shiftEnterNewline = false,
     transcriptAvailable = false,
   }: StatusBarShortcutsInput,
   ctrlCAction: CtrlCAction,
   maxColumns: number | undefined,
 ): string {
-  const childList = childNavigationAvailable
-    ? keyHintText({ key: 'Tab', action: SESSION_LIST.openAction })
-    : undefined;
   const parentBack = parentNavigationAvailable
     ? keyHintText({ key: 'Esc', action: SESSION_LIST.parentAction })
     : undefined;
-  const runFocus = runFocusAvailable
-    ? keyHintText({
-        key: metaChordLabel(modifierLabel, '1..9'),
-        action: 'focus',
-      })
+  const childList = childNavigationAvailable
+    ? keyHintText({ key: 'Tab', action: SESSION_LIST.openAction })
     : undefined;
   const fullOutput = transcriptAvailable
     ? keyHintText({ key: 'Ctrl-T', action: 'transcript' })
     : undefined;
-  const chatHint = (key: string, action: string): string | undefined =>
-    chatInputAvailable ? keyHintText({ key, action }) : undefined;
-  const agent = agentSelectionAvailable
-    ? chatHint('/agent', 'agents')
+  const commands = chatInputAvailable
+    ? keyHintText({ key: '/', action: 'commands' })
     : undefined;
-  const status = chatHint('/status', 'details');
-  const model = chatHint('/model', 'models');
-  const api = chatHint('/api', 'api');
-  const newline = chatHint(
-    shiftEnterNewline ? 'Shift-Enter' : 'Ctrl-J',
-    'newline',
-  );
   const ctrlC = keyHintText({ key: 'Ctrl-C', action: ctrlCAction });
-  const setupControlsOnly =
-    chatInputAvailable && agentSelectionAvailable && !childNavigationAvailable;
-  const candidates = [
-    // Child navigation only applies when the current tree has a visible row;
-    // unrelated or not-yet-attached runs do not make Tab actionable.
-    statusBarBindingRow([
-      childList,
-      runFocus,
-      fullOutput,
-      status,
-      agent,
-      model,
-      api,
-      newline,
-      ctrlC,
-    ]),
-    setupControlsOnly &&
-      statusBarBindingRow([fullOutput, agent, model, api, newline, ctrlC]),
-    childNavigationAvailable &&
-      statusBarBindingRow([childList, fullOutput, agent, status, ctrlC]),
-    childNavigationAvailable &&
-      statusBarBindingRow([childList, fullOutput, agent, ctrlC]),
-    childNavigationAvailable &&
-      transcriptAvailable &&
-      statusBarBindingRow([childList, fullOutput, ctrlC]),
-    parentNavigationAvailable &&
-      transcriptAvailable &&
-      statusBarBindingRow([fullOutput, ctrlC]),
-    setupControlsOnly && statusBarBindingRow([agent, model, api, ctrlC]),
-    statusBarBindingRow([childList, fullOutput, agent, status, ctrlC]),
-    statusBarBindingRow([childList, fullOutput, agent, ctrlC]),
-    (childNavigationAvailable || agentSelectionAvailable) &&
-      statusBarBindingRow([childList, agent, ctrlC]),
-    childNavigationAvailable &&
-      statusBarBindingRow([childList, fullOutput, ctrlC]),
-    parentNavigationAvailable && ctrlC,
-    childNavigationAvailable && childList,
-  ].map((candidate) =>
-    parentBack && candidate
-      ? statusBarBindingRow([parentBack, candidate])
-      : candidate,
-  );
-  if (parentBack) candidates.push(parentBack);
-
-  return firstFittingCandidate({
-    candidates,
-    fallback: ctrlC,
-    maxColumns,
-    measure: textDisplayWidth,
-  });
-}
-
-function foregroundBindingsText(
-  ctrlCAction: CtrlCAction,
-  maxColumns?: number,
-  escapeAction = 'close',
-): string {
-  const ctrlCBinding = keyHintText({ key: 'Ctrl-C', action: ctrlCAction });
-  const escBinding = keyHintText({ key: 'Esc', action: escapeAction });
   return firstFittingCandidate({
     candidates: [
-      statusBarBindingRow([
-        FOREGROUND_OWNERSHIP.keysGoAbove,
-        escBinding,
-        ctrlCBinding,
-      ]),
-      statusBarBindingRow([escBinding, ctrlCBinding]),
+      statusBarBindingRow([parentBack, childList, fullOutput, commands, ctrlC]),
+      statusBarBindingRow([parentBack, childList, fullOutput, ctrlC]),
+      statusBarBindingRow([parentBack, childList, ctrlC]),
+      parentBack && statusBarBindingRow([parentBack, ctrlC]),
+      // Past Ctrl-C's width, the one navigation key still beats it: Ctrl-C
+      // works without being named, the way out of a child view does not.
+      parentBack,
+      childList,
     ],
-    fallback: ctrlCBinding,
+    fallback: ctrlC,
     maxColumns,
     measure: textDisplayWidth,
   });
@@ -742,7 +642,7 @@ function approvalPolicySegment(
       };
     case 'yolo':
       return {
-        text: 'yolo',
+        text: 'auto-approve',
         color: COLOR_ERROR,
         compactPriority: STATUS_BAR_COMPACT_PRIORITY.approvalPolicy,
       };
@@ -835,11 +735,9 @@ function resolveStatusBarBindings(input: StatusBarDisplayInput): string {
   const maxColumns = statusBarInnerWidth(input.width);
   const ctrlCAction = input.ctrlCAction ?? 'exit';
   if (input.foreground.inputActive) {
-    return foregroundBindingsText(
-      ctrlCAction,
-      maxColumns,
-      input.foreground.escapeAction,
-    );
+    // The surface above prints its own keys, Esc included; only Ctrl-C,
+    // which works over every surface, is the bar's to name.
+    return keyHintText({ key: 'Ctrl-C', action: ctrlCAction });
   }
   if (input.childList.focused) {
     return childListBindingsText(input.childList, ctrlCAction, maxColumns);
@@ -928,9 +826,11 @@ export function buildStatusBarDisplay(
     }
   }
 
-  // One slot carries the loop position this run is at, in the coordinate its
-  // family counts (mirrors the SubagentList row's `flowLabel`).
-  const flowText = formatFlowPositionLabel(flowPosition(input.flow));
+  // One slot carries a reflection run's round (mirrors the SubagentList row's
+  // `flowLabel`). A chat's turn count is not something anyone acts on.
+  const position = flowPosition(input.flow);
+  const flowText =
+    position?.kind === 'turn' ? undefined : formatFlowPositionLabel(position);
   left.push(
     ...(
       [

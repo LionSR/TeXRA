@@ -12,15 +12,6 @@ import { textInputEditingHelp } from '../input/textInputBindings';
 
 import type { SlashCommand, SlashCommandCategory } from './slashRegistry';
 
-export const GOAL_MODE_HELP = [
-  'Goal mode starts from an approved plan, not a standalone prompt.',
-  '',
-  'Ask the agent to create a plan, then choose `r run as goal` in the plan approval panel. ' +
-    'The active goal keeps the agent working across turns until it verifies completion, pauses, or you stop it.',
-  '',
-  'Use `/goal` to choose whether goal mode auto-approves commands only or all goal work (commands, file edits, and delegated work). Other prompts still ask. Use `/status` to inspect the active session.',
-].join('\n');
-
 // Help sections in display order; `undefined` collects uncategorized
 // commands into a trailing "Other" section.
 const CATEGORY_SECTIONS: ReadonlyArray<{
@@ -72,10 +63,9 @@ function keyboardSection(options: SlashCommandHelpOptions): string {
     // Generated from the editing keymap so this list can't drift from the
     // bindings that actually exist (see textInputBindings.ts).
     `- ${textInputEditingHelp()}`,
-    '- `Esc` returns to the parent session, or stops the focused agent when there is no parent · `Ctrl-C` exits idle chats; stops active responses',
+    '- `Esc` closes panels and returns to the parent session · `Ctrl-C` stops the active response, or exits when idle',
     "- `Ctrl-T` opens the focused run's full output in a scrollable reader (PgUp/PgDn pages)",
     `- \`Tab\` ${SESSION_LIST.openHelp}`,
-    '- In the session list, `←`/`→` collapse or expand children; `Enter` or `r` resumes an interrupted run',
     `- \`${focusChord}\` focuses a run in the visible session-list order`,
   ].join('\n');
 }
@@ -88,5 +78,6 @@ export function formatSlashCommandHelp(
     ...commandSections(commands),
     keyboardSection(options),
     'Typing while a response is running queues your message as a follow-up.',
+    'Goal mode: press `r` on a plan approval to keep the agent working until it verifies completion. `/approval` sets what it auto-approves.',
   ].join('\n\n');
 }

@@ -16,7 +16,7 @@ import type {
 export type SlashCommandCategory = 'session' | 'configuration' | 'account';
 
 /** A structured-form component renders inline when the user picks a slash
- *  command that declares one (e.g. `/api`). Calls `onDone(result)` to
+ *  command that declares one (e.g. `/login`). Calls `onDone(result)` to
  *  commit the user's selection or `onDone(undefined)` on cancel. */
 export interface SlashFormProps<T = unknown> {
   readonly onDone: (result: T | undefined) => void;
@@ -53,11 +53,6 @@ export interface SlashCommand {
    * the command is picked from the palette.
    */
   readonly formComponent?: React.ComponentType<SlashFormProps>;
-  /**
-   * Status-bar verb for Escape while `formComponent` owns input. Defaults to
-   * `close`; use `cancel` for forms where Escape discards a pending choice.
-   */
-  readonly formEscapeAction?: string;
   /**
    * Keep the raw command line out of transcripts and persistent input history.
    * Use for commands whose remainder could contain a credential even when the

@@ -58,8 +58,8 @@ export const chatCommand = withUsageSections(
       rows: [
         ['/help', 'show slash commands inside chat'],
         ['/status', 'show session state'],
-        ['/goal', 'configure autonomous goal mode and auto-approval scope'],
-        ['/login, /logout', RESEARCHER_ACCESS_AUTH.chatLoginDescription],
+        ['/approval', 'set approval policy and session auto-approvals'],
+        ['/login', RESEARCHER_ACCESS_AUTH.chatLoginDescription],
         [
           'Ctrl-T',
           "open the focused run's full output in a scrollable reader (PgUp/PgDn pages)",
