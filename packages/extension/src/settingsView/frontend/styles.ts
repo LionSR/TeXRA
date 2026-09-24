@@ -135,22 +135,13 @@ export const settingsViewStyles: CSSResult[] = [
         scrollbar-width: thin;
       }
 
+      /* Narrow panes keep the words and drop the icons: six short labels
+         fit a sidebar, and the strip scrolls if they ever do not. */
       .settings-page-button::part(base) {
-        width: var(--height-control);
-        gap: 0;
-        place-content: center;
-        padding: 0;
+        padding: 0 var(--wa-space-2xs);
       }
 
       .settings-page-button::part(start) {
-        margin: 0;
-      }
-
-      .settings-page-button wa-icon {
-        margin-inline-end: 0;
-      }
-
-      .settings-page-button::part(label) {
         display: none;
       }
 

@@ -38,6 +38,7 @@ import { postStateSetting } from '../shared/stateSettingRows';
 
 // Side-effect imports - register WA components
 import '@awesome.me/webawesome/dist/components/button/button.js';
+import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
 
@@ -131,20 +132,6 @@ export class SubscriptionSection extends LitElement {
             checked: preferSubscription,
             onChange: this.handlePreferSubscriptionChange,
           })}
-          ${
-            contextWindowSetting
-              ? renderSettingsNumberRow({
-                  label: 'Subscription input token budget',
-                  description: contextWindowSetting.description,
-                  value: this.contextWindow,
-                  min: contextWindowSetting.min,
-                  max: contextWindowSetting.max,
-                  unit: contextWindowSetting.unitLabel,
-                  onChange: (value) =>
-                    postStateSetting(contextWindowSetting.configKey, value),
-                })
-              : ''
-          }
           <div class="settings-row">
             <div class="settings-row-text">
               <span class="settings-row-label" aria-live="polite">
@@ -187,6 +174,25 @@ export class SubscriptionSection extends LitElement {
             .snapshot=${this.usage}
             .now=${this.now}
           ></subscription-usage-row>
+          ${
+            // The long explanation lives in the docs (models.md) and the
+            // catalog row; the card keeps one line.
+            contextWindowSetting
+              ? html`<wa-details class="panel-collapsible" summary="Advanced">
+                  ${renderSettingsNumberRow({
+                    label: 'Input token budget',
+                    description:
+                      'How much context TeXRA sends per request on your ChatGPT plan. The default matches Codex.',
+                    value: this.contextWindow,
+                    min: contextWindowSetting.min,
+                    max: contextWindowSetting.max,
+                    unit: contextWindowSetting.unitLabel,
+                    onChange: (value) =>
+                      postStateSetting(contextWindowSetting.configKey, value),
+                  })}
+                </wa-details>`
+              : nothing
+          }
         </div>
       </section>
     `;

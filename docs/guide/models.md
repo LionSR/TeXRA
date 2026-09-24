@@ -193,6 +193,13 @@ Kimi Code and the GLM Coding Plan also run on a subscription you already pay for
 plan-specific key instead of a full provider key. Read
 [Quick start → Add a key or connect a subscription](./quick-start.md#add-a-key-or-connect-a-subscription).
 
+The ChatGPT section's **Advanced → Input token budget** (`texra.chatgptCodex.contextWindowK`) is the
+input budget for ChatGPT-subscription (Codex) routing, in thousands of tokens, like Codex CLI's
+`model_context_window`. The default 272 (272,000 tokens) matches Codex; GPT-5.6 models accept up to 872.
+Automatic compaction may run earlier, according to the separate compaction threshold, and the context
+window TeXRA displays adds the model's output budget. OpenAI enforces the real per-account limit: a value
+above what your plan allows fails and triggers compaction recovery.
+
 ## Customizing the model list
 
 Choose which models appear in the extension picker from the **Dashboard → Models** page: toggle them on or off per provider, no JSON required (the choice is saved in the extension).
