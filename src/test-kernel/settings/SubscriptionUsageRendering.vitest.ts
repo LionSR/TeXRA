@@ -61,12 +61,17 @@ type SubscriptionUsageRowElement = HTMLElement & {
   updateComplete: Promise<boolean>;
 };
 
-function getKimiUsageRow(
+/** The ChatGPT section's meter: the tab's ticker feeds it through the section. */
+async function getChatgptUsageRow(
   tab: SubscriptionsTabElement,
-): SubscriptionUsageRowElement | null {
+): Promise<SubscriptionUsageRowElement | null> {
+  const section = tab.shadowRoot?.querySelector<
+    HTMLElement & { updateComplete: Promise<boolean> }
+  >('subscription-section');
+  await section?.updateComplete;
   return (
-    tab.shadowRoot?.querySelector<SubscriptionUsageRowElement>(
-      '#kimi-code-subscription subscription-usage-row',
+    section?.shadowRoot?.querySelector<SubscriptionUsageRowElement>(
+      'subscription-usage-row',
     ) ?? null
   );
 }
@@ -109,12 +114,12 @@ describe('subscription usage rendering', () => {
     );
 
     await tab.updateComplete;
-    const kimiRow = getKimiUsageRow(tab);
-    expect(kimiRow).not.toBeNull();
-    await kimiRow!.updateComplete;
-    expect(kimiRow!.shadowRoot?.querySelector('wa-details')).toBeNull();
+    const chatgptRow = await getChatgptUsageRow(tab);
+    expect(chatgptRow).not.toBeNull();
+    await chatgptRow!.updateComplete;
+    expect(chatgptRow!.shadowRoot?.querySelector('wa-details')).toBeNull();
     const styleText = (
-      kimiRow!.constructor as unknown as {
+      chatgptRow!.constructor as unknown as {
         styles: readonly { cssText: string }[];
       }
     ).styles
@@ -122,14 +127,14 @@ describe('subscription usage rendering', () => {
       .join('\n');
     expect(styleText).toContain('flex: 1 1 100%');
     expect(styleText).toContain('min-width: 0');
-    const text = kimiRow!.shadowRoot?.textContent ?? '';
-    expect(text).toContain('Kimi Code plan usage');
+    const text = chatgptRow!.shadowRoot?.textContent ?? '';
+    expect(text).toContain('ChatGPT plan usage');
     expect(text).toMatch(/5-hour\s*:\s*25%/);
     expect(text).toMatch(/7-day\s*:\s*100%/);
-    const meters = kimiRow!.shadowRoot?.querySelectorAll('wa-progress-bar');
+    const meters = chatgptRow!.shadowRoot?.querySelectorAll('wa-progress-bar');
     expect(meters).toHaveLength(2);
     expect(meters?.[0]?.getAttribute('value')).toBe('25');
-    expect(meters?.[0]?.getAttribute('label')).toBe('Kimi Code 5-hour usage');
+    expect(meters?.[0]?.getAttribute('label')).toBe('ChatGPT 5-hour usage');
     expect(text).toContain('resets in 1d 21h');
     expect(tab.shadowRoot?.textContent).not.toContain('Grok usage unavailable');
   });
@@ -146,10 +151,10 @@ describe('subscription usage rendering', () => {
     await vi.advanceTimersByTimeAsync(3 * 60_000);
     expect(tab._ticker.now).toBe(NOW + 3 * 60_000);
     expect(vi.getTimerCount()).toBe(1);
-    const kimiRow = getKimiUsageRow(tab);
-    await kimiRow?.updateComplete;
-    expect(kimiRow?.now).toBe(tab._ticker.now);
-    expect(kimiRow?.shadowRoot?.textContent).toContain(
+    const chatgptRow = await getChatgptUsageRow(tab);
+    await chatgptRow?.updateComplete;
+    expect(chatgptRow?.now).toBe(tab._ticker.now);
+    expect(chatgptRow?.shadowRoot?.textContent).toContain(
       'stale · updated 3m ago',
     );
 
@@ -165,13 +170,13 @@ describe('subscription usage rendering', () => {
     vi.setSystemTime(NOW + 30_000);
     tab.usage = {
       ...snapshots,
-      kimiCode: { ...snapshots.kimiCode, fetchedAt: NOW + 30_000 },
+      chatgpt: { ...snapshots.chatgpt, fetchedAt: NOW + 30_000 },
     };
     await tab.updateComplete;
-    const kimiRow = getKimiUsageRow(tab);
-    await kimiRow?.updateComplete;
+    const chatgptRow = await getChatgptUsageRow(tab);
+    await chatgptRow?.updateComplete;
 
     expect(tab._ticker.now).toBe(NOW + 30_000);
-    expect(kimiRow?.shadowRoot?.textContent).toContain('updated just now');
+    expect(chatgptRow?.shadowRoot?.textContent).toContain('updated just now');
   });
 });

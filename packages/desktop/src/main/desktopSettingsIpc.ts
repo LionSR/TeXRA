@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 
-import { Cause, Effect, Exit, type Scope, Stream } from 'effect';
+import { Cause, Effect, type Scope } from 'effect';
 
 import type { SessionHandle } from '@agent/runtime';
 import { formatError } from '@common/errors';
@@ -44,7 +44,6 @@ import { unsupported, UnsupportedCommandError } from '@shared/utils/dispatcher';
 import { buildSettingsSnapshotMessage } from '@shared/settingsView/handlers/settingsSnapshot';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { loadRuntimeSkillDisplay } from '@skills/runtimeSkills';
-import { goalList, goalStateChanges } from '@tools/goal';
 import {
   GITHUB_TOKEN_PROMPT,
   GITHUB_TOKEN_REMOVED_MESSAGE,
@@ -249,41 +248,10 @@ export function createDesktopSettingsIpc(
     });
   }
 
-  function postGoalList() {
-    return Effect.gen(function* () {
-      // The list is read from memory and the view repainted before this
-      // program suspends, as the synchronous `try` it replaces was.
-      const listed = yield* Effect.exit(
-        Effect.try({
-          try: () => goalList(options.session),
-          catch: ensureError,
-        }),
-      );
-      if (Exit.isSuccess(listed)) {
-        options.postToRenderer({
-          command: SETTINGS_VIEW_COMMANDS.UPDATE_GOAL_LIST,
-          items: listed.value,
-        });
-        return;
-      }
-      if (Cause.hasInterrupts(listed.cause)) return;
-      const error = Cause.squash(listed.cause);
-      options.ui.onError(error);
-      yield* options.ui.showErrorMessage(
-        formatError('Failed to load goals', error),
-      );
-    });
-  }
-
   function postInitialSettingsData() {
     return Effect.gen(function* () {
       yield* postSettingsSnapshot('git-author');
       yield* postSettingsSnapshot('latex');
-      // Forked, not yielded: `runFork` runs the goal read on this turn, so the
-      // list still repaints ahead of the snapshots below, and the dialog a
-      // failed read raises does not hold them up. Nothing waits on it, as
-      // nothing waited on the eagerly started promise it replaces.
-      runAsync(postGoalList());
       yield* postSettingsSnapshot('multi-agent');
       yield* postSettingsSnapshot('approval');
       yield* postSettingsSnapshot('skills');
@@ -397,23 +365,11 @@ export function createDesktopSettingsIpc(
     );
   }
 
-  // Agent runs execute in this same main process and the settings panel shares
-  // the app window with run progress, so a Goals tab left open during a run
-  // needs the push. The session outlives the window, so the subscription is
-  // forked into the caller's scope below.
-  //
-  // App signals and goal changes deliver on their own fiber, not on the
-  // emitter's stack; each refresh they trigger still forks through `runAsync`,
-  // so one slow refresh never holds the next event. Every refresh reads this
-  // paper's own session, which these posters take from `options.session`.
+  // App signals deliver on their own fiber, not on the emitter's stack; each
+  // refresh they trigger still forks through `runAsync`, so one slow refresh
+  // never holds the next event. Every refresh reads this paper's own session,
+  // which these posters take from `options.session`.
   const subscriptions: Array<Effect.Effect<void>> = [
-    Stream.runForEach(goalStateChanges(options.session), () =>
-      Effect.sync(() => runAsync(postGoalList())),
-    ).pipe(
-      Effect.catchCause((cause) =>
-        Effect.logWarning('The settings goal subscription stopped', cause),
-      ),
-    ),
     options.toolingSettingsController.followToolAvailability,
   ];
 
@@ -594,8 +550,6 @@ export function createDesktopSettingsIpc(
       updateStateSetting(message.key, message.value),
     ...options.toolingSettingsController.toolHandlers,
     ...options.toolingSettingsController.latexHandlers,
-    getGoalList: () => postGoalList(),
-    revealGoalRun: (message) => revealRun(message.runId),
   };
 
   const settingsIpc: DesktopSettingsIpc = {

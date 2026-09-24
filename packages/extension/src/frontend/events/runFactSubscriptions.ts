@@ -4,7 +4,6 @@ import { Effect, Fiber, Stream } from 'effect';
 import type { SessionHandle } from '@agent/runtime';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import { aggregateTarget, type AddOutputFilesPayload } from '@shared/schemas';
-import { goalStateChanges, type GoalStateChange } from '@tools/goal';
 
 /** Read the output files each durable output row owns. */
 export function subscribeOutputFiles(
@@ -25,22 +24,6 @@ export function subscribeOutputFiles(
           ),
         });
       }),
-    ),
-  );
-  return () => {
-    runtime.runFork(Fiber.interrupt(fiber));
-  };
-}
-
-/** Read a session's goal-state changes from now on. */
-export function subscribeGoalStateChanges(
-  session: Pick<SessionHandle, 'folded' | 'now'>,
-  listener: (change: GoalStateChange) => void,
-  runtime: ProcessRuntime,
-): () => void {
-  const fiber = runtime.runFork(
-    Stream.runForEach(goalStateChanges(session), (change) =>
-      Effect.sync(() => listener(change)),
     ),
   );
   return () => {

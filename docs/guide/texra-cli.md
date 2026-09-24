@@ -326,7 +326,7 @@ the plugin it lists. When it lists several, name the ones you want with
 Plugin skills count as user skills: they rank below the skills in
 `~/.texra/skills` and above imported and bundled skills, and the user source
 switch in the Skills settings turns them off with the rest. The VS Code
-extension reads the same install, and its Skills tab lists installed plugins.
+extension reads the same install, and its Agents page lists installed plugins under Skills.
 The desktop app keeps its own settings and does not load them yet.
 
 TeXRA loads only skills from a plugin for now. It does not load or run a

@@ -213,8 +213,21 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
   Reset buttons are gone: set a switch back by flipping it. **Open the
   compiled PDF** and **Repair failed compiles** are greyed out while
   auto-compile is off, since they only act on its result.
+- **Settings has six pages instead of thirteen** (extension and desktop):
+  Models, Agents, Tools, LaTeX, Memory and General, in one row. Connecting a
+  model happens on Models, which now holds ChatGPT, Grok and Copilot sign-in
+  next to the API keys; Kimi Code and GLM Coding Plan usage shows on their
+  key rows. Teams and Skills are sections of Agents, with compaction, retries
+  and team coordination under Advanced. Integrations are a section of Tools.
+  Account sign-in, telemetry and Git are on General. The Goals page is gone;
+  a run's goal shows in its header. OpenAI background responses, parallel
+  tool calls, the GPT-5 reasoning summary and Google background responses
+  keep their defaults and are set in `.texra/config.json`.
 
 #### Bug Fixes
+
+- **Clearing the agent commit name or email in Settings resets it to the
+  default.** The field used to go blank while the old value stayed in use.
 
 - **Cancelling TeXRA sign-in no longer counts as signing in.** In a
   single-folder window, the sign-in prompt that setup, a team launch or the

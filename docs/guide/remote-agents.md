@@ -39,7 +39,7 @@ Once signed in, browse remote agents from the Agents tab:
 3. Select a remote agent in the list to see its details
 4. Select **Show in agent selector** to add it to your agent selector
 
-Your email and access level sit on the Account & Usage tab of Settings.
+Your email and access level sit on the General page of Settings.
 
 The selected agent appears in the main TeXRA view alongside your built-in agents.
 
@@ -131,7 +131,7 @@ To check your account status:
 
 1. Open the Command Palette
 2. Run **TeXRA: Open Settings**
-3. View your email and access level on the Account & Usage tab
+3. View your email and access level on the General page
 
 The Agents tab of Settings lists the remote agents available to you.
 

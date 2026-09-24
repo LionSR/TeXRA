@@ -186,7 +186,7 @@ export const EXTENSION_COMMAND_HANDLERS = {
   'texra.auth.signIn': (actions) => actions.signIn(),
   'texra.auth.chatgpt.signIn': (actions) => actions.signInChatGpt(),
   'texra.auth.signOut': (actions) => actions.signOut(),
-  'texra.auth.viewProfile': (actions) => actions.showSettings('account'),
+  'texra.auth.viewProfile': (actions) => actions.showSettings('general'),
   [EXTENSION_COMMANDS.RUN_SETUP_ASSISTANT]: (actions) =>
     actions.runSetupAssistant(),
   [EXTENSION_COMMANDS.OPEN_GETTING_STARTED]: (actions) =>

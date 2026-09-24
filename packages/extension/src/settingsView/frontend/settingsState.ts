@@ -39,7 +39,6 @@ import {
   type AgentCategory,
   type AgentModePreset,
   type ByCategory,
-  type GoalListItem,
   type InstalledPlugin,
   type SkillDisplayIssue,
   type SkillDisplayItem,
@@ -121,12 +120,11 @@ export function applySettingsSnapshot(
 // Tab state
 // ---------------------------------------------------------------------------
 /**
- * Opening panel when the host asks for the settings view without naming a tab.
- * Account is the first nav group, so this matches what the nav already
- * presents as the entry point.
+ * Opening panel when the host asks for the settings view without naming a tab:
+ * Models, the first page, because connecting a model is the first job.
  */
 export const selectedPanel = trackedSignal<SettingsTabPanelName>(
-  () => 'account',
+  () => 'models',
 );
 
 // ---------------------------------------------------------------------------
@@ -308,11 +306,6 @@ export const latexFormatter = settingSignal<string>(
 export const inlineCriticismEnabled = settingSignal<boolean>(
   GlobalStateKey.INLINE_CRITICISM_ENABLED,
 );
-
-// ---------------------------------------------------------------------------
-// Goal settings state
-// ---------------------------------------------------------------------------
-export const goalItems = trackedSignal<readonly GoalListItem[]>(() => []);
 
 // ---------------------------------------------------------------------------
 // Reset — module-level state is shared across remounts in the same JS context

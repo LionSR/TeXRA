@@ -1,16 +1,18 @@
-/** Provider keys and model selection for the settings view. */
+/**
+ * The Models page: connect a model (API keys, then subscriptions), then choose
+ * which models appear.
+ */
 
 import { LitElement, html, css, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared styles
+import type { SubscriptionUsageSnapshots } from '@shared/schemas';
 import type {
   ModelSelectionItem,
   ProviderKeyStatus,
 } from '@shared/settingsView/settingsViewMessages';
 import { commonViewStyles, designTokens } from '@ui/styles';
-
-// Local imports - shared schemas
 
 // Local imports - settings view components (side-effect: register)
 import '../components/profile/ProviderKeyList';
@@ -35,13 +37,17 @@ export class ModelsTab extends LitElement {
     [];
   @property({ attribute: false }) helperModel = '';
   @property({ type: Boolean }) preferShortModelNames = false;
+  @property({ attribute: false }) usage: SubscriptionUsageSnapshots | null =
+    null;
 
   override render(): TemplateResult {
     return html`
       <div class="models-container tab-content-container">
         <provider-key-list
           .providerKeyStatuses=${this.providerKeyStatuses}
+          .usage=${this.usage}
         ></provider-key-list>
+        <slot name="subscriptions"></slot>
         <model-selection-list
           .models=${this.modelSelectionItems}
           .helperModel=${this.helperModel}

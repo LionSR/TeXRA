@@ -62,7 +62,7 @@ GPT-6 Sol and Luna supersede GPT-5.6 Sol (`gpt56`) and Luna (`gpt56--`), which a
 deprecated. TeXRA pins the [Codex integration](./agent-integrations.md#openai-codex) to `gpt-5.5`.
 GPT-5.6 Pro (`gpt56pro`) runs GPT-5.6 Sol in the Responses API's pro reasoning mode, billed at standard token rates
 rather than a premium tier, for the hardest planning and long-horizon tasks. It is hidden by
-default; enable it from Settings → Providers & Models when you need it. For one-off hard questions you can
+default; enable it from Settings → Models when you need it. For one-off hard questions you can
 also enable the `inquiry` tool and paste the answer from your own ChatGPT subscription instead of
 running a full agent turn against the API. `gpt56-` (Terra) remains a mid-priced option. Read the [OpenAI API reference](https://developers.openai.com/api/docs) for
 full capabilities.
@@ -107,7 +107,7 @@ GPT-5 reasoning summaries require account verification. Enable them with `texra.
 | :---------- | :--------------------------------------------- | :--- | :----- |
 | `minimaxM3` | Flagship with interleaved thinking, 1M context | $    | Medium |
 
-MiniMax uses interleaved thinking (chain-of-thought woven into responses). API keys are region-specific: international keys (api.minimax.io) and China keys (api.minimaxi.com) are not interchangeable. Expand the MiniMax row in **Providers & Models → API configuration** and toggle **MiniMax China region** (GLM, Kimi/Moonshot, and Qwen have matching toggles; GLM's is on by default).
+MiniMax uses interleaved thinking (chain-of-thought woven into responses). API keys are region-specific: international keys (api.minimax.io) and China keys (api.minimaxi.com) are not interchangeable. Expand the MiniMax row in **Models → API keys** and toggle **MiniMax China region** (GLM, Kimi/Moonshot, and Qwen have matching toggles; GLM's is on by default).
 
 - **International**: Get your API key at [platform.minimax.io](https://platform.minimax.io/)
 - **China**: Get your API key at [platform.minimaxi.com](https://platform.minimaxi.com/)
@@ -127,7 +127,7 @@ GLM models support thinking mode (reasoning is shown inline). The API uses a non
 
 - **International (Z.AI)**: Get your API key at [z.ai](https://z.ai/); endpoint: api.z.ai
 - **China (BigModel)**: Get your API key at [open.bigmodel.cn](https://open.bigmodel.cn/); endpoint: open.bigmodel.cn (default)
-- **Coding Plan**: GLM offers monthly subscription plans as an alternative to pay-as-you-go, with access to all GLM models. Coding Plan uses a separate endpoint (`/api/coding/paas/v4`). Turn on the **Coding Plan** toggle in the Providers & Models tab. [Subscribe to the GLM Coding Plan](https://z.ai/subscribe).
+- **Coding Plan**: GLM offers monthly subscription plans as an alternative to pay-as-you-go, with access to all GLM models. Coding Plan uses a separate endpoint (`/api/coding/paas/v4`). Turn on the **Coding Plan** toggle on the GLM row of the Models page. [Subscribe to the GLM Coding Plan](https://z.ai/subscribe).
 
 ## Meta (Muse Spark) models
 
@@ -160,7 +160,7 @@ developers.
 ### Subscription-backed models in VS Code
 
 The VS Code extension can also use compatible models from a GitHub Copilot
-subscription. Open **Settings → Subscriptions → Copilot in VS Code**, then select
+subscription. Open **Settings → Models → Copilot in VS Code**, then select
 **Grant access**. VS Code shows its own consent prompt; TeXRA never asks for
 or stores a Copilot API key.
 
@@ -173,14 +173,14 @@ key is available.
 Using your own provider API key? TeXRA stores keys in VS Code's secret storage; they are never written to settings files.
 
 1.  **Open the Settings Dashboard**: Select the <wa-icon library="texra" name="settings-gear"></wa-icon> gear icon in the TeXRA panel's title bar, or run **TeXRA: Open Settings** from the Command Palette.
-2.  **Go to the Providers & Models tab**: The **API configuration** table lists every provider with its current key status (`Set`, `Env`, or `Not set`).
+2.  **Go to the Models page**: The **API keys** list shows every provider with its current key status (`Set`, `Env`, or `Not set`).
 3.  **Set the key**: Find your provider's row and select the <wa-icon library="texra" name="key"></wa-icon> **Set API key** button, then paste your key. If you don't have a key yet, select the <wa-icon library="texra" name="arrow-up-right-from-square"></wa-icon> **Get** button to open the provider's API key page.
 
 The Status column shows `Set` once the key is stored. To replace a key, set it again; to remove one, select the <wa-icon library="texra" name="trash"></wa-icon> trash icon. Repeat for each provider you plan to use.
 
 <ApiKeysHero />
 
-<p class="hero-caption">The Providers & Models tab's API configuration table: each provider shows its key status and Set / Get / Remove actions.</p>
+<p class="hero-caption">The Models page's API keys list: each provider shows its key status and Set / Get / Remove actions.</p>
 
 ::: tip Per-provider settings
 Expand a provider's row (select the chevron) to point requests at a custom endpoint, for providers that support it.
@@ -193,9 +193,16 @@ Kimi Code and the GLM Coding Plan also run on a subscription you already pay for
 plan-specific key instead of a full provider key. Read
 [Quick start → Add a key or connect a subscription](./quick-start.md#add-a-key-or-connect-a-subscription).
 
+The ChatGPT section's **Advanced → Input token budget** (`texra.chatgptCodex.contextWindowK`) is the
+input budget for ChatGPT-subscription (Codex) routing, in thousands of tokens, like Codex CLI's
+`model_context_window`. The default 272 (272,000 tokens) matches Codex; GPT-5.6 models accept up to 872.
+Automatic compaction may run earlier, according to the separate compaction threshold, and the context
+window TeXRA displays adds the model's output budget. OpenAI enforces the real per-account limit: a value
+above what your plan allows fails and triggers compaction recovery.
+
 ## Customizing the model list
 
-Choose which models appear in the extension picker from the **Dashboard → Providers & Models** tab: toggle them on or off per provider, no JSON required (the choice is saved in the extension).
+Choose which models appear in the extension picker from the **Dashboard → Models** page: toggle them on or off per provider, no JSON required (the choice is saved in the extension).
 
 In the CLI TUI, run `/model` after a chat starts to see the models your current credentials can run. Mid-session switching is limited to models that share the active model's provider family; other entries are shown disabled with a reason, and switching waits until the current response finishes. To change family, start a new chat with `--model`. Before you send the first message, `/agent` chains straight into that same model picker, so choosing a root agent and its model stays one step.
 
@@ -211,13 +218,13 @@ To access additional models or alternative pricing:
 
 1. Get an [OpenRouter](https://openrouter.ai/) API key
 2. Add it with the `TeXRA: Set API Key` command
-3. In the Dashboard → Providers & Models tab → API configuration, expand the OpenRouter row and turn on **Use OpenRouter for all models**
+3. In the Dashboard → Models page → API keys, expand the OpenRouter row and turn on **Use OpenRouter for all models**
 
 Expanding any provider's row in **API Configuration** reveals its key field plus the per-provider toggles described here:
 
 <ProviderConfigRow />
 
-<p class="hero-caption">Expand a provider's <strong>API configuration</strong> row to reveal its masked key field (and <strong>Custom endpoint</strong> where supported); the OpenRouter row adds <strong>Use OpenRouter for all models</strong>.</p>
+<p class="hero-caption">Expand a provider's <strong>API keys</strong> row to reveal its masked key field (and <strong>Custom endpoint</strong> where supported); the OpenRouter row adds <strong>Use OpenRouter for all models</strong>.</p>
 
 ## Next steps
 

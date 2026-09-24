@@ -421,32 +421,26 @@ const CORE_SETTING_ROWS: Record<
       'Enable Goal, a per-stream autonomous-continuation mode for tool-use agents. When on, an active Goal lets the agent keep working across turns toward a stated objective until it calls plan(command="complete"). On by default; set to false to require manual continuation.',
     honoredBy: everyHost('src/tools/goal/goalFeatureFlag.ts'),
   },
-  // The Models-tab provider toggles below are `configTarget: 'global'`:
+  // The provider toggles below are `configTarget: 'global'`:
   // they describe how you talk to a provider, not a property of one project,
   // and that is the scope they were written at before the catalog collapse
   // routed them through the shared write path. The target restores global
   // writes and exempts them from the extension's open-workspace write guard,
   // while Models-tab and runtime reads both keep merged-config semantics. A
   // workspace override therefore remains visible and honored; cleanup of values
-  // stranded by the regression window is tracked separately in #11173.
-  'model.gpt5ReasoningSummary': modelProviderToggle({
-    default: false,
+  // stranded by the regression window is tracked separately in #11173. Only
+  // server-side state is a choice a user makes (it decides data retention);
+  // the transport knobs have no settings-view row and are set in
+  // `.texra/config.json`.
+  'model.gpt5ReasoningSummary': {
+    schema: z.boolean().prefault(false),
+    configTarget: 'global',
+    category: 'model',
     title: 'GPT-5 reasoning summary',
     description:
       "Show the model's reasoning steps alongside its output when using GPT-5 models. Requires an OpenAI account with access to reasoning features.",
     honoredBy: everyHost('src/agent/runtime/run/modelBinding.ts'),
-    model: {
-      provider: 'openai',
-      label: 'GPT-5 reasoning summary',
-      description:
-        'Request reasoning summaries from GPT-5 models. Only available on OpenAI API Tier 3+.',
-      warning:
-        'New accounts with $20 credit are typically Tier 1 and will hit rate limits.',
-      warningUrl:
-        'https://platform.openai.com/settings/organization/billing/overview',
-      warningUrlLabel: 'Check your tier',
-    },
-  }),
+  },
   'model.useGoogleInteractionsServerState': modelProviderToggle({
     default: true,
     title: 'Server-side conversation state',
@@ -460,45 +454,33 @@ const CORE_SETTING_ROWS: Record<
         "Store Interactions conversation state on Google's servers (send only the new turn each round; Google retains the conversation for a limited period to enable chaining). Disable to keep conversations off Google's servers and resend the full transcript each round.",
     },
   }),
-  'model.useGoogleBackgroundResponses': modelProviderToggle({
-    default: false,
+  'model.useGoogleBackgroundResponses': {
+    schema: z.boolean().prefault(false),
+    configTarget: 'global',
+    category: 'model',
     title: 'Google background responses',
     description:
       'Run Google workflow generations as background Interactions (submit + poll) instead of one long streamed request. Requires server-side conversation state and a model that supports background execution. Off by default; unsupported models fall back automatically.',
     honoredBy: everyHost('src/agent/runtime/ModelInvoker.ts'),
-    model: {
-      provider: 'google',
-      label: 'Background responses',
-      description:
-        'Run workflow generations as background Interactions (submit + poll) instead of one long streamed request. Requires server-side conversation state and a model that supports background execution. Off by default; unsupported models fall back automatically.',
-    },
-  }),
-  'model.useBackgroundResponses': modelProviderToggle({
-    default: true,
+  },
+  'model.useBackgroundResponses': {
+    schema: z.boolean().prefault(true),
+    configTarget: 'global',
+    category: 'model',
     title: 'Background responses',
     description:
       'Keep long-running OpenAI requests alive in the background (polling) instead of timing out after 10 minutes. Applies automatically to GPT models running workflow agents; ignored otherwise. Disable to fall back to synchronous streaming requests.',
     honoredBy: everyHost('src/agent/runtime/ModelInvoker.ts'),
-    model: {
-      provider: 'openai',
-      label: 'Background responses',
-      description:
-        'Handle long-running generations (>10 min) via polling to prevent timeouts. Adds polling overhead.',
-    },
-  }),
-  'model.openaiParallelToolCalls': modelProviderToggle({
-    default: true,
+  },
+  'model.openaiParallelToolCalls': {
+    schema: z.boolean().prefault(true),
+    configTarget: 'global',
+    category: 'model',
     title: 'Parallel tool calls',
     description:
       'Let OpenAI models use multiple tools at the same time for faster results. Enabled by default; disable for models that require sequential tool run.',
     honoredBy: everyHost('src/agent/runtime/run/modelBinding.ts'),
-    model: {
-      provider: 'openai',
-      label: 'Parallel tool calls',
-      description:
-        'Allow the model to call multiple tools in parallel. On by default; disable for models that require sequential run.',
-    },
-  }),
+  },
   // No `configTarget`: both runtime readers resolve the *merged* config value
   // through `readSettingFrom`, so the row must not narrow itself to the
   // global scope — a workspace override the runtime honors would then be

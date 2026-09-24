@@ -64,12 +64,12 @@ test('first launch shows a usable launcher chrome', async () => {
 /**
  * Trajectory 2 — Settings: Models tab carries model access + provider keys.
  *
- * Account identity and usage live in their own page; Models remains the single
- * home for configuring model access and provider credentials.
+ * Models is the single home for connecting a model: provider keys and
+ * subscription sign-in.
  */
 
 /**
- * Trajectory 3 — Memory tab is the leftmost settings panel. Cross-launch
+ * Trajectory 3 — Memory settings page. Cross-launch
  * persistence is covered by `settingsPersistence.spec.ts`, which relaunches
  * the desktop app on a shared Electron user-data directory.
  */
@@ -150,7 +150,7 @@ test('rapid settings-tab switching does not crash the renderer', async () => {
     'memory',
     'models',
     'agents',
-    'multi-agent',
+    'general',
     'latex',
   ] as const) {
     await setSettingsTab(launched, tab);

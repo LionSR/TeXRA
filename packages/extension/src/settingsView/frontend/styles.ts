@@ -30,7 +30,6 @@ export const settingsViewStyles: CSSResult[] = [
       );
     }
 
-    .settings-category-nav,
     .settings-page-nav {
       display: flex;
       align-items: center;
@@ -40,16 +39,8 @@ export const settingsViewStyles: CSSResult[] = [
       scrollbar-width: none;
     }
 
-    .settings-category-nav::-webkit-scrollbar,
     .settings-page-nav::-webkit-scrollbar {
       display: none;
-    }
-
-    .settings-category-nav {
-      gap: var(--wa-space-3xs);
-      min-height: var(--height-control);
-      padding: var(--wa-space-2xs) var(--wa-space-xs);
-      border-bottom: var(--border-thin) solid var(--border-hairline);
     }
 
     .settings-page-nav {
@@ -58,39 +49,9 @@ export const settingsViewStyles: CSSResult[] = [
       padding: 0 var(--wa-space-xs);
     }
 
-    .settings-category-button,
     .settings-page-button {
       flex: 0 0 auto;
       white-space: nowrap;
-    }
-
-    .settings-category-button::part(base) {
-      justify-content: center;
-      min-height: var(--height-control);
-      padding: 0 var(--wa-space-xs);
-      border: var(--border-thin) solid transparent;
-      border-radius: var(--wa-border-radius-pill);
-      color: var(--wa-color-text-quiet);
-      font-size: var(--font-size);
-      font-weight: var(--font-weight);
-      letter-spacing: var(--letter-spacing-tight);
-      transition:
-        background-color var(--transition-fast),
-        border-color var(--transition-fast),
-        color var(--transition-fast);
-    }
-
-    .settings-category-button:hover::part(base) {
-      background: var(--surface-hover);
-      color: var(--wa-color-text-normal);
-    }
-
-    .settings-category-button[data-active='true']::part(base) {
-      border-color: var(--border-hairline);
-      background: var(--wa-color-surface-default);
-      color: var(--wa-color-text-normal);
-      font-weight: var(--font-weight-medium);
-      box-shadow: var(--wa-shadow-s, none);
     }
 
     .settings-page-button::part(base) {
@@ -122,7 +83,6 @@ export const settingsViewStyles: CSSResult[] = [
       box-shadow: inset 0 -2px var(--wa-color-text-normal);
     }
 
-    .settings-category-button wa-icon,
     .settings-page-button wa-icon,
     .settings-tab-icon {
       display: grid;
@@ -170,28 +130,18 @@ export const settingsViewStyles: CSSResult[] = [
     }
 
     @container settings (max-width: 520px) {
-      .settings-category-nav,
       .settings-page-nav {
         padding-inline: var(--wa-space-2xs);
         scrollbar-width: thin;
       }
 
+      /* Narrow panes keep the words and drop the icons: six short labels
+         fit a sidebar, and the strip scrolls if they ever do not. */
       .settings-page-button::part(base) {
-        width: var(--height-control);
-        gap: 0;
-        place-content: center;
-        padding: 0;
+        padding: 0 var(--wa-space-2xs);
       }
 
       .settings-page-button::part(start) {
-        margin: 0;
-      }
-
-      .settings-page-button wa-icon {
-        margin-inline-end: 0;
-      }
-
-      .settings-page-button::part(label) {
         display: none;
       }
 

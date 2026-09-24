@@ -11,21 +11,26 @@ view; TeXRA does not contribute product settings to VS Code's Settings editor.
 - **Desktop app:** open **Settings**.
 - **CLI:** run `texra config`, or enter `/config` during a chat.
 
-The Dashboard groups the current controls by subject:
+The Dashboard has six pages:
 
-- **Account**: sign-in status, telemetry, and subscription access (ChatGPT,
-  Grok, Kimi Code, GLM Coding Plan, and Copilot).
-- **Models**: provider keys and model visibility.
-- **Agents**: available agents, active teams, orchestration, and session
-  reliability.
-- **Capabilities**: tool availability, permissions, skills, connected coding
-  agents, and LaTeX processing.
-- **Workspace**: Git behavior and shortcuts.
-- **Data & Activity**: memory and autonomous goals (the **Memory** and **Goals** tabs).
+- **Models**: provider API keys (including Kimi Code and the GLM Coding Plan),
+  ChatGPT and Grok sign-in, Copilot in VS Code, and model visibility.
+- **Agents**: available agents, teams, and skills. An **Advanced** section holds
+  compaction, retries, and team coordination.
+- **Tools**: approval policy, tool availability, and integrations such as Codex,
+  Claude Code, Zotero, and GitHub activity.
+- **LaTeX**: dependencies, compile, diff, and formatting.
+- **Memory**: the notes TeXRA keeps across tasks.
+- **General**: TeXRA account sign-in, telemetry, Git commit attribution, and
+  the GitHub token.
+
+The desktop app adds a **Shortcuts** page.
 
 Settings that benefit from an ordinary control appear directly in these views.
-File-handling rules and other internal implementation constants are not exposed
-as configuration.
+Provider transport knobs (OpenAI background responses, parallel tool calls, the
+GPT-5 reasoning summary, and Google background responses) keep their defaults
+unless you set them in `config.json`. File-handling rules and other internal
+implementation constants are not exposed as configuration.
 
 ## Where settings live
 
@@ -78,13 +83,12 @@ them at the intended project or user scope.
 
 ## Model access and credentials
 
-The **Providers & Models** view is the single home for model access, provider
-API keys, provider behavior, model visibility, and retry settings. Account
-connections that stand in for a provider key live in the **Account** group,
-under **Subscriptions**: ChatGPT, Grok, Kimi Code, the GLM Coding Plan, and
-Copilot. TeXRA account sign-in also sits in that group, under **Account &
-Usage**. It unlocks the hosted research-agent catalog and does not supply
-model access.
+The **Models** page is the single home for model access: provider API keys,
+provider behavior, subscription sign-in (ChatGPT, Grok, and Copilot), and model
+visibility. Kimi Code and the GLM Coding Plan use API keys, so they sit on
+their provider rows with their usage meters. TeXRA account sign-in is on the
+**General** page. It unlocks the hosted research-agent catalog and does not
+supply model access.
 
 Saved provider keys currently use each host's secure credential mechanism. They
 are not copied through the shared JSON configuration. Environment-variable keys
@@ -92,12 +96,12 @@ are available to any TeXRA host launched with that environment.
 
 ## Skills, tools, and privacy
 
-The **Tools** view contains the skills switch, tool availability, and approval
-controls. The CLI exposes the same skills switch from `/config` during a chat.
+The **Tools** page contains tool availability and approval controls; the skills
+switch is on the **Agents** page. The CLI exposes the same skills switch from `/config` during a chat.
 Tools that are disabled globally are removed from an agent's available
 tool list even when its definition names them.
 
-The **Account & Usage** view contains the telemetry switch. The environment
+The **General** page contains the telemetry switch. The environment
 variables `TEXRA_NO_TELEMETRY=1` and `DO_NOT_TRACK=1` also disable telemetry.
 
 ### Usage logging

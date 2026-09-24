@@ -41,15 +41,15 @@ available.
 A credential is the one step no agent can do for you. On a fresh install, the **Welcome to TeXRA** card in the
 TeXRA panel offers the main access choices:
 
-1. **Use your own provider API key**: Anthropic, OpenAI, Google, and more. Open the **Providers & Models** tab
+1. **Use your own provider API key**: Anthropic, OpenAI, Google, and more. Open the **Models** page
    (the <wa-icon library="texra" name="settings-gear"></wa-icon> gear icon at the top of the TeXRA panel) and
-   set your provider's key in the **API Configuration** table, or place a `.env` file in your workspace with
+   set your provider's key in the **API keys** list, or place a `.env` file in your workspace with
    variables like `OPENAI_API_KEY`.
-2. **Use ChatGPT subscription**: Codex models through your ChatGPT plan. Open the Dashboard's **Subscriptions**
-   tab and use the **ChatGPT subscription** sign-in section.
+2. **Use ChatGPT subscription**: Codex models through your ChatGPT plan. Open the Dashboard's **Models**
+   page and use the **ChatGPT subscription** sign-in section.
 3. **Use another provider subscription**: Grok (xAI), Kimi Code, and the GLM Coding Plan also run on a plan you
-   already pay for. Connect them from the same **Subscriptions** tab.
-4. **Use GitHub Copilot in VS Code**: compatible models through a Copilot subscription. Open **Subscriptions →
+   already pay for. Connect them from the same **Models** page.
+4. **Use GitHub Copilot in VS Code**: compatible models through a Copilot subscription. Open **Models →
    Copilot in VS Code** and grant access through VS Code's native consent prompt. This source does not appear in
    the CLI or desktop applications.
 
