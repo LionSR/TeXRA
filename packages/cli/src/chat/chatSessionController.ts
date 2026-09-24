@@ -32,7 +32,10 @@ import {
   type FollowUpRecoveryLease,
 } from '@agent/followUp';
 import { type CliContext } from '@cli/runtime/cliContext';
-import { warnApprovalDenied } from '@cli/runtime/approval/approvalPrompts';
+import {
+  policyDenialOf,
+  warnApprovalDenied,
+} from '@cli/runtime/approval/approvalPrompts';
 import { cliApprovalPromptsUnavailable } from '@cli/runtime/approval/settleApprovals';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { readCliMultiAgentPresetName } from '@cli/runtime/multiAgentPresets';
@@ -578,11 +581,11 @@ export function createChatSessionController(
   > => ({
     session: runtimeSession,
     approvalPromptsUnavailable: approvalsUnavailable,
-    onApprovalPolicyDenial: () =>
+    onApprovalPolicyDenial: (withheldTools) =>
       warnApprovalDenied(
         runtimeSession,
         sessionContext,
-        'Tool or edit approval',
+        policyDenialOf(withheldTools),
         launchRunId,
       ),
     executeWorkflow: (_config, runId) =>
@@ -649,11 +652,11 @@ export function createChatSessionController(
               session: runtimeSession,
               enforceCategory: true,
               approvalPromptsUnavailable: approvalsUnavailable,
-              onApprovalPolicyDenial: () =>
+              onApprovalPolicyDenial: (withheldTools) =>
                 warnApprovalDenied(
                   runtimeSession,
                   sessionContext,
-                  'Tool or edit approval',
+                  policyDenialOf(withheldTools),
                   runId,
                 ),
               onRunResolved: (resolvedRunId) => {

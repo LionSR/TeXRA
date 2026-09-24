@@ -32,7 +32,7 @@ import {
 import { aggregateError, generateRunId } from '@utils/core';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
-import { warnApprovalDenied } from './approval/approvalPrompts';
+import { policyDenialOf, warnApprovalDenied } from './approval/approvalPrompts';
 import { cliApprovalPromptsUnavailable } from './approval/settleApprovals';
 import { createHeadlessCliHostInteractions } from './approvalAdapter';
 import {
@@ -556,8 +556,8 @@ export function executeCliRequest(
           runContext,
           runContext.approvalPolicy,
         ),
-        onApprovalPolicyDenial: () =>
-          warnApprovalDenied(session, runContext, 'Tool or edit approval'),
+        onApprovalPolicyDenial: (withheld) =>
+          warnApprovalDenied(session, runContext, policyDenialOf(withheld)),
       });
 
     let runResult:
