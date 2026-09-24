@@ -64,12 +64,14 @@ import { AgentReviewService } from '@frontend/review/AgentReviewService';
 import { withLogChannel } from '@logger/effectLog';
 import { createLog } from '@logger/logUtils';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
+import { Lifecycle, SHUTDOWN_PHASE } from '@platform/interfaces';
 import type {
   StateStore,
   StateReadFailed,
   StateWriteFailed,
 } from '@platform/interfaces';
 import type { LanguageModel } from '@platform/languageModel';
+import { withProcessServices } from '@platform/processRuntime';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import {
@@ -420,11 +422,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     this.disposables.push(
       { dispose: detachHostInteractions },
       { dispose: detachTerminalResultToast },
-      {
-        dispose: () => {
-          this.runtime.runFork(this.toolEditApprovals.dispose());
-        },
-      },
     );
 
     this.watchWorkspace();
@@ -437,6 +434,11 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
 
   public initialize() {
     return Effect.gen({ self: this }, function* () {
+      // `ON` phase, behind the run settlement activation registered earlier.
+      (yield* Lifecycle).onShutdown(
+        SHUTDOWN_PHASE.ON,
+        withProcessServices(this.runtime, this.dispose()),
+      );
       yield* this.snapshot.refresh;
       yield* this.refreshOnboardingFunnel();
       yield* Effect.logDebug('ProgressViewProvider initialized').pipe(
@@ -807,15 +809,20 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     });
   }
 
-  public dispose(): void {
-    this.closeSidebarPort();
-    this.closePort(this.editor?.port);
-    this.editor?.panel.dispose();
-    this.editor = undefined;
-    this.runtime.runFork(Scope.close(this.bridgeScope, Exit.void));
-    for (const disposable of this.disposables.splice(0)) disposable.dispose();
-    if (ProgressViewProvider._instance === this) {
-      ProgressViewProvider._instance = undefined;
-    }
+  /** Awaits the staged tool-edit preview files' removal: runtime disposal
+   *  follows the shutdown drain and would cut a forked release short. */
+  private dispose(): Effect.Effect<void, never, ProcessServices> {
+    return Effect.gen({ self: this }, function* () {
+      this.closeSidebarPort();
+      this.closePort(this.editor?.port);
+      this.editor?.panel.dispose();
+      this.editor = undefined;
+      yield* Scope.close(this.bridgeScope, Exit.void);
+      for (const disposable of this.disposables.splice(0)) disposable.dispose();
+      yield* this.toolEditApprovals.dispose();
+      if (ProgressViewProvider._instance === this) {
+        ProgressViewProvider._instance = undefined;
+      }
+    });
   }
 }
