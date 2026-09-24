@@ -156,8 +156,6 @@ function toolUseConfig() {
   };
 }
 
-/** Tools the CLI runtime hides by default during agent run. */
-
 /** A run program's options with the session, runtime and lifecycle the
  *  wrapper below supplies. */
 type WithoutSession<O> = Omit<O, 'session' | 'runtime' | 'lifecycle'>;
