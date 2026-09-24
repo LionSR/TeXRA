@@ -3,7 +3,7 @@ import { mkdir, realpath, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, Result } from 'effect';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 // Local imports
@@ -62,22 +62,21 @@ describe('collectReviewDiff (real git repository)', () => {
   });
 
   async function collectDiff(options: Partial<CollectReviewDiffOptions> = {}) {
-    return collectReviewDiff({
-      cwd: repo,
-      ...options,
-    });
+    return Effect.runPromise(
+      Effect.result(collectReviewDiff({ cwd: repo, ...options })),
+    );
   }
 
   async function collectDiffOrFail(
     options: Partial<CollectReviewDiffOptions> = {},
   ) {
     const result = await collectDiff(options);
-    if (!result.ok) {
+    if (Result.isFailure(result)) {
       throw new Error(
-        `expected collectReviewDiff to succeed: ${result.reason}`,
+        `expected collectReviewDiff to succeed: ${result.failure.reason}`,
       );
     }
-    return result.value;
+    return result.success;
   }
 
   it('diffs a feature branch against main using ordinary Git semantics', async () => {
@@ -185,9 +184,8 @@ describe('collectReviewDiff (real git repository)', () => {
     const result = await collectDiff({
       baseBranch: 'no-such-branch',
     });
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.reason).toContain('no-such-branch');
+    if (Result.isSuccess(result)) throw new Error('expected a failure');
+    expect(result.failure.reason).toContain('no-such-branch');
   });
 
   it('uses an explicit base ref for commit-triggered reviews', async () => {
@@ -219,10 +217,10 @@ describe('collectReviewDiff (real git repository)', () => {
   it('fails with a reason outside a git repository', async () => {
     await withTempDir('texra-plain-', async (plain) => {
       const result = await collectDiff({ cwd: plain });
-      expect(result).toEqual({
-        ok: false,
-        reason: 'The workspace is not a git repository.',
-      });
+      if (Result.isSuccess(result)) throw new Error('expected a failure');
+      expect(result.failure.reason).toBe(
+        'The workspace is not a git repository.',
+      );
     });
   });
 
@@ -232,7 +230,7 @@ describe('collectReviewDiff (real git repository)', () => {
     await git('update-ref', 'refs/remotes/origin/HEAD', 'refs/heads/main');
     await git('checkout', '-b', 'feature');
 
-    const candidates = await listBaseBranchCandidates(repo);
+    const candidates = await Effect.runPromise(listBaseBranchCandidates(repo));
     const byRef = new Map(candidates.map((c) => [c.ref, c]));
     expect([...byRef.keys()]).toEqual(
       expect.arrayContaining(['main', 'develop', 'feature', 'origin/release']),
@@ -245,7 +243,9 @@ describe('collectReviewDiff (real git repository)', () => {
 
   it('returns no branch candidates outside a git repository', async () => {
     await withTempDir('texra-plain-', async (plain) => {
-      expect(await listBaseBranchCandidates(plain)).toEqual([]);
+      expect(await Effect.runPromise(listBaseBranchCandidates(plain))).toEqual(
+        [],
+      );
     });
   });
 });
