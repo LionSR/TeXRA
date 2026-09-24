@@ -97,14 +97,16 @@ export function installSlashCommands(
     }
     pluginIds.add(pluginId);
     for (const command of commands) {
-      for (const candidate of commandCandidates(command)) {
+      // A command may repeat its own name as an alias (case aside); only a
+      // second command addressing the same token is a collision.
+      for (const candidate of new Set(commandCandidates(command))) {
         const owner = claimed.get(candidate);
         if (owner !== undefined) {
           throw new Error(
-            `Slash command /${candidate} is claimed by both ${owner} and ${pluginId}`,
+            `Slash command /${candidate} is claimed by both ${owner} and ${pluginId} (/${command.name})`,
           );
         }
-        claimed.set(candidate, pluginId);
+        claimed.set(candidate, `${pluginId} (/${command.name})`);
       }
     }
   }
