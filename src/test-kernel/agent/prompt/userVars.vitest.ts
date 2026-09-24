@@ -90,7 +90,7 @@ describe('buildUserVars round count', () => {
 });
 
 describe('buildUserVars runtime skill diagnostics', () => {
-  const missingSource = '/missing/runtime-skill-source';
+  const missingSource = fakePath('missing/runtime-skill-source');
   const tempRoots = useTempDirs();
 
   beforeEach(() => {
