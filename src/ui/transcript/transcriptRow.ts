@@ -31,6 +31,7 @@ import {
   type CompactionActivityBlock,
 } from '@shared/runs/compactionActivityProjection';
 import { assertNever } from '@utils/core';
+import { formatCompactTokenCount } from '@utils/text/stringUtils';
 
 import type { ToolRowModel } from './toolRowModel';
 import type { TranscriptText } from './transcriptText';
@@ -347,6 +348,11 @@ export function compactionActivityRow(
     timestamp: block.startedAt,
     level: 'info',
     block,
-    label: COMPACTION_ACTIVITY_LABEL[block.status],
+    // `Context compacted · freed 41k tokens (78% → 22%)`: the one row
+    // carries the figures its stats entry used to repeat as a second row.
+    label:
+      block.freed && block.freed.tokens > 0
+        ? `${COMPACTION_ACTIVITY_LABEL[block.status]} · freed ${formatCompactTokenCount(block.freed.tokens)} tokens (${block.freed.utilizationBefore.toFixed(0)}% → ${block.freed.utilizationAfter.toFixed(0)}%)`
+        : COMPACTION_ACTIVITY_LABEL[block.status],
   };
 }

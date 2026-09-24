@@ -94,7 +94,7 @@
     "src/shared/schemas/sessionEvent.ts": 808,
     "src/shared/session/runStateFold.ts": 821,
     "src/shared/session/sessionFold.ts": 1980,
-    "src/shared/session/surface.ts": 505,
+    "src/shared/session/surface.ts": 511,
     "src/shared/settingsView/settingsViewMessages.ts": 940,
     "src/shared/state/stateSettings.ts": 1565,
     "src/telemetry/UsageLogService.ts": 571,

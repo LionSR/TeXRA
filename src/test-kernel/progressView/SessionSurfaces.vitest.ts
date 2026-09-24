@@ -13,7 +13,10 @@ import type { HostRequest } from '@shared/session/hostRequest';
 import type { Response } from '@shared/session/sessionFrames';
 import type { RuntimeRequest } from '@shared/session/runtimeRequest';
 import { emptySessionView } from '@shared/session/sessionView';
-import { PersistedSurfaceSchema } from '@shared/session/surface';
+import {
+  LaunchPatchSchema,
+  PersistedSurfaceSchema,
+} from '@shared/session/surface';
 import {
   createWebviewStorage,
   type KeyValueStore,
@@ -126,6 +129,13 @@ describe('session Surface ownership', () => {
       expect(surfaces.get(KEY)?.surface$.get().requestError).toBeNull();
     },
   );
+
+  it('parses a host launch patch without defaulting the fields it omits', () => {
+    // A host naming one field must not reset the agent, draft or files.
+    expect(LaunchPatchSchema.parse({ commit: 'a1f3c2' })).toEqual({
+      commit: 'a1f3c2',
+    });
+  });
 
   it('releases the graph of a session that leaves the sync set', () => {
     surfaces.sync([]);

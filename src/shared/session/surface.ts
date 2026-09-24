@@ -50,9 +50,24 @@ export const LaunchSurfaceSchema = UIFileFieldsSchema.merge(
 });
 type LaunchSurface = z.infer<typeof LaunchSurfaceSchema>;
 
-/** A change to the launcher. Zod because the host's `surface.action`
- *  carries it. */
-export const LaunchPatchSchema = LaunchSurfaceSchema.partial();
+type LaunchShape = typeof LaunchSurfaceSchema.shape;
+
+/** A change to the launcher, carried by the host's `surface.action`: every
+ *  field optional with its `.prefault` unwrapped, since `.partial()` keeps
+ *  prefaults that Zod runs for an absent key, so `{ commit }` would reset
+ *  the agent, the draft and the file lists. */
+export const LaunchPatchSchema = z.object(
+  Object.fromEntries(
+    Object.entries(LaunchSurfaceSchema.shape).map(([key, field]) => [
+      key,
+      (field instanceof z.ZodPrefault ? field.unwrap() : field).optional(),
+    ]),
+  ) as {
+    [K in keyof LaunchShape]: z.ZodOptional<
+      LaunchShape[K] extends z.ZodPrefault<infer Inner> ? Inner : LaunchShape[K]
+    >;
+  },
+);
 type LaunchPatch = z.infer<typeof LaunchPatchSchema>;
 
 /** An image of a follow-up: the `[fileName]` chip its text carries and
@@ -447,22 +462,13 @@ export function applySurfaceAction(
         }),
       };
     case 'launch': {
-      // Naming an agent targets that agent, whatever team was chosen.
-      const launch = {
-        ...surface.launch,
-        ...action.patch,
-        ...(action.patch.agent === undefined
-          ? {}
-          : { launchTarget: 'agent' as const }),
-      } satisfies LaunchSurface;
-      // A team is a tool-use launch target: a workflow launch runs its
-      // agent, whatever team was chosen before.
+      const launch = { ...surface.launch, ...action.patch };
+      // Naming an agent targets it, and only a tool-use launch runs a team.
+      const toAgent =
+        action.patch.agent !== undefined || launch.sessionType !== 'toolUse';
       return {
         ...surface,
-        launch:
-          launch.sessionType === 'toolUse'
-            ? launch
-            : { ...launch, launchTarget: 'agent' },
+        launch: toAgent ? { ...launch, launchTarget: 'agent' } : launch,
       };
     }
     case 'inquiryDraft':

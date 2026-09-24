@@ -419,8 +419,8 @@ export function projectTranscriptRow(
 
     case MESSAGE_TYPES.CONTEXT_MANAGEMENT: {
       const data = entry.data;
-      // A client compaction is already one row, its activity ("Context
-      // compacted"); its stats entry would report the same event twice.
+      // A client compaction is one row, its activity, which carries these
+      // figures (`compactionActivityRow`); a second row would repeat it.
       if (data.action === 'compaction') return undefined;
       const reduced = data.action === 'max_tokens_reduced';
       if (

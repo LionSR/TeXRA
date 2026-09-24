@@ -289,7 +289,7 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
   instead of one combined Setup menu, and the follow-up line names its
   target only when you can send the message to a parent run instead.
 - **The run view shows each fact once** — a context compaction is one row
-  instead of two, the workflow board leaves spend to the usage footer and
+  that also says how many tokens it freed, instead of two, the workflow board leaves spend to the usage footer and
   elapsed time to the header, its footer appears only when a call failed,
   and "Kill run" is gone from the board because the header's Stop does the
   same. The Tasks panel names the task in progress in its summary and stays
