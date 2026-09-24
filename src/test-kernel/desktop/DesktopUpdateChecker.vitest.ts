@@ -11,18 +11,21 @@ import {
 import { processOwnerId } from '@platform/defaults/nodeProcesses';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
 import { UpdateCheckRecords } from '@shared/session/updateCheckRecords';
+import { withEnv } from '@test/support/testEnv';
 
 type Options = Parameters<typeof checkForDesktopUpdate>[0];
 const release = { version: '0.40.0' };
-const runCheck = (overrides: Partial<Options> = {}) =>
+const runCheck = (
+  overrides: Partial<Options> = {},
+  env: Record<string, string> = {},
+) =>
   checkForDesktopUpdate({
     currentVersion: '0.39.3',
     isPackaged: true,
-    env: {},
     notify: () => {},
     fetchRelease: Effect.succeed(release),
     ...overrides,
-  });
+  }).pipe(withEnv(env));
 const withRecords = <A, E>(program: Effect.Effect<A, E, UpdateCheckRecords>) =>
   Effect.scoped(
     Effect.gen(function* () {
@@ -65,10 +68,10 @@ describe('desktop update checker', () => {
     withRecords(
       Effect.gen(function* () {
         const fetchRelease = vi.fn(() => release);
-        yield* runCheck({
-          env: { TEXRA_NO_UPDATE_CHECK: '1' },
-          fetchRelease: Effect.sync(fetchRelease),
-        });
+        yield* runCheck(
+          { fetchRelease: Effect.sync(fetchRelease) },
+          { TEXRA_NO_UPDATE_CHECK: '1' },
+        );
         expect(fetchRelease).not.toHaveBeenCalled();
       }),
     ),

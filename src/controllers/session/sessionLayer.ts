@@ -120,6 +120,7 @@ import { SetupPlatform, type SetupPlatformShape } from '@tools/setup/platform';
 import { toolRegistryLayer } from '@tools/registry';
 import { StreamLogStore } from '@transcript/StreamLogStore';
 import { readConfigSettingFrom } from '@utils/config/platformSettings';
+import { processEnvConfigLayer } from '@utils/system/envFlags';
 import { inquiryRecordsLayer } from './inquiryRecords';
 import { updateCheckRecordsLayer } from './updateCheckRecords';
 import { databaseLayer } from './Database';
@@ -1134,12 +1135,11 @@ export function installProcessRuntime({
           Layer.mergeAll(
             effectDiagnosticsLayer(minimumLogLevel),
             FetchHttpClient.layer,
-            // The standard library's filesystem and path services, once per
-            // process: every root reaches this install, so a consumer (the
-            // Lean layer included) takes `FileSystem`/`Path` from context and
-            // builds no layer of its own.
+            // FileSystem, Path and the env ConfigProvider, once per process:
+            // every root reaches this install, so no consumer builds its own.
             NodeFileSystem.layer,
             NodePath.layer,
+            processEnvConfigLayer,
           ),
         ),
       ),

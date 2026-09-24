@@ -17,6 +17,7 @@ import {
   makeTempDir as makeSharedTempDir,
   useTempDirs,
 } from '@test/support/tempDirPlatform';
+import { withEnv } from '@test/support/testEnv';
 import {
   app as electronApp,
   configureElectronTestStub,
@@ -37,11 +38,9 @@ const loadJsonStore = Effect.promise(async () => {
 
 describe('desktop platform adapters', () => {
   const tempDirs = useTempDirs();
-  const originalEnv = { ...process.env };
   const testSecretKey = 'TEXRA_TEST_TOKEN';
 
   afterEach(async () => {
-    process.env = { ...originalEnv };
     const stubUserDataPath = getElectronTestStubUserDataPath();
     if (stubUserDataPath != null) tempDirs.push(stubUserDataPath);
     resetElectronTestStub();
@@ -113,7 +112,7 @@ describe('desktop platform adapters', () => {
           secrets,
         } = yield* loadSecrets();
 
-        expect(getSecretStorageMode()).toBe('encrypted');
+        expect(yield* getSecretStorageMode()).toBe('encrypted');
         yield* secrets.set(testSecretKey, 'persisted');
 
         expect(yield* secrets.get(testSecretKey)).toBe('persisted');
@@ -122,15 +121,18 @@ describe('desktop platform adapters', () => {
           value: expect.any(String),
         });
 
-        process.env[testSecretKey] = 'from-env';
-        expect(yield* secrets.get(testSecretKey)).toBe('from-env');
+        // The inner provider wins for this one read only.
+        expect(
+          yield* secrets
+            .get(testSecretKey)
+            .pipe(withEnv({ [testSecretKey]: 'from-env' })),
+        ).toBe('from-env');
 
-        delete process.env[testSecretKey];
         yield* secrets.delete(testSecretKey);
 
         expect(yield* secrets.get(testSecretKey)).toBeUndefined();
         expect(store.snapshot()).toEqual({});
-      }).pipe(Effect.provide(nodePlatformLayer)),
+      }).pipe(withEnv({}), Effect.provide(nodePlatformLayer)),
   );
 
   it.effect(
@@ -145,14 +147,14 @@ describe('desktop platform adapters', () => {
 
         configureElectronTestStub({ safeStorageEncryptionAvailable: false });
 
-        expect(getSecretStorageMode()).toBe('unavailable');
+        expect(yield* getSecretStorageMode()).toBe('unavailable');
         expect(yield* secretWriteError(secrets)).toMatchObject(
           unavailableWrite(
             'Electron safeStorage is unavailable for secret writes.',
           ),
         );
         expect(store.snapshot()).toEqual({});
-      }).pipe(Effect.provide(nodePlatformLayer)),
+      }).pipe(withEnv({}), Effect.provide(nodePlatformLayer)),
   );
 
   it.effect(
@@ -174,7 +176,7 @@ describe('desktop platform adapters', () => {
           key: testSecretKey,
         });
         expect(store.snapshot()).toEqual({});
-      }).pipe(Effect.provide(nodePlatformLayer)),
+      }).pipe(withEnv({}), Effect.provide(nodePlatformLayer)),
   );
 
   it.effect(
@@ -194,7 +196,7 @@ describe('desktop platform adapters', () => {
         vi.spyOn(process, 'platform', 'get').mockReturnValue('linux');
         configureElectronTestStub({ safeStorageBackend: 'basic_text' });
 
-        expect(getSecretStorageMode()).toBe('basic_text');
+        expect(yield* getSecretStorageMode()).toBe('basic_text');
         expect(yield* secretWriteError(secrets)).toMatchObject(
           unavailableWrite(LINUX_BASIC_TEXT_SECRET_STORAGE_MESSAGE),
         );
@@ -206,7 +208,7 @@ describe('desktop platform adapters', () => {
           LINUX_BASIC_TEXT_SECRET_STORAGE_MESSAGE,
         );
         expect(store.snapshot()).toEqual({});
-      }).pipe(Effect.provide(nodePlatformLayer)),
+      }).pipe(withEnv({}), Effect.provide(nodePlatformLayer)),
   );
 
   it.effect(
@@ -236,7 +238,7 @@ describe('desktop platform adapters', () => {
           unavailableWrite(LINUX_BASIC_TEXT_SECRET_STORAGE_MESSAGE),
         );
         expect(store.snapshot()).toEqual({});
-      }).pipe(Effect.provide(nodePlatformLayer)),
+      }).pipe(withEnv({}), Effect.provide(nodePlatformLayer)),
   );
 
   it.effect('ignores malformed persisted secret records', () =>

@@ -199,7 +199,7 @@ async function loadSupabaseAuth() {
       // The process services this suite's runtime carries: the auth run edge
       // reads none of them, so a member call is a test error the mock raises
       // rather than an answer from a store nothing here opened.
-      Layer.mock(Secrets, { getEnv: unreadProcessService }),
+      Layer.mock(Secrets, { get: unreadProcessService }),
       Layer.mock(AppState, { update: unreadProcessService }),
       // The account plane the module under test serves is its own module
       // state; this one only satisfies the process-runtime type.

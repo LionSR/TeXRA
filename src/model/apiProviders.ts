@@ -10,6 +10,7 @@ import { LRUCache } from 'lru-cache';
 import type { PlatformSecrets, SecretsFailed } from '@platform/secrets';
 import { findModelProviderPlugin } from '@shared/constants/modelProviderPlugins';
 import { API_KEY_PROVIDER_IDS } from '@shared/constants/providers';
+import { envVar } from '@utils/system/envFlags';
 import { isNonEmptyString } from '@utils/text/stringUtils';
 
 export const API_PROVIDERS = API_KEY_PROVIDER_IDS;
@@ -104,16 +105,20 @@ function resolveApiKeyUncached(
   secrets: PlatformSecrets,
   provider: ApiProvider,
 ): Effect.Effect<ResolvedApiKey, SecretsFailed> {
-  return Effect.map(secrets.get(apiKeySecretName(provider)), (stored) => {
-    if (isNonEmptyString(stored)) {
-      return { value: redactedKey(stored, provider), origin: 'secret' };
-    }
-    const envValue = secrets.getEnv(apiKeyEnvName(provider));
-    if (isNonEmptyString(envValue)) {
-      return { value: redactedKey(envValue, provider), origin: 'env' };
-    }
-    return { value: undefined, origin: 'none' };
-  });
+  return Effect.flatMap(
+    secrets.get(apiKeySecretName(provider)),
+    (stored): Effect.Effect<ResolvedApiKey> =>
+      isNonEmptyString(stored)
+        ? Effect.succeed({
+            value: redactedKey(stored, provider),
+            origin: 'secret',
+          })
+        : Effect.map(envVar(apiKeyEnvName(provider)), (envValue) =>
+            isNonEmptyString(envValue)
+              ? { value: redactedKey(envValue, provider), origin: 'env' }
+              : { value: undefined, origin: 'none' },
+          ),
+  );
 }
 
 /** The cache for one credential store, created on first use. */

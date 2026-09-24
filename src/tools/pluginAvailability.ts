@@ -41,6 +41,7 @@ import {
 } from '@tools/toolProbes';
 import { ZOTERO_PORT_KEY } from '@tools/zotero/bbtClient';
 import { isGitRepository } from '@utils/git/isGitRepository';
+import { envVar } from '@utils/system/envFlags';
 import { findToolInCommonPaths } from '@utils/system/platformPaths';
 import { checkToolInstalled } from '@utils/system/toolUtils';
 import { formatResultCount } from '@utils/text/stringUtils';
@@ -245,7 +246,8 @@ export const CLAUDE_CODE_AVAILABILITY: ToolAvailabilityChecks = {
           `Reading the Anthropic API key failed; reporting the environment instead: ${failure.message}`,
         ).pipe(
           withLogChannel(CHANNEL),
-          Effect.as(process.env[anthropicApiKeyEnv] ? 'env' : 'none'),
+          Effect.andThen(envVar(anthropicApiKeyEnv)),
+          Effect.map((value) => (value ? ('env' as const) : ('none' as const))),
         ),
       ),
     );

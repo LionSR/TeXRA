@@ -12,6 +12,7 @@
 import { Effect } from 'effect';
 
 import type { PlatformSecrets, SecretsFailed } from '@platform/secrets';
+import { envVar } from '@utils/system/envFlags';
 
 /** SecretStorage key under which the GitHub PAT is persisted. */
 export const GITHUB_TOKEN_STORAGE_KEY = 'github.token';
@@ -53,28 +54,24 @@ function normalizeGitHubToken(token: string | undefined): string | undefined {
   return trimmed || undefined;
 }
 
-function getGitHubEnvToken(
-  readEnv: (name: string) => string | undefined,
-): string | undefined {
-  for (const envVar of GITHUB_TOKEN_ENV_VARS) {
-    const token = normalizeGitHubToken(readEnv(envVar));
-    if (token) return token;
-  }
-  return undefined;
-}
+/** The first non-blank GitHub token env var, in precedence order. */
+const gitHubEnvToken: Effect.Effect<string | undefined> = Effect.gen(
+  function* () {
+    for (const name of GITHUB_TOKEN_ENV_VARS) {
+      const token = normalizeGitHubToken(yield* envVar(name));
+      if (token) return token;
+    }
+    return undefined;
+  },
+);
 
 export function getGitHubToken(
   secrets: PlatformSecrets,
 ): Effect.Effect<string | undefined, SecretsFailed> {
-  return secrets
-    .get(GITHUB_TOKEN_STORAGE_KEY)
-    .pipe(
-      Effect.map(
-        (stored) =>
-          normalizeGitHubToken(stored) ??
-          getGitHubEnvToken((name) => secrets.getEnv(name)),
-      ),
-    );
+  return Effect.flatMap(secrets.get(GITHUB_TOKEN_STORAGE_KEY), (stored) => {
+    const token = normalizeGitHubToken(stored);
+    return token ? Effect.succeed(token) : gitHubEnvToken;
+  });
 }
 
 /**
@@ -89,10 +86,11 @@ export function getGitHubToken(
 export function resolveGitHubTokenSource(
   secrets: PlatformSecrets,
 ): Effect.Effect<'secret' | 'env' | 'none', SecretsFailed> {
-  return secrets.getStored(GITHUB_TOKEN_STORAGE_KEY).pipe(
-    Effect.map((stored) => {
-      if (normalizeGitHubToken(stored)) return 'secret';
-      return getGitHubEnvToken((name) => secrets.getEnv(name)) ? 'env' : 'none';
-    }),
+  return Effect.flatMap(
+    secrets.getStored(GITHUB_TOKEN_STORAGE_KEY),
+    (stored): Effect.Effect<'secret' | 'env' | 'none'> =>
+      normalizeGitHubToken(stored)
+        ? Effect.succeed('secret')
+        : Effect.map(gitHubEnvToken, (token) => (token ? 'env' : 'none')),
   );
 }

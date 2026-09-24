@@ -6,6 +6,10 @@
  */
 import * as os from 'node:os';
 
+import { Effect } from 'effect';
+
+import { envVar } from '@utils/system/envFlags';
+
 type ElectronProcess = NodeJS.Process & {
   defaultApp?: boolean;
   resourcesPath?: string;
@@ -15,13 +19,22 @@ type ElectronProcess = NodeJS.Process & {
 // reads, so a mutated method would change behavior for all of them (AGENTS.md
 // "Never hand out a shared mutable literal").
 export const nodeHostEnvironment = Object.freeze({
-  hostInfo() {
-    return {
-      platform: process.platform,
-      arch: process.arch,
-      osRelease: os.release(),
-      shell: process.env.SHELL ?? process.env.ComSpec ?? 'unknown',
-    };
+  /** OS, arch and shell; the shell comes from the ambient ConfigProvider. */
+  hostInfo(): Effect.Effect<{
+    platform: NodeJS.Platform;
+    arch: NodeJS.Architecture;
+    osRelease: string;
+    shell: string;
+  }> {
+    return Effect.map(
+      Effect.all([envVar('SHELL'), envVar('ComSpec')]),
+      ([shell, comSpec]) => ({
+        platform: process.platform,
+        arch: process.arch,
+        osRelease: os.release(),
+        shell: shell ?? comSpec ?? 'unknown',
+      }),
+    );
   },
   /**
    * `process.resourcesPath` when running inside a packaged Electron app;

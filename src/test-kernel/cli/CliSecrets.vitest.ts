@@ -7,6 +7,7 @@ import { describe, expect, vi } from 'vitest';
 
 import { CliSecrets, cliSecretsPath } from '@cli/runtime/cliSecrets';
 import { withTempDir, withTempDirEffect } from '@test/support/tempDirPlatform';
+import { withEnv } from '@test/support/testEnv';
 
 async function withSecretsRoot(
   run: (paths: {
@@ -55,7 +56,7 @@ describe('CLI secrets', () => {
           expect(path.dirname(secretsPath)).toBe(storageRoot);
         }),
       );
-    }),
+    }).pipe(withEnv({})),
   );
 
   it.effect(
@@ -98,7 +99,7 @@ describe('CLI secrets', () => {
             expect(yield* secrets.get('ANOTHER_KEY')).toBe('another-value');
           }),
         );
-      }),
+      }).pipe(withEnv({})),
   );
 
   it.effect(
@@ -128,7 +129,7 @@ describe('CLI secrets', () => {
             expect(yield* secrets.get('ORDERED_KEY')).toBe('new-value');
           }),
         );
-      }),
+      }).pipe(withEnv({})),
   );
 
   it.effect(
@@ -171,12 +172,8 @@ describe('CLI secrets', () => {
               // open-time `mkdir`/`chmod` on the read path throws (#8220). Reads must
               // degrade to "nothing stored" and let env vars keep working.
               yield* Effect.promise(() => fs.chmod(root, 0o500));
-              vi.stubEnv('TEXRA_CLI_SECRETS_ENV_ONLY_KEY', 'env-value');
               yield* Effect.addFinalizer(() =>
-                Effect.promise(async () => {
-                  vi.unstubAllEnvs();
-                  await fs.chmod(root, 0o700);
-                }),
+                Effect.promise(() => fs.chmod(root, 0o700)),
               );
 
               const secrets = new CliSecrets(secretsPath);
@@ -194,7 +191,7 @@ describe('CLI secrets', () => {
             }),
           ),
         );
-      }),
+      }).pipe(withEnv({ TEXRA_CLI_SECRETS_ENV_ONLY_KEY: 'env-value' })),
   );
 
   itPosix('restricts the secrets file and its directory to the owner', () =>
