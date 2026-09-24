@@ -12,11 +12,7 @@ import { it } from '@effect/vitest';
 import { Deferred, Effect, Exit, Scope } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
-import {
-  DESKTOP_WORKSPACE_COMMANDS,
-  EMPTY_DESKTOP_ENVIRONMENT_SUMMARY,
-  type DesktopEnvironmentSummary,
-} from '@desktop/shared/desktopWorkspaceMessages';
+import { DESKTOP_WORKSPACE_COMMANDS } from '@desktop/shared/desktopWorkspaceMessages';
 import { createDesktopWorkspaceIpc } from '@desktop/main/desktopWorkspaceIpc';
 import type { DesktopBrowserViews } from '@desktop/main/desktopBrowserViews';
 import type { DesktopPtyHost } from '@desktop/main/desktopPtyHost';
@@ -65,8 +61,6 @@ function createIpc(
     browserViews: createBrowserViews(),
     toWindowBounds: (bounds) => bounds,
     getWorkspacePath: () => workspacePath,
-    getEnvironmentSummary: () =>
-      Effect.succeed(EMPTY_DESKTOP_ENVIRONMENT_SUMMARY),
     onAsyncError: vi.fn(),
     runtime: testRuntime(),
     ...overrides,
@@ -400,38 +394,6 @@ describe('desktop workspace IPC', () => {
         dirty: true,
       }),
     ).toBe(false);
-  });
-
-  it('posts environment state', async () => {
-    const environment: DesktopEnvironmentSummary = {
-      isGitRepository: true,
-      branch: 'feature/ui',
-      upstream: 'origin/feature/ui',
-      changedFiles: 3,
-      additions: 12,
-      deletions: 4,
-      ahead: 1,
-      behind: 0,
-    };
-    const postToRenderer = vi.fn();
-    const success = createIpc(postToRenderer, {
-      getEnvironmentSummary: () => Effect.succeed(environment),
-    });
-
-    const environmentPosted = nextCall(
-      postToRenderer,
-      (message) =>
-        (message as { command?: string }).command ===
-        DESKTOP_WORKSPACE_COMMANDS.ENVIRONMENT_STATE,
-    );
-    success.handleMessage({
-      command: DESKTOP_WORKSPACE_COMMANDS.ENVIRONMENT_REQUEST,
-    });
-    await environmentPosted;
-    expect(postToRenderer).toHaveBeenCalledWith({
-      command: DESKTOP_WORKSPACE_COMMANDS.ENVIRONMENT_STATE,
-      environment,
-    });
   });
 
   it('runs setup commands only after the integrated pty is ready', async () => {

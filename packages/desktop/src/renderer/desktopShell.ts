@@ -47,11 +47,13 @@ interface ShellSidebarModel {
   readonly subagentsOpen: boolean;
   /** Canonical name of the command palette action, from the command catalog. */
   readonly commandsLabel: string;
+  /** The same name with its shortcut, for the tooltip. */
+  readonly commandsTitle: string;
 }
 
 interface ShellSidebarCallbacks {
   onNewTask(): void;
-  onSearch(): void;
+  onOpenCommands(): void;
   onToggleFiles(): void;
   onOpenFolder(): void;
   onSelectProject(key: string): void;
@@ -60,7 +62,6 @@ interface ShellSidebarCallbacks {
   onOpenTerminal(): void;
   onOpenBrowser(): void;
   onOpenSettings(): void;
-  onOpenLogs(): void;
   /** Opens the Subagents tab on the active project's selected family. */
   onOpenSubagents(): void;
 }
@@ -68,6 +69,7 @@ interface ShellSidebarCallbacks {
 function sidebarAction(options: {
   icon: TeXRAIconName;
   label: string;
+  title?: string;
   onClick: () => void;
   primary?: boolean;
 }): TemplateResult {
@@ -78,6 +80,7 @@ function sidebarAction(options: {
       appearance="plain"
       size="s"
       data-primary=${options.primary ? 'true' : 'false'}
+      title=${options.title ?? nothing}
       @click=${options.onClick}
     >
       ${waIcon(options.icon, {
@@ -276,13 +279,6 @@ function projectsSectionsTemplate(
         <span class="shell-sidebar-section-label">
           ${model.projects.length > 1 ? 'Projects' : 'Project'}
         </span>
-        <wa-badge
-          class="shell-sidebar-section-count"
-          variant="neutral"
-          appearance="outlined"
-          pill
-          >${model.projects.length}</wa-badge
-        >
       </div>
       ${model.projects.map((project) => projectSection(project, model, callbacks))}
       <wa-button
@@ -335,15 +331,6 @@ export function shellSidebarTemplate(
       <header class="shell-sidebar-brand">
         <div class="shell-sidebar-logo" aria-hidden="true">T</div>
         <span class="shell-sidebar-product">TeXRA</span>
-        ${renderIconActionButton({
-          id: 'shellSidebarCommands',
-          icon: 'chevron-down',
-          label: model.commandsLabel,
-          tooltip: model.commandsLabel,
-          className: 'shell-sidebar-brand-menu icon-button',
-          size: 's',
-          onClick: callbacks.onSearch,
-        })}
       </header>
 
       <nav class="shell-sidebar-primary" aria-label="Task actions">
@@ -355,8 +342,9 @@ export function shellSidebarTemplate(
         })}
         ${sidebarAction({
           icon: 'magnifying-glass',
-          label: 'Search',
-          onClick: callbacks.onSearch,
+          label: model.commandsLabel,
+          title: model.commandsTitle,
+          onClick: callbacks.onOpenCommands,
         })}
       </nav>
 
@@ -372,11 +360,6 @@ export function shellSidebarTemplate(
           icon: 'globe',
           label: 'Browser',
           onClick: callbacks.onOpenBrowser,
-        })}
-        ${sidebarAction({
-          icon: 'file-lines',
-          label: 'Logs',
-          onClick: callbacks.onOpenLogs,
         })}
         ${sidebarAction({
           icon: 'gear',

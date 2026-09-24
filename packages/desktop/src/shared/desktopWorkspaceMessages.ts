@@ -36,9 +36,6 @@ export const DESKTOP_WORKSPACE_COMMANDS = {
   BROWSER_HIDE: 'desktop:browser:hide',
   BROWSER_CLOSE: 'desktop:browser:close',
   BROWSER_STATE: 'desktop:browser:state',
-  // Environment
-  ENVIRONMENT_REQUEST: 'desktop:environment:request',
-  ENVIRONMENT_STATE: 'desktop:environment:state',
 } as const;
 
 // ── Editor ──
@@ -221,43 +218,6 @@ export const DesktopBrowserStateMessageSchema =
     title: z.string(),
   });
 
-// ── Environment ──
-
-const DesktopEnvironmentRequestMessageSchema =
-  DesktopWorkspaceMessageSchema.extend({
-    command: z.literal(DESKTOP_WORKSPACE_COMMANDS.ENVIRONMENT_REQUEST),
-  });
-
-const DesktopEnvironmentSummarySchema = z.object({
-  isGitRepository: z.boolean(),
-  branch: z.string().optional(),
-  upstream: z.string().optional(),
-  changedFiles: z.int().nonnegative(),
-  additions: z.int().nonnegative(),
-  deletions: z.int().nonnegative(),
-  ahead: z.int().nonnegative(),
-  behind: z.int().nonnegative(),
-});
-
-export type DesktopEnvironmentSummary = z.infer<
-  typeof DesktopEnvironmentSummarySchema
->;
-
-export const EMPTY_DESKTOP_ENVIRONMENT_SUMMARY = {
-  isGitRepository: false,
-  changedFiles: 0,
-  additions: 0,
-  deletions: 0,
-  ahead: 0,
-  behind: 0,
-} satisfies DesktopEnvironmentSummary;
-
-export const DesktopEnvironmentStateMessageSchema =
-  DesktopWorkspaceMessageSchema.extend({
-    command: z.literal(DESKTOP_WORKSPACE_COMMANDS.ENVIRONMENT_STATE),
-    environment: DesktopEnvironmentSummarySchema,
-  });
-
 /** Everything the main process accepts from the renderer. */
 export const DesktopWorkspaceInboundMessageSchema = z.discriminatedUnion(
   'command',
@@ -273,6 +233,5 @@ export const DesktopWorkspaceInboundMessageSchema = z.discriminatedUnion(
     DesktopBrowserBoundsMessageSchema,
     DesktopBrowserHideMessageSchema,
     DesktopBrowserCloseMessageSchema,
-    DesktopEnvironmentRequestMessageSchema,
   ],
 );

@@ -204,17 +204,15 @@ test('opens settings beside the permanent conversation', async () => {
   await expect(page.locator('.shell-conversation')).toBeVisible();
 });
 
-test('toggles and restores the bottom, side, and summary bars', async () => {
+test('toggles and restores the bottom and side bars', async () => {
   const { page } = launched;
 
   await openSidebarWorkbench('Settings');
   const bottomToggle = page.locator('#shellToggleBottomBar');
   const sideToggle = page.locator('#shellToggleSidePanel');
-  const summaryToggle = page.locator('#shellToggleSummaryBar');
 
   await expect(bottomToggle).toHaveAttribute('aria-pressed', 'false');
   await expect(sideToggle).toHaveAttribute('aria-pressed', 'true');
-  await expect(summaryToggle).toHaveAttribute('aria-pressed', 'true');
 
   await bottomToggle.click();
   const bottomWorkbench = page.locator(
@@ -241,12 +239,6 @@ test('toggles and restores the bottom, side, and summary bars', async () => {
   await expect(bottomWorkbench).toBeHidden();
   await expect(bottomToggle).toHaveAttribute('aria-pressed', 'false');
   await expect(page.locator('.shell-sidebar-footer')).toBeVisible();
-
-  await summaryToggle.click();
-  await expect(page.locator('.shell-environment-button')).toHaveCount(0);
-  await expect(summaryToggle).toHaveAttribute('aria-pressed', 'false');
-  await summaryToggle.click();
-  await expect(page.locator('.shell-environment-button')).toBeVisible();
 
   await sideToggle.click();
   await expect(page.locator('.shell-workbench:visible')).toHaveCount(0);
@@ -374,9 +366,6 @@ test('loads tools, centers every compact nav icon, and customizes shortcuts', as
   await expect(
     shortcuts.getByText('Toggle Side Panel', { exact: true }),
   ).toBeVisible();
-  await expect(
-    shortcuts.getByText('Toggle Summary Bar', { exact: true }),
-  ).toBeVisible();
   const recorder = page.locator('shortcuts-tab .shortcut-recorder').first();
   await expect(recorder).toBeVisible();
   await recorder.click();
@@ -394,23 +383,6 @@ test('loads tools, centers every compact nav icon, and customizes shortcuts', as
     page.locator('wa-dialog.desktop-command-palette'),
   ).toHaveJSProperty('open', true);
   await page.keyboard.press('Escape');
-});
-
-test('shows live environment status without duplicate panel actions', async () => {
-  const { page } = launched;
-
-  await page.locator('.shell-environment-button').click();
-  const popover = page.locator('.shell-environment-popover');
-  await expect(popover).toBeVisible();
-  await expect(popover).toContainText('Environment');
-  await expect(popover).toContainText('Changes');
-  await expect(popover).toContainText('Background terminal');
-  await expect(popover).toContainText('No open sources');
-  await expect(popover.locator('wa-button')).toHaveCount(1);
-  await expect(
-    popover.locator('.shell-environment-refresh'),
-  ).not.toBeDisabled();
-  await page.locator('.shell-environment-button').click();
 });
 
 test('loads a workspace file into the Monaco editor workbench', async () => {
