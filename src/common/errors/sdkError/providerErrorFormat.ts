@@ -574,7 +574,12 @@ export interface ModelRouteVerdict {
    * a rate limit without an explicit model scope — that one uses its own
    * recovery scope.
    * Retryable failures outside this set (e.g. 409 conflicts) stay node-local —
-   * a conflict does not imply the route is unhealthy.
+   * a conflict does not imply the route is unhealthy. This is a third,
+   * deliberately distinct transient-status policy alongside
+   * `isTransientHttpStatus` (`utils/core/httpStatus.ts`) and
+   * `isRetryableStatusCode` (`sdkErrorKinds.ts` in this directory): both of
+   * those treat a 409 as retryable at the request level, but a route-level
+   * verdict must not, for the reason above.
    */
   readonly wireRouteFailure: boolean;
   /** `retry-after` / `retry-after-ms` guidance from the cause chain's headers. */
