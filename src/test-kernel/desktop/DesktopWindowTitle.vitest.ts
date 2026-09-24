@@ -70,6 +70,7 @@ function installTitle(
       window as unknown as Parameters<typeof installDesktopWindowTitle>[0],
       session,
       workspacePath,
+      () => true,
     ).pipe(Scope.provide(scope)),
   );
   return () => {

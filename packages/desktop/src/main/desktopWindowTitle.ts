@@ -38,19 +38,23 @@ export function getDesktopWindowTitle(
 
 /**
  * Keep one BrowserWindow title synchronized with its session's view, for as
- * long as the enclosing scope is open. Renderer page titles are presentation
- * content and cannot replace this host-owned projection.
+ * long as the enclosing scope is open and `isCurrent` holds. Renderer page
+ * titles are presentation content and cannot replace this host-owned
+ * projection. `isCurrent` is the owner's synchronous check: a project switch
+ * forks the old scope's close, so until that close runs, only this check
+ * keeps the old session's stream from writing over the new project's title.
  */
 export function installDesktopWindowTitle(
   window: DesktopTitleWindow,
   session: DesktopTitleSession,
   workspacePath: string | undefined,
+  isCurrent: () => boolean,
 ): Effect.Effect<void, never, Scope.Scope> {
   return Effect.gen(function* () {
     let currentTitle = window.getTitle();
     let disposed = false;
     const update = (): void => {
-      if (disposed || window.isDestroyed()) return;
+      if (disposed || !isCurrent() || window.isDestroyed()) return;
       const title = getDesktopWindowTitle(session, workspacePath);
       if (title === currentTitle) return;
       currentTitle = title;
@@ -72,8 +76,7 @@ export function installDesktopWindowTitle(
       Effect.forkScoped({ startImmediately: true }),
     );
     // Registered after the fork, so the scope's close runs this first and
-    // synchronously: a project switch cannot let the old session's stream
-    // write its title over the new one while that fiber is interrupted.
+    // synchronously, before that fiber is interrupted.
     yield* Effect.acquireRelease(
       Effect.sync(() => {
         window.webContents.on('page-title-updated', preventRendererTitle);

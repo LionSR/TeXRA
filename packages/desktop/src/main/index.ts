@@ -1375,14 +1375,22 @@ function createWindow(options: {
                 }),
               catch: ensureError,
             }).pipe(
-              Effect.map((result) => {
-                if (result.response === 0) clipboard.writeText(url);
-              }),
+              Effect.flatMap((result) =>
+                result.response === 0
+                  ? Effect.try({
+                      try: () => clipboard.writeText(url),
+                      catch: ensureError,
+                    })
+                  : Effect.void,
+              ),
             ),
           presentSubscriptionDeviceCode: (prompt, productName) =>
             Effect.gen(function* () {
               // Copied up front: the dialog closes on any button.
-              clipboard.writeText(prompt.userCode);
+              yield* Effect.try({
+                try: () => clipboard.writeText(prompt.userCode),
+                catch: ensureError,
+              });
               const result = yield* Effect.tryPromise({
                 try: () =>
                   dialog.showMessageBox(window, {
@@ -1477,10 +1485,16 @@ function createWindow(options: {
         session: project.session,
         runtime,
       }).pipe(
-        // Last, so the scope's close stops the title before the old
-        // session's stream can write over the new project's.
+        // Gated on the same owner check as `postForActiveProject`: the old
+        // scope's close is forked, so the switch itself must stop the old
+        // title synchronously.
         Effect.tap(() =>
-          installDesktopWindowTitle(window, project.session, project.root),
+          installDesktopWindowTitle(
+            window,
+            project.session,
+            project.root,
+            () => projectScope === owner,
+          ),
         ),
         Scope.provide(owner),
       ),
