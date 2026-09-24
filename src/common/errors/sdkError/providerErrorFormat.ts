@@ -573,7 +573,7 @@ export interface ModelRouteVerdict {
    * credential + endpoint): a transport failure, a 5xx/408 server failure, or
    * a rate limit without an explicit model scope — that one uses its own
    * recovery scope.
-   * Retryable failures outside this set (e.g. 409 conflicts) stay node-local —
+   * A 409, retryable per request by `isRetryableStatusCode`, stays node-local:
    * a conflict does not imply the route is unhealthy.
    */
   readonly wireRouteFailure: boolean;
