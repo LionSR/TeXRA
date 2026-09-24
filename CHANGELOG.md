@@ -173,7 +173,11 @@ All notable changes to this project will be documented in this file.
 
 - **Fewer chat slash commands** — `/api`, `/auth` and `/logout` fold into
   `/login`, whose form already signed you in and out and set subscription
-  preferences; `/login status` prints what `/auth` did. `/yolo` and `/goal`
+  preferences; `/login status` prints what `/auth` did. The typed
+  preference shortcuts `/api chatgpt`, `/api grok`, `/api kimi-code` and
+  `/api glm-code` are gone with it: set which subscription serves a
+  provider's models from the `/login` form or `/config`. `/login chatgpt` and
+  `/login grok` still sign in. `/yolo` and `/goal`
   fold into `/approval`, which also gains per-session **Auto-approve
   commands** and **Auto-approve edits** toggles (the same grant as answering
   a prompt with "approve for session"). `/tools` lives under `/config` →
