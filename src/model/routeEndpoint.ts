@@ -60,7 +60,7 @@ export function resolveRouteEndpoint(
       return { baseUrl: `https://${normalizeProviderEndpoint(customUrl)}` };
     }
     const baseUrl = findModelProviderPlugin(config.provider)?.baseUrl;
-    if (baseUrl === undefined) {
+    if (baseUrl == null) {
       throw new Error(
         `Model ${config.name} has no HTTP endpoint for provider ${config.provider}.`,
       );

@@ -78,9 +78,11 @@ interface ModelProviderPlugin {
   readonly region?: ProviderRegionSetting;
   /**
    * Default HTTP base URL, or a China/international pair chosen by the
-   * region toggle. Absent: the provider has no HTTP route of its own.
+   * region toggle. `null`: an llm-zoo provider with no HTTP route of its
+   * own (checked below, so a dropped endpoint is a compile error). Absent:
+   * a plugin outside llm-zoo's `ModelProvider` (`openRouter`, `kimiCode`).
    */
-  readonly baseUrl?: string | RegionalBaseUrl;
+  readonly baseUrl?: string | RegionalBaseUrl | null;
   /** Conversation format a direct route to this provider binds under. */
   readonly compatibilityKey?: ModelCompatibilityKey;
   /** Model the setup assistant probes when this is the only credential. */
@@ -297,12 +299,14 @@ const MANIFEST = [
   {
     id: 'copilot',
     displayName: 'Copilot',
+    baseUrl: null,
     compatibilityKey: 'VscodeLm',
     modelSource: true,
   },
   {
     id: 'others',
     displayName: 'Others',
+    baseUrl: null,
     compatibilityKey: 'OpenRouterNative',
   },
 ] as const satisfies readonly ModelProviderPlugin[];
@@ -338,5 +342,16 @@ type _EveryModelProviderHasACompatibilityKey = AssertNever<
       ModelProviderPluginEntry,
       { readonly compatibilityKey: string }
     >['id']
+  >
+>;
+
+/**
+ * Every llm-zoo provider states its default endpoint, `null` when it has no
+ * HTTP route; the error names the provider ids that state none.
+ */
+type _EveryModelProviderStatesABaseUrl = AssertNever<
+  Exclude<
+    `${ModelProvider}`,
+    Extract<ModelProviderPluginEntry, { readonly baseUrl: unknown }>['id']
   >
 >;
