@@ -64,17 +64,16 @@ export function ModelListForm(props: ModelListFormProps): React.JSX.Element {
     title: '/model',
     loadingLabel: 'Loading models...',
     load: () =>
-      props.stores.runtime.runPromise(
-        Effect.flatMap(
-          getCliModelAccessList({ stores: props.stores }),
-          (models) =>
-            modelSelectItemsForCli(
-              props.stores,
-              models,
-              props.getModelSwitchDisabledReason,
-            ),
-        ),
+      Effect.flatMap(
+        getCliModelAccessList({ stores: props.stores }),
+        (models) =>
+          modelSelectItemsForCli(
+            props.stores,
+            models,
+            props.getModelSwitchDisabledReason,
+          ),
       ),
+    runtime: props.stores.runtime,
     isEmpty: (items) => items.length === 0,
     closeEmptyOnEnter: true,
     items: (items) => items,

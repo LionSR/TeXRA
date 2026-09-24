@@ -11,9 +11,7 @@ import {
 } from '@cli/runtime/enabledModels';
 import type { StateStore } from '@platform/interfaces';
 import type { ProcessRuntime } from '@platform/processRuntime';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 
-import { setTransientNotice } from '../state/cliState';
 import { AsyncListForm } from './_shared/ListForm';
 
 interface EnabledModelsFormProps {
@@ -45,9 +43,8 @@ export function EnabledModelsForm(
       title="/models"
       compactTitle="/models · Enable models that appear in pickers."
       loadingLabel="Loading models..."
-      load={() =>
-        props.runtime.runPromise(listCliEnabledModelCatalog(props.state))
-      }
+      load={() => listCliEnabledModelCatalog(props.state)}
+      runtime={props.runtime}
       items={(models) =>
         models.map((model) => ({
           value: model.id,
@@ -64,16 +61,11 @@ export function EnabledModelsForm(
       }
       action="toggle"
       showTransientCloseHint={false}
-      onSelect={(id, { data: models, reload }) => {
+      onSelect={(id, { data: models, update }) => {
         const row = models.find((candidate) => candidate.id === id);
-        if (!row) return;
-        void props.runtime
-          .runPromise(setCliModelEnabled(props.state, id, !row.enabled))
-          .then(reload)
-          .catch((error: unknown) => {
-            // e.g. disabling the last remaining model — keep the catalog as-is.
-            setTransientNotice(toErrorMessage(error));
-          });
+        // A refused write (e.g. disabling the last remaining model) keeps the
+        // catalog as-is.
+        if (row) update(setCliModelEnabled(props.state, id, !row.enabled));
       }}
       onCancel={props.onClose}
     />

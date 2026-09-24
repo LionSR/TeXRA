@@ -96,19 +96,18 @@ export function SkillsListForm(props: SkillsListFormProps): React.JSX.Element {
       title="/skills"
       loadingLabel="Loading skills..."
       load={() =>
-        props.runtime.runPromise(
-          Effect.gen(function* () {
-            const result = yield* loadEnabledRuntimeSkills(
-              props.workspaceRoot,
-              props.stores,
-            );
-            return {
-              ...result,
-              disabled: yield* readDisabledSkills(props.stores),
-            };
-          }),
-        )
+        Effect.gen(function* () {
+          const result = yield* loadEnabledRuntimeSkills(
+            props.workspaceRoot,
+            props.stores,
+          );
+          return {
+            ...result,
+            disabled: yield* readDisabledSkills(props.stores),
+          };
+        })
       }
+      runtime={props.runtime}
       items={(result) => skillSelectItemsForTui(result.skills, result.disabled)}
       isEmpty={(result) => result.skills.length === 0}
       availableRows={props.availableRows}

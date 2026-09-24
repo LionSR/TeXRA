@@ -4,6 +4,7 @@
 // copied verbatim across every list form; it lives here once.
 
 import { useInput } from 'ink';
+import { Cause, Effect } from 'effect';
 import { useCallback, useState } from 'react';
 
 import {
@@ -12,6 +13,8 @@ import {
   type ReturnKeyInput,
 } from '@cli/tui/inputKeys';
 import { useCancellableEffect } from '@cli/tui/useCancellableEffect';
+import { setTransientNotice } from '@cli/chat/tui/state/cliState';
+import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 interface AsyncListFormState<T> {
@@ -38,11 +41,16 @@ interface AsyncListFormState<T> {
    * used by load failures.
    */
   readonly reportError: (error: unknown) => void;
+  /** Run a write, then {@link reload}; a failed write becomes a transient
+   *  notice and leaves the loaded data as it is. */
+  readonly update: (write: Effect.Effect<void, Error, ProcessServices>) => void;
 }
 
 interface UseAsyncListFormOptions<T> {
-  /** Loads the form's data once on mount. */
-  readonly load: () => Promise<T>;
+  /** Loads the form's data once on mount, as a program the hook runs. */
+  readonly load: () => Effect.Effect<T, Error, ProcessServices>;
+  /** The runtime the load and every write settle on. */
+  readonly runtime: ProcessRuntime;
   /** Close handler invoked when `Esc` is pressed in a non-actionable state. */
   readonly onClose: () => void;
   /**
@@ -116,7 +124,7 @@ export function useAsyncListForm<T>(
   const [pendingInput, setPendingInput] = useState<string | undefined>();
   const clearPendingInput = useCallback(() => setPendingInput(undefined), []);
 
-  const { load, onError } = options;
+  const { load, runtime, onError } = options;
 
   const reportError = useCallback(
     (err: unknown) => {
@@ -148,32 +156,53 @@ export function useAsyncListForm<T>(
     }
   });
 
-  const reload = useCallback(() => {
-    setError(undefined);
-    void load()
-      .then((result) => {
-        setData(result);
-      })
-      .catch(reportError);
-  }, [load, reportError]);
-
-  useCancellableEffect(
-    (isCancelled) => {
-      void load()
-        .then((result) => {
-          if (isCancelled()) return;
-          setData(result);
-          setLoading(false);
-        })
-        .catch((err: unknown) => {
-          if (isCancelled()) return;
-          reportError(err);
-          setLoading(false);
-        });
-    },
-    // Load once on mount, matching the original per-form `useEffect(..., [])`.
-    [],
+  // The load as a program that settles into the form state and recovers from
+  // its whole cause: the mount runs it, `reload` re-runs it, and `update`
+  // sequences it after a write in the same run.
+  const settleLoad = useCallback(
+    (isCancelled: () => boolean) =>
+      Effect.suspend(() => {
+        setError(undefined);
+        return load();
+      }).pipe(
+        Effect.matchCause({
+          onSuccess: (result) => {
+            if (isCancelled()) return;
+            setData(result);
+            setLoading(false);
+          },
+          onFailure: (cause) => {
+            if (isCancelled()) return;
+            reportError(Cause.squash(cause));
+            setLoading(false);
+          },
+        }),
+      ),
+    [load, reportError],
   );
+
+  const reload = useCallback(() => {
+    void runtime.runPromise(settleLoad(() => false));
+  }, [runtime, settleLoad]);
+
+  const update = (write: Effect.Effect<void, Error, ProcessServices>): void => {
+    void runtime.runPromise(
+      write.pipe(
+        Effect.matchCauseEffect({
+          onSuccess: () => settleLoad(() => false),
+          onFailure: (cause) =>
+            Effect.sync(() =>
+              setTransientNotice(toErrorMessage(Cause.squash(cause))),
+            ),
+        }),
+      ),
+    );
+  };
+
+  // Load once on mount, matching the original per-form `useEffect(..., [])`.
+  useCancellableEffect((isCancelled) => {
+    void runtime.runPromise(settleLoad(isCancelled));
+  }, []);
 
   return {
     data,
@@ -183,5 +212,6 @@ export function useAsyncListForm<T>(
     clearPendingInput,
     reload,
     reportError,
+    update,
   };
 }

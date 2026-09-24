@@ -2,6 +2,7 @@
 // first message, tool-use agents can be chosen as the root chat agent.
 
 import { Box, Text } from 'ink';
+import { Effect } from 'effect';
 
 import { computeAgentOptionsData, type AgentRosterStores } from '@agent/index';
 import { Select } from '@cli/tui/ui/Select';
@@ -149,12 +150,12 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
   const picker = useAsyncPickerForm<AgentGroups, string>({
     title: '/agent',
     loadingLabel: 'Loading agents...',
-    load: async () => {
-      const options = await props.runtime.runPromise(
+    load: () =>
+      Effect.map(
         computeAgentOptionsData(props.stores),
-      );
-      return { toolUse: options.toolUse, workflow: options.workflow };
-    },
+        ({ toolUse, workflow }) => ({ toolUse, workflow }),
+      ),
+    runtime: props.runtime,
     isEmpty: (groups) => groups.toolUse.length === 0,
     closeEmptyOnEnter: true,
     items: (groups) =>
