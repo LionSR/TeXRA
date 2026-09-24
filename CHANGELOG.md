@@ -230,7 +230,8 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
   and one ⋯ menu instead of two stacked headers. A new project shows one
   card at a time (setup, then "No LaTeX files yet") and at most one warning
   above the composer; the "TeXRA account — Sign in" card is gone (sign in
-  from Settings). The run header's AUTO-EDIT, AUTO-BASH and AUTO-TASK
+  from Settings). A missing tool is named in one sentence that says what
+  TeXRA can't do without it. The run header's AUTO-EDIT, AUTO-BASH and AUTO-TASK
   toggles are replaced by an "Auto-approving …" chip that appears only while
   a grant from an approval card is on; click it to go back to asking. Open
   dashboard and Attach TeX Count left the ⋯ menu (the gear and the Input
@@ -247,7 +248,6 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
   default.** The field used to go blank while the old value stayed in use.
 - **The selected session row is readable on desktop.** It drew dark text on
   a black background.
-
 - **Cancelling TeXRA sign-in no longer counts as signing in.** In a
   single-folder window, the sign-in prompt that setup, a team launch or the
   remote agent catalog opens reported success even when you closed it without

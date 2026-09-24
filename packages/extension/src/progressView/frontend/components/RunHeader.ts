@@ -44,8 +44,8 @@ import {
   getProgressBadgeTitle,
 } from '../formatters/progressBadgeFormatter';
 
-/** A window-level item the shell appends to the run's menu, under a
- *  divider: pop out, LaTeXDiffs, figures. */
+/** A window-level item the shell appends to the run's menu: pop out,
+ *  LaTeXDiffs, figures. */
 export interface HeaderMenuItem {
   readonly value: string;
   readonly icon: TeXRAIconName;
@@ -151,7 +151,7 @@ function enabledRunActions(
  * shell slots its own controls around it (the Sessions button at `start`,
  * New task at `end`), so a run never shows two rows of chrome: path and
  * title, status, time, an active run grant, Stop, and one menu holding the
- * run's actions and, under a divider, the shell's window items.
+ * run's actions, the shell's window items, and last, Delete session.
  */
 @customElement('run-header')
 export class RunHeader extends LitElement {
@@ -328,7 +328,7 @@ export class RunHeader extends LitElement {
   @property({ attribute: false }) run: RunView | null = null;
   /** For the per-run policy snapshot behind the grant chip. */
   @property({ attribute: false }) view: SessionView | null = null;
-  /** The shell's window items, under a divider in the run's menu. */
+  /** The shell's window items, after the run's actions in its menu. */
   @property({ attribute: false }) menuItems: readonly HeaderMenuItem[] = [];
 
   /** The delete item was chosen; the row asks before it acts. */
@@ -508,26 +508,21 @@ export class RunHeader extends LitElement {
             >`;
           },
         )}
+        ${repeat(
+          this.menuItems,
+          (item) => item.value,
+          (item) =>
+            html`<wa-dropdown-item value=${item.value}
+              >${waIcon(item.icon, { slot: 'icon' })}${item.label}</wa-dropdown-item
+            >`,
+        )}
         ${
           canDelete
-            ? html`<wa-dropdown-item value=${DELETE_SESSION} variant="danger"
-                >${waIcon('trash', { slot: 'icon' })}Delete
-                session…</wa-dropdown-item
-              >`
-            : nothing
-        }
-        ${
-          this.menuItems.length > 0
-            ? html`<wa-divider></wa-divider>${repeat(
-                  this.menuItems,
-                  (item) => item.value,
-                  (item) =>
-                    html`<wa-dropdown-item value=${item.value}
-                      >${waIcon(item.icon, { slot: 'icon' })}${
-                        item.label
-                      }</wa-dropdown-item
-                    >`,
-                )}`
+            ? html`<wa-divider></wa-divider
+                ><wa-dropdown-item value=${DELETE_SESSION} variant="danger"
+                  >${waIcon('trash', { slot: 'icon' })}Delete
+                  session…</wa-dropdown-item
+                >`
             : nothing
         }
       </wa-dropdown>

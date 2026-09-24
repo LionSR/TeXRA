@@ -69,8 +69,8 @@ The header provides a summary and actions for the selected stream:
 - **Token and cost summary**: Displays the combined input and output token counts from all completed rounds (e.g., `r0`, `r1`, `r2`, …) along with the estimated cost.
 - **One header row**: the Sessions button, the run's title, its status and
   time, **Stop** while it runs, **New task**, and one **More** menu (⋯).
-  The menu holds the run's actions and, under a divider, Open sessions in
-  editor, LaTeXDiffs, and Figures. Workflow runs offer Run again from
+  The menu holds the run's actions, then Open sessions in editor,
+  LaTeXDiffs, and Figures. Workflow runs offer Run again from
   scratch, Resume, Edit as new task, Open run folder, Export, Copy run
   context, latexdiff, Archive outputs, and Delete output files; tool-use
   runs offer Compact, Edit as new task, Open run folder, and Export. Export
