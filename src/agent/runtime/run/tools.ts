@@ -37,11 +37,73 @@ export function toolDefinitionsFor(
   }));
 }
 
+/** Keywords whose value is one schema, or an array of schemas. */
+const SUBSCHEMA_KEYWORDS: ReadonlySet<string> = new Set([
+  'items',
+  'prefixItems',
+  'additionalProperties',
+  'additionalItems',
+  'unevaluatedProperties',
+  'unevaluatedItems',
+  'contains',
+  'contentSchema',
+  'propertyNames',
+  'not',
+  'if',
+  'then',
+  'else',
+  'anyOf',
+  'oneOf',
+  'allOf',
+]);
+
+/** Keywords whose value maps a name to a schema: keys are data, kept as is. */
+const SCHEMA_MAP_KEYWORDS: ReadonlySet<string> = new Set([
+  'properties',
+  '$defs',
+  'definitions',
+  'patternProperties',
+  'dependentSchemas',
+  'dependencies',
+]);
+
+const isPlainObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+/**
+ * A JSON Schema node with the `description` keyword dropped at every schema
+ * position. It walks keywords, not keys: a property named `description` is a
+ * name in a `properties` map and stays, and `enum`/`const`/`default` values
+ * are data and are not entered.
+ */
+function withoutSchemaDescriptions(node: unknown): unknown {
+  if (Array.isArray(node)) return node.map(withoutSchemaDescriptions);
+  if (!isPlainObject(node)) return node;
+  const out: Record<string, unknown> = {};
+  for (const [keyword, value] of Object.entries(node)) {
+    if (keyword === 'description') continue;
+    if (SUBSCHEMA_KEYWORDS.has(keyword)) {
+      out[keyword] = withoutSchemaDescriptions(value);
+    } else if (SCHEMA_MAP_KEYWORDS.has(keyword) && isPlainObject(value)) {
+      out[keyword] = Object.fromEntries(
+        Object.entries(value).map(([name, schema]) => [
+          name,
+          withoutSchemaDescriptions(schema),
+        ]),
+      );
+    } else {
+      out[keyword] = value;
+    }
+  }
+  return out;
+}
+
 /**
  * The toolset a tool-use run records at open: the offered names in offer
  * order, and a sha256 over the canonical (key-sorted) JSON of each offered
- * name and input schema. Descriptions are left out: delegation annotations
- * rewrite them between launches without changing what a call may carry.
+ * name and input schema. Every description is left out, the tool's own and
+ * each schema node's: delegation annotations and plugin docs rewrite them
+ * between launches without changing what a call may carry.
  */
 export function offeredToolset(definitions: readonly ToolDefinition[]): {
   readonly offeredTools: readonly string[];
@@ -50,7 +112,7 @@ export function offeredToolset(definitions: readonly ToolDefinition[]): {
   const offered = toolDefinitionsFor(definitions);
   const canonical = offered.map(({ name, parameters }) => ({
     name,
-    parameters,
+    parameters: withoutSchemaDescriptions(parameters),
   }));
   return {
     offeredTools: offered.map(({ name }) => name),
