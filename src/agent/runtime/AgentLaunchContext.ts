@@ -313,12 +313,13 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
 
     // Block category mismatch: prevent launching a tool-use agent as a workflow
     // (or vice versa). Category-scoped resolution already lands on an entry of
-    // the requested category, so this catches only the residual case the
-    // registry's pre-merge category can't see (and the category-blind pinned
-    // tier): a child agent that `inherits` a parent of the other category
-    // resolves with the scanner's pre-merge category but loads a post-merge
-    // `setting.agentCategory` that differs. Enforced only when the caller opts
-    // in, which each caller does when the category is one it asked for.
+    // the requested category, so this catches only what the registry's
+    // pre-merge category can't see: a child agent that `inherits` a parent of
+    // the other category resolves with the scanner's pre-merge category but
+    // loads a post-merge `setting.agentCategory` that differs, and a pinned
+    // `agentSource` (category-blind) read from a run record. Enforced only when
+    // the caller opts in: chat root runs, the CLI, subagents and resume do; a
+    // fresh host launch runs under the loaded setting's category.
     if (
       input.enforceCategory &&
       fullConfig.agentCategory !== setting.agentCategory

@@ -173,6 +173,15 @@ describe('cross-category agent resolution', () => {
           'remote',
         );
         expect(stale?.source).toBe('builtInToolUse');
+
+        // A `source:name` key of the other category is no match: only an
+        // explicit `source` pins category-blind.
+        const crossCategory = yield* resolveAgentForLaunch(
+          hostStores(),
+          AgentCategory.ToolUse,
+          'custom:assistant',
+        );
+        expect(crossCategory).toBeUndefined();
       }),
   );
 

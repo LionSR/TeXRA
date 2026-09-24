@@ -92,10 +92,9 @@ export function missingMultiAgentPresetMessage(name: string): string {
 
 /**
  * Resolve an identifier the way launch resolves it, scoped to `category`: a
- * `source:name` identifier pins its entry even when a higher-priority source
- * shadows the name. Returns undefined when the identifier resolves outside
- * `category`, including through the pinned tier, which is category-blind by
- * design.
+ * `source:name` identifier lands on its exact entry even when a higher-priority
+ * source shadows the name. Returns undefined when the identifier resolves
+ * outside `category`.
  */
 export function resolveCliAgentInCategory(
   stores: AgentRosterStores,

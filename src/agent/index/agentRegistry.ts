@@ -445,10 +445,12 @@ export function getCategoryAgent(
 
 /** Resolve a launch by pinned source, visible roster, then full category.
  * Each tier runs only when the preceding one has no match, preserving the
- * exact agent chosen during validation even when visibility changes. The
- * source is pinned either by `source` or by a `source:name` identifier; the
- * pinned tier is category-blind, so a caller that requires a category checks
- * the returned entry.
+ * exact agent chosen during validation even when visibility changes. Only an
+ * explicit `source` (a run record's decided identity) pins, and that tier is
+ * category-blind, so a caller that requires a category checks the returned
+ * entry. A `source:name` identifier resolves through the category-scoped
+ * tiers, which match its exact entry even when a higher-priority source
+ * shadows the name, and never answer with an entry of the other category.
  */
 export function resolveAgentForLaunch(
   stores: AgentRosterStores,
@@ -457,11 +459,10 @@ export function resolveAgentForLaunch(
   source?: AgentSource | null,
 ) {
   return Effect.gen(function* () {
-    const pinnedKey = source
-      ? agentKey(source, agentName(identifier))
-      : identifier !== agentName(identifier) && identifier;
     return (
-      (pinnedKey ? cache.get(pinnedKey) : undefined) ??
+      (source
+        ? cache.get(agentKey(source, agentName(identifier)))
+        : undefined) ??
       (yield* getVisibleAgent(stores, category, identifier)) ??
       getCategoryAgent(category, identifier)
     );
