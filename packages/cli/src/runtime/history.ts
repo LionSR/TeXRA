@@ -1,7 +1,6 @@
-import { readFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
-import { Effect, Result, Stream } from 'effect';
+import { Effect, FileSystem, PlatformError, Result, Stream } from 'effect';
 
 import {
   checkpointExists,
@@ -15,7 +14,6 @@ import {
 import type { AgentConfig, SessionHandle } from '@agent/runtime';
 import { loadChatExportInput, type ChatExportInput } from '@agent/export';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
-import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
 import { redactDisplayValue } from '@logger/redaction';
 import {
   RunIdSchema,
@@ -37,9 +35,11 @@ import {
   readCompletedRunConversation,
 } from '@transcript';
 import { byStringProp } from '@utils/core';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { toErrorMessage } from '@utils/errors/errorMessage';
+import { absentReason } from '@utils/files/fsEntryExists';
 
 import { CliUsageError } from './cliContext';
+import { cliErrorMessage } from './logSinks';
 import { cliRunStanding, readCliResumedModel } from './toolUseResumeData';
 import {
   formatCliHistoryAgentLabel,
@@ -325,32 +325,30 @@ const TRACE_VIEWER_DIR_NAME = 'traceViewer';
 /**
  * Read the trace-viewer's single-file default bundle — one self-contained
  * `index.html` with no external `assets/` (JS/CSS/fonts all inlined) so the
- * default export opens correctly via `file://` with no server. Returns `null`
- * (without throwing) only when the template is absent — e.g. a dev checkout
- * where `packages/trace-viewer` hasn't been built — so the caller can report a
- * clear error instead of an ENOENT stack trace. Any other read failure
- * (EACCES, a transient I/O error) is a different problem and must not be
- * reported as "rebuild the CLI", so it surfaces as a usage error naming the
- * real cause.
+ * default export opens correctly via `file://` with no server. Succeeds with
+ * `null` only when the template is absent — e.g. a dev checkout where
+ * `packages/trace-viewer` hasn't been built — so the caller can report a clear
+ * error instead of an ENOENT stack trace. Any other read failure (EACCES, a
+ * transient I/O error) is not "rebuild the CLI", so it fails as a usage error
+ * naming the real cause.
  */
 export function readCliHistoryStandaloneTemplate(
   resourcesPath: string,
-): Effect.Effect<string | null, CliUsageError> {
+): Effect.Effect<string | null, CliUsageError, FileSystem.FileSystem> {
   const templatePath = path.join(
     resourcesPath,
     TRACE_VIEWER_DIR_NAME,
     'index.html',
   );
-  return Effect.tryPromise({
-    try: () => readFile(templatePath, 'utf8'),
-    catch: ensureError,
-  }).pipe(
-    Effect.catch((error) =>
-      isFileNotFoundError(error) || isNotADirectoryError(error)
+  return FileSystem.FileSystem.use((fs) =>
+    fs.readFileString(templatePath),
+  ).pipe(
+    Effect.catch((error: PlatformError.PlatformError) =>
+      absentReason(error)
         ? Effect.succeed(null)
         : Effect.fail(
             new CliUsageError(
-              `history export: cannot read ${templatePath}: ${toErrorMessage(error)}`,
+              `history export: cannot read ${templatePath}: ${cliErrorMessage(error)}`,
             ),
           ),
     ),

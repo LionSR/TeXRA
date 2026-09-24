@@ -7,6 +7,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 import { Effect } from 'effect';
 import { it } from '@effect/vitest';
+import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import {
   createTestSession,
@@ -1103,7 +1104,7 @@ describe('CLI history runtime', () => {
         expect(yield* readCliHistoryStandaloneTemplate(resourcesPath)).toBe(
           '<html>standalone</html>',
         );
-      }),
+      }).pipe(Effect.provide(nodePlatformLayer)),
     );
 
     it.live(
@@ -1117,7 +1118,7 @@ describe('CLI history runtime', () => {
           expect(
             yield* readCliHistoryStandaloneTemplate(resourcesPath),
           ).toBeNull();
-        }),
+        }).pipe(Effect.provide(nodePlatformLayer)),
     );
 
     describe('runHistoryExport html', () => {
@@ -1173,7 +1174,7 @@ describe('CLI history runtime', () => {
               }),
               'a1a1a1' as RunId,
               'html',
-            );
+            ).pipe(Effect.provide(nodePlatformLayer));
 
             expect(exitCode).toBe(CliExitCode.Usage);
             expect(stdout).toBe('');

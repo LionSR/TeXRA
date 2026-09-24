@@ -4,8 +4,8 @@ import path, { join } from 'node:path';
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Effect } from 'effect';
-import { afterEach, describe, expect, vi } from 'vitest';
+import { Effect, FileSystem, PlatformError } from 'effect';
+import { describe, expect } from 'vitest';
 
 // Local imports
 import {
@@ -16,24 +16,14 @@ import {
 } from '@cli/runtime/initConfig';
 import { setWorkspaceCliChatAgent } from '@cli/runtime/cliConfig';
 import { workspaceTexraConfigPath } from '@platform/defaults/nodeStorage';
+import { errnoError, nodePlatformLayer } from '@test/support/fsTestUtils';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { FakeConfigProvider } from '@test/support/FakePlatform';
 import { installPlatform } from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { readSettingFrom } from '@utils/config/platformSettings';
 
-vi.mock('node:fs/promises', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('node:fs/promises')>();
-  return { ...actual, readFile: vi.fn(actual.readFile) };
-});
-
-const mockedReadFile = vi.mocked(nodeReadFile);
-
 const tempDirs = useTempDirs();
-
-afterEach(async () => {
-  mockedReadFile.mockClear();
-});
 
 const ANSWERS: InitAnswers = {
   agent: 'chat',
@@ -50,7 +40,9 @@ describe('writeInitConfig', () => {
       );
       const configPath = workspaceTexraConfigPath(workspace);
 
-      yield* writeInitConfig(configPath, buildInitConfig(ANSWERS));
+      yield* writeInitConfig(configPath, buildInitConfig(ANSWERS)).pipe(
+        Effect.provide(nodePlatformLayer),
+      );
 
       const text = yield* Effect.promise(() =>
         nodeReadFile(configPath, 'utf8'),
@@ -153,7 +145,9 @@ describe('ensureTexraGitignored', () => {
       if (existing !== undefined)
         yield* Effect.promise(() => writeFile(gitignorePath, existing, 'utf8'));
 
-      const result = yield* ensureTexraGitignored(workspace);
+      const result = yield* ensureTexraGitignored(workspace).pipe(
+        Effect.provide(nodePlatformLayer),
+      );
       expect(result).toBe(outcome);
       const text = yield* Effect.promise(() =>
         nodeReadFile(gitignorePath, 'utf8'),
@@ -175,15 +169,24 @@ describe('ensureTexraGitignored', () => {
         writeFile(gitignorePath, 'node_modules\ndist\n', 'utf8'),
       );
 
-      const eacces = Object.assign(new Error('EACCES: permission denied'), {
-        code: 'EACCES',
-      });
-      mockedReadFile.mockImplementationOnce(async () => {
-        throw eacces;
+      const denied = PlatformError.systemError({
+        _tag: 'PermissionDenied',
+        module: 'FileSystem',
+        method: 'readFile',
+        pathOrDescriptor: gitignorePath,
+        cause: errnoError('EACCES', 'EACCES: permission denied'),
       });
 
-      const error = yield* Effect.flip(ensureTexraGitignored(workspace));
-      expect(error).toBe(eacces);
+      const error = yield* Effect.flip(
+        ensureTexraGitignored(workspace).pipe(
+          Effect.provide(
+            FileSystem.layerNoop({
+              readFileString: () => Effect.fail(denied),
+            }),
+          ),
+        ),
+      );
+      expect(error).toBe(denied);
 
       // Original content survives — the old bug silently overwrote it with
       // just `.texra/\n`.

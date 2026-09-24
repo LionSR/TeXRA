@@ -1,6 +1,7 @@
 import { defineCommand } from 'citty';
 import { Cause, Effect, Exit } from 'effect';
 
+import { nodeFileServices } from '@platform/defaults/jsonStore';
 import { withProcessServices } from '@platform/processRuntime';
 import { usageLoggingOptOut } from '@telemetry/UsageLogService';
 import { ensureError } from '@utils/errors/errorMessage';
@@ -38,14 +39,14 @@ function doctorReport(context: CliContext): Effect.Effect<DoctorReport> {
     if (Exit.isFailure(init)) {
       // A failed init disposed the runtime it installed (see
       // `initPlatform.ts`), so the degraded report — node, workspace,
-      // resources, LaTeX, config and the platform-failure row — renders with
-      // nothing provided. It reads no service and nothing in it logs through
-      // Effect.
+      // resources, LaTeX, config and the platform-failure row — renders
+      // without it. It reads only the Node filesystem, which it provides
+      // itself, and nothing in it logs through Effect.
       return yield* buildDoctorReport(
         context,
         {},
         ensureError(Cause.squash(init.cause)),
-      );
+      ).pipe(Effect.provide(nodeFileServices));
     }
     const services = init.value;
     // The healthy report settles on the root's own context — the provision

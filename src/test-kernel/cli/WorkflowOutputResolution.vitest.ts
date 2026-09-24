@@ -18,6 +18,7 @@ import {
   AgentCategory,
 } from '@shared/schemas';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
+import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { runDirUnder } from '@utils/files/runStorageFs';
 
@@ -25,7 +26,9 @@ type WorkflowResult = Parameters<typeof resolveWorkflowOutput>[2];
 
 /** `resolveWorkflowOutput`, run at this suite's one Effect boundary. */
 const resolveOutput = (...args: Parameters<typeof resolveWorkflowOutput>) =>
-  Effect.runPromise(resolveWorkflowOutput(...args));
+  Effect.runPromise(
+    resolveWorkflowOutput(...args).pipe(Effect.provide(nodePlatformLayer)),
+  );
 
 const tempDirs = useTempDirs();
 

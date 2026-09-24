@@ -1,15 +1,17 @@
-import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
-import { Effect } from 'effect';
+import { Effect, FileSystem, PlatformError } from 'effect';
 
 import { parseGitHubSlug, type GitHubSlug } from '@tools/github/githubSlug';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { pathExists } from '@utils/files/fsDurability';
 
 import { CliExitCode } from '../runtime/exitCodes';
-import { pathExists } from '../runtime/initConfig';
 import { tryOpenBrowser } from '../runtime/browser';
-import { writeTextStderr, writeTextStdout } from '../runtime/logSinks';
+import {
+  cliErrorMessage,
+  writeTextStderr,
+  writeTextStdout,
+} from '../runtime/logSinks';
 import {
   currentBranch,
   defaultBranch,
@@ -174,10 +176,9 @@ function runInstallGithubAction(context: CliContext, opts: InstallOptions) {
 
     // An unreadable workflow path is the command's failure, reported by the
     // `catchExitCode` below; only "not there" is an answer.
-    const workflowExists = yield* Effect.tryPromise({
-      try: () => pathExists(workflowAbsPath),
-      catch: ensureError,
-    });
+    const workflowExists = yield* FileSystem.FileSystem.use((fs) =>
+      pathExists(fs, workflowAbsPath),
+    );
     if (workflowExists && !opts.force) {
       writeTextStderr(
         `${WORKFLOW_RELATIVE_PATH} already exists. Re-run with --force to overwrite it.`,
@@ -233,14 +234,21 @@ function runInstallGithubAction(context: CliContext, opts: InstallOptions) {
 
     // The write is the one fallible step with a recovery of its own: its
     // failure is the abort message below, not the command's error channel.
-    const writeFailure = yield* Effect.tryPromise({
-      try: async (): Promise<string | null> => {
-        await mkdir(path.dirname(workflowAbsPath), { recursive: true });
-        await writeFile(workflowAbsPath, WORKFLOW_TEMPLATE, 'utf8');
-        return null;
-      },
-      catch: ensureError,
-    }).pipe(Effect.catch((error) => Effect.succeed(toErrorMessage(error))));
+    const writeFailure = yield* FileSystem.FileSystem.use((fs) =>
+      fs
+        .makeDirectory(path.dirname(workflowAbsPath), { recursive: true })
+        .pipe(
+          Effect.andThen(
+            fs.writeFileString(workflowAbsPath, WORKFLOW_TEMPLATE),
+          ),
+        ),
+    ).pipe(
+      Effect.uninterruptible,
+      Effect.as(null),
+      Effect.catch((error: PlatformError.PlatformError) =>
+        Effect.succeed(cliErrorMessage(error)),
+      ),
+    );
     if (writeFailure !== null) {
       return abort(
         `Failed to write ${WORKFLOW_RELATIVE_PATH}: ${writeFailure}`,

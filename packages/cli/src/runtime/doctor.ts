@@ -1,9 +1,5 @@
-// Node imports
-import { constants as fsConstants } from 'node:fs';
-import { access, stat } from 'node:fs/promises';
-
 // Third-party imports
-import { Data, Effect } from 'effect';
+import { Data, Effect, FileSystem, PlatformError } from 'effect';
 import { satisfies as semverSatisfies } from 'semver';
 
 // Local imports
@@ -48,13 +44,9 @@ export interface DoctorReport {
   readonly checks: readonly DoctorCheck[];
 }
 
-interface DirectoryStat {
-  isDirectory(): boolean;
-}
-
 /**
- * The failure of a probe this module drives itself: the two Node `fs` reads,
- * the LaTeX toolchain probe and the telemetry consent read. It carries the
+ * The failure of a probe this module drives itself: the LaTeX toolchain probe
+ * and the telemetry consent read. It carries the
  * value the foreign edge threw, so the check that recovers from it renders the
  * same hint it rendered when it caught the rejection. The two probes the CLI
  * root supplies are programs already and keep their own `Error` failure.
@@ -85,13 +77,6 @@ interface DoctorDependencies {
     LatexToolchainProbe,
     DoctorProbeFailed
   >;
-  readonly pathStat?: (
-    filePath: string,
-  ) => Effect.Effect<DirectoryStat, DoctorProbeFailed>;
-  readonly pathAccess?: (
-    filePath: string,
-    mode?: number,
-  ) => Effect.Effect<void, DoctorProbeFailed>;
   readonly usageLoggingOptOut?: () => UsageLoggingOptOut;
 }
 
@@ -207,21 +192,20 @@ function checkDirectory(
   name: string,
   dir: string,
   access: DirectoryAccess,
-  deps: ResolvedDoctorDependencies,
-): Effect.Effect<DoctorCheck> {
-  const mode =
-    access === 'readwrite'
-      ? fsConstants.R_OK | fsConstants.W_OK
-      : fsConstants.R_OK;
+): Effect.Effect<DoctorCheck, never, FileSystem.FileSystem> {
   return Effect.gen(function* () {
-    const info = yield* deps.pathStat(dir);
-    if (!info.isDirectory()) {
+    const fs = yield* FileSystem.FileSystem;
+    const info = yield* fs.stat(dir);
+    if (info.type !== 'Directory') {
       return fail(id, name, `${dir} exists but is not a directory.`);
     }
-    yield* deps.pathAccess(dir, mode);
+    yield* fs.access(dir, {
+      readable: true,
+      writable: access === 'readwrite',
+    });
     return pass(id, name, dir);
   }).pipe(
-    Effect.catch((failure: DoctorProbeFailed) =>
+    Effect.catch((failure: PlatformError.PlatformError) =>
       Effect.succeed(
         failFromError(
           id,
@@ -229,7 +213,7 @@ function checkDirectory(
           access === 'readwrite'
             ? `${dir} is not readable and writable.`
             : `${dir} is not readable.`,
-          failure.cause,
+          failure.reason.cause ?? failure,
         ),
       ),
     ),
@@ -361,17 +345,18 @@ function checkLatex(
 
 function checkConfig(
   context: CliContext,
-  deps: ResolvedDoctorDependencies,
-): Effect.Effect<DoctorCheck> {
+): Effect.Effect<DoctorCheck, never, FileSystem.FileSystem> {
   // The project file the config provider layers over the user file. Its
   // readability is asked here rather than carried on the context: the provider
   // answers with values, and this check is the one caller that needs the path.
   const filePath = workspaceTexraConfigPath(context.cwd);
-  return deps.pathAccess(filePath, fsConstants.R_OK).pipe(
+  return FileSystem.FileSystem.use((fs) =>
+    fs.access(filePath, { readable: true }),
+  ).pipe(
     Effect.as(true),
     // The probe's answer, not a swallowed failure: an unreadable file is
     // exactly the `skip` row below, and it is reported there.
-    Effect.catch(() => Effect.succeed(false)),
+    Effect.catch((_: PlatformError.PlatformError) => Effect.succeed(false)),
     Effect.map((readable) => {
       if (context.configWarnings.length > 0) {
         return warn(
@@ -451,22 +436,6 @@ function checkTelemetry(
 }
 
 /**
- * The foreign edges this module drives itself, each wrapped exactly once: a
- * rejection becomes a {@link DoctorProbeFailed} carrying what was thrown, and
- * the check that recovers from it renders that value as its hint.
- */
-const statPath = (
-  filePath: string,
-): Effect.Effect<DirectoryStat, DoctorProbeFailed> =>
-  Effect.tryPromise({ try: () => stat(filePath), catch: probeFailure });
-
-const accessPath = (
-  filePath: string,
-  mode?: number,
-): Effect.Effect<void, DoctorProbeFailed> =>
-  Effect.tryPromise({ try: () => access(filePath, mode), catch: probeFailure });
-
-/**
  * Stand-in for the one probe this module cannot build for itself. Unreachable:
  * the caller omits `modelAccessList` only when platform init failed, and that
  * sets `initError`, which skips the model check before it is ever called.
@@ -501,14 +470,12 @@ export function buildDoctorReport(
   context: CliContext,
   deps: DoctorDependencies = {},
   initError?: Error,
-): Effect.Effect<DoctorReport> {
+): Effect.Effect<DoctorReport, never, FileSystem.FileSystem> {
   const resolved = {
     nodeVersion: deps.nodeVersion ?? process.versions.node,
     authProfile: deps.authProfile ?? missingAuthProfileProbe,
     modelAccessList: deps.modelAccessList ?? missingModelAccessProbe,
     latexToolchain: deps.latexToolchain ?? probeLatexToolchain(),
-    pathStat: deps.pathStat ?? statPath,
-    pathAccess: deps.pathAccess ?? accessPath,
     usageLoggingOptOut: deps.usageLoggingOptOut ?? missingUsageLoggingOptOut,
   };
   return Effect.gen(function* () {
@@ -533,23 +500,16 @@ export function buildDoctorReport(
           ];
     const checks: DoctorCheck[] = [
       checkNode(resolved.nodeVersion),
-      yield* checkDirectory(
-        'workspace',
-        'Workspace',
-        context.cwd,
-        'readwrite',
-        resolved,
-      ),
+      yield* checkDirectory('workspace', 'Workspace', context.cwd, 'readwrite'),
       yield* checkDirectory(
         'resources',
         'Packaged resources',
         context.resourcesPath,
         'read',
-        resolved,
       ),
       ...sessionDependentChecks,
       ...(yield* checkLatex(resolved)),
-      yield* checkConfig(context, resolved),
+      yield* checkConfig(context),
     ];
     return {
       ok: !checks.some((check) => check.status === 'fail'),
