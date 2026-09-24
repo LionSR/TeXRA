@@ -351,7 +351,7 @@ export async function runChat(
   const terminalTitleUpdates = installTerminalTitleUpdates(context.cwd);
   disposables.add(terminalTitleUpdates.dispose);
   disposables.add(announceForegroundApprovals());
-  disposables.add(subscribeCliCredentialChanges(runtime, runtimeSession.roots));
+  disposables.add(subscribeCliCredentialChanges(runtime));
   let subscribedRuns = '';
   const syncTranscriptSubscriptions = (): void => {
     const ids = [...currentView().runs.keys()];

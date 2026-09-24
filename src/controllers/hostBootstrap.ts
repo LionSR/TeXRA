@@ -11,9 +11,10 @@
  * module owns that order, so the three roots cannot drift and there is one
  * place to read what a started TeXRA process has installed.
  *
- * Nothing here reads an ambient host: every step either sets a module-global
- * or registers a closure that resolves later, and the one state write takes
- * its store as an argument. The CLI keeps its roots and lazy session private
+ * Nothing here reads an ambient host: every step either sets a module-global,
+ * registers a closure that resolves later, or forks a process-lifetime
+ * subscriber on the root's runtime, and the one state write takes its store
+ * as an argument. The CLI keeps its roots and lazy session private
  * until this fallible setup has succeeded, and the first-install seed below
  * is the fallible step that invariant was written for.
  *
@@ -37,6 +38,7 @@ import { installLongRunningModelDispatcher } from '@platform/defaults/longRunnin
 import type { PlatformSecrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { SettingHost } from '@shared/state/stateSettings';
+import { reprobeOnCredentialChange } from '@tools/credentialReprobe';
 import { TOOL_PLUGINS } from '@tools/plugins';
 import { seedDisabledToolDefaults } from '@tools/toolAvailability';
 import { initProcessSettingHost } from '@utils/config/platformSettings';
@@ -95,4 +97,10 @@ export const bootstrapHost = Effect.fn('bootstrapHost')(function* (
   // Seed first-install defaults (e.g. disabled tools). No-ops once
   // DISABLED_TOOLS exists, so upgrading users keep the tools they enabled.
   yield* seedDisabledToolDefaults(init.roots.globalState);
+  // A credential a tool plugin declares (the GitHub token) re-probes every
+  // open workspace when any store writes it. Process-lifetime, like the
+  // secret store whose writes it follows, so it is detached from this call.
+  yield* Effect.forkDetach(reprobeOnCredentialChange, {
+    startImmediately: true,
+  });
 });
