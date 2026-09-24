@@ -167,6 +167,13 @@ All notable changes to this project will be documented in this file.
   walkthrough. Clean in the Progress toolbar now clears the selected run's
   output folder, and "Clean All Build Files (Workspace-wide)" is unchanged.
 
+#### Bug Fixes
+
+- **Cancelling TeXRA sign-in no longer counts as signing in.** In a
+  single-folder window, the sign-in prompt that setup, a team launch or the
+  remote agent catalog opens reported success even when you closed it without
+  signing in, so TeXRA went on as if you had. It now reports the cancellation.
+
 ### CLI and Agent SDK
 
 #### Breaking Changes
