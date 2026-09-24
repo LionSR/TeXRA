@@ -22,12 +22,10 @@ import {
   aggregateTarget,
   HISTORY_RUN_STATUS,
   HISTORY_RUN_STATUS_LABEL,
-  resolveHistoryRunStatus,
   type RunId,
   type HistoryRunStatus,
 } from '@shared/schemas';
 import type { SessionOpenError } from '@shared/session/database';
-import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import type { RunView } from '@shared/session/sessionView';
 import { runOutcomeToCliRunStatus } from '@shared/runs/runStatus';
 import {
@@ -42,7 +40,7 @@ import { byStringProp } from '@utils/core';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 import { CliUsageError } from './cliContext';
-import { isCliRunResumable, readCliResumedModel } from './toolUseResumeData';
+import { cliRunStanding, readCliResumedModel } from './toolUseResumeData';
 import {
   formatCliHistoryAgentLabel,
   formatCliHistorySubject,
@@ -215,22 +213,16 @@ export const readCliHistoryDetails = Effect.fn('cli.readCliHistoryDetails')(
       : undefined;
     // The same rule the listing applies, from the same facts: `status` is a
     // frozen contract, so `history show` must not answer it differently from
-    // `history list` for the run in the row the caller just read. A run whose
-    // config is missing or malformed has no category to resume under and no
-    // config for a host to adopt, so it is not offered, the listing never
-    // reaches this rule for such a row, which lists as incomplete.
-    const resumable =
-      config !== null &&
-      (yield* isCliRunResumable(
-        {
-          id,
-          checkpointPresent,
-          agentCategory: config.agentCategory,
-          outcome:
-            run && isTerminalOutcomePhase(run.status) ? run.status : undefined,
-        },
-        session,
-      ));
+    // `history list` for the run in the row the caller just read.
+    const standing = yield* cliRunStanding(
+      {
+        id,
+        checkpointPresent,
+        agentCategory: config === null ? null : config.agentCategory,
+        phase: run?.status,
+      },
+      session,
+    );
     const workspaceFiles = yield* listRunWorkspaceFiles(
       config,
       persistedWorkspaceFilePaths,
@@ -263,11 +255,7 @@ export const readCliHistoryDetails = Effect.fn('cli.readCliHistoryDetails')(
     }
     return redactDisplayValue({
       id,
-      status: resolveHistoryRunStatus({
-        resumable,
-        outcome:
-          run && isTerminalOutcomePhase(run.status) ? run.status : undefined,
-      }),
+      status: standing.status,
       run: run
         ? {
             launchedAt: run.launchedAt,
@@ -569,12 +557,12 @@ const toCliHistoryEntry = Effect.fn('history.toCliHistoryEntry')(function* (
   const config = entry.record;
   const firstInputFile = config.inputFiles.at(0);
   const inputBasename = firstInputFile ? path.basename(firstInputFile) : '-';
-  const resumable = yield* isCliRunResumable(
+  const { status, resumable } = yield* cliRunStanding(
     {
       id: entry.id,
       checkpointPresent: entry.checkpointPresent,
       agentCategory: config.agentCategory,
-      outcome: entry.outcome,
+      phase: entry.status,
     },
     session,
   );
@@ -586,7 +574,7 @@ const toCliHistoryEntry = Effect.fn('history.toCliHistoryEntry')(function* (
     // records that only inside its checkpoint, which a listing no longer
     // parses; `history show` still reports the resumed model.
     model: config.model,
-    status: resolveHistoryRunStatus({ resumable, outcome: entry.outcome }),
+    status,
     resumable,
     inputBasename,
     category: config.agentCategory,

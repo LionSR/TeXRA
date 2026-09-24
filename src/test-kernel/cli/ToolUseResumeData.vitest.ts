@@ -4,8 +4,8 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { AgentConfig, SessionHandle } from '@agent/runtime';
 import {
-  isCliRunResumable as isCliRunResumableEffect,
-  type CliRunResumabilityFacts,
+  cliRunStanding,
+  type CliRunFacts,
 } from '@cli/runtime/toolUseResumeData';
 import {
   aggregateId,
@@ -30,13 +30,13 @@ const config = {
 /** A failed workflow row: the one shape whose snapshot is still read. */
 function listingFacts(
   runId: RunId,
-  overrides: Partial<CliRunResumabilityFacts> = {},
-): CliRunResumabilityFacts {
+  overrides: Partial<CliRunFacts> = {},
+): CliRunFacts {
   return {
     id: runId,
     checkpointPresent: true,
     agentCategory: config.agentCategory,
-    outcome: RUN_OUTCOME.FAILED,
+    phase: RUN_OUTCOME.FAILED,
     ...overrides,
   };
 }
@@ -92,8 +92,12 @@ describe('CLI listing resumability', () => {
     session = await Effect.runPromise(createProcessSession());
   });
 
-  function isCliRunResumable(facts: CliRunResumabilityFacts): Promise<boolean> {
-    return Effect.runPromise(isCliRunResumableEffect(facts, session));
+  function resumableOf(facts: CliRunFacts): Promise<boolean> {
+    return Effect.runPromise(
+      cliRunStanding(facts, session).pipe(
+        Effect.map((standing) => standing.resumable),
+      ),
+    );
   }
 
   /** Open the run aggregate the way a reflection round does. */
@@ -124,9 +128,9 @@ describe('CLI listing resumability', () => {
       // `true`. Only the free fact can produce the `false` asserted below.
       await writeSnapshot(runId, { totalRounds: 4 });
 
-      await expect(
-        isCliRunResumable(listingFacts(runId, overrides)),
-      ).resolves.toBe(false);
+      await expect(resumableOf(listingFacts(runId, overrides))).resolves.toBe(
+        false,
+      );
     },
   );
 
@@ -135,7 +139,7 @@ describe('CLI listing resumability', () => {
       'a tool-use row',
       { agentCategory: 'toolUse' as AgentConfig['agentCategory'] },
     ],
-    ['a workflow row that did not fail', { outcome: RUN_OUTCOME.CANCELLED }],
+    ['a workflow row that did not fail', { phase: RUN_OUTCOME.CANCELLED }],
   ])(
     'advertises %s without reading its snapshot',
     async (_description, overrides) => {
@@ -144,9 +148,9 @@ describe('CLI listing resumability', () => {
       // `false`. Only the short-circuit can produce the `true` asserted below.
       await writeSnapshot(runId, TERMINAL_REJECTION, 1);
 
-      await expect(
-        isCliRunResumable(listingFacts(runId, overrides)),
-      ).resolves.toBe(true);
+      await expect(resumableOf(listingFacts(runId, overrides))).resolves.toBe(
+        true,
+      );
     },
   );
 
@@ -154,6 +158,6 @@ describe('CLI listing resumability', () => {
     const runId = mintRunId();
     await writeSnapshot(runId, TERMINAL_REJECTION, 1);
 
-    await expect(isCliRunResumable(listingFacts(runId))).resolves.toBe(false);
+    await expect(resumableOf(listingFacts(runId))).resolves.toBe(false);
   });
 });

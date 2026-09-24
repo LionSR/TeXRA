@@ -195,7 +195,7 @@ describe('run listing normalization', () => {
           expect.objectContaining({
             id,
             description: 'Updated by another host',
-            outcome: 'completed',
+            status: 'completed',
           }),
         ]);
       }),
@@ -220,6 +220,7 @@ describe('run listing normalization', () => {
             timestamp: '2026-07-15T10:00:00.000Z',
             identity: { kind: 'agent', agent: 'assistant' },
             record: agentConfig,
+            status: 'ready',
             checkpointPresent: false,
           },
         ]);
@@ -271,6 +272,7 @@ describe('run listing normalization', () => {
         kind: 'incomplete',
         id: incompleteId,
         timestamp: '2026-07-15T07:00:00.000Z',
+        status: 'ready',
         checkpointPresent: false,
       });
       expect(entries.filter(isUserVisibleRun)).toEqual([entries[1]]);

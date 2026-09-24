@@ -3,9 +3,13 @@ import { Effect, Result } from 'effect';
 
 import { deriveResumability, getRunRecords } from '@agent/storage';
 import { type AgentConfigPayload, type SessionHandle } from '@agent/runtime';
-import { RUN_OUTCOME, type RunId, AgentCategory } from '@shared/schemas';
+import {
+  AgentCategory,
+  isTerminalCompileRejection,
+  RUN_OUTCOME,
+  type RunId,
+} from '@shared/schemas';
 import type { SessionOpenError } from '@shared/session/database';
-import { snapshotHoldsTerminalCompileRejection } from '../runtime/toolUseResumeData';
 
 import {
   failUsage,
@@ -331,7 +335,7 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
       if (snapshot.family !== 'reflection') return false;
       return (
         snapshot.runtime.lastError == null &&
-        !snapshotHoldsTerminalCompileRejection(snapshot)
+        !isTerminalCompileRejection(snapshot.state, snapshot.runtime.round)
       );
     };
     const writeResumeHint = (

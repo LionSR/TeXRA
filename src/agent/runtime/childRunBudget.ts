@@ -21,15 +21,12 @@ import {
 } from '@shared/schemas';
 import { readSettingFrom } from '@utils/config/platformSettings';
 
-import type { RunRegistry } from './runRegistry';
-import type { SessionHandle } from './SessionHandle';
-
 /**
  * The configured budget with the `auto` sentinel resolved to this machine's
  * core count, clamped to the schema range. Model conversations are network
  * bound, so the core count is a floor for useful parallelism rather than a
  * ceiling — which is why the setting stays overridable up to `max`. This is
- * the one host-side owner of the number: the session's semaphore below and
+ * the one host-side owner of the number: the session's semaphore (re-pinned by the child-run loop) and
  * the workflow engine's per-run semaphore (`workflowScriptStrategy`) both
  * read it here. Resolved host-side because `src/shared` is loaded by the settings
  * webview and must stay free of `node:os`.
@@ -47,19 +44,5 @@ export const resolveChildRunConcurrencyBudget = Effect.fn(
   return Math.min(
     CHILD_RUN_CONCURRENCY_BUDGET_SETTING.max,
     Math.max(1, os.availableParallelism()),
-  );
-});
-
-/**
- * The session's shared child-run budget at the configured value, read in the
- * session's scope: the session's runs hold the one semaphore
- * (`RunRegistry.childRunBudget`) and re-pin it here on every launch.
- */
-export const childRunBudgetFor = Effect.fn('childRunBudgetFor')(function* (
-  session: SessionHandle,
-  runs: RunRegistry,
-) {
-  return yield* runs.childRunBudget(
-    yield* resolveChildRunConcurrencyBudget(session.roots),
   );
 });

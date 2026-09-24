@@ -16,15 +16,11 @@ import type {
 } from '@shared/schemas';
 import { runIdentityName } from '@shared/schemas';
 
+/** A tracked run's status line: the stream's phase, and how long it has
+ *  been running while active. */
 export interface RunStatusInfo {
-  status: RunPhase | 'unknown';
+  status: RunPhase;
   elapsed: string | null;
-  /**
-   * Why the status reads the way it does, when the phase alone would mislead:
-   * a run another process holds, or one interrupted with a checkpoint still
-   * on disk.
-   */
-  detail?: string;
 }
 
 /**

@@ -75,6 +75,7 @@ import {
   AgentCategory,
   fileLocationDisplayPath,
   MESSAGE_TYPES,
+  isTerminalCompileRejection,
   OUTPUT_END_TAG,
   RUN_OUTCOME,
   SCRATCHPAD_TAG,
@@ -287,11 +288,11 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     delete flow.unresolvedCompileRejection;
     delete flow.compileFailureContext;
   });
-  const terminalCompileRejection = (state: RunState): boolean =>
-    flow.unresolvedCompileRejection === true && state.round + 1 >= totalRounds;
   const resolveOutcome = (state: RunState): RunOutcome =>
     deriveRunOutcome({
-      failed: state.lastError !== null || terminalCompileRejection(state),
+      failed:
+        state.lastError !== null ||
+        isTerminalCompileRejection(flow, state.round),
       cancelled: false,
     });
   /** The round loop's single continue/finalize decision. */

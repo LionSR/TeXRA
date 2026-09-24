@@ -65,7 +65,7 @@ vi.mock('@agent/storage', async () => {
   };
 });
 
-// `isCliRunResumable` stays real: it is the rule under test on both surfaces,
+// `cliRunStanding` stays real: it is the rule under test on both surfaces,
 // and it decides from the row's own facts without touching storage.
 vi.mock('@cli/runtime/toolUseResumeData', async () => {
   const actual = await vi.importActual<
@@ -269,7 +269,7 @@ function runListEntry(
     id: id as RunId,
     timestamp: '2026-05-18T08:00:00.000Z',
     record: config,
-    outcome: 'completed',
+    status: 'completed',
     ...overrides,
   };
 }
@@ -364,7 +364,7 @@ describe('CLI history runtime', () => {
           id: id as RunId,
           timestamp: '2026-05-18T08:00:00.000Z',
           record: config,
-          ...(outcome ? { outcome } : {}),
+          status: outcome ?? 'running',
         })),
       ),
     );
@@ -407,13 +407,13 @@ describe('CLI history runtime', () => {
           id: 'bash-process' as RunId,
           timestamp: '2026-05-18T08:01:00.000Z',
           record: processConfig,
-          outcome: 'completed',
+          status: 'completed',
         },
         {
           kind: 'incomplete',
           id: 'configless' as RunId,
           timestamp: '2026-05-18T08:02:00.000Z',
-          outcome: 'completed',
+          status: 'completed',
         },
       ]),
     );
@@ -450,7 +450,7 @@ describe('CLI history runtime', () => {
           identity: { kind: 'agent', agent: 'engineer' },
           timestamp: '2026-05-18T10:00:00.000Z',
           record: teamConfig,
-          outcome: 'cancelled',
+          status: 'cancelled',
           ...RESUMABLE_ROW_FACTS,
         }),
       ]),
@@ -473,7 +473,7 @@ describe('CLI history runtime', () => {
           identity: { kind: 'agent', agent: 'assistant' },
           timestamp: '2026-05-18T11:00:00.000Z',
           record: chatConfig,
-          outcome: 'cancelled',
+          status: 'cancelled',
           description: 'Sketch a proof outline',
           ...RESUMABLE_ROW_FACTS,
         }),
