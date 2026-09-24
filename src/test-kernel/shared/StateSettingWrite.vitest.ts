@@ -99,6 +99,38 @@ describe('applyStateSettingUpdate', () => {
   );
 
   it.effect(
+    'lets CLI /config write its rows that the settings view does not render',
+    () =>
+      Effect.gen(function* () {
+        const fake = makeFakeSettingsStores();
+        const key = WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS;
+
+        expect(
+          yield* applyStateSettingUpdate(key, 20000, {
+            stores: fake.stores,
+            host: 'cli',
+          }),
+        ).toMatchObject({ kind: 'applied', entry: { key } });
+        expect(yield* fake.workspaceState.get(key)).toBe(20000);
+        expect(
+          yield* applyStateSettingUpdate(key, null, {
+            stores: fake.stores,
+            host: 'cli',
+          }),
+        ).toMatchObject({ kind: 'applied' });
+        expect(yield* isStored(fake.workspaceState, key)).toBe(false);
+
+        // The settings view still cannot write a row it does not render.
+        expect(
+          yield* applyStateSettingUpdate(key, 20000, {
+            stores: fake.stores,
+            host: 'vscode',
+          }),
+        ).toEqual({ kind: 'ignored' });
+      }),
+  );
+
+  it.effect(
     'ignores unknown keys and preserves catalog validation errors',
     () =>
       Effect.gen(function* () {

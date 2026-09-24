@@ -1470,6 +1470,16 @@ export function settingsViewSnapshotEntries(
 export const CLI_STATE_SETTINGS: readonly SurfacedSettingEntry[] =
   SURFACED_SETTINGS.filter((entry) => entry.surfaces.cliConfig === true);
 
+const CLI_STATE_SETTINGS_BY_KEY: ReadonlyMap<string, SurfacedSettingEntry> =
+  new Map(CLI_STATE_SETTINGS.map((entry) => [entry.key, entry]));
+
+/** Look up a row the CLI `/config` panel lists, and so may write. */
+export function cliConfigSettingByKey(
+  key: string,
+): SurfacedSettingEntry | undefined {
+  return CLI_STATE_SETTINGS_BY_KEY.get(key);
+}
+
 /**
  * Canonical `texra.*` keys the CLI reads or writes in `.texra/config.json` —
  * the unknown-key whitelist's catalog half. A config-backed row belongs when

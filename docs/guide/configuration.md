@@ -118,7 +118,8 @@ context, edited files, and media. Discovery has no settings of its own.
 The **LaTeX** view contains the settings that remain useful to change:
 
 - compile and diff behavior (auto-compile, opening the PDF, repairing failed
-  compiles, diff page range and math markup, and diffs between rounds);
+  compiles, only changed pages in diff PDFs, math markup in diffs, and diffs
+  between rounds);
 - formatter selection; and
 - inline criticism display (VS Code only).
 
