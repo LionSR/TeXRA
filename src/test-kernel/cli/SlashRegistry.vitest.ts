@@ -8,14 +8,12 @@ import { afterEach, beforeAll, describe, expect } from 'vitest';
 
 import {
   findSlashCommand,
-  listSlashCommands,
   matchSlashCommands,
   parseSlashInput,
   prefixSlashCommands,
-  registerSlashCommand,
   suggestSlashCommand,
-  unregisterSlashCommand,
   type SlashCommand,
+  installSlashCommands,
 } from '@cli/chat/tui/commands/slashRegistry';
 import { registerBuiltinSlashCommands } from '@cli/chat/tui/commands/registerBuiltins';
 import {
@@ -95,7 +93,7 @@ function registerBuiltins(
 }
 
 afterEach(() => {
-  for (const cmd of [...listSlashCommands()]) unregisterSlashCommand(cmd.name);
+  installSlashCommands([]);
   resetCliState();
 });
 
@@ -681,9 +679,16 @@ describe('slashRegistry', () => {
   });
 
   it('matches by name prefix case-insensitively', () => {
-    registerSlashCommand({ name: 'model', description: 'pick a model' });
-    registerSlashCommand({ name: 'agent', description: 'pick an agent' });
-    registerSlashCommand({ name: 'merge', description: 'merge outputs' });
+    installSlashCommands([
+      {
+        pluginId: 'test',
+        commands: [
+          { name: 'model', description: 'pick a model' },
+          { name: 'agent', description: 'pick an agent' },
+          { name: 'merge', description: 'merge outputs' },
+        ],
+      },
+    ]);
     expect(matchSlashCommands('m').map((c) => c.name)).toEqual([
       'model',
       'merge',
@@ -697,18 +702,32 @@ describe('slashRegistry', () => {
   });
 
   it('matches aliases alongside the canonical name', () => {
-    registerSlashCommand({
-      name: 'help',
-      description: 'show help',
-      aliases: ['h', 'usage'],
-    });
+    installSlashCommands([
+      {
+        pluginId: 'test',
+        commands: [
+          {
+            name: 'help',
+            description: 'show help',
+            aliases: ['h', 'usage'],
+          },
+        ],
+      },
+    ]);
     expect(matchSlashCommands('h').map((c) => c.name)).toEqual(['help']);
     expect(matchSlashCommands('us').map((c) => c.name)).toEqual(['help']);
   });
 
   it('falls back to substring matches when no prefix matches', () => {
-    registerSlashCommand({ name: 'model', description: 'pick a model' });
-    registerSlashCommand({ name: 'agent', description: 'pick an agent' });
+    installSlashCommands([
+      {
+        pluginId: 'test',
+        commands: [
+          { name: 'model', description: 'pick a model' },
+          { name: 'agent', description: 'pick an agent' },
+        ],
+      },
+    ]);
 
     expect(matchSlashCommands('odel').map((c) => c.name)).toEqual(['model']);
     expect(matchSlashCommands('gen').map((c) => c.name)).toEqual(['agent']);
@@ -717,16 +736,30 @@ describe('slashRegistry', () => {
   });
 
   it('falls back to the typo suggestion when nothing matches literally', () => {
-    registerSlashCommand({ name: 'help', description: 'show help' });
-    registerSlashCommand({ name: 'model', description: 'pick a model' });
+    installSlashCommands([
+      {
+        pluginId: 'test',
+        commands: [
+          { name: 'help', description: 'show help' },
+          { name: 'model', description: 'pick a model' },
+        ],
+      },
+    ]);
 
     expect(matchSlashCommands('hlp').map((c) => c.name)).toEqual(['help']);
     expect(matchSlashCommands('frobnicate')).toEqual([]);
   });
 
   it('keeps the auto-run tier prefix-only so fallbacks never fire blind', () => {
-    registerSlashCommand({ name: 'help', description: 'show help' });
-    registerSlashCommand({ name: 'model', description: 'pick a model' });
+    installSlashCommands([
+      {
+        pluginId: 'test',
+        commands: [
+          { name: 'help', description: 'show help' },
+          { name: 'model', description: 'pick a model' },
+        ],
+      },
+    ]);
 
     expect(prefixSlashCommands('mo').map((c) => c.name)).toEqual(['model']);
     // Substring ('odel') and typo ('hlp') matches are palette-only.
@@ -735,11 +768,18 @@ describe('slashRegistry', () => {
   });
 
   it('finds exact command names and aliases case-insensitively', () => {
-    registerSlashCommand({
-      name: 'agent',
-      description: 'pick an agent',
-      aliases: ['agents'],
-    });
+    installSlashCommands([
+      {
+        pluginId: 'test',
+        commands: [
+          {
+            name: 'agent',
+            description: 'pick an agent',
+            aliases: ['agents'],
+          },
+        ],
+      },
+    ]);
 
     expect(findSlashCommand('agent')?.name).toBe('agent');
     expect(findSlashCommand('AGENTS')?.name).toBe('agent');
@@ -755,11 +795,18 @@ describe('slashRegistry', () => {
   });
 
   it('matches typo suggestions against aliases too', () => {
-    registerSlashCommand({
-      name: 'exit',
-      description: 'Exit the CLI session',
-      aliases: ['quit'],
-    });
+    installSlashCommands([
+      {
+        pluginId: 'test',
+        commands: [
+          {
+            name: 'exit',
+            description: 'Exit the CLI session',
+            aliases: ['quit'],
+          },
+        ],
+      },
+    ]);
 
     expect(suggestSlashCommand('quitt')?.name).toBe('exit');
   });

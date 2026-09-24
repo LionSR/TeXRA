@@ -29,9 +29,8 @@ import {
 import { transcriptRowHeadline } from '@cli/chat/tui/panes/transcriptEntries';
 import type { InputHistory } from '@cli/chat/tui/history/inputHistory';
 import {
-  registerSlashCommand,
   shouldRedactSlashInput,
-  unregisterSlashCommand,
+  installSlashCommands,
 } from '@cli/chat/tui/commands/slashRegistry';
 import {
   CLI_LOCAL_RUN_ID,
@@ -153,12 +152,19 @@ describe('InputBar slash submit', () => {
   beforeAll(bindTestSessionView);
   it('threads deferred echo through a palette-opened form', async () => {
     const { ink, React } = await loadInk();
-    registerSlashCommand({
-      name: 'model',
-      description: 'Choose a model',
-      echo: 'ifPersists',
-      formComponent: () => null,
-    });
+    installSlashCommands([
+      {
+        pluginId: 'test',
+        commands: [
+          {
+            name: 'model',
+            description: 'Choose a model',
+            echo: 'ifPersists',
+            formComponent: () => null,
+          },
+        ],
+      },
+    ]);
     const { instance, stdin, stdout } = renderInteractive(
       ink,
       React.createElement(InputBar, {
@@ -189,22 +195,29 @@ describe('InputBar slash submit', () => {
       ).toEqual([{ kind: 'user', text: '/model' }]);
     } finally {
       instance.unmount();
-      unregisterSlashCommand('model');
+      installSlashCommands([]);
       resetCliState();
     }
   });
 
   it('does not persist commands whose input may contain a credential', () => {
-    registerSlashCommand({
-      name: 'key',
-      aliases: ['keys'],
-      description: 'Add an API key',
-      redactInput: true,
-    });
-    registerSlashCommand({
-      name: 'model',
-      description: 'Choose a model',
-    });
+    installSlashCommands([
+      {
+        pluginId: 'test',
+        commands: [
+          {
+            name: 'key',
+            aliases: ['keys'],
+            description: 'Add an API key',
+            redactInput: true,
+          },
+          {
+            name: 'model',
+            description: 'Choose a model',
+          },
+        ],
+      },
+    ]);
 
     try {
       const cases: ReadonlyArray<readonly [string, boolean]> = [
@@ -231,8 +244,7 @@ describe('InputBar slash submit', () => {
         expect(!shouldRedactSlashInput(input)).toBe(expected);
       }
     } finally {
-      unregisterSlashCommand('key');
-      unregisterSlashCommand('model');
+      installSlashCommands([]);
     }
   });
 

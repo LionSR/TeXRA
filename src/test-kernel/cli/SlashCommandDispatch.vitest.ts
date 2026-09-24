@@ -30,11 +30,7 @@ import {
   type SlashCommandOutput,
 } from '@cli/chat/tui/commands/handlers/slashContext';
 import { registerBuiltinSlashCommands } from '@cli/chat/tui/commands/registerBuiltins';
-import {
-  listSlashCommands,
-  registerSlashCommand,
-  unregisterSlashCommand,
-} from '@cli/chat/tui/commands/slashRegistry';
+import { installSlashCommands } from '@cli/chat/tui/commands/slashRegistry';
 import { tuiUi } from '@cli/chat/tui/hosts/tuiUiHost';
 import { transcriptRowHeadline } from '@cli/chat/tui/panes/transcriptEntries';
 import { notices, noticesFor } from '@cli/chat/tui/state/transcript';
@@ -108,7 +104,7 @@ beforeEach(() => {
   );
 });
 afterEach(() => {
-  for (const cmd of [...listSlashCommands()]) unregisterSlashCommand(cmd.name);
+  installSlashCommands([]);
   seeded.clear();
   syncSeededView();
   resetCliState();
@@ -420,11 +416,18 @@ describe('handleTuiSlashCommand', () => {
     'adds a lazy command echo before errors even under echo never',
     () =>
       Effect.gen(function* () {
-        registerSlashCommand({
-          name: 'unavailable',
-          description: 'Unavailable test command',
-          echo: 'never',
-        });
+        installSlashCommands([
+          {
+            pluginId: 'test',
+            commands: [
+              {
+                name: 'unavailable',
+                description: 'Unavailable test command',
+                echo: 'never',
+              },
+            ],
+          },
+        ]);
 
         yield* dispatchSlash('/unavailable', createContext());
 
@@ -440,12 +443,19 @@ describe('handleTuiSlashCommand', () => {
 
   it.effect('threads deferred echo through fallback registered forms', () =>
     Effect.gen(function* () {
-      registerSlashCommand({
-        name: 'custom-form',
-        description: 'Custom form',
-        echo: 'ifPersists',
-        formComponent: () => null,
-      });
+      installSlashCommands([
+        {
+          pluginId: 'test',
+          commands: [
+            {
+              name: 'custom-form',
+              description: 'Custom form',
+              echo: 'ifPersists',
+              formComponent: () => null,
+            },
+          ],
+        },
+      ]);
 
       yield* dispatchSlash('/custom-form', createContext());
       const form = activeForm.get()?.render(() => undefined, 20) as {
@@ -465,11 +475,18 @@ describe('handleTuiSlashCommand', () => {
     'queues a host dialog behind an open slash form instead of evicting it',
     () =>
       Effect.gen(function* () {
-        registerSlashCommand({
-          name: 'custom-form',
-          description: 'Custom form',
-          formComponent: () => null,
-        });
+        installSlashCommands([
+          {
+            pluginId: 'test',
+            commands: [
+              {
+                name: 'custom-form',
+                description: 'Custom form',
+                formComponent: () => null,
+              },
+            ],
+          },
+        ]);
         yield* dispatchSlash('/custom-form', createContext());
 
         // The host dialog reachable from a retry card ('k' with no stored
