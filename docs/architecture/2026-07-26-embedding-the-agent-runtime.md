@@ -561,11 +561,16 @@ The caller knows which case it is in, and says so with
   whatever port the embedder passed. The `memory`/`plan` injections do not
   depend on this choice (`src/tools/plugins.ts`).
 
-There is no separate agent-bundle bootstrap to run or skip. The installed
-`AgentDirectoriesPort` is the whole of it: `AgentDirectoryService`
-resolves `builtIn()` and `builtInToolUse()` inside the `resourcesPath` it was
-given and the files are read where they sit, so a port pointed at a tree that
-does not hold them leaves `loadAgents` with no packaged agents (§2).
+The installed `AgentDirectoriesPort` is the whole of the core agent bundle:
+`AgentDirectoryService` resolves `builtIn()` and `builtInToolUse()` inside the
+`resourcesPath` it was given and the files are read where they sit, so a port
+pointed at a tree that does not hold them leaves `loadAgents` with no packaged
+agents (§2). Tool plugins that ship agents (`agents: true`, today `lean4`)
+keep them at `<resourcesPath>/plugins/<id>/agents`, and the `builtInToolUse`
+scan adds those directories only once
+`installPluginAgentDirectories(resourcesPath, agentPluginIds)`
+(`src/agent/index/BundledAgentDirectories.ts`) has run, as `bootstrapHost`
+does. Skipping it drops the Lean agents and nothing else.
 
 ---
 

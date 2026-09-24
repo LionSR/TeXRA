@@ -7,10 +7,9 @@
  * module's closure (and its readers') small.
  *
  * Derived from this list: the Tools dashboard (in list order), availability
- * probes, the first-install toggle seed, switched-off plugins and a run's
- * injected tools (`@tools/composition`), install/auth terminal actions,
- * `texra tools` guides, and the skill roots the host bootstrap installs in
- * the bundled tier for each `skills` plugin, not gated by switch or probe.
+ * probes, the first-install toggle seed, switched-off plugins, a run's
+ * injected tools (`@tools/composition`), install/auth actions, `texra tools`
+ * guides, and the bundled skills and agents the bootstrap installs (ungated).
  *
  * Rules: an id is persisted (the disabled-tools key), so it never changes and
  * is never reused; every tool belongs to exactly one plugin (checked below
@@ -74,8 +73,9 @@ export interface ToolPlugin {
   /** Owns resources: a layer in `@tools/registry`, built while an open
    *  composition includes the plugin (`@tools/compositions`). */
   readonly layer?: true;
-  /** Ships skills at `resources/plugins/<id>/skills` (see the header). */
+  /** Ships skills / `builtInToolUse` agents in `resources/plugins/<id>/`. */
   readonly skills?: true;
+  readonly agents?: true;
   readonly installGuide?: string;
   readonly installUrl?: string;
   /** VS Code extension ID — when present, the dashboard offers a direct "Install" button. */
@@ -269,6 +269,7 @@ const MANIFEST = [
       'CLI / desktop builds: requires `lake` on PATH; each Lake project can have its own language server, and idle ones stop after thirty minutes, surfaced below.',
     availability: LEAN4_AVAILABILITY,
     skills: true,
+    agents: true,
   },
   {
     id: 'workflow-script',

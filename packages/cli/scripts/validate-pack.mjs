@@ -74,7 +74,7 @@ function assertNoForbiddenTarballEntries(entries) {
   );
 }
 
-function assertBundledSkillsIncluded(entries) {
+function assertBundledResourcesIncluded(entries) {
   const relativeEntries = entries.map((entry) =>
     entry.startsWith(packageDir) ? entry.slice(packageDir.length) : entry,
   );
@@ -97,6 +97,13 @@ function assertBundledSkillsIncluded(entries) {
   assert(
     hasPluginSkillManifest,
     'npm package should include tool plugin skill manifests (dist/resources/plugins/*/skills/).',
+  );
+  // ...and their bundled tool-use agents under resources/plugins/<id>/agents.
+  assert(
+    relativeEntries.some((relative) =>
+      /^dist\/resources\/plugins\/[^/]+\/agents\/.+\.yaml$/.test(relative),
+    ),
+    'npm package should include tool plugin agents (dist/resources/plugins/*/agents/).',
   );
 }
 
@@ -144,7 +151,7 @@ try {
     .filter(Boolean)
     .sort();
   assertNoForbiddenTarballEntries(entries);
-  assertBundledSkillsIncluded(entries);
+  assertBundledResourcesIncluded(entries);
 
   const installRoot = path.join(tmp, 'install');
   run('npm', ['install', '--prefix', installRoot, tarballPath]);

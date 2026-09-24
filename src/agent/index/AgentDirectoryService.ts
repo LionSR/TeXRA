@@ -19,6 +19,7 @@ import { entryExists } from '@utils/files/fsEntryExists';
 import {
   BUILTIN_WORKFLOW_AGENTS_DIR,
   BUILTIN_TOOL_USE_AGENTS_DIR,
+  builtInToolUseRoots,
 } from './BundledAgentDirectories';
 
 interface CustomAgentDirectoryStore {
@@ -102,7 +103,10 @@ export class AgentDirectoryService {
       const entries: AgentDirectoryEntry[] = [
         { directory: customDir, source: 'custom' },
         { directory: builtInDir, source: 'builtInWorkflow' },
-        { directory: builtInToolUseDir, source: 'builtInToolUse' },
+        ...builtInToolUseRoots(builtInToolUseDir).map((directory) => ({
+          directory,
+          source: 'builtInToolUse' as const,
+        })),
       ];
       return entries;
     });

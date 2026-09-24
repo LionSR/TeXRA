@@ -203,6 +203,10 @@ function createFakeDesktopPackage(
     'name: example\n\ndescription: Example plugin skill.\n',
   );
   writeText(
+    join(appRoot, 'resources/plugins/lean4/agents/example.yaml'),
+    'name: example\n',
+  );
+  writeText(
     join(appRoot, 'resources/traceViewer/index.html'),
     '<!doctype html>\n',
   );

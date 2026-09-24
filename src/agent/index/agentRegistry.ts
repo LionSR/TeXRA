@@ -29,6 +29,7 @@ import { byName } from '@utils/core';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { scanDirectory } from './agentYamlScanner';
+import { builtInToolUseRoots } from './BundledAgentDirectories';
 import { loadRemoteAgents } from './remoteAgentMeta';
 import type { AgentEntry } from './agentEntry';
 
@@ -152,7 +153,6 @@ function queueLoad(
     if (loadEpoch !== epoch) return;
     const startTime = Date.now();
 
-    // Load from all sources in parallel
     const dirs = yield* AgentDirectories;
     const [customDir, builtInDir, toolUseDir] = yield* Effect.all(
       [dirs.custom(), dirs.builtIn(), dirs.builtInToolUse()],
@@ -172,9 +172,9 @@ function queueLoad(
     const [customScan, builtInScan, toolUseScan, remoteEntries] =
       yield* Effect.all(
         [
-          scanDirectory(customDir, 'custom'),
-          scanDirectory(builtInDir, 'builtInWorkflow'),
-          scanDirectory(toolUseDir, 'builtInToolUse'),
+          scanDirectory([customDir], 'custom'),
+          scanDirectory([builtInDir], 'builtInWorkflow'),
+          scanDirectory(builtInToolUseRoots(toolUseDir), 'builtInToolUse'),
           includeRemote
             ? loadRemoteAgents()
             : Effect.succeed([] as AgentEntry[]),

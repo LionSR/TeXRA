@@ -540,6 +540,7 @@ const bundledRuntimeResourceDirs = [
   'tool_use_agents',
   'skills',
   'plugins',
+  'plugins/lean4/agents',
 ];
 // The Codex and Claude Code SDKs each pull a per-platform package carrying a
 // 250-410 MiB native CLI binary. The desktop app resolves a user-installed CLI

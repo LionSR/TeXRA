@@ -45,6 +45,8 @@ interface AgentDirectoryScan {
 interface ParsedAgentYaml {
   readonly name: string;
   readonly path: string;
+  /** The scanned root the file was found under; issues name paths from it. */
+  readonly root: string;
   readonly definition: AgentDefinition;
 }
 
@@ -62,32 +64,47 @@ export function extractToolNames(
   });
 }
 
+/**
+ * Scan one agent source. A source can span several roots (the bundled
+ * tool-use source is the core directory plus each tool plugin's), and they are
+ * pooled into one scan, so names stay unique and `inherits` resolves across
+ * the whole source. Files list in absolute-path order, as one directory holding
+ * them all would list them.
+ */
 export function scanDirectory(
-  dir: string,
+  roots: readonly string[],
   source: AgentSource,
 ): Effect.Effect<AgentDirectoryScan, never, FileSystem.FileSystem> {
-  if (!dir) return Effect.succeed({ entries: [], issues: [] });
+  const dirs = roots.filter((root) => root !== '');
+  if (dirs.length === 0) return Effect.succeed({ entries: [], issues: [] });
 
   return Effect.gen(function* () {
-    const files = (yield* Effect.tryPromise({
-      try: () =>
-        glob('**/*.yaml', {
-          cwd: dir,
-          absolute: true,
-          nodir: true,
-        }),
-      catch: (cause) =>
-        new AgentScanError({
-          path: dir,
-          message: toErrorMessage(cause),
-          cause,
-        }),
-    })).toSorted();
+    const files = (yield* Effect.forEach(dirs, (root) =>
+      Effect.tryPromise({
+        try: () =>
+          glob('**/*.yaml', {
+            cwd: root,
+            absolute: true,
+            nodir: true,
+          }),
+        catch: (cause) =>
+          new AgentScanError({
+            path: root,
+            message: toErrorMessage(cause),
+            cause,
+          }),
+      }).pipe(
+        Effect.map((paths) => paths.map((yamlPath) => ({ root, yamlPath }))),
+      ),
+    ))
+      .flat()
+      // Code-unit order, as the default sort of one directory's paths gave.
+      .toSorted((a, b) => (a.yamlPath < b.yamlPath ? -1 : 1));
     const issues: AgentScanIssue[] = [];
     const parsed: ParsedAgentYaml[] = [];
     for (const result of yield* Effect.forEach(
       files,
-      (yamlPath) => Effect.result(readYamlDefinition(yamlPath, dir)),
+      ({ root, yamlPath }) => Effect.result(readYamlDefinition(yamlPath, root)),
       { concurrency: 8 },
     )) {
       if (Result.isSuccess(result)) parsed.push(result.success);
@@ -98,7 +115,7 @@ export function scanDirectory(
         });
       }
     }
-    const unique = yield* entriesWithUniqueNames(parsed, dir, issues);
+    const unique = yield* entriesWithUniqueNames(parsed, issues);
     const definitions = new Map(
       unique.map((entry) => [entry.name, entry] as const),
     );
@@ -115,7 +132,7 @@ export function scanDirectory(
         `Failed to scan ${entry.path}: ${scanned.failure.message}`,
       ).pipe(withLogChannel(CHANNEL));
       issues.push({
-        path: path.relative(dir, entry.path),
+        path: path.relative(entry.root, entry.path),
         message: scanned.failure.message,
       });
     }
@@ -126,11 +143,11 @@ export function scanDirectory(
     return { entries, issues };
   }).pipe(
     Effect.catch((error: AgentScanError) =>
-      Effect.logError(`Failed to scan ${dir}: ${error.message}`).pipe(
+      Effect.logError(`Failed to scan ${error.path}: ${error.message}`).pipe(
         withLogChannel(CHANNEL),
         Effect.as({
           entries: [],
-          issues: [{ path: dir, message: error.message }],
+          issues: [{ path: error.path, message: error.message }],
         }),
       ),
     ),
@@ -139,7 +156,6 @@ export function scanDirectory(
 
 function entriesWithUniqueNames(
   entries: readonly ParsedAgentYaml[],
-  dir: string,
   issues: AgentScanIssue[],
 ): Effect.Effect<ParsedAgentYaml[]> {
   return Effect.gen(function* () {
@@ -154,7 +170,7 @@ function entriesWithUniqueNames(
         ).pipe(withLogChannel(CHANNEL));
         for (const match of matches) {
           issues.push({
-            path: path.relative(dir, match.path),
+            path: path.relative(match.root, match.path),
             message: `Duplicate agent name "${name}".`,
           });
         }
@@ -189,6 +205,7 @@ function readYamlDefinition(
       return Effect.succeed({
         name: parsed.success.name,
         path: yamlPath,
+        root: dir,
         definition: parsed.success,
       });
     }),
