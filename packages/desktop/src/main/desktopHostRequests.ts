@@ -662,9 +662,9 @@ export function createDesktopHostRequests(
       skip: Effect.suspend(() => options.onboarding.skipOnboarding()),
       runSetup: Effect.suspend(() => options.onboarding.runSetup()),
       skipSetup: Effect.suspend(() => options.onboarding.skipSetup()),
-      openGettingStarted: Effect.suspend(() =>
-        options.openExternalUrl(DESKTOP_DOCS_URL),
-      ),
+      // The card's "Open walkthrough" opens the in-app walkthrough, the
+      // same one `gettingStarted('openWalkthrough')` above opens.
+      openGettingStarted: Effect.sync(() => options.showFirstRunWalkthrough()),
     },
     // One window per paper and no view-title menu, so nothing reads this.
     setActiveView: () => {},
