@@ -43,7 +43,10 @@ const SUBSCHEMA_KEYWORDS: ReadonlySet<string> = new Set([
   'prefixItems',
   'additionalProperties',
   'additionalItems',
+  'unevaluatedProperties',
+  'unevaluatedItems',
   'contains',
+  'contentSchema',
   'propertyNames',
   'not',
   'if',
@@ -61,6 +64,7 @@ const SCHEMA_MAP_KEYWORDS: ReadonlySet<string> = new Set([
   'definitions',
   'patternProperties',
   'dependentSchemas',
+  'dependencies',
 ]);
 
 const isPlainObject = (value: unknown): value is Record<string, unknown> =>
