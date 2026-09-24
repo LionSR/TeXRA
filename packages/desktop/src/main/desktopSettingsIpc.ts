@@ -49,7 +49,6 @@ import { buildSettingsSnapshotMessage } from '@shared/settingsView/handlers/sett
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { loadRuntimeSkillDisplay } from '@skills/runtimeSkills';
 import { goalList, goalStateChanges } from '@tools/goal';
-import { refreshToolAvailability } from '@tools/toolAvailability';
 import {
   GITHUB_TOKEN_PROMPT,
   GITHUB_TOKEN_REMOVED_MESSAGE,
@@ -496,10 +495,10 @@ export function createDesktopSettingsIpc(
     ),
     // The secret store announces every committed write, whoever wrote it: the
     // settings round-trip, the setup agent's `unset_api_key`, another window.
-    // A provider key repaints this window's credential surfaces; the GitHub
-    // token gates the `github_subscription` tool group, so it re-probes, and
-    // `toolAvailabilityChanged` repaints the Tools tab. Other entries (OAuth
-    // tokens, sign-in nonces) are ignored.
+    // A provider key repaints this window's credential surfaces. A key a tool
+    // plugin declares (the GitHub token) is re-probed by the shared bootstrap,
+    // and `toolAvailabilityChanged` repaints the Tools tab. Other entries
+    // (OAuth tokens, sign-in nonces) are ignored.
     onAppSignal('credentialChanged', ({ key }) => {
       const provider = apiProviderOfSecretName(key);
       if (provider !== undefined) {
@@ -507,13 +506,6 @@ export function createDesktopSettingsIpc(
           options.credentialSettingsController.refreshAfterProviderKeyChange(
             provider,
           ),
-        );
-      } else if (key === GITHUB_TOKEN_STORAGE_KEY) {
-        runAsync(
-          refreshToolAvailability({
-            workspaceRoot: roots.workspace,
-            config: roots.config,
-          }),
         );
       }
     }),

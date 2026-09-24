@@ -96,6 +96,75 @@ describe('tool availability app signals', () => {
   );
 
   it.effect(
+    're-probes every open workspace when a key a plugin declares changes',
+    () =>
+      Effect.gen(function* () {
+        const probedRoots: (string | undefined)[] = [];
+        vi.doMock('@tools/plugins', () => ({
+          TOOL_PLUGINS: [
+            {
+              id: 'token-tool',
+              toolNames: ['token'],
+              name: 'Token tool',
+              category: 'ai-agents',
+              availability: {
+                reprobeOnSecrets: ['token.key'],
+                probe: vi.fn(({ workspaceRoot }: ToolProbeInputs) =>
+                  Effect.sync(() => probedRoots.push(workspaceRoot)),
+                ),
+                check: vi.fn(() => Effect.succeed(true)),
+              },
+            },
+          ],
+        }));
+        const sessionGraph = yield* Effect.promise(
+          () => import('@agent/runtime/sessionGraph'),
+        );
+        const { emitAppSignal, onAppSignal } = yield* Effect.promise(
+          () => import('@eventBus/AppSignals'),
+        );
+        const { reprobeOnCredentialChange } = yield* Effect.promise(
+          () => import('@tools/credentialReprobe'),
+        );
+        const session = (workspace: string | undefined) => ({
+          roots: { workspace, config: probeInputs.config },
+        });
+        // Two projects plus the no-workspace session; the second session on
+        // `/a` shares its availability cache, so it is probed once.
+        const sessions = [
+          session('/a'),
+          session('/a'),
+          session('/b'),
+          session(undefined),
+        ];
+        sessionGraph.initSessionOwner({
+          list: () => Effect.succeed(sessions),
+        } as never);
+        let refreshed = 0;
+        const allRefreshed = Deferred.makeUnsafe<void>();
+        const listener = yield* Effect.forkChild(
+          onAppSignal('toolAvailabilityChanged', () => {
+            if (++refreshed === 3)
+              Deferred.doneUnsafe(allRefreshed, Effect.void);
+          }),
+        );
+        const reprobe = yield* Effect.forkChild(reprobeOnCredentialChange);
+        // Both subscribers register on their own fibers, the re-prober's one
+        // fork deeper, before the store announces anything.
+        yield* Effect.repeat(Effect.yieldNow, { times: 3 });
+
+        emitAppSignal('credentialChanged', { key: 'unrelated.key' });
+        emitAppSignal('credentialChanged', { key: 'token.key' });
+
+        yield* Deferred.await(allRefreshed);
+        expect(probedRoots.toSorted()).toEqual(['/a', '/b', undefined]);
+        sessionGraph.initSessionOwner(undefined);
+        yield* Fiber.interrupt(reprobe);
+        yield* Fiber.interrupt(listener);
+      }).pipe(Effect.provide(probeServices)),
+  );
+
+  it.effect(
     'derives unavailable tool names from the last probe results, with no cache to refresh',
     () =>
       Effect.gen(function* () {

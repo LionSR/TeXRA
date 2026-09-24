@@ -112,6 +112,12 @@ export interface ToolAvailabilityChecks {
   readonly statusLabel?: (
     probeResult?: unknown,
   ) => Effect.Effect<string | undefined, ToolProbeError, ToolProbeServices>;
+  /**
+   * The secret-store keys this plugin's answer reads. A committed write to any
+   * of them (`credentialChanged`) re-probes every open workspace, so a plugin
+   * gated on a credential declares it here instead of each host naming it.
+   */
+  readonly reprobeOnSecrets?: readonly string[];
 }
 
 // ============================================================

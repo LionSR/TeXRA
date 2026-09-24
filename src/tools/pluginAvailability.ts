@@ -18,7 +18,10 @@ import {
   findClaudeBinaryPath,
 } from '@tools/claudeAgentImport';
 import { hasClaudeCodeOauthToken } from '@tools/claudeAgentConfig';
-import { getGitHubToken } from '@tools/github/githubAuth';
+import {
+  getGitHubToken,
+  GITHUB_TOKEN_STORAGE_KEY,
+} from '@tools/github/githubAuth';
 import { LEAN4_EXTENSION_ID } from '@tools/lean/leanTypes';
 import { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import {
@@ -163,30 +166,35 @@ const getGitHubPRPrerequisites = Effect.fn('getGitHubPRPrerequisites')(
   },
 );
 
-export const GITHUB_AVAILABILITY = prerequisitesChecks({
-  probe: ({ workspaceRoot }) => getGitHubPRPrerequisites(workspaceRoot),
-  // Without a workspace to ask about, the token is still answerable.
-  fallback: () => getGitHubPRPrerequisites(undefined),
-  check: ({ tokenPresent, inGitRepo }) => tokenPresent && inGitRepo,
-  statusLabel: ({ tokenPresent, inGitRepo }) => {
-    if (tokenPresent && inGitRepo) return undefined;
-    if (tokenPresent && !inGitRepo) return 'Needs git repo';
-    if (!tokenPresent && inGitRepo) return 'Needs token';
-    return 'Needs setup';
-  },
-  detailCheck: ({ tokenPresent, inGitRepo }) => {
-    if (tokenPresent && inGitRepo) {
-      return 'GitHub token detected and workspace is a git repo. Ready to subscribe to PR activity.';
-    }
-    if (!tokenPresent && !inGitRepo) {
-      return 'Open a git-tracked folder, or run git init and add a github.com remote. Then set a token in /config → GitHub token or the Git tab.';
-    }
-    if (!tokenPresent) {
-      return 'This workspace is a git repo. Set a GitHub personal access token in /config → GitHub token or the Git tab to enable PR activity subscriptions.';
-    }
-    return 'GitHub token is set. Open a git-tracked folder, or run git init and add a github.com remote, to use PR activity subscriptions.';
-  },
-});
+export const GITHUB_AVAILABILITY: ToolAvailabilityChecks = {
+  // The token gates the `github_subscription` tool group, so setting or
+  // clearing it re-probes the Tools tab and the next run's tool list.
+  reprobeOnSecrets: [GITHUB_TOKEN_STORAGE_KEY],
+  ...prerequisitesChecks({
+    probe: ({ workspaceRoot }) => getGitHubPRPrerequisites(workspaceRoot),
+    // Without a workspace to ask about, the token is still answerable.
+    fallback: () => getGitHubPRPrerequisites(undefined),
+    check: ({ tokenPresent, inGitRepo }) => tokenPresent && inGitRepo,
+    statusLabel: ({ tokenPresent, inGitRepo }) => {
+      if (tokenPresent && inGitRepo) return undefined;
+      if (tokenPresent && !inGitRepo) return 'Needs git repo';
+      if (!tokenPresent && inGitRepo) return 'Needs token';
+      return 'Needs setup';
+    },
+    detailCheck: ({ tokenPresent, inGitRepo }) => {
+      if (tokenPresent && inGitRepo) {
+        return 'GitHub token detected and workspace is a git repo. Ready to subscribe to PR activity.';
+      }
+      if (!tokenPresent && !inGitRepo) {
+        return 'Open a git-tracked folder, or run git init and add a github.com remote. Then set a token in /config → GitHub token or the Git tab.';
+      }
+      if (!tokenPresent) {
+        return 'This workspace is a git repo. Set a GitHub personal access token in /config → GitHub token or the Git tab to enable PR activity subscriptions.';
+      }
+      return 'GitHub token is set. Open a git-tracked folder, or run git init and add a github.com remote, to use PR activity subscriptions.';
+    },
+  }),
+};
 
 export const CODEX_AVAILABILITY: ToolAvailabilityChecks = {
   check: () => probeSdkBinaryAvailable(importCodexClass, findCodexBinaryPath),

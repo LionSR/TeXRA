@@ -120,10 +120,7 @@ import { GlobalDatabase } from '@shared/session/database';
 import { usageLogLayer } from '@telemetry/UsageLogService';
 import { registerRuntimeShutdownHandlers } from '@tools/agentCliSessionStores';
 import { refreshToolAvailability } from '@tools/toolAvailability';
-import {
-  GITHUB_TOKEN_STORAGE_KEY,
-  gitHubTokenRejectedMessage,
-} from '@tools/github/githubAuth';
+import { gitHubTokenRejectedMessage } from '@tools/github/githubAuth';
 import { killActiveRecording } from '@tools/media/audio';
 import { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import { sessionStoreClearedMessage } from '@ui/copy/sessionStore';
@@ -826,12 +823,6 @@ async function activateExtension(context: vscode.ExtensionContext) {
     context.secrets.onDidChange(({ key }) => {
       invalidateApiKeyCache();
       emitAppSignal('credentialChanged', { key });
-    }),
-    // The GitHub token gates the `github_subscription` tool group; re-probe so
-    // the Tools tab and the next run's tool list see the new token presence.
-    subscribeAppSignal(runtime, 'credentialChanged', ({ key }) => {
-      if (key !== GITHUB_TOKEN_STORAGE_KEY) return;
-      runtime.runFork(refreshToolAvailabilityLogged('secret change'));
     }),
     // Lean/LaTeX extension installed or removed → re-probe so the Tools tab
     // reflects the new state without the user clicking Re-check.
