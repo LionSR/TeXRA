@@ -98,8 +98,8 @@ vi.mock('@cli/runtime/terminalStatus', async (importOriginal) => ({
 }));
 
 vi.mock('@cli/runtime/sessionProgressSubscription', () => ({
-  attachCliSessionProgressProjection: vi.fn(
-    () => mocks.detachSessionProgressProjection,
+  attachCliSessionProgressProjection: vi.fn(() =>
+    Effect.succeed(Effect.suspend(mocks.detachSessionProgressProjection)),
   ),
 }));
 
@@ -416,7 +416,7 @@ describe('executeCliRequest', () => {
 
         expect(attachProjection).toHaveBeenCalledTimes(1);
         // The writer slot: the projection defaults to the NDJSON stdout sink.
-        expect(attachProjection.mock.calls[0]?.[2]).toBeUndefined();
+        expect(attachProjection.mock.calls[0]?.[1]).toBeUndefined();
         expect(mocks.runAgent).toHaveBeenCalledTimes(1);
         expect(attachProjection.mock.invocationCallOrder[0]).toBeLessThan(
           mocks.runAgent.mock.invocationCallOrder[0] ??

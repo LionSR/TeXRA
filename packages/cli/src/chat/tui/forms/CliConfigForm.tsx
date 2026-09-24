@@ -220,17 +220,16 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
 
   const settings = useAsyncListForm<Record<string, unknown>>({
     load: () =>
-      runtime.runPromise(
-        Effect.map(
-          Effect.forEach(CLI_STATE_SETTINGS, (entry) =>
-            Effect.map(
-              readSetting(entry, stores, 'cli'),
-              (value) => [entry.key, value] as const,
-            ),
+      Effect.map(
+        Effect.forEach(CLI_STATE_SETTINGS, (entry) =>
+          Effect.map(
+            readSetting(entry, stores, 'cli'),
+            (value) => [entry.key, value] as const,
           ),
-          Object.fromEntries,
         ),
+        Object.fromEntries,
       ),
+    runtime,
     onClose: props.onClose,
     onError: props.onError,
   });

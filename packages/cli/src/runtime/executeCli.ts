@@ -320,8 +320,8 @@ export function executeCliRequest(
     );
     const detachSessionProgressProjection =
       runContext.outputFormat === 'ndjson'
-        ? attachCliSessionProgressProjection(options.runtime, session)
-        : () => Effect.void;
+        ? yield* attachCliSessionProgressProjection(session)
+        : Effect.void;
     const detachWorkflowPlainOutput = renderWorkflowPlainProgress
       ? attachWorkflowPlainOutput(options.runtime, session, {
           runId: request.runId,
@@ -571,7 +571,7 @@ export function executeCliRequest(
       detachResultToast();
       terminalResult.dispose();
       detachRunProgressRenderer();
-      yield* detachSessionProgressProjection();
+      yield* detachSessionProgressProjection;
       detachWorkflowPlainOutput();
       detachHostInteractions();
       yield* presentationHost.close();
