@@ -18,4 +18,5 @@ export const EXTENSION_COMMANDS = {
   RUN_SETUP_ASSISTANT: 'texra.runSetupAssistant',
   OPEN_GETTING_STARTED: 'texra.openGettingStarted',
   SET_API_KEY: 'texra.setApiKey',
+  SHOW_MAIN_VIEW: 'texra.showMainView',
 } as const satisfies Record<string, CommandId>;

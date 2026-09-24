@@ -3,6 +3,7 @@ import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
+import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
 import { hasAnyUsableSetupCredential } from '@commands/setup/setupAssistantCommand';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
@@ -39,7 +40,7 @@ export const refreshApiKeyStatusBar = Effect.fn('refreshApiKeyStatusBar')(
     setup.tooltip =
       'Connect a model: sign in with ChatGPT or add a provider API key';
     // The welcome card in the TeXRA panel is the one home for that choice.
-    setup.command = 'texra.showMainView';
+    setup.command = EXTENSION_COMMANDS.SHOW_MAIN_VIEW;
     setup.accessibilityInformation = { label: 'TeXRA setup, get started' };
     setup.show();
   },
