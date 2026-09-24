@@ -8,7 +8,6 @@ import { parse as shellParse } from 'shell-quote';
 
 // Local imports
 import { withLogChannel } from '@logger/effectLog';
-import { createLog } from '@logger/logUtils';
 import { ToolMissingReporter } from '@platform/interfaces';
 import type { ExecResult } from '@shared/schemas';
 import {
@@ -34,7 +33,6 @@ import { executeCommandSync } from './execCore';
 import { executeCommand, type ExecuteCommandBaseOptions } from './execUtils';
 
 const CHANNEL = 'toolUtils';
-const log = createLog(CHANNEL);
 
 interface ToolConfig {
   command?: string | string[]; // Optional - defaults to "${toolName} --version"
@@ -448,8 +446,6 @@ export function detectPackageManager(): SystemPackageManager | null {
   for (const name of managers) {
     if (hasPackageManager(name)) return name;
   }
-
-  log.debug('No package manager detected');
   return null;
 }
 
@@ -462,7 +458,9 @@ const packageManagerAvailability = new Map<SystemPackageManager, boolean>();
  * than {@link detectPackageManager}: that one answers "which manager does this
  * platform use", so on a Linux box with both apt and Linuxbrew it returns
  * `apt` and a brew-only command map would never match. Each answer is probed
- * once and cached, including misses.
+ * once and cached, including misses. The answer is the whole report: the
+ * probe's own run and stderr are logged by `executeCommandSync`, and each
+ * caller surfaces the boolean (or `detectPackageManager`'s null) itself.
  */
 export function hasPackageManager(name: SystemPackageManager): boolean {
   const cached = packageManagerAvailability.get(name);
@@ -475,10 +473,5 @@ export function hasPackageManager(name: SystemPackageManager): boolean {
     cwd: process.cwd(),
   }).success;
   packageManagerAvailability.set(name, available);
-  log.debug(
-    available
-      ? `Package manager detected: ${name}`
-      : `Package manager not found: ${name}`,
-  );
   return available;
 }

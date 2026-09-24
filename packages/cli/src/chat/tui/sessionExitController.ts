@@ -24,7 +24,6 @@ import {
   restoreTuiInputModes,
   supportsTerminalJobControl,
 } from '@cli/tui/terminalCleanup';
-import { createLog } from '@logger/logUtils';
 import type { DisposableStore } from '@platform/disposable';
 import type { LifecycleHost } from '@platform/interfaces';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
@@ -58,7 +57,6 @@ import {
 import { terminalCapabilities } from './state/terminalCapabilities';
 import type { Instance as InkInstance } from 'ink';
 
-const log = createLog('cli.sessionExit');
 const EXIT_CONFIRMATION_TTL_MS = 800;
 
 /**
@@ -384,9 +382,11 @@ export function createSessionExitController(
       // flushed and the resume hint is printed, preserving the suspended flow
       // record on disk for `texra resume`. Run platform shutdown first so queued
       // usage logs flush — bin/texra.ts's finally won't on exit().
+      // Terminal modes are restored, so stderr is the operator's again; the
+      // log sink is silent for the whole TUI session and would drop this.
       if (disposalFailed) {
-        log.error(
-          `Session resource disposal failed during exit: ${toErrorMessage(disposalFailure)}`,
+        await writeTextStderrAndWait(
+          `[error] [cli.sessionExit] Session resource disposal failed during exit: ${toErrorMessage(disposalFailure)}`,
         );
       }
       await runPlatformShutdown();

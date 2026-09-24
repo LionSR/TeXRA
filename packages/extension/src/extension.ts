@@ -181,7 +181,6 @@ async function initVscodePlatform(
   context: vscode.ExtensionContext,
   lifecycle: LifecycleHost,
   workspaceRoot: string | undefined,
-  gitRepoRoot: string | undefined,
   /** The session a resume request targets, read at request time: the
    *  platform must exist before `initializeDefaultSession` can run, so the
    *  session cannot be a value here. */
@@ -300,6 +299,9 @@ async function initVscodePlatform(
       const projectState = yield* openProjectStateStore(
         storage.getStoragePath(),
       );
+      const gitRepoRoot = workspaceRoot
+        ? yield* resolveGitCommonRoot(workspaceRoot)
+        : undefined;
       return {
         globalState,
         workspaceState: gitRepoRoot
@@ -519,19 +521,19 @@ function registerSupabaseAuth(
         // is what an OAuth callback arrives at, so sign-in is not "ready"
         // before it is installed.
         authReadiness.uriHandlerInstalled = true;
-
-        log.info('Supabase authentication provider registered');
       },
       catch: (cause) => new SupabaseAuthRegistrationFailed({ cause }),
     }).pipe(
-      Effect.catchTag('SupabaseAuthRegistrationFailed', (failure) =>
-        Effect.sync(() => {
-          auth.setInitError(ensureError(failure.cause));
-          log.error(
-            `Failed to initialize Supabase authentication: ${toErrorMessage(failure.cause)}`,
-          );
-        }),
+      Effect.andThen(
+        Effect.logInfo('Supabase authentication provider registered'),
       ),
+      Effect.catchTag('SupabaseAuthRegistrationFailed', ({ cause }) => {
+        auth.setInitError(ensureError(cause));
+        return Effect.logError(
+          `Failed to initialize Supabase authentication: ${toErrorMessage(cause)}`,
+        );
+      }),
+      withLogChannel(EXTENSION_CHANNEL),
     ),
   );
 }
@@ -609,7 +611,6 @@ async function activateExtension(context: vscode.ExtensionContext) {
         context,
         lifecycle,
         undefined,
-        undefined,
         // The credential-only path never initializes a session; a resume
         // request cannot arrive here because every run belongs to one.
         () => {
@@ -671,7 +672,6 @@ async function activateExtension(context: vscode.ExtensionContext) {
     ),
   );
   setActiveSidebarView(SIDEBAR_VIEWS.MAIN);
-  const gitRepoRoot = await resolveGitCommonRoot(workspaceRoot);
 
   setLogSink(createVsCodeLogSink());
   // Deactivation releases the output channels with the sink, so a reload does
@@ -683,7 +683,6 @@ async function activateExtension(context: vscode.ExtensionContext) {
       context,
       lifecycle,
       workspaceRoot,
-      gitRepoRoot,
       // `runtimeSession` is created below; resume requests only arrive after
       // activation has composed it.
       () => runtimeSession,
@@ -752,14 +751,17 @@ async function activateExtension(context: vscode.ExtensionContext) {
   // Order matters: registerAgentDirectoryRoots exposes the packaged built-in
   // directories, and loadAgents scans them.
   await runtime.runPromise(registerAgentDirectoryRoots(context));
-  const agentIndex = await runtime.runPromiseExit(
-    loadAgents({ includeRemote: false }),
+  const agentIndexLoaded = await runtime.runPromise(
+    loadAgents({ includeRemote: false }).pipe(
+      Effect.as(true),
+      Effect.catchCause((cause) =>
+        Effect.logError(
+          `Failed to initialize agent index: ${toErrorMessage(Cause.squash(cause))}`,
+        ).pipe(withLogChannel(EXTENSION_CHANNEL), Effect.as(false)),
+      ),
+    ),
   );
-  if (Exit.isFailure(agentIndex)) {
-    log.error(
-      `Failed to initialize agent index: ${toErrorMessage(Cause.squash(agentIndex.cause))}`,
-    );
-  } else {
+  if (agentIndexLoaded) {
     runtime.runFork(
       loadAgents().pipe(
         Effect.catchCause((cause) =>
@@ -779,9 +781,12 @@ async function activateExtension(context: vscode.ExtensionContext) {
     runtimeSession,
     Effect.suspend(() => apiKeyStatusRefresh()),
   );
-  await runtime.runPromise(progressViewProvider.initialize());
-
-  log.info('TeXRA extension activated');
+  await runtime.runPromise(
+    Effect.andThen(
+      progressViewProvider.initialize(),
+      Effect.logInfo('TeXRA extension activated'),
+    ).pipe(withLogChannel(EXTENSION_CHANNEL)),
+  );
 
   // Deferred off the activation tick: extendEnvPath() inside performs
   // synchronous glob probes of TeX install directories, which would
@@ -845,7 +850,6 @@ async function activateExtension(context: vscode.ExtensionContext) {
     'githubTokenInvalid',
     ({ message }) => {
       const rejected = gitHubTokenRejectedMessage(message);
-      log.error(rejected);
       void vscode.window
         .showErrorMessage(rejected, 'Open Git settings')
         .then((choice) => {
@@ -857,7 +861,11 @@ async function activateExtension(context: vscode.ExtensionContext) {
   );
   context.subscriptions.push(gitHubAuthListener);
   await runtime.runPromise(
-    registerInlineCriticism(context, runtime, runtimeSession, globalState),
+    registerInlineCriticism(context, runtime, runtimeSession, globalState).pipe(
+      Effect.andThen(
+        registerLanguageModelTools(context, runtime, runtimeSession),
+      ),
+    ),
   );
   registerInlineComments(context);
 
@@ -985,10 +993,6 @@ async function activateExtension(context: vscode.ExtensionContext) {
     'approvalPolicyChanged',
     updateStatusBarTooltip,
   );
-
-  // Surface curated research tools to VS Code's Language Model Tool API
-  // (Copilot Chat `#texra_*` references).
-  registerLanguageModelTools(context, runtime, runtimeSession);
 
   context.subscriptions.push(
     { dispose: disposeStatusListener },
