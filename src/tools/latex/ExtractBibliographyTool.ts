@@ -12,12 +12,15 @@ import {
   loadBibliographyEntries,
   summarizeBibliographyEntries,
 } from '@latex/extractBibliography';
+import { relativeToRoot } from '@platform/defaults/nodeWorkspace';
 import { WorkspaceFs } from '@platform/rootedFs';
 import type { ToolResult } from '@shared/schemas';
 import { formatToolOutput } from '@tools/formatting';
 import { resolveToolPath, type ToolPathCall } from '@tools/pathResolution';
 import { defineTool } from '@tools/core/define';
 import { executed } from '@tools/core/result';
+import { toPosixPath } from '@utils/core/pathCore';
+import { ensureError } from '@utils/errors/errorMessage';
 import { pathExists } from '@utils/files/fsDurability';
 import { formatResultCount } from '@utils/text/stringUtils';
 import {
@@ -41,10 +44,26 @@ type ExtractBibliographyInput = z.infer<typeof ExtractBibliographyInputSchema>;
 
 const DEFAULT_MAX_ENTRIES = 25;
 
+/**
+ * Display already-resolved absolute paths: relative to the working directory
+ * (or the workspace) when they lie under it, absolute otherwise. These are
+ * files the document names, not tool input, so no containment applies: a
+ * chapter run's missing `../refs.bib` is a note, not a tool failure.
+ */
 function formatPathList(call: ToolPathCall, filePaths: string[]) {
-  return Effect.forEach(filePaths, (filePath) =>
-    resolveToolPath(call, filePath).pipe(Effect.map(({ display }) => display)),
-  ).pipe(Effect.map((paths) => paths.join(', ')));
+  const base = call.workingDirectory ?? call.roots.workspace;
+  return Effect.try({
+    try: () =>
+      filePaths
+        .map((filePath) =>
+          toPosixPath(
+            (base === undefined ? undefined : relativeToRoot(base, filePath)) ??
+              filePath,
+          ),
+        )
+        .join(', '),
+    catch: ensureError,
+  });
 }
 
 const extractBibliography = Effect.fn('ExtractBibliographyTool.execute')(
