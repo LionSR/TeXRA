@@ -847,20 +847,20 @@ export class SettingsViewMessageHandler {
     context: vscode.ExtensionContext,
   ) {
     return Effect.gen({ self: this }, function* () {
+      // Repeat one superseded discovery, then fail closed rather than
+      // authorize from the retained presentation catalogue. A failed probe
+      // fails the program: authorization never falls back to the retained
+      // catalogue.
       const discovery = yield* Effect.exit(
-        Effect.gen(function* () {
-          // Retry one superseded discovery, then fail closed rather than
-          // authorize from the retained presentation catalogue. A failed
-          // probe fails the program: authorization never falls back to the
-          // retained catalogue.
-          for (let attempt = 0; attempt < 2; attempt += 1) {
-            const result = yield* refreshRuntimeModelRegistry({
-              forceDiscovery: true,
-            });
-            if (result === 'current') return copilotRouteForModel(modelName);
-          }
-          return undefined;
-        }),
+        refreshRuntimeModelRegistry({ forceDiscovery: true }).pipe(
+          Effect.repeat({
+            until: (result): boolean => result === 'current',
+            times: 1,
+          }),
+          Effect.map((result) =>
+            result === 'current' ? copilotRouteForModel(modelName) : undefined,
+          ),
+        ),
       );
       const route = Exit.isSuccess(discovery) ? discovery.value : undefined;
       let result: Exit.Exit<unknown, unknown> = discovery;

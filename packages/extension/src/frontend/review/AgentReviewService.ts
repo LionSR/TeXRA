@@ -260,38 +260,33 @@ class AgentReviewServiceImpl {
     // `clear()` discards the run. Check before collecting so a clear that
     // landed during the initial context-key update cannot start stale work.
     if (!this.reviewRuns.isCurrent(run)) return;
-    const collected = await collectReviewDiff({
-      cwd,
-      baseRef: options.baseRef,
-      baseDescription: options.baseDescription,
-      baseBranch: options.baseBranch,
-    });
+    // A failed collection settles to its user-facing reason (ReviewDiffFailed).
+    const collected = await runtime
+      .runPromise(collectReviewDiff({ ...options, cwd }))
+      .catch(toErrorMessage);
     if (!this.reviewRuns.isCurrent(run)) return;
     if (run.stopRequested) {
       this.summary = 'Review cancelled';
       return;
     }
 
-    if (!collected.ok) {
+    if (typeof collected === 'string') {
+      const reason = collected;
       // Issues from the previous run stay available rather than vanishing on
       // a transient failure; the summary marks them as previous results.
-      this.summary = `Review failed: ${collected.reason}${this.issues.length > 0 ? ' · showing previous results' : ''}`;
+      this.summary = `Review failed: ${reason}${this.issues.length > 0 ? ' · showing previous results' : ''}`;
       if (trigger === 'manual') {
         runtime.runFork(
-          showLoggedErrorMessage(
-            CHANNEL,
-            'Agent review failed',
-            collected.reason,
-          ),
+          showLoggedErrorMessage(CHANNEL, 'Agent review failed', reason),
         );
       } else {
-        log.warn(`Agent review failed: ${collected.reason}`);
+        log.warn(`Agent review failed: ${reason}`);
       }
       return;
     }
 
     const { repoRoot, baseDescription, diff, changedFiles, truncated } =
-      collected.value;
+      collected;
     if (!diff) {
       this.baseDescription = baseDescription;
       this.issues = [];

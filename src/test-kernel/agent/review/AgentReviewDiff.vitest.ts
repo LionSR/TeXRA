@@ -3,8 +3,9 @@ import { mkdir, realpath, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect } from 'effect';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { it } from '@effect/vitest';
+import { Effect, Result } from 'effect';
+import { beforeEach, describe, expect } from 'vitest';
 
 // Local imports
 import {
@@ -18,6 +19,7 @@ import {
   makeTempDir,
   useTempDirs,
   withTempDir,
+  withTempDirEffect,
 } from '@test/support/tempDirPlatform';
 import { executeCommand } from '@utils/system/execUtils';
 
@@ -62,22 +64,21 @@ describe('collectReviewDiff (real git repository)', () => {
   });
 
   async function collectDiff(options: Partial<CollectReviewDiffOptions> = {}) {
-    return collectReviewDiff({
-      cwd: repo,
-      ...options,
-    });
+    return Effect.runPromise(
+      Effect.result(collectReviewDiff({ cwd: repo, ...options })),
+    );
   }
 
   async function collectDiffOrFail(
     options: Partial<CollectReviewDiffOptions> = {},
   ) {
     const result = await collectDiff(options);
-    if (!result.ok) {
+    if (Result.isFailure(result)) {
       throw new Error(
-        `expected collectReviewDiff to succeed: ${result.reason}`,
+        `expected collectReviewDiff to succeed: ${result.failure.message}`,
       );
     }
-    return result.value;
+    return result.success;
   }
 
   it('diffs a feature branch against main using ordinary Git semantics', async () => {
@@ -185,9 +186,8 @@ describe('collectReviewDiff (real git repository)', () => {
     const result = await collectDiff({
       baseBranch: 'no-such-branch',
     });
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.reason).toContain('no-such-branch');
+    if (Result.isSuccess(result)) throw new Error('expected a failure');
+    expect(result.failure.message).toContain('no-such-branch');
   });
 
   it('uses an explicit base ref for commit-triggered reviews', async () => {
@@ -219,33 +219,54 @@ describe('collectReviewDiff (real git repository)', () => {
   it('fails with a reason outside a git repository', async () => {
     await withTempDir('texra-plain-', async (plain) => {
       const result = await collectDiff({ cwd: plain });
-      expect(result).toEqual({
-        ok: false,
-        reason: 'The workspace is not a git repository.',
-      });
+      if (Result.isSuccess(result)) throw new Error('expected a failure');
+      expect(result.failure.message).toBe(
+        'The workspace is not a git repository.',
+      );
     });
   });
 
-  it('lists local and origin branches for the picker, flagging the current one', async () => {
-    await git('branch', 'develop');
-    await git('update-ref', 'refs/remotes/origin/release', 'refs/heads/main');
-    await git('update-ref', 'refs/remotes/origin/HEAD', 'refs/heads/main');
-    await git('checkout', '-b', 'feature');
+  it.effect(
+    'lists local and origin branches for the picker, flagging the current one',
+    () =>
+      Effect.gen(function* () {
+        yield* Effect.promise(async () => {
+          await git('branch', 'develop');
+          await git(
+            'update-ref',
+            'refs/remotes/origin/release',
+            'refs/heads/main',
+          );
+          await git(
+            'update-ref',
+            'refs/remotes/origin/HEAD',
+            'refs/heads/main',
+          );
+          await git('checkout', '-b', 'feature');
+        });
 
-    const candidates = await listBaseBranchCandidates(repo);
-    const byRef = new Map(candidates.map((c) => [c.ref, c]));
-    expect([...byRef.keys()]).toEqual(
-      expect.arrayContaining(['main', 'develop', 'feature', 'origin/release']),
-    );
-    // origin/HEAD is a symbolic alias, not a diffable branch.
-    expect(byRef.has('origin/HEAD')).toBe(false);
-    expect(byRef.get('feature')?.current).toBe(true);
-    expect(byRef.get('main')?.current).toBe(false);
-  });
+        const candidates = yield* listBaseBranchCandidates(repo);
+        const byRef = new Map(candidates.map((c) => [c.ref, c]));
+        expect([...byRef.keys()]).toEqual(
+          expect.arrayContaining([
+            'main',
+            'develop',
+            'feature',
+            'origin/release',
+          ]),
+        );
+        // origin/HEAD is a symbolic alias, not a diffable branch.
+        expect(byRef.has('origin/HEAD')).toBe(false);
+        expect(byRef.get('feature')?.current).toBe(true);
+        expect(byRef.get('main')?.current).toBe(false);
+      }),
+  );
 
-  it('returns no branch candidates outside a git repository', async () => {
-    await withTempDir('texra-plain-', async (plain) => {
-      expect(await listBaseBranchCandidates(plain)).toEqual([]);
-    });
-  });
+  it.effect('returns no branch candidates outside a git repository', () =>
+    withTempDirEffect('texra-plain-', (plain) =>
+      Effect.gen(function* () {
+        expect(yield* listBaseBranchCandidates(plain)).toEqual([]);
+      }),
+    ),
+  );
 });

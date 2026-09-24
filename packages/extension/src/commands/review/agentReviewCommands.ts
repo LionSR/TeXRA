@@ -100,7 +100,7 @@ async function handleRunWithOptions(
     );
     return;
   }
-  const options = await promptReviewOptions(cwd);
+  const options = await promptReviewOptions(cwd, runtime);
   if (!options) return; // Cancelled at one of the prompt steps.
   await AgentReviewService.runReview('manual', options);
 }
