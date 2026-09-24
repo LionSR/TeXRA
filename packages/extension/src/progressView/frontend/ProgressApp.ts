@@ -438,7 +438,13 @@ export class ProgressApp extends LitElement {
       `;
     }
     const { launch } = surface;
-    const selectedFiles = FILE_SELECT_CONFIGS.flatMap(
+    // Only a document pass reads Input and Context; an interactive agent
+    // gets the instruction and its attachments, so it shows only those.
+    const documentPass = launch.sessionType === 'workflow';
+    const fileGroups = documentPass
+      ? FILE_SELECT_CONFIGS
+      : FILE_SELECT_CONFIGS.filter((config) => config.type === 'media');
+    const selectedFiles = fileGroups.flatMap(
       (config) => launch[LAUNCH_FILE_LISTS[config.type]],
     );
     const { rollup } = view;
@@ -447,9 +453,12 @@ export class ProgressApp extends LitElement {
       <div class="empty">
         <div class="hero-wrap">
           ${this.renderHero(host)}
-          <wa-details class="context">
+          <!-- A document pass cannot run without an input file, so picking
+            one opens the file groups. -->
+          <wa-details class="context" ?open=${documentPass}>
             <span slot="summary" class="context-summary"
-              >${waIcon('file-circle-plus')} Context and attachments
+              >${waIcon('file-circle-plus')}
+              ${documentPass ? 'Documents and attachments' : 'Attachments'}
               <span class="context-files"
                 >${
                   selectedFiles.length === 0
@@ -460,7 +469,7 @@ export class ProgressApp extends LitElement {
             >
             <div class="context-body">
               ${repeat(
-                FILE_SELECT_CONFIGS,
+                fileGroups,
                 (config) => config.type,
                 (config) => html`
                   <file-select-group

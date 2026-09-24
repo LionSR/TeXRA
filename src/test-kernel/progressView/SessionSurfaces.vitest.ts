@@ -224,64 +224,29 @@ describe('session Surface ownership', () => {
     });
   });
 
-  it.each([
-    ['polish', 'stream'],
-    ['record', 'stream'],
-    ['polish', 'launch'],
-    ['record', 'launch'],
-  ] as const)(
-    'returns %s to its originating %s draft after selection changes',
-    async (operation, target) => {
+  it.each(['polish', 'record'] as const)(
+    'returns %s to its originating draft after selection changes',
+    async (operation) => {
       view.set(foldAll(buildScenario().events));
-      const isLaunch = target === 'launch';
-      if (isLaunch) {
-        surfaces.act(KEY, { kind: 'selectNew' });
-        surfaces.act(KEY, {
-          kind: 'launch',
-          patch: {
-            sessionType: 'toolUse',
-            instruction: { toolUse: 'Saved text' },
-          },
-        });
-      }
       const finish = response();
       const request: HostRequest =
         operation === 'polish'
           ? { kind: 'polish', text: 'Saved text' }
-          : {
-              kind: 'record',
-              action: { kind: 'start', target: isLaunch ? 'launch' : ROOT },
-            };
+          : { kind: 'record', action: { kind: 'start', target: ROOT } };
       surfaces.hostRequest(KEY, request);
-      if (isLaunch) {
-        surfaces.act(KEY, {
-          kind: 'launch',
-          patch: {
-            sessionType: 'workflow',
-            instruction: { workflow: 'Other text' },
-          },
-        });
-      } else {
-        surfaces.act(KEY, { kind: 'select', runId: CHILD });
-        surfaces.act(KEY, {
-          kind: 'draft',
-          runId: CHILD,
-          patch: { text: 'Other text' },
-        });
-      }
+      surfaces.act(KEY, { kind: 'select', runId: CHILD });
+      surfaces.act(KEY, {
+        kind: 'draft',
+        runId: CHILD,
+        patch: { text: 'Other text' },
+      });
       finish({ ok: true, outcome: { kind: 'text', text: 'Result' } });
       await Promise.resolve();
       const surface = surfaces.get(KEY)!.surface$.get();
-      expect(
-        isLaunch
-          ? surface.launch.instruction.toolUse
-          : surface.drafts.get(ROOT)?.text,
-      ).toBe(operation === 'polish' ? 'Result' : 'Saved text Result');
-      expect(
-        isLaunch
-          ? surface.launch.instruction.workflow
-          : surface.drafts.get(CHILD)?.text,
-      ).toBe('Other text');
+      expect(surface.drafts.get(ROOT)?.text).toBe(
+        operation === 'polish' ? 'Result' : 'Saved text Result',
+      );
+      expect(surface.drafts.get(CHILD)?.text).toBe('Other text');
       expect(surface.polishing.size).toBe(0);
     },
   );

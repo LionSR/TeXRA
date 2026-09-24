@@ -1313,7 +1313,7 @@ function createWindow(options: {
           if (!binding || binding !== documentBinding) return;
           binding.bridge.surfaceAction({
             kind: 'launch',
-            patch: { agent: { toolUse: selectedToolUseAgent } },
+            patch: { sessionType: 'toolUse', agent: selectedToolUseAgent },
           });
         }),
     });

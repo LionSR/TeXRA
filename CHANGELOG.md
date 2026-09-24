@@ -276,8 +276,31 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
 
 ### Extension (VS Code) and Desktop
 
+#### Changes
+
+- **The agent you pick decides the run type** — the Mode chip (Interactive /
+  Workflow) is gone from the New task composer. The Agent menu lists
+  interactive agents, document passes and teams as sections, and the
+  composer keeps one draft instead of one per mode, so switching agents no
+  longer swaps out what you typed. A draft saved by an earlier build is
+  cleared once.
+- **A quieter New task composer** — the paragraph of guidance under the
+  composer is gone, the narrow sidebar shows the Agent and Model chips
+  instead of one combined Setup menu, and the follow-up line names its
+  target only when you can send the message to a parent run instead.
+- **The run view shows each fact once** — a context compaction is one row
+  instead of two, the workflow board leaves spend to the usage footer and
+  elapsed time to the header, its footer appears only when a call failed,
+  and "Kill run" is gone from the board because the header's Stop does the
+  same. The Tasks panel names the task in progress in its summary and stays
+  open or closed as you left it when you switch runs.
+
 #### Bug Fixes
 
+- **File lists no longer look used when the agent ignores them** — the
+  Input and Context lists and the auto-extract and TeX Count options now
+  appear only for a document-pass agent. An interactive agent never read
+  them, so a file added there was silently dropped.
 - **The session transcript uses the full panel width.**
 - **Selected conversation tabs and settings cards are readable** — selected-row
   text now contrasts against the highlight instead of blending into it.

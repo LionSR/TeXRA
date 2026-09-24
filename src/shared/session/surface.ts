@@ -29,7 +29,12 @@ import type { HostSnapshot } from './hostSnapshot';
 import type { RequestErrorWire } from './sessionFrames';
 import type { SessionView, RunView } from './sessionView';
 
-/** The new-task composer's selections, separate from host-derived state. */
+/**
+ * The new-task composer's selections, separate from host-derived state.
+ * One agent and one instruction: the agent's category is the run type, so
+ * `sessionType` is always written together with `agent` and never chosen
+ * on its own.
+ */
 export const LaunchSurfaceSchema = UIFileFieldsSchema.merge(
   ToolConfigFieldsSchema,
 ).extend({
@@ -37,34 +42,17 @@ export const LaunchSurfaceSchema = UIFileFieldsSchema.merge(
   launchTarget: LaunchTargetSchema.prefault('agent'),
   selectedTeamId: z.string().prefault(''),
   workingDirectory: z.string().prefault(''),
-  agent: z
-    .object({
-      workflow: z.string().prefault('correct'),
-      toolUse: z.string().prefault('orchestrator'),
-    })
-    .prefault({}),
+  agent: z.string().prefault('orchestrator'),
   model: z.string().prefault(DEFAULT_AGENT_MODEL),
   commit: z.string().prefault('HEAD'),
-  instruction: z
-    .object({
-      workflow: z.string().prefault(''),
-      toolUse: z.string().prefault(''),
-    })
-    .prefault({}),
+  instruction: z.string().prefault(''),
   baseFile: z.string().prefault(''),
 });
 type LaunchSurface = z.infer<typeof LaunchSurfaceSchema>;
 
-/** A change to the launcher: the per-category records merge one level
- *  deep, so a host can name the tool-use agent without knowing the
- *  workflow one. Zod because the host's `surface.action` carries it. */
-const PerCategoryPatchSchema = z
-  .object({ workflow: z.string().optional(), toolUse: z.string().optional() })
-  .optional();
-export const LaunchPatchSchema = LaunchSurfaceSchema.partial().extend({
-  agent: PerCategoryPatchSchema,
-  instruction: PerCategoryPatchSchema,
-});
+/** A change to the launcher. Zod because the host's `surface.action`
+ *  carries it. */
+export const LaunchPatchSchema = LaunchSurfaceSchema.partial();
 type LaunchPatch = z.infer<typeof LaunchPatchSchema>;
 
 /** An image of a follow-up: the `[fileName]` chip its text carries and
@@ -109,7 +97,7 @@ export interface Surface {
    */
   readonly selected: RunId | null;
   readonly drafts: ReadonlyMap<RunId, Draft>;
-  /** Foreground polish operations, keyed by stream id or `launch:<mode>`. Never persisted. */
+  /** Foreground polish operations, keyed by stream id or `launch`. Never persisted. */
   readonly polishing: ReadonlySet<string>;
   /** Streams awaiting follow-up admission. Never persisted. */
   readonly sending: ReadonlySet<RunId>;
@@ -459,15 +447,16 @@ export function applySurfaceAction(
         }),
       };
     case 'launch': {
-      const { agent, instruction, ...rest } = action.patch;
+      // Naming an agent targets that agent, whatever team was chosen.
       const launch = {
         ...surface.launch,
-        ...rest,
-        agent: { ...surface.launch.agent, ...agent },
-        instruction: { ...surface.launch.instruction, ...instruction },
-      };
-      // A team is a tool-use launch target: leaving that mode launches the
-      // mode's agent, whatever target the tool-use mode had chosen.
+        ...action.patch,
+        ...(action.patch.agent === undefined
+          ? {}
+          : { launchTarget: 'agent' as const }),
+      } satisfies LaunchSurface;
+      // A team is a tool-use launch target: a workflow launch runs its
+      // agent, whatever team was chosen before.
       return {
         ...surface,
         launch:

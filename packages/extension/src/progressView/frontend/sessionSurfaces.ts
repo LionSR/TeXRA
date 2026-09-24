@@ -11,7 +11,7 @@
  */
 import { signal, type Signal } from '@lit-labs/signals';
 
-import type { SessionType, RunId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import { subscribeToSignalChanges } from '@shared/signals';
 import { LAUNCH_FILE_LISTS } from '@shared/launcher/fileSelectConfigs';
 import type { HostRequest } from '@shared/session/hostRequest';
@@ -192,16 +192,15 @@ export function createSessionSurfaces(options: {
   }
 
   /** An asynchronous operation keeps the draft that started it, even if
-   *  selection or the launcher's mode changes before its response. */
+   *  selection changes before its response. */
   interface DraftOrigin {
     readonly runId: RunId | null;
-    readonly sessionType: SessionType;
   }
 
   function draftText(entry: Held, origin: DraftOrigin): string {
     const surface = entry.surface$.get();
     return origin.runId === null
-      ? surface.launch.instruction[origin.sessionType]
+      ? surface.launch.instruction
       : (surface.drafts.get(origin.runId)?.text ?? '');
   }
 
@@ -212,10 +211,7 @@ export function createSessionSurfaces(options: {
       act(entry, { kind: 'draft', runId: origin.runId, patch: { text } });
       return;
     }
-    act(entry, {
-      kind: 'launch',
-      patch: { instruction: { [origin.sessionType]: text } },
-    });
+    act(entry, { kind: 'launch', patch: { instruction: text } });
   }
 
   function presentResult(entry: Held, result: Response['result']): void {
@@ -300,14 +296,8 @@ export function createSessionSurfaces(options: {
         }
         return;
       case 'launch':
-        if (
-          launch.instruction[request.launch.sessionType] ===
-          request.launch.instruction[request.launch.sessionType]
-        ) {
-          act(entry, {
-            kind: 'launch',
-            patch: { instruction: { [request.launch.sessionType]: '' } },
-          });
+        if (launch.instruction === request.launch.instruction) {
+          act(entry, { kind: 'launch', patch: { instruction: '' } });
         }
         return;
       default:
@@ -334,11 +324,8 @@ export function createSessionSurfaces(options: {
     if (request.kind === 'record' && request.action.kind === 'start') {
       runId = request.action.target === 'launch' ? null : request.action.target;
     }
-    const origin: DraftOrigin = {
-      runId,
-      sessionType: surface.launch.sessionType,
-    };
-    const target = origin.runId ?? `launch:${origin.sessionType}`;
+    const origin: DraftOrigin = { runId };
+    const target = origin.runId ?? 'launch';
     if (request.kind === 'polish') {
       if (surface.polishing.has(target)) return;
       setSurface(entry, {
@@ -454,7 +441,7 @@ export function createSessionSurfaces(options: {
       return;
     }
     const { launch } = surface;
-    const instruction = launch.instruction[launch.sessionType].trim();
+    const instruction = launch.instruction.trim();
     if (instruction === '') return;
     hostRequestFor(entry, { kind: 'launch', launch, instruction });
   }

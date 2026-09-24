@@ -297,28 +297,25 @@ export class BackgroundTasksPanel extends LitElement {
               >${inquiries.length}</wa-badge
             >`
         : html`${waIcon('diagram-project')} Dispatched
-            ${formatResultCount(rollup.total, BACKGROUND_TASK.countNoun)}
-            <wa-badge variant="neutral" appearance="outlined" pill
-              >${rollup.total}</wa-badge
-            >${
-              rollup.running > 0
-                ? html`<wa-badge variant="success" pill
-                    >${rollup.running}</wa-badge
-                  >`
-                : nothing
-            }${
-              run.approval === 'descendant'
-                ? html`<wa-badge variant="warning" pill
-                    >${waIcon('triangle-exclamation')}</wa-badge
-                  >`
-                : nothing
-            }${
-              since === null
-                ? nothing
-                : html`<span class="dispatch-since"
-                    >since ${getTimeFormatter().format(new Date(since))}</span
-                  >`
-            }`;
+          ${formatResultCount(rollup.total, BACKGROUND_TASK.countNoun)}${
+            rollup.running > 0
+              ? html`<wa-badge variant="success" pill
+                  >${rollup.running} running</wa-badge
+                >`
+              : nothing
+          }${
+            run.approval === 'descendant'
+              ? html`<wa-badge variant="warning" pill
+                  >${waIcon('triangle-exclamation')}</wa-badge
+                >`
+              : nothing
+          }${
+            since === null
+              ? nothing
+              : html`<span class="dispatch-since"
+                  >since ${getTimeFormatter().format(new Date(since))}</span
+                >`
+          }`;
     const open =
       this.surface?.groups.get(run.id)?.get(DISPATCH_GROUP_KEY) !== false;
 

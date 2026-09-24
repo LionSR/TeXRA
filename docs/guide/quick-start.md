@@ -88,6 +88,11 @@ Open the TeXRA panel from the brain icon in the sidebar, or press
 
 ### Select files
 
+The **Input** and **Context** sections appear once you pick a document-pass
+agent such as `polish` or `correct`, because only those agents read them. An
+interactive agent (the orchestrator, the assistant) gets your instruction and
+any attachments, so the Launcher shows only **Media** for it.
+
 1. In the **Input** section, select <wa-icon library="texra" name="add"></wa-icon> **Add files** and pick your document from the file picker. You can also drag it from the OS file manager. If you have several `.tex` files open and want them all, use <wa-icon library="texra" name="folder-opened"></wa-icon> **Add opened files**; it appends every editor tab whose extension matches.
 2. (Optional) Use the same buttons in **Context** to add read-only references or preamble, and **Media** to add figure files.
 
@@ -102,7 +107,10 @@ Each category holds an ordered list. Add as many files as the task needs and dra
 ### Choose agent, model, and instruction
 
 The dropdown menus at the bottom of the instruction box pick the agent
-(e.g. `polish` for improving writing) and the model (e.g. `sonnet5`).
+(e.g. `polish` for improving writing) and the model (e.g. `sonnet5`). The
+agent menu lists interactive agents, document passes and teams in three
+sections, and the agent you pick decides what kind of run starts: there is
+no separate mode to set.
 Then write a specific instruction in the text area:
 
 ```
@@ -117,7 +125,7 @@ Be specific about your objectives: state both what the agent should improve and 
 
 ### Configure tools
 
-Two icon buttons sit in the file-group header rows of the file selector: one next to the **Input** label, one next to the **Media** label. They light up when a helper is active.
+Two icon buttons sit in the file-group header rows of the file selector: one next to the **Input** label, one next to the **Media** label. They light up when a helper is active, and they appear only for a document-pass agent, the only kind that uses them.
 
 1. Select the <wa-icon library="texra" name="tools"></wa-icon> **Tool configuration options** button to:
    - **Attach TeX Count**: include document word-count statistics so the agent knows the document's size and structure

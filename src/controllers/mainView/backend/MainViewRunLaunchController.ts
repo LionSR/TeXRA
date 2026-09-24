@@ -148,17 +148,13 @@ export function prepareSurfaceLaunch(
     if (launch.launchTarget !== 'team') {
       // AgentConfigSchema prefaults agent/model; reject missing UI selections
       // before schema parsing so the user sees the real form problem.
-      const agent = launch.agent[launch.sessionType];
       preparation =
-        !agent || !launch.model
-          ? {
-              valid: false,
-              message: 'Choose an agent, a model, and a run type first.',
-            }
+        !launch.agent || !launch.model
+          ? { valid: false, message: 'Choose an agent and a model first.' }
           : buildLaunchRequest(
               launch,
               instruction,
-              agent,
+              launch.agent,
               launch.sessionType,
               storageRoot,
             );
