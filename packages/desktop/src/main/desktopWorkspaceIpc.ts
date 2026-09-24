@@ -40,7 +40,6 @@ import { normalizeLineEndings } from '@utils/text/stringUtils';
 import {
   DESKTOP_WORKSPACE_COMMANDS,
   DesktopWorkspaceInboundMessageSchema,
-  EMPTY_DESKTOP_ENVIRONMENT_SUMMARY,
   type DesktopBrowserBounds,
   type DesktopEnvironmentSummary,
 } from '../shared/desktopWorkspaceMessages.js';
@@ -71,7 +70,10 @@ interface DesktopWorkspaceIpcOptions {
    * compares to.
    */
   getWorkspacePath(): string | undefined;
-  getEnvironmentSummary(): Promise<DesktopEnvironmentSummary>;
+  /** The project's git summary. Its git reads report their own failures and
+   *  settle on the empty summary, so the renderer's loading state always
+   *  clears. */
+  getEnvironmentSummary(): Effect.Effect<DesktopEnvironmentSummary>;
   onAsyncError(error: unknown): void;
   /** The process runtime the window was handed; every program below settles
    *  on it. */
@@ -114,7 +116,7 @@ class WorkspaceRequestRefused extends Data.TaggedError(
 class WorkspaceHostCallFailed extends Data.TaggedError(
   'WorkspaceHostCallFailed',
 )<{
-  readonly member: 'ptyHost.create' | 'getEnvironmentSummary';
+  readonly member: 'ptyHost.create';
   readonly message: string;
   readonly cause: unknown;
 }> {}
@@ -474,25 +476,7 @@ export function createDesktopWorkspaceIpc(
   }
 
   function postEnvironment() {
-    return Effect.tryPromise({
-      try: () => options.getEnvironmentSummary(),
-      catch: (cause) =>
-        new WorkspaceHostCallFailed({
-          member: 'getEnvironmentSummary',
-          message: toErrorMessage(cause),
-          cause,
-        }),
-    }).pipe(
-      // The renderer's loading state clears either way, but the failure still
-      // reaches the window's reporter instead of being swallowed. The handler's
-      // parameter is the whole error type this expression can carry, so a
-      // second failure added here fails to compile.
-      Effect.catch((error: WorkspaceHostCallFailed) =>
-        Effect.sync(() => {
-          options.onAsyncError(error);
-          return EMPTY_DESKTOP_ENVIRONMENT_SUMMARY;
-        }),
-      ),
+    return options.getEnvironmentSummary().pipe(
       Effect.map((environment) => {
         renderer.postToRenderer({
           command: DESKTOP_WORKSPACE_COMMANDS.ENVIRONMENT_STATE,

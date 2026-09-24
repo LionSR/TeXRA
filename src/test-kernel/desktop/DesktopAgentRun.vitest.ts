@@ -66,7 +66,7 @@ describe('desktop agent run completion hook', () => {
         session,
         runtime: testRuntime(),
         showAgentConfigBanner: () => Effect.void,
-        onRunCompleted,
+        onRunCompleted: Effect.sync(onRunCompleted),
       });
       onTestFinished(async () => {
         run.dispose();

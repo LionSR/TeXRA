@@ -67,11 +67,11 @@ export interface DesktopAgentRunOptions {
   /** The process runtime this window was handed; the run and its approval
    *  wiring settle on it. */
   runtime: ProcessRuntime;
-  /** Fired when a launch this window started settles. That is after
+  /** Runs when a launch this window started settles. That is after
    *  `AgentRunLifecycle` writes `firstRunDone` on a successful run, so the
    *  host can recompute the onboarding funnel from the updated flag. The
    *  refresh is idempotent and runs on every settle. */
-  onRunCompleted?: () => void;
+  onRunCompleted?: Effect.Effect<void>;
 }
 
 export interface DesktopAgentRun {
@@ -219,7 +219,7 @@ export function createDesktopAgentRun(
         onRunResolved: options.onLaunched,
         ...runOptions,
       },
-    ).pipe(Effect.ensuring(Effect.sync(() => options.onRunCompleted?.())));
+    ).pipe(Effect.ensuring(options.onRunCompleted ?? Effect.void));
   }
 
   return {

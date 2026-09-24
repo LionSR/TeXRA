@@ -1,5 +1,5 @@
 // Third-party imports
-import { Data, Effect } from 'effect';
+import { Effect } from 'effect';
 
 // Local imports
 import { LoopbackTransportUnavailableError } from '@auth/oauth/loopbackLogin';
@@ -49,18 +49,6 @@ import { getProviderKeyUrl } from '@utils/config/providerConfig';
 import { allSettledVoid } from '@utils/core/allSettledVoid';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
-/**
- * A sign-in presenter (the device-code dialog, the browser-opened notice)
- * rejected. Reported, never propagated: the flow that called it is not
- * waiting on the presentation.
- */
-class SignInPresentationFailed extends Data.TaggedError(
-  'SignInPresentationFailed',
-)<{
-  readonly cause: unknown;
-  readonly message: string;
-}> {}
-
 interface DesktopCredentialSettingsControllerOptions extends SettingsStatePorts {
   readonly config: ConfigProvider;
   readonly secrets: PlatformSecrets;
@@ -92,7 +80,7 @@ interface DesktopCredentialSettingsControllerOptions extends SettingsStatePorts 
     presentSubscriptionSignInUrl(
       url: string,
       productName: string,
-    ): void | Promise<void>;
+    ): Effect.Effect<void, Error>;
     /**
      * Show the one-time code and verification URL for a device-code sign-in,
      * the fallback when no browser can carry the loopback callback.
@@ -100,7 +88,7 @@ interface DesktopCredentialSettingsControllerOptions extends SettingsStatePorts 
     presentSubscriptionDeviceCode(
       prompt: SubscriptionDeviceCodePrompt,
       productName: string,
-    ): void | Promise<void>;
+    ): Effect.Effect<void, Error>;
   };
   readonly notifications: MessageHost;
   readonly auth: {
@@ -326,36 +314,22 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
    * Show one informational part of a sign-in without waiting for it, and
    * report a failure the way an awaited presentation would: the cause goes to
    * `onError`, then the dialog says which presentation could not be shown. A
-   * dialog that itself fails is reported through the same `onError`.
-   *
-   * Containment is deliberate and covers a synchronous throw as well as a
-   * rejection: the presenter interface admits a synchronous `void` presenter,
-   * and neither kind of failure to *show* a notice should abort the sign-in
-   * the notice merely describes. The desktop presenters are async today, so
-   * only the rejection path runs in production.
+   * dialog that itself fails is reported through the same `onError`. Failing
+   * to *show* a notice never aborts the sign-in the notice merely describes.
    */
   private presentInBackground(
     displayName: string,
-    present: () => void | Promise<void>,
+    present: Effect.Effect<void, Error>,
   ): void {
     const options = this.options;
     options.runtime.runFork(
-      Effect.tryPromise({
-        try: async () => {
-          await present();
-        },
-        catch: (cause) =>
-          new SignInPresentationFailed({
-            cause,
-            message: toErrorMessage(cause),
-          }),
-      }).pipe(
-        Effect.catchTag('SignInPresentationFailed', (failure) =>
+      present.pipe(
+        Effect.catch((failure) =>
           Effect.gen(function* () {
-            options.onError(failure.cause);
+            options.onError(failure);
             yield* options.notifications
               .showErrorMessage(
-                `Failed to display ${displayName} sign-in instructions: ${failure.message}`,
+                `Failed to display ${displayName} sign-in instructions: ${toErrorMessage(failure)}`,
               )
               .pipe(
                 Effect.catchTag('NotificationFailed', (notice) =>
@@ -381,7 +355,8 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
       presentDeviceCode: (prompt) => {
         // Informational only — awaiting would block the approval poll, and a
         // presenter failure is contained rather than failing the poll.
-        this.presentInBackground(displayName, () =>
+        this.presentInBackground(
+          displayName,
           this.options.externalOpener.presentSubscriptionDeviceCode(
             prompt,
             displayName,
@@ -405,7 +380,8 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
               // Informational only — awaiting would block the OAuth callback,
               // and a presenter failure is contained rather than failing the
               // callback wait.
-              this.presentInBackground(displayName, () =>
+              this.presentInBackground(
+                displayName,
                 this.options.externalOpener.presentSubscriptionSignInUrl(
                   url,
                   displayName,

@@ -65,7 +65,8 @@ function createIpc(
     browserViews: createBrowserViews(),
     toWindowBounds: (bounds) => bounds,
     getWorkspacePath: () => workspacePath,
-    getEnvironmentSummary: async () => EMPTY_DESKTOP_ENVIRONMENT_SUMMARY,
+    getEnvironmentSummary: () =>
+      Effect.succeed(EMPTY_DESKTOP_ENVIRONMENT_SUMMARY),
     onAsyncError: vi.fn(),
     runtime: testRuntime(),
     ...overrides,
@@ -396,7 +397,7 @@ describe('desktop workspace IPC', () => {
     ).toBe(false);
   });
 
-  it('posts environment state and clears loading state after host failures', async () => {
+  it('posts environment state', async () => {
     const environment: DesktopEnvironmentSummary = {
       isGitRepository: true,
       branch: 'feature/ui',
@@ -408,10 +409,8 @@ describe('desktop workspace IPC', () => {
       behind: 0,
     };
     const postToRenderer = vi.fn();
-    const onAsyncError = vi.fn();
     const success = createIpc(postToRenderer, {
-      getEnvironmentSummary: async () => environment,
-      onAsyncError,
+      getEnvironmentSummary: () => Effect.succeed(environment),
     });
 
     const environmentPosted = nextCall(
@@ -427,35 +426,6 @@ describe('desktop workspace IPC', () => {
     expect(postToRenderer).toHaveBeenCalledWith({
       command: DESKTOP_WORKSPACE_COMMANDS.ENVIRONMENT_STATE,
       environment,
-    });
-
-    const failure = new Error('git unavailable');
-    const failed = createIpc(postToRenderer, {
-      getEnvironmentSummary: async () => {
-        throw failure;
-      },
-      onAsyncError,
-    });
-    const hostCallFailed = nextCall(
-      onAsyncError,
-      (error) =>
-        (error as { _tag?: string })._tag === 'WorkspaceHostCallFailed',
-    );
-    failed.handleMessage({
-      command: DESKTOP_WORKSPACE_COMMANDS.ENVIRONMENT_REQUEST,
-    });
-
-    await hostCallFailed;
-    expect(onAsyncError).toHaveBeenCalledWith(
-      expect.objectContaining({
-        _tag: 'WorkspaceHostCallFailed',
-        member: 'getEnvironmentSummary',
-        cause: failure,
-      }),
-    );
-    expect(postToRenderer).toHaveBeenLastCalledWith({
-      command: DESKTOP_WORKSPACE_COMMANDS.ENVIRONMENT_STATE,
-      environment: EMPTY_DESKTOP_ENVIRONMENT_SUMMARY,
     });
   });
 

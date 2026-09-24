@@ -181,8 +181,8 @@ async function createFixture({
     externalOpener: {
       openExternal: () => Effect.void,
       openSubscriptionSignInUrl: () => Effect.void,
-      presentSubscriptionSignInUrl: () => undefined,
-      presentSubscriptionDeviceCode: () => undefined,
+      presentSubscriptionSignInUrl: () => Effect.void,
+      presentSubscriptionDeviceCode: () => Effect.void,
     },
     notifications: {
       showInfoMessage: (message) =>
@@ -470,8 +470,8 @@ describe('DefaultDesktopCredentialSettingsController', () => {
             }),
           ),
         );
-        const presentSubscriptionSignInUrl = vi.fn();
-        const presentSubscriptionDeviceCode = vi.fn();
+        const presentSubscriptionSignInUrl = vi.fn(() => Effect.void);
+        const presentSubscriptionDeviceCode = vi.fn(() => Effect.void);
         const logs = captureLogEntries();
         const fixture = yield* Effect.promise(() =>
           createFixture({

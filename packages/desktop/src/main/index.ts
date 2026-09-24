@@ -62,7 +62,10 @@ import type {
   StateWriteFailed,
   StateReadFailed,
 } from '@platform/interfaces';
-import type { ProcessRuntime } from '@platform/processRuntime';
+import {
+  withProcessServices,
+  type ProcessRuntime,
+} from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import {
   INSTRUCTION_ACTION,
@@ -185,7 +188,7 @@ let mainWindow: BrowserWindow | null = null;
 let reopenMainWindow: (() => void) | undefined;
 /** Window-owned post-launch funnel refresh. The process resume owner reads
  *  this; createWindow assigns it when onboarding IPC exists. */
-const afterLaunchFunnelRefresh: { current?: () => void } = {};
+const afterLaunchFunnelRefresh: { current?: Effect.Effect<void> } = {};
 let continueQuitAfterWindowClose: (() => void) | undefined;
 // Temp directories holding the `.diff` patch files written by the
 // external-editor fallback of every window's diff host. The OS editor may
@@ -467,17 +470,21 @@ function createWindow(options: {
   const reportBackgroundError = (error: unknown) => {
     console.error('Desktop background operation failed:', error);
   };
-  const refreshFunnelAfterLaunch = (): void => {
+  // Detached so the launch does not wait on it; reports its own defects.
+  const refreshFunnelAfterLaunch: Effect.Effect<void> = Effect.suspend(() => {
     const refresh = onboardingIpcRef.current?.refreshOnboardingFunnel();
-    if (!refresh) return;
-    runtime.runFork(
-      refresh.pipe(
-        Effect.catch((error: StateWriteFailed | StateReadFailed) =>
-          Effect.sync(() => reportAsyncError(error)),
-        ),
+    if (!refresh) return Effect.void;
+    return withProcessServices(runtime, refresh).pipe(
+      Effect.catch((error: StateWriteFailed | StateReadFailed) =>
+        Effect.sync(() => reportAsyncError(error)),
       ),
+      Effect.catchDefect((defect) =>
+        Effect.sync(() => reportAsyncError(defect)),
+      ),
+      Effect.forkDetach,
+      Effect.asVoid,
     );
-  };
+  });
   installDesktopNavigationPolicy(window.webContents, {
     onAsyncError: reportAsyncError,
   });
@@ -880,7 +887,8 @@ function createWindow(options: {
       const selectedPath = result.canceled ? undefined : result.filePaths[0];
       if (!selectedPath) return;
       const project = yield* options.projects.open(selectedPath);
-      if (project.root !== undefined) selectProject(project.key);
+      if (project.root !== undefined && project !== activeProject())
+        yield* options.projects.activate(project.root);
     },
   );
   attachRendererConsoleLog(window.webContents);
@@ -1076,8 +1084,8 @@ function createWindow(options: {
         snapshot.showAgentConfigBanner(agentName, category),
       onLaunched: (runId) => bridge.surfaceAction({ kind: 'select', runId }),
       // Recompute the onboarding funnel when a launch settles so a first
-      // successful run leaves the setup card without a restart. The awaited
-      // runPromise includes AgentRunLifecycle's firstRunDone write.
+      // successful run leaves the setup card without a restart. The settled
+      // launch includes AgentRunLifecycle's firstRunDone write.
       onRunCompleted: refreshFunnelAfterLaunch,
     });
     const hostRequests = createDesktopHostRequests({
@@ -1352,48 +1360,53 @@ function createWindow(options: {
           // missing browser itself and falls back to a device code.
           openExternal: (url) => openExternalProgram(url, true),
           openSubscriptionSignInUrl: (url) => openExternalProgram(url, false),
-          presentSubscriptionSignInUrl: async (url, productName) => {
-            const result = await dialog.showMessageBox(window, {
-              type: 'info',
-              message: `Signing in with ${productName}`,
-              detail:
-                `Opened your default browser. Using a different browser for ${productName}? ` +
-                'Open this link there instead:\n\n' +
-                `${url}`,
-              buttons: ['Copy Sign-in Link', 'Close'],
-              defaultId: 0,
-              cancelId: 1,
-            });
-            if (result.response === 0) {
-              clipboard.writeText(url);
-            }
-          },
-          presentSubscriptionDeviceCode: async (prompt, productName) => {
-            // The code is copied up front: the dialog closes on any button, so
-            // the user must not have to keep it open to read the code back.
-            clipboard.writeText(prompt.userCode);
-            const result = await dialog.showMessageBox(window, {
-              type: 'info',
-              message: `Sign in with ${productName}`,
-              detail:
-                `No browser could take the sign-in callback, so ${productName} ` +
-                'is signing in with a one-time code instead.\n\n' +
-                `1. Open ${prompt.verificationUrl}\n` +
-                `2. Enter the code: ${prompt.userCode} (copied to the clipboard)\n\n` +
-                'TeXRA is waiting for you to approve it.',
-              buttons: ['Open Verification Page', 'Close'],
-              defaultId: 0,
-              cancelId: 1,
-            });
-            if (result.response === 0) {
-              // A dialog callback, not a program: the one run this arm owns.
-              await runtime.runPromise(
-                previewHost.openExternal(
+          presentSubscriptionSignInUrl: (url, productName) =>
+            Effect.tryPromise({
+              try: () =>
+                dialog.showMessageBox(window, {
+                  type: 'info',
+                  message: `Signing in with ${productName}`,
+                  detail:
+                    `Opened your default browser. Using a different browser for ${productName}? ` +
+                    'Open this link there instead:\n\n' +
+                    `${url}`,
+                  buttons: ['Copy Sign-in Link', 'Close'],
+                  defaultId: 0,
+                  cancelId: 1,
+                }),
+              catch: ensureError,
+            }).pipe(
+              Effect.map((result) => {
+                if (result.response === 0) clipboard.writeText(url);
+              }),
+            ),
+          presentSubscriptionDeviceCode: (prompt, productName) =>
+            Effect.gen(function* () {
+              // Copied up front: the dialog closes on any button.
+              clipboard.writeText(prompt.userCode);
+              const result = yield* Effect.tryPromise({
+                try: () =>
+                  dialog.showMessageBox(window, {
+                    type: 'info',
+                    message: `Sign in with ${productName}`,
+                    detail:
+                      `No browser could take the sign-in callback, so ${productName} ` +
+                      'is signing in with a one-time code instead.\n\n' +
+                      `1. Open ${prompt.verificationUrl}\n` +
+                      `2. Enter the code: ${prompt.userCode} (copied to the clipboard)\n\n` +
+                      'TeXRA is waiting for you to approve it.',
+                    buttons: ['Open Verification Page', 'Close'],
+                    defaultId: 0,
+                    cancelId: 1,
+                  }),
+                catch: ensureError,
+              });
+              if (result.response === 0) {
+                yield* previewHost.openExternal(
                   prompt.verificationUrlComplete ?? prompt.verificationUrl,
-                ),
-              );
-            }
-          },
+                );
+              }
+            }),
         },
         notifications: {
           showInfoMessage,
@@ -1673,17 +1686,15 @@ function createWindow(options: {
         getWorkspacePath: () => project.root,
         getEnvironmentSummary: () =>
           project.root
-            ? runtime.runPromise(
-                readGitEnvironmentSummary(project.root, {
-                  settings: project.roots,
-                  onError: reportBackgroundError,
-                }).pipe(
-                  Effect.map(
-                    (summary) => summary ?? EMPTY_DESKTOP_ENVIRONMENT_SUMMARY,
-                  ),
+            ? readGitEnvironmentSummary(project.root, {
+                settings: project.roots,
+                onError: reportBackgroundError,
+              }).pipe(
+                Effect.map(
+                  (summary) => summary ?? EMPTY_DESKTOP_ENVIRONMENT_SUMMARY,
                 ),
               )
-            : Promise.resolve(EMPTY_DESKTOP_ENVIRONMENT_SUMMARY),
+            : Effect.succeed(EMPTY_DESKTOP_ENVIRONMENT_SUMMARY),
         onAsyncError: reportAsyncError,
       },
     );
@@ -1865,7 +1876,9 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
         sessions: () =>
           [projects.fallback(), ...projects.list()].map((p) => p.session),
         runtime: () => runtime,
-        onLaunchSettled: () => afterLaunchFunnelRefresh.current?.(),
+        onLaunchSettled: Effect.suspend(
+          () => afterLaunchFunnelRefresh.current ?? Effect.void,
+        ),
       });
       const platformInit = await initializeElectronPlatform(
         desktopMainDir,
@@ -1874,10 +1887,6 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
       // The process runtime the platform above built: the shutdown handlers,
       // the startup program, and every surface they wire run on it.
       const { lifecycle, runtime } = platformInit;
-      // Process root: session-lifetime resources register at creation and are
-      // disposed LIFO in the ON phase (every project's process stores → result
-      // toast), then every project's session, most recently opened first.
-      const processResources = new DisposableStore();
       registerRuntimeShutdownHandlers(lifecycle, {
         beforeAgentShutdown: [Effect.sync(() => processResumeOwner.disable())],
         afterAgentShutdown: [killActiveRecording()],
@@ -1889,9 +1898,8 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
         // diff host are removed here, once, while the process is still alive.
         afterFlushArtifacts: [removeExternalDiffPatchDirs],
         afterRunSettlement: [
-          Effect.sync(() => processResources.dispose()),
-          // The sessions after the process stores above them, settled before
-          // the runtime they run on goes.
+          // Every project's session, most recently opened first, settled
+          // before the runtime they run on goes.
           Effect.suspend(() => projects.dispose()),
           disposeProcessRuntime(runtime),
         ],
@@ -1974,37 +1982,35 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
                 setupAuth: platformInit.setupAuth,
               });
             reopenMainWindow();
-            if (unopenedProjects.length > 0) {
-              runtime.runFork(
-                Effect.tryPromise({
-                  try: () =>
-                    showDesktopWarningDialog(
-                      `Some projects could not be reopened:\n${unopenedProjects.join('\n')}`,
-                    ),
-                  catch: (cause) =>
-                    new NotificationFailed({
-                      member: 'showWarningMessage',
-                      message:
-                        'The unopened-projects warning could not be shown.',
-                      cause,
-                    }),
-                }).pipe(
-                  // The handler's parameter is the whole error type this
-                  // expression can carry, so a second failure added to this
-                  // channel fails to compile instead of being logged as a
-                  // warning that would not show.
-                  Effect.catch((error: NotificationFailed) =>
-                    Effect.sync(() => console.error(error)),
-                  ),
-                ),
-              );
-            }
-
             app.on('activate', () => {
               if (BrowserWindow.getAllWindows().length === 0)
                 reopenMainWindow?.();
             });
           });
+          if (unopenedProjects.length > 0) {
+            // Detached: startup does not wait on the user dismissing it.
+            yield* Effect.tryPromise({
+              try: () =>
+                showDesktopWarningDialog(
+                  `Some projects could not be reopened:\n${unopenedProjects.join('\n')}`,
+                ),
+              catch: (cause) =>
+                new NotificationFailed({
+                  member: 'showWarningMessage',
+                  message: 'The unopened-projects warning could not be shown.',
+                  cause,
+                }),
+            }).pipe(
+              // Exhaustive: a second failure added here fails to compile.
+              Effect.catch((error: NotificationFailed) =>
+                Effect.sync(() => console.error(error)),
+              ),
+              Effect.catchDefect((defect) =>
+                Effect.sync(() => console.error(defect)),
+              ),
+              Effect.forkDetach,
+            );
+          }
         }),
       );
       if (Exit.isFailure(startup)) {
