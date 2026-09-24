@@ -33,51 +33,24 @@ function mountPanel(
   return mountComponent<BashRequestPanel>('bash-request-panel', { permission });
 }
 
-type ApproveSplit = HTMLElement & { canBypass?: boolean };
-
-function querySplitButton(element: BashRequestPanel): ApproveSplit | null {
-  return (
-    element.shadowRoot?.querySelector<ApproveSplit>('approve-split-button') ??
-    null
-  );
-}
-
-// The bash panel gets the Yolo affordance from shared BaseBypassApprovalPanel
-// logic; these tests guard that it wires it up.
+// Every card shares one action row (BaseRequestPanel); the bash card is where
+// it guards the most, so these pin the row's keys here.
 describe('bash-request-panel', () => {
   useLitComponentTestDom(
     () => import('@progressView/frontend/components/BashRequestPanel'),
   );
 
-  it('renders a non-bypass Approve and ignores "a" when bypass is not allowed', async () => {
-    const element = await mountPanel(createPermission({ allowBypass: false }));
-    const actions = recordPermissionActions(element);
-
-    const split = querySplitButton(element);
-    expect(split).toBeTruthy();
-    expect(split?.canBypass).toBe(false);
-    expect(element.handleKeyboardShortcut('a')).toBe(false);
-    expect(actions).toEqual([]);
-  });
-
-  it('renders a non-bypass Approve when runId is empty even if bypass is allowed', async () => {
-    const element = await mountPanel(
-      createPermission({ allowBypass: true, runId: '' }),
-    );
-
-    const split = querySplitButton(element);
-    expect(split?.canBypass).toBe(false);
-    expect(element.handleKeyboardShortcut('a')).toBe(false);
-  });
-
-  it('passes canBypass to the split button and "a" emits approveSession', async () => {
+  it('offers the run grant on the Approve menu and "a" enables it', async () => {
     const element = await mountPanel(
       createPermission({ allowBypass: true, runId: 'run-1' as RunId }),
     );
     const actions = recordPermissionActions(element);
 
-    const split = querySplitButton(element);
-    expect(split?.canBypass).toBe(true);
+    expect(
+      element.shadowRoot
+        ?.querySelector('wa-dropdown-item[value="grant"]')
+        ?.textContent?.trim(),
+    ).toBe('Approve all commands in this run');
 
     expect(element.handleKeyboardShortcut('a')).toBe(true);
     expect(actions).toEqual([
@@ -95,6 +68,37 @@ describe('bash-request-panel', () => {
         runId: 'run-1',
         requestId: 'bash-request-1',
         decision: { action: 'approve' },
+      },
+    ]);
+  });
+
+  it('rejects on one "n", sends an opened note with it, and never answers on Escape', async () => {
+    const element = await mountPanel(
+      createPermission({ runId: 'run-1' as RunId }),
+    );
+    const actions = recordPermissionActions(element);
+
+    expect(element.handleKeyboardShortcut('escape')).toBe(false);
+    element.shadowRoot
+      ?.querySelector<HTMLElement>('wa-button[data-action="note"]')
+      ?.click();
+    await element.updateComplete;
+    const note = element.shadowRoot?.querySelector<
+      HTMLElement & { value: string }
+    >('[data-note-input]');
+    expect(note).toBeTruthy();
+    note!.value = '  use latexmk instead  ';
+    // With the note open, "a" must not grant, and Escape closes the note only.
+    expect(element.handleKeyboardShortcut('a')).toBe(false);
+    expect(actions).toEqual([]);
+
+    expect(element.handleKeyboardShortcut('n')).toBe(true);
+    expect(actions).toEqual([
+      {
+        kind: 'request.decide',
+        runId: 'run-1',
+        requestId: 'bash-request-1',
+        decision: { action: 'reject', feedback: 'use latexmk instead' },
       },
     ]);
   });

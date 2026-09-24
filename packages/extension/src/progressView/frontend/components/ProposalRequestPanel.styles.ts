@@ -5,46 +5,20 @@ import { css, type CSSResult } from 'lit';
 import { sp } from '@ui/styles';
 
 export const proposalRequestPanelStyles: CSSResult = css`
-  .workflow-proposal__header-row {
+  :host {
+    --request-accent: var(--wa-color-text-link);
+  }
+
+  /* The pickers open floating menus a scrolling body would clip. */
+  .request-card__details {
+    max-height: none;
+    overflow-y: visible;
+  }
+
+  .workflow-proposal__pickers {
     display: flex;
-    align-items: baseline;
-    gap: ${sp.medium};
     flex-wrap: wrap;
-  }
-
-  .workflow-proposal__agent {
-    font-family: var(--wa-font-family-mono);
-    font-size: var(--font-size);
-    font-weight: var(--font-weight-semibold);
-    color: var(--wa-color-text-link);
-  }
-
-  .workflow-proposal__model {
-    font-size: var(--font-size-sm);
-    color: var(--color-text-secondary);
-  }
-
-  .workflow-proposal__model::before {
-    content: '\u2022';
-    margin-inline-end: ${sp.small};
-  }
-
-  .workflow-proposal__agent-select,
-  .workflow-proposal__model-select {
-    display: flex;
-    align-items: center;
-    gap: ${sp.small};
-  }
-
-  .workflow-proposal__agent-select wa-icon,
-  .workflow-proposal__model-select wa-icon {
-    color: var(--wa-color-text-quiet);
-    flex-shrink: 0;
-  }
-
-  /* Model dropdown floats to the trailing edge of the header row. */
-  .workflow-proposal__model-select {
-    margin-inline-start: auto;
+    gap: ${sp.medium};
   }
 
   .proposal-model-dropdown {
@@ -57,57 +31,20 @@ export const proposalRequestPanelStyles: CSSResult = css`
     max-width: 8rem;
   }
 
-  .workflow-proposal__workflow-summary {
-    display: flex;
-    align-items: center;
-    gap: ${sp.small};
-    min-width: 0;
-    white-space: nowrap;
-    font-size: var(--font-size-sm);
-  }
-
-  .workflow-proposal__workflow-summary wa-icon {
-    flex: 0 0 auto;
-  }
-
-  .workflow-proposal__workflow-name {
-    min-width: 4rem;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    font-weight: var(--font-weight-semibold);
-  }
-
-  .workflow-proposal__workflow-progress {
-    flex: 0 0 auto;
-    font-variant-numeric: tabular-nums;
-    color: var(--color-text-secondary);
-  }
-
-  /* The card (board W0): the head, the lede, one row per declared phase. */
-  .proposal-card__head {
-    display: flex;
-    align-items: center;
-    gap: ${sp.small};
-    margin-block-start: ${sp.small};
-    padding: ${sp.small} ${sp.medium};
-    border-radius: var(--wa-border-radius-m);
-    background: var(--wa-color-warning-fill-quiet);
-    color: var(--wa-color-warning-on-quiet);
-    font-size: var(--font-size-sm);
-  }
-
+  /* The workflow-script card (board W0): the lede, one row per phase. */
   .proposal-card__summary {
     margin-inline-start: auto;
     font-variant-numeric: tabular-nums;
     color: var(--color-text-secondary);
+    white-space: nowrap;
   }
 
   .proposal-card__lede {
     display: flex;
+    flex-wrap: wrap;
     align-items: baseline;
     gap: ${sp.small};
     min-width: 0;
-    padding: ${sp.small} ${sp.medium} 0;
     font-size: var(--font-size-sm);
   }
 
@@ -147,10 +84,6 @@ export const proposalRequestPanelStyles: CSSResult = css`
     color: var(--color-text-secondary);
   }
 
-  .proposal-card__skip {
-    margin-inline-start: auto;
-  }
-
   .workflow-proposal__cost-warning {
     display: flex;
     align-items: center;
@@ -162,11 +95,6 @@ export const proposalRequestPanelStyles: CSSResult = css`
 
   .workflow-proposal__workflow-details {
     margin-block-start: ${sp.small};
-  }
-
-  .workflow-proposal__task-list {
-    margin-block: ${sp.small};
-    padding-inline-start: var(--wa-space-l);
   }
 
   .workflow-proposal__plan-note {

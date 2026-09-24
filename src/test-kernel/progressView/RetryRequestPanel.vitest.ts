@@ -82,7 +82,7 @@ function tailLine(text: string): string {
 function actionButtonIds(element: RetryRequestPanel): (string | null)[] {
   const buttons = [
     ...(element.shadowRoot?.querySelectorAll(
-      '.retry-request__actions wa-button',
+      '.request-card__actions wa-button',
     ) ?? []),
   ];
   return buttons.map((button) => button.getAttribute('data-action'));
@@ -98,7 +98,7 @@ describe('retry-request-panel', () => {
       },
     });
 
-    expect(actionButtonIds(element)).toEqual(['retry', 'cancel']);
+    expect(actionButtonIds(element)).toEqual(['primary', 'decline']);
   });
 
   it('does not map the k shortcut to the API-key switch for exclusive models', async () => {
@@ -112,7 +112,8 @@ describe('retry-request-panel', () => {
     const actions = recordPermissionActions(element);
 
     expect(element.handleKeyboardShortcut('k')).toBe(false);
-    expect(element.handleKeyboardShortcut('r')).toBe(true);
+    expect(element.handleKeyboardShortcut('escape')).toBe(false);
+    expect(element.handleKeyboardShortcut('y')).toBe(true);
 
     expect(actions).toEqual([
       {
@@ -134,9 +135,9 @@ describe('retry-request-panel', () => {
     });
 
     expect(actionButtonIds(element)).toEqual([
+      'primary',
       'useOwnApiKey',
-      'retry',
-      'cancel',
+      'decline',
     ]);
   });
 

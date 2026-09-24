@@ -5,60 +5,32 @@ import { css, type CSSResult } from 'lit';
 import { sp } from '@ui/styles';
 
 export const toolEditRequestPanelStyles: CSSResult = css`
-  .approval-request__path {
-    font-family: var(--wa-font-family-mono);
-    font-size: var(--font-size-sm);
-    font-variant-ligatures: none;
-    line-height: var(--line-height-normal);
-    color: var(--wa-color-text-normal);
-    overflow-wrap: anywhere;
-    text-align: start;
+  :host {
+    --request-accent: var(--wa-color-text-normal);
   }
 
-  .approval-request__source-tool {
-    font-family: var(--wa-font-family-mono);
-    font-variant-ligatures: none;
-    color: var(--wa-color-text-normal);
-    overflow-wrap: anywhere;
-  }
-
-  .approval-request__diff {
+  .tool-edit__diff {
     display: inline-flex;
     align-items: baseline;
     gap: ${sp.small};
     font-variant-numeric: tabular-nums;
   }
 
-  .approval-request__diff-added,
-  .approval-request__diff-removed {
+  .tool-edit__diff-added,
+  .tool-edit__diff-removed {
     font-size: var(--font-size-xs);
   }
 
-  .approval-request__diff-added {
+  .tool-edit__diff-added {
     color: var(--color-added);
   }
 
-  .approval-request__diff-removed {
+  .tool-edit__diff-removed {
     color: var(--color-removed);
   }
 
-  .approval-request__diff-label {
+  .tool-edit__diff-label {
     color: var(--color-text-muted);
     font-size: var(--font-size-xs);
-  }
-
-  /* Web Awesome owns the split geometry. Keep the diff control compact among
-     its Approve/Reject siblings and reserve a narrow trailing caret segment. */
-  .approval-request__actions .diff-dropdown {
-    flex: 0 1 8.25rem;
-    min-width: 0;
-    max-width: min(8.25rem, 100%);
-  }
-
-  .approval-request__actions .diff-dropdown .diff-main-button {
-    flex: 1 1 auto;
-    width: auto;
-    min-width: 0;
-    max-width: none;
   }
 `;

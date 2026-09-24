@@ -1,12 +1,11 @@
 /**
- * UI panel for external inquiry requests.
+ * External inquiry card: "Ask an outside model", then question (with Copy
+ * and links to the chat apps) → answer → Submit. Context, earlier turns and
+ * session links wait in one "More" disclosure.
  *
- * Displays a question formulated by the agent, with a "Copy question" button
- * for the user to paste into an external AI model (ChatGPT, Gemini, Claude, etc.).
- * Provides a textarea for the user to paste the answer back.
- *
- * If the external model returns files, the user saves them into the workspace
- * and tells the agent the paths.
+ * Skipping sends no note: a declined inquiry is recorded as dropped and the
+ * agent is told only that, so a note box here would collect words nobody
+ * reads.
  *
  * The answer draft lives in the surface's `inquiryDrafts`, keyed by
  * `draftKey`, so it survives a re-mount.
@@ -14,11 +13,9 @@
 
 import { html, nothing, type PropertyValues, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
-import { classMap } from 'lit/directives/class-map.js';
 import { live } from 'lit/directives/live.js';
 import { repeat } from 'lit/directives/repeat.js';
 
-import '@awesome.me/webawesome/dist/components/badge/badge.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/textarea/textarea.js';
@@ -28,40 +25,26 @@ import type {
   ExternalInquiryPermission,
   InquiryDraft,
   InquiryThreadRecord,
-  PermissionPayload,
 } from '@shared/schemas';
 import { CopyButtonController } from '@shared/litControllers/CopyButtonController';
 import type { SurfaceDecision } from '@shared/session/approvalDecision';
 import type { Surface } from '@shared/session/surface';
 import { SessionUiEvents } from '@shared/session/uiEvents';
-import {
-  commonViewStyles,
-  designTokens,
-  requestPanelSharedStyles,
-} from '@ui/styles';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 import { renderDotMeta } from '@ui/wa/metaStrip';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 import { createFlushableDebounce, tryParseUrl } from '@utils/core';
-import {
-  BaseFeedbackPanel,
-  REDIRECT_FEEDBACK_PROMPT,
-} from './BaseFeedbackPanel';
+import { BaseRequestPanel } from './BaseRequestPanel';
 import { externalInquiryPanelStyles } from './ExternalInquiryPanel.styles';
-
-type ExternalInquiryPermissionState = Extract<
-  PermissionPayload,
-  { kind: 'externalInquiry' }
->;
-
-// ── Draft persistence ──
 
 const DRAFT_SAVE_DELAY_MS = 400;
 
 /** `Surface.inquiryDrafts` is keyed by inquiry turn, never by stream
  *  (PRD 9): the thread and the number of turns already answered. */
-function draftKey(permission: ExternalInquiryPermissionState): string {
+function draftKey(permission: {
+  readonly data: ExternalInquiryPermission;
+}): string {
   const { threadId, transcript } = permission.data;
   return `${threadId}#${transcript?.length ?? 0}`;
 }
@@ -78,14 +61,10 @@ function safeHttpUrl(link: string): string | undefined {
     : undefined;
 }
 
-// ── Component ──
-
 @customElement('external-inquiry-panel')
-export class ExternalInquiryPanel extends BaseFeedbackPanel<'externalInquiry'> {
+export class ExternalInquiryPanel extends BaseRequestPanel<'externalInquiry'> {
   static override styles = [
-    designTokens,
-    commonViewStyles,
-    requestPanelSharedStyles,
+    BaseRequestPanel.styles,
     externalInquiryPanelStyles,
   ];
 
@@ -182,51 +161,54 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel<'externalInquiry'> {
     ];
   }
 
+  protected override get primaryLabel(): string {
+    return 'Submit';
+  }
+
+  protected override get decline(): 'skip' {
+    return 'skip';
+  }
+
+  protected override get declineTakesNote(): boolean {
+    return false;
+  }
+
+  protected override submitPrimary(): void {
+    this.handleSubmit();
+  }
+
+  protected override renderAsk(): string {
+    return (this.permission.data.transcript?.length ?? 0) > 1
+      ? 'Ask an outside model a follow-up'
+      : 'Ask an outside model';
+  }
+
   override render(): TemplateResult {
     const data = this.permission.data;
-
-    return html`
-      <div
-        class=${classMap({
-          'external-inquiry-request': true,
-          'external-inquiry-request--feedback-active': this.showFeedback,
-        })}
-      >
-        <div class="external-inquiry-request__details">
-          ${this.renderHeader(data)}
-          ${data.context ? this.renderContext(data.context) : nothing}
-          ${this.renderTranscript(data.transcript ?? [])}
-          ${this.renderQuestion(data.question)}
-          ${data.suggestSearch ? this.renderSearchHint() : nothing}
-          ${
-            data.attachFiles?.length
-              ? this.renderAttachFiles(data.attachFiles)
-              : nothing
-          }
-          ${this.renderSessionLinks(data.sessionLinks ?? [])}
-          ${this.renderAnswerArea()}
-          ${this.renderFeedbackSection(
-            'external-inquiry-request__feedback',
-            'external-inquiry-request__feedback-input',
-            REDIRECT_FEEDBACK_PROMPT,
-          )}
-        </div>
-        ${this.renderActions()}
-      </div>
-    `;
+    return this.renderCard(html`
+      ${this.renderQuestion(data.question)}
+      ${data.suggestSearch ? this.renderSearchHint() : nothing}
+      ${
+        data.attachFiles?.length
+          ? this.renderAttachFiles(data.attachFiles)
+          : nothing
+      }
+      ${this.renderAnswerArea()} ${this.renderMore(data)}
+    `);
   }
 
-  private renderHeader(data: ExternalInquiryPermission): TemplateResult {
+  /** Everything the answer does not need: context, earlier turns, links. */
+  private renderMore(data: ExternalInquiryPermission): TemplateResult {
     return html`
-      <wa-badge variant="neutral" appearance="filled">
-        ${(data.transcript?.length ?? 0) > 1 ? 'follow-up' : 'new question'}
-      </wa-badge>
-    `;
-  }
-
-  private renderContext(context: string): TemplateResult {
-    return html`
-      <div class="external-inquiry-request__context">${context}</div>
+      <wa-details class="external-inquiry-request__more" summary="More">
+        ${
+          data.context
+            ? html`<div class="request-card__context">${data.context}</div>`
+            : nothing
+        }
+        ${this.renderTranscript(data.transcript ?? [])}
+        ${this.renderSessionLinks(data.sessionLinks ?? [])}
+      </wa-details>
     `;
   }
 
@@ -239,25 +221,13 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel<'externalInquiry'> {
     if (answeredTurns.length === 0) return nothing;
 
     return html`
-      <wa-details
-        class="external-inquiry-request__transcript"
-        appearance="plain"
-      >
-        <span
-          slot="summary"
-          class="external-inquiry-request__transcript-summary"
-        >
-          ${waIcon('clock-rotate-left')} Conversation transcript
-          (${answeredTurns.length})
-        </span>
-        <div class="external-inquiry-request__transcript-turns">
-          ${repeat(
-            answeredTurns,
-            (turn) => turn.turnIndex,
-            (turn) => this.renderTranscriptTurn(turn),
-          )}
-        </div>
-      </wa-details>
+      <div class="external-inquiry-request__transcript-turns">
+        ${repeat(
+          answeredTurns,
+          (turn) => turn.turnIndex,
+          (turn) => this.renderTranscriptTurn(turn),
+        )}
+      </div>
     `;
   }
 
@@ -302,7 +272,6 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel<'externalInquiry'> {
 
   private renderQuestion(question: string): TemplateResult {
     const { copied } = this.copyController.state;
-    const text = copied ? 'Question copied' : 'Copy question';
 
     return html`
       <div class="external-inquiry-request__question">
@@ -310,12 +279,27 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel<'externalInquiry'> {
         <div class="external-inquiry-request__question-actions">
           ${renderLabeledActionButton({
             icon: copied ? 'check' : 'copy',
-            text,
-            title: copied
-              ? 'Question copied to clipboard'
-              : 'Copy question to clipboard for pasting into an external AI model',
+            text: copied ? 'Question copied' : 'Copy question',
+            title: 'Copy the question to paste into another model',
             onClick: () => this.copyController.copy(question),
           })}
+          <span class="external-inquiry-request__chat-links">
+            Paste it into
+            ${renderDotMeta([
+              html`<a
+                href="https://chatgpt.com/"
+                target="_blank"
+                rel="noopener noreferrer"
+                >ChatGPT</a
+              >`,
+              html`<a
+                href="https://gemini.google.com/app"
+                target="_blank"
+                rel="noopener noreferrer"
+                >Gemini</a
+              >`,
+            ])}
+          </span>
         </div>
       </div>
     `;
@@ -324,8 +308,8 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel<'externalInquiry'> {
   private renderSearchHint(): TemplateResult {
     return html`
       <div class="external-inquiry-request__search-hint">
-        ${waIcon('lightbulb')} Consider enabling <strong>Search</strong> mode in
-        the external tool for this question
+        ${waIcon('lightbulb')} Turn on <strong>search</strong> in that chat for
+        this question.
       </div>
     `;
   }
@@ -334,7 +318,7 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel<'externalInquiry'> {
     return html`
       <div class="external-inquiry-request__attach-files">
         <div class="external-inquiry-request__attach-label">
-          ${waIcon('cloud-arrow-up')} Files to upload to the external model:
+          ${waIcon('cloud-arrow-up')} Upload these files with the question:
         </div>
         <ul class="external-inquiry-request__file-list">
           ${files.map(
@@ -367,11 +351,11 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel<'externalInquiry'> {
           @keydown=${this.handleKeyDown}
         >
           <span slot="label" class="external-inquiry-request__answer-label">
-            Paste the answer from the external model
+            Answer
           </span>
           <span slot="hint" class="external-inquiry-request__answer-hint">
-            If the external model returns files, save them into the workspace
-            and tell the agent the paths.
+            If the answer comes with files, save them in the workspace and name
+            their paths here.
           </span>
         </wa-textarea>
       </div>
@@ -380,72 +364,39 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel<'externalInquiry'> {
 
   private renderSessionLinks(sessionLinks: string[]): TemplateResult {
     return html`
-      <div class="external-inquiry-request__session-links">
-        ${
-          sessionLinks.length
-            ? html`
-                <div class="external-inquiry-request__session-links-known">
-                  <div class="external-inquiry-request__session-links-label">
-                    Known external session links:
-                  </div>
-                  <ul class="external-inquiry-request__session-links-list">
-                    ${repeat(
-                      sessionLinks,
-                      (link) => link,
-                      (link) =>
-                        html`<li>${this.renderKnownSessionLink(link)}</li>`,
-                    )}
-                  </ul>
-                </div>
-              `
-            : nothing
-        }
-        <div class="external-inquiry-request__session-links-input-group">
-          <div class="external-inquiry-request__chat-links">
-            Open:
-            ${renderDotMeta([
-              html`<a
-                href="https://chatgpt.com/plans/pro/"
-                target="_blank"
-                rel="noopener noreferrer"
-                >ChatGPT Pro</a
-              >`,
-              html`<a
-                href="https://deepmind.google/models/gemini/deep-think/"
-                target="_blank"
-                rel="noopener noreferrer"
-                >Gemini Deep Think</a
-              >`,
-            ])}
-          </div>
-          <wa-textarea
-            class="external-inquiry-request__session-links-input"
-            name="external-inquiry-session-links"
-            placeholder="Paste one external session link per line…"
-            rows="2"
-            resize="vertical"
-            autocomplete="off"
-            autocapitalize="none"
-            spellcheck="false"
-            inputmode="url"
-            .value=${live(this.sessionLinksText)}
-            @input=${this.handleSessionLinksInput}
-          >
-            <span
-              slot="label"
-              class="external-inquiry-request__session-links-label"
-            >
-              Save external session links for follow-ups
-            </span>
-            <span
-              slot="hint"
-              class="external-inquiry-request__session-links-hint"
-            >
-              Add the chat URLs you used, one per line.
-            </span>
-          </wa-textarea>
-        </div>
-      </div>
+      ${
+        sessionLinks.length
+          ? html`
+              <ul class="external-inquiry-request__session-links-list">
+                ${repeat(
+                  sessionLinks,
+                  (link) => link,
+                  (link) => html`<li>${this.renderKnownSessionLink(link)}</li>`,
+                )}
+              </ul>
+            `
+          : nothing
+      }
+      <wa-textarea
+        class="external-inquiry-request__session-links-input"
+        name="external-inquiry-session-links"
+        placeholder="One chat URL per line…"
+        rows="2"
+        resize="vertical"
+        autocomplete="off"
+        autocapitalize="none"
+        spellcheck="false"
+        inputmode="url"
+        .value=${live(this.sessionLinksText)}
+        @input=${this.handleSessionLinksInput}
+      >
+        <span
+          slot="label"
+          class="external-inquiry-request__session-links-label"
+        >
+          Chat links to keep for follow-ups
+        </span>
+      </wa-textarea>
     `;
   }
 
@@ -465,23 +416,6 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel<'externalInquiry'> {
         rel="noopener noreferrer"
         >${link}</a
       >
-    `;
-  }
-
-  private renderActions(): TemplateResult {
-    return html`
-      <div class="external-inquiry-request__actions">
-        ${renderLabeledActionButton({
-          icon: 'check',
-          text: 'Submit answer',
-          title: 'Submit the answer from the external model',
-          action: 'submit',
-          kind: 'primary',
-          disabled: this.readOnly,
-          onClick: this.handleSubmit,
-        })}
-        ${this.renderRejectButton('Reject this external inquiry (n)')}
-      </div>
     `;
   }
 
@@ -509,7 +443,6 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel<'externalInquiry'> {
   }
 
   private handleSubmit(): void {
-    if (this.readOnly) return;
     const answerInput = this.renderRoot.querySelector<ValidatableTextarea>(
       '.external-inquiry-request__answer-input',
     );
@@ -536,7 +469,13 @@ export class ExternalInquiryPanel extends BaseFeedbackPanel<'externalInquiry'> {
         : '',
     );
     if (hasInvalidSessionLink) {
-      sessionLinksInput?.reportValidity();
+      // The links box sits in the collapsed "More": open it so the message
+      // shows where the bad link is.
+      const more = this.renderRoot.querySelector<
+        HTMLElement & { open: boolean }
+      >('.external-inquiry-request__more');
+      if (more) more.open = true;
+      void this.updateComplete.then(() => sessionLinksInput?.reportValidity());
       return;
     }
 
