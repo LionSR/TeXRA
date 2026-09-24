@@ -76,6 +76,9 @@ All notable changes to this project will be documented in this file.
 
 ### Bug Fixes
 
+- **Diff previews for pending tool edits no longer pile up on disk.** In
+  VS Code, the temporary files staged for tool edits still awaiting approval
+  when the window closes are now removed at shutdown.
 - **The `texra` chat no longer drops some diagnostics silently** — if session
   resources fail to close when you exit a resumable chat, the error is now
   printed to stderr after the terminal is restored, and a code block whose
