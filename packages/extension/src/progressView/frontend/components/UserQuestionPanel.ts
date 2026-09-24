@@ -1,3 +1,5 @@
+/** User question card: "Answer 2 questions", the questions, Submit / Skip. */
+
 // Third-party imports
 import { html, nothing, type TemplateResult } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
@@ -15,34 +17,16 @@ import type {
   UserQuestionPermission,
   UserQuestionPrompt,
 } from '@shared/schemas';
-import {
-  commonViewStyles,
-  designTokens,
-  requestPanelSharedStyles,
-} from '@ui/styles';
-
-// Local imports - shared schemas
-
-// Local imports - shared utilities
-import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 
 // Local imports - base class
-import {
-  BaseFeedbackPanel,
-  REDIRECT_FEEDBACK_PROMPT,
-} from './BaseFeedbackPanel';
+import { BaseRequestPanel } from './BaseRequestPanel';
 
 // Local imports - styles
 import { userQuestionPanelStyles } from './UserQuestionPanel.styles';
 
 @customElement('user-question-panel')
-export class UserQuestionPanel extends BaseFeedbackPanel<'userQuestion'> {
-  static override styles = [
-    designTokens,
-    commonViewStyles,
-    requestPanelSharedStyles,
-    userQuestionPanelStyles,
-  ];
+export class UserQuestionPanel extends BaseRequestPanel<'userQuestion'> {
+  static override styles = [BaseRequestPanel.styles, userQuestionPanelStyles];
 
   // Indexed by question position (not `question.question`): two questions
   // with identical wording would otherwise collide on a text key, both in
@@ -50,57 +34,48 @@ export class UserQuestionPanel extends BaseFeedbackPanel<'userQuestion'> {
   @state() private selections: string[][] = [];
   @state() private freeText: string[] = [];
 
+  protected override get primaryLabel(): string {
+    return 'Submit';
+  }
+
+  protected override get decline(): 'skip' {
+    return 'skip';
+  }
+
+  protected override get notePrompt(): string {
+    return 'What should the agent do instead?';
+  }
+
+  protected override submitPrimary(): void {
+    this.submitAnswers();
+  }
+
+  protected override renderAsk(): string {
+    const count = this.permission.data.questions.length;
+    return count === 1 ? 'Answer a question' : `Answer ${count} questions`;
+  }
+
   override render(): TemplateResult {
     const data = this.permission.data;
     const canSubmit = this.hasAnyAnswer(data);
 
-    return html`
-      <div class="user-question-request">
-        ${
-          data.context
-            ? html`<div class="user-question-request__context">
-                ${data.context}
-              </div>`
-            : nothing
-        }
-        <div class="user-question-request__questions">
-          ${repeat(
-            data.questions,
-            (_question, index) => index,
-            (question, index) => this.renderQuestion(question, index),
-          )}
-        </div>
-        <div class="user-question-request__actions">
-          ${renderLabeledActionButton({
-            icon: 'check',
-            text: 'Submit answers',
-            title: canSubmit
-              ? 'Submit answers (y)'
-              : 'Select or type at least one answer before submitting',
-            action: 'submit',
-            kind: 'primary',
-            disabled: this.readOnly,
-            onClick: () => this.submitAnswers(),
-          })}
-          ${this.renderRejectButton('Reject this question (n)')}
-        </div>
-        <p class="user-question-request__answer-requirement" role="status">
-          ${canSubmit ? '' : 'Answer at least one question to continue.'}
-        </p>
-        ${this.renderFeedbackSection(
-          'user-question-request__feedback',
-          'user-question-request__feedback-input',
-          REDIRECT_FEEDBACK_PROMPT,
+    return this.renderCard(html`
+      ${
+        data.context
+          ? html`<div class="request-card__context">${data.context}</div>`
+          : nothing
+      }
+      <div class="user-question-request__questions">
+        ${repeat(
+          data.questions,
+          (_question, index) => index,
+          (question, index) => this.renderQuestion(question, index),
         )}
       </div>
-    `;
-  }
-
-  override handleKeyboardShortcut(key: string): boolean {
-    if (key !== 'y') return super.handleKeyboardShortcut(key);
-    if (this.showFeedback) return false;
-    this.submitAnswers();
-    return true;
+      <p class="user-question-request__answer-requirement" role="status">
+        ${canSubmit ? '' : 'Answer at least one question to continue.'}
+      </p>
+    `);
   }
 
   private renderQuestion(
@@ -246,7 +221,6 @@ export class UserQuestionPanel extends BaseFeedbackPanel<'userQuestion'> {
   }
 
   private submitAnswers(): void {
-    if (this.readOnly) return;
     const data = this.permission.data;
     if (!this.hasAnyAnswer(data)) {
       this.renderRoot

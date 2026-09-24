@@ -5,6 +5,17 @@ import { css, type CSSResult } from 'lit';
 import { sp } from '@ui/styles';
 
 export const externalInquiryPanelStyles: CSSResult = css`
+  :host {
+    --request-accent: var(--wa-color-focus);
+  }
+
+  /* Question and answer are the card; the dock scrolls rather than this
+     body, so the answer box is never scrolled out of its own card. */
+  .request-card__details {
+    max-height: none;
+    overflow-y: visible;
+  }
+
   .external-inquiry-request__question {
     background: var(--wa-color-surface-lowered);
     border: var(--border-thin) solid var(--wa-color-surface-border);
@@ -26,62 +37,29 @@ export const externalInquiryPanelStyles: CSSResult = css`
 
   .external-inquiry-request__question-actions {
     display: flex;
-    justify-content: flex-end;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: ${sp.medium};
     margin-top: ${sp.small};
     padding-top: ${sp.small};
     border-top: var(--border-thin) solid var(--wa-color-surface-border);
   }
 
-  .external-inquiry-request__transcript {
-    border: var(--border-thin) solid var(--wa-color-surface-border);
-    border-radius: var(--border-radius);
-    background: var(--wa-color-surface-lowered);
-  }
-
-  .external-inquiry-request__transcript::part(base) {
-    border: 0;
-    border-radius: 0;
-    background: transparent;
-  }
-
-  .external-inquiry-request__transcript::part(header),
-  .external-inquiry-request__transcript::part(content) {
-    padding: 0;
-  }
-
-  /* Web Awesome's details template exposes the disclosure indicator as part="icon". */
-  .external-inquiry-request__transcript::part(icon) {
-    padding-inline-end: ${sp.medium};
-  }
-
-  .external-inquiry-request__transcript-summary {
+  .external-inquiry-request__more::part(content) {
     display: flex;
-    align-items: center;
-    gap: ${sp.small};
-    padding: ${sp.small} ${sp.medium};
-    cursor: pointer;
-    color: var(--wa-color-text-normal);
-    font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-semibold);
+    flex-direction: column;
+    gap: ${sp.medium};
   }
 
   .external-inquiry-request__transcript-turns {
     display: flex;
     flex-direction: column;
     gap: ${sp.medium};
-    max-height: min(28vh, 18rem);
-    overflow-y: auto;
-    padding: ${sp.medium};
-    border-top: var(--border-thin) solid var(--wa-color-surface-border);
-    scrollbar-gutter: stable;
   }
 
   .external-inquiry-request__transcript-turn,
   .external-inquiry-request__attach-files,
-  .external-inquiry-request__answer-area,
-  .external-inquiry-request__session-links,
-  .external-inquiry-request__session-links-known,
-  .external-inquiry-request__session-links-input-group {
+  .external-inquiry-request__answer-area {
     display: flex;
     flex-direction: column;
     gap: ${sp.small};
@@ -101,7 +79,6 @@ export const externalInquiryPanelStyles: CSSResult = css`
   }
 
   .external-inquiry-request__transcript-context,
-  .external-inquiry-request__session-links-hint,
   .external-inquiry-request__chat-links,
   .external-inquiry-request__answer-hint {
     font-size: var(--font-size-sm);
@@ -215,9 +192,6 @@ export const externalInquiryPanelStyles: CSSResult = css`
     font-size: var(--font-size);
   }
 
-  /* The SCROLLABLE_DETAILS short-viewport override that used to share this
-     block lives in requestPanelSharedStyles.ts, since it applies to every
-     panel type, not just external inquiry. */
   @media (max-height: 900px) {
     .external-inquiry-request__question-text {
       max-height: min(18vh, 10rem);

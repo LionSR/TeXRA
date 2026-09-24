@@ -8,23 +8,26 @@ import type { WorkflowDeclaredPlan } from '@shared/schemas';
 export const WORKFLOW_SCRIPT_PROPOSAL_COPY = {
   costWarning: 'Calls may run concurrently and incur high model cost.',
   declaredItemsNote:
-    'Declared items are plan labels from the script; the actual calls appear when the script issues them.',
+    'Steps are labels from the script; the actual calls appear as it runs.',
   dynamicCallsNote:
-    'This script issues its calls at runtime; they appear when the script issues them.',
+    'This script decides its steps as it runs; they appear as it issues them.',
   filesHeading: 'Files available to the script',
   defaults: (agent: string, model: string): string =>
     `Defaults: ${agent} (${model}) — each call may name its own agent and model.`,
 } as const;
 
+/** `3 steps`, or `steps decided as it runs` for none. Never a fake `0`. */
+export function workflowScriptStepCount(count: number): string {
+  if (count === 0) return 'steps decided as it runs';
+  return `${count} ${count === 1 ? 'step' : 'steps'}`;
+}
+
 /**
- * `2 phases · 3 declared items`, `2 phases · calls issued at runtime`, or the
- * bare tail when the script declares no phases. Never a fake `0 tasks`.
+ * `2 phases · 3 steps`, `2 phases · steps decided as it runs`, or the bare
+ * tail when the script declares no phases.
  */
 export function workflowScriptPlanSummary(plan: WorkflowDeclaredPlan): string {
-  const items =
-    plan.tasks.length > 0
-      ? `${plan.tasks.length} declared ${plan.tasks.length === 1 ? 'item' : 'items'}`
-      : 'calls issued at runtime';
-  if (plan.phases.length === 0) return items;
-  return `${plan.phases.length} ${plan.phases.length === 1 ? 'phase' : 'phases'} · ${items}`;
+  const steps = workflowScriptStepCount(plan.tasks.length);
+  if (plan.phases.length === 0) return steps;
+  return `${plan.phases.length} ${plan.phases.length === 1 ? 'phase' : 'phases'} · ${steps}`;
 }

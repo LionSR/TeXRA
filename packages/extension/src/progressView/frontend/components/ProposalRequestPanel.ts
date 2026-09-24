@@ -1,4 +1,4 @@
-/** Agent proposal request panel. */
+/** Agent proposal card: "Delegate a task to reviewer" / "Start a multi-agent run: …". */
 
 // Third-party imports
 import { html, nothing, type PropertyValues, type TemplateResult } from 'lit';
@@ -8,7 +8,6 @@ import { repeat } from 'lit/directives/repeat.js';
 import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 
 // Side-effect imports - register WA icon component
-import '@awesome.me/webawesome/dist/components/badge/badge.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/select/select.js';
@@ -26,17 +25,17 @@ import { SessionUiEvents } from '@shared/session/uiEvents';
 import { workflowRunModel } from '@shared/runs/workflowRunModel';
 import { getModelLabel } from '@shared/model/modelLabel';
 import { APPROVE_ALL_DELEGATED_WORK_ACTION } from '@shared/session/approvalDecision';
+import { selectStyles } from '@ui/styles';
 import {
-  commonViewStyles,
-  designTokens,
-  requestPanelSharedStyles,
-  selectStyles,
-} from '@ui/styles';
+  DELEGATION_APPROVAL_COPY,
+  RUN_GRANT_LABEL,
+} from '@ui/copy/delegationApproval';
 
 // Local imports - shared utils
 import {
   WORKFLOW_SCRIPT_PROPOSAL_COPY,
   workflowScriptPlanSummary,
+  workflowScriptStepCount,
 } from '@ui/copy/workflowScriptProposal';
 import { markdownStyles } from '@ui/styles/markdownStyles';
 import {
@@ -51,7 +50,7 @@ import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { getBasename } from '@utils/core';
 
 // Local imports - base class
-import { BaseApprovalPanel } from './BaseApprovalPanel';
+import { BaseRequestPanel, type RunGrant } from './BaseRequestPanel';
 import { proposalRequestPanelStyles } from './ProposalRequestPanel.styles';
 import { buildStatusBadge } from '../formatters/htmlBuilders';
 import { processMarkdownContent } from '../formatters/markdownRenderer';
@@ -64,12 +63,10 @@ function proposalRequestIdOf(
 }
 
 @customElement('proposal-request-panel')
-export class ProposalRequestPanel extends BaseApprovalPanel<'proposal'> {
+export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
   static override styles = [
-    designTokens,
-    commonViewStyles,
+    BaseRequestPanel.styles,
     markdownStyles,
-    requestPanelSharedStyles,
     proposalRequestPanelStyles,
     selectStyles,
   ];
@@ -77,8 +74,43 @@ export class ProposalRequestPanel extends BaseApprovalPanel<'proposal'> {
   @state() private selectedModel: string | null = null;
   @state() private selectedAgent: string | null = null;
 
-  protected get approvalDecision() {
-    return { action: 'approve' as const, ...this.proposalOverrides };
+  protected override submitPrimary(): void {
+    this.emitAction({ action: 'approve', ...this.proposalOverrides });
+  }
+
+  protected override get grant(): RunGrant {
+    return {
+      label: RUN_GRANT_LABEL.superYolo,
+      scope: DELEGATION_APPROVAL_COPY.progressViewToggle,
+      decision: {
+        action: APPROVE_ALL_DELEGATED_WORK_ACTION,
+        ...this.proposalOverrides,
+      },
+    };
+  }
+
+  /**
+   * What the agent wants to start, naming the agent (unless the agent
+   * picker below names it) and the model (unless the model picker does).
+   */
+  protected override renderAsk(): TemplateResult {
+    const data = this.permission.data;
+    if (data.agentCategory === AgentCategory.Workflow && data.workflowScript) {
+      return html`Start a multi-agent run:
+        <strong>${data.workflowScript.name}</strong>`;
+    }
+    const agent =
+      (this.permission.agentOptionsData ?? []).length > 0
+        ? nothing
+        : html` <strong>${data.agent}</strong>`;
+    const model =
+      (this.permission.modelOptionsData ?? []).length > 0
+        ? nothing
+        : html` on ${getModelLabel(data.model)}`;
+    return data.agentCategory === AgentCategory.Workflow
+      ? html`Run${agent === nothing ? ' an agent' : agent}${model}`
+      : html`Delegate a
+        task${agent === nothing ? '' : html` to${agent}`}${model}`;
   }
 
   // Reset selections only when the proposal's identity changes, so an async
@@ -105,132 +137,63 @@ export class ProposalRequestPanel extends BaseApprovalPanel<'proposal'> {
     return false;
   }
 
-  // Proposals carry a stronger approval action than the edit/bash bypass.
-  // Enabling canApproveAllDelegatedWork surfaces it on the Approve menu and
-  // maps the shared `a` accelerator to it (the base owns both). A proposal
-  // always has a runId.
-  protected override get canApproveAllDelegatedWork(): boolean {
-    return true;
-  }
-
-  protected override approveAllDelegatedWorkHandler(): void {
-    this.emitAction(this.approveAllDelegatedWorkDecision);
-  }
-
   override render(): TemplateResult {
     const data = this.permission.data;
     const modelOptions = this.permission.modelOptionsData ?? [];
     const agentOptions = this.permission.agentOptionsData ?? [];
     const isWorkflow = data.agentCategory === AgentCategory.Workflow;
     const workflowScript = isWorkflow ? data.workflowScript : undefined;
-    let categoryLabel = 'Tool-Use';
-    if (workflowScript) {
-      categoryLabel = 'Multi-agent workflow';
-    } else if (isWorkflow) {
-      categoryLabel = 'Workflow';
-    }
-    const currentModel = this.selectedModel ?? data.model;
-    const currentAgent = this.selectedAgent ?? data.agent;
-    // The transport ships option data only for proposals whose approval
-    // honors a model/agent override; the dropdowns render iff it arrived.
-    const hasModelOptions = modelOptions.length > 0;
-    const hasAgentOptions = agentOptions.length > 0;
 
-    // The workflow-script card (W0) opens on its own head, 'Proposes a
-    // multi-agent run'; the kind, agent, and model row belongs to the other
-    // proposals, whose head is that row.
-    const headerRow = workflowScript
-      ? nothing
-      : html`<div class="workflow-proposal__header-row">
-          <wa-badge
-            variant=${isWorkflow ? 'neutral' : 'brand'}
-            appearance="filled"
-          >
-            ${categoryLabel}
-          </wa-badge>
-          ${
-            hasAgentOptions
-              ? html`
-                  <div class="workflow-proposal__agent-select">
-                    ${waIcon('wand-magic-sparkles')}
-                    <wa-select
-                      class="proposal-agent-dropdown"
-                      .value=${currentAgent}
-                      @change=${this.handleAgentSelectChange}
-                    >
-                      <span slot="label" class="visually-hidden"
-                        >Agent for this proposal</span
-                      >
-                      ${renderAgentOptions(agentOptions)}
-                    </wa-select>
-                  </div>
-                `
-              : html`<span class="workflow-proposal__agent"
-                  >${data.agent}</span
-                >`
-          }
-          ${
-            hasModelOptions
-              ? html`
-                  <div class="workflow-proposal__model-select">
-                    ${waIcon('robot')}
-                    <wa-select
-                      class="proposal-model-dropdown"
-                      .value=${currentModel}
-                      @change=${this.handleSelectChange}
-                    >
-                      <span slot="label" class="visually-hidden"
-                        >Model for this proposal</span
-                      >
-                      ${renderModelOptions(modelOptions)}
-                    </wa-select>
-                  </div>
-                `
-              : html`<span class="workflow-proposal__model"
-                  >${getModelLabel(data.model)}</span
-                >`
-          }
-        </div>`;
-    return this.renderRequestShell({
-      prefix: 'workflow-proposal',
-      details: html`
-        ${headerRow}
-        ${
-          workflowScript
-            ? this.renderWorkflowScriptSummary(data, workflowScript)
-            : html`${this.renderInstruction(data.instruction)}
-              ${isWorkflow ? this.renderExtractFlags(data) : nothing}
-              ${this.renderProposalFiles(data)}`
-        }
-      `,
-      approveTitle: workflowScript
-        ? 'Approve and run this workflow (y)'
-        : 'Approve this proposal (y)',
-      approveLabel: workflowScript ? 'Approve and run' : 'Approve',
-      rejectTitle: 'Reject this proposal (n)',
-      trailingActions: html`${renderLabeledActionButton({
+    // The transport ships option data only for proposals whose approval
+    // honors a model/agent override; the pickers render iff it arrived.
+    const pickers =
+      agentOptions.length > 0 || modelOptions.length > 0
+        ? html`<div class="workflow-proposal__pickers">
+            ${
+              agentOptions.length > 0
+                ? html`<wa-select
+                    class="proposal-agent-dropdown"
+                    .value=${this.selectedAgent ?? data.agent}
+                    @change=${this.handleAgentSelectChange}
+                  >
+                    <span slot="label" class="visually-hidden">Agent</span>
+                    ${waIcon('wand-magic-sparkles', { slot: 'start' })}
+                    ${renderAgentOptions(agentOptions)}
+                  </wa-select>`
+                : nothing
+            }
+            ${
+              modelOptions.length > 0
+                ? html`<wa-select
+                    class="proposal-model-dropdown"
+                    .value=${this.selectedModel ?? data.model}
+                    @change=${this.handleSelectChange}
+                  >
+                    <span slot="label" class="visually-hidden">Model</span>
+                    ${waIcon('robot', { slot: 'start' })}
+                    ${renderModelOptions(modelOptions)}
+                  </wa-select>`
+                : nothing
+            }
+          </div>`
+        : nothing;
+
+    return this.renderCard(
+      workflowScript
+        ? this.renderWorkflowScriptSummary(data, workflowScript)
+        : html`${pickers} ${this.renderInstruction(data.instruction)}
+          ${isWorkflow ? this.renderExtractFlags(data) : nothing}
+          ${this.renderProposalFiles(data)}`,
+      renderLabeledActionButton({
         id: 'proposal-setup-button',
         icon: 'reply',
         text: 'Edit as new task',
         tooltip: 'Edit as new task (s)',
         action: 'setup',
+        disabled: this.readOnly,
         onClick: () => this.emitAction({ action: 'setup' }),
-      })}${
-        workflowScript
-          ? html`<wa-button
-              id="proposal-skip-button"
-              class="proposal-card__skip"
-              appearance="plain"
-              variant="neutral"
-              size="s"
-              type="button"
-              ?disabled=${this.readOnly}
-              @click=${() => this.approveAllDelegatedWorkHandler()}
-              >Skip proposals this session</wa-button
-            >`
-          : nothing
-      }`,
-    });
+      }),
+    );
   }
 
   // ===========================================================================
@@ -259,19 +222,11 @@ export class ProposalRequestPanel extends BaseApprovalPanel<'proposal'> {
     const modelLabel = getModelLabel(data.model);
 
     return html`
-      <div class="proposal-card__head">
-        ${waIcon('diagram-project')}
-        <strong>Proposes a multi-agent run</strong>
+      <div class="proposal-card__lede">
+        <span>${workflow.description}</span>
         <span class="proposal-card__summary"
           >${workflowScriptPlanSummary(workflow)}</span
         >
-      </div>
-      <div class="proposal-card__lede">
-        <span class="workflow-proposal__workflow-name" title=${workflow.name}
-          >${workflow.name}</span
-        >
-        <span aria-hidden="true">·</span>
-        <span>${workflow.description}</span>
       </div>
       ${
         phases.length > 0
@@ -287,15 +242,7 @@ export class ProposalRequestPanel extends BaseApprovalPanel<'proposal'> {
                       >${data.agent} · ${modelLabel}</span
                     >
                     <span class="proposal-card__phase-calls"
-                      >${
-                        phase.declaredTasks.length > 0
-                          ? `${phase.declaredTasks.length} ${
-                              phase.declaredTasks.length === 1
-                                ? 'call'
-                                : 'calls'
-                            }`
-                          : 'calls at runtime'
-                      }</span
+                      >${workflowScriptStepCount(phase.declaredTasks.length)}</span
                     >
                   </div>
                 `,
@@ -479,13 +426,6 @@ export class ProposalRequestPanel extends BaseApprovalPanel<'proposal'> {
         ? { agent: selectedAgent }
         : {}),
     };
-  }
-
-  private get approveAllDelegatedWorkDecision() {
-    return {
-      action: APPROVE_ALL_DELEGATED_WORK_ACTION,
-      ...this.proposalOverrides,
-    } as const;
   }
 }
 

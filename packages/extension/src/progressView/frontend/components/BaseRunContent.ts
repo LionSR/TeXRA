@@ -39,7 +39,6 @@ export abstract class BaseRunContent extends LitElement {
       <div class="conversation-column conversation-approval-dock">
         <request-panels
           .permissions=${permissions}
-          .view=${this.view}
           .surface=${this.surface}
           .readOnly=${this.run?.readOnly === true}
         ></request-panels>

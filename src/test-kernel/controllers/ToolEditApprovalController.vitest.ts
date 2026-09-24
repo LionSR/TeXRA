@@ -143,25 +143,6 @@ function createController(host: ReturnType<typeof createTestHost>['host']) {
 }
 
 describe('tool edit approval controller', () => {
-  it('decides a request discarded while its preview is still staging', async () => {
-    const testHost = createTestHost();
-    const controller = createController(testHost.host);
-
-    const presented = run(controller.present(approvalRequest()));
-    await run(Deferred.await(testHost.contextReady));
-    const requestId = testHost.contextForRequest().requestId;
-    await run(testHost.contextForRequest().discard());
-    expect(testHost.contextForRequest().isSettled()).toBe(true);
-    Deferred.doneUnsafe(testHost.staging, Effect.void);
-    await presented;
-
-    expect(testHost.host.decide).toHaveBeenCalledWith(RUN, requestId, {
-      action: 'reject',
-    });
-    expect(testHost.preview.dispose).toHaveBeenCalledOnce();
-    expect(testHost.preview.present).not.toHaveBeenCalled();
-  });
-
   it('holds a release open until the staging in flight has disposed', async () => {
     const testHost = createTestHost();
     const controller = createController(testHost.host);

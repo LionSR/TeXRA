@@ -1,18 +1,24 @@
+import type { ApprovalBypassKind } from '@shared/approvalBypassKind';
+
+/**
+ * The run-scoped grant each approval kind's Approve ▾ menu offers, one noun
+ * per kind: edits, commands, agent work. The run toolbar names the same grant
+ * with the same noun.
+ */
+export const RUN_GRANT_LABEL = Object.freeze({
+  toolEdit: 'Approve all edits in this run',
+  bash: 'Approve all commands in this run',
+  superYolo: 'Approve all agent work in this run',
+} as const satisfies Record<ApprovalBypassKind, string>);
+
 /** Host-specific user copy for the delegated-work approval grant. */
 export const DELEGATION_APPROVAL_COPY = Object.freeze({
   cliAction: 'approve agent work for this chat',
   cliCompactAction: 'all agent work',
   cliExplanation:
     'Press y to approve only this task. Press a to approve delegated tasks, file edits, and commands for this chat. Other prompts still ask.',
-  progressViewAction: 'Approve agent work for this run',
-  progressViewExplanation:
-    'Approves this request and other work already queued in the current run. Later agent tasks, file edits, and shell commands in the current run and any runs delegated from it are auto-approved. Plans, retries, external inquiries, and user questions still require a decision.',
   progressViewToggle:
     'Auto-approve later agent tasks, file edits, and shell commands in this run',
-  progressViewEditAction:
-    'Approve and later auto-approve file edits in this run',
-  progressViewCommandAction:
-    'Approve and later auto-approve shell commands in this run',
 } as const);
 
 /**

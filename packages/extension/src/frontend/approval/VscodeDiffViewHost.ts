@@ -24,7 +24,7 @@ type EditorCallFailed = HostCallFailed | RequestRefusal;
  * file. Shared by the diff-view and tool-edit-approval hosts, which both watch
  * and close tabs that reference files.
  */
-export function tabInputFileUri(tab: vscode.Tab): vscode.Uri | null {
+function tabInputFileUri(tab: vscode.Tab): vscode.Uri | null {
   const input = tab.input;
   if (input instanceof vscode.TabInputText) return input.uri;
   if (input instanceof vscode.TabInputTextDiff) return input.modified;

@@ -94,12 +94,6 @@ export interface ToolEditPreviewContext {
   readonly relativePath: string;
   /** True once the request settled, so hosts can drop late view work. */
   isSettled(): boolean;
-  /**
-   * Reject the request because the user closed the host's view. The host
-   * runs this on a fiber of its own, where its view framework handed it a
-   * plain callback.
-   */
-  discard(): Effect.Effect<void, never, PreviewServices>;
 }
 
 export interface ToolEditApprovalHost {
@@ -379,7 +373,6 @@ export class ToolEditApprovalController {
         requestId,
         relativePath,
         isSettled: () => this.isSettled(requestId),
-        discard: () => this.discard(requestId),
       })
       .pipe(
         Effect.flatMap((preview) => {
@@ -442,23 +435,6 @@ export class ToolEditApprovalController {
 
   private isSettled(requestId: string): boolean {
     return !this.requests.has(requestId);
-  }
-
-  private discard(
-    requestId: string,
-  ): Effect.Effect<void, never, PreviewServices> {
-    return Effect.suspend(() => {
-      const state = this.requests.get(requestId);
-      if (state?.phase === 'initializing') {
-        return this.decideFromPayload(state, { action: 'reject' });
-      }
-      if (state?.phase === 'pending') {
-        return this.admit(state, () =>
-          this.send(state.request, { action: 'reject' }),
-        );
-      }
-      return Effect.void;
-    });
   }
 
   /**

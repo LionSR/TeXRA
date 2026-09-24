@@ -313,6 +313,25 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
   and "Kill run" is gone from the board because the header's Stop does the
   same. The Tasks panel names the task in progress in its summary and stays
   open or closed as you left it when you switch runs.
+- **Every request the agent makes is one card with the same buttons.** Edits,
+  commands, proposals, plans, questions, outside-model inquiries and failed
+  model calls now open with one sentence saying what the agent wants, and end
+  with the same row: the main action on `y` (Approve, Submit or Retry), an
+  optional ▾ **Approve all edits / commands / agent work in this run** on
+  `a`, and **Reject**, **Skip** or **Stop run** on `n`, which answers in one
+  click. **Add a note…** attaches an optional note for the agent. Esc no
+  longer answers anything; on a failed model call it used to end the run.
+- **"Skip proposals this session" is removed.** Despite its name it approved
+  the workflow and switched on auto-approval for every later task, edit and
+  command in the run. The Approve ▾ menu's **Approve all agent work in this
+  run** is the one place that grant lives.
+- **Closing the VS Code diff tab no longer rejects the edit.** The diff tab
+  only shows the change; the request stays on its card, where **Open diff**
+  reopens it. This matches the desktop app.
+- **The outside-model inquiry card leads with the question and the answer
+  box.** Context, earlier turns and chat links move under **More**, and the
+  links now open ChatGPT and Gemini chats instead of their pricing pages.
+  Skipping an inquiry no longer offers a note the agent would never see.
 
 #### Bug Fixes
 

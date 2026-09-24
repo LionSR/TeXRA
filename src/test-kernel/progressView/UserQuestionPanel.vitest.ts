@@ -57,7 +57,7 @@ function submitButton(
   element: UserQuestionPanel,
 ): HTMLElement & { disabled?: boolean } {
   const button = element.shadowRoot?.querySelector(
-    'wa-button[data-action="submit"]',
+    'wa-button[data-action="primary"]',
   );
   if (!button) throw new Error('submit button not rendered');
   return button as HTMLElement & { disabled?: boolean };
@@ -68,15 +68,17 @@ function dispatchChange(element: HTMLElement): void {
 }
 
 describe('user-question-panel', () => {
-  it('does not emit inherited approve action while rejection feedback is open', async () => {
+  it('skips on one "n", the word the CLI uses for declining a question', async () => {
     const element = await mountPanel();
     const actions = collectActions(element);
 
+    expect(
+      element.shadowRoot
+        ?.querySelector('wa-button[data-action="decline"]')
+        ?.textContent?.trim(),
+    ).toBe('Skip');
     expect(element.handleKeyboardShortcut('n')).toBe(true);
-    await element.updateComplete;
-
-    expect(element.handleKeyboardShortcut('y')).toBe(false);
-    expect(actions).toEqual([]);
+    expect(actions).toEqual([{ action: 'skip' }]);
   });
 
   it('does not submit an empty answer set', async () => {
