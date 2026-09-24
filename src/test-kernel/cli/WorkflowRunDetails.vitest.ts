@@ -5,9 +5,9 @@ import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { ConversationPane } from '@cli/chat/tui/panes/ConversationPane';
 import { selectWorkflowRunDetailLines } from '@cli/chat/tui/panes/WorkflowRunDetails';
 import {
-  activeRunId,
   resetCliState,
   rootRunId,
+  focusRun,
 } from '@cli/chat/tui/state/cliState';
 import {
   AgentCategory,
@@ -188,7 +188,7 @@ describe('selectWorkflowRunDetailLines', () => {
       ]),
     );
     rootRunId.set(STREAM_ID);
-    activeRunId.set(STREAM_ID);
+    focusRun(STREAM_ID);
     const { ink, React } = await loadInk();
     const output = ink.renderToString(
       React.createElement(ConversationPane, {

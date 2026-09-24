@@ -57,6 +57,7 @@ import {
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
+import { acceptsFollowUp } from '@shared/session/sessionView';
 import { RUN_OUTCOME, type RunId, AgentCategory } from '@shared/schemas';
 import {
   DatabaseClaimRefused,
@@ -73,7 +74,7 @@ import {
   type SlashCommandContext,
 } from './tui/commands/handlers/slashContext';
 import {
-  activeRunId as activeRunIdSignal,
+  selectedRunId as selectedRunIdSignal,
   focusRun,
   rootRunId,
   patchSessionMeta,
@@ -89,7 +90,7 @@ import {
 import {
   currentView,
   runViewOf,
-  focusedChildAcceptsFollowUps,
+  CLI_FOLLOW_UP_HOST,
 } from './tui/state/sessionView';
 import { createTuiHostInteractions } from './tui/state/subscribeApprovals';
 import {
@@ -1159,10 +1160,10 @@ export function createChatSessionController(
         readonly kind: 'accept' | 'reject';
         readonly runId: RunId;
       } => {
-    const stream = runViewOf(currentView(), activeRunIdSignal.get());
+    const stream = runViewOf(currentView(), selectedRunIdSignal.get());
     if (!stream || stream.parentId === null) return { kind: 'none' };
     return {
-      kind: focusedChildAcceptsFollowUps(stream) ? 'accept' : 'reject',
+      kind: acceptsFollowUp(stream, CLI_FOLLOW_UP_HOST) ? 'accept' : 'reject',
       runId: stream.id,
     };
   };

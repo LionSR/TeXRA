@@ -111,29 +111,17 @@ interface StatusBarSegment {
   readonly decorative?: boolean;
 }
 
-export interface StatusBarDisplayInput {
-  readonly status: RunPhase | undefined;
-  /** The fold's label for `status` (G4, one table); undefined with no run. */
-  readonly statusLabel: string | undefined;
-  /** Liveness of the running turn — omitted entirely in tests/headless runs,
+/**
+ * What the status bar shows beyond the displayed run's own facts, which it
+ * reads straight off the `RunView` (`buildStatusBarDisplay`'s `run`): the
+ * turn clock, the session chrome, and which surface owns input.
+ */
+export interface StatusBarChrome {
+  /** Liveness of the running turn: omitted entirely in tests/headless runs,
    *  same as each of its fields individually. */
   readonly turn?: StatusBarTurnInput;
   readonly transientNotice: TransientNotice | undefined;
   readonly commandName?: string;
-  /** The run's policy snapshot bypasses; absent before `approval.policy` folds. */
-  readonly bypass?: BypassState;
-  readonly queuedFollowUpMessages: readonly string[];
-  /** Latest usage snapshot — read for `usageRoute` (which subscription quota
-   *  to show), never for context occupancy: that is `contextState`. */
-  readonly usage: TokenUsageStats | undefined;
-  /** Run-authoritative context occupancy for the displayed run
-   *  (`RunView.context`). */
-  readonly contextState: ContextStateData | undefined;
-  /** The displayed run's loop position (`RunView.flow`); undefined before
-   *  its first step. */
-  readonly flow: RunView['flow'] | undefined;
-  /** Retained and active direct subagents owned by the displayed run. */
-  readonly subagents: number;
   /** Visible child sessions still in flight (see RUNNING_SESSION copy). */
   readonly runningSessions: number;
   readonly approvalDepth: number;
@@ -148,9 +136,6 @@ export interface StatusBarDisplayInput {
   /** Terminal width in columns. */
   readonly width?: number;
   readonly ctrlCAction?: CtrlCAction;
-  /** True when `status` belongs to a focused child/subagent run rather
-   *  than the root session — see `statusBarRunTarget`. */
-  readonly isChildRun?: boolean;
   /** Nested-session location (`Survey (1/1) › Agent runtime`). Omitted on
    *  the root session, where the header already names the conversation. */
   readonly location?: { readonly context?: string; readonly label: string };
@@ -175,8 +160,6 @@ interface StatusBarTurnInput {
    *  `loadingFrameAt`) shown ahead of the status label while a turn is
    *  active, so "running" reads as alive rather than a static word. */
   readonly runningFrame?: string;
-  readonly thinkingActive?: boolean;
-  readonly compactingActive?: boolean;
 }
 
 interface StatusBarForegroundInput {
@@ -721,7 +704,7 @@ const BYPASS_BADGES: ReadonlyArray<{
 // Which text occupies the bindings row is a priority order, not a single
 // condition: a resumable exit confirmation always wins, then an actual
 // foreground surface, then the child list, and only then normal chat shortcuts.
-function resolveStatusBarBindings(input: StatusBarDisplayInput): string {
+function resolveStatusBarBindings(input: StatusBarChrome): string {
   if (
     input.transientNotice?.kind === 'exit' &&
     input.transientNotice.resumeId
@@ -746,27 +729,35 @@ function resolveStatusBarBindings(input: StatusBarDisplayInput): string {
   return statusBarBindingsText(input.shortcuts, ctrlCAction, maxColumns);
 }
 
+/**
+ * The bar for the displayed run (`statusBarRunTarget`), read straight off
+ * its `RunView` and the view's per-run policy and follow-up queue, around
+ * the chrome the TUI supplies.
+ */
 export function buildStatusBarDisplay(
-  input: StatusBarDisplayInput,
+  run: RunView | undefined,
+  view: Pick<SessionView, 'policy' | 'queuedFollowUps'>,
+  input: StatusBarChrome,
 ): StatusBarDisplay {
   const left: StatusBarSegment[] = [
     { text: STATUS_DIAMOND, color: COLOR_HINT, decorative: true },
   ];
   const turn = input.turn;
-  const queuedCount = input.queuedFollowUpMessages.length;
+  const status = runPhaseOf(run);
+  const active = isActivePhase(status);
+  const queuedCount =
+    run === undefined ? 0 : (view.queuedFollowUps.get(run.id)?.length ?? 0);
 
-  // No run yet: a child row has no status column, the root keeps its slot.
-  const statusLabel = input.statusLabel ?? (input.isChildRun ? '' : '-');
+  // No run yet: the root keeps its status slot.
+  const statusLabel = run?.statusLabel ?? '-';
   const spinPrefix =
-    isActivePhase(input.status) && turn?.runningFrame
-      ? `${turn.runningFrame} `
-      : '';
+    active && turn?.runningFrame ? `${turn.runningFrame} ` : '';
 
   // A notice must not hide the only indication that an active run is still
   // alive. Keep that liveness compact so the notice remains the focal text.
   let transientLivenessIndex: number | undefined;
   if (input.transientNotice) {
-    if (isActivePhase(input.status)) {
+    if (active) {
       const elapsed =
         turn?.elapsedMs === undefined
           ? ''
@@ -786,7 +777,7 @@ export function buildStatusBarDisplay(
       text: `${spinPrefix}${statusLabel}`,
       color: 'dim',
     });
-    if (isActivePhase(input.status) && turn?.elapsedMs !== undefined) {
+    if (active && turn?.elapsedMs !== undefined) {
       left.push({
         text: formatCompactDuration(turn.elapsedMs),
         color: 'dim',
@@ -797,13 +788,13 @@ export function buildStatusBarDisplay(
   // Routine activity, not caution: these sit onscreen for whole turns, and
   // painting them yellow trains the eye to ignore the color that also
   // announces auto-approval bypasses and quota exhaustion.
-  if (turn?.compactingActive === true && isActivePhase(input.status)) {
+  if (run?.compactingActive === true && active) {
     left.push({
       text: 'compacting...',
       color: 'dim',
       compactPriority: STATUS_BAR_COMPACT_PRIORITY.compacting,
     });
-  } else if (turn?.thinkingActive === true && isActivePhase(input.status)) {
+  } else if (run?.thinkingActive === true && active) {
     left.push({
       text: 'thinking...',
       color: 'dim',
@@ -829,13 +820,15 @@ export function buildStatusBarDisplay(
 
   // One slot carries a reflection run's round (mirrors the SubagentList row's
   // `flowLabel`). A chat's turn count is not something anyone acts on.
-  const position = flowPosition(input.flow);
+  const position = flowPosition(run?.flow ?? undefined);
+  // Every direct and nested subagent the displayed run owns.
+  const subagents = run?.rollup.total ?? 0;
   const flowText =
     position?.kind === 'turn' ? undefined : formatFlowPositionLabel(position);
   left.push(
     ...(
       [
-        input.ctrlCAction === 'stop root' && !isActivePhase(input.status)
+        input.ctrlCAction === 'stop root' && !active
           ? {
               text: 'root active',
               color: COLOR_WARNING,
@@ -869,7 +862,7 @@ export function buildStatusBarDisplay(
               color: 'dim',
               compactPriority: STATUS_BAR_COMPACT_PRIORITY.flow,
             },
-        formatUsage(input.contextState, input.usage),
+        formatUsage(run?.context ?? undefined, run?.usage),
         queuedCount > 0
           ? {
               text: `queued ${queuedCount}`,
@@ -877,10 +870,10 @@ export function buildStatusBarDisplay(
               compactPriority: STATUS_BAR_COMPACT_PRIORITY.queuedFollowUp,
             }
           : undefined,
-        input.subagents > 0
+        subagents > 0
           ? {
-              text: formatResultCount(input.subagents, 'agent'),
-              compactText: `${input.subagents} ${SUBAGENT.compactCountSuffix}`,
+              text: formatResultCount(subagents, 'agent'),
+              compactText: `${subagents} ${SUBAGENT.compactCountSuffix}`,
               color: 'dim',
               compactPriority: STATUS_BAR_COMPACT_PRIORITY.activeSubagent,
             }
@@ -906,8 +899,9 @@ export function buildStatusBarDisplay(
       ] satisfies (StatusBarSegment | undefined)[]
     ).filter(filterNotNullish),
   );
+  const bypass = run === undefined ? undefined : view.policy.get(run.id);
   for (const badge of BYPASS_BADGES) {
-    if (input.bypass?.[badge.field]) {
+    if (bypass?.bypasses[badge.field]) {
       left.push({
         text: badge.text,
         badge: true,

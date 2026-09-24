@@ -5,7 +5,7 @@ import { notifyFollowUpSent } from '@agent/followUp';
 import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
 import { formatCliSessionStatus } from '@cli/chat/tui/sessionStatus';
 import {
-  activeRunId as activeRunIdSignal,
+  selectedRunId as selectedRunIdSignal,
   beginWorkPlanReaderRequest,
   cancelPendingWorkPlanReaderRequest,
   cancelWorkPlanReaderRequest,
@@ -44,7 +44,7 @@ export function showCliSlashCommandHelp(): void {
 
 /** Open the focused run's work plan from the view it is rendered from. */
 export function showCliWorkPlan(session: SessionHandle): void {
-  const runId = activeRunIdSignal.get();
+  const runId = selectedRunIdSignal.get();
   if (!runId) {
     cancelPendingWorkPlanReaderRequest();
     setTransientNotice('No focused session.');
@@ -79,7 +79,7 @@ export const showCliSessionStatus = Effect.fn('showCliSessionStatus')(
   function* (context: SlashCommandContext) {
     const meta = sessionMeta.get();
     const view = currentView();
-    const activeRunId = activeRunIdSignal.get();
+    const activeRunId = selectedRunIdSignal.get();
     const run = runViewOf(view, activeRunId);
     // The children a status line counts: the active run's, else its
     // parent's (a focused leaf reports its siblings' activity).
@@ -132,7 +132,7 @@ export function requestCliSessionCompaction(
   session: SessionHandle,
 ): Effect.Effect<void> {
   return Effect.suspend(() => {
-    const runId = activeRunIdSignal.get();
+    const runId = selectedRunIdSignal.get();
     if (runId === undefined) {
       appendLocalAssistantTranscript(
         'No active tool-use session found for context compaction.',
