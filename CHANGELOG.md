@@ -50,6 +50,17 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
+- **Install Claude Code and Codex plugins for their skills** — `texra plugin
+install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
+  adds its skills as user skills to TeXRA sessions in the terminal and in
+  VS Code, which share the install. The desktop app does not load them yet.
+  It reads the
+  plugin's own `.claude-plugin/plugin.json` or `.codex-plugin/plugin.json`,
+  installs from a marketplace repository with `--plugin <name>`, and uses a
+  local plugin folder in place. `texra plugin list`, `update` and `remove`
+  manage them, and the Skills settings tab lists them. Only skills are loaded
+  for now; a plugin's MCP servers, hooks, commands and agents are listed as
+  ignored and never run.
 - **The orchestrator and the Lean agents ship with TeXRA** — `orchestrator`,
   `search`, `simplifier`, `presenter`, `progressCheck`, and the Lean Project
   agents (`lean`, `leanSearch`, `leanSimplifier`, `leanBlueprint`,

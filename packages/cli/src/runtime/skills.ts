@@ -30,7 +30,7 @@ export function readCliSkills(
 ) {
   return Effect.gen(function* () {
     const result = yield* discoverSkillSources(
-      runtimeSkillSources(cwd, options),
+      yield* runtimeSkillSources(cwd, stores, options),
     );
     return filterDiscoveredSkills(result, yield* readDisabledSkills(stores));
   });

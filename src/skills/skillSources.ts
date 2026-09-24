@@ -1,6 +1,6 @@
 import * as path from 'node:path';
 
-import type { ActiveSkillSourceScope } from '@shared/schemas';
+import type { ActiveSkillSourceScope, InstalledPlugin } from '@shared/schemas';
 
 import type { SkillSource, SkillSourceTier } from './loadSkills';
 
@@ -24,12 +24,20 @@ export const INTEROP_SKILL_DIRS = [
  * A `source` tier keeps its roots in registration order; the `name` tier
  * pools its roots and orders their skills by directory name, so bundled
  * skills read the same whether one directory or several ship them.
+ *
+ * Installed plugins sit right below the user's own skills and carry the
+ * `user` scope: installing one is a per-user act like writing
+ * `~/.texra/skills`, so the user source switch governs both, and a skill the
+ * user writes by hand still shadows a plugin's. They rank above interop
+ * imports and bundled skills because an explicit install is a stronger
+ * choice than either.
  */
 const SKILL_TIERS = [
   { id: 'custom', scope: 'custom', order: 'source' },
   { id: 'project', scope: 'project', order: 'source' },
   { id: 'interop-project', scope: 'interop', order: 'source' },
   { id: 'user', scope: 'user', order: 'source' },
+  { id: 'plugin', scope: 'user', order: 'source' },
   { id: 'interop-user', scope: 'interop', order: 'source' },
   { id: 'bundled', scope: 'bundled', order: 'name' },
 ] as const satisfies readonly {
@@ -46,6 +54,8 @@ interface SkillSourceCall {
   readonly home: string;
   readonly resourcesPath: string;
   readonly options: SkillSourceOptions;
+  /** The plugins `texra plugin install` recorded, read from settings. */
+  readonly plugins: readonly InstalledPlugin[];
 }
 
 interface SkillRoot {
@@ -102,6 +112,20 @@ const CORE_SKILL_CONTRIBUTIONS: readonly SkillSourceContribution[] = [
     roots: ({ home }) => [
       { path: path.join(home, '.texra', 'skills'), label: 'user' },
     ],
+  },
+  {
+    id: 'core:plugins',
+    tier: 'plugin',
+    // Required: a recorded root that has gone missing is reported, not
+    // skipped, until `texra plugin update` or `remove` resolves it.
+    roots: ({ plugins }) =>
+      plugins.flatMap((plugin) =>
+        plugin.skills.map((skillsPath) => ({
+          path: skillsPath,
+          label: `plugin ${plugin.name}`,
+          required: true as const,
+        })),
+      ),
   },
   {
     id: 'core:interop-user',

@@ -45,6 +45,7 @@ import {
   CodexApprovalPolicySchema,
   CodexReasoningEffortSchema,
   CodexSandboxModeSchema,
+  InstalledPluginSchema,
   LATEXDIFF_TEMP_FILE_LOCATIONS,
   MODEL_COMPACTION_THRESHOLD_SETTING,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
@@ -1347,6 +1348,19 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     honoredBy: everyHost('src/skills/runtimeSkills.ts'),
     openForm: 'skills',
     surfaces: { settingsView: 'skills', cliConfig: true },
+  }),
+  // Written only by `texra plugin install|update|remove`; the settings view
+  // lists it read-only, so the CLI command stays the one home for the action.
+  surfacedSetting({
+    key: GlobalStateKey.INSTALLED_PLUGINS,
+    schema: z.array(InstalledPluginSchema).prefault([]),
+    title: 'Installed plugins',
+    description:
+      'Claude Code and Codex plugins installed with `texra plugin install`. TeXRA loads their skills as user skills.',
+    category: 'tools',
+    slots: sameSlot('globalState'),
+    honoredBy: everyHost('src/skills/runtimeSkills.ts'),
+    surfaces: { settingsView: 'skills' },
   }),
   surfacedSetting({
     key: WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED,

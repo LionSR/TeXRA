@@ -3,10 +3,11 @@ import { Effect } from 'effect';
 import {
   ACTIVE_SKILLS_SNAPSHOT_MAX_SKILLS,
   type ActiveSkillSourceScope,
+  type InstalledPlugin,
   type RawAcceptedSkill,
   type SkillDisplayItem,
 } from '@shared/schemas';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { readSettingFrom } from '@utils/config/platformSettings';
@@ -64,21 +65,31 @@ export function installSkillContributions(
 }
 
 /**
- * The installed contributions folded for one folder. `options` replaces the
- * installed options for one call: the CLI's `skills list` flags.
+ * The installed contributions folded for one folder, with the plugins
+ * recorded in `stores`. `options` replaces the installed options for one
+ * call: the CLI's `skills list` flags.
  */
 export function runtimeSkillSources(
   cwd: string,
+  stores: SettingsStores,
   options: SkillSourceOptions = installed.options,
 ) {
-  return foldSkillSources(installed.contributions, {
-    cwd,
-    // `safeHomedir()` never throws (unlike raw `os.homedir()`, which can
-    // raise UV_ENOENT in containers/CI); `/nonexistent` matches the fallback
-    // used by other agnostic-zone callers (e.g. `claudeAgentConfig.ts`).
-    home: safeHomedir() ?? '/nonexistent',
-    resourcesPath: installed.resourcesPath,
-    options,
+  return Effect.gen(function* () {
+    const plugins = yield* readSettingFrom<InstalledPlugin[]>(
+      stores,
+      GlobalStateKey.INSTALLED_PLUGINS,
+    );
+    return foldSkillSources(installed.contributions, {
+      cwd,
+      // `safeHomedir()` never throws (unlike raw `os.homedir()`, which can
+      // raise UV_ENOENT in containers/CI); `/nonexistent` matches the
+      // fallback used by other agnostic-zone callers (e.g.
+      // `claudeAgentConfig.ts`).
+      home: safeHomedir() ?? '/nonexistent',
+      resourcesPath: installed.resourcesPath,
+      options,
+      plugins,
+    });
   });
 }
 
@@ -88,10 +99,14 @@ export function runtimeSkillSources(
  * data by the caller that holds it — a run's session workspace, or the host's
  * at the settings surface that asked (#12421).
  */
-function discoverRuntimeSkills(workspaceRoot: string | undefined) {
-  return discoverSkillSources(
-    runtimeSkillSources(workspaceRoot ?? safeHomedir() ?? '/nonexistent'),
-  );
+function discoverRuntimeSkills(
+  workspaceRoot: string | undefined,
+  stores: SettingsStores,
+) {
+  return runtimeSkillSources(
+    workspaceRoot ?? safeHomedir() ?? '/nonexistent',
+    stores,
+  ).pipe(Effect.flatMap(discoverSkillSources));
 }
 
 function sourceLabel(source: SkillSource): string {
@@ -151,7 +166,7 @@ export function skillDisplayItem(
 export const loadRuntimeSkillDisplay = Effect.fn('skills.runtimeDisplay')(
   function* (workspaceRoot: string | undefined, stores: SettingsStores) {
     const disabled = yield* readDisabledSkills(stores);
-    const result = yield* discoverRuntimeSkills(workspaceRoot);
+    const result = yield* discoverRuntimeSkills(workspaceRoot, stores);
     return {
       skills: result.skills.map((entry) => skillDisplayItem(entry, disabled)),
       issues: result.errors.map(({ message, path }) => ({ message, path })),
@@ -180,7 +195,7 @@ export function loadEnabledRuntimeSkills(
   stores: SettingsStores,
 ) {
   return Effect.gen(function* () {
-    const result = yield* discoverRuntimeSkills(workspaceRoot);
+    const result = yield* discoverRuntimeSkills(workspaceRoot, stores);
     return filterDiscoveredSkills(result, yield* readDisabledSkills(stores));
   });
 }
