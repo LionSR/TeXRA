@@ -70,34 +70,24 @@ export class SkillsTab extends LitElement {
       : [...new Set([...values, value])];
   }
 
+  /** The whole-source switch, in that source's list heading. */
   private renderSourceToggle(scope: ActiveSkillSourceScope): TemplateResult {
-    const checked = !this.disabledSources.includes(scope);
-    const id = `skill-source-${scope}`;
     return html`
-      <div class="settings-row">
-        <div class="settings-row-text">
-          <label class="settings-row-label" for=${id}
-            >Use ${SOURCE_LABELS[scope].toLowerCase()} skills</label
-          >
-          <span class="settings-row-help">Skills from ${scope} sources.</span>
-        </div>
-        <div class="settings-row-control">
-          <wa-switch
-            id=${id}
-            .checked=${checked}
-            ?disabled=${!this.masterEnabled}
-            @change=${(event: Event) =>
-              postStateSetting(
-                WorkspaceStateKey.DISABLED_SKILL_SOURCES,
-                this.toggleValue(
-                  this.disabledSources,
-                  scope,
-                  Boolean((event.target as WaSwitch).checked),
-                ),
-              )}
-          ></wa-switch>
-        </div>
-      </div>
+      <wa-switch
+        id=${`skill-source-${scope}`}
+        .checked=${!this.disabledSources.includes(scope)}
+        ?disabled=${!this.masterEnabled}
+        @change=${(event: Event) =>
+          postStateSetting(
+            WorkspaceStateKey.DISABLED_SKILL_SOURCES,
+            this.toggleValue(
+              this.disabledSources,
+              scope,
+              Boolean((event.target as WaSwitch).checked),
+            ),
+          )}
+        >Use ${SOURCE_LABELS[scope].toLowerCase()} skills</wa-switch
+      >
     `;
   }
 
@@ -173,24 +163,18 @@ export class SkillsTab extends LitElement {
   override render(): TemplateResult {
     const groups = groupBy(this.skills, (skill) => skill.scope);
     return html`
-      <div class="tab-content-container">
+      <div>
+        ${renderSettingsSectionHeading({
+          icon: 'wand-magic-sparkles',
+          title: 'Skills',
+          description:
+            'Reusable instructions agents can load when a task needs them.',
+        })}
         <div class="settings-section">
           ${renderStateSettingToggleRow({
             key: AGENT_SKILLS_CONFIG_KEY,
             checked: this.masterEnabled,
           })}
-        </div>
-        <div class="category-section">
-          ${renderSettingsSectionHeading({
-            icon: 'folder-tree',
-            title: 'Sources',
-            description: 'Choose which workspace skill sources are available.',
-          })}
-          <div class="settings-section">
-            ${ActiveSkillSourceScopeSchema.options.map((scope) =>
-              this.renderSourceToggle(scope),
-            )}
-          </div>
         </div>
         ${this.renderPlugins()}
         ${
@@ -219,6 +203,7 @@ export class SkillsTab extends LitElement {
                           icon: 'wand-magic-sparkles',
                           title: `${SOURCE_LABELS[scope]} (${items.length})`,
                           description: `Skills discovered from ${scope} sources.`,
+                          actions: this.renderSourceToggle(scope),
                         })}
                         <div class="settings-section">
                           ${repeat(

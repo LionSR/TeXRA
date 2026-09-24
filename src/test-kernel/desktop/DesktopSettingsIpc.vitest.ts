@@ -23,7 +23,7 @@ import {
   BASH_APPROVAL_CONFIG_KEY,
   AGENT_SKILLS_CONFIG_KEY,
 } from '@shared/schemas';
-import type { ModelOptionData, RunId } from '@shared/schemas';
+import type { ModelOptionData } from '@shared/schemas';
 import type { DerivedSettingsSnapshot } from '@shared/settingsView/settingsViewMessages';
 import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
@@ -34,12 +34,7 @@ import {
   FakeSecrets,
   FakeStateStore,
 } from '@test/support/FakePlatform';
-import {
-  createTestSession,
-  publishTestRunStart,
-} from '@test/support/sessionTestUtils';
-import { setupPlatform } from '@test/support/setupPlatform';
-import { startGoal } from '@tools/goal';
+import { createTestSession } from '@test/support/sessionTestUtils';
 
 import {
   commandOf,
@@ -118,8 +113,7 @@ function createSettingsFixture(overrides: SettingsFixtureOverrides = {}) {
   if (overrides.session === undefined) {
     onTestFinished(() => Effect.runPromise(session.dispose()));
   }
-  // The IPC subscribes to its session's goal facts and the process app-signal
-  // bus, so a fixture whose scope stayed open would keep reacting to later
+  // The IPC subscribes to the process app-signal bus, so a fixture whose scope stayed open would keep reacting to later
   // tests' emits.
   const scope = Scope.makeUnsafe();
   liveScopes.push(scope);
@@ -461,65 +455,6 @@ describe('desktop settings IPC', () => {
         });
       }),
   );
-
-  it('serves the goal list instead of the desktop "not available" stub (issue #7751 FS6)', async () => {
-    const { settings, posted } = createCapturedSettingsFixture();
-
-    expect(
-      settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.GET_GOAL_LIST,
-      }),
-    ).toBe(true);
-
-    expect(posted.at(-1)).toEqual({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_GOAL_LIST,
-      items: [],
-    });
-  });
-
-  describe('goal-state pushes', () => {
-    setupPlatform();
-
-    it.effect('reposts the goal list when a run mutates a goal', () =>
-      Effect.gen(function* () {
-        const runId = 'd5e77190' as RunId;
-        const { posted, session } = createCapturedSettingsFixture();
-        publishTestRunStart(session, runId);
-
-        // A run mutates goals on its paper's session, as the desktop does.
-        yield* startGoal(session, runId, 'Finish the proof');
-        yield* Effect.promise(() => flushAsyncWork());
-
-        expect(posted.at(-1)).toMatchObject({
-          command: SETTINGS_VIEW_COMMANDS.UPDATE_GOAL_LIST,
-          items: [expect.objectContaining({ objective: 'Finish the proof' })],
-        });
-      }),
-    );
-  });
-
-  it('routes revealGoalRun to the window-owned progress bridge (issue #7751 FS6)', async () => {
-    const revealed: string[] = [];
-
-    const { settings } = createSettingsFixture({
-      ui: {
-        revealRun: async (runId) => {
-          revealed.push(runId);
-          return 'revealed';
-        },
-      },
-    });
-
-    expect(
-      settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.REVEAL_GOAL_RUN,
-        runId: 'a0a1b2c3',
-      }),
-    ).toBe(true);
-    await flushAsyncWork();
-
-    expect(revealed).toEqual(['a0a1b2c3']);
-  });
 
   it('shows unsupported-command reasons without reporting an error', async () => {
     const showInfoMessage = vi.fn(() => Effect.void);

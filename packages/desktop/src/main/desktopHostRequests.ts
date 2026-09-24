@@ -616,7 +616,7 @@ export function createDesktopHostRequests(
       Effect.sync(() =>
         postDesktopSettingsView(
           options.postToRenderer,
-          section === 'teams' ? 'multi-agent' : section,
+          section === 'teams' ? 'agents' : section,
           sessionType === 'toolUse' ? 'toolUse' : undefined,
         ),
       ),

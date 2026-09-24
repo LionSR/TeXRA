@@ -186,10 +186,10 @@ export const GITHUB_AVAILABILITY: ToolAvailabilityChecks = {
         return 'GitHub token detected and workspace is a git repo. Ready to subscribe to PR activity.';
       }
       if (!tokenPresent && !inGitRepo) {
-        return 'Open a git-tracked folder, or run git init and add a github.com remote. Then set a token in /config → GitHub token or the Git tab.';
+        return 'Open a git-tracked folder, or run git init and add a github.com remote. Then set a token in /config → GitHub token or Settings → General.';
       }
       if (!tokenPresent) {
-        return 'This workspace is a git repo. Set a GitHub personal access token in /config → GitHub token or the Git tab to enable PR activity subscriptions.';
+        return 'This workspace is a git repo. Set a GitHub personal access token in /config → GitHub token or Settings → General to enable PR activity subscriptions.';
       }
       return 'GitHub token is set. Open a git-tracked folder, or run git init and add a github.com remote, to use PR activity subscriptions.';
     },

@@ -19,6 +19,7 @@ import { renderSettingsSectionHeading } from '@ui/wa/settingsSection';
 
 // Web Awesome icon bundle (side-effect import)
 import '@awesome.me/webawesome/dist/components/button/button.js';
+import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/input/input.js';
 
@@ -171,10 +172,10 @@ export class GitTab extends LitElement {
     event: Event,
     key: WorkspaceStateKey,
   ): void {
+    // An emptied field resets to the default identity its placeholder shows;
+    // `null` clears the key (the catalog rejects a blank name or email).
     const value = (event.target as WaInput | null)?.value?.trim();
-    if (value) {
-      postStateSetting(key, value);
-    }
+    postStateSetting(key, value || null);
   }
 
   private handleSetGitHubToken(): void {
@@ -251,8 +252,11 @@ export class GitTab extends LitElement {
               })}
             </span>
           </div>
-          <div class="instructions">
-            <strong>How to get a token:</strong>
+          <wa-details
+            class="panel-collapsible instructions"
+            summary="How to get a token"
+            ?open=${this.githubTokenStatus === 'none'}
+          >
             <ol>
               <li>
                 Select <em>Create on GitHub…</em> to open the token-creation
@@ -272,16 +276,16 @@ export class GitTab extends LitElement {
                 <em>Set token</em>.
               </li>
             </ol>
-            ${
-              this.githubTokenStatus === 'env'
-                ? html`<p>
-                    A token is currently being read from the
-                    <code>GITHUB_TOKEN</code> or <code>GH_TOKEN</code>
-                    environment variable. Setting one above will override it.
-                  </p>`
-                : nothing
-            }
-          </div>
+          </wa-details>
+          ${
+            this.githubTokenStatus === 'env'
+              ? html`<p class="instructions">
+                  A token is currently being read from the
+                  <code>GITHUB_TOKEN</code> or <code>GH_TOKEN</code>
+                  environment variable. Setting one above will override it.
+                </p>`
+              : nothing
+          }
         </div>
         ${
           this.prSubscriptions.length > 0

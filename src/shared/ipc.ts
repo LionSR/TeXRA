@@ -83,8 +83,6 @@ export const SETTINGS_VIEW_COMMANDS = {
   APPLY_LATEX_SETTINGS: 'applyLatexSettings',
   INSTALL_LATEX_WORKSHOP: 'installLatexWorkshop',
   RUN_INSTALL_COMMAND: 'runInstallCommand',
-  GET_GOAL_LIST: 'getGoalList',
-  REVEAL_GOAL_RUN: 'revealGoalRun',
   // Outbound-only commands (backend → frontend, not schema-validated)
   UPDATE_MEMORY: 'updateMemory',
   UPDATE_MEMORY_PREVIEW: 'updateMemoryPreview',
@@ -100,5 +98,4 @@ export const SETTINGS_VIEW_COMMANDS = {
   UPDATE_TOOL_DASHBOARD: 'updateToolDashboard',
   UPDATE_SUBSCRIPTION_USAGE: 'updateSubscriptionUsage',
   UPDATE_LATEX_SETTINGS_STATUS: 'updateLatexSettingsStatus',
-  UPDATE_GOAL_LIST: 'updateGoalList',
 } as const;

@@ -82,12 +82,12 @@ function dispatch(
 }
 
 describe('extension command surface — catalog-tagged command dispatch', () => {
-  it('texra.auth.viewProfile opens the account tab', async () => {
+  it('texra.auth.viewProfile opens the general page', async () => {
     const actions = makeActions();
     await expect(
       dispatch(actions, 'texra.auth.viewProfile'),
     ).resolves.toBeUndefined();
-    expect(actions.showSettings).toHaveBeenCalledExactlyOnceWith('account');
+    expect(actions.showSettings).toHaveBeenCalledExactlyOnceWith('general');
   });
 
   it('texra.showMemory passes the memory panel name', async () => {

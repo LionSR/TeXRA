@@ -28,13 +28,6 @@ interface CodingPlanSubscriptionDescriptor {
   readonly retryFallbackName: string;
   readonly retrySourceName: string;
   readonly usageVariantSettingKeys: readonly string[];
-  readonly sectionId: string;
-  readonly description: string;
-  readonly consoleUrl: string;
-  readonly keyLabel: string;
-  readonly keyHelp: string;
-  readonly toggleLabel: string;
-  readonly toggleHelp: string;
 }
 
 /** Canonical catalog of coding-plan providers supported by every host. */
@@ -55,14 +48,6 @@ export const CODING_PLAN_SUBSCRIPTIONS = Object.freeze([
     retryFallbackName: 'your own Moonshot API keys',
     retrySourceName: 'Kimi Code subscription',
     usageVariantSettingKeys: Object.freeze([]),
-    sectionId: 'kimi-code-subscription',
-    description: 'Use a Kimi Code membership for the kimi-for-coding models.',
-    consoleUrl: 'https://www.kimi.com/code/console',
-    keyLabel: '1. Get a membership key',
-    keyHelp: 'Create an API key in the Kimi Code console.',
-    toggleLabel: '3. Optional: prefer Kimi Code',
-    toggleHelp:
-      'Enable "Prefer Kimi Code" on the same row so K3 also uses your Kimi Code subscription; the kimi-for-coding models always do.',
   }),
   Object.freeze({
     id: 'glmCodingPlan',
@@ -80,15 +65,6 @@ export const CODING_PLAN_SUBSCRIPTIONS = Object.freeze([
     retryFallbackName: 'the regular GLM endpoint',
     retrySourceName: 'GLM Coding Plan',
     usageVariantSettingKeys: Object.freeze([GlobalStateKey.GLM_USE_CHINA]),
-    sectionId: 'glm-coding-plan-subscription',
-    description:
-      'Use a GLM Coding Plan subscription for GLM models via the coding endpoint.',
-    consoleUrl: 'https://z.ai/subscribe',
-    keyLabel: '1. Get a subscription key',
-    keyHelp: 'Subscribe and create an API key in the Z.AI console.',
-    toggleLabel: '3. Enable the Coding Plan',
-    toggleHelp:
-      'Turn on "GLM Coding Plan" on the GLM row so requests route through the coding endpoint with your plan\u2019s monthly quota.',
   }),
 ] as const satisfies readonly CodingPlanSubscriptionDescriptor[]);
 

@@ -1,4 +1,4 @@
-/** Multi-agent teams and coordination toggles. */
+/** Team cards on the Agents page: built-in and saved agent sets. */
 
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
@@ -11,26 +11,14 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 // Local imports - shared webview
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
-import {
-  AGENT_MODE_PRESETS,
-  CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
-  CHILD_RUN_CONCURRENCY_BUDGET_SETTING,
-  type AgentModePreset,
-} from '@shared/schemas';
-import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
+import { AGENT_MODE_PRESETS, type AgentModePreset } from '@shared/schemas';
 import { designTokens, commonViewStyles } from '@ui/styles';
-import { renderIconActionButton } from '@ui/wa/actionButtons';
 import {
-  renderSettingsNumberRow,
-  renderSettingsSectionHeading,
-} from '@ui/wa/settingsSection';
+  renderIconActionButton,
+  renderLabeledActionButton,
+} from '@ui/wa/actionButtons';
+import { renderSettingsSectionHeading } from '@ui/wa/settingsSection';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
-
-// Local imports - catalog-driven settings rows
-import {
-  postStateSetting,
-  renderStateSettingToggleRow,
-} from '../components/shared/stateSettingRows';
 
 @customElement('multi-agent-tab')
 export class MultiAgentTab extends LitElement {
@@ -181,13 +169,6 @@ export class MultiAgentTab extends LitElement {
     `,
   ];
 
-  @property({ attribute: false }) allowOrchestratorKill = true;
-  @property({ attribute: false }) detachSubagentsOnStop = false;
-  @property({ attribute: false }) worktreeSupport = false;
-  @property({ attribute: false }) childRunConcurrencyBudget =
-    CHILD_RUN_CONCURRENCY_BUDGET_SETTING.defaultValue;
-  /** Parent-owned acknowledgement generation; changes force a re-render even when all field values are unchanged. */
-  @property({ attribute: false }) ackGeneration = 0;
   @property({ attribute: false }) customPresets: AgentModePreset[] = [];
   /** Agent names that carry delegation tools, computed backend-side from the registry. */
   @property({ attribute: false }) orchestratorAgents: string[] = [];
@@ -315,51 +296,25 @@ export class MultiAgentTab extends LitElement {
 
   override render(): TemplateResult {
     return html`
-      <div
-        class="multi-agent-container tab-content-container"
-        data-ack-generation=${this.ackGeneration}
-      >
+      <div class="multi-agent-container">
         ${renderSettingsSectionHeading({
-          title: 'Available teams',
-          description: 'Select a team to activate it.',
+          title: 'Teams',
+          description:
+            'Pick a team to show only its agents in the agent selector. Save team keeps the agents shown now as a new team.',
           icon: 'users',
+          actions: renderLabeledActionButton({
+            icon: 'floppy-disk',
+            text: 'Save team',
+            kind: 'secondary',
+            appearance: 'outlined',
+            onClick: () =>
+              postMessage(SETTINGS_VIEW_COMMANDS.SAVE_AGENT_MODE_PRESET),
+          }),
         })}
 
         <div class="preset-grid" role="list">
           ${AGENT_MODE_PRESETS.map((p) => this.renderPresetCard(p, false))}
           ${this.customPresets.map((p) => this.renderPresetCard(p, true))}
-        </div>
-
-        ${renderSettingsSectionHeading({
-          title: 'Team coordination',
-          description:
-            "Control how the orchestrator works with the rest of the team. It can only use agents and models you've enabled.",
-          icon: 'diagram-project',
-        })}
-
-        <div class="settings-section">
-          ${renderStateSettingToggleRow({
-            key: GlobalStateKey.ALLOW_ORCHESTRATOR_KILL,
-            checked: this.allowOrchestratorKill,
-          })}
-          ${renderStateSettingToggleRow({
-            key: GlobalStateKey.DETACH_SUBAGENTS_ON_STOP,
-            checked: this.detachSubagentsOnStop,
-          })}
-          ${renderStateSettingToggleRow({
-            key: WorkspaceStateKey.GIT_WORKTREE_SUPPORT,
-            checked: this.worktreeSupport,
-          })}
-          ${renderSettingsNumberRow({
-            label: 'Child-run concurrency budget',
-            description: CHILD_RUN_CONCURRENCY_BUDGET_SETTING.description,
-            value: this.childRunConcurrencyBudget,
-            min: CHILD_RUN_CONCURRENCY_BUDGET_SETTING.min,
-            max: CHILD_RUN_CONCURRENCY_BUDGET_SETTING.max,
-            step: 1,
-            onChange: (value) =>
-              postStateSetting(CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY, value),
-          })}
         </div>
       </div>
     `;

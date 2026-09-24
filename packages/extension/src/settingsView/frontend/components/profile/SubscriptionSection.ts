@@ -7,7 +7,7 @@
  * ({@link SubscriptionSectionProvider}) and the markup is written once.
  */
 
-import { LitElement, html, css, type TemplateResult } from 'lit';
+import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared auth
@@ -49,8 +49,8 @@ export interface SubscriptionSectionProvider {
   readonly sectionId: string;
   readonly title: string;
   readonly description: string;
-  /** Caveat shown under the heading (context cap, client registration, …). */
-  readonly note: string;
+  /** Caveat shown under the heading (client registration, …). */
+  readonly note?: string;
   readonly preferLabel: string;
   readonly preferDescription: string;
   /** Account-row label while signed out. */
@@ -116,10 +116,14 @@ export class SubscriptionSection extends LitElement {
             >Experimental</wa-tag
           >`,
         })}
-        <p class="keyless-source__limit">
-          ${waIcon('circle-info')}
-          <span>${provider.note}</span>
-        </p>
+        ${
+          provider.note
+            ? html`<p class="keyless-source__limit">
+                ${waIcon('circle-info')}
+                <span>${provider.note}</span>
+              </p>`
+            : nothing
+        }
         <div class="settings-section">
           ${renderSettingsToggleRow({
             label: provider.preferLabel,
@@ -200,7 +204,6 @@ export const CHATGPT_SUBSCRIPTION_SECTION: SubscriptionSectionProvider =
     title: CHATGPT_AUTH.subscriptionLabel,
     description:
       'Use OpenAI models through your ChatGPT Plus, Pro, or Team subscription. No OpenAI API key is needed.',
-    note: 'Subscription routing uses a 272K-token input budget by default. GPT-5.6 models support up to 872K input tokens; the displayed context also includes the output budget.',
     contextWindowSetting: CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
     preferLabel: CHATGPT_AUTH.preferLabel,
     preferDescription: 'Use the subscription for eligible Codex models.',

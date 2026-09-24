@@ -1,5 +1,5 @@
 /**
- * Subscription sign-in handlers for Settings → Subscriptions.
+ * Subscription sign-in handlers for the Settings → Models page.
  *
  * ChatGPT (Codex) and Grok (xAI) run the identical flow: a host-neutral OAuth
  * sign-in, a sign-out through the provider's auth coordinator, a routing
