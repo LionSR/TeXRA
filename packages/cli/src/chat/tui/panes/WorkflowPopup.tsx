@@ -22,7 +22,7 @@ import { POINTER } from '@cli/tui/ui/glyphs';
 import { CONFIRM_CARD_HORIZONTAL_DECORATION } from '@cli/tui/ui/theme';
 import { useLiveNowMsSince } from '@cli/tui/useLiveNowMs';
 import { fillRows, textDisplayWidth } from '@cli/runtime/terminalText';
-import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
+import { wrappedRowCount } from '@cli/tui/ansiWrap';
 
 // Local imports - shared schemas, model, and copy
 import {
@@ -361,10 +361,7 @@ export function WorkflowPopup({
   ];
   // The shared budget assumes a one-row footer; the wrapped hints take what
   // they measure at this width.
-  const hintRows = Math.max(
-    1,
-    wrapAnsiToWidth(keyHintsText(hints), Math.max(1, width)).split('\n').length,
-  );
+  const hintRows = wrappedRowCount(keyHintsText(hints), width);
   const filterShown = view.filterEditing || view.filter.length > 0;
   const listRows = Math.max(
     1,

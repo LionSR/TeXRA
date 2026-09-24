@@ -153,9 +153,9 @@ function compactHiddenLineText({
 
 /**
  * Bounds pre-wrapped display lines to `maxDisplayLines`, replacing hidden
- * spans with overflow marker rows. Compact layouts reserve the last row for a
- * combined scroll-status marker; a single-row budget collapses to one
- * "first line ... N {hiddenNoun} hidden" row.
+ * spans with overflow marker rows fitted to `width`. Compact layouts reserve
+ * the last row for a combined scroll-status marker; a single-row budget
+ * collapses to one "first line ... N {hiddenNoun} hidden" row.
  */
 export function boundedScrollableLines<K extends string>({
   hiddenNoun,
@@ -215,19 +215,18 @@ export function boundedScrollableLines<K extends string>({
     rows: lines,
     scrollOffset,
   });
+  const marker = (full: string, short: string): ScrollableDisplayLine<K> => ({
+    kind: 'overflow',
+    text: textDisplayWidth(full) <= width ? full : clipToWidth(short, width),
+  });
 
   return [
     ...(hiddenBefore > 0
-      ? [
-          {
-            kind: 'overflow' as const,
-            text: previousRowsText(hiddenBefore),
-          },
-        ]
+      ? [marker(previousRowsText(hiddenBefore), `… ${hiddenBefore} prev rows`)]
       : []),
     ...visibleRows,
     ...(hiddenAfter > 0
-      ? [{ kind: 'overflow' as const, text: moreRowsText(hiddenAfter) }]
+      ? [marker(moreRowsText(hiddenAfter), `… +${hiddenAfter} rows`)]
       : []),
   ];
 }
