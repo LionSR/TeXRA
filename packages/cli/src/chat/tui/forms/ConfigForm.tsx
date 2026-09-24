@@ -8,7 +8,6 @@
 // catalog drives the extension settings view and this panel without drift.
 
 import { Box, Text, useInput } from 'ink';
-import { Cause, Effect } from 'effect';
 import { useState } from 'react';
 
 import { isCtrlInput, type ReturnKeyInput } from '@cli/tui/inputKeys';
@@ -34,6 +33,8 @@ import {
   configCategoryLabel,
 } from './configCategories';
 import { FormFrame } from './_shared/FormFrame';
+import { runFormWrite } from './_shared/useAsyncListForm';
+import type { Effect } from 'effect';
 
 type SettingEditKind =
   'form' | 'boolean' | 'enum' | 'string' | 'number' | 'readonly';
@@ -267,9 +268,8 @@ export function ConfigForm(props: ConfigFormProps): React.JSX.Element {
       : props.readValue(entry);
 
   // Optimistically show `optimisticValue`, run `action`, and roll the override
-  // back to the prior value if it fails. `Effect.suspend` builds the program
-  // inside the fiber, so a synchronous throw (e.g. a schema-rejected value)
-  // and a failed write both land in the single `catchCause`.
+  // back to the prior value if it fails; the failure reaches the surface's
+  // error hook.
   const runWrite = (
     entry: SurfacedSettingEntry,
     optimisticValue: unknown,
@@ -277,16 +277,12 @@ export function ConfigForm(props: ConfigFormProps): React.JSX.Element {
   ): void => {
     const previous = effective(entry);
     setOverrides((current) => ({ ...current, [entry.key]: optimisticValue }));
-    void props.runtime.runPromise(
-      Effect.catchCause(Effect.suspend(action), (cause) =>
-        Effect.sync(() => {
-          setOverrides((current) => ({ ...current, [entry.key]: previous }));
-          // The squashed cause is the value the runtime would have rejected
-          // this write with, so the surface's error hook sees what failed.
-          props.onError?.(Cause.squash(cause));
-        }),
-      ),
-    );
+    runFormWrite(props.runtime, action, {
+      onError: (cause) => {
+        setOverrides((current) => ({ ...current, [entry.key]: previous }));
+        props.onError?.(cause);
+      },
+    });
   };
 
   const commit = (entry: SurfacedSettingEntry, value: unknown): void =>

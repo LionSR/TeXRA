@@ -1,4 +1,4 @@
-import { Cause, Effect } from 'effect';
+import { Effect } from 'effect';
 import { Box, Text } from 'ink';
 import { useState } from 'react';
 
@@ -32,7 +32,7 @@ import {
 } from '@shared/schemas';
 
 import { FormFrame, renderAsyncListFormTransient } from './_shared/FormFrame';
-import { useAsyncListForm } from './_shared/useAsyncListForm';
+import { runFormWrite, useAsyncListForm } from './_shared/useAsyncListForm';
 
 type AgentRosterFormMode =
   | 'overview'
@@ -131,28 +131,17 @@ export function AgentRosterForm(
       onError: props.onError,
     });
 
-  /** Every roster write is a program, and Ink owns no runtime: the form runs
-   *  the one it was handed. The continuation and the refusal are both part of
-   *  that program, so one `runPromise` settles the pair and no promise-level
-   *  catch has to stand in for the fold. */
   const write = (
     action: () => Effect.Effect<void, Error, ProcessServices>,
     nextMode = mode,
-  ): void => {
-    void props.runtime.runPromise(
-      action().pipe(
-        Effect.tap(() =>
-          Effect.sync(() => {
-            setMode(nextMode);
-            reload();
-          }),
-        ),
-        Effect.catchCause((cause) =>
-          Effect.sync(() => reportError(Cause.squash(cause))),
-        ),
-      ),
-    );
-  };
+  ): void =>
+    runFormWrite(props.runtime, action, {
+      onSuccess: () => {
+        setMode(nextMode);
+        reload();
+      },
+      onError: reportError,
+    });
 
   if (!data) {
     return renderAsyncListFormTransient({
