@@ -21,7 +21,6 @@ import { Effect } from 'effect';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { executeCommand } from '@utils/system/execUtils';
 import { isGitRepository } from '@utils/git/isGitRepository';
-import { splitOutputLines } from '@utils/text/stringUtils';
 
 import { COMMIT_LABEL_FORMAT, splitCommitLines } from './commitLogFormat';
 
@@ -133,8 +132,3 @@ export const readRecentCommits = Effect.fn(
   const commits = yield* readRecentCommitLabels(workspacePath, limit, options);
   return { commits: commits ?? [], isGitRepo: true };
 });
-
-function parseGitCount(value: string): number {
-  const parsed = Number.parseInt(value, 10);
-  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
-}

@@ -379,6 +379,11 @@ function shellConversationTemplate(): TemplateResult {
   if (sidebarCollapsedWithPendingApproval) {
     sidebarToggleLabel = 'Show sidebar - approval pending';
   }
+  // One card at a time: with no folder open the walkthrough takes the
+  // open-folder panel's place instead of stacking on it.
+  const noWorkspaceContent = startupPanelVisible
+    ? startupTeamPanel.template()
+    : noWorkspacePlaceholder;
   return html`
     <main class="shell-conversation" aria-label="Task conversation">
       <header class="shell-header">
@@ -450,7 +455,7 @@ function shellConversationTemplate(): TemplateResult {
                   </section>
                   ${startupTeamPanel.template()}
                 `
-              : noWorkspacePlaceholder
+              : noWorkspaceContent
           }
         </section>
       </div>
