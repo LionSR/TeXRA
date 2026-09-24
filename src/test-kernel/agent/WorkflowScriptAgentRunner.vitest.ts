@@ -3,7 +3,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 
 import { it } from '@effect/vitest';
-import { Cause, Deferred, Effect, Exit, FileSystem } from 'effect';
+import { Cause, Deferred, Effect, Exit, FileSystem, Scope } from 'effect';
 
 import { beforeEach, describe, expect, vi } from 'vitest';
 
@@ -257,6 +257,7 @@ function parentContext(): DelegationParent {
     run: {
       runId: parentRunId,
       session,
+      scope: Scope.makeUnsafe(),
       config: AgentConfigSchema.parse({
         agent: 'chat',
         model: PARENT_MODEL,

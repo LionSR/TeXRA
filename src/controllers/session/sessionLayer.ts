@@ -114,6 +114,7 @@ import { releaseRunResources } from '@tools/approval';
 import { InlineComments } from '@tools/comment/InlineCommentTool';
 import type { InlineCommentProvider } from '@tools/comment/InlineCommentTool';
 import { gitHubSubscriptionsLayer } from '@tools/github/subscriptionRegistries';
+import { directLeanLanguageServices } from '@tools/lean/direct/directLspAdapter';
 import type { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import { SetupPlatform, type SetupPlatformShape } from '@tools/setup/platform';
 import { toolRegistryLayer } from '@tools/registry';
@@ -997,12 +998,11 @@ interface ProcessRuntimeOptions {
    */
   readonly inlineComments?: InlineCommentProvider;
   /**
-   * The host's Lean language services: the VS Code extension's bridge to the
-   * Lean 4 extension, or the direct `lake env lean --server` pool on a Node
-   * host, over the `FileSystem`/`Path` this install provides. Built with the
-   * runtime and closed with it.
+   * The host's Lean language services, built and closed with the runtime.
+   * Absent, the direct `lake env lean --server` pool over this install's
+   * `FileSystem`/`Path`; VS Code passes its Lean 4 extension bridge.
    */
-  readonly lean: Layer.Layer<
+  readonly lean?: Layer.Layer<
     LeanLanguageServices,
     never,
     FileSystem.FileSystem | Path.Path | AppState
@@ -1059,7 +1059,7 @@ export function installProcessRuntime({
   setup,
   editorModel,
   inlineComments,
-  lean,
+  lean = directLeanLanguageServices(),
   usageLog,
   globalDatabase: globalDatabaseOption,
   minimumLogLevel,

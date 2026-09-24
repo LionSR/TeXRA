@@ -3,7 +3,7 @@
 // a detached run-loop rejection through the `childRunLoop` channel log.
 
 import { it } from '@effect/vitest';
-import { Effect } from 'effect';
+import { Effect, Scope } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
@@ -74,6 +74,7 @@ describe('executeSubagent child run launch', () => {
     run: {
       runId: 'parent-exec' as RunId,
       session: { tag: 'parent-session' } as never,
+      scope: Scope.makeUnsafe(),
       config: AgentConfigSchema.parse({ agent: 'chat', model: 'gpt5' }),
       logger: noopTrace,
       toolPolicy: {

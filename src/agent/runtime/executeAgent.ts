@@ -28,7 +28,6 @@ import { RunLedger } from '@shared/session/runLedger';
 import { emptyRunEndOutput } from '@shared/schemas';
 import type { RunState } from '@shared/session/runStateFold';
 import type { CompositionKey } from '@tools/compositions';
-import { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import { ensureRunDirUnder } from '@utils/files/runStorageFs';
 import { ensureError } from '@utils/errors/errorMessage';
 
@@ -300,13 +299,6 @@ function buildLifecycleOptions(
     parentRunId,
     onError: options.onRunError,
     onRun: options.onRun,
-    // Stop the Lean servers the ended run started; a host whose Lean
-    // integration owns server lifetime (the VS Code bridge) omits the stop.
-    onRunEnd: (runId) =>
-      Effect.flatMap(
-        LeanLanguageServices,
-        (lean) => lean.stopSessionsForRun?.(runId) ?? Effect.void,
-      ),
   };
 }
 

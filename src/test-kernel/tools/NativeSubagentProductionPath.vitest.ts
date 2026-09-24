@@ -1,7 +1,7 @@
 import { writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
-import { Deferred, Effect, Fiber, Layer, Stream } from 'effect';
+import { Deferred, Effect, Fiber, Layer, Scope, Stream } from 'effect';
 
 /**
  * Production-shaped regression for #9531. Agent registration, launch, child
@@ -540,6 +540,7 @@ async function launchWaitingChild(options: {
     run: {
       runId: PARENT_RUN_ID,
       session,
+      scope: Scope.makeUnsafe(),
       config: AgentConfigSchema.parse({
         agent: 'chat',
         model: PARENT_MODEL,

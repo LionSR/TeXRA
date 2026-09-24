@@ -1,8 +1,9 @@
-import { Cause, Effect } from 'effect';
+import { Cause, Effect, Scope } from 'effect';
 import { z } from 'zod';
 
 import { ToolCall, type ToolCallShape } from '@agent/runtime/ToolCall';
-import { ToolError, type ToolResult } from '@shared/schemas';
+import { withLogChannel } from '@logger/effectLog';
+import { ToolError, type RunId, type ToolResult } from '@shared/schemas';
 import { defineTool } from '@tools/core/define';
 import { errorResult, executed } from '@tools/core/result';
 import { nullishWithDefault } from '@tools/core/inputSchema';
@@ -162,7 +163,7 @@ const diagnose = Effect.fn('LeanDiagnosticsTool.execute')(function* (
   const absoluteFile = yield* leanFilePath(file, call);
   const result = yield* services.fetchDiagnosticsForFile(
     absoluteFile,
-    call.run?.runId,
+    yield* leanRunId(call, services),
   );
   if (!result.ok) {
     // The adapter distinguishes a genuinely missing file from a broken or
@@ -255,7 +256,7 @@ In VS Code, these commands use the Lean 4 extension. CLI and desktop provide the
       const success = yield* services.executeFileCommand(
         command,
         yield* leanFilePath(file, call),
-        call.run?.runId,
+        yield* leanRunId(call, services),
       );
       if (!success) {
         return errorResult(
@@ -289,7 +290,10 @@ In VS Code, these commands use the Lean 4 extension. CLI and desktop provide the
     return Effect.gen(function* () {
       const call = yield* ToolCall;
       const services = yield* LeanLanguageServices;
-      yield* services.executeProjectCommand(command, call.run?.runId);
+      yield* services.executeProjectCommand(
+        command,
+        yield* leanRunId(call, services),
+      );
 
       if (command === 'build') {
         return executed(
@@ -325,7 +329,7 @@ function executeLeanInspectTool(
     request: (
       services: LeanLanguageServicesShape,
       filePath: string,
-      call: ToolCallShape,
+      runId: RunId | undefined,
     ) => Effect.Effect<LspResult<T>>,
     empty: { readonly message: string; readonly summary: string },
     render: (data: T) => ToolResult,
@@ -336,7 +340,7 @@ function executeLeanInspectTool(
       const { data, error } = yield* request(
         services,
         yield* leanFilePath(file, call),
-        call,
+        yield* leanRunId(call, services),
       );
       if (!data)
         return noPositionData(empty.message, location, empty.summary, error);
@@ -354,8 +358,8 @@ function executeLeanInspectTool(
   switch (type) {
     case 'goal':
       program = inspect(
-        (services, filePath, call) =>
-          services.getGoalState(filePath, line0, col0, call.run?.runId),
+        (services, filePath, runId) =>
+          services.getGoalState(filePath, line0, col0, runId),
         { message: 'Could not get goal state', summary: 'No goal state' },
         (goal) =>
           goal.goals.length === 0
@@ -371,16 +375,16 @@ function executeLeanInspectTool(
       break;
     case 'term_goal':
       program = inspect(
-        (services, filePath, call) =>
-          services.getTermGoal(filePath, line0, col0, call.run?.runId),
+        (services, filePath, runId) =>
+          services.getTermGoal(filePath, line0, col0, runId),
         { message: 'No expected type', summary: 'No term goal' },
         (termGoal) => executed(termGoal.goal, 'Term goal'),
       );
       break;
     case 'hover':
       program = inspect(
-        (services, filePath, call) =>
-          services.getHoverInfo(filePath, line0, col0, call.run?.runId),
+        (services, filePath, runId) =>
+          services.getHoverInfo(filePath, line0, col0, runId),
         { message: 'No information', summary: 'No hover info' },
         (hover) => {
           const text = extractHoverText(hover.contents);
@@ -448,5 +452,48 @@ function leanFilePath(file: string, call: ToolCallShape) {
       file,
       call.workingDirectory,
     )).path.absolute;
+  });
+}
+
+/** The runs whose end already stops the Lean servers they started. */
+const stopRegistered = new WeakSet<NonNullable<ToolCallShape['run']>>();
+
+/**
+ * The run a Lean request is attributed to. The first request of a run also
+ * ties the servers it starts to the run's lifetime: the host's stop is a
+ * finalizer on the run's scope, so the run's end stops them. A host whose
+ * Lean integration owns server lifetime (the VS Code bridge) has no stop.
+ */
+function leanRunId(
+  call: ToolCallShape,
+  services: LeanLanguageServicesShape,
+): Effect.Effect<RunId | undefined> {
+  return Effect.suspend(() => {
+    const { run } = call;
+    if (!run) return Effect.succeed(undefined);
+    const { runId } = run;
+    if (!services.stopSessionsForRun || stopRegistered.has(run)) {
+      return Effect.succeed(runId);
+    }
+    stopRegistered.add(run);
+    return Scope.addFinalizer(
+      run.scope,
+      // A finalizer on the run's scope: a failure here must not replace the
+      // run's exit, so it is logged and the scope still closes.
+      Effect.suspend(
+        () => services.stopSessionsForRun?.(runId) ?? Effect.void,
+      ).pipe(
+        Effect.catchCause((cause) =>
+          Cause.hasInterruptsOnly(cause)
+            ? Effect.interrupt
+            : Effect.logWarning(
+                'Failed to stop the Lean servers of an ended run',
+              ).pipe(
+                Effect.annotateLogs({ runId, error: Cause.squash(cause) }),
+                withLogChannel('LeanTools'),
+              ),
+        ),
+      ),
+    ).pipe(Effect.as(runId));
   });
 }
