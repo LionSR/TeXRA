@@ -60,10 +60,7 @@ import {
   settingDefault,
   writeSetting,
 } from '@shared/config/settingsAccess';
-import {
-  LATEX_CONFIG_DEFAULTS,
-  LATEX_CONFIG_KEYS,
-} from '@shared/constants/latexConfig';
+import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latexConfig';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
   FakeScopedConfigProvider,
@@ -158,15 +155,6 @@ const STATE_SETTING_KEYS: readonly string[] = STATE_SETTINGS.map(
 );
 
 describe('state settings catalog', () => {
-  it('backs every rendered LaTeX setting with a catalog entry', () => {
-    for (const key of Object.keys(LATEX_CONFIG_KEYS)) {
-      assert.ok(
-        settingByKey(key),
-        `the LaTeX tab renders a key with no catalog entry: ${key}`,
-      );
-    }
-  });
-
   it('uses unique canonical keys', () => {
     assert.equal(new Set(STATE_SETTING_KEYS).size, STATE_SETTING_KEYS.length);
   });
@@ -356,10 +344,6 @@ describe('catalog-derived settings snapshots', () => {
           false,
         );
         yield* workspaceState.update(
-          WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS,
-          25000,
-        );
-        yield* workspaceState.update(
           WorkspaceStateKey.LATEXDIFF_MATH_MARKUP,
           'stale-bogus-value',
         );
@@ -379,14 +363,6 @@ describe('catalog-derived settings snapshots', () => {
           assert.equal(
             message.values[WorkspaceStateKey.WORKFLOW_AUTO_COMPILE],
             false,
-          );
-          assert.equal(
-            message.values[WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS],
-            LATEX_CONFIG_DEFAULTS.workflowAutoCompileTimeoutMs,
-          );
-          assert.equal(
-            message.values[WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS],
-            25000,
           );
           assert.equal(
             message.values[WorkspaceStateKey.LATEXDIFF_MATH_MARKUP],

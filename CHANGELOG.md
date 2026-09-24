@@ -203,6 +203,16 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
   walkthrough no longer opens beside it and is down to four accurate steps,
   and the **Get Started** status pill opens the welcome card. The tasks pill
   shows only while something is running.
+- **The LaTeX settings page is shorter** — it now shows your LaTeX
+  dependencies, the recommended VS Code settings, and the compile, diff,
+  formatter and inline-criticism switches, using the same names as the CLI's
+  `/config`. The replacement-engine groups and custom replacement maps, and
+  the two millisecond timeouts, are no longer on the page; they keep their
+  defaults. Replacement rules can still be set in `.texra/config.json`, and
+  both timeouts in the CLI's `/config`. The per-row "customized" markers and
+  Reset buttons are gone: set a switch back by flipping it. **Open the
+  compiled PDF** and **Repair failed compiles** are greyed out while
+  auto-compile is off, since they only act on its result.
 
 #### Bug Fixes
 

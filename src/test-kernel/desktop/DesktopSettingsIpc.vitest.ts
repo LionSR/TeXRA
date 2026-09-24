@@ -252,16 +252,6 @@ describe('desktop settings IPC', () => {
       }),
     ).toBe(true);
     await flushAsyncWork();
-    // First post is the derived capability broadcast (commands this host's
-    // registry declares `unsupported(...)`); asserted structurally rather
-    // than as an exact list so it doesn't need updating every time a
-    // command's per-host support decision changes.
-    expect(posted[0]).toMatchObject({
-      command: SETTINGS_VIEW_COMMANDS.SET_UNSUPPORTED_COMMANDS,
-      commands: expect.arrayContaining([
-        SETTINGS_VIEW_COMMANDS.INSTALL_LATEX_WORKSHOP,
-      ]),
-    });
     expect(findSnapshot(posted, 'git-author')).toEqual({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_SETTINGS_SNAPSHOT,
       snapshot: 'git-author',
@@ -474,19 +464,6 @@ describe('desktop settings IPC', () => {
 
   it('serves the goal list instead of the desktop "not available" stub (issue #7751 FS6)', async () => {
     const { settings, posted } = createCapturedSettingsFixture();
-
-    // The desktop serves this command, so it must stay out of the derived
-    // capability broadcast (SET_UNSUPPORTED_COMMANDS).
-    settings.handleMessage({
-      command: SETTINGS_VIEW_COMMANDS.WEBVIEW_READY,
-      view: 'settings',
-    });
-    await flushAsyncWork();
-    const capabilities = posted[0] as { commands?: string[] };
-    expect(capabilities.commands).not.toContain(
-      SETTINGS_VIEW_COMMANDS.GET_GOAL_LIST,
-    );
-    posted.length = 0;
 
     expect(
       settings.handleMessage({
@@ -840,7 +817,7 @@ describe('desktop settings IPC', () => {
 
     expect(onError).toHaveBeenCalledWith(failure);
     expect(showErrorMessage).toHaveBeenCalledWith(
-      `Failed to update "${WorkspaceStateKey.LATEX_FORMATTER}": workspace write failed`,
+      'Failed to update "LaTeX formatter": workspace write failed',
     );
     expect(latexSnapshotCount(posted)).toBe(1);
   });
@@ -854,8 +831,8 @@ describe('desktop settings IPC', () => {
     expect(
       settings.handleMessage({
         command: SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING,
-        key: WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS,
-        value: 1000.5,
+        key: WorkspaceStateKey.LATEXDIFF_MATH_MARKUP,
+        value: 'bogus',
       }),
     ).toBe(true);
     await flushAsyncWork();
@@ -863,9 +840,7 @@ describe('desktop settings IPC', () => {
     expect(update).not.toHaveBeenCalled();
     expect(onError).toHaveBeenCalledWith(expect.any(Error));
     expect(showErrorMessage).toHaveBeenCalledWith(
-      expect.stringContaining(
-        `Invalid value for "${WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS}":`,
-      ),
+      expect.stringContaining('Invalid value for "Math markup in diffs":'),
     );
     expect(latexSnapshotCount(posted)).toBe(1);
   });

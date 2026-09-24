@@ -173,15 +173,15 @@ describe('agent skills workspace guard', () => {
       yield* withProcessServices(
         testRuntime(),
         handler.updateStateSetting(
-          WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS,
-          1000.5,
+          WorkspaceStateKey.LATEXDIFF_MATH_MARKUP,
+          'bogus',
         ),
       );
 
       expect(mocks.writeSetting).not.toHaveBeenCalled();
       expect(mocks.showLoggedErrorMessage).toHaveBeenCalledWith(
         'SettingsViewMessageHandler',
-        `Invalid value for “${WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS}”`,
+        'Invalid value for “Math markup in diffs”',
         expect.any(Error),
       );
       expect(handler.postStateSettingSnapshot).toHaveBeenCalledWith('latex');

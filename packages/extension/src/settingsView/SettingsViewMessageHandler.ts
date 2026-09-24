@@ -32,10 +32,7 @@ import { sharedSettingsCommands } from '@controllers/settingsView/sharedSettings
 import { SettingsProfileController } from '@controllers/settingsView/SettingsProfileController';
 import { emitAppSignal } from '@eventBus/AppSignals';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
-import {
-  isInlineCriticismEnabled,
-  setInlineCriticismEnabled,
-} from '@frontend/latex/inlineCriticism';
+import { syncInlineCriticism } from '@frontend/latex/inlineCriticism';
 import { VscodeExternalOpener } from '@frontend/hosts/VscodeExternalOpener';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { acquireVscodeLanguageModel } from '@frontend/lm/acquireVscodeLanguageModel';
@@ -77,6 +74,7 @@ import {
 } from '@shared/codingPlanSubscriptions';
 import type { SubscriptionUsageProvider } from '@shared/schemas';
 import type { SettingsViewSnapshot } from '@shared/state/stateSettings';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 import type {
   DerivedSettingsSnapshot,
   SettingsMessageFor,
@@ -88,10 +86,7 @@ import {
   type SettingsSnapshotPosters,
 } from '@shared/settingsView/handlers/stateSettingWrite';
 
-import {
-  UnsupportedCommandError,
-  unsupportedCommands,
-} from '@shared/utils/dispatcher';
+import { UnsupportedCommandError } from '@shared/utils/dispatcher';
 import { buildSettingsSnapshotMessage } from '@shared/settingsView/handlers/settingsSnapshot';
 import { loadRuntimeSkillDisplay } from '@skills/runtimeSkills';
 import { getLastCheckResults } from '@tools/toolAvailability';
@@ -395,14 +390,6 @@ export class SettingsViewMessageHandler {
       runToolCommand: (message) =>
         Effect.sync(() => this.handleRunToolCommand(message)),
       ...this.latexHandlers.handlers,
-      getInlineCriticismEnabled: () =>
-        this.withActiveWebview((w) => this.sendInlineCriticismEnabled(w)),
-      setInlineCriticismEnabled: (message) =>
-        setInlineCriticismEnabled(message.enabled).pipe(
-          Effect.andThen(
-            this.withActiveWebview((w) => this.sendInlineCriticismEnabled(w)),
-          ),
-        ),
       getGoalList: () => this.withActiveWebview((w) => this.sendGoalList(w)),
       revealGoalRun: (message) =>
         revealProgressRun(message.runId).pipe(Effect.asVoid),
@@ -598,11 +585,6 @@ export class SettingsViewMessageHandler {
         { startImmediately: true },
       );
 
-      yield* postToWebview(webview, {
-        command: SETTINGS_VIEW_COMMANDS.SET_UNSUPPORTED_COMMANDS,
-        commands: unsupportedCommands(this.handlerRegistry),
-      });
-
       yield* this.sendProfileAndModelSelectionData(webview);
 
       yield* allSettledVoid<Error, ProcessServices>([
@@ -623,19 +605,9 @@ export class SettingsViewMessageHandler {
         this.sendSettingsSnapshot(webview, 'telemetry'),
         this.latexHandlers.sendLatexSettingsStatus(webview),
         this.sendSettingsSnapshot(webview, 'latex'),
-        this.sendInlineCriticismEnabled(webview),
         this.sendGoalList(webview),
       ]);
     });
-  }
-
-  private sendInlineCriticismEnabled(webview: vscode.Webview) {
-    return Effect.flatMap(isInlineCriticismEnabled(), (enabled) =>
-      postToWebview(webview, {
-        command: SETTINGS_VIEW_COMMANDS.UPDATE_INLINE_CRITICISM_ENABLED,
-        enabled,
-      }),
-    );
   }
 
   private sendProfileData(webview: vscode.Webview) {
@@ -734,6 +706,9 @@ export class SettingsViewMessageHandler {
       if (result.entry.onWrite?.invalidatesModelOptions) {
         yield* this.withActiveWebview((w) => this.sendModelSelectionData(w));
         yield* this.progressView.refreshCatalogs();
+      }
+      if (key === GlobalStateKey.INLINE_CRITICISM_ENABLED) {
+        yield* syncInlineCriticism();
       }
       if (codingPlanForUsageSetting(key) !== undefined) {
         yield* this.withActiveWebview((w) => this.sendSubscriptionUsage(w));

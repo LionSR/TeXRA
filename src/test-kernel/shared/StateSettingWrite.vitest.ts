@@ -113,15 +113,15 @@ describe('applyStateSettingUpdate', () => {
 
         expect(
           yield* applyStateSettingUpdate(
-            WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS,
-            1000.5,
+            WorkspaceStateKey.LATEXDIFF_MATH_MARKUP,
+            'bogus',
             ports,
           ),
         ).toMatchObject({
           kind: 'rejected',
           entry: {
-            key: WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS,
-            surfaces: { settingsView: 'latex', cliConfig: true },
+            key: WorkspaceStateKey.LATEXDIFF_MATH_MARKUP,
+            surfaces: { settingsView: 'latex' },
           },
           error: expect.any(Error),
         });
