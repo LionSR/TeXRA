@@ -218,10 +218,12 @@ const exportLatex = Effect.fn('exportLatex')(function* (
     return;
   }
   if (result.logTail) {
-    yield* Effect.logWarning(
-      `LaTeX export compilation failed for ${result.storagePath}`,
+    yield* Effect.logError(
+      `LaTeX export compilation failed for ${result.storagePath}:\n${result.logTail}`,
     ).pipe(
-      Effect.annotateLogs({ logTail: result.logTail }),
+      Effect.annotateLogs({
+        data: { storagePath: result.storagePath, logTail: result.logTail },
+      }),
       withLogChannel(CHANNEL),
     );
   }
