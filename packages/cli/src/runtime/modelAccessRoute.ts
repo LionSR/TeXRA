@@ -72,25 +72,6 @@ export type CliModelAccessItemsInput =
       readonly state: 'failed' | 'loading';
     };
 
-/**
- * Pick the route the CLI reports for a model. Both inputs speak `UsageRoute`,
- * so this owns one precedence rule and no per-provider knowledge: a completed
- * request's route cannot change, so it always wins over the prospective route
- * `activeSubscriptionUsageRoute` reports for the next one. No route at all
- * means nothing has been paid for yet, which every label renders as own keys.
- */
-export function resolveCliModelAccessRoute({
-  usageRoute,
-  prospectiveRoute,
-}: {
-  /** Route stamped on completed usage, when the stream has any. */
-  readonly usageRoute?: UsageRoute;
-  /** Route that would serve the next request (`activeSubscriptionUsageRoute`). */
-  readonly prospectiveRoute?: UsageRoute;
-}): UsageRoute | undefined {
-  return usageRoute ?? prospectiveRoute;
-}
-
 /** Status-bar form of the access route. Width-critical, so every arm is a
  *  short display phrase; the enum value itself never reaches the screen. */
 export function shortCliModelAccessRoute(

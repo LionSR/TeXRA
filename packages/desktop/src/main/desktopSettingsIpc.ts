@@ -40,11 +40,7 @@ import {
   applyStateSettingUpdate,
   type SettingsSnapshotPosters,
 } from '@shared/settingsView/handlers/stateSettingWrite';
-import {
-  unsupported,
-  unsupportedCommands,
-  UnsupportedCommandError,
-} from '@shared/utils/dispatcher';
+import { unsupported, UnsupportedCommandError } from '@shared/utils/dispatcher';
 import { buildSettingsSnapshotMessage } from '@shared/settingsView/handlers/settingsSnapshot';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { loadRuntimeSkillDisplay } from '@skills/runtimeSkills';
@@ -544,18 +540,10 @@ export function createDesktopSettingsIpc(
   const settingsHandlers: SettingsViewInboundHandlerRegistry<
     ProcessServices | StorageFs
   > = {
-    // The settings webview announcing itself: answer with the capabilities
-    // this host's registry declares unsupported, then its opening data. The
-    // other views share the command and want neither.
+    // The settings webview announcing itself: answer with its opening data.
+    // The other views share the command and want none of it.
     webviewReady: (message) =>
-      Effect.gen(function* () {
-        if (message.view !== 'settings') return;
-        options.postToRenderer({
-          command: SETTINGS_VIEW_COMMANDS.SET_UNSUPPORTED_COMMANDS,
-          commands: unsupportedCommands(settingsHandlers),
-        });
-        yield* postInitialSettingsData();
-      }),
+      message.view === 'settings' ? postInitialSettingsData() : Effect.void,
     getMemoryData: () => postMemoryData(),
     getMemoryPreview: (message) => postMemoryPreview(message.storagePath),
     openMemoryFile,
@@ -606,16 +594,6 @@ export function createDesktopSettingsIpc(
       updateStateSetting(message.key, message.value),
     ...options.toolingSettingsController.toolHandlers,
     ...options.toolingSettingsController.latexHandlers,
-    // Inline criticism renders `\criticize{...}` annotations as editor
-    // squiggles and Problems-panel entries. Both are VS Code editor surfaces
-    // with no desktop counterpart, so this stays host-specific rather than
-    // "not yet ported".
-    getInlineCriticismEnabled: unsupported(
-      'Inline criticism needs the VS Code editor and Problems panel.',
-    ),
-    setInlineCriticismEnabled: unsupported(
-      'Inline criticism needs the VS Code editor and Problems panel.',
-    ),
     getGoalList: () => postGoalList(),
     revealGoalRun: (message) => revealRun(message.runId),
   };

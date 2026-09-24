@@ -154,7 +154,7 @@ describe('SettingsModelSelectionController', () => {
       }),
   );
 
-  it.effect('pins a disabled helper to the built-in default', () =>
+  it.effect('resolves a disabled helper to the built-in default', () =>
     Effect.gen(function* () {
       const globalState = new FakeStateStore({
         [GlobalStateKey.MODEL_SELECTION]: {
@@ -177,7 +177,7 @@ describe('SettingsModelSelectionController', () => {
         enabledExtras: [],
         disabledDefaults: [],
       });
-      expect(yield* globalState.get(GlobalStateKey.HELPER_MODEL)).toBe(
+      expect((yield* controller.buildSelectionData()).helperModel).toBe(
         DEFAULT_HELPER_MODEL,
       );
     }),

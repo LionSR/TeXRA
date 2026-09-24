@@ -37,8 +37,8 @@ code --new-window \
 In the Extension Development Host:
 
 1. Confirm that the TeXRA output channel reports activation without an error.
-2. Run `TeXRA: Show Launcher`.
-3. Run `TeXRA: Show Progress`.
+2. Run `TeXRA: New Task`.
+3. Run `TeXRA: Show Sessions`.
 4. Run `TeXRA: Show Settings`.
 5. Capture screenshots of the launcher, progress view, and settings view.
 

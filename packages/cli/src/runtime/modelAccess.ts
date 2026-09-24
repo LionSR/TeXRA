@@ -5,34 +5,34 @@ import { Effect, Result } from 'effect';
 import {
   modelOptionsFrom,
   readModelAvailabilityInputs,
+  usageRouteFrom,
+  type ModelAvailabilityInputs,
   type ModelOptionStores,
 } from '@model/computeModelOptions';
-import { shouldRouteModelThroughOpenRouter } from '@model/openRouterRouting';
-import { resolveRouteEndpoint } from '@model/routeEndpoint';
-import { getRuntimeModelConfig } from '@model/runtimeModelRegistry';
 import {
   decideRunModel,
   type RunModelCandidate,
   type RunModelDecisionReason,
 } from '@model/runModelDecision';
 import type { ProcessRuntime } from '@platform/processRuntime';
-import type { SettingsStores } from '@shared/config/settingsAccess';
-import type { ModelOptionData } from '@shared/schemas';
+import type { ModelOptionData, UsageRoute } from '@shared/schemas';
 import {
   isModelOptionAvailable,
   MODEL_AVAILABILITY_STATUS,
 } from '@shared/schemas';
 import { assertNever, unique } from '@utils/core';
-import { getUseOpenRouter } from '@utils/config/providerConfig';
 
 // Local file imports
 import { resolveKnownCliModelId } from './cliConfig';
+import { formatCliModelAccessRoute } from './modelAccessRoute';
 
 export interface CliModelAccess {
   readonly model: ModelOptionData;
   /** Runnable with the currently configured credentials. */
   readonly available: boolean;
   readonly status: string;
+  /** The subscription the picker decided pays for the next request. */
+  readonly usageRoute?: UsageRoute;
 }
 
 export interface CliModelPickerItem {
@@ -149,34 +149,16 @@ function formatModelAccessStatus(model: ModelOptionData): string {
     : MODEL_AVAILABILITY_STATUS[model.availability].label.toLowerCase();
 }
 
-export function formatModelStatusForCli(
-  stores: SettingsStores,
-  model: CliModelAccess,
-) {
-  return Effect.gen(function* () {
-    if (model.model.provider === 'kimiCode')
-      return 'api: Kimi Code subscription';
-    if (
-      model.model.provider === 'glm' &&
-      model.model.availability === 'provider-key'
-    ) {
-      const config = getRuntimeModelConfig(model.model.value);
-      if (config) {
-        const endpoint = yield* resolveRouteEndpoint(
-          stores,
-          config,
-          shouldRouteModelThroughOpenRouter(
-            config,
-            yield* getUseOpenRouter(stores),
-          ),
-        );
-        if (endpoint.usageRoute === 'glm-coding-plan-subscription') {
-          return 'api: GLM Coding Plan';
-        }
-      }
-    }
-    return `api: ${model.status}`;
-  });
+/**
+ * The picker row's access, naming the coding plan when one pays for the next
+ * request (the row's `usageRoute`, decided by the picker).
+ */
+export function formatModelStatusForCli(model: CliModelAccess): string {
+  const route = model.usageRoute;
+  return route === 'kimi-code-subscription' ||
+    route === 'glm-coding-plan-subscription'
+    ? `api: ${formatCliModelAccessRoute(route)}`
+    : `api: ${model.status}`;
 }
 
 // Reason a given model id cannot be switched to right now, or undefined if it can.
@@ -185,7 +167,6 @@ export type GetModelSwitchDisabledReason = (
 ) => Effect.Effect<string | undefined, Error>;
 
 export function modelSelectItemsForCli(
-  stores: SettingsStores,
   models: readonly CliModelAccess[],
   getModelSwitchDisabledReason?: GetModelSwitchDisabledReason,
 ) {
@@ -194,7 +175,7 @@ export function modelSelectItemsForCli(
       const disabledReason = getModelSwitchDisabledReason
         ? yield* getModelSwitchDisabledReason(model.model.value)
         : undefined;
-      const access = yield* formatModelStatusForCli(stores, model);
+      const access = formatModelStatusForCli(model);
       const status = model.model.reasoning
         ? `${access} · reasoning setting: ${model.model.reasoning}`
         : access;
@@ -208,20 +189,22 @@ export function modelSelectItemsForCli(
   );
 }
 
-function toCliModelAccess(model: ModelOptionData): CliModelAccess {
-  return {
+function cliModelAccessFrom(inputs: ModelAvailabilityInputs) {
+  return (model: ModelOptionData): CliModelAccess => ({
     model,
     available: isModelOptionAvailable(model),
     status: formatModelAccessStatus(model),
-  };
+    usageRoute: usageRouteFrom(inputs, model.value),
+  });
 }
 
 export const getCliModelAccessList = Effect.fn('getCliModelAccessList')(
   function* (options: CliModelAccessListOptions) {
-    const models = modelOptionsFrom(
-      yield* readModelAvailabilityInputs(options.stores, options.models),
+    const inputs = yield* readModelAvailabilityInputs(
+      options.stores,
+      options.models,
     );
-    return models.map(toCliModelAccess);
+    return modelOptionsFrom(inputs).map(cliModelAccessFrom(inputs));
   },
 );
 
@@ -354,9 +337,10 @@ export const loadCliModelAccessEntry = Effect.fn('loadCliModelAccessEntry')(
     const hiddenModelId = resolveKnownCliModelId(trimmed);
     if (hiddenModelId == null) return undefined;
 
-    const hiddenModelOption = modelOptionsFrom(
-      yield* readModelAvailabilityInputs(options.stores, [hiddenModelId]),
-    )[0];
+    const inputs = yield* readModelAvailabilityInputs(options.stores, [
+      hiddenModelId,
+    ]);
+    const hiddenModelOption = modelOptionsFrom(inputs)[0];
     if (!hiddenModelOption) {
       return yield* Effect.fail(
         new Error(
@@ -365,7 +349,7 @@ export const loadCliModelAccessEntry = Effect.fn('loadCliModelAccessEntry')(
       );
     }
 
-    return toCliModelAccess(hiddenModelOption);
+    return cliModelAccessFrom(inputs)(hiddenModelOption);
   },
 );
 

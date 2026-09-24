@@ -9,10 +9,6 @@
  * module-level signals in `settingsState.ts` directly.
  */
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import {
-  LATEX_CONFIG_KEYS,
-  type LatexConfigValues,
-} from '@shared/constants/latexConfig';
 import { type SettingsViewOutboundHandlerRegistry } from '@shared/settingsView/settingsViewMessages';
 
 import {
@@ -30,8 +26,6 @@ import {
   gitSettingsLoaded,
   goalItems,
   helperModel,
-  inlineCriticismEnabled,
-  latexConfigValues,
   latexSettingsLoaded,
   latexSettingsStatus,
   memoryItems,
@@ -49,7 +43,6 @@ import {
   subscriptionUsage,
   toolDashboardItems,
   toolDashboardLoaded,
-  unsupportedCommands,
   userEmail,
 } from './settingsState';
 
@@ -58,10 +51,6 @@ export const settingsViewHandlers: SettingsViewOutboundHandlerRegistry = {
   [SETTINGS_VIEW_COMMANDS.SET_TAB]: (data) => {
     selectedPanel.set(data.tab);
     agentSubTab.set(data.agentSubTab);
-  },
-
-  [SETTINGS_VIEW_COMMANDS.SET_UNSUPPORTED_COMMANDS]: (data) => {
-    unsupportedCommands.set(new Set(data.commands));
   },
 
   // Memory.
@@ -129,29 +118,6 @@ export const settingsViewHandlers: SettingsViewOutboundHandlerRegistry = {
 
   // Catalog-derived settings snapshots.
   [SETTINGS_VIEW_COMMANDS.UPDATE_SETTINGS_SNAPSHOT]: (data) => {
-    if (data.snapshot === 'latex') {
-      // The LaTeX tab renders its own keyed record rather than the catalog
-      // signals, so it takes the payload whole: every row the snapshot carries
-      // reaches the tab, including one added after this line was written. A
-      // row with no field, or a field whose key left the catalog, is reported
-      // rather than rendering a default forever — the same guarantee
-      // `applySettingsSnapshot` gives the other snapshots.
-      const unrendered = new Set(Object.keys(LATEX_CONFIG_KEYS));
-      for (const key of Object.keys(data.values)) {
-        if (!unrendered.delete(key)) {
-          console.warn(
-            `[settings] The LaTeX tab declares no field for catalog setting "${key}"; it cannot render it.`,
-          );
-        }
-      }
-      for (const key of unrendered) {
-        console.warn(
-          `[settings] The LaTeX tab renders "${key}", which the LaTeX snapshot does not carry; it will show its default.`,
-        );
-      }
-      latexConfigValues.set(data.values as LatexConfigValues);
-      return;
-    }
     applySettingsSnapshot(data.values);
     if (data.snapshot === 'git-author') gitSettingsLoaded.set(true);
     if (data.snapshot === 'multi-agent') {
@@ -204,9 +170,5 @@ export const settingsViewHandlers: SettingsViewOutboundHandlerRegistry = {
   [SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_SETTINGS_STATUS]: (data) => {
     latexSettingsStatus.set(data.settings);
     latexSettingsLoaded.set(true);
-  },
-
-  [SETTINGS_VIEW_COMMANDS.UPDATE_INLINE_CRITICISM_ENABLED]: (data) => {
-    inlineCriticismEnabled.set(data.enabled);
   },
 };

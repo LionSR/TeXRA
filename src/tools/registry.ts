@@ -198,7 +198,7 @@ const PLUGIN_LAYERS = {} as const satisfies {
 type PluginTools = typeof PLUGIN_TOOLS;
 
 /** Union of all registered tool names. */
-export type RegisteredToolName = {
+type RegisteredToolName = {
   [Id in ToolPluginId]: keyof PluginTools[Id];
 }[ToolPluginId];
 

@@ -43,6 +43,8 @@ export class PlanView extends CollapsiblePanel {
 
   @property({ attribute: false }) plan: Plan | null = null;
 
+  protected readonly groupKey = 'plan';
+
   override render(): TemplateResult | typeof nothing {
     if (!this.plan) {
       return nothing;

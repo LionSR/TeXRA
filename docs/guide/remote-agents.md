@@ -21,13 +21,13 @@ Remote agents are pre-configured agents hosted in the cloud that you can run dir
 Remote agents require a TeXRA account:
 
 1. Open the Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`)
-2. Run **TeXRA: Sign In**
+2. Run **TeXRA: Sign In to TeXRA Account (Remote Agents)**
 3. Choose a sign-in method (GitHub or Google)
 4. Complete the sign-in flow in your browser
 5. Return to VS Code once signed in
 
 ::: tip
-To check your sign-in status at any time, run **TeXRA: View Profile** from the Command Palette.
+To check your sign-in status at any time, run **TeXRA: Open Settings** and open the Account & Usage tab.
 :::
 
 ### 2. Browse available agents
@@ -35,11 +35,11 @@ To check your sign-in status at any time, run **TeXRA: View Profile** from the C
 Once signed in, browse remote agents from the Agents tab:
 
 1. Open the Command Palette
-2. Run **TeXRA: Show Agents** to open the Agents tab in Settings
+2. Run **TeXRA: Open Settings** and open the Agents tab
 3. Select a remote agent in the list to see its details
 4. Select **Show in agent selector** to add it to your agent selector
 
-Your email and access level sit on the Account & Usage tab (**TeXRA: View Profile**).
+Your email and access level sit on the Account & Usage tab of Settings.
 
 The selected agent appears in the main TeXRA view alongside your built-in agents.
 
@@ -130,10 +130,10 @@ TeXRA supports academic research. Remote agent access is **free for qualifying r
 To check your account status:
 
 1. Open the Command Palette
-2. Run **TeXRA: View Profile**
+2. Run **TeXRA: Open Settings**
 3. View your email and access level on the Account & Usage tab
 
-Run **TeXRA: Show Agents** to browse the remote agents available to you.
+The Agents tab of Settings lists the remote agents available to you.
 
 ### Sign out
 

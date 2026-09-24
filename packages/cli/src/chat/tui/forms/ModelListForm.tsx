@@ -67,11 +67,7 @@ export function ModelListForm(props: ModelListFormProps): React.JSX.Element {
       Effect.flatMap(
         getCliModelAccessList({ stores: props.stores }),
         (models) =>
-          modelSelectItemsForCli(
-            props.stores,
-            models,
-            props.getModelSwitchDisabledReason,
-          ),
+          modelSelectItemsForCli(models, props.getModelSwitchDisabledReason),
       ),
     runtime: props.stores.runtime,
     isEmpty: (items) => items.length === 0,

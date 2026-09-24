@@ -6,7 +6,7 @@ import { MODEL_CONFIGS, ModelProvider } from 'llm-zoo';
 import { resolveModelCompatibilityKey } from '@agent/runtime/modelRoutes';
 
 import {
-  resolveModelApiKeyProvider,
+  resolveDirectModelApiKeyProvider,
   resolveModelSource,
   shouldRouteModelThroughOpenRouter,
 } from '@model/openRouterRouting';
@@ -54,10 +54,7 @@ describe('Kimi Code routing', () => {
   const globalState = new FakeStateStore();
 
   it('keeps the direct Kimi Code route when OpenRouter is globally enabled', () => {
-    expect(resolveModelApiKeyProvider(MODEL_CONFIGS.kimiCoding, false)).toBe(
-      'kimiCode',
-    );
-    expect(resolveModelApiKeyProvider(MODEL_CONFIGS.kimiCoding, true)).toBe(
+    expect(resolveDirectModelApiKeyProvider(MODEL_CONFIGS.kimiCoding)).toBe(
       'kimiCode',
     );
     expect(
@@ -105,7 +102,7 @@ describe('Kimi Code routing', () => {
   );
 
   it('does not divert other moonshot models off their normal routes', () => {
-    expect(resolveModelApiKeyProvider(MODEL_CONFIGS.kimi25T, false)).toBe(
+    expect(resolveDirectModelApiKeyProvider(MODEL_CONFIGS.kimi25T)).toBe(
       'moonshot',
     );
   });

@@ -597,7 +597,6 @@ const CORE_SETTING_ROWS: Record<
       'Wrap bare criticism and comment commands inside align environments with intertext.',
     category: 'latex',
     honoredBy: everyHost(REPLACEMENT_ENGINE_READER),
-    surfaces: { settingsView: 'latex' },
   },
   'latex.enabledReplacements': {
     schema: z
@@ -607,7 +606,6 @@ const CORE_SETTING_ROWS: Record<
     description: 'Enabled groups of direct LaTeX cleanup replacements.',
     category: 'latex',
     honoredBy: everyHost(REPLACEMENT_ENGINE_READER),
-    surfaces: { settingsView: 'latex' },
   },
   'latex.enabledReplacementsRegex': {
     schema: z
@@ -617,7 +615,6 @@ const CORE_SETTING_ROWS: Record<
     description: 'Enabled groups of pattern-based LaTeX cleanup replacements.',
     category: 'latex',
     honoredBy: everyHost(REPLACEMENT_ENGINE_READER),
-    surfaces: { settingsView: 'latex' },
   },
   'latex.customReplacementsRegex': {
     schema: z.record(z.string(), z.string()).prefault({}),
@@ -625,7 +622,6 @@ const CORE_SETTING_ROWS: Record<
     description: 'Custom regular-expression replacements.',
     category: 'latex',
     honoredBy: everyHost(REPLACEMENT_ENGINE_READER),
-    surfaces: { settingsView: 'latex' },
   },
   'latex.customReplacements': {
     schema: z.record(z.string(), z.string()).prefault({}),
@@ -633,7 +629,6 @@ const CORE_SETTING_ROWS: Record<
     description: 'Custom direct text replacements.',
     category: 'latex',
     honoredBy: everyHost(REPLACEMENT_ENGINE_READER),
-    surfaces: { settingsView: 'latex' },
   },
   'latexdiff.tempFileLocation': {
     schema: z.enum(LATEXDIFF_TEMP_FILE_LOCATIONS).prefault('sameDirectory'),
@@ -1076,13 +1071,14 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     category: 'workflow',
     slots: sameSlot('workspaceState'),
     honoredBy: WORKFLOW_COMPILE_HONORED_BY,
-    surfaces: { settingsView: 'latex', cliConfig: true },
+    surfaces: { cliConfig: true },
   }),
   surfacedSetting({
     key: WorkspaceStateKey.WORKFLOW_AUTO_OPEN_PDF,
     schema: z.boolean().prefault(LATEX_CONFIG_DEFAULTS.workflowAutoOpenPdf),
+    title: 'Open the compiled PDF',
     description:
-      'Open the compiled PDF automatically after a successful auto-compile.',
+      'After auto-compile, open the PDF when it succeeds or the LaTeX log when it fails.',
     category: 'workflow',
     slots: sameSlot('workspaceState'),
     // Read by the reflection flow, but the emitted `requestOpenFile` has no CLI
@@ -1098,9 +1094,9 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     schema: z
       .boolean()
       .prefault(LATEX_CONFIG_DEFAULTS.workflowRejectOnCompileFailure),
-    title: 'Reject compile failures',
+    title: 'Repair failed compiles',
     description:
-      'Reject an agent edit when the automatic post-output compile fails, so broken LaTeX is not accepted.',
+      'When the automatic compile fails, spend the next planned round repairing the output from the compile log.',
     category: 'workflow',
     slots: sameSlot('workspaceState'),
     honoredBy: everyHost('src/agent/runtime/loop/reflection.ts'),
@@ -1108,13 +1104,15 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
   }),
 
   // --- LaTeXdiff -------------------------------------------------------------
-  // Run by the reflection flow, so every host honors them; deferred from the
-  // CLI `/config` panel by product decision, which is a surface choice only.
+  // Run by the reflection flow, so every host honors them. The timeout is kept
+  // out of the settings view (an insider knob) and edited from CLI `/config`;
+  // the rest are deferred from `/config` by product decision.
   surfacedSetting({
     key: WorkspaceStateKey.LATEXDIFF_BETWEEN_ROUNDS,
     schema: z.boolean().prefault(LATEX_CONFIG_DEFAULTS.latexdiffBetweenRounds),
+    title: 'Diff consecutive rounds',
     description:
-      'Generate a latexdiff between successive reflection rounds, not just against the original input.',
+      'Also diff each agent round against the previous one, not only against your original input.',
     category: 'latexdiff',
     slots: sameSlot('workspaceState'),
     honoredBy: everyHost('src/agent/output/LatexDiffManager.ts'),
@@ -1127,18 +1125,20 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
       .min(LATEX_CONFIG_RANGES.latexdiffTimeoutMs.min)
       .max(LATEX_CONFIG_RANGES.latexdiffTimeoutMs.max)
       .prefault(LATEX_CONFIG_DEFAULTS.latexdiffTimeoutMs),
+    title: 'latexdiff timeout',
     description:
       'Maximum time (in milliseconds) to allow a single latexdiff invocation to run.',
     category: 'latexdiff',
     slots: sameSlot('workspaceState'),
     honoredBy: everyHost('src/latex/latexdiff.ts'),
-    surfaces: { settingsView: 'latex' },
+    surfaces: { cliConfig: true },
   }),
   surfacedSetting({
     key: WorkspaceStateKey.LATEXDIFF_MATH_MARKUP,
     schema: z
       .enum(LATEXDIFF_MATH_MARKUP_VALUES)
       .prefault(LATEX_CONFIG_DEFAULTS.latexdiffMathMarkup),
+    title: 'Math markup in diffs',
     description: 'How latexdiff marks up changes inside math environments.',
     category: 'latexdiff',
     slots: sameSlot('workspaceState'),
@@ -1154,8 +1154,9 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
   surfacedSetting({
     key: WorkspaceStateKey.LATEXDIFF_CHANGES_ONLY,
     schema: z.boolean().prefault(LATEX_CONFIG_DEFAULTS.latexdiffChangesOnly),
+    title: 'Only changed pages in diff PDFs',
     description:
-      'Produce a changes-only diff (show only the parts that changed) rather than the full marked-up document.',
+      'Compile diff PDFs with only the pages that contain edits, instead of the full document.',
     category: 'latexdiff',
     slots: sameSlot('workspaceState'),
     honoredBy: everyHost('src/latex/latexdiff/diffCommandExecutor.ts'),
@@ -1168,15 +1169,37 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     schema: z
       .enum(LATEX_FORMATTER_VALUES)
       .prefault(LATEX_CONFIG_DEFAULTS.latexFormatter),
+    title: 'LaTeX formatter',
     description: 'Which formatter to run when formatting LaTeX source.',
     category: 'latex',
     slots: sameSlot('workspaceState'),
     honoredBy: everyHost('src/latex/formatter/texFormatter.ts'),
+    enumLabels: ['latexindent', 'tex-fmt', 'None'],
     enumDescriptions: [
-      'Format with latexindent.',
-      'Format with tex-fmt.',
-      'Do not run any formatter.',
+      'needs Perl',
+      'standalone Rust binary',
+      'leave formatting unchanged',
     ],
+    surfaces: { settingsView: 'latex' },
+  }),
+
+  // --- Inline criticism -------------------------------------------------------
+  // Editor squiggles and Problems-panel entries exist only in VS Code. Every
+  // host carries the slot so the shared LaTeX snapshot reads on each of them;
+  // the desktop LaTeX page hides the row.
+  surfacedSetting({
+    key: GlobalStateKey.INLINE_CRITICISM_ENABLED,
+    schema: z.boolean().prefault(false),
+    title: 'Show criticism as editor diagnostics',
+    description:
+      'Show \\criticize{message}{severity}{confidence} annotations from agent-revised LaTeX files as squiggles and Problems-panel entries.',
+    category: 'latex',
+    slots: sameSlot('globalState'),
+    honoredBy: {
+      vscode: {
+        reader: 'packages/extension/src/frontend/latex/inlineCriticism.ts',
+      },
+    },
     surfaces: { settingsView: 'latex' },
   }),
 
@@ -1446,6 +1469,16 @@ export function settingsViewSnapshotEntries(
  */
 export const CLI_STATE_SETTINGS: readonly SurfacedSettingEntry[] =
   SURFACED_SETTINGS.filter((entry) => entry.surfaces.cliConfig === true);
+
+const CLI_STATE_SETTINGS_BY_KEY: ReadonlyMap<string, SurfacedSettingEntry> =
+  new Map(CLI_STATE_SETTINGS.map((entry) => [entry.key, entry]));
+
+/** Look up a row the CLI `/config` panel lists, and so may write. */
+export function cliConfigSettingByKey(
+  key: string,
+): SurfacedSettingEntry | undefined {
+  return CLI_STATE_SETTINGS_BY_KEY.get(key);
+}
 
 /**
  * Canonical `texra.*` keys the CLI reads or writes in `.texra/config.json` —

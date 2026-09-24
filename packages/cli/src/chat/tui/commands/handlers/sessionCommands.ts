@@ -2,7 +2,6 @@ import { Effect } from 'effect';
 
 import { type SessionHandle } from '@agent/runtime';
 import { notifyFollowUpSent } from '@agent/followUp';
-import { resolveCliModelAccessRoute } from '@cli/runtime/modelAccessRoute';
 import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
 import { formatCliSessionStatus } from '@cli/chat/tui/sessionStatus';
 import {
@@ -26,7 +25,7 @@ import {
   appendLocalAssistantTranscript,
   appendLocalRequestRefusal,
 } from '@cli/chat/tui/state/transcript';
-import { activeSubscriptionUsageRoute } from '@model/codingPlanSubscriptions';
+import { readProspectiveUsageRoute } from '@model/computeModelOptions';
 import { AgentCategory, MESSAGE_TYPES, type RunId } from '@shared/schemas';
 
 import { formatSlashCommandHelp } from '../helpText';
@@ -90,7 +89,7 @@ export const showCliSessionStatus = Effect.fn('showCliSessionStatus')(
         : run;
     const activeChildSessions = runningChildCount(view, countedParent);
     const model = run?.model ?? (meta.model || context.initialModel);
-    const prospectiveRoute = yield* activeSubscriptionUsageRoute(
+    const prospectiveRoute = yield* readProspectiveUsageRoute(
       { ...context.stores, secrets: context.secrets },
       model,
     );
@@ -99,10 +98,9 @@ export const showCliSessionStatus = Effect.fn('showCliSessionStatus')(
         agent: meta.agent || context.initialAgent,
         model,
         teamName: meta.teamName,
-        modelAccess: resolveCliModelAccessRoute({
-          usageRoute: run?.usage.usageRoute,
-          prospectiveRoute,
-        }),
+        // A completed request's route cannot change, so it outranks the
+        // prospective one.
+        modelAccess: run?.usage.usageRoute ?? prospectiveRoute,
         approvalBypasses:
           activeRunId === undefined
             ? undefined

@@ -19,10 +19,6 @@ export const workflowRunBoardStyles = css`
     color: var(--wa-color-text-quiet);
   }
 
-  .spacer {
-    flex: 1 1 auto;
-  }
-
   .tone-running {
     color: var(--wa-color-success-on-quiet);
   }
@@ -286,10 +282,6 @@ export const workflowRunBoardStyles = css`
     white-space: nowrap;
   }
 
-  .tally wa-icon {
-    font-size: 9px;
-  }
-
   /* Controls bar */
   .controls {
     display: flex;
@@ -313,19 +305,5 @@ export const workflowRunBoardStyles = css`
 
   .controls .note-rejected {
     color: var(--wa-color-warning-on-quiet);
-  }
-
-  .note-wide {
-    display: none;
-  }
-
-  @container (min-width: 720px) {
-    .note-narrow {
-      display: none;
-    }
-
-    .note-wide {
-      display: inline;
-    }
   }
 `;

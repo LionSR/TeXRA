@@ -35,8 +35,16 @@ export class ToolUseRunContent extends BaseRunContent {
       <div class="conversation-content">
         ${this.renderApprovalDock()}
         <div class="conversation-column conversation-prelude">
-          <todo-list .todos=${run.todos} .collapseKey=${run.id}></todo-list>
-          <plan-view .plan=${run.plan} .collapseKey=${run.id}></plan-view>
+          <todo-list
+            .todos=${run.todos}
+            .runId=${run.id}
+            .surface=${this.surface}
+          ></todo-list>
+          <plan-view
+            .plan=${run.plan}
+            .runId=${run.id}
+            .surface=${this.surface}
+          ></plan-view>
           <background-tasks-panel
             .run=${run}
             .view=${this.view}

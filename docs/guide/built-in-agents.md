@@ -509,7 +509,7 @@ An end-of-session reviewer. It looks at what was just done and, when the session
 **Best for:** Auditing what a team run actually delivered versus the goal
 
 ::: tip
-Additional remote workflow agents may be available depending on your access level. In the VS Code extension, run **TeXRA: Show Agents** from the Command Palette for the full list. Read [Remote agents](./remote-agents.md) to sign in and sync them.
+Additional remote workflow agents may be available depending on your access level. In the VS Code extension, the Agents tab of Settings (**TeXRA: Open Settings**) has the full list. Read [Remote agents](./remote-agents.md) to sign in and sync them.
 :::
 
 ## Built-in teams

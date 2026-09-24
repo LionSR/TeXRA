@@ -18,10 +18,7 @@ import {
   dispatchSettingsViewOutbound,
   type SettingsTabPanelName,
 } from '@shared/settingsView/settingsViewMessages';
-import {
-  isKnownUnsupported,
-  isUnrecognizedCommand,
-} from '@shared/utils/dispatcher';
+import { isUnrecognizedCommand } from '@shared/utils/dispatcher';
 import { commonViewStyles, designTokens } from '@ui/styles';
 import { registerTeXRAWebAwesomeIcons, waIcon } from '@ui/wa/webAwesomeIcons';
 
@@ -60,13 +57,7 @@ import {
   bashApprovalEnabled,
   chatgptCodexContextWindow,
   childRunConcurrencyBudget,
-  claudeAgentEffort,
-  claudeAgentModel,
-  claudeAgentPermissionMode,
-  codexApprovalPolicy,
-  codexReasoningEffort,
   compactionThresholdPercent,
-  codexSandboxMode,
   copilotRouteInfos,
   customAgentDir,
   customAgentDirIsDefault,
@@ -87,7 +78,10 @@ import {
   goalItems,
   helperModel,
   inlineCriticismEnabled,
-  latexConfigValues,
+  latexdiffBetweenRounds,
+  latexdiffChangesOnly,
+  latexdiffMathMarkup,
+  latexFormatter,
   latexSettingsLoaded,
   latexSettingsStatus,
   memoryEnabled,
@@ -100,6 +94,7 @@ import {
   providerKeyStatuses,
   resetSettingsState,
   selectedPanel,
+  settingSignal,
   sessionProblem,
   skillLoadIssues,
   skillsList,
@@ -110,7 +105,9 @@ import {
   toolDashboardLoaded,
   toolPathProtectionEnabled,
   agentSelectionItems,
-  unsupportedCommands,
+  workflowAutoCompile,
+  workflowAutoOpenPdf,
+  workflowRejectOnCompileFailure,
   userEmail,
 } from './settingsState';
 
@@ -361,31 +358,37 @@ export class SettingsApp extends SignalWatcher(LitElement) {
             .issues=${skillLoadIssues.get()}
           ></skills-tab>
         `;
-      case 'ai-agents':
+      case 'ai-agents': {
+        const items = toolDashboardItems.get();
+        // Read here, inside this watcher's render, so a snapshot that changes
+        // one of the cards' inline settings re-renders the tab.
+        const settingValues = Object.fromEntries(
+          items
+            .flatMap((item) => item.settings ?? [])
+            .map(([key]) => [key, settingSignal<string>(key).get()]),
+        );
         return html`
           <ai-agents-tab
-            .items=${toolDashboardItems.get()}
+            .items=${items}
             .loaded=${toolDashboardLoaded.get()}
-            .codexSandboxMode=${codexSandboxMode.get()}
-            .codexReasoningEffort=${codexReasoningEffort.get()}
-            .codexApprovalPolicy=${codexApprovalPolicy.get()}
-            .claudeAgentModel=${claudeAgentModel.get()}
-            .claudeAgentPermissionMode=${claudeAgentPermissionMode.get()}
-            .claudeAgentEffort=${claudeAgentEffort.get()}
+            .settingValues=${settingValues}
           ></ai-agents-tab>
         `;
+      }
       case 'latex':
         return html`
           <latex-tab
             .settings=${latexSettingsStatus.get()}
             .loaded=${latexSettingsLoaded.get()}
-            .configValues=${latexConfigValues.get()}
-            .inlineCriticismEnabled=${inlineCriticismEnabled.get()}
             .desktopHost=${desktopHost}
-            .inlineCriticismSupported=${!isKnownUnsupported(
-              unsupportedCommands.get(),
-              SETTINGS_VIEW_COMMANDS.GET_INLINE_CRITICISM_ENABLED,
-            )}
+            .autoCompile=${workflowAutoCompile.get()}
+            .autoOpenPdf=${workflowAutoOpenPdf.get()}
+            .rejectOnCompileFailure=${workflowRejectOnCompileFailure.get()}
+            .diffBetweenRounds=${latexdiffBetweenRounds.get()}
+            .diffChangesOnly=${latexdiffChangesOnly.get()}
+            .diffMathMarkup=${latexdiffMathMarkup.get()}
+            .formatter=${latexFormatter.get()}
+            .inlineCriticismEnabled=${inlineCriticismEnabled.get()}
           ></latex-tab>
         `;
       case 'git':

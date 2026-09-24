@@ -61,6 +61,13 @@ export function planToolTerminalAction(input: {
   return { kind: 'terminal', name: `TeXRA: ${def.name}`, command };
 }
 
+/** The plugin's inline settings rows, as the dashboard item carries them. */
+function settingRows(plugin: ToolPlugin): Pick<ToolDashboardItem, 'settings'> {
+  return plugin.settings
+    ? { settings: plugin.settings.map(([key, label]) => [key, label]) }
+    : {};
+}
+
 // ============================================================
 // Public API
 // ============================================================
@@ -106,15 +113,16 @@ export const buildToolDashboardItems = Effect.fn('buildToolDashboardItems')(
     const builtinItems: ToolDashboardItem[] = TOOL_PLUGINS.filter(
       (plugin) =>
         plugin.availability === undefined && isToolPluginVisible(plugin, host),
-    ).map(({ id, name, category, description, toolNames }) => ({
-      id,
-      name,
-      category,
-      description,
-      tools: toolNames.map((toolName) => ({ name: toolName })),
+    ).map((plugin) => ({
+      id: plugin.id,
+      name: plugin.name,
+      category: plugin.category,
+      description: plugin.description,
+      tools: plugin.toolNames.map((toolName) => ({ name: toolName })),
       status: 'available' as const,
       installActions: [],
       requiresSetup: false,
+      ...settingRows(plugin),
     }));
 
     const results =
@@ -161,6 +169,7 @@ export const buildToolDashboardItems = Effect.fn('buildToolDashboardItems')(
         authNote: def.authNote,
         toggleable: def.toggleable,
         enabled: !disabledIds.has(def.id),
+        ...settingRows(def),
       });
     }
 

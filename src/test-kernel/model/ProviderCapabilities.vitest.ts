@@ -12,8 +12,8 @@ import { Effect } from 'effect';
 import { CODEX_SESSION_SECRET_KEY } from '@auth/codex/codexConstants';
 import type { CodexSession } from '@auth/codex/codexSessionTypes';
 import { installTexraAccountProbes } from '@controllers/modelAccess/installTexraAccountProbes';
+import { readProspectiveUsageRoute } from '@model/computeModelOptions';
 import {
-  isCodexSubscriptionActive,
   resolveCodexSubscriptionCapabilities,
   codexBackendModelId,
 } from '@model/providerCapabilities';
@@ -206,9 +206,9 @@ describe('ChatGPT subscription model routing', () => {
       expect(
         yield* withProcessServices(
           testRuntime(),
-          isCodexSubscriptionActive(hostStores(), 'gpt55'),
+          readProspectiveUsageRoute(hostStores(), 'gpt55'),
         ),
-      ).toBe(false);
+      ).toBeUndefined();
     }),
   );
 
@@ -222,9 +222,9 @@ describe('ChatGPT subscription model routing', () => {
         expect(
           yield* withProcessServices(
             testRuntime(),
-            isCodexSubscriptionActive(hostStores(), 'gpt55'),
+            readProspectiveUsageRoute(hostStores(), 'gpt55'),
           ),
-        ).toBe(true);
+        ).toBe('chatgpt-subscription');
       }),
   );
 
@@ -237,9 +237,9 @@ describe('ChatGPT subscription model routing', () => {
       expect(
         yield* withProcessServices(
           testRuntime(),
-          isCodexSubscriptionActive(hostStores(), 'gpt55'),
+          readProspectiveUsageRoute(hostStores(), 'gpt55'),
         ),
-      ).toBe(false);
+      ).toBeUndefined();
     }),
   );
 
@@ -250,9 +250,9 @@ describe('ChatGPT subscription model routing', () => {
       expect(
         yield* withProcessServices(
           testRuntime(),
-          isCodexSubscriptionActive(hostStores(), 'unknown-subscription-model'),
+          readProspectiveUsageRoute(hostStores(), 'unknown-subscription-model'),
         ),
-      ).toBe(false);
+      ).toBeUndefined();
     }),
   );
 });

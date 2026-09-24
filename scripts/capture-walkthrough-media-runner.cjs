@@ -157,16 +157,6 @@ async function seedMessages(window, view) {
 
 function targetScript(target) {
   switch (target) {
-    case 'agent-model-selection':
-      return `
-        const app = document.querySelector('progress-app');
-        const panel = app?.shadowRoot?.querySelector('session-composer');
-        const controls = [
-          ...(panel?.shadowRoot?.querySelectorAll('.chips .chip-trigger') ?? []),
-        ];
-        if (controls.length === 0) throw new Error('Cannot find agent/model controls.');
-        return padRect(unionRects(controls.map((control) => control.getBoundingClientRect())), 10, 8);
-      `;
     case 'file-selection':
       return `
         const app = document.querySelector('progress-app');
@@ -194,39 +184,6 @@ function targetScript(target) {
           width: rect.width + 24,
           height: rect.height + 6,
         });
-      `;
-    case 'auto-extract-options':
-      return `
-        const app = document.querySelector('progress-app');
-        const root = app?.shadowRoot;
-        const details = root?.querySelector('.context');
-        if (!details) throw new Error('Cannot find file selection details.');
-        if (!details.open && typeof details.show === 'function') {
-          await details.show();
-        } else {
-          details.open = true;
-        }
-        await nextFrame();
-        const mediaGroup = [...root.querySelectorAll('file-select-group')]
-          .find((group) => group.config.type === 'media');
-        mediaGroup?.scrollIntoView({ block: 'center', inline: 'nearest' });
-        await nextFrame();
-        const button = mediaGroup?.shadowRoot?.querySelector('#toggleAutoExtract');
-        if (!mediaGroup || !button) throw new Error('Cannot find auto-extract control.');
-        button.click();
-        await nextFrame();
-        const dropdown = mediaGroup.shadowRoot.querySelector('wa-dropdown');
-        const menu = dropdown?.shadowRoot?.querySelector('[part~="menu"], [part="menu"]')?.getBoundingClientRect();
-        const trigger = button.getBoundingClientRect();
-        const labels = [...mediaGroup.shadowRoot.querySelectorAll(
-          '.file-select-icon, .file-select-label, .file-select-count',
-        )];
-        const rects = [
-          ...labels.map((label) => label.getBoundingClientRect()),
-          menu,
-          trigger,
-        ].filter((rect) => rect && rect.width > 0 && rect.height > 0);
-        return padRect(unionRects(rects), 12, 12);
       `;
     case 'api-key-setup':
       return `
@@ -264,14 +221,6 @@ async function captureTarget(window, capture) {
             width: Math.max(1, Math.min(Math.ceil(rect.width), maxWidth)),
             height: Math.max(1, Math.min(Math.ceil(rect.height), maxHeight)),
           };
-        }
-        function padRect(rect, xPad, yPad) {
-          return clipRect({
-            x: rect.x - xPad,
-            y: rect.y - yPad,
-            width: rect.width + xPad * 2,
-            height: rect.height + yPad * 2,
-          });
         }
         function unionRects(rects) {
           const visibleRects = rects.filter((rect) => rect && rect.width > 0 && rect.height > 0);

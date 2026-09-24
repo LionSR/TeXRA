@@ -6,7 +6,7 @@ view; TeXRA does not contribute product settings to VS Code's Settings editor.
 
 ## Open TeXRA settings
 
-- **VS Code extension:** run **TeXRA: Show Settings Dashboard** from the
+- **VS Code extension:** run **TeXRA: Open Settings** from the
   Command Palette.
 - **Desktop app:** open **Settings**.
 - **CLI:** run `texra config`, or enter `/config` during a chat.
@@ -117,10 +117,17 @@ context, edited files, and media. Discovery has no settings of its own.
 
 The **LaTeX** view contains the settings that remain useful to change:
 
-- inline criticism display;
-- compile and diff behavior;
+- compile and diff behavior (auto-compile, opening the PDF, repairing failed
+  compiles, only changed pages in diff PDFs, math markup in diffs, and diffs
+  between rounds);
 - formatter selection; and
-- direct, regular-expression, and custom replacement rules.
+- inline criticism display (VS Code only).
+
+The replacement engine's rule groups and custom maps are not shown there. Set
+them in `.texra/config.json` under `texra.latex.enabledReplacements`,
+`texra.latex.enabledReplacementsRegex`, `texra.latex.customReplacements` and
+`texra.latex.customReplacementsRegex`. The auto-compile and latexdiff timeouts
+are edited from the CLI's `/config`.
 
 The latexdiff picture-environment pattern is a fixed product rule rather than a
 user setting.

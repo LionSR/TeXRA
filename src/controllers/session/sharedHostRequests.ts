@@ -68,7 +68,6 @@ const SHARED_HOST_REQUEST_KINDS = [
   'runCompileFixer',
   'runNew',
   'savePastedImage',
-  'setActiveView',
   'signIn',
   'toolEdit',
   'useOwnApiKey',
@@ -176,9 +175,6 @@ export interface SharedHostRequestBindings {
     readonly skipSetup: HostVerb<void>;
     readonly openGettingStarted: HostVerb<void>;
   };
-  /** Which state the port shows, for the view-title menus that differ
-   *  between the New-task state and a conversation. */
-  setActiveView(view: 'main' | 'progress', port: string): void;
 }
 
 /** The ports a host binds before these arms have anything left to decide. */
@@ -413,9 +409,6 @@ export function handleSharedHostRequest(
             yield* host.onboarding.openGettingStarted;
             return done;
         }
-        return done;
-      case 'setActiveView':
-        host.setActiveView(request.view, port);
         return done;
     }
   });

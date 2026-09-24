@@ -35,7 +35,6 @@ import {
 } from '@platform/defaults/workspaceStorage';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { usageLogLayer } from '@telemetry/UsageLogService';
-import { directLeanLanguageServices } from '@tools/lean/direct/directLspAdapter';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
@@ -172,7 +171,6 @@ export const initializeElectronPlatform = Effect.fn(
     agentDirectories: agentDirectoriesLayer,
     lifecycle,
     setup: setupAuth.platform,
-    lean: directLeanLanguageServices(),
     // Desktop model traffic goes to the same Supabase usage log the extension
     // and CLI write to, tagged with editorType 'desktop' and the app version.
     // The runtime's disposal drains the queue, so a queue shorter than one

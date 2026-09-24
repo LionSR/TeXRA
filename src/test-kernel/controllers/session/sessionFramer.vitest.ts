@@ -288,17 +288,17 @@ describe('session framer', () => {
 
       // Posted while the surface's document loads: nothing reaches it yet.
       bridge.surfaceAction({ kind: 'selectNew' });
-      port.surfaceAction({ kind: 'toggleDrawer' });
+      port.surfaceAction({ kind: 'showSessions', runId: RUN });
       expect(sent).toEqual([]);
 
       const live = { ...subscribe, session: session.roots.storage };
       yield* port.receive(live);
-      expect(actions()).toEqual(['selectNew', 'toggleDrawer']);
+      expect(actions()).toEqual(['selectNew', 'showSessions']);
 
       // Live from here on, and a resubscribe replays nothing.
       port.surfaceAction({ kind: 'submit' });
       yield* port.receive({ ...live, generation: 2 });
-      expect(actions()).toEqual(['selectNew', 'toggleDrawer', 'submit']);
+      expect(actions()).toEqual(['selectNew', 'showSessions', 'submit']);
     }).pipe(Effect.provide(fakeProcessServices())),
   );
   it.live('closes a superseded port before registering its replacement', () =>

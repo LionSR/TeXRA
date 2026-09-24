@@ -142,12 +142,6 @@ export const HostRequestSchema = z.discriminatedUnion('kind', [
     ]),
     feedback: z.string().nullish(),
   }),
-  /** The sidebar port reports which state it shows, for the view-title
-   *  menus that differ between the New-task state and a conversation. */
-  z.object({
-    kind: z.literal('setActiveView'),
-    view: z.enum(['main', 'progress']),
-  }),
   /** An output file's verbs on a workflow run's file list. */
   z.object({
     kind: z.literal('fileAction'),

@@ -22,6 +22,7 @@ import {
 } from '@model/copilotRouting';
 import {
   codexBackendModelId,
+  type ProviderCapabilityProfile,
   resolveCodexSubscriptionCapabilities,
   resolveXaiSubscriptionCapabilities,
 } from '@model/providerCapabilities';
@@ -43,7 +44,6 @@ import type {
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { findModelProviderPlugin } from '@shared/constants/modelProviderPlugins';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { ensureError } from '@utils/errors/errorMessage';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 import type { HttpClient } from 'effect/unstable/http';
 
@@ -99,12 +99,13 @@ export interface ApiKeyRouteCredential {
 }
 
 /**
- * An OAuth subscription session standing in for the provider's API key: the
- * ChatGPT (Codex) session on the Responses protocol, the Grok session on the
- * xAI Chat protocol. The token is the bearer the package sends; `@auth/*`
- * owns its refresh, so a binding always carries a fresh one.
+ * What a subscription route reads off its signed-in session: the ChatGPT
+ * (Codex) session on the Responses protocol, the Grok session on the xAI Chat
+ * protocol, each with the endpoint its token is accepted at. The token is the
+ * bearer the package sends; `@auth/*` owns its refresh, so a binding always
+ * carries a fresh one.
  */
-type SubscriptionRouteCredential =
+type SubscriptionSession =
   | {
       readonly route: 'chatgpt-subscription';
       readonly accessToken: string;
@@ -115,16 +116,19 @@ type SubscriptionRouteCredential =
       /** The Codex backend's bare model id, which differs from the API's. */
       readonly requestedModel: string;
       readonly endpoint: string;
-      readonly provider: ApiProvider;
       readonly usageRoute: 'chatgpt-subscription';
     }
   | {
       readonly route: 'xai-subscription';
       readonly accessToken: string;
       readonly endpoint: string;
-      readonly provider: ApiProvider;
       readonly usageRoute: 'xai-subscription';
     };
+
+/** An OAuth subscription session standing in for the provider's API key. */
+type SubscriptionRouteCredential = SubscriptionSession & {
+  readonly provider: ApiProvider;
+};
 
 export type RouteCredential =
   ApiKeyRouteCredential | SubscriptionRouteCredential;
@@ -148,15 +152,121 @@ interface SubscriptionRoute {
 }
 
 /**
- * A ChatGPT session failure the user must act on, minted as the loop's own
- * error: the "sign in again, or turn off the preference" instruction, not a
- * raw auth error. Anything else keeps its identity through `ensureError`,
- * which is what the caller's own promise boundary did with it.
+ * A subscription session failure the user must act on, minted as the loop's
+ * own error: the "sign in again, or turn off the preference" instruction, not
+ * a raw auth error. Anything else keeps its identity.
  */
-const codexAuthFailure = (error: unknown): Error =>
-  error instanceof CodexAuthError
-    ? new AgentError(formatCodexAuthUnavailableMessage(error), { cause: error })
-    : ensureError(error);
+function subscriptionAuthFailure<E extends Error>(
+  error: Error,
+  AuthError: abstract new (...args: never[]) => E,
+  format: (error: E) => string,
+): Error {
+  return error instanceof AuthError
+    ? new AgentError(format(error), { cause: error })
+    : error;
+}
+
+/** One OAuth subscription a model provider's API key can give way to. */
+interface SubscriptionRouteRow {
+  readonly route: SubscriptionSession['route'];
+  /** The subscription's name in the signed-out warning ('ChatGPT'). */
+  readonly subscriptionName: string;
+  /** The API key the model bills while signed out ('OpenAI'). */
+  readonly apiKeyName: string;
+  /** The route's own config (context ceiling, zero price), or null when the
+   *  preference is off, OpenRouter is selected, the model is OpenRouter-only,
+   *  or the model is not eligible. */
+  readonly resolveCapabilities: (
+    stores: SettingsStores,
+    config: ModelConfig,
+    useOpenRouter: boolean,
+  ) => Effect.Effect<ProviderCapabilityProfile | null, Error>;
+  readonly isSignedIn: () => Effect.Effect<boolean>;
+  /**
+   * The session read, the only refresh on this path. Its failure passes
+   * through `authFailure`, so a refresh that fails reaches the user as the
+   * "sign in again, or turn off the preference" instruction.
+   */
+  readonly readSession: (
+    secrets: PlatformSecrets,
+    config: ModelConfig,
+  ) => Effect.Effect<SubscriptionSession, Error, HttpClient.HttpClient>;
+  readonly authFailure: (error: Error) => Error;
+}
+
+/**
+ * The subscription routes, keyed by the model provider whose API key each
+ * stands in for. A subscription is one row here; the resolver below never
+ * names a provider.
+ *
+ * Each binding calls through rather than capturing the imported value: the
+ * table is built at module load, and a suite that partially mocks
+ * `@auth/*` or the model-layer subscription modules must still load this one.
+ */
+const SUBSCRIPTION_ROUTES: ReadonlyMap<ModelProvider, SubscriptionRouteRow> =
+  new Map([
+    [
+      ModelProvider.OPENAI,
+      {
+        route: 'chatgpt-subscription',
+        subscriptionName: 'ChatGPT',
+        apiKeyName: 'OpenAI',
+        resolveCapabilities: (stores, config, useOpenRouter) =>
+          resolveCodexSubscriptionCapabilities(stores, config, useOpenRouter),
+        isSignedIn: () => isCodexSignedIn(),
+        readSession: (secrets, config) =>
+          Effect.gen(function* () {
+            const coordinator = codexCoordinator(secrets);
+            const accessToken = yield* coordinator.getFreshAccessToken();
+            const accountId = (yield* coordinator.getAccountId()) ?? null;
+            const plan = yield* coordinator.getPlanType();
+            return {
+              route: 'chatgpt-subscription',
+              accessToken,
+              accountId,
+              plan,
+              requestedModel: codexBackendModelId(config),
+              endpoint: CODEX_BACKEND_BASE_URL,
+              usageRoute: 'chatgpt-subscription',
+            } as const;
+          }),
+        authFailure: (error) =>
+          subscriptionAuthFailure(
+            error,
+            CodexAuthError,
+            formatCodexAuthUnavailableMessage,
+          ),
+      },
+    ],
+    [
+      ModelProvider.XAI,
+      {
+        route: 'xai-subscription',
+        subscriptionName: 'Grok',
+        apiKeyName: 'xAI',
+        resolveCapabilities: (stores, config, useOpenRouter) =>
+          resolveXaiSubscriptionCapabilities(stores, config, useOpenRouter),
+        isSignedIn: () => isXaiSignedIn(),
+        readSession: (secrets) =>
+          Effect.map(
+            xaiCoordinator(secrets).getFreshAccessToken(),
+            (accessToken) =>
+              ({
+                route: 'xai-subscription',
+                accessToken,
+                endpoint: XAI_SUBSCRIPTION_ENDPOINT,
+                usageRoute: 'xai-subscription',
+              }) as const,
+          ),
+        authFailure: (error) =>
+          subscriptionAuthFailure(
+            error,
+            XaiAuthError,
+            formatXaiAuthUnavailableMessage,
+          ),
+      },
+    ],
+  ]);
 
 /**
  * The subscription route a model binds under, if the user prefers one, the
@@ -181,86 +291,27 @@ export const resolveSubscriptionCredential = Effect.fn(
 ): Effect.fn.Return<SubscriptionRoute | null, Error, HttpClient.HttpClient> {
   const provider = resolveDirectModelApiKeyProvider(config);
   if (provider === undefined) return null;
-  if (config.provider === ModelProvider.OPENAI) {
-    if (declinedRoutes.includes('chatgpt-subscription')) return null;
-    // The capability read consults the subscription preference and
-    // context-window setting of the workspace the caller handed in; a host
-    // read that throws stays in the typed channel.
-    const profile = yield* resolveCodexSubscriptionCapabilities(
-      stores,
-      config,
-      useOpenRouter,
-    );
-    if (profile === null) return null;
-    const signedIn = yield* isCodexSignedIn();
-    if (!signedIn) {
-      yield* Effect.logWarning(
-        `Prefer ChatGPT subscription is on but no ChatGPT session is signed in: model ${config.name} bills the OpenAI API key.`,
-      ).pipe(withLogChannel(CHANNEL));
-      return null;
-    }
-    const coordinator = codexCoordinator(secrets);
-    // The session read is the only refresh on this path: a refresh that fails
-    // must reach the user with the "sign in again, or turn off the
-    // preference" instruction, not as a raw auth error.
-    const session = yield* Effect.gen(function* () {
-      const accessToken = yield* coordinator.getFreshAccessToken();
-      const accountId = (yield* coordinator.getAccountId()) ?? null;
-      const plan = yield* coordinator.getPlanType();
-      return { accessToken, accountId, plan };
-    }).pipe(Effect.mapError(codexAuthFailure));
-    return {
-      credential: {
-        route: 'chatgpt-subscription',
-        accessToken: session.accessToken,
-        accountId: session.accountId,
-        plan: session.plan,
-        requestedModel: codexBackendModelId(config),
-        endpoint: CODEX_BACKEND_BASE_URL,
-        provider,
-        usageRoute: 'chatgpt-subscription',
-      },
-      config: profile.config,
-    };
+  const row = SUBSCRIPTION_ROUTES.get(config.provider);
+  if (row === undefined || declinedRoutes.includes(row.route)) return null;
+  // The capability read consults the subscription preference and
+  // context-window setting of the workspace the caller handed in; a host
+  // read that throws stays in the typed channel.
+  const profile = yield* row.resolveCapabilities(stores, config, useOpenRouter);
+  if (profile === null) return null;
+  const signedIn = yield* row.isSignedIn();
+  if (!signedIn) {
+    yield* Effect.logWarning(
+      `Prefer ${row.subscriptionName} subscription is on but no ${row.subscriptionName} session is signed in: model ${config.name} bills the ${row.apiKeyName} API key.`,
+    ).pipe(withLogChannel(CHANNEL));
+    return null;
   }
-  if (config.provider === ModelProvider.XAI) {
-    if (declinedRoutes.includes('xai-subscription')) return null;
-    const profile = yield* resolveXaiSubscriptionCapabilities(
-      stores,
-      config,
-      useOpenRouter,
-    );
-    if (profile === null) return null;
-    const signedIn = yield* isXaiSignedIn();
-    if (!signedIn) {
-      yield* Effect.logWarning(
-        `Prefer Grok subscription is on but no Grok session is signed in: model ${config.name} bills the xAI API key.`,
-      ).pipe(withLogChannel(CHANNEL));
-      return null;
-    }
-    const accessToken = yield* xaiCoordinator(secrets)
-      .getFreshAccessToken()
-      .pipe(
-        Effect.mapError((error) =>
-          error instanceof XaiAuthError
-            ? new AgentError(formatXaiAuthUnavailableMessage(error), {
-                cause: error,
-              })
-            : ensureError(error),
-        ),
-      );
-    return {
-      credential: {
-        route: 'xai-subscription',
-        accessToken,
-        endpoint: XAI_SUBSCRIPTION_ENDPOINT,
-        provider,
-        usageRoute: 'xai-subscription',
-      },
-      config: profile.config,
-    };
-  }
-  return null;
+  const session = yield* row
+    .readSession(secrets, config)
+    .pipe(Effect.mapError(row.authFailure));
+  return {
+    credential: { ...session, provider },
+    config: profile.config,
+  };
 });
 
 /**

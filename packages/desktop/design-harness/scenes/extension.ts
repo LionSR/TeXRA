@@ -89,7 +89,7 @@ function surface(view: SessionView, ...actions: SurfaceAction[]): Surface {
       patch: {
         inputFiles: ['main.tex'],
         contextFiles: ['library.bib'],
-        agent: { toolUse: 'orchestrator', workflow: 'correct' },
+        agent: 'orchestrator',
         model: 'gemini-3.8-flash',
         baseFile: 'main.tex',
         editedFile: 'main_polish.tex',

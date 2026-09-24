@@ -183,7 +183,36 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
 - **"Clean All LLM Output Files (Workspace-wide)" is removed** — it is gone
   from the command palette, the Progress toolbar and the getting-started
   walkthrough. Clean in the Progress toolbar now clears the selected run's
-  output folder, and "Clean All Build Files (Workspace-wide)" is unchanged.
+  output folder.
+- **A shorter command palette and a quieter first run** — the palette lists
+  what an author reaches for, in the panel's own words: **New Task**
+  (`Ctrl+Alt+M`, replacing Show Launcher and New Session), **Show Sessions**
+  (`Ctrl+Alt+P`), **Open Sessions in Editor**, **Open Settings**, and
+  **Format Current LaTeX File**. The per-tab settings commands, Execute Agent,
+  View Profile, Sign Out, Remove API Key and Create AI Agent stay bound (to
+  keys, buttons and links) but leave the palette; Settings owns them. Removed:
+  Toggle Sessions Drawer and its `Ctrl+Alt+T` key (the panel's Sessions
+  button does it), Indent All LaTeX Files, Import or Create LaTeX Project,
+  and Sign In with Grok Subscription (Settings has it). **TeXRA: Sign In** is
+  now **Sign In to TeXRA Account (Remote Agents)**, since model access never
+  needed it. The panel's title bar shows only the Settings gear; it no longer
+  swaps in workspace-wide Indent and Clean buttons over a conversation.
+  **Delete All build/ Folders in Workspace** (formerly Clean All Build Files)
+  now lists the folders and asks before deleting them, then says what it
+  did. On first run only the welcome card in the TeXRA panel opens; the
+  walkthrough no longer opens beside it and is down to four accurate steps,
+  and the **Get Started** status pill opens the welcome card. The tasks pill
+  shows only while something is running.
+- **The LaTeX settings page is shorter** — it now shows your LaTeX
+  dependencies, the recommended VS Code settings, and the compile, diff,
+  formatter and inline-criticism switches, using the same names as the CLI's
+  `/config`. The replacement-engine groups and custom replacement maps, and
+  the two millisecond timeouts, are no longer on the page; they keep their
+  defaults. Replacement rules can still be set in `.texra/config.json`, and
+  both timeouts in the CLI's `/config`. The per-row "customized" markers and
+  Reset buttons are gone: set a switch back by flipping it. **Open the
+  compiled PDF** and **Repair failed compiles** are greyed out while
+  auto-compile is off, since they only act on its result.
 
 #### Bug Fixes
 
@@ -276,8 +305,31 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
 
 ### Extension (VS Code) and Desktop
 
+#### Changes
+
+- **The agent you pick decides the run type** — the Mode chip (Interactive /
+  Workflow) is gone from the New task composer. The Agent menu lists
+  interactive agents, document passes and teams as sections, and the
+  composer keeps one draft instead of one per mode, so switching agents no
+  longer swaps out what you typed. A draft saved by an earlier build is
+  cleared once.
+- **A quieter New task composer** — the paragraph of guidance under the
+  composer is gone, the narrow sidebar shows the Agent and Model chips
+  instead of one combined Setup menu, and the follow-up line names its
+  target only when you can send the message to a parent run instead.
+- **The run view shows each fact once** — a context compaction is one row
+  that also says how many tokens it freed, instead of two, the workflow board leaves spend to the usage footer and
+  elapsed time to the header, its footer appears only when a call failed,
+  and "Kill run" is gone from the board because the header's Stop does the
+  same. The Tasks panel names the task in progress in its summary and stays
+  open or closed as you left it when you switch runs.
+
 #### Bug Fixes
 
+- **File lists no longer look used when the agent ignores them** — the
+  Input and Context lists and the auto-extract and TeX Count options now
+  appear only for a document-pass agent. An interactive agent never read
+  them, so a file added there was silently dropped.
 - **The session transcript uses the full panel width.**
 - **Selected conversation tabs and settings cards are readable** — selected-row
   text now contrasts against the highlight instead of blending into it.

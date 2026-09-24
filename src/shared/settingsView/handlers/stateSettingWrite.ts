@@ -8,7 +8,8 @@
 //   - a value-less message is a no-op (the catalog schemas `.prefault()`, so
 //     parsing `undefined` would silently write a default),
 //   - null explicitly resets a setting while an omitted value remains a no-op,
-//   - only catalog rows tagged for a settings-view snapshot are writable.
+//   - a settings view writes only rows tagged for a settings-view snapshot;
+//     the CLI writes only the rows its `/config` panel lists.
 
 import { Data, Effect } from 'effect';
 
@@ -17,10 +18,12 @@ import {
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
 import {
+  cliConfigSettingByKey,
   settingsViewSettingByKey,
   type SettingHost,
   type SettingsViewSnapshot,
   type SettingsViewStateSettingEntry,
+  type SurfacedSettingEntry,
 } from '@shared/state/stateSettings';
 import {
   readSetting,
@@ -30,24 +33,23 @@ import {
 } from '@shared/config/settingsAccess';
 import { ensureError } from '@utils/errors/errorMessage';
 
+/**
+ * The rows a host may write: the settings views (extension, desktop) write
+ * the rows they render, the CLI writes the rows its `/config` panel lists.
+ */
+type WritableEntry<H extends SettingHost> = H extends 'cli'
+  ? SurfacedSettingEntry
+  : SettingsViewStateSettingEntry;
+
 /** Outcome of {@link applyStateSettingUpdate}, for host-specific UI feedback. */
-export type StateSettingUpdateResult =
+export type StateSettingUpdateResult<
+  E extends SurfacedSettingEntry = SurfacedSettingEntry,
+> =
   | { readonly kind: 'ignored' }
-  | {
-      readonly kind: 'rejected';
-      readonly entry: SettingsViewStateSettingEntry;
-      readonly error: Error;
-    }
-  | {
-      readonly kind: 'workspace-required';
-      readonly entry: SettingsViewStateSettingEntry;
-    }
-  | { readonly kind: 'applied'; readonly entry: SettingsViewStateSettingEntry }
-  | {
-      readonly kind: 'failed';
-      readonly entry: SettingsViewStateSettingEntry;
-      readonly error: unknown;
-    };
+  | { readonly kind: 'rejected'; readonly entry: E; readonly error: Error }
+  | { readonly kind: 'workspace-required'; readonly entry: E }
+  | { readonly kind: 'applied'; readonly entry: E }
+  | { readonly kind: 'failed'; readonly entry: E; readonly error: unknown };
 
 /**
  * The write path's own failure. It never leaves this module: the program folds
@@ -59,20 +61,18 @@ class StateSettingWriteFailed extends Data.TaggedError(
   'StateSettingWriteFailed',
 )<{ readonly cause: unknown }> {}
 
-export interface StateSettingUpdatePorts {
+export interface StateSettingUpdatePorts<H extends SettingHost = SettingHost> {
   readonly stores: SettingsStores;
   /**
-   * The calling host, so slot resolution uses that host's own row entry
-   * instead of assuming the extension's.
+   * The calling host: it selects which rows are writable and resolves each
+   * row's slot for that host instead of assuming the extension's.
    */
-  readonly host: SettingHost;
+  readonly host: H;
   /**
    * Extension-only guard: a workspace-target config write needs an open
    * workspace folder. Hosts without that constraint (desktop, CLI) omit this.
    */
-  readonly requiresOpenWorkspace?: (
-    entry: SettingsViewStateSettingEntry,
-  ) => boolean;
+  readonly requiresOpenWorkspace?: () => boolean;
   /** Applies the approval-policy side effect when that setting changes. */
   readonly onApprovalPolicyChanged?: (policy: TexraApprovalPolicy) => void;
 }
@@ -88,13 +88,18 @@ export interface StateSettingUpdatePorts {
  * carries no error channel: a failed persist or a throwing approval-policy
  * hook settles as the `failed` result the callers already render.
  */
-export function applyStateSettingUpdate(
+export function applyStateSettingUpdate<H extends SettingHost>(
   key: string,
   value: unknown,
-  ports: StateSettingUpdatePorts,
-): Effect.Effect<StateSettingUpdateResult> {
+  ports: StateSettingUpdatePorts<H>,
+): Effect.Effect<StateSettingUpdateResult<WritableEntry<H>>> {
   if (value === undefined) return Effect.succeed({ kind: 'ignored' });
-  const entry = settingsViewSettingByKey(key);
+  // Sound: the lookup matches the host, which is what `WritableEntry` keys on.
+  const entry = (
+    ports.host === 'cli'
+      ? cliConfigSettingByKey(key)
+      : settingsViewSettingByKey(key)
+  ) as WritableEntry<H> | undefined;
   if (!entry) return Effect.succeed({ kind: 'ignored' });
   const parsed = value === null ? null : entry.schema.safeParse(value);
   if (parsed && !parsed.success) {
@@ -103,7 +108,7 @@ export function applyStateSettingUpdate(
   if (
     entry.slots[ports.host] === 'config' &&
     entry.configTarget !== 'global' &&
-    ports.requiresOpenWorkspace?.(entry)
+    ports.requiresOpenWorkspace?.()
   ) {
     return Effect.succeed({ kind: 'workspace-required', entry });
   }

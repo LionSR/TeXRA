@@ -1,5 +1,5 @@
 /** Explicit call capabilities over the test host's existing process services. */
-import { Context, Layer } from 'effect';
+import { Context, Layer, Scope } from 'effect';
 
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { FileInteractionState } from '@agent/core/state/AgentWorkspaceState';
@@ -59,6 +59,7 @@ export function nativeToolTestLayer(
         config: AgentConfigSchema.parse({ agent: 'test', model: 'test-model' }),
         logger: noopTrace,
         composition: emptyPinnedComposition,
+        scope: Scope.makeUnsafe(),
         ...run,
       },
       ...call,

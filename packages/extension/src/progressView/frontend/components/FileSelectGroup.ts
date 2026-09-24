@@ -68,7 +68,8 @@ export class FileSelectGroup extends LitElement {
   @property({ attribute: false }) checkboxValues: CheckboxValues =
     ToolConfigFieldsSchema.parse({});
 
-  /** The launch mode: a tool-use session takes no input files. */
+  /** The launch's run type: only a document pass (workflow) reads the
+   *  tool and auto-extract toggles. */
   @property() sessionType: SessionType = AgentCategory.Workflow;
 
   @query('.multiple-files-list')
@@ -137,10 +138,6 @@ export class FileSelectGroup extends LitElement {
     this.patchLaunch({ [this.listId]: reordered });
   }
 
-  private get isFileInputDisabled(): boolean {
-    return this.sessionType === AgentCategory.ToolUse;
-  }
-
   /**
    * Handle wa-select on the checkbox-type dropdown items: keep the menu open
    * (preventDefault), patch the launcher field the item names, and react to
@@ -200,7 +197,6 @@ export class FileSelectGroup extends LitElement {
           type="checkbox"
           value="attachTeXCount"
           ?checked=${values.attachTeXCount}
-          ?disabled=${this.isFileInputDisabled}
         >
           Attach TeX Count
         </wa-dropdown-item>
@@ -242,6 +238,17 @@ export class FileSelectGroup extends LitElement {
         </wa-dropdown-item>
       `,
     });
+  }
+
+  /** Only a document pass (workflow) reads the tool and auto-extract
+   *  toggles, so an interactive launch shows neither menu. */
+  private renderConfigMenu(): TemplateResult | typeof nothing {
+    if (this.sessionType !== AgentCategory.Workflow) return nothing;
+    if (this.config.toolConfig === 'tool') return this.renderToolConfigMenu();
+    if (this.config.toolConfig === 'autoExtract') {
+      return this.renderAutoExtractMenu();
+    }
+    return nothing;
   }
 
   private renderFileList(): TemplateResult {
@@ -358,16 +365,7 @@ export class FileSelectGroup extends LitElement {
                   : formatResultCount(this.files.length, 'file')
               }
             </span>
-            ${
-              config.toolConfig === 'tool'
-                ? this.renderToolConfigMenu()
-                : nothing
-            }
-            ${
-              config.toolConfig === 'autoExtract'
-                ? this.renderAutoExtractMenu()
-                : nothing
-            }
+            ${this.renderConfigMenu()}
           </div>
           <div class="file-select-actions">
             ${renderIconActionButton({

@@ -2,27 +2,16 @@ import { Effect } from 'effect';
 import { ModelProvider, type ModelConfig } from 'llm-zoo';
 
 import { zeroCostAccessOverrides } from '@model/subscriptionAccessOverrides';
-import {
-  isCodexSignedIn,
-  isPreferCodexSubscription,
-} from '@model/codex/codexSubscription';
-import {
-  isPreferXaiSubscription,
-  isXaiSignedIn,
-} from '@model/xai/xaiSubscription';
-import type { LanguageModel } from '@platform/languageModel';
+import { isPreferCodexSubscription } from '@model/codex/codexSubscription';
+import { isPreferXaiSubscription } from '@model/xai/xaiSubscription';
 import {
   CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
   type UsageRoute,
 } from '@shared/schemas';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { readSettingFrom } from '@utils/config/platformSettings';
-import { getUseOpenRouter } from '@utils/config/providerConfig';
 
-import {
-  getRuntimeModelConfig,
-  resolveRuntimeModelConfig,
-} from './runtimeModelRegistry';
+import { getRuntimeModelConfig } from './runtimeModelRegistry';
 
 /** A subscription route's effective model config and the usage route it bills. */
 export interface ProviderCapabilityProfile {
@@ -154,79 +143,6 @@ export const resolveCodexSubscriptionCapabilities = Effect.fn(
 });
 
 /**
- * Shared signed-in-subscription probe: resolve the model config, ask the
- * per-provider capability resolver whether the subscription route is active
- * under the live OpenRouter toggle, and confirm the provider is signed in.
- * Returns the profile's own `usageRoute` so callers never restate which route
- * a provider serves. The coding plans cannot share this (they have no sign-in
- * probe and add key-set facts), so they answer from their catalog descriptor
- * in `@model/codingPlanSubscriptions`.
- */
-const signedInSubscriptionUsageRoute = Effect.fn(
-  'providerCapabilities.signedInSubscriptionUsageRoute',
-)(function* (
-  stores: SettingsStores,
-  modelId: string,
-  resolveCapabilities: (
-    stores: SettingsStores,
-    config: ModelConfig,
-    useOpenRouter: boolean,
-  ) => Effect.Effect<ProviderCapabilityProfile | null, Error>,
-  isSignedIn: () => Effect.Effect<boolean>,
-): Effect.fn.Return<UsageRoute | undefined, Error, LanguageModel> {
-  const config = yield* resolveRuntimeModelConfig(modelId);
-  if (!config) return undefined;
-  const capabilities = yield* resolveCapabilities(
-    stores,
-    config,
-    yield* getUseOpenRouter(stores),
-  );
-  if (!capabilities) return undefined;
-  const signedIn = yield* isSignedIn();
-  return signedIn ? capabilities.usageRoute : undefined;
-});
-
-/**
- * The OAuth-subscription route serving this model's next request, if any.
- *
- * Pairing each capability resolver with its own sign-in probe stays inside
- * this module — the one that owns those profiles. `activeSubscriptionUsageRoute`
- * (`@model/codingPlanSubscriptions`) unions this with the API-key coding plans.
- */
-export const oauthSubscriptionUsageRoute = Effect.fn(
-  'providerCapabilities.oauthSubscriptionUsageRoute',
-)(function* (stores: SettingsStores, modelId: string) {
-  return (
-    (yield* signedInSubscriptionUsageRoute(
-      stores,
-      modelId,
-      resolveCodexSubscriptionCapabilities,
-      isCodexSignedIn,
-    )) ??
-    (yield* signedInSubscriptionUsageRoute(
-      stores,
-      modelId,
-      resolveXaiSubscriptionCapabilities,
-      isXaiSignedIn,
-    ))
-  );
-});
-
-/** Whether the model currently routes through a signed-in ChatGPT subscription. */
-export const isCodexSubscriptionActive = Effect.fn(
-  'providerCapabilities.isCodexSubscriptionActive',
-)(function* (stores: SettingsStores, modelId: string) {
-  return (
-    (yield* signedInSubscriptionUsageRoute(
-      stores,
-      modelId,
-      resolveCodexSubscriptionCapabilities,
-      isCodexSignedIn,
-    )) !== undefined
-  );
-});
-
-/**
  * Resolve the active Grok-subscription provider profile, or null when the
  * subscription preference is off, OpenRouter is selected, or the model is not
  * xAI-eligible. All non-OpenRouter-only xAI registry models qualify; the OAuth
@@ -249,17 +165,3 @@ export const resolveXaiSubscriptionCapabilities = Effect.fn(
     };
   }),
 );
-
-/** Whether the model currently routes through a signed-in Grok subscription. */
-export const isXaiSubscriptionActive = Effect.fn(
-  'providerCapabilities.isXaiSubscriptionActive',
-)(function* (stores: SettingsStores, modelId: string) {
-  return (
-    (yield* signedInSubscriptionUsageRoute(
-      stores,
-      modelId,
-      resolveXaiSubscriptionCapabilities,
-      isXaiSignedIn,
-    )) !== undefined
-  );
-});

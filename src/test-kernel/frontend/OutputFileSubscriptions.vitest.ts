@@ -6,9 +6,10 @@ import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 import { aggregateId as qualifyAggregateId, type RunId } from '@shared/schemas';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { waitForCondition } from '@test/support/asyncTestUtils';
-import { FakeStateStore } from '@test/support/FakePlatform';
+import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 import type * as VSCode from 'vscode';
 
 const mocks = vi.hoisted(() => ({
@@ -111,7 +112,7 @@ vi.mock('vscode', () => {
 const { createTestSession, publishTestRunStart } =
   await import('@test/support/sessionTestUtils');
 const { emitAppSignal } = await import('@eventBus/AppSignals');
-const { registerInlineCriticism, setInlineCriticismEnabled } =
+const { registerInlineCriticism, syncInlineCriticism } =
   await import('@frontend/latex/inlineCriticism');
 const { registerFileDecorations } =
   await import('@frontend/ui/fileDecorations');
@@ -244,15 +245,20 @@ describe('output-file run fact frontend subscriptions', () => {
         yield* Effect.addFinalizer(() =>
           Effect.sync(() => disposeContext(context)),
         );
+        const { stores, globalState } = makeFakeSettingsStores();
+        const setEnabled = (enabled: boolean) =>
+          globalState
+            .update(GlobalStateKey.INLINE_CRITICISM_ENABLED, enabled)
+            .pipe(Effect.andThen(syncInlineCriticism()));
         yield* registerInlineCriticism(
           context as unknown as VSCode.ExtensionContext,
           testRuntime(),
           session,
-          new FakeStateStore(),
+          stores,
         );
 
         yield* Effect.promise(() => emitOutputFiles(session, outputPath));
-        yield* setInlineCriticismEnabled(true);
+        yield* setEnabled(true);
         expect(latestDiagnostics(outputPath)).toBe(undefined);
 
         yield* Effect.promise(() => emitOutputFiles(session, outputPath));
@@ -267,7 +273,7 @@ describe('output-file run fact frontend subscriptions', () => {
         );
         expect(latestDiagnostics(outputPath)).toHaveLength(1);
 
-        yield* setInlineCriticismEnabled(false);
+        yield* setEnabled(false);
         yield* Effect.promise(() => emitOutputFiles(session, outputPath));
         expect(latestDiagnostics(outputPath)).toBe(undefined);
       }),

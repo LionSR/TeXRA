@@ -5,7 +5,7 @@ import { afterEach, describe, expect, vi } from 'vitest';
 
 // Local imports
 import * as codexAuth from '@auth/codex';
-import * as providerCapabilities from '@model/providerCapabilities';
+import * as computeModelOptions from '@model/computeModelOptions';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import {
@@ -77,9 +77,9 @@ describe('shared setup capabilities', () => {
           }),
         );
         vi.spyOn(
-          providerCapabilities,
-          'isCodexSubscriptionActive',
-        ).mockReturnValue(Effect.succeed(false));
+          computeModelOptions,
+          'readProspectiveUsageRoute',
+        ).mockReturnValue(Effect.succeed(undefined));
 
         expect(yield* getChatGptSubscriptionStatus(hostStores())).toEqual({
           signedIn: true,

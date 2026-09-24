@@ -23,11 +23,11 @@ tab of the TeXRA view in VS Code.
 
 ## Opening the ProgressBoard
 
-The ProgressBoard shares the **TeXRA view** with the launcher. Select the TeXRA icon in the Secondary Side Bar, then switch to the **Sessions** tab (the launcher is the **New** tab).
+The ProgressBoard shares the **TeXRA view** with the New task screen. Select the TeXRA icon in the Secondary Side Bar; the **Sessions** button at the top left of the panel lists every session, and **+** starts a new task.
 
 - **Automatic**: It usually opens when you execute an agent.
-- **Manual**: Open it from the Command Palette (`Ctrl+Shift+P` or `Cmd+Shift+P`) with **TeXRA: Show Progress**, or press `Ctrl+Alt+P` (`Cmd+Option+P` on macOS).
-- **Editor tab**: Run **TeXRA: Open Progress in Editor Tab** to open the ProgressBoard as a full editor tab.
+- **Manual**: Open it from the Command Palette (`Ctrl+Shift+P` or `Cmd+Shift+P`) with **TeXRA: Show Sessions**, or press `Ctrl+Alt+P` (`Cmd+Option+P` on macOS). From the New task screen this opens the newest session.
+- **Editor tab**: Run **TeXRA: Open Sessions in Editor**, or pick **Open sessions in editor** from the panel's **⋯** menu, to open the ProgressBoard as a full editor tab.
 
 <GuideIntroHero />
 
@@ -122,7 +122,7 @@ When a run recorded a compile failure, **Run latexFixer** still appears under
 
 ### Memory
 
-Tool-use agents can remember things between sessions. When memory is enabled (toggle in the Dashboard's **Memory** tab), agents save useful notes about your project. You can browse, pin, and delete these notes from the **Memory** tab in the Dashboard, or by running **TeXRA: Show Memory** from the Command Palette. Read the [memory guide](./memory.md) for a full walkthrough.
+Tool-use agents can remember things between sessions. When memory is enabled (toggle in the Dashboard's **Memory** tab), agents save useful notes about your project. You can browse, pin, and delete these notes from the **Memory** tab in the Dashboard, reached with **TeXRA: Open Settings**. Read the [memory guide](./memory.md) for a full walkthrough.
 
 ### Log content
 

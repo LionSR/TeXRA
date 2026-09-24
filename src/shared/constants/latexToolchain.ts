@@ -341,32 +341,6 @@ export const TEXFMT_INSTALL_GUIDE: Guide = {
   win32: 'Install tex-fmt via Cargo:\n  cargo install tex-fmt',
 };
 
-export const WOLFRAM_INSTALL_GUIDE: Guide = {
-  darwin:
-    'TeXRA requires the "wolframscript" command-line tool.\n\n' +
-    'Install the free Wolfram Engine:\n' +
-    '  brew install --cask wolfram-engine\n\n' +
-    '"brew" requires Homebrew (https://brew.sh).\n' +
-    'Or download from:\n  https://www.wolfram.com/engine/\n\n' +
-    'Note: A Mathematica installation alone is not enough.\n' +
-    'You need WolframScript on your PATH. The Wolfram Engine\n' +
-    'includes it automatically.',
-  linux:
-    'TeXRA requires the "wolframscript" command-line tool.\n\n' +
-    'Install the free Wolfram Engine:\n' +
-    '  https://www.wolfram.com/engine/\n\n' +
-    'Note: A Mathematica installation alone is not enough.\n' +
-    'You need WolframScript on your PATH. The Wolfram Engine\n' +
-    'includes it automatically.',
-  win32:
-    'TeXRA requires the "wolframscript" command-line tool.\n\n' +
-    'Install the free Wolfram Engine:\n' +
-    '  https://www.wolfram.com/engine/\n\n' +
-    'Note: A Mathematica installation alone is not enough.\n' +
-    'You need WolframScript on your PATH. The Wolfram Engine\n' +
-    'includes it automatically.',
-};
-
 // ── Simple brew / apt / URL tools ──────────────────────────
 
 export const GHOSTSCRIPT_INSTALL_GUIDE = brewAptUrl(

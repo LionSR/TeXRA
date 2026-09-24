@@ -172,7 +172,7 @@ key is available.
 
 Using your own provider API key? TeXRA stores keys in VS Code's secret storage; they are never written to settings files.
 
-1.  **Open the Settings Dashboard**: Select the <wa-icon library="texra" name="settings-gear"></wa-icon> gear icon at the top of the TeXRA panel, or run **TeXRA: Show Settings Dashboard** from the Command Palette.
+1.  **Open the Settings Dashboard**: Select the <wa-icon library="texra" name="settings-gear"></wa-icon> gear icon in the TeXRA panel's title bar, or run **TeXRA: Open Settings** from the Command Palette.
 2.  **Go to the Providers & Models tab**: The **API configuration** table lists every provider with its current key status (`Set`, `Env`, or `Not set`).
 3.  **Set the key**: Find your provider's row and select the <wa-icon library="texra" name="key"></wa-icon> **Set API key** button, then paste your key. If you don't have a key yet, select the <wa-icon library="texra" name="arrow-up-right-from-square"></wa-icon> **Get** button to open the provider's API key page.
 

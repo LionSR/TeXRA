@@ -69,18 +69,9 @@ export class LogList extends LitElement {
     this.getOrCreateEntry(run.id).run = run;
   }
 
-  override render(): TemplateResult {
-    if (!this.run) {
-      return html`<task-group-list
-        role="log"
-        aria-label="Run activity"
-        aria-relevant="additions"
-        .hasRuns=${false}
-        .runStatus=${undefined}
-        .durableOutcome=${null}
-        .isToolUse=${false}
-      ></task-group-list>`;
-    }
+  override render(): TemplateResult | typeof nothing {
+    // The run bodies mount the transcript only for a run.
+    if (!this.run) return nothing;
     return html`${repeat(
       this.runCache.rentries() as Iterable<[RunId, CachedRun]>,
       ([id]) => id,
@@ -96,10 +87,8 @@ export class LogList extends LitElement {
             ?hidden=${id !== this.activeRunId}
             .runId=${id}
             .transcript=${run.transcript}
-            .hasRuns=${true}
             .runStatus=${run.status}
             .durableOutcome=${run.durableOutcome}
-            .isToolUse=${run.category === 'toolUse'}
             .expanded=${this.surface?.groups.get(id)}
             ?terminal=${terminal}
           ></task-group-list>

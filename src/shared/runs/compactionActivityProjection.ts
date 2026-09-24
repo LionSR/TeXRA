@@ -18,6 +18,13 @@ export interface CompactionActivityBlock {
   readonly startPosition: number;
   readonly startedAt: number;
   readonly finishedAt?: number;
+  /** What the compaction freed, from the `compaction` context-management
+   *  entry the run writes just before the activity completes. */
+  readonly freed?: {
+    readonly tokens: number;
+    readonly utilizationBefore: number;
+    readonly utilizationAfter: number;
+  };
 }
 
 export const COMPACTION_ACTIVITY_LABEL: Record<
@@ -78,6 +85,26 @@ export function applyCompactionActivityEntry(
     projection.maxAppliedSeqNo,
     entry.seqNo,
   );
+  if (
+    entry.messageType === MESSAGE_TYPES.CONTEXT_MANAGEMENT &&
+    entry.data.action === 'compaction'
+  ) {
+    // The figures belong to the one activity row: the latest running block.
+    const index = projection.blocks.findLastIndex(
+      (block) => block.status === 'running',
+    );
+    if (index === -1) return [];
+    const { data } = entry;
+    projection.blocks[index] = {
+      ...projection.blocks[index],
+      freed: {
+        tokens: data.tokensBefore - data.tokensAfter,
+        utilizationBefore: data.utilizationBefore,
+        utilizationAfter: data.utilizationAfter,
+      },
+    };
+    return [index];
+  }
   if (entry.messageType !== MESSAGE_TYPES.CONTEXT_COMPACTION_ACTIVITY) {
     interruptRunningBlocks(projection, entry, changedIndices);
     return [...changedIndices];

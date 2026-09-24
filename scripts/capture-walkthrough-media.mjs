@@ -169,22 +169,10 @@ function conversationWebview(
 }
 
 const webviewViews = [
-  conversationWebview('launcher-auto-extract', [
-    {
-      target: 'auto-extract-options',
-      outputPath: mediaPath('auto-extract-options.png'),
-    },
-  ]),
   conversationWebview('launcher-files', [
     {
       target: 'file-selection',
       outputPath: mediaPath('file-selection.png'),
-    },
-  ]),
-  conversationWebview('launcher-agent-model', [
-    {
-      target: 'agent-model-selection',
-      outputPath: mediaPath('agent-model-selection.png'),
     },
   ]),
   {
