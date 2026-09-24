@@ -792,7 +792,7 @@ const readFile = Effect.fn('ExecutionsTool.readFile')(function* (
   viewRange?: [number, number],
 ) {
   const displayPath = `/executions/${runId}/files/${filePath}`;
-  assertNoParentTraversal(filePath);
+  yield* assertNoParentTraversal(filePath);
   const fullPath = yield* findExistingRunStoragePathUnder(
     context.session.roots.storage,
     runId,

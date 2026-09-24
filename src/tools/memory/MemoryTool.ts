@@ -25,7 +25,7 @@ import {
   writeMemoryFile,
 } from '@tools/memory/memoryFileSystem';
 import { executed } from '@tools/core/result';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import {
   formatBytes,
   formatRelativeTime,
@@ -419,15 +419,21 @@ const strReplace = Effect.fn('MemoryTool.strReplace')(function* (
   if (readGate) return readGate;
 
   const { content, meta } = yield* readMemoryFile(resolvedPath);
-  const replacement = replaceLiteralMatches({
-    content,
-    search: oldStr,
-    replacement: newStr,
-    mode: 'unique',
-    notFoundError: () =>
-      `The provided old_str was not found in ${inputPath}. Ensure it matches the file content exactly.`,
-    multipleMatchesError: ({ lineNumbers }) =>
-      `old_str is not unique within ${inputPath} (found in lines ${lineNumbers.join(', ')}). Include more surrounding context to make it unique.`,
+  // A missing or ambiguous match is the model's error to correct: a failure,
+  // not a defect.
+  const replacement = yield* Effect.try({
+    try: () =>
+      replaceLiteralMatches({
+        content,
+        search: oldStr,
+        replacement: newStr,
+        mode: 'unique',
+        notFoundError: () =>
+          `The provided old_str was not found in ${inputPath}. Ensure it matches the file content exactly.`,
+        multipleMatchesError: ({ lineNumbers }) =>
+          `old_str is not unique within ${inputPath} (found in lines ${lineNumbers.join(', ')}). Include more surrounding context to make it unique.`,
+      }),
+    catch: ensureError,
   });
 
   const updated = replacement.content;
