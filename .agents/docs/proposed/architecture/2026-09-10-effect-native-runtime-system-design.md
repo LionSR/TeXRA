@@ -38,6 +38,66 @@ fold and resume rules, the [substrate decision][substrate] §6.1 owns C1 to C10,
 model][onerun] §3.10 owns the names. Where those documents disagree, §9 says which
 reading this design takes and why.
 
+## Update 2026-09-24: the tool registry and plugin compositions
+
+The tool side of this design (the §2.1 `ToolRegistry` row, §3.1, §3.2's last two
+rows, §4 row 2 and §5.3's `ToolRegistry` read) is implemented, in a different
+shape from the one proposed. The owner ruled on 2026-09-23 that the plugin
+architecture is the direction, that the SDK tool contract may change for it, and
+that LOC is not the gate for that work. The
+[plugin architecture note][plugins] owns how it works today; this section only
+records what landed against this proposal and where it departs. The rest of the
+note (§5.4 onward, §6, §7, §10's other slices) is still open and keeps its
+`proposed` status.
+
+What is implemented:
+
+- **Tools are data** (#13083). `defineTool` returns a plain tool object with an
+  `execute` function; `BaseTool` is deleted. §10 slice 2's `execute(): Effect`
+  holds, but as a field of a value, not a method on a subclass.
+- **One static plugin manifest** (#13084). `TOOL_PLUGINS` in
+  `src/tools/plugins.ts` assigns every tool to exactly one plugin with a stable
+  id, and drives the registry, the Tools dashboard, the probes and the toggles.
+  `externalToolDefs.ts` is deleted.
+- **Offered-tool record** (#13088, hash refined by #13111). A tool-use run
+  records `offeredTools` and `toolsetHash` on its snapshot state
+  (`src/shared/schemas/runFlowState.ts`) through the one ledger writer; a
+  resume offers recorded ∩ available and names every missing tool. This adds a
+  row to §6.1's "state needed to resume" that the proposal did not list.
+- **Process `ToolRegistry` service** (#13089). `ToolRegistry`
+  (`src/tools/toolTable.ts`) holds a plugin table (plugin id → tool name →
+  tool), provided by `installProcessRuntime`. The lazy singleton and the
+  injection array (`toolInjection.ts`) are deleted; injections are the
+  manifest's `injectedWhen` data. A run's toolset is built from a `Composition`
+  value (`src/tools/composition.ts`) keyed by `compositionHash`.
+- **`Compositions` `LayerMap`** (#13090). `src/tools/compositions.ts`. A run
+  pins one composition for its lifetime in its layer scope, a delegated child
+  joins its parent's key, and a plugin may own a layer that lives as long as
+  the compositions that include it.
+
+What changed against the proposal:
+
+- §4 row 2 proposed `ToolRegistry` as `{ base, injections }` with a run-scoped
+  overlay merged over `base` (§5.3's `overlayRegistry(base, overlay)`). The
+  offered registry is instead rebuilt from the pinned composition's plugin
+  list, never narrowed or overlaid in place; only run-local tools such as the
+  structured-output terminal tool are added per run
+  (`src/agent/runtime/agentToolResolution.ts`).
+- §2's fiber tree has three scopes above the call. There is now a fourth
+  lifetime between process and run: a `Compositions` entry, reference-counted
+  by the runs that pinned it. The rulings ledger records it as an amendment to
+  the lifetimes ruling and a new ruling
+  ([rulings ledger][ledger], "A run pins one composition ...").
+- Plugin resources reach tool calls through the pinned entry's services
+  (`src/agent/runtime/loop/toolUseDispatch.ts`), not through new tags in the run
+  context.
+- The Lean server pool stays a process service rather than moving into a plugin
+  layer (#13090 records why).
+- Tool contributions are no longer only the built-in table: MCP servers are
+  loadable plugins (#13092), and model providers (#13094), CLI slash commands
+  (#13093) and skill sources (#13114) are contribution lists keyed by plugin
+  id.
+
 ## 1. Verified starting point (`main` at `047c88cf6e`, 2026-09-11)
 
 Counts are direct references measured on this commit unless stated; "was" gives the
@@ -1125,3 +1185,5 @@ Everything the surveys found duplicated, and the one thing it becomes. Rows mark
 [findings]: ../../archived/architecture/2026-09-08-effect-4-interface-findings.md
 [loop]: ../../archived/architecture/2026-09-06-agent-loop-architecture-study.md
 [lease]: ./2026-09-10-execution-ownership-lane-and-lease.md
+[plugins]: ../../implemented/architecture/2026-09-24-plugin-architecture.md
+[ledger]: ../../implemented/architecture/2026-08-01-architecture-rulings-ledger.md
