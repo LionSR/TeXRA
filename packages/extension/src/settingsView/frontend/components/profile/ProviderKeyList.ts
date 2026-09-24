@@ -9,7 +9,7 @@ import type {
   ProviderKeyStatus,
   ProviderSetting,
 } from '@shared/settingsView/settingsViewMessages';
-import { PROVIDER_STATE_ENTRIES } from '@shared/constants/providers';
+import { findModelProviderPlugin } from '@shared/constants/modelProviderPlugins';
 import { createEvent } from '@shared/utils/events';
 import { commonViewStyles, designTokens } from '@ui/styles';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
@@ -108,8 +108,8 @@ export class ProviderKeyList extends LitElement {
               placeholder="Leave blank for default"
               @change=${(e: Event) => {
                 const value = (e.target as WaInput).value?.trim() ?? '';
-                const key = PROVIDER_STATE_ENTRIES.find(
-                  ({ id }) => id === entry.provider,
+                const key = findModelProviderPlugin(
+                  entry.provider,
                 )?.endpointKey;
                 if (key) postStateSetting(key, value);
               }}
