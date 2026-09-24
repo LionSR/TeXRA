@@ -45,8 +45,17 @@ export interface TeamRunPlan<T extends TeamCatalogAgent = TeamCatalogAgent> {
   readonly missingAgents: ByCategory<readonly string[]>;
 }
 
+/**
+ * The roster's member identity rule (`getCategoryAgent` in production): a bare
+ * name matches within the category, a `source:name` key matches exactly.
+ */
+type TeamAgentResolver<T> = (
+  category: AgentCategory,
+  identifier: string,
+) => T | undefined;
+
 interface TeamRunOptions<T extends TeamCatalogAgent> {
-  readonly agents: ByCategory<readonly T[]>;
+  readonly resolveAgent: TeamAgentResolver<T>;
   readonly agentOverride?: string;
 }
 
@@ -56,17 +65,15 @@ export function planTeamRun<T extends TeamCatalogAgent>(
 ): TeamRunPlan<T> {
   const resolved = byCategory((category) =>
     resolvePresetAgents(preset.agents[category], (name) =>
-      options.agents[category].find((agent) =>
-        agentMatchesIdentifier(agent, name),
-      ),
+      options.resolveAgent(category, name),
     ),
   );
-  const override = resolveAgentOverride(
-    options.agentOverride,
-    options.agents.toolUse,
-  );
+  const overrideQuery = options.agentOverride?.trim();
+  const overrideAgent = overrideQuery
+    ? options.resolveAgent(AgentCategory.ToolUse, overrideQuery)
+    : undefined;
   const rootAgent =
-    override.agent ??
+    overrideAgent ??
     selectTeamRootAgent(resolved.toolUse.resolved, {
       presetOrder: preset.agents.toolUse,
       presetSource: preset.source,
@@ -78,7 +85,8 @@ export function planTeamRun<T extends TeamCatalogAgent>(
   return {
     preset,
     rootAgent,
-    missingAgentOverride: override.missing,
+    missingAgentOverride:
+      overrideQuery && !overrideAgent ? overrideQuery : undefined,
     agentKeys: {
       workflow: resolved.workflow.resolved.map(agentKeyOf),
       toolUse: toolUseAgents.map(agentKeyOf),
@@ -217,7 +225,7 @@ function buildTeamOptions(plans: readonly TeamRunPlan[]): TeamOptionData[] {
 export function loadTeamOptions<T extends TeamCatalogAgent, R = never>(ports: {
   customPresetsRaw: unknown;
   ensureCatalogLoaded: () => Effect.Effect<void, Error, R>;
-  getAgents: (category: AgentCategory) => readonly T[];
+  resolveAgent: TeamAgentResolver<T>;
   canAccessRemoteCatalog: () => Effect.Effect<boolean>;
   refreshRemote: () => Effect.Effect<void, Error, R>;
 }): Effect.Effect<TeamOptionData[], Error, R> {
@@ -225,7 +233,7 @@ export function loadTeamOptions<T extends TeamCatalogAgent, R = never>(ports: {
     yield* ports.ensureCatalogLoaded();
     const presets = launchableTeamPresets(ports.customPresetsRaw);
     const planCurrent = () =>
-      planTeamRuns(presets, currentCatalogOptions(ports.getAgents));
+      planTeamRuns(presets, { resolveAgent: ports.resolveAgent });
     const result = yield* refreshRemoteCatalogForGaps(
       planCurrent(),
       (plans) => plans.some(teamPlanHasGaps),
@@ -262,7 +270,7 @@ export function resolveTeamLaunch<T extends TeamCatalogAgent, R = never>(args: {
   teamId: string;
   customPresetsRaw: unknown;
   ensureCatalogLoaded: () => Effect.Effect<void, Error, R>;
-  getAgents: (category: AgentCategory) => readonly T[];
+  resolveAgent: TeamAgentResolver<T>;
   canAccessRemoteCatalog: () => Effect.Effect<boolean>;
   refreshRemote: () => Effect.Effect<void, Error, R>;
   choose: (
@@ -280,7 +288,7 @@ export function resolveTeamLaunch<T extends TeamCatalogAgent, R = never>(args: {
 
     yield* args.ensureCatalogLoaded();
     const planCurrent = () =>
-      planTeamRun(preset, currentCatalogOptions(args.getAgents));
+      planTeamRun(preset, { resolveAgent: args.resolveAgent });
     const refreshed = yield* refreshRemoteCatalogForGaps(
       planCurrent(),
       teamPlanHasGaps,
@@ -432,26 +440,9 @@ export function formatPartialTeamLaunchMessage(
   return `This team will run with available members only. Unavailable members: ${missingNames.join(', ')}.`;
 }
 
-/** Snapshot the current agent catalog into run options for (re)planning. */
-function currentCatalogOptions<T extends TeamCatalogAgent>(
-  getAgents: (category: AgentCategory) => readonly T[],
-): TeamRunOptions<T> {
-  return { agents: byCategory((category) => getAgents(category)) };
-}
-
 /** Missing workflow and tool-use member names, in preset-declaration order. */
 function missingMemberNames(plan: TeamRunPlan): string[] {
   return AGENT_CATEGORIES.flatMap((category) => plan.missingAgents[category]);
-}
-
-function resolveAgentOverride<T extends TeamCatalogAgent>(
-  override: string | undefined,
-  agents: readonly T[],
-): { agent?: T; missing?: string } {
-  const query = override?.trim();
-  if (!query) return {};
-  const agent = agents.find((entry) => agentMatchesIdentifier(entry, query));
-  return agent ? { agent } : { missing: query };
 }
 
 function selectTeamRootAgent<T extends TeamCatalogAgent>(

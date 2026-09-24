@@ -18,7 +18,11 @@ import {
   teamPlanHasGaps,
 } from '@common/teams/TeamPlan';
 import { findTeamPreset, teamPresets } from '@common/teams/TeamPresets';
-import { AgentCategory } from '@shared/schemas';
+import {
+  AgentCategory,
+  agentMatchesIdentifier,
+  type ByCategory,
+} from '@shared/schemas';
 
 function agent(
   name: string,
@@ -43,17 +47,19 @@ function findPreset(id: string) {
 // `CliMultiAgentPresetRunPlan` instead of the unpinned `TeamCatalogAgent` bound.
 const planTeamRunForAgentEntry = planTeamRun<AgentEntry>;
 type TeamPreset = Parameters<typeof planTeamRunForAgentEntry>[0];
-type TeamRunOptions = Parameters<typeof planTeamRunForAgentEntry>[1];
 
 function planRun(
   preset: TeamPreset,
-  options: Partial<TeamRunOptions['agents']> & {
+  options: Partial<ByCategory<readonly AgentEntry[]>> & {
     agentOverride?: string;
   } = {},
 ) {
   const { agentOverride, ...agents } = options;
   return planTeamRunForAgentEntry(preset, {
-    agents: { workflow: [], toolUse: [], ...agents },
+    resolveAgent: (category, identifier) =>
+      agents[category]?.find((entry) =>
+        agentMatchesIdentifier(entry, identifier),
+      ),
     agentOverride,
   });
 }

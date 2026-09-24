@@ -281,10 +281,7 @@ describe('CLI multi-agent run command', () => {
     mocks.planTeamRuns.mockImplementation((presets) =>
       presets.map((preset: unknown) =>
         mocks.planTeamRun(preset, {
-          agents: {
-            workflow: agentCatalogMock.getAgentsByCategory('workflow'),
-            toolUse: agentCatalogMock.getAgentsByCategory('toolUse'),
-          },
+          resolveAgent: agentCatalogMock.getCategoryAgent,
         }),
       ),
     );

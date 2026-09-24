@@ -1,6 +1,6 @@
 import { Effect } from 'effect';
 
-import { getAgentsByCategory, loadAgents, refresh } from '@agent/index';
+import { getCategoryAgent, loadAgents, refresh } from '@agent/index';
 import { supabaseAuthenticated } from '@auth/SupabaseAuth';
 import {
   planTeamRun,
@@ -10,7 +10,6 @@ import {
 } from '@common/teams/TeamPlan';
 import { findTeamPreset, type TeamPreset } from '@common/teams/TeamPresets';
 import type { StateStore } from '@platform/interfaces';
-import { byCategory } from '@shared/schemas';
 
 import { missingMultiAgentPresetMessage } from './agents';
 import { CliUsageError } from './cliContext';
@@ -41,7 +40,7 @@ function planCurrentMultiAgentRun(
   init: MultiAgentRunPlanInit,
 ): CliMultiAgentPresetRunPlan {
   return planTeamRun(preset, {
-    agents: byCategory((category) => getAgentsByCategory(category)),
+    resolveAgent: getCategoryAgent,
     agentOverride: init.agent,
   });
 }
@@ -49,9 +48,7 @@ function planCurrentMultiAgentRun(
 function planLoadedCliMultiAgentPresets(
   presets: readonly TeamPreset[],
 ): CliMultiAgentPresetRunPlan[] {
-  return planTeamRuns(presets, {
-    agents: byCategory((category) => getAgentsByCategory(category)),
-  });
+  return planTeamRuns(presets, { resolveAgent: getCategoryAgent });
 }
 
 /**

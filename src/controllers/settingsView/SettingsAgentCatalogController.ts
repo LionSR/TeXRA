@@ -15,7 +15,7 @@ import type { StateStore } from '@platform/interfaces';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
   AGENT_CATEGORIES,
-  agentKey,
+  agentName,
   agentKeyOf,
   agentMatchesIdentifier,
   byCategory,
@@ -128,18 +128,14 @@ export class SettingsAgentCatalogController implements TeamRosterCatalog {
         texraHostedAgents: [],
         source: 'custom',
       };
-      const catalogAgents = this.deps.getAgents('toolUse');
+      // Only the tool-use root matters here, so workflow members stay
+      // unresolved.
       return planTeamRun(preset, {
-        agents: {
-          workflow: [],
-          toolUse: [
-            ...catalogAgents,
-            ...this.synthesizedBuiltInRootEntries(
-              preset.agents.toolUse,
-              catalogAgents,
-            ),
-          ],
-        },
+        resolveAgent: (category, identifier) =>
+          category === 'toolUse'
+            ? (this.deps.roster.resolveAgent(category, identifier) ??
+              builtInRootStandIn(identifier))
+            : undefined,
       }).rootAgent?.name;
     });
   }
@@ -297,37 +293,25 @@ export class SettingsAgentCatalogController implements TeamRosterCatalog {
         enabledKeys?.some((key) => agentMatchesIdentifier(entry, key)) ?? true,
     };
   }
+}
 
-  /**
-   * Delegation-capable stand-ins for built-in team roots the preset lists but
-   * the catalog has not loaded yet (pre-sign-in or pre-remote-fetch), so the
-   * preview can plan with them without inventing phantom catalog members.
-   */
-  private synthesizedBuiltInRootEntries(
-    toolUseAgents: readonly string[],
-    catalogAgents: readonly SettingsAgentCatalogEntry[],
-  ): SettingsAgentCatalogEntry[] {
-    const knownBuiltInRoots = new Set<string>(BUILTIN_TEAM_ROOT_AGENT_NAMES);
-    return [...knownBuiltInRoots]
-      .filter(
-        (name) =>
-          toolUseAgents.some((identifier) =>
-            agentMatchesIdentifier(
-              { source: 'builtInToolUse', name },
-              identifier,
-            ),
-          ) &&
-          !catalogAgents.some(
-            (agent) =>
-              agentMatchesIdentifier(agent, name) ||
-              agentMatchesIdentifier(agent, agentKey('builtInToolUse', name)),
-          ),
-      )
-      .map((name): SettingsAgentCatalogEntry => ({
-        name,
-        source: 'builtInToolUse',
-        category: 'toolUse',
-        tools: ['delegate_agent'],
-      }));
-  }
+/**
+ * A delegation-capable stand-in for a built-in team root the preset lists but
+ * the catalog has not loaded yet (pre-sign-in or pre-remote-fetch), so the
+ * preview can plan with it without inventing phantom catalog members.
+ */
+function builtInRootStandIn(
+  identifier: string,
+): SettingsAgentCatalogEntry | undefined {
+  const standIn: SettingsAgentCatalogEntry = {
+    name: agentName(identifier),
+    source: 'builtInToolUse',
+    category: 'toolUse',
+    tools: ['delegate_agent'],
+  };
+  return (BUILTIN_TEAM_ROOT_AGENT_NAMES as readonly string[]).includes(
+    standIn.name,
+  ) && agentMatchesIdentifier(standIn, identifier)
+    ? standIn
+    : undefined;
 }

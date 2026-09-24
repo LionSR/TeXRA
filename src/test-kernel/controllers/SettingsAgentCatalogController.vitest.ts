@@ -313,19 +313,17 @@ describe('SettingsAgentCatalogController', () => {
         assert.equal(
           preview,
           planTeamRun(mathematician, {
-            agents: {
-              workflow: [],
-              toolUse: [
+            resolveAgent: (_category, identifier) =>
+              [
                 delegatingLean,
                 // Stand-in for the controller's synthesized built-in root entry.
                 {
-                  source: 'builtInToolUse',
+                  source: 'builtInToolUse' as const,
                   name: 'orchestrator',
-                  category: 'toolUse',
+                  category: 'toolUse' as const,
                   tools: ['delegate_agent'],
                 },
-              ],
-            },
+              ].find((entry) => agentMatchesIdentifier(entry, identifier)),
           }).rootAgent?.name,
         );
         // The same member list previewed ad-hoc keeps custom semantics and

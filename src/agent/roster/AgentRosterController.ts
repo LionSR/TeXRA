@@ -56,7 +56,7 @@ export interface AgentRosterControllerDeps<
    * The controller applies no fallback around this, so an implementation owns
    * the whole contract: match a bare name against the category's agents, match
    * a source-qualified key exactly, and return nothing for an entry outside
-   * `category`. `getRosterAgent` is the production implementation.
+   * `category`. `getCategoryAgent` is the production implementation.
    */
   readonly resolveAgent: (
     category: AgentCategory,

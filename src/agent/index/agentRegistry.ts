@@ -316,23 +316,6 @@ export function invalidateRemoteAgentsAfterSignOut(): Effect.Effect<
 // KEY HELPERS
 // =============================================================================
 
-/**
- * Resolve one roster identifier without collapsing an exact source key.
- * Module-local: the roster controller it exists for is built here, so no
- * caller outside this file needs the resolution rule on its own.
- */
-function getRosterAgent(
-  category: AgentCategoryType,
-  identifier: string,
-): AgentEntry | undefined {
-  const name = agentName(identifier);
-  const entry =
-    identifier === name
-      ? getCategoryAgent(category, identifier)
-      : getAgent(identifier);
-  return entry?.category === category ? entry : undefined;
-}
-
 // =============================================================================
 // VISIBLE AGENTS (for dropdowns)
 // =============================================================================
@@ -366,7 +349,7 @@ export function createWorkspaceAgentRosterController(
     getAgents,
     getPresets: () =>
       workspaceState.get<unknown>(WorkspaceStateKey.CUSTOM_AGENT_PRESETS),
-    resolveAgent: getRosterAgent,
+    resolveAgent: getCategoryAgent,
   });
 }
 
@@ -405,7 +388,7 @@ export function resolveDelegationScopeAgents(
     // entry contribute it once.
     const byKey = new Map<string, AgentEntry>();
     for (const key of keys) {
-      const entry = getRosterAgent(category, key);
+      const entry = getCategoryAgent(category, key);
       if (entry) byKey.set(agentKeyOf(entry), entry);
     }
     return [...byKey.values()];
@@ -442,12 +425,22 @@ export function getVisibleAgent(
   });
 }
 
-/** Resolve an identifier to an agent in a category, ignoring visibility. */
+/**
+ * Resolve an identifier to an agent in a category, ignoring visibility: the
+ * one member identity rule the roster, team plans and launch share. A bare
+ * name matches the category's deduplicated entries; a `source:name` key
+ * matches its exact entry, even one a higher-priority source shadows. An
+ * entry outside `category` is no match.
+ */
 export function getCategoryAgent(
-  category: AgentCategory,
+  category: AgentCategoryType,
   identifier: string,
 ): AgentEntry | undefined {
-  return findAgentByIdentifier(getAgentsByCategory(category), identifier);
+  const entry =
+    identifier === agentName(identifier)
+      ? findAgentByIdentifier(getAgentsByCategory(category), identifier)
+      : cache.get(identifier);
+  return entry?.category === category ? entry : undefined;
 }
 
 /** Resolve a launch by pinned source, visible roster, then full category.
