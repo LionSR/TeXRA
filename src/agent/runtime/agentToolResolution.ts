@@ -11,7 +11,10 @@
  * switches say now. The offered registry is rebuilt from the pinned
  * composition's table, in this order:
  *   1. The declared tools, in declaration order, each with the table's own
- *      contract (description, parameter schema). A tool the host cannot run
+ *      contract (description, parameter schema). An MCP server's tools
+ *      (`mcp__<server>__<tool>`, or `mcp__<server>__*` for all it lists)
+ *      come from the loaded plugin the declaration names; a server that is
+ *      not configured or failed to start is reported. A tool the host cannot run
  *      (its `unavailableHosts`; every such tool when no host was named) or
  *      that is approval-gated while approval prompts are unavailable is
  *      withheld, then one whose plugin is off.
@@ -48,6 +51,7 @@ import type { AgentDelegationScope, ToolDefinition } from '@shared/schemas';
 import { hasDelegationTool } from '@shared/constants/delegationTools';
 import { compositionFor, compositionHash } from '@tools/composition';
 import { CompositionKey, Compositions } from '@tools/compositions';
+import { mcpPluginId, mcpServerOfToolName } from '@tools/mcp/mcpServer';
 import { findToolPlugin } from '@tools/plugins';
 import { getUnavailableToolNamesCached } from '@tools/toolAvailability';
 import { ToolRegistry } from '@tools/toolTable';
@@ -155,6 +159,17 @@ export const resolveAgentTools = Effect.fn('resolveAgentTools')(function* ({
       }
     }
   }
+  const declared = (Array.isArray(tools) ? tools : []).map((toolConfig) =>
+    typeof toolConfig === 'string' ? toolConfig : toolConfig.name,
+  );
+  const compositions = yield* Compositions;
+  // The loaded plugins (MCP servers) the declared tools name, read fresh; a
+  // child joins its parent's instead. The read's problems (an invalid
+  // entry, an unreadable file) reach the run's transcript.
+  const loaded = inherited
+    ? { plugins: [], warnings: [] }
+    : yield* compositions.load(declared);
+  for (const warning of loaded.warnings) logger.warn(warning);
   // A child reads no switches or probes: its plugins are its parent's pin.
   const composition = compositionFor({
     table,
@@ -164,16 +179,15 @@ export const resolveAgentTools = Effect.fn('resolveAgentTools')(function* ({
     unavailableTools: inherited
       ? new Set<string>()
       : getUnavailableToolNamesCached(workspaceRoot),
+    loaded: loaded.plugins,
     host,
     approvalPromptsUnavailable,
-    tools: (Array.isArray(tools) ? tools : []).map((toolConfig) =>
-      typeof toolConfig === 'string' ? toolConfig : toolConfig.name,
-    ),
+    tools: declared,
     injected,
   });
   // A child pins its parent's key, so its plugins are the parent's; its
   // declared tools, injections and gates (below) are its own.
-  const pinned = yield* (yield* Compositions).pin(
+  const pinned = yield* compositions.pin(
     inherited ?? new CompositionKey(compositionHash(composition), composition),
   );
   // The tools the composition may offer: its pinned table.
@@ -183,7 +197,7 @@ export const resolveAgentTools = Effect.fn('resolveAgentTools')(function* ({
 
   /** The host and approval gates, shared by declared and injected tools. */
   const passesRuntimeGates = (name: string): boolean => {
-    const tool = table.get(name);
+    const tool = enabled.get(name) ?? table.get(name);
     const excluded = tool?.unavailableHosts ?? [];
     if (excluded.length > 0 && host === undefined) {
       logger.warn(
@@ -195,17 +209,50 @@ export const resolveAgentTools = Effect.fn('resolveAgentTools')(function* ({
     return !approvalPromptsUnavailable || !tool?.requiresApproval;
   };
 
+  // A declared MCP name reaches its server's plugin: `mcp__<server>__*` is
+  // every tool the server listed, in its order. A server the run names but
+  // could not get (not configured, or failed to start) is reported once.
+  const reportedServers = new Set<string>();
+  const reportServer = (server: string, message: string): void => {
+    if (reportedServers.has(server)) return;
+    reportedServers.add(server);
+    logger.warn(message);
+  };
+  const expandDeclared = (name: string): readonly string[] => {
+    const server = mcpServerOfToolName(name);
+    if (server === undefined) return [name];
+    const id = mcpPluginId(server);
+    const serverTools = pinned.table.plugins.get(id);
+    if (!serverTools) {
+      reportServer(
+        server,
+        `MCP server "${server}" is not configured in ${inherited ? "this run's parent" : 'the MCP config'}; its tools are not offered.`,
+      );
+      return [];
+    }
+    const failure = pinned.failures.get(id);
+    if (failure !== undefined) {
+      reportServer(server, `${failure}; its tools are not offered.`);
+      return [];
+    }
+    if (name.endsWith('__*')) return [...serverTools.keys()];
+    if (!serverTools.has(name))
+      logger.warn(`MCP server "${server}" lists no tool named ${name}.`);
+    return [name];
+  };
+
   const resolved: ToolDefinition[] = [];
   const resolvedNames = new Set<string>();
-  for (const name of composition.tools) {
+  for (const name of composition.tools.flatMap(expandDeclared)) {
+    if (resolvedNames.has(name)) continue;
     if (!passesRuntimeGates(name)) continue;
     const tool = enabled.get(name);
     if (!tool) {
       // A declared name with no registration is a configuration error (typo,
       // or a tool retired from the table) — dropping it silently would strip
       // the agent's capability with no trace. One whose plugin is off is
-      // withheld quietly.
-      if (!table.get(name)) {
+      // withheld quietly; an MCP name was reported above.
+      if (!table.get(name) && mcpServerOfToolName(name) === undefined) {
         logger.warn(`Declared tool not found in registry: ${name}`);
       }
       continue;

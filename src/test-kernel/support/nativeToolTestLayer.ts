@@ -25,12 +25,14 @@ export const emptyPinnedComposition: PinnedComposition = {
   key: new CompositionKey('0'.repeat(64), {
     plugins: [],
     disabled: [],
+    loaded: [],
     host: null,
     approvalPromptsUnavailable: false,
     tools: [],
     injected: [],
   }),
   table: toolTable({}),
+  failures: new Map(),
   services: Context.empty(),
 };
 

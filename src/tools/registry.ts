@@ -10,6 +10,7 @@ import {
   type CanonicalDelegationToolName,
 } from '@shared/constants/delegationTools';
 import { toolTableLayer } from '@tools/compositions';
+import { mcpPluginLoader, USER_MCP_CONFIG_PATH } from '@tools/mcp/mcpConfig';
 import type {
   PluginToolName,
   ToolPluginEntry,
@@ -224,10 +225,14 @@ type _CanonicalDelegationNamesAreRegistered = AssertNever<
 export const TOOL_TABLE = toolTable(PLUGIN_TOOLS, PLUGIN_LAYERS);
 
 /**
- * The process's `ToolRegistry` and the `Compositions` built over it, which
+ * The process's `ToolRegistry` and the `Compositions` built over it and the
+ * MCP servers of the user's `~/.texra/mcp.json`, which
  * `installProcessRuntime` provides.
  */
-export const toolRegistryLayer = toolTableLayer(TOOL_TABLE);
+export const toolRegistryLayer = toolTableLayer(
+  TOOL_TABLE,
+  mcpPluginLoader(USER_MCP_CONFIG_PATH),
+);
 
 /** Whether a registered tool declares itself unavailable on a product host. */
 export function isToolUnavailableOnHost(name: string, host: ToolHost): boolean {

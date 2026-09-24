@@ -6,7 +6,7 @@
  * built over it. This module imports no tool, manifest or plugin layer, so
  * a reader of the tag loads none of them.
  */
-import { Context, type Layer } from 'effect';
+import { Context, type Effect, type Layer, type Scope } from 'effect';
 
 import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
 
@@ -20,6 +20,47 @@ import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
  * services into the tool contract's requirements.
  */
 export type PluginLayer = Layer.Layer<never>;
+
+/** What a loaded plugin's resources answer once up: its tools, or why none. */
+export interface LoadedPluginTools {
+  readonly tools: ReadonlyMap<string, ITool>;
+  /** Why the plugin offers no tools (its server failed to start). */
+  readonly failure?: string;
+}
+
+/**
+ * A plugin read from user configuration rather than the manifest (an MCP
+ * server): its tools are known only once its resources are up, so the
+ * composition that includes it records its `spec`, and the entry built for
+ * that composition acquires it (`@tools/compositions`).
+ */
+export interface LoadedPlugin {
+  /** Stable id, e.g. `mcp:<server>`. */
+  readonly id: string;
+  /** What the composition records and hashes. */
+  readonly spec: Readonly<Record<string, unknown>>;
+  /**
+   * A keyed digest of what the spec leaves out (an MCP server's env values),
+   * which the composition records beside it: a changed revision is a new
+   * composition, built with fresh resources beside the open ones. Keyed
+   * per process, so it reveals nothing about the values it digests.
+   */
+  readonly revision: string;
+  /**
+   * Bring the resources up in the given scope and answer the tools. Never
+   * fails: a plugin that cannot start answers its `failure` instead.
+   */
+  readonly acquire: Effect.Effect<LoadedPluginTools, never, Scope.Scope>;
+}
+
+/**
+ * The loaded plugins a run's declared tool names reach, read fresh at each
+ * resolution, and the configuration problems the read found.
+ */
+export type PluginLoader = (declared: readonly string[]) => Effect.Effect<{
+  readonly plugins: readonly LoadedPlugin[];
+  readonly warnings: readonly string[];
+}>;
 
 /** Every plugin's tools, and every tool by name. */
 export interface ToolTable {
