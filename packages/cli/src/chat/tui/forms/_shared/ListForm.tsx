@@ -2,7 +2,7 @@ import { Box, Text } from 'ink';
 import { useEffect, useRef, type ReactNode } from 'react';
 
 import { COLOR_WARNING } from '@cli/tui/ui/colors';
-import { KeyHints } from '@cli/tui/ui/KeyHints';
+import { KeyHints, type KeyHint } from '@cli/tui/ui/KeyHints';
 import {
   Select,
   selectIndexForHotkeyInput,
@@ -60,6 +60,8 @@ interface ListFormProps<T> {
   readonly emptyShowCloseHint?: boolean;
   readonly selectMarginTop?: number;
   readonly action: string;
+  /** Form-specific keys shown between the select and `Esc` hints. */
+  readonly extraHints?: readonly KeyHint[];
   readonly escapeAction?: string;
   readonly onSelect: (value: T) => void;
   readonly onCancel: () => void;
@@ -137,6 +139,7 @@ export function ListForm<T>(props: ListFormProps<T>): React.JSX.Element {
           hints={[
             { key: '↑/↓', action: 'navigate' },
             { key: shortcut, action: props.action },
+            ...(props.extraHints ?? []),
             { key: 'Esc', action: props.escapeAction ?? 'close' },
           ]}
           confirmCancel={false}

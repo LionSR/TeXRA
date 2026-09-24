@@ -8,9 +8,9 @@ import type { ProcessRuntime } from '@platform/processRuntime';
 import { GITHUB_TOKEN_CREATE_URL } from '@tools/github/githubAuth';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-import { CredentialEntryForm } from './ApiKeyEntryForm';
 import { formatStatusViewSummary } from './_shared/formatStatusViewSummary';
 import { ListForm } from './_shared/ListForm';
+import { TextEntryForm } from './_shared/TextEntryForm';
 import { runFormWrite } from './_shared/useAsyncListForm';
 import type { Effect } from 'effect';
 
@@ -109,11 +109,11 @@ export function GitHubTokenForm(
 
   if (entering) {
     return (
-      <CredentialEntryForm
+      <TextEntryForm
         title="Set GitHub token"
         helper={<Text dimColor>Get a token: {GITHUB_TOKEN_CREATE_URL}</Text>}
         placeholder="enter your GitHub token (hidden)"
-        savedHint="Stored in TeXRA secrets on Enter — or set GH_TOKEN / GITHUB_TOKEN."
+        hint="Stored in TeXRA secrets on Enter — or set GH_TOKEN / GITHUB_TOKEN."
         error={error}
         saving={saving}
         onCancel={() => {

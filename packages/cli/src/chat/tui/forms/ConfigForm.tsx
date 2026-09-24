@@ -7,15 +7,11 @@
 // Reads/writes go through the host-aware `settingsAccess` accessor so the same
 // catalog drives the extension settings view and this panel without drift.
 
-import { Box, Text, useInput } from 'ink';
+import { Text, useInput } from 'ink';
 import { useState } from 'react';
 
 import { isCtrlInput, type ReturnKeyInput } from '@cli/tui/inputKeys';
-import { computeSelectWindowSize } from '@cli/tui/selectWindow';
-import { KeyHints } from '@cli/tui/ui/KeyHints';
-import { Select, type SelectItem } from '@cli/tui/ui/Select';
-import { COLOR_ERROR } from '@cli/tui/ui/colors';
-import { CROSS, POINTER } from '@cli/tui/ui/glyphs';
+import type { SelectItem } from '@cli/tui/ui/Select';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import {
   settingEnumOptions,
@@ -27,12 +23,13 @@ import {
 import { stripPrefix } from '@shared/config/configKeys';
 import { settingDefault, settingSlot } from '@shared/config/settingsAccess';
 
-import { BaseTextInput } from '../input/BaseTextInput';
 import {
   buildConfigCategoryItems,
   configCategoryLabel,
 } from './configCategories';
 import { FormFrame } from './_shared/FormFrame';
+import { ListForm } from './_shared/ListForm';
+import { TextEntryForm } from './_shared/TextEntryForm';
 import { runFormWrite } from './_shared/useAsyncListForm';
 import type { Effect } from 'effect';
 
@@ -194,66 +191,6 @@ type ConfigFormMode =
       readonly category: string;
     };
 
-// Every /config layout wraps one Select in the same chrome: two FormFrame
-// border rows, the title, the KeyHints margin, and the hints row.
-const SELECT_CHROME_ROWS = 5;
-
-/** Inline text editor for a string/number setting (its own input buffer). */
-function ConfigTextEditor(props: {
-  readonly entry: SurfacedSettingEntry;
-  readonly initialValue: string;
-  readonly isNumber: boolean;
-  readonly onSubmit: (raw: string) => string | undefined;
-  readonly onReset: () => void;
-  readonly onCancel: () => void;
-}): React.JSX.Element {
-  const [buffer, setBuffer] = useState(props.initialValue);
-  const [error, setError] = useState<string>();
-  // BaseTextInput owns Enter (onSubmit) and ignores Escape, so handle Escape
-  // here to back out to the list.
-  useInput((input, key) => {
-    if (isConfigResetInput(input, key)) props.onReset();
-    if (key.escape) props.onCancel();
-  });
-  return (
-    <FormFrame
-      title={`/config · ${settingDisplayName(props.entry)}`}
-      showCloseHint={false}
-    >
-      <Box>
-        <Text>{`${POINTER} `}</Text>
-        <BaseTextInput
-          value={buffer}
-          placeholder={props.isNumber ? 'enter a number' : 'enter a value'}
-          onChange={(value) => {
-            setBuffer(value);
-            if (error) setError(undefined);
-          }}
-          onSubmit={(raw) => {
-            const submitError = props.onSubmit(raw);
-            if (submitError) setError(submitError);
-          }}
-        />
-      </Box>
-      {error ? (
-        <Box marginTop={1}>
-          <Text color={COLOR_ERROR}>{`${CROSS} ${error}`}</Text>
-        </Box>
-      ) : null}
-      <Box marginTop={1}>
-        <KeyHints
-          hints={[
-            { key: 'Enter', action: 'save' },
-            { key: 'Ctrl-R', action: 'reset' },
-            { key: 'Esc', action: 'back' },
-          ]}
-          confirmCancel={false}
-        />
-      </Box>
-    </FormFrame>
-  );
-}
-
 export function ConfigForm(props: ConfigFormProps): React.JSX.Element {
   const [mode, setMode] = useState<ConfigFormMode>({ kind: 'categories' });
   // Optimistic overrides: a write is async, so without these a rapid second
@@ -319,40 +256,21 @@ export function ConfigForm(props: ConfigFormProps): React.JSX.Element {
   if (mode.kind === 'enum') {
     const { entry } = mode;
     const current = effective(entry);
-    const items = buildEnumItems(entry);
-    const window = computeSelectWindowSize({
-      availableRows: props.availableRows,
-      itemCount: items.length,
-      chromeRows: SELECT_CHROME_ROWS,
-    });
     return (
-      <FormFrame
+      <ListForm
         title={`/config · ${settingDisplayName(entry)}`}
-        showCloseHint={false}
-      >
-        <Select
-          items={items}
-          activeValue={typeof current === 'string' ? current : undefined}
-          maxVisibleItems={window.maxVisibleItems}
-          showOverflow={window.showOverflow}
-          onSelect={(value) => {
-            commit(entry, value);
-            setMode({ kind: 'list', category: mode.category });
-          }}
-          onCancel={() => setMode({ kind: 'list', category: mode.category })}
-        />
-        <Box marginTop={1}>
-          <KeyHints
-            hints={[
-              { key: '↑/↓', action: 'navigate' },
-              { key: 'Enter', action: 'select' },
-              { key: 'Ctrl-R', action: 'reset' },
-              { key: 'Esc', action: 'back' },
-            ]}
-            confirmCancel={false}
-          />
-        </Box>
-      </FormFrame>
+        availableRows={props.availableRows}
+        items={buildEnumItems(entry)}
+        activeValue={typeof current === 'string' ? current : undefined}
+        action="select"
+        extraHints={[{ key: 'Ctrl-R', action: 'reset' }]}
+        escapeAction="back"
+        onSelect={(value) => {
+          commit(entry, value);
+          setMode({ kind: 'list', category: mode.category });
+        }}
+        onCancel={() => setMode({ kind: 'list', category: mode.category })}
+      />
     );
   }
 
@@ -360,26 +278,30 @@ export function ConfigForm(props: ConfigFormProps): React.JSX.Element {
     const { entry, isNumber } = mode;
     const current = effective(entry);
     return (
-      <ConfigTextEditor
+      <TextEntryForm
         key={entry.key}
-        entry={entry}
+        title={`/config · ${settingDisplayName(entry)}`}
         initialValue={current == null ? '' : String(current)}
-        isNumber={isNumber}
+        placeholder={isNumber ? 'enter a number' : 'enter a value'}
+        masked={false}
+        rawSubmit
+        extraHints={[{ key: 'Ctrl-R', action: 'reset' }]}
+        onKey={(input, key) => {
+          if (isConfigResetInput(input, key)) {
+            resetEntry(entry);
+            setMode({ kind: 'list', category: mode.category });
+          }
+        }}
         onSubmit={(raw) => {
           if (!isNumber && raw.trim() === '') {
             resetEntry(entry);
             setMode({ kind: 'list', category: mode.category });
-            return undefined;
+            return;
           }
 
           const parsed = validateSettingInput(entry, raw, isNumber);
           if (!parsed.ok) return parsed.message;
           commit(entry, parsed.value);
-          setMode({ kind: 'list', category: mode.category });
-          return undefined;
-        }}
-        onReset={() => {
-          resetEntry(entry);
           setMode({ kind: 'list', category: mode.category });
         }}
         onCancel={() => setMode({ kind: 'list', category: mode.category })}
@@ -396,47 +318,25 @@ export function ConfigForm(props: ConfigFormProps): React.JSX.Element {
       })),
       ...buildConfigCategoryItems(props.entries),
     ];
-    if (categories.length === 0) {
-      return (
-        <FormFrame title="/config">
-          <Text dimColor>No configurable settings are available here yet.</Text>
-        </FormFrame>
-      );
-    }
-    const window = computeSelectWindowSize({
-      availableRows: props.availableRows,
-      itemCount: categories.length,
-      chromeRows: SELECT_CHROME_ROWS,
-    });
     return (
-      <FormFrame title="/config" showCloseHint={false}>
-        <Select
-          items={categories}
-          maxVisibleItems={window.maxVisibleItems}
-          showOverflow={window.showOverflow}
-          onSelect={(category) => {
-            if (category.startsWith('form:')) {
-              setMode({
-                kind: 'linked-form',
-                name: category.slice('form:'.length),
-              });
-              return;
-            }
-            setMode({ kind: 'list', category });
-          }}
-          onCancel={props.onClose}
-        />
-        <Box marginTop={1}>
-          <KeyHints
-            hints={[
-              { key: '↑/↓', action: 'navigate' },
-              { key: 'Enter', action: 'open' },
-              { key: 'Esc', action: 'close' },
-            ]}
-            confirmCancel={false}
-          />
-        </Box>
-      </FormFrame>
+      <ListForm
+        title="/config"
+        availableRows={props.availableRows}
+        items={categories}
+        emptyMessage="No configurable settings are available here yet."
+        action="open"
+        onSelect={(category) => {
+          if (category.startsWith('form:')) {
+            setMode({
+              kind: 'linked-form',
+              name: category.slice('form:'.length),
+            });
+            return;
+          }
+          setMode({ kind: 'list', category });
+        }}
+        onCancel={props.onClose}
+      />
     );
   }
 
@@ -448,12 +348,6 @@ export function ConfigForm(props: ConfigFormProps): React.JSX.Element {
   // so a selected category always has at least one entry — no empty-list guard
   // needed here (the categories view above handles empty `props.entries`).
   const items = buildConfigListItems(categoryEntries, effective);
-
-  const window = computeSelectWindowSize({
-    availableRows: props.availableRows,
-    itemCount: items.length,
-    chromeRows: SELECT_CHROME_ROWS,
-  });
 
   const handleSelect = (key: string): void => {
     const entry = categoryEntries.find((candidate) => candidate.key === key);
@@ -482,27 +376,14 @@ export function ConfigForm(props: ConfigFormProps): React.JSX.Element {
   };
 
   return (
-    <FormFrame
+    <ListForm
       title={`/config · ${configCategoryLabel(category)}`}
-      showCloseHint={false}
-    >
-      <Select
-        items={items}
-        maxVisibleItems={window.maxVisibleItems}
-        showOverflow={window.showOverflow}
-        onSelect={handleSelect}
-        onCancel={() => setMode({ kind: 'categories' })}
-      />
-      <Box marginTop={1}>
-        <KeyHints
-          hints={[
-            { key: '↑/↓', action: 'navigate' },
-            { key: 'Enter', action: 'toggle / edit / open' },
-            { key: 'Esc', action: 'back' },
-          ]}
-          confirmCancel={false}
-        />
-      </Box>
-    </FormFrame>
+      availableRows={props.availableRows}
+      items={items}
+      action="toggle / edit / open"
+      escapeAction="back"
+      onSelect={handleSelect}
+      onCancel={() => setMode({ kind: 'categories' })}
+    />
   );
 }
