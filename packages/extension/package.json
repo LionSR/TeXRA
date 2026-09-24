@@ -204,16 +204,9 @@
       },
       {
         "command": "texra.cleanBuild",
-        "title": "Clean All Build Files (Workspace-wide)",
-        "shortTitle": "Clean Build Files",
+        "title": "Delete All build/ Folders in Workspace",
         "category": "TeXRA",
         "icon": "$(close-all)"
-      },
-      {
-        "command": "texra.indentTeX",
-        "title": "Indent All LaTeX Files",
-        "category": "TeXRA",
-        "icon": "$(indent)"
       },
       {
         "command": "texra.cloneOverleafProject",
@@ -223,7 +216,7 @@
       },
       {
         "command": "texra.indentCurrentTeX",
-        "title": "Indent Current TeX",
+        "title": "Format Current LaTeX File",
         "category": "TeXRA",
         "icon": "$(indent)",
         "enablement": "!virtualWorkspace"
@@ -258,29 +251,9 @@
         "category": "TeXRA"
       },
       {
-        "command": "texra.showImportOptions",
-        "title": "Import or Create LaTeX Project",
-        "category": "TeXRA",
-        "icon": "$(cloud-download)"
-      },
-      {
         "command": "texra.execute",
         "title": "Execute Agent",
         "category": "TeXRA"
-      },
-      {
-        "command": "texra.pack",
-        "title": "Pack Output into History Folder",
-        "shortTitle": "Pack Output",
-        "category": "TeXRA",
-        "icon": "$(archive)"
-      },
-      {
-        "command": "texra.clean",
-        "title": "Clean Agent Output Files",
-        "shortTitle": "Clean Output",
-        "category": "TeXRA",
-        "icon": "$(trash)"
       },
       {
         "command": "texra.createAgentWithAI",
@@ -300,19 +273,13 @@
       },
       {
         "command": "texra.auth.signIn",
-        "title": "Sign In",
+        "title": "Sign In to TeXRA Account (Remote Agents)",
         "category": "TeXRA",
         "icon": "$(sign-in)"
       },
       {
         "command": "texra.auth.chatgpt.signIn",
         "title": "Sign In with ChatGPT Subscription",
-        "category": "TeXRA",
-        "icon": "$(comment-discussion)"
-      },
-      {
-        "command": "texra.auth.grok.signIn",
-        "title": "Sign In with Grok Subscription",
         "category": "TeXRA",
         "icon": "$(comment-discussion)"
       },
@@ -324,86 +291,68 @@
       },
       {
         "command": "texra.auth.viewProfile",
-        "title": "View Profile",
+        "title": "Account Settings",
         "category": "TeXRA",
         "icon": "$(account)"
       },
       {
-        "command": "texra.openDoc",
-        "title": "Open TeXRA Documentation",
-        "category": "TeXRA"
-      },
-      {
-        "command": "texra.mainView.reset",
-        "title": "New Session",
-        "shortTitle": "New",
-        "category": "TeXRA",
-        "icon": "$(new-file)"
-      },
-      {
         "command": "texra.showMemory",
-        "title": "Show Memory",
+        "title": "Memory Settings",
         "category": "TeXRA",
         "icon": "$(database)"
       },
       {
         "command": "texra.showModels",
-        "title": "Show Models",
+        "title": "Model Settings",
         "category": "TeXRA",
         "icon": "$(hubot)"
       },
       {
         "command": "texra.showAgents",
-        "title": "Show Agents",
+        "title": "Agent Settings",
         "category": "TeXRA",
         "icon": "$(symbol-method)"
       },
       {
         "command": "texra.showTools",
-        "title": "Show Tool Dashboard",
+        "title": "Tool Settings",
         "category": "TeXRA",
         "icon": "$(tools)"
       },
       {
         "command": "texra.showMultiAgent",
-        "title": "Show Multi-Agent Settings",
+        "title": "Agent Team Settings",
         "category": "TeXRA",
         "icon": "$(organization)"
       },
       {
         "command": "texra.showGitSettings",
-        "title": "Show Git Settings",
+        "title": "Git Settings",
         "category": "TeXRA",
         "icon": "$(git-branch)"
       },
       {
         "command": "texra.showMainView",
-        "title": "Show Launcher",
+        "title": "New Task",
         "category": "TeXRA",
         "icon": "$(edit)"
       },
       {
         "command": "texra.showProgressView",
-        "title": "Show Progress",
+        "title": "Show Sessions",
         "category": "TeXRA",
         "icon": "$(eye)"
       },
       {
-        "command": "texra.toggleView",
-        "title": "Toggle Sessions Drawer",
-        "category": "TeXRA",
-        "icon": "$(split-horizontal)"
-      },
-      {
         "command": "texra.openProgressViewInTab",
-        "title": "Open Progress in Editor Tab",
-        "shortTitle": "Open in Tab",
+        "title": "Open Sessions in Editor",
+        "shortTitle": "Open in Editor",
         "category": "TeXRA",
         "icon": "$(multiple-windows)"
       },
       {
         "command": "texra.showDashboard",
-        "title": "Show Settings Dashboard",
+        "title": "Open Settings",
         "shortTitle": "Settings",
         "category": "TeXRA",
         "icon": "$(gear)"
@@ -482,115 +431,58 @@
       {
         "id": "texra.gettingStarted",
         "title": "Get started with TeXRA",
-        "description": "Choose a credential, let the setup assistant check your project and run your first polish, then meet the orchestrator.",
+        "description": "Connect a model, open your paper, let the setup assistant check your project, then run your first task.",
         "steps": [
           {
             "id": "texra.gettingStarted.signIn",
-            "title": "Choose how TeXRA should sign in",
-            "description": "A credential is the one step no agent can do for you. Two ways in:\n\n**Use ChatGPT subscription** — ChatGPT Plus/Pro/Team can route Codex models through your ChatGPT plan.\n\n[Sign in with ChatGPT](command:texra.auth.chatgpt.signIn)\n\n**Use your own provider API key** — Anthropic, OpenAI, Google, and more. Except for Codex through ChatGPT subscription, chat subscriptions do not include API access.\n\n[Set API key](command:texra.setApiKey)\n\nSigning in to your TeXRA account separately unlocks the hosted research-agent catalog of remote workflow agents.\n\n[Sign In](command:texra.auth.signIn)",
+            "title": "Connect a model",
+            "description": "TeXRA needs one way to reach a model. It is the one step no agent can do for you.\n\n**ChatGPT subscription**: Plus, Pro, and Team plans run Codex models through your ChatGPT sign-in.\n\n[Sign in with ChatGPT](command:texra.auth.chatgpt.signIn)\n\n**Your own API key**: Anthropic, OpenAI, Google, and more. Chat subscriptions other than ChatGPT do not include API access.\n\n[Set API key](command:texra.setApiKey)\n\nA TeXRA account is optional: it only adds the hosted remote agents. The bundled agents, the orchestrator included, work without one.",
             "media": {
               "image": "resources/walkthroughs/media/api-key-setup.png",
-              "altText": "Screenshot of the API key configuration view"
+              "altText": "Screenshot of the provider API key settings"
             },
             "completionEvents": [
-              "onCommand:texra.auth.signIn",
               "onCommand:texra.auth.chatgpt.signIn",
               "onCommand:texra.setApiKey"
             ]
           },
           {
+            "id": "texra.gettingStarted.openPaper",
+            "title": "Open your paper",
+            "description": "TeXRA works inside one folder: the folder that holds your LaTeX project.\n\n[Open Folder](command:workbench.action.files.openFolder)\n\nNo project at hand? Start from the bundled sample, clone one from Overleaf, or download a paper's source from arXiv.\n\n[Create the sample project](command:texra.createSampleProject)\n\n[Clone from Overleaf](command:texra.walkthroughWorkspaceAction?%5B%22texra.cloneOverleafProject%22%5D)\n\n[Download from arXiv](command:texra.walkthroughWorkspaceAction?%5B%22texra.downloadArXivSource%22%5D)",
+            "media": {
+              "image": "resources/walkthroughs/media/file-selection.png",
+              "altText": "Screenshot of a paper's files attached to a new task"
+            },
+            "completionEvents": [
+              "onContext:workspaceFolderCount == 1",
+              "onCommand:texra.createSampleProject",
+              "onCommand:texra.cloneOverleafProject",
+              "onCommand:texra.downloadArXivSource"
+            ]
+          },
+          {
             "id": "texra.gettingStarted.setupAssistant",
-            "title": "The setup assistant takes it from here",
-            "description": "One conversation covers the rest. The setup assistant checks your environment and installs any missing LaTeX tools, asks what you're working on and applies the matching team, then runs your first polish -- ending at a diff so you can see every change. It asks before every command and explains what it's about to do; you stay in control.\n\n[Run Setup Assistant](command:texra.walkthroughWorkspaceAction?%5B%22texra.runSetupAssistant%22%5D)\n\nPrefer to do it yourself? The manual steps below walk the same loop.",
+            "title": "Run the setup assistant",
+            "description": "One conversation covers the rest. The setup assistant checks your LaTeX tools and offers to install what is missing, asks what you are working on and applies a matching agent team, then runs a first polish on your paper that ends at a diff. It asks before every command it runs.\n\n[Run Setup Assistant](command:texra.walkthroughWorkspaceAction?%5B%22texra.runSetupAssistant%22%5D)",
             "media": {
               "image": "resources/walkthroughs/media/texra-progressboard.png",
-              "altText": "Screenshot of the Progress view"
+              "altText": "Screenshot of a TeXRA session"
             },
             "completionEvents": [
               "onCommand:texra.runSetupAssistant"
             ]
           },
           {
-            "id": "texra.gettingStarted.agentModel",
-            "title": "Meet the orchestrator",
-            "description": "After setup, the **orchestrator** is the habit. You don't pick from 23 agents -- it reads your paper, figures out what needs work, and hands each task to the right agent. You just approve the proposals as they come in.\n\nPick **orchestrator** from the agent dropdown and choose a model -- bigger models give better results, smaller ones are faster and cheaper. The orchestrator ships with TeXRA, so it needs no sign-in.\n\nTeams give the orchestrator the right tools for your field. The setup assistant applies one for you, or pick one yourself:\n\n[Pick a team](command:texra.walkthroughWorkspaceAction?%5B%22texra.showMultiAgent%22%5D)",
-            "media": {
-              "image": "resources/walkthroughs/media/agent-model-selection.png",
-              "altText": "Screenshot of the agent and model selection UI"
-            },
-            "completionEvents": [
-              "onCommand:texra.showMultiAgent"
-            ]
-          },
-          {
-            "id": "texra.gettingStarted.sampleWorkspace",
-            "title": "Prefer to do it manually? Try the sample project",
-            "description": "The steps from here mirror what the setup assistant does, for when you'd rather drive yourself.\n\nNot sure where to start? We've bundled a small LaTeX project you can play with.\n\n[Create the sample project](command:texra.createSampleProject)\n\nYou'll get a folder with example `.tex` files and a README that explains the layout.",
-            "media": {
-              "image": "resources/walkthroughs/media/file-selection.png",
-              "altText": "Screenshot of the file selection interface"
-            },
-            "completionEvents": [
-              "onCommand:texra.createSampleProject"
-            ]
-          },
-          {
-            "id": "texra.gettingStarted.stageFiles",
-            "title": "Manual path: pick your files",
-            "description": "Open the main view and tell TeXRA what to work on:\n\n- **Input** -- the manuscript you want edited\n- **Context** -- bib/style files, reference papers, or any read-only context (optional)\n- **Media** -- figures and images (optional)\n\nYou really only need an Input file to get going.\n\n[Open the TeXRA main view](command:texra.walkthroughWorkspaceAction?%5B%22texra.showMainView%22%5D)",
-            "media": {
-              "image": "resources/walkthroughs/media/file-selection.png",
-              "altText": "Screenshot of the file selection interface"
-            },
-            "completionEvents": [
-              "onCommand:texra.showMainView"
-            ]
-          },
-          {
-            "id": "texra.gettingStarted.autoExtract",
-            "title": "Manual path: auto-extract figures (optional)",
-            "description": "Got figures or TikZ diagrams in your paper? Turn on auto-extraction and TeXRA will pull them out before running.\n\nFlip the **Auto-extract figures** and **Auto-extract TikZ** toggles in the main view. Or run TikZ extraction manually:\n\n[Extract TikZ figures](command:texra.walkthroughWorkspaceAction?%5B%22texra.extractTikzFigures%22%5D)",
-            "media": {
-              "image": "resources/walkthroughs/media/auto-extract-options.png",
-              "altText": "Screenshot showing auto-extraction options"
-            },
-            "completionEvents": [
-              "onCommand:texra.extractTikzFigures"
-            ]
-          },
-          {
-            "id": "texra.gettingStarted.progress",
-            "title": "Manual path: run the agent",
-            "description": "You're all set. Click Run agent and the orchestrator will start working through your paper.\n\n[Run agent](command:texra.walkthroughWorkspaceAction?%5B%22texra.execute%22%5D)\n\nIt'll propose tasks as it goes -- you'll see each one pop up in the [Progress view](command:texra.walkthroughWorkspaceAction?%5B%22texra.showProgressView%22%5D) where you can approve, tweak, or skip it.\n\nWant it to just run without asking? Turn on **auto-approve** in Settings > Multi-Agent.",
-            "media": {
-              "image": "resources/walkthroughs/media/texra-progressboard.png",
-              "altText": "Screenshot of the Progress view"
-            },
-            "completionEvents": [
-              "onCommand:texra.execute"
-            ]
-          },
-          {
-            "id": "texra.gettingStarted.review",
-            "title": "Manual path: check what it did",
-            "description": "Your originals are safe -- TeXRA writes edits to new files. Open them up and use VS Code's diff view to see exactly what changed. Accept what you like, ignore what you don't.",
+            "id": "texra.gettingStarted.firstTask",
+            "title": "Your first task",
+            "description": "Open **New task** in the TeXRA panel, say what you want (for example, \"tighten the introduction\"), and send it. Pick **orchestrator** in the agent menu to have it plan the work and hand each part to the right agent.\n\n[New task](command:texra.walkthroughWorkspaceAction?%5B%22texra.showMainView%22%5D)\n\nEvery task becomes a session. The **Sessions** button at the top of the panel lists them, running or finished, so you can come back to one.\n\nBefore an agent edits a file or runs a command, it asks in the conversation, and edits open in VS Code's diff view so you see each change first. To change how often it asks, set the approval policy under Settings > Tools.\n\n[Approval settings](command:texra.walkthroughWorkspaceAction?%5B%22texra.showTools%22%5D)",
             "media": {
               "image": "resources/walkthroughs/media/vscode-compare.png",
               "altText": "Screenshot of the VS Code diff view"
-            }
-          },
-          {
-            "id": "texra.gettingStarted.housekeeping",
-            "title": "Manual path: clean up when you're done",
-            "description": "Happy with the results? Use **Pack** $(archive) to save everything to a `History/` folder. Want to start over? Use **Clean** $(trash) to wipe the generated files.\n\nYou'll find both in the Progress toolbar or the command palette.\n\n[Clean build files](command:texra.walkthroughWorkspaceAction?%5B%22texra.cleanBuild%22%5D)",
-            "media": {
-              "image": "resources/walkthroughs/media/texra-progressboard.png",
-              "altText": "Screenshot showing pack and clean buttons in the Progress toolbar"
             },
             "completionEvents": [
-              "onCommand:texra.cleanBuild",
-              "onCommand:texra.pack",
-              "onCommand:texra.clean"
+              "onCommand:texra.showMainView"
             ]
           }
         ]
@@ -628,7 +520,7 @@
     "viewsWelcome": [
       {
         "view": "texra.scmAgentReviewView",
-        "contents": "Review changes against the main branch for issues.\n[Find Issues](command:texra.agentReview.run)\n[Find Issues with Options…](command:texra.agentReview.runWithOptions)",
+        "contents": "Review changes against the main branch for issues.\n[Find Issues](command:texra.agentReview.run)",
         "when": "texra.activated && !texra.agentReview.running"
       }
     ],
@@ -642,29 +534,9 @@
       ],
       "view/title": [
         {
-          "command": "texra.indentTeX",
-          "when": "texra.activated && view == texra.mainView && texra.activeView == 'progress'",
-          "group": "navigation@1"
-        },
-        {
-          "command": "texra.cleanBuild",
-          "when": "texra.activated && view == texra.mainView && texra.activeView == 'progress'",
-          "group": "navigation@3"
-        },
-        {
           "command": "texra.showDashboard",
-          "when": "texra.activated && view == texra.mainView && texra.activeView == 'progress'",
-          "group": "navigation@4"
-        },
-        {
-          "command": "texra.mainView.reset",
-          "when": "texra.activated && view == texra.mainView && texra.activeView != 'progress'",
+          "when": "texra.activated && view == texra.mainView",
           "group": "navigation@0"
-        },
-        {
-          "command": "texra.showDashboard",
-          "when": "texra.activated && view == texra.mainView && texra.activeView != 'progress'",
-          "group": "navigation@1"
         },
         {
           "command": "texra.agentReview.run",
@@ -711,7 +583,7 @@
         },
         {
           "command": "texra.agentReview.runWithOptions",
-          "when": "texra.activated && !texra.agentReview.running"
+          "when": "false"
         },
         {
           "command": "texra.agentReview.stop",
@@ -754,10 +626,6 @@
           "when": "texra.activated"
         },
         {
-          "command": "texra.indentTeX",
-          "when": "texra.activated"
-        },
-        {
           "command": "texra.cloneOverleafProject",
           "when": "texra.activated"
         },
@@ -786,24 +654,12 @@
           "when": "texra.activated"
         },
         {
-          "command": "texra.showImportOptions",
-          "when": "texra.activated"
-        },
-        {
           "command": "texra.execute",
-          "when": "texra.activated"
-        },
-        {
-          "command": "texra.pack",
-          "when": "false"
-        },
-        {
-          "command": "texra.clean",
           "when": "false"
         },
         {
           "command": "texra.createAgentWithAI",
-          "when": "texra.activated"
+          "when": "false"
         },
         {
           "command": "texra.setApiKey",
@@ -811,7 +667,7 @@
         },
         {
           "command": "texra.removeApiKey",
-          "when": "texra.activated"
+          "when": "false"
         },
         {
           "command": "texra.auth.signIn",
@@ -822,48 +678,36 @@
           "when": "texra.activated"
         },
         {
-          "command": "texra.auth.grok.signIn",
-          "when": "texra.activated"
-        },
-        {
           "command": "texra.auth.signOut",
-          "when": "texra.activated"
-        },
-        {
-          "command": "texra.auth.viewProfile",
-          "when": "texra.activated"
-        },
-        {
-          "command": "texra.openDoc",
           "when": "false"
         },
         {
-          "command": "texra.mainView.reset",
-          "when": "texra.activated"
+          "command": "texra.auth.viewProfile",
+          "when": "false"
         },
         {
           "command": "texra.showMemory",
-          "when": "texra.activated"
+          "when": "false"
         },
         {
           "command": "texra.showModels",
-          "when": "texra.activated"
+          "when": "false"
         },
         {
           "command": "texra.showAgents",
-          "when": "texra.activated"
+          "when": "false"
         },
         {
           "command": "texra.showTools",
-          "when": "texra.activated"
+          "when": "false"
         },
         {
           "command": "texra.showMultiAgent",
-          "when": "texra.activated"
+          "when": "false"
         },
         {
           "command": "texra.showGitSettings",
-          "when": "texra.activated"
+          "when": "false"
         },
         {
           "command": "texra.showMainView",
@@ -871,10 +715,6 @@
         },
         {
           "command": "texra.showProgressView",
-          "when": "texra.activated"
-        },
-        {
-          "command": "texra.toggleView",
           "when": "texra.activated"
         },
         {
@@ -930,12 +770,6 @@
         "key": "ctrl+alt+p",
         "mac": "cmd+option+p",
         "when": "texra.activated"
-      },
-      {
-        "command": "texra.toggleView",
-        "key": "ctrl+alt+t",
-        "mac": "cmd+option+t",
-        "when": "texra.activated && focusedView == texra.mainView"
       },
       {
         "command": "texra.execute",

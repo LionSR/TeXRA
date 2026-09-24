@@ -13,8 +13,10 @@ import { runExecuteCommand as agentRunExecuteCommand } from '@commands/agent/exe
 import { downloadArXivSource as latexDownloadArXivSource } from '@commands/latex/arXivCommands';
 import { launchSetupAssistant } from '@commands/setup/setupAssistantCommand';
 import { createSampleProject as sysCreateSampleProject } from '@commands/system/sampleProjectCommands';
-import { showImportOptions as sysShowImportOptions } from '@commands/system/mainViewCommands';
-import { handleClean as fileHandleClean } from '@commands/housekeeping/cleanCommands';
+import {
+  confirmCleanBuild,
+  handleClean as fileHandleClean,
+} from '@commands/housekeeping/cleanCommands';
 import { handlePack as fileHandlePack } from '@commands/housekeeping/packCommands';
 import {
   handleAcceptEdited as latexHandleAcceptEdited,
@@ -25,7 +27,6 @@ import {
   removeApiKey as apiRemoveApiKey,
 } from '@commands/api/apiKeyCommands';
 import {
-  handleIndentTeX,
   handleIndentCurrentTeX as latexIndentCurrentTeX,
   handleFixCompilation as latexFixCompilation,
   handleGetTeXCount as latexGetTeXCount,
@@ -37,7 +38,6 @@ import {
 import { cloneOverleafProject as gitCloneOverleafProject } from '@commands/git/gitCommands';
 import { openGettingStarted as sysOpenGettingStarted } from '@commands/system/walkthroughCommands';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
-import { runCleanBuild } from '@housekeeping/clean';
 import type { StateStore } from '@platform/interfaces';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import { withSessionFs } from '@platform/rootedFs';
@@ -71,18 +71,16 @@ export function createExtensionCommandActions(
   return {
     showSettings: (tab, agentSubTab) =>
       settingsViewProvider.showSettingsView(tab, agentSubTab),
-    // New Session is the header's "+" (PRD 12.4): the New-task state into
+    // New Task is the header's "+" (PRD 12.4): the New-task state into
     // view with the launcher's selections as they are.
-    resetMainView: () => progressViewProvider.showLauncher(),
-    cleanBuild: () => runCleanBuild,
+    newTask: () => progressViewProvider.showLauncher(),
+    cleanBuild: () => confirmCleanBuild,
     pack: fileHandlePack,
     clean: fileHandleClean,
     compare: latexHandleCompare,
     acceptEdited: latexHandleAcceptEdited,
-    indentTeX: () => handleIndentTeX(session),
     signIn: () => authSignIn,
     signInChatGpt: () => settingsViewProvider.signInSubscription('chatgpt'),
-    signInGrok: () => settingsViewProvider.signInSubscription('grok'),
     signOut: () => authSignOut,
     runSetupAssistant: () =>
       Effect.asVoid(launchSetupAssistant(secrets, globalState, session)),
@@ -108,8 +106,6 @@ export function createExtensionCommandActions(
     cloneOverleafProject: () => gitCloneOverleafProject(session, secrets),
     removeApiKey: () =>
       apiRemoveApiKey(session.roots, secrets, refreshAfterProviderKeyChange),
-    showImportOptions: () => sysShowImportOptions,
-    toggleView: () => progressViewProvider.toggleDrawer(),
     showProgressView: (inPlace) =>
       progressViewProvider.showProgressView({ inPlace }),
     setApiKey: (provider) =>

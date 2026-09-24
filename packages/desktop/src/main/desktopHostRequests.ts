@@ -666,8 +666,6 @@ export function createDesktopHostRequests(
       // same one `gettingStarted('openWalkthrough')` above opens.
       openGettingStarted: Effect.sync(() => options.showFirstRunWalkthrough()),
     },
-    // One window per paper and no view-title menu, so nothing reads this.
-    setActiveView: () => {},
   };
 
   /** The arms both GUI hosts answer through one body, now that this window's

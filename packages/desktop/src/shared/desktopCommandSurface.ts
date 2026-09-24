@@ -73,7 +73,6 @@ export const DESKTOP_MENU_GROUPS = [
     'texra.showDashboard',
     DESKTOP_LOCAL_COMMANDS.TOGGLE_BOTTOM_BAR,
     DESKTOP_LOCAL_COMMANDS.TOGGLE_SIDE_PANEL,
-    'texra.mainView.reset',
   ],
   [
     'texra.showMemory',
@@ -185,7 +184,6 @@ const DESKTOP_COMMAND_ICONS = {
   'texra.showDashboard': 'gear',
   [DESKTOP_LOCAL_COMMANDS.TOGGLE_BOTTOM_BAR]: 'window-maximize',
   [DESKTOP_LOCAL_COMMANDS.TOGGLE_SIDE_PANEL]: 'picture-in-picture',
-  'texra.mainView.reset': 'file-circle-plus',
   'texra.showMemory': 'database',
   'texra.showModels': 'server',
   'texra.showAgents': 'robot',
@@ -221,7 +219,6 @@ export interface DesktopCommandActions {
   openWorkspaceFolder(): void;
   saveFile(): void;
   showFirstRunWalkthrough(): void;
-  resetMainView(): void;
   toggleBottomBar(): void;
   toggleSidePanel(): void;
 }
@@ -275,7 +272,6 @@ const DESKTOP_COMMAND_HANDLERS = {
     a.toggleSidePanel(),
   ),
   'texra.showDashboard': action((a) => a.showSettings()),
-  'texra.mainView.reset': action((a) => a.resetMainView()),
   // `texra.show*` rows derived from the catalog's `settingsTab` field
   // (`settingsTabByCommand`) — same source the extension handler map uses.
   ...(Object.fromEntries(

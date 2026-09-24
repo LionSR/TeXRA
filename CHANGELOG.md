@@ -183,7 +183,26 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
 - **"Clean All LLM Output Files (Workspace-wide)" is removed** — it is gone
   from the command palette, the Progress toolbar and the getting-started
   walkthrough. Clean in the Progress toolbar now clears the selected run's
-  output folder, and "Clean All Build Files (Workspace-wide)" is unchanged.
+  output folder.
+- **A shorter command palette and a quieter first run** — the palette lists
+  what an author reaches for, in the panel's own words: **New Task**
+  (`Ctrl+Alt+M`, replacing Show Launcher and New Session), **Show Sessions**
+  (`Ctrl+Alt+P`), **Open Sessions in Editor**, **Open Settings**, and
+  **Format Current LaTeX File**. The per-tab settings commands, Execute Agent,
+  View Profile, Sign Out, Remove API Key and Create AI Agent stay bound (to
+  keys, buttons and links) but leave the palette; Settings owns them. Removed:
+  Toggle Sessions Drawer and its `Ctrl+Alt+T` key (the panel's Sessions
+  button does it), Indent All LaTeX Files, Import or Create LaTeX Project,
+  and Sign In with Grok Subscription (Settings has it). **TeXRA: Sign In** is
+  now **Sign In to TeXRA Account (Remote Agents)**, since model access never
+  needed it. The panel's title bar shows only the Settings gear; it no longer
+  swaps in workspace-wide Indent and Clean buttons over a conversation.
+  **Delete All build/ Folders in Workspace** (formerly Clean All Build Files)
+  now lists the folders and asks before deleting them, then says what it
+  did. On first run only the welcome card in the TeXRA panel opens; the
+  walkthrough no longer opens beside it and is down to four accurate steps,
+  and the **Get Started** status pill opens the welcome card. The tasks pill
+  shows only while something is running.
 
 #### Bug Fixes
 

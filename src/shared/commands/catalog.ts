@@ -66,17 +66,9 @@ export const commandCatalog = [
   {
     id: 'texra.cleanBuild',
     extensionRegistry: true,
-    title: 'Clean All Build Files (Workspace-wide)',
-    shortTitle: 'Clean Build Files',
+    title: 'Delete All build/ Folders in Workspace',
     category: 'TeXRA',
     icon: '$(close-all)',
-  },
-  {
-    id: 'texra.indentTeX',
-    extensionRegistry: true,
-    title: 'Indent All LaTeX Files',
-    category: 'TeXRA',
-    icon: '$(indent)',
   },
   {
     id: 'texra.cloneOverleafProject',
@@ -88,7 +80,7 @@ export const commandCatalog = [
   {
     id: 'texra.indentCurrentTeX',
     extensionRegistry: true,
-    title: 'Indent Current TeX',
+    title: 'Format Current LaTeX File',
     category: 'TeXRA',
     icon: '$(indent)',
     enablement: '!virtualWorkspace',
@@ -128,13 +120,6 @@ export const commandCatalog = [
     category: 'TeXRA',
   },
   {
-    id: 'texra.showImportOptions',
-    extensionRegistry: true,
-    title: 'Import or Create LaTeX Project',
-    category: 'TeXRA',
-    icon: '$(cloud-download)',
-  },
-  {
     id: 'texra.execute',
     extensionRegistry: true,
     title: 'Execute Agent',
@@ -144,22 +129,6 @@ export const commandCatalog = [
       mac: 'cmd+option+e',
       when: 'texra.activated',
     },
-  },
-  {
-    id: 'texra.pack',
-    extensionRegistry: true,
-    title: 'Pack Output into History Folder',
-    shortTitle: 'Pack Output',
-    category: 'TeXRA',
-    icon: '$(archive)',
-  },
-  {
-    id: 'texra.clean',
-    extensionRegistry: true,
-    title: 'Clean Agent Output Files',
-    shortTitle: 'Clean Output',
-    category: 'TeXRA',
-    icon: '$(trash)',
   },
   {
     id: 'texra.createAgentWithAI',
@@ -183,7 +152,7 @@ export const commandCatalog = [
   {
     id: 'texra.auth.signIn',
     extensionRegistry: true,
-    title: 'Sign In',
+    title: 'Sign In to TeXRA Account (Remote Agents)',
     category: 'TeXRA',
     icon: '$(sign-in)',
   },
@@ -191,13 +160,6 @@ export const commandCatalog = [
     id: 'texra.auth.chatgpt.signIn',
     extensionRegistry: true,
     title: 'Sign In with ChatGPT Subscription',
-    category: 'TeXRA',
-    icon: '$(comment-discussion)',
-  },
-  {
-    id: 'texra.auth.grok.signIn',
-    extensionRegistry: true,
-    title: 'Sign In with Grok Subscription',
     category: 'TeXRA',
     icon: '$(comment-discussion)',
   },
@@ -211,28 +173,14 @@ export const commandCatalog = [
   {
     id: 'texra.auth.viewProfile',
     extensionRegistry: true,
-    title: 'View Profile',
+    title: 'Account Settings',
     category: 'TeXRA',
     icon: '$(account)',
   },
   {
-    id: 'texra.openDoc',
-    extensionRegistry: true,
-    title: 'Open TeXRA Documentation',
-    category: 'TeXRA',
-  },
-  {
-    id: 'texra.mainView.reset',
-    extensionRegistry: true,
-    title: 'New Session',
-    shortTitle: 'New',
-    category: 'TeXRA',
-    icon: '$(new-file)',
-  },
-  {
     id: 'texra.showMemory',
     extensionRegistry: true,
-    title: 'Show Memory',
+    title: 'Memory Settings',
     category: 'TeXRA',
     icon: '$(database)',
     settingsTab: 'memory',
@@ -240,7 +188,7 @@ export const commandCatalog = [
   {
     id: 'texra.showModels',
     extensionRegistry: true,
-    title: 'Show Models',
+    title: 'Model Settings',
     category: 'TeXRA',
     icon: '$(hubot)',
     settingsTab: 'models',
@@ -248,7 +196,7 @@ export const commandCatalog = [
   {
     id: 'texra.showAgents',
     extensionRegistry: true,
-    title: 'Show Agents',
+    title: 'Agent Settings',
     category: 'TeXRA',
     icon: '$(symbol-method)',
     settingsTab: 'agents',
@@ -256,7 +204,7 @@ export const commandCatalog = [
   {
     id: 'texra.showTools',
     extensionRegistry: true,
-    title: 'Show Tool Dashboard',
+    title: 'Tool Settings',
     category: 'TeXRA',
     icon: '$(tools)',
     settingsTab: 'tools',
@@ -264,7 +212,7 @@ export const commandCatalog = [
   {
     id: 'texra.showMultiAgent',
     extensionRegistry: true,
-    title: 'Show Multi-Agent Settings',
+    title: 'Agent Team Settings',
     category: 'TeXRA',
     icon: '$(organization)',
     settingsTab: 'multi-agent',
@@ -272,14 +220,15 @@ export const commandCatalog = [
   {
     id: 'texra.showGitSettings',
     extensionRegistry: true,
-    title: 'Show Git Settings',
+    title: 'Git Settings',
     category: 'TeXRA',
     icon: '$(git-branch)',
     settingsTab: 'git',
   },
   {
     id: 'texra.showMainView',
-    title: 'Show Launcher',
+    extensionRegistry: true,
+    title: 'New Task',
     category: 'TeXRA',
     icon: '$(edit)',
     keybinding: {
@@ -291,7 +240,7 @@ export const commandCatalog = [
   {
     id: 'texra.showProgressView',
     extensionRegistry: true,
-    title: 'Show Progress',
+    title: 'Show Sessions',
     category: 'TeXRA',
     icon: '$(eye)',
     keybinding: {
@@ -301,29 +250,17 @@ export const commandCatalog = [
     },
   },
   {
-    id: 'texra.toggleView',
-    extensionRegistry: true,
-    title: 'Toggle Sessions Drawer',
-    category: 'TeXRA',
-    icon: '$(split-horizontal)',
-    keybinding: {
-      key: 'ctrl+alt+t',
-      mac: 'cmd+option+t',
-      when: 'texra.activated && focusedView == texra.mainView',
-    },
-  },
-  {
     id: 'texra.openProgressViewInTab',
     extensionRegistry: true,
-    title: 'Open Progress in Editor Tab',
-    shortTitle: 'Open in Tab',
+    title: 'Open Sessions in Editor',
+    shortTitle: 'Open in Editor',
     category: 'TeXRA',
     icon: '$(multiple-windows)',
   },
   {
     id: 'texra.showDashboard',
     extensionRegistry: true,
-    title: 'Show Settings Dashboard',
+    title: 'Open Settings',
     shortTitle: 'Settings',
     category: 'TeXRA',
     icon: '$(gear)',
@@ -518,7 +455,6 @@ export const settingsTabByCommand = Object.fromEntries(
 const commandKeybindingOrder = [
   'texra.showMainView',
   'texra.showProgressView',
-  'texra.toggleView',
   'texra.execute',
 ] as const satisfies readonly CommandId[];
 

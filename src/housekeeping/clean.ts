@@ -12,20 +12,14 @@ import { CHANNEL } from './constants';
 import { GlobFailed } from './utils';
 
 /**
- * Delete every `build/` directory under the session's workspace. The
- * workspace filesystem comes from context and is already rooted, so the
- * listing and the deletions cannot name different workspaces.
+ * Every `build/` directory under the session's workspace, relative to its
+ * root. The workspace filesystem comes from context and is already rooted,
+ * so this listing and {@link removeBuildDirectories} cannot name different
+ * workspaces.
  */
-export const runCleanBuild = Effect.gen(function* () {
-  yield* Effect.logDebug('Starting build directory cleanup').pipe(
-    withLogChannel(CHANNEL),
-  );
-
-  const workspaceFs = yield* WorkspaceFs;
-  const workspacePath = workspaceFs.root;
-  if (!workspacePath) {
-    return;
-  }
+export const findBuildDirectories = Effect.gen(function* () {
+  const workspacePath = (yield* WorkspaceFs).root;
+  if (!workspacePath) return [];
 
   const ignorePatterns = [...EXCLUDED_DIRS]
     .filter((dir) => dir !== 'build')
@@ -40,7 +34,18 @@ export const runCleanBuild = Effect.gen(function* () {
       }),
     catch: (cause) => new GlobFailed({ pattern: '**/build', cause }),
   });
+  return directories.toSorted();
+});
 
+/**
+ * Delete the listed workspace-relative directories. Returns the ones that
+ * could not be removed, each already logged, so the caller can say so.
+ */
+export const removeBuildDirectories = Effect.fn(
+  'housekeeping.removeBuildDirectories',
+)(function* (directories: readonly string[]) {
+  const workspaceFs = yield* WorkspaceFs;
+  const failed: string[] = [];
   for (const dir of directories) {
     yield* workspaceFs.remove(dir, { recursive: true, force: true }).pipe(
       Effect.tap(() =>
@@ -48,16 +53,14 @@ export const runCleanBuild = Effect.gen(function* () {
           withLogChannel(CHANNEL),
         ),
       ),
-      Effect.catch((error) =>
-        Effect.logError(`Error removing build directory ${dir}`).pipe(
+      Effect.catch((error) => {
+        failed.push(dir);
+        return Effect.logError(`Error removing build directory ${dir}`).pipe(
           Effect.annotateLogs({ data: error }),
           withLogChannel(CHANNEL),
-        ),
-      ),
+        );
+      }),
     );
   }
-
-  yield* Effect.logInfo('Build directories cleaned').pipe(
-    withLogChannel(CHANNEL),
-  );
+  return failed;
 });

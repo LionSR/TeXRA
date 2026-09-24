@@ -25,9 +25,8 @@ TeXRA integrates into your editor and terminal to help you do good work: derivin
 5. Review the diff
 
 > 💡 **Tip:** Inside VS Code you can open the **Get started with TeXRA** walkthrough from the Get Started page
-> (or by running `TeXRA: Open Getting Started Walkthrough`). It tells the same story in four steps (choose how
-> TeXRA should sign in; the setup assistant takes it from here; meet the orchestrator; or do it manually with the
-> sample project) and links directly to the relevant commands.
+> (or by running `TeXRA: Open Getting Started Walkthrough`). It tells the same story in four steps (connect a
+> model, open your paper, run the setup assistant, your first task) and links directly to the relevant commands.
 
 ::: tip Prefer the terminal?
 This guide walks through the VS Code extension. If you installed the
@@ -57,7 +56,7 @@ TeXRA panel offers the main access choices:
 The full per-provider key reference (the API Configuration table, Set / Get / Remove actions, and per-provider toggles) lives in [Models → Setting API keys](./models.md#setting-api-keys).
 
 ::: tip Signing in to TeXRA
-**TeXRA: Sign In** is separate from model access: your TeXRA account unlocks the hosted
+**TeXRA: Sign In to TeXRA Account (Remote Agents)** is separate from model access: your TeXRA account unlocks the hosted
 research-agent catalog (remote workflow agents such as `generic` and `devise`), and those agents still run on the credential
 you configured above. Read the [Remote agents guide](./remote-agents.md).
 :::
@@ -83,8 +82,8 @@ cover the Launcher controls you'll use beyond that.
 
 ## The Launcher in detail
 
-Open the TeXRA panel from the brain icon in the sidebar, or press
-`Ctrl+Alt+M` (`Cmd+Option+M` on macOS).
+Open the TeXRA panel from the brain icon in the sidebar, or run **TeXRA: New Task**
+(`Ctrl+Alt+M`, `Cmd+Option+M` on macOS).
 
 ### Select files
 

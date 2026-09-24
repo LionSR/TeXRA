@@ -23,7 +23,7 @@ works.
 
 Both integrations follow the same setup flow from the TeXRA Dashboard.
 
-1. Open **TeXRA: Show Settings Dashboard** (`Ctrl+Shift+P`) → **Integrations** tab (<wa-icon library="texra" name="link"></wa-icon>).
+1. Open **TeXRA: Open Settings** (`Ctrl+Shift+P`) → **Integrations** tab (<wa-icon library="texra" name="link"></wa-icon>).
 2. Find the **OpenAI Codex CLI** or **Claude Code CLI** card. When it shows **Needs setup**, the setup actions expand automatically.
 3. Select <wa-icon library="texra" name="terminal"></wa-icon> **Install in Terminal**, then <wa-icon library="texra" name="right-to-bracket"></wa-icon> **Sign in** to OAuth in your browser.
 4. Reopen the dashboard (or select **Re-check** on the **Tools** tab). The status changes to a green <wa-icon library="texra" name="check"></wa-icon> check (tooltip **Ready**) once TeXRA detects the install.

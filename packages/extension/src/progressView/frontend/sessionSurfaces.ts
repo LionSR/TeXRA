@@ -462,16 +462,14 @@ export function createSessionSurfaces(options: {
   transport.onSurfaceAction((key, action) => {
     const entry = held.get(key);
     if (!entry) return;
-    if (action.kind === 'chime') {
-      // The host already decided the transition and chose this port.
-      playCompletionSound();
-      return;
+    // The host already decided a chime's transition and chose this port.
+    if (action.kind === 'chime') playCompletionSound();
+    else if (action.kind === 'submit') submit(entry);
+    else if (action.kind !== 'showSessions') act(entry, action);
+    // Show Sessions opens the newest session only from the New-task state.
+    else if (entry.surface$.get().selected === null) {
+      act(entry, { kind: 'select', runId: action.runId });
     }
-    if (action.kind === 'submit') {
-      submit(entry);
-      return;
-    }
-    act(entry, action);
   });
 
   return {

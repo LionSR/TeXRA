@@ -380,8 +380,8 @@ export function resolvePhase(
 
 /**
  * Every change a component may ask of the surface. The root applies it;
- * a component never mutates the record. `selectNew` and `toggleDrawer` are
- * also the host-initiated arms of `surface.action` (PRD 8.5).
+ * a component never mutates the record. `selectNew` and `select` are also
+ * host-initiated arms of `surface.action` (PRD 8.5).
  */
 export type SurfaceAction =
   | { readonly kind: 'select'; readonly runId: RunId | null }

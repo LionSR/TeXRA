@@ -3,16 +3,11 @@
  * startup and the progress and settings views.
  *
  * Extension production code and kernel tests import `@common/webview` rather
- * than individual base classes or view-state helpers. Concrete view modules
+ * than individual base classes. Concrete view modules
  * and other files in this directory remain implementation details and are not
  * re-exported here.
  */
 export { BundledViewContentProvider } from './BundledViewContentProvider';
-export {
-  SIDEBAR_VIEWS,
-  getActiveSidebarView,
-  setActiveSidebarView,
-} from './viewState';
 export {
   getSharedLocalResourceRoots,
   getCombinedLocalResourceRoots,

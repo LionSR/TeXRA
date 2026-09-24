@@ -28,7 +28,6 @@ import { openGettingStarted } from '@commands/system/walkthroughCommands';
 import { createSampleProjectWithoutWorkspace } from '@commands/system/sampleProjectCommands';
 import { tryResumeFromResumeData } from '@commands/agent/resumeFromResumeData';
 import { isFileNotFoundError } from '@common/errors';
-import { SIDEBAR_VIEWS, setActiveSidebarView } from '@common/webview';
 import {
   disposeProcessRuntime,
   installProcessRuntime,
@@ -412,13 +411,11 @@ function installUnhandledRejectionSurface(
  * event.
  */
 const WALKTHROUGH_COMMANDS_NEEDING_WORKSPACE = [
+  EXTENSION_COMMANDS.CLONE_OVERLEAF_PROJECT,
+  EXTENSION_COMMANDS.DOWNLOAD_ARXIV_SOURCE,
   EXTENSION_COMMANDS.RUN_SETUP_ASSISTANT,
-  'texra.showMultiAgent',
   'texra.showMainView',
-  'texra.extractTikzFigures',
-  'texra.execute',
-  'texra.showProgressView',
-  'texra.cleanBuild',
+  'texra.showTools',
 ] as const satisfies readonly CommandId[];
 
 /** Internal command URI used by workspace-bound walkthrough links. */
@@ -668,8 +665,6 @@ async function activateExtension(context: vscode.ExtensionContext) {
       ),
     ),
   );
-  setActiveSidebarView(SIDEBAR_VIEWS.MAIN);
-
   setLogSink(createVsCodeLogSink());
   // Deactivation releases the output channels with the sink, so a reload does
   // not leave a disposed host surface installed.
@@ -866,12 +861,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
   );
   statusBarItem.name = 'TeXRA Tasks';
   statusBarItem.command = 'texra.showProgressView';
-  statusBarItem.text = '$(bracket-dot) TeXRA: Idle';
-  statusBarItem.tooltip = 'Open the TeXRA Progress view';
-  statusBarItem.accessibilityInformation = {
-    label: 'TeXRA tasks, idle',
-  };
-  statusBarItem.show();
+  // Shown only while a run is active (`updateStatusBarText`).
 
   apiKeyStatusBarItem = vscode.window.createStatusBarItem(
     'texra.setupStatus',
@@ -887,12 +877,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
     withPerKeyLane(
       apiKeyStatusRefreshLanes,
       'refresh',
-    )(
-      refreshApiKeyStatusBar(roots, secrets, {
-        setup: apiKeyStatusBarItem,
-        tasks: statusBarItem,
-      }),
-    );
+    )(refreshApiKeyStatusBar(roots, secrets, apiKeyStatusBarItem));
   const safeRefreshApiKeyStatus = (): Promise<void> =>
     runtime.runPromise(
       apiKeyStatusRefresh().pipe(
@@ -921,7 +906,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
     const { cost, inputTokens, outputTokens } =
       statusBarUsageTracker.totalUsage;
     if (cost === 0 && inputTokens === 0 && outputTokens === 0) {
-      statusBarItem.tooltip = `${policyLine}\n\nOpen the TeXRA Progress view`;
+      statusBarItem.tooltip = `${policyLine}\n\nClick to show TeXRA sessions`;
       return;
     }
     const tip = new vscode.MarkdownString(
@@ -934,7 +919,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
         `| Input tokens | ${inputTokens.toLocaleString()} |`,
         `| Output tokens | ${outputTokens.toLocaleString()} |`,
         '',
-        '*Click to open the Progress view*',
+        '*Click to show TeXRA sessions*',
       ].join('\n'),
     );
     tip.isTrusted = false;
@@ -954,11 +939,11 @@ async function activateExtension(context: vscode.ExtensionContext) {
         label: 'TeXRA tasks, one active',
       };
     } else {
-      statusBarItem.text = '$(bracket-dot) TeXRA: Idle';
-      statusBarItem.accessibilityInformation = {
-        label: 'TeXRA tasks, idle',
-      };
+      // Nothing running: no pill. The setup pill covers the first run.
+      statusBarItem.hide();
+      return;
     }
+    statusBarItem.show();
   };
 
   const disposeStatusListener = subscribeStatusBarSessionEvents({
@@ -1020,15 +1005,12 @@ async function activateExtension(context: vscode.ExtensionContext) {
 
   const welcomeKey = 'texra.welcomeShown';
   if (!(await runtime.runPromise(globalState.get<boolean>(welcomeKey)))) {
-    // Land first-run users on the main welcome card so the credential choice
-    // (ChatGPT subscription first) is the first real action, then open the
-    // walkthrough alongside for the rest of the onboarding tips.
+    // Land first-run users on the welcome card in the TeXRA panel: the one
+    // onboarding surface that opens by itself. It links the walkthrough.
     // A failure leaves the flag unset, so the welcome shows again next time.
     runtime.runFork(
-      Effect.forEach(
-        ['texra.showMainView', EXTENSION_COMMANDS.OPEN_GETTING_STARTED],
-        (id) => fromHost(id, () => vscode.commands.executeCommand(id)),
-        { discard: true },
+      fromHost('texra.showMainView', () =>
+        vscode.commands.executeCommand('texra.showMainView'),
       ).pipe(
         Effect.andThen(globalState.update(welcomeKey, true)),
         Effect.catchCause((cause) =>

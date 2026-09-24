@@ -24,11 +24,8 @@ import {
 import { hasAnyUsableSetupCredential } from '@commands/setup/setupAssistantCommand';
 import {
   BundledViewContentProvider,
-  getActiveSidebarView,
   getCombinedLocalResourceRoots,
   getSharedLocalResourceRoots,
-  setActiveSidebarView,
-  SIDEBAR_VIEWS,
 } from '@common/webview';
 import {
   EXTENSION_CATEGORIES,
@@ -574,7 +571,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       webviewView.onDidDispose(() => {
         this.closeSidebarPort();
         this.sidebarView = undefined;
-        setActiveSidebarView(SIDEBAR_VIEWS.MAIN);
       }),
     );
   }
@@ -697,23 +693,10 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     });
   }
 
-  /** `texra.toggleView`: the Sessions drawer of the sidebar. */
-  public toggleDrawer() {
-    return Effect.gen({ self: this }, function* () {
-      yield* this.showInSidebar();
-      this.sidebarPort?.attached.surfaceAction({ kind: 'toggleDrawer' });
-    });
-  }
-
   public isViewVisible(): boolean {
     return (
       this.sidebarView?.visible === true || this.editor?.panel.visible === true
     );
-  }
-
-  /** Whether the sidebar shows a conversation or the New-task state. */
-  private sidebarShowsProgress(): boolean {
-    return getActiveSidebarView() === SIDEBAR_VIEWS.PROGRESS;
   }
 
   public showInSidebar(): Effect.Effect<void, SurfacePlacementFailed> {
@@ -745,12 +728,11 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
         return;
       }
       if (!options?.inPlace) yield* this.showInSidebar();
-      // Showing progress from the launcher means showing a conversation: the
-      // newest stream, the one the sidebar would open on by itself.
-      if (this.sidebarShowsProgress()) return;
+      // Each surface decides from its own selection: one on the New-task
+      // state opens the newest session, one showing a session keeps it.
       const newest = SubscriptionRef.getUnsafe(this.session.view).order.at(0);
       if (newest !== undefined) {
-        this.surfaceAction({ kind: 'select', runId: newest });
+        this.surfaceAction({ kind: 'showSessions', runId: newest });
       }
     });
   }

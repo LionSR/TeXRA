@@ -5,7 +5,7 @@
  * registry (`extensionCommandHandlers.ts`), which already guarantees the
  * registered IDs match `commandCatalog`. These constants are the mirror for
  * the *call* sites that dispatch or reference the same commands by literal —
- * the import quick-pick (`mainViewCommands.ts`), the welcome-view buttons,
+ * the welcome-view buttons,
  * the status-bar CTA, and the setup assistant. Referencing the constant keeps
  * a renamed ID a compile error instead of a silent runtime no-op.
  */

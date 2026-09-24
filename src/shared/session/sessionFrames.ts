@@ -136,7 +136,10 @@ const SurfaceActionMessageSchema = z.object({
   action: z.discriminatedUnion('kind', [
     z.object({ kind: z.literal('selectNew') }),
     z.object({ kind: z.literal('select'), runId: RunIdSchema }),
-    z.object({ kind: z.literal('toggleDrawer') }),
+    /** Show Sessions (`texra.showProgressView`): a surface on the New-task
+     *  state opens `runId`, the newest session; one already showing a
+     *  session keeps it. The surface decides, since only it knows. */
+    z.object({ kind: z.literal('showSessions'), runId: RunIdSchema }),
     /** The run accelerator: the composer's Send for the surface's resolved
      *  selection, a follow-up to the selected stream or a launch (PRD 12.4). */
     z.object({ kind: z.literal('submit') }),

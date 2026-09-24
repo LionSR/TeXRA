@@ -3,17 +3,9 @@ import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
-import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
 import { hasAnyUsableSetupCredential } from '@commands/setup/setupAssistantCommand';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
-
-interface ApiKeyStatusBarItems {
-  /** The setup pill: shown only while no usable credential exists. */
-  readonly setup: vscode.StatusBarItem | undefined;
-  /** The tasks pill the setup pill replaces while it is showing. */
-  readonly tasks: vscode.StatusBarItem | undefined;
-}
 
 /**
  * Paint the setup pill from the credential store.
@@ -33,22 +25,21 @@ export const refreshApiKeyStatusBar = Effect.fn('refreshApiKeyStatusBar')(
   function* (
     stores: SettingsStores,
     secrets: PlatformSecrets,
-    items: ApiKeyStatusBarItems,
+    /** The setup pill: shown only while no usable credential exists. */
+    setup: vscode.StatusBarItem | undefined,
   ) {
-    const { setup, tasks } = items;
     if (!setup) return;
 
     if (yield* hasAnyUsableSetupCredential(stores, secrets)) {
       setup.hide();
-      tasks?.show();
       return;
     }
 
-    tasks?.hide();
     setup.text = '$(rocket) TeXRA: Get Started';
     setup.tooltip =
-      'Click to run the setup assistant — use ChatGPT or add a provider key';
-    setup.command = EXTENSION_COMMANDS.RUN_SETUP_ASSISTANT;
+      'Connect a model: sign in with ChatGPT or add a provider API key';
+    // The welcome card in the TeXRA panel is the one home for that choice.
+    setup.command = 'texra.showMainView';
     setup.accessibilityInformation = { label: 'TeXRA setup, get started' };
     setup.show();
   },

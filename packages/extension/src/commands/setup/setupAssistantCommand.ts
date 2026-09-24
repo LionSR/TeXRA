@@ -260,7 +260,7 @@ export function launchSetupAssistant(
         .some((handle) => agentName(handle.agentName) === SETUP_AGENT_NAME)
     ) {
       void vscode.window.showInformationMessage(
-        'The setup assistant is already running. Follow it in the Progress view.',
+        'The setup assistant is already running. Follow it in the TeXRA panel.',
       );
       yield* Effect.promise(() =>
         vscode.commands.executeCommand('texra.showProgressView'),
@@ -275,7 +275,7 @@ export function launchSetupAssistant(
     // shouldUseCodexSubscription short-circuits when useOpenRouter is true.
     if (!(yield* ensureRoutingConfigured(session.roots, secrets))) {
       void vscode.window.showInformationMessage(
-        'Setup assistant cancelled. Fix the "Use OpenRouter" setting in Dashboard → Models, then run `TeXRA: Run Setup Assistant` again.',
+        'Setup assistant cancelled. Fix the "Use OpenRouter" setting in Settings → Models, then run `TeXRA: Run Setup Assistant` again.',
       );
       return 'not-started' as const;
     }
@@ -283,7 +283,7 @@ export function launchSetupAssistant(
     const proceed = yield* ensureCredentialOrPrompt(session.roots, secrets);
     if (!proceed) {
       void vscode.window.showInformationMessage(
-        'Setup assistant cancelled. Run `TeXRA: Run Setup Assistant` again once you have signed in, turned on your ChatGPT subscription, or set an API key.',
+        'Setup assistant cancelled. Run `TeXRA: Run Setup Assistant` again once you have signed in with your ChatGPT subscription or set an API key.',
       );
       return 'not-started' as const;
     }

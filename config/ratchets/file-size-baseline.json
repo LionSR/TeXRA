@@ -88,7 +88,6 @@
     "src/model/computeModelOptions.ts": 943,
     "src/replacement/maxRules.ts": 668,
     "src/replacement/rules.ts": 830,
-    "src/shared/commands/catalog.ts": 537,
     "src/shared/constants/latexToolchain.ts": 559,
     "src/shared/runs/workflowRunModel.ts": 656,
     "src/shared/schemas/runLedgerEvent.ts": 556,

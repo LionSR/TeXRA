@@ -58,11 +58,15 @@ type ExtensionRegistryCatalogCommandId = ExtensionRegistryCatalogEntry['id'];
 /**
  * Internal ids intentionally absent from the shared catalog — they don't
  * appear in the command palette or `package.json` contributions — but must
- * keep resolving for extension callers.
+ * keep resolving for extension callers. Each takes an argument no palette
+ * invocation could supply.
  */
 export const EXTENSION_INTERNAL_COMMAND_IDS = [
   'texra.compare',
   'texra.acceptEdited',
+  'texra.pack',
+  'texra.clean',
+  'texra.openDoc',
 ] as const;
 
 type InternalExtensionRegistryCommandId =
@@ -92,7 +96,7 @@ export interface ExtensionCommandActions {
     tab?: SettingsTabPanelName,
     agentSubTab?: AgentCategory,
   ): CommandProgram;
-  resetMainView(): CommandProgram;
+  newTask(): CommandProgram;
   cleanBuild(): CommandProgram;
   pack(config: PackConfig): CommandProgram;
   clean(config: CleanConfig): CommandProgram;
@@ -105,10 +109,8 @@ export interface ExtensionCommandActions {
     editedLocation: FileLocation,
     copyMeta?: AcceptCopyMeta,
   ): CommandProgram<boolean>;
-  indentTeX(): CommandProgram;
   signIn(): CommandProgram<boolean>;
   signInChatGpt(): CommandProgram;
-  signInGrok(): CommandProgram;
   signOut(): CommandProgram;
   runSetupAssistant(): CommandProgram;
   openGettingStarted(): CommandProgram;
@@ -123,8 +125,6 @@ export interface ExtensionCommandActions {
   compileTikzFigures(): CommandProgram;
   cloneOverleafProject(): CommandProgram;
   removeApiKey(): CommandProgram;
-  showImportOptions(): CommandProgram;
-  toggleView(): CommandProgram;
   showProgressView(inPlace: boolean): CommandProgram;
   setApiKey(provider: ApiProvider | undefined): CommandProgram;
   createAgentWithAI(category: AgentCategory): CommandProgram;
@@ -155,7 +155,7 @@ const SETTINGS_TAB_COMMAND_HANDLERS = Object.fromEntries(
 export const EXTENSION_COMMAND_HANDLERS = {
   ...SETTINGS_TAB_COMMAND_HANDLERS,
   'texra.showDashboard': (actions) => actions.showSettings(),
-  'texra.mainView.reset': (actions) => actions.resetMainView(),
+  'texra.showMainView': (actions) => actions.newTask(),
   'texra.cleanBuild': (actions) => actions.cleanBuild(),
   'texra.pack': definedHandler(
     z.tuple([PackConfigSchema]),
@@ -183,10 +183,8 @@ export const EXTENSION_COMMAND_HANDLERS = {
       copyMeta?: AcceptCopyMeta,
     ) => actions.acceptEdited(baseLocation, editedLocation, copyMeta),
   ),
-  'texra.indentTeX': (actions) => actions.indentTeX(),
   'texra.auth.signIn': (actions) => actions.signIn(),
   'texra.auth.chatgpt.signIn': (actions) => actions.signInChatGpt(),
-  'texra.auth.grok.signIn': (actions) => actions.signInGrok(),
   'texra.auth.signOut': (actions) => actions.signOut(),
   'texra.auth.viewProfile': (actions) => actions.showSettings('account'),
   [EXTENSION_COMMANDS.RUN_SETUP_ASSISTANT]: (actions) =>
@@ -210,8 +208,6 @@ export const EXTENSION_COMMAND_HANDLERS = {
   [EXTENSION_COMMANDS.CLONE_OVERLEAF_PROJECT]: (actions) =>
     actions.cloneOverleafProject(),
   'texra.removeApiKey': (actions) => actions.removeApiKey(),
-  'texra.showImportOptions': (actions) => actions.showImportOptions(),
-  'texra.toggleView': (actions) => actions.toggleView(),
   'texra.showProgressView': definedHandler(
     z.tuple([z.strictObject({ inPlace: z.boolean().optional() }).optional()]),
     (actions: ExtensionCommandActions, options?: { inPlace?: boolean }) =>
