@@ -546,7 +546,19 @@ describe('childRunLoop E2E fixtures', () => {
         const events: string[] = [];
         const aborted = vi.fn();
         const releaseSessionOwnership = vi.fn(() => release(runId));
-        trackChildHandle(runId, PARENT_RUN_ID);
+        // The CLI session registries track process children, so the fixture
+        // is one: the loop's own fiber survives the stop (the ruled
+        // permanent resident) and the loop's abort signal is what reaches
+        // the strategy's in-flight launch — a native-shaped fixture would
+        // take the stop as the run fiber's interruption instead, which the
+        // launch's abort listener is not guaranteed to observe.
+        const childRun = yield* createChildRun(session, runId, PARENT_RUN_ID, {
+          run: { kind: 'agent', agent: 'fake-cli', tool: 'codex' },
+          userFollowUpSupport: 'terminalBacked',
+          description: 'Keep an agent-CLI child running',
+          config: childRunConfig,
+        }).pipe(Effect.provideService(Runs, session.runs));
+        trackedRunIds.add(runId);
         const launched = yield* Deferred.make<void>();
 
         const strategy: ChildRunStrategy<FakeTurn> = {
@@ -579,6 +591,7 @@ describe('childRunLoop E2E fixtures', () => {
         try {
           const loop = yield* startLoop(runId, strategy, {
             agentName: name,
+            childRun,
           });
 
           expect(events).toEqual(['registered']);
@@ -589,6 +602,8 @@ describe('childRunLoop E2E fixtures', () => {
           expect(events).toEqual(['registered', 'launch']);
           interruptAll();
 
+          // A process child's loop fiber survives the stop: the aborted
+          // turn ends the loop as interrupted and it finalizes CANCELLED.
           yield* Fiber.join(loop);
           expect(aborted).toHaveBeenCalledOnce();
           expect(session.followUps.hasLiveOwner(runId)).toBe(false);
@@ -626,7 +641,10 @@ describe('childRunLoop E2E fixtures', () => {
         );
         yield* rejectTurn(1, createAbortError());
         yield* Fiber.join(stopping);
-        yield* Fiber.join(loop);
+        // The stop ends the loop fiber by interruption; `await` observes the
+        // exit where `join` would inherit it.
+        const exit = yield* Fiber.await(loop);
+        expect(Exit.isFailure(exit)).toBe(true);
 
         // An interrupted turn never settles, so the acceptance row stands and
         // the lease is released only once the loop is done with it.

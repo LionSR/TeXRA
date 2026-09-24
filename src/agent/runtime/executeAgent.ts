@@ -1,6 +1,6 @@
 import * as path from 'node:path';
 
-import { Effect, Fiber, Layer } from 'effect';
+import { Cause, Effect, Exit, Fiber, Layer } from 'effect';
 
 import { logConversationProgress, type AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
@@ -8,6 +8,7 @@ import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
 import { acquireResumedRunOwnership } from '@agent/storage/runLifecycle';
 import { persistedParentRunId } from '@agent/storage/runRecords';
 import { AgentError } from '@common/errors';
+import { ensureError } from '@utils/errors/errorMessage';
 import { createLog } from '@logger/logUtils';
 import type { ProcessServices } from '@platform/processRuntime';
 import { sessionFsLayer } from '@platform/rootedFs';
@@ -614,33 +615,60 @@ const resumeToolUse = Effect.fn('resumeToolUse')(function* (
   // between the read and the launch, released when this scope closes — after
   // the launch's own scope and its compensating finalizers, never before
   // them, and on every exit the old rollback/release pair covered.
-  return yield* Effect.scoped(
-    Effect.gen(function* () {
-      // A recovered child's continuous driver holds the claim already; a
-      // standalone resume takes it here.
-      if (!options.turns) {
-        yield* Effect.acquireRelease(
-          acquireResumedRunOwnership(session, identity.runId),
-          // A release finalizer cannot fail: a failed claim release is a
-          // defect on the scope's exit, never a swallowed error — the same
-          // `orDie` the registry's other claim releases use.
-          () => session.releaseRunLease(identity.runId).pipe(Effect.orDie),
+  // A release finalizer cannot fail, and a failed claim release is no
+  // defect either — a drain that lost queued facts is the caller's typed
+  // error. The finalizer records it and the fold after the scope re-fails:
+  // alone after a successful turn, aggregated behind the run's own failure
+  // otherwise, the run's first — `Effect.onExit`-style combining would bury
+  // it instead.
+  let releaseFailure: Error | undefined;
+  const outcome = yield* Effect.exit(
+    Effect.scoped(
+      Effect.gen(function* () {
+        // A recovered child's continuous driver holds the claim already; a
+        // standalone resume takes it here.
+        if (!options.turns) {
+          yield* Effect.acquireRelease(
+            acquireResumedRunOwnership(session, identity.runId),
+            () =>
+              session.releaseRunLease(identity.runId).pipe(
+                Effect.catch((error) =>
+                  Effect.sync(() => {
+                    releaseFailure = error;
+                  }),
+                ),
+              ),
+          );
+        }
+        const retrieved = yield* retrieveSessionResumeData(
+          identity.runId,
+          identity.agentConfig,
+          session,
+        ).pipe(
+          Effect.flatMap((retrieved) =>
+            retrieved?.type === 'toolUse'
+              ? Effect.succeed(retrieved)
+              : Effect.fail(new ResumeSessionUnavailableError(identity.runId)),
+          ),
         );
-      }
-      const retrieved = yield* retrieveSessionResumeData(
-        identity.runId,
-        identity.agentConfig,
-        session,
-      ).pipe(
-        Effect.flatMap((retrieved) =>
-          retrieved?.type === 'toolUse'
-            ? Effect.succeed(retrieved)
-            : Effect.fail(new ResumeSessionUnavailableError(identity.runId)),
-        ),
-      );
-      // The launched turn owns the run from here, including setup failures.
-      return yield* resumeToolUseWithOwnedLease(retrieved, options);
-    }),
+        // The launched turn owns the run from here, including setup failures.
+        return yield* resumeToolUseWithOwnedLease(retrieved, options);
+      }),
+    ),
+  );
+  if (Exit.isSuccess(outcome)) {
+    if (releaseFailure !== undefined) return yield* Effect.fail(releaseFailure);
+    return outcome.value;
+  }
+  // An interruption unwinds straight past the fold; nothing aggregates
+  // behind it.
+  if (releaseFailure === undefined || Cause.hasInterruptsOnly(outcome.cause))
+    return yield* Effect.failCause(outcome.cause);
+  return yield* Effect.fail(
+    new AggregateError(
+      [ensureError(Cause.squash(outcome.cause)), releaseFailure],
+      `Run ${identity.runId} failed and its final artifacts could not be persisted`,
+    ),
   );
 });
 

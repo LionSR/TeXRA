@@ -114,6 +114,22 @@ export class RunRegistry {
     return this.roster.interrupt(runId);
   }
 
+  /**
+   * Stop whatever of the run is live here, by run id: the child loop's
+   * activation when one is reserved — its interrupt aborts the foreign
+   * turn's signal and, for a native child, the run's fiber with it — and
+   * the run's fiber itself otherwise ({@link interrupt}, which stays the
+   * fiber-only primitive `ChildRunInterruptible.interrupt` composes).
+   */
+  interruptActive(runId: RunId): boolean {
+    const activation = this.roster.activation(runId);
+    if (activation !== undefined) {
+      activation.interrupt();
+      return true;
+    }
+    return this.roster.interrupt(runId);
+  }
+
   /** Reserve an inactive run for deletion; never wait for a live owner. */
   withInactiveRunStep<A, E, R>(
     runId: RunId,

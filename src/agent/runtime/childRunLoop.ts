@@ -113,6 +113,9 @@ interface ChildRunPort {
     outcome: RunOutcome;
     /** Cause behind a FAILED outcome, for diagnosis. */
     error?: unknown;
+    /** The loop's stop observation at finalize time: a landed stop outranks
+     *  the outcome report, so the row and stage resolve to CANCELLED. */
+    stopped?: boolean;
     /** Session stage closed with the derived outcome (the loop's stage). */
     stage?: Pick<StageHandle, 'end'>;
     /** Drop the child's tab once finalized (ephemeral process children). */
@@ -1324,14 +1327,20 @@ export function startChildRunLoop<TTurn, R = never>(
                   { startImmediately: true },
                 );
 
+                // The cost observer above runs between the body's exit and
+                // this derive; a stop landing in that window is still the
+                // run's terminal verdict, so the observation is re-read here,
+                // not carried from the handler's entry.
+                const stoppedAtExit = stopped || loop.isInterrupted();
                 const outcome = deriveRunOutcome({
                   failed: sawTurnFailure,
-                  cancelled: stopped,
+                  cancelled: stoppedAtExit,
                 });
                 if (childRun) {
                   yield* childRun.finalize({
                     outcome,
                     error: lastTurnErr,
+                    stopped: stoppedAtExit,
                     stage: sessionStage,
                     ...(strategy.autoCloseChildRun === true && {
                       autoClose: true,
@@ -1342,7 +1351,7 @@ export function startChildRunLoop<TTurn, R = never>(
                   const handle = runs.getHandle(runId);
                   if (handle) {
                     yield* finalizeRunTerminal({
-                      stopped,
+                      stopped: stoppedAtExit,
                       session: runSession,
                       handle,
                       outcome,
@@ -1355,7 +1364,7 @@ export function startChildRunLoop<TTurn, R = never>(
                           : undefined,
                     });
                   } else if (
-                    (stopped || sawTurnFailure) &&
+                    (stoppedAtExit || sawTurnFailure) &&
                     (yield* runSession.ownsRun(runId))
                   ) {
                     // Failure or cancellation can precede the engine's first handle.

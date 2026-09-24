@@ -335,12 +335,17 @@ export class RunRoster {
       };
       const step = Effect.gen({ self: this }, function* () {
         this.waiting.delete(refusal);
-        // Admission is the fork: the fiber is registered on the entry in the
-        // same synchronous turn it is created, so a stop by run id reaches
-        // the run from its first instant — there is no pre-fiber window a
-        // stop could miss — and the lane is held until the fiber settles,
-        // which is what serializes the next generation behind this one.
-        const fiber = yield* Effect.forkChild(operation);
+        // Admission is the fork: the fiber STARTS with its registration on
+        // the entry, in the same synchronous turn — a fiber only scheduled
+        // would take a pre-start interruption as its whole program and skip
+        // every finalizer the run's unwinding owns, so a stop by run id
+        // reaches the run's live stack from the first instant: there is no
+        // pre-fiber window a stop could miss. The lane is held until the
+        // fiber settles, which is what serializes the next generation behind
+        // this one.
+        const fiber = yield* Effect.forkChild(operation, {
+          startImmediately: true,
+        });
         this.setFiber(runId, fiber);
         return yield* Fiber.join(fiber);
       });

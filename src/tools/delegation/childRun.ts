@@ -42,6 +42,13 @@ interface FinalizeChildRunOptions {
   outcome: RunOutcome;
   /** Cause behind a FAILED outcome, for diagnosis. */
   error?: unknown;
+  /**
+   * The loop's own stop observation: a stop that reached the child before
+   * this finalize outranks the outcome report above — `finalizeRunTerminal`
+   * resolves the row and the stage to CANCELLED and drops the error facts
+   * the outranked failure classified.
+   */
+  stopped?: boolean;
   /** Session stage closed with the derived outcome (agent-CLI loop's stage). */
   stage?: Pick<StageHandle, 'end'>;
   /** Release completed transcript residency while preserving command history. */
@@ -245,16 +252,28 @@ const finalizeChildRun = Effect.fn('finalizeChildRun')(function* (
     };
   }
 
-  yield* finalizeRunTerminal({
+  const finalized = yield* finalizeRunTerminal({
     session,
     handle,
     outcome,
     error,
     stage: options.stage,
+    stopped: options.stopped,
   });
   disposeTrace();
 
   if (options.autoClose) {
     session.transcripts.requestEviction(handle.runId);
+  }
+  // The port's contract is "resolves once the terminal finalizer has
+  // persisted": a `run.end` row that never wrote is this finalize's failure,
+  // so the loop's cleanup aggregation fails the loop over it rather than
+  // report a child whose terminal fact is gone.
+  if (finalized?.persistFailure !== undefined) {
+    return yield* Effect.fail(
+      new Error(`Child run ${handle.runId} terminal state was not persisted`, {
+        cause: finalized.persistFailure,
+      }),
+    );
   }
 }, Effect.uninterruptible);

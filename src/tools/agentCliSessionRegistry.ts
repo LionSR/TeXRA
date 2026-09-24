@@ -126,9 +126,11 @@ export class AgentCliSessionRegistry {
     const interrupted = new Set<RunId>();
     const interrupt = (entry: AgentCliSessionEntry): void => {
       if (interrupted.has(entry.runId)) return;
-      // The run's stop is its fiber's interruption; the registry reaches a
-      // live target wherever the run currently is (fiber, launch, or loop).
-      if (!this.runs.interrupt(entry.runId)) return;
+      // The run's stop is its fiber's interruption, reached through the
+      // child loop's activation when one is reserved — the loop's signal is
+      // what a strategy's in-flight turn observes — and the fiber directly
+      // wherever no loop is (a launch, or a settled loop's residue).
+      if (!this.runs.interruptActive(entry.runId)) return;
       interrupted.add(entry.runId);
     };
 

@@ -119,6 +119,12 @@ interface FinalizeRunTerminalParams {
 
 interface FinalizeRunTerminalResult {
   readonly event: ResultEvent;
+  /** The `run.end` row write's failure, when it failed — a report on the
+   *  result, not a thrown fact: the terminal still drained, settled and
+   *  untracked, and this finalizer's exactly-once claim is spent either way.
+   *  Callers whose own exit must attest the persistence (the child loop's
+   *  cleanup aggregation) read it here. */
+  readonly persistFailure?: unknown;
 }
 
 /**
@@ -286,7 +292,10 @@ const finalizeRunTerminalBody = Effect.fn('finalizeRunTerminal.body')(
         }),
       ),
     );
-    return { event };
+    return {
+      event,
+      ...(finalization.ok ? {} : { persistFailure: finalization.error }),
+    };
   },
 );
 

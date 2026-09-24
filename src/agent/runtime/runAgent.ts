@@ -192,116 +192,130 @@ export const runAgent = Effect.fn('runAgent')(function* (
 
       let lifecycleStarted = false;
       const callerOnRun = executeAgentOptions.onRun;
-      return yield* Effect.gen(function* () {
-        onRunLeaseAcquired?.(runId);
-        // Ownership is the fence for the edge as well: a detach another
-        // host committed while this launch prepared has folded by now, and
-        // a foreign row never reaches a handle this session tracks, so the
-        // registry applies the severed edge here (approval ancestry, the
-        // former parent's roster) before the lifecycle reads the lineage
-        // back off the fresh edge below. Inside the owned region: a failed
-        // read releases ownership like any other launch failure.
-        const liveParent = shouldRegister
-          ? undefined
-          : yield* persistedParentRunId(runSession, runId);
-        if (resumedParentRunId !== undefined && liveParent === undefined)
-          runSession.runs.detachChildren(resumedParentRunId, [runId]);
-        const onRun = (handle: AgentRunHandle): Effect.Effect<void, Error> =>
-          Effect.suspend(() => {
-            lifecycleStarted = true;
-            return callerOnRun?.(handle) ?? Effect.void;
-          });
-        return liveParent !== undefined
-          ? yield* executeAgent(definition, runId, {
-              ...executeAgentOptions,
-              parentRunId: liveParent,
-              session: runSession,
-              resumed: !shouldRegister,
-              onRun,
-            })
-          : yield* executeAgent(definition, runId, {
-              ...executeAgentOptions,
-              session: runSession,
-              resumed: !shouldRegister,
-              onRun,
+      // The terminal aggregation REPLACES the run's own failure: it is a
+      // value the exit handler records and this fold re-fails, never the
+      // handler's own failure — `Effect.onExit` combines a handler failure
+      // with the run's cause instead of replacing it, and the aggregate
+      // would drown beneath the failure it diagnoses. Interruption still
+      // unwinds straight past the `Effect.exit` below, with the handler's
+      // uninterruptible cleanup already run.
+      let aggregated: Error | undefined;
+      const run = yield* Effect.exit(
+        Effect.gen(function* () {
+          onRunLeaseAcquired?.(runId);
+          // Ownership is the fence for the edge as well: a detach another
+          // host committed while this launch prepared has folded by now, and
+          // a foreign row never reaches a handle this session tracks, so the
+          // registry applies the severed edge here (approval ancestry, the
+          // former parent's roster) before the lifecycle reads the lineage
+          // back off the fresh edge below. Inside the owned region: a failed
+          // read releases ownership like any other launch failure.
+          const liveParent = shouldRegister
+            ? undefined
+            : yield* persistedParentRunId(runSession, runId);
+          if (resumedParentRunId !== undefined && liveParent === undefined)
+            runSession.runs.detachChildren(resumedParentRunId, [runId]);
+          const onRun = (handle: AgentRunHandle): Effect.Effect<void, Error> =>
+            Effect.suspend(() => {
+              lifecycleStarted = true;
+              return callerOnRun?.(handle) ?? Effect.void;
             });
-      }).pipe(
-        // The launch's terminal: a stop lands before it or after it, never
-        // inside — the prior-outcome restore, the host's final artifacts
-        // and the lease release settle atomically, on every exit.
-        Effect.onExit((run) =>
-          Effect.uninterruptible(
-            Effect.gen(function* () {
-              const failures: unknown[] = [];
-              if (Exit.isFailure(run)) {
-                const error = Cause.squash(run.cause);
-                failures.push(error);
-                const restoredOutcome = shouldRegister
-                  ? RUN_OUTCOME.FAILED
-                  : priorEnd?.outcome;
-                if (!lifecycleStarted && restoredOutcome !== undefined) {
-                  // A resume restores its snapshot only while the snapshot is
-                  // still the run's terminal fact: a generation that admitted
-                  // itself beside this one (both passed the duplicate check before
-                  // either awaited) may have written a newer end, which this
-                  // failure must not undo. A read that fails here is one more
-                  // failure to report, never a reason to skip the release below.
-                  const current = shouldRegister
-                    ? Exit.succeed(priorEnd)
-                    : yield* Effect.exit(
-                        getRunRecords(runSession, runId).readRunEnd(),
-                      );
-                  if (Exit.isFailure(current)) {
-                    failures.push(Cause.squash(current.cause));
-                  } else {
-                    const currentStable = stableStringify(current.value);
-                    if (
-                      currentStable !== undefined &&
-                      priorEndStable !== undefined &&
-                      currentStable === priorEndStable
-                    ) {
-                      const finalization = yield* Effect.exit(
-                        finalizeRun(runSession, {
-                          runId,
-                          outcome: restoredOutcome,
-                        }),
-                      );
-                      if (Exit.isFailure(finalization))
-                        failures.push(Cause.squash(finalization.cause));
-                      else if (!finalization.value.ok)
-                        failures.push(finalization.value.error);
+          return liveParent !== undefined
+            ? yield* executeAgent(definition, runId, {
+                ...executeAgentOptions,
+                parentRunId: liveParent,
+                session: runSession,
+                resumed: !shouldRegister,
+                onRun,
+              })
+            : yield* executeAgent(definition, runId, {
+                ...executeAgentOptions,
+                session: runSession,
+                resumed: !shouldRegister,
+                onRun,
+              });
+        }).pipe(
+          // The launch's terminal: a stop lands before it or after it, never
+          // inside — the prior-outcome restore, the host's final artifacts
+          // and the lease release settle atomically, on every exit.
+          Effect.onExit((exit) =>
+            Effect.uninterruptible(
+              Effect.gen(function* () {
+                const failures: unknown[] = [];
+                if (Exit.isFailure(exit)) {
+                  const error = Cause.squash(exit.cause);
+                  failures.push(error);
+                  const restoredOutcome = shouldRegister
+                    ? RUN_OUTCOME.FAILED
+                    : priorEnd?.outcome;
+                  if (!lifecycleStarted && restoredOutcome !== undefined) {
+                    // A resume restores its snapshot only while the snapshot is
+                    // still the run's terminal fact: a generation that admitted
+                    // itself beside this one (both passed the duplicate check before
+                    // either awaited) may have written a newer end, which this
+                    // failure must not undo. A read that fails here is one more
+                    // failure to report, never a reason to skip the release below.
+                    const current = shouldRegister
+                      ? Exit.succeed(priorEnd)
+                      : yield* Effect.exit(
+                          getRunRecords(runSession, runId).readRunEnd(),
+                        );
+                    if (Exit.isFailure(current)) {
+                      failures.push(Cause.squash(current.cause));
+                    } else {
+                      const currentStable = stableStringify(current.value);
+                      if (
+                        currentStable !== undefined &&
+                        priorEndStable !== undefined &&
+                        currentStable === priorEndStable
+                      ) {
+                        const finalization = yield* Effect.exit(
+                          finalizeRun(runSession, {
+                            runId,
+                            outcome: restoredOutcome,
+                          }),
+                        );
+                        if (Exit.isFailure(finalization))
+                          failures.push(Cause.squash(finalization.cause));
+                        else if (!finalization.value.ok)
+                          failures.push(finalization.value.error);
+                      }
                     }
                   }
                 }
-              }
 
-              const artifacts = yield* Effect.exit(
-                Effect.suspend(
-                  () => beforeLeaseRelease?.(runSession) ?? Effect.void,
-                ),
-              );
-              if (Exit.isFailure(artifacts))
-                failures.push(Cause.squash(artifacts.cause));
-              if (Exit.isFailure(artifacts) || artifacts.value !== true) {
-                const release = yield* Effect.exit(
-                  runSession.releaseRunLease(runId),
+                const artifacts = yield* Effect.exit(
+                  Effect.suspend(
+                    () => beforeLeaseRelease?.(runSession) ?? Effect.void,
+                  ),
                 );
-                if (Exit.isFailure(release))
-                  failures.push(Cause.squash(release.cause));
-              }
-              if (failures.length > 0) {
-                return yield* Effect.fail(
-                  ensureError(
+                if (Exit.isFailure(artifacts))
+                  failures.push(Cause.squash(artifacts.cause));
+                if (Exit.isFailure(artifacts) || artifacts.value !== true) {
+                  const release = yield* Effect.exit(
+                    runSession.releaseRunLease(runId),
+                  );
+                  if (Exit.isFailure(release))
+                    failures.push(Cause.squash(release.cause));
+                }
+                if (failures.length > 0) {
+                  aggregated = ensureError(
                     aggregateError(
                       failures,
                       `Run ${runId} failed or its final artifacts could not be persisted`,
                     ),
-                  ),
-                );
-              }
-            }),
+                  );
+                }
+              }),
+            ),
           ),
         ),
+      );
+      if (Exit.isSuccess(run)) return run.value;
+      if (Cause.hasInterruptsOnly(run.cause))
+        return yield* Effect.failCause(run.cause);
+      return yield* Effect.fail(
+        aggregated ?? ensureError(Cause.squash(run.cause)),
       );
     }),
   );

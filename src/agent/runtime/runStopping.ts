@@ -54,11 +54,23 @@ export class RunStopper {
     if (!handle) {
       const activation = this.roster.activation(runId);
       activation?.interrupt();
+      // A run between admission and its lifecycle's handle — the lineage
+      // reads, the definition load — is its fiber and nothing else; the stop
+      // lands there or misses the launch entirely.
+      const fiber = this.roster.fiber(runId);
+      if (fiber !== undefined && activation === undefined)
+        fiber.interruptUnsafe();
       this.roster.notifyWaiters(runId);
-      const reached = activation !== undefined;
+      const reached = activation !== undefined || fiber !== undefined;
       return {
         accepted: () => reached,
-        settlement: this.roster.throughStop(runId, stopToken, Effect.void),
+        settlement: this.roster.throughStop(
+          runId,
+          stopToken,
+          fiber === undefined
+            ? Effect.void
+            : Fiber.await(fiber).pipe(Effect.asVoid),
+        ),
       };
     }
     const visited = new Set<string>();
