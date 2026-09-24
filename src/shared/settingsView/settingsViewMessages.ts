@@ -354,7 +354,6 @@ const ToolDependencyStatusSchema = z.enum([
 ]);
 export type ToolDependencyStatus = z.infer<typeof ToolDependencyStatusSchema>;
 
-/** Category for grouping tools in the dashboard */
 const ToolCategorySchema = z.enum([
   'file',
   'latex',
@@ -387,7 +386,7 @@ const ToolInstallActionSchema = z.discriminatedUnion('kind', [
 ]);
 export type ToolInstallAction = z.infer<typeof ToolInstallActionSchema>;
 
-/** Single tool entry in the dashboard */
+/** One dashboard card; `settings` are its inline rows as [catalog key, label]. */
 const ToolDashboardItemSchema = z.strictObject({
   id: z.string(),
   name: z.string(),
@@ -403,6 +402,7 @@ const ToolDashboardItemSchema = z.strictObject({
   authNote: z.string().optional(),
   toggleable: z.boolean().optional(),
   enabled: z.boolean().optional(),
+  settings: z.array(z.tuple([z.string(), z.string()])).optional(),
 });
 export type ToolDashboardItem = z.infer<typeof ToolDashboardItemSchema>;
 

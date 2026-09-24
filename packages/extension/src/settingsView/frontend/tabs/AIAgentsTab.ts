@@ -1,8 +1,8 @@
 /**
  * Integrations tab for coding agents, services, reference managers, and
  * assisted inquiries. Reuses the same `tool-card` component as the Tools tab,
- * plus the per-agent inline settings (Codex, Claude Agent) that used to live
- * inside ToolsTab.
+ * plus the inline settings rows each card's plugin declares (Codex and Claude
+ * Code today).
  */
 
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
@@ -10,23 +10,8 @@ import { customElement, property } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - shared styles
-import {
-  type ClaudeAgentEffort,
-  type ClaudeAgentModel,
-  type ClaudeAgentPermissionMode,
-  type CodexApprovalPolicy,
-  type CodexReasoningEffort,
-  type CodexSandboxMode,
-  CLAUDE_AGENT_DEFAULT_EFFORT,
-  CLAUDE_AGENT_DEFAULT_MODEL,
-  CLAUDE_AGENT_DEFAULT_PERMISSION_MODE,
-  CODEX_APPROVAL_POLICY_DEFAULT,
-  CODEX_REASONING_EFFORT_DEFAULT,
-  CODEX_SANDBOX_MODE_DEFAULT,
-} from '@shared/schemas';
 import { settingsViewSettingByKey } from '@shared/state/stateSettings';
 import { type ToolDashboardItem } from '@shared/settingsView/settingsViewMessages';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { commonViewStyles, designTokens } from '@ui/styles';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { renderEmptyState } from '@ui/wa/emptyState';
@@ -102,19 +87,11 @@ export class AIAgentsTab extends LitElement {
 
   @property({ attribute: false }) items: ToolDashboardItem[] = [];
   @property({ type: Boolean }) loaded = false;
-  @property({ type: String }) codexSandboxMode: CodexSandboxMode =
-    CODEX_SANDBOX_MODE_DEFAULT;
-  @property({ type: String }) codexReasoningEffort: CodexReasoningEffort =
-    CODEX_REASONING_EFFORT_DEFAULT;
-  @property({ type: String }) codexApprovalPolicy: CodexApprovalPolicy =
-    CODEX_APPROVAL_POLICY_DEFAULT;
-  @property({ type: String }) claudeAgentModel: ClaudeAgentModel =
-    CLAUDE_AGENT_DEFAULT_MODEL;
-  @property({ type: String })
-  claudeAgentPermissionMode: ClaudeAgentPermissionMode =
-    CLAUDE_AGENT_DEFAULT_PERMISSION_MODE;
-  @property({ type: String }) claudeAgentEffort: ClaudeAgentEffort =
-    CLAUDE_AGENT_DEFAULT_EFFORT;
+  /** Current value of every inline setting the cards declare, by catalog
+   *  key; `SettingsApp` reads them from the keyed setting signals. */
+  @property({ attribute: false }) settingValues: Readonly<
+    Record<string, string>
+  > = {};
 
   /**
    * One catalog-backed select row: the allowed values, their labels, and the
@@ -126,7 +103,7 @@ export class AIAgentsTab extends LitElement {
    */
   private renderSelectRow(
     label: string,
-    key: WorkspaceStateKey,
+    key: string,
     value: string,
   ): TemplateResult {
     const entry = settingsViewSettingByKey(key);
@@ -134,6 +111,9 @@ export class AIAgentsTab extends LitElement {
       throw new Error(`No settings-view catalog row for setting "${key}"`);
     }
     const options = catalogEnumChoices(key);
+    if (options.length === 0) {
+      throw new Error(`Inline setting "${key}" is not an enum catalog row`);
+    }
     const controlId = `ai-agent-${key.replaceAll('.', '-')}`;
     const onChange = (e: Event): void => {
       const selected = readSelectValue(e);
@@ -165,47 +145,12 @@ export class AIAgentsTab extends LitElement {
     `;
   }
 
-  private renderInlineSettingsFor(itemId: string): TemplateResult | null {
-    let rows: ReadonlyArray<readonly [string, WorkspaceStateKey, string]>;
-    if (itemId === 'codex') {
-      rows = [
-        [
-          'Sandbox mode',
-          WorkspaceStateKey.CODEX_SANDBOX_MODE,
-          this.codexSandboxMode,
-        ],
-        [
-          'Reasoning effort',
-          WorkspaceStateKey.CODEX_REASONING_EFFORT,
-          this.codexReasoningEffort,
-        ],
-        [
-          'Approval policy',
-          WorkspaceStateKey.CODEX_APPROVAL_POLICY,
-          this.codexApprovalPolicy,
-        ],
-      ];
-    } else if (itemId === 'claude-agent') {
-      rows = [
-        ['Model', WorkspaceStateKey.CLAUDE_AGENT_MODEL, this.claudeAgentModel],
-        [
-          'Reasoning effort',
-          WorkspaceStateKey.CLAUDE_AGENT_EFFORT,
-          this.claudeAgentEffort,
-        ],
-        [
-          'Permission mode',
-          WorkspaceStateKey.CLAUDE_AGENT_PERMISSION_MODE,
-          this.claudeAgentPermissionMode,
-        ],
-      ];
-    } else {
-      return null;
-    }
+  private renderInlineSettings(item: ToolDashboardItem): TemplateResult | null {
+    if (!item.settings?.length) return null;
     return html`
       <div class="settings-section">
-        ${rows.map(([label, key, value]) =>
-          this.renderSelectRow(label, key, value),
+        ${item.settings.map(([key, label]) =>
+          this.renderSelectRow(label, key, this.settingValues[key]),
         )}
       </div>
     `;
@@ -280,9 +225,7 @@ export class AIAgentsTab extends LitElement {
                     items,
                     (item) => item.id,
                     (item) => {
-                      const inlineSettings = this.renderInlineSettingsFor(
-                        item.id,
-                      );
+                      const inlineSettings = this.renderInlineSettings(item);
                       return html`
                         <tool-card .item=${item}>
                           ${

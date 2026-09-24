@@ -18,9 +18,8 @@ import type { AgentDirectories } from '@platform/interfaces';
 import type { LanguageModel } from '@platform/languageModel';
 import type { GlobalStorageFs } from '@platform/rootedFs';
 import type { AgentCategory } from '@shared/schemas';
-import { DELEGATE_MULTI_AGENTS_TOOL_NAME } from '@shared/constants/delegationTools';
 import { TOOL_JSON_SCHEMA_OPTIONS } from '@shared/tools/toolJsonSchema';
-import type { RegisteredToolName } from '@tools/registry';
+import { TOOL_PLUGINS } from '@tools/plugins';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { isNonEmptyString } from '@utils/text/stringUtils';
 import { extractTextFromTag } from '@utils/text/xmlExtraction';
@@ -120,123 +119,39 @@ interface AgentBlueprint {
   fallbackVars: Record<string, string>;
 }
 
+/** One pickable tool group of the agent creator: a dashboard-listed plugin. */
 interface ToolGroup {
-  description: string;
-  tools: readonly RegisteredToolName[];
-  keywords: string[];
+  readonly description: string;
+  readonly tools: readonly string[];
 }
 
-export const TOOL_GROUPS: Record<string, ToolGroup> = {
-  'File Operations': {
-    description: 'Read, write, edit, search files and run shell commands',
-    tools: ['bash', 'read_file', 'write_file', 'edit_file', 'glob', 'grep'],
-    keywords: ['file', 'edit', 'code', 'write', 'read', 'script', 'shell'],
-  },
-  'Web & Search': {
-    description: 'Search the web and fetch page content',
-    tools: ['web_search', 'web_fetch'],
-    keywords: ['web', 'search', 'internet', 'online', 'url', 'fetch', 'browse'],
-  },
-  'Academic Research': {
-    description: 'Search arXiv, CrossRef, and download papers',
-    tools: [
-      'arxiv_search',
-      'arxiv_metadata',
-      'download_arxiv_source',
-      'crossref_search',
-    ],
-    keywords: [
-      'arxiv',
-      'paper',
-      'research',
-      'literature',
-      'review',
-      'survey',
-      'cite',
-      'doi',
-      'journal',
-    ],
-  },
-  'LaTeX Processing': {
-    description: 'Extract figures, bibliography, TikZ, and count words',
-    tools: [
-      'extract_figures',
-      'extract_bib_entries',
-      'extract_tikz_figures',
-      'texcount',
-    ],
-    keywords: [
-      'latex',
-      'figure',
-      'tikz',
-      'bibliography',
-      'bib',
-      'word count',
-      'extract',
-    ],
-  },
-  'Citation Management': {
-    description: 'Manage references with Zotero',
-    tools: [
-      'zotero_add',
-      'zotero_search',
-      'zotero_export',
-      'zotero_collections',
-    ],
-    keywords: ['zotero', 'citation', 'reference', 'bibliography', 'endnote'],
-  },
-  Computation: {
-    description: 'Mathematical computation with Wolfram Alpha',
-    tools: ['wolfram'],
-    keywords: [
-      'math',
-      'compute',
-      'calculate',
-      'wolfram',
-      'symbolic',
-      'equation',
-    ],
-  },
-  'Agent Delegation': {
-    description: 'Delegate tasks to other agents and manage executions',
-    tools: [
-      'delegate_workflow',
-      DELEGATE_MULTI_AGENTS_TOOL_NAME,
-      'delegate_agent',
-      'executions',
-      'accept_run_files',
-    ],
-    keywords: ['delegate', 'orchestrat', 'pipeline', 'multi-agent', 'chain'],
-  },
-  'Lean 4': {
-    description: 'Lean 4 proof assistant integration',
-    tools: [
-      'lean_diagnostics',
-      'lean_file',
-      'lean_project',
-      'lean_inspect',
-      'lean_loogle',
-    ],
-    keywords: ['lean', 'proof', 'theorem', 'formal', 'verification'],
-  },
-  Utility: {
-    description: 'Memory, todo tracking, and diagnostics',
-    tools: ['memory', 'todo_write', 'plan', 'diagnostics'],
-    keywords: ['memory', 'todo', 'plan', 'diagnostic', 'track'],
-  },
-};
+/** The plugin every suggestion includes, as a safe baseline for any tool-use
+ *  agent. */
+const BASELINE_PLUGIN_ID = 'file-ops';
+
+/** Every plugin the Tools dashboard lists; hidden ones are not offered. */
+const GROUP_PLUGINS = TOOL_PLUGINS.filter((plugin) => plugin.hidden !== true);
+
+/** The agent creator's tool groups, keyed by plugin name in manifest order. */
+export const TOOL_GROUPS: Readonly<Record<string, ToolGroup>> =
+  Object.fromEntries(
+    GROUP_PLUGINS.map((plugin) => [
+      plugin.name,
+      { description: plugin.description, tools: plugin.toolNames },
+    ]),
+  );
 
 /**
- * Tool groups whose keywords match `description`. `File Operations` is
- * always included as a safe baseline for any tool-use agent.
+ * Tool groups whose plugin keywords match `description`, plus the baseline
+ * plugin's group.
  */
 function suggestToolGroups(description: string): string[] {
   const lower = description.toLowerCase();
-  const suggested = new Set<string>(['File Operations']);
-  for (const [name, group] of Object.entries(TOOL_GROUPS)) {
-    if (group.keywords.some((kw) => lower.includes(kw))) suggested.add(name);
-  }
-  return [...suggested];
+  return GROUP_PLUGINS.filter(
+    (plugin) =>
+      plugin.id === BASELINE_PLUGIN_ID ||
+      plugin.keywords?.some((kw) => lower.includes(kw)) === true,
+  ).map((plugin) => plugin.name);
 }
 
 /**

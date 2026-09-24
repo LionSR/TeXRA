@@ -60,13 +60,7 @@ import {
   bashApprovalEnabled,
   chatgptCodexContextWindow,
   childRunConcurrencyBudget,
-  claudeAgentEffort,
-  claudeAgentModel,
-  claudeAgentPermissionMode,
-  codexApprovalPolicy,
-  codexReasoningEffort,
   compactionThresholdPercent,
-  codexSandboxMode,
   copilotRouteInfos,
   customAgentDir,
   customAgentDirIsDefault,
@@ -100,6 +94,7 @@ import {
   providerKeyStatuses,
   resetSettingsState,
   selectedPanel,
+  settingSignal,
   sessionProblem,
   skillLoadIssues,
   skillsList,
@@ -361,19 +356,23 @@ export class SettingsApp extends SignalWatcher(LitElement) {
             .issues=${skillLoadIssues.get()}
           ></skills-tab>
         `;
-      case 'ai-agents':
+      case 'ai-agents': {
+        const items = toolDashboardItems.get();
+        // Read here, inside this watcher's render, so a snapshot that changes
+        // one of the cards' inline settings re-renders the tab.
+        const settingValues = Object.fromEntries(
+          items
+            .flatMap((item) => item.settings ?? [])
+            .map(([key]) => [key, settingSignal<string>(key).get()]),
+        );
         return html`
           <ai-agents-tab
-            .items=${toolDashboardItems.get()}
+            .items=${items}
             .loaded=${toolDashboardLoaded.get()}
-            .codexSandboxMode=${codexSandboxMode.get()}
-            .codexReasoningEffort=${codexReasoningEffort.get()}
-            .codexApprovalPolicy=${codexApprovalPolicy.get()}
-            .claudeAgentModel=${claudeAgentModel.get()}
-            .claudeAgentPermissionMode=${claudeAgentPermissionMode.get()}
-            .claudeAgentEffort=${claudeAgentEffort.get()}
+            .settingValues=${settingValues}
           ></ai-agents-tab>
         `;
+      }
       case 'latex':
         return html`
           <latex-tab
