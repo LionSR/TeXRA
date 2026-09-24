@@ -50,7 +50,6 @@ import {
 import { DELIVERY_TAG } from '@shared/deliveryTags';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { buildSyntheticToolUseConfig } from '@tools/core/syntheticAgentConfig';
-import { parseWorkingDirectory } from '@tools/pathResolution';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import { formatWallTimeSeconds, previewLabel } from '@utils/text/stringUtils';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
@@ -536,10 +535,9 @@ const launchCodexSession = Effect.fn('codex.launchCodexSession')(function* (
   AgentCliToolFailure,
   ToolCall | Runs | AgentResume
 > {
-  const workingDir = parseWorkingDirectory(parentWorkingDirectory);
   const { roots } = yield* ToolCall;
   const thread = yield* agentCliCall(
-    createCodexThread(input, sandboxMode, roots, workingDir),
+    createCodexThread(input, sandboxMode, roots, parentWorkingDirectory),
   );
   // Synthetic run metadata for the child run: Codex runs outside the normal
   // run loop, so the tool-use category and a stable Codex model label are

@@ -66,27 +66,30 @@ export interface MatchedExternalRoot extends ExternalRoot {
 const roots = new Map<ExternalRootKind, ExternalRoot>();
 
 /**
- * Canonicalise an absolute path: resolve `.`/`..` segments, then walk
- * symlinks via realpath. When the final segment does not exist yet
- * (ENOENT / ENOTDIR) we recursively canonicalise the longest existing
- * prefix and re-append the non-existent tail — writes that create new
- * files must still match.
+ * Canonicalise a path: resolve `.`/`..` segments, then walk symlinks via
+ * realpath. When the final segment does not exist yet (ENOENT / ENOTDIR) we
+ * recursively canonicalise the longest existing prefix and re-append the
+ * non-existent tail, so writes that create new files still match.
  *
  * Throws on permission errors (EACCES/EPERM) or any unexpected error so
  * callers can fail closed: a path we cannot verify must never be admitted
- * to the allowlist.
+ * to the allowlist. `canonicalizeWorkspacePath` is the one tolerant caller.
+ *
+ * Uses the JS `realpathSync`, not `.native`: on Windows the native call
+ * rewrites a mapped drive to its UNC target, and the workspace identity built
+ * on this function must keep the spelling the user opened.
  */
-function canonicalise(p: string): string {
+export function canonicalizePath(p: string): string {
   const resolved = path.resolve(p);
   try {
-    return fs.realpathSync.native(resolved);
+    return fs.realpathSync(resolved);
   } catch (err) {
     if (!isFileNotFoundError(err) && !isNotADirectoryError(err)) {
       throw err;
     }
     const parent = path.dirname(resolved);
     if (parent === resolved) return resolved; // reached the filesystem root
-    return path.join(canonicalise(parent), path.basename(resolved));
+    return path.join(canonicalizePath(parent), path.basename(resolved));
   }
 }
 
@@ -105,13 +108,13 @@ export function registerExternalRoot(
     );
   }
   // Canonicalise at registration so find-time canonicalisation lands in the
-  // same space. canonicalise tolerates non-existent trailing segments itself
+  // same space. canonicalizePath tolerates non-existent trailing segments itself
   // and only throws on permission errors or unexpected failures; per the
   // fail-closed contract in its JSDoc, let those propagate so an
   // un-verifiable path is never admitted to the allowlist. Registration is
   // setup-time and the caller already has a try/catch that surfaces a
   // meaningful error.
-  const canonicalPath = canonicalise(absolutePath);
+  const canonicalPath = canonicalizePath(absolutePath);
   // Frozen: the registry hands these entries to tool code and to
   // `listExternalRoots`, and a mutated `writable` or `absolutePath` would
   // silently widen the allowlist for every later lookup.
@@ -146,7 +149,7 @@ export function findExternalRoot(
 
   let resolved: string;
   try {
-    resolved = canonicalise(absolutePath);
+    resolved = canonicalizePath(absolutePath);
   } catch {
     // Permission error or unexpected failure — refuse to admit the path
     // rather than approve something we cannot verify.

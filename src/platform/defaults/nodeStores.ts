@@ -2,8 +2,8 @@
  * The JSON stores a Node-family host (CLI, desktop, extension) opens while
  * it composes its process.
  *
- * Every host resolves the same files from the same
- * {@link WorkspaceStorageProvider}, so the derivations live here once: which
+ * Every host resolves the same files from the same storage root, so the
+ * derivations live here once: which
  * store backs workspace configuration (the project `.texra/config.json` when
  * it is usable, the internal workspace store otherwise), where global
  * configuration lives. Workspace and global state are not here: they are rows
@@ -29,8 +29,11 @@ import {
   TEXRA_CONFIG_FILE_NAME,
   workspaceTexraConfigPath,
 } from './nodeStorage';
+import {
+  resolveGlobalStoragePath,
+  resolveWorkspaceStoragePath,
+} from './workspaceStorage';
 import type { JsonConfigProviderOptions } from './jsonConfigProvider';
-import type { WorkspaceStorageProvider } from './workspaceStorage';
 
 /**
  * Whether a write through a `JsonStore` at `filePath` could succeed:
@@ -117,33 +120,31 @@ export const openTexraWorkspaceConfigStore = Effect.fn(
 });
 
 /**
- * Open both stores backing a host's {@link JsonConfigProvider}.
- *
- * `storage` is the two path getters and nothing else: a
- * {@link WorkspaceStorageProvider} satisfies it, and a caller that must not
- * create a directory under the storage root (the CLI's pre-platform startup
- * read, whose `clone` entry may only be able to read it) passes the pure path
- * calculators instead. Neither store creates anything on open.
+ * Open both stores backing a host's {@link JsonConfigProvider} for the
+ * workspace `workspaceRoot` under `storageRoot`. Neither store creates
+ * anything on open, so a caller that must not create a directory under the
+ * storage root (the CLI's pre-platform startup read, whose `clone` entry may
+ * only be able to read it) is served too.
  */
 export const openTexraConfigStores = Effect.fn(
   'nodeStores.openTexraConfigStores',
 )(function* (
-  storage: Pick<
-    WorkspaceStorageProvider,
-    'getStoragePath' | 'getGlobalStoragePath'
-  >,
+  storageRoot: string,
   workspaceRoot: string | undefined,
   warn: (message: string) => void,
 ) {
   const [workspace, global] = yield* Effect.all(
     [
       openTexraWorkspaceConfigStore(
-        storage.getStoragePath(),
+        resolveWorkspaceStoragePath(storageRoot, workspaceRoot),
         workspaceRoot,
         warn,
       ),
       JsonStore.open(
-        path.join(storage.getGlobalStoragePath(), TEXRA_CONFIG_FILE_NAME),
+        path.join(
+          resolveGlobalStoragePath(storageRoot),
+          TEXRA_CONFIG_FILE_NAME,
+        ),
       ),
     ],
     { concurrency: 'unbounded' },

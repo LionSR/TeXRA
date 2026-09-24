@@ -10,10 +10,9 @@ import { afterEach, describe, expect, vi } from 'vitest';
 import type { ElectronSecrets } from '@desktop/main/platform/electronSecrets';
 import { NotificationFailed } from '@hosts/uiHosts';
 import type { JsonStore } from '@platform/defaults/jsonStore';
-import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 
 // Local imports - test support
-import { nodePlatformLayer, pathExists } from '@test/support/fsTestUtils';
+import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import {
   makeTempDir as makeSharedTempDir,
   useTempDirs,
@@ -102,35 +101,6 @@ describe('desktop platform adapters', () => {
         expect(store.get('missing', 'fallback')).toBe('fallback');
         expect(store.snapshot()).toEqual({ session: { active: true } });
       }).pipe(Effect.provide(nodePlatformLayer)),
-  );
-
-  it.effect(
-    'creates stable global and workspace storage roots under userData',
-    () =>
-      Effect.gen(function* () {
-        const root = yield* makeTempDir('texra-electron-storage-');
-
-        const first = new WorkspaceStorageProvider(root, '/workspace/a');
-        const same = new WorkspaceStorageProvider(root, '/workspace/a');
-        const other = new WorkspaceStorageProvider(root, '/workspace/b');
-        const noWorkspace = new WorkspaceStorageProvider(root, undefined);
-
-        expect(first.getGlobalStoragePath()).toBe(
-          join(root, 'v1', 'global-storage'),
-        );
-        expect(first.getStoragePath()).toBe(same.getStoragePath());
-        expect(first.getStoragePath()).not.toBe(other.getStoragePath());
-        expect(noWorkspace.getStoragePath()).toMatch(/workspace-storage/);
-        expect(
-          yield* Effect.promise(() => pathExists(first.getGlobalStoragePath())),
-        ).toBe(true);
-        expect(
-          yield* Effect.promise(() => pathExists(first.getStoragePath())),
-        ).toBe(true);
-        expect(
-          yield* Effect.promise(() => pathExists(noWorkspace.getStoragePath())),
-        ).toBe(true);
-      }),
   );
 
   it.effect(

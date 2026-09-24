@@ -21,7 +21,6 @@ import {
 } from '@agent/core/definition/AgentConfig';
 import type { ToolServices } from '@agent/runtime/ToolServices';
 import { WorkspaceFs } from '@platform/rootedFs';
-import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { ToolResult, WorkflowAgentProposal } from '@shared/schemas';
 import {
   AgentCategory,
@@ -41,7 +40,8 @@ import { DELEGATE_MULTI_AGENTS_TOOL_NAME } from '@shared/constants/delegationToo
 import { configureDelegatedChildApprovals } from '@tools/approval';
 import {
   assertWritable,
-  resolveWorkspaceRelativePath,
+  resolveToolPath,
+  type ToolPathCall,
 } from '@tools/pathResolution';
 import { defineTool } from '@tools/core/define';
 import { errorResult, executed } from '@tools/core/result';
@@ -159,15 +159,9 @@ const fileSystemAt = (
 const persistWorkflowScript = Effect.fn('persistWorkflowScript')(function* (
   script: string,
   submissionId: string,
-  roots: WorkspaceRoots,
-  workingDirectory: string | undefined,
+  call: ToolPathCall,
 ) {
-  const directory = yield* resolveWorkspaceRelativePath(
-    roots,
-    roots.workspace,
-    WORKFLOW_SCRIPT_DIRECTORY,
-    workingDirectory,
-  );
+  const directory = yield* resolveToolPath(call, WORKFLOW_SCRIPT_DIRECTORY);
   assertWritable(directory, WORKFLOW_SCRIPT_DIRECTORY);
   const directoryFs = yield* fileSystemAt(directory.fsPath);
   yield* directoryFs
@@ -176,11 +170,9 @@ const persistWorkflowScript = Effect.fn('persistWorkflowScript')(function* (
   const stem = workflowScriptDraftStem(submissionId);
   for (let suffix = 0; ; suffix += 1) {
     const filename = suffix === 0 ? `${stem}.mjs` : `${stem}-${suffix + 1}.mjs`;
-    const resolved = yield* resolveWorkspaceRelativePath(
-      roots,
-      roots.workspace,
+    const resolved = yield* resolveToolPath(
+      call,
       `${WORKFLOW_SCRIPT_DIRECTORY}/${filename}`,
-      workingDirectory,
     );
     assertWritable(resolved, resolved.relative);
     const fs = yield* fileSystemAt(resolved.fsPath);
@@ -250,12 +242,7 @@ function executeWorkflowScriptTool(
     let scriptPath: string;
     let script: string;
     if (input.scriptPath != null) {
-      const resolved = yield* resolveWorkspaceRelativePath(
-        parent.roots,
-        parent.roots.workspace,
-        input.scriptPath!,
-        workingDirectory,
-      );
+      const resolved = yield* resolveToolPath(parent, input.scriptPath!);
       scriptPath = resolved.relative;
       const scriptFs = yield* fileSystemAt(resolved.fsPath);
       script = yield* readNormalizedFile(scriptFs, resolved.fsPath).pipe(
@@ -276,12 +263,7 @@ function executeWorkflowScriptTool(
           parentRunId,
           script,
         });
-      scriptPath = yield* persistWorkflowScript(
-        script,
-        submissionId,
-        parent.roots,
-        workingDirectory,
-      );
+      scriptPath = yield* persistWorkflowScript(script, submissionId, parent);
     }
 
     // Every phase below fails with the same annotation: prefix the

@@ -10,7 +10,7 @@ import { ToolError, type ToolResult } from '@shared/schemas';
 
 // Local imports - tools
 import { requireFileReadForEdit } from '@tools/fileInteractions';
-import { resolveAndFormat } from '@tools/pathResolution';
+import { resolveToolPath } from '@tools/pathResolution';
 import {
   appendApprovalDiffNote,
   buildApprovalRejectedResult,
@@ -121,12 +121,8 @@ export const resolveWritableTarget = Effect.fn('resolveWritableTarget')(
     // the tool runner reports to the model, so they stay a failure rather than
     // becoming a defect.
     const call = yield* ToolCall;
-    const { path: resolved, display } = yield* resolveAndFormat(
-      call.roots,
-      call.roots.workspace,
-      inputPath,
-      call.workingDirectory,
-    );
+    const resolved = yield* resolveToolPath(call, inputPath);
+    const { display } = resolved;
     const { path, absolutePath, displayPath } = yield* Effect.try({
       try: () => {
         const fsPath = resolved.fsPath;

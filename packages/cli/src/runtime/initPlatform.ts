@@ -31,7 +31,7 @@ import { createNodeWorkspaceRoots } from '@platform/defaults/nodeHost';
 import { DEFAULT_NODE_STORAGE_ROOT } from '@platform/defaults/nodeStorage';
 import {
   resolveGlobalStoragePath,
-  WorkspaceStorageProvider,
+  resolveWorkspaceStoragePath,
 } from '@platform/defaults/workspaceStorage';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { SessionOpenError } from '@shared/session/database';
@@ -295,13 +295,11 @@ export function initCliPlatform(
         return yield* Effect.gen(function* () {
           // The project's `texra.db` lives in its storage directory and is
           // owned by the project scope; AppState (global) is the runtime's.
-          const storage = new WorkspaceStorageProvider(
-            context.storageRoot ?? DEFAULT_NODE_STORAGE_ROOT,
-            context.cwd,
+          const storageRoot = context.storageRoot ?? DEFAULT_NODE_STORAGE_ROOT;
+          const storage = resolveWorkspaceStoragePath(storageRoot, context.cwd);
+          const workspaceState = yield* openProjectStateStore(storage).pipe(
+            Scope.provide(projectScope),
           );
-          const workspaceState = yield* openProjectStateStore(
-            storage.getStoragePath(),
-          ).pipe(Scope.provide(projectScope));
           const cliSecrets = getCliSecrets(context.storageRoot);
           // One process, one project: the process roots are the `--cwd` workspace,
           // over the config provider the startup read already opened — the project
@@ -311,8 +309,8 @@ export function initCliPlatform(
           // what keeps a value `texra config` writes readable at the next startup.
           const roots = createNodeWorkspaceRoots({
             workspacePath: context.cwd,
-            storage: storage.getStoragePath(),
-            globalStorage: storage.getGlobalStoragePath(),
+            storage,
+            globalStorage: resolveGlobalStoragePath(storageRoot),
             config: context.config,
             workspaceState,
             globalState,

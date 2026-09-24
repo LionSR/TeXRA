@@ -1,5 +1,3 @@
-import * as path from 'node:path';
-
 import { describe, expect, it } from 'vitest';
 
 import { buildAgentWorkspaceOptions } from '@tools/agentWorkspaceOptions';
@@ -14,8 +12,10 @@ describe('agent workspace options', () => {
   });
 
   it('keeps the workspace root available for subdirectory runs', () => {
-    expect(buildAgentWorkspaceOptions(WORKSPACE, 'packages/app')).toEqual({
-      workingDirectory: path.resolve('/tmp/workspace', 'packages/app'),
+    expect(
+      buildAgentWorkspaceOptions(WORKSPACE, '/tmp/workspace/packages/app'),
+    ).toEqual({
+      workingDirectory: '/tmp/workspace/packages/app',
       additionalDirectories: ['/tmp/workspace'],
     });
   });

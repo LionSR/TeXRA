@@ -8,7 +8,7 @@ import { Effect, type FileSystem, Option, Stream } from 'effect';
 import { afterEach, describe, expect, vi } from 'vitest';
 
 // Local imports
-import { MEMORY_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
+import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { StorageFs } from '@platform/rootedFs';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
@@ -113,15 +113,18 @@ describe('MemoryTool view with an omitted path', () => {
         vi.useFakeTimers({ toFake: ['Date'] });
         vi.setSystemTime(new Date('2026-01-02T00:00:00.000Z'));
 
-        const alphaPath = path.join(MEMORY_STORAGE_DIR, 'alpha');
+        const alphaPath = path.join(WORKSPACE_STORAGE_LAYOUT.memory, 'alpha');
         const betaPath = path.join(alphaPath, 'beta');
         const pinnedPath = path.join(alphaPath, 'pinned.md');
-        const rootFilePath = path.join(MEMORY_STORAGE_DIR, 'root.md');
+        const rootFilePath = path.join(
+          WORKSPACE_STORAGE_LAYOUT.memory,
+          'root.md',
+        );
 
         const storageFs = storageView({
           exists: () => Effect.succeed(true),
           readDirectoryTyped: (target) => {
-            if (target === MEMORY_STORAGE_DIR) {
+            if (target === WORKSPACE_STORAGE_LAYOUT.memory) {
               return Effect.succeed([
                 ['alpha', 'Directory'],
                 ['root.md', 'File'],
@@ -183,12 +186,12 @@ describe('MemoryTool view with an omitted path', () => {
 
   it.effect('skips a symlink cycle when listing memory directories', () =>
     Effect.gen(function* () {
-      const cyclePath = path.join(MEMORY_STORAGE_DIR, 'cycle');
+      const cyclePath = path.join(WORKSPACE_STORAGE_LAYOUT.memory, 'cycle');
 
       const storageFs = storageView({
         exists: () => Effect.succeed(true),
         readDirectoryTyped: (target) => {
-          if (target === MEMORY_STORAGE_DIR) {
+          if (target === WORKSPACE_STORAGE_LAYOUT.memory) {
             return Effect.succeed([['cycle', 'SymbolicLink']] as const);
           }
           return Effect.die(

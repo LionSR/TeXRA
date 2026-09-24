@@ -6,7 +6,7 @@ import { z } from 'zod';
 import { ToolCall } from '@agent/runtime/ToolCall';
 import { withLogChannel } from '@logger/effectLog';
 import { ToolError, type ToolResult } from '@shared/schemas';
-import { resolveWorkspaceRelativePath } from '@tools/pathResolution';
+import { resolveToolPath } from '@tools/pathResolution';
 import { executed } from '@tools/core/result';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { formatResultCount } from '@utils/text/stringUtils';
@@ -202,12 +202,9 @@ const addThread = Effect.fn('InlineCommentTool.addThread')(function* (
 ) {
   const call = yield* ToolCall;
   const { path, line, endLine, body } = input;
-  const resolved = yield* resolveWorkspaceRelativePath(
-    call.roots,
-    call.roots.workspace,
-    path,
-    call.workingDirectory,
-  ).pipe(Effect.catch(addCommentFailure));
+  const resolved = yield* resolveToolPath(call, path).pipe(
+    Effect.catch(addCommentFailure),
+  );
   const provider = yield* requireProvider;
   const result = yield* Effect.try({
     try: () =>
@@ -262,12 +259,7 @@ const listThreads = Effect.fn('InlineCommentTool.list')(function* (
   const absolutePath =
     input.path == null
       ? undefined
-      : (yield* resolveWorkspaceRelativePath(
-          call.roots,
-          call.roots.workspace,
-          input.path ?? undefined,
-          call.workingDirectory,
-        )).absolute;
+      : (yield* resolveToolPath(call, input.path ?? undefined)).absolute;
   const threads = (yield* requireProvider).list({ absolutePath });
   if (threads.length === 0) {
     return executed(

@@ -7,7 +7,7 @@ import { ToolError, type RunId, type ToolResult } from '@shared/schemas';
 import { defineTool } from '@tools/core/define';
 import { errorResult, executed } from '@tools/core/result';
 import { nullishWithDefault } from '@tools/core/inputSchema';
-import { resolveAndFormat } from '@tools/pathResolution';
+import { resolveToolPath } from '@tools/pathResolution';
 import { groupBy } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { formatResultCount } from '@utils/text/stringUtils';
@@ -446,12 +446,7 @@ function noPositionData(
 /** Resolve a Lean file once in the invoking project before the host program runs. */
 function leanFilePath(file: string, call: ToolCallShape) {
   return Effect.gen(function* () {
-    return (yield* resolveAndFormat(
-      call.roots,
-      call.roots.workspace,
-      file,
-      call.workingDirectory,
-    )).path.absolute;
+    return (yield* resolveToolPath(call, file)).absolute;
   });
 }
 

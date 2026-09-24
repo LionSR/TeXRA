@@ -10,7 +10,6 @@
  * `Rejected` with its reason, never dropped.
  */
 import * as path from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 import * as vscode from 'vscode';
 import { Effect, FileSystem } from 'effect';
@@ -30,7 +29,7 @@ import { getIncludedExtensions } from '@common/files/fileTypeUtils';
 import { teamAvailabilityPrompt } from '@common/teams/TeamPlan';
 import type { ToolEditApprovalController } from '@controllers/approval/ToolEditApprovalController';
 import {
-  attachDroppedPaths,
+  attachDroppedFiles,
   normalizeMainViewFileExtension,
 } from '@controllers/mainView/MainViewDroppedFilesController';
 import { prepareSurfaceLaunch } from '@controllers/mainView/backend/MainViewRunLaunchController';
@@ -118,7 +117,7 @@ import {
 } from '@shared/state/onboardingState';
 
 import { getProviderKeyUrl } from '@utils/config/providerConfig';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { pathToLocationIn } from '@utils/files/fileLocation';
 import {
   locateInWorkspace,
@@ -489,59 +488,14 @@ export function createExtensionHostRequests(
     ]);
   }
 
-  /** One dropped path as a workspace-relative file, or `null` when it is
-   *  not one. A path that does not decode as a URL stands as its raw text,
-   *  and a file the workspace cannot stat is not a file here; both say so
-   *  in the debug log. */
-  function resolveWorkspaceDropFile(
-    rawPath: string,
-  ): Effect.Effect<string | null> {
-    return Effect.gen(function* () {
-      const trimmed = rawPath.trim();
-      const decodedPath = trimmed.startsWith('file:')
-        ? yield* Effect.try({
-            try: () => fileURLToPath(trimmed),
-            catch: ensureError,
-          }).pipe(
-            Effect.catch((cause: unknown) =>
-              Effect.logDebug(
-                `Dropped path is not a file URL: ${trimmed}: ${toErrorMessage(cause)}`,
-              ).pipe(withLogChannel(CHANNEL), Effect.as(trimmed)),
-            ),
-          )
-        : trimmed;
-      const resolved = locateInWorkspace(session.roots.workspace, decodedPath);
-      if (resolved.kind !== 'workspace') return null;
-      return yield* Effect.tryPromise({
-        try: () =>
-          vscode.workspace.fs.stat(vscode.Uri.file(resolved.absolutePath)),
-        catch: ensureError,
-      }).pipe(
-        Effect.map((stat) =>
-          (stat.type & vscode.FileType.File) === 0
-            ? null
-            : resolved.relativePath,
-        ),
-        Effect.catch((cause: unknown) =>
-          Effect.logDebug(
-            `Dropped file could not be read: ${decodedPath}: ${toErrorMessage(cause)}`,
-          ).pipe(withLogChannel(CHANNEL), Effect.as(null)),
-        ),
-      );
-    });
-  }
-
-  function attachDroppedFiles(
+  function attachDropped(
     request: Extract<HostRequest, { kind: 'attachDroppedFiles' }>,
-  ): Effect.Effect<HostOutcome, Rejected> {
-    return Effect.forEach(
+  ) {
+    return attachDroppedFiles(
+      session.roots.workspace,
       request.paths,
-      (rawPath) => resolveWorkspaceDropFile(rawPath),
-      { concurrency: 'unbounded' },
+      getIncludedExtensions(request.category),
     ).pipe(
-      Effect.flatMap((paths) =>
-        attachDroppedPaths(paths, getIncludedExtensions(request.category)),
-      ),
       Effect.tap((attached) =>
         attached.attachedCount > 0 && attached.rejectedCount > 0
           ? Effect.forkDetach(
@@ -854,7 +808,7 @@ export function createExtensionHostRequests(
           return outcome;
         }
         case 'attachDroppedFiles':
-          return yield* attachDroppedFiles(request);
+          return yield* attachDropped(request);
         case 'launch':
           yield* launch(request);
           return done;

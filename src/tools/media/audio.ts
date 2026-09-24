@@ -88,11 +88,14 @@ function resolveSoxCommand(
     if (!path.isAbsolute(configuredPath)) {
       throw new Error(`Path must be absolute: ${configuredPath}`);
     }
-    if (existsSync(configuredPath)) {
-      return resolveOptionalCommand('sox', [], {
-        resolvedPath: configuredPath,
-      });
+    // A configured binary that is missing fails loudly too: silently
+    // recording with whatever `sox` is on PATH is not what was configured.
+    if (!existsSync(configuredPath)) {
+      throw new Error(`Configured sox path does not exist: ${configuredPath}`);
     }
+    return resolveOptionalCommand('sox', [], {
+      resolvedPath: configuredPath,
+    });
   }
   return resolveOptionalCommand('sox');
 }

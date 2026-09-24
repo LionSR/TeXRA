@@ -10,17 +10,13 @@ import { describe, expect } from 'vitest';
 // Local imports - platform
 import { openTexraConfigStores } from '@platform/defaults/nodeStores';
 import {
-  MEMORY_STORAGE_DIR,
-  WorkspaceStorageProvider,
   resolveGlobalStoragePath,
   resolveMemoryStoragePath,
-  resolveRunOriginalSnapshotPath,
-  resolveRunStoragePath,
   resolveWorkspaceStoragePath,
-  RUNS_STORAGE_DIR,
 } from '@platform/defaults/workspaceStorage';
 import { nodePlatformLayer, pathExists } from '@test/support/fsTestUtils';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
+import { resolveRunStoragePath } from '@utils/files/runStorageFs';
 
 describe('workspace storage defaults', () => {
   const tempDirs = useTempDirs();
@@ -29,14 +25,12 @@ describe('workspace storage defaults', () => {
     return makeTempDir('texra-workspace-storage-', tempDirs);
   }
 
-  // The workspace storage identity, read off the provider that owns it.
+  // The workspace storage identity, read off the path calculator that owns it.
   function storageIdOf(
     root: string,
     workspacePath: string | undefined,
   ): string {
-    return basename(
-      new WorkspaceStorageProvider(root, workspacePath).getStoragePath(),
-    );
+    return basename(resolveWorkspaceStoragePath(root, workspacePath));
   }
 
   it('computes a stable workspace storage identity', async () => {
@@ -60,19 +54,15 @@ describe('workspace storage defaults', () => {
     expect([
       resolveGlobalStoragePath(root),
       resolveWorkspaceStoragePath(root, workspacePath),
-      MEMORY_STORAGE_DIR,
+      resolveMemoryStoragePath(),
       resolveMemoryStoragePath('memories/project.md'),
-      RUNS_STORAGE_DIR,
       resolveRunStoragePath('run-1', 'result.json'),
-      resolveRunOriginalSnapshotPath('run-1', 'Draft/Draft.tex'),
     ]).toEqual([
       join(root, 'v1', 'global-storage'),
       join(root, 'v1', 'workspace-storage', storageIdOf(root, workspacePath)),
       'memories',
       'memories/project.md',
-      'executions',
       'executions/run-1/result.json',
-      'executions/run-1/original/Draft/Draft.tex',
     ]);
     expect(() => resolveMemoryStoragePath('not-memories/project.md')).toThrow(
       'Invalid memory path',
@@ -115,9 +105,11 @@ describe('workspace storage defaults', () => {
             writeFile(join(oldPath, 'state.json'), oldBytes),
           );
         }
-        const provider = new WorkspaceStorageProvider(root, workspacePath);
-        const storagePath = provider.getStoragePath();
-        const globalPath = provider.getGlobalStoragePath();
+        const storagePath = resolveWorkspaceStoragePath(root, workspacePath);
+        const globalPath = resolveGlobalStoragePath(root);
+        for (const created of [storagePath, globalPath]) {
+          yield* Effect.promise(() => mkdir(created, { recursive: true }));
+        }
         expect(storagePath).toBe(
           join(
             root,
@@ -163,13 +155,10 @@ describe('workspace storage defaults', () => {
         yield* Effect.promise(() =>
           writeFile(join(workspacePath, '.texra', 'config.json'), '{ broken'),
         );
-        const storage = new WorkspaceStorageProvider(root, workspacePath);
         const warnings: string[] = [];
 
-        const stores = yield* openTexraConfigStores(
-          storage,
-          workspacePath,
-          (m) => warnings.push(m),
+        const stores = yield* openTexraConfigStores(root, workspacePath, (m) =>
+          warnings.push(m),
         );
         yield* stores.workspace.set('texra.files.exclude', ['dist']);
 
@@ -177,7 +166,12 @@ describe('workspace storage defaults', () => {
         expect(warnings[0]).toContain('Cannot open project .texra/config.json');
         expect(
           yield* Effect.promise(() =>
-            pathExists(join(storage.getStoragePath(), 'config.json')),
+            pathExists(
+              join(
+                resolveWorkspaceStoragePath(root, workspacePath),
+                'config.json',
+              ),
+            ),
           ),
         ).toBe(true);
       }).pipe(Effect.provide(nodePlatformLayer)),

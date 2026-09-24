@@ -5,12 +5,8 @@ import * as path from 'node:path';
 import { Effect, FileSystem, PlatformError } from 'effect';
 
 // Local imports
+import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { withLogChannel } from '@logger/effectLog';
-import {
-  resolveRunOriginalSnapshotPath,
-  resolveRunStoragePath,
-  resolveRunStorageRelativePath,
-} from '@platform/defaults/workspaceStorage';
 import {
   RunIdSchema,
   type RunId,
@@ -18,7 +14,7 @@ import {
 } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { normalizeFilePath } from '@utils/core';
-import { getPathSegments } from '@utils/core/pathCore';
+import { getPathSegments, isPathWithin } from '@utils/core/pathCore';
 
 // Local file imports
 import { createRunStorageLocation } from './fileLocation';
@@ -31,6 +27,21 @@ export const CHANNEL = 'runStorage';
  * root already — a tool call's `roots`, a run's session roots, or a host's
  * `WorkspaceRoots` — so none of them reads an ambient root (#12421).
  */
+
+/** A storage-relative (POSIX) path under the runs directory. */
+export function resolveRunStoragePath(...segments: string[]): string {
+  return path.posix.join(WORKSPACE_STORAGE_LAYOUT.runs, ...segments);
+}
+
+function runStorageRelativePath(
+  absolutePath: string,
+  runDirectory: string,
+): string | undefined {
+  if (!isPathWithin(runDirectory, absolutePath)) return undefined;
+  return (
+    normalizeFilePath(path.relative(runDirectory, absolutePath)) || undefined
+  );
+}
 
 /** A run's directory under `storageRoot`. */
 export function runDirUnder(storageRoot: string, id: RunId): string {
@@ -45,7 +56,11 @@ export function originalSnapshotPathUnder(
 ): string {
   return path.join(
     storageRoot,
-    resolveRunOriginalSnapshotPath(runId, workspaceRelativePath),
+    resolveRunStoragePath(
+      runId,
+      WORKSPACE_STORAGE_LAYOUT.original,
+      workspaceRelativePath,
+    ),
   );
 }
 
@@ -176,7 +191,7 @@ export function runStorageLocationInRunUnder(
   runId: RunId,
 ): RunStorageFileLocation | undefined {
   if (!path.isAbsolute(absolutePath)) return undefined;
-  const relativePath = resolveRunStorageRelativePath(
+  const relativePath = runStorageRelativePath(
     absolutePath,
     runDirUnder(storageRoot, runId),
   );
@@ -195,7 +210,7 @@ export function runStorageLocationUnder(
   if (!path.isAbsolute(absolutePath)) return undefined;
 
   const root = path.join(storageRoot, resolveRunStoragePath());
-  const runRelativePath = resolveRunStorageRelativePath(absolutePath, root);
+  const runRelativePath = runStorageRelativePath(absolutePath, root);
   if (!runRelativePath) return undefined;
 
   const [rawRunId, ...entrySegments] = getPathSegments(runRelativePath);

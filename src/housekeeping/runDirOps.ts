@@ -6,13 +6,13 @@ import { Effect } from 'effect';
 
 // Local imports
 import { withLogChannel } from '@logger/effectLog';
-import { resolveRunStoragePath } from '@platform/defaults/workspaceStorage';
 import { StorageFs, WorkspaceFs } from '@platform/rootedFs';
 import type { RunId, FileOpResult } from '@shared/schemas';
 import {
   getCleanAgentName,
   mergeRunDirAndWorkspaceResult,
 } from '@shared/schemas';
+import { resolveRunStoragePath } from '@utils/files/runStorageFs';
 import { copyDereferenced } from '@utils/files/fsDurability';
 import type { RootedFileSystem } from '@utils/files/rootedFileSystem';
 

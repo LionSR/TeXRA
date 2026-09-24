@@ -26,17 +26,17 @@ import {
 
 // Local file imports
 import { JsonConfigProvider } from './jsonConfigProvider';
-import { canonicalizeWorkspacePath } from './nodeWorkspace';
 import type { WorkspaceRoots } from '../workspaceRoots';
 import type { JsonConfigProviderOptions } from './jsonConfigProvider';
 import type { ConfigProvider, StateStore } from '../interfaces';
 
 /** The per-workspace services a Node host opens for one workspace folder. */
 export interface NodeWorkspaceRootsInit {
+  /** The canonical workspace root (`canonicalizeWorkspacePath`), decided by the host where it reads it. */
   readonly workspacePath: string | undefined;
-  /** The storage root opened for this workspace (`WorkspaceStorageProvider.getStoragePath()`). */
+  /** The storage root opened for this workspace (`resolveWorkspaceStoragePath`). */
   readonly storage: string;
-  /** The cross-workspace global storage root (`getGlobalStoragePath()`). */
+  /** The cross-workspace global storage root (`resolveGlobalStoragePath`). */
   readonly globalStorage: string;
   /**
    * Config source: the workspace + global stores to build the file-backed
@@ -54,16 +54,13 @@ export interface NodeWorkspaceRootsInit {
  * Build the `WorkspaceRoots` for one workspace folder: the canonical physical
  * root, the pinned storage path, and the config/state stores opened for it.
  * Every host (and the desktop, once per open paper) builds its roots here so
- * canonicalization and the config-provider choice cannot drift.
+ * the config-provider choice cannot drift.
  */
 export function createNodeWorkspaceRoots(
   init: NodeWorkspaceRootsInit,
 ): WorkspaceRoots {
   return {
-    workspace:
-      init.workspacePath == null
-        ? undefined
-        : canonicalizeWorkspacePath(init.workspacePath),
+    workspace: init.workspacePath,
     storage: init.storage,
     globalStorage: init.globalStorage,
     config:
