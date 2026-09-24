@@ -34,7 +34,6 @@ import {
 } from './desktopShellMessages.js';
 import {
   DesktopBrowserStateMessageSchema,
-  DesktopEnvironmentStateMessageSchema,
   DesktopFileErrorMessageSchema,
   DesktopFileReadMessageSchema,
   DesktopFilesListErrorMessageSchema,
@@ -58,9 +57,8 @@ export const DesktopOutboundMessageSchema = z.discriminatedUnion('command', [
   DesktopTerminalExitMessageSchema,
   DesktopTerminalErrorMessageSchema,
   DesktopTerminalOpenCommandMessageSchema,
-  // Browser + environment
+  // Browser
   DesktopBrowserStateMessageSchema,
-  DesktopEnvironmentStateMessageSchema,
   // Overlays
   DesktopShowDiffMessageSchema,
   DesktopCloseDiffMessageSchema,

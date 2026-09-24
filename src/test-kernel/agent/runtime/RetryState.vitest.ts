@@ -51,12 +51,14 @@ import {
   modelInvokerLayer,
   type InvokeRequest,
 } from '@agent/runtime/ModelInvoker';
+import { makeRunCell } from '@agent/runtime/loop/runProgram';
+import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
 import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
 import type { BoundModel } from '@agent/runtime/run/modelBinding';
 import { classifyModelFailure } from '@agent/runtime/run/modelFailure';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { UsageMonitor } from '@agent/runtime/UsageMonitor';
-import { noopTrace, TraceEmitter, type AgentTrace } from '@agent/trace';
+import { TraceEmitter, type AgentTrace } from '@agent/trace';
 import { attachContextWindowError } from '@common/errors/sdkError/errorMetadata';
 import {
   LanguageModel,
@@ -64,7 +66,7 @@ import {
 } from '@platform/languageModel';
 import {
   AgentCategory,
-  AgentRunStateSnapshotSchema,
+  EMPTY_RUN_USAGE_TOTALS,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
   RUN_PHASE,
   type RunId,
@@ -75,12 +77,13 @@ import {
 } from '@shared/session/database';
 import { RunLedger, RunLedgerRefused } from '@shared/session/runLedger';
 import type { RunState } from '@shared/session/runStateFold';
+import { emptyPinnedComposition } from '@test/support/nativeToolTestLayer';
+import { noopTrace } from '@test/support/noopTrace';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { hostStores, installPlatform } from '@test/support/setupPlatform';
-import { getDefaultToolRegistry } from '@tools/registry';
 import { isObject } from '@utils/core';
 import { RunFileService } from '@utils/files/runStorage';
 
@@ -286,8 +289,10 @@ function agentRun(
     userVarChannels: {},
     initialUserMessageForTranscript: undefined,
     fileService: new RunFileService(runId, session.roots),
-    tools: getDefaultToolRegistry(),
+    tools: new MapToolRegistry({}),
     finalToolName: null,
+    toolset: { offeredTools: [], toolsetHash: '0'.repeat(64) },
+    composition: emptyPinnedComposition,
     structured: { value: undefined },
     model,
     scope: Scope.makeUnsafe(),
@@ -333,16 +338,18 @@ const freshState = (): RunState => ({
   requests: {},
   followUps: [],
   followUpIds: new Set(),
-  usage: AgentRunStateSnapshotSchema.parse({}).usageAccumulator.totals,
+  usage: EMPTY_RUN_USAGE_TOTALS,
   flow: null,
+  roundOutputs: [],
+  overflowRecoveredAtRound: null,
 });
 
 interface InvokerKit {
   readonly runId: RunId;
   /** The folded state of the freshly opened run. */
   readonly state: RunState;
-  /** `ModelInvoker` over this run's ledger, with nothing left to provide. */
-  readonly layer: Layer.Layer<ModelInvoker>;
+  /** `ModelInvoker` and this run's ledger, with nothing left to provide. */
+  readonly layer: Layer.Layer<ModelInvoker | RunLedger>;
 }
 
 /**
@@ -368,24 +375,31 @@ const openRun = Effect.fn('openRun')(function* (
     ]),
     snapshotRow(runId, freshState(), {
       phase: 'initial',
-      state: { shouldSkipCycle: false, stateSlices: null },
+      state: {
+        family: 'toolUse',
+        state: {
+          stateSlices: null,
+          offeredTools: [],
+          toolsetHash: '0'.repeat(64),
+        },
+      },
     }),
   ]);
   const bound = yield* SynchronizedRef.make(boundModel(model, overrides));
   const layer = modelInvokerLayer().pipe(
-    Layer.provide([
+    Layer.provide(
       Layer.succeed(AgentRun, agentRun(runId, session, logger, bound)),
-      Layer.succeed(RunLedger, session.ledger),
-    ]),
+    ),
+    Layer.merge(Layer.succeed(RunLedger, session.ledger)),
   );
   return { runId, state, layer };
 });
 
 /** One invocation on an opened run. */
-const invokeOn = ({ layer, state }: InvokerKit) =>
+const invokeOn = ({ layer, runId, state }: InvokerKit) =>
   Effect.gen(function* () {
     const invoker = yield* ModelInvoker;
-    return yield* invoker.invoke(state, REQUEST);
+    return yield* invoker.invoke(yield* makeRunCell(runId, state), REQUEST);
   }).pipe(
     // `invoke`'s debug-object sink writes through the process `FileSystem`;
     // this suite runs on `it.effect`'s own runtime, so the service comes from
@@ -838,6 +852,10 @@ describe('ModelInvoker retry', () => {
       if (outcome.kind === 'response') {
         expect(outcome.state.pendingRetry).toBeNull();
       }
+      // The response retires the failure the gate recorded in its own batch:
+      // a crash before the loop's next snapshot resumes a recovered run, not
+      // one that re-reads the stale error and finishes FAILED.
+      expect((yield* session.ledger.load(runId))?.lastError).toBeNull();
       // The decision neither parks nor ends the run: the phase the fold
       // reports is still running.
       expect(session.runView(runId)?.status).toBe(RUN_PHASE.RUNNING);

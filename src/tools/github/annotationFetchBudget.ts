@@ -20,7 +20,7 @@
  * contract.
  */
 
-import { Clock, Effect, Ref } from 'effect';
+import { Clock, Data, Effect, Ref } from 'effect';
 
 import { clamp } from '@utils/core';
 
@@ -33,10 +33,10 @@ import { clamp } from '@utils/core';
 const MAX_PROCESS_ANNOTATION_REQUESTS_PER_WINDOW = 50;
 const ANNOTATION_FETCH_BUDGET_WINDOW_MS = 60_000;
 
-export class AnnotationFetchBudgetExhaustedError extends Error {
-  constructor() {
-    super('Annotation fetch budget exhausted');
-  }
+export class AnnotationFetchBudgetExhaustedError extends Data.TaggedError(
+  'AnnotationFetchBudgetExhaustedError',
+) {
+  override readonly message = 'Annotation fetch budget exhausted';
 }
 
 interface TokenBucketState {

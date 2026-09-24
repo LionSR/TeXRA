@@ -1,5 +1,5 @@
 import { it } from '@effect/vitest';
-import { Deferred, Effect } from 'effect';
+import { Deferred, Effect, Exit, Scope } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
@@ -18,8 +18,11 @@ import { assertSupported, isUnsupported } from '@shared/utils/dispatcher';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { FakeConfigProvider, FakeStateStore } from '@test/support/FakePlatform';
-import type { ToolProbeInputs } from '@tools/externalToolDefs';
-import type { ExternalToolCheckResult } from '@tools/toolAvailability';
+import type { ToolProbeInputs } from '@tools/toolProbes';
+import {
+  refreshToolAvailability,
+  type ExternalToolCheckResult,
+} from '@tools/toolAvailability';
 
 import { commandOf } from './desktopSettingsTestSupport';
 
@@ -106,7 +109,7 @@ type ControllerOptions = ConstructorParameters<
   typeof DefaultDesktopToolingSettingsController
 >[0];
 
-const liveControllers: DefaultDesktopToolingSettingsController[] = [];
+const liveScopes: Scope.Closeable[] = [];
 
 /** Restores the doubles a test has not replaced. The refresh double emits as
  *  the real `refreshToolAvailability` does once its probes land: that emit is
@@ -135,9 +138,7 @@ function createFixture(
   const posted: unknown[] = [];
   const reportedErrors: unknown[] = [];
   const commands: string[] = [];
-  const openedUrls: string[] = [];
   const globalState = overrides.globalState ?? new FakeStateStore();
-  const workspaceState = overrides.workspaceState ?? new FakeStateStore();
   const controller = new DefaultDesktopToolingSettingsController({
     onError: (error) => {
       reportedErrors.push(error);
@@ -145,17 +146,11 @@ function createFixture(
     },
     config: new FakeConfigProvider(),
     globalState,
-    workspaceState,
     workspaceRoot: undefined,
     renderer: {
       postToRenderer: (message) => {
         posted.push(message);
         hooks.onPost?.(message, posted);
-      },
-    },
-    navigation: {
-      openExternal: async (url) => {
-        openedUrls.push(url);
       },
     },
     commands: {
@@ -180,18 +175,22 @@ function createFixture(
     // default is restated here rather than left to the fixture's shape.
     runtime: overrides.runtime ?? testRuntime(),
   });
-  // The controller subscribes to a process-global bus, so a fixture left
-  // undisposed would keep reacting to later tests' emits.
-  liveControllers.push(controller);
+  // The controller follows a process-global bus, so a fixture whose scope
+  // stayed open would keep reacting to later tests' emits.
+  const scope = Scope.makeUnsafe();
+  liveScopes.push(scope);
+  testRuntime().runSync(
+    Effect.forkIn(controller.followToolAvailability, scope, {
+      startImmediately: true,
+    }),
+  );
 
   return {
     controller,
     commands,
     globalState,
-    openedUrls,
     posted,
     reportedErrors,
-    workspaceState,
   };
 }
 
@@ -199,7 +198,8 @@ describe('DefaultDesktopToolingSettingsController', () => {
   beforeEach(installDefaultToolDataDoubles);
 
   afterEach(() => {
-    for (const controller of liveControllers.splice(0)) controller.dispose();
+    for (const scope of liveScopes.splice(0))
+      testRuntime().runFork(Scope.close(scope, Exit.void));
   });
 
   it.live('posts cached startup data before refreshing external tools', () =>
@@ -223,21 +223,18 @@ describe('DefaultDesktopToolingSettingsController', () => {
         {},
         {
           onPost: (_message, posted) => {
-            if (posted.length === 4)
+            if (posted.length === 3)
               Deferred.doneUnsafe(repainted, Effect.void);
           },
         },
       );
 
-      yield* controller.postLatexConfigValues();
       yield* withProcessServices(testRuntime(), controller.postStartupData());
 
-      const startup = posted.map(commandOf);
-      expect(startup[0]).toBe(SETTINGS_VIEW_COMMANDS.UPDATE_SETTINGS_SNAPSHOT);
       // `postStartupData` fans the dashboard and LaTeX reads out with
       // `Effect.all`, so which of the two posts first is not a contract; that
       // both land before the refresh repaint below is.
-      expect([...startup.slice(1)].sort()).toEqual(
+      expect(posted.map(commandOf).sort()).toEqual(
         [
           SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD,
           SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_SETTINGS_STATUS,
@@ -249,7 +246,7 @@ describe('DefaultDesktopToolingSettingsController', () => {
 
       finishRefresh?.();
       yield* Deferred.await(repainted);
-      expect(posted.map(commandOf)).toHaveLength(4);
+      expect(posted.map(commandOf)).toHaveLength(3);
       expect(posted.map(commandOf).at(-1)).toBe(
         SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD,
       );
@@ -355,7 +352,7 @@ describe('DefaultDesktopToolingSettingsController', () => {
           emitAppSignal('toolAvailabilityChanged', undefined);
         });
         const posted = createDeferred();
-        const { controller } = createFixture({
+        createFixture({
           renderer: {
             postToRenderer: () => {
               events.push('renderer:post');
@@ -366,8 +363,9 @@ describe('DefaultDesktopToolingSettingsController', () => {
 
         yield* withProcessServices(
           testRuntime(),
-          assertSupported(controller.toolHandlers.recheckToolStatus)({
-            command: SETTINGS_VIEW_COMMANDS.RECHECK_TOOL_STATUS,
+          refreshToolAvailability({
+            workspaceRoot: undefined,
+            config: new FakeConfigProvider(),
           }),
         );
         yield* Effect.promise(() => posted.promise);
@@ -498,8 +496,9 @@ describe('DefaultDesktopToolingSettingsController', () => {
 
         yield* withProcessServices(
           testRuntime(),
-          assertSupported(controller.toolHandlers.recheckToolStatus)({
-            command: SETTINGS_VIEW_COMMANDS.RECHECK_TOOL_STATUS,
+          refreshToolAvailability({
+            workspaceRoot: undefined,
+            config: new FakeConfigProvider(),
           }),
         );
 

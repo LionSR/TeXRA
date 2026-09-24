@@ -6,7 +6,9 @@ import { ToolCall } from '@agent/runtime/ToolCall';
 // Local imports - tools
 import { isTexFile } from '@common/files/fileTypeUtils';
 import { WorkspaceFs } from '@platform/rootedFs';
-import replacementEngine from '@replacement/engine';
+import replacementEngine, {
+  logReplacementDiagnostics,
+} from '@replacement/engine';
 import type { ToolResult } from '@shared/schemas';
 import {
   applyApprovedFileEdit,
@@ -30,7 +32,7 @@ const write = Effect.fn('WriteFileTool.execute')(function* (
   input: WriteInput,
 ): Effect.fn.Return<
   ToolResult,
-  unknown,
+  Error,
   ToolCall | FileSystem.FileSystem | WorkspaceFs
 > {
   const call = yield* ToolCall;
@@ -41,11 +43,16 @@ const write = Effect.fn('WriteFileTool.execute')(function* (
     return prepared.blocked;
   }
   const { path, displayPath, exists, originalContent } = prepared.target;
-  const proposedContent = isTexFile(path)
-    ? replacementEngine.applyFor(input.content, 'tex-write', (key) =>
-        call.roots.config.get(key),
-      )
-    : input.content;
+  let proposedContent = input.content;
+  if (isTexFile(path)) {
+    const replaced = replacementEngine.applyFor(
+      input.content,
+      'tex-write',
+      (key) => call.roots.config.get(key),
+    );
+    yield* logReplacementDiagnostics(replaced.diagnostics);
+    proposedContent = replaced.text;
+  }
 
   return yield* applyApprovedFileEdit({
     path,

@@ -111,7 +111,7 @@ describe('assembleTrace', () => {
     Effect.gen(function* () {
       const runId = 'abc900abc900' as RunId;
       const runConfigRecord = config({ agent: 'review', model: 'sonnet46T' });
-      yield* registerRun(session, runId, runConfigRecord, 'review', {
+      yield* registerRun(session, runId, runConfigRecord, {
         identity: { kind: 'agent', agent: 'review' },
       });
       yield* Effect.promise(() => appendLogEntry(runId, 'registered row'));

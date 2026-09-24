@@ -9,31 +9,28 @@ import {
   type SkillLoadIssue,
   type SourcedSkill,
 } from '@skills/loadSkills';
-import {
-  defaultSkillSources,
-  type SkillSourceOptions,
-} from '@skills/skillSources';
+import type { SkillSourceOptions } from '@skills/skillSources';
 import {
   filterDiscoveredSkills,
   readDisabledSkills,
+  runtimeSkillSources,
 } from '@skills/runtimeSkills';
 
-// Local imports - CLI runtime
-import type { CliContext } from './cliContext';
-
 /**
+ * Fold the contributions the command's platform init installed for `cwd`,
+ * with this command's own source flags in place of the process-wide ones.
  * `stores` are the setting slots of the workspace this listing is for — the
- * roots the command's platform init installed — so the disabled-skill lists
- * come from that project rather than from ambient state.
+ * roots that init installed — so the disabled-skill lists come from that
+ * project rather than from ambient state.
  */
 export function readCliSkills(
-  context: Pick<CliContext, 'cwd' | 'resourcesPath'>,
+  cwd: string,
   stores: SettingsStores,
   options: SkillSourceOptions = {},
 ) {
   return Effect.gen(function* () {
     const result = yield* discoverSkillSources(
-      defaultSkillSources(context, options),
+      yield* runtimeSkillSources(cwd, stores, options),
     );
     return filterDiscoveredSkills(result, yield* readDisabledSkills(stores));
   });

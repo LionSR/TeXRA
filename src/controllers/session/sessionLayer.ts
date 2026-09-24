@@ -43,10 +43,6 @@ import {
   executeAgent,
   resumeToolUseFromResumeData,
 } from '@agent/runtime/executeAgent';
-import {
-  AGENT_TOOL_INJECTIONS,
-  ToolInjections,
-} from '@agent/runtime/toolInjection';
 import { EditorModel } from '@agent/runtime/run/modelBinding';
 import { createSessionApprovals } from '@agent/runtime/runApprovalQueue';
 import { RunRegistry } from '@agent/runtime/runRegistry';
@@ -120,6 +116,7 @@ import type { InlineCommentProvider } from '@tools/comment/InlineCommentTool';
 import { gitHubSubscriptionsLayer } from '@tools/github/subscriptionRegistries';
 import type { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import { SetupPlatform, type SetupPlatformShape } from '@tools/setup/platform';
+import { toolRegistryLayer } from '@tools/registry';
 import { StreamLogStore } from '@transcript/StreamLogStore';
 import { readConfigSettingFrom } from '@utils/config/platformSettings';
 import { inquiryRecordsLayer } from './inquiryRecords';
@@ -140,6 +137,12 @@ import { sessionInputsLayer } from './sessionInputs';
 import { WorkspaceRoots } from './WorkspaceRoots';
 
 const CHANNEL = 'sessionLayer';
+
+/** Log a failure on this channel, with the failure attached as its `data`. */
+const logFailure =
+  (message: string, log = Effect.logWarning) =>
+  (data: unknown) =>
+    log(message).pipe(Effect.annotateLogs({ data }), withLogChannel(CHANNEL));
 
 /** How often the owners the view names are re-probed (PRD 5.2). */
 const OWNER_LIVENESS_PROBE_INTERVAL = '5 seconds';
@@ -177,7 +180,7 @@ class Session extends Context.Service<Session, SessionHandle>()(
 /**
  * The sessions the owner holds, outside the map: what the owner's synchronous
  * `current` and `held` read, and so the process's one list of live sessions
- * (`heldSessions`, `forEachLiveSession`) — no module keeps a second one. An
+ * (`heldSessions`) — no module keeps a second one. An
  * entry is written once its handle exists and removed as the first step of its
  * release, so a root whose session is still building, or already unwinding,
  * reads as having none. Keyed by the entry's `SessionKey` and matched on its
@@ -186,17 +189,6 @@ class Session extends Context.Service<Session, SessionHandle>()(
  * `closeSession` needs that, a synchronous read cannot have it.
  */
 type HeldSessions = Map<SessionKey, SessionHandle>;
-
-/** The held session whose key names `root`, if one does. */
-function heldSessionSync(
-  held: HeldSessions,
-  root: string,
-): SessionHandle | undefined {
-  for (const [key, session] of held) {
-    if (key.storage === root) return session;
-  }
-  return undefined;
-}
 
 /** The owner ids of the non-terminal runs another process wrote. */
 function foreignOwners(view: SessionView, self: OwnerId): OwnerId[] {
@@ -452,12 +444,9 @@ const sessionHandleLayer = (
                     // The settle's failure is what the caller hears; a release
                     // that also failed leaves the claims to the next process's
                     // liveness proof, and says so.
-                    Effect.catch((error) =>
-                      Effect.logWarning(
+                    Effect.catch(
+                      logFailure(
                         'Registration claims were not released after its settle failed.',
-                      ).pipe(
-                        Effect.annotateLogs({ data: error }),
-                        withLogChannel(CHANNEL),
                       ),
                     ),
                   ),
@@ -557,12 +546,9 @@ const sessionHandleLayer = (
               session
                 .settlePublications()
                 .pipe(
-                  Effect.catch((error) =>
-                    Effect.logWarning(
+                  Effect.catch(
+                    logFailure(
                       `Session ${key.storage} left a failed publication behind as it closed.`,
-                    ).pipe(
-                      Effect.annotateLogs({ data: error }),
-                      withLogChannel(CHANNEL),
                     ),
                   ),
                 ),
@@ -631,10 +617,11 @@ const sessionHandleLayer = (
             Effect.andThen(SubscriptionRef.set(delivered, event.commit)),
           ),
         ),
-        Effect.tapError((error) =>
-          Effect.logError(
+        Effect.tapError(
+          logFailure(
             `Session ${key.storage} stopped delivering committed rows: the log could not be read.`,
-          ).pipe(Effect.annotateLogs({ data: error }), withLogChannel(CHANNEL)),
+            Effect.logError,
+          ),
         ),
         Effect.onExit((exit) => Deferred.done(tailEnded, exit)),
         Effect.forkIn(consumerScope),
@@ -646,28 +633,24 @@ const sessionHandleLayer = (
       yield* Stream.runForEach(session.folded(anchor), (event) =>
         session.receiveFoldedEvent(event),
       ).pipe(
-        Effect.tapError((error) =>
-          Effect.logError(
+        Effect.catch(
+          logFailure(
             `Session ${key.storage} stopped delivering folded rows: the log could not be read.`,
-          ).pipe(Effect.annotateLogs({ data: error }), withLogChannel(CHANNEL)),
+            Effect.logError,
+          ),
         ),
         Effect.forkIn(consumerScope),
       );
       yield* sweepLeftoverRuns(session, initialListing).pipe(
-        Effect.catch((error) =>
-          Effect.logWarning('Background-shell cleanup failed.').pipe(
-            Effect.annotateLogs({ data: error }),
-            withLogChannel(CHANNEL),
-          ),
-        ),
+        Effect.catch(logFailure('Background-shell cleanup failed.')),
         Effect.forkScoped,
       );
       // The session owns retries and waits for in-flight removal on close.
       yield* collectPendingDeletions(eventLog, key.storage).pipe(
-        Effect.catch((error) =>
-          Effect.logWarning(
+        Effect.catch(
+          logFailure(
             'Deletion records could not be read; cleanup remains pending.',
-          ).pipe(Effect.annotateLogs({ data: error }), withLogChannel(CHANNEL)),
+          ),
         ),
         Effect.repeat({ schedule: Schedule.spaced('30 seconds') }),
         Effect.forkScoped,
@@ -789,13 +772,9 @@ const listSessions = Effect.gen(function* () {
 const unopenedEntry =
   (key: SessionKey) =>
   (error: SessionOpenError): Effect.Effect<Option.Option<never>> =>
-    Effect.logWarning(
-      `Session ${key.storage} failed to open; it holds no session.`,
-    ).pipe(
-      Effect.annotateLogs({ data: error }),
-      withLogChannel(CHANNEL),
-      Effect.as(Option.none()),
-    );
+    logFailure(`Session ${key.storage} failed to open; it holds no session.`)(
+      error,
+    ).pipe(Effect.as(Option.none()));
 
 /** The session held for `root`, if the map holds one: an entry still building
  *  is waited for, never skipped, which is what lets a close issued right after
@@ -850,25 +829,13 @@ const closeSession = (root: string) =>
     runs.closeAdmissions();
     // Every touch of the session's storage runs in its scope: the stop writes
     // each run's outcome under the session's roots, and the flush writes its
-    // stores there. A child with a handle is stopped by its parent's cascade;
-    // a native child between turns has no handle, and its kill interrupts the
-    // loop the registry retains for it.
+    // stores there.
+    // A settlement fails when a fact the stop owed storage was refused.
+    // `close` answers a `SessionCloseReport` and names no error, so that
+    // travels the same defect channel the flush below documents, rather than
+    // being widened into this close's type.
     const termination = yield* Effect.forkDetach(
-      Effect.all(
-        runs.getActiveIds().flatMap((runId) => {
-          if (runs.getHandle(runId)?.isChild) return [];
-          // A settlement fails when a fact the stop owed storage was refused.
-          // `close` answers a `SessionCloseReport` and names no error, so that
-          // travels the same defect channel the flush below documents, rather
-          // than being widened into this close's type.
-          return [
-            runs
-              .kill(runId, { detachActiveChildren: false })
-              .settlement.pipe(Effect.orDie),
-          ];
-        }),
-        { concurrency: 'unbounded', discard: true },
-      ),
+      runs.stopAll().pipe(Effect.orDie),
       { startImmediately: true },
     );
     // The entry remains owned until waiting metadata finalization, not merely
@@ -876,6 +843,9 @@ const closeSession = (root: string) =>
     const settled = Fiber.join(termination).pipe(
       Effect.andThen(runs.awaitDrained()),
     );
+    // Nothing joins the detached fibers below: each logs its own failure.
+    const logDetached = (what: string) =>
+      logFailure(`Session ${root}: ${what}`, Effect.logError);
     // One budget for the whole close: the shutdown-phase deadline, forked
     // once so the flush below shares what settlement left.
     const budget = yield* Effect.forkChild(
@@ -886,16 +856,16 @@ const closeSession = (root: string) =>
       Fiber.join(budget).pipe(Effect.as(false)),
     ).pipe(
       Effect.catchCause((cause) =>
-        // A refused stop fact kills the detached termination fiber. The run
-        // may still be unwinding, so retain the entry until it settles, then
-        // make the same final flush and release the ordinary close path owes,
-        // re-raising the original defect after arming that cleanup so callers
-        // still see the failed close instead of a false success report.
+        // A refused stop fact kills the termination fiber while its run may
+        // still unwind: keep the entry until it settles, then flush and
+        // release as the ordinary path does, and re-raise the original defect
+        // after arming that, so callers see the failed close, not a success.
         Effect.forkDetach(
           runs
             .awaitDrained()
             .pipe(
               Effect.andThen(flushArtifacts),
+              Effect.tapCause(logDetached('the flush after a failed close')),
               Effect.ensuring(sessions.invalidate(key)),
             ),
           { startImmediately: true },
@@ -913,21 +883,22 @@ const closeSession = (root: string) =>
           // returns and no timer stands between the report and the release.
           Effect.andThen(
             Effect.forkDetach(
-              settled.pipe(Effect.andThen(sessions.invalidate(key))),
+              Fiber.join(termination).pipe(
+                Effect.catchCause(logDetached('a run stop failed past budget')),
+                Effect.andThen(runs.awaitDrained()),
+                Effect.ensuring(sessions.invalidate(key)),
+              ),
               { startImmediately: true },
             ),
           ),
         );
     // The release is the flush's finalizer: the entry goes, or its release is
     // armed on the settlement, whatever the flush's exit, and a flush that
-    // fails still fails this close.
-    //
-    // `flushArtifacts` does fail when a session publication failed, and
-    // `Effect.orDie` is deliberate: `close` answers a `SessionCloseReport` and
-    // names no error, so the defect is the channel a failed flush travels on,
-    // and `ProcessHold.release` (packages/agent/src/effect/runtime.ts)
-    // documents the embedder seeing exactly that. Widening it into a typed
-    // failure is a contract change, not a conversion.
+    // fails still fails this close. `flushArtifacts` fails when a session
+    // publication failed, and `Effect.orDie` is deliberate: `close` answers a
+    // `SessionCloseReport` naming no error, so a failed flush travels the
+    // defect channel, as `ProcessHold.release` (packages/agent/src/effect/
+    // runtime.ts) documents for the embedder; typing it is a contract change.
     yield* Effect.race(
       flushArtifacts,
       Fiber.join(budget).pipe(
@@ -938,17 +909,13 @@ const closeSession = (root: string) =>
         ),
       ),
     ).pipe(Effect.ensuring(release));
-    const report: SessionCloseReport = {
-      settled: didSettle,
-      abandoned,
-    };
-    return report;
+    return { settled: didSettle, abandoned } satisfies SessionCloseReport;
   }).pipe(Effect.uninterruptible);
 
 /**
  * Make the one Effect runtime of this process over its identity (PRD 7.7) and
  * install it with the session family it serves: called by a composition root
- * exactly once at startup, right beside `initPlatform()`, which calls
+ * exactly once at startup, which calls
  * {@link disposeProcessRuntime} on its shutdown path after the last session
  * has released its graph. The identity is a program for the process start:
  * already-resolved on a host that read it before installing, still a pending
@@ -1097,9 +1064,8 @@ export function installProcessRuntime({
   globalDatabase: globalDatabaseOption,
   minimumLogLevel,
 }: ProcessRuntimeOptions): ProcessRuntime {
-  // Non-failing by contract: `nodeProcesses.selfIdentity()` reports an
-  // unreadable identity as undefined, and a root that already read one hands
-  // over `Effect.succeed(...)`, which builds this layer synchronously.
+  // Non-failing: `nodeProcesses.selfIdentity()` reads an unreadable identity
+  // as undefined; a root that already read one passes `Effect.succeed(...)`.
   const identity = Layer.effect(
     ProcessIdentity,
     Effect.map(processStart, (start) => ({ ownerId: processOwnerId(start) })),
@@ -1122,7 +1088,7 @@ export function installProcessRuntime({
       ? Layer.empty
       : ToolMissingReporter.layer(toolMissingReporter),
     SetupPlatform.layer(setup),
-    ToolInjections.layer(AGENT_TOOL_INJECTIONS),
+    toolRegistryLayer,
     Layer.succeed(AgentEngine)({ executeAgent, resumeToolUseFromResumeData }),
     // Built with this runtime: a replacement starts with empty tables.
     gitHubSubscriptionsLayer,
@@ -1168,10 +1134,9 @@ export function installProcessRuntime({
           Layer.mergeAll(
             effectDiagnosticsLayer(minimumLogLevel),
             FetchHttpClient.layer,
-            // The standard library's filesystem and path services, provided
-            // once per process here rather than by each program that needs
-            // them: every root reaches this install, so a consumer (the Lean
-            // layer included) takes `FileSystem`/`Path` from context and
+            // The standard library's filesystem and path services, once per
+            // process: every root reaches this install, so a consumer (the
+            // Lean layer included) takes `FileSystem`/`Path` from context and
             // builds no layer of its own.
             NodeFileSystem.layer,
             NodePath.layer,
@@ -1183,7 +1148,7 @@ export function installProcessRuntime({
   initSessionOwner({
     runtime,
     open: (open) => onThisRuntime(openSession(open)),
-    current: (root) => heldSessionSync(held, root),
+    current: (root) => [...held].find(([key]) => key.storage === root)?.[1],
     held: () => [...held.values()],
     list: () => onThisRuntime(listSessions),
     close: (root) => onThisRuntime(closeSession(root)),

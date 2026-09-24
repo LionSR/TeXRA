@@ -11,9 +11,17 @@ import '@test/support/defaultSessionTestSetup';
 // Third-party imports
 import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { dirname } from 'node:path';
+import { dirname, join } from 'node:path';
 import { it } from '@effect/vitest';
-import { Deferred, Effect, Fiber, Layer, SynchronizedRef } from 'effect';
+import {
+  Deferred,
+  Effect,
+  Exit,
+  Fiber,
+  FileSystem,
+  Layer,
+  SynchronizedRef,
+} from 'effect';
 import { describe, expect, vi } from 'vitest';
 
 // Local imports
@@ -24,9 +32,9 @@ import {
 } from '@agent/core/definition/AgentDataclass';
 import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
 import {
-  reflectionFlowState,
+  familyState,
   rowAggregate,
-  runtimeSnapshotRow,
+  snapshotRow,
   stepRow,
 } from '@agent/runtime/loop/rows';
 import { runReflection } from '@agent/runtime/loop/reflection';
@@ -37,6 +45,9 @@ import { turnText } from '@agent/runtime/run/turnText';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { UsageMonitor } from '@agent/runtime/UsageMonitor';
 import { TraceEmitter } from '@agent/trace';
+import { Runs } from '@agent/runtime/runRegistry';
+import type { RunCell } from '@agent/runtime/loop/runProgram';
+import { StateReadFailed } from '@platform/interfaces';
 import {
   LanguageModel,
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
@@ -46,14 +57,18 @@ import {
   RUN_OUTCOME,
   STREAM_LOG_ENTRY_TYPES,
   type CompileResult,
-  type OutputFileInfo,
   type RetryErrorInfo,
   type RunId,
 } from '@shared/schemas';
+import {
+  WORKFLOW_RAW_OUTPUT_EXT,
+  workflowOutputPath,
+} from '@shared/constants/workflowOutput';
 import { RunLedger } from '@shared/session/runLedger';
 import type { RunState } from '@shared/session/runStateFold';
 import { StreamLog } from '@shared/session/traceEntries';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { emptyPinnedComposition } from '@test/support/nativeToolTestLayer';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { rootedFsLayer } from '@test/support/fsTestUtils';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
@@ -69,16 +84,12 @@ import {
   installPlatform,
   setupPlatform,
 } from '@test/support/setupPlatform';
-import { fakePath } from '@test/support/FakePlatform';
+import { FakeStateStore, fakePath } from '@test/support/FakePlatform';
 import { generateRunId, isObject } from '@utils/core';
 import { createRunStorageLocation } from '@utils/files/fileLocation';
 import { RunFileService } from '@utils/files/runStorage';
 
-import {
-  createRecordingHost,
-  recordTraceEvents,
-  runFactsOfKey,
-} from './progressTestUtils';
+import { createRecordingHost } from './progressTestUtils';
 
 import type { Model, TurnResult } from '@texra-ai/llm/turn';
 
@@ -102,125 +113,112 @@ const scripted = vi.hoisted(() => ({
   compileResults: new Map<number, CompileResult | undefined>(),
   /** Whether the round summary lists its outputs as files to open. */
   openFiles: false,
+  /** A valid extracted document with the former raw-cycle filename. */
+  collidingDocument: false,
 }));
 
-vi.mock(
-  '@agent/implementations/flows/reflection/output/compileCheck',
-  async (importOriginal) => ({
+vi.mock('@agent/output/compileCheck', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agent/output/compileCheck')>()),
+  runCompileCheck: vi.fn((_context: unknown, round: number) =>
+    Effect.sync(() => ({
+      compileResult: scripted.compileResults.get(round),
+      artifacts: [],
+    })),
+  ),
+}));
+
+vi.mock('@agent/output/outputFileExtraction', async (importOriginal) => {
+  const { ensureRoundData } = await import('@agent/output/outputState');
+  const { createRunStorageLocation: locate } =
+    await import('@utils/files/fileLocation');
+  type OutputState = Parameters<typeof ensureRoundData>[0];
+  return {
     ...(await importOriginal<
-      typeof import('@agent/implementations/flows/reflection/output/compileCheck')
+      typeof import('@agent/output/outputFileExtraction')
     >()),
-    runCompileCheck: vi.fn((_context: unknown, round: number) =>
-      Effect.sync(() => ({
-        compileResult: scripted.compileResults.get(round),
-        artifacts: [],
-      })),
+    extractFilesFromXml: vi.fn(
+      (
+        outputState: OutputState,
+        _deps: unknown,
+        _xml: unknown,
+        outputLocation: { absolutePath: string },
+        round: number,
+      ) =>
+        Effect.gen(function* () {
+          const source = scripted.collidingDocument
+            ? 'output.c0.xml'
+            : 'main.tex';
+          const absolutePath = scripted.collidingDocument
+            ? join(dirname(outputLocation.absolutePath), source)
+            : `/storage/executions/${scripted.runId}/r${round}/main.tex`;
+          if (scripted.collidingDocument) {
+            const fs = yield* FileSystem.FileSystem;
+            yield* fs.writeFileString(absolutePath, 'extracted document');
+          }
+          ensureRoundData(outputState, round).outputs = [
+            {
+              source,
+              round,
+              location: locate(
+                absolutePath,
+                `r${round}/${source}`,
+                scripted.runId as RunId,
+              ),
+              lineage: null,
+              diff: null,
+            },
+          ];
+        }),
     ),
-  }),
-);
+  };
+});
 
-vi.mock(
-  '@agent/implementations/flows/reflection/output/outputFileExtraction',
-  async (importOriginal) => {
-    const { ensureRoundData } =
-      await import('@agent/implementations/flows/reflection/output/outputState');
-    const { createRunStorageLocation: locate } =
-      await import('@utils/files/fileLocation');
-    type OutputState = Parameters<typeof ensureRoundData>[0];
-    return {
-      ...(await importOriginal<
-        typeof import('@agent/implementations/flows/reflection/output/outputFileExtraction')
-      >()),
-      extractFilesFromXml: vi.fn(
-        (
-          outputState: OutputState,
-          _deps: unknown,
-          _xml: unknown,
-          _location: unknown,
-          round: number,
-        ) =>
-          Effect.sync(() => {
-            ensureRoundData(outputState, round).outputs = [
-              {
-                source: 'main.tex',
-                round,
-                location: locate(
-                  `/storage/executions/${scripted.runId}/r${round}/main.tex`,
-                  `r${round}/main.tex`,
-                  scripted.runId as RunId,
-                ),
-                lineage: null,
-                diff: null,
-              },
-            ];
-          }),
-      ),
-    };
+vi.mock('@agent/output/lineageMapping', () => ({
+  traceFileLineage: vi.fn(() => ({ files: [] })),
+}));
+
+vi.mock('@agent/output/LatexDiffManager', () => ({
+  LatexDiffManager: class {
+    handleLatexdiffOfOutput = () => Effect.succeed([]);
   },
-);
+}));
 
-vi.mock(
-  '@agent/implementations/flows/reflection/output/lineageMapping',
-  () => ({ traceFileLineage: vi.fn(() => ({ files: [] })) }),
-);
-
-vi.mock(
-  '@agent/implementations/flows/reflection/output/LatexDiffManager',
-  () => ({
-    LatexDiffManager: class {
-      handleLatexdiffOfOutput = () => Effect.succeed([]);
-    },
-  }),
-);
-
-vi.mock(
-  '@agent/implementations/flows/reflection/output/XmlOutputManager',
-  () => ({
-    XmlOutputManager: class {
-      ensureCorrectXmlStructure = () => Effect.void;
-    },
-  }),
-);
-
-vi.mock(
-  '@agent/implementations/flows/reflection/output/roundSummary',
-  async () => {
-    const { ensureRoundData } =
-      await import('@agent/implementations/flows/reflection/output/outputState');
-    type OutputState = Parameters<typeof ensureRoundData>[0];
-    return {
-      summarizeRound: vi.fn(
-        (
-          outputState: OutputState,
-          _deps: unknown,
-          _location: unknown,
-          round: number,
-        ) =>
-          Effect.sync(() => {
-            const outputs = ensureRoundData(outputState, round).outputs;
-            return {
-              fileInfos: outputs,
-              filesToOpen: scripted.openFiles
-                ? outputs.map((output) => output.location)
-                : [],
-            };
-          }),
-      ),
-    };
+vi.mock('@agent/output/XmlOutputManager', () => ({
+  XmlOutputManager: class {
+    ensureCorrectXmlStructure = () => Effect.void;
   },
-);
+}));
 
-vi.mock(
-  '@agent/implementations/flows/reflection/output/outputValidation',
-  () => ({
-    checkExpectedOutputs: vi.fn(() => Effect.succeed({ missing: [] })),
-  }),
-);
+vi.mock('@agent/output/roundSummary', async () => {
+  const { ensureRoundData } = await import('@agent/output/outputState');
+  type OutputState = Parameters<typeof ensureRoundData>[0];
+  return {
+    summarizeRound: vi.fn(
+      (
+        outputState: OutputState,
+        _deps: unknown,
+        _location: unknown,
+        round: number,
+      ) =>
+        Effect.sync(() => {
+          const outputs = ensureRoundData(outputState, round).outputs;
+          return {
+            filesToOpen: scripted.openFiles
+              ? outputs.map((output) => output.location)
+              : [],
+          };
+        }),
+    ),
+  };
+});
 
-vi.mock(
-  '@agent/implementations/flows/reflection/output/snapshotResolution',
-  () => ({ resolveBaseFilesForDiff: vi.fn(() => Effect.succeed([])) }),
-);
+vi.mock('@agent/output/outputValidation', () => ({
+  checkExpectedOutputs: vi.fn(() => Effect.succeed({ missing: [] })),
+}));
+
+vi.mock('@agent/output/snapshotResolution', () => ({
+  resolveBaseFilesForDiff: vi.fn(() => Effect.succeed([])),
+}));
 
 vi.mock('@agent/prompt/PromptBuilder', () => ({
   getSystemPromptWithRules: vi.fn(() => Effect.succeed('system')),
@@ -346,19 +344,21 @@ function invokerLayer(init: LoopInit, requests: InvokeRequest[]) {
     ModelInvoker,
     Effect.gen(function* () {
       const run = yield* AgentRun;
-      const ledger = yield* RunLedger;
       const aggregateId = rowAggregate(run.runId);
       return {
-        invoke: (state: RunState, request: InvokeRequest) =>
+        invoke: (cell: RunCell, request: InvokeRequest) =>
           Effect.gen(function* () {
+            const state = yield* cell.current;
             const turnScript = init.turns?.[requests.length] ?? COMPLETE;
             requests.push(request);
             if (init.beforeResponse) yield* init.beforeResponse(request.round);
             if ('failWith' in turnScript) {
-              const failed = yield* ledger.appendBatch(run.runId, state, [
-                runtimeSnapshotRow(run.runId, state, {
-                  lastError: turnScript.failWith,
-                  declinedRoutes: [],
+              const failed = yield* cell.append([
+                snapshotRow(run.runId, state, {
+                  runtime: {
+                    lastError: turnScript.failWith,
+                    declinedRoutes: [],
+                  },
                 }),
               ]);
               return {
@@ -374,7 +374,7 @@ function invokerLayer(init: LoopInit, requests: InvokeRequest[]) {
               turnScript.text ?? `round ${request.round} output`,
               turnScript.finish,
             );
-            const next = yield* ledger.appendBatch(run.runId, state, [
+            const next = yield* cell.append([
               {
                 type: 'model.message',
                 aggregateId,
@@ -397,6 +397,14 @@ function invokerLayer(init: LoopInit, requests: InvokeRequest[]) {
                   usage: null,
                 },
               },
+              // As the invoker does: the response retires a recorded failure.
+              ...(state.lastError === null
+                ? []
+                : [
+                    snapshotRow(run.runId, state, {
+                      runtime: { lastError: null },
+                    }),
+                  ]),
               stepRow(run.runId, state, 'response.ready'),
             ]);
             if (init.afterResponse) yield* init.afterResponse(request.round);
@@ -445,6 +453,8 @@ function agentRunTestLayer(init: LoopInit) {
         fileService: new RunFileService(init.runId, init.session.roots),
         tools: new MapToolRegistry({}),
         finalToolName: null,
+        toolset: { offeredTools: [], toolsetHash: '0'.repeat(64) },
+        composition: emptyPinnedComposition,
         structured: { value: undefined },
         model,
         scope,
@@ -472,6 +482,7 @@ function loopProgram(init: LoopInit, requests: InvokeRequest[]) {
       invokerLayer(init, requests).pipe(
         Layer.provideMerge(agentRunTestLayer(init)),
         Layer.provideMerge(Layer.succeed(RunLedger)(init.session.ledger)),
+        Layer.provideMerge(Layer.succeed(Runs)(init.session.runs)),
         Layer.provideMerge(rootedFsLayer(init.session.roots)),
         Layer.provideMerge(
           LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT),
@@ -531,6 +542,7 @@ function startedRun(session: SessionHandle): RunId {
   scripted.runId = runId;
   scripted.compileResults.clear();
   scripted.openFiles = false;
+  scripted.collidingDocument = false;
   publishTestRunStart(session, runId);
   return runId;
 }
@@ -575,9 +587,21 @@ function userTexts(state: RunState): string[] {
   );
 }
 
+/** The canonical raw output a round's pipeline reads, as the loop derives it
+ *  from the round. */
+function canonicalOutputOf(
+  session: SessionHandle,
+  runId: RunId,
+  round: number,
+): string {
+  return new RunFileService(runId, session.roots).createLocation(
+    workflowOutputPath({ ext: WORKFLOW_RAW_OUTPUT_EXT, round }),
+  ).absolutePath;
+}
+
 /** The persisted reflection state of a folded run. */
 function flowOf(state: RunState) {
-  const flow = reflectionFlowState(state);
+  const flow = familyState(state, 'reflection');
   if (flow === null) throw new Error('The run persisted no reflection state.');
   return flow;
 }
@@ -925,14 +949,78 @@ describe('a resumed reflection run', () => {
 });
 
 describe('the output facts a reflection round publishes', () => {
+  it.effect('keeps extracted outputs when presentation settings fail', () =>
+    Effect.gen(function* () {
+      const stateStore = new FakeStateStore();
+      yield* Effect.promise(() =>
+        installPlatform(
+          {
+            storagePath: fakePath('storage'),
+            workspacePath: fakePath('workspace'),
+          },
+          {
+            workspaceState: {
+              get: <T>(key: string, defaultValue?: T) =>
+                key === WorkspaceStateKey.WORKFLOW_AUTO_OPEN_PDF
+                  ? Effect.fail(
+                      new StateReadFailed({
+                        key,
+                        message: 'Cannot read auto-open setting',
+                        cause: new Error('read failed'),
+                      }),
+                    )
+                  : stateStore.get(key, defaultValue),
+              update: (key, value) => stateStore.update(key, value),
+            },
+          },
+        ),
+      );
+      const session = yield* createProcessSession();
+      const runId = startedRun(session);
+      const init = { runId, session, rounds: 1 };
+
+      const exit = yield* Effect.exit(loopProgram(init, []));
+      const state = yield* loadState(init);
+
+      expect(Exit.isFailure(exit)).toBe(true);
+      expect(state.roundOutputs[0]?.outputs[0]?.location).toMatchObject({
+        relativePath: 'r0/main.tex',
+      });
+    }),
+  );
+
+  it.effect('keeps raw cycles separate from an output.c0.xml document', () =>
+    Effect.gen(function* () {
+      const session = yield* createProcessSession();
+      const runId = startedRun(session);
+      scripted.collidingDocument = true;
+
+      const { result, state } = yield* runLoop({ runId, session, rounds: 1 });
+      const canonical = canonicalOutputOf(session, runId, 0);
+      const roundDir = dirname(canonical);
+      const cycle = join(dirname(roundDir), 'raw', 'r0', 'output.c0.xml');
+      const extracted = join(roundDir, 'output.c0.xml');
+
+      expect(result.outcome).toBe(RUN_OUTCOME.COMPLETED);
+      expect(state.roundOutputs[0]?.outputs[0]?.location.absolutePath).toBe(
+        extracted,
+      );
+      expect(yield* Effect.promise(() => readFile(cycle, 'utf8'))).toBe(
+        'round 0 output',
+      );
+      expect(yield* Effect.promise(() => readFile(extracted, 'utf8'))).toBe(
+        'extracted document',
+      );
+    }),
+  );
+
   it.effect('publishes the run-wide output map, restored rounds included', () =>
     Effect.gen(function* () {
       const session = yield* createProcessSession();
       const runId = startedRun(session);
       const firstLogger = new TraceEmitter();
-      const first = recordTraceEvents(firstLogger);
 
-      yield* runLoop({
+      const first = yield* runLoop({
         runId,
         session,
         rounds: 2,
@@ -940,12 +1028,10 @@ describe('the output facts a reflection round publishes', () => {
         turns: [COMPLETE, { failWith: PROVIDER_FAILURE }],
       });
 
-      const opened = runFactsOfKey(first.events, 'outputFiles');
-      expect(Object.keys(opened.at(-1)?.filesByRound ?? {})).toEqual(['0']);
+      expect(first.state.roundOutputs.map((round) => round.round)).toEqual([0]);
 
       const resumedLogger = new TraceEmitter();
-      const resumed = recordTraceEvents(resumedLogger);
-      yield* runLoop({
+      const resumed = yield* runLoop({
         runId,
         session,
         rounds: 2,
@@ -956,10 +1042,10 @@ describe('the output facts a reflection round publishes', () => {
       // The row carries the run's whole round map, not the round that just
       // finished: a cold fold keeps only the newest row, so the restored
       // round has to ride along.
-      const republished = runFactsOfKey(resumed.events, 'outputFiles');
-      const filesByRound = republished.at(-1)?.filesByRound ?? {};
-      expect(Object.keys(filesByRound)).toEqual(['0', '1']);
-      expect((filesByRound[0] as OutputFileInfo[])[0]?.round).toBe(0);
+      expect(resumed.state.roundOutputs.map((round) => round.round)).toEqual([
+        0, 1,
+      ]);
+      expect(resumed.state.roundOutputs[0]?.outputs[0]?.round).toBe(0);
     }),
   );
 
@@ -968,14 +1054,11 @@ describe('the output facts a reflection round publishes', () => {
       const session = yield* createProcessSession();
       const runId = startedRun(session);
       const logger = new TraceEmitter();
-      const recorded = recordTraceEvents(logger);
       scripted.compileResults.set(0, compileFailure(0));
 
-      yield* runLoop({ runId, session, rounds: 1, logger });
+      const completed = yield* runLoop({ runId, session, rounds: 1, logger });
 
-      const failures = runFactsOfKey(recorded.events, 'compileFailures');
-      expect(failures).toHaveLength(1);
-      expect(failures[0]?.filesByRound[0]).toMatchObject([
+      expect(completed.state.roundOutputs[0]?.compileFailures).toMatchObject([
         { round: 0, displayName: 'main.tex' },
       ]);
     }),
@@ -1053,7 +1136,7 @@ describe('a token-limited reflection response', () => {
       const session = yield* createProcessSession({
         responseTextProcessing: {
           normalizeResponseText: (text: string) => text,
-          postProcessResponse: (text: string) => text,
+          postProcessResponse: (text: string) => Effect.succeed(text),
           connectResponseText,
         },
       });
@@ -1069,17 +1152,16 @@ describe('a token-limited reflection response', () => {
         ],
       });
 
-      const location = flowOf(state).outputLocation;
-      if (location === null) throw new Error('The round kept no output.');
+      const canonical = canonicalOutputOf(session, runId, state.round);
       // Every cycle asks the policy how it joins onto what came before; the
       // first has nothing before it, so its connector is never written.
       expect(connectResponseText.mock.calls).toEqual([
         ['', 'left'],
         ['left', 'right'],
       ]);
-      expect(
-        yield* Effect.promise(() => readFile(location.absolutePath, 'utf-8')),
-      ).toBe('left\nright');
+      expect(yield* Effect.promise(() => readFile(canonical, 'utf-8'))).toBe(
+        'left\nright',
+      );
     }),
   );
 
@@ -1126,7 +1208,7 @@ describe('an interrupted reflection run', () => {
       expect(state.step).toBe('halted');
       expect(state.outcome).toBe(RUN_OUTCOME.CANCELLED);
       // The round the stop interrupted is still the round a resume reopens.
-      expect(flowOf(state).currentRound).toBe(0);
+      expect(state.round).toBe(0);
 
       const resumed = yield* runLoop({
         runId,
@@ -1157,15 +1239,15 @@ describe('an interrupted reflection run', () => {
         );
 
         // The first round's stage closed with its own verdict; only the
-        // interrupted one is cancelled, and its outputs stay on the
-        // snapshot a resume continues from.
+        // interrupted one is cancelled, and its outputs stay in the
+        // ledger a resume continues from.
         expect(roundStageOutcomes(store)).toEqual([
           RUN_OUTCOME.COMPLETED,
           RUN_OUTCOME.CANCELLED,
         ]);
         expect(halted.outcome).toBe(RUN_OUTCOME.CANCELLED);
-        expect(flowOf(halted).currentRound).toBe(1);
-        expect(flowOf(halted).roundOutputs[0]?.outputs).toHaveLength(1);
+        expect(halted.round).toBe(1);
+        expect(halted.roundOutputs[0]?.outputs).toHaveLength(1);
 
         const resumed = yield* runLoop({
           runId,
@@ -1181,30 +1263,18 @@ describe('an interrupted reflection run', () => {
   /**
    * C15: a crash between the committed response row and the round's raw
    * output write. The response is paid for and durable, so resume reprocesses
-   * it. The recorded byte offset prevents a duplicate append and repairs
-   * different-length debris, but equal-length conflicting bytes are
-   * indistinguishable from the completed write.
+   * it. The reprocessed cycle writes its own path wholesale, keyed by the
+   * folded continuationIndex, so debris a crash left in the cycle file or in
+   * the canonical output is rewritten from the coordinate, never reconciled
+   * by length.
    */
   it.effect.each([
-    { name: 'missing file', seed: null, expected: 'round 0 output' },
-    {
-      name: 'completed write',
-      seed: 'round 0 output',
-      expected: 'round 0 output',
-    },
-    {
-      name: 'different-length debris',
-      seed: 'stale bytes from the crash',
-      expected: 'round 0 output',
-    },
-    {
-      name: 'same-length debris',
-      seed: 'stale 0 output',
-      expected: 'stale 0 output',
-    },
+    { name: 'missing file', seed: null },
+    { name: 'canonical debris', seed: 'canonical' },
+    { name: 'cycle debris', seed: 'cycle' },
   ])(
-    'reconciles a reprocessed response by the recorded output byte length ($name)',
-    ({ seed, expected }) =>
+    'rewrites a reprocessed response from its coordinate ($name)',
+    ({ seed }) =>
       Effect.gen(function* () {
         const session = yield* createProcessSession();
         const runId = startedRun(session);
@@ -1213,22 +1283,25 @@ describe('an interrupted reflection run', () => {
           0,
           'afterResponse',
         );
-        // The response row is committed and no snapshot has recorded a
-        // write: the offset resume reconciles against is zero.
+        // The response row is committed; its cycle file is not yet written.
         expect(halted.lastTurn).not.toBeNull();
-        expect(flowOf(halted).rawOutputBytes).toBe(0);
-        const path = flowOf(halted).outputLocation?.absolutePath;
-        if (path === undefined) throw new Error('The round has no output.');
+        const canonical = canonicalOutputOf(session, runId, halted.round);
         yield* Effect.promise(async () => {
           if (seed === null) return;
-          await mkdir(dirname(path), { recursive: true });
-          await writeFile(path, seed);
+          const target =
+            seed === 'canonical'
+              ? canonical
+              : join(dirname(dirname(canonical)), 'raw', 'r0', 'output.c0.xml');
+          await mkdir(dirname(target), { recursive: true });
+          await writeFile(target, 'stale bytes from the crash');
         });
 
         yield* runLoop({ runId, session, rounds: 1, resume: true });
 
-        const content = yield* Effect.promise(() => readFile(path, 'utf-8'));
-        expect(content).toBe(expected);
+        const content = yield* Effect.promise(() =>
+          readFile(canonical, 'utf-8'),
+        );
+        expect(content).toBe('round 0 output');
       }),
   );
 });

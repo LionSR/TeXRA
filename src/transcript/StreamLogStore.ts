@@ -18,7 +18,7 @@
  * whose seed is a superset of what the tail delivers) are never delivered
  * by the tail. The only rows that can be both seeded and tail-applied are
  * a fresh run's registration batch, every member of which is a no-op in
- * `applyEvent` or idempotent (`run.activate` re-sets the status the seed
+ * `applyTraceRow` or idempotent (`run.activate` re-sets the status the seed
  * already set). So no permit or sequence comparison decides where the two
  * meet. The contract is one-process: a foreign process committing rows
  * during a seed read's async window can duplicate or drop a display-cache
@@ -29,14 +29,12 @@ import { Effect, type Context } from 'effect';
 import {
   aggregateId,
   aggregateTarget,
-  isTranscriptEvent,
   type SessionEvent,
   type RunId,
-  RUN_PHASE,
 } from '@shared/schemas';
 import type { Database } from '@shared/session/database';
 import { StreamLog } from '@shared/session/traceEntries';
-import { createTranscriptFold } from '@shared/session/traceFold';
+import { applyTraceRow, createTranscriptFold } from '@shared/session/traceFold';
 
 type TranscriptDatabase = Pick<
   Context.Service.Shape<typeof Database>,
@@ -64,30 +62,6 @@ interface CachedRun {
   evictWhenIdle: boolean;
 }
 
-/** Apply one event with the same projection used by the live recorder. */
-function applyEvent(
-  log: StreamLog,
-  fold: ReturnType<typeof createTranscriptFold>,
-  event: SessionEvent,
-  debug: boolean,
-): void {
-  if (event.type === 'run.activate') fold.status(RUN_PHASE.RUNNING);
-  else if (event.type === 'flow.step') {
-    if (event.payload.step === 'waiting') fold.status(RUN_PHASE.WAITING);
-    else if (event.payload.step !== 'halted') fold.status(RUN_PHASE.RUNNING);
-  } else if (event.type === 'child.park') {
-    fold.status(
-      event.phase === 'parked' ? RUN_PHASE.WAITING : RUN_PHASE.RUNNING,
-    );
-  } else if (event.type === 'run.end') fold.status(event.outcome);
-  else if (isTranscriptEvent(event))
-    fold.record(event, {
-      at: event.at,
-      id: JSON.stringify([event.aggregateId, event.seq]),
-      debug,
-    });
-}
-
 function foldEntries(
   events: readonly SessionEvent[],
   debug: boolean,
@@ -103,7 +77,7 @@ function foldEntries(
   }
   const log = new StreamLog();
   const fold = createTranscriptFold(log);
-  for (const event of events) applyEvent(log, fold, event, debug);
+  for (const event of events) applyTraceRow(fold, event, debug);
   log.drainEmission();
   return { log, fold };
 }
@@ -220,7 +194,7 @@ export class StreamLogStore {
     }
     const cached = this.runs.get(target.id);
     if (cached === undefined) return;
-    applyEvent(cached.log, cached.fold, event, this.debug);
+    applyTraceRow(cached.fold, event, this.debug);
     // Nothing here reads the log's change buffers; drain them so they do not
     // grow with the resident log.
     cached.log.drainEmission();

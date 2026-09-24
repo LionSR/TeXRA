@@ -1,9 +1,8 @@
 import { it } from '@effect/vitest';
-import { Effect } from 'effect';
+import { Effect, Layer } from 'effect';
 import { beforeEach, describe, expect, vi } from 'vitest';
 
 import type { ModelOptionStores } from '@model/computeModelOptions';
-import { platform } from '@platform/platform';
 import {
   LanguageModel,
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
@@ -50,8 +49,8 @@ const {
 } = await import('@tools/delegation/delegationAvailability');
 const { resolveAgentTools } =
   await import('@agent/runtime/agentToolResolution');
-const { MapToolRegistry } = await import('@agent/core/tools/ToolTypes');
-const { NO_TOOL_INJECTIONS } = await import('@agent/runtime/toolInjection');
+const { toolTable } = await import('@tools/toolTable');
+const { toolTableLayer } = await import('@tools/compositions');
 
 const DELEGATE_AGENT_DESCRIPTION = [
   'Delegate a task to a tool-use agent.',
@@ -130,21 +129,23 @@ function rewriteRoster(
 }
 
 /**
- * A registry holding exactly these definitions: `resolveAgentTools` advertises
- * the registry's own contract, not the one the declaration carries.
+ * A tool table holding exactly these definitions: `resolveAgentTools`
+ * advertises the table's own contract, not the one the declaration carries.
  */
 function delegationRegistry(tools: readonly ToolInput[]) {
-  return new MapToolRegistry(
-    Object.fromEntries(
-      tools.map((tool) => [
-        tool.name,
-        {
-          definition: tool,
-          call: () =>
-            Effect.succeed({ status: 'executed', summary: '', output: '' }),
-        },
-      ]),
-    ),
+  return toolTableLayer(
+    toolTable({
+      test: Object.fromEntries(
+        tools.map((tool) => [
+          tool.name,
+          {
+            definition: tool,
+            call: () =>
+              Effect.succeed({ status: 'executed', summary: '', output: '' }),
+          },
+        ]),
+      ),
+    }),
   );
 }
 
@@ -155,12 +156,14 @@ function resolveToolList(
   return Effect.suspend(() => {
     return resolveAgentTools({
       tools,
-      registry: delegationRegistry(tools),
       logger: { warn: () => {} },
-      toolInjections: NO_TOOL_INJECTIONS,
+      host: 'extension',
+      injectTools: false,
       stores,
-    });
+      workspaceRoot: undefined,
+    }).pipe(Effect.scoped, Effect.provide(delegationRegistry(tools)));
   }).pipe(
+    Effect.map(({ definitions }) => definitions),
     // The delegation-annotation availability read yields `LanguageModel`;
     // this host has no editor models.
     Effect.provide(LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT)),

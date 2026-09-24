@@ -5,7 +5,7 @@ import { afterEach, describe, expect, vi } from 'vitest';
 
 import type { ConfigProvider } from '@platform/interfaces';
 import { Secrets, type PlatformSecrets } from '@platform/secrets';
-import type { ToolProbeInputs } from '@tools/externalToolDefs';
+import type { ToolProbeInputs } from '@tools/toolProbes';
 import { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import { SetupPlatform } from '@tools/setup/platform';
 import { createFakeSetupPlatform } from './setup/fixtures';
@@ -40,30 +40,32 @@ const secretsLayer = Secrets.layer({
   getEnv: unreadSecret,
 } satisfies PlatformSecrets);
 
-/** The services a group's availability callbacks may read. */
+/** The services a plugin's availability callbacks may read. */
 const probeServices = Layer.mergeAll(
   secretsLayer,
   SetupPlatform.layer(createFakeSetupPlatform()),
-  // The mocked defs declare no Lean group, so nothing here reads the port.
+  // The mocked plugins declare no Lean plugin, so nothing here reads the port.
   Layer.mock(LeanLanguageServices, { listServers: () => [] }),
 );
 
 afterEach(() => {
-  vi.doUnmock('@tools/externalToolDefs');
+  vi.doUnmock('@tools/plugins');
   vi.resetModules();
 });
 
 describe('tool availability app signals', () => {
   it.effect('emits toolAvailabilityChanged after a refresh', () =>
     Effect.gen(function* () {
-      vi.doMock('@tools/externalToolDefs', () => ({
-        EXTERNAL_TOOL_DEFS: [
+      vi.doMock('@tools/plugins', () => ({
+        TOOL_PLUGINS: [
           {
             id: 'test-tool',
-            tools: [],
+            toolNames: [],
             name: 'Test tool',
             category: 'ai-agents',
-            check: vi.fn(() => Effect.succeed(true)),
+            availability: {
+              check: vi.fn(() => Effect.succeed(true)),
+            },
           },
         ],
       }));
@@ -94,39 +96,119 @@ describe('tool availability app signals', () => {
   );
 
   it.effect(
+    're-probes every open workspace when a key a plugin declares changes',
+    () =>
+      Effect.gen(function* () {
+        const probedRoots: (string | undefined)[] = [];
+        vi.doMock('@tools/plugins', () => ({
+          TOOL_PLUGINS: [
+            {
+              id: 'token-tool',
+              toolNames: ['token'],
+              name: 'Token tool',
+              category: 'ai-agents',
+              availability: {
+                reprobeOnSecrets: ['token.key'],
+                probe: vi.fn(({ workspaceRoot }: ToolProbeInputs) =>
+                  Effect.sync(() => probedRoots.push(workspaceRoot)),
+                ),
+                check: vi.fn(() => Effect.succeed(true)),
+              },
+            },
+          ],
+        }));
+        const sessionGraph = yield* Effect.promise(
+          () => import('@agent/runtime/sessionGraph'),
+        );
+        const { emitAppSignal, onAppSignal } = yield* Effect.promise(
+          () => import('@eventBus/AppSignals'),
+        );
+        const { reprobeOnCredentialChange } = yield* Effect.promise(
+          () => import('@tools/credentialReprobe'),
+        );
+        const session = (workspace: string | undefined) => ({
+          roots: { workspace, config: probeInputs.config },
+        });
+        // Two projects plus the no-workspace session; the second session on
+        // `/a` shares its availability cache, so it is probed once.
+        const sessions = [
+          session('/a'),
+          session('/a'),
+          session('/b'),
+          session(undefined),
+        ];
+        sessionGraph.initSessionOwner({
+          list: () => Effect.succeed(sessions),
+        } as never);
+        let refreshed = 0;
+        const allRefreshed = Deferred.makeUnsafe<void>();
+        const listener = yield* Effect.forkChild(
+          onAppSignal('toolAvailabilityChanged', () => {
+            if (++refreshed === 3)
+              Deferred.doneUnsafe(allRefreshed, Effect.void);
+          }),
+        );
+        const reprobe = yield* Effect.forkChild(reprobeOnCredentialChange);
+        // Both subscribers register on their own fibers, the re-prober's one
+        // fork deeper, before the store announces anything.
+        yield* Effect.repeat(Effect.yieldNow, { times: 3 });
+
+        emitAppSignal('credentialChanged', { key: 'unrelated.key' });
+        emitAppSignal('credentialChanged', { key: 'token.key' });
+
+        yield* Deferred.await(allRefreshed);
+        expect(probedRoots.toSorted()).toEqual(['/a', '/b', undefined]);
+        sessionGraph.initSessionOwner(undefined);
+        yield* Fiber.interrupt(reprobe);
+        yield* Fiber.interrupt(listener);
+      }).pipe(Effect.provide(probeServices)),
+  );
+
+  it.effect(
     'derives unavailable tool names from the last probe results, with no cache to refresh',
     () =>
       Effect.gen(function* () {
-        vi.doMock('@tools/externalToolDefs', () => ({
-          EXTERNAL_TOOL_DEFS: [
+        vi.doMock('@tools/plugins', () => ({
+          TOOL_PLUGINS: [
             {
               id: 'present-tool',
-              tools: ['present'],
+              toolNames: ['present'],
               name: 'Present tool',
               category: 'ai-agents',
-              check: vi.fn(() => Effect.succeed(true)),
+              availability: {
+                check: vi.fn(() => Effect.succeed(true)),
+              },
             },
             {
               id: 'missing-tool',
-              tools: ['missing'],
+              toolNames: ['missing'],
               name: 'Missing tool',
               category: 'ai-agents',
               toggleable: true,
-              check: vi.fn(() => Effect.succeed(false)),
+              availability: {
+                check: vi.fn(() => Effect.succeed(false)),
+              },
             },
           ],
         }));
         const { getUnavailableToolNamesCached, runExternalToolChecks } =
           yield* Effect.promise(() => import('@tools/toolAvailability'));
 
-        expect([...getUnavailableToolNamesCached()]).toEqual([]);
+        expect([...getUnavailableToolNamesCached(undefined)]).toEqual([]);
 
         yield* runExternalToolChecks(probeInputs);
 
         // Toggling a tool on or off never changes this set — it reports missing
         // external dependencies only — so there is nothing to rebuild after a
         // toggle, which is why the availability answer is derived on read.
-        expect([...getUnavailableToolNamesCached()]).toEqual(['missing']);
+        expect([...getUnavailableToolNamesCached(undefined)]).toEqual([
+          'missing',
+        ]);
+        // The probes read the workspace, so one workspace's results never
+        // answer for another's on a multi-project host.
+        expect([...getUnavailableToolNamesCached('/other/project')]).toEqual(
+          [],
+        );
       }).pipe(Effect.provide(probeServices)),
   );
 
@@ -134,28 +216,32 @@ describe('tool availability app signals', () => {
     'distinguishes failed probes from missing tools without hiding optional-status failures',
     () =>
       Effect.gen(function* () {
-        vi.doMock('@tools/externalToolDefs', () => ({
-          EXTERNAL_TOOL_DEFS: [
+        vi.doMock('@tools/plugins', () => ({
+          TOOL_PLUGINS: [
             {
               id: 'broken-probe',
-              tools: ['broken'],
+              toolNames: ['broken'],
               name: 'Broken probe',
               category: 'ai-agents',
-              probe: vi.fn(() =>
-                Effect.fail(new Error('invalid local configuration')),
-              ),
-              check: vi.fn(() => Effect.succeed(true)),
-              statusLabel: vi.fn(() => Effect.succeed('Needs setup')),
+              availability: {
+                probe: vi.fn(() =>
+                  Effect.fail(new Error('invalid local configuration')),
+                ),
+                check: vi.fn(() => Effect.succeed(true)),
+                statusLabel: vi.fn(() => Effect.succeed('Needs setup')),
+              },
             },
             {
               id: 'broken-detail',
-              tools: ['present'],
+              toolNames: ['present'],
               name: 'Broken detail',
               category: 'ai-agents',
-              check: vi.fn(() => Effect.succeed(true)),
-              detailCheck: vi.fn(() =>
-                Effect.fail(new Error('status command crashed')),
-              ),
+              availability: {
+                check: vi.fn(() => Effect.succeed(true)),
+                detailCheck: vi.fn(() =>
+                  Effect.fail(new Error('status command crashed')),
+                ),
+              },
             },
           ],
         }));

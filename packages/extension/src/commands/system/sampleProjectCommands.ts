@@ -16,6 +16,7 @@ import {
 import { selectFolder } from '@frontend/ui/dialogs';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import { WorkspaceFs } from '@platform/rootedFs';
+import { ensureError } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'SampleProjectCommands';
 
@@ -28,9 +29,8 @@ const reportFailure = (err: unknown) =>
 /**
  * No-workspace variant for the welcome view: ask where to put the sample,
  * copy it there, and open the folder (which reloads the window into full
- * activation, so the regular onboarding takes over). Must not touch
- * `platform()` or a session — the no-workspace activation path returns
- * before `initPlatform()` runs.
+ * activation, so the regular onboarding takes over). Must not touch a
+ * session — the no-workspace activation path returns before one exists.
  */
 export async function createSampleProjectWithoutWorkspace(
   extensionPath: string,
@@ -56,7 +56,7 @@ export async function createSampleProjectWithoutWorkspace(
           cp(path.join(extensionPath, 'resources', 'examples'), dest, {
             recursive: true,
           }),
-        catch: (err: unknown) => err,
+        catch: ensureError,
       });
     }
     yield* Effect.tryPromise({
@@ -67,7 +67,7 @@ export async function createSampleProjectWithoutWorkspace(
           { forceNewWindow: false },
         );
       },
-      catch: (err: unknown) => err,
+      catch: ensureError,
     });
   });
 

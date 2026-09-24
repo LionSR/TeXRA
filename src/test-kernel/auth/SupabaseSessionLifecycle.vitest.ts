@@ -387,17 +387,19 @@ describe('SupabaseSession', () => {
       }),
     );
 
-    it.live('returns refreshed session tokens without reloading storage', () =>
-      Effect.gen(function* () {
-        const { coordinator, getReadCount } = createCoordinator({
-          initialSession: expiredSession(),
-        });
-        assert.deepEqual(yield* coordinator.getSessionTokens(), {
-          accessToken: 'refreshed-access',
-          refreshToken: 'refreshed-refresh',
-        });
-        assert.equal(getReadCount(), 1);
-      }),
+    it.live(
+      'returns the refreshed access token without reloading storage',
+      () =>
+        Effect.gen(function* () {
+          const { coordinator, getReadCount } = createCoordinator({
+            initialSession: expiredSession(),
+          });
+          assert.equal(
+            yield* coordinator.ensureFreshToken(),
+            'refreshed-access',
+          );
+          assert.equal(getReadCount(), 1);
+        }),
     );
 
     it.effect('does not return tokens cleared while loading the session', () =>
@@ -407,7 +409,7 @@ describe('SupabaseSession', () => {
           onFirstRead: (c) => Effect.runPromise(c.clearSession()),
         });
 
-        assert.equal(yield* coordinator.getSessionTokens(), null);
+        assert.equal(yield* coordinator.ensureFreshToken(), null);
         assert.equal(getReadCount(), 2);
       }),
     );
@@ -431,7 +433,7 @@ describe('SupabaseSession', () => {
             });
 
           const tokensFiber = yield* Effect.forkChild(
-            coordinator.getSessionTokens(),
+            coordinator.ensureFreshToken(),
             { startImmediately: true },
           );
           yield* Effect.promise(() => deleteStarted.promise);
@@ -590,18 +592,14 @@ describe('SupabaseSession', () => {
       {
         status: 401,
         failure: 'invalid',
-        request: (coordinator: SupabaseSessionCoordinator) =>
-          coordinator.getSessionTokens(),
       },
       {
         status: 503,
         failure: 'transient',
-        request: (coordinator: SupabaseSessionCoordinator) =>
-          coordinator.ensureFreshToken(),
       },
     ])(
       'classifies refresh HTTP $status as $failure and returns no token',
-      ({ status, failure, request }) =>
+      ({ status, failure }) =>
         Effect.gen(function* () {
           const client = createClient({
             refreshSession: async () => ({
@@ -614,7 +612,7 @@ describe('SupabaseSession', () => {
             client,
           });
 
-          assert.equal(yield* request(coordinator), null);
+          assert.equal(yield* coordinator.ensureFreshToken(), null);
           assert.equal(coordinator.getLastRefreshFailure(), failure);
         }),
     );

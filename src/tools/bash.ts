@@ -316,10 +316,8 @@ function createBackgroundBashStrategy(params: {
     // `executeCommand` never fails on a non-zero exit — it answers with the
     // exit code, so the failure is an application-level one.
     isTurnError: (turn) => !turn.success,
-    onTurnError: (turn, turnLogger) =>
-      turnLogger.error(
-        `Background bash failed with exit code ${turn.exitCode}.`,
-      ),
+    turnErrorMessage: (turn) =>
+      `Background bash failed with exit code ${turn.exitCode}.`,
 
     formatDelivery: (turn, wallTimeMs) =>
       Effect.try({ try: () => delivery(turn, wallTimeMs), catch: ensureError }),
@@ -347,7 +345,221 @@ function createBackgroundBashStrategy(params: {
   };
 }
 
-export class BashTool extends defineTool({
+function executeBashTool(input: BashInput) {
+  return Effect.gen(function* () {
+    const toolCall = yield* ToolCall;
+    if (
+      !input.run_in_background &&
+      SHELL_BACKGROUNDING_PATTERN.test(input.command)
+    ) {
+      return yield* Effect.fail(new ToolError(SHELL_BACKGROUNDING_MESSAGE));
+    }
+
+    // A background shell delivers its result as a follow-up message; a
+    // one-shot run ends after the current cycle, so nothing is left to collect
+    // it. Every other child type already answers this case — agent-CLI
+    // refuses, native subagents degrade to the parent trace, workflow-script
+    // awaits — and a background shell cannot degrade, because the follow-up
+    // IS its delivery. The approval the loop already took is spent by the
+    // time this refuses: in the SDK path (`packages/agent/src/effect/sessionPrograms.ts`)
+    // the `finally` kills the process group, so launching here would run the
+    // user's command and then discard its result with nothing reported.
+    if (input.run_in_background && toolCall.run?.toolPolicy.stopAfterCycle) {
+      return yield* Effect.fail(
+        new ToolError(
+          'bash run_in_background is unavailable in one-shot runs: it delivers its result as a follow-up message, and this run ends after the current cycle so no follow-up can be collected. Run the command in the foreground instead (omit run_in_background), raising `timeout` if it needs longer than the default.',
+        ),
+      );
+    }
+
+    const cwd =
+      parseWorkingDirectory(toolCall.workingDirectory) ??
+      toolCall.roots.workspace;
+
+    if (input.run_in_background) {
+      const run = yield* requireToolRun('bash run_in_background', toolCall);
+      return yield* executeBackground(
+        run.session,
+        input.command,
+        input.timeout,
+        run.runId,
+        cwd,
+      );
+    }
+
+    return yield* executeForeground(
+      input.command,
+      input.timeout,
+      toolCall,
+      cwd,
+    );
+  });
+}
+
+const executeForeground = Effect.fn('BashTool.executeForeground')(function* (
+  command: string,
+  timeoutMs: number,
+  toolCall: import('@agent/runtime/ToolCall').ToolCallShape,
+  cwd?: string,
+): Effect.fn.Return<ToolResult, Error, Scope.Scope> {
+  const stdout = createBoundedOutputCapture(
+    FOREGROUND_OUTPUT_HEAD_CHARS,
+    FOREGROUND_OUTPUT_TAIL_CHARS,
+  );
+  const stderr = createBoundedOutputCapture(
+    FOREGROUND_OUTPUT_HEAD_CHARS,
+    FOREGROUND_OUTPUT_TAIL_CHARS,
+  );
+  const startedAt = Date.now();
+  const result = yield* executeCommand(command, {
+    cwd,
+    // The call's own session roots: a `git commit` the agent runs
+    // carries this paper's configured identity.
+    settings: toolCall.roots,
+    buffer: false,
+    timeout: timeoutMs,
+    // The string command form gets shell teardown: interruption and
+    // timeout signal the whole process group so piped children and
+    // backgrounded jobs are torn down.
+    onStdout: (chunk) => {
+      stdout.append(chunk);
+      toolCall.hooks?.onToolOutput?.(chunk);
+    },
+    onStderr: (chunk) => {
+      stderr.append(chunk);
+      toolCall.hooks?.onToolOutput?.(chunk);
+    },
+  });
+  // Spawn/cancellation diagnostics can come from executeCommand itself
+  // rather than either subprocess stream, so retain those as a fallback.
+  const retainedStdout = stdout.text('stdout') ?? result.stdout;
+  const retainedStderr = stderr.text('stderr') ?? result.stderr;
+
+  if (result.timedOut) {
+    const parts: string[] = [
+      `Foreground command timed out after ${timeoutMs / 1000}s.`,
+    ];
+    if (retainedStdout) parts.push(`<stdout>${retainedStdout}</stdout>`);
+    if (retainedStderr) parts.push(`<stderr>${retainedStderr}</stderr>`);
+    parts.push(
+      `To fix, either:\n` +
+        `- Increase the timeout parameter up to 600s (600000ms): { "timeout": 600000 }\n` +
+        `- Set run_in_background: true to execute asynchronously: { "run_in_background": true }\n` +
+        `Do not use shell-level backgrounding such as \`nohup ... &\` inside a foreground call.`,
+    );
+    return yield* Effect.fail(new ToolError(parts.join('\n')));
+  }
+
+  const duration = formatDuration(Date.now() - startedAt);
+
+  if (result.success) {
+    const preview = previewLabel(command);
+    return executed(
+      retainedStdout ?? '',
+      `Executed: ${preview} (exit 0, ${duration})`,
+    );
+  }
+  // Many CLI tools (including latexmk) write errors to stdout, not stderr
+  const errorOutput =
+    [retainedStderr, retainedStdout].filter(Boolean).join('\n') ||
+    'No error output available';
+  return yield* Effect.fail(
+    new ToolError(`Command failed (${duration}): ${errorOutput}`),
+  );
+});
+
+const executeBackground = Effect.fn('BashTool.executeBackground')(function* (
+  session: SessionHandle,
+  command: string,
+  timeoutMs: number,
+  parentRunId: RunId,
+  cwd?: string,
+) {
+  return yield* Effect.uninterruptibleMask((restore) =>
+    Effect.gen(function* () {
+      const runId = generateRunId();
+      const preview = previewLabel(command);
+
+      const syntheticConfig = buildSyntheticToolUseConfig({
+        agent: 'bash',
+        instruction: command,
+      });
+
+      // The durable record states only what a shell command has: no run
+      // mode, no model. The synthetic AgentConfig above feeds the ephemeral
+      // live wire only.
+      yield* registerRun(
+        session,
+        runId,
+        { name: 'bash', instruction: command },
+        {
+          identity: { kind: 'process', tool: 'bash' },
+          userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+          parentRunId,
+          category: AgentCategory.ToolUse,
+          description: childRunDescription(command),
+        },
+      );
+
+      yield* startDetachedChildRunLoop({
+        session,
+        runId,
+        parentRunId,
+        agentName: 'bash',
+        // A background shell is an external process on no model budget, like
+        // the agent-CLI children (see the child-run concurrency budget note).
+        budgeted: false,
+        createChildRun: () =>
+          restore(Effect.void).pipe(
+            Effect.andThen(
+              createChildRun(session, runId, parentRunId, {
+                run: { kind: 'process', tool: 'bash' },
+                userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+                description: command,
+                config: syntheticConfig,
+              }),
+            ),
+          ),
+        buildLaunch: (childRun) =>
+          Effect.sync(() => {
+            return {
+              strategy: createBackgroundBashStrategy({
+                runId,
+                command,
+                timeoutMs,
+                cwd,
+                settings: session.roots,
+                logger: childRun.logger,
+              }),
+              // Nobody awaits this run: own late loop failures here as trace
+              // diagnostics, since the loop already owns its one user-facing
+              // result delivery.
+              onLoopFailed: (error: unknown) =>
+                Effect.sync(() =>
+                  childRun.logger.error(
+                    'Background command run loop failed after launch',
+                    { data: error },
+                  ),
+                ),
+            };
+          }),
+      });
+
+      return executed(
+        [
+          `Command launched in background.`,
+          `Run ID: ${runId}`,
+          'Result arrives automatically as a follow-up message when complete. Continue other work or end your turn.',
+          `To read its output so far (works while it runs): executions tool with path=/executions/${runId}/output`,
+          `Only if you cannot proceed without the result, block with the executions tool: path=/executions/${runId} action=wait`,
+        ].join('\n'),
+        `Launched background: ${preview}`,
+      );
+    }),
+  );
+});
+
+export const BashTool = defineTool({
   name: 'bash',
   requiresApproval: true,
   slow: true,
@@ -356,223 +568,5 @@ export class BashTool extends defineTool({
   schema: BashInputSchema,
   // The command this call runs; the loop gets it approved before the body.
   guard: { bash: (input: BashInput) => Effect.succeed(input.command) },
-}) {
-  protected execute(input: BashInput) {
-    return Effect.gen({ self: this }, function* () {
-      const toolCall = yield* ToolCall;
-      if (
-        !input.run_in_background &&
-        SHELL_BACKGROUNDING_PATTERN.test(input.command)
-      ) {
-        return yield* Effect.fail(new ToolError(SHELL_BACKGROUNDING_MESSAGE));
-      }
-
-      // A background shell delivers its result as a follow-up message; a
-      // one-shot run ends after the current cycle, so nothing is left to collect
-      // it. Every other child type already answers this case — agent-CLI
-      // refuses, native subagents degrade to the parent trace, workflow-script
-      // awaits — and a background shell cannot degrade, because the follow-up
-      // IS its delivery. The approval the loop already took is spent by the
-      // time this refuses: in the SDK path (`packages/agent/src/effect/sessionPrograms.ts`)
-      // the `finally` kills the process group, so launching here would run the
-      // user's command and then discard its result with nothing reported.
-      if (input.run_in_background && toolCall.run?.toolPolicy.stopAfterCycle) {
-        return yield* Effect.fail(
-          new ToolError(
-            'bash run_in_background is unavailable in one-shot runs: it delivers its result as a follow-up message, and this run ends after the current cycle so no follow-up can be collected. Run the command in the foreground instead (omit run_in_background), raising `timeout` if it needs longer than the default.',
-          ),
-        );
-      }
-
-      const cwd =
-        parseWorkingDirectory(toolCall.workingDirectory) ??
-        toolCall.roots.workspace;
-
-      if (input.run_in_background) {
-        const run = yield* requireToolRun('bash run_in_background', toolCall);
-        return yield* this.executeBackground(
-          run.session,
-          input.command,
-          input.timeout,
-          run.runId,
-          cwd,
-        );
-      }
-
-      return yield* this.executeForeground(
-        input.command,
-        input.timeout,
-        toolCall,
-        cwd,
-      );
-    });
-  }
-
-  private readonly executeForeground = Effect.fn('BashTool.executeForeground')(
-    function* (
-      this: BashTool,
-      command: string,
-      timeoutMs: number,
-      toolCall: import('@agent/runtime/ToolCall').ToolCallShape,
-      cwd?: string,
-    ): Effect.fn.Return<ToolResult, Error, Scope.Scope> {
-      const stdout = createBoundedOutputCapture(
-        FOREGROUND_OUTPUT_HEAD_CHARS,
-        FOREGROUND_OUTPUT_TAIL_CHARS,
-      );
-      const stderr = createBoundedOutputCapture(
-        FOREGROUND_OUTPUT_HEAD_CHARS,
-        FOREGROUND_OUTPUT_TAIL_CHARS,
-      );
-      const startedAt = Date.now();
-      const result = yield* executeCommand(command, {
-        cwd,
-        // The call's own session roots: a `git commit` the agent runs
-        // carries this paper's configured identity.
-        settings: toolCall.roots,
-        buffer: false,
-        timeout: timeoutMs,
-        // The string command form gets shell teardown: interruption and
-        // timeout signal the whole process group so piped children and
-        // backgrounded jobs are torn down.
-        onStdout: (chunk) => {
-          stdout.append(chunk);
-          toolCall.hooks?.onToolOutput?.(chunk);
-        },
-        onStderr: (chunk) => {
-          stderr.append(chunk);
-          toolCall.hooks?.onToolOutput?.(chunk);
-        },
-      });
-      // Spawn/cancellation diagnostics can come from executeCommand itself
-      // rather than either subprocess stream, so retain those as a fallback.
-      const retainedStdout = stdout.text('stdout') ?? result.stdout;
-      const retainedStderr = stderr.text('stderr') ?? result.stderr;
-
-      if (result.timedOut) {
-        const parts: string[] = [
-          `Foreground command timed out after ${timeoutMs / 1000}s.`,
-        ];
-        if (retainedStdout) parts.push(`<stdout>${retainedStdout}</stdout>`);
-        if (retainedStderr) parts.push(`<stderr>${retainedStderr}</stderr>`);
-        parts.push(
-          `To fix, either:\n` +
-            `- Increase the timeout parameter up to 600s (600000ms): { "timeout": 600000 }\n` +
-            `- Set run_in_background: true to execute asynchronously: { "run_in_background": true }\n` +
-            `Do not use shell-level backgrounding such as \`nohup ... &\` inside a foreground call.`,
-        );
-        return yield* Effect.fail(new ToolError(parts.join('\n')));
-      }
-
-      const duration = formatDuration(Date.now() - startedAt);
-
-      if (result.success) {
-        const preview = previewLabel(command);
-        return executed(
-          retainedStdout ?? '',
-          `Executed: ${preview} (exit 0, ${duration})`,
-        );
-      }
-      // Many CLI tools (including latexmk) write errors to stdout, not stderr
-      const errorOutput =
-        [retainedStderr, retainedStdout].filter(Boolean).join('\n') ||
-        'No error output available';
-      return yield* Effect.fail(
-        new ToolError(`Command failed (${duration}): ${errorOutput}`),
-      );
-    },
-  );
-
-  private readonly executeBackground = Effect.fn('BashTool.executeBackground')(
-    function* (
-      session: SessionHandle,
-      command: string,
-      timeoutMs: number,
-      parentRunId: RunId,
-      cwd?: string,
-    ) {
-      return yield* Effect.uninterruptibleMask((restore) =>
-        Effect.gen(function* () {
-          const runId = generateRunId();
-          const preview = previewLabel(command);
-
-          const syntheticConfig = buildSyntheticToolUseConfig({
-            agent: 'bash',
-            instruction: command,
-          });
-
-          // The durable record states only what a shell command has: no run
-          // mode, no model. The synthetic AgentConfig above feeds the ephemeral
-          // live wire only.
-          yield* registerRun(
-            session,
-            runId,
-            { name: 'bash', instruction: command },
-            'bash',
-            {
-              identity: { kind: 'process', tool: 'bash' },
-              userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
-              parentRunId,
-              category: AgentCategory.ToolUse,
-              description: childRunDescription(command),
-            },
-          );
-
-          yield* startDetachedChildRunLoop({
-            session,
-            runId,
-            parentRunId,
-            agentName: 'bash',
-            // A background shell is an external process on no model budget, like
-            // the agent-CLI children (see the child-run concurrency budget note).
-            budgeted: false,
-            createChildRun: () =>
-              restore(Effect.void).pipe(
-                Effect.andThen(
-                  createChildRun(session, runId, parentRunId, {
-                    run: { kind: 'process', tool: 'bash' },
-                    userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
-                    description: command,
-                    config: syntheticConfig,
-                  }),
-                ),
-              ),
-            buildLaunch: (childRun) =>
-              Effect.sync(() => {
-                return {
-                  strategy: createBackgroundBashStrategy({
-                    runId,
-                    command,
-                    timeoutMs,
-                    cwd,
-                    settings: session.roots,
-                    logger: childRun.logger,
-                  }),
-                  // Nobody awaits this run: own late loop failures here as trace
-                  // diagnostics, since the loop already owns its one user-facing
-                  // result delivery.
-                  onLoopFailed: (error: unknown): void => {
-                    childRun.logger.error(
-                      'Background command run loop failed after launch',
-                      { data: error },
-                    );
-                  },
-                };
-              }),
-          });
-
-          return executed(
-            [
-              `Command launched in background.`,
-              `Run ID: ${runId}`,
-              'Result arrives automatically as a follow-up message when complete. Continue other work or end your turn.',
-              `To read its output so far (works while it runs): executions tool with path=/executions/${runId}/output`,
-              `Only if you cannot proceed without the result, block with the executions tool: path=/executions/${runId} action=wait`,
-            ].join('\n'),
-            `Launched background: ${preview}`,
-          );
-        }),
-      );
-    },
-  );
-}
+  execute: executeBashTool,
+});

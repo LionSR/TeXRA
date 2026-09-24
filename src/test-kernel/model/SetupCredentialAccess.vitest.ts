@@ -1,5 +1,5 @@
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, Logger } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports - platform
@@ -60,10 +60,20 @@ const { hasUsableSetupCredential } =
 
 function hasCredential(): Promise<boolean> {
   return Effect.runPromise(
-    hasUsableSetupCredential(stores, secrets, mocks.reportProbeFailure).pipe(
+    hasUsableSetupCredential(stores, secrets).pipe(
       // The subscription probes yield the `LanguageModel` service by type;
       // both are mocked, so the port is never read.
       Effect.provide(LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT)),
+      // A failed probe is logged; the test reads each logged message.
+      Effect.provide(
+        Logger.layer([
+          Logger.make(({ message }) =>
+            mocks.reportProbeFailure(
+              Array.isArray(message) ? message.join(' ') : String(message),
+            ),
+          ),
+        ]),
+      ),
     ),
   );
 }
@@ -82,7 +92,7 @@ describe('setup credential access', () => {
     access.chatGptSubscription = false;
     access.grokSubscription = false;
     access.keys = {};
-    mocks.reportProbeFailure.mockReset();
+    mocks.reportProbeFailure.mockReset().mockReturnValue(Effect.void);
     mocks.isCodexSubscriptionActive.mockReset().mockImplementation(() =>
       Effect.sync(() => {
         events.push('subscription:chatgpt');

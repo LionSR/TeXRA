@@ -33,7 +33,7 @@ const globWithFailedStat = (
       pathOrDescriptor: targetPath,
       description,
     });
-    return yield* new GlobTool().call(input).pipe(
+    return yield* GlobTool.call(input).pipe(
       Effect.provideService(FileSystem.FileSystem, {
         ...fs,
         stat: (candidate: string) =>
@@ -85,7 +85,7 @@ describe('GlobTool match metadata', () => {
     Effect.gen(function* () {
       yield* withGlobWorkspace(() =>
         Effect.gen(function* () {
-          const result = yield* new GlobTool().call({
+          const result = yield* GlobTool.call({
             pattern: '{old,new}.tex',
           });
 
@@ -163,7 +163,7 @@ describe('GlobTool match metadata', () => {
                   false,
                 );
 
-                const result = yield* new GlobTool().call({
+                const result = yield* GlobTool.call({
                   pattern: '**/*.tex',
                   path: externalPath,
                 });

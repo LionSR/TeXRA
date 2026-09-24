@@ -8,6 +8,8 @@ import {
   showLoggedErrorMessage,
   showLoggedMessage,
 } from '@frontend/ui/errorHandlingUtils';
+import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
+import type { NotificationFailed } from '@hosts/uiHosts';
 import { withLogChannel } from '@logger/effectLog';
 import { workspaceRelativePath } from '@utils/files/workspaceFS';
 
@@ -58,29 +60,31 @@ type ActiveFileGuardResult =
 const getActiveLatexEditor = (
   session: SessionHandle,
   saveDocument: boolean,
-): Effect.Effect<ActiveFileGuardResult> =>
+): Effect.Effect<ActiveFileGuardResult, NotificationFailed> =>
   Effect.gen(function* () {
     const editor = vscode.window.activeTextEditor;
     if (!editor) {
-      yield* Effect.promise(async () => {
-        await vscode.window.showWarningMessage(
-          GUARD_FAILURE_MESSAGES.noEditor.user,
-        );
-      });
+      yield* vscodeUi.showWarningMessage(GUARD_FAILURE_MESSAGES.noEditor.user);
       return { status: 'noEditor' } satisfies ActiveFileGuardResult;
     }
 
     if (!editor.document.fileName.toLowerCase().endsWith('.tex')) {
-      yield* Effect.promise(async () => {
-        await vscode.window.showWarningMessage(
-          GUARD_FAILURE_MESSAGES.unsupportedExtension.user,
-        );
-      });
+      yield* vscodeUi.showWarningMessage(
+        GUARD_FAILURE_MESSAGES.unsupportedExtension.user,
+      );
       return { status: 'unsupportedExtension' } satisfies ActiveFileGuardResult;
     }
 
     if (saveDocument && editor.document.isDirty) {
-      const saved = yield* Effect.promise(async () => editor.document.save());
+      // A rejected save is the same answer as a declined one: saveFailed.
+      const saved = yield* Effect.tryPromise(() => editor.document.save()).pipe(
+        Effect.catch((error) =>
+          Effect.logWarning('Saving the active document failed', error).pipe(
+            withLogChannel(CHANNEL),
+            Effect.as(false),
+          ),
+        ),
+      );
       if (!saved) {
         yield* showLoggedMessage(
           CHANNEL,
@@ -124,7 +128,7 @@ export function runGuardedLatexCommand<R = never>(
   options: GuardedLatexCommandOptions,
   operation: (
     guardResult: ActiveFileGuardSuccess,
-  ) => Effect.Effect<void, unknown, R>,
+  ) => Effect.Effect<void, Error, R>,
 ): Effect.Effect<void, never, R> {
   const { channel, action, saveDocument = false, errorMessage } = options;
 

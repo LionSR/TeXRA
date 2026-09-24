@@ -12,7 +12,7 @@ import {
 import { OWN_API_KEYS } from '@ui/copy/modelAccess';
 import { RESEARCHER_ACCESS } from '@ui/copy/onboarding';
 
-// Kept to one rendered row: the /api form and the account panel both
+// Kept to one rendered row: the /login form and the account panel both
 // budget a single line for this description (75 columns at most).
 export const CLI_ACCOUNT_ACCESS_DESCRIPTION =
   'Sign in or out, set subscription preferences, and how the rest is paid for.';
@@ -72,42 +72,6 @@ export type CliModelAccessItemsInput =
       readonly state: 'failed' | 'loading';
     };
 
-export function parseCliModelAccessSelection(
-  input: string,
-): CliModelAccessSelection | undefined {
-  const normalized = input.trim().toLowerCase();
-  const codingPlan = CODING_PLAN_SUBSCRIPTIONS.find((plan) =>
-    plan.cliAliases.includes(normalized),
-  );
-  if (codingPlan) {
-    return {
-      kind: 'subscription-preference',
-      provider: codingPlan.cliProvider,
-      state: 'on',
-    };
-  }
-
-  switch (normalized) {
-    case 'chatgpt':
-    case 'subscription':
-      return {
-        kind: 'subscription-preference',
-        provider: 'chatgpt',
-        state: 'on',
-      };
-    case 'grok':
-    case 'xai':
-    case 'supergrok':
-      return {
-        kind: 'subscription-preference',
-        provider: 'grok',
-        state: 'on',
-      };
-    default:
-      return undefined;
-  }
-}
-
 /**
  * Pick the route the CLI reports for a model. Both inputs speak `UsageRoute`,
  * so this owns one precedence rule and no per-provider knowledge: a completed
@@ -137,7 +101,7 @@ export function shortCliModelAccessRoute(
     case 'xai-subscription':
     case 'kimi-code-subscription':
     case 'glm-coding-plan-subscription':
-      // The bar names how the call is paid for, not which provider; the /api
+      // The bar names how the call is paid for, not which provider; the /login
       // form and /status name the subscription itself.
       return 'subscription';
     case undefined:

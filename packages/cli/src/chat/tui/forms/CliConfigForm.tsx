@@ -84,7 +84,7 @@ function useAsyncStatusView<Status, View extends StatusViewBase>(options: {
    * on the surface's runtime and recovers from the whole cause there, so a
    * failed read reaches the view without a Promise rejection in between.
    */
-  readonly load: () => Effect.Effect<Status, unknown>;
+  readonly load: () => Effect.Effect<Status, Error>;
   readonly runtime: ProcessRuntime;
   readonly buildView: (status: Status) => View;
   readonly onErrorRef: {
@@ -220,17 +220,16 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
 
   const settings = useAsyncListForm<Record<string, unknown>>({
     load: () =>
-      runtime.runPromise(
-        Effect.map(
-          Effect.forEach(CLI_STATE_SETTINGS, (entry) =>
-            Effect.map(
-              readSetting(entry, stores, 'cli'),
-              (value) => [entry.key, value] as const,
-            ),
+      Effect.map(
+        Effect.forEach(CLI_STATE_SETTINGS, (entry) =>
+          Effect.map(
+            readSetting(entry, stores, 'cli'),
+            (value) => [entry.key, value] as const,
           ),
-          Object.fromEntries,
         ),
+        Object.fromEntries,
       ),
+    runtime,
     onClose: props.onClose,
     onError: props.onError,
   });

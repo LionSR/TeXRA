@@ -1,20 +1,14 @@
 // The bounded static-scrollback ring behind `StaticConversationTranscript`:
-// what the retained tail contains (session header, finalized entries,
-// duplicate-row markers), what it costs in rows and bytes, and how an
-// incremental tick advances it. Everything here is plain data over the
-// transcript fold — no React, no Ink — so the component file holds only the
-// component.
+// what the retained tail contains (session header and finalized entries),
+// what it costs in rows and bytes, and how an incremental tick advances it.
+// Everything here is plain data over the transcript fold — no React, no Ink —
+// so the component file holds only the component.
 
-import { randomUUID } from 'node:crypto';
-
-import { createLog } from '@logger/logUtils';
 import type { RunPhase } from '@shared/schemas';
 import { getModelLabel } from '@shared/model/modelLabel';
 import type { RunLabels } from '@shared/tools/executionsDisplay';
-import { transcriptText, type TranscriptRow } from '@ui/transcript';
-import { createBoundedIdSet } from '@utils/core/boundedIdSet';
+import type { TranscriptRow } from '@ui/transcript';
 
-import { registerCliStateResetHook, type SessionMeta } from '../state/cliState';
 import {
   incrementalStaticTranscriptEntries,
   orderedStaticTranscriptEntries,
@@ -24,6 +18,7 @@ import {
   transcriptEntryLayout,
   transcriptEntryMarginBottomRows,
 } from './transcriptEntryLayout';
+import type { SessionMeta } from '../state/cliState';
 
 export type StaticTranscriptItem =
   | {
@@ -589,172 +584,6 @@ interface StaticTranscriptBuildResult {
   readonly trimmed: boolean;
 }
 
-const log = createLog('StaticConversationTranscript');
-const DUPLICATE_ROW_LOG_CAP = 1000;
-/** Row ids already logged as duplicates, so a persistently-colliding id is
- *  logged once instead of once per rebuild. `upsertRow` (sessionFold) and
- *  the local-notice counter (`transcript.ts`) both guarantee unique ids; a
- *  collision here means one of those invariants broke upstream. This gates
- *  only the log call — the inline marker is re-derived on every pass that
- *  still finds the collision (see {@link duplicateRowWarningItems}), so a
- *  later repaint (which replaces all of `<Static>`'s printed output from
- *  the current `items`) never silently drops a marker it already showed. */
-const duplicateRowIdsLogged = createBoundedIdSet(DUPLICATE_ROW_LOG_CAP);
-// `/clear` resets `localEntrySeq` (`transcript.ts`) back to 0 without
-// terminating the TUI, so a local-notice id like `local:0:cli-local` is
-// reusable across the reset. Without this hook, a genuinely new collision
-// after `/clear` that happens to reuse an already-logged id would be
-// mistaken for the old one and suppressed.
-registerCliStateResetHook(() => duplicateRowIdsLogged.clear());
-
-/**
- * A fresh, unguessable per-process token, not a fixed string: entry ids are
- * wire content (`z.string().min(1)`, no format constraint), so a marker id
- * built only from a literal prefix and a counter is a string an upstream
- * producer could — in principle, however unlikely — happen to reproduce.
- * Nothing outside this module ever sees or influences `randomUUID()`'s
- * output, so no entry id can be engineered (accidentally or otherwise) to
- * collide with `${DUPLICATE_ROW_WARNING_NAMESPACE}:`.
- */
-const DUPLICATE_ROW_WARNING_NAMESPACE = `duplicate-row-warning:${randomUUID()}`;
-let duplicateRowWarningSeq = 0;
-
-function nextDuplicateRowWarningId(entryId: string): string {
-  return `${DUPLICATE_ROW_WARNING_NAMESPACE}:${duplicateRowWarningSeq++}:${entryId}`;
-}
-
-/** The source row id a marker's own item id represents, or `undefined` for
- *  anything that isn't one of this module's markers (namespaced above). */
-function duplicateRowWarningSourceId(itemId: string): string | undefined {
-  const prefix = `${DUPLICATE_ROW_WARNING_NAMESPACE}:`;
-  if (!itemId.startsWith(prefix)) return undefined;
-  const rest = itemId.slice(prefix.length);
-  const counterEnd = rest.indexOf(':');
-  return counterEnd === -1 ? undefined : rest.slice(counterEnd + 1);
-}
-
-interface PendingDuplicateRow {
-  readonly entry: TranscriptRow;
-  readonly markerId: string;
-}
-
-interface DuplicateRowScan {
-  /** The rows that may join the list, in arrival order, repeats dropped. */
-  readonly accepted: readonly TranscriptRow[];
-  /** One marker per colliding id this pass is the first to see. */
-  readonly pending: readonly PendingDuplicateRow[];
-}
-
-/**
- * Split `entries` into the rows a list already holding `existing` can take and
- * the duplicate-id rows that get a marker instead. Both the ids already taken
- * and the collisions already marked are read from `existing`, so a collision
- * spread across ticks (one occurrence arrives now, another arrived several
- * ticks ago and already got its marker) never grows a second marker, while a
- * marker that was later trimmed away is free to reappear — the same
- * requirement as the tail placement in {@link duplicateRowWarningItems}. A
- * repeat within one call is likewise marked once.
- *
- * A full rebuild passes an empty list: it starts from nothing but the session
- * header, which is not a row and holds no row id.
- */
-function scanDuplicateRowIds(
-  entries: readonly TranscriptRow[],
-  existing: readonly StaticTranscriptItem[],
-): DuplicateRowScan {
-  const taken = new Set(existing.map((item) => item.id));
-  const alreadyMarked = new Set(
-    existing.flatMap((item) => {
-      const sourceId = duplicateRowWarningSourceId(item.id);
-      return sourceId === undefined ? [] : [sourceId];
-    }),
-  );
-  const markedThisPass = new Set<string>();
-  const accepted: TranscriptRow[] = [];
-  const pending: PendingDuplicateRow[] = [];
-  for (const entry of entries) {
-    if (taken.has(entry.id)) {
-      if (!markedThisPass.has(entry.id) && !alreadyMarked.has(entry.id)) {
-        markedThisPass.add(entry.id);
-        pending.push({
-          entry,
-          markerId: nextDuplicateRowWarningId(entry.id),
-        });
-      }
-      continue;
-    }
-    taken.add(entry.id);
-    accepted.push(entry);
-  }
-  return { accepted, pending };
-}
-
-/**
- * Visible markers for the duplicate-id rows that were dropped, shaped like the
- * local notices `transcript.ts` synthesizes (`origin: 'local'`, host-assigned
- * id). `log.warn` alone is not enough here: while the TUI owns the terminal,
- * `initCliPlatform` installs a no-op log sink (every interactive launch sets
- * `quietLogs: true`), so logging is a best-effort record for non-interactive
- * hosts and this inline row — matching `EntryErrorBoundary`'s convention of
- * surfacing a render-time defect in the transcript itself — is what an
- * interactive user actually sees.
- *
- * Callers append these at the true tail rather than beside the historical
- * duplicate: retention trims from the front, so a marker here is the last
- * thing a long session's ring budget would ever drop, and a diagnostic
- * surfacing "now" for an old collision is at least as legible as one backdated
- * into scrollback that may already be gone. Derived on every pass that still
- * finds the collision (not gated by whether it was logged before), so a later
- * repaint — which replaces all printed output from the current `items` —
- * doesn't drop a marker it already showed.
- */
-function duplicateRowWarningItems(
-  pending: readonly PendingDuplicateRow[],
-): readonly StaticTranscriptItem[] {
-  return pending.map(({ entry, markerId }): StaticTranscriptItem => ({
-    id: markerId,
-    kind: 'entry',
-    entry: {
-      id: markerId,
-      origin: 'local',
-      timestamp: Date.now(),
-      level: 'error',
-      kind: 'error',
-      summary: transcriptText(
-        `Duplicate transcript row id (kind ${entry.kind}); dropped a repeat. This points at an upsert or local-notice bug upstream.`,
-      ),
-      details: [],
-      detailText: transcriptText(''),
-    },
-  }));
-}
-
-/**
- * Log each pending duplicate once — never more, and only for the ones whose
- * marker row is still present after ring-budget trimming. A marker trimmed
- * away in the same pass it was inserted never reached the reader, so logging
- * it here would suppress every future retry and the collision would go
- * unlogged for the rest of a long session (the bug this whole warning path
- * exists to avoid, just moved one step later). The marker itself already
- * rendered regardless of this gate — see {@link duplicateRowWarningItems}.
- */
-function logSurvivingDuplicates(
-  pending: readonly PendingDuplicateRow[],
-  survivingItems: readonly StaticTranscriptItem[],
-  context: string,
-): void {
-  if (pending.length === 0) return;
-  const survivingIds = new Set(survivingItems.map((item) => item.id));
-  for (const { entry, markerId } of pending) {
-    if (!survivingIds.has(markerId)) continue;
-    if (duplicateRowIdsLogged.has(entry.id)) continue;
-    duplicateRowIdsLogged.add(entry.id);
-    log.warn(
-      `Duplicate transcript row id ${entry.id} (kind ${entry.kind}) in ${context}; dropping the repeat. Row ids should be unique — this points at an upsert or local-notice bug upstream.`,
-    );
-  }
-}
-
 export function buildStaticTranscriptItems(
   options: BuildStaticTranscriptItemsOptions,
 ): StaticTranscriptBuildResult {
@@ -780,29 +609,19 @@ export function buildStaticTranscriptItems(
     width,
   });
   const items: StaticTranscriptItem[] = [...header.items];
-  const duplicates = scanDuplicateRowIds(
-    orderedStaticTranscriptEntries(
-      source.entries ?? [],
-      source.settledRows,
-      source.status,
-    ),
-    [],
-  );
-  for (const entry of duplicates.accepted) {
+  for (const entry of orderedStaticTranscriptEntries(
+    source.entries ?? [],
+    source.settledRows,
+    source.status,
+  )) {
     items.push({ id: entry.id, kind: 'entry', entry });
   }
-  items.push(...duplicateRowWarningItems(duplicates.pending));
 
   const retained = retainedStaticTranscriptTail(items, {
     budgets: ringBudgets,
     runLabels,
     width,
   });
-  logSurvivingDuplicates(
-    duplicates.pending,
-    retained.items,
-    'a static rebuild',
-  );
   return {
     items: retained.items,
     rowCount: retained.totals.rows,
@@ -1015,22 +834,13 @@ export function advanceStaticTranscriptState(
     bytes: nextByteCount,
   });
   let aboveMarginBottomRows = itemMarginBottomRows(nextItems.at(-1));
-  const appendItem = (item: StaticTranscriptItem): void => {
+  for (const entry of plan.appended) {
+    const item: StaticTranscriptItem = { id: entry.id, kind: 'entry', entry };
     const metrics = staticTranscriptItemMetrics(item, width, runLabels);
     totals.insert(aboveMarginBottomRows, metrics, undefined);
     aboveMarginBottomRows = metrics.marginBottomRows;
     nextItems = [...nextItems, item];
     changed = true;
-  };
-  const duplicates =
-    plan.appended.length > 0
-      ? scanDuplicateRowIds(plan.appended, nextItems)
-      : { accepted: [], pending: [] };
-  for (const entry of duplicates.accepted) {
-    appendItem({ id: entry.id, kind: 'entry', entry });
-  }
-  for (const item of duplicateRowWarningItems(duplicates.pending)) {
-    appendItem(item);
   }
   nextRowCount = totals.rows;
   nextByteCount = totals.bytes;
@@ -1048,11 +858,6 @@ export function advanceStaticTranscriptState(
     nextRepaintEpoch += 1;
     changed = true;
   }
-  logSurvivingDuplicates(
-    duplicates.pending,
-    nextItems,
-    'an incremental append',
-  );
 
   const cursor = plan.cursor;
   const cursorChanged =

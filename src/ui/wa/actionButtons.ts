@@ -56,6 +56,8 @@ export interface IconActionButtonOptions {
   readonly disabled?: boolean;
   /** Selected state for toggle buttons. Reflected as `aria-pressed`. */
   readonly pressed?: boolean;
+  /** Open state for disclosure buttons. Reflected as `aria-expanded`. */
+  readonly expanded?: boolean;
   /**
    * Icon-only. When defined, the button renders inside an overlay wrapper:
    * while `true` a spinner covers the (hidden, disabled) button so the toolbar
@@ -123,6 +125,7 @@ function renderActionButtonParts({
   size,
   disabled,
   pressed,
+  expanded,
   busy,
   tooltip,
   ariaHidden,
@@ -172,6 +175,9 @@ function renderActionButtonParts({
       aria-label=${ariaLabel}
       aria-pressed=${ifDefined(
         pressed === undefined ? undefined : String(pressed),
+      )}
+      aria-expanded=${ifDefined(
+        expanded === undefined ? undefined : String(expanded),
       )}
       title=${ifDefined(useWebAwesomeTooltip ? undefined : nativeTitle)}
       data-action=${ifDefined(action)}

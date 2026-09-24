@@ -17,8 +17,9 @@ import {
   Scope,
 } from 'effect';
 
-import { createChannelTrace, type AgentTrace } from '@agent/trace';
 import { emitAppSignal } from '@eventBus/AppSignals';
+import { withLogChannel } from '@logger/effectLog';
+import { createLog, type Log } from '@logger/logUtils';
 
 import {
   SHUTDOWN_PHASE,
@@ -83,7 +84,7 @@ export class PollHookRejected extends Data.TaggedError('PollHookRejected')<{
 }> {}
 
 interface PollingSourceConfig {
-  /** Display name used in the logger and exception messages. */
+  /** Display name used as the log channel and in exception messages. */
   name: string;
   pollIntervalMs: number;
   maxConcurrent: number;
@@ -123,7 +124,10 @@ export abstract class PollingSourceBase<
   K extends string,
   S extends BasePollSubscriptionState,
 > {
-  protected readonly logger: AgentTrace;
+  /** Puts an Effect's log entries on this source's channel, `config.name`. */
+  protected readonly inLogChannel: ReturnType<typeof withLogChannel>;
+  /** The same channel for the fiberless listener bookkeeping below. */
+  private readonly syncLog: Log;
   private readonly subscriptions = new Map<K, S>();
   private readonly keysChangedListeners = new Set<
     (keys: readonly K[]) => void
@@ -136,7 +140,8 @@ export abstract class PollingSourceBase<
   private shutdownLifecycle: LifecycleHost | undefined;
 
   constructor(protected readonly config: PollingSourceConfig) {
-    this.logger = createChannelTrace(config.name);
+    this.inLogChannel = withLogChannel(config.name);
+    this.syncLog = createLog(config.name);
   }
 
   /**
@@ -147,7 +152,7 @@ export abstract class PollingSourceBase<
   protected abstract pollOne(
     key: K,
     state: S,
-  ): Effect.Effect<void, unknown, Secrets>;
+  ): Effect.Effect<void, Error, Secrets>;
 
   /** Optional subclass hook that runs after all subscription polls settle. */
   protected afterTick(
@@ -155,6 +160,20 @@ export abstract class PollingSourceBase<
     _now: number,
   ): Effect.Effect<void, PollHookRejected, Secrets> {
     return Effect.void;
+  }
+
+  /**
+   * Warn on this source's channel. A `data` argument, when given, rides the
+   * entry raw as its payload; omitting it leaves the entry without one.
+   */
+  protected logWarning(
+    message: string,
+    ...data: [] | [unknown]
+  ): Effect.Effect<void> {
+    const entry = Effect.logWarning(message);
+    return (
+      data.length === 0 ? entry : Effect.annotateLogs(entry, { data: data[0] })
+    ).pipe(this.inLogChannel);
   }
 
   /** Subclass: format a halted-subscription error event for the listener. */
@@ -194,7 +213,8 @@ export abstract class PollingSourceBase<
    *
    * The caller runs this Effect. Its short critical section commits the
    * binding and starts the source-owned poller together. A capacity refusal
-   * remains the same plain Error defect the tool already reports.
+   * remains the same plain Error defect the tool already reports, raised
+   * with `Effect.die` rather than a throw inside the suspend.
    */
   protected register(
     key: K,
@@ -205,8 +225,10 @@ export abstract class PollingSourceBase<
       Effect.flatMap(Lifecycle, (lifecycle) =>
         Effect.suspend(() => {
           if (lifecycle.shutdownRan) {
-            throw new Error(
-              `Cannot subscribe to ${this.config.name} after shutdown`,
+            return Effect.die(
+              new Error(
+                `Cannot subscribe to ${this.config.name} after shutdown`,
+              ),
             );
           }
           // A replacement host starts with fresh subscriptions. Stop the old
@@ -216,20 +238,27 @@ export abstract class PollingSourceBase<
           const created = !state;
           if (!state) {
             if (this.subscriptions.size >= this.config.maxConcurrent) {
-              throw new Error(
-                `Too many active ${this.config.name} subscriptions (max ${this.config.maxConcurrent}). Unsubscribe from one before adding another.`,
+              return Effect.die(
+                new Error(
+                  `Too many active ${this.config.name} subscriptions (max ${this.config.maxConcurrent}). Unsubscribe from one before adding another.`,
+                ),
               );
             }
             state = initState();
             this.subscriptions.set(key, state);
-            this.logger.info(`Subscribed to ${key}`);
           }
           state.listeners.add(onEvent);
           if (created) this.notifyKeysChanged();
           const disposable: Disposable = {
             dispose: () => this.removeListener(key, onEvent),
           };
-          return this.ensurePolling(lifecycle).pipe(Effect.as(disposable));
+          const logSubscribed = created
+            ? Effect.logInfo(`Subscribed to ${key}`).pipe(this.inLogChannel)
+            : Effect.void;
+          return logSubscribed.pipe(
+            Effect.andThen(this.ensurePolling(lifecycle)),
+            Effect.as(disposable),
+          );
         }),
       ),
     );
@@ -265,11 +294,7 @@ export abstract class PollingSourceBase<
         : Effect.forkChild(delivery);
     }).pipe(
       Effect.asVoid,
-      Effect.catchDefect((defect) =>
-        Effect.sync(() => {
-          this.logger.warn('Listener threw', { data: defect });
-        }),
-      ),
+      Effect.catchDefect((defect) => this.logWarning('Listener threw', defect)),
     );
   }
 
@@ -281,24 +306,23 @@ export abstract class PollingSourceBase<
     res: SuccessfulConditionalResponse<unknown>,
     schema: ZodType<T>,
     label: string,
-  ): SuccessfulConditionalResponse<T> | undefined;
+  ): Effect.Effect<SuccessfulConditionalResponse<T> | undefined>;
   protected validateOrSkip<T>(
     res: ConditionalResponse<unknown>,
     schema: ZodType<T>,
     label: string,
-  ): ConditionalResponse<T> | undefined;
+  ): Effect.Effect<ConditionalResponse<T> | undefined>;
   protected validateOrSkip<T>(
     res: ConditionalResponse<unknown>,
     schema: ZodType<T>,
     label: string,
-  ): ConditionalResponse<T> | undefined {
-    if (res.status === 304) return res;
+  ): Effect.Effect<ConditionalResponse<T> | undefined> {
+    if (res.status === 304) return Effect.succeed(res);
     const parsed = schema.safeParse(res.data);
     if (!parsed.success) {
-      this.logger.warn(label, { data: parsed.error });
-      return undefined;
+      return this.logWarning(label, parsed.error).pipe(Effect.as(undefined));
     }
-    return { ...res, data: parsed.data };
+    return Effect.succeed({ ...res, data: parsed.data });
   }
 
   /**
@@ -368,7 +392,7 @@ export abstract class PollingSourceBase<
     state.listeners.delete(onEvent);
     if (state.listeners.size === 0) {
       this.subscriptions.delete(key);
-      this.logger.info(`Unsubscribed from ${key}`);
+      this.syncLog.info(`Unsubscribed from ${key}`);
       this.notifyKeysChanged();
     }
     if (this.subscriptions.size === 0) this.stopPolling();
@@ -384,7 +408,7 @@ export abstract class PollingSourceBase<
       try {
         listener(keys);
       } catch (err) {
-        this.logger.warn('Keys-changed listener threw', { data: err });
+        this.syncLog.warn('Keys-changed listener threw', { data: err });
       }
     }
   }
@@ -496,15 +520,11 @@ export abstract class PollingSourceBase<
     function* (this: PollingSourceBase<K, S>) {
       const exit = yield* Effect.exit(this.pollRound());
       if (Exit.isSuccess(exit)) return;
-      if (Cause.hasInterrupts(exit.cause)) {
-        return yield* Effect.failCause(exit.cause);
-      }
-      this.logger.warn('Poll round failed; polling continues.', {
-        data:
-          exit.cause.reasons.length === 1
-            ? Cause.squash(exit.cause)
-            : exit.cause,
-      });
+      if (Cause.hasInterrupts(exit.cause)) return yield* Effect.interrupt;
+      yield* this.logWarning(
+        'Poll round failed; polling continues.',
+        exit.cause.reasons.length === 1 ? Cause.squash(exit.cause) : exit.cause,
+      );
     },
   );
 
@@ -576,11 +596,7 @@ export abstract class PollingSourceBase<
           if (cause.reasons.length !== 1 || reason?._tag !== 'Fail') {
             return Effect.failCause(cause);
           }
-          return Effect.sync(() => {
-            this.logger.warn('Post-poll hook failed', {
-              data: reason.error.cause,
-            });
-          });
+          return this.logWarning('Post-poll hook failed', reason.error.cause);
         }),
       );
     },
@@ -635,10 +651,11 @@ export abstract class PollingSourceBase<
             return Effect.failCause(cause);
           }
           return Effect.flatMap(Clock.currentTimeMillis, (failedAt) =>
-            Effect.suspend(() => {
-              this.logger.warn('Poll threw a defect', { data: reason.defect });
-              return this.handleFailure(key, state, reason.defect, failedAt);
-            }),
+            this.logWarning('Poll threw a defect', reason.defect).pipe(
+              Effect.andThen(
+                this.handleFailure(key, state, reason.defect, failedAt),
+              ),
+            ),
           );
         }),
       );
@@ -663,18 +680,20 @@ export abstract class PollingSourceBase<
     now: number,
   ) {
     if (err instanceof GitHubAuthError) {
-      this.logger.warn(`Auth error for ${key}; stopping subscription.`, {
-        data: err,
-      });
+      yield* this.logWarning(
+        `Auth error for ${key}; stopping subscription.`,
+        err,
+      );
       yield* this.emit(state, this.formatErrorEvent(state, err.message));
       emitAppSignal('githubTokenInvalid', { message: err.message });
       this.detach(key);
       return;
     }
     if (err instanceof GitHubPermanentError) {
-      this.logger.warn(`Permanent error for ${key}; stopping subscription.`, {
-        data: err,
-      });
+      yield* this.logWarning(
+        `Permanent error for ${key}; stopping subscription.`,
+        err,
+      );
       yield* this.emitErrorAndDetach(key, state, err.message);
       return;
     }
@@ -686,7 +705,7 @@ export abstract class PollingSourceBase<
       // failures) past the 24 h window should still age out — without this
       // check the rate-limit branch would hold a slot indefinitely.
       if (now - state.lastSuccessAt >= this.config.maxFailureDurationMs) {
-        this.logger.warn(
+        yield* this.logWarning(
           `Rate limited polling ${key} and unreachable for over 24 h; detaching.`,
         );
         yield* this.emitErrorAndDetach(
@@ -696,7 +715,7 @@ export abstract class PollingSourceBase<
         );
         return;
       }
-      this.logger.warn(
+      yield* this.logWarning(
         `Rate limited polling ${key}; backing off until ${new Date(state.skipPollUntilMs).toISOString()}.`,
       );
       return;
@@ -711,9 +730,9 @@ export abstract class PollingSourceBase<
     );
     state.skipPollUntilMs = now + actualDelayMs;
     if (now - state.lastSuccessAt >= this.config.maxFailureDurationMs) {
-      this.logger.warn(
+      yield* this.logWarning(
         `Poll failed for ${key}; unreachable for over 24 h, detaching.`,
-        { data: { failureCount: state.consecutiveFailures, error: err } },
+        { failureCount: state.consecutiveFailures, error: err },
       );
       yield* this.emitErrorAndDetach(
         key,
@@ -722,12 +741,10 @@ export abstract class PollingSourceBase<
       );
       return;
     }
-    this.logger.warn(`Poll failed for ${key}; retrying.`, {
-      data: {
-        failureCount: state.consecutiveFailures,
-        retryInSec: Math.round(actualDelayMs / 1000),
-        error: err,
-      },
+    yield* this.logWarning(`Poll failed for ${key}; retrying.`, {
+      failureCount: state.consecutiveFailures,
+      retryInSec: Math.round(actualDelayMs / 1000),
+      error: err,
     });
   });
 }

@@ -1,9 +1,9 @@
 import { it } from '@effect/vitest';
 import { Cause, Deferred, Effect, Exit, Fiber } from 'effect';
 
-import { beforeEach, describe, expect, vi, type Mock } from 'vitest';
+import { afterEach, beforeEach, describe, expect, vi, type Mock } from 'vitest';
 
-import { noopTrace, TraceEmitter } from '@agent/trace';
+import { TraceEmitter } from '@agent/trace';
 import type { FinalizeRunResult } from '@agent/storage/runLifecycle';
 import { RunHandle } from '@agent/runtime/RunHandle';
 import { Runs } from '@agent/runtime/runRegistry';
@@ -17,6 +17,8 @@ import {
   type WorkflowFlowResult,
 } from '@agent/runtime/AgentFlowResult';
 import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
+import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
+import { setLogSink } from '@logger/logSink';
 import {
   aggregateId as qualifyAggregateId,
   RUN_OUTCOME,
@@ -28,6 +30,8 @@ import type { RunId, RunOutcome } from '@shared/schemas';
 import { DatabaseWriteFailed } from '@shared/session/database';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
+import { noopTrace } from '@test/support/noopTrace';
+import { captureLogEntries } from '@test/support/logSinkCapture';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { testRunHandle } from '@test/support/runHandleFixtures';
@@ -58,10 +62,6 @@ const storageMocks = vi.hoisted(() => ({
   ),
 }));
 
-const channelTraceMocks = vi.hoisted(() => ({
-  warn: vi.fn(),
-}));
-
 // AgentRunLifecycle deep-imports finalizeRun from runLifecycle
 // (not the `@agent/storage` barrel). Spy only that leaf to avoid re-export
 // recursion through a dual mock.
@@ -73,20 +73,12 @@ vi.mock('@agent/storage', () => ({
   finalizeRun: storageMocks.finalizeRun,
 }));
 
-vi.mock('@agent/trace', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@agent/trace')>();
-  return {
-    ...actual,
-    createChannelTrace: vi.fn(() => ({
-      ...actual.noopTrace,
-      warn: channelTraceMocks.warn,
-    })),
-  };
-});
-
 beforeEach(() => {
   storageMocks.finalizeRun.mockClear();
-  channelTraceMocks.warn.mockClear();
+});
+
+afterEach(() => {
+  setLogSink(null);
 });
 
 async function initLifecycleTestPlatform(firstRunDone: boolean) {
@@ -868,6 +860,7 @@ describe('finalizeRunTerminal', () => {
     'settles and untracks once while reporting terminal metadata failure',
     () =>
       Effect.gen(function* () {
+        const logs = captureLogEntries();
         const { runId, session, handle, untrackIfCurrent } = finalizeFixture();
         const durabilityError = new Error('metadata disk write failed');
         storageMocks.finalizeRun.mockReturnValueOnce(
@@ -892,18 +885,15 @@ describe('finalizeRunTerminal', () => {
           },
         });
         expect(untrackIfCurrent).toHaveBeenCalledExactlyOnceWith(handle);
-        expect(channelTraceMocks.warn).toHaveBeenCalledExactlyOnceWith(
-          'Failed to finalize durable run state',
-          {
-            data: {
-              agentIdentifier: 'test-agent',
-              runId,
-              outcomePersisted: false,
-              error: durabilityError,
-            },
-          },
-        );
-      }),
+        const [warning, ...rest] = logs.at('WARN', 'agentRunLifecycle');
+        expect(rest).toEqual([]);
+        expect(warning?.message).toBe('Failed to finalize durable run state');
+        // The sink renders the raw payload once; the durability facts ride it.
+        const data = String(warning?.annotations.data);
+        expect(data).toContain(`"runId": "${runId}"`);
+        expect(data).toContain('"outcomePersisted": false');
+        expect(data).toContain('metadata disk write failed');
+      }).pipe(Effect.provide(effectDiagnosticsLayer('Trace'))),
   );
 
   // The stop's verdict is the single owner of a run's terminal outcome: the
@@ -915,6 +905,7 @@ describe('finalizeRunTerminal', () => {
     'resolves the terminal outcome from a stop that reached the finalizer',
     () =>
       Effect.gen(function* () {
+        const logs = captureLogEntries();
         const { runId, session, handle } = finalizeFixture();
         const stage = { end: vi.fn() };
 
@@ -944,8 +935,8 @@ describe('finalizeRunTerminal', () => {
             outcome: RUN_OUTCOME.CANCELLED,
           }),
         );
-        expect(channelTraceMocks.warn).not.toHaveBeenCalled();
-      }),
+        expect(logs.at('WARN')).toEqual([]);
+      }).pipe(Effect.provide(effectDiagnosticsLayer('Trace'))),
   );
 
   it.effect(

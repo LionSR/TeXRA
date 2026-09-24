@@ -160,23 +160,21 @@ function launchBackgroundBash(parentRunId: RunId) {
 }
 
 function backgroundBashCall(parentRunId: RunId) {
-  return new BashTool()
-    .call({
-      command: 'make build',
-      run_in_background: true,
-    })
-    .pipe(
-      Effect.provide(
-        nativeToolTestLayer({
-          tracker: new FileInteractionState(),
-          run: {
-            session: testDefaultSession(),
-            runId: parentRunId,
-            toolPolicy: {},
-          },
-        }),
-      ),
-    );
+  return BashTool.call({
+    command: 'make build',
+    run_in_background: true,
+  }).pipe(
+    Effect.provide(
+      nativeToolTestLayer({
+        tracker: new FileInteractionState(),
+        run: {
+          session: testDefaultSession(),
+          runId: parentRunId,
+          toolPolicy: {},
+        },
+      }),
+    ),
+  );
 }
 
 describe('BashTool', () => {
@@ -205,7 +203,7 @@ describe('BashTool', () => {
         Effect.succeed(execResult),
       );
 
-      const result = yield* new BashTool().call({ command: 'echo long' }).pipe(
+      const result = yield* BashTool.call({ command: 'echo long' }).pipe(
         Effect.provide(
           nativeToolTestLayer({
             tracker: new FileInteractionState(),
@@ -247,7 +245,7 @@ describe('BashTool', () => {
         const text = 'h'.repeat(4_000) + 'X' + 't'.repeat(50_000);
         mockStreamingCommand((options) => options.onStdout?.(text));
 
-        const result = yield* new BashTool().call({ command: 'one-elided' });
+        const result = yield* BashTool.call({ command: 'one-elided' });
         assert.equal(
           result.output,
           `${'h'.repeat(4_000)}\n\n[... 1 characters elided from stdout ...]\n\n${'t'.repeat(50_000)}`,
@@ -287,7 +285,7 @@ describe('BashTool', () => {
         for (const chunk of chunks) options.onStdout?.(chunk);
       });
 
-      const result = yield* new BashTool().call({
+      const result = yield* BashTool.call({
         command: 'whitespace-output',
       });
       assert.equal(result.output, expected);
@@ -312,7 +310,7 @@ describe('BashTool', () => {
         options.onStdout?.(`B${' '.repeat(100_000)}`);
       });
 
-      const result = yield* new BashTool().call({ command: 'whitespace-gap' });
+      const result = yield* BashTool.call({ command: 'whitespace-gap' });
       const output = String(result.output);
       assert.ok(
         output.includes(
@@ -347,7 +345,7 @@ describe('BashTool', () => {
     Effect.gen(function* () {
       mockStreamingCommand((options) => options.onStdout?.(text));
 
-      const result = yield* new BashTool().call({
+      const result = yield* BashTool.call({
         command: 'unicode-boundary',
       });
       const output = String(result.output);
@@ -382,7 +380,7 @@ describe('BashTool', () => {
           options.onStdout?.(`\n${tailMarker}\n`);
         });
 
-        const result = yield* new BashTool().call({ command: 'large-output' });
+        const result = yield* BashTool.call({ command: 'large-output' });
         assert.equal(result.status, 'executed');
         const output = String(result.output);
         assert.ok(output.startsWith(headMarker));
@@ -420,7 +418,7 @@ describe('BashTool', () => {
           { success: false, exitCode: 9 },
         );
 
-        const result = yield* new BashTool().call({ command: 'large-failure' });
+        const result = yield* BashTool.call({ command: 'large-failure' });
         assert.equal(result.status, 'error');
         const error = result.error ?? '';
         assert.ok(error.includes('STDERR_HEAD'));
@@ -459,7 +457,7 @@ describe('BashTool', () => {
           exitCode: 1,
         });
 
-        const result = yield* new BashTool().call({
+        const result = yield* BashTool.call({
           command: 'latexmk -pdf p.tex',
         });
         assert.equal(result.status, 'error');
@@ -862,7 +860,7 @@ describe('BashTool', () => {
         { success: false, timedOut: true, exitCode: 1 },
       );
 
-      const result = yield* new BashTool().call({
+      const result = yield* BashTool.call({
         command: 'slow-command',
         timeout: 1_000,
       });
@@ -913,7 +911,7 @@ describe('BashTool', () => {
         );
         const hookCalls: string[] = [];
         const fiber = yield* Effect.forkChild(
-          new BashTool().call({ command: 'echo long' }).pipe(
+          BashTool.call({ command: 'echo long' }).pipe(
             Effect.provide(
               nativeToolTestLayer({
                 tracker: new FileInteractionState(),

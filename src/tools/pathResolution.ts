@@ -95,12 +95,13 @@ export const workspacePathPorts = (call: {
   settings: call.roots,
 });
 
-/** Throw when a raw tool path contains a parent-directory segment. */
-export function assertNoParentTraversal(targetPath: string): void {
-  if (getPathSegments(targetPath).includes('..')) {
-    throw new ToolError(`path must not contain '..': ${targetPath}`);
-  }
-}
+/** Fail when a raw tool path contains a parent-directory segment. */
+export const assertNoParentTraversal = (
+  targetPath: string,
+): Effect.Effect<void, ToolError> =>
+  getPathSegments(targetPath).includes('..')
+    ? Effect.fail(new ToolError(`path must not contain '..': ${targetPath}`))
+    : Effect.void;
 
 /**
  * Resolve a potentially absolute or relative path against a root directory.

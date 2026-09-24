@@ -39,7 +39,9 @@ import {
   openProjectStateStore,
 } from '@controllers/session/appStateStore';
 import { bootstrapHost } from '@controllers/hostBootstrap';
+import { fromHost } from '@controllers/session/hostCallFailure';
 import { emitAppSignal } from '@eventBus/AppSignals';
+import { vscodeToolMissingReporter } from '@frontend/system/commandUtils';
 import { subscribeAppSignal } from '@frontend/events/appSignalSubscriptions';
 import { refreshApiKeyStatusBar } from '@frontend/statusBar/apiKeyStatusBar';
 import { acquireVscodeLanguageModel } from '@frontend/lm/acquireVscodeLanguageModel';
@@ -76,13 +78,17 @@ import { VscodeSecrets } from '@frontend/vscode/vscodeSecrets';
 import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
 import { withLogChannel } from '@logger/effectLog';
-import * as logger from '@logger/logUtils';
+import { createLog } from '@logger/logUtils';
 import { setLogSink } from '@logger/logSink';
 import { formatFatalErrorDetail } from '@logger/redaction';
+import { invalidateApiKeyCache } from '@model/apiProviders';
 import { invalidateRuntimeModelRegistry } from '@model/runtimeModelRegistry';
 import { AppState, AgentDirectories } from '@platform/interfaces';
-import type { AgentResumePort, LifecycleHost } from '@platform/interfaces';
-import { initPlatform, type Platform } from '@platform/platform';
+import type {
+  AgentResumePort,
+  LifecycleHost,
+  ToolMissingHandler,
+} from '@platform/interfaces';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import {
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
@@ -92,10 +98,13 @@ import type { PlatformSecrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { createNodeWorkspaceRoots } from '@platform/defaults/nodeHost';
 import { nodeProcesses } from '@platform/defaults/nodeProcesses';
-import { createNodeStorageProvider } from '@platform/defaults/nodeStorage';
+import { DEFAULT_NODE_STORAGE_ROOT } from '@platform/defaults/nodeStorage';
 import { openTexraConfigStores } from '@platform/defaults/nodeStores';
 import { JsonConfigProvider } from '@platform/defaults/jsonConfigProvider';
-import { RUNS_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
+import {
+  RUNS_STORAGE_DIR,
+  WorkspaceStorageProvider,
+} from '@platform/defaults/workspaceStorage';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
 import { WorktreeStateStore } from '@platform/defaults/worktreeStateStore';
@@ -111,10 +120,7 @@ import { GlobalDatabase } from '@shared/session/database';
 import { usageLogLayer } from '@telemetry/UsageLogService';
 import { registerRuntimeShutdownHandlers } from '@tools/agentCliSessionStores';
 import { refreshToolAvailability } from '@tools/toolAvailability';
-import {
-  GITHUB_TOKEN_STORAGE_KEY,
-  gitHubTokenRejectedMessage,
-} from '@tools/github/githubAuth';
+import { gitHubTokenRejectedMessage } from '@tools/github/githubAuth';
 import { killActiveRecording } from '@tools/media/audio';
 import { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import { sessionStoreClearedMessage } from '@ui/copy/sessionStore';
@@ -127,7 +133,7 @@ import { ProgressViewProvider } from './progressView/ProgressViewProvider';
 import { registerCommands } from './commands';
 
 const EXTENSION_CHANNEL = 'extension';
-const log = logger.createLog(EXTENSION_CHANNEL);
+const log = createLog(EXTENSION_CHANNEL);
 
 /** The TeXRA account provider and its URI handler could not be registered. */
 class SupabaseAuthRegistrationFailed extends Data.TaggedError(
@@ -138,8 +144,7 @@ class SupabaseAuthRegistrationFailed extends Data.TaggedError(
  * The OAuth readiness gate the account plane's `isReady` probe awaits. Built
  * with the plane in `initVscodePlatform` and flipped by `registerSupabaseAuth`
  * once the URI handler is installed, so a sign-in attempted before that
- * reports the handler as not initialized — the check the auth provider's own
- * constructor closure used to make.
+ * reports the handler as not initialized.
  */
 interface AuthReadinessGate {
   uriHandlerInstalled: boolean;
@@ -163,7 +168,7 @@ let projectScope: Scope.Closeable | undefined;
 let extensionShutdownPromise: Promise<void> | undefined;
 
 /**
- * The platform, the process runtime, and the process roots, wired once for
+ * The process runtime and the process roots, wired once for
  * both activation paths: the credential-only path without a folder and the
  * workspace path, which adds the ports only a folder can answer.
  *
@@ -173,12 +178,13 @@ async function initVscodePlatform(
   context: vscode.ExtensionContext,
   lifecycle: LifecycleHost,
   workspaceRoot: string | undefined,
-  gitRepoRoot: string | undefined,
   /** The session a resume request targets, read at request time: the
    *  platform must exist before `initializeDefaultSession` can run, so the
    *  session cannot be a value here. */
   getSession: () => SessionHandle,
-  extras: Pick<Platform, 'toolMissingHandler'> & {
+  extras: {
+    /** The editor's tool-missing UI, served as `ToolMissingReporter` below. */
+    readonly toolMissingHandler?: ToolMissingHandler;
     /** The editor's LM bridge, served as `LanguageModel` below. */
     readonly languageModel?: LanguageModelPort;
   } = {},
@@ -189,9 +195,12 @@ async function initVscodePlatform(
   authReadiness: AuthReadinessGate;
   roots: WorkspaceRoots;
 }> {
-  // The process runtime comes first: the config stores below are opened as
-  // Effect programs, so it must exist before the platform this host wires.
-  const storage = createNodeStorageProvider({ workspacePath: workspaceRoot });
+  // `~/.texra` is one history across CLI/desktop/extension (#8622). The
+  // process runtime precedes the config stores below, which open on it.
+  const storage = new WorkspaceStorageProvider(
+    DEFAULT_NODE_STORAGE_ROOT,
+    workspaceRoot,
+  );
   const secrets = new VscodeSecrets(context);
   const appState = Layer.effect(
     AppState,
@@ -202,8 +211,7 @@ async function initVscodePlatform(
   const authReadiness: AuthReadinessGate = { uriHandlerInstalled: false };
   // A construction failure degrades to the unavailable plane instead of
   // failing activation: registration below records and reports the error, and
-  // every probe answers signed-out — what the facade's statics answered when
-  // initialization threw.
+  // every probe answers signed-out.
   // The account plane and the process identity both resolve before the
   // runtime that serves them, on one pre-runtime run: an opener that uses the
   // synchronous `open` would otherwise face an asynchronous identity layer
@@ -218,7 +226,6 @@ async function initVscodePlatform(
               ? Effect.void
               : Effect.fail(new Error(AUTH_URI_HANDLER_NOT_INITIALIZED)),
           ),
-        log: logger,
       }).pipe(
         Effect.catch((error) => Effect.succeed(unavailableSupabaseAuth(error))),
       );
@@ -289,6 +296,9 @@ async function initVscodePlatform(
       const projectState = yield* openProjectStateStore(
         storage.getStoragePath(),
       );
+      const gitRepoRoot = workspaceRoot
+        ? yield* resolveGitCommonRoot(workspaceRoot)
+        : undefined;
       return {
         globalState,
         workspaceState: gitRepoRoot
@@ -306,11 +316,6 @@ async function initVscodePlatform(
       ),
     ),
   );
-  initPlatform({
-    lifecycle,
-    agentDirectories,
-    toolMissingHandler: extras.toolMissingHandler,
-  });
   const roots = createNodeWorkspaceRoots({
     workspacePath: workspaceRoot,
     storage: storage.getStoragePath(),
@@ -319,7 +324,7 @@ async function initVscodePlatform(
     workspaceState,
     globalState,
   });
-  // Everything this process installs once after its platform exists, in the
+  // Everything this process installs once after its roots exist, in the
   // order the shared bootstrap owns for all three hosts.
   await runtime.runPromise(
     bootstrapHost({
@@ -513,19 +518,19 @@ function registerSupabaseAuth(
         // is what an OAuth callback arrives at, so sign-in is not "ready"
         // before it is installed.
         authReadiness.uriHandlerInstalled = true;
-
-        log.info('Supabase authentication provider registered');
       },
       catch: (cause) => new SupabaseAuthRegistrationFailed({ cause }),
     }).pipe(
-      Effect.catchTag('SupabaseAuthRegistrationFailed', (failure) =>
-        Effect.sync(() => {
-          auth.setInitError(ensureError(failure.cause));
-          log.error(
-            `Failed to initialize Supabase authentication: ${toErrorMessage(failure.cause)}`,
-          );
-        }),
+      Effect.andThen(
+        Effect.logInfo('Supabase authentication provider registered'),
       ),
+      Effect.catchTag('SupabaseAuthRegistrationFailed', ({ cause }) => {
+        auth.setInitError(ensureError(cause));
+        return Effect.logError(
+          `Failed to initialize Supabase authentication: ${toErrorMessage(cause)}`,
+        );
+      }),
+      withLogChannel(EXTENSION_CHANNEL),
     ),
   );
 }
@@ -594,7 +599,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
   if (!hasSingleWorkspace) {
     registerWelcomeView(context);
     // Credential-only platform. Every sign-in path stores into SecretStorage
-    // (`platform().secrets`) and the global `~/.texra` config — none of it
+    // (the `Secrets` service) and the global `~/.texra` config — none of it
     // needs a folder — so the walkthrough's credential buttons work before
     // one is open. Agents still require the workspace-backed platform below;
     // opening a folder reloads the window into that path (welcomeView.ts).
@@ -602,7 +607,6 @@ async function activateExtension(context: vscode.ExtensionContext) {
       await initVscodePlatform(
         context,
         lifecycle,
-        undefined,
         undefined,
         // The credential-only path never initializes a session; a resume
         // request cannot arrive here because every run belongs to one.
@@ -639,7 +643,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
       // No settings view exists before a folder is open, so there is no
       // credential surface to refresh after the key write.
       vscode.commands.registerCommand(EXTENSION_COMMANDS.SET_API_KEY, () =>
-        apiSetApiKey(roots, secrets, () => Effect.void, runtime),
+        runtime.runPromise(apiSetApiKey(roots, secrets, () => Effect.void)),
       ),
     );
     registerWalkthroughWorkspaceAction(context, false, runtime);
@@ -665,38 +669,23 @@ async function activateExtension(context: vscode.ExtensionContext) {
     ),
   );
   setActiveSidebarView(SIDEBAR_VIEWS.MAIN);
-  const gitRepoRoot = await resolveGitCommonRoot(workspaceRoot);
 
   setLogSink(createVsCodeLogSink());
   // Deactivation releases the output channels with the sink, so a reload does
   // not leave a disposed host surface installed.
   context.subscriptions.push({ dispose: () => setLogSink(null) });
   const languageModel = createLanguageModelPort(context);
-  // Shared `~/.texra` storage root (one history across CLI/desktop/extension,
-  // #8622).
   const { secrets, runtime, auth, authReadiness, roots } =
     await initVscodePlatform(
       context,
       lifecycle,
       workspaceRoot,
-      gitRepoRoot,
       // `runtimeSession` is created below; resume requests only arrive after
       // activation has composed it.
       () => runtimeSession,
       {
         languageModel,
-        toolMissingHandler: async (message, openDocsCommand) => {
-          const actions = openDocsCommand ? ['View Installation Guide'] : [];
-          log.error(message);
-          const choice = await vscode.window.showErrorMessage(
-            message,
-            ...actions,
-          );
-          if (choice === 'View Installation Guide' && openDocsCommand) {
-            const [command, ...args] = openDocsCommand.split(',');
-            void vscode.commands.executeCommand(command, ...args);
-          }
-        },
+        toolMissingHandler: vscodeToolMissingReporter,
       },
     );
   const { globalState } = roots;
@@ -759,15 +748,18 @@ async function activateExtension(context: vscode.ExtensionContext) {
   // Order matters: registerAgentDirectoryRoots exposes the packaged built-in
   // directories, and loadAgents scans them.
   await runtime.runPromise(registerAgentDirectoryRoots(context));
-  const agentIndex = await runtime.runPromiseExit(
-    loadAgents({ includeRemote: false }),
+  const agentIndexLoaded = await runtime.runPromise(
+    loadAgents({ includeRemote: false }).pipe(
+      Effect.as(true),
+      Effect.catchCause((cause) =>
+        Effect.logError(
+          `Failed to initialize agent index: ${toErrorMessage(Cause.squash(cause))}`,
+        ).pipe(withLogChannel(EXTENSION_CHANNEL), Effect.as(false)),
+      ),
+    ),
   );
-  if (Exit.isFailure(agentIndex)) {
-    log.error(
-      `Failed to initialize agent index: ${toErrorMessage(Cause.squash(agentIndex.cause))}`,
-    );
-  } else {
-    void runtime.runPromise(
+  if (agentIndexLoaded) {
+    runtime.runFork(
       loadAgents().pipe(
         Effect.catchCause((cause) =>
           Effect.logWarning(
@@ -786,9 +778,12 @@ async function activateExtension(context: vscode.ExtensionContext) {
     runtimeSession,
     Effect.suspend(() => apiKeyStatusRefresh()),
   );
-  await runtime.runPromise(progressViewProvider.initialize());
-
-  log.info('TeXRA extension activated');
+  await runtime.runPromise(
+    Effect.andThen(
+      progressViewProvider.initialize(),
+      Effect.logInfo('TeXRA extension activated'),
+    ).pipe(withLogChannel(EXTENSION_CHANNEL)),
+  );
 
   // Deferred off the activation tick: extendEnvPath() inside performs
   // synchronous glob probes of TeX install directories, which would
@@ -822,26 +817,23 @@ async function activateExtension(context: vscode.ExtensionContext) {
     );
 
   context.subscriptions.push(
-    context.secrets.onDidChange((e) => {
-      if (e.key !== GITHUB_TOKEN_STORAGE_KEY) return;
-      // Re-probe so any subscribed UI (Tools tab) reflects the new token
-      // presence; getGitHubToken() now reads SecretStorage live (no cache).
-      void runtime.runPromise(refreshToolAvailabilityLogged('secret change'));
+    // The VS Code store's half of `credentialChanged`: SecretStorage reports
+    // every committed write, other windows' included, so the signal and the
+    // lookup-cache drop (another window never ran our finalizer) live here.
+    context.secrets.onDidChange(({ key }) => {
+      invalidateApiKeyCache();
+      emitAppSignal('credentialChanged', { key });
     }),
     // Lean/LaTeX extension installed or removed → re-probe so the Tools tab
     // reflects the new state without the user clicking Re-check.
     vscode.extensions.onDidChange(() => {
-      void runtime.runPromise(
-        refreshToolAvailabilityLogged('extension change'),
-      );
+      runtime.runFork(refreshToolAvailabilityLogged('extension change'));
     }),
     // Workspace folders opened/closed can flip `isGitRepository`, which
     // gates the GitHub PR subscription tool group. ProgressViewProvider owns
     // the ordered workspace-storage and native-config replacement.
     vscode.workspace.onDidChangeWorkspaceFolders(() => {
-      void runtime.runPromise(
-        refreshToolAvailabilityLogged('workspace folder change'),
-      );
+      runtime.runFork(refreshToolAvailabilityLogged('workspace folder change'));
     }),
   );
   const gitHubAuthListener = subscribeAppSignal(
@@ -849,7 +841,6 @@ async function activateExtension(context: vscode.ExtensionContext) {
     'githubTokenInvalid',
     ({ message }) => {
       const rejected = gitHubTokenRejectedMessage(message);
-      log.error(rejected);
       void vscode.window
         .showErrorMessage(rejected, 'Open Git settings')
         .then((choice) => {
@@ -861,7 +852,11 @@ async function activateExtension(context: vscode.ExtensionContext) {
   );
   context.subscriptions.push(gitHubAuthListener);
   await runtime.runPromise(
-    registerInlineCriticism(context, runtime, runtimeSession, globalState),
+    registerInlineCriticism(context, runtime, runtimeSession, globalState).pipe(
+      Effect.andThen(
+        registerLanguageModelTools(context, runtime, runtimeSession),
+      ),
+    ),
   );
   registerInlineComments(context);
 
@@ -990,10 +985,6 @@ async function activateExtension(context: vscode.ExtensionContext) {
     updateStatusBarTooltip,
   );
 
-  // Surface curated research tools to VS Code's Language Model Tool API
-  // (Copilot Chat `#texra_*` references).
-  registerLanguageModelTools(context, runtime, runtimeSession);
-
   context.subscriptions.push(
     { dispose: disposeStatusListener },
     approvalPolicyTooltipRefresh,
@@ -1032,12 +1023,20 @@ async function activateExtension(context: vscode.ExtensionContext) {
     // Land first-run users on the main welcome card so the credential choice
     // (ChatGPT subscription first) is the first real action, then open the
     // walkthrough alongside for the rest of the onboarding tips.
-    void vscode.commands
-      .executeCommand('texra.showMainView')
-      .then(() =>
-        vscode.commands.executeCommand(EXTENSION_COMMANDS.OPEN_GETTING_STARTED),
-      )
-      .then(() => runtime.runPromise(globalState.update(welcomeKey, true)));
+    // A failure leaves the flag unset, so the welcome shows again next time.
+    runtime.runFork(
+      Effect.forEach(
+        ['texra.showMainView', EXTENSION_COMMANDS.OPEN_GETTING_STARTED],
+        (id) => fromHost(id, () => vscode.commands.executeCommand(id)),
+        { discard: true },
+      ).pipe(
+        Effect.andThen(globalState.update(welcomeKey, true)),
+        Effect.catchCause((cause) =>
+          Effect.logWarning('Welcome failed', cause),
+        ),
+        withLogChannel(EXTENSION_CHANNEL),
+      ),
+    );
   }
 }
 

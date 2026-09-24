@@ -45,7 +45,7 @@ export interface AgentRuntimeEmitOptions {
  * failure — which is why a host hands it over rather than running a fiber
  * of its own.
  */
-export type HostPresentation = Effect.Effect<void, unknown> | void;
+export type HostPresentation = Effect.Effect<void, Error> | void;
 
 /**
  * One handler per {@link RuntimePresentationEventPayloads} key, each typed to

@@ -88,18 +88,13 @@ const { runHeadlessAgent: nativeRun } = await import('@cli/commands/workflow');
 const runToolUseAgent = (...args: Parameters<typeof nativeRun>) =>
   Effect.provide(nativeRun(...args), fakeProcessServices());
 
-/**
- * The usage error a refused run carries. `runHeadlessAgent` reports one by
- * throwing `CliUsageError` from its `Effect.fn` body, which Effect surfaces as
- * a defect rather than a typed failure — `Effect.flip` does not succeed on it,
- * so the assertion reads the cause.
- */
+/** The usage error a refused run fails with. */
 function usageErrorFrom(exit: Exit.Exit<number, Error>): Error {
   if (!Exit.isFailure(exit)) throw new Error('The run was expected to fail.');
-  const defect = exit.cause.reasons.find(Cause.isDieReason)?.defect;
-  if (!(defect instanceof Error))
+  const failure = exit.cause.reasons.find(Cause.isFailReason)?.error;
+  if (!(failure instanceof Error))
     throw new Error(`The run failed without a usage error: ${exit.cause}`);
-  return defect;
+  return failure;
 }
 
 describe('CLI run command, tool-use agents', () => {

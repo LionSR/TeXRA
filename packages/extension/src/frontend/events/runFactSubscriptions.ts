@@ -6,8 +6,8 @@ import type { ProcessRuntime } from '@platform/processRuntime';
 import { aggregateTarget, type AddOutputFilesPayload } from '@shared/schemas';
 import { goalStateChanges, type GoalStateChange } from '@tools/goal';
 
-/** Read a session's `outputFiles` run facts from now on. */
-export function subscribeAddOutputFilesRunFact(
+/** Read the output files each durable output row owns. */
+export function subscribeOutputFiles(
   session: Pick<SessionHandle, 'events' | 'now'>,
   listener: (payload: AddOutputFilesPayload) => void,
   runtime: ProcessRuntime,
@@ -15,11 +15,15 @@ export function subscribeAddOutputFilesRunFact(
   const fiber = runtime.runFork(
     Stream.runForEach(session.events.all(session.now()), (event) =>
       Effect.sync(() => {
-        if (event.type !== 'run.fact' || event.fact.key !== 'outputFiles')
-          return;
+        if (event.type !== 'output.produced') return;
         const target = aggregateTarget(event.aggregateId);
         if (target.kind !== 'run') return;
-        listener({ runId: target.id, filesByRound: event.fact.filesByRound });
+        listener({
+          runId: target.id,
+          filesByRound: Object.fromEntries(
+            event.rounds.map((round) => [round.round, round.outputs]),
+          ),
+        });
       }),
     ),
   );

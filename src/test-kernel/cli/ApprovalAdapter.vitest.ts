@@ -214,9 +214,6 @@ const credentialExhaustedRetry: RetryPermission = {
 };
 
 beforeEach(async () => {
-  const { initPlatform: init } = await import('@platform/platform');
-  const { createFakePlatform } = await import('@test/support/FakePlatform');
-  init(createFakePlatform());
   const actual = await vi.importActual<
     typeof import('@cli/runtime/approval/approvalSummaries')
   >('@cli/runtime/approval/approvalSummaries');

@@ -24,7 +24,7 @@ import type {
 } from '@shared/schemas';
 import type { SessionView } from '@shared/session/sessionView';
 import { type ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import {
   settleExecutable,
   settleHumanInputDenial,
@@ -98,7 +98,7 @@ const askHeadlessUserQuestion = Effect.fn(
               questions: [question],
             });
           },
-          catch: (cause) => cause,
+          catch: ensureError,
         });
         const answer = yield* queueCliApprovalQuestion(context, {
           kind: 'approval',
@@ -109,7 +109,7 @@ const askHeadlessUserQuestion = Effect.fn(
         });
         const parsed = yield* Effect.try({
           try: () => parseUserQuestionAnswer(answer, question),
-          catch: (cause) => cause,
+          catch: ensureError,
         });
         if (parsed != null) answers[question.question] = parsed;
       }),
@@ -243,7 +243,7 @@ export function createHeadlessCliHostInteractions(
         // double call is pre-existing retry behavior, not a bug to "fix".
         hooks.beforePrompt?.();
         // The prompt surface owns the retry hint: the operator must see the
-        // `/api personal` / coding-plan switch guidance in the prompt they
+        // own-key / coding-plan switch guidance in the prompt they
         // actually answer, not only in the pre-prompt stderr line.
         // `formatRetryRequestMessage` is the single retry formatter.
         const summary = formatRetryRequestMessage(payload.data);

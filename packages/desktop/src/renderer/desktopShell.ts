@@ -47,11 +47,13 @@ interface ShellSidebarModel {
   readonly subagentsOpen: boolean;
   /** Canonical name of the command palette action, from the command catalog. */
   readonly commandsLabel: string;
+  /** The same name with its shortcut, for the tooltip. */
+  readonly commandsTitle: string;
 }
 
 interface ShellSidebarCallbacks {
   onNewTask(): void;
-  onSearch(): void;
+  onOpenCommands(): void;
   onToggleFiles(): void;
   onOpenFolder(): void;
   onSelectProject(key: string): void;
@@ -60,7 +62,6 @@ interface ShellSidebarCallbacks {
   onOpenTerminal(): void;
   onOpenBrowser(): void;
   onOpenSettings(): void;
-  onOpenLogs(): void;
   /** Opens the Subagents tab on the active project's selected family. */
   onOpenSubagents(): void;
 }
@@ -68,6 +69,7 @@ interface ShellSidebarCallbacks {
 function sidebarAction(options: {
   icon: TeXRAIconName;
   label: string;
+  title?: string;
   onClick: () => void;
   primary?: boolean;
 }): TemplateResult {
@@ -78,6 +80,7 @@ function sidebarAction(options: {
       appearance="plain"
       size="s"
       data-primary=${options.primary ? 'true' : 'false'}
+      title=${options.title ?? nothing}
       @click=${options.onClick}
     >
       ${waIcon(options.icon, {
@@ -188,6 +191,8 @@ function projectSection(
   const active = key === model.shell.active;
   const collapsed = model.shell.collapsed.includes(key);
   const foldLabel = `${collapsed ? 'Expand' : 'Collapse'} ${name}`;
+  // Tooltip anchors: the key is a path, so it is encoded into the DOM id.
+  const idBase = `shell-project-${encodeURIComponent(key)}`;
   // The tree has one home at a time: the Subagents tab holds the shown
   // project's, and this section then lists its top-level runs only.
   const flattened = active && model.subagentsOpen;
@@ -211,21 +216,20 @@ function projectSection(
         </span>
       </wa-button>
       ${collapsed ? projectBadge(project.view) : nothing}
-      <wa-button
-        type="button"
-        class="shell-project-fold icon-button is-size-s"
-        appearance="plain"
-        size="s"
-        title=${foldLabel}
-        aria-label=${foldLabel}
-        aria-expanded=${collapsed ? 'false' : 'true'}
-        @click=${() => callbacks.onToggleProjectCollapsed(key)}
-      >
-        ${waIcon(collapsed ? 'chevron-right' : 'chevron-down')}
-      </wa-button>
       ${renderIconActionButton({
+        id: `${idBase}-fold`,
+        icon: collapsed ? 'chevron-right' : 'chevron-down',
+        label: foldLabel,
+        tooltip: foldLabel,
+        expanded: !collapsed,
+        className: 'shell-project-fold icon-button is-size-s',
+        onClick: () => callbacks.onToggleProjectCollapsed(key),
+      })}
+      ${renderIconActionButton({
+        id: `${idBase}-close`,
         icon: 'xmark',
         label: `Close ${name}`,
+        tooltip: `Close ${name}`,
         className: 'shell-project-close icon-button is-size-s',
         onClick: () => callbacks.onCloseProject(key),
       })}
@@ -275,13 +279,6 @@ function projectsSectionsTemplate(
         <span class="shell-sidebar-section-label">
           ${model.projects.length > 1 ? 'Projects' : 'Project'}
         </span>
-        <wa-badge
-          class="shell-sidebar-section-count"
-          variant="neutral"
-          appearance="outlined"
-          pill
-          >${model.projects.length}</wa-badge
-        >
       </div>
       ${model.projects.map((project) => projectSection(project, model, callbacks))}
       <wa-button
@@ -334,17 +331,6 @@ export function shellSidebarTemplate(
       <header class="shell-sidebar-brand">
         <div class="shell-sidebar-logo" aria-hidden="true">T</div>
         <span class="shell-sidebar-product">TeXRA</span>
-        <wa-button
-          type="button"
-          class="shell-sidebar-brand-menu icon-button is-size-s"
-          appearance="plain"
-          size="s"
-          aria-label=${model.commandsLabel}
-          title=${model.commandsLabel}
-          @click=${callbacks.onSearch}
-        >
-          ${waIcon('chevron-down')}
-        </wa-button>
       </header>
 
       <nav class="shell-sidebar-primary" aria-label="Task actions">
@@ -356,8 +342,9 @@ export function shellSidebarTemplate(
         })}
         ${sidebarAction({
           icon: 'magnifying-glass',
-          label: 'Search',
-          onClick: callbacks.onSearch,
+          label: model.commandsLabel,
+          title: model.commandsTitle,
+          onClick: callbacks.onOpenCommands,
         })}
       </nav>
 
@@ -373,11 +360,6 @@ export function shellSidebarTemplate(
           icon: 'globe',
           label: 'Browser',
           onClick: callbacks.onOpenBrowser,
-        })}
-        ${sidebarAction({
-          icon: 'file-lines',
-          label: 'Logs',
-          onClick: callbacks.onOpenLogs,
         })}
         ${sidebarAction({
           icon: 'gear',
@@ -638,8 +620,10 @@ export function workbenchTabsTemplate(
                 }
               </wa-button>
               ${renderIconActionButton({
+                id: `${workbenchTabDomId(tab.id, session)}-close`,
                 icon: 'xmark',
                 label: `Close ${tab.title}`,
+                tooltip: `Close ${tab.title}`,
                 className:
                   'shell-workbench-tab-close icon-button is-size-s focus-ring-inset',
                 onClick: (event) => {
@@ -684,17 +668,15 @@ export function workbenchTabsTemplate(
           `;
         })}
       </div>
-      <wa-button
-        type="button"
-        class="shell-workbench-close icon-button is-size-m focus-ring-inset"
-        appearance="plain"
-        size="s"
-        aria-label=${`Hide ${placement} panel`}
-        title=${`Hide ${placement} panel`}
-        @click=${callbacks.onHide}
-      >
-        ${waIcon(hideDirection)}
-      </wa-button>
+      ${renderIconActionButton({
+        id: `${workbenchPanelDomId(placement, session)}-hide`,
+        icon: hideDirection,
+        label: `Hide ${placement} panel`,
+        tooltip: `Hide ${placement} panel`,
+        className: 'shell-workbench-close icon-button focus-ring-inset',
+        size: 'm',
+        onClick: callbacks.onHide,
+      })}
     </div>
   `;
 }

@@ -7,7 +7,8 @@ import {
   type AgentRosterControllerDeps,
   type AgentRosterEntry,
 } from '@agent/roster/AgentRosterController';
-import * as logger from '@logger/logUtils';
+import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
+import { setLogSink } from '@logger/logSink';
 import type { StateStore } from '@platform/interfaces';
 import {
   agentMatchesIdentifier,
@@ -16,6 +17,7 @@ import {
 } from '@shared/schemas';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { FakeStateStore } from '@test/support/FakePlatform';
+import { captureLogEntries } from '@test/support/logSinkCapture';
 
 const agents: Record<AgentCategory, AgentRosterEntry[]> = {
   workflow: [
@@ -62,25 +64,14 @@ function controller(
 describe('AgentRosterController', () => {
   afterEach(() => {
     vi.restoreAllMocks();
+    setLogSink(null);
   });
-
-  /** Silence the roster log channel and return the spy for assertions. */
-  function stubWarn(): ReturnType<typeof vi.spyOn> {
-    return vi.spyOn(logger, 'warn').mockImplementation(() => {});
-  }
-
-  function expectMalformedWarning(warn: ReturnType<typeof vi.spyOn>): void {
-    expect(warn).toHaveBeenCalledWith(
-      'AgentRosterController',
-      expect.stringContaining('malformed roster selection'),
-    );
-  }
 
   it.effect(
     'warns and falls back to the inherited roster on malformed state',
     () =>
       Effect.gen(function* () {
-        const warn = stubWarn();
+        const logs = captureLogEntries();
         const roster = controller(
           new FakeStateStore({
             [WorkspaceStateKey.AGENT_ROSTER_SELECTION]: { kind: 'invalid' },
@@ -90,8 +81,14 @@ describe('AgentRosterController', () => {
         expect((yield* roster.snapshot()).selection).toEqual({
           kind: 'inherit',
         });
-        expectMalformedWarning(warn);
-      }),
+        expect(
+          logs.has(
+            'WARN',
+            'AgentRosterController',
+            'malformed roster selection',
+          ),
+        ).toBe(true);
+      }).pipe(Effect.provide(effectDiagnosticsLayer('Trace'))),
   );
 
   it.effect('uses the user default only for inherited workspaces', () =>

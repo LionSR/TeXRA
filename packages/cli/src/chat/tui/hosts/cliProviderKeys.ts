@@ -11,7 +11,7 @@
 // body below and each surface binds its own.
 
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, Fiber } from 'effect';
 
 // Local imports - CLI runtime
 import { cliExternalOpener } from '@cli/runtime/hosts/cliExternalOpener';
@@ -20,11 +20,14 @@ import {
   ProviderKeyActionFailed,
   SettingsProfileKeyController,
 } from '@controllers/settingsView/SettingsProfileKeyController';
+// Local imports - event bus
+import { onAppSignal } from '@eventBus/AppSignals';
 // Local imports - hosts
 import { PromptFailed, type PromptHost } from '@hosts/uiHosts';
 // Local imports - model
-import { invalidateApiKeyCache, type ApiProvider } from '@model/apiProviders';
+import { apiProviderOfSecretName, type ApiProvider } from '@model/apiProviders';
 // Local imports - platform
+import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 // Local imports - shared
 import type { SettingsStores } from '@shared/config/settingsAccess';
@@ -34,7 +37,6 @@ import {
   getProviderDisplayName,
   getProviderKeyUrl,
 } from '@utils/config/providerConfig';
-
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { bumpCodexPreferenceVersion } from '../state/cliState';
@@ -55,14 +57,10 @@ const commitProviderApiKeyVia = Effect.fn('commitProviderApiKeyVia')(function* (
     getProviderDisplayName: (candidate) =>
       getProviderDisplayName(stores, candidate, providerDisplayName(candidate)),
     getProviderKeyUrl: (candidate) => getProviderKeyUrl(stores, candidate),
-    // The key-dependent state this host repaints: the process's API-key
-    // lookup cache, and the subscription-preference level the status bar
-    // and the model pickers read.
-    refreshAfterKeyChange: () =>
-      Effect.sync(() => {
-        invalidateApiKeyCache();
-        bumpCodexPreferenceVersion();
-      }),
+    // Nothing to repaint here: the store drops the API-key lookup cache on
+    // commit, and the chat TUI's `credentialChanged` subscriber bumps the
+    // subscription-preference level the status bar and model pickers read.
+    refreshAfterKeyChange: () => Effect.void,
   });
   yield* controller.commitProviderKey(provider, key).pipe(
     Effect.mapError((error) =>
@@ -165,3 +163,27 @@ export const promptForCliProviderApiKey = Effect.fn(
   if (key == null) return;
   yield* commitCliProviderApiKey(secrets, stores, provider, key);
 });
+
+/**
+ * The chat TUI's `credentialChanged` subscriber, forked at its run edge (R1)
+ * and interrupted by the returned disposer. The secret store announces every
+ * committed write, whoever made it: `/key`, `/config`, the setup agent's
+ * `unset_api_key`. A provider key bumps the subscription-preference level the
+ * status bar and model pickers read. A key a tool plugin declares (the GitHub
+ * token) is re-probed by the shared bootstrap. Other entries (OAuth tokens,
+ * sign-in nonces) are ignored.
+ */
+export function subscribeCliCredentialChanges(
+  runtime: ProcessRuntime,
+): () => void {
+  const fiber = runtime.runFork(
+    onAppSignal('credentialChanged', ({ key }) => {
+      if (apiProviderOfSecretName(key) !== undefined) {
+        bumpCodexPreferenceVersion();
+      }
+    }),
+  );
+  return () => {
+    runtime.runFork(Fiber.interrupt(fiber));
+  };
+}

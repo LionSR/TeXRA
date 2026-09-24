@@ -11,7 +11,9 @@ import {
   STREAM_LOG_ENTRY_TYPES,
   RUN_PHASE,
   TOOL_CALL_STATUS,
+  ToolUseLogSchema,
   isTerminalWorkflowCallProgress,
+  isTranscriptEvent,
   type LogLevel,
   type MessageType,
   type ToolUseLog,
@@ -19,6 +21,7 @@ import {
   type WorkflowCallProgress,
   type TranscriptEvent,
   type RunPhase,
+  type SessionEvent,
 } from '@shared/schemas';
 import { roundedUtilizationPercent } from '@shared/runs/contextUtilization';
 import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
@@ -27,6 +30,7 @@ import type {
   StreamLogAppendInput,
   StreamLogUpdatePatch,
 } from '@shared/session/traceEntries';
+import { isObject } from '@utils/core';
 
 const KNOWN_MESSAGE_TYPES = new Set<string>(Object.values(MESSAGE_TYPES));
 
@@ -201,7 +205,20 @@ export function createTranscriptFold(
 
       case 'tool.end': {
         if (transcriptBoundaryClosed) return;
-        const result = (event.result ?? {}) as Partial<ToolUseLog>;
+        // .passthrough() keeps fields outside ToolUseLogSchema (e.g.
+        // toolUseDispatch.ts's `files`), matching endToolUseCard's "forwarded
+        // as-is" contract. On failure, keep the raw object rather than `{}`:
+        // every field is optional, so `{}` would "succeed" on
+        // normalizeToolUseData's re-parse and hide a malformed row instead of
+        // tripping its "Malformed tool payload" fallback.
+        const parsedResult = ToolUseLogSchema.omit({ status: true })
+          .passthrough()
+          .safeParse(event.result);
+        let result: Partial<ToolUseLog>;
+        if (parsedResult.success) result = parsedResult.data;
+        else if (isObject(event.result))
+          result = event.result as Partial<ToolUseLog>;
+        else result = {};
         // Omit groupId on update: undefined would clobber the value stamped
         // at tool.start.
         const patch = {
@@ -209,7 +226,7 @@ export function createTranscriptFold(
           data: {
             ...result,
             status: event.status,
-          } as ToolUseLog,
+          } satisfies ToolUseLog,
         } satisfies StreamLogUpdatePatch;
         if (event.status === TOOL_CALL_STATUS.IN_PROGRESS) {
           if (!activeToolEntries.has(event.logId)) return;
@@ -441,6 +458,33 @@ export function createTranscriptFold(
     activeToolEntries.clear();
   };
   return { record, status };
+}
+
+/**
+ * One committed row onto a transcript fold: the lifecycle rows move its
+ * status, and a transcript row is recorded under its durable coordinates.
+ * The one projection both the resident cache and the session view apply.
+ */
+export function applyTraceRow(
+  fold: ReturnType<typeof createTranscriptFold>,
+  event: SessionEvent,
+  debug: boolean,
+): void {
+  if (event.type === 'run.activate') fold.status(RUN_PHASE.RUNNING);
+  else if (event.type === 'flow.step') {
+    if (event.payload.step === 'waiting') fold.status(RUN_PHASE.WAITING);
+    else if (event.payload.step !== 'halted') fold.status(RUN_PHASE.RUNNING);
+  } else if (event.type === 'child.park') {
+    fold.status(
+      event.phase === 'parked' ? RUN_PHASE.WAITING : RUN_PHASE.RUNNING,
+    );
+  } else if (event.type === 'run.end') fold.status(event.outcome);
+  else if (isTranscriptEvent(event))
+    fold.record(event, {
+      at: event.at,
+      id: JSON.stringify([event.aggregateId, event.seq]),
+      debug,
+    });
 }
 /**
  * Maps a domain key onto a known MessageType; keys not listed fall back to the

@@ -1,6 +1,6 @@
 import { Effect } from 'effect';
 
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import type {
   StateStore,
   StateWriteFailed,
@@ -34,7 +34,7 @@ import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { unique } from '@utils/core';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 
-const log = createLog('AgentRosterController');
+const CHANNEL = 'AgentRosterController';
 
 export interface AgentRosterEntry {
   readonly name: string;
@@ -117,10 +117,10 @@ function readAgentRosterSelection(workspaceState: StateStore) {
     if (raw === undefined) return INHERITED_AGENT_ROSTER;
     const parsed = AgentRosterSelectionSchema.safeParse(raw);
     if (parsed.success) return parsed.data;
-    log.warn(
+    yield* Effect.logWarning(
       `Ignoring malformed roster selection; falling back to ` +
         `the inherited roster: ${parsed.error.message}`,
-    );
+    ).pipe(withLogChannel(CHANNEL));
     return INHERITED_AGENT_ROSTER;
   });
 }

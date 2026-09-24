@@ -2,7 +2,6 @@ import { Effect } from 'effect';
 import { ModelProvider, type ModelConfig } from 'llm-zoo';
 
 import { shouldUseInternalValidationModel } from '@agent/runtime/run/validationModel';
-import { resolveRouteEndpoint } from '@agent/runtime/run/routeEndpoint';
 import {
   CODEX_BACKEND_BASE_URL,
   CodexAuthError,
@@ -17,7 +16,6 @@ import {
 import { AgentError } from '@common/errors';
 import { attachMissingApiKeyError } from '@common/errors/sdkError/errorMetadata';
 import { withLogChannel } from '@logger/effectLog';
-import { createLog } from '@logger/logUtils';
 import {
   copilotRouteUnavailableReason,
   prefersCopilotRoute,
@@ -34,6 +32,7 @@ import {
   shouldRouteModelThroughOpenRouter,
 } from '@model/openRouterRouting';
 import { exposeApiKey, getApiKey, type ApiProvider } from '@model/apiProviders';
+import { resolveRouteEndpoint } from '@model/routeEndpoint';
 import type { StateStore } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
 import type {
@@ -42,39 +41,19 @@ import type {
   UsageRoute,
 } from '@shared/schemas';
 import type { SettingsStores } from '@shared/config/settingsAccess';
+import { findModelProviderPlugin } from '@shared/constants/modelProviderPlugins';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { ensureError } from '@utils/errors/errorMessage';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 import type { HttpClient } from 'effect/unstable/http';
 
 const CHANNEL = 'modelRoutes';
-const log = createLog(CHANNEL);
 
 /**
  * The Grok subscription's OAuth token is accepted by xAI's own API surface
  * only; it is never sent to a dashboard custom endpoint or OpenRouter.
  */
 const XAI_SUBSCRIPTION_ENDPOINT = 'https://api.x.ai/v1';
-
-// Record (not Map) so TypeScript enforces exhaustiveness over ModelProvider.
-// A new enum value in llm-zoo without an entry here will fail typecheck.
-const PROVIDER_COMPATIBILITY_KEYS: Record<
-  ModelProvider,
-  ModelCompatibilityKey
-> = {
-  [ModelProvider.ANTHROPIC]: 'Anthropic',
-  [ModelProvider.OPENAI]: 'OpenAI',
-  [ModelProvider.GOOGLE]: 'GoogleInteractions',
-  [ModelProvider.DEEPSEEK]: 'DeepSeek',
-  [ModelProvider.XAI]: 'XAI',
-  [ModelProvider.MOONSHOT]: 'Kimi',
-  [ModelProvider.DASHSCOPE]: 'DashScope',
-  [ModelProvider.MINIMAX]: 'MiniMax',
-  [ModelProvider.GLM]: 'GLM',
-  [ModelProvider.META]: 'Meta',
-  [ModelProvider.OTHERS]: 'OpenRouterNative',
-  [ModelProvider.COPILOT]: 'VscodeLm',
-};
 
 /**
  * Check if OpenAI Responses API should be used for this config. Talking to
@@ -241,21 +220,7 @@ export const resolveSubscriptionCredential = Effect.fn(
         provider,
         usageRoute: 'chatgpt-subscription',
       },
-      config: {
-        ...config,
-        contextWindow: profile.contextWindow,
-        inputPrice: profile.inputPrice,
-        outputPrice: profile.outputPrice,
-        // Whether this backend takes input files is the route's fact, not
-        // the base model's, and the ChatGPT-subscription backend takes none.
-        // The binding's PDF admission reads this, so the route degrades a PDF
-        // the way any route without native PDF does instead of sending a
-        // shape the backend rejects.
-        capabilities: {
-          ...config.capabilities,
-          supportsNativePdf: false,
-        },
-      },
+      config: profile.config,
     };
   }
   if (config.provider === ModelProvider.XAI) {
@@ -292,12 +257,7 @@ export const resolveSubscriptionCredential = Effect.fn(
         provider,
         usageRoute: 'xai-subscription',
       },
-      config: {
-        ...config,
-        contextWindow: profile.contextWindow,
-        inputPrice: profile.inputPrice,
-        outputPrice: profile.outputPrice,
-      },
+      config: profile.config,
     };
   }
   return null;
@@ -333,8 +293,10 @@ export const resolveRouteCredential = Effect.fn('resolveRouteCredential')(
         new Error(`Model "${config.name}" has no direct API-key provider.`),
       );
     }
-    const apiKey = yield* Effect.mapBoth(getApiKey(secrets, provider), {
-      onFailure: (cause) => {
+    // An unreadable key store fails as itself, not as a missing key.
+    const apiKey = yield* getApiKey(secrets, provider).pipe(
+      Effect.map(exposeApiKey),
+      Effect.catchTag('ApiKeyMissing', (cause) => {
         const error = new Error(
           useOpenRouter
             ? 'Missing OpenRouter API key. Set an OpenRouter API key in settings.'
@@ -342,10 +304,9 @@ export const resolveRouteCredential = Effect.fn('resolveRouteCredential')(
           { cause },
         );
         attachMissingApiKeyError(error);
-        return error;
-      },
-      onSuccess: exposeApiKey,
-    });
+        return Effect.fail(error);
+      }),
+    );
     const endpoint = yield* resolveRouteEndpoint(
       stores,
       config,
@@ -380,9 +341,9 @@ export const withShortModelName = Effect.fn('withShortModelName')(function* (
     yield* getPreferShortModelNames(globalState),
   );
   if (resolved !== config) {
-    log.debug(
+    yield* Effect.logDebug(
       `Using short model name for ${config.name}: ${config.fullName} → ${resolved.fullName}`,
-    );
+    ).pipe(withLogChannel(CHANNEL));
   }
   return resolved;
 });
@@ -447,22 +408,22 @@ export const resolveModelCompatibilityKey = Effect.fn(
   if (shouldRouteModelThroughOpenRouter(config, useOpenRouter)) {
     return 'OpenRouterNative';
   }
-  return providerCompatibilityKey(config.provider);
+  return yield* providerCompatibilityKey(config.provider);
 });
 
 /**
- * Guarded route-table read. The table is exhaustive over `ModelProvider`, so a
- * miss means a provider string from outside the enum (stale registry entry or
+ * Guarded plugin read. The provider plugin manifest gives every
+ * `ModelProvider` a compatibility key (checked at compile time), so a miss
+ * means a provider string from outside the enum (stale registry entry or
  * persisted config). Report it here instead of crashing on the property
  * access; the caller turns the missing route into a named failure.
  */
 function providerCompatibilityKey(
   provider: ModelProvider,
-): ModelCompatibilityKey | undefined {
-  const key = PROVIDER_COMPATIBILITY_KEYS[provider];
-  if (!key) {
-    log.warn(`No model route is registered for provider ${provider}`);
-    return undefined;
-  }
-  return key;
+): Effect.Effect<ModelCompatibilityKey | undefined> {
+  const key = findModelProviderPlugin(provider)?.compatibilityKey;
+  if (key) return Effect.succeed(key);
+  return Effect.logWarning(
+    `No model route is registered for provider ${provider}`,
+  ).pipe(withLogChannel(CHANNEL), Effect.as(undefined));
 }

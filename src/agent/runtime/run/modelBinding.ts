@@ -43,7 +43,6 @@ import {
   withShortModelName,
   type RouteCredential,
 } from '@agent/runtime/modelRoutes';
-import { OPENAI_DEFAULT_ENDPOINT } from '@agent/runtime/run/routeEndpoint';
 import { type ModelOptionStores } from '@model/computeModelOptions';
 import {
   reasoningEffortOverrides,
@@ -56,6 +55,7 @@ import {
 } from '@model/kimiCodeSubscriptionRouting';
 import { isOpenRouterRoutingUnsupported } from '@model/openRouterRouting';
 import type { StateStore } from '@platform/interfaces';
+import { OPENAI_DEFAULT_ENDPOINT } from '@shared/constants/modelProviderPlugins';
 import {
   AgentCategory,
   type DeclinableUsageRoute,

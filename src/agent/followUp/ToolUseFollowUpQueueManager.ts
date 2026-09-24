@@ -20,6 +20,7 @@ import {
 } from '@shared/session/database';
 import type { Append } from '@shared/session/sessionEvents';
 import { createBoundedIdSet } from '@utils/core/boundedIdSet';
+import { ensureError } from '@utils/errors/errorMessage';
 import type { QueuedFollowUp, RunInput } from './RunInput';
 
 const CHANNEL = 'ToolUseFollowUpQueue';
@@ -695,14 +696,11 @@ export class ToolUseFollowUpQueue {
   }
 
   private notifyReleaseObservers(runId: RunId): void {
-    for (const observer of this.releaseObservers) {
-      const observed = Result.try({
-        try: () => observer(runId),
-        catch: (err) => err,
-      });
-      if (Result.isFailure(observed)) {
+    for (const notify of this.releaseObservers) {
+      const ran = Result.try({ try: () => notify(runId), catch: ensureError });
+      if (Result.isFailure(ran)) {
         logger.warn(`Release observer threw for run ${runId}`, {
-          data: observed.failure,
+          data: ran.failure,
         });
       }
     }

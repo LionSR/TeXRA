@@ -24,6 +24,7 @@ import {
   agentMatchesIdentifier,
 } from '@shared/schemas';
 import type { ModelOptionData, RequestDecision, RunId } from '@shared/schemas';
+import { DatabaseWriteFailed } from '@shared/session/database';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { testRunHandle } from '@test/support/runHandleFixtures';
 import {
@@ -32,7 +33,10 @@ import {
   queuedFollowUps,
 } from '@test/support/sessionTestUtils';
 import { fakeProcessServices } from '@test/support/setupPlatform';
-import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
+import {
+  nativeToolTestLayer,
+  emptyPinnedComposition,
+} from '@test/support/nativeToolTestLayer';
 import { DelegateAgentTool } from '@tools/delegation/DelegationTools';
 import {
   executeSubagentInBand as executeSubagentInBandEffect,
@@ -48,7 +52,6 @@ const mocks = vi.hoisted(() => ({
   childRecords: vi.fn(),
   getVisibleAgents: vi.fn(),
   isApprovalBypassedForRun: vi.fn(),
-  isProposalBypassed: vi.fn(),
   registerRun: vi.fn(),
   writeReport: vi.fn(),
   writeResultMeta: vi.fn(),
@@ -133,9 +136,6 @@ vi.mock('@model/computeModelOptions', () => ({
 vi.mock('@tools/approval', () => ({
   configureDelegatedChildApprovals: mocks.configureDelegatedChildApprovals,
   isApprovalBypassedForRun: mocks.isApprovalBypassedForRun,
-  proposalApprovals: () => ({
-    isBypassed: mocks.isProposalBypassed,
-  }),
 }));
 
 const PARENT_RUN_ID = 'aaaaaa222222' as RunId;
@@ -167,7 +167,6 @@ function parentRunContext(
         stopAfterCycle,
         approvalPromptsUnavailable:
           overrides.approvalPromptsUnavailable ?? false,
-        runtimeUnavailableTools: [],
       },
     },
   };
@@ -177,19 +176,17 @@ function parentRunContext(
 let testEngine: AgentEngine['Service'];
 
 function callDelegateReview(call = parentRunContext()) {
-  return new DelegateAgentTool()
-    .call({
-      agent: 'review',
-      model: null,
-      instruction: 'Check the proof.',
-      memories: [],
-      working_directory: null,
-      execution_id: null,
-    })
-    .pipe(
-      Effect.provideService(AgentEngine, testEngine),
-      Effect.provide(nativeToolTestLayer(call)),
-    );
+  return DelegateAgentTool.call({
+    agent: 'review',
+    model: null,
+    instruction: 'Check the proof.',
+    memories: [],
+    working_directory: null,
+    execution_id: null,
+  }).pipe(
+    Effect.provideService(AgentEngine, testEngine),
+    Effect.provide(nativeToolTestLayer(call)),
+  );
 }
 
 const waitForChildrenEffect = Effect.fn('waitForTestChildren')(function* (
@@ -252,7 +249,6 @@ function delegateWithProposalDecision(
 ) {
   return Effect.scoped(
     Effect.gen(function* () {
-      mocks.isProposalBypassed.mockReturnValue(false);
       const session = createTestSession();
       const decider = answerOpenedRequests(session, decision);
       yield* Effect.addFinalizer(() =>
@@ -302,6 +298,7 @@ function delegationOptions(
     agentName: 'review',
     parentRunId: IN_BAND_PARENT_RUN_ID,
     session: inBandSession,
+    composition: emptyPinnedComposition.key,
     ...overrides,
   };
 }
@@ -479,10 +476,11 @@ describe('headless delegation', () => {
     testEngine = {
       executeAgent: (definition, runId, options) =>
         Effect.tryPromise({
-          try: async () => {
+          try: async (signal) => {
             let reportedError: unknown;
             const turn = await mocks.executeAgent(definition, runId, {
               ...options,
+              turnSignal: signal,
               onRunError: (error: unknown, result: unknown) => {
                 reportedError = error;
                 return (
@@ -533,7 +531,11 @@ describe('headless delegation', () => {
         },
       ]),
     );
-    mocks.isProposalBypassed.mockReturnValue(true);
+    // Every case delegates without a proposal unless it brings its own
+    // session, whose proposal bypass starts off.
+    testDefaultSession().approvals.proposal.setBypass(PARENT_RUN_ID, true, {
+      silent: true,
+    });
     mocks.isApprovalBypassedForRun.mockReturnValue(false);
     const records = new Map<RunId, ReturnType<typeof memoryChildRecords>>();
     mocks.childRecords.mockImplementation((runId: RunId) => {
@@ -685,7 +687,6 @@ describe('headless delegation', () => {
           inBandSession,
           result.runId,
           expect.objectContaining({ agent: 'review' }),
-          'review',
           expect.objectContaining({ parentRunId: IN_BAND_PARENT_RUN_ID }),
         );
         expect(mocks.writeResultMeta).toHaveBeenCalledWith(
@@ -708,7 +709,12 @@ describe('headless delegation', () => {
       Effect.gen(function* () {
         const drain = vi.spyOn(inBandSession, 'settlePublications');
         releaseClaims.mockReturnValueOnce(
-          Effect.fail(new Error('claim release failed')),
+          Effect.fail(
+            new DatabaseWriteFailed({
+              path: 'session.db',
+              cause: new Error('claim release failed'),
+            }),
+          ),
         );
 
         const result = yield* runInBand(delegationOptions());
@@ -834,7 +840,12 @@ describe('headless delegation', () => {
         const childFailure = new Error('review model failed');
         mocks.executeAgent.mockRejectedValueOnce(childFailure);
         releaseClaims.mockReturnValueOnce(
-          Effect.fail(new Error('claim release failed')),
+          Effect.fail(
+            new DatabaseWriteFailed({
+              path: 'session.db',
+              cause: new Error('claim release failed'),
+            }),
+          ),
         );
         expect(yield* Effect.flip(runInBand(delegationOptions()))).toBe(
           childFailure,
@@ -865,54 +876,39 @@ describe('headless delegation', () => {
   );
 
   it.effect(
-    'a caller stop leaves the detached in-band child to finish its own record',
+    'interrupts the live child when the in-band caller is interrupted',
     () =>
       Effect.gen(function* () {
         const onCost = vi.fn();
         const ready = yield* Deferred.make<void>();
-        let finishChild!: () => void;
-        const childGate = new Promise<void>((resolve) => {
-          finishChild = resolve;
-        });
-        mocks.executeAgent.mockImplementationOnce(async () => {
-          Deferred.doneUnsafe(ready, Effect.void);
-          await childGate;
-          return {
-            outcome: 'completed',
-            runId: CHILD_RUN_ID,
-            output: { category: 'toolUse', response: 'done', files: [] },
-          };
-        });
+        mocks.executeAgent.mockImplementationOnce(
+          async (_config, _id, options) => {
+            Deferred.doneUnsafe(ready, Effect.void);
+            // The child's stop is its run fiber's interruption, which the
+            // test engine sees as its turn promise's abort.
+            await new Promise<void>((resolve) => {
+              options.turnSignal.addEventListener('abort', () => resolve());
+            });
+            return {
+              outcome: 'cancelled',
+              runId: CHILD_RUN_ID,
+              output: { category: 'toolUse', response: '', files: [] },
+            };
+          },
+        );
 
         const running = yield* Effect.forkChild(
           runInBand(delegationOptions({ onCost })),
         );
         yield* Deferred.await(ready);
-        // The caller's stop is its fiber's interruption; the detached child
-        // loop is not the caller's to tear down.
+
+        // Interruption stops the child by run id and waits for it to settle
+        // its own terminal record.
         yield* Fiber.interrupt(running);
         const exit = yield* Fiber.await(running);
-        expect(Exit.isFailure(exit) && Cause.hasInterrupts(exit.cause)).toBe(
-          true,
-        );
-
-        // The child finishes on its own lease and commits its own record,
-        // cost included.
-        finishChild();
-        yield* Effect.promise(() =>
-          vi.waitFor(() =>
-            expect(mocks.writeResultMeta).toHaveBeenCalledOnce(),
-          ),
-        );
-        expect(mocks.writeResultMeta).toHaveBeenLastCalledWith(
-          expect.objectContaining({
-            producer: 'subagent',
-            output: expect.objectContaining({ response: 'done' }),
-          }),
-        );
-        yield* Effect.promise(() =>
-          vi.waitFor(() => expect(onCost).toHaveBeenCalledOnce()),
-        );
+        expect(Exit.hasInterrupts(exit)).toBe(true);
+        expect(onCost).toHaveBeenCalledOnce();
+        expect(inBandSession.runs.isLive(IN_BAND_RUN_ID)).toBe(false);
       }),
   );
 
@@ -932,22 +928,12 @@ describe('headless delegation', () => {
 
         const running = yield* Effect.forkChild(runInBand(delegationOptions()));
         yield* Deferred.await(persisting);
-        // The caller's stop interrupts its own await, never the child's
-        // persistence: the detached loop owns that record.
-        yield* Fiber.interrupt(running);
-        const exit = yield* Fiber.await(running);
-        expect(Exit.isFailure(exit) && Cause.hasInterrupts(exit.cause)).toBe(
-          true,
-        );
+        const interrupting = yield* Effect.forkChild(Fiber.interrupt(running));
         finishPersistence();
 
-        yield* Effect.promise(() =>
-          vi.waitFor(() =>
-            expect(
-              inBandSession.runs.getHandle(IN_BAND_RUN_ID),
-            ).toBeUndefined(),
-          ),
-        );
+        yield* Fiber.join(interrupting);
+        const exit = yield* Fiber.await(running);
+        expect(Exit.hasInterrupts(exit)).toBe(true);
         expect(mocks.writeResultMeta).toHaveBeenCalledOnce();
         expect(mocks.writeResultMeta).toHaveBeenCalledWith(
           expect.objectContaining({
@@ -957,6 +943,21 @@ describe('headless delegation', () => {
             }),
           }),
         );
+      }),
+  );
+
+  it.effect(
+    'does not register a child when the in-band caller is interrupted before it starts',
+    () =>
+      Effect.gen(function* () {
+        // A child fiber is scheduled, not started, so this interrupt lands first.
+        const running = yield* Effect.forkChild(runInBand(delegationOptions()));
+        yield* Fiber.interrupt(running);
+        const exit = yield* Fiber.await(running);
+
+        expect(Exit.hasInterrupts(exit)).toBe(true);
+        expect(mocks.registerRun).not.toHaveBeenCalled();
+        expect(mocks.executeAgent).not.toHaveBeenCalled();
       }),
   );
 
@@ -1122,7 +1123,6 @@ describe('headless delegation', () => {
           // front, so a delegation tool that still executes was deliberately offered
           // (delegate_multi_agents). The proposal gate must not settle a
           // guaranteed denial; the child stays on inherited approval state.
-          mocks.isProposalBypassed.mockReturnValue(false);
           const session = createTestSession();
           const decider = answerOpenedRequests(session, { action: 'approve' });
           yield* Effect.addFinalizer(() =>

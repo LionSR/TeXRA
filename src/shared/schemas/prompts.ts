@@ -166,9 +166,6 @@ export type UserQuestionPermission = z.infer<
 // Plan Approval
 // ============================================================================
 
-export type ToolEditApprovalAction =
-  'approve' | 'reject' | 'openDiff' | 'showLatexdiff' | 'previewProposed';
-
 export const PlanApprovalPermissionSchema = z.strictObject({
   requestId: z.string(),
   runId: RunIdSchema,

@@ -253,12 +253,6 @@ export interface WorkflowAgentInvocation {
   prompt: string;
   options: WorkflowAgentCallOptions;
   /**
-   * Fires when the run is aborted (wall-clock timeout). Runners should
-   * cancel the underlying agent run so timed-out workflows stop
-   * consuming model quota instead of finishing in the background.
-   */
-  signal: AbortSignal;
-  /**
    * Host-side side channel: the runner reports whatever it has
    * resolved for the live attempt, in whatever combination it learns them.
    * Never journaled — none of it affects resume identity.
@@ -301,6 +295,12 @@ export interface WorkflowAttemptFacts {
  * to keep the child it inspected from being resumed under it is released only
  * after this call's journal entry has committed, since until then the result
  * the parent is persisting is one another host could still invalidate.
+ *
+ * Cancellation is interruption: the engine interrupts the runner on a skip,
+ * a retry, a run-level fault, the wall-clock timeout, or its own caller's
+ * interrupt, and awaits it before the attempt's scope closes. A runner over
+ * work that cancels through an `AbortSignal` derives one from that
+ * interruption at its own edge.
  */
 type WorkflowAgentRunner<R = never> = (
   invocation: WorkflowAgentInvocation,
@@ -407,8 +407,6 @@ export interface WorkflowScriptRunOptions<R = never> {
   fingerprintAgentDependencies?: (
     options: WorkflowAgentCallOptions,
   ) => Effect.Effect<string, Error, R>;
-  /** Parent cancellation signal; aborts guest run and active agents. */
-  signal?: AbortSignal;
   /** Max concurrently running agent() calls. The host passes the session's
    *  child-run budget; 4 is the library fallback. */
   concurrency?: number;
@@ -434,14 +432,14 @@ export interface WorkflowScriptRunOptions<R = never> {
     readonly childRunId: RunId;
   }) => Effect.Effect<void, Error, R>;
   /**
-   * Synchronous observer for every validated result this invocation consumes,
+   * Observer for every validated result this invocation consumes,
    * whether replayed or live. It fires after the call reaches its terminal
    * cached/completed status and before the result becomes visible to the
    * script; an onEvent throw during that status prevents both this
    * callback and consumption. A live entry is already durably committed by
    * onJournalEntry when this observer fires.
    */
-  onJournalEntryConsumed?: (entry: WorkflowJournalEntry) => void;
+  onJournalEntryConsumed?: (entry: WorkflowJournalEntry) => Effect.Effect<void>;
   /** Synchronous observer of every {@link WorkflowScriptEvent}, in order. */
   onEvent?: (event: WorkflowScriptEvent) => void;
   /**

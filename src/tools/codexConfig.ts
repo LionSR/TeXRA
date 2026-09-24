@@ -4,28 +4,15 @@ import { z } from 'zod';
 // Local imports - agent config
 import { withLogChannel } from '@logger/effectLog';
 import type { StateReadFailed } from '@platform/interfaces';
-import type { StateStore } from '@platform/interfaces';
+import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { CodexReasoningEffort } from '@shared/schemas';
-import {
-  CODEX_APPROVAL_POLICY_DEFAULT,
-  CODEX_REASONING_EFFORT_DEFAULT,
-  CODEX_SANDBOX_MODE_DEFAULT,
-  parseCodexApprovalPolicy,
-  parseCodexReasoningEffort,
-  parseCodexSandboxMode,
-} from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { readSettingFrom } from '@utils/config/platformSettings';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { executeCommand } from '@utils/system/execUtils';
 
-import { createEnumStateGetter } from './support/enumConfig';
-
 // Type-only imports
-import type {
-  ApprovalMode,
-  ModelReasoningEffort,
-  SandboxMode,
-} from '@openai/codex-sdk';
+import type { ModelReasoningEffort } from '@openai/codex-sdk';
 
 // ============================================================================
 // Model config — the Codex CLI uses short model names, not versioned API IDs
@@ -41,12 +28,6 @@ const codexXhighProbeLanes = new Map<string, PerKeyLane>();
 // ============================================================================
 // Reasoning effort
 // ============================================================================
-
-const getCodexReasoningEffort = createEnumStateGetter(
-  WorkspaceStateKey.CODEX_REASONING_EFFORT,
-  CODEX_REASONING_EFFORT_DEFAULT,
-  parseCodexReasoningEffort,
-);
 
 /**
  * Older Codex CLI runtimes reject `xhigh` even though it is present in the SDK
@@ -65,46 +46,15 @@ export function toCodexCliReasoningEffort(
   return effort === 'xhigh' && !supportsXhigh ? 'high' : effort;
 }
 
-export function getCodexCliReasoningEffort(
-  workspaceState: StateStore,
-  supportsXhigh = false,
-) {
-  return Effect.gen(function* () {
-    return toCodexCliReasoningEffort(
-      yield* getCodexReasoningEffort(workspaceState),
-      supportsXhigh,
-    );
-  });
-}
-
-// ============================================================================
-// Approval policy
-// ============================================================================
-
-// The schema in `@shared` is the single source of truth for the persisted
-// values; the SDK-typed return annotation is what keeps those values aligned
-// with the Codex union — a schema value the SDK doesn't accept fails here.
-export const getCodexApprovalPolicy: (
-  workspaceState: StateStore,
-) => Effect.Effect<ApprovalMode, StateReadFailed> = createEnumStateGetter(
-  WorkspaceStateKey.CODEX_APPROVAL_POLICY,
-  CODEX_APPROVAL_POLICY_DEFAULT,
-  parseCodexApprovalPolicy,
-);
-
-// ============================================================================
-// Sandbox mode
-// ============================================================================
-
-// As above: the SDK-typed return annotation is the alignment guard between the
-// persisted schema values and the Codex sandbox union.
-export const getCodexSandboxMode: (
-  workspaceState: StateStore,
-) => Effect.Effect<SandboxMode, StateReadFailed> = createEnumStateGetter(
-  WorkspaceStateKey.CODEX_SANDBOX_MODE,
-  CODEX_SANDBOX_MODE_DEFAULT,
-  parseCodexSandboxMode,
-);
+/** The persisted effort, uncapped: a requested `xhigh` goes through
+ *  `toCodexCliReasoningEffort` with the binary probe's answer. */
+export const getCodexCliReasoningEffort = (
+  stores: SettingsStores,
+): Effect.Effect<CodexReasoningEffort, StateReadFailed> =>
+  readSettingFrom<CodexReasoningEffort>(
+    stores,
+    WorkspaceStateKey.CODEX_REASONING_EFFORT,
+  );
 
 // ============================================================================
 // Extra High capability probe

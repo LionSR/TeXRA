@@ -225,9 +225,22 @@ structured, cost }`), `null` on failure, or the truthy
   `parallel()` call, and a wall-clock timeout. The cap raises
   `WorkflowRunAbortError`, which `parallel()` does not convert to `null` — the
   whole run fails. The timeout is the sandbox's own error: guest execution is
-  interrupted, the run's `AbortSignal` (on every
-  `runAgent` invocation) fires, and new `agent()` calls are refused; runners
-  should cancel in-flight work on it.
+  interrupted and every in-flight `agent()` fiber is interrupted and awaited
+  before the run settles.
+- **Cancellation is interruption**: the engine and the sandbox take no
+  `AbortSignal`. The sandbox is one scoped Effect whose QuickJS runtime,
+  context, pending host promises, `agent()` fibers and deadline timer are
+  resources of its scope, so a result, a timeout, the first run-level fault,
+  or the caller interrupting the run all tear it down the same way: calls
+  interrupted (an admitted journal commit reaching its durability point
+  first), then the realm disposed, then the terminal sweep. Skip and retry
+  are a per-attempt `Deferred` decision the host's gesture and the runner's
+  settlement race for; a retry journals its supersession before it
+  interrupts the runner. The two cancellation edges live in the host, where
+  the child-run loop is a detached fiber: `workflowScriptStrategy` turns the
+  loop's abort into an interrupt of the run, and `executeSubagentInBand`
+  turns an interrupt of its caller into a stop of the in-band child by run
+  id, then waits for the child to settle.
 - **Debuggability**: a thrown error inside a `parallel()` thunk
   (a script bug, as opposed to an `agent()` failure,
   which already resolves to `null` with its own `agent:end` event) rejects the
@@ -245,10 +258,10 @@ and rerun the file instead of reproducing the full script. Phase metadata
 accepts both title strings and `{ title }` objects and normalizes them
 to one internal representation. It ships in the built-in `orchestrator`
 agent's tool list
-(`prompts/agents/remote/tool_use/orchestrator.yaml`); explicitly naming the tool in an
+(`packages/extension/resources/tool_use_agents/orchestrator.yaml`); explicitly naming the tool in an
 agent's configuration is one half of the consent boundary for automated
 workflow fan-out. The other half is global: the "Multi-Agent Workflow" toggle
-in the Tools dashboard (`src/tools/externalToolDefs.ts`, id `workflow-script`)
+in the Tools dashboard (`src/tools/plugins.ts`, id `workflow-script`)
 strips `delegate_multi_agents` from every agent's resolved tools when
 switched off, regardless of what any individual agent configuration names —
 and new installs start with the switch off.

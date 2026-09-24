@@ -62,10 +62,8 @@ wa-button[hidden] {
   outline-offset: calc(-1 * var(--focus-ring-offset));
 }
 
-/* Named `spin` so a caller can override just the duration, as desktopShell.css's
-   .shell-environment-refresh does. This shell chrome sits outside the Lit
-   component tree, so it defines its own keyframe rather than sharing one
-   from @ui/styles. */
+/* This shell chrome sits outside the Lit component tree, so it defines its
+   own keyframe rather than sharing one from @ui/styles. */
 @keyframes spin {
   from {
     transform: rotate(0deg);

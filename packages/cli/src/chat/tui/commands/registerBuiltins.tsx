@@ -1,6 +1,7 @@
-// Registers the slash commands the input palette surfaces.
+// The built-in slash command contributions, built from the surface's runtime
+// options and installed once at startup.
 
-import { Cause, Effect, Fiber } from 'effect';
+import { Effect } from 'effect';
 
 import type { SessionHandle } from '@agent/runtime';
 import type { GetModelSwitchDisabledReason } from '@cli/runtime/modelAccess';
@@ -12,54 +13,50 @@ import {
   parseChatLoginSlashArgs,
 } from '@cli/runtime/loginOptions';
 import type { ApiProvider } from '@model/apiProviders';
-import type { StateStore } from '@platform/interfaces';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import { type RunId } from '@shared/schemas';
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import { OWN_API_KEYS } from '@ui/copy/modelAccess';
-import { RESEARCHER_ACCESS_AUTH } from '@ui/copy/accountAuth';
-import { toErrorMessage } from '@utils/errors/errorMessage';
-import { collapseWhitespace } from '@utils/text/stringUtils';
 
 import {
   AccountAccessForm,
   type AccountAccessFormValue,
 } from '../forms/AccountAccessForm';
 import { AgentListForm } from '../forms/AgentListForm';
-import { ApprovalPolicyForm } from '../forms/ApprovalPolicyForm';
+import {
+  ApprovalPolicyForm,
+  type ApprovalFormValue,
+} from '../forms/ApprovalPolicyForm';
 import { CliConfigForm } from '../forms/CliConfigForm';
 import { MemoryListForm } from '../forms/MemoryListForm';
 import { EnabledModelsForm } from '../forms/EnabledModelsForm';
-import { GoalModeForm } from '../forms/GoalModeForm';
 import { ModelListForm } from '../forms/ModelListForm';
 import { ProviderApiKeyForm } from '../forms/ProviderApiKeyForm';
 import { ResumeListForm } from '../forms/ResumeListForm';
 import { SkillsListForm, type SkillActivation } from '../forms/SkillsListForm';
-import { ToolsListForm } from '../forms/ToolsListForm';
 import {
-  formProgress,
   goalAutoApproveAll,
   patchSessionMeta,
+  selectedRunId,
   sessionMeta,
   setTransientNotice,
   setCliSessionModelOverride,
 } from '../state/cliState';
+import { currentView, runViewOf } from '../state/sessionView';
 import { appendLocalAssistantTranscript } from '../state/transcript';
 import {
   applyCliModelSelection,
   applyInitialCliAgentSelection,
 } from './handlers/agentModelCommands';
 import {
-  applyCliModelAccessInput,
   applyCliModelAccessSelection,
   applyCliProviderApiKey,
-  showCliAuthStatus,
+  showCliAccountStatus,
 } from './handlers/modelAccessCommands';
 import {
   applyCliApprovalPolicySelection,
-  YOLO_USAGE,
+  setCliRunBypass,
 } from './handlers/approvalCommand';
 import {
   loginFromChat,
@@ -69,7 +66,6 @@ import {
 import {
   type SlashCommandEffect,
   type SlashCommandOutput,
-  transcriptSlashCommandOutput,
 } from './handlers/slashContext';
 import {
   showCliMemoryList,
@@ -77,12 +73,16 @@ import {
 } from './handlers/memoryCommands';
 import {
   requestCliSessionCompaction,
-  showCliGoalModeHelp,
   showCliSessionStatus,
   showCliSlashCommandHelp,
   showCliWorkPlan,
 } from './handlers/sessionCommands';
-import { registerSlashCommand, type SlashFormProps } from './slashRegistry';
+import { type ErrorHandler, formSelectionHandler } from './formSelection';
+import {
+  installSlashCommands,
+  type SlashCommandContribution,
+  type SlashFormProps,
+} from './slashRegistry';
 import { openCliSlashCommandForm } from './slashForms';
 
 type SelectHandler<T> = (value: T) => SlashCommandEffect;
@@ -95,179 +95,12 @@ type FormActionHandler<T> = (
 type ApiKeySaveHandler = (
   provider: ApiProvider,
   key: string,
-) => Effect.Effect<string | void, unknown>;
-type ErrorHandler = (error: unknown) => void;
-type SelectionCompletion = 'afterAction' | 'beforeAction' | 'busy';
+) => Effect.Effect<string | void, Error>;
 
-/** Build a form selection handler with consistent completion and errors. */
-function formSelectionHandler<T>({
-  runtime,
-  action,
-  onDone,
-  onError,
-  onPersist,
-  echoOnPersist = false,
-  completion = 'afterAction',
-  busyTitle,
-}: {
-  readonly runtime: ProcessRuntime;
-  readonly action: (value: T, output: SlashCommandOutput) => SlashCommandEffect;
-  readonly onDone: (value: T) => void;
-  readonly onError?: ErrorHandler;
-  readonly onPersist?: () => void;
-  readonly echoOnPersist?: boolean;
-  readonly completion?: SelectionCompletion;
-  readonly busyTitle?: (value: T) => string;
-}): (value: T) => void {
-  // Every host's error hook writes to its transcript and returns; reporting
-  // is a step of the failure path, not a wait inside it.
-  const reportError = (error: unknown): Effect.Effect<void> =>
-    Effect.sync(() => {
-      onError?.(error);
-    });
-  return (value) => {
-    if (completion === 'busy') {
-      // The submission token is the single owner of "is this submission still
-      // live": resetCliState clears `formProgress`, so a stale token can never
-      // match the current progress.
-      const token = Symbol('form submission');
-      const currentProgress = () => {
-        const current = formProgress.get();
-        return current?.token === token ? current : undefined;
-      };
-      const close = (): void => {
-        if (!currentProgress()) return;
-        formProgress.set(undefined);
-        onDone(value);
-      };
-      // The running submission IS the forked fiber below, so Escape
-      // interrupts it instead of detaching from a promise that keeps running.
-      const cancel = (): void => {
-        if (!currentProgress()) return;
-        runtime.runFork(Fiber.interrupt(actionFiber));
-        formProgress.set(undefined);
-        onDone(value);
-      };
-      const title = busyTitle?.(value) ?? 'Working';
-      const archiveCopyable = (): void => {
-        const current = currentProgress();
-        if (!current?.copyableMessage || current.copyableMessageArchived) {
-          return;
-        }
-        if (echoOnPersist) onPersist?.();
-        appendLocalAssistantTranscript(current.copyableMessage);
-        formProgress.set({
-          ...current,
-          message: 'Authentication instructions were written to scrollback.',
-          copyableMessageArchived: true,
-        });
-      };
-      formProgress.set({
-        token,
-        status: 'running',
-        title,
-        archiveCopyable,
-        cancel,
-        dismiss: close,
-      });
-
-      const output: SlashCommandOutput = {
-        appendOutcome: (message) => {
-          if (!currentProgress()) return;
-          if (echoOnPersist) onPersist?.();
-          appendLocalAssistantTranscript(message);
-          const current = currentProgress();
-          if (current) formProgress.set({ ...current, message });
-        },
-        setNotice: (message) => {
-          if (currentProgress()) setTransientNotice(message);
-        },
-        writeProgress: (message, options) => {
-          const current = currentProgress();
-          if (!current) return;
-          formProgress.set({
-            ...current,
-            message,
-            ...(options?.copyable
-              ? { copyableMessage: message, copyableMessageArchived: false }
-              : {}),
-          });
-        },
-      };
-
-      const actionFiber = runtime.runFork(
-        Effect.suspend(() => action(value, output)).pipe(
-          Effect.matchCauseEffect({
-            onSuccess: () =>
-              Effect.sync(() => {
-                const current = currentProgress();
-                if (!current) return;
-                if (current.copyableMessage) {
-                  formProgress.set({ ...current, status: 'succeeded' });
-                } else {
-                  close();
-                }
-              }),
-            onFailure: (cause) =>
-              Effect.gen(function* () {
-                let current = currentProgress();
-                if (!current) return;
-                if (echoOnPersist) onPersist?.();
-                const error = Cause.squash(cause);
-                const errorMessage = toErrorMessage(error);
-                const copyableMessage = current.copyableMessage;
-                yield* reportError(
-                  copyableMessage
-                    ? new Error(
-                        `${collapseWhitespace(errorMessage)} · ${collapseWhitespace(
-                          copyableMessage,
-                        )}`,
-                      )
-                    : error,
-                );
-                current = currentProgress();
-                if (!current) return;
-                if (current.copyableMessage) {
-                  formProgress.set({
-                    ...current,
-                    status: 'failed',
-                    message: errorMessage,
-                  });
-                } else {
-                  close();
-                }
-              }),
-          }),
-        ),
-      );
-      return;
-    }
-
-    if (echoOnPersist) onPersist?.();
-    if (completion === 'beforeAction') {
-      onDone(value);
-    }
-
-    runtime.runFork(
-      Effect.suspend(() => action(value, transcriptSlashCommandOutput)).pipe(
-        Effect.catchCause((cause) =>
-          Effect.suspend(() => {
-            if (!echoOnPersist) onPersist?.();
-            return reportError(Cause.squash(cause));
-          }),
-        ),
-        Effect.ensuring(
-          Effect.sync(() => {
-            if (completion === 'afterAction') {
-              onDone(value);
-            }
-          }),
-        ),
-      ),
-    );
-  };
-}
-
+/**
+ * Build the built-in contributions from the surface's runtime options and
+ * install them, replacing the installed slash command table.
+ */
 export function registerBuiltinSlashCommands(options: {
   /**
    * The process secret store and the three setting slots the built-in forms and handlers
@@ -342,10 +175,13 @@ export function registerBuiltinSlashCommands(options: {
           // Picking the root agent and the root model is a single up-front
           // choice before the first message, so chain straight into the model
           // picker instead of closing — but only while still choosing the root
-          // and model selection is available.
+          // and model selection is available. The agent form closes first:
+          // `takeActiveForm` requeues what it displaces, and a finished pick
+          // must not come back when the model picker closes.
           onDone:
             selectable && canSelectModel()
-              ? () => {
+              ? (value) => {
+                  props.onDone(value);
                   openCliSlashCommandForm('model', '');
                 }
               : props.onDone,
@@ -402,14 +238,56 @@ export function registerBuiltinSlashCommands(options: {
 
   function ApprovalPolicyFormAdapter(props: SlashFormProps): React.JSX.Element {
     const current = options.getApprovalPolicy?.() ?? 'ask';
+    // The run the status bar describes: its bypass badges are how a toggle
+    // here reads as applied.
+    const runId = runViewOf(currentView(), selectedRunId.get())?.id;
+    const bypasses =
+      runId === undefined
+        ? undefined
+        : currentView().policy.get(runId)?.bypasses;
+    const bypassState = (kind: 'bash' | 'toolEdit'): boolean | undefined =>
+      runId === undefined ? undefined : bypasses?.[kind] === true;
     return (
       <ApprovalPolicyForm
         availableRows={props.availableRows}
         currentPolicy={current}
-        onSelect={formSelectionHandler<TexraApprovalPolicy>({
+        toggles={{
+          bash: bypassState('bash'),
+          toolEdit: bypassState('toolEdit'),
+          goal: goalAutoApproveAll.get(),
+        }}
+        onSelect={formSelectionHandler<ApprovalFormValue>({
           runtime,
-          action: (value) =>
-            Effect.sync(() => options.onApprovalPolicySelect?.(value)),
+          action: (value) => {
+            switch (value) {
+              case 'goal':
+                return Effect.sync(() => {
+                  const enabled = !goalAutoApproveAll.get();
+                  goalAutoApproveAll.set(enabled);
+                  appendLocalAssistantTranscript(
+                    `Goal mode approves all work: ${enabled ? 'on' : 'off'}`,
+                  );
+                });
+              case 'bash':
+              case 'toolEdit':
+                return runId === undefined
+                  ? Effect.void
+                  : setCliRunBypass(
+                      options.runtimeSession,
+                      runId,
+                      value,
+                      !bypassState(value),
+                    );
+              case 'ask':
+              case 'never':
+              case 'yolo':
+                return Effect.sync(() =>
+                  options.onApprovalPolicySelect?.(value),
+                );
+              default:
+                return value satisfies never;
+            }
+          },
           onDone: props.onDone,
           onError: options.onError,
           completion: 'beforeAction',
@@ -417,20 +295,6 @@ export function registerBuiltinSlashCommands(options: {
           echoOnPersist: props.echoOnPersist,
         })}
         onCancel={() => props.onDone(undefined)}
-      />
-    );
-  }
-
-  function GoalModeFormAdapter(props: SlashFormProps): React.JSX.Element {
-    return (
-      <GoalModeForm
-        autoApproveAll={goalAutoApproveAll.get()}
-        availableRows={props.availableRows}
-        onToggle={(enabled) => {
-          goalAutoApproveAll.set(enabled);
-          props.onDone(enabled);
-        }}
-        onClose={() => props.onDone(undefined)}
       />
     );
   }
@@ -470,19 +334,6 @@ export function registerBuiltinSlashCommands(options: {
           onPersist: props.onPersist,
           echoOnPersist: props.echoOnPersist,
         })}
-        onClose={() => props.onDone(undefined)}
-      />
-    );
-  }
-
-  function ToolsListFormAdapter(props: SlashFormProps): React.JSX.Element {
-    return (
-      <ToolsListForm
-        state={stores.globalState}
-        runtime={runtime}
-        workspaceRoot={options.runtimeSession.roots.workspace}
-        config={options.runtimeSession.roots.config}
-        availableRows={props.availableRows}
         onClose={() => props.onDone(undefined)}
       />
     );
@@ -550,38 +401,6 @@ export function registerBuiltinSlashCommands(options: {
     (value: SkillActivation) => options.onSkillSelect?.(value) ?? Effect.void,
   );
 
-  registerSlashCommand({
-    name: 'help',
-    description: 'Show available slash commands',
-    category: 'session',
-    echo: 'never',
-    handler: () => Effect.sync(showCliSlashCommandHelp),
-  });
-  registerSlashCommand({
-    name: 'clear',
-    description: 'Start a fresh chat session',
-    category: 'session',
-    echo: 'ifPersists',
-    handler: (_remainder, context) => Effect.sync(() => context.resetSession()),
-  });
-  registerSlashCommand({
-    name: 'agent',
-    description: 'List or choose the root agent',
-    aliases: ['agents'],
-    category: 'configuration',
-    echo: 'ifPersists',
-    handler: (remainder, context) =>
-      applyInitialCliAgentSelection(remainder, context),
-    formComponent: AgentListFormAdapter,
-  });
-  registerSlashCommand({
-    name: 'model',
-    description: 'Choose the model for this chat',
-    category: 'configuration',
-    echo: 'ifPersists',
-    handler: applyCliModelSelection,
-    formComponent: ModelListFormAdapter,
-  });
   const EnabledModelsFormAdapter = (
     props: SlashFormProps,
   ): React.JSX.Element => (
@@ -592,167 +411,10 @@ export function registerBuiltinSlashCommands(options: {
       onClose={() => props.onDone(undefined)}
     />
   );
-  registerSlashCommand({
-    name: 'models',
-    description: 'Enable or disable models in pickers',
-    category: 'configuration',
-    echo: 'never',
-    formComponent: EnabledModelsFormAdapter,
-  });
-  registerSlashCommand({
-    name: 'api',
-    description: `Sign in, choose ChatGPT, Grok, Kimi Code, GLM, or ${OWN_API_KEYS.inline}`,
-    category: 'account',
-    echo: 'ifPersists',
-    handler: (remainder, context) =>
-      applyCliModelAccessInput(stores, remainder, context),
-    formComponent: AccountAccessFormAdapter,
-  });
-  registerSlashCommand({
-    name: 'key',
-    description: 'Add a provider API key with masked input',
-    aliases: ['keys'],
-    category: 'configuration',
-    echo: 'never',
-    // A remainder never reaches the form: it could be the key itself, so it is
-    // refused and dropped rather than pre-filled.
-    handler: (remainder) =>
-      Effect.sync(() => {
-        if (remainder) {
-          setTransientNotice(
-            'For safety, `/key` does not accept a key as an argument. Enter it in the masked form.',
-          );
-        }
-        openCliSlashCommandForm('key', '');
-      }),
-    formComponent: ProviderApiKeyFormAdapter,
-    formEscapeAction: 'close',
-    redactInput: true,
-  });
-  registerSlashCommand({
-    name: 'auth',
-    description: 'Show signed-in accounts and active model access',
-    category: 'account',
-    echo: 'ifPersists',
-    handler: () => showCliAuthStatus(stores, secrets),
-  });
-  registerSlashCommand({
-    name: 'login',
-    description: RESEARCHER_ACCESS_AUTH.slashLoginDescription,
-    category: 'account',
-    // The form can complete a sign-out or a preference toggle too, so the
-    // typed command is not an accurate transcript row; outcomes are written
-    // by loginFromChat itself.
-    echo: 'never',
-    handler: (remainder, context) =>
-      loginFromChat(remainder, stores, runtime, context.cliContext),
-    formComponent: AccountAccessFormAdapter,
-  });
-  registerSlashCommand({
-    name: 'logout',
-    description: 'Sign out of one account or all accounts',
-    category: 'account',
-    // Same merged-form mismatch as /login: the typed command does not
-    // describe what the form actually did.
-    echo: 'never',
-    handler: (remainder) => logoutFromChat(remainder, stores, secrets),
-    formComponent: AccountAccessFormAdapter,
-  });
-  registerSlashCommand({
-    name: 'approval',
-    description: 'Switch approval policy',
-    category: 'configuration',
-    echo: 'ifPersists',
-    handler: (remainder, context) =>
-      Effect.sync(() => applyCliApprovalPolicySelection(remainder, context)),
-    formRemainders: ['status'],
-    formComponent: ApprovalPolicyFormAdapter,
-    formEscapeAction: 'cancel',
-  });
-  registerSlashCommand({
-    name: 'yolo',
-    description: 'Auto-approve privileged actions',
-    category: 'configuration',
-    echo: 'ifPersists',
-    handler: (remainder, context) =>
-      Effect.sync(() =>
-        applyCliApprovalPolicySelection(
-          remainder || 'yolo',
-          context,
-          YOLO_USAGE,
-        ),
-      ),
-  });
-  registerSlashCommand({
-    name: 'status',
-    description: 'Show session details',
-    category: 'session',
-    echo: 'ifPersists',
-    handler: (_remainder, context) => showCliSessionStatus(context),
-  });
-  registerSlashCommand({
-    name: 'plan',
-    description: 'Read the focused session work plan',
-    category: 'session',
-    echo: 'never',
-    handler: () => Effect.sync(() => showCliWorkPlan(options.runtimeSession)),
-  });
-  registerSlashCommand({
-    name: 'goal',
-    description: 'Configure autonomous goal mode',
-    aliases: ['goals'],
-    category: 'session',
-    echo: 'never',
-    handler: () => Effect.sync(showCliGoalModeHelp),
-    formComponent: GoalModeFormAdapter,
-  });
-  registerSlashCommand({
-    name: 'resume',
-    description: 'Resume a previous session',
-    category: 'session',
-    echo: 'ifPersists',
-    handler: (remainder, context) =>
-      Effect.gen(function* () {
-        const id = parseCliHistoryId(remainder);
-        if (!id)
-          return yield* Effect.fail(new Error(`Invalid run id: ${remainder}`));
-        yield* context.resumeRun(id);
-      }),
-    formComponent: ResumeListFormAdapter,
-  });
-  registerSlashCommand({
-    name: 'memory',
-    description: 'List stored memories',
-    category: 'configuration',
-    echo: 'never',
-    handler: (remainder) =>
-      Effect.suspend(() => {
-        const roots = options.runtimeSession.roots;
-        return remainder.toLowerCase() === 'list'
-          ? showCliMemoryList(roots)
-          : showCliMemoryPreview(roots, remainder);
-      }),
-    formComponent: MemoryListFormAdapter,
-  });
-  registerSlashCommand({
-    name: 'skills',
-    description: 'List skills or activate one',
-    aliases: ['skill'],
-    category: 'configuration',
-    echo: 'never',
-    formComponent: SkillsListFormAdapter,
-  });
-  registerSlashCommand({
-    name: 'tools',
-    description: 'List or toggle external integrations',
-    category: 'configuration',
-    echo: 'never',
-    formComponent: ToolsListFormAdapter,
-  });
-  // Only offer /config when the host wired the stores it reads/writes — a
-  // command that can't reach a store would render an inert panel.
-  const configStores = options.configStores;
-  if (configStores) {
+
+  function configContribution(
+    configStores: SettingsStores,
+  ): SlashCommandContribution {
     const ConfigFormAdapter = (props: SlashFormProps): React.JSX.Element => {
       return (
         <CliConfigForm
@@ -761,11 +423,11 @@ export function registerBuiltinSlashCommands(options: {
           runtime={runtime}
           workspaceRoot={options.runtimeSession.roots.workspace}
           availableRows={props.availableRows}
-          // Same hook `/approval` drives, so the approval-policy row updates the
-          // live session and the status bar from whichever surface set it —
-          // including its "Approval mode: …" transcript line, which is the
-          // confirmation that the change reached the running session and not
-          // just the config file.
+          // Same hook `/approval` drives, so the approval-policy row updates
+          // the live session and the status bar from whichever surface set
+          // it — including its "Approval mode: …" transcript line, which is
+          // the confirmation that the change reached the running session and
+          // not just the config file.
           onApprovalPolicyChanged={options.onApprovalPolicySelect}
           onClose={() => props.onDone(undefined)}
           onError={async (error) => {
@@ -775,41 +437,228 @@ export function registerBuiltinSlashCommands(options: {
         />
       );
     };
-    registerSlashCommand({
-      name: 'config',
-      description: 'View and toggle settings',
-      aliases: ['settings'],
-      category: 'configuration',
-      echo: 'never',
-      formComponent: ConfigFormAdapter,
-      formEscapeAction: 'close',
-    });
+    return {
+      pluginId: 'config',
+      commands: [
+        {
+          name: 'config',
+          description: 'View and toggle settings',
+          aliases: ['settings'],
+          category: 'configuration',
+          echo: 'never',
+          formComponent: ConfigFormAdapter,
+        },
+      ],
+    };
   }
-  registerSlashCommand({
-    name: 'compact',
-    description: 'Request context compaction',
-    category: 'session',
-    echo: 'ifPersists',
-    handler: () => requestCliSessionCompaction(options.runtimeSession),
-  });
-  registerSlashCommand({
-    name: 'exit',
-    description: 'Exit the CLI session',
-    aliases: ['quit'],
-    category: 'session',
-    echo: 'never',
-    handler: (_remainder, context) =>
-      Effect.sync(() => {
-        // Deliberately does NOT interrupt: the graceful teardown owns that
-        // policy and skips the interrupt for a resumable-idle root, so `/exit`
-        // agrees with Ctrl-C by construction instead of pre-empting it.
-        //
-        // `stopRequested` stays and is the sole writer on this path. The
-        // teardown awaits the follow-up queue's `idle` BEFORE setting the flag
-        // itself, and the queued task polls this flag — dropping it would hang
-        // `/exit` forever with a follow-up queued and no stream id yet.
-        context.session.stopRequested = true;
-        context.requestInputExit();
-      }),
-  });
+
+  // The contributions' order is the palette's and `/help`'s order.
+  installSlashCommands([
+    {
+      pluginId: 'chat-basics',
+      commands: [
+        {
+          name: 'help',
+          description: 'Show available slash commands',
+          category: 'session',
+          echo: 'never',
+          handler: () => Effect.sync(showCliSlashCommandHelp),
+        },
+        {
+          name: 'clear',
+          description: 'Start a fresh chat session',
+          category: 'session',
+          echo: 'ifPersists',
+          handler: (_remainder, context) =>
+            Effect.sync(() => context.resetSession()),
+        },
+      ],
+    },
+    {
+      pluginId: 'agent-model',
+      commands: [
+        {
+          name: 'agent',
+          description: 'List or choose the root agent',
+          aliases: ['agents'],
+          category: 'configuration',
+          echo: 'ifPersists',
+          handler: (remainder, context) =>
+            applyInitialCliAgentSelection(remainder, context),
+          formComponent: AgentListFormAdapter,
+        },
+        {
+          name: 'model',
+          description: 'Choose the model for this chat',
+          category: 'configuration',
+          echo: 'ifPersists',
+          handler: applyCliModelSelection,
+          formComponent: ModelListFormAdapter,
+        },
+        {
+          name: 'models',
+          description: 'Enable or disable models in pickers',
+          category: 'configuration',
+          echo: 'never',
+          formComponent: EnabledModelsFormAdapter,
+        },
+      ],
+    },
+    {
+      pluginId: 'model-access',
+      commands: [
+        {
+          name: 'key',
+          description: 'Add a provider API key with masked input',
+          aliases: ['keys'],
+          category: 'account',
+          echo: 'never',
+          // A remainder never reaches the form: it could be the key itself,
+          // so it is refused and dropped rather than pre-filled.
+          handler: (remainder) =>
+            Effect.sync(() => {
+              if (remainder) {
+                setTransientNotice(
+                  'For safety, `/key` does not accept a key as an argument. Enter it in the masked form.',
+                );
+              }
+              openCliSlashCommandForm('key', '');
+            }),
+          formComponent: ProviderApiKeyFormAdapter,
+          redactInput: true,
+        },
+        {
+          name: 'login',
+          description: 'Sign in or out, and choose subscriptions or API keys',
+          category: 'account',
+          // One form owns sign-in, sign-out, and subscription preferences, so
+          // the typed command is not an accurate transcript row; outcomes are
+          // written by the form's handlers.
+          echo: 'never',
+          handler: (remainder, context) =>
+            remainder.trim().toLowerCase() === 'status'
+              ? showCliAccountStatus(stores, secrets)
+              : loginFromChat(remainder, stores, runtime, context.cliContext),
+          formComponent: AccountAccessFormAdapter,
+        },
+      ],
+    },
+    {
+      pluginId: 'approval',
+      commands: [
+        {
+          name: 'approval',
+          description: 'Set the approval policy and auto-approvals',
+          category: 'configuration',
+          echo: 'ifPersists',
+          handler: (remainder, context) =>
+            Effect.sync(() =>
+              applyCliApprovalPolicySelection(remainder, context),
+            ),
+          formRemainders: ['status'],
+          formComponent: ApprovalPolicyFormAdapter,
+        },
+      ],
+    },
+    {
+      pluginId: 'session-info',
+      commands: [
+        {
+          name: 'status',
+          description: 'Show session details',
+          category: 'session',
+          echo: 'ifPersists',
+          handler: (_remainder, context) => showCliSessionStatus(context),
+        },
+        {
+          name: 'plan',
+          description: 'Read the focused session work plan',
+          category: 'session',
+          echo: 'never',
+          handler: () =>
+            Effect.sync(() => showCliWorkPlan(options.runtimeSession)),
+        },
+        {
+          name: 'resume',
+          description: 'Resume a previous session',
+          category: 'session',
+          echo: 'ifPersists',
+          handler: (remainder, context) =>
+            Effect.gen(function* () {
+              const id = parseCliHistoryId(remainder);
+              if (!id)
+                return yield* Effect.fail(
+                  new Error(`Invalid run id: ${remainder}`),
+                );
+              yield* context.resumeRun(id);
+            }),
+          formComponent: ResumeListFormAdapter,
+        },
+      ],
+    },
+    {
+      pluginId: 'workspace',
+      commands: [
+        {
+          name: 'memory',
+          description: 'List stored memories',
+          category: 'configuration',
+          echo: 'never',
+          handler: (remainder) =>
+            Effect.suspend(() => {
+              const roots = options.runtimeSession.roots;
+              return remainder.toLowerCase() === 'list'
+                ? showCliMemoryList(roots)
+                : showCliMemoryPreview(roots, remainder);
+            }),
+          formComponent: MemoryListFormAdapter,
+        },
+        {
+          name: 'skills',
+          description: 'List skills or activate one',
+          aliases: ['skill'],
+          category: 'configuration',
+          echo: 'never',
+          formComponent: SkillsListFormAdapter,
+        },
+      ],
+    },
+    // Only offer /config when the host wired the stores it reads/writes — a
+    // command that can't reach a store would render an inert panel.
+    ...(options.configStores ? [configContribution(options.configStores)] : []),
+    {
+      pluginId: 'session-lifecycle',
+      commands: [
+        {
+          name: 'compact',
+          description: 'Request context compaction',
+          category: 'session',
+          echo: 'ifPersists',
+          handler: () => requestCliSessionCompaction(options.runtimeSession),
+        },
+        {
+          name: 'exit',
+          description: 'Exit the CLI session',
+          aliases: ['quit'],
+          category: 'session',
+          echo: 'never',
+          handler: (_remainder, context) =>
+            Effect.sync(() => {
+              // Deliberately does NOT interrupt: the graceful teardown owns
+              // that policy and skips the interrupt for a resumable-idle root,
+              // so `/exit` agrees with Ctrl-C by construction instead of
+              // pre-empting it.
+              //
+              // `stopRequested` stays and is the sole writer on this path. The
+              // teardown awaits the follow-up queue's `idle` BEFORE setting the
+              // flag itself, and the queued task polls this flag — dropping it
+              // would hang `/exit` forever with a follow-up queued and no
+              // stream id yet.
+              context.session.stopRequested = true;
+              context.requestInputExit();
+            }),
+        },
+      ],
+    },
+  ]);
 }

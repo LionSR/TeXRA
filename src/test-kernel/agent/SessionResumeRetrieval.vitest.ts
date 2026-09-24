@@ -64,7 +64,7 @@ function toolUseSnapshot(
   return {
     family: 'toolUse',
     runtime: runtimeOf(modelId, compatibilityKey),
-    state: { shouldSkipCycle: false, stateSlices: null },
+    state: { stateSlices: null, offeredTools: [], toolsetHash: '0'.repeat(64) },
   };
 }
 
@@ -73,14 +73,8 @@ function reflectionSnapshot(modelId: string): FlowSnapshotPayload {
     family: 'reflection',
     runtime: runtimeOf(modelId, COMPATIBILITY_KEY),
     state: {
-      currentRound: 1,
       totalRounds: 2,
       workspaceSnapshot: AgentWorkspaceState.create().toSnapshot(),
-      outputLocation: null,
-      runStateSnapshot: { totalRounds: 2, totalResponseTimeMs: 0 },
-      roundOutputs: [],
-      continueRounds: true,
-      endTurn: false,
     },
   };
 }

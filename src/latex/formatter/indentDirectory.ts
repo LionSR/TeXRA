@@ -3,7 +3,6 @@ import * as path from 'node:path';
 import { Effect, FileSystem, Path, PlatformError } from 'effect';
 
 import { withLogChannel } from '@logger/effectLog';
-import { createLog } from '@logger/logUtils';
 import { EXCLUDED_DIRS } from '@shared/constants/latexTiming';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { readDirectoryTypedTolerant } from '@utils/files/fsDurability';
@@ -12,8 +11,6 @@ import { hasExtension } from '@utils/core/pathCore';
 
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from '../latexLogging';
 import type { LatexFormatter } from './texFormatter';
-
-const log = createLog(CHANNEL);
 
 export type IndentLatexResult =
   | {
@@ -158,12 +155,18 @@ export const indentLatexFilesInDirectory = Effect.fn(
     : path.resolve(workspaceRoot ?? '.', directory);
 
   return yield* walkDirectory(absoluteDirectory).pipe(
-    Effect.map((): IndentLatexResult => {
-      log.info(
+    Effect.andThen(() =>
+      Effect.logInfo(
         `${indentedCount} .tex files have been formatted in ${directory}`,
-      );
-      return { status: 'formatted', directory, count: indentedCount };
-    }),
+      ).pipe(
+        withLogChannel(CHANNEL),
+        Effect.as<IndentLatexResult>({
+          status: 'formatted',
+          directory,
+          count: indentedCount,
+        }),
+      ),
+    ),
     Effect.catch((err) =>
       Effect.logError(
         `Error during indentation process: ${toErrorMessage(err)}`,

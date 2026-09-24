@@ -3,7 +3,7 @@ import { LRUCache } from 'lru-cache';
 
 import { settleFailure } from '@auth/authProgram';
 import { codexCoordinator, CodexAuthError } from '@auth/codex';
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import { exposeApiKey, lookupApiKey } from '@model/apiProviders';
 import type { PlatformSecrets, SecretsFailed } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
@@ -30,7 +30,7 @@ import {
 } from './subscriptionUsageParsing';
 import type { HttpClient } from 'effect/unstable/http';
 
-const log = createLog('SubscriptionUsage');
+const CHANNEL = 'SubscriptionUsage';
 
 const CACHE_TTL_MS = 30_000;
 const DEFAULT_REQUEST_TIMEOUT_MS = 15_000;
@@ -46,18 +46,14 @@ function mapCodingPlanSubscriptions(
   ) as Record<CodingPlanUsageProvider, string>;
 }
 
-const CODING_PLAN_PROVIDER_NAMES = mapCodingPlanSubscriptions('credentialName');
-
-const CODING_PLAN_DEFAULT_NAMES = mapCodingPlanSubscriptions('displayName');
-
 const PROVIDER_NAMES: Record<SubscriptionUsageProvider, string> = {
   chatgpt: 'ChatGPT',
-  ...CODING_PLAN_PROVIDER_NAMES,
+  ...mapCodingPlanSubscriptions('credentialName'),
 };
 
 const DEFAULT_PLAN_NAMES: Record<SubscriptionUsageProvider, string> = {
   chatgpt: 'ChatGPT Coding Plan',
-  ...CODING_PLAN_DEFAULT_NAMES,
+  ...mapCodingPlanSubscriptions('displayName'),
 };
 
 /** The credential stores this service reads, plus the two test-only clocks. */
@@ -76,12 +72,12 @@ type SubscriptionUsageUnavailableReason = Extract<
 
 interface SubscriptionUsageAdapter {
   /** Credential-derived request variant (today: the GLM region flag). */
-  readonly resolveVariant?: () => Effect.Effect<boolean, unknown>;
+  readonly resolveVariant?: () => Effect.Effect<boolean, Error>;
   readonly fetch: (
     variant: boolean | undefined,
   ) => Effect.Effect<
     ParsedSubscriptionUsage | null,
-    unknown,
+    Error,
     HttpClient.HttpClient
   >;
 }
@@ -215,16 +211,18 @@ export class SubscriptionUsageService {
     const adapter = this.adapters[provider];
     return Effect.matchCauseEffect(
       Effect.suspend(
-        (): Effect.Effect<boolean | undefined, unknown> =>
+        (): Effect.Effect<boolean | undefined, Error> =>
           adapter.resolveVariant?.() ?? Effect.succeed(undefined),
       ),
       {
         onFailure: (cause) =>
-          Effect.sync(() => {
+          Effect.gen({ self: this }, function* () {
             const error = settleFailure(cause);
-            log.warn(
+            yield* Effect.logWarning(
               `Subscription usage variant probe failed for ${provider}: ${toErrorMessage(error)}`,
-              { data: error },
+            ).pipe(
+              Effect.annotateLogs({ data: error }),
+              withLogChannel(CHANNEL),
             );
             return this.unavailable(provider, 'request_failed');
           }),
@@ -352,16 +350,15 @@ export class SubscriptionUsageService {
         return this.available(provider, parsed);
       }),
       Effect.catchCause((cause) =>
-        Effect.sync(() => {
+        Effect.gen({ self: this }, function* () {
           // The reason a failed fetch maps to, most specific cause first. The
           // failure classes are disjoint, so at most one of these checks
           // holds. The reason alone cannot tell a routine refusal from an
           // unexpected fault, so the cause is named once here.
           const error = settleFailure(cause);
-          log.warn(
+          yield* Effect.logWarning(
             `Subscription usage fetch failed for ${provider}: ${toErrorMessage(error)}`,
-            { data: error },
-          );
+          ).pipe(Effect.annotateLogs({ data: error }), withLogChannel(CHANNEL));
           const invalidCredentials =
             (error instanceof CodexAuthError && error.needsReauth) ||
             (error instanceof SubscriptionUsageHttpError &&

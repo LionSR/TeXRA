@@ -8,7 +8,7 @@ import { Data, Effect, Option } from 'effect';
 import { withLogChannel } from '@logger/effectLog';
 import { StorageFs } from '@platform/rootedFs';
 import { THREE_DAYS_MS } from '@utils/config/constants';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local imports - filesystem
 import { PASTED_DIR, isPastedImage } from './pastedImageName';
@@ -119,7 +119,7 @@ export const savePastedImageBuffer = Effect.fn(
   const storageFs = yield* StorageFs;
   const relativePath = yield* Effect.try({
     try: () => path.join(PASTED_DIR, pastedImageFileName(fileName)),
-    catch: (cause) => cause,
+    catch: ensureError,
   });
   yield* storageFs.makeDirectory(PASTED_DIR, { recursive: true });
   yield* storageFs.writeFile(relativePath, data);

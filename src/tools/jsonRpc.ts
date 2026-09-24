@@ -1,0 +1,390 @@
+/**
+ * JSON-RPC 2.0 over a byte stream and a byte sink, in one of two framings:
+ * LSP's `Content-Length: <n>\r\n\r\n<json>` (the Lean language server) or
+ * one message per line (an MCP server's stdio transport).
+ *
+ * Inbound bytes run through the frame decoder (`Stream.mapAccumEffect` over a
+ * byte buffer) and are routed: responses complete the `Deferred` registered
+ * per request id, notifications go to the owner's handler, and a request the
+ * peer sends us is answered by the owner's `onRequest` or refused with
+ * `MethodNotFound`. Outbound frames are queued to the sink by a writer
+ * fiber. Both fibers live in the connection's scope.
+ *
+ * The connection has one terminal state: `close(reason)` fails every pending
+ * request with {@link JsonRpcConnectionDisposed} carrying that reason, drops
+ * later notifications, and refuses later requests. The scope's finalizer
+ * closes with a generic reason; a writer failure (the peer's stdin is gone)
+ * closes with the failure; the owner closes with the peer's end when it
+ * knows it. Ending of the input stream alone does not close: the owner sees
+ * the process end right after and closes with the better reason.
+ */
+
+import { Buffer } from 'node:buffer';
+
+import {
+  type Cause,
+  Data,
+  Deferred,
+  Effect,
+  Queue,
+  Ref,
+  type Sink,
+  Stream,
+} from 'effect';
+
+import { withLogChannel } from '@logger/effectLog';
+import { toErrorMessage } from '@utils/errors/errorMessage';
+
+const CHANNEL = 'JsonRpcConnection';
+
+const METHOD_NOT_FOUND = -32601;
+
+/** The connection was closed; `message` is the closer's reason. */
+export class JsonRpcConnectionDisposed extends Data.TaggedError(
+  'JsonRpcConnectionDisposed',
+)<{ readonly message: string }> {}
+
+/**
+ * The peer answered a request with a JSON-RPC error. `code` is the JSON-RPC
+ * error code the peer sent.
+ */
+export class JsonRpcRequestError extends Data.TaggedError(
+  'JsonRpcRequestError',
+)<{
+  readonly method: string;
+  readonly message: string;
+  readonly code?: number;
+  readonly cause: unknown;
+}> {}
+
+/** The peer sent bytes that are not an LSP frame. Ends the reader. */
+class JsonRpcFrameError extends Data.TaggedError('JsonRpcFrameError')<{
+  readonly message: string;
+}> {}
+
+export interface JsonRpcConnection {
+  readonly request: <T>(
+    method: string,
+    params?: unknown,
+  ) => Effect.Effect<T, JsonRpcRequestError | JsonRpcConnectionDisposed>;
+  /** Send a notification; after `close` it is dropped. */
+  readonly notify: (method: string, params?: unknown) => Effect.Effect<void>;
+  /** Fail every pending request with `reason` and refuse later ones. Idempotent. */
+  readonly close: (reason: string) => Effect.Effect<void>;
+}
+
+interface JsonRpcConnectionOptions {
+  /** The peer's output: bytes we decode. */
+  readonly input: Stream.Stream<Uint8Array, Error>;
+  /** The peer's input: bytes we encode. */
+  readonly output: Sink.Sink<void, Uint8Array, never, Error>;
+  readonly onNotification: (
+    method: string,
+    params: unknown,
+  ) => Effect.Effect<void>;
+  /**
+   * `'content-length'` (the default): LSP frames. `'newline'`: one JSON
+   * message per line, no embedded newlines (MCP stdio).
+   */
+  readonly framing?: 'content-length' | 'newline';
+  /**
+   * The result of a request the peer sends us, or `undefined` to refuse it
+   * with `MethodNotFound`.
+   */
+  readonly onRequest?: (
+    method: string,
+    params: unknown,
+  ) => Effect.Effect<unknown> | undefined;
+}
+
+type PendingError = JsonRpcRequestError | JsonRpcConnectionDisposed;
+
+interface PendingRequest {
+  readonly method: string;
+  readonly deferred: Deferred.Deferred<unknown, PendingError>;
+}
+
+interface JsonRpcMessage {
+  readonly id?: number | string | null;
+  readonly method?: string;
+  readonly params?: unknown;
+  readonly result?: unknown;
+  readonly error?: { code?: number; message?: string; data?: unknown };
+}
+
+const CONTENT_LENGTH = /Content-Length:\s*(\d+)/i;
+const HEADER_END = '\r\n\r\n';
+/** The longest line a newline-framed peer may send before the reader gives up. */
+const MAX_LINE_BYTES = 16 * 1024 * 1024;
+
+function encodeFrame(message: object): Uint8Array {
+  const body = Buffer.from(JSON.stringify(message), 'utf8');
+  return Buffer.concat([
+    Buffer.from(`Content-Length: ${body.length}${HEADER_END}`, 'ascii'),
+    body,
+  ]);
+}
+
+/** Split complete frames off the front of `buffer`, parsing their bodies. */
+const takeFrames = (
+  buffer: Buffer,
+): Effect.Effect<
+  readonly [rest: Buffer, messages: ReadonlyArray<JsonRpcMessage>],
+  JsonRpcFrameError
+> =>
+  Effect.gen(function* () {
+    const messages: JsonRpcMessage[] = [];
+    let rest = buffer;
+    for (;;) {
+      const headerEnd = rest.indexOf(HEADER_END);
+      if (headerEnd < 0) break;
+      const header = rest.subarray(0, headerEnd).toString('ascii');
+      const match = CONTENT_LENGTH.exec(header);
+      if (!match) {
+        return yield* new JsonRpcFrameError({
+          message: `Frame header without Content-Length: ${header}`,
+        });
+      }
+      const bodyStart = headerEnd + HEADER_END.length;
+      const bodyEnd = bodyStart + Number.parseInt(match[1]!, 10);
+      if (rest.length < bodyEnd) break;
+      messages.push(
+        yield* parseBody(rest.subarray(bodyStart, bodyEnd).toString('utf8')),
+      );
+      rest = rest.subarray(bodyEnd);
+    }
+    // Copy the tail so the consumed prefix is not retained by the slice.
+    return [Buffer.from(rest), messages] as const;
+  });
+
+function encodeLine(message: object): Uint8Array {
+  return Buffer.from(`${JSON.stringify(message)}\n`, 'utf8');
+}
+
+const parseBody = (
+  body: string,
+): Effect.Effect<JsonRpcMessage, JsonRpcFrameError> =>
+  Effect.try({
+    try: (): unknown => JSON.parse(body),
+    catch: (error) =>
+      new JsonRpcFrameError({
+        message: `Frame body is not JSON: ${toErrorMessage(error)}`,
+      }),
+  }).pipe(
+    Effect.flatMap((value) =>
+      typeof value === 'object' && value !== null && !Array.isArray(value)
+        ? Effect.succeed(value as JsonRpcMessage)
+        : Effect.fail(
+            new JsonRpcFrameError({
+              message: `Frame body is not a JSON-RPC object: ${body.slice(0, 200)}`,
+            }),
+          ),
+    ),
+  );
+
+/** Split complete lines off the front of `buffer`, parsing each non-blank one. */
+const takeLines = (
+  buffer: Buffer,
+): Effect.Effect<
+  readonly [rest: Buffer, messages: ReadonlyArray<JsonRpcMessage>],
+  JsonRpcFrameError
+> =>
+  Effect.gen(function* () {
+    const messages: JsonRpcMessage[] = [];
+    let rest = buffer;
+    for (;;) {
+      const end = rest.indexOf(0x0a);
+      if (end < 0) break;
+      const line = rest.subarray(0, end).toString('utf8').trim();
+      if (line) messages.push(yield* parseBody(line));
+      rest = rest.subarray(end + 1);
+    }
+    if (rest.length > MAX_LINE_BYTES) {
+      return yield* new JsonRpcFrameError({
+        message: `Message exceeds ${MAX_LINE_BYTES} bytes without a newline`,
+      });
+    }
+    return [Buffer.from(rest), messages] as const;
+  });
+
+export const makeJsonRpcConnection = Effect.fn('JsonRpc.make')(function* (
+  options: JsonRpcConnectionOptions,
+) {
+  const pending = yield* Ref.make<ReadonlyMap<number, PendingRequest>>(
+    new Map(),
+  );
+  const ids = yield* Ref.make(0);
+  const closedReason = yield* Ref.make<string | undefined>(undefined);
+  const outbound = yield* Queue.make<Uint8Array, Cause.Done>();
+  const newline = options.framing === 'newline';
+  const encode = newline ? encodeLine : encodeFrame;
+  const decode = newline ? takeLines : takeFrames;
+
+  const close = Effect.fn('JsonRpc.close')(function* (reason: string) {
+    const first = yield* Ref.modify(
+      closedReason,
+      (current) => [current === undefined, current ?? reason] as const,
+    );
+    if (!first) return;
+    yield* Queue.end(outbound);
+    const waiting = yield* Ref.getAndSet(pending, new Map());
+    for (const { deferred } of waiting.values()) {
+      yield* Deferred.fail(
+        deferred,
+        new JsonRpcConnectionDisposed({ message: reason }),
+      );
+    }
+  });
+
+  /** Queue a frame; a frame offered after the queue ended is dropped. */
+  const send = (message: object): Effect.Effect<void> =>
+    Effect.asVoid(Queue.offer(outbound, encode(message)));
+
+  const takePending = (id: number) =>
+    Ref.modify(pending, (map) => {
+      const entry = map.get(id);
+      if (!entry) return [undefined, map] as const;
+      const next = new Map(map);
+      next.delete(id);
+      return [entry, next] as const;
+    });
+
+  const dispatch = Effect.fn('JsonRpc.dispatch')(function* (
+    message: JsonRpcMessage,
+  ) {
+    if (message.method === undefined) {
+      if (typeof message.id !== 'number') {
+        yield* Effect.logDebug(
+          `Ignoring message without method or numeric id`,
+        ).pipe(withLogChannel(CHANNEL));
+        return;
+      }
+      const entry = yield* takePending(message.id);
+      if (!entry) {
+        yield* Effect.logDebug(
+          `Response for unknown request id ${message.id}`,
+        ).pipe(withLogChannel(CHANNEL));
+        return;
+      }
+      if (message.error) {
+        yield* Deferred.fail(
+          entry.deferred,
+          new JsonRpcRequestError({
+            method: entry.method,
+            message: message.error.message ?? 'JSON-RPC error',
+            code: message.error.code,
+            cause: message.error,
+          }),
+        );
+      } else {
+        yield* Deferred.succeed(entry.deferred, message.result);
+      }
+      return;
+    }
+    if (message.id != null) {
+      // A request from the peer: the owner's answer, else refused.
+      const answer = options.onRequest?.(message.method, message.params);
+      if (answer) {
+        yield* send({ jsonrpc: '2.0', id: message.id, result: yield* answer });
+        return;
+      }
+      yield* send({
+        jsonrpc: '2.0',
+        id: message.id,
+        error: {
+          code: METHOD_NOT_FOUND,
+          message: `Method not found: ${message.method}`,
+        },
+      });
+      return;
+    }
+    yield* options.onNotification(message.method, message.params);
+  });
+
+  yield* Effect.forkScoped(
+    Stream.fromQueue(outbound).pipe(
+      Stream.run(options.output),
+      Effect.catch((error) =>
+        Effect.gen(function* () {
+          if ((yield* Ref.get(closedReason)) === undefined) {
+            yield* Effect.logDebug(
+              `stdin write failed: ${toErrorMessage(error)}`,
+            ).pipe(withLogChannel(CHANNEL));
+          }
+          yield* close(`JSON-RPC output failed: ${toErrorMessage(error)}`);
+        }),
+      ),
+    ),
+  );
+  yield* Effect.forkScoped(
+    options.input.pipe(
+      Stream.mapAccumEffect(
+        (): Buffer => Buffer.alloc(0),
+        (buffer, chunk) => decode(Buffer.concat([buffer, chunk])),
+      ),
+      Stream.runForEach(dispatch),
+      Effect.catch((error) =>
+        Effect.gen(function* () {
+          if ((yield* Ref.get(closedReason)) === undefined) {
+            yield* Effect.logDebug(
+              `connection error: ${toErrorMessage(error)}`,
+            ).pipe(withLogChannel(CHANNEL));
+          }
+          yield* close(`JSON-RPC input failed: ${toErrorMessage(error)}`);
+        }),
+      ),
+    ),
+  );
+  // Registered after the fibers, so it runs before they are interrupted:
+  // every pending request is failed with a reason, never left to the
+  // interruption of its reader.
+  yield* Effect.addFinalizer(() => close('JsonRpcConnection disposed'));
+
+  const request = Effect.fn('JsonRpc.request')(function* <T>(
+    method: string,
+    params?: unknown,
+  ) {
+    const reason = yield* Ref.get(closedReason);
+    if (reason !== undefined) {
+      return yield* new JsonRpcConnectionDisposed({ message: reason });
+    }
+    const id = yield* Ref.updateAndGet(ids, (n) => n + 1);
+    const deferred = yield* Deferred.make<unknown, PendingError>();
+    yield* Ref.update(pending, (map) =>
+      new Map(map).set(id, { method, deferred }),
+    );
+    // `close` fails the table it drained, so a close that landed between the
+    // check above and this insert leaves this entry with nobody to fail it and
+    // no frame on the wire: re-read and fail it here rather than await forever.
+    const closedSince = yield* Ref.get(closedReason);
+    if (closedSince !== undefined) {
+      yield* takePending(id);
+      return yield* new JsonRpcConnectionDisposed({ message: closedSince });
+    }
+    yield* send({
+      jsonrpc: '2.0',
+      id,
+      method,
+      ...(params !== undefined && { params }),
+    });
+    const result = yield* Deferred.await(deferred).pipe(
+      Effect.onInterrupt(() => takePending(id)),
+    );
+    return result as T;
+  });
+
+  const notify = Effect.fn('JsonRpc.notify')(function* (
+    method: string,
+    params?: unknown,
+  ) {
+    if ((yield* Ref.get(closedReason)) !== undefined) return;
+    yield* send({
+      jsonrpc: '2.0',
+      method,
+      ...(params !== undefined && { params }),
+    });
+  });
+
+  const connection: JsonRpcConnection = { request, notify, close };
+  return connection;
+});

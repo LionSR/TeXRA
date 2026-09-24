@@ -250,11 +250,11 @@ function buildTeamOptions(plans: readonly TeamRunPlan[]): TeamOptionData[] {
 
 export function loadTeamOptions<T extends TeamCatalogAgent, R = never>(ports: {
   customPresetsRaw: unknown;
-  ensureCatalogLoaded: () => Effect.Effect<void, unknown, R>;
+  ensureCatalogLoaded: () => Effect.Effect<void, Error, R>;
   getAgents: (category: AgentCategory) => readonly T[];
   canAccessRemoteCatalog: () => Effect.Effect<boolean>;
-  refreshRemote: () => Effect.Effect<void, unknown, R>;
-}): Effect.Effect<TeamOptionData[], unknown, R> {
+  refreshRemote: () => Effect.Effect<void, Error, R>;
+}): Effect.Effect<TeamOptionData[], Error, R> {
   return Effect.gen(function* () {
     yield* ports.ensureCatalogLoaded();
     const presets = teamPresets(ports.customPresetsRaw);
@@ -295,16 +295,16 @@ export type TeamLaunchResolution =
 export function resolveTeamLaunch<T extends TeamCatalogAgent, R = never>(args: {
   teamId: string;
   customPresetsRaw: unknown;
-  ensureCatalogLoaded: () => Effect.Effect<void, unknown, R>;
+  ensureCatalogLoaded: () => Effect.Effect<void, Error, R>;
   getAgents: (category: AgentCategory) => readonly T[];
   canAccessRemoteCatalog: () => Effect.Effect<boolean>;
-  refreshRemote: () => Effect.Effect<void, unknown, R>;
+  refreshRemote: () => Effect.Effect<void, Error, R>;
   choose: (
     unavailableNames: readonly string[],
   ) => Effect.Effect<TeamAvailabilityChoice | undefined, TeamCatalogPortFailed>;
   signIn: () => Effect.Effect<boolean, SignInFailed>;
   providedChoice?: TeamAvailabilityChoice;
-}): Effect.Effect<TeamLaunchResolution, unknown, R> {
+}): Effect.Effect<TeamLaunchResolution, Error, R> {
   return Effect.gen(function* () {
     const preset = findTeamPreset(
       teamPresets(args.customPresetsRaw),
@@ -372,11 +372,11 @@ export function refreshRemoteCatalogForGaps<T, R = never>(
   replan: () => T,
   ports: {
     canAccessRemoteCatalog: () => Effect.Effect<boolean>;
-    refreshRemote: () => Effect.Effect<void, unknown, R>;
+    refreshRemote: () => Effect.Effect<void, Error, R>;
   },
 ): Effect.Effect<
   { value: T; remoteCatalogRefreshAttempted: boolean },
-  unknown,
+  Error,
   R
 > {
   return Effect.gen(function* () {

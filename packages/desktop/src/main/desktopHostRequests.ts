@@ -39,6 +39,7 @@ import type { HostDraftRequests } from '@controllers/session/hostDraftRequests';
 import type { HostSnapshotSource } from '@controllers/session/hostSnapshotSource';
 import {
   handleSharedHostRequest,
+  isSharedHostRequest,
   type SharedHostRequestBindings,
   type SharedHostRequestPorts,
 } from '@controllers/session/sharedHostRequests';
@@ -48,14 +49,19 @@ import {
   latexdiffPackMessage,
   runPackLatexdiffvc,
 } from '@housekeeping/packLatexdiffvc';
-import { runCleanRunDir, runPackRunDir } from '@housekeeping/runDirOps';
+import { packRunOutputs, runCleanRunDir } from '@housekeeping/runDirOps';
 import { LaTeXdiffService } from '@latex/latexdiff';
+import { withLogChannel } from '@logger/effectLog';
 import {
   modelOptionsFrom,
   readModelAvailabilityInputs,
 } from '@model/computeModelOptions';
 import type { AgentDirectoriesFailed, StateStore } from '@platform/interfaces';
-import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
+import {
+  withProcessServices,
+  type ProcessRuntime,
+  type ProcessServices,
+} from '@platform/processRuntime';
 import {
   sessionFsLayer,
   type GlobalStorageFs,
@@ -92,7 +98,6 @@ import {
   postDesktopSettingsView,
   vsCodeOnlyGettingStartedMessage,
 } from '../shared/desktopCommandSurface.js';
-import { toLogData } from './desktopLogUtils.js';
 import {
   DesktopProgressFileActions,
   type DesktopLatexdiffWorkspaceScan,
@@ -125,7 +130,7 @@ interface DesktopHostRequestsOptions {
   postSurfaceAction(action: SurfaceActionMessage['action']): void;
   /** Start the browser sign-in. The failure is the sign-in's own; the arm
    *  below names it for the request dialog. */
-  signIn(): Effect.Effect<void, unknown>;
+  signIn(): Effect.Effect<void, Error>;
   getCustomAgentDirectory(): Effect.Effect<
     string,
     AgentDirectoriesFailed,
@@ -142,10 +147,6 @@ interface DesktopHostRequestsOptions {
   /** The process runtime this window was handed; every request arm below runs
    *  on it. */
   runtime: ProcessRuntime;
-  logger: {
-    warn(message: string, data?: { data?: unknown }): void;
-    error(message: string, data?: { data?: unknown }): void;
-  };
 }
 
 export interface DesktopHostRequests {
@@ -158,7 +159,7 @@ export interface DesktopHostRequests {
   dispose(): void;
 }
 
-const LATEXDIFF_CHANNEL = 'DesktopHostRequests';
+const CHANNEL = 'DesktopHostRequests';
 
 type WorkflowFileOperation = 'pack' | 'clean';
 
@@ -174,7 +175,7 @@ function operationLabel(operation: WorkflowFileOperation): {
 export function createDesktopHostRequests(
   options: DesktopHostRequestsOptions,
 ): DesktopHostRequests {
-  const { session, host, run, logger, runtime } = options;
+  const { session, host, run, runtime } = options;
   /** The rooted filesystems of this window's paper, for the housekeeping
    *  programs. An open session holds a snapshot of its roots for its whole
    *  lifetime, so the layer is built once from it here, never from an
@@ -194,14 +195,12 @@ export function createDesktopHostRequests(
       session,
       runAgentRequest: run.runAgentRequest,
       loadModelOptions: () =>
-        Effect.flatMap(runtime.contextEffect, (context) =>
-          Effect.provideContext(
-            readModelAvailabilityInputs({
-              ...session.roots,
-              secrets: options.secrets,
-            }).pipe(Effect.map(modelOptionsFrom)),
-            context,
-          ),
+        withProcessServices(
+          runtime,
+          readModelAvailabilityInputs({
+            ...session.roots,
+            secrets: options.secrets,
+          }).pipe(Effect.map(modelOptionsFrom)),
         ),
       // Only the "ask the user for a key" step is host-specific: on the
       // desktop that means opening the Models tab rather than a modal prompt.
@@ -271,13 +270,14 @@ export function createDesktopHostRequests(
               // interrupts-only silence rather than presented.
               Cause.hasInterruptsOnly(cause)
                 ? Effect.failCause(cause)
-                : Effect.suspend(() => {
+                : Effect.gen(function* () {
                     const error = Cause.squash(cause);
-                    logger.error('Desktop merge run failed', {
-                      data: toLogData(error),
-                    });
+                    yield* Effect.logError('Desktop merge run failed').pipe(
+                      Effect.annotateLogs({ data: error }),
+                      withLogChannel(CHANNEL),
+                    );
                     const primaryError = primaryAgentError(error);
-                    return presentAgentFailure(
+                    return yield* presentAgentFailure(
                       session.interactions,
                       {
                         kind: classifyAgentError(primaryError),
@@ -371,11 +371,7 @@ export function createDesktopHostRequests(
           fs.readFileString(file),
         ),
       showInfo: (message) => host.showInfoMessage(message),
-      // The refusal is the notice: the member fails with the `Rejected` the
-      // request answers with.
-      showError: (reason) => Effect.fail(new Rejected({ reason })),
-      logError: (message, error) =>
-        logger.error(message, { data: toLogData(error) }),
+      showError: rejectRequestEffect,
     },
     sendFollowUp: (runId, text) => runActions.sendFollowUp(runId, text),
   });
@@ -456,14 +452,15 @@ export function createDesktopHostRequests(
       }
       const ran = yield* Effect.exit(
         operation === 'pack'
-          ? runPackRunDir(runId as RunId, agent, model, inputFile)
+          ? packRunOutputs(request)
           : runCleanRunDir(runId as RunId),
       );
       if (Exit.isFailure(ran)) {
         const error = Cause.squash(ran.cause);
-        logger.error(`Desktop ${operation} operation failed`, {
-          data: toLogData(error),
-        });
+        yield* Effect.logError(`Desktop ${operation} operation failed`).pipe(
+          Effect.annotateLogs({ data: error }),
+          withLogChannel(CHANNEL),
+        );
         return yield* Effect.fail(
           new Rejected({
             reason: `Error during ${operation}: ${toErrorMessage(error)}`,
@@ -536,7 +533,6 @@ export function createDesktopHostRequests(
         showInfo: (message) => host.showInfoMessage(message),
         showWarning: (message) => host.showWarningMessage(message),
         showError: rejectRequestEffect,
-        reportDetail: (message) => logger.error(message),
         getController: getChatExportController,
         getTraceViewerTemplate: () =>
           path.join(options.resourcesPath, 'traceViewer', 'index.html'),
@@ -564,7 +560,7 @@ export function createDesktopHostRequests(
       const base = pathToLocationIn(session.roots.workspace, baseFile);
       if (action === 'latexdiffvc') {
         const result = yield* new LaTeXdiffService(
-          LATEXDIFF_CHANNEL,
+          CHANNEL,
           session.roots,
         ).runDiffVc(base, commit);
         if (!result.success) {
@@ -666,9 +662,9 @@ export function createDesktopHostRequests(
       skip: Effect.suspend(() => options.onboarding.skipOnboarding()),
       runSetup: Effect.suspend(() => options.onboarding.runSetup()),
       skipSetup: Effect.suspend(() => options.onboarding.skipSetup()),
-      openGettingStarted: Effect.suspend(() =>
-        options.openExternalUrl(DESKTOP_DOCS_URL),
-      ),
+      // The card's "Open walkthrough" opens the in-app walkthrough, the
+      // same one `gettingStarted('openWalkthrough')` above opens.
+      openGettingStarted: Effect.sync(() => options.showFirstRunWalkthrough()),
     },
     // One window per paper and no view-title menu, so nothing reads this.
     setActiveView: () => {},
@@ -707,40 +703,10 @@ export function createDesktopHostRequests(
   > {
     return Effect.gen(function* () {
       const done: HostOutcome = { kind: 'done' };
+      if (isSharedHostRequest(request)) {
+        return yield* handleSharedHostRequest(sharedRequests, request, port);
+      }
       switch (request.kind) {
-        case 'openFile':
-        case 'openLabel':
-        case 'openRunStorage':
-        case 'exportTranscript':
-        case 'restoreIntoLauncher':
-        case 'resume':
-        case 'runNew':
-        case 'runCompileFixer':
-        case 'useOwnApiKey':
-        case 'latexdiff':
-        case 'pack':
-        case 'clean':
-        case 'latexdiffs':
-        case 'record':
-        case 'openDashboard':
-        case 'refreshCommits':
-        case 'refreshFiles':
-        case 'openSettings':
-        case 'polish':
-        case 'savePastedImage':
-        case 'toolEdit':
-        case 'setActiveView':
-        case 'fileAction':
-        case 'restoreProposalConfig':
-        case 'apiKeyBanner':
-        case 'agentConfigBanner':
-        case 'recheckDependencies':
-        case 'openInstallGuide':
-        case 'signIn':
-        case 'dismissBanner':
-        case 'gettingStarted':
-        case 'onboarding':
-          return yield* handleSharedHostRequest(sharedRequests, request, port);
         case 'popOut':
         case 'popBack':
           return yield* Effect.fail(notOnDesktop('Pop-out to editor'));

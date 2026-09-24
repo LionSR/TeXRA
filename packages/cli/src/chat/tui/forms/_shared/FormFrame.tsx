@@ -21,7 +21,7 @@ interface FormFrameProps {
   readonly children: React.ReactNode;
   /**
    * Append the canonical `Esc close` footer. Forms whose transient states
-   * carry their own footer (or none, like `/tools`) pass `false`.
+   * carry their own footer (or none, like the tools form) pass `false`.
    */
   readonly showCloseHint?: boolean;
 }

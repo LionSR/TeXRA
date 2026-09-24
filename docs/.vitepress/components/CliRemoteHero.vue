@@ -30,11 +30,11 @@
     <!-- Beat 2: the remote agent resolves by name -->
     <div class="mk-term-prompt crm-beat">
       <span class="mk-term-sigil">$</span>
-      <span class="mk-term-cmd">texra agents show search</span>
+      <span class="mk-term-cmd">texra agents show generic</span>
     </div>
     <div class="crm-block">
-      <div><span class="crm-k">name:</span> search</div>
-      <div><span class="crm-k">category:</span> toolUse</div>
+      <div><span class="crm-k">name:</span> generic</div>
+      <div><span class="crm-k">category:</span> workflow</div>
       <div>
         <span class="crm-k">source:</span>
         <span class="crm-hot"> remote</span>
@@ -45,11 +45,12 @@
     <div class="mk-term-prompt crm-beat">
       <span class="mk-term-sigil">$</span>
       <span class="mk-term-cmd"
-        >texra chat <span class="mk-term-flag">--agent</span> search</span
+        >texra run generic
+        <span class="mk-term-flag">--input</span> draft.tex</span
       >
     </div>
     <div class="crm-note">
-      runs like any local agent — same chat, same run history
+      runs like any local agent — same diff review, same run history
     </div>
   </TermWindow>
 </template>

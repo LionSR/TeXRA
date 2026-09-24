@@ -183,6 +183,15 @@ export function createDispatcher<TMessage extends CommandMessage>(
   };
 }
 
+function isZodError(error: unknown): error is z.ZodError {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'issues' in error &&
+    Array.isArray((error as { issues: unknown }).issues)
+  );
+}
+
 /**
  * True when a discriminated-union `safeParse` failure means "this message's
  * `command` doesn't belong to this schema at all" (Zod's "no matching
@@ -193,7 +202,8 @@ export function createDispatcher<TMessage extends CommandMessage>(
  * different path, which is a real validation failure, not an unrecognized
  * command.
  */
-function isUnrecognizedCommand(error: z.ZodError): boolean {
+export function isUnrecognizedCommand(error: unknown): boolean {
+  if (!isZodError(error)) return false;
   const [issue, ...rest] = error.issues;
   return (
     rest.length === 0 &&

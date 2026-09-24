@@ -11,6 +11,7 @@
 
 import { Context, Effect, Semaphore, type Scope } from 'effect';
 
+import type { ProcessServices } from '@platform/processRuntime';
 import {
   RUN_PHASE,
   RUN_SUBSTATE,
@@ -36,7 +37,7 @@ import type {
 } from './runRegistryTypes';
 
 /**
- * Session-owned registry of active runs and their change listeners. One
+ * Session-owned registry of active runs and their change waiters. One
  * instance belongs to each session, built by the session layer in that
  * session's scope and provided as {@link Runs}.
  */
@@ -71,16 +72,14 @@ export class RunRegistry {
    * only once the view has folded it.
    *
    * A `run.end` folded to `cancelled` also closes the admission window its
-   * stop left, which is why the caller runs what this returns: the stop's
+   * stop left, so this interrupts the children admitted in it: the stop's
    * in-flight token lifts when its settlement does, before this fold
    * ({@link RunStopper.sweepChildrenOfFoldedStop}).
    */
-  handleStatus(runId: RunId): Effect.Effect<void> {
-    if (this.disposed) return Effect.void;
-    const sweep = this.stopper.sweepChildrenOfFoldedStop(runId);
-    if (!this.roster.handle(runId)) return sweep;
-    this.roster.notifyWaiters(runId);
-    return sweep;
+  handleStatus(runId: RunId): void {
+    if (this.disposed) return;
+    this.stopper.sweepChildrenOfFoldedStop(runId);
+    if (this.roster.handle(runId)) this.roster.notifyWaiters(runId);
   }
 
   dispose(): void {
@@ -161,7 +160,7 @@ export class RunRegistry {
    * resume that would otherwise start a second generation over a live one is
    * refused here rather than by a caller's earlier read of the same fact. The
    * claim that survives it lifts the run's stop marks ({@link
-   * RunRoster.clearStops}); a refused launch leaves the stop's gate intact.
+   * RunRoster.launch}); a refused launch leaves the stop's gate intact.
    */
   launchRun<A, E, R>(
     runId: RunId,
@@ -347,6 +346,22 @@ export class RunRegistry {
     return this.stopper.kill(runId, options);
   }
 
+  /** Stop every top-level run, cascading into its children: the sweep a
+   *  session close and a project close both run. A child with a handle is
+   *  stopped by its parent's cascade; a native child between turns has no
+   *  handle, and its kill interrupts the loop the registry retains for it.
+   *  The kills are issued now; the answer joins their settlements, and
+   *  fails as the first refused one does, for the caller to map into its
+   *  own error channel. */
+  stopAll(): Effect.Effect<void, Error> {
+    const settlements = this.getActiveIds().flatMap((runId) =>
+      this.getHandle(runId)?.isChild
+        ? []
+        : [this.kill(runId, { detachActiveChildren: false }).settlement],
+    );
+    return Effect.all(settlements, { concurrency: 'unbounded', discard: true });
+  }
+
   /** Stop a visible agent run and apply the caller's declared child policy:
    *  the one gesture hosts call, whose choreography is `RunStopper`'s. */
   stopAgentRun(
@@ -436,3 +451,12 @@ export class RunRegistry {
 export class Runs extends Context.Service<Runs, RunRegistry>()(
   '@texra/session/Runs',
 ) {}
+
+/**
+ * The services every step of an agent run reads on the way down: the process
+ * services (the global state store, the secret store, the tool table, ...)
+ * and the `Runs` of the session the run is launched on. Named once here
+ * because the launch, resume and delegation signatures all carry exactly
+ * these tags in their `R` channel.
+ */
+export type AgentRunServices = ProcessServices | Runs;

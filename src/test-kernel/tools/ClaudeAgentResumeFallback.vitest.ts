@@ -67,9 +67,6 @@ vi.mock('@agent/runtime/childRunLoop', () => ({
 }));
 
 vi.mock('@tools/claudeAgentConfig', () => ({
-  getClaudeAgentPermissionMode: () => Effect.succeed('acceptEdits'),
-  getClaudeAgentModel: () => Effect.succeed('claude-sonnet-4-6'),
-  getClaudeAgentEffort: () => Effect.succeed('high'),
   buildClaudeAgentEnv: mocks.buildClaudeAgentEnv,
 }));
 
@@ -120,7 +117,7 @@ describe('claude_agent tool launch and resume fallback', () => {
 
     mocks.registerRun.mockReturnValue(Effect.void);
     mocks.buildClaudeAgentEnv.mockReturnValue(Effect.succeed({}));
-    mocks.findClaudeBinaryPath.mockReturnValue(undefined);
+    mocks.findClaudeBinaryPath.mockReturnValue(Effect.succeed(undefined));
     mocks.createChildRun.mockReturnValue(
       Effect.succeed(createFakeAgentCliChildRun(childRunId)),
     );
@@ -139,7 +136,7 @@ describe('claude_agent tool launch and resume fallback', () => {
     'refuses a one-shot run whose follow-up could never be collected',
     () =>
       Effect.gen(function* () {
-        const result = yield* new ClaudeAgentTool().call({
+        const result = yield* ClaudeAgentTool.call({
           prompt: 'must not launch into a run that ends first',
         });
 
@@ -166,11 +163,11 @@ describe('claude_agent tool launch and resume fallback', () => {
 
   it.live('does not create a run when Claude binary discovery fails', () =>
     Effect.gen(function* () {
-      mocks.findClaudeBinaryPath.mockImplementation(() => {
-        throw new Error('Claude binary lookup failed');
-      });
+      mocks.findClaudeBinaryPath.mockReturnValue(
+        Effect.fail(new Error('Claude binary lookup failed')),
+      );
 
-      const result = yield* new ClaudeAgentTool().call({
+      const result = yield* ClaudeAgentTool.call({
         prompt: 'must not create a stale child',
       });
 
@@ -242,7 +239,7 @@ describe('claude_agent tool launch and resume fallback', () => {
       );
 
       expect(
-        yield* new ClaudeAgentTool().call({ prompt: 'launch Claude' }),
+        yield* ClaudeAgentTool.call({ prompt: 'launch Claude' }),
       ).toMatchObject({ status: 'executed' });
       // The detached loop fiber writes this log on the same runtime, so the
       // spy itself is the wake; nothing is polled.
@@ -277,7 +274,7 @@ describe('claude_agent tool launch and resume fallback', () => {
           })(),
         );
 
-        const tool = new ClaudeAgentTool();
+        const tool = ClaudeAgentTool;
         yield* tool.call({
           prompt: 'continue the refactor',
           session_id: 'stale-session',
@@ -325,7 +322,7 @@ describe('claude_agent tool launch and resume fallback', () => {
       );
       const captured = captureStrategy();
 
-      yield* new ClaudeAgentTool().call({ prompt: 'start Claude' });
+      yield* ClaudeAgentTool.call({ prompt: 'start Claude' });
       assert.ok(captured.strategy);
       const turn = yield* captured.strategy.launch(
         fakePorts(),
@@ -390,7 +387,7 @@ describe('claude_agent tool launch and resume fallback', () => {
             return release;
           });
 
-        const tool = new ClaudeAgentTool();
+        const tool = ClaudeAgentTool;
         const first = yield* Effect.forkChild(
           tool.call({
             prompt: 'continue the refactor',
@@ -452,7 +449,7 @@ describe('claude_agent tool launch and resume fallback', () => {
         const interrupt = vi.fn();
         const captured = captureStrategy();
 
-        yield* new ClaudeAgentTool().call({
+        yield* ClaudeAgentTool.call({
           prompt: 'start a long initial turn',
         });
 
@@ -503,7 +500,7 @@ describe('claude_agent tool launch and resume fallback', () => {
             return release;
           });
 
-        const tool = new ClaudeAgentTool();
+        const tool = ClaudeAgentTool;
         const first = yield* Effect.forkChild(
           tool.call({
             prompt: 'first attempt',
@@ -549,7 +546,7 @@ describe('claude_agent tool launch and resume fallback', () => {
       Effect.gen(function* () {
         ClaudeAgentSessions.register('sess-resumed', { runId: childRunId });
 
-        const result = yield* new ClaudeAgentTool().call({
+        const result = yield* ClaudeAgentTool.call({
           prompt: 'one more follow-up',
           session_id: 'sess-resumed',
         });
@@ -588,7 +585,7 @@ describe('claude_agent tool launch and resume fallback', () => {
         });
         const captured = captureStrategy();
 
-        const result = yield* new ClaudeAgentTool().call({
+        const result = yield* ClaudeAgentTool.call({
           prompt: 'try a different proof',
           session_id: 'source-session',
           fork_session: true,
@@ -670,7 +667,7 @@ describe('claude_agent tool launch and resume fallback', () => {
       );
       const captured = captureStrategy();
 
-      const result = yield* new ClaudeAgentTool().call({
+      const result = yield* ClaudeAgentTool.call({
         prompt: 'try a different proof',
         session_id: 'source-session',
         fork_session: true,
@@ -735,7 +732,7 @@ describe('claude_agent tool launch and resume fallback', () => {
       ClaudeAgentSessions.register('foreign-session', { runId: sourceRunId });
       sessionHandles.byRunId = handle;
 
-      const result = yield* new ClaudeAgentTool().call({
+      const result = yield* ClaudeAgentTool.call({
         prompt: 'read a foreign branch',
         session_id: 'foreign-session',
         fork_session: true,

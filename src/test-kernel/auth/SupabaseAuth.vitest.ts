@@ -10,7 +10,6 @@ import { createSupabaseAuth, type SupabaseAuthShape } from '@auth/SupabaseAuth';
 import type { SessionSecretStore } from '@auth/oauth/sessionAccess';
 import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
 import { setLogSink } from '@logger/logSink';
-import * as logger from '@logger/logUtils';
 import { SecretsFailed } from '@platform/secrets';
 import { FakeSecrets } from '@test/support/FakePlatform';
 import { captureLogEntries } from '@test/support/logSinkCapture';
@@ -27,6 +26,10 @@ function createAuth(
 }
 
 describe('SupabaseAuth probes', () => {
+  afterEach(() => {
+    setLogSink(null);
+  });
+
   it.effect('reports not ready when the readiness gate fails', () =>
     Effect.gen(function* () {
       const auth = createAuth(new FakeSecrets(), () =>
@@ -54,14 +57,17 @@ describe('SupabaseAuth probes', () => {
           set: () => Effect.void,
           delete: () => Effect.void,
         };
-        const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+        const logs = captureLogEntries();
         const auth = createAuth(secrets);
 
-        expect(yield* auth.storedAccountLabel).toBe(null);
-        expect(warn).toHaveBeenCalledWith(
-          'SupabaseAuth',
-          expect.stringContaining('secret storage unavailable'),
-        );
+        expect(
+          yield* auth.storedAccountLabel.pipe(
+            Effect.provide(effectDiagnosticsLayer('Trace')),
+          ),
+        ).toBe(null);
+        expect(
+          logs.has('WARN', 'SupabaseAuth', 'secret storage unavailable'),
+        ).toBe(true);
       }),
   );
 });

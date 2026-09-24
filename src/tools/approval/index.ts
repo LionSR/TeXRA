@@ -7,20 +7,7 @@
  */
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import type { RunApprovalBypass } from '@agent/runtime/runApprovalQueue';
 import type { RunId } from '@shared/schemas';
-
-/**
- * Per-stream bypass state for agent delegation proposals, owned by the
- * session (`session.approvals.proposal`).
- *
- * Proposals settle through the run coordinators rather than a stream approval
- * queue, so unlike bash / tool-edit there is no controller here — only the
- * session's bypass state. Every caller passes the session that owns the run.
- */
-export function proposalApprovals(session: SessionHandle): RunApprovalBypass {
-  return session.approvals.proposal;
-}
 
 /**
  * Link a freshly resolved child subagent stream to its parent for approval

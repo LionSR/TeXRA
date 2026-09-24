@@ -111,7 +111,7 @@ class IssuePollingSource extends PollingSourceBase<string, SubscriptionState> {
   protected pollOne(
     _key: string,
     state: SubscriptionState,
-  ): Effect.Effect<void, unknown, Secrets> {
+  ): Effect.Effect<void, Error, Secrets> {
     return this.pollIssue(state);
   }
 
@@ -139,7 +139,7 @@ class IssuePollingSource extends PollingSourceBase<string, SubscriptionState> {
         // check (don't advance state.etags.issue) and fall through to the
         // independent comments fetch below — a malformed issue payload must
         // not block comment delivery.
-        const parsedIssue = this.validateOrSkip(
+        const parsedIssue = yield* this.validateOrSkip(
           issueRes,
           GhIssueSchema,
           `Skipping issue-state check for ${state.slug}#${issue.issueNumber}: malformed issue payload`,
@@ -181,7 +181,7 @@ class IssuePollingSource extends PollingSourceBase<string, SubscriptionState> {
       // the next successful fetch seeds rather than replaying the whole history
       // (handled by the shared consumeCommentList choreography).
       if (commentsRes.status === 200) {
-        const parsedComments = this.validateOrSkip(
+        const parsedComments = yield* this.validateOrSkip(
           commentsRes,
           GhIssueCommentArraySchema,
           `Skipping comments tick for ${state.slug}#${issue.issueNumber}: malformed comments payload`,

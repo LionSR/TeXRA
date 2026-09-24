@@ -6,7 +6,7 @@ import { execa, type Options, type ResultPromise } from 'execa';
 import { quote as shellQuote } from 'shell-quote';
 
 // Internal imports
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { ExecResult } from '@shared/schemas';
 import { getGitAuthorEnv } from '@utils/system/gitAuthorEnv';
@@ -14,10 +14,10 @@ import { onAbort as onAbortSignal } from '@utils/core';
 import {
   CHANNEL,
   commandEnv,
+  commandStderrLogLine,
   deriveCommandStderr,
-  logCommandStderr,
-  logExecutionErrorAndBuildResult,
   normalizeEncoding,
+  resultFromExecutionError,
   resultFromProcessOutput,
   signalProcessGroup,
   type ExecEncoding,
@@ -25,6 +25,7 @@ import {
   type ExecOutput,
 } from '@utils/system/execCore';
 import { IS_WINDOWS } from '@utils/system/platformPaths';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 const FORCE_KILL_DELAY_MS = 5_000;
 
@@ -159,7 +160,14 @@ export function executeCommand(
 ): Effect.Effect<ExecResult> {
   return Effect.scoped(runCommand(command, options)).pipe(
     Effect.catch((error) =>
-      Effect.succeed(logExecutionErrorAndBuildResult(error, options)),
+      Effect.as(
+        options.quiet
+          ? Effect.void
+          : Effect.logError(
+              `Error executing command: ${toErrorMessage(error)}`,
+            ).pipe(withLogChannel(options.channel ?? CHANNEL)),
+        resultFromExecutionError(error),
+      ),
     ),
   );
 }
@@ -167,7 +175,7 @@ export function executeCommand(
 function runCommand(
   command: string | string[],
   options: ExecuteCommandBaseOptions,
-): Effect.Effect<ExecResult, unknown, Scope.Scope> {
+): Effect.Effect<ExecResult, Error, Scope.Scope> {
   return Effect.gen(function* () {
     if (options.signal?.aborted) {
       return resultFromProcessOutput(null, 'Command aborted by user', 130);
@@ -179,7 +187,7 @@ function runCommand(
     }
 
     const encoding = normalizeEncoding(options.encoding);
-    const log = createLog(options.channel ?? CHANNEL);
+    const channel = options.channel ?? CHANNEL;
     const isArrayForm = Array.isArray(command);
     const teardown: CommandTeardown = {
       shellTimedOut: false,
@@ -205,13 +213,15 @@ function runCommand(
       stderr: options.stderr,
     };
 
+    if (!options.quiet) {
+      yield* Effect.logDebug(
+        `Running command: ${isArrayForm ? shellQuote(command) : command}`,
+      ).pipe(withLogChannel(channel));
+    }
     const subprocess = yield* Effect.try({
       try: (): ResultPromise => {
         if (Array.isArray(command)) {
           const [cmd, ...args] = command;
-          if (!options.quiet) {
-            log.debug(`Running command: ${shellQuote(command)}`);
-          }
           return execa(cmd, args, {
             ...execaOptions,
             cancelSignal: options.signal,
@@ -221,9 +231,6 @@ function runCommand(
             // tracked-pid kill would leave behind.
             killDescendants: options.killProcessTree,
           });
-        }
-        if (!options.quiet) {
-          log.debug(`Running command: ${command}`);
         }
         // Shell commands with pipes (e.g. "find / | head -2") create child
         // processes that inherit stdout.  execa's built-in timeout only kills
@@ -256,7 +263,7 @@ function runCommand(
           ...(useDetached ? { detached: true } : {}),
         });
       },
-      catch: (error) => error,
+      catch: ensureError,
     });
 
     // A command that ran to completion — including one its abort signal or
@@ -366,12 +373,12 @@ function runCommand(
           subscribeDecodedOutput(subprocess.stderr, encoding, options.onStderr);
         }
       },
-      catch: (error) => error,
+      catch: ensureError,
     });
 
     const result = yield* Effect.tryPromise({
       try: () => subprocess,
-      catch: (error) => error,
+      catch: ensureError,
     }).pipe(Effect.onInterrupt(() => Effect.sync(onInterrupt)));
 
     const stdout = (result.stdout as string) ?? '';
@@ -395,8 +402,11 @@ function runCommand(
             shouldUseShortMessage,
           );
 
-    if (!options.quiet) {
-      logCommandStderr(log, normalizedStderr, options.truncate);
+    const stderrLine = options.quiet
+      ? undefined
+      : commandStderrLogLine(normalizedStderr, options.truncate);
+    if (stderrLine !== undefined) {
+      yield* Effect.logDebug(stderrLine).pipe(withLogChannel(channel));
     }
 
     return resultFromProcessOutput(stdout, normalizedStderr, exitCode, {

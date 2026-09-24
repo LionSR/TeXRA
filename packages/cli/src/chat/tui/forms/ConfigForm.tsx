@@ -1,6 +1,6 @@
 // `/config` — view and edit host-neutral settings from the chat TUI.
 //
-// Unlike the single-Select pickers (`/approval`, `/api`), this is a list +
+// Unlike the single-Select pickers (`/approval`, `/login`), this is a list +
 // drill-in: the outer list shows every catalog entry the CLI consumes with its
 // current value and store; selecting a boolean toggles it inline, an enum opens
 // an inner value picker, and a string/number opens an inline text editor.
@@ -125,9 +125,7 @@ export function buildConfigListItems(
     const kind = settingEditKind(entry);
     const store = settingStoreLabel(entry);
     const valueText =
-      kind === 'form'
-        ? `open /${entry.openForm}`
-        : formatSettingValue(readValue(entry));
+      kind === 'form' ? 'open' : formatSettingValue(readValue(entry));
     const suffix = kind === 'readonly' ? ' · read-only' : '';
     return {
       value: entry.key,
@@ -158,11 +156,11 @@ interface ConfigFormProps {
   readonly writeValue: (
     entry: SurfacedSettingEntry,
     value: unknown,
-  ) => Effect.Effect<void, unknown>;
+  ) => Effect.Effect<void, Error>;
   /** Reset a setting to its default (delete the key). */
   readonly resetValue: (
     entry: SurfacedSettingEntry,
-  ) => Effect.Effect<void, unknown>;
+  ) => Effect.Effect<void, Error>;
   /** The runtime the writes above settle on, from the surface that mounted
    *  this form — Ink components run no Effect of their own. */
   readonly runtime: ProcessRuntime;
@@ -275,7 +273,7 @@ export function ConfigForm(props: ConfigFormProps): React.JSX.Element {
   const runWrite = (
     entry: SurfacedSettingEntry,
     optimisticValue: unknown,
-    action: () => Effect.Effect<void, unknown>,
+    action: () => Effect.Effect<void, Error>,
   ): void => {
     const previous = effective(entry);
     setOverrides((current) => ({ ...current, [entry.key]: optimisticValue }));

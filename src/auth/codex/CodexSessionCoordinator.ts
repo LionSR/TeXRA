@@ -34,13 +34,11 @@ import {
 } from './codexSessionTypes';
 import type { HttpClient } from 'effect/unstable/http';
 
-export type CodexSessionStorage = SubscriptionSessionStorage;
-export type CodexOAuthClient = SubscriptionOAuthClient;
 export type CodexSessionStatus = SubscriptionSessionStatus;
 
 export interface CodexSessionCoordinatorInit {
-  storage: CodexSessionStorage;
-  client?: CodexOAuthClient;
+  storage: SubscriptionSessionStorage;
+  client?: SubscriptionOAuthClient;
   now?: () => number;
 }
 
@@ -121,7 +119,7 @@ export class CodexSessionCoordinator extends SubscriptionOAuthCoordinator<CodexS
   completeDeviceLogin(params: {
     authorizationCode: string;
     codeVerifier: string;
-  }): Effect.Effect<CodexSession, unknown, HttpClient.HttpClient> {
+  }): Effect.Effect<CodexSession, Error, HttpClient.HttpClient> {
     return this.loginWithCode({
       code: params.authorizationCode,
       verifier: params.codeVerifier,

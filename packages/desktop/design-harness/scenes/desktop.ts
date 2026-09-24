@@ -140,7 +140,7 @@ const shellOf = (
 const noop = () => {};
 const sidebarCallbacks = {
   onNewTask: noop,
-  onSearch: noop,
+  onOpenCommands: noop,
   onToggleFiles: noop,
   onOpenFolder: noop,
   onSelectProject: noop,
@@ -149,7 +149,6 @@ const sidebarCallbacks = {
   onOpenTerminal: noop,
   onOpenBrowser: noop,
   onOpenSettings: noop,
-  onOpenLogs: noop,
   onOpenSubagents: noop,
 };
 const workbenchCallbacks = {
@@ -175,6 +174,7 @@ const rail = (
       shell,
       subagentsOpen: options.subagentsOpen ?? false,
       commandsLabel: 'Commands',
+      commandsTitle: 'Commands - ⌘K',
     },
     sidebarCallbacks,
   );

@@ -25,8 +25,11 @@ import * as path from 'node:path';
 import { Effect } from 'effect';
 
 import { isModuleNotFoundError } from '@common/errors';
-import type { StateStore, StateReadFailed } from '@platform/interfaces';
+import type { StateReadFailed } from '@platform/interfaces';
+import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { ClaudeAgentPermissionMode } from '@shared/schemas';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { readSettingFrom } from '@utils/config/platformSettings';
 import { ensureError } from '@utils/errors/errorMessage';
 import { IS_WINDOWS } from '@utils/system/platformPaths';
 import {
@@ -111,17 +114,18 @@ const CLAUDE_BINARY_NAME = IS_WINDOWS ? 'claude.exe' : 'claude';
  * The platform binary sits directly in the platform-package directory.
  *
  * The probe is a plain predicate on a path this module just built, over the
- * real filesystem the packaged binary lives on, so it stays synchronous like
- * the sibling `which.sync` / `executeCommandSync` probes. The static it
- * replaces asked lstat, which counted a dangling symlink as present where
- * `existsSync`'s access probe does not — a link no executable can be run
- * through either way.
+ * real filesystem the packaged binary lives on, like the sibling `which.sync`
+ * probe. The static it replaces asked lstat, which counted a dangling symlink
+ * as present where `existsSync`'s access probe does not — a link no
+ * executable can be run through either way.
  */
 function claudeBinaryInPlatformPackage(
   platformPkgDir: string,
-): string | undefined {
-  const binary = path.join(platformPkgDir, CLAUDE_BINARY_NAME);
-  return existsSync(binary) ? binary : undefined;
+): Effect.Effect<string | undefined> {
+  return Effect.sync(() => {
+    const binary = path.join(platformPkgDir, CLAUDE_BINARY_NAME);
+    return existsSync(binary) ? binary : undefined;
+  });
 }
 
 /**
@@ -169,10 +173,11 @@ export const getClaudeAgentConfig = Effect.promise(
  */
 export const claudeAgentPermissionMode = (
   input: { readonly permission_mode?: ClaudeAgentPermissionMode | null },
-  workspaceState: StateStore,
+  stores: SettingsStores,
 ): Effect.Effect<ClaudeAgentPermissionMode, StateReadFailed> =>
-  Effect.flatMap(getClaudeAgentConfig, (config) =>
-    input.permission_mode == null
-      ? config.getClaudeAgentPermissionMode(workspaceState)
-      : Effect.succeed(input.permission_mode),
-  );
+  input.permission_mode == null
+    ? readSettingFrom<ClaudeAgentPermissionMode>(
+        stores,
+        WorkspaceStateKey.CLAUDE_AGENT_PERMISSION_MODE,
+      )
+    : Effect.succeed(input.permission_mode);

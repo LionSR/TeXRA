@@ -4,15 +4,10 @@ import * as vscode from 'vscode';
 
 // Local imports
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
-import { runPackSingle, runPackMultiple } from '@housekeeping/pack';
-import { runPackRunDir } from '@housekeeping/runDirOps';
+import { packRunOutputs } from '@housekeeping/runDirOps';
 import { filesystemFor } from '@housekeeping/utils';
 import { WorkspaceFs } from '@platform/rootedFs';
-
-import {
-  mergeRunDirAndWorkspaceResult,
-  type FileOpResult,
-} from '@shared/schemas';
+import { type FileOpResult } from '@shared/schemas';
 import { type PackConfig } from './fileOpSchemas';
 
 const CHANNEL = 'packCommands';
@@ -62,25 +57,12 @@ const showPackResult = (
 export const handlePack = Effect.fn('packCommands.handlePack')(function* (
   config: PackConfig,
 ) {
-  const { agent, model, inputFile, outputFiles, runId } = config;
   const workspaceFs = yield* WorkspaceFs;
-  const packWorkspace =
-    outputFiles.length > 0
-      ? runPackMultiple(model, inputFile, agent, outputFiles)
-      : runPackSingle(model, inputFile, agent);
-
-  // Toolbar invocations pass a runId: pack the run's storage AND the source
-  // document's own files beside it in the workspace.
-  const result: FileOpResult = runId
-    ? mergeRunDirAndWorkspaceResult(
-        yield* runPackRunDir(runId, agent, model, inputFile),
-        yield* packWorkspace,
-      )
-    : yield* packWorkspace;
+  const result = yield* packRunOutputs(config);
 
   const folder = result.status === 'success' ? result.outputFolder : undefined;
   const folderPath = folder
     ? (yield* filesystemFor(workspaceFs, folder)).absolutePath
     : undefined;
-  yield* showPackResult(result, inputFile, folderPath);
+  yield* showPackResult(result, config.inputFile, folderPath);
 });

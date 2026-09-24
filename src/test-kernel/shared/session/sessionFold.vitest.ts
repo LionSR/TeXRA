@@ -794,11 +794,9 @@ describe('sessionFold', () => {
   });
 
   it('takes each round map from the newest row, on a cold read and on replay', () => {
-    // The `outputFiles`, `missingOutputs` and `compileFailures` run facts
-    // are latest-only listing keys of their own — the listing groups by the
-    // fact key beside the row type — so a cold read hands the fold one row
-    // of each per run. Every row therefore carries the run's whole round map
-    // (`OutputState`), and the fold replaces rather than merges.
+    // `output.produced` is a latest-only listing key, so a cold read hands
+    // the fold one row per run. It carries the whole round collection, and
+    // the fold replaces rather than merges the derived maps.
     const log = new Log();
     const start = log.emit(CHILD, 3000, {
       type: 'run.start',
@@ -822,43 +820,23 @@ describe('sessionFold', () => {
       log: createExternalLocation(`/tmp/paper_r${round}.log`),
       logRelativePath: `compile/r${round}.log`,
     });
+    const roundOutput = (round: number) => ({
+      round,
+      rawOutput: null,
+      outputs: [outputOf(round)],
+      compileFailures: round === 0 ? [failureOf(0)] : [],
+      missingOutputs: round === 0 ? ['intro.tex'] : [],
+    });
     const firstRound = [
       log.emit(CHILD, 3010, {
-        type: 'run.fact',
-        fact: { key: 'outputFiles', filesByRound: { 0: [outputOf(0)] } },
-      }),
-      log.emit(CHILD, 3011, {
-        type: 'run.fact',
-        fact: { key: 'missingOutputs', filesByRound: { 0: ['intro.tex'] } },
-      }),
-      log.emit(CHILD, 3012, {
-        type: 'run.fact',
-        fact: { key: 'compileFailures', filesByRound: { 0: [failureOf(0)] } },
+        type: 'output.produced',
+        rounds: [roundOutput(0)],
       }),
     ];
-    // The second round republishes the run's whole map, the first round
-    // included; round 1 compiled cleanly and produced no missing outputs.
     const secondRound = [
       log.emit(CHILD, 3020, {
-        type: 'run.fact',
-        fact: {
-          key: 'outputFiles',
-          filesByRound: { 0: [outputOf(0)], 1: [outputOf(1)] },
-        },
-      }),
-      log.emit(CHILD, 3021, {
-        type: 'run.fact',
-        fact: {
-          key: 'missingOutputs',
-          filesByRound: { 0: ['intro.tex'], 1: [] },
-        },
-      }),
-      log.emit(CHILD, 3022, {
-        type: 'run.fact',
-        fact: {
-          key: 'compileFailures',
-          filesByRound: { 0: [failureOf(0)], 1: [] },
-        },
+        type: 'output.produced',
+        rounds: [roundOutput(0), roundOutput(1)],
       }),
     ];
     const bothRounds = {
@@ -908,8 +886,8 @@ describe('sessionFold', () => {
     const dropped = foldAll(
       [
         log.emit(CHILD, 3030, {
-          type: 'run.fact',
-          fact: { key: 'outputFiles', filesByRound: { 1: [outputOf(1)] } },
+          type: 'output.produced',
+          rounds: [roundOutput(1)],
         }),
       ].map((event) => ({
         _tag: 'event' as const,
@@ -1211,7 +1189,8 @@ describe('sessionFold', () => {
 //
 // Measured serialized size of the two snapshot drafts below (aggregate id
 // included, parsed defaults filled), so PR 2 has a number before it turns the
-// writes on: tool-use with `stateSlices: null` is 362 bytes; reflection with
+// writes on (before the offered toolset joined the tool-use state): tool-use
+// with `stateSlices: null` was 362 bytes; reflection with
 // an empty workspace and no round outputs is 741 bytes. Both grow with the
 // family state they carry, never with the conversation, which the rows carry.
 // ---------------------------------------------------------------------------
@@ -1314,7 +1293,7 @@ const toolUseSnapshot = (runtime: Record<string, unknown> = {}) => ({
   payload: {
     family: 'toolUse',
     runtime: { ...RUNTIME, ...runtime },
-    state: { shouldSkipCycle: false, stateSlices: null },
+    state: { stateSlices: null, offeredTools: [], toolsetHash: '0'.repeat(64) },
   },
 });
 
@@ -1329,7 +1308,6 @@ const reflectionSnapshot = {
     family: 'reflection',
     runtime: RUNTIME,
     state: {
-      currentRound: 0,
       totalRounds: 1,
       workspaceSnapshot: {
         assembly: {},
@@ -1338,11 +1316,6 @@ const reflectionSnapshot = {
         interactions: {},
         workPlan: {},
       },
-      outputLocation: null,
-      runStateSnapshot: {},
-      roundOutputs: [],
-      continueRounds: true,
-      endTurn: false,
     },
   },
 };
@@ -1582,19 +1555,26 @@ describe('foldRunState', () => {
     [
       'compaction that replaced history mid-run: keepPrefix plus the row',
       () => {
-        const state = stateOf(
-          through(11, {
-            type: 'model.compaction',
-            payload: {
-              keepPrefix: 1,
-              messages: [USER('summary')],
-              cause: 'context-limit',
-              continuation: null,
-              continuationDropped: null,
-            },
-          }),
-        );
+        const compacted = (cause: 'context-limit' | 'context-window') =>
+          stateOf(
+            through(11, {
+              type: 'model.compaction',
+              payload: {
+                keepPrefix: 1,
+                messages: [USER('summary')],
+                cause,
+                continuation: null,
+                continuationDropped: null,
+              },
+            }),
+          );
+        const state = compacted('context-limit');
         expect(state?.messages.map((m) => m.role)).toEqual(['user', 'user']);
+        // Only an overflow compaction spends the round's one overflow retry.
+        expect(state?.overflowRecoveredAtRound).toBeNull();
+        const overflow = compacted('context-window');
+        expect(overflow?.round).toBeTypeOf('number');
+        expect(overflow?.overflowRecoveredAtRound).toBe(overflow?.round);
       },
     ],
     [
@@ -1713,10 +1693,8 @@ describe('foldRunState', () => {
         );
         const flow = state?.flow;
         expect(flow?.family).toBe('reflection');
-        // D12: no snapshot payload carries an accumulator; usage is derived.
-        expect(
-          flow?.family === 'reflection' ? flow.state.runStateSnapshot : null,
-        ).not.toHaveProperty('usageAccumulator');
+        // D12: no snapshot payload carries usage; it is derived from the rows.
+        expect(flow?.state).not.toHaveProperty('runStateSnapshot');
         expect(state?.snapshotCommit).toBe(2);
       },
     ],

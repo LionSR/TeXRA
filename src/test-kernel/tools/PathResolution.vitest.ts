@@ -17,15 +17,18 @@ import {
 import { registerExternalRoot } from '@utils/files/externalRoots';
 
 describe('assertNoParentTraversal', () => {
-  it.each(['../x', 'a/../../x'])('rejects %s', (targetPath) => {
-    expect(() => assertNoParentTraversal(targetPath)).toThrowError(
-      new ToolError(`path must not contain '..': ${targetPath}`),
-    );
-  });
+  it.effect.each(['../x', 'a/../../x'])('rejects %s', (targetPath) =>
+    Effect.gen(function* () {
+      const error = yield* Effect.flip(assertNoParentTraversal(targetPath));
+      expect(error).toEqual(
+        new ToolError(`path must not contain '..': ${targetPath}`),
+      );
+    }),
+  );
 
-  it.each(['a/b', 'a..b'])('accepts %s', (targetPath) => {
-    expect(() => assertNoParentTraversal(targetPath)).not.toThrow();
-  });
+  it.effect.each(['a/b', 'a..b'])('accepts %s', (targetPath) =>
+    assertNoParentTraversal(targetPath),
+  );
 });
 
 describe('resolveWorkspaceRelativePath path protection', () => {

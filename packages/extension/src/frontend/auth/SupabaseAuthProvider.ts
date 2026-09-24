@@ -2,7 +2,6 @@ import { Deferred, Effect, Exit, FileSystem } from 'effect';
 import * as vscode from 'vscode';
 
 import { invalidateRemoteAgentsAfterSignOut } from '@agent/index';
-import { refreshRemoteAgentCatalogAfterSignOut } from '@auth/authFlowEffects';
 import { type AuthPortError, callPort, settleFailure } from '@auth/authProgram';
 import {
   AUTH_BRIDGE_URL,
@@ -30,7 +29,6 @@ import {
   type SignInCallbackOutcome,
 } from '@controllers/auth/supabaseSignIn';
 import { withLogChannel } from '@logger/effectLog';
-import * as logger from '@logger/logUtils';
 import type { AgentDirectories } from '@platform/interfaces';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { GlobalStorageFs } from '@platform/rootedFs';
@@ -40,7 +38,6 @@ import type { HttpClient } from 'effect/unstable/http';
 import type { SupabaseUriHandler } from './UriHandler';
 
 const CHANNEL = 'SupabaseAuthProvider';
-const log = logger.createLog(CHANNEL);
 
 export const AUTH_URI_HANDLER_NOT_INITIALIZED =
   'OAuth handler not initialized. Restart the extension.';
@@ -230,12 +227,12 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
 
       return yield* this.resolveUsableSession(session).pipe(
         Effect.catchCause((cause) =>
-          Effect.sync(() => {
-            log.error(
-              `Error loading session: ${toErrorMessage(settleFailure(cause))}`,
-            );
-            return [] as vscode.AuthenticationSession[];
-          }),
+          Effect.logError(
+            `Error loading session: ${toErrorMessage(settleFailure(cause))}`,
+          ).pipe(
+            withLogChannel(CHANNEL),
+            Effect.as([] as vscode.AuthenticationSession[]),
+          ),
         ),
       );
     });
@@ -512,10 +509,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
     never,
     GlobalStorageFs | FileSystem.FileSystem | AgentDirectories
   > {
-    return refreshRemoteAgentCatalogAfterSignOut(
-      invalidateRemoteAgentsAfterSignOut(),
-      (message) => Effect.logWarning(message).pipe(withLogChannel(CHANNEL)),
-    ).pipe(
+    return invalidateRemoteAgentsAfterSignOut().pipe(
       Effect.andThen(
         Effect.sync(() => {
           this._onDidChangeSessions.fire({

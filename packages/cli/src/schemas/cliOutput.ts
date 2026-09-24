@@ -84,6 +84,7 @@ const CliNdjsonRecordSchema = z.discriminatedUnion('kind', [
   z.looseObject({ kind: z.literal('result'), result: payload }),
   z.looseObject({ kind: z.literal('skill'), skill: payload }),
   z.looseObject({ kind: z.literal('skill-issue'), issue: payload }),
+  z.looseObject({ kind: z.literal('plugin'), plugin: payload }),
   z.looseObject({ kind: z.literal('doctor-check') }),
   z.looseObject({ kind: z.literal('doctor-summary') }),
   z.looseObject({ kind: z.literal('progress') }),

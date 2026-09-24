@@ -70,7 +70,6 @@ export const registerRun = Effect.fn('registerRun')(function* (
   session: SessionHandle,
   runId: RunId,
   record: RunRecord,
-  agentName: string,
   options: RegisterRunOptions,
 ): Effect.fn.Return<void, Error> {
   let releaseClaims: Effect.Effect<void, Error> = Effect.void;
@@ -130,11 +129,6 @@ export const registerRun = Effect.fn('registerRun')(function* (
       }
       events.push(
         {
-          type: 'run.launchLabel',
-          aggregateId: target,
-          label: agentName,
-        },
-        {
           type: 'run.record',
           aggregateId: target,
           record: pinned,
@@ -185,12 +179,8 @@ export const acquireResumedRunOwnership = Effect.fn(
   session: SessionHandle,
   runId: RunId,
 ): Effect.fn.Return<Effect.Effect<void, Error>, Error> {
-  const claims = yield* Effect.exit(
-    session.acquireClaims(aggregateId('run', runId)),
-  );
-  if (Exit.isFailure(claims))
-    return yield* Effect.fail(ensureError(Cause.squash(claims.cause)));
-  return claims.value.pipe(
+  const release = yield* session.acquireClaims(aggregateId('run', runId));
+  return release.pipe(
     Effect.mapError(
       (error) =>
         new Error(`Run admission rollback failed for ${runId}`, {

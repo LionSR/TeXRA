@@ -5,7 +5,7 @@
  * Problems panel, like a linter.
  *
  * Two ingest paths:
- *   1. Session run facts keyed by `outputFiles` parse each output
+ *   1. Session `output.produced` rows parse each output
  *      `.tex` file. Universal — any agent that writes the macro participates.
  *   2. The `diagnostics` tool's `add` command routes through
  *      `pushManualCriticism` here for tool-use agents that want to flag issues
@@ -21,11 +21,10 @@ import * as vscode from 'vscode';
 
 // Local imports
 import { type ManualCriticismEntry, type SessionHandle } from '@agent/runtime';
-import { subscribeAddOutputFilesRunFact } from '@frontend/events/runFactSubscriptions';
+import { subscribeOutputFiles } from '@frontend/events/runFactSubscriptions';
 import { lineToRange } from '@frontend/vscode/vscodeEditor';
 import { parseCriticismAnnotations } from '@latex/criticismParser';
 import { withLogChannel } from '@logger/effectLog';
-import { createLog } from '@logger/logUtils';
 import type { StateStore, StateReadFailed } from '@platform/interfaces';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { AddOutputFilesPayload, OutputFileInfo } from '@shared/schemas';
@@ -35,7 +34,6 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
 
 const CHANNEL = 'InlineCriticism';
-const log = createLog(CHANNEL);
 const COLLECTION_NAME = 'texra-criticism';
 const SOURCE_LABEL = 'TeXRA';
 const CODE_PARSED = 'criticize';
@@ -50,7 +48,7 @@ interface CriticismRegistration {
 }
 
 let collection: vscode.DiagnosticCollection | undefined;
-let runFactUnsubscribe: (() => void) | undefined;
+let outputUnsubscribe: (() => void) | undefined;
 /** The single owner of the context and event hub `enable` works against. */
 let registration: CriticismRegistration | undefined;
 
@@ -165,27 +163,31 @@ function handleAddOutputFiles(
   );
 }
 
-function enable({ context, session, runtime }: CriticismRegistration): void {
-  if (collection) return;
+/** Answers whether this call enabled the diagnostics (false when already on). */
+function enable({ context, session, runtime }: CriticismRegistration): boolean {
+  if (collection) return false;
   collection = vscode.languages.createDiagnosticCollection(COLLECTION_NAME);
   context.subscriptions.push(collection);
-  runFactUnsubscribe = subscribeAddOutputFilesRunFact(
+  outputUnsubscribe = subscribeOutputFiles(
     session,
     (payload) => handleAddOutputFiles(payload, runtime),
     runtime,
   );
-  log.info('Inline criticism diagnostics enabled');
+  return true;
 }
 
+const logEnabled = Effect.logInfo('Inline criticism diagnostics enabled').pipe(
+  withLogChannel(CHANNEL),
+);
+
 function disable(): void {
-  runFactUnsubscribe?.();
-  runFactUnsubscribe = undefined;
+  outputUnsubscribe?.();
+  outputUnsubscribe = undefined;
   if (collection) {
     collection.clear();
     collection.dispose();
     collection = undefined;
   }
-  log.info('Inline criticism diagnostics disabled');
 }
 
 /**
@@ -234,7 +236,7 @@ export function registerInlineCriticism(
       false,
     );
     registration = { context, session, runtime, globalState };
-    if (enabled === true) enable(registration);
+    if (enabled === true && enable(registration)) yield* logEnabled;
     context.subscriptions.push({ dispose: disable });
   });
 }
@@ -256,7 +258,13 @@ export function setInlineCriticismEnabled(
       GlobalStateKey.INLINE_CRITICISM_ENABLED,
       enabled,
     );
-    if (enabled) enable(current);
-    else disable();
+    if (enabled) {
+      if (enable(current)) yield* logEnabled;
+    } else {
+      disable();
+      yield* Effect.logInfo('Inline criticism diagnostics disabled').pipe(
+        withLogChannel(CHANNEL),
+      );
+    }
   });
 }

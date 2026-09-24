@@ -25,7 +25,6 @@ import { tryDefaultSession } from '@agent/runtime';
 import { tuiOutputStreamForColor } from '@cli/tui/noColorOutput';
 import { DEFAULT_MODELS } from '@model/modelOptionsBasic';
 import { apiKeySecretName } from '@model/apiProviders';
-import { platform } from '@platform/platform';
 import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
 import { MEMORY_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import {
@@ -86,10 +85,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { App } from '../src/chat/tui/App';
 import { registerBuiltinSlashCommands } from '../src/chat/tui/commands/registerBuiltins';
 import { showCliWorkPlan } from '../src/chat/tui/commands/handlers/sessionCommands';
-import {
-  formatSlashCommandHelp,
-  GOAL_MODE_HELP,
-} from '../src/chat/tui/commands/helpText';
+import { formatSlashCommandHelp } from '../src/chat/tui/commands/helpText';
 import {
   findSlashCommand,
   listSlashCommands,
@@ -154,7 +150,6 @@ const SHOW_PROCESS_CHILD = process.env.HARNESS_PROCESS_CHILD === '1';
 const RESET_WORKFLOW_SCRIPT_DISABLED =
   process.env.HARNESS_WORKFLOW_SCRIPT_DISABLED === '1';
 const HARNESS_APPROVAL_USAGE = 'Usage: /approval [ask | never | yolo]';
-const HARNESS_YOLO_USAGE = 'Usage: /yolo [ask | never | yolo]';
 const ENTRY_COUNT = Number(process.env.HARNESS_ENTRIES ?? '15');
 const SHOW_EDIT_APPROVAL = process.env.HARNESS_EDIT_APPROVAL === '1';
 const EDIT_APPROVAL_WRAPPED_CONTEXT =
@@ -1365,11 +1360,13 @@ if (SHOW_EDIT_APPROVAL) {
     // exactly as `requestToolEditApproval` stages it. Staging hands back the
     // release for an open that never commits; this request is opened right
     // below, so the harness holds that program and never runs it.
-    const releaseStagedPreview = session().interactions.presentToolEdit({
-      ...request,
-      roots: session().roots,
-      permission,
-    });
+    const releaseStagedPreview = harnessRuntime.runSync(
+      session().interactions.presentToolEdit({
+        ...request,
+        roots: session().roots,
+        permission,
+      }),
+    );
     requestHarnessApproval(
       request.runId,
       { kind: 'toolEdit', data: permission },
@@ -1493,19 +1490,6 @@ function markHarnessInterrupted(): void {
       seedRunEnd(runId, RUN_OUTCOME.CANCELLED);
     }
   }
-}
-
-function markHarnessRunInterrupted(runId: RunId): void {
-  cancelHarnessRequests('Run interrupted.', runId);
-  if (runId === HARNESS_RUN_ID) {
-    canInterrupt = false;
-    rootRunPending.set(false);
-  }
-  appendHarnessAssistantTranscript(
-    `Harness focused interrupt requested for ${runId}.`,
-    runId,
-  );
-  seedRunEnd(runId, RUN_OUTCOME.CANCELLED);
 }
 
 function appendHarnessAssistantTranscript(text: string, runId?: RunId): void {
@@ -1667,18 +1651,11 @@ function handleHarnessSlashCommand(line: string): boolean {
     case 'plan':
       void showCliWorkPlan(session());
       return true;
-    case 'goal':
-    case 'goals':
-      appendHarnessAssistantTranscript(GOAL_MODE_HELP);
-      return true;
     case 'clear':
       resetHarnessForClear();
       return true;
     case 'approval':
       applyHarnessApprovalPolicySelection(rest, HARNESS_APPROVAL_USAGE);
-      return true;
-    case 'yolo':
-      applyHarnessApprovalPolicySelection(rest || 'yolo', HARNESS_YOLO_USAGE);
       return true;
     default: {
       const command = findSlashCommand(commandName);
@@ -1707,7 +1684,7 @@ registerBuiltinSlashCommands({
   runtime: HARNESS_PLATFORM_SERVICES.runtime,
   runtimeSession: harnessRuntimeSession,
   // Mirror `texra chat`: agent selection is open exactly while no root run
-  // is pending, the same fact the status bar's `/agent` hint derives from.
+  // is pending.
   canSelectAgent: () => !rootRunPending.get(),
   canSelectModel: () => CAN_SELECT_MODEL,
   getModelSwitchDisabledReason: (model) =>
@@ -1792,12 +1769,8 @@ function renderHarnessApp(): React.JSX.Element {
       onSubmit={handleHarnessSubmit}
       onKillRun={markHarnessRunStopped}
       onWorkflowControl={() => undefined}
-      canInterruptRun={(runId) =>
-        isInFlightPhase(runViewOf(currentView(), runId)?.status)
-      }
       colorEnabled={HARNESS_COLOR_ENABLED}
       history={HARNESS_INPUT_HISTORY}
-      onInterruptRun={markHarnessRunInterrupted}
       onStaticTranscriptChange={viewportController.repaintTranscript}
       onCtrlC={handleHarnessCtrlC}
     />
@@ -1954,7 +1927,7 @@ async function exitHarness(exitCode: number): Promise<void> {
   ink.unmount();
   try {
     await Effect.runPromise(harnessRuntimeHost.close());
-    await Effect.runPromise(platform().lifecycle.runShutdown);
+    await Effect.runPromise(HARNESS_PLATFORM_SERVICES.lifecycle.runShutdown);
   } finally {
     process.exit(exitCode);
   }

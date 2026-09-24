@@ -25,6 +25,7 @@ import {
 } from '@tools/arxiv/arxivShared';
 import { executed } from '@tools/core/result';
 import { pluralize } from '@utils/text/stringUtils';
+import { ensureError } from '@utils/errors/errorMessage';
 
 type Category = Parameters<typeof catQuery>[0];
 
@@ -91,7 +92,7 @@ const searchArxiv = Effect.fn('ArxivSearchTool.execute')(function* (
     // and rely on the library's runtime validation (recovered below).
     const filter = yield* Effect.try({
       try: () => catQuery(trimmed as Category),
-      catch: (error) => error,
+      catch: ensureError,
     }).pipe(
       // Skip invalid categories — log so a silently-dropped filter is
       // traceable rather than mysteriously absent from the query.

@@ -52,39 +52,35 @@ const CHAT_LOGIN_USAGE = [
   'Usage: /login [texra [github | google]] [--no-browser] [--device] [--select-account] [--login-hint <account>]',
   '       /login chatgpt [--no-browser] [--device]',
   '       /login grok [--no-browser] [--device]',
+  '       /login status',
 ].join('\n');
 const CHAT_LOGOUT_USAGE = 'Usage: /logout chatgpt | grok | texra | all';
 
-export function loginStartMessage(args: CliLoginSlashArgs): string {
-  if (args.target === 'chatgpt') {
-    if (args.device) return CHATGPT_AUTH.startingDevice;
-    if (args.noBrowser) return CHATGPT_AUTH.startingNoBrowser;
-    return CHATGPT_AUTH.startingBrowser;
-  }
-  if (args.target === 'grok') {
-    if (args.device) return GROK_AUTH.startingDevice;
-    if (args.noBrowser) return GROK_AUTH.startingNoBrowser;
-    return GROK_AUTH.startingBrowser;
-  }
-  if (args.device) return RESEARCHER_ACCESS_AUTH.startingDevice;
-  if (args.noBrowser)
-    return RESEARCHER_ACCESS_AUTH.startingNoBrowser(args.provider);
-  return RESEARCHER_ACCESS_AUTH.startingBrowser(args.provider);
-}
-
-/** Sign-in outcome copy shared by the subscription auth objects. */
+/** Sign-in copy shared by the subscription auth objects. */
 interface SubscriptionAuthCopy {
+  readonly startingDevice: string;
+  readonly startingNoBrowser: string;
+  readonly startingBrowser: string;
   readonly signedInEnabled: (accountLabel: string) => string;
-  readonly signedInOverrideDisabled: (
-    accountLabel: string,
-    target: string,
-  ) => string;
 }
 
 const SUBSCRIPTION_AUTH_COPY: Record<
   SubscriptionProviderId,
   SubscriptionAuthCopy
 > = { chatgpt: CHATGPT_AUTH, grok: GROK_AUTH };
+
+export function loginStartMessage(args: CliLoginSlashArgs): string {
+  if (args.target === 'chatgpt' || args.target === 'grok') {
+    const copy = SUBSCRIPTION_AUTH_COPY[args.target];
+    if (args.device) return copy.startingDevice;
+    if (args.noBrowser) return copy.startingNoBrowser;
+    return copy.startingBrowser;
+  }
+  if (args.device) return RESEARCHER_ACCESS_AUTH.startingDevice;
+  if (args.noBrowser)
+    return RESEARCHER_ACCESS_AUTH.startingNoBrowser(args.provider);
+  return RESEARCHER_ACCESS_AUTH.startingBrowser(args.provider);
+}
 
 /**
  * Subscription sign-in from the chat TUI, mirroring `signOutSubscription`
@@ -101,12 +97,9 @@ const loginToSubscription = Effect.fn('loginToSubscription')(function* (
     writeProgress: (message) =>
       output.writeProgress(message, { copyable: true }),
   });
-  const update = yield* setCliSubscriptionPreference(stores, providerId, true);
-  const auth = SUBSCRIPTION_AUTH_COPY[providerId];
+  yield* setCliSubscriptionPreference(stores, providerId, true);
   output.appendOutcome(
-    update.effective
-      ? auth.signedInEnabled(account.label)
-      : auth.signedInOverrideDisabled(account.label, update.target),
+    SUBSCRIPTION_AUTH_COPY[providerId].signedInEnabled(account.label),
   );
 });
 

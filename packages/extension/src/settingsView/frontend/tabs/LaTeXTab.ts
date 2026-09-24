@@ -77,6 +77,7 @@ import {
 } from '@ui/wa/settingsSection';
 import { renderSetStatusIcon, statusCheckIconStyles } from '@ui/wa/statusIcons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
+import { readSelectValue } from '@ui/wa/selectTemplates';
 
 // Local imports - shared utilities
 import { clampOptional, filterNotNullish } from '@utils/core';
@@ -88,7 +89,6 @@ import {
 } from '../components/shared/stateSettingRows';
 import { latexTabStyles } from './LaTeXTab.styles';
 import type WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
-import type WaSelect from '@awesome.me/webawesome/dist/components/select/select.js';
 import type WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
 import type WaCheckbox from '@awesome.me/webawesome/dist/components/checkbox/checkbox.js';
 import type WaTextarea from '@awesome.me/webawesome/dist/components/textarea/textarea.js';
@@ -1160,7 +1160,7 @@ export class LaTeXTab extends LitElement {
           class="setting-enum-select setting-control-metadata"
           .value=${String(effective)}
           @change=${(e: Event) => {
-            const v = (e.target as WaSelect).value as LatexConfigValueFor<F>;
+            const v = readSelectValue(e) as LatexConfigValueFor<F>;
             this.dispatchSetConfigValue(opts.field, v);
           }}
         >

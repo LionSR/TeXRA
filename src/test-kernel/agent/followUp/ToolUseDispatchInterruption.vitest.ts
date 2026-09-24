@@ -33,6 +33,7 @@ import { dispatchFactsFor } from '@agent/runtime/run/tools';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { UsageMonitor } from '@agent/runtime/UsageMonitor';
 import { TraceEmitter } from '@agent/trace';
+import type { RunCell } from '@agent/runtime/loop/runProgram';
 import {
   AgentCategory,
   type RequestDecision,
@@ -42,7 +43,10 @@ import {
 import { RunLedger } from '@shared/session/runLedger';
 import type { RunState } from '@shared/session/runStateFold';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
-import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
+import {
+  nativeToolTestLayer,
+  emptyPinnedComposition,
+} from '@test/support/nativeToolTestLayer';
 import { hostStores } from '@test/support/setupPlatform';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
@@ -144,12 +148,12 @@ function invokerLayer(turns: readonly TurnResult[]) {
     ModelInvoker,
     Effect.gen(function* () {
       const run = yield* AgentRun;
-      const ledger = yield* RunLedger;
       const aggregateId = rowAggregate(run.runId);
       let index = 0;
       return {
-        invoke: (state: RunState) =>
+        invoke: (cell: RunCell) =>
           Effect.gen(function* () {
+            const state = yield* cell.current;
             const turn = turns[index];
             index += 1;
             if (turn === undefined) {
@@ -160,7 +164,7 @@ function invokerLayer(turns: readonly TurnResult[]) {
             const bound = yield* SynchronizedRef.get(run.model);
             const invocation = { invocationId: randomUUID(), attempt: 1 };
             const responseId = randomUUID();
-            const next = yield* ledger.appendBatch(run.runId, state, [
+            const next = yield* cell.append([
               {
                 type: 'model.message',
                 aggregateId,
@@ -244,6 +248,8 @@ function agentRunTestLayer(init: HarnessInit) {
         fileService: new RunFileService(init.runId, init.session.roots),
         tools: new MapToolRegistry(init.tools),
         finalToolName: null,
+        toolset: { offeredTools: [], toolsetHash: '0'.repeat(64) },
+        composition: emptyPinnedComposition,
         structured: { value: undefined },
         model,
         scope,

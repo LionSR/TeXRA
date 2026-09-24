@@ -10,8 +10,6 @@
 
 import { Cause, Effect, Fiber, Stream } from 'effect';
 
-import type { AgentTrace } from '@agent/trace';
-import { createChannelTrace } from '@agent/trace';
 import {
   validateRunRequest,
   type HostPresentation,
@@ -22,12 +20,13 @@ import {
   type SessionHandle,
   type ValidatedRunRequest,
 } from '@agent/runtime';
-import {
-  ToolEditApprovalController,
-  type ToolEditApprovalHost,
-} from '@controllers/approval/ToolEditApprovalController';
+import { ToolEditApprovalController } from '@controllers/approval/ToolEditApprovalController';
 import { RunLaunchFailed } from '@controllers/session/hostRunActions';
-import type { ProcessRuntime } from '@platform/processRuntime';
+import { withLogChannel } from '@logger/effectLog';
+import {
+  type ProcessRuntime,
+  withProcessServices,
+} from '@platform/processRuntime';
 import type {
   AgentCategory,
   RequestOpenFilePayload,
@@ -44,12 +43,13 @@ import {
   DesktopToolEditApprovalHost,
   type DesktopToolEditApprovalUi,
 } from './desktopToolEditApproval.js';
-import { toLogData } from './desktopLogUtils.js';
 import {
   launchDesktopAgent,
   type DesktopAgentLaunchOptions as DesktopRunOptions,
 } from './desktopAgentLaunch.js';
 import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';
+
+const CHANNEL = 'DesktopAgentRun';
 
 export interface DesktopAgentRunOptions {
   host: DesktopAgentRunHost;
@@ -67,12 +67,11 @@ export interface DesktopAgentRunOptions {
   /** The process runtime this window was handed; the run and its approval
    *  wiring settle on it. */
   runtime: ProcessRuntime;
-  /** Fired when a launch this window started settles. That is after
+  /** Runs when a launch this window started settles. That is after
    *  `AgentRunLifecycle` writes `firstRunDone` on a successful run, so the
    *  host can recompute the onboarding funnel from the updated flag. The
    *  refresh is idempotent and runs on every settle. */
-  onRunCompleted?: () => void;
-  logger?: AgentTrace;
+  onRunCompleted?: Effect.Effect<void>;
 }
 
 export interface DesktopAgentRun {
@@ -105,7 +104,6 @@ export function createDesktopAgentRun(
   options: DesktopAgentRunOptions,
 ): DesktopAgentRun {
   const { session, host, runtime } = options;
-  const logger = options.logger ?? createChannelTrace('DesktopAgentRun');
   let disposed = false;
 
   /**
@@ -151,21 +149,16 @@ export function createDesktopAgentRun(
   // (`request.opened` folds into the view), and a surface's `request.decide`
   // settles it there; the staged preview is discarded when the request
   // resolves, whichever way.
-  const decideRequest: ToolEditApprovalHost['decide'] = (
-    runId,
-    requestId,
-    decision,
-  ) =>
-    session.requests
-      .request({ kind: 'request.decide', runId, requestId, decision })
-      .pipe(Effect.asVoid);
   const toolEditApprovals = new ToolEditApprovalController({
     host: new DesktopToolEditApprovalHost({
       ui: {
         ...options.toolEditPreview,
         showErrorMessage: host.showErrorMessage,
       },
-      decide: decideRequest,
+      decide: (runId, requestId, decision) =>
+        session.requests
+          .request({ kind: 'request.decide', runId, requestId, decision })
+          .pipe(Effect.asVoid),
       runtime,
     }),
   });
@@ -186,15 +179,16 @@ export function createDesktopAgentRun(
       // here rather than left to a fiber nobody reads.
       presentToolEdit: (request) => {
         runtime.runFork(
-          toolEditApprovals.present(request).pipe(
-            Effect.catchCause((cause) =>
-              Effect.sync(() => {
-                logger.warn('Failed to stage the tool-edit preview', {
-                  data: toLogData(Cause.squash(cause)),
-                });
-              }),
+          toolEditApprovals
+            .present(request)
+            .pipe(
+              Effect.catchCause((cause) =>
+                Effect.logWarning('Failed to stage the tool-edit preview').pipe(
+                  Effect.annotateLogs({ data: Cause.squash(cause) }),
+                  withLogChannel(CHANNEL),
+                ),
+              ),
             ),
-          ),
         );
       },
       // An open that never committed leaves the staged preview with no
@@ -204,9 +198,7 @@ export function createDesktopAgentRun(
       // services from the runtime's context, which the session that composes
       // them does not carry.
       releaseToolEdit: (requestId) =>
-        Effect.flatMap(runtime.contextEffect, (context) =>
-          Effect.provideContext(toolEditApprovals.release(requestId), context),
-        ),
+        withProcessServices(runtime, toolEditApprovals.release(requestId)),
     }),
   );
 
@@ -227,17 +219,20 @@ export function createDesktopAgentRun(
         onRunResolved: options.onLaunched,
         ...runOptions,
       },
-    ).pipe(Effect.ensuring(Effect.sync(() => options.onRunCompleted?.())));
+    ).pipe(Effect.ensuring(options.onRunCompleted ?? Effect.void));
   }
 
   return {
     runAgentRequest(request, runOptions) {
       const validated = validateRunRequest(request);
       if (!validated.valid) {
-        logger.error('Invalid desktop run request', {
-          data: validated.issue,
-        });
-        return Effect.fail(new Rejected({ reason: validated.message }));
+        return Effect.logError('Invalid desktop run request').pipe(
+          Effect.annotateLogs({ data: validated.issue }),
+          withLogChannel(CHANNEL),
+          Effect.andThen(
+            Effect.fail(new Rejected({ reason: validated.message })),
+          ),
+        );
       }
       // The launch program still fails with a bare `Error`, so the port's
       // one channel is named here, as the extension's binding names it.

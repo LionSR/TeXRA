@@ -10,7 +10,7 @@ import { type AgentFlowResult } from '@agent/runtime/AgentFlowResult';
 import { AgentEngine } from '@agent/runtime/AgentEngine';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { ExecuteAgentOptions } from '@agent/runtime/executeAgent';
-import type { AgentRunServices } from '@agent/runtime/toolInjection';
+import type { AgentRunServices } from '@agent/runtime/runRegistry';
 import type { AgentRunHandle } from '@agent/runtime/RunHandle';
 import type {
   ChildRunPorts,
@@ -24,6 +24,7 @@ import {
   type RunId,
   type UserFollowUpSupport,
 } from '@shared/schemas';
+import type { CompositionKey } from '@tools/compositions';
 import { ensureError } from '@utils/errors/errorMessage';
 import {
   buildSubagentResult,
@@ -46,8 +47,12 @@ export interface ChildRunLaunchOptions {
   readonly parentRunId: RunId;
   readonly session: SessionHandle;
   readonly approvalPromptsUnavailable?: boolean;
+  /**
+   * The parent's composition, which a fresh child joins; a resumed child
+   * resolves its own.
+   */
+  readonly composition?: CompositionKey;
   readonly onApprovalPolicyDenial?: () => void;
-  readonly runtimeUnavailableTools?: readonly string[];
   /** Fires with the resolved child run id — the caller inherits approvals onto it. */
   readonly onRunResolved?: (runId: RunId) => void;
 }
@@ -70,7 +75,11 @@ interface NativeSubagentStrategyBase extends ChildRunLaunchOptions {
 
 type NativeSubagentStrategyParams = NativeSubagentStrategyBase &
   (
-    | { readonly definition: PreparedAgentDefinition; readonly resume?: never }
+    | {
+        readonly definition: PreparedAgentDefinition;
+        readonly resume?: never;
+        readonly composition: CompositionKey;
+      }
     | {
         readonly definition?: never;
         readonly resume: {
@@ -167,8 +176,8 @@ export function createNativeSubagentStrategy(
             ...params.resume?.options,
             session: params.session,
             approvalPromptsUnavailable: params.approvalPromptsUnavailable,
+            composition: params.composition,
             onApprovalPolicyDenial: params.onApprovalPolicyDenial,
-            runtimeUnavailableTools: params.runtimeUnavailableTools,
             onRunResolved: params.onRunResolved,
             onProgress: (update: Parameters<ChildRunPorts['notify']>[0]) =>
               ports.notify(update),

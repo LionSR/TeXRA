@@ -9,14 +9,10 @@ import {
 import { join } from 'node:path';
 
 import { it } from '@effect/vitest';
-import { Deferred, Effect } from 'effect';
+import { Deferred, Effect, Exit, Scope } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
-import {
-  DESKTOP_WORKSPACE_COMMANDS,
-  EMPTY_DESKTOP_ENVIRONMENT_SUMMARY,
-  type DesktopEnvironmentSummary,
-} from '@desktop/shared/desktopWorkspaceMessages';
+import { DESKTOP_WORKSPACE_COMMANDS } from '@desktop/shared/desktopWorkspaceMessages';
 import { createDesktopWorkspaceIpc } from '@desktop/main/desktopWorkspaceIpc';
 import type { DesktopBrowserViews } from '@desktop/main/desktopBrowserViews';
 import type { DesktopPtyHost } from '@desktop/main/desktopPtyHost';
@@ -65,15 +61,18 @@ function createIpc(
     browserViews: createBrowserViews(),
     toWindowBounds: (bounds) => bounds,
     getWorkspacePath: () => workspacePath,
-    getEnvironmentSummary: async () => EMPTY_DESKTOP_ENVIRONMENT_SUMMARY,
     onAsyncError: vi.fn(),
     runtime: testRuntime(),
     ...overrides,
   };
   const ipc = createDesktopWorkspaceIpc({ postToRenderer }, options);
-  // The IPC subscribes to a process-global bus, so a fixture left undisposed
-  // would keep reacting to later tests' emits.
-  liveWorkspaceIpcs.push(ipc);
+  // The IPC follows a process-global bus, so a fixture whose scope stayed
+  // open would keep reacting to later tests' emits.
+  const scope = Scope.makeUnsafe();
+  liveScopes.push(scope);
+  options.runtime.runSync(
+    Effect.forkIn(ipc.followFilesWritten, scope, { startImmediately: true }),
+  );
   return {
     ...ipc,
     handleMessage(message: Parameters<typeof ipc.handleMessage>[0]) {
@@ -82,7 +81,7 @@ function createIpc(
   };
 }
 
-const liveWorkspaceIpcs: ReturnType<typeof createDesktopWorkspaceIpc>[] = [];
+const liveScopes: Scope.Closeable[] = [];
 
 /** Resolve the returned promise the next time `mock` is called with an
  *  argument matching `predicate`. The mock's own return stays undefined. */
@@ -126,7 +125,8 @@ describe('desktop workspace IPC', () => {
   });
 
   afterEach(() => {
-    for (const ipc of liveWorkspaceIpcs.splice(0)) ipc.dispose();
+    for (const scope of liveScopes.splice(0))
+      testRuntime().runFork(Scope.close(scope, Exit.void));
   });
 
   // The file tree caches its listing and there is no filesystem watcher, so a
@@ -394,69 +394,6 @@ describe('desktop workspace IPC', () => {
         dirty: true,
       }),
     ).toBe(false);
-  });
-
-  it('posts environment state and clears loading state after host failures', async () => {
-    const environment: DesktopEnvironmentSummary = {
-      isGitRepository: true,
-      branch: 'feature/ui',
-      upstream: 'origin/feature/ui',
-      changedFiles: 3,
-      additions: 12,
-      deletions: 4,
-      ahead: 1,
-      behind: 0,
-    };
-    const postToRenderer = vi.fn();
-    const onAsyncError = vi.fn();
-    const success = createIpc(postToRenderer, {
-      getEnvironmentSummary: async () => environment,
-      onAsyncError,
-    });
-
-    const environmentPosted = nextCall(
-      postToRenderer,
-      (message) =>
-        (message as { command?: string }).command ===
-        DESKTOP_WORKSPACE_COMMANDS.ENVIRONMENT_STATE,
-    );
-    success.handleMessage({
-      command: DESKTOP_WORKSPACE_COMMANDS.ENVIRONMENT_REQUEST,
-    });
-    await environmentPosted;
-    expect(postToRenderer).toHaveBeenCalledWith({
-      command: DESKTOP_WORKSPACE_COMMANDS.ENVIRONMENT_STATE,
-      environment,
-    });
-
-    const failure = new Error('git unavailable');
-    const failed = createIpc(postToRenderer, {
-      getEnvironmentSummary: async () => {
-        throw failure;
-      },
-      onAsyncError,
-    });
-    const hostCallFailed = nextCall(
-      onAsyncError,
-      (error) =>
-        (error as { _tag?: string })._tag === 'WorkspaceHostCallFailed',
-    );
-    failed.handleMessage({
-      command: DESKTOP_WORKSPACE_COMMANDS.ENVIRONMENT_REQUEST,
-    });
-
-    await hostCallFailed;
-    expect(onAsyncError).toHaveBeenCalledWith(
-      expect.objectContaining({
-        _tag: 'WorkspaceHostCallFailed',
-        member: 'getEnvironmentSummary',
-        cause: failure,
-      }),
-    );
-    expect(postToRenderer).toHaveBeenLastCalledWith({
-      command: DESKTOP_WORKSPACE_COMMANDS.ENVIRONMENT_STATE,
-      environment: EMPTY_DESKTOP_ENVIRONMENT_SUMMARY,
-    });
   });
 
   it('runs setup commands only after the integrated pty is ready', async () => {

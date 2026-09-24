@@ -48,12 +48,13 @@ import type {
   RuntimeToolRegistry,
   ToolServices,
 } from '@agent/runtime/ToolServices';
+import { makeRunCell } from '@agent/runtime/loop/runProgram';
 import { dispatchPendingResponse } from '@agent/runtime/loop/toolUseDispatch';
 import {
   appendRow,
+  familyState,
   rowAggregate,
   snapshotRow,
-  toolUseFlowState,
   type ToolUseFlowState,
 } from '@agent/runtime/loop/rows';
 import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
@@ -61,23 +62,22 @@ import type { BoundModel } from '@agent/runtime/run/modelBinding';
 import { dispatchFactsFor } from '@agent/runtime/run/tools';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { UsageMonitor } from '@agent/runtime/UsageMonitor';
-import {
-  noopTrace,
-  TraceEmitter,
-  type AgentEvent,
-  type AgentTrace,
-} from '@agent/trace';
+import { TraceEmitter, type AgentEvent, type AgentTrace } from '@agent/trace';
 import { DatabaseWriteFailed } from '@shared/session/database';
 import {
   AgentCategory,
-  AgentRunStateSnapshotSchema,
+  EMPTY_RUN_USAGE_TOTALS,
   type RunId,
   type ToolResult,
 } from '@shared/schemas';
 import { RunLedger } from '@shared/session/runLedger';
 import type { RunState } from '@shared/session/runStateFold';
+import { noopTrace } from '@test/support/noopTrace';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
-import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
+import {
+  nativeToolTestLayer,
+  emptyPinnedComposition,
+} from '@test/support/nativeToolTestLayer';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { hostStores, setupPlatform } from '@test/support/setupPlatform';
@@ -223,8 +223,10 @@ const freshState = (): RunState => ({
   requests: {},
   followUps: [],
   followUpIds: new Set(),
-  usage: AgentRunStateSnapshotSchema.parse({}).usageAccumulator.totals,
+  usage: EMPTY_RUN_USAGE_TOTALS,
   flow: null,
+  roundOutputs: [],
+  overflowRecoveredAtRound: null,
 });
 
 const INVOCATION = {
@@ -267,6 +269,8 @@ function agentRun(
     fileService: new RunFileService(runId, session.roots),
     tools,
     finalToolName: null,
+    toolset: { offeredTools: [], toolsetHash: '0'.repeat(64) },
+    composition: emptyPinnedComposition,
     structured: { value: undefined },
     model,
     scope: Scope.makeUnsafe(),
@@ -313,7 +317,6 @@ interface HarnessOptions {
 
 /** The slices of a run that has yet to touch a file. */
 const emptySlices = (): NonNullable<ToolUseFlowState['stateSlices']> => ({
-  runStateSnapshot: { totalRounds: 0, totalResponseTimeMs: 0 },
   workspaceSnapshot: AgentWorkspaceState.create().toSnapshot({
     excludeAssemblyStrings: true,
   }),
@@ -341,8 +344,12 @@ const openDispatch = Effect.fn('openDispatch')(function* (
     snapshotRow(runId, freshState(), {
       phase: 'initial',
       state: {
-        shouldSkipCycle: false,
-        stateSlices: options.stateSlices ?? null,
+        family: 'toolUse',
+        state: {
+          stateSlices: options.stateSlices ?? null,
+          offeredTools: [],
+          toolsetHash: '0'.repeat(64),
+        },
       },
     }),
   ]);
@@ -399,10 +406,15 @@ const openDispatch = Effect.fn('openDispatch')(function* (
 
 /** Dispatch the pending response of an opened run. */
 const dispatch = (kit: DispatchKit, userInstruction?: string) =>
-  dispatchPendingResponse(kit.state, {
-    workspace: kit.workspace,
-    userInstruction,
-  }).pipe(Effect.provide(kit.layer));
+  makeRunCell(kit.runId, kit.state).pipe(
+    Effect.flatMap((cell) =>
+      dispatchPendingResponse(cell, {
+        workspace: kit.workspace,
+        userInstruction,
+      }),
+    ),
+    Effect.provide(kit.layer),
+  );
 
 /** The one tool group the dispatch delivers, in call order. */
 function deliveredResults(
@@ -764,7 +776,7 @@ describe('tool-use dispatch', () => {
       ]);
       // No delivery ran, so this workspace can only have come from the
       // settlement's own state operation.
-      const slices = toolUseFlowState(folded!)?.stateSlices;
+      const slices = familyState(folded!, 'toolUse')?.stateSlices;
       expect(slices?.workspaceSnapshot.interactions.edits).toEqual([
         { path: 'notes.tex', added: 3, removed: 1 },
       ]);

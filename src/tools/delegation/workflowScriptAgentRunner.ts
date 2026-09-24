@@ -11,7 +11,7 @@ import {
 import { WorkflowRunAbortError } from '@agent/workflowScript/runWorkflowScript';
 import type { WorkflowAgentInvocation } from '@agent/workflowScript/types';
 import type { AgentEntry } from '@agent/index/agentEntry';
-import type { AgentRunServices } from '@agent/runtime/toolInjection';
+import type { AgentRunServices } from '@agent/runtime/runRegistry';
 import { Runs } from '@agent/runtime/runRegistry';
 import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
 import { formatError } from '@common/errors';
@@ -472,8 +472,6 @@ const recoverOrLaunchWorkflowChild = Effect.fn('recoverOrLaunchWorkflowChild')(
     AgentRunServices | Scope.Scope
   > {
     const { session } = call;
-    // A workflow stop reaches this runner as the interruption of the fiber it
-    // runs on; there is no abort signal to poll beside it.
     // The mark does not say where to start; it says what an absent id means. A
     // deleted attempt is collected in the end, and an id-by-id probe reads the
     // hole that leaves as an id that never started — it would launch into it
@@ -810,9 +808,8 @@ export function createWorkflowScriptAgentRunner(
               session,
               approvalPromptsUnavailable:
                 parent.run.toolPolicy.approvalPromptsUnavailable,
+              composition: parent.run.composition.key,
               onApprovalPolicyDenial: parent.run.onApprovalPolicyDenial,
-              runtimeUnavailableTools:
-                parent.run.toolPolicy.runtimeUnavailableTools,
               // Live inherited bypass values, matching LLM delegation: each
               // approval follows the parent's corresponding bypass. The run's own
               // stream inherits from the orchestrator, so nested delegation remains

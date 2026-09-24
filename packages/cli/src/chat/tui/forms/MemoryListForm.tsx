@@ -2,6 +2,7 @@
 // memory is selected.
 
 import { Text } from 'ink';
+import { Effect } from 'effect';
 
 import {
   CLI_MEMORY_LIST_LIMIT,
@@ -34,13 +35,12 @@ export function MemoryListForm(props: MemoryListFormProps): React.JSX.Element {
     <AsyncListForm<readonly MemoryViewItem[], string>
       title="/memory"
       loadingLabel="Loading memories..."
-      load={async () =>
-        (
-          await props.runtime.runPromise(
-            runCliMemory(props.roots, loadMemoryItems()),
-          )
-        ).slice(0, CLI_MEMORY_LIST_LIMIT)
+      load={() =>
+        Effect.map(runCliMemory(props.roots, loadMemoryItems()), (items) =>
+          items.slice(0, CLI_MEMORY_LIST_LIMIT),
+        )
       }
+      runtime={props.runtime}
       items={(entries) =>
         entries.map((item) => ({
           value: item.storagePath,

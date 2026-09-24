@@ -112,8 +112,6 @@ export function formatZodIssuesForDiagnostics(
 const ToolResultSharedFields = {
   /** User instruction that was processed */
   userInstruction: z.string().optional(),
-  /** User-provided patch content */
-  userPatch: z.string().optional(),
   /**
    * Additional diagnostic information. Deliberately `z.unknown()`: every tool
    * shapes its own payload here (validation issues, severity counts, an

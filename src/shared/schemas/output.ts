@@ -35,7 +35,7 @@ export const FileLocationSchema = z.discriminatedUnion('kind', [
 ]);
 
 /** Agent outputs are workspace or runStorage, never external */
-export const AgentFileLocationSchema = z.discriminatedUnion('kind', [
+const AgentFileLocationSchema = z.discriminatedUnion('kind', [
   WorkspaceFileLocationSchema,
   RunStorageFileLocationSchema,
 ]);
@@ -266,8 +266,7 @@ export const RoundOutputSchema = z.strictObject({
   outputs: OutputFileInfoSchema.array(),
   compileFailures: CompileFailureSchema.array().prefault(() => []),
   /** The expected output files this round did not produce, as last reported.
-   *  Persisted with the round so a resumed run still publishes the whole
-   *  run's missing-output map on its next `missingOutputs` run fact. */
+   *  Persisted with all round outputs in the `output.produced` row. */
   missingOutputs: z
     .string()
     .array()

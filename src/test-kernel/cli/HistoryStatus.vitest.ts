@@ -82,16 +82,10 @@ function snapshotPayload(
     runtime: SNAPSHOT_RUNTIME,
     state:
       family === 'toolUse'
-        ? { shouldSkipCycle: false, stateSlices: null }
+        ? { stateSlices: null, offeredTools: [], toolsetHash: '0'.repeat(64) }
         : {
-            currentRound: 1,
             totalRounds: 2,
             workspaceSnapshot: AgentWorkspaceState.emptySnapshot(),
-            outputLocation: null,
-            runStateSnapshot: {},
-            roundOutputs: [],
-            continueRounds: false,
-            endTurn: false,
           },
   });
 }
@@ -104,7 +98,7 @@ async function seedSnapshot(
   family: 'toolUse' | 'reflection',
 ): Promise<void> {
   await Effect.runPromise(
-    registerRun(testDefaultSession(), id, config, agent, {
+    registerRun(testDefaultSession(), id, config, {
       identity: { kind: 'agent', agent },
     }),
   );

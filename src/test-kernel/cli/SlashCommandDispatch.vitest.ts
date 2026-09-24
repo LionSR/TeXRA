@@ -24,17 +24,16 @@ import {
   showCliMemoryList,
   showCliMemoryPreview,
 } from '@cli/chat/tui/commands/handlers/memoryCommands';
-import { loginFromChat } from '@cli/chat/tui/commands/handlers/loginCommands';
+import {
+  loginFromChat,
+  logoutFromChat,
+} from '@cli/chat/tui/commands/handlers/loginCommands';
 import {
   type SlashCommandContext,
   type SlashCommandOutput,
 } from '@cli/chat/tui/commands/handlers/slashContext';
 import { registerBuiltinSlashCommands } from '@cli/chat/tui/commands/registerBuiltins';
-import {
-  listSlashCommands,
-  registerSlashCommand,
-  unregisterSlashCommand,
-} from '@cli/chat/tui/commands/slashRegistry';
+import { installSlashCommands } from '@cli/chat/tui/commands/slashRegistry';
 import { tuiUi } from '@cli/chat/tui/hosts/tuiUiHost';
 import { transcriptRowHeadline } from '@cli/chat/tui/panes/transcriptEntries';
 import { notices, noticesFor } from '@cli/chat/tui/state/transcript';
@@ -108,7 +107,7 @@ beforeEach(() => {
   );
 });
 afterEach(() => {
-  for (const cmd of [...listSlashCommands()]) unregisterSlashCommand(cmd.name);
+  installSlashCommands([]);
   seeded.clear();
   syncSeededView();
   resetCliState();
@@ -270,6 +269,14 @@ function dispatchSlash(
   );
 }
 
+/** The account form's sign-out action, as `/login` runs it. */
+function logout(target: string): Effect.Effect<void, unknown> {
+  return withProcessServices(
+    services.runtime,
+    logoutFromChat(target, services.stores, services.secrets),
+  );
+}
+
 function silentOutput(): SlashCommandOutput {
   return { appendOutcome: vi.fn(), setNotice: vi.fn(), writeProgress: vi.fn() };
 }
@@ -311,11 +318,7 @@ function mockSignOuts(): {
     .mockReturnValue(Effect.void);
   const signOutChatGpt = vi
     .spyOn(subscriptionLogin, 'signOutCliSubscription')
-    .mockReturnValue(
-      Effect.succeed({
-        preferenceUpdate: { effective: false, target: 'global' as const },
-      }),
-    );
+    .mockReturnValue(Effect.succeed({}));
   mockModelAccessOverview();
   return { signOutSupabase, signOutChatGpt };
 }
@@ -333,17 +336,9 @@ describe('handleTuiSlashCommand', () => {
       registerBuiltinSlashCommands({ ...services });
       const context = createContext();
 
-      yield* dispatchSlash('/tools', context);
-      expect(localEntries()).toEqual([]);
-
       yield* dispatchSlash('/help', context);
       expect(infoPane.get()).toMatchObject({ title: '/help' });
       expect(infoPane.get()?.lines.join('\n')).toContain('**Keyboard**');
-      expect(localEntries()).toEqual([]);
-
-      closeInfoPane();
-      yield* dispatchSlash('/goal', context);
-      expect(activeForm.get()).toMatchObject({ commandName: 'goal' });
       expect(localEntries()).toEqual([]);
     }),
   );
@@ -424,11 +419,18 @@ describe('handleTuiSlashCommand', () => {
     'adds a lazy command echo before errors even under echo never',
     () =>
       Effect.gen(function* () {
-        registerSlashCommand({
-          name: 'unavailable',
-          description: 'Unavailable test command',
-          echo: 'never',
-        });
+        installSlashCommands([
+          {
+            pluginId: 'test',
+            commands: [
+              {
+                name: 'unavailable',
+                description: 'Unavailable test command',
+                echo: 'never',
+              },
+            ],
+          },
+        ]);
 
         yield* dispatchSlash('/unavailable', createContext());
 
@@ -444,12 +446,19 @@ describe('handleTuiSlashCommand', () => {
 
   it.effect('threads deferred echo through fallback registered forms', () =>
     Effect.gen(function* () {
-      registerSlashCommand({
-        name: 'custom-form',
-        description: 'Custom form',
-        echo: 'ifPersists',
-        formComponent: () => null,
-      });
+      installSlashCommands([
+        {
+          pluginId: 'test',
+          commands: [
+            {
+              name: 'custom-form',
+              description: 'Custom form',
+              echo: 'ifPersists',
+              formComponent: () => null,
+            },
+          ],
+        },
+      ]);
 
       yield* dispatchSlash('/custom-form', createContext());
       const form = activeForm.get()?.render(() => undefined, 20) as {
@@ -469,11 +478,18 @@ describe('handleTuiSlashCommand', () => {
     'queues a host dialog behind an open slash form instead of evicting it',
     () =>
       Effect.gen(function* () {
-        registerSlashCommand({
-          name: 'custom-form',
-          description: 'Custom form',
-          formComponent: () => null,
-        });
+        installSlashCommands([
+          {
+            pluginId: 'test',
+            commands: [
+              {
+                name: 'custom-form',
+                description: 'Custom form',
+                formComponent: () => null,
+              },
+            ],
+          },
+        ]);
         yield* dispatchSlash('/custom-form', createContext());
 
         // The host dialog reachable from a retry card ('k' with no stored
@@ -640,7 +656,7 @@ describe('handleTuiSlashCommand', () => {
         }),
       );
       vi.spyOn(codexSubscription, 'setPreferCodexSubscription').mockReturnValue(
-        Effect.succeed({ effective: true, target: 'global' }),
+        Effect.void,
       );
 
       const handled = yield* dispatchSlash('/login chatgpt', createContext());
@@ -682,7 +698,7 @@ describe('handleTuiSlashCommand', () => {
       }),
   );
 
-  it.effect('derives /auth and /api status from the same access overview', () =>
+  it.effect('prints account and access status for /login status', () =>
     Effect.gen(function* () {
       registerBuiltinSlashCommands({ ...services });
       const overview = vi
@@ -697,15 +713,9 @@ describe('handleTuiSlashCommand', () => {
         );
       const context = createContext();
 
-      yield* dispatchSlash('/auth', context);
-      const authStatusText = lastEntryText();
-      expectAccessStatusText(authStatusText);
-
-      yield* dispatchSlash('/api status', context);
-      const apiStatusText = lastEntryText();
-      expectAccessStatusText(apiStatusText);
-      expect(apiStatusText).toBe(authStatusText);
-      expect(overview).toHaveBeenCalledTimes(2);
+      yield* dispatchSlash('/login status', context);
+      expectAccessStatusText(lastEntryText());
+      expect(overview).toHaveBeenCalledOnce();
     }),
   );
 
@@ -729,7 +739,7 @@ describe('handleTuiSlashCommand', () => {
         'glm-secret',
       );
       expect(notice).toBe(
-        "Tip: the regular GLM endpoint is the default; enable 'Prefer GLM Coding Plan' with `/api glm-code` or in `/config` to use GLM Coding Plan.",
+        "Tip: the regular GLM endpoint is the default; enable 'Prefer GLM Coding Plan' in `/login` or `/config` to use GLM Coding Plan.",
       );
     }),
   );
@@ -764,37 +774,30 @@ describe('handleTuiSlashCommand', () => {
       }),
   );
 
-  it.effect('clears TeXRA and ChatGPT credentials on /logout', () =>
-    Effect.gen(function* () {
-      registerBuiltinSlashCommands({ ...services });
-      const { signOutSupabase, signOutChatGpt } = mockSignOuts();
+  it.effect(
+    'clears TeXRA and ChatGPT credentials when signing out of all',
+    () =>
+      Effect.gen(function* () {
+        registerBuiltinSlashCommands({ ...services });
+        const { signOutSupabase, signOutChatGpt } = mockSignOuts();
 
-      const handled = yield* dispatchSlash('/logout all', createContext());
+        yield* logout('all');
 
-      expect(handled).toBe(true);
-      expect(signOutSupabase).toHaveBeenCalledOnce();
-      // The provider ids only: each call also carries the session's setting
-      // stores, and a `ConfigProvider` in an assertion argument breaks the
-      // formatter's own `inspect` probe.
-      expect(
-        signOutChatGpt.mock.calls.map(([, providerId]) => providerId),
-      ).toEqual(['chatgpt', 'grok']);
-      const entry = lastEntryText();
-      expect(entry).toContain(RESEARCHER_ACCESS_AUTH.signedOut);
-      expect(entry).toContain('Signed out of ChatGPT.');
-      expect(entry).toContain(
-        'ChatGPT subscription disabled for Codex models.',
-      );
-      expect(entry).not.toContain('\n');
-    }),
-  );
-
-  it.effect('opens an account-specific sign-out chooser for bare /logout', () =>
-    Effect.gen(function* () {
-      registerBuiltinSlashCommands({ ...services });
-
-      yield* expectFormOpens('/logout', 'logout');
-    }),
+        expect(signOutSupabase).toHaveBeenCalledOnce();
+        // The provider ids only: each call also carries the session's setting
+        // stores, and a `ConfigProvider` in an assertion argument breaks the
+        // formatter's own `inspect` probe.
+        expect(
+          signOutChatGpt.mock.calls.map(([, providerId]) => providerId),
+        ).toEqual(['chatgpt', 'grok']);
+        const entry = lastEntryText();
+        expect(entry).toContain(RESEARCHER_ACCESS_AUTH.signedOut);
+        expect(entry).toContain('Signed out of ChatGPT.');
+        expect(entry).toContain(
+          'ChatGPT subscription disabled for Codex models.',
+        );
+        expect(entry).not.toContain('\n');
+      }),
   );
 
   it.effect('signs out of only the requested account', () =>
@@ -802,11 +805,11 @@ describe('handleTuiSlashCommand', () => {
       registerBuiltinSlashCommands({ ...services });
       const { signOutSupabase, signOutChatGpt } = mockSignOuts();
 
-      yield* dispatchSlash('/logout texra', createContext());
+      yield* logout('texra');
       expect(signOutSupabase).toHaveBeenCalledOnce();
       expect(signOutChatGpt).not.toHaveBeenCalled();
 
-      yield* dispatchSlash('/logout chatgpt', createContext());
+      yield* logout('chatgpt');
       expect(signOutSupabase).toHaveBeenCalledOnce();
       expect(signOutChatGpt).toHaveBeenCalledOnce();
     }),
@@ -821,9 +824,8 @@ describe('handleTuiSlashCommand', () => {
       );
       mockModelAccessOverview();
 
-      const handled = yield* dispatchSlash('/logout all', createContext());
+      yield* logout('all');
 
-      expect(handled).toBe(true);
       const entry = lastEntryText();
       expect(entry).toContain(RESEARCHER_ACCESS_AUTH.signedOut);
       expect(entry).toContain('ChatGPT sign-out failed: Codex logout failed');
@@ -843,9 +845,8 @@ describe('handleTuiSlashCommand', () => {
         );
         mockModelAccessOverview();
 
-        const handled = yield* dispatchSlash('/logout all', createContext());
+        yield* logout('all');
 
-        expect(handled).toBe(true);
         const entry = lastEntryText();
         expect(entry).toContain(RESEARCHER_ACCESS_AUTH.signedOut);
         expect(entry).toContain('Signed out of ChatGPT.');

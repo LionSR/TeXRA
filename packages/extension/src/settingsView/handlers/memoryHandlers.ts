@@ -16,12 +16,10 @@ import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { resolveMemoryStoragePath } from '@platform/defaults/workspaceStorage';
 import { StorageFs, withSessionFs } from '@platform/rootedFs';
 
-import {
-  SETTINGS_VIEW_CMD,
-  type SettingsMessageFor,
-} from '@shared/settingsView/settingsViewMessages';
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import type { SettingsMessageFor } from '@shared/settingsView/settingsViewMessages';
 import { hasExtension } from '@utils/core/pathCore';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
   postToWebview,
@@ -37,13 +35,13 @@ class MemoryMessageUndelivered extends Data.TaggedError(
 /** The Memory tab's inbound arms, spread into the settings-view registry. */
 type MemoryTabHandlers = Pick<
   SettingsViewInboundHandlerRegistry,
-  | typeof SETTINGS_VIEW_CMD.GET_MEMORY_DATA
-  | typeof SETTINGS_VIEW_CMD.GET_MEMORY_PREVIEW
-  | typeof SETTINGS_VIEW_CMD.OPEN_MEMORY_FILE
-  | typeof SETTINGS_VIEW_CMD.OPEN_MEMORY_FOLDER
-  | typeof SETTINGS_VIEW_CMD.DELETE_MEMORY
-  | typeof SETTINGS_VIEW_CMD.PIN_MEMORY
-  | typeof SETTINGS_VIEW_CMD.UNPIN_MEMORY
+  | typeof SETTINGS_VIEW_COMMANDS.GET_MEMORY_DATA
+  | typeof SETTINGS_VIEW_COMMANDS.GET_MEMORY_PREVIEW
+  | typeof SETTINGS_VIEW_COMMANDS.OPEN_MEMORY_FILE
+  | typeof SETTINGS_VIEW_COMMANDS.OPEN_MEMORY_FOLDER
+  | typeof SETTINGS_VIEW_COMMANDS.DELETE_MEMORY
+  | typeof SETTINGS_VIEW_COMMANDS.PIN_MEMORY
+  | typeof SETTINGS_VIEW_COMMANDS.UNPIN_MEMORY
 >;
 
 /** Memory-settings handler delegate. */
@@ -90,32 +88,30 @@ export class MemoryHandlers {
    * placeholder, so the view never waits on a preview that will not arrive.
    */
   private handleGetMemoryPreview(
-    data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.GET_MEMORY_PREVIEW>,
+    data: SettingsMessageFor<typeof SETTINGS_VIEW_COMMANDS.GET_MEMORY_PREVIEW>,
   ) {
     return this.ctx.withActiveWebview((webview) =>
       Effect.gen({ self: this }, function* () {
-        const delivered = yield* this.withStorage(
-          Effect.exit(
-            Effect.flatMap(
-              this.memory.getMemoryPreviewMessage(data.storagePath),
-              (preview) =>
-                postToWebview(webview, preview).pipe(
-                  Effect.mapError(
-                    (cause) =>
-                      new MemoryMessageUndelivered({
-                        cause,
-                        message: toErrorMessage(cause),
-                      }),
-                  ),
+        const failure = yield* this.withStorage(
+          Effect.flatMap(
+            this.memory.getMemoryPreviewMessage(data.storagePath),
+            (preview) =>
+              postToWebview(webview, preview).pipe(
+                Effect.mapError(
+                  (cause) =>
+                    new MemoryMessageUndelivered({
+                      cause,
+                      message: toErrorMessage(cause),
+                    }),
                 ),
-            ),
-          ),
+              ),
+          ).pipe(Effect.as(null), Effect.catch(Effect.succeed)),
         );
-        if (Exit.isSuccess(delivered)) return;
+        if (failure === null) return;
         yield* showLoggedErrorMessage(
           this.ctx.channel,
           'Failed to load memory preview',
-          Cause.squash(delivered.cause),
+          failure,
         );
         yield* postToWebview(
           webview,
@@ -126,7 +122,7 @@ export class MemoryHandlers {
   }
 
   private handleOpenMemoryFile(
-    data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.OPEN_MEMORY_FILE>,
+    data: SettingsMessageFor<typeof SETTINGS_VIEW_COMMANDS.OPEN_MEMORY_FILE>,
   ) {
     return withHandlerErrorHandling(
       this.ctx,
@@ -154,7 +150,7 @@ export class MemoryHandlers {
             const doc = await vscode.workspace.openTextDocument(fileUri);
             await vscode.window.showTextDocument(doc, { preview: false });
           },
-          catch: (cause) => cause,
+          catch: ensureError,
         });
       }),
     );
@@ -187,7 +183,7 @@ export class MemoryHandlers {
   }
 
   private handleDeleteMemory(
-    data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.DELETE_MEMORY>,
+    data: SettingsMessageFor<typeof SETTINGS_VIEW_COMMANDS.DELETE_MEMORY>,
   ) {
     return Effect.gen({ self: this }, function* () {
       const posted = yield* this.withStorage(

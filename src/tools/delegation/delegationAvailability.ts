@@ -27,11 +27,7 @@
 import { Effect } from 'effect';
 
 // Local imports
-import {
-  findAgentByIdentifier,
-  resolveDelegationScopeAgents,
-  type AgentRosterStores,
-} from '@agent/index/agentRegistry';
+import { resolveDelegationScopeAgents } from '@agent/index/agentRegistry';
 import type { AgentEntry } from '@agent/index/agentEntry';
 import {
   modelOptionsFrom,
@@ -149,43 +145,21 @@ export const readDelegationAnnotationState = Effect.fn(
   'readDelegationAnnotationState',
 )(function* (stores: SettingsStores, delegationScope?: AgentDelegationScope) {
   const agents = yield* Effect.all({
-    workflow: getDelegationAgents(
+    workflow: resolveDelegationScopeAgents(
       stores,
+      delegationScope,
       AgentCategory.Workflow,
-      delegationScope,
     ),
-    toolUse: getDelegationAgents(
+    toolUse: resolveDelegationScopeAgents(
       stores,
-      AgentCategory.ToolUse,
       delegationScope,
+      AgentCategory.ToolUse,
     ),
   });
   return {
     agents,
     worktreeEnabled: yield* isWorktreeSupportEnabled(stores),
   } satisfies DelegationAnnotationState;
-});
-
-/** Resolve targets from a pinned run scope or the current durable roster. */
-export function getDelegationAgents(
-  stores: AgentRosterStores,
-  category: AgentCategory,
-  scope?: AgentDelegationScope,
-) {
-  return resolveDelegationScopeAgents(stores, scope, category);
-}
-
-/** Resolve one target from the same authoritative candidate set. */
-export const getDelegationAgent = Effect.fn('getDelegationAgent')(function* (
-  stores: AgentRosterStores,
-  category: AgentCategory,
-  identifier: string,
-  scope?: AgentDelegationScope,
-) {
-  return findAgentByIdentifier(
-    yield* getDelegationAgents(stores, category, scope),
-    identifier,
-  );
 });
 
 /* -------------------------------------------------------------------------

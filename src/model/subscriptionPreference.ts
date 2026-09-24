@@ -14,22 +14,19 @@ import {
 import { settingByKey } from '@shared/state/stateSettings';
 import { writeSettingTo } from '@utils/config/platformSettings';
 
-export interface SubscriptionPreferenceUpdate {
-  readonly effective: boolean;
-  readonly target: ConfigTarget;
-}
-
 interface SubscriptionPreference {
   isPrefer(stores: SettingsStores): boolean;
   /**
-   * Persist the preference and report the scope it landed in. An `Effect`, so
-   * the caller's program owns the write and its failure rather than receiving
-   * a rejection it cannot compose.
+   * Persist the preference in the scope that controls it. An `Effect`, so the
+   * caller's program owns the write and its failure rather than receiving a
+   * rejection it cannot compose. The value read back is always `enabled`:
+   * every host's config is a two-layer `JsonConfigProvider`, and the write
+   * lands in the layer that wins, so no more specific setting can override it.
    */
   setPrefer(
     stores: SettingsStores,
     enabled: boolean,
-  ): Effect.Effect<SubscriptionPreferenceUpdate, ConfigWriteFailed | Error>;
+  ): Effect.Effect<void, ConfigWriteFailed | Error>;
 }
 
 /**
@@ -50,7 +47,7 @@ export function createSubscriptionPreference(
   function setPrefer(
     stores: SettingsStores,
     enabled: boolean,
-  ): Effect.Effect<SubscriptionPreferenceUpdate, ConfigWriteFailed | Error> {
+  ): Effect.Effect<void, ConfigWriteFailed | Error> {
     // The scope that currently controls the value: a project that already
     // names the preference keeps owning it, everyone else writes the user
     // file. Passed to the catalog write path as the explicit target, so the
@@ -58,12 +55,7 @@ export function createSubscriptionPreference(
     const inspection = stores.config.inspect<boolean>(configKey);
     const target: ConfigTarget =
       inspection?.workspaceValue !== undefined ? 'workspace' : 'global';
-    return writeSettingTo(stores, configKey, enabled, target).pipe(
-      // The effective value is read after the write: a store that refuses the
-      // write never reaches it, and one that normalizes it is what the caller
-      // sees.
-      Effect.map(() => ({ effective: isPrefer(stores), target })),
-    );
+    return writeSettingTo(stores, configKey, enabled, target);
   }
 
   return { isPrefer, setPrefer };

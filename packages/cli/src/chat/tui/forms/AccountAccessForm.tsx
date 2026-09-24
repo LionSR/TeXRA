@@ -138,7 +138,7 @@ function buildAccountAccessFormItems(
   if (input.kind !== 'loaded') {
     if (input.state === 'failed') {
       // Account state is unknown, so the form keeps every provider's sign-in
-      // transports — this same form backs /login and /logout, and recovery
+      // transports — this form is where every sign-in and sign-out lives, and recovery
       // actions matter most exactly when account state failed to load.
       return [
         ...toggleItems,

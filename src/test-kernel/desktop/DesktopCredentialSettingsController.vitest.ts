@@ -4,11 +4,11 @@ import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 // Local imports
-import { LoopbackTransportUnavailableError } from '@auth/oauth/loopbackLogin';
 import type { SubscriptionDeviceCodePrompt } from '@controllers/modelAccess/subscriptionProviders';
 import { DefaultDesktopCredentialSettingsController } from '@desktop/main/desktopCredentialSettingsController';
 import { ExternalOpenFailed } from '@hosts/uiHosts';
-import * as logger from '@logger/logUtils';
+import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
+import { setLogSink } from '@logger/logSink';
 import { apiKeySecretName } from '@model/apiProviders';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import { withProcessServices } from '@platform/processRuntime';
@@ -16,6 +16,7 @@ import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { ModelOptionData } from '@shared/schemas';
 import { assertSupported } from '@shared/utils/dispatcher';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import { captureLogEntries } from '@test/support/logSinkCapture';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import {
   FakeConfigProvider,
@@ -46,8 +47,8 @@ const codexMocks = vi.hoisted(() => ({
     }): Effect.Effect<{ email: string }, unknown> =>
       Effect.succeed({ email: 'user@example.com' }),
   ),
-  setPreferSubscription: vi.fn((_stores: unknown, enabled: boolean) =>
-    Effect.succeed({ effective: enabled }),
+  setPreferSubscription: vi.fn(
+    (_stores: unknown, _enabled: boolean) => Effect.void,
   ),
   signOut: vi.fn(() => Effect.void),
 }));
@@ -115,7 +116,7 @@ async function createFixture({
   const warnings: string[] = [];
   const errors: string[] = [];
   const signIn = vi.fn(() => Effect.void);
-  const signOut = vi.fn(async () => undefined);
+  const signOut = vi.fn(() => Effect.void);
   const onCredentialChanged = vi.fn(() =>
     Effect.sync(() => {
       events.push('credential');
@@ -180,8 +181,8 @@ async function createFixture({
     externalOpener: {
       openExternal: () => Effect.void,
       openSubscriptionSignInUrl: () => Effect.void,
-      presentSubscriptionSignInUrl: () => undefined,
-      presentSubscriptionDeviceCode: () => undefined,
+      presentSubscriptionSignInUrl: () => Effect.void,
+      presentSubscriptionDeviceCode: () => Effect.void,
     },
     notifications: {
       showInfoMessage: (message) =>
@@ -241,14 +242,12 @@ describe('DefaultDesktopCredentialSettingsController', () => {
     codexMocks.loginWithDeviceCode.mockReturnValue(
       Effect.succeed({ email: 'user@example.com' }),
     );
-    codexMocks.setPreferSubscription.mockImplementation(
-      (_stores: unknown, enabled: boolean) =>
-        Effect.succeed({ effective: enabled }),
-    );
+    codexMocks.setPreferSubscription.mockImplementation(() => Effect.void);
     codexMocks.signOut.mockReturnValue(Effect.void);
   });
 
   afterEach(() => {
+    setLogSink(null);
     vi.restoreAllMocks();
     vi.clearAllMocks();
   });
@@ -265,12 +264,7 @@ describe('DefaultDesktopCredentialSettingsController', () => {
       yield* Effect.gen(function* () {
         yield* withProcessServices(
           testRuntime(),
-          assertSupported(fixture.controller.profileHandlers.removeProviderKey)(
-            {
-              command: SETTINGS_VIEW_COMMANDS.REMOVE_PROVIDER_KEY,
-              provider: 'openai',
-            },
-          ),
+          fixture.controller.profileKeyController.removeProviderKey('openai'),
         );
       });
 
@@ -296,10 +290,7 @@ describe('DefaultDesktopCredentialSettingsController', () => {
         yield* Effect.gen(function* () {
           yield* withProcessServices(
             testRuntime(),
-            assertSupported(fixture.controller.profileHandlers.setProviderKey)({
-              command: SETTINGS_VIEW_COMMANDS.SET_PROVIDER_KEY,
-              provider: 'google',
-            }),
+            fixture.controller.profileKeyController.setProviderKey('google'),
           );
         });
 
@@ -341,10 +332,7 @@ describe('DefaultDesktopCredentialSettingsController', () => {
       yield* Effect.gen(function* () {
         yield* withProcessServices(
           testRuntime(),
-          assertSupported(fixture.controller.profileHandlers.setProviderKey)({
-            command: SETTINGS_VIEW_COMMANDS.SET_PROVIDER_KEY,
-            provider: 'openai',
-          }),
+          fixture.controller.profileKeyController.setProviderKey('openai'),
         );
       });
       expect(yield* secrets.get(secretName)).toBe('replacement');
@@ -352,12 +340,7 @@ describe('DefaultDesktopCredentialSettingsController', () => {
       yield* Effect.gen(function* () {
         yield* withProcessServices(
           testRuntime(),
-          assertSupported(fixture.controller.profileHandlers.removeProviderKey)(
-            {
-              command: SETTINGS_VIEW_COMMANDS.REMOVE_PROVIDER_KEY,
-              provider: 'openai',
-            },
-          ),
+          fixture.controller.profileKeyController.removeProviderKey('openai'),
         );
       });
       expect(deleteSpy).toHaveBeenCalledExactlyOnceWith(secretName);
@@ -381,10 +364,7 @@ describe('DefaultDesktopCredentialSettingsController', () => {
 
         yield* withProcessServices(
           testRuntime(),
-          assertSupported(fixture.controller.profileHandlers.setProviderKey)({
-            command: SETTINGS_VIEW_COMMANDS.SET_PROVIDER_KEY,
-            provider,
-          }),
+          fixture.controller.profileKeyController.setProviderKey(provider),
         );
 
         expect(fixture.subscriptionUsage.invalidate).toHaveBeenCalledWith(
@@ -402,31 +382,6 @@ describe('DefaultDesktopCredentialSettingsController', () => {
 
   // Provider toggles are written by the shared catalog path
   // (`UPDATE_STATE_SETTING`); this pins the desktop refresh that path triggers.
-
-  it.effect(
-    'warns when a more specific setting overrides the requested subscription toggle',
-    () =>
-      Effect.gen(function* () {
-        const fixture = yield* Effect.promise(() => createFixture());
-        codexMocks.setPreferSubscription.mockReturnValueOnce(
-          Effect.succeed({ effective: false }),
-        );
-
-        yield* withProcessServices(
-          testRuntime(),
-          assertSupported(
-            fixture.controller.chatGptHandlers.setChatGptPreferSubscription,
-          )({
-            command: SETTINGS_VIEW_COMMANDS.SET_CHATGPT_PREFER_SUBSCRIPTION,
-            enabled: true,
-          }),
-        );
-        expect(fixture.warnings).toEqual([
-          'A more specific setting still keeps ChatGPT subscription disabled.',
-        ]);
-        expect(fixture.infos).toEqual([]);
-      }),
-  );
 
   it.effect(
     'refreshes ChatGPT preferences and reports authentication outcomes',
@@ -515,9 +470,9 @@ describe('DefaultDesktopCredentialSettingsController', () => {
             }),
           ),
         );
-        const presentSubscriptionSignInUrl = vi.fn();
-        const presentSubscriptionDeviceCode = vi.fn();
-        const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+        const presentSubscriptionSignInUrl = vi.fn(() => Effect.void);
+        const presentSubscriptionDeviceCode = vi.fn(() => Effect.void);
+        const logs = captureLogEntries();
         const fixture = yield* Effect.promise(() =>
           createFixture({
             externalOpener: {
@@ -564,14 +519,14 @@ describe('DefaultDesktopCredentialSettingsController', () => {
         expect(fixture.infos).toContain(
           'Signed in with ChatGPT as device@example.com.',
         );
-        expect(warnSpy).toHaveBeenCalledExactlyOnceWith(
-          'subscriptionProviders',
+        const warnings = logs.at('WARN', 'subscriptionProviders');
+        expect(warnings.map((entry) => entry.message)).toEqual([
           'ChatGPT browser sign-in is unavailable, falling back to a one-time device code: Could not open a browser for ChatGPT sign-in. Cause: no browser handler',
-          { data: expect.any(LoopbackTransportUnavailableError) },
+        ]);
+        // The sink renders the raw payload, cause chain included.
+        expect(String(warnings[0]?.annotations['data'])).toContain(
+          browserError.message,
         );
-        const loggedError = warnSpy.mock.calls[0]?.[2]?.data;
-        expect(loggedError).toBeInstanceOf(LoopbackTransportUnavailableError);
-        expect((loggedError as Error).cause).toBe(browserError);
-      }),
+      }).pipe(Effect.provide(effectDiagnosticsLayer('Trace'))),
   );
 });

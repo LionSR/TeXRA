@@ -10,7 +10,7 @@
  * tool call: a retry after a timeout or an interruption resumes the same
  * aggregate through `run.start.checkpointId`, never through the run's id.
  */
-import { Effect } from 'effect';
+import { Data, Effect } from 'effect';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { DatabaseReadFailed } from '@shared/session/database';
@@ -109,6 +109,11 @@ function decodeJsonValue(value: PersistedJsonValue): unknown {
   return value.kind === 'undefined' ? undefined : value.value;
 }
 
+/** A checkpoint aggregate whose rows cannot fold into a checkpoint. */
+class WorkflowCheckpointMalformed extends Data.TaggedError(
+  'WorkflowCheckpointMalformed',
+)<{ readonly message: string }> {}
+
 /**
  * Fold one checkpoint's rows: the latest script row and the journal, latest
  * per key, in index order. No script row is absence; journal rows without one
@@ -117,7 +122,7 @@ function decodeJsonValue(value: PersistedJsonValue): unknown {
 function foldWorkflowScriptCheckpoint(
   checkpointId: string,
   rows: readonly SessionEvent[],
-): WorkflowScriptCheckpoint | null {
+): Effect.Effect<WorkflowScriptCheckpoint | null, WorkflowCheckpointMalformed> {
   let script: Extract<SessionEvent, { type: 'workflow.script' }> | null = null;
   const journalByKey = new Map<string, WorkflowJournalEntry>();
   for (const row of rows) {
@@ -133,18 +138,20 @@ function foldWorkflowScriptCheckpoint(
   }
   if (script === null) {
     if (journalByKey.size > 0) {
-      throw new Error(
-        `Workflow checkpoint ${checkpointId} has journal rows without a script row.`,
+      return Effect.fail(
+        new WorkflowCheckpointMalformed({
+          message: `Workflow checkpoint ${checkpointId} has journal rows without a script row.`,
+        }),
       );
     }
-    return null;
+    return Effect.succeed(null);
   }
-  return {
+  return Effect.succeed({
     script: script.script,
     args: decodeJsonValue(script.args),
     files: script.files,
     journal: [...journalByKey.values()].toSorted((a, b) => a.index - b.index),
-  };
+  });
 }
 
 /** Read one checkpoint. Absence is null; a malformed aggregate fails. */
@@ -152,14 +159,13 @@ export function readWorkflowScriptCheckpoint(
   session: SessionHandle,
   checkpointId: string,
 ): Effect.Effect<WorkflowScriptCheckpoint | null, Error> {
-  return session.readAggregate(checkpointAggregate(checkpointId)).pipe(
-    Effect.flatMap((rows) =>
-      Effect.try({
-        try: () => foldWorkflowScriptCheckpoint(checkpointId, rows),
-        catch: ensureError,
-      }),
-    ),
-  );
+  return session
+    .readAggregate(checkpointAggregate(checkpointId))
+    .pipe(
+      Effect.flatMap((rows) =>
+        foldWorkflowScriptCheckpoint(checkpointId, rows),
+      ),
+    );
 }
 
 /**
@@ -284,8 +290,8 @@ function recordWorkflowCallSupersession(
 /**
  * Run or resume a workflow script against its durable journal. Every
  * completed `agent()` call is a committed row before the script can consume
- * it: the engine awaits `onJournalEntry` inside its journal commit fence,
- * which is sealed and drained before the run settles. The whole invocation
+ * it: the engine awaits `onJournalEntry` uninterruptibly, and every call's
+ * fiber has ended before the run settles. The whole invocation
  * takes its checkpoint's lane, so overlapping calls on one id run in order
  * rather than replaying the same journal twice.
  */

@@ -5,7 +5,6 @@ import { Cause, Deferred, Effect, Exit, Fiber, Queue, Result } from 'effect';
 
 import { finalizeRun } from '@agent/storage';
 import type { AgentTrace, StageHandle } from '@agent/trace';
-import { createChannelTrace } from '@agent/trace';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { finalizeRunTerminal } from '@agent/runtime/AgentRunLifecycle';
 import { childRunBudgetFor } from '@agent/runtime/childRunBudget';
@@ -24,6 +23,7 @@ import {
 import { persistChildRunDelivery } from '@agent/storage/childRunDeliveryPersistence';
 import { classifyAgentError } from '@common/errors';
 import { isUserAbort } from '@common/errors/sdkError/errorPatterns';
+import { withLogChannel } from '@logger/effectLog';
 import { AgentResume } from '@platform/interfaces';
 import {
   RUN_OUTCOME,
@@ -51,42 +51,27 @@ type TurnUsage = { input_tokens?: number; output_tokens?: number };
 
 /**
  * Capabilities the loop provides to a strategy for the duration of one child
- * run. `notify` is best-effort live progress (no report/manifest persist, no
- * gating; duplicate delivery is impossible by construction since there is
- * one delivery site per turn, so there is nothing left to dedupe against).
+ * run. `notify` is best-effort live progress (no persistence, no gating; one
+ * delivery site per turn, so there is nothing to dedupe).
  *
- * ## Cost accounting contract (the one discipline every child-run type keeps)
+ * ## Cost accounting contract (every child-run type keeps it)
  *
- * One fact; "this child's total spend"; flows through three fixed roles:
- *
- * - **Observe.** A strategy reports spend only through `recordCost`, and only
- *   as a *cumulative total for the physical run so far*, never a delta. Native
- *   subagents pass each turn's run-cumulative `usage.totalCost`
- *   (`nativeSubagentStrategy.runNative`). The workflow-script strategy's
- *   attempt model is per-grandchild deltas, so it converts them into an
- *   invocation-cumulative total first (`createWorkflowAttemptCostTracker`) —
- *   the retention rule below is only correct over cumulative observations.
- *   Replayed/recovered journal work observes zero (it was billed by the run
- *   that produced it), and `invocation.report({ costUsd })` is snapshot
- *   display, never accounting.
- * - **Retain.** The loop retains `max(best defined observation)`. Max over
- *   cumulative totals is order-insensitive and monotone, so a later partial
- *   source cannot replace the best available total; max over deltas would
- *   under-bill, which is why observation is cumulative by contract.
+ * - **Observe.** A strategy reports spend only through `recordCost`, as a
+ *   *cumulative total for the physical run so far*, never a delta. Native
+ *   subagents pass each turn's run-cumulative `usage.totalCost`; the
+ *   workflow-script strategy converts its per-grandchild deltas first
+ *   (`createWorkflowAttemptCostTracker`). Replayed journal work observes
+ *   zero, and `invocation.report({ costUsd })` is display, never accounting.
+ * - **Retain.** The loop keeps `max(best defined observation)`: order-
+ *   insensitive and monotone over cumulative totals.
  * - **Commit.** Exactly one commit per physical child run, at run end, into
- *   `params.recordCost`; the parent-side callback *adds* into the parent's
- *   usage totals, so a second commit is double-billing and a missed one is
- *   under-billing. The in-band single-cycle path has exactly one observation
- *   per physical attempt and forwards it to its caller's `onCost` once; there
- *   is no multi-observation in-band path, hence no retention layer there.
+ *   `params.recordCost`, which the parent *adds* into its totals: a second
+ *   commit double-bills, a missed one under-bills.
  * - **Failure path (workflow).** A failed run settles from the checkpoint
- *   journal; if settlement itself fails, that spend stays unbilled and must be
- *   warned about loudly; never silently, and never masking the run error.
- *   Live observations already retained remain committed.
- * - **Agent-CLI children** wire no cost observer by design: their spend is
- *   external (the user's own claude/codex subscription), not TeXRA-billed
- *   USD. A future cost-reporting CLI must observe through this same
- *   cumulative discipline rather than adding a parallel channel.
+ *   journal; spend a failed settlement leaves unbilled is warned about
+ *   loudly, never masking the run error.
+ * - **Agent-CLI children** wire no cost observer: their spend is the user's
+ *   own subscription, not TeXRA-billed USD.
  */
 export interface ChildRunPorts {
   notify(update: SubagentProgressUpdate): void;
@@ -138,44 +123,27 @@ export interface ChildRunStrategy<TTurn, R = never> {
   readonly stageLabel: string;
 
   /**
-   * This child's turns drive a live OS process, so a stop tears one down.
-   * Shutdown drain reads the kill hook the loop registers on the run handle
-   * (`RunHandle.backgroundProcess`, drained by
-   * `RunRegistry.killBackgroundProcesses`) to reach a leaked process without
-   * disturbing agent children that are deliberately left running for restart
-   * recovery.
+   * This child's turns drive a live OS process: shutdown drain reaches it
+   * through `RunHandle.backgroundProcess` (#8155) without disturbing agent
+   * children left running for restart recovery.
    */
   readonly ownsBackgroundProcess?: boolean;
 
-  /**
-   * Drop the child's run tab when the run finalizes. For a child whose tab
-   * is ephemeral by construction (a background shell), the tab exists only
-   * while the process does; every other child type keeps its tab for reading
-   * back.
-   */
+  /** Drop the child's run tab when the run finalizes (a background shell's
+   *  tab exists only while its process does). */
   readonly autoCloseChildRun?: boolean;
 
-  /**
-   * Deliver a settled turn to the parent even when the loop was interrupted.
-   * Default (and right for every agent child) is not to: an interrupted turn
-   * has no result to report. A killed OS process is the exception; it still
-   * reports a complete result (exit code plus the output it produced), and a
-   * parent suspended on that job would otherwise never be told it ended.
-   */
+  /** Deliver a settled turn even when the loop was interrupted: only a
+   *  killed OS process, whose exit code and output are a complete result. */
   readonly deliverAfterInterrupt?: boolean;
 
-  /**
-   * `persistOnly` records the terminal report without routing it to a parent.
-   * Used when a headless caller awaits and reads that report itself. Omitted
-   * strategies deliver normally.
-   */
+  /** `persistOnly` records the report without routing it to a parent, for
+   *  a headless caller that awaits and reads it itself. */
   readonly deliveryMode?: 'persistOnly';
 
   /**
    * Produce the first turn's outcome. Throws on hard failure. `R` names the
-   * process services a turn reads (the native strategy's engine turns read
-   * `ToolInjections` and `AppState`); the loop forwards it to its caller,
-   * where the process runtime provides them.
+   * process services a turn reads, forwarded to the loop's caller.
    */
   launch(
     ports: ChildRunPorts,
@@ -209,8 +177,8 @@ export interface ChildRunStrategy<TTurn, R = never> {
   /** An interrupted interactive turn has no new result to settle. */
   isTurnInterrupted?(turn: TTurn): boolean;
 
-  /** Log a turn-level error message for a non-throwing failure. */
-  onTurnError?(turn: TTurn, logger: AgentTrace): void;
+  /** The error message to log for a non-throwing failure, if it has one. */
+  turnErrorMessage?(turn: TTurn): string | undefined;
 
   /** After loop setup, before the initial turn starts. */
   onLoopStart?(session: SessionHandle): void;
@@ -236,13 +204,9 @@ export interface ChildRunStrategy<TTurn, R = never> {
   formatError(turn: TTurn | null, err: unknown): string;
 
   /**
-   * Structured result manifest for a turn's delivery, persisted alongside the
-   * report so `/executions/{id}/result` reflects the latest turn; called for
-   * both success and failure (`turn` is null when the call threw, `isError`
-   * is set for both a throw and a non-throwing application-level failure) so
-   * a failure overwrites any earlier interim-success manifest instead of
-   * leaving it stale. Native strategies provide one per turn; agent-CLI
-   * strategies omit it; they have no chaining-manifest contract.
+   * Structured result manifest persisted beside each turn's report, success
+   * or failure (`turn` null when the call threw), so a failure overwrites a
+   * stale interim manifest. Agent-CLI strategies omit it.
    */
   buildResultMeta?(
     turn: TTurn | null,
@@ -277,13 +241,8 @@ export interface ChildRunLoopParams<TTurn, R = never> {
   readonly runId: RunId;
   readonly agentName: string;
   readonly strategy: ChildRunStrategy<TTurn, R>;
-  /**
-   * Roll this child's final cost into the parent's usage totals. Omitted by
-   * agent-CLI callers (no cost concept today); native delegation passes its
-   * captured `recordSubagentCost` closure. Synchronous by contract: the loop
-   * runs it inside `Effect.try`, which folds a throw and would take a
-   * returned promise for the observer's result.
-   */
+  /** Roll this child's final cost into the parent's usage totals; omitted
+   *  by agent-CLI callers. Synchronous by contract (run inside `Effect.try`). */
   readonly recordCost?: (totalCost: number | undefined) => void;
   /**
    * Gate every turn through the session's shared child-run budget
@@ -301,12 +260,9 @@ export interface ChildRunLoopParams<TTurn, R = never> {
    */
   readonly notify?: (update: SubagentProgressUpdate) => void;
   /**
-   * Hands an awaiting caller each settled turn's facts in memory; the
-   * formatted message, the (turn-stamped) result manifest, and the raw error
-   * of a failed turn. Persistence stays best-effort in the loop; a caller
-   * with a required-durability contract verifies the store afterwards rather
-   * than changing what the loop persists. Fires after persistence, once per
-   * settled turn.
+   * Hands an awaiting caller each settled turn's facts in memory, once per
+   * settled turn after persistence; a required-durability caller verifies
+   * the store afterwards rather than changing what the loop persists.
    */
   readonly onTurnSettled?: (settled: {
     readonly message: string;
@@ -318,19 +274,14 @@ export interface ChildRunLoopParams<TTurn, R = never> {
 
 /**
  * The child loop's stop, registered on the run's roster activation for the
- * loop's whole lifetime, so the stop button always finds a live target;
- * including the inter-turn WAITING gap, when no flow-owned context is
- * attached. Follow-ups join its queue; flow-only controls such as compaction
- * ignore it.
- *
- * A process child's turns are reached through `signal` alone: every strategy
- * binds the turn it launches to it (`execa`'s `cancelSignal`, the Codex SDK,
- * the Claude Agent SDK), and the loop races its queue wait against it. The
- * loop's own fiber is never the stop target — a stopped turn's settlement,
- * parent delivery and finalization all run after the abort (the ruled
- * permanent resident, architecture rulings ledger 2026-08-01). A native
- * child has no foreign process: its in-flight turn is this session's own run
- * program, so its stop ALSO interrupts the run fiber the turn runs on.
+ * loop's whole lifetime, so a stop finds a live target in the inter-turn
+ * WAITING gap too. A process child's turns are reached through `signal`
+ * alone — `execa`'s `cancelSignal`, the Codex SDK, the Claude Agent SDK — and
+ * its loop fiber survives the abort to settle, deliver and finalize (the
+ * ruled permanent resident, architecture rulings ledger 2026-08-01). A native
+ * child has no foreign process: its turn is this session's own run program,
+ * so its stop ALSO interrupts the run's fiber, and the loop's terminal runs
+ * as that fiber's uninterruptible exit.
  */
 class ChildRunInterruptible {
   private readonly controller = new AbortController();
@@ -362,22 +313,54 @@ class ChildRunInterruptible {
   }
 }
 
+const CHANNEL = 'childRunLoop';
+
+const EFFECT_LOG = {
+  debug: Effect.logDebug,
+  info: Effect.logInfo,
+  warn: Effect.logWarning,
+  error: Effect.logError,
+} as const;
+
+/**
+ * Write one loop diagnostic. An agent-CLI child presents them on its own
+ * trace; every other child has no loop-owned stream, so they go to the
+ * process log under this module's channel.
+ */
+function loopLog(
+  trace: AgentTrace | undefined,
+  level: keyof typeof EFFECT_LOG,
+  message: string,
+  data?: unknown,
+): Effect.Effect<void> {
+  if (trace) {
+    return Effect.sync(() =>
+      trace[level](message, data === undefined ? undefined : { data }),
+    );
+  }
+  const entry = EFFECT_LOG[level](message).pipe(withLogChannel(CHANNEL));
+  return data === undefined ? entry : Effect.annotateLogs(entry, { data });
+}
+
 /** Log a turn summary (duration + token usage) to the child stream. */
-function logTurnSummary(
-  logger: AgentTrace,
+const logTurnSummary = (
+  trace: AgentTrace | undefined,
   wallTimeMs: number,
   usage: TurnUsage | null | undefined,
-): void {
-  logger.info(`Turn completed in ${formatDuration(wallTimeMs)}`);
-  if (usage) {
-    logger.info('Tokens', {
-      data: {
+): Effect.Effect<void> =>
+  Effect.gen(function* () {
+    yield* loopLog(
+      trace,
+      'info',
+      `Turn completed in ${formatDuration(wallTimeMs)}`,
+    );
+    if (usage) {
+      yield* loopLog(trace, 'info', 'Tokens', {
         input: usage.input_tokens ?? 0,
         output: usage.output_tokens ?? 0,
-      },
-    });
-  }
-}
+      });
+    }
+  });
 
 /** Outcome of a single turn attempt, flattening the loop's inner try/catch. */
 type TurnAttempt<TTurn> =
@@ -394,20 +377,23 @@ function attemptTurn<TTurn, R>(
   strategy: ChildRunStrategy<TTurn, R>,
   runner: (signal: AbortSignal) => Effect.Effect<TTurn, Error, R>,
   loop: ChildRunInterruptible,
-  logger: AgentTrace,
+  trace: AgentTrace | undefined,
   startedAt: number,
 ): Effect.Effect<TurnAttempt<TTurn>, never, R> {
   return Effect.gen(function* () {
     const attempt = yield* Effect.exit(
       Effect.gen(function* () {
         const turn = yield* runner(loop.signal);
-        logTurnSummary(
-          logger,
+        yield* logTurnSummary(
+          trace,
           Date.now() - startedAt,
           strategy.getUsage?.(turn),
         );
         const turnIsError = strategy.isTurnError?.(turn) === true;
-        if (turnIsError) strategy.onTurnError?.(turn, logger);
+        const turnError = turnIsError
+          ? strategy.turnErrorMessage?.(turn)
+          : undefined;
+        if (turnError) yield* loopLog(trace, 'error', turnError);
         return { kind: 'completed' as const, turn, turnIsError };
       }),
     );
@@ -416,24 +402,18 @@ function attemptTurn<TTurn, R>(
     if (loop.isInterrupted() || isUserAbort(caught)) {
       return { kind: 'interrupted' as const };
     }
-    logger.error(toErrorMessage(caught));
+    yield* loopLog(trace, 'error', toErrorMessage(caught));
     return { kind: 'failed' as const, err: caught };
   });
 }
 
 /**
  * The delivery id one accepted turn's single parent delivery is admitted
- * under (#9531). A turn that ran queued follow-ups as its prompt takes its
- * identity from the prompt's durable rows, not from the attempt: the parent
- * row is admitted before this child's settlement consumes the prompt, so a
- * crash between the two re-executes the prompt under a new attempt id, and
- * only the prompt-anchored id lets admission judge the second delivery a
- * replay of the first instead of handing the parent both results. Every
- * other turn takes the `child.turn` row's key (run, attempt, turn index).
- * Neither is persisted beside its row, so the two can never disagree. The
- * turn-key form stays distinct across attempts, even when a workflow
- * deliberately reuses its run id, so a later workflow run cannot collide
- * with its prior delivery.
+ * under (#9531). A turn that ran queued follow-ups takes its identity from
+ * the prompt's durable rows, so a crash between parent admission and prompt
+ * consumption re-executes under a new attempt id yet is judged a replay.
+ * Every other turn takes the `child.turn` row's key (run, attempt, turn
+ * index), distinct across attempts even when a workflow reuses its run id.
  */
 function turnDeliveryId(
   runId: RunId,
@@ -452,7 +432,7 @@ type ChildLoopTerminationCause = 'interrupted' | 'turn_failed' | 'terminal';
  * driver diagnostics; the child's output remains its provider's narrative.
  */
 function emitTurnDiagnostic(
-  logger: AgentTrace,
+  trace: AgentTrace | undefined,
   event: 'turn.accepted' | 'turn.delivered' | 'loop.terminated',
   params: {
     runId: RunId;
@@ -460,34 +440,24 @@ function emitTurnDiagnostic(
     queueOwner?: FollowUpConsumerLease;
     interruptionCause?: ChildLoopTerminationCause;
   },
-): void {
+): Effect.Effect<void> {
   const { runId, turn, queueOwner, interruptionCause } = params;
-  logger.debug(`childRunLoop ${event}`, {
-    data: {
-      runId,
-      ...(turn ? { attemptId: turn.key, turnIndex: turn.index } : {}),
-      ...(queueOwner ? { queueOwner: queueOwner.kind } : {}),
-      ...(interruptionCause ? { interruptionCause } : {}),
-    },
+  return loopLog(trace, 'debug', `childRunLoop ${event}`, {
+    runId,
+    ...(turn ? { attemptId: turn.key, turnIndex: turn.index } : {}),
+    ...(queueOwner ? { queueOwner: queueOwner.kind } : {}),
+    ...(interruptionCause ? { interruptionCause } : {}),
   });
 }
 
 /**
  * Commit one turn's `child.turn` row (#9531), the fact the report/result
  * slots are attributed from. Not best-effort: a refused append is the turn's
- * failure. `not-owner` means this process no longer holds the run and the
- * loop stops rather than deliver under a claim it lost (R7); a write failure
- * is a fact the slots cannot be labeled without.
- *
- * An agent-CLI turn's settlement also consumes the follow-ups that were its
- * prompt (C3): no ledger message carries that prompt, and its provider's
- * thread holds it only once the turn has run, so the rows stay queued until
- * then. The parent delivery is admitted before this commit, so a crash after
- * settlement still leaves the result on the parent; a crash before it
- * re-delivers the prompt to the next loop, whose re-executed turn admits its
- * result under the same prompt-anchored delivery id, so the parent is not
- * handed both results. A turn whose own result persistence failed settles
- * with no consumption at all, so its prompt stays queued for that loop.
+ * failure, and `not-owner` stops the loop rather than deliver under a lost
+ * claim (R7). An agent-CLI turn's settlement also consumes the follow-ups
+ * that were its prompt (C3); the parent delivery is admitted first, so a
+ * crash either way leaves the parent exactly one result. A turn whose own
+ * persistence failed consumes nothing, so its prompt stays queued.
  */
 function commitChildTurn(
   session: SessionHandle,
@@ -517,13 +487,9 @@ function commitChildTurn(
 /**
  * Move an agent-CLI child's phase across its park (one run model, 3.3):
  * `parked` before the loop blocks on its queue, `resumed` when the taken
- * batch starts the next turn. Its own row: a run this loop is the only
- * driver of has no ledger, no `flow.snapshot` and no rounds, so a borrowed
- * `flow.step` had to invent a `toolUse` family, a round 0 and a continuation
- * index that named nothing. Without the park row the run stays RUNNING while
- * idle and `getToolUseFollowUpTarget` classifies the next turn's submission
- * as `no_session`; native children park through their own loop's `waiting`
- * step and are never written here, so each park keeps one writer.
+ * batch starts the next turn. Without it the idle run stays RUNNING and the
+ * next submission classifies as `no_session`; native children park through
+ * their own loop's `waiting` step, so each park keeps one writer.
  */
 function commitPark(
   session: SessionHandle,
@@ -565,12 +531,16 @@ interface PendingChildDelivery {
  * enqueue site and the deferred wake site, which resolve the target at
  * different times.
  */
-function warnDetachedChildDelivery(logger: AgentTrace, runId: RunId): void {
-  logger.warn(
+const warnDetachedChildDelivery = (
+  trace: AgentTrace | undefined,
+  runId: RunId,
+): Effect.Effect<void> =>
+  loopLog(
+    trace,
+    'warn',
     'Turn result not delivered: child was detached from its orchestrator. The result remains in the run report.',
-    { data: { runId } },
+    { runId },
   );
-}
 
 /**
  * Format, persist, and enqueue one turn's outcome on the parent's follow-up
@@ -587,7 +557,7 @@ const deliverTurn = Effect.fn('childRunLoop.deliverTurn')(function* <
   session: SessionHandle;
   strategy: ChildRunStrategy<TTurn, R>;
   runId: RunId;
-  logger: AgentTrace;
+  trace: AgentTrace | undefined;
   turn: TTurn | null;
   turnKey: AttemptKey;
   /** The queued follow-ups this turn ran as its prompt. */
@@ -603,7 +573,7 @@ const deliverTurn = Effect.fn('childRunLoop.deliverTurn')(function* <
   const {
     strategy,
     runId,
-    logger,
+    trace,
     turn,
     turnKey,
     err,
@@ -643,7 +613,7 @@ const deliverTurn = Effect.fn('childRunLoop.deliverTurn')(function* <
   if (Exit.isSuccess(persisted) && strategy.deliveryMode !== 'persistOnly') {
     const targetRunId = parent.current ?? undefined;
     if (!targetRunId) {
-      warnDetachedChildDelivery(logger, runId);
+      yield* warnDetachedChildDelivery(trace, runId);
     } else if (prepareParentDelivery?.() !== false) {
       // Admit the parent row before consuming the prompt: a crash after
       // settlement then still leaves the result on the parent, and a crash
@@ -661,15 +631,11 @@ const deliverTurn = Effect.fn('childRunLoop.deliverTurn')(function* <
         { liveOffer: finalizing ? 'deferred' : 'immediate' },
       );
       if (submitted.kind === 'refused') {
-        logger.warn(
+        yield* loopLog(
+          trace,
+          'warn',
           `Turn result not delivered: parent run is unavailable (${submitted.reason ?? 'not_resumable'}). The result remains in the run report.`,
-          {
-            data: {
-              runId,
-              parentRunId: targetRunId,
-              reason: submitted.reason,
-            },
-          },
+          { runId, parentRunId: targetRunId, reason: submitted.reason },
         );
       } else {
         pending = {
@@ -682,15 +648,10 @@ const deliverTurn = Effect.fn('childRunLoop.deliverTurn')(function* <
       }
     }
   }
-  // The turn settled whatever the delivery persistence did: its settle path
-  // ran, which is the fact a recovering caller's re-execution gate reads (a
-  // settled `child.turn` under a run with no outcome refuses repetition,
-  // manifest or not, since the manifest is written for a failed delivery
-  // too and so cannot say whether the turn succeeded), so the row lands
-  // before that failure is raised. The prompt's consumption commits only
-  // when its result is durable: when persistence failed, no report and no
-  // parent row carries the outcome, so the prompt rows stay queued for the
-  // relaunched loop to deliver again rather than recording the turn as spent.
+  // The turn settled whatever persistence did, and a recovering caller's
+  // re-execution gate reads that settled row, so it lands before the
+  // failure is raised. The prompt is consumed only when its result is
+  // durable; otherwise it stays queued for the relaunched loop.
   yield* commitChildTurn(
     params.session,
     runId,
@@ -718,24 +679,25 @@ const submitPendingDelivery = Effect.fn('submitPendingDelivery')(function* (
   pending: PendingChildDelivery | undefined,
   session: SessionHandle,
   runId: RunId,
-  logger: AgentTrace,
+  trace: AgentTrace | undefined,
 ): Effect.fn.Return<void, Error, AgentResume> {
   if (!pending) return;
   const targetRunId = pending.parent.current ?? undefined;
   if (!targetRunId) {
-    warnDetachedChildDelivery(logger, runId);
+    yield* warnDetachedChildDelivery(trace, runId);
     return;
   }
   /** The parent could not be resumed; its result still awaits an explicit resume. */
-  const warnParentNotResumed = (): void =>
-    logger.warn(
-      'Turn result queued for the parent, but the parent could not be resumed; an explicit Resume delivers it.',
-      { data: { runId, parentRunId: targetRunId } },
-    );
+  const warnParentNotResumed = loopLog(
+    trace,
+    'warn',
+    'Turn result queued for the parent, but the parent could not be resumed; an explicit Resume delivers it.',
+    { runId, parentRunId: targetRunId },
+  );
   const recovery = pending.recovery;
   if (recovery) {
     const resumed = yield* startFollowUpWake(targetRunId, recovery, session);
-    if (!resumed) warnParentNotResumed();
+    if (!resumed) yield* warnParentNotResumed;
   }
   // Duplicate-safe: the parent row was admitted before the child prompt
   // was consumed. This wake still goes through submitFollowUp so a mocked
@@ -745,18 +707,14 @@ const submitPendingDelivery = Effect.fn('submitPendingDelivery')(function* (
     session,
   });
   if (delivery.status === 'failed') {
-    logger.warn(
+    yield* loopLog(
+      trace,
+      'warn',
       `Turn result not delivered: parent run is unavailable (${delivery.reason}). The result remains in the run report.`,
-      {
-        data: {
-          runId,
-          parentRunId: targetRunId,
-          reason: delivery.reason,
-        },
-      },
+      { runId, parentRunId: targetRunId, reason: delivery.reason },
     );
   } else if (delivery.status === 'queued' && delivery.wake === 'failed') {
-    warnParentNotResumed();
+    yield* warnParentNotResumed;
   }
 });
 
@@ -887,18 +845,15 @@ export function startChildRunLoop<TTurn, R = never>(
       ? yield* childRunBudgetFor(runSession, runs)
       : undefined;
     const { childRun, parentRunId, agentName, strategy } = params;
-    // Native runs own their trace; driver diagnostics use a channel trace.
-    const logger = childRun?.logger ?? createChannelTrace('childRunLoop');
+    // An agent-CLI child presents on its own trace; `loopLog` sends every
+    // other child's driver diagnostics to the process log.
+    const trace = childRun?.logger;
     const loop = new ChildRunInterruptible(runs, runId, childRun === undefined);
     // Every child loop reserves its stop target on the run's roster entry for
-    // the loop's whole life: a run stop must reach the loop's own signal,
-    // never interrupt the loop's fiber — a stopped turn's settlement, parent
-    // delivery and finalization all run after the abort. Only a native child
-    // also retains a terminal parent's continuation (its delivery
-    // reservation); a process child's reservation would make a terminal
-    // parent look recoverable after it can no longer accept either user
-    // input or the child's result. The parent edge is the roster's shared
-    // cell: a detaching stop severs it for the activation and every handle.
+    // its whole life. Only a native child also retains a terminal parent's
+    // continuation; a process child's would make a terminal parent look
+    // recoverable. The parent edge is the roster's shared cell, so a
+    // detaching stop severs it for the activation and every handle.
     const parent = runs.getHandle(runId)?.parentState ?? {
       current: parentRunId,
     };
@@ -972,9 +927,7 @@ export function startChildRunLoop<TTurn, R = never>(
               handle.backgroundProcess = { kill: () => loop.interrupt() };
             }
           }
-          sessionStage = childRun
-            ? logger.openStage(strategy.stageLabel)
-            : undefined;
+          sessionStage = trace?.openStage(strategy.stageLabel);
         });
       }),
     );
@@ -1072,10 +1025,9 @@ export function startChildRunLoop<TTurn, R = never>(
           const runNotice = (notice: Effect.Effect<void, Error>) =>
             notice.pipe(
               Effect.catch((error) =>
-                Effect.sync(() => {
-                  logger.warn('Child progress was not queued', {
-                    data: { runId, error },
-                  });
+                loopLog(trace, 'warn', 'Child progress was not queued', {
+                  runId,
+                  error,
                 }),
               ),
             );
@@ -1111,7 +1063,7 @@ export function startChildRunLoop<TTurn, R = never>(
             turnIndex += 1;
             turnStartedAt = Date.now();
             const turnKey = { key: attemptId, index: turnIndex };
-            emitTurnDiagnostic(logger, 'turn.accepted', {
+            yield* emitTurnDiagnostic(trace, 'turn.accepted', {
               runId,
               turn: turnKey,
               queueOwner: queueLease,
@@ -1143,7 +1095,7 @@ export function startChildRunLoop<TTurn, R = never>(
                 strategy,
                 runId,
                 parent,
-                logger,
+                trace,
                 turn,
                 turnKey,
                 consumed,
@@ -1181,7 +1133,7 @@ export function startChildRunLoop<TTurn, R = never>(
                   delivery,
                   runSession,
                   runId,
-                  logger,
+                  trace,
                 );
               }).pipe(Effect.uninterruptible),
           };
@@ -1195,7 +1147,7 @@ export function startChildRunLoop<TTurn, R = never>(
               strategy,
               strategy.continuous ? runner : gateTurn(runner),
               loop,
-              logger,
+              trace,
               turnStartedAt,
             );
             if (attempt.kind === 'interrupted') break;
@@ -1227,7 +1179,7 @@ export function startChildRunLoop<TTurn, R = never>(
               finalizing,
             );
             const turnKey = { key: attemptId, index: turnIndex };
-            emitTurnDiagnostic(logger, 'turn.delivered', {
+            yield* emitTurnDiagnostic(trace, 'turn.delivered', {
               runId,
               turn: turnKey,
               queueOwner: queueLease,
@@ -1251,7 +1203,7 @@ export function startChildRunLoop<TTurn, R = never>(
             }
 
             // Process strategies wake the parent before waiting for input.
-            yield* submitPendingDelivery(delivery, runSession, runId, logger);
+            yield* submitPendingDelivery(delivery, runSession, runId, trace);
             if (loop.isInterrupted()) break;
 
             // The park is durable before the block, so a follow-up arriving
@@ -1275,17 +1227,13 @@ export function startChildRunLoop<TTurn, R = never>(
       );
       return result;
     }).pipe(
-      // The loop's terminal, in the toolUse exit-protocol pattern: it hangs
-      // off `onExit` and runs uninterruptibly, so a stop — the loop's own
-      // signal, or the run fiber's interruption reaching the loop — lands
-      // before it or after it, never inside, and the queue lease, the
+      // The loop's terminal, in the toolUse exit-protocol pattern: a stop
+      // lands before it or after it, never inside, so the queue lease, the
       // terminal row, the claim release and the final delivery settle
       // atomically on every exit.
       Effect.onExit((body) =>
         Effect.uninterruptible(
           Effect.gen(function* () {
-            // The loop's stop: its own signal, or the run fiber's
-            // interruption reaching the loop here.
             const stopped =
               loop.isInterrupted() ||
               (Exit.isFailure(body) && Cause.hasInterrupts(body.cause));
@@ -1303,7 +1251,7 @@ export function startChildRunLoop<TTurn, R = never>(
                 let terminationCause: ChildLoopTerminationCause = 'terminal';
                 if (stopped) terminationCause = 'interrupted';
                 else if (sawTurnFailure) terminationCause = 'turn_failed';
-                emitTurnDiagnostic(logger, 'loop.terminated', {
+                yield* emitTurnDiagnostic(trace, 'loop.terminated', {
                   runId,
                   queueOwner: queueLease,
                   interruptionCause: terminationCause,
@@ -1317,20 +1265,19 @@ export function startChildRunLoop<TTurn, R = never>(
                     catch: ensureError,
                   }).pipe(
                     Effect.catch((error) =>
-                      Effect.sync(() => {
-                        logger.warn('Child cost observer failed', {
-                          data: error,
-                        });
-                      }),
+                      loopLog(
+                        trace,
+                        'warn',
+                        'Child cost observer failed',
+                        error,
+                      ),
                     ),
                   ),
                   { startImmediately: true },
                 );
 
-                // The cost observer above runs between the body's exit and
-                // this derive; a stop landing in that window is still the
-                // run's terminal verdict, so the observation is re-read here,
-                // not carried from the handler's entry.
+                // Re-read: a stop landing after the body's exit is still the
+                // run's terminal verdict.
                 const stoppedAtExit = stopped || loop.isInterrupted();
                 const outcome = deriveRunOutcome({
                   failed: sawTurnFailure,
@@ -1383,13 +1330,16 @@ export function startChildRunLoop<TTurn, R = never>(
               runSession.releaseRunLease(runId),
             );
             if (Exit.isFailure(released)) {
-              logger.warn('Failed to persist final child-run artifacts', {
-                data: { runId, error: Cause.squash(released.cause) },
-              });
+              yield* loopLog(
+                trace,
+                'warn',
+                'Failed to persist final child-run artifacts',
+                { runId, error: Cause.squash(released.cause) },
+              );
             }
             // The parent may immediately read this child; release its claim first.
             const delivery = yield* Effect.exit(
-              submitPendingDelivery(pendingDelivery, runSession, runId, logger),
+              submitPendingDelivery(pendingDelivery, runSession, runId, trace),
             );
             const activation = yield* Effect.exit(
               Effect.sync(releaseChildActivation),

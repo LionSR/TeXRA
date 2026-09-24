@@ -100,7 +100,7 @@ const OPENING_SNAPSHOT: FlowSnapshotPayload = {
     lastError: null,
     declinedRoutes: [],
   },
-  state: { shouldSkipCycle: false, stateSlices: null },
+  state: { stateSlices: null, offeredTools: [], toolsetHash: '0'.repeat(64) },
 };
 
 /**
@@ -124,14 +124,8 @@ const workflowSnapshot = (
     declinedRoutes: [],
   },
   state: {
-    currentRound: 0,
     totalRounds: 4,
     workspaceSnapshot: AgentWorkspaceState.create().toSnapshot(),
-    outputLocation: null,
-    runStateSnapshot: { totalRounds: 4, totalResponseTimeMs: 0 },
-    roundOutputs: [],
-    continueRounds: true,
-    endTurn: false,
   },
 });
 
@@ -436,7 +430,12 @@ describe('runResumeCommand', () => {
 
   it('identifies claim read failures separately from session loading', async () => {
     vi.spyOn(seededSession, 'claimOwner').mockReturnValue(
-      Effect.fail(new Error('claim disk offline')),
+      Effect.fail(
+        new DatabaseReadFailed({
+          path: 'session.db',
+          cause: new Error('claim disk offline'),
+        }),
+      ),
     );
 
     await expect(run(cliContext())).resolves.toBe(1);

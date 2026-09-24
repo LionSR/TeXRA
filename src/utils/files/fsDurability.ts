@@ -4,8 +4,6 @@
  * carrying each entry's own (unfollowed) type, and exclusive or
  * symlink-dereferencing copies.
  *
- * These are the Effect form of what the retired `baseFS.ts` facade reached
- * its Promise filesystem port for.
  * Nothing here re-implements an operation `FileSystem` already has — an
  * append, for instance, is `fs.writeFile(path, data, { flag: 'a' })` and gets
  * no wrapper. The Node calls `FileSystem` cannot express (`lstat`,
@@ -105,18 +103,19 @@ function entryTypeOf(entry: {
 }
 
 /**
- * `BaseFS.exists`'s reading of `FileSystem.exists`: a path whose parent is not
- * a directory (`ENOTDIR`) counted as absent alongside `ENOENT`, and the
- * standard library reports that case as `BadResource`. The predicate names
- * ENOTDIR specifically, so an operational failure (`ELOOP`, `EACCES`) still
- * propagates instead of reading as "absent".
+ * `FileSystem.exists` with a path whose parent is not a directory (`ENOTDIR`)
+ * counted as absent alongside `ENOENT`; the standard library reports that
+ * case as `BadResource`. The predicate names ENOTDIR specifically, so an
+ * operational failure (`ELOOP`, `EACCES`) still propagates instead of reading
+ * as "absent".
  *
- * One reading differs, and it is deliberate: the facade's probe was
- * `lstat`-backed, so a dangling or circular symlink was present, while this
- * one follows the link and finds nothing there. A caller asking whether a
- * dependency, figure, bibliography or input *file* is unusable wants the
- * follow; a caller asking whether the path names an entry wants `readLink`
- * first and this as the fallback (see `existsAt` in `arxivProcessor.ts`).
+ * This probe follows links, so a dangling symlink reads as absent (ENOENT)
+ * while a circular one raises ELOOP and propagates, unlike the lstat-backed
+ * `entryExists` in `fsEntryExists.ts`. A
+ * caller asking whether a dependency, figure, bibliography or input *file* is
+ * unusable wants the follow; a caller asking whether the path names an entry
+ * wants `readLink` first and this as the fallback (see `existsAt` in
+ * `arxivProcessor.ts`).
  *
  * The caller passes the filesystem it probes with, so a rooted view answers
  * for the paths inside its root and the process filesystem answers for the
@@ -150,14 +149,14 @@ export const entryTypeAt = Effect.fn('fsDurability.entryTypeAt')(function* (
 
 /**
  * The entry type and size at `target`, `lstat` first and then `stat` when the
- * entry is a link — the reading the retired `platform().fs.stat` gave: a link
- * that resolves reports its target's type and size, and a dangling or
- * circular one reports the link itself rather than failing. `FileSystem.stat`
- * gives neither half: it follows the link and fails `NotFound` when the target
- * is gone, so a caller sizing a recorded path would lose the row.
+ * entry is a link: a link that resolves reports its target's type and size,
+ * and a dangling or circular one reports the link itself rather than failing.
+ * `FileSystem.stat` gives neither half: it follows the link and fails
+ * `NotFound` when the target is gone, so a caller sizing a recorded path
+ * would lose the row.
  *
- * Absence is not recovered here; the caller decides what a missing path means,
- * as it did with the facade.
+ * Absence is not recovered here; the caller decides what a missing path
+ * means.
  */
 export const entryMetadataAt = Effect.fn('fsDurability.entryMetadataAt')(
   function* (target: string) {
@@ -300,10 +299,10 @@ export const copyDereferenced = Effect.fn('fsDurability.copyDereferenced')(
 );
 
 /**
- * `AbsoluteFS.read`: the file's bytes decoded as UTF-8, with line endings
- * normalized. `FileSystem.readFileString` is not this -- it decodes through a
- * `TextDecoder`, which drops a leading UTF-8 BOM that the facade preserved,
- * and the editor then writes its buffer back without it.
+ * The file's bytes decoded as UTF-8, with line endings normalized and a
+ * leading BOM kept. `FileSystem.readFileString` is not this -- it decodes
+ * through a `TextDecoder`, which drops a leading UTF-8 BOM, and the editor
+ * then writes its buffer back without it.
  *
  * The caller passes the filesystem it reads from, so a rooted view answers for
  * the paths inside its root and the process filesystem answers for the rest.

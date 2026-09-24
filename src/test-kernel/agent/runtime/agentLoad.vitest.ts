@@ -71,35 +71,41 @@ afterAll(async () => {
 });
 
 describe('validateAgentYamlContent', () => {
-  it('rejects root settings that only satisfy the partial YAML schema', () => {
-    assert.throws(() =>
+  it.effect(
+    'rejects root settings that only satisfy the partial YAML schema',
+    () =>
+      Effect.gen(function* () {
+        yield* Effect.flip(
+          validateAgentYamlContent(
+            [
+              'name: bad_tool_use_root',
+              'settings:',
+              '  agentCategory: toolUse',
+              '  rounds: 2',
+              '',
+            ].join('\n'),
+          ),
+        );
+      }),
+  );
+
+  it.effect(
+    'keeps inherited child settings partial before parent merging',
+    () =>
       validateAgentYamlContent(
         [
-          'name: bad_tool_use_root',
+          'name: child',
+          'inherits: parent',
           'settings:',
-          '  agentCategory: toolUse',
           '  rounds: 2',
+          'prompts:',
+          '  userRequest: Override the parent request.',
           '',
         ].join('\n'),
       ),
-    );
-  });
+  );
 
-  it('keeps inherited child settings partial before parent merging', () => {
-    validateAgentYamlContent(
-      [
-        'name: child',
-        'inherits: parent',
-        'settings:',
-        '  rounds: 2',
-        'prompts:',
-        '  userRequest: Override the parent request.',
-        '',
-      ].join('\n'),
-    );
-  });
-
-  it('validates root agents after resolving raw tool names', () => {
+  it.effect('validates root agents after resolving raw tool names', () =>
     validateAgentYamlContent(
       [
         'name: root_tool_use',
@@ -109,17 +115,17 @@ describe('validateAgentYamlContent', () => {
         '    - grep',
         '',
       ].join('\n'),
-    );
-  });
+    ),
+  );
 
-  it('wraps malformed YAML text through the shared parse boundary', () => {
-    assert.throws(
-      () => validateAgentYamlContent('name: "unterminated'),
-      (error: unknown) =>
-        error instanceof Error &&
-        error.message.startsWith('Failed to parse agent YAML:'),
-    );
-  });
+  it.effect('wraps malformed YAML text through the shared parse boundary', () =>
+    Effect.gen(function* () {
+      const error = yield* Effect.flip(
+        validateAgentYamlContent('name: "unterminated'),
+      );
+      assert.ok(error.message.startsWith('Failed to parse agent YAML:'));
+    }),
+  );
 });
 
 describe('loadAgentSettingAndPrompts', () => {

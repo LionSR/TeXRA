@@ -52,7 +52,7 @@ interface RuntimeModelCatalogue {
   /** The in-flight discovery's shared answer, if one is running. */
   readonly pending?: Deferred.Deferred<
     RefreshRuntimeModelRegistryResult,
-    unknown
+    Error
   >;
   /** Whether the in-flight discovery explicitly bypasses a fresh cache. */
   readonly pendingForceDiscovery?: boolean;
@@ -153,7 +153,7 @@ export const refreshRuntimeModelRegistry = Effect.fn(
   'runtimeModelRegistry.refreshRuntimeModelRegistry',
 )(function* (
   options: RefreshRuntimeModelRegistryOptions = {},
-): Effect.fn.Return<RefreshRuntimeModelRegistryResult, unknown, LanguageModel> {
+): Effect.fn.Return<RefreshRuntimeModelRegistryResult, Error, LanguageModel> {
   if (options.forceDiscovery) {
     // Overlapping user actions share one forced probe. A normal probe that
     // started earlier is superseded because its access snapshot may predate
@@ -173,7 +173,7 @@ export const refreshRuntimeModelRegistry = Effect.fn(
     const { generation, entries: previousEntries } = catalogue;
     const pending = Deferred.makeUnsafe<
       RefreshRuntimeModelRegistryResult,
-      unknown
+      Error
     >();
     catalogue = {
       ...catalogue,

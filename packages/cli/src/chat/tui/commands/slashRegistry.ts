@@ -1,4 +1,4 @@
-// In-tree slash command registry.
+// The slash command table, installed from plugin contributions at startup.
 
 import {
   editDistance,
@@ -11,11 +11,12 @@ import type {
 } from './handlers/slashContext';
 
 /** Help-screen grouping. Uncategorized commands land in a trailing
- *  "Other" section, so plugin-style registrations stay visible. */
+ *  "Other" section, so no contribution's command drops out of
+ *  `/help`. */
 export type SlashCommandCategory = 'session' | 'configuration' | 'account';
 
 /** A structured-form component renders inline when the user picks a slash
- *  command that declares one (e.g. `/api`). Calls `onDone(result)` to
+ *  command that declares one (e.g. `/login`). Calls `onDone(result)` to
  *  commit the user's selection or `onDone(undefined)` on cancel. */
 export interface SlashFormProps<T = unknown> {
   readonly onDone: (result: T | undefined) => void;
@@ -53,11 +54,6 @@ export interface SlashCommand {
    */
   readonly formComponent?: React.ComponentType<SlashFormProps>;
   /**
-   * Status-bar verb for Escape while `formComponent` owns input. Defaults to
-   * `close`; use `cancel` for forms where Escape discards a pending choice.
-   */
-  readonly formEscapeAction?: string;
-  /**
    * Keep the raw command line out of transcripts and persistent input history.
    * Use for commands whose remainder could contain a credential even when the
    * command normally collects that value through a structured form.
@@ -67,18 +63,53 @@ export interface SlashCommand {
 
 export type SlashPickIntent = 'complete' | 'submit';
 
-const COMMANDS = new Map<string, SlashCommand>();
-
-export function registerSlashCommand(command: SlashCommand): void {
-  COMMANDS.set(command.name, command);
+/**
+ * One plugin's slash commands. The id is stable and unique across the
+ * installed contributions; the commands keep their listed order, which is
+ * the palette's and `/help`'s order.
+ */
+export interface SlashCommandContribution {
+  readonly pluginId: string;
+  readonly commands: readonly SlashCommand[];
 }
 
-export function unregisterSlashCommand(name: string): void {
-  COMMANDS.delete(name);
+let installedCommands: readonly SlashCommand[] = [];
+
+/**
+ * Install the process's slash commands, replacing whatever was installed:
+ * the surface that owns the runtime options builds its contributions from
+ * them once at startup. A duplicate plugin id, or a name or alias claimed
+ * twice, is a wiring bug and throws.
+ */
+export function installSlashCommands(
+  contributions: readonly SlashCommandContribution[],
+): void {
+  const pluginIds = new Set<string>();
+  const claimed = new Map<string, string>();
+  for (const { pluginId, commands } of contributions) {
+    if (pluginIds.has(pluginId)) {
+      throw new Error(`Duplicate slash command plugin id: ${pluginId}`);
+    }
+    pluginIds.add(pluginId);
+    for (const command of commands) {
+      // A command may repeat its own name as an alias (case aside); only a
+      // second command addressing the same token is a collision.
+      for (const candidate of new Set(commandCandidates(command))) {
+        const owner = claimed.get(candidate);
+        if (owner !== undefined) {
+          throw new Error(
+            `Slash command /${candidate} is claimed by both ${owner} and ${pluginId} (/${command.name})`,
+          );
+        }
+        claimed.set(candidate, `${pluginId} (/${command.name})`);
+      }
+    }
+  }
+  installedCommands = contributions.flatMap(({ commands }) => commands);
 }
 
 export function listSlashCommands(): readonly SlashCommand[] {
-  return [...COMMANDS.values()];
+  return installedCommands;
 }
 
 /** Lowercased name + aliases a command can be addressed by. */
@@ -191,7 +222,7 @@ export function prefixSlashCommands(prefix: string): readonly SlashCommand[] {
 
 /**
  * Returns registered commands matching `prefix`, case-insensitively and in
- * registration order. Prefix matches (on name or alias) win; when there are
+ * installed order. Prefix matches (on name or alias) win; when there are
  * none, falls back to substring matches (`/odel` still finds `/model`), and
  * finally to the closest typo suggestion (`/hlp` → `/help`) so the palette
  * recovers from mistypes instead of going blank. The fallback tiers are for

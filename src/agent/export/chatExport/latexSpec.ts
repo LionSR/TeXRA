@@ -8,9 +8,8 @@
  */
 
 import type { DocumentMeta, ExportAttachmentType } from '@agent/export/schemas';
-import { sanitizeLiveLinkUrl } from '@shared/utils/liveLinkUrl';
 
-import { escapeLatex, escapeLatexUrl, latexListing } from './escapeUtils';
+import { escapeLatex, latexListing } from './escapeUtils';
 import {
   HEADER_FIELDS,
   type FormatSpec,
@@ -63,14 +62,6 @@ const LATEX_ATTACHMENT_LABELS = {
   document: '\\textit{[Document attachment]}',
 } as const satisfies Record<ExportAttachmentType, string>;
 
-function latexLinkOrText(url: string, title: string): string {
-  const safeUrl = sanitizeLiveLinkUrl(url);
-  const safeTitle = escapeLatex(title);
-  return safeUrl
-    ? `\\href{${escapeLatexUrl(safeUrl)}}{${safeTitle}}`
-    : safeTitle;
-}
-
 const TEX_NODES: NodeRenderers = {
   'user-message': ({ parts }) => {
     const body = parts
@@ -96,13 +87,6 @@ const TEX_NODES: NodeRenderers = {
 
   'web-search': ({ query }) =>
     `\\begin{websearchbox}\n\\textbf{Query:} ${escapeLatex(query)}\n\\end{websearchbox}\n`,
-
-  'web-search-results': ({ results }) => {
-    const items = results
-      .map((r) => `  \\item ${latexLinkOrText(r.url, r.title)}`)
-      .join('\n');
-    return `\\begin{websearchbox}\n\\begin{itemize}\n${items}\n\\end{itemize}\n\\end{websearchbox}\n`;
-  },
 };
 
 /**

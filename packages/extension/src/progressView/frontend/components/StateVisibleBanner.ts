@@ -1,8 +1,6 @@
 import { LitElement, type PropertyValues } from 'lit';
 import { property } from 'lit/decorators.js';
 
-import type { BannerState } from '@shared/schemas';
-
 /**
  * Base for banners whose visibility the host drives directly: it mirrors the
  * `visible` property onto a reflected attribute so the `:host(:not([visible]))`
@@ -23,7 +21,7 @@ export abstract class VisibleBanner extends LitElement {
  * instead of being copy-pasted per banner.
  */
 export abstract class StateVisibleBanner<
-  S extends BannerState,
+  S extends { visible: boolean },
 > extends VisibleBanner {
   abstract state: S;
 

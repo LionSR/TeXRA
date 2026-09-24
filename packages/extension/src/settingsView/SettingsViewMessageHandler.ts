@@ -27,10 +27,8 @@ import {
   buildToolDashboardItems,
   planToolTerminalAction,
 } from '@controllers/settingsView/ToolDashboardData';
-import {
-  ProviderKeyActionFailed,
-  SettingsProfileKeyController,
-} from '@controllers/settingsView/SettingsProfileKeyController';
+import { SettingsProfileKeyController } from '@controllers/settingsView/SettingsProfileKeyController';
+import { sharedSettingsCommands } from '@controllers/settingsView/sharedSettingsCommands';
 import { SettingsProfileController } from '@controllers/settingsView/SettingsProfileController';
 import { emitAppSignal } from '@eventBus/AppSignals';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
@@ -47,6 +45,7 @@ import {
 } from '@frontend/ui/errorHandlingUtils';
 import { subscribeAppSignal } from '@frontend/events/appSignalSubscriptions';
 import { subscribeGoalStateChanges } from '@frontend/events/runFactSubscriptions';
+import { withLogChannel } from '@logger/effectLog';
 import { createLog, type Log } from '@logger/logUtils';
 import {
   modelOptionsFrom,
@@ -54,7 +53,7 @@ import {
 } from '@model/computeModelOptions';
 import {
   API_PROVIDERS,
-  invalidateApiKeyCache,
+  apiProviderOfSecretName,
   loadApiKeyStatusMap,
 } from '@model/apiProviders';
 import {
@@ -82,10 +81,7 @@ import type {
   DerivedSettingsSnapshot,
   SettingsMessageFor,
 } from '@shared/settingsView/settingsViewMessages';
-import {
-  SettingsViewInboundMessageSchema,
-  SETTINGS_VIEW_CMD,
-} from '@shared/settingsView/settingsViewMessages';
+import { SettingsViewInboundMessageSchema } from '@shared/settingsView/settingsViewMessages';
 
 import {
   applyStateSettingUpdate,
@@ -98,15 +94,12 @@ import {
 } from '@shared/utils/dispatcher';
 import { buildSettingsSnapshotMessage } from '@shared/settingsView/handlers/settingsSnapshot';
 import { loadRuntimeSkillDisplay } from '@skills/runtimeSkills';
-import {
-  getLastCheckResults,
-  refreshToolAvailability,
-} from '@tools/toolAvailability';
+import { getLastCheckResults } from '@tools/toolAvailability';
 import { goalList } from '@tools/goal';
 import { getProviderKeyUrl } from '@utils/config/providerConfig';
 import { allSettledVoid } from '@utils/core/allSettledVoid';
-import { ensureError } from '@utils/errors/errorMessage';
 import { setToolEnabled } from '@utils/config/constants';
+import { ensureError } from '@utils/errors/errorMessage';
 import { AgentHandlers } from './handlers/agentHandlers';
 import { LatexSettingsHandlers } from './handlers/latexSettingsHandlers';
 import { MemoryHandlers } from './handlers/memoryHandlers';
@@ -143,6 +136,7 @@ export class SettingsViewMessageHandler {
   private readonly profileKeyController: SettingsProfileKeyController<ProcessServices>;
   /** The typed message and dialog surface this view reports and asks on. */
   private readonly subscriptionUsage: SubscriptionUsageService;
+  private readonly externalOpener = new VscodeExternalOpener();
 
   constructor(
     private readonly context: vscode.ExtensionContext,
@@ -185,7 +179,7 @@ export class SettingsViewMessageHandler {
     this.profileKeyController = new SettingsProfileKeyController({
       secrets,
       prompt: vscodeUi,
-      externalOpener: new VscodeExternalOpener(),
+      externalOpener: this.externalOpener,
       getProviderDisplayName: (provider) =>
         this.profileController.getProviderDisplayName(provider),
       getProviderKeyUrl: (provider) =>
@@ -251,6 +245,14 @@ export class SettingsViewMessageHandler {
       subscribeAppSignal(this.runtime, 'agentRosterChanged', () => {
         this.runtime.runFork(this.refreshAfterAgentMutation(undefined, true));
       }),
+      // Every provider-key writer lands here, not just this view's own
+      // round-trip: the setup agent's `unset_api_key`, the command palette,
+      // another window. An OAuth or GitHub token write is not a provider key.
+      subscribeAppSignal(this.runtime, 'credentialChanged', ({ key }) => {
+        const provider = apiProviderOfSecretName(key);
+        if (provider === undefined) return;
+        this.runtime.runFork(this.refreshAfterProviderKeyChange(provider));
+      }),
       subscribeAppSignal(this.runtime, 'languageModelsChanged', () => {
         this.runtime.runFork(
           this.withActiveWebview((webview) =>
@@ -277,9 +279,9 @@ export class SettingsViewMessageHandler {
    * the command palette gets the status round-trip and credential refresh
    * tail instead of a bespoke sign-in that leaves both stale.
    */
-  public signInSubscription(providerId: SubscriptionProviderId): Promise<void> {
+  public signInSubscription(providerId: SubscriptionProviderId) {
     const handlers = { chatgpt: this.chatgptHandlers, grok: this.grokHandlers };
-    return this.runtime.runPromise(handlers[providerId].handleSignIn());
+    return handlers[providerId].handleSignIn();
   }
 
   /** Each command builds a program; the message entry runs the selected one. */
@@ -293,22 +295,41 @@ export class SettingsViewMessageHandler {
         safeExecuteCommand(AUTH_COMMANDS.SIGN_IN, [], this.viewName),
       signOut: () =>
         safeExecuteCommand(AUTH_COMMANDS.SIGN_OUT, [], this.viewName),
-      setProviderKey: (message) =>
-        this.profileKeyController.setProviderKey(message.provider),
-      removeProviderKey: (message) =>
-        this.profileKeyController.removeProviderKey(message.provider),
-      openProviderKeyUrl: (message) =>
-        this.profileKeyController.openProviderKeyUrl(message.provider),
-      openExternalUrl: (message) => this.openExternalUrl(message.url),
-      setModelEnabled: (message) =>
-        this.setModelEnabled(message.modelName, message.enabled),
-      setModelReasoningLevel: (message) =>
-        this.modelSelectionController
-          .setReasoningLevel({
-            modelName: message.modelName,
-            level: message.level,
-          })
-          .pipe(Effect.andThen(this.postModelSelectionData())),
+      ...sharedSettingsCommands({
+        profileKeys: this.profileKeyController,
+        modelSelection: this.modelSelectionController,
+        externalOpener: this.externalOpener,
+        toolProbes: {
+          workspaceRoot: this.session.roots.workspace,
+          config: this.session.roots.config,
+        },
+        host: {
+          postModelSelection: () =>
+            this.withActiveWebview((w) => this.sendModelSelectionData(w)),
+          refreshModelCatalog: () =>
+            this.progressView.refreshCatalogs().pipe(Effect.asVoid),
+          // A failed key write leaves the profile and the Models tab showing
+          // the key as it was before the attempt. The error dialog is the
+          // report: a repaint that fails after it (a view closed meanwhile)
+          // is logged, not raised as a second, generic dialog.
+          reportProviderKeyFailure: (error) =>
+            Effect.andThen(
+              showLoggedErrorMessage(this.channel, error.message, error.cause),
+              this.withActiveWebview((w) =>
+                this.sendProfileAndModelSelectionData(w),
+              ).pipe(
+                Effect.catch((cause) =>
+                  Effect.logWarning(
+                    'Could not repaint the profile after a failed key write',
+                  ).pipe(
+                    Effect.annotateLogs({ data: cause }),
+                    withLogChannel(this.channel),
+                  ),
+                ),
+              ),
+            ),
+        },
+      }),
       requestModelAccess: (message) =>
         this.handleRequestModelAccess(message.modelName, context),
       clearCopilotRoute: (message) =>
@@ -361,14 +382,8 @@ export class SettingsViewMessageHandler {
         ),
       updateStateSetting: (message) =>
         this.updateStateSetting(message.key, message.value),
-      openToolInstallUrl: (message) => this.openExternalUrl(message.url),
       installToolExtension: (message) =>
         this.latexHandlers.installExtension(message.extensionId),
-      recheckToolStatus: () =>
-        refreshToolAvailability({
-          workspaceRoot: this.session.roots.workspace,
-          config: this.session.roots.config,
-        }),
       toggleTool: (message) =>
         setToolEnabled(message.toolId, message.enabled, this.globalState).pipe(
           Effect.andThen(
@@ -383,7 +398,11 @@ export class SettingsViewMessageHandler {
       getInlineCriticismEnabled: () =>
         this.withActiveWebview((w) => this.sendInlineCriticismEnabled(w)),
       setInlineCriticismEnabled: (message) =>
-        this.handleSetInlineCriticismEnabled(message.enabled),
+        setInlineCriticismEnabled(message.enabled).pipe(
+          Effect.andThen(
+            this.withActiveWebview((w) => this.sendInlineCriticismEnabled(w)),
+          ),
+        ),
       getGoalList: () => this.withActiveWebview((w) => this.sendGoalList(w)),
       revealGoalRun: (message) =>
         revealProgressRun(message.runId).pipe(Effect.asVoid),
@@ -399,7 +418,7 @@ export class SettingsViewMessageHandler {
               command: SETTINGS_VIEW_COMMANDS.UPDATE_GOAL_LIST,
               items: goalList(this.session),
             }),
-          catch: (error) => error,
+          catch: ensureError,
         }).pipe(
           Effect.flatMap((delivered) =>
             delivered
@@ -427,7 +446,7 @@ export class SettingsViewMessageHandler {
   }
 
   private handleRunToolCommand(
-    data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.RUN_TOOL_COMMAND>,
+    data: SettingsMessageFor<typeof SETTINGS_VIEW_COMMANDS.RUN_TOOL_COMMAND>,
   ): void {
     const action = planToolTerminalAction({
       toolId: data.toolId,
@@ -519,15 +538,6 @@ export class SettingsViewMessageHandler {
             const report = Effect.gen({ self: this }, function* () {
               if (error instanceof UnsupportedCommandError) {
                 yield* vscodeUi.showInfoMessage(error.reason);
-              } else if (error instanceof ProviderKeyActionFailed) {
-                yield* showLoggedErrorMessage(
-                  this.channel,
-                  error.message,
-                  error.cause,
-                );
-                yield* this.withActiveWebview((webview) =>
-                  this.sendProfileAndModelSelectionData(webview),
-                );
               } else {
                 this.log.error('Error handling message', { data: error });
                 yield* vscodeUi.showErrorMessage(
@@ -561,10 +571,32 @@ export class SettingsViewMessageHandler {
     return Effect.gen({ self: this }, function* () {
       // Tool dashboard involves network I/O (Zotero probe, etc.) — fire on a
       // detached fiber so it doesn't block the initial render. The frontend
-      // shows a loading spinner until data arrives.
-      yield* Effect.forkDetach(this.sendToolDashboardData(webview), {
-        startImmediately: true,
-      });
+      // shows a loading spinner until data arrives, so a failed build still
+      // posts an empty dashboard to end it, and nothing joins this fiber, so
+      // each failure is logged on it.
+      yield* Effect.forkDetach(
+        this.sendToolDashboardData(webview).pipe(
+          Effect.catch((error) =>
+            Effect.logWarning(
+              'The tool dashboard could not be built; showing it empty.',
+            ).pipe(
+              Effect.annotateLogs({ data: error }),
+              withLogChannel(this.channel),
+              Effect.andThen(
+                postToWebview(webview, {
+                  command: SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD,
+                  items: [],
+                }),
+              ),
+            ),
+          ),
+          Effect.ignore({
+            log: 'Warn',
+            message: 'The empty tool dashboard could not be posted either.',
+          }),
+        ),
+        { startImmediately: true },
+      );
 
       yield* postToWebview(webview, {
         command: SETTINGS_VIEW_COMMANDS.SET_UNSUPPORTED_COMMANDS,
@@ -606,14 +638,6 @@ export class SettingsViewMessageHandler {
     );
   }
 
-  private handleSetInlineCriticismEnabled(enabled: boolean) {
-    return setInlineCriticismEnabled(enabled).pipe(
-      Effect.andThen(
-        this.withActiveWebview((w) => this.sendInlineCriticismEnabled(w)),
-      ),
-    );
-  }
-
   private sendProfileData(webview: vscode.Webview) {
     return Effect.flatMap(
       this.profileController.buildProfileMessage(),
@@ -626,11 +650,6 @@ export class SettingsViewMessageHandler {
       this.modelSelectionController.buildModelSelectionMessage(),
       (message) => postToWebview(webview, message),
     );
-  }
-
-  /** Post the model-selection payload to whichever webview is active. */
-  private postModelSelectionData() {
-    return this.withActiveWebview((w) => this.sendModelSelectionData(w));
   }
 
   private sendProfileAndModelSelectionData(webview: vscode.Webview) {
@@ -802,7 +821,6 @@ export class SettingsViewMessageHandler {
     provider: string,
   ): Effect.Effect<void, Error, ProcessServices> {
     return Effect.gen({ self: this }, function* () {
-      invalidateApiKeyCache();
       const usageProvider = codingPlanForApiProvider(provider)?.usageProvider;
       // The launcher's API-key banner reads the same credential probe from
       // the host snapshot.
@@ -829,20 +847,20 @@ export class SettingsViewMessageHandler {
     context: vscode.ExtensionContext,
   ) {
     return Effect.gen({ self: this }, function* () {
+      // Repeat one superseded discovery, then fail closed rather than
+      // authorize from the retained presentation catalogue. A failed probe
+      // fails the program: authorization never falls back to the retained
+      // catalogue.
       const discovery = yield* Effect.exit(
-        Effect.gen(function* () {
-          // Retry one superseded discovery, then fail closed rather than
-          // authorize from the retained presentation catalogue. A failed
-          // probe fails the program: authorization never falls back to the
-          // retained catalogue.
-          for (let attempt = 0; attempt < 2; attempt += 1) {
-            const result = yield* refreshRuntimeModelRegistry({
-              forceDiscovery: true,
-            });
-            if (result === 'current') return copilotRouteForModel(modelName);
-          }
-          return undefined;
-        }),
+        refreshRuntimeModelRegistry({ forceDiscovery: true }).pipe(
+          Effect.repeat({
+            until: (result): boolean => result === 'current',
+            times: 1,
+          }),
+          Effect.map((result) =>
+            result === 'current' ? copilotRouteForModel(modelName) : undefined,
+          ),
+        ),
       );
       const route = Exit.isSuccess(discovery) ? discovery.value : undefined;
       let result: Exit.Exit<unknown, unknown> = discovery;
@@ -903,7 +921,7 @@ export class SettingsViewMessageHandler {
       if (Exit.isSuccess(result)) {
         // Two different programs: the notice is a host dialog, the preference
         // is a state write. The boundary composes whichever it chose.
-        const settle: Effect.Effect<unknown, unknown> =
+        const settle: Effect.Effect<unknown, Error> =
           !route || route.access === 'unavailable'
             ? showLoggedInfoMessage(
                 this.channel,
@@ -1002,7 +1020,7 @@ export class SettingsViewMessageHandler {
   ) {
     return Effect.gen({ self: this }, function* () {
       const cachedResults = options?.skipChecks
-        ? (getLastCheckResults() ?? undefined)
+        ? (getLastCheckResults(this.session.roots.workspace) ?? undefined)
         : undefined;
       const items = yield* buildToolDashboardItems(
         'extension',
@@ -1017,23 +1035,5 @@ export class SettingsViewMessageHandler {
         items,
       });
     });
-  }
-
-  private openExternalUrl(url: string) {
-    return Effect.tryPromise({
-      try: () => vscode.env.openExternal(vscode.Uri.parse(url)),
-      catch: ensureError,
-    }).pipe(Effect.asVoid);
-  }
-
-  private setModelEnabled(modelName: string, enabled: boolean) {
-    return this.modelSelectionController
-      .setModelEnabled({ modelName, enabled })
-      .pipe(
-        Effect.andThen(this.postModelSelectionData()),
-        // The options cache is invalidated by the writer itself.
-        Effect.andThen(this.progressView.refreshCatalogs()),
-        Effect.asVoid,
-      );
   }
 }

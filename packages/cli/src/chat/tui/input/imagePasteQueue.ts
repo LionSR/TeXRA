@@ -1,3 +1,5 @@
+import { warn as logWarning } from '@logger/logUtils';
+
 export interface ImagePasteAttempt {
   readonly isCurrent: () => boolean;
 }
@@ -22,14 +24,22 @@ export class ImagePasteQueue {
 
   track(work: Promise<void>): void {
     this.pending.add(work);
-    // The catch silences only this bookkeeping chain; whoever created `work`
-    // owns its rejection.
+    // This catch keeps only the bookkeeping chain alive — whoever created
+    // `work` owns its rejection — and the warn is that chain's one rejection
+    // observer: a throw out of `flush`'s deferred action would otherwise
+    // vanish here.
     void work
       .finally(() => {
         this.pending.delete(work);
         this.flush();
       })
-      .catch(() => undefined);
+      .catch((error: unknown) => {
+        logWarning(
+          'cli.tui',
+          'The image-paste bookkeeping chain rejected after the paste settled.',
+          { data: error },
+        );
+      });
   }
 
   runWhenIdle(action: () => void): void {

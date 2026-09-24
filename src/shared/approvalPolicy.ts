@@ -37,7 +37,7 @@ const TEXRA_APPROVAL_UNPRESENTABLE_MESSAGE =
 const TEXRA_APPROVAL_POLICY_COPY = {
   ask: {
     label: 'Ask',
-    description: 'Control Bash and edit prompts independently.',
+    description: 'Ask before commands and edits.',
   },
   never: {
     label: 'Never',

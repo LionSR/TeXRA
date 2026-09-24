@@ -35,24 +35,19 @@ import {
   latexdiffAllFailedMessage,
   NO_LATEXDIFF_OPERATIONS_MESSAGE,
 } from '@latex/latexdiff/latexdiffCopy';
-import {
-  DEFAULT_MATH_MARKUP,
-  MATH_MARKUP_OPTIONS,
-  describeMathMarkupOption,
-  type MathMarkupOption,
-} from '@latex/latexdiff/mathMarkup';
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import { withSessionFs } from '@platform/rootedFs';
 import type { FileLocation } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { settingByKey, settingEnumChoices } from '@shared/state/stateSettings';
 import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latexConfig';
+import type { LatexdiffMathMarkupValue } from '@shared/constants/latexConfig';
+import { readSettingFrom } from '@utils/config/platformSettings';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { pathToLocationIn } from '@utils/files/fileLocation';
 import { entryExists } from '@utils/files/fsEntryExists';
 import { checkToolInstalled } from '@utils/system/toolUtils';
-
-const log = createLog(CHANNEL);
 
 type LatexdiffTool = 'latexdiff' | 'latexdiff-vc';
 
@@ -72,7 +67,7 @@ const withLatexdiffTool = <E, R>(
   Effect.gen(function* () {
     const installed = yield* checkToolInstalled(tool);
     if (!installed) {
-      log.warn(`${tool} is not installed; command will not run.`);
+      yield* Effect.logWarning(`${tool} is not installed; skipping.`);
       return;
     }
     yield* action;
@@ -86,23 +81,28 @@ const withLatexdiffTool = <E, R>(
             Cause.squash(cause),
           ).pipe(Effect.asVoid),
     ),
+    // Every log in a command body belongs to this file's channel.
+    withLogChannel(CHANNEL),
   );
 
-type MarkupItem = vscode.QuickPickItem & { value: MathMarkupOption };
+type MarkupItem = vscode.QuickPickItem & { value: LatexdiffMathMarkupValue };
 
 // Returns undefined when the user cancels, logging it so callers just bail.
 const promptForLatexdiffMathMarkup = Effect.fnUntraced(function* (
   session: SessionHandle,
 ) {
-  const configuredMode = yield* session.roots.workspaceState.get<string>(
+  const configuredMode = yield* readSettingFrom<LatexdiffMathMarkupValue>(
+    session.roots,
     WorkspaceStateKey.LATEXDIFF_MATH_MARKUP,
-    DEFAULT_MATH_MARKUP,
   );
-  const items: MarkupItem[] = MATH_MARKUP_OPTIONS.map((mode) => ({
-    label: mode,
-    description: describeMathMarkupOption(mode),
-    picked: mode === configuredMode,
-    value: mode,
+  // The row is a catalog enum row: a missing one is a defect, not an option.
+  const items: MarkupItem[] = settingEnumChoices<LatexdiffMathMarkupValue>(
+    settingByKey(WorkspaceStateKey.LATEXDIFF_MATH_MARKUP)!,
+  )!.map(({ value, label, description }) => ({
+    label,
+    description,
+    picked: value === configuredMode,
+    value,
   }));
   // Keep the configured mode first so Enter accepts it immediately.
   const prioritizedItems = [
@@ -123,7 +123,7 @@ const promptForLatexdiffMathMarkup = Effect.fnUntraced(function* (
     catch: ensureError,
   });
   if (!pick) {
-    log.debug('Math markup selection cancelled by user');
+    yield* Effect.logDebug('Math markup selection cancelled by user');
   }
   return pick?.value;
 });
@@ -193,12 +193,9 @@ const restorePreparedViewerTarget = (
     // The original setup error still propagates; a failed restore is a reason
     // to skip the argument-free viewer rather than open a stale/unrelated PDF.
     Effect.catch((err) =>
-      Effect.sync(() => {
-        log.warn(
-          `Failed to restore the last prepared diff before viewer handoff: ${toErrorMessage(err)}`,
-        );
-        return false;
-      }),
+      Effect.logWarning(
+        `Failed to restore the last prepared diff before viewer handoff: ${toErrorMessage(err)}`,
+      ).pipe(Effect.as(false)),
     ),
   );
 
@@ -230,13 +227,13 @@ const prepareLatexdiffResultsAndScheduleViewer = Effect.fnUntraced(function* (
         });
         if (opened) {
           lastProcessedLocation = opened.diffLocation;
-          log.debug(`Successfully generated diff: ${result.diffPath}${suffix}`);
+          yield* Effect.logDebug(`Generated diff: ${result.diffPath}${suffix}`);
           if (opened.viewerReady) {
             lastViewerLocation = opened.diffLocation;
           }
         }
       } else {
-        log.warn(`Failed to generate diff${suffix}: ${result.message}`);
+        yield* Effect.logWarning(`Diff failed${suffix}: ${result.message}`);
       }
     }
     completedSetup = true;
@@ -274,12 +271,12 @@ const runDiffAndOpen = Effect.fnUntraced(function* (
   session: SessionHandle,
   toolLabel: string,
   runDiff: (
-    mathMarkup: MathMarkupOption,
+    mathMarkup: LatexdiffMathMarkupValue,
   ) => Effect.Effect<LaTeXdiffResult, never, FileSystem.FileSystem>,
 ) {
   const mathMarkup = yield* promptForLatexdiffMathMarkup(session);
   if (!mathMarkup) return;
-  log.info(`Running ${toolLabel} with math markup mode: ${mathMarkup}`);
+  yield* Effect.logInfo(`Running ${toolLabel}, math markup: ${mathMarkup}`);
 
   const result = yield* runDiff(mathMarkup);
   if (!result.success) {
@@ -378,7 +375,7 @@ const handlePackLatexdiffvc = Effect.fnUntraced(function* (
     'latexdiff-vc',
     clean ? 'Error cleaning LaTeX diff' : 'Error packing LaTeX diff',
     Effect.gen(function* () {
-      log.debug(
+      yield* Effect.logDebug(
         `Command called with: inputFile=${inputFile}, baseFile=${baseFile}, commitHash=${commitHash}, clean=${clean}`,
       );
       const fileToUse = yield* resolveDiffBase(inputFile, baseFile);
@@ -405,7 +402,7 @@ const handleRunLatexdiff = Effect.fnUntraced(function* (
     'latexdiff',
     'Error running LaTeX diffs',
     Effect.gen(function* () {
-      log.debug(`Command called with config: ${JSON.stringify(config)}`);
+      yield* Effect.logDebug(`Command config: ${JSON.stringify(config)}`);
 
       const { agent, model, inputFile } = config;
 
@@ -420,14 +417,14 @@ const handleRunLatexdiff = Effect.fnUntraced(function* (
       const mathMarkup = yield* promptForLatexdiffMathMarkup(session);
       if (!mathMarkup) return;
 
-      log.info(`Running latexdiff with math markup mode: ${mathMarkup}`);
+      yield* Effect.logInfo(`Running latexdiff, math markup: ${mathMarkup}`);
 
       const generateBetweenRoundDiffs =
         yield* session.roots.workspaceState.get<boolean>(
           WorkspaceStateKey.LATEXDIFF_BETWEEN_ROUNDS,
           LATEX_CONFIG_DEFAULTS.latexdiffBetweenRounds,
         );
-      log.debug(`Between-round diffs enabled: ${generateBetweenRoundDiffs}`);
+      yield* Effect.logDebug(`Between rounds: ${generateBetweenRoundDiffs}`);
 
       const outputsByRound = normalizeRunLatexdiffOutputsByRound(
         config.outputsByRound,

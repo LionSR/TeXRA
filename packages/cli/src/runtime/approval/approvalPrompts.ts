@@ -9,7 +9,7 @@ import {
   type QuotaFallbackRoute,
 } from '@shared/quotaFallbackRoutes';
 import { isKimiCodeExclusiveRetryModel } from '@shared/model/kimiCodeRetryGate';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
 
 import { type CliContext, type CliPromptRequest } from '../cliContext';
@@ -195,7 +195,7 @@ export const askApproval = Effect.fn('approvalPrompts.askApproval')(function* (
       // leaves interruption free to propagate.
       const beforePrompt = Effect.try({
         try: () => hooks.beforePrompt?.(),
-        catch: (cause) => cause,
+        catch: ensureError,
       });
       while (true) {
         yield* beforePrompt;
@@ -210,7 +210,7 @@ export const askApproval = Effect.fn('approvalPrompts.askApproval')(function* (
         }
         yield* Effect.try({
           try: () => writeTextStderr(safeTerminalText(details())),
-          catch: (cause) => cause,
+          catch: ensureError,
         });
       }
 

@@ -407,7 +407,6 @@ describe('runAgent run ownership', () => {
         SESSION,
         RUN_ID,
         CONFIG,
-        CONFIG.agent,
         expect.objectContaining({
           identity: { kind: 'agent', agent: CONFIG.agent },
         }),
@@ -452,7 +451,6 @@ describe('runAgent run ownership', () => {
           SESSION,
           RUN_ID,
           definition.config,
-          CONFIG.agent,
           expect.objectContaining({ userFollowUpSupport: 'unsupported' }),
         );
         expect(mocks.executeAgent).toHaveBeenCalledWith(

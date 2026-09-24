@@ -4,7 +4,6 @@ import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
-import { noopTrace } from '@agent/trace';
 import {
   AgentConfigSchema,
   type AgentConfig,
@@ -18,12 +17,12 @@ import {
 import { buildUserVars as buildUserVarsEffect } from '@agent/prompt/userVars';
 import type { ConfigProvider } from '@platform/interfaces';
 import { AgentCategory } from '@shared/schemas';
-import { setRuntimeSkillSources } from '@skills/runtimeSkills';
+import { noopTrace } from '@test/support/noopTrace';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { spiedTrace } from '@test/support/spiedTrace';
-import { writeSkill } from '@test/support/skillFixtures';
+import { installTestSkillRoots, writeSkill } from '@test/support/skillFixtures';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { FakeConfigProvider, fakePath } from '@test/support/FakePlatform';
 
@@ -96,18 +95,13 @@ describe('buildUserVars runtime skill diagnostics', () => {
 
   beforeEach(() => {
     fakeConfig.set('texra.skills.enabled', true);
-    setRuntimeSkillSources([
-      {
-        scope: 'bundled',
-        path: missingSource,
-        label: 'bundled',
-        required: true,
-      },
+    installTestSkillRoots([
+      { tier: 'bundled', path: missingSource, required: true },
     ]);
   });
 
   afterEach(async () => {
-    setRuntimeSkillSources([]);
+    installTestSkillRoots([]);
     await Effect.runPromise(
       fakeConfig.update('texra.skills.enabled', undefined),
     );
@@ -184,7 +178,7 @@ describe('buildUserVars runtime skill diagnostics', () => {
       { name: 'client-review', description: rawDescription },
       'Apply the skill.',
     );
-    setRuntimeSkillSources([{ scope: 'project', path: root }]);
+    installTestSkillRoots([{ tier: 'project', path: root }]);
     const emit = vi.fn();
 
     const vars = await buildUserVars(

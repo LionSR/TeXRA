@@ -20,8 +20,8 @@ import {
 
 /**
  * The test kernel's process runtime and session graph family (PRD
- * one-fold-three-renderers, 7.7): what a composition root installs beside
- * `initPlatform()`. Installed at import, in the importing test file's module
+ * one-fold-three-renderers, 7.7): what a composition root installs with
+ * `installProcessRuntime()`. Installed at import, in the importing test file's module
  * graph, so it lands after that file's `vi.mock` registrations and the graph
  * is built over the modules the test actually mocks. `setupFakePlatform.ts`
  * deliberately does not import this module: a setup file runs before any

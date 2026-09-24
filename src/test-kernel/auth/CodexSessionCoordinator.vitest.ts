@@ -8,11 +8,11 @@ import { describe, expect, vi } from 'vitest';
 
 // Local imports
 import { CodexAuthError } from '@auth/codex';
-import {
-  CodexSessionCoordinator,
-  type CodexOAuthClient,
-  type CodexSessionStorage,
-} from '@auth/codex/CodexSessionCoordinator';
+import { CodexSessionCoordinator } from '@auth/codex/CodexSessionCoordinator';
+import type {
+  SubscriptionOAuthClient,
+  SubscriptionSessionStorage,
+} from '@auth/oauth/SubscriptionOAuthCoordinator';
 import type {
   CodexSession,
   CodexTokenResponse,
@@ -24,7 +24,7 @@ import type { HttpClient } from 'effect/unstable/http';
 const NOW = 1_900_000_000_000;
 const FIVE_MIN = 5 * 60 * 1000;
 
-function memoryStorage(initial?: CodexSession): CodexSessionStorage & {
+function memoryStorage(initial?: CodexSession): SubscriptionSessionStorage & {
   peek: () => CodexSession | undefined;
 } {
   let value = initial ? JSON.stringify(initial) : undefined;
@@ -50,7 +50,7 @@ function memoryStorage(initial?: CodexSession): CodexSessionStorage & {
 function gatedStorage(
   gateOn: 'get' | 'store' | 'delete',
   initial?: CodexSession,
-): CodexSessionStorage & {
+): SubscriptionSessionStorage & {
   peek: () => CodexSession | undefined;
   gateReached: Effect.Effect<void>;
   release: () => void;
@@ -156,8 +156,8 @@ const joinFailure = <A>(fiber: Fiber.Fiber<A, unknown>) =>
   Effect.flip(Fiber.join(fiber));
 
 function makeCoordinator(
-  storage: CodexSessionStorage,
-  client: Partial<CodexOAuthClient> = {},
+  storage: SubscriptionSessionStorage,
+  client: Partial<SubscriptionOAuthClient> = {},
 ): CodexSessionCoordinator {
   return new CodexSessionCoordinator({
     storage,
@@ -357,7 +357,7 @@ describe('CodexSessionCoordinator', () => {
       Effect.gen(function* () {
         const gated = gatedStorage('store');
         const ops: string[] = [];
-        const storage: CodexSessionStorage = {
+        const storage: SubscriptionSessionStorage = {
           get: gated.get,
           store: (value) =>
             Effect.gen(function* () {

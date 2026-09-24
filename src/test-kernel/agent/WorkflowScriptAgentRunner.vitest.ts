@@ -9,13 +9,14 @@ import { beforeEach, describe, expect, vi } from 'vitest';
 
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { FileInteractionState } from '@agent/core/state/AgentWorkspaceState';
-import { noopTrace } from '@agent/trace';
 import { createSessionApprovals } from '@agent/runtime/runApprovalQueue';
 import { RunRoster } from '@agent/runtime/runRoster';
 import { Runs } from '@agent/runtime/runRegistry';
 import type { WorkflowAgentInvocation } from '@agent/workflowScript/types';
 import type { AgentEntry } from '@agent/index/agentEntry';
 import { RunUsageTotalsSchema, type RunEnd, type RunId } from '@shared/schemas';
+import { emptyPinnedComposition } from '@test/support/nativeToolTestLayer';
+import { noopTrace } from '@test/support/noopTrace';
 import { createFakeWorkspaceRoots, fakePath } from '@test/support/FakePlatform';
 import { fakeProcessServices } from '@test/support/setupPlatform';
 import { createWorkflowScriptAgentRunner as createNativeWorkflowScriptAgentRunner } from '@tools/delegation/workflowScriptAgentRunner';
@@ -63,9 +64,9 @@ function withStubbedExists<A, E, R>(program: Effect.Effect<A, E, R>) {
   });
 }
 
-// The fingerprint now reads through the process `FileSystem` rather than the
-// deleted `AbsoluteFS` facade, so the stub replaces one method of the real
-// service (as GlobTool's suite does) instead of mocking a module.
+// The fingerprint reads through the process `FileSystem`, so the stub
+// replaces one method of the real service (as GlobTool's suite does) instead
+// of mocking a module.
 function fingerprintWorkflowAgentDependencies(
   ...args: Parameters<typeof fingerprintInputDependencies> extends [
     unknown,
@@ -166,9 +167,8 @@ vi.mock('@tools/delegation/inputFields', async (importOriginal) => ({
   rejectOversizedBibAttachments: mocks.rejectOversizedBibAttachments,
 }));
 
-// `resolveInvocationFileList` canonicalizes through `node:fs/promises.realpath`
-// now that the `WorkspaceFS` facade is gone, so the stub stands in for that one
-// export.
+// `resolveInvocationFileList` canonicalizes through
+// `node:fs/promises.realpath`, so the stub stands in for that one export.
 vi.mock('node:fs/promises', async (importOriginal) => ({
   ...(await importOriginal<typeof import('node:fs/promises')>()),
   realpath: mocks.realpath,
@@ -268,8 +268,8 @@ function parentContext(): DelegationParent {
       },
       toolPolicy: {
         approvalPromptsUnavailable: true,
-        runtimeUnavailableTools: ['user_question'],
       },
+      composition: emptyPinnedComposition,
     },
   };
 }
@@ -299,7 +299,6 @@ function invocation(
     key: '0123456789abcdef',
     prompt: 'Draft the section.',
     options,
-    signal: new AbortController().signal,
     report: vi.fn(),
   };
 }
@@ -630,7 +629,6 @@ describe('createWorkflowScriptAgentRunner', () => {
           agentName: 'correct',
           parentRunId: runId,
           approvalPromptsUnavailable: true,
-          runtimeUnavailableTools: ['user_question'],
           configPayload: expect.objectContaining({
             agent: 'correct',
             agentSource: 'builtInWorkflow',

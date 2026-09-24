@@ -104,21 +104,6 @@ function selectionSizeLabel(selection: AgentRosterCategorySelection): string {
 // Border, title, footer spacer, and key hints are the chrome.
 const AGENT_ROSTER_SELECT_CHROME_ROWS = 5;
 
-async function loadRosterData(
-  runtime: ProcessRuntime,
-  roots: SettingsStores,
-): Promise<AgentRosterData> {
-  // The roster read loads the local agent catalog the lists below read.
-  const record = await runtime.runPromise(readCliAgentRoster(roots));
-  return {
-    record,
-    presets: await runtime.runPromise(
-      createWorkspaceAgentRosterController(roots).allPresets(),
-    ),
-    agents: byCategory((category) => getAgentsByCategory(category)),
-  };
-}
-
 export function AgentRosterForm(
   props: AgentRosterFormProps,
 ): React.JSX.Element | null {
@@ -128,7 +113,20 @@ export function AgentRosterForm(
   const roots = props.stores;
   const { data, error, reload, reportError } =
     useAsyncListForm<AgentRosterData>({
-      load: () => loadRosterData(props.runtime, roots),
+      // The roster read loads the local agent catalog the lists read.
+      load: () =>
+        Effect.map(
+          Effect.all({
+            record: readCliAgentRoster(roots),
+            presets: createWorkspaceAgentRosterController(roots).allPresets(),
+          }),
+          ({ record, presets }): AgentRosterData => ({
+            record,
+            presets,
+            agents: byCategory((category) => getAgentsByCategory(category)),
+          }),
+        ),
+      runtime: props.runtime,
       onClose: props.onClose,
       onError: props.onError,
     });
@@ -138,7 +136,7 @@ export function AgentRosterForm(
    *  that program, so one `runPromise` settles the pair and no promise-level
    *  catch has to stand in for the fold. */
   const write = (
-    action: () => Effect.Effect<void, unknown, ProcessServices>,
+    action: () => Effect.Effect<void, Error, ProcessServices>,
     nextMode = mode,
   ): void => {
     void props.runtime.runPromise(

@@ -487,7 +487,7 @@
           {
             "id": "texra.gettingStarted.signIn",
             "title": "Choose how TeXRA should sign in",
-            "description": "A credential is the one step no agent can do for you. Two ways in:\n\n**Use ChatGPT subscription** — ChatGPT Plus/Pro/Team can route Codex models through your ChatGPT plan.\n\n[Sign in with ChatGPT](command:texra.auth.chatgpt.signIn)\n\n**Use your own provider API key** — Anthropic, OpenAI, Google, and more. Except for Codex through ChatGPT subscription, chat subscriptions do not include API access.\n\n[Set API key](command:texra.setApiKey)\n\nSigning in to your TeXRA account separately unlocks the hosted research-agent catalog, including the orchestrator.\n\n[Sign In](command:texra.auth.signIn)",
+            "description": "A credential is the one step no agent can do for you. Two ways in:\n\n**Use ChatGPT subscription** — ChatGPT Plus/Pro/Team can route Codex models through your ChatGPT plan.\n\n[Sign in with ChatGPT](command:texra.auth.chatgpt.signIn)\n\n**Use your own provider API key** — Anthropic, OpenAI, Google, and more. Except for Codex through ChatGPT subscription, chat subscriptions do not include API access.\n\n[Set API key](command:texra.setApiKey)\n\nSigning in to your TeXRA account separately unlocks the hosted research-agent catalog of remote workflow agents.\n\n[Sign In](command:texra.auth.signIn)",
             "media": {
               "image": "resources/walkthroughs/media/api-key-setup.png",
               "altText": "Screenshot of the API key configuration view"
@@ -513,7 +513,7 @@
           {
             "id": "texra.gettingStarted.agentModel",
             "title": "Meet the orchestrator",
-            "description": "After setup, the **orchestrator** is the habit. You don't pick from 23 agents -- it reads your paper, figures out what needs work, and hands each task to the right agent. You just approve the proposals as they come in.\n\nPick **orchestrator** from the agent dropdown and choose a model -- bigger models give better results, smaller ones are faster and cheaper. The orchestrator itself comes from the hosted research-agent catalog, so sign in to TeXRA to use it; without sign-in, start with **assistant** instead.\n\nTeams give the orchestrator the right tools for your field. The setup assistant applies one for you, or pick one yourself:\n\n[Pick a team](command:texra.walkthroughWorkspaceAction?%5B%22texra.showMultiAgent%22%5D)",
+            "description": "After setup, the **orchestrator** is the habit. You don't pick from 23 agents -- it reads your paper, figures out what needs work, and hands each task to the right agent. You just approve the proposals as they come in.\n\nPick **orchestrator** from the agent dropdown and choose a model -- bigger models give better results, smaller ones are faster and cheaper. The orchestrator ships with TeXRA, so it needs no sign-in.\n\nTeams give the orchestrator the right tools for your field. The setup assistant applies one for you, or pick one yourself:\n\n[Pick a team](command:texra.walkthroughWorkspaceAction?%5B%22texra.showMultiAgent%22%5D)",
             "media": {
               "image": "resources/walkthroughs/media/agent-model-selection.png",
               "altText": "Screenshot of the agent and model selection UI"
@@ -951,23 +951,23 @@
       },
       {
         "name": "lean-blueprint",
-        "path": "resources/skills/lean-blueprint/SKILL.md"
+        "path": "resources/plugins/lean4/skills/lean-blueprint/SKILL.md"
       },
       {
         "name": "lean-proof-assistant",
-        "path": "resources/skills/lean-proof-assistant/SKILL.md"
+        "path": "resources/plugins/lean4/skills/lean-proof-assistant/SKILL.md"
       },
       {
         "name": "lean-search",
-        "path": "resources/skills/lean-search/SKILL.md"
+        "path": "resources/plugins/lean4/skills/lean-search/SKILL.md"
       },
       {
         "name": "lean-simplifier",
-        "path": "resources/skills/lean-simplifier/SKILL.md"
+        "path": "resources/plugins/lean4/skills/lean-simplifier/SKILL.md"
       },
       {
         "name": "lean-tactic-improver",
-        "path": "resources/skills/lean-tactic-improver/SKILL.md"
+        "path": "resources/plugins/lean4/skills/lean-tactic-improver/SKILL.md"
       },
       {
         "name": "literature-search",

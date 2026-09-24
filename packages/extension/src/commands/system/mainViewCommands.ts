@@ -8,6 +8,7 @@ import { registerCommandEntries } from '@commands/_shared/registerCommands';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
+import { ensureError } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'mainViewCommands';
 
@@ -50,38 +51,43 @@ export function registerMainViewCommands(
 }
 
 /** Show the project import quick-pick. */
-export async function showImportOptions(): Promise<void> {
-  const picked = await vscode.window.showQuickPick(
-    [
-      {
-        label: '$(repo-clone) Pull from Overleaf',
-        description: 'Import an existing Overleaf/ShareLaTeX project',
-        command: EXTENSION_COMMANDS.CLONE_OVERLEAF_PROJECT,
-      },
-      {
-        label: '$(cloud-download) Grab from arXiv',
-        description: "Download a paper's source files",
-        command: EXTENSION_COMMANDS.DOWNLOAD_ARXIV_SOURCE,
-      },
-      {
-        label: '$(file-add) Try the sample project',
-        description: 'Create a sample project to play around risk-free',
-        command: EXTENSION_COMMANDS.CREATE_SAMPLE_PROJECT,
-      },
-      {
-        label: '$(rocket) Run the setup assistant',
-        description: 'Check tools, credentials, and LaTeX setup',
-        command: EXTENSION_COMMANDS.RUN_SETUP_ASSISTANT,
-      },
-      {
-        label: '$(book) Walk me through setup',
-        description: 'Open the getting started walkthrough',
-        command: EXTENSION_COMMANDS.OPEN_GETTING_STARTED,
-      },
-    ],
-    { placeHolder: 'Import or create a LaTeX project' },
+export const showImportOptions = Effect.gen(function* () {
+  const picked = yield* Effect.promise(() =>
+    vscode.window.showQuickPick(
+      [
+        {
+          label: '$(repo-clone) Pull from Overleaf',
+          description: 'Import an existing Overleaf/ShareLaTeX project',
+          command: EXTENSION_COMMANDS.CLONE_OVERLEAF_PROJECT,
+        },
+        {
+          label: '$(cloud-download) Grab from arXiv',
+          description: "Download a paper's source files",
+          command: EXTENSION_COMMANDS.DOWNLOAD_ARXIV_SOURCE,
+        },
+        {
+          label: '$(file-add) Try the sample project',
+          description: 'Create a sample project to play around risk-free',
+          command: EXTENSION_COMMANDS.CREATE_SAMPLE_PROJECT,
+        },
+        {
+          label: '$(rocket) Run the setup assistant',
+          description: 'Check tools, credentials, and LaTeX setup',
+          command: EXTENSION_COMMANDS.RUN_SETUP_ASSISTANT,
+        },
+        {
+          label: '$(book) Walk me through setup',
+          description: 'Open the getting started walkthrough',
+          command: EXTENSION_COMMANDS.OPEN_GETTING_STARTED,
+        },
+      ],
+      { placeHolder: 'Import or create a LaTeX project' },
+    ),
   );
   if (picked) {
-    await vscode.commands.executeCommand(picked.command);
+    yield* Effect.tryPromise({
+      try: () => vscode.commands.executeCommand(picked.command),
+      catch: ensureError,
+    });
   }
-}
+});

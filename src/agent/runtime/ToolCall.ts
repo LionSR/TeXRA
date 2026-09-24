@@ -24,8 +24,8 @@ export interface ToolCallShape {
   };
   /**
    * Absent for a standalone host invocation outside an agent run. What the run
-   * already answers for (its model, its delegation scope, its approval-denial
-   * observer, its trace, its tool policy) is read from here rather than copied
+   * already answers for (its model, its delegation scope, its composition,
+   * its approval-denial observer, its trace, its tool policy) is read from here rather than copied
    * onto the call.
    */
   readonly run:
@@ -37,6 +37,7 @@ export interface ToolCallShape {
         | 'config'
         | 'logger'
         | 'delegationAgentScope'
+        | 'composition'
         | 'onApprovalPolicyDenial'
       >
     | undefined;

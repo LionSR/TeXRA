@@ -16,7 +16,12 @@ import {
 import { MapToolRegistry, type ITool } from '@agent/core/tools/ToolTypes';
 import { followUpsLayer } from '@agent/runtime/FollowUps';
 import { ModelInvoker, type InvokeRequest } from '@agent/runtime/ModelInvoker';
-import { rowAggregate, stepRow, type Message } from '@agent/runtime/loop/rows';
+import {
+  rowAggregate,
+  snapshotRow,
+  stepRow,
+  type Message,
+} from '@agent/runtime/loop/rows';
 import { runToolUse } from '@agent/runtime/loop/toolUse';
 import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
 import type { BoundModel } from '@agent/runtime/run/modelBinding';
@@ -25,6 +30,7 @@ import { turnText } from '@agent/runtime/run/turnText';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { UsageMonitor } from '@agent/runtime/UsageMonitor';
 import { TraceEmitter } from '@agent/trace';
+import type { RunCell } from '@agent/runtime/loop/runProgram';
 import {
   AgentCategory,
   RUN_OUTCOME,
@@ -37,7 +43,10 @@ import { RunLedger } from '@shared/session/runLedger';
 import type { RunState } from '@shared/session/runStateFold';
 import { StreamLog } from '@shared/session/traceEntries';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
-import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
+import {
+  nativeToolTestLayer,
+  emptyPinnedComposition,
+} from '@test/support/nativeToolTestLayer';
 import { hostStores } from '@test/support/setupPlatform';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import {
@@ -167,12 +176,12 @@ function invokerLayer(script: readonly ScriptedTurn[], seen: InvokeRequest[]) {
     ModelInvoker,
     Effect.gen(function* () {
       const run = yield* AgentRun;
-      const ledger = yield* RunLedger;
       const aggregateId = rowAggregate(run.runId);
       let index = 0;
       return {
-        invoke: (state: RunState, request: InvokeRequest) =>
+        invoke: (cell: RunCell, request: InvokeRequest) =>
           Effect.gen(function* () {
+            const state = yield* cell.current;
             const scripted = script[index];
             index += 1;
             seen.push(request);
@@ -185,9 +194,14 @@ function invokerLayer(script: readonly ScriptedTurn[], seen: InvokeRequest[]) {
               return { kind: 'cancelled' as const, state };
             }
             if ('failWith' in scripted) {
+              // As the invoker does: the failure commits before it returns.
               return {
                 kind: 'failed' as const,
-                state,
+                state: yield* cell.append([
+                  snapshotRow(run.runId, state, {
+                    runtime: { lastError: scripted.failWith },
+                  }),
+                ]),
                 error: scripted.failWith,
               };
             }
@@ -195,7 +209,7 @@ function invokerLayer(script: readonly ScriptedTurn[], seen: InvokeRequest[]) {
             const invocation = { invocationId: randomUUID(), attempt: 1 };
             const responseId = randomUUID();
             const turn = 'compactTo' in scripted ? scripted.turn : scripted;
-            const next = yield* ledger.appendBatch(run.runId, state, [
+            const next = yield* cell.append([
               {
                 type: 'model.message',
                 aggregateId,
@@ -306,6 +320,8 @@ function agentRunTestLayer(init: LoopInit) {
         fileService: new RunFileService(init.runId, init.session.roots),
         tools: new MapToolRegistry(tools),
         finalToolName: init.finalToolName ?? null,
+        toolset: { offeredTools: [], toolsetHash: '0'.repeat(64) },
+        composition: emptyPinnedComposition,
         structured: init.structured ?? { value: undefined },
         model,
         scope,

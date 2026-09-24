@@ -9,6 +9,7 @@ import {
   type ToolUseRunEndOutputSchema,
 } from '@shared/schemas';
 import { runOutcomeToCliRunStatus } from '@shared/runs/runStatus';
+import type { DatabaseReadFailed } from '@shared/session/database';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { CliExitCode } from './exitCodes';
@@ -77,7 +78,10 @@ export const readCliRunOutcomeState = Effect.fn('readCliRunOutcomeState')(
           outcome: end === null ? result.outcome : end.outcome,
           outcomePersisted: end !== null,
         })),
-        Effect.catch((error) =>
+        // The handler names the channel's whole error type, so a second
+        // failure added to `readRunEnd` fails to compile here rather than
+        // being reported as a failed outcome read.
+        Effect.catch((error: DatabaseReadFailed) =>
           Effect.sync(() => {
             reportReadFailure?.(
               new Error(

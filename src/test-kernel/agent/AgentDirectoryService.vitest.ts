@@ -9,7 +9,6 @@ import { describe } from 'vitest';
 
 // Local imports
 import { AgentDirectoryService, agentSourceDirectory } from '@agent/index';
-import type { AgentDirectoryIssueReporter } from '@agent/index/AgentDirectoryService';
 import type { GlobalStorageFs } from '@platform/rootedFs';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import {
@@ -26,7 +25,7 @@ import {
 
 const MISSING_CUSTOM_PATH = path.resolve('/texra-missing-parent', 'custom');
 
-class RecordingIssueReporter implements AgentDirectoryIssueReporter {
+class RecordingIssueReporter {
   readonly reports: Array<{ message: string; docsId: string }> = [];
 
   report(message: string, docsId: string): Effect.Effect<void> {

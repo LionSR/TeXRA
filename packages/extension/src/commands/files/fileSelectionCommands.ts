@@ -7,12 +7,11 @@ import type { SessionHandle } from '@agent/runtime';
 import { getFilterExtensions } from '@common/files/fileTypeUtils';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { selectFiles } from '@frontend/ui/dialogs';
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import type { MultipleDocumentFileType } from '@shared/schemas';
 import { workspaceRelativePath } from '@utils/files/workspaceFS';
 
 const CHANNEL = 'fileSelectionCommands';
-const log = createLog(CHANNEL);
 
 interface PickerOptions {
   openLabel: string;
@@ -24,15 +23,17 @@ function announceSelection<E>(
   select: Effect.Effect<string[] | null, E>,
 ): Effect.Effect<string[] | null> {
   return select.pipe(
-    Effect.map((result) => {
+    Effect.flatMap((result) => {
       if (!result) {
-        return null;
+        return Effect.succeed(null);
       }
 
       const message = `Selected files: ${result.join(', ')}`;
       vscode.window.showInformationMessage(message);
-      log.info(message);
-      return result;
+      return Effect.logInfo(message).pipe(
+        withLogChannel(CHANNEL),
+        Effect.as(result),
+      );
     }),
     Effect.catch((err) =>
       showLoggedErrorMessage(

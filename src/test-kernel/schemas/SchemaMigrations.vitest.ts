@@ -1,51 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  AgentRunStateSnapshotSchema,
-  ContextManagementDataSchema,
-} from '@shared/schemas';
-
-// Minimal NormalizedUsage fixture: all required fields, no optionals.
-const usageFixture = {
-  inputTokens: 100,
-  outputTokens: 20,
-  cost: 0.01,
-  responseTimeMs: 500,
-  provider: 'anthropic-messages',
-} as const;
-
-describe('run-state snapshot usage accumulator — canonical shape', () => {
-  it('parses empty object to zero totals and null latestUsage', () => {
-    const result = AgentRunStateSnapshotSchema.parse({}).usageAccumulator;
-
-    expect(result.latestUsage).toBeNull();
-    expect(result.totals.totalInputTokens).toBe(0);
-  });
-
-  it('passes a canonical payload through unchanged', () => {
-    const result = AgentRunStateSnapshotSchema.parse({
-      usageAccumulator: {
-        totals: { totalInputTokens: 100 },
-        latestUsage: usageFixture,
-      },
-    }).usageAccumulator;
-
-    expect(result.totals.totalInputTokens).toBe(100);
-    expect(result.latestUsage).toMatchObject(usageFixture);
-  });
-
-  it('rejects a retired normalizedSnapshots blob instead of migrating it', () => {
-    // The legacy writer is extinct; a blob still carrying the key must fail
-    // loudly through the resume-parse failure path, not degrade silently.
-    expect(() =>
-      AgentRunStateSnapshotSchema.parse({
-        usageAccumulator: {
-          normalizedSnapshots: [{ round: 0, usage: usageFixture }],
-        },
-      }),
-    ).toThrow();
-  });
-});
+import { ContextManagementDataSchema } from '@shared/schemas';
 
 describe('ContextManagementDataSchema', () => {
   const base = {

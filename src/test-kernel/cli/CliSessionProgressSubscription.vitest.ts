@@ -16,7 +16,6 @@ import {
   USER_FOLLOW_UP_SUPPORT,
 } from '@shared/schemas';
 import type { RunId } from '@shared/schemas';
-import { testRuntime } from '@test/support/testProcessRuntime';
 import {
   createTestSession,
   publishTestRunStart,
@@ -172,10 +171,9 @@ function rowFields(record: CliNdjsonRecord): {
   return { event: record.event, fields };
 }
 
-function projectionOver(session: SessionHandle) {
+const projectionOver = Effect.fnUntraced(function* (session: SessionHandle) {
   const writeRecord = recordWriter();
-  const detachProjection = attachCliSessionProgressProjection(
-    testRuntime(),
+  const detach = yield* attachCliSessionProgressProjection(
     session,
     writeRecord,
   );
@@ -189,10 +187,8 @@ function projectionOver(session: SessionHandle) {
   /** The event lines alone: the roster is a derivation, asserted apart. */
   const records = (): CliNdjsonRecord[] =>
     all().filter((record) => record.event !== 'run.children');
-  /** The projection's drain, run for the suite's Promise-shaped tests. */
-  const detach = (): Promise<void> => Effect.runPromise(detachProjection());
   return { writeRecord, all, records, publish, detach };
-}
+});
 
 describe('attachCliSessionProgressProjection', () => {
   it.effect(
@@ -205,8 +201,8 @@ describe('attachCliSessionProgressProjection', () => {
         // The projection attaches at the current ordinal: settle the seeded
         // existence facts first so only what the test publishes is projected.
         yield* session.settlePublications();
-        const { records, publish, detach } = projectionOver(session);
-        yield* Effect.addFinalizer(() => Effect.promise(() => detach()));
+        const { records, publish, detach } = yield* projectionOver(session);
+        yield* Effect.addFinalizer(() => detach);
         for (const { source } of PASS_THROUGH_CASES) {
           yield* Effect.promise(() => publish(source));
         }
@@ -227,8 +223,8 @@ describe('attachCliSessionProgressProjection', () => {
         const session = createTestSession();
         publishTestRunStart(session, runId);
         yield* session.settlePublications();
-        const { records, publish, detach } = projectionOver(session);
-        yield* Effect.addFinalizer(() => Effect.promise(() => detach()));
+        const { records, publish, detach } = yield* projectionOver(session);
+        yield* Effect.addFinalizer(() => detach);
         yield* Effect.promise(() =>
           publish({
             draft: {
@@ -300,11 +296,28 @@ describe('attachCliSessionProgressProjection', () => {
             aggregateId: runAggregate,
             description: 'Recorded before the resume',
           },
+          // A child that ran and settled before the resume: its parent's
+          // roster is history too, not a line to replay (#11864).
+          {
+            type: 'run.start',
+            aggregateId: childAggregate,
+            identity: { kind: 'agent', agent: 'review' },
+            category: AgentCategory.ToolUse,
+            isRemote: false,
+            userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+            parent: { id: runId },
+          },
+          {
+            type: 'run.end',
+            aggregateId: childAggregate,
+            outcome: 'completed',
+            output: { category: 'toolUse', response: '', files: [] },
+          },
         ]);
         yield* session.settlePublications();
 
-        const { records, publish, detach } = projectionOver(session);
-        yield* Effect.addFinalizer(() => Effect.promise(() => detach()));
+        const { all, publish, detach } = yield* projectionOver(session);
+        yield* Effect.addFinalizer(() => detach);
         // A resume mints no run.start: the activation is its only new fact.
         yield* Effect.promise(() =>
           publish({
@@ -316,8 +329,9 @@ describe('attachCliSessionProgressProjection', () => {
             },
           }),
         );
+        yield* detach;
 
-        expect(records().map(rowFields)).toEqual([
+        expect(all().map(rowFields)).toEqual([
           {
             event: 'run.activate',
             fields: {
@@ -337,8 +351,8 @@ describe('attachCliSessionProgressProjection', () => {
         const session = createTestSession();
         publishTestRunStart(session, runId);
         yield* session.settlePublications();
-        const { all, publish, detach } = projectionOver(session);
-        yield* Effect.addFinalizer(() => Effect.promise(() => detach()));
+        const { all, publish, detach } = yield* projectionOver(session);
+        yield* Effect.addFinalizer(() => detach);
         const rosters = () => all().filter((r) => r.event === 'run.children');
         yield* Effect.promise(() =>
           publish({
@@ -425,7 +439,7 @@ describe('attachCliSessionProgressProjection', () => {
       const session = createTestSession();
       publishTestRunStart(session, runId);
       yield* session.settlePublications();
-      const { writeRecord, publish, detach } = projectionOver(session);
+      const { writeRecord, publish, detach } = yield* projectionOver(session);
       yield* Effect.promise(() =>
         publish({
           draft: {
@@ -437,7 +451,7 @@ describe('attachCliSessionProgressProjection', () => {
       );
       expect(writeRecord).toHaveBeenCalledTimes(1);
 
-      yield* Effect.promise(() => detach());
+      yield* detach;
       yield* session.settlePublications();
       yield* Effect.promise(() =>
         publish({
@@ -459,8 +473,8 @@ describe('attachCliSessionProgressProjection', () => {
         const session = createTestSession();
         publishTestRunStart(session, runId);
         yield* session.settlePublications();
-        const { records, publish, detach } = projectionOver(session);
-        yield* Effect.addFinalizer(() => Effect.promise(() => detach()));
+        const { records, publish, detach } = yield* projectionOver(session);
+        yield* Effect.addFinalizer(() => detach);
         for (const turn of [1, 2]) {
           yield* Effect.promise(() =>
             publish({

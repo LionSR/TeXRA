@@ -26,7 +26,6 @@ import {
 } from '@test/support/tempDirPlatform';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { admitInterruptibleRun } from '@test/support/runHandleFixtures';
-import { getDefaultUnavailableToolNames } from '@tools/registry';
 
 const mocks = vi.hoisted(() => ({
   close: vi.fn(),
@@ -100,8 +99,8 @@ vi.mock('@cli/runtime/terminalStatus', async (importOriginal) => ({
 }));
 
 vi.mock('@cli/runtime/sessionProgressSubscription', () => ({
-  attachCliSessionProgressProjection: vi.fn(
-    () => mocks.detachSessionProgressProjection,
+  attachCliSessionProgressProjection: vi.fn(() =>
+    Effect.succeed(Effect.suspend(mocks.detachSessionProgressProjection)),
   ),
 }));
 
@@ -157,9 +156,6 @@ function toolUseConfig() {
     agentCategory: 'toolUse' as const,
   };
 }
-
-/** Tools the CLI runtime hides by default during agent run. */
-const DEFAULT_RUNTIME_UNAVAILABLE_TOOLS = getDefaultUnavailableToolNames('cli');
 
 /** A run program's options with the session, runtime and lifecycle the
  *  wrapper below supplies. */
@@ -307,14 +303,8 @@ function reflectionSnapshot(): FlowSnapshotPayload {
       declinedRoutes: [],
     },
     state: {
-      currentRound: 0,
       totalRounds: 4,
       workspaceSnapshot: AgentWorkspaceState.create().toSnapshot(),
-      outputLocation: null,
-      runStateSnapshot: { totalRounds: 4, totalResponseTimeMs: 0 },
-      roundOutputs: [],
-      continueRounds: true,
-      endTurn: false,
     },
   };
 }
@@ -432,7 +422,7 @@ describe('executeCliRequest', () => {
 
         expect(attachProjection).toHaveBeenCalledTimes(1);
         // The writer slot: the projection defaults to the NDJSON stdout sink.
-        expect(attachProjection.mock.calls[0]?.[2]).toBeUndefined();
+        expect(attachProjection.mock.calls[0]?.[1]).toBeUndefined();
         expect(mocks.runAgent).toHaveBeenCalledTimes(1);
         expect(attachProjection.mock.invocationCallOrder[0]).toBeLessThan(
           mocks.runAgent.mock.invocationCallOrder[0] ??
@@ -551,7 +541,6 @@ describe('executeCliRequest', () => {
         request,
         expect.objectContaining({
           approvalPromptsUnavailable: false,
-          runtimeUnavailableTools: DEFAULT_RUNTIME_UNAVAILABLE_TOOLS,
         }),
       );
     }),

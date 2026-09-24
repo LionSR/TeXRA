@@ -4,7 +4,6 @@ import { describe, expect, it } from 'vitest';
 // Local imports - TUI interaction policy
 import {
   approvalVisibleForSelection,
-  foregroundEscapeAction,
   foregroundMaxRowsForKind,
   foregroundSurfaceKind,
   triggerAppCtrlC,
@@ -17,7 +16,6 @@ import type { RunId } from '@shared/schemas';
 import { makeRunView, viewWith } from './fixtures/sessionViewFixture';
 
 type ForegroundSurfaceInput = Parameters<typeof foregroundSurfaceKind>[0];
-type ForegroundEscapeInput = Parameters<typeof foregroundEscapeAction>[0];
 type ForegroundRowsInput = Parameters<typeof foregroundMaxRowsForKind>[0];
 type ApprovalKind = NonNullable<ForegroundRowsInput['approvalKind']>;
 

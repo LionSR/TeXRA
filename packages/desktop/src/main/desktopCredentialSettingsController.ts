@@ -1,5 +1,5 @@
 // Third-party imports
-import { Data, Effect } from 'effect';
+import { Effect } from 'effect';
 
 // Local imports
 import { LoopbackTransportUnavailableError } from '@auth/oauth/loopbackLogin';
@@ -13,9 +13,10 @@ import {
 } from '@controllers/modelAccess/subscriptionProviders';
 import { SubscriptionUsageService } from '@controllers/modelAccess/subscriptionUsage/SubscriptionUsageService';
 import {
-  ProviderKeyActionFailed,
   SettingsProfileKeyController,
+  type ProviderKeyActionFailed,
 } from '@controllers/settingsView/SettingsProfileKeyController';
+import type { SharedSettingsCommandPorts } from '@controllers/settingsView/sharedSettingsCommands';
 import { SettingsProfileController } from '@controllers/settingsView/SettingsProfileController';
 import { SettingsModelSelectionController } from '@controllers/settingsView/SettingsModelSelectionController';
 import type {
@@ -24,11 +25,7 @@ import type {
   MessageHost,
   PromptHost,
 } from '@hosts/uiHosts';
-import {
-  API_PROVIDERS,
-  invalidateApiKeyCache,
-  loadApiKeyStatusMap,
-} from '@model/apiProviders';
+import { API_PROVIDERS, loadApiKeyStatusMap } from '@model/apiProviders';
 import {
   modelOptionsFrom,
   readModelAvailabilityInputs,
@@ -50,26 +47,7 @@ import type { SettingsStatePorts } from '@shared/settingsView/types';
 import { ACCOUNT_OUTCOME } from '@ui/copy/accountAuth';
 import { getProviderKeyUrl } from '@utils/config/providerConfig';
 import { allSettledVoid } from '@utils/core/allSettledVoid';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
-
-/**
- * A sign-in presenter (the device-code dialog, the browser-opened notice)
- * rejected. Reported, never propagated: the flow that called it is not
- * waiting on the presentation.
- */
-class SignInPresentationFailed extends Data.TaggedError(
-  'SignInPresentationFailed',
-)<{
-  readonly cause: unknown;
-  readonly message: string;
-}> {}
-
-/** A subscription-provider mutation (sign-in, sign-out, preference) failed. */
-class SubscriptionActionFailed extends Data.TaggedError(
-  'SubscriptionActionFailed',
-)<{
-  readonly cause: unknown;
-}> {}
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 interface DesktopCredentialSettingsControllerOptions extends SettingsStatePorts {
   readonly config: ConfigProvider;
@@ -102,7 +80,7 @@ interface DesktopCredentialSettingsControllerOptions extends SettingsStatePorts 
     presentSubscriptionSignInUrl(
       url: string,
       productName: string,
-    ): void | Promise<void>;
+    ): Effect.Effect<void, Error>;
     /**
      * Show the one-time code and verification URL for a device-code sign-in,
      * the fallback when no browser can carry the loopback callback.
@@ -110,12 +88,12 @@ interface DesktopCredentialSettingsControllerOptions extends SettingsStatePorts 
     presentSubscriptionDeviceCode(
       prompt: SubscriptionDeviceCodePrompt,
       productName: string,
-    ): void | Promise<void>;
+    ): Effect.Effect<void, Error>;
   };
   readonly notifications: MessageHost;
   readonly auth: {
-    signIn(): Effect.Effect<void, unknown>;
-    signOut(): Promise<void>;
+    signIn(): Effect.Effect<void, Error>;
+    signOut(): Effect.Effect<void, Error>;
   };
   readonly subscriptionUsage?: Pick<
     SubscriptionUsageService,
@@ -144,12 +122,7 @@ interface DesktopCredentialSettingsControllerOptions extends SettingsStatePorts 
 
 type DesktopProfileHandlers = Pick<
   SettingsViewInboundHandlerRegistry,
-  | typeof SETTINGS_VIEW_COMMANDS.SIGN_IN
-  | typeof SETTINGS_VIEW_COMMANDS.SIGN_OUT
-  | typeof SETTINGS_VIEW_COMMANDS.SET_PROVIDER_KEY
-  | typeof SETTINGS_VIEW_COMMANDS.REMOVE_PROVIDER_KEY
-  | typeof SETTINGS_VIEW_COMMANDS.OPEN_PROVIDER_KEY_URL
-  | typeof SETTINGS_VIEW_COMMANDS.OPEN_EXTERNAL_URL
+  typeof SETTINGS_VIEW_COMMANDS.SIGN_IN | typeof SETTINGS_VIEW_COMMANDS.SIGN_OUT
 >;
 
 type DesktopChatGptHandlers = Pick<
@@ -181,6 +154,12 @@ export interface DesktopCredentialSettingsController {
   readonly chatGptHandlers: DesktopChatGptHandlers;
   readonly grokHandlers: DesktopGrokHandlers;
   readonly modelSelectionController: SettingsModelSelectionController<LanguageModel>;
+  /** The provider-key arms are the shared settings body's; this controller
+   *  owns the key policy and the window's report of a failed key write. */
+  readonly profileKeyController: SharedSettingsCommandPorts['profileKeys'];
+  reportProviderKeyFailure(
+    error: ProviderKeyActionFailed,
+  ): Effect.Effect<void, Error, ProcessServices>;
   /**
    * The posts and refreshes below are programs, so a key write and the
    * repaint it triggers are one run at the window's IPC, not a chain of them.
@@ -196,9 +175,12 @@ export interface DesktopCredentialSettingsController {
   refreshAfterProviderSettingChange(
     key: string,
   ): Effect.Effect<void, Error, ProcessServices>;
+  refreshAfterProviderKeyChange(
+    provider: string,
+  ): Effect.Effect<void, Error, ProcessServices>;
   refreshAuthDependentData(): Effect.Effect<void, Error, ProcessServices>;
   /** Also driven by the desktop welcome card, not just the Settings view. */
-  signInChatGpt(): Effect.Effect<void, unknown, ProcessServices>;
+  signInChatGpt(): Effect.Effect<void, Error, ProcessServices>;
 }
 
 /** Owns desktop credential mutation, authentication, and dependent refreshes. */
@@ -207,9 +189,9 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
   readonly chatGptHandlers: DesktopChatGptHandlers;
   readonly grokHandlers: DesktopGrokHandlers;
   readonly modelSelectionController: SettingsModelSelectionController<LanguageModel>;
+  readonly profileKeyController: SettingsProfileKeyController<ProcessServices>;
 
   private readonly profileController: SettingsProfileController;
-  private readonly profileKeyController: SettingsProfileKeyController<ProcessServices>;
   private readonly subscriptionUsage: Pick<
     SubscriptionUsageService,
     'getAllUsage' | 'invalidate'
@@ -263,32 +245,8 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
     this.profileHandlers = {
       // The settings view's Sign in button is a host entry, so the sign-in
       // program settles here.
-      signIn: () => options.auth.signIn().pipe(Effect.mapError(ensureError)),
-      signOut: () =>
-        Effect.tryPromise({
-          try: () => options.auth.signOut(),
-          catch: ensureError,
-        }),
-      setProviderKey: (message) =>
-        this.profileKeyController
-          .setProviderKey(message.provider)
-          .pipe(
-            Effect.catchTag('ProviderKeyActionFailed', (error) =>
-              this.reportKeyFailure(error),
-            ),
-          ),
-      removeProviderKey: (message) =>
-        this.profileKeyController
-          .removeProviderKey(message.provider)
-          .pipe(
-            Effect.catchTag('ProviderKeyActionFailed', (error) =>
-              this.reportKeyFailure(error),
-            ),
-          ),
-      openProviderKeyUrl: (message) =>
-        this.profileKeyController.openProviderKeyUrl(message.provider),
-      openExternalUrl: (message) =>
-        options.externalOpener.openExternal(message.url),
+      signIn: () => options.auth.signIn(),
+      signOut: () => options.auth.signOut(),
     };
     // Each arm is a settings-view message, so the subscription programs settle
     // here exactly as the profile arms above do.
@@ -306,7 +264,7 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
     };
   }
 
-  private reportKeyFailure(error: ProviderKeyActionFailed) {
+  reportProviderKeyFailure(error: ProviderKeyActionFailed) {
     return Effect.gen({ self: this }, function* () {
       yield* this.options.notifications.showErrorMessage(
         `${error.message}: ${toErrorMessage(error.cause)}`,
@@ -352,36 +310,22 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
    * Show one informational part of a sign-in without waiting for it, and
    * report a failure the way an awaited presentation would: the cause goes to
    * `onError`, then the dialog says which presentation could not be shown. A
-   * dialog that itself fails is reported through the same `onError`.
-   *
-   * Containment is deliberate and covers a synchronous throw as well as a
-   * rejection: the presenter interface admits a synchronous `void` presenter,
-   * and neither kind of failure to *show* a notice should abort the sign-in
-   * the notice merely describes. The desktop presenters are async today, so
-   * only the rejection path runs in production.
+   * dialog that itself fails is reported through the same `onError`. Failing
+   * to *show* a notice never aborts the sign-in the notice merely describes.
    */
   private presentInBackground(
     displayName: string,
-    present: () => void | Promise<void>,
+    present: Effect.Effect<void, Error>,
   ): void {
     const options = this.options;
     options.runtime.runFork(
-      Effect.tryPromise({
-        try: async () => {
-          await present();
-        },
-        catch: (cause) =>
-          new SignInPresentationFailed({
-            cause,
-            message: toErrorMessage(cause),
-          }),
-      }).pipe(
-        Effect.catchTag('SignInPresentationFailed', (failure) =>
+      present.pipe(
+        Effect.catch((failure) =>
           Effect.gen(function* () {
-            options.onError(failure.cause);
+            options.onError(failure);
             yield* options.notifications
               .showErrorMessage(
-                `Failed to display ${displayName} sign-in instructions: ${failure.message}`,
+                `Failed to display ${displayName} sign-in instructions: ${toErrorMessage(failure)}`,
               )
               .pipe(
                 Effect.catchTag('NotificationFailed', (notice) =>
@@ -407,7 +351,8 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
       presentDeviceCode: (prompt) => {
         // Informational only — awaiting would block the approval poll, and a
         // presenter failure is contained rather than failing the poll.
-        this.presentInBackground(displayName, () =>
+        this.presentInBackground(
+          displayName,
           this.options.externalOpener.presentSubscriptionDeviceCode(
             prompt,
             displayName,
@@ -431,7 +376,8 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
               // Informational only — awaiting would block the OAuth callback,
               // and a presenter failure is contained rather than failing the
               // callback wait.
-              this.presentInBackground(displayName, () =>
+              this.presentInBackground(
+                displayName,
                 this.options.externalOpener.presentSubscriptionSignInUrl(
                   url,
                   displayName,
@@ -457,23 +403,16 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
     ) => string,
     work: (
       provider: ReturnType<typeof subscriptionProvider>,
-    ) => Effect.Effect<void, unknown, ProcessServices>,
+    ) => Effect.Effect<void, Error, ProcessServices>,
   ) {
     const provider = subscriptionProvider(providerId);
     const options = this.options;
     const refresh = this.refreshAfterSubscriptionAuthChange(providerId);
     const attempt = work(provider).pipe(
-      Effect.mapError((cause) => new SubscriptionActionFailed({ cause })),
-      Effect.catchTag('SubscriptionActionFailed', (failure) =>
+      Effect.catch((error) =>
         options.notifications
-          .showErrorMessage(buildErrorMessage(provider, failure.cause))
-          .pipe(
-            Effect.flatMap(() =>
-              Effect.sync(() => {
-                options.onError(failure.cause);
-              }),
-            ),
-          ),
+          .showErrorMessage(buildErrorMessage(provider, error))
+          .pipe(Effect.andThen(Effect.sync(() => options.onError(error)))),
       ),
     );
     return Effect.gen(function* () {
@@ -526,9 +465,14 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
     });
   }
 
-  private refreshAfterProviderKeyChange(provider: string) {
+  /**
+   * Repaint what depends on one provider's key. Run by the settings
+   * round-trip that wrote the key and by the window's `credentialChanged`
+   * subscriber, which covers every other writer (the setup agent's
+   * `unset_api_key`, another window).
+   */
+  refreshAfterProviderKeyChange(provider: string) {
     return Effect.gen({ self: this }, function* () {
-      invalidateApiKeyCache();
       const usageProvider = codingPlanForApiProvider(provider)?.usageProvider;
       if (usageProvider) this.subscriptionUsage.invalidate(usageProvider);
       yield* this.postProfileData();
@@ -586,17 +530,7 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
       (provider, error) =>
         `${provider.displayName} subscription preference update failed: ${toErrorMessage(error)}`,
       (provider) =>
-        Effect.gen({ self: this }, function* () {
-          const update = yield* provider.setPreferSubscription(
-            this.options.stores,
-            enabled,
-          );
-          if (update.effective !== enabled) {
-            yield* this.options.notifications.showWarningMessage(
-              `A more specific setting still keeps ${provider.displayName} subscription ${update.effective ? 'enabled' : 'disabled'}.`,
-            );
-          }
-        }),
+        provider.setPreferSubscription(this.options.stores, enabled),
     );
   }
 

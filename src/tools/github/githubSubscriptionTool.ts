@@ -152,33 +152,9 @@ interface ParsedIssuePath {
 }
 type ParsedPath = ParsedRepoPath | ParsedPRPath | ParsedIssuePath;
 
-const REPO_PATH_RE = /^([^/\s]+)\/([^/\s]+)$/;
-const SUB_PATH_RE = /^([^/\s]+)\/([^/\s]+)\/(pulls|issues)\/(\d+)$/;
+const PATH_RE = /^([^/\s]+)\/([^/\s]+)(?:\/(pulls|issues)\/(\d+))?$/;
 
-function parsePath(raw: string): ParsedPath {
-  const trimmed = raw.trim();
-  const sub = SUB_PATH_RE.exec(trimmed);
-  if (sub) {
-    const [, owner, repo, kind, numStr] = sub;
-    const n = Number(numStr);
-    if (!Number.isFinite(n) || n <= 0) {
-      throw new ToolError(`Invalid number in path "${raw}".`);
-    }
-    return kind === 'pulls'
-      ? { kind: 'pr', owner, repo, pullNumber: n }
-      : { kind: 'issue', owner, repo, issueNumber: n };
-  }
-  const repoMatch = REPO_PATH_RE.exec(trimmed);
-  if (repoMatch) {
-    const [, owner, repo] = repoMatch;
-    return { kind: 'repo', owner, repo };
-  }
-  throw new ToolError(
-    `Invalid path "${raw}". Expected "owner/repo", "owner/repo/pulls/N", or "owner/repo/issues/N".`,
-  );
-}
-
-const requireToken = (): Effect.Effect<void, unknown, Secrets> =>
+const requireToken = (): Effect.Effect<void, Error, Secrets> =>
   Effect.gen(function* () {
     const secrets = yield* Secrets;
     const token = yield* getGitHubToken(secrets);
@@ -196,13 +172,38 @@ function slugOf(target: { owner: string; repo: string }): string {
   return `${target.owner}/${target.repo}`;
 }
 
-function requirePath(input: { command: string; path: string }): ParsedPath {
-  if (!input.path) {
-    throw new ToolError(
-      `command="${input.command}" requires a path ("owner/repo", "owner/repo/pulls/N", or "owner/repo/issues/N").`,
+const PATH_FORMS =
+  '"owner/repo", "owner/repo/pulls/N", or "owner/repo/issues/N"';
+
+function requirePath(input: {
+  command: string;
+  path: string;
+}): Effect.Effect<ParsedPath, ToolError> {
+  const raw = input.path;
+  if (!raw) {
+    return Effect.fail(
+      new ToolError(
+        `command="${input.command}" requires a path (${PATH_FORMS}).`,
+      ),
     );
   }
-  return parsePath(input.path);
+  const match = PATH_RE.exec(raw.trim());
+  if (!match) {
+    return Effect.fail(
+      new ToolError(`Invalid path "${raw}". Expected ${PATH_FORMS}.`),
+    );
+  }
+  const [, owner, repo, kind, numStr] = match;
+  if (kind === undefined) return Effect.succeed({ kind: 'repo', owner, repo });
+  const n = Number(numStr);
+  if (!Number.isFinite(n) || n <= 0) {
+    return Effect.fail(new ToolError(`Invalid number in path "${raw}".`));
+  }
+  return Effect.succeed(
+    kind === 'pulls'
+      ? { kind: 'pr', owner, repo, pullNumber: n }
+      : { kind: 'issue', owner, repo, issueNumber: n },
+  );
 }
 
 /** Shared body sentence describing what a PR subscription delivers. */
@@ -219,7 +220,7 @@ const execSubscribe = Effect.fn('GitHubSubscriptionTool.subscribe')(function* (
 ) {
   yield* requireToken();
   const subscriptions = yield* GitHubSubscriptions;
-  const target = requirePath(input);
+  const target = yield* requirePath(input);
   const minAnnotationLevel = input.min_annotation_level;
   const annotationLevelDescription =
     ANNOTATION_LEVEL_DESCRIPTIONS[minAnnotationLevel];
@@ -317,7 +318,7 @@ const resolveIssueIsPR = (
   owner: string,
   repo: string,
   number: number,
-): Effect.Effect<boolean, unknown, Secrets> =>
+): Effect.Effect<boolean, Error, Secrets> =>
   Effect.flatMap(
     ghGet<GhIssue>(`/repos/${owner}/${repo}/issues/${number}`),
     (res) =>
@@ -334,7 +335,7 @@ const resolveIssueIsPR = (
 const execUnsubscribe = Effect.fn('GitHubSubscriptionTool.unsubscribe')(
   function* (input: UnsubscribeInput, runId: RunId) {
     const subscriptions = yield* GitHubSubscriptions;
-    const target = requirePath(input);
+    const target = yield* requirePath(input);
     const slug = slugOf(target);
     let removed: boolean;
     let label: string;
@@ -425,7 +426,7 @@ interface OpenPullSummary {
 const getDefaultBranch = (
   owner: string,
   repo: string,
-): Effect.Effect<string, unknown, Secrets> =>
+): Effect.Effect<string, Error, Secrets> =>
   Effect.flatMap(
     ghGet<{ default_branch?: string }>(`/repos/${owner}/${repo}`),
     (res) =>
@@ -459,7 +460,7 @@ const getLocalDefaultBranchHint = (
 const listOpenPullSuggestions = (
   owner: string,
   repo: string,
-): Effect.Effect<string, unknown, Secrets> =>
+): Effect.Effect<string, Error, Secrets> =>
   Effect.map(
     ghGet<OpenPullSummary[]>(
       `/repos/${owner}/${repo}/pulls?state=open&per_page=5`,

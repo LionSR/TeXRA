@@ -8,7 +8,7 @@ import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
 import { acquireResumedRunOwnership } from '@agent/storage/runLifecycle';
 import { persistedParentRunId } from '@agent/storage/runRecords';
 import { AgentError } from '@common/errors';
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import type { ProcessServices } from '@platform/processRuntime';
 import { sessionFsLayer } from '@platform/rootedFs';
 import {
@@ -25,6 +25,7 @@ import {
 } from '@shared/schemas';
 import { RunLedger } from '@shared/session/runLedger';
 import type { RunState } from '@shared/session/runStateFold';
+import type { CompositionKey } from '@tools/compositions';
 import { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import { ensureError } from '@utils/errors/errorMessage';
 import { ensureRunDirUnder } from '@utils/files/runStorageFs';
@@ -54,11 +55,11 @@ import { agentRunLayer } from './run/AgentRun';
 import { runReflection } from './loop/reflection';
 import { runToolUse } from './loop/toolUse';
 import { Runs } from './runRegistry';
-import type { AgentRunServices } from './toolInjection';
+import type { AgentRunServices } from './runRegistry';
 import type { SessionHandle } from './SessionHandle';
 import type { RunHandle, AgentRunHandle } from './RunHandle';
 
-const logger = createLog('executeAgent');
+const CHANNEL = 'executeAgent';
 
 /** A claimed run no longer has the persisted tool-use state to resume. */
 export class ResumeSessionUnavailableError extends Error {
@@ -320,10 +321,13 @@ export interface SubagentRunOptions {
   onProgress?: (update: SubagentProgressUpdate) => void;
   /** Hide tools whose approval prompts cannot be answered in this host mode. */
   approvalPromptsUnavailable?: boolean;
+  /**
+   * The composition a fresh delegated child joins: its parent's. A resume
+   * resolves its own under the recorded-toolset rule.
+   */
+  composition?: CompositionKey;
   /** Record that this run encountered an executable policy denial. */
   onApprovalPolicyDenial?: () => void;
-  /** Hide tools unavailable because the current host/runtime cannot support them. */
-  runtimeUnavailableTools?: readonly string[];
   /** Session owning this run's coordination state; run entry points require it. */
   session?: SessionHandle;
   /**
@@ -415,8 +419,9 @@ export function executeAgent(
       ownApiKeyFallback: options.ownApiKeyFallback,
       toolPolicy: {
         approvalPromptsUnavailable: options.approvalPromptsUnavailable,
-        runtimeUnavailableTools: options.runtimeUnavailableTools,
         stopAfterCycle: options.stopAfterCycle,
+        // A resumed run resolves its own: its parent's pin is not recorded.
+        composition: options.resumed ? undefined : options.composition,
       },
     });
     return yield* Effect.gen(function* () {
@@ -452,16 +457,25 @@ export function executeAgent(
               const parentRunId = handle.deliveryTarget;
               // Pre-run UI setup (RUNNING is set by runFlowWithLifecycle)
               yield* ensureRunDirUnder(runSession.roots.storage, runId);
-              logger.info(`Starting run (runId: ${runId})`);
-              logger.info(`Input file: ${config.inputFiles[0] ?? '(none)'}`);
-              logger.debug('Run details', {
-                data: {
-                  runId,
-                  agent: config.agent,
-                  model: config.model,
-                },
-              });
-              logger.debug(`Output files: ${config.outputFiles?.length ?? 0}`);
+              yield* Effect.logInfo(`Starting run (runId: ${runId})`).pipe(
+                withLogChannel(CHANNEL),
+              );
+              yield* Effect.logInfo(
+                `Input file: ${config.inputFiles[0] ?? '(none)'}`,
+              ).pipe(withLogChannel(CHANNEL));
+              yield* Effect.logDebug('Run details').pipe(
+                Effect.annotateLogs({
+                  data: {
+                    runId,
+                    agent: config.agent,
+                    model: config.model,
+                  },
+                }),
+                withLogChannel(CHANNEL),
+              );
+              yield* Effect.logDebug(
+                `Output files: ${config.outputFiles?.length ?? 0}`,
+              ).pipe(withLogChannel(CHANNEL));
               // Subagents don't need to force-open the progress board or show notifications;
               // the orchestrator's run is already visible.
               if (parentRunId === undefined) {
@@ -473,9 +487,12 @@ export function executeAgent(
                   { replayWhenAttached: true },
                 );
               }
-              logger.info('Executing agent', {
-                data: { agent: config.agent, model: config.model },
-              });
+              yield* Effect.logInfo('Executing agent').pipe(
+                Effect.annotateLogs({
+                  data: { agent: config.agent, model: config.model },
+                }),
+                withLogChannel(CHANNEL),
+              );
 
               if (setting.agentCategory === AgentCategory.ToolUse) {
                 return yield* launchToolUseRun(
@@ -563,7 +580,6 @@ const resumeToolUseWithOwnedLease = Effect.fn('resumeToolUseWithOwnedLease')(
             session: runSession,
             toolPolicy: {
               approvalPromptsUnavailable: options.approvalPromptsUnavailable,
-              runtimeUnavailableTools: options.runtimeUnavailableTools,
             },
           });
           const { setting } = ctx;

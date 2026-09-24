@@ -46,6 +46,7 @@ import {
   type CodexReasoningEffort,
   type CodexSandboxMode,
   type GoalListItem,
+  type InstalledPlugin,
   type SkillDisplayIssue,
   type SkillDisplayItem,
   type SubscriptionUsageSnapshots,
@@ -243,6 +244,9 @@ export const disabledSkills = settingSignal<string[]>(
 );
 export const disabledSkillSources = settingSignal<string[]>(
   WorkspaceStateKey.DISABLED_SKILL_SOURCES,
+);
+export const installedPlugins = settingSignal<InstalledPlugin[]>(
+  GlobalStateKey.INSTALLED_PLUGINS,
 );
 export const skillsList = trackedSignal<SkillDisplayItem[]>(() => []);
 export const skillLoadIssues = trackedSignal<SkillDisplayIssue[]>(() => []);

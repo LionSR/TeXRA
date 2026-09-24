@@ -1,6 +1,6 @@
 /**
  * Platform port contracts — the host-neutral interfaces a host wires into
- * `initPlatform()`. Formerly one file per port under `interfaces/`.
+ * `installProcessRuntime()`. Formerly one file per port under `interfaces/`.
  */
 import { Context, Data, Effect, FileSystem, Layer } from 'effect';
 import type { AgentSource, RunId } from '@shared/schemas';
@@ -145,10 +145,10 @@ export type ShutdownPhase =
 /**
  * One registered shutdown handler: the program the drain runs at its phase,
  * not a callback it calls. A failure is reported to the drain's `onError`,
- * which is why the channel is open here: the drain is the boundary that
- * reports it, and no caller of `runShutdown` adopts it.
+ * which is why the channel is any `Error` here: the drain is the boundary
+ * that reports it, and no caller of `runShutdown` adopts it.
  */
-export type ShutdownHandler = Effect.Effect<void, unknown>;
+export type ShutdownHandler = Effect.Effect<void, Error>;
 
 export interface LifecycleHost {
   /**
@@ -333,12 +333,13 @@ export class AgentResume extends Context.Service<
 /**
  * The host's optional "tool is missing" reporter. The VS Code host is the only
  * one with a UI for it; every other host omits it, and callers treat an absent
- * reporter as silence.
+ * reporter as silence. It settles its own presentation failures, so the probe
+ * that reports a missing tool still gets its answer.
  */
 export type ToolMissingHandler = (
   message: string,
   openDocsCommand?: string,
-) => void | Promise<void>;
+) => Effect.Effect<void>;
 
 /**
  * The process's tool-missing reporter as an Effect service

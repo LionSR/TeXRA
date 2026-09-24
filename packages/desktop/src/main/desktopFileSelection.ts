@@ -14,6 +14,7 @@ import { relativeToRoot } from '@platform/defaults/nodeWorkspace';
 import type { DocumentFileType, FileOptions } from '@shared/schemas';
 import { Rejected } from '@shared/session/requestErrors';
 import { normalizeFilePath } from '@utils/core';
+import { ensureError } from '@utils/errors/errorMessage';
 
 interface DesktopFileSelectionDialogOptions {
   title: string;
@@ -160,18 +161,8 @@ export function createDesktopFileSelection(
           )
         : Effect.succeed(paths.map(() => null));
       return Effect.flatMap(probed, (resolved) =>
-        // The plan signals "nothing was attached" by throwing the `Rejected`
-        // the request answers with, so that refusal belongs on the failure
-        // channel; anything else it could throw stays a defect, as it was
-        // when this member answered with a promise.
-        Effect.try({
-          try: () =>
-            attachDroppedPaths(resolved, getIncludedExtensions(category)).paths,
-          catch: (cause) => cause,
-        }).pipe(
-          Effect.catch((cause) =>
-            cause instanceof Rejected ? Effect.fail(cause) : Effect.die(cause),
-          ),
+        attachDroppedPaths(resolved, getIncludedExtensions(category)).pipe(
+          Effect.map((attached) => attached.paths),
         ),
       );
     },

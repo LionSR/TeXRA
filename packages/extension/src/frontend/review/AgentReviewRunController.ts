@@ -1,11 +1,7 @@
 import { Effect } from 'effect';
 
 // Local imports
-import {
-  detachSubagentsOnStop,
-  type AgentRunHandle,
-  type SessionHandle,
-} from '@agent/runtime';
+import type { AgentRunHandle, SessionHandle } from '@agent/runtime';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 
 /** Log channel of the Agent Review surface this controller stops runs for. */
@@ -135,19 +131,17 @@ export class AgentReviewRunController {
     const handle = run.handle;
     if (!handle) return Effect.void;
     if (run.session.runs.getHandle(handle.runId) !== handle) return Effect.void;
-    return Effect.flatMap(
-      detachSubagentsOnStop(run.session.roots),
-      (detachActiveChildren) =>
-        run.session.runs.stopAgentRun(handle.runId, { detachActiveChildren }),
-    ).pipe(
-      Effect.catch((error) =>
-        showLoggedErrorMessage(
-          CHANNEL,
-          'The agent review run could not be stopped',
-          error,
+    return run.session.requests
+      .request({ kind: 'run.stop', runId: handle.runId })
+      .pipe(
+        Effect.catch((error) =>
+          showLoggedErrorMessage(
+            CHANNEL,
+            'The agent review run could not be stopped',
+            'reason' in error ? error.reason : error._tag,
+          ),
         ),
-      ),
-      Effect.asVoid,
-    );
+        Effect.asVoid,
+      );
   }
 }

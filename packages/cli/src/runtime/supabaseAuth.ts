@@ -5,12 +5,10 @@ import { Effect, FileSystem } from 'effect';
 import { invalidateRemoteAgentsAfterSignOut } from '@agent/index';
 import { unwrapAuthPortCause } from '@auth/authProgram';
 import { DEFAULT_OAUTH_PROVIDER, type OAuthProvider } from '@auth/config';
-import { refreshRemoteAgentCatalogAfterSignOut } from '@auth/authFlowEffects';
 import { createSupabaseAuth, type SupabaseAuthShape } from '@auth/SupabaseAuth';
 import {
   toStorableSupabaseSession,
   type SupabaseSession,
-  type SupabaseSessionLog,
 } from '@auth/SupabaseSession';
 import type { StoredSessionState } from '@auth/TokenProvider';
 import { completeDeviceSession } from '@auth/oauth/deviceAuthorization';
@@ -70,13 +68,6 @@ export function formatCliManualAuthUrlMessage(url: string): string {
 }
 
 let auth: SupabaseAuthShape | undefined;
-let activeAuthLog: SupabaseSessionLog | undefined;
-const deferredAuthLog: SupabaseSessionLog = {
-  debug: (channel, message) => activeAuthLog?.debug?.(channel, message),
-  info: (channel, message) => activeAuthLog?.info?.(channel, message),
-  warn: (channel, message) => activeAuthLog?.warn?.(channel, message),
-  error: (channel, message) => activeAuthLog?.error?.(channel, message),
-};
 
 /**
  * The CLI's account plane, created once beside the process runtime install
@@ -90,18 +81,8 @@ export function ensureCliSupabaseAuth(
   // The plane is built before the process runtime it is served on, so it is
   // built here on a bootstrap fiber: construction reads no service, and the
   // GoTrue storage callbacks it captures need none either.
-  auth ??= Effect.runSync(
-    createSupabaseAuth({ secrets, log: deferredAuthLog }),
-  );
+  auth ??= Effect.runSync(createSupabaseAuth({ secrets }));
   return auth;
-}
-
-export function initializeCliSupabaseAuth(
-  secrets: PlatformSecrets,
-  log?: SupabaseSessionLog,
-): void {
-  activeAuthLog = log ?? activeAuthLog;
-  ensureCliSupabaseAuth(secrets);
 }
 
 /**
@@ -143,7 +124,6 @@ export const signInCliSupabase = Effect.fn('supabaseAuth.signInCliSupabase')(
       transport: loopbackCallbackTransport({
         runtime,
         openBrowser: (url) => presentCliSignInUrl(url, options),
-        log: (message) => deferredAuthLog.warn?.('cli-auth', message),
       }),
     });
     return yield* coordinator
@@ -238,11 +218,7 @@ export function signOutCliSupabase(): Effect.Effect<
     yield* authCoordinator
       .clearSession()
       .pipe(Effect.mapError(unwrapAuthPortCause));
-    yield* refreshRemoteAgentCatalogAfterSignOut(
-      invalidateRemoteAgentsAfterSignOut(),
-      (message) =>
-        Effect.sync(() => activeAuthLog?.warn?.('cli-auth', message)),
-    );
+    yield* invalidateRemoteAgentsAfterSignOut();
   });
 }
 

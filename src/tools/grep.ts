@@ -117,7 +117,7 @@ function buildArguments(input: GrepInput): string[] {
 const runGrep = Effect.fn('GrepTool.execute')(function* (
   ports: WorkspacePathPorts,
   input: GrepInput,
-): Effect.fn.Return<ToolResult, unknown, FileSystem.FileSystem> {
+): Effect.fn.Return<ToolResult, Error, FileSystem.FileSystem> {
   const root = ports.toolRoot();
   const { path, display } = yield* resolveAndFormat(
     ports.settings,

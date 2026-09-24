@@ -6,17 +6,16 @@ import {
   buildToolDashboardItems,
   planToolTerminalAction,
 } from '@controllers/settingsView/ToolDashboardData';
-import type { ConfigProvider } from '@platform/interfaces';
+import { onAppSignal } from '@eventBus/AppSignals';
+import type { ConfigProvider, StateStore } from '@platform/interfaces';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type {
   ToolCommandKind,
   ToolDashboardItem,
 } from '@shared/settingsView/settingsViewMessages';
-import { buildSettingsSnapshotMessage } from '@shared/settingsView/handlers/settingsSnapshot';
-import type { SettingsStatePorts } from '@shared/settingsView/types';
 import { unsupported } from '@shared/utils/dispatcher';
-import type { ToolProbeInputs } from '@tools/externalToolDefs';
+import type { ToolProbeInputs } from '@tools/toolProbes';
 import {
   getLastCheckResults,
   refreshToolAvailability,
@@ -24,16 +23,12 @@ import {
 import { ensureError } from '@utils/errors/errorMessage';
 import { setToolEnabled } from '@utils/config/constants';
 
-import { subscribeDesktopAppSignal } from './desktopAppSignalSubscription.js';
-
 const NO_EXTENSION_HOSTING =
   'TeXRA Desktop runs standalone and cannot host VS Code extensions.';
 
 type DesktopToolHandlers = Pick<
   SettingsViewInboundHandlerRegistry,
-  | typeof SETTINGS_VIEW_COMMANDS.OPEN_TOOL_INSTALL_URL
   | typeof SETTINGS_VIEW_COMMANDS.INSTALL_TOOL_EXTENSION
-  | typeof SETTINGS_VIEW_COMMANDS.RECHECK_TOOL_STATUS
   | typeof SETTINGS_VIEW_COMMANDS.TOGGLE_TOOL
   | typeof SETTINGS_VIEW_COMMANDS.RUN_TOOL_COMMAND
 >;
@@ -45,17 +40,15 @@ type DesktopLatexHandlers = Pick<
   | typeof SETTINGS_VIEW_COMMANDS.RUN_INSTALL_COMMAND
 >;
 
-interface DefaultDesktopToolingSettingsControllerOptions extends SettingsStatePorts {
+interface DefaultDesktopToolingSettingsControllerOptions {
   readonly config: ConfigProvider;
+  readonly globalState: StateStore;
   /** The active paper's workspace folder, for the probes that need one. */
   readonly workspaceRoot: string | undefined;
   readonly runtime: ProcessRuntime;
   readonly onError: (error: unknown) => void;
   readonly renderer: {
     postToRenderer(message: unknown): void;
-  };
-  readonly navigation: {
-    openExternal(url: string): Promise<void>;
   };
   readonly commands: {
     run(command: string): Promise<void>;
@@ -66,35 +59,30 @@ interface DefaultDesktopToolingSettingsControllerOptions extends SettingsStatePo
 export interface DesktopToolingSettingsController {
   readonly toolHandlers: DesktopToolHandlers;
   readonly latexHandlers: DesktopLatexHandlers;
-  postLatexConfigValues(): Effect.Effect<void, Error>;
   postStartupData(): Effect.Effect<void, Error, ProcessServices>;
   /**
-   * Releases the app-signal subscription. Scoped to the window that built this
-   * controller: `createWindow` runs again on macOS dock reactivation, so an
-   * undisposed subscription would keep repainting a destroyed window's
-   * renderer and pile up one listener per reopen.
+   * Repaints the Tools tab on every re-probe, whoever triggered it — the
+   * shared Re-check arm, a GitHub token write, or any future core-side input
+   * change — until interrupted. Following the signal rather than posting
+   * after each call site is what makes the dashboard follow availability
+   * instead of following the one path that remembered to re-post. The
+   * settings IPC forks it into the window's project scope.
    */
-  dispose(): void;
+  readonly followToolAvailability: Effect.Effect<void>;
 }
 
 /** Owns the desktop settings Tools and LaTeX domains. */
 export class DefaultDesktopToolingSettingsController implements DesktopToolingSettingsController {
   readonly toolHandlers: DesktopToolHandlers;
   readonly latexHandlers: DesktopLatexHandlers;
-  private readonly unsubscribeToolAvailability: () => void;
+  readonly followToolAvailability: Effect.Effect<void>;
 
   constructor(
     private readonly options: DefaultDesktopToolingSettingsControllerOptions,
   ) {
     this.toolHandlers = {
-      openToolInstallUrl: (message) =>
-        Effect.tryPromise({
-          try: () => options.navigation.openExternal(message.url),
-          catch: ensureError,
-        }),
       installToolExtension: unsupported(NO_EXTENSION_HOSTING),
       // Each arm is a settings-view message, so its program settles here.
-      recheckToolStatus: () => refreshToolAvailability(this.probeInputs),
       toggleTool: (message) => this.toggleTool(message.toolId, message.enabled),
       runToolCommand: (message) => this.runToolCommand(message),
     };
@@ -106,39 +94,11 @@ export class DefaultDesktopToolingSettingsController implements DesktopToolingSe
       runInstallCommand: (message) =>
         this.runLatexInstallCommand(message.installCommand),
     };
-    // Every re-probe repaints the Tools tab, whoever triggered it — the
-    // Re-check button, a GitHub token write, or any future core-side input
-    // change. Subscribing here rather than posting after each call site is
-    // what makes the dashboard follow availability instead of following the
-    // one path that remembered to re-post.
-    this.unsubscribeToolAvailability = subscribeDesktopAppSignal(
-      options.runtime,
-      'toolAvailabilityChanged',
-      () => {
-        options.runtime.runFork(
-          this.reportingFailure(this.postToolDashboardData()),
-        );
-      },
-    );
-  }
-
-  dispose(): void {
-    this.unsubscribeToolAvailability();
-  }
-
-  postLatexConfigValues(): Effect.Effect<void, Error> {
-    return Effect.map(
-      buildSettingsSnapshotMessage(
-        'latex',
-        {
-          config: this.options.config,
-          workspaceState: this.options.workspaceState,
-          globalState: this.options.globalState,
-        },
-        'desktop',
-      ),
-      (message) => this.options.renderer.postToRenderer(message),
-    );
+    this.followToolAvailability = onAppSignal('toolAvailabilityChanged', () => {
+      options.runtime.runFork(
+        this.reportingFailure(this.postToolDashboardData()),
+      );
+    });
   }
 
   postStartupData(): Effect.Effect<void, Error, ProcessServices> {
@@ -190,7 +150,7 @@ export class DefaultDesktopToolingSettingsController implements DesktopToolingSe
       const items = yield* buildToolDashboardItems(
         'desktop',
         this.probeInputs,
-        getLastCheckResults() ?? undefined,
+        getLastCheckResults(this.probeInputs.workspaceRoot) ?? undefined,
       );
       this.options.renderer.postToRenderer({
         command: SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD,

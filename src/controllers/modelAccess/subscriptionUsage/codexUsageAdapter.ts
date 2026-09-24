@@ -125,7 +125,7 @@ export function parseChatGptUsage(
 export function fetchChatGptUsage(
   credential: ChatGptUsageCredential,
   signal: AbortSignal,
-): Effect.Effect<ParsedSubscriptionUsage, unknown> {
+): Effect.Effect<ParsedSubscriptionUsage, Error> {
   const headers: Record<string, string> = {
     Accept: 'application/json',
     Authorization: `Bearer ${credential.accessToken}`,

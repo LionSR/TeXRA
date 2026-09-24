@@ -93,8 +93,6 @@ src/agent/trace/                  ← agent-general (no MESSAGE_TYPES, no TeXRA)
 ├── events.ts                     ← AgentEvent discriminated union
 ├── AgentTrace.ts                 ← lean SDK interface
 ├── TraceEmitter.ts               ← in-process implementation
-├── noopTrace.ts                  ← default for SDK consumers
-├── channelTrace.ts               ← createChannelTrace + attachChannelSubscriber
 ├── helpers.ts                    ← TeXRA helpers as functions over AgentTrace
 ├── toolUseHelpers.ts             ← tool-use card helpers
 └── index.ts                      ← the module's public surface
@@ -146,7 +144,8 @@ this channel replaced down to this single point.
 3. Add a sugar method on `AgentTrace` that reduces to `emit({type:'…'})`,
    or, if the arm is TeXRA-specific, a helper function over `AgentTrace`
    in `helpers.ts`.
-4. Update `noopTrace` if the new arm has a return shape.
+4. Update the test-support `noopTrace` (`src/test-kernel/support/noopTrace.ts`)
+   if the new arm has a return shape.
 
 The discriminated union is the SSoT — interface drift forces a build
 break in subscribers, not silent data loss.

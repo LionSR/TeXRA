@@ -28,67 +28,51 @@
  * family, and the reflection run's tool registry is empty by construction.
  */
 import { dirname } from 'node:path';
-import {
-  ByteSize,
-  Cause,
-  Effect,
-  Exit,
-  FileSystem,
-  PlatformError,
-  Ref,
-  SynchronizedRef,
-} from 'effect';
+import { Cause, Effect, Exit, FileSystem, SynchronizedRef } from 'effect';
 
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { userRequestTemplateCount } from '@agent/index/agentYamlScanner';
-import {
-  compileFailuresOf,
-  runCompileCheck,
-} from '@agent/implementations/flows/reflection/output/compileCheck';
+import { compileFailuresOf, runCompileCheck } from '@agent/output/compileCheck';
 import {
   appendCompileFailureRoundContext,
   formatCompileFailureRoundContext,
-} from '@agent/implementations/flows/reflection/output/compileFailureRoundContext';
-import { LatexDiffManager } from '@agent/implementations/flows/reflection/output/LatexDiffManager';
-import { traceFileLineage } from '@agent/implementations/flows/reflection/output/lineageMapping';
-import { extractFilesFromXml } from '@agent/implementations/flows/reflection/output/outputFileExtraction';
-import { recoverOutputFailure } from '@agent/implementations/flows/reflection/output/outputOperations';
+} from '@agent/output/compileFailureRoundContext';
+import { LatexDiffManager } from '@agent/output/LatexDiffManager';
+import { traceFileLineage } from '@agent/output/lineageMapping';
+import { extractFilesFromXml } from '@agent/output/outputFileExtraction';
+import { recoverOutputFailure } from '@agent/output/outputOperations';
 import {
   createOutputState,
   ensureRoundData,
-  getCompileFailuresByRound,
   getOutputFilesByRound,
   roundsFromPersisted,
   roundsToPersisted,
   setCompileFailures,
   type OutputDependencies,
-} from '@agent/implementations/flows/reflection/output/outputState';
-import { checkExpectedOutputs } from '@agent/implementations/flows/reflection/output/outputValidation';
-import {
-  summarizeRound,
-  type RoundSummary,
-} from '@agent/implementations/flows/reflection/output/roundSummary';
-import { resolveBaseFilesForDiff } from '@agent/implementations/flows/reflection/output/snapshotResolution';
-import type { RoundFileMapping } from '@agent/implementations/flows/reflection/output/types';
-import { XmlOutputManager } from '@agent/implementations/flows/reflection/output/XmlOutputManager';
+} from '@agent/output/outputState';
+import { checkExpectedOutputs } from '@agent/output/outputValidation';
+import { summarizeRound, type RoundSummary } from '@agent/output/roundSummary';
+import { resolveBaseFilesForDiff } from '@agent/output/snapshotResolution';
+import type { RoundFileMapping } from '@agent/output/types';
+import { XmlOutputManager } from '@agent/output/XmlOutputManager';
 import {
   getSystemPromptWithRules,
   PromptBuilder,
 } from '@agent/prompt/PromptBuilder';
-import { logUserMessage, type StageHandle } from '@agent/trace';
-import { isNotADirectoryError } from '@common/errors';
+import { logUserMessage } from '@agent/trace';
 import { LatexMediaManager } from '@latex/LatexMediaManager';
 import { getTeXCountStats } from '@latex/texcount';
 import type { WorkspaceFs } from '@platform/rootedFs';
 import type { LanguageModel } from '@platform/languageModel';
 import {
+  WORKFLOW_OUTPUT_BASENAME,
   WORKFLOW_RAW_OUTPUT_EXT,
   workflowOutputPath,
+  workflowOutputRoundDir,
 } from '@shared/constants/workflowOutput';
 import { deriveRunOutcome } from '@shared/runs/runStatus';
 import {
   AgentCategory,
-  EMPTY_RUN_USAGE_TOTALS,
   fileLocationDisplayPath,
   MESSAGE_TYPES,
   OUTPUT_END_TAG,
@@ -104,34 +88,37 @@ import {
   type RunUsageTotals,
 } from '@shared/schemas';
 import { RunLedger } from '@shared/session/runLedger';
-import type { RunState } from '@shared/session/runStateFold';
+import { type RunState } from '@shared/session/runStateFold';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { pathToLocationIn } from '@utils/files/fileLocation';
+import { absentReason } from '@utils/files/fsEntryExists';
 import { extractScratchpad } from '@utils/text/xmlExtraction';
 import { AgentRun } from '../run/AgentRun';
 import { compactIfNeeded } from '../run/compaction';
 import { mediaInputParts, type InputPart } from '../run/mediaInput';
 import { turnText } from '../run/turnText';
 import { ModelInvoker } from '../ModelInvoker';
+import { Runs } from '../runRegistry';
 import {
   appendRow,
-  NOT_RESUMABLE_MESSAGE,
-  reflectionFlowState,
-  reflectionSnapshotRow,
-  runtimeSnapshotRow,
+  familyState,
+  rowAggregate,
+  snapshotRow,
   stepRow,
   type ReflectionFlowState,
-  type ReflectionSnapshotPatch,
+  type SnapshotPatch,
 } from './rows';
 import {
-  alreadyOpenedMessage,
-  freshProgramState,
+  loadRun,
+  makeRunCell,
   recordServedUsage,
-  usageSnapshot,
+  settleRun,
+  stagedBy,
+  stoppedBy,
+  type RunCell,
 } from './runProgram';
-import { recordHalt, runStopError } from './runExit';
 import type { HttpClient } from 'effect/unstable/http';
 
 // Reflection owns conversation limits and document completion, not the provider.
@@ -140,9 +127,6 @@ const K_SLICE = 200;
 const CONTINUE_LIMIT = 10;
 const INPUT_TOKEN_LIMIT = 1500000;
 const OUTPUT_TOKEN_LIMIT_FACTOR = 2.5;
-
-/** Decodes the raw-output bytes a resumed run reads back at a byte offset. */
-const utf8 = new TextDecoder();
 
 interface ReflectionStart {
   /** The caller launched this as a resume; the ledger decides what it is. */
@@ -165,22 +149,12 @@ interface OutputExecResult {
   summary: RoundSummary;
   compileResult?: CompileResult;
   compiledArtifacts: RunStorageFileLocation[];
-  emitCompileFailures: boolean;
 }
 
 type RoundExit = {
   readonly state: RunState;
-  readonly kind: 'completed' | 'failed' | 'cancelled';
+  readonly kind: RunOutcome;
 };
-
-/** ENOENT, or ENOTDIR on a parent, as `AbsoluteFS.exists`/`statIfExists` treated them. */
-function isAbsentFsPath(error: PlatformError.PlatformError): boolean {
-  return (
-    error.reason._tag === 'NotFound' ||
-    (error.reason._tag === 'BadResource' &&
-      isNotADirectoryError(error.reason.cause))
-  );
-}
 
 /** The finish reason of a completed turn; the editor arm reports none. */
 function finishReasonOf(
@@ -208,6 +182,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
   | WorkspaceFs
   | LanguageModel
   | HttpClient.HttpClient
+  | Runs
 > {
   const run = yield* AgentRun;
   const ledger = yield* RunLedger;
@@ -284,51 +259,23 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     });
 
   // ---------------------------------------------------------------- state
-  const latest = yield* Ref.make<RunState | null>(null);
-  const commit = (state: RunState) =>
-    Ref.set(latest, state).pipe(Effect.as(state));
   let workspace = AgentWorkspaceState.create();
-  // The run's error fact, runtime-owned: every snapshot names it, so the
-  // value a listing or a resume reads (`runtime.lastError`) is the value the
-  // live loop holds, and a resumed run that retries clears it for good.
-  let lastError: RetryErrorInfo | undefined;
-  /**
-   * One forced-compaction recovery per round: a turn that overflowed the
-   * context window is retried once against a compacted history, and a second
-   * overflow in the same round stops rather than paying for a futile retry.
-   */
-  let contextWindowRecoveryAttempted = false;
-  // The scalar family state; the snapshot re-derives the collections below.
+  // The family state no row carries: the round budget and the compile
+  // rejection facts. The round is the folded `state.round`.
   let flow: ReflectionFlowState = {
-    currentRound: 0,
     totalRounds,
     workspaceSnapshot: AgentWorkspaceState.emptySnapshot(),
-    outputLocation: null,
-    runStateSnapshot: { totalRounds, totalResponseTimeMs: 0 },
-    roundOutputs: [],
-    continueRounds: true,
-    endTurn: false,
   };
+  /** The family state every snapshot of this run carries. */
   const flowState = (): ReflectionFlowState => ({
     ...flow,
     workspaceSnapshot: workspace.toSnapshot({ excludeAssemblyStrings: true }),
-    roundOutputs: roundsToPersisted(outputState),
   });
-  const snapshot = (
-    state: RunState,
-    patch: Omit<ReflectionSnapshotPatch, 'state'>,
-  ) =>
-    reflectionSnapshotRow(runId, state, {
+  const snapshot = (state: RunState, patch: Omit<SnapshotPatch, 'state'>) =>
+    snapshotRow(runId, state, {
       ...patch,
-      runtime: { lastError: lastError ?? null, ...patch.runtime },
-      state: flowState(),
+      state: { family: 'reflection', state: flowState() },
     });
-  const coordinates = (state: RunState, continuationIndex?: number) => ({
-    family: state.family,
-    round: flow.currentRound,
-    turn: state.turn,
-    continuationIndex: continuationIndex ?? state.continuationIndex,
-  });
   /** Disabling rejection is an explicit acceptance decision. */
   const normalizeCompileRejectionPolicy = Effect.fn(function* () {
     if (
@@ -340,26 +287,46 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     delete flow.unresolvedCompileRejection;
     delete flow.compileFailureContext;
   });
-  const terminalCompileRejection = (): boolean =>
-    flow.unresolvedCompileRejection === true &&
-    flow.currentRound + 1 >= flow.totalRounds;
-  const resolveOutcome = (): RunOutcome =>
+  const terminalCompileRejection = (state: RunState): boolean =>
+    flow.unresolvedCompileRejection === true && state.round + 1 >= totalRounds;
+  const resolveOutcome = (state: RunState): RunOutcome =>
     deriveRunOutcome({
-      failed: lastError !== undefined || terminalCompileRejection(),
+      failed: state.lastError !== null || terminalCompileRejection(state),
       cancelled: false,
     });
   /** The round loop's single continue/finalize decision. */
-  const shouldContinueNextRound = (): boolean =>
-    lastError === undefined &&
-    flow.continueRounds &&
-    flow.currentRound + 1 < flow.totalRounds;
+  const shouldContinueNextRound = (state: RunState): boolean =>
+    state.lastError === null && state.round + 1 < totalRounds;
+
+  /**
+   * A committed response's text as the round writes it, and whether it ended
+   * the turn: a stop with text, or a stop sequence (whose stripped tag is
+   * restored so extraction sees the document it closed).
+   */
+  const responseOf = (turn: NonNullable<RunState['lastTurn']>) =>
+    Effect.map(
+      session.responseTextProcessing.postProcessResponse(
+        turnText(turn),
+        session.roots.config,
+      ),
+      (processed) => {
+        const finish = finishReasonOf(turn);
+        const text =
+          finish === 'stop-sequence' && !processed.includes(OUTPUT_END_TAG)
+            ? `${processed}\n${OUTPUT_END_TAG}`
+            : processed;
+        const endTurn =
+          text !== '' && (finish === 'stop' || finish === 'stop-sequence');
+        return { finish, text, endTurn };
+      },
+    );
 
   /** The files a round works on: inputs first, then the previous outputs. */
   const filesForRound = (round: number): FileLocation[] => {
     if (round === 0) {
       return config.inputFiles.map((f) => fileService.createLocation(f));
     }
-    const previous = flow.roundOutputs[round - 1];
+    const previous = outputState.rounds.get(round - 1);
     if (previous?.outputs.length) {
       return previous.outputs.map((o) => o.location);
     }
@@ -367,10 +334,9 @@ export const runReflection = Effect.fn('reflection.run')(function* (
   };
 
   // -------------------------------------------------------------- opening
-  const openFresh = Effect.fn('reflection.open')(function* (): Effect.fn.Return<
-    RunState,
-    Error
-  > {
+  const openFresh = Effect.fn('reflection.open')(function* (
+    opening: RunState,
+  ): Effect.fn.Return<RunState, Error> {
     // A workflow YAML may still declare `tools:`. This family advertises
     // none (header), so the narrowing is stated rather than silent.
     if (setting.tools.length > 0) {
@@ -382,32 +348,27 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     }
     const bound = yield* SynchronizedRef.get(run.model);
     const opened = yield* ledger.appendBatch(runId, null, [
-      reflectionSnapshotRow(
-        runId,
-        freshProgramState('reflection', bound, run),
-        {
-          phase: 'round.ready',
-          round: 0,
-          runtime: {
-            modelId: bound.modelId,
-            modelCompatibilityKey: bound.compatibilityKey,
-          },
-          state: flowState(),
+      snapshotRow(runId, opening, {
+        phase: 'round.ready',
+        round: 0,
+        runtime: {
+          modelId: bound.modelId,
+          modelCompatibilityKey: bound.compatibilityKey,
         },
-      ),
+        state: { family: 'reflection', state: flowState() },
+      }),
     ]);
     run.callbacks.onProgress?.({ kind: 'started' });
-    return yield* commit(opened);
+    return opened;
   });
 
   /** Restore the family state a resumed run continues from. */
   const restore = Effect.fn('reflection.restore')(function* (
     state: RunState,
   ): Effect.fn.Return<void, Error, FileSystem.FileSystem> {
-    const fs = yield* FileSystem.FileSystem;
-    const persisted = reflectionFlowState(state);
+    const persisted = familyState(state, 'reflection');
     if (persisted === null) {
-      return yield* Effect.fail(
+      return yield* Effect.die(
         new Error(`Run ${runId} is not a reflection run; resume it as one.`),
       );
     }
@@ -415,36 +376,22 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     // (rounds: 2 -> 1) takes effect on resume; a resumed run retries the
     // invocation its failure interrupted rather than failing again at once.
     flow = { ...persisted, totalRounds };
-    // The run's error fact resumes with it: the loop carries the durable
-    // `lastError` forward so the next snapshot restates it, and only a
-    // response that actually arrives clears it (below).
-    lastError = state.lastError ?? undefined;
     workspace = AgentWorkspaceState.fromSnapshot(persisted.workspaceSnapshot);
-    outputState.rounds = roundsFromPersisted(persisted.roundOutputs);
-    // Mid-round, the raw output file holds the text every earlier response
-    // cycle produced; the next connector and continuation prompt read its tail.
-    if (
-      persisted.outputLocation !== null &&
-      (state.phase === 'model.ready' ||
-        state.phase === 'model.submitted' ||
-        state.phase === 'response.ready')
-    ) {
-      const path = persisted.outputLocation.absolutePath;
-      const content = yield* fs.readFile(path).pipe(
-        Effect.map((bytes) =>
-          utf8.decode(bytes.subarray(0, persisted.rawOutputBytes ?? 0)),
-        ),
-        // A raw output file the resume finds gone contributes no text; the
-        // round rebuilds it from the rows that follow. Any other failure to
-        // read it — permissions, a directory, I/O — still fails the resume
-        // rather than quietly continuing without the earlier responses.
-        Effect.catchIf(isAbsentFsPath, () => Effect.succeed('')),
+    outputState.rounds = roundsFromPersisted(state.roundOutputs);
+    // Mid-round, the cycle files hold the text every earlier response cycle
+    // produced; the next connector and continuation prompt read their tail.
+    // `continuationIndex` is folded state, so no directory enumeration is
+    // needed to find them.
+    if (state.phase === 'model.ready' || state.phase === 'model.submitted') {
+      const content = yield* readRawOutput(
+        state.round,
+        state.continuationIndex,
       );
       workspace.assembly.accumulatedOutput = content;
       workspace.assembly.lastResponse = content;
     }
     logger.debug(
-      `Resuming reflection run from round ${flow.currentRound}/${flow.totalRounds}`,
+      `Resuming reflection run from round ${state.round}/${totalRounds}`,
     );
   });
 
@@ -452,17 +399,11 @@ export const runReflection = Effect.fn('reflection.run')(function* (
   /** The round prompt, its media and TeX count, committed with `round.begin`. */
   const prepareRound = Effect.fn('reflection.prepareRound')(function* (
     initial: RunState,
+    cell: RunCell,
   ): Effect.fn.Return<RunState, Error, FileSystem.FileSystem | WorkspaceFs> {
-    const round = flow.currentRound;
+    const round = initial.round;
     const bound = yield* SynchronizedRef.get(run.model);
-    contextWindowRecoveryAttempted = false;
     workspace = AgentWorkspaceState.create();
-    flow = {
-      ...flow,
-      outputLocation: outputLocationFor(round),
-      endTurn: false,
-      rawOutputBytes: 0,
-    };
     const files = filesForRound(round);
     const content: InputPart[] = [];
 
@@ -567,73 +508,49 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     logger.debug('Prepared round context', {
       data: { round, parts: content.length },
     });
-    const prepared = yield* ledger.appendBatch(runId, initial, [
+    const prepared = yield* cell.append([
       appendRow(runId, [{ role: 'user', content }]),
       snapshot(initial, { phase: 'model.ready', round, continuationIndex: 0 }),
-      stepRow(runId, coordinates(initial, 0), 'round.begin'),
+      stepRow(runId, initial, 'round.begin'),
     ]);
-    return yield* commit(prepared);
+    return prepared;
   });
 
   /**
-   * Append this cycle's text to the round's raw output file at the byte
-   * offset the last processed response left. A replayed response completes
-   * a partial write or skips one already complete; conflicting content is
-   * rewritten from the offset and said so.
+   * The raw output of one response cycle, keyed by the folded
+   * `continuationIndex`: a re-entry at the same cycle rewrites the same path
+   * with the same bytes, so the write is idempotent by coordinate and needs
+   * no byte-offset bookkeeping; raw/ is outside extracted round files.
    */
-  const writeOutputFragment = (
-    location: AgentFileLocation,
-    fragment: string,
-  ): Effect.Effect<void, Error, FileSystem.FileSystem> =>
+  const cycleLocationFor = (
+    round: number,
+    continuationIndex: number,
+  ): AgentFileLocation =>
+    fileService.createLocation(
+      `raw/${workflowOutputRoundDir(round)}/${WORKFLOW_OUTPUT_BASENAME}.c${continuationIndex}.${WORKFLOW_RAW_OUTPUT_EXT}`,
+    ) as AgentFileLocation;
+
+  /**
+   * The round's accumulated raw output: its cycle files read back in index
+   * order, cycles `0 .. count - 1`. A cycle that produced no text left no
+   * file; a file the resume finds gone contributes no text, and the round
+   * rebuilds it from the rows that follow. Any other read failure —
+   * permissions, a directory, I/O — still fails rather than quietly
+   * continuing without the earlier responses.
+   */
+  const readRawOutput = (
+    round: number,
+    count: number,
+  ): Effect.Effect<string, Error, FileSystem.FileSystem> =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
-      const path = location.absolutePath;
-      const expected = flow.rawOutputBytes ?? 0;
-      const fragmentBytes = Buffer.byteLength(fragment);
-      yield* fs.makeDirectory(dirname(path), { recursive: true });
-      // A `ByteSize` is a branded bigint: the comparisons below are against
-      // byte counts of a raw output, which no file reaches unsafely.
-      const actual = yield* fs.stat(path).pipe(
-        Effect.map((info) => ByteSize.toNumberUnsafe(info.size)),
-        // No file yet is the same as an empty one: both mean "write it".
-        Effect.catchIf(isAbsentFsPath, () => Effect.succeed(0)),
-      );
-      if (actual === expected + fragmentBytes && expected + fragmentBytes > 0) {
-        logger.debug(
-          'Raw output already holds this response; not appending twice.',
-        );
-      } else if (actual === expected) {
-        if (actual > 0) {
-          logger.debug(`Appending to existing file: ${path}`);
-          yield* fs.writeFileString(path, fragment, { flag: 'a' });
-        } else {
-          logger.debug(`Creating new file: ${path}`);
-          yield* fs.writeFileString(path, fragment);
-        }
-      } else {
-        logger.warn(
-          `Raw output ${path} is ${actual} bytes where ${expected} were recorded; rewriting from the recorded offset.`,
-        );
-        const existing = yield* fs
-          .readFile(path)
-          .pipe(
-            Effect.catchIf(isAbsentFsPath, () =>
-              Effect.succeed(Buffer.alloc(0)),
-            ),
-          );
-        // The rewrite is byte-for-byte what the create and append paths above
-        // would have left: the recorded offset counts bytes of the fragment, so
-        // normalizing line endings here would put the file below its own count
-        // and make every later cycle take this branch again.
-        yield* fs.writeFileString(
-          path,
-          Buffer.concat([
-            existing.subarray(0, Math.min(expected, existing.length)),
-            Buffer.from(fragment),
-          ]).toString('utf8'),
-        );
+      let raw = '';
+      for (let index = 0; index < count; index++) {
+        raw += yield* fs
+          .readFileString(cycleLocationFor(round, index).absolutePath)
+          .pipe(Effect.catchIf(absentReason, () => Effect.succeed('')));
       }
-      flow = { ...flow, rawOutputBytes: expected + fragmentBytes };
+      return raw;
     });
 
   /**
@@ -643,35 +560,25 @@ export const runReflection = Effect.fn('reflection.run')(function* (
    */
   const processResponse = Effect.fn('reflection.processResponse')(function* (
     initial: RunState,
+    cell: RunCell,
   ): Effect.fn.Return<
     RunState,
     Error,
     FileSystem.FileSystem | HttpClient.HttpClient
   > {
     const turn = initial.lastTurn;
-    const location = flow.outputLocation;
-    if (turn === null || location === null) {
+    if (turn === null) {
       return yield* Effect.die(
         new Error('A response is processed only after its row and its round.'),
       );
     }
-    const finish = finishReasonOf(turn);
-    let text = session.responseTextProcessing.postProcessResponse(
-      turnText(turn),
-      session.roots.config,
-    );
-    // A provider stop sequence strips the tag it matched; restore it so
-    // extraction sees the document it closed.
-    if (finish === 'stop-sequence' && !text.includes(OUTPUT_END_TAG)) {
-      text = `${text}\n${OUTPUT_END_TAG}`;
-    }
+    const { finish, text, endTurn } = yield* responseOf(turn);
     logger.debug(`Stop reason: ${finish}`);
     const scratchpad = extractScratchpad(text, SCRATCHPAD_TAG);
     if (scratchpad) {
       logger.info(scratchpad, { messageType: MESSAGE_TYPES.SCRATCHPAD });
     }
 
-    let endTurn = false;
     let continueCycle = false;
     // The state the continuation is issued against: an overflow retry
     // replaces it with the compacted history the retry needs.
@@ -682,23 +589,23 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     /**
      * A context-window overflow is recoverable once per round: force the
      * compaction the history needs and retry the cycle against it. A second
-     * overflow, or a compaction that shortened nothing, stops, because the
-     * same history would overflow again.
+     * overflow in the round (the fold records the round of its
+     * `context-window` compaction), or a compaction that shortened nothing,
+     * stops, because the same history would overflow again.
      */
     const admitOverflowRetry = Effect.fn('reflection.overflowRetry')(
       function* (): Effect.fn.Return<boolean, Error> {
-        if (contextWindowRecoveryAttempted) {
+        if (base.overflowRecoveredAtRound === base.round) {
           logger.warn(
             'Model context window still exceeded after forced compaction; stopping to avoid a futile retry.',
           );
           return false;
         }
-        contextWindowRecoveryAttempted = true;
         const bound = yield* SynchronizedRef.get(run.model);
         // The retry pays for a summary first: the compaction row is committed
         // before the continuation prompt, so the retried request is issued
         // against the compacted history the fold returns.
-        const compacted = yield* commit(
+        const compacted = yield* cell.adopt(
           yield* compactIfNeeded(base, {
             runId,
             ledger,
@@ -707,7 +614,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
             stores: session.roots,
             system: undefined,
             tools: [],
-            force: true,
+            force: 'overflow',
           }),
         );
         if (compacted === base) {
@@ -727,8 +634,14 @@ export const runReflection = Effect.fn('reflection.run')(function* (
           workspace.assembly.lastResponse.slice(-K_SLICE),
           text.slice(0, K_SLICE),
         );
-      yield* writeOutputFragment(
-        location,
+      const fs = yield* FileSystem.FileSystem;
+      const cyclePath = cycleLocationFor(
+        initial.round,
+        initial.continuationIndex,
+      ).absolutePath;
+      yield* fs.makeDirectory(dirname(cyclePath), { recursive: true });
+      yield* fs.writeFileString(
+        cyclePath,
         workspace.assembly.accumulatedOutput ? connector + text : text,
       );
       workspace.assembly.lastResponse = text;
@@ -746,7 +659,6 @@ export const runReflection = Effect.fn('reflection.run')(function* (
       const inputTokenLimitExceeded =
         totals.totalInputTokens > INPUT_TOKEN_LIMIT;
       const encounterDocumentTag = text.includes(OUTPUT_END_TAG);
-      endTurn = finish === 'stop' || finish === 'stop-sequence';
       // Warn-only by design: this multiplier has never stopped a run, it
       // flags one whose output has run away relative to its first input.
       if (totals.totalOutputTokens > maxOutputTokens) {
@@ -793,28 +705,34 @@ export const runReflection = Effect.fn('reflection.run')(function* (
       );
       const prefillTokens = workspace.assembly.lastResponse.slice(-K_SLICE);
       const continuationPrompt = `Your response got cut off, because you only have limited response space. Continue responding exactly from where you left off until the very end, marked by ${OUTPUT_END_TAG}. Avoid repeating yourself and avoid starting over. Start your response at the next token after: "${prefillTokens}"`;
-      flow = { ...flow, endTurn: false };
-      const continued = yield* ledger.appendBatch(runId, base, [
+      const progressed = { ...base, continuationIndex: next };
+      return yield* cell.append([
         appendRow(runId, [
           {
             role: 'user',
             content: [{ kind: 'text', text: continuationPrompt }],
           },
         ]),
-        snapshot(base, { phase: 'model.ready', continuationIndex: next }),
-        stepRow(runId, coordinates(base, next), 'response.processed'),
+        snapshot(base, {
+          phase: 'model.ready',
+          continuationIndex: next,
+          // A response arrived: the run is no longer failed, and this
+          // snapshot is what records that.
+          runtime: { lastError: null },
+        }),
+        stepRow(runId, progressed, 'response.processed'),
       ]);
-      return yield* commit(continued);
     }
     // `output.pending` is committed before any output file is touched, so
     // a re-entry at this phase knows the pipeline may have started.
-    flow = { ...flow, endTurn };
-    const processed = yield* ledger.appendBatch(runId, initial, [
-      snapshot(initial, { phase: 'output.pending' }),
-      stepRow(runId, coordinates(initial), 'response.processed'),
-      stepRow(runId, coordinates(initial), 'output.ready'),
+    return yield* cell.append([
+      snapshot(initial, {
+        phase: 'output.pending',
+        runtime: { lastError: null },
+      }),
+      stepRow(runId, initial, 'response.processed'),
+      stepRow(runId, initial, 'output.ready'),
     ]);
-    return yield* commit(processed);
   });
 
   /** The output pipeline over the round's raw output: extraction, lineage,
@@ -836,7 +754,6 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     let mapping: RoundFileMapping | undefined;
     let compileRoundResult: CompileResult | undefined;
     const compiledArtifacts: RunStorageFileLocation[] = [];
-    let emitCompileFailures = false;
     if (endTurn) {
       logger.debug(`Processing output for round ${round}`);
       yield* xmlManager
@@ -855,8 +772,6 @@ export const runReflection = Effect.fn('reflection.run')(function* (
           ...(yield* diffManager.handleLatexdiffOfOutput(round, mapping)),
         );
         yield* Effect.gen(function* () {
-          const hadCompileFailures =
-            (outputState.rounds.get(round)?.compileFailures.length ?? 0) > 0;
           const check = yield* runCompileCheck(
             {
               roots,
@@ -871,8 +786,6 @@ export const runReflection = Effect.fn('reflection.run')(function* (
           compiledArtifacts.push(...check.artifacts);
           const compileFailures = compileFailuresOf(check.compileResult);
           setCompileFailures(outputState, round, compileFailures);
-          emitCompileFailures =
-            compileFailures.length > 0 || hadCompileFailures;
         }).pipe(recoverWarn('Compile check'));
       }
     }
@@ -887,7 +800,6 @@ export const runReflection = Effect.fn('reflection.run')(function* (
       summary,
       compileResult: compileRoundResult,
       compiledArtifacts,
-      emitCompileFailures,
     };
   });
 
@@ -912,7 +824,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
             `Output fallback summary failed; output files may be dropped: ${toErrorMessage(summaryError)}`,
             { data: summaryError },
           );
-          return { fileInfos: [], filesToOpen: [] };
+          return { filesToOpen: [] };
         }),
       ),
     );
@@ -924,37 +836,17 @@ export const runReflection = Effect.fn('reflection.run')(function* (
       summary,
       compileResult: undefined,
       compiledArtifacts: [],
-      emitCompileFailures: false,
     };
   });
 
-  /** Publish the round's facts, open its files, and validate its outputs. */
-  const publishOutput = Effect.fn('reflection.publishOutput')(function* (
-    round: number,
-    outputLocation: AgentFileLocation,
+  /** Open produced files and apply the round's compile policy. */
+  const presentOutput = Effect.fn('reflection.presentOutput')(function* (
     endTurn: boolean,
     result: OutputExecResult,
   ) {
     const interactions = session.interactions;
     const { summary } = result;
     const compileFailures = compileFailuresOf(result.compileResult);
-    // Latest-only listing rows: each carries the run's whole round map.
-    const files = { ...getOutputFilesByRound(outputState) };
-    files[round] = summary.fileInfos;
-    logger.emit({
-      type: 'run.fact',
-      fact: { key: 'outputFiles', filesByRound: files },
-    });
-    if (result.emitCompileFailures) {
-      const failures = {
-        ...getCompileFailuresByRound(outputState),
-        [round]: compileFailures,
-      };
-      logger.emit({
-        type: 'run.fact',
-        fact: { key: 'compileFailures', filesByRound: failures },
-      });
-    }
     for (const location of summary.filesToOpen) {
       yield* interactions.emit('requestOpenFile', {
         location,
@@ -980,22 +872,6 @@ export const runReflection = Effect.fn('reflection.run')(function* (
         });
       }
     }
-    if (endTurn) {
-      yield* Effect.gen(function* () {
-        const validation = yield* checkExpectedOutputs(
-          outputState,
-          deps,
-          outputLocation,
-          round,
-        );
-        if (validation.missing.length > 0) {
-          yield* interactions.emit('requestShowInstruction', {
-            key: 'missingOutputsInfo',
-            message: 'Missing output files detected',
-          });
-        }
-      }).pipe(recoverWarn('Validate expected outputs'));
-    }
     if (result.compileResult) {
       const compileFailureContext = (yield* getRejectOnCompileFailure())
         ? formatCompileFailureRoundContext(result.compileResult)
@@ -1020,13 +896,26 @@ export const runReflection = Effect.fn('reflection.run')(function* (
    */
   const produceOutput = Effect.fn('reflection.produceOutput')(function* (
     state: RunState,
+    cell: RunCell,
   ): Effect.fn.Return<RunState, Error, FileSystem.FileSystem | WorkspaceFs> {
-    const round = flow.currentRound;
-    const location = flow.outputLocation;
-    if (location === null) {
-      return yield* Effect.die(new Error('Output needs the round location.'));
+    const round = state.round;
+    const location = outputLocationFor(round);
+    if (state.lastTurn === null) {
+      return yield* Effect.die(new Error('Output needs the round response.'));
     }
-    const endTurn = flow.endTurn;
+    // Whether the round's last response ended the turn, from the folded
+    // turn: the same rule `processResponse` applied before committing
+    // `output.pending`.
+    const { endTurn } = yield* responseOf(state.lastTurn);
+    // The canonical raw output the pipeline reads is the round's cycle files
+    // concatenated in index order; re-entry rewrites it whole from the same
+    // coordinates.
+    const fs = yield* FileSystem.FileSystem;
+    const raw = yield* readRawOutput(round, state.continuationIndex + 1);
+    yield* fs.makeDirectory(dirname(location.absolutePath), {
+      recursive: true,
+    });
+    yield* fs.writeFileString(location.absolutePath, raw);
     const result = yield* processOutput(round, location, endTurn).pipe(
       // The pipeline's own steps recover what they can; anything that still
       // reaches here — a failed step or a defect in one — costs the round its
@@ -1038,290 +927,219 @@ export const runReflection = Effect.fn('reflection.run')(function* (
           : fallbackOutput(round, location, ensureError(Cause.squash(cause))),
       ),
     );
-    yield* publishOutput(round, location, endTurn, result);
-    return state;
+    if (endTurn) {
+      yield* Effect.gen(function* () {
+        const validation = yield* checkExpectedOutputs(
+          outputState,
+          deps,
+          location,
+          round,
+        );
+        if (validation.missing.length > 0) {
+          yield* session.interactions.emit('requestShowInstruction', {
+            key: 'missingOutputsInfo',
+            message: 'Missing output files detected',
+          });
+        }
+      }).pipe(recoverWarn('Validate expected outputs'));
+    }
+    // The row owns completed outputs. Commit it before fallible presentation
+    // and policy reads; output.pending stays replayable until round end.
+    const produced = yield* cell.append([
+      {
+        type: 'output.produced',
+        aggregateId: rowAggregate(runId),
+        rounds: roundsToPersisted(outputState),
+      },
+    ]);
+    yield* presentOutput(endTurn, result);
+    return produced;
   });
 
   /** One round inside its trace stage: prompt, response cycles, output. */
   const runRound = Effect.fn('reflection.round')(function* (
-    initial: RunState,
+    cell: RunCell,
   ): Effect.fn.Return<
     RoundExit,
     Error,
     FileSystem.FileSystem | WorkspaceFs | LanguageModel | HttpClient.HttpClient
   > {
-    const round = flow.currentRound;
-    // The stage closes with the round's own verdict; an exit that never set
-    // one is a stop (interrupt) or a defect.
-    let roundOutcome: RunOutcome | null = null;
-    return yield* Effect.scoped(
-      Effect.gen(function* () {
-        yield* Effect.acquireRelease(
-          Effect.sync((): StageHandle =>
-            logger.openStage(`r${round}`, {
-              parent: run.parentStage,
-              kind: 'round',
-              index: round,
-              total: flow.totalRounds,
-            }),
-          ),
-          (stage, exit) =>
-            Effect.sync(() => {
-              stage.end(
-                roundOutcome ??
-                  (Exit.isFailure(exit) && Cause.hasInterrupts(exit.cause)
-                    ? RUN_OUTCOME.CANCELLED
-                    : RUN_OUTCOME.FAILED),
-              );
-            }),
-        );
-        let state = initial;
-        if (state.phase === 'round.ready') state = yield* prepareRound(state);
-        while (
-          state.phase === 'model.ready' ||
-          state.phase === 'model.submitted' ||
-          state.phase === 'response.ready'
-        ) {
-          const unprocessed =
-            state.openAttempt === null &&
-            state.lastTurn !== null &&
-            state.phase !== 'model.ready';
-          if (!unprocessed) {
-            const system = yield* getSystemPromptWithRules(
-              prompt.systemPrompt,
-              run.userVarChannels,
-              roots.workspace,
-            );
-            const outcome = yield* invoker.invoke(state, {
-              system,
-              tools: [],
-              toolChoice: undefined,
-              stopSequences: [OUTPUT_END_TAG],
-              round,
-              debugName: `r${round}`,
-            });
-            state = yield* commit(outcome.state);
-            if (outcome.kind === 'cancelled') {
-              roundOutcome = RUN_OUTCOME.CANCELLED;
-              return { state, kind: 'cancelled' } as const;
-            }
-            if (outcome.kind === 'failed') {
-              lastError = outcome.error;
-              // A failure the invoker's gate did not already commit (no
-              // retry was available) is committed here, so a listing and a
-              // resume read the run's error where the gate writes it.
-              if (state.lastError === null) {
-                state = yield* commit(
-                  yield* Effect.uninterruptible(
-                    ledger.appendBatch(runId, state, [
-                      runtimeSnapshotRow(runId, state, {
-                        lastError: outcome.error,
-                      }),
-                    ]),
-                  ),
-                );
-              }
-              roundOutcome = RUN_OUTCOME.FAILED;
-              return { state, kind: 'failed' } as const;
-            }
-            // The retry succeeded: the run is no longer failed, and the next
-            // snapshot is what records that.
-            lastError = undefined;
-            flow = {
-              ...flow,
-              runStateSnapshot: {
-                ...flow.runStateSnapshot,
-                totalResponseTimeMs:
-                  flow.runStateSnapshot.totalResponseTimeMs +
-                  outcome.responseTimeMs,
-              },
-            };
-            yield* recordServedUsage(
-              run,
-              usageSnapshot(
-                state,
-                flow.currentRound,
-                flow.runStateSnapshot.totalResponseTimeMs,
-                outcome.usage,
-              ),
-            );
+    const round = (yield* cell.current).round;
+    const body = Effect.gen(function* () {
+      let state = yield* cell.current;
+      if (state.phase === 'round.ready')
+        state = yield* prepareRound(state, cell);
+      while (
+        state.phase === 'model.ready' ||
+        state.phase === 'model.submitted'
+      ) {
+        const unprocessed =
+          state.openAttempt === null &&
+          state.lastTurn !== null &&
+          state.phase !== 'model.ready';
+        if (!unprocessed) {
+          const system = yield* getSystemPromptWithRules(
+            prompt.systemPrompt,
+            run.userVarChannels,
+            roots.workspace,
+          );
+          const outcome = yield* invoker.invoke(cell, {
+            system,
+            tools: [],
+            toolChoice: undefined,
+            stopSequences: [OUTPUT_END_TAG],
+            round,
+            debugName: `r${round}`,
+          });
+          state = outcome.state;
+          if (outcome.kind === 'cancelled') {
+            return { state, kind: 'cancelled' } as const;
           }
-          state = yield* processResponse(state);
+          if (outcome.kind === 'failed') {
+            return { state, kind: 'failed' } as const;
+          }
+          yield* recordServedUsage(run, state, outcome.usage);
         }
-        if (state.phase === 'output.pending') {
-          state = yield* produceOutput(state);
-        }
-        roundOutcome = RUN_OUTCOME.COMPLETED;
-        return { state, kind: 'completed' } as const;
-      }),
-    );
+        state = yield* processResponse(state, cell);
+      }
+      if (state.phase === 'output.pending') {
+        state = yield* produceOutput(state, cell);
+      }
+      return { state, kind: 'completed' } as const;
+    });
+    return yield* stagedBy(
+      () =>
+        logger.openStage(`r${round}`, {
+          parent: run.parentStage,
+          kind: 'round',
+          index: round,
+          total: totalRounds,
+        }),
+      (exit: RoundExit) => exit.kind,
+    )(body);
   });
 
   // ------------------------------------------------------------- the loop
   type LoopExit = { readonly state: RunState; readonly outcome: RunOutcome };
-  const program = Effect.gen(function* () {
-    if (start.resume) yield* ledger.acquire(runId);
-    const loaded = yield* ledger.load(runId);
-    let state: RunState;
-    if (loaded === null || loaded.phase === null) {
-      if (start.resume && loaded === null) {
-        return yield* Effect.fail(new Error(NOT_RESUMABLE_MESSAGE));
-      }
-      state = yield* openFresh();
-    } else {
-      if (!start.resume && loaded.phase !== null) {
-        // A fresh launch onto a non-empty aggregate is refused (#11313).
-        return yield* Effect.fail(new Error(alreadyOpenedMessage(runId)));
-      }
-      yield* restore(loaded);
-      state = yield* commit(loaded);
-    }
-    // Run-workspace preparation, before the first round: extraction reads
-    // the prepared snapshot, and a failure is a transcript warning, never an
-    // unhandled rejection.
-    yield* fileService
-      .prepareRunWorkspace(baseFiles, {
-        linkFiles: collectRunSupportFiles(roots.workspace, config),
-      })
-      .pipe(
-        Effect.catch((error) =>
-          Effect.sync(() => {
-            logger.warn(
-              `Failed to prepare run workspace; in-place diffs may be empty: ${toErrorMessage(error)}`,
-              { data: error, messageType: MESSAGE_TYPES.INTERNAL },
-            );
-          }),
-        ),
-      );
-    yield* normalizeCompileRejectionPolicy();
-
-    /**
-     * Advance onto the next round: reset the per-round flow facts and
-     * workspace, then commit the `round.ready` snapshot.
-     *
-     * `closePrevious` says whether a round is actually being closed. Ending
-     * one emits `round.end` against the coordinates captured *before* the
-     * advance; relaunching a halted run enters a round without a predecessor
-     * to close, and that is the only difference between the two entries.
-     */
-    const enterRound = Effect.fn('reflection.enterRound')(function* (
-      current: RunState,
-      closePrevious: boolean,
-    ): Effect.fn.Return<RunState, Error> {
-      const ended = coordinates(current);
-      flow = {
-        ...flow,
-        currentRound: flow.currentRound + 1,
-        endTurn: false,
-        outputLocation: null,
-        rawOutputBytes: 0,
-      };
-      workspace = AgentWorkspaceState.create();
-      return yield* commit(
-        yield* ledger.appendBatch(runId, current, [
-          ...(closePrevious ? [stepRow(runId, ended, 'round.end')] : []),
-          snapshot(current, {
-            phase: 'round.ready',
-            round: flow.currentRound,
-            continuationIndex: 0,
-          }),
-        ]),
-      );
-    });
-    const finish = Effect.fn('reflection.finish')(function* (
-      current: RunState,
-      roundEnded: boolean,
-    ): Effect.fn.Return<LoopExit, Error> {
-      yield* normalizeCompileRejectionPolicy();
-      const outcome = resolveOutcome();
-      const state = yield* commit(
-        yield* ledger.appendBatch(runId, current, [
-          ...(roundEnded
-            ? [stepRow(runId, coordinates(current), 'round.end')]
-            : []),
-          snapshot(current, { phase: 'halted' }),
-        ]),
-      );
-      return { state, outcome };
-    });
-
-    for (;;) {
-      if (state.phase === 'halted') {
-        // A finished run launched again continues only if rounds remain
-        // under the current configuration. The restored error fact does not
-        // decide this: relaunching is the admission of a new attempt, and it
-        // clears the error the way a consumed follow-up does in the tool-use
-        // loop, so the next snapshot no longer restates a failure the run has
-        // moved past.
-        if (!(
-          flow.continueRounds && flow.currentRound + 1 < flow.totalRounds
-        )) {
-          return { state, outcome: resolveOutcome() } satisfies LoopExit;
-        }
-        lastError = undefined;
-        state = yield* enterRound(state, false);
-      }
-      // The configured total may have been lowered since the snapshot; the
-      // hard round limit takes precedence over continuing that round.
-      if (flow.currentRound >= flow.totalRounds) {
-        return yield* finish(state, false);
-      }
-      const exit = yield* runRound(state);
-      state = exit.state;
-      if (exit.kind === 'cancelled') {
-        return { state, outcome: RUN_OUTCOME.CANCELLED } satisfies LoopExit;
-      }
-      if (exit.kind === 'failed') {
-        return { state, outcome: RUN_OUTCOME.FAILED } satisfies LoopExit;
-      }
-      if (!shouldContinueNextRound()) return yield* finish(state, true);
-      state = yield* enterRound(state, true);
-    }
+  const enter = Effect.gen(function* () {
+    const entry = yield* loadRun(runId, 'reflection', start.resume);
+    const opened =
+      entry._tag === 'fresh'
+        ? yield* openFresh(entry.opening)
+        : yield* Effect.as(restore(entry.loaded), entry.loaded);
+    return yield* makeRunCell(runId, opened);
   });
 
-  const result = (
-    outcome: RunOutcome,
-    at: RunState | null,
-  ): ReflectionResult => ({
+  const loopBody = (cell: RunCell) =>
+    Effect.gen(function* () {
+      // Run-workspace preparation, before the first round: extraction reads
+      // the prepared snapshot, and a failure is a transcript warning, never
+      // an unhandled rejection.
+      yield* fileService
+        .prepareRunWorkspace(baseFiles, {
+          linkFiles: collectRunSupportFiles(roots.workspace, config),
+        })
+        .pipe(
+          Effect.catch((error) =>
+            Effect.sync(() => {
+              logger.warn(
+                `Failed to prepare run workspace; in-place diffs may be empty: ${toErrorMessage(error)}`,
+                { data: error, messageType: MESSAGE_TYPES.INTERNAL },
+              );
+            }),
+          ),
+        );
+      yield* normalizeCompileRejectionPolicy();
+
+      /**
+       * Advance onto the next round: reset the per-round flow facts and
+       * workspace, then commit the `round.ready` snapshot.
+       *
+       * `closePrevious` says whether a round is actually being closed. Ending
+       * one emits `round.end` against the folded state captured *before* the
+       * advance; relaunching a halted run enters a round without a
+       * predecessor to close, and that is the only difference between the two
+       * entries. The snapshot clears the error fact: relaunching is the
+       * admission of a new attempt, so nothing restates a failure the run has
+       * moved past.
+       */
+      const enterRound = Effect.fn('reflection.enterRound')(function* (
+        current: RunState,
+        closePrevious: boolean,
+      ): Effect.fn.Return<RunState, Error> {
+        workspace = AgentWorkspaceState.create();
+        return yield* cell.append([
+          ...(closePrevious ? [stepRow(runId, current, 'round.end')] : []),
+          snapshot(current, {
+            phase: 'round.ready',
+            round: current.round + 1,
+            continuationIndex: 0,
+            runtime: { lastError: null },
+          }),
+        ]);
+      });
+      const finish = Effect.fn('reflection.finish')(function* (
+        current: RunState,
+        roundEnded: boolean,
+      ): Effect.fn.Return<LoopExit, Error> {
+        yield* normalizeCompileRejectionPolicy();
+        const outcome = resolveOutcome(current);
+        const state = yield* cell.append([
+          ...(roundEnded ? [stepRow(runId, current, 'round.end')] : []),
+          snapshot(current, { phase: 'halted' }),
+        ]);
+        return { state, outcome };
+      });
+
+      for (;;) {
+        let state = yield* cell.current;
+        if (state.phase === 'halted') {
+          // A finished run launched again continues only if rounds remain
+          // under the current configuration. The restored error fact does not
+          // decide this: relaunching is the admission of a new attempt.
+          if (state.round + 1 >= totalRounds) {
+            return {
+              state,
+              outcome: resolveOutcome(state),
+            } satisfies LoopExit;
+          }
+          state = yield* enterRound(state, false);
+        }
+        // The configured total may have been lowered since the snapshot; the
+        // hard round limit takes precedence over continuing that round.
+        if (state.round >= totalRounds) {
+          return yield* finish(state, false);
+        }
+        const exit = yield* runRound(cell);
+        state = exit.state;
+        if (exit.kind === 'cancelled') {
+          return { state, outcome: RUN_OUTCOME.CANCELLED } satisfies LoopExit;
+        }
+        if (exit.kind === 'failed') {
+          return { state, outcome: RUN_OUTCOME.FAILED } satisfies LoopExit;
+        }
+        if (!shouldContinueNextRound(state)) return yield* finish(state, true);
+        state = yield* enterRound(state, true);
+      }
+    });
+
+  const result = (outcome: RunOutcome, at: RunState): ReflectionResult => ({
     outcome,
     roundOutputs: roundsToPersisted(outputState),
-    usage: at?.usage ?? EMPTY_RUN_USAGE_TOTALS,
-    ...(lastError !== undefined && outcome === RUN_OUTCOME.FAILED
-      ? { error: lastError }
+    usage: at.usage,
+    ...(outcome === RUN_OUTCOME.FAILED && at.lastError !== null
+      ? { error: at.lastError }
       : {}),
   });
 
-  /**
-   * The exit protocol: the halt row happens whether the loop returned,
-   * failed, or was interrupted by a host stop. It hangs off `onExit` rather
-   * than an `Effect.exit` followed by a masked block — an external interrupt
-   * unwinds straight past `Effect.exit`, which left the `halted` step
-   * unwritten.
-   */
-  const finalize = (exit: Exit.Exit<LoopExit, Error>) =>
-    Effect.uninterruptible(
-      Effect.gen(function* () {
-        const halt = recordHalt({ ledger, logger, runId }, coordinates);
-        if (Exit.isSuccess(exit)) {
-          return yield* halt(exit.value.state, exit.value.outcome);
-        }
-        const state = yield* Ref.get(latest);
-        if (Cause.hasInterrupts(exit.cause)) {
-          return yield* halt(state, RUN_OUTCOME.CANCELLED);
-        }
-        yield* halt(state, RUN_OUTCOME.FAILED);
-      }),
-    );
-
-  return yield* program.pipe(
-    Effect.onExit(finalize),
+  // Every ledger append the loop makes is uninterruptible inside
+  // `cell.append`, so the halt the release writes never folds onto a state
+  // behind the rows. Reflection holds no input lease.
+  return yield* Effect.acquireUseRelease(enter, loopBody, (cell, exit) =>
+    settleRun(cell, logger, null)(exit),
+  ).pipe(
     Effect.map((loop) => result(loop.outcome, loop.state)),
-    Effect.catchCause((cause) => {
-      if (Cause.hasInterrupts(cause)) return Effect.failCause(cause);
-      const stopped = runStopError(Cause.squash(cause));
-      logger.warn(`Reflection run ${runId} stopped: ${stopped.message}`);
-      return Effect.fail(stopped);
-    }),
+    Effect.catchCause(stoppedBy(logger, `Reflection run ${runId}`)),
   );
 });
 

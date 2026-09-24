@@ -1,25 +1,24 @@
 /**
- * The once-per-process bootstrap that sits beside `initPlatform()`, in one
- * order for every host.
+ * The once-per-process bootstrap that sits beside each composition root's
+ * `installProcessRuntime()`, in one order for every host.
  *
- * Each composition root still builds its own `Platform` literal and makes its
- * own `initPlatform()` call — every field of the literal is host-specific and
- * ESLint pins the call to the roots. What surrounded that call was not
- * host-specific at all: the VS Code extension, the Electron main process and
- * the `texra` CLI each performed the same process-wide installs in three
- * different orders, every body carrying a comment claiming to mirror one of
- * the other two. This module owns that order, so the three roots cannot drift
- * and there is one place to read what a started TeXRA process has installed.
+ * Each composition root still installs its own process runtime — every
+ * service it serves is host-specific and ESLint pins the install to the
+ * roots. What surrounded that install was not host-specific at all: the VS
+ * Code extension, the Electron main process and the `texra` CLI each
+ * performed the same process-wide installs in three different orders, every
+ * body carrying a comment claiming to mirror one of the other two. This
+ * module owns that order, so the three roots cannot drift and there is one
+ * place to read what a started TeXRA process has installed.
  *
- * Nothing here reads `platform()`: every step either sets a module-global or
- * registers a closure that resolves later, and the one state write takes its
- * store as an argument. So the extension and the desktop run it straight
- * after `initPlatform()`, while the CLI runs it just before — that host keeps
- * its platform, roots and lazy session private until the fallible setup has
- * succeeded, and the first-install seed below is the fallible step that
- * invariant was written for.
+ * Nothing here reads an ambient host: every step either sets a module-global,
+ * registers a closure that resolves later, or forks a process-lifetime
+ * subscriber on the root's runtime, and the one state write takes its store
+ * as an argument. The CLI keeps its roots and lazy session private
+ * until this fallible setup has succeeded, and the first-install seed below
+ * is the fallible step that invariant was written for.
  *
- * What stays with the caller: the `Platform` literal and `initPlatform()`, the
+ * What stays with the caller: the process runtime install, the
  * `WorkspaceRoots` (each host resolves its config stores differently, and the
  * CLI opens its process session over the roots before this runs), and
  * `registerRuntimeShutdownHandlers` — its hook record names host-owned
@@ -31,6 +30,7 @@
 import { Effect } from 'effect';
 
 // Local imports
+import { installPluginAgentDirectories } from '@agent/index/BundledAgentDirectories';
 import {
   initializeNodeRuntimeSkills,
   type NodeRuntimeSkillOptions,
@@ -39,6 +39,8 @@ import { installLongRunningModelDispatcher } from '@platform/defaults/longRunnin
 import type { PlatformSecrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { SettingHost } from '@shared/state/stateSettings';
+import { reprobeOnCredentialChange } from '@tools/credentialReprobe';
+import { TOOL_PLUGINS } from '@tools/plugins';
 import { seedDisabledToolDefaults } from '@tools/toolAvailability';
 import { initProcessSettingHost } from '@utils/config/platformSettings';
 
@@ -84,9 +86,30 @@ export const bootstrapHost = Effect.fn('bootstrapHost')(function* (
   // layer is bring-your-own-key. See installTexraAccountProbes.
   installTexraAccountProbes(init.secrets);
   // Project skills follow each session's workspace; only the bundle is fixed
-  // here, so this is a registration rather than a scan.
-  initializeNodeRuntimeSkills(init.skills);
+  // here, so this is a registration rather than a scan. Tool plugins that ship
+  // skills contribute them to the bundled tier; the ids cross as strings so
+  // `@skills` and `@platform` take no value edge to `@tools`.
+  initializeNodeRuntimeSkills(
+    init.skills,
+    TOOL_PLUGINS.flatMap((plugin) =>
+      plugin.skills === true ? [plugin.id] : [],
+    ),
+  );
+  // Tool plugins that ship agents add their directories to the bundled
+  // tool-use source, again by id, so `@agent/index` takes no edge to `@tools`.
+  installPluginAgentDirectories(
+    init.skills.resourcesPath,
+    TOOL_PLUGINS.flatMap((plugin) =>
+      plugin.agents === true ? [plugin.id] : [],
+    ),
+  );
   // Seed first-install defaults (e.g. disabled tools). No-ops once
   // DISABLED_TOOLS exists, so upgrading users keep the tools they enabled.
   yield* seedDisabledToolDefaults(init.roots.globalState);
+  // A credential a tool plugin declares (the GitHub token) re-probes every
+  // open workspace when any store writes it. Process-lifetime, like the
+  // secret store whose writes it follows, so it is detached from this call.
+  yield* Effect.forkDetach(reprobeOnCredentialChange, {
+    startImmediately: true,
+  });
 });

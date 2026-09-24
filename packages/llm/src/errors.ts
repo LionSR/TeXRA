@@ -3,7 +3,13 @@ import { Data, Effect } from 'effect';
 import { z } from 'zod';
 
 // Local imports - canonical protocol binding
-import { EditorOriginSchema, OriginSchema } from './protocol.js';
+import {
+  EditorOriginSchema,
+  OriginSchema,
+  sameModelOrigin,
+  type ModelOrigin,
+} from './protocol.js';
+import { admittedFingerprint } from './prefixFingerprint.js';
 
 // Local imports - canonical messages
 import {
@@ -106,6 +112,64 @@ const ModelErrorFieldsSchema = z.strictObject({
 export class ModelError extends Data.TaggedError('ModelError')<
   z.infer<typeof ModelErrorFieldsSchema> & { readonly cause?: unknown }
 > {}
+
+/** The operation `input` names, provided it belongs to the `origin` binding. */
+export const boundOperation = Effect.fn('llm.boundOperation')(function* (
+  input: RemoteOperation,
+  origin: ModelOrigin,
+) {
+  const parsed = RemoteOperationSchema.safeParse(input);
+  if (!parsed.success || !sameModelOrigin(parsed.data.origin, origin))
+    return yield* new ModelError({
+      kind: 'unsupported',
+      message: 'The remote operation belongs to another model binding.',
+    });
+  return parsed.data;
+});
+
+/**
+ * Whether an observed completion may leave a continuation anchor.
+ *
+ * The operation records what the provider was actually given. A resume
+ * rebuilds the turn from the caller's current system text, so a drifted
+ * rebuild still gets its result but must leave no anchor: the next round then
+ * resends the transcript instead of chaining on instructions the answer never
+ * saw. The admitted storage mode is part of what makes an anchor safe: a turn
+ * re-derived stored for a temporary operation must not chain.
+ */
+export const admittedInputsChain = (
+  domain: string,
+  turn: Parameters<typeof admittedFingerprint>[1] & {
+    readonly controls: { readonly store: boolean };
+  },
+  operation: RemoteOperation,
+): Effect.Effect<boolean> =>
+  turn.controls.store === operation.store &&
+  admittedFingerprint(domain, turn) === operation.admittedFingerprint
+    ? Effect.succeed(true)
+    : Effect.as(
+        Effect.logWarning(
+          `The admitted inputs of background operation ${operation.providerResponseId} changed since it was accepted; its completion leaves no continuation.`,
+        ),
+        false,
+      );
+
+/**
+ * What a cancel reply's status says about the work: `cancelled` confirms it,
+ * a queued or running status leaves it unconfirmed, and any other status is
+ * the terminal outcome it reached first, bounded by the cancellation
+ * evidence schema the caller parses this into.
+ */
+export const cancellationStatus = (status: string) =>
+  status === 'cancelled'
+    ? { kind: 'confirmed-cancelled' as const }
+    : {
+        kind:
+          status === 'queued' || status === 'in_progress'
+            ? ('unconfirmed' as const)
+            : ('observed-terminal' as const),
+        status,
+      };
 
 /**
  * Rebuild a `ModelError` with `patch` applied over the fields it already

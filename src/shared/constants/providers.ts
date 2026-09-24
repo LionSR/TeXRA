@@ -1,8 +1,9 @@
 import { z } from 'zod';
 
-import { ModelProvider } from 'llm-zoo';
-
-import { GlobalStateKey } from '@shared/state/stateKeys';
+import {
+  MODEL_PROVIDER_PLUGINS,
+  type ApiKeyProviderId,
+} from '@shared/constants/modelProviderPlugins';
 
 /** OpenAI-compatible base URL for the Kimi Code (Moonshot coding-subscription)
  *  coding endpoint. Lives here (shared) so both the model routing layer and the
@@ -10,173 +11,20 @@ import { GlobalStateKey } from '@shared/state/stateKeys';
 export const KIMI_CODE_BASE_URL = 'https://api.kimi.com/coding/v1';
 
 // ============================================================================
-// Provider Registry — single source of truth for all provider metadata
+// Derived from the model provider plugin manifest
 // ============================================================================
 
-/** Definition for a provider entry in the registry. */
-interface ProviderDef {
-  readonly id: ModelProvider;
-  readonly displayName: string;
-  /** URL for obtaining API keys. undefined = no standalone key page. */
-  readonly keyUrl?: string;
-  /** Global-state key for this provider's custom endpoint. */
-  readonly endpointKey?: GlobalStateKey;
-  /** Optional alternate-region metadata for endpoint/key-url derivation. */
-  readonly region?: ProviderRegionSetting;
-}
-
-interface ProviderRegionSetting {
-  readonly key: GlobalStateKey;
-  readonly default: boolean;
-  readonly displayName?: string;
-  readonly keyUrlWhenSet?: string;
-  readonly keyUrlWhenUnset?: string;
-}
-
-export interface ProviderStateEntry {
-  readonly id: string;
-  readonly displayName: string;
-  readonly endpointKey?: GlobalStateKey;
-  readonly region?: ProviderRegionSetting;
-}
-
-export type ProviderEndpointStateEntry = ProviderStateEntry & {
-  readonly endpointKey: GlobalStateKey;
-};
-
-/**
- * Canonical provider registry. Registry-derived lists (MODEL_SOURCE_ORDER,
- * PROVIDER_DISPLAY_NAMES, PROVIDER_URLS, API_KEY_PROVIDER_IDS) are derived
- * from this — no manual sync needed.
- * Order here determines display order for direct model providers.
- *
- * To add a new provider that has a ModelProvider enum value: add a single entry
- * here, and it automatically flows into every derived list plus the API-key
- * provider set. Providers without a ModelProvider enum value (e.g. OpenRouter,
- * Kimi Code) live in EXTRA_API_KEY_PROVIDER_IDS instead.
- *
- */
-const PROVIDER_REGISTRY = [
-  {
-    id: ModelProvider.OPENAI,
-    displayName: 'OpenAI',
-    keyUrl: 'https://platform.openai.com/api-keys',
-    endpointKey: GlobalStateKey.ENDPOINT_OPENAI,
-  },
-  {
-    id: ModelProvider.ANTHROPIC,
-    displayName: 'Anthropic',
-    keyUrl: 'https://console.anthropic.com/',
-    endpointKey: GlobalStateKey.ENDPOINT_ANTHROPIC,
-  },
-  {
-    id: ModelProvider.GOOGLE,
-    displayName: 'Google',
-    keyUrl: 'https://aistudio.google.com/app/apikey',
-    endpointKey: GlobalStateKey.ENDPOINT_GOOGLE,
-  },
-  {
-    id: ModelProvider.XAI,
-    displayName: 'xAI',
-    keyUrl: 'https://console.x.ai/',
-    endpointKey: GlobalStateKey.ENDPOINT_XAI,
-  },
-  {
-    id: ModelProvider.DEEPSEEK,
-    displayName: 'DeepSeek',
-    keyUrl: 'https://platform.deepseek.com/api_keys',
-    endpointKey: GlobalStateKey.ENDPOINT_DEEPSEEK,
-  },
-  {
-    id: ModelProvider.MOONSHOT,
-    displayName: 'Moonshot',
-    keyUrl: 'https://platform.moonshot.cn/console',
-    endpointKey: GlobalStateKey.ENDPOINT_MOONSHOT,
-    // China=true is the default since moonshot.cn is the primary platform;
-    // when toggled off (international), keys come from platform.moonshot.ai.
-    // Keys are platform-specific — a .cn key does not work on .ai.
-    region: {
-      key: GlobalStateKey.MOONSHOT_USE_CHINA,
-      default: true,
-      keyUrlWhenUnset: 'https://platform.moonshot.ai/console',
-    },
-  },
-  {
-    id: ModelProvider.DASHSCOPE,
-    displayName: 'Qwen',
-    keyUrl: 'https://dashscope.aliyun.com/api-console/',
-    endpointKey: GlobalStateKey.ENDPOINT_DASHSCOPE,
-    region: {
-      key: GlobalStateKey.DASHSCOPE_USE_CHINA,
-      default: false,
-      displayName: 'Bailian',
-      keyUrlWhenSet: 'https://bailian.console.aliyun.com/',
-    },
-  },
-  {
-    id: ModelProvider.MINIMAX,
-    displayName: 'MiniMax',
-    keyUrl: 'https://platform.minimax.io/',
-    endpointKey: GlobalStateKey.ENDPOINT_MINIMAX,
-    region: {
-      key: GlobalStateKey.MINIMAX_USE_CHINA,
-      default: false,
-      keyUrlWhenSet: 'https://platform.minimaxi.com/',
-    },
-  },
-  {
-    id: ModelProvider.GLM,
-    displayName: 'GLM',
-    keyUrl: 'https://open.bigmodel.cn/',
-    endpointKey: GlobalStateKey.ENDPOINT_GLM,
-    // China=true is the default since bigmodel.cn is the primary platform;
-    // when toggled off (international), the key URL is z.ai.
-    region: {
-      key: GlobalStateKey.GLM_USE_CHINA,
-      default: true,
-      keyUrlWhenUnset: 'https://z.ai/',
-    },
-  },
-  {
-    id: ModelProvider.META,
-    displayName: 'Meta',
-    keyUrl: 'https://dev.meta.ai/',
-    endpointKey: GlobalStateKey.ENDPOINT_META,
-  },
-] as const satisfies readonly ProviderDef[];
-
-/**
- * Direct API-key provider ids that have no ModelProvider enum counterpart and
- * therefore cannot live in PROVIDER_REGISTRY. Single home for these ids;
- * API_KEY_PROVIDER_IDS composes them with the registry so a new provider is
- * added in exactly one place.
- */
-const EXTRA_API_KEY_PROVIDER_IDS = ['openRouter', 'kimiCode'] as const;
-
-/** Providers not in the main registry (no server-side keys, no model selection). */
-const EXTRA_DISPLAY_NAMES: Record<string, string> = {
-  openRouter: 'OpenRouter',
-  kimiCode: 'Kimi Code',
-  [ModelProvider.COPILOT]: 'Copilot',
-  [ModelProvider.OTHERS]: 'Others',
-};
-
-// ============================================================================
-// Derived lists — keep in sync automatically
-// ============================================================================
-
-/** Model sources shown in selection lists. Keyless sources stay outside the API-key registry. */
-export const MODEL_SOURCE_ORDER = [
-  ...PROVIDER_REGISTRY.map((provider) => provider.id),
-  'kimiCode',
-  ModelProvider.COPILOT,
-] as const;
+/** Model sources shown in selection lists, in display order. */
+export const MODEL_SOURCE_ORDER: readonly string[] =
+  MODEL_PROVIDER_PLUGINS.flatMap((plugin) =>
+    plugin.modelSource ? [plugin.id] : [],
+  );
 
 /** Consolidated provider display names used across settings UI and model selection. */
-export const PROVIDER_DISPLAY_NAMES: Record<string, string> = {
-  ...Object.fromEntries(PROVIDER_REGISTRY.map((p) => [p.id, p.displayName])),
-  ...EXTRA_DISPLAY_NAMES,
-};
+export const PROVIDER_DISPLAY_NAMES: Record<string, string> =
+  Object.fromEntries(
+    MODEL_PROVIDER_PLUGINS.map((plugin) => [plugin.id, plugin.displayName]),
+  );
 
 /**
  * Display name for a provider id, falling back to the id itself when the id is
@@ -188,30 +36,17 @@ export function providerDisplayName(provider: string): string {
 }
 
 /** URLs for obtaining API keys from each provider. */
-export const PROVIDER_URLS: Record<string, string> = {
-  ...Object.fromEntries(
-    PROVIDER_REGISTRY.flatMap((p) => (p.keyUrl ? [[p.id, p.keyUrl]] : [])),
+export const PROVIDER_URLS: Record<string, string> = Object.fromEntries(
+  MODEL_PROVIDER_PLUGINS.flatMap((plugin) =>
+    plugin.keyUrl ? [[plugin.id, plugin.keyUrl]] : [],
   ),
-  openRouter: 'https://openrouter.ai/keys',
-  kimiCode: 'https://www.kimi.com/code/console',
-};
+);
 
-export const PROVIDER_STATE_ENTRIES: readonly ProviderStateEntry[] =
-  PROVIDER_REGISTRY.map((provider) => ({
-    id: provider.id,
-    displayName: provider.displayName,
-    endpointKey: provider.endpointKey,
-    region: 'region' in provider ? provider.region : undefined,
-  }));
-
-function hasEndpoint(
-  entry: ProviderStateEntry,
-): entry is ProviderEndpointStateEntry {
-  return entry.endpointKey !== undefined;
-}
-
-export const PROVIDER_ENDPOINT_STATE_ENTRIES: readonly ProviderEndpointStateEntry[] =
-  PROVIDER_STATE_ENTRIES.filter(hasEndpoint);
+/** The providers with a custom-endpoint setting, and that setting's key. */
+export const PROVIDER_ENDPOINT_STATE_ENTRIES = MODEL_PROVIDER_PLUGINS.flatMap(
+  ({ id, displayName, endpointKey }) =>
+    endpointKey === undefined ? [] : [{ id, displayName, endpointKey }],
+);
 
 /**
  * Default model used for auxiliary/helper tasks (polishing, agent creation,
@@ -252,20 +87,14 @@ export const ProviderSettingDefSchema = z.object({
 
 /**
  * Provider IDs where users can configure direct API keys — the single source
- * for direct key-provider enumeration, derived from PROVIDER_REGISTRY (plus
- * EXTRA_API_KEY_PROVIDER_IDS for the two non-enum providers). Order = display
- * order in the settings key rows; a registry addition flows in automatically.
+ * for direct key-provider enumeration, derived from the plugin manifest.
+ * Order = display order in the settings key rows.
  */
-export const API_KEY_PROVIDER_IDS = Object.freeze([
-  // `as const` on the registry objects keeps `provider.id` as its enum-member
-  // type; the template-literal cast recovers the string value so the derived
-  // tuple's element type stays a string-literal union (like the hand-written
-  // list it replaces) and callers can pass plain 'anthropic'-style strings.
-  ...PROVIDER_REGISTRY.map(
-    (provider) => provider.id as `${typeof provider.id}`,
+export const API_KEY_PROVIDER_IDS: readonly ApiKeyProviderId[] = Object.freeze(
+  MODEL_PROVIDER_PLUGINS.flatMap((plugin) =>
+    plugin.apiKey ? [plugin.id as ApiKeyProviderId] : [],
   ),
-  ...EXTRA_API_KEY_PROVIDER_IDS,
-] as const);
+);
 
 // ============================================================================
 // Model pricing hints
@@ -306,22 +135,28 @@ export function isFastFirstResponseModel(
  * Predicate and copy for models whose API pricing is high enough that we
  * actively steer users toward the External Inquiry tool — which lets agents
  * ask the user to paste an answer from their own ChatGPT/Claude/Gemini
- * subscription instead of paying per-token API rates. For OpenAI's "-pro"
- * variants ($15-$30 input, $120-$180 output per 1M) a single agentic turn
- * can cost tens of dollars.
+ * subscription instead of paying per-token API rates.
  *
- * The match is name-shaped (`gpt<digits>pro`) rather than price-thresholded
- * so a future flagship Pro release stays covered without a tweak, and other
- * vendors' priciest reasoning models aren't lumped in.
+ * The test is the output price, not the name: `gpt<digits>pro` once meant
+ * "Pro tier", but `gpt56pro` ships at $4/$20 while `o1pro` ($150/$600) and
+ * `o3pro` ($20/$80) never matched. The Pro tier (o3pro, gpt5pro … gpt55pro,
+ * o1pro) plus gpt45 all price output at $80+ per 1M; the most expensive
+ * flagship tier (Opus 4/4.1) tops out at $75, so $80 separates the two.
  */
+
+/** Output-price floor (USD per million tokens) for the premium-pricing hint. */
+const EXPENSIVE_OUTPUT_PRICE_FLOOR = 80;
 
 /** Hint string prepended to the model tooltip when the model qualifies. */
 export const EXPENSIVE_MODEL_HINT =
   '💸 Premium API pricing — consider the External Inquiry tool to use your own ChatGPT/Claude subscription instead';
 
-const GPT_PRO_NAME = /^gpt\d+pro$/;
-
-/** Returns true when API use of the model is expensive enough to warn about. */
-export function isExpensiveModel(provider: string, name: string): boolean {
-  return provider === 'openai' && GPT_PRO_NAME.test(name);
+/**
+ * Returns true when API use of the model is expensive enough to warn about.
+ * Undefined prices (unpriced / local / custom) are treated as not expensive.
+ */
+export function isExpensiveModel(outputPrice: number | undefined): boolean {
+  return (
+    outputPrice !== undefined && outputPrice >= EXPENSIVE_OUTPUT_PRICE_FLOOR
+  );
 }

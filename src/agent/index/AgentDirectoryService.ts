@@ -7,7 +7,6 @@ import { Effect, FileSystem } from 'effect';
 // Local imports
 import { CUSTOM_AGENTS_STORAGE_DIR } from '@common/storage/storageLayout';
 import { withLogChannel } from '@logger/effectLog';
-import { createLog } from '@logger/logUtils';
 import {
   AgentDirectoriesFailed,
   type AgentDirectoriesPort,
@@ -20,6 +19,7 @@ import { entryExists } from '@utils/files/fsEntryExists';
 import {
   BUILTIN_WORKFLOW_AGENTS_DIR,
   BUILTIN_TOOL_USE_AGENTS_DIR,
+  builtInToolUseRoots,
 } from './BundledAgentDirectories';
 
 interface CustomAgentDirectoryStore {
@@ -34,7 +34,7 @@ export interface AgentDirectoryEntry {
   source: AgentSource;
 }
 
-export interface AgentDirectoryIssueReporter {
+interface AgentDirectoryIssueReporter {
   report(message: string, docsId: AgentDirectoryDocsId): Effect.Effect<void>;
 }
 
@@ -47,22 +47,20 @@ export interface AgentDirectoryServiceOptions {
    */
   resourcesPath: string;
   customDirectoryStore: CustomAgentDirectoryStore;
-  issueReporter: AgentDirectoryIssueReporter;
+  /** Defaults to logging the issue at `warn`; hosts with an interactive
+   * notification surface (e.g. the VS Code extension) can override it. */
+  issueReporter?: AgentDirectoryIssueReporter;
 }
 
 export class AgentDirectoryService {
-  private readonly log: ReturnType<typeof createLog>;
-
-  constructor(private readonly options: AgentDirectoryServiceOptions) {
-    this.log = createLog(options.channel);
-  }
+  constructor(private readonly options: AgentDirectoryServiceOptions) {}
 
   builtIn(): Effect.Effect<string, AgentDirectoriesFailed> {
-    return Effect.sync(() => this.packagedDir(BUILTIN_WORKFLOW_AGENTS_DIR));
+    return this.packagedDir(BUILTIN_WORKFLOW_AGENTS_DIR);
   }
 
   builtInToolUse(): Effect.Effect<string, AgentDirectoriesFailed> {
-    return Effect.sync(() => this.packagedDir(BUILTIN_TOOL_USE_AGENTS_DIR));
+    return this.packagedDir(BUILTIN_TOOL_USE_AGENTS_DIR);
   }
 
   custom(): Effect.Effect<
@@ -105,7 +103,10 @@ export class AgentDirectoryService {
       const entries: AgentDirectoryEntry[] = [
         { directory: customDir, source: 'custom' },
         { directory: builtInDir, source: 'builtInWorkflow' },
-        { directory: builtInToolUseDir, source: 'builtInToolUse' },
+        ...builtInToolUseRoots(builtInToolUseDir).map((directory) => ({
+          directory,
+          source: 'builtInToolUse' as const,
+        })),
       ];
       return entries;
     });
@@ -115,10 +116,13 @@ export class AgentDirectoryService {
    * The packaged directory itself. It ships read-only with the host and every
    * consumer registers it `writable: false`, so there is nothing to create.
    */
-  private packagedDir(dirName: string): string {
-    const basePath = path.join(this.options.resourcesPath, dirName);
-    this.log.debug(`Using built-in ${dirName} directory: ${basePath}`);
-    return basePath;
+  private packagedDir(dirName: string): Effect.Effect<string> {
+    return Effect.suspend(() => {
+      const basePath = path.join(this.options.resourcesPath, dirName);
+      return Effect.logDebug(
+        `Using built-in ${dirName} directory: ${basePath}`,
+      ).pipe(withLogChannel(this.options.channel), Effect.as(basePath));
+    });
   }
 
   private ensureDefaultCustomDir(): Effect.Effect<
@@ -134,19 +138,24 @@ export class AgentDirectoryService {
           Effect.andThen(() =>
             globalStorageFs.resolve(CUSTOM_AGENTS_STORAGE_DIR),
           ),
-          Effect.catch((cause) => {
-            this.log.error('Failed to create default custom agents directory', {
-              data: cause,
-            });
-            return Effect.fail(
-              new AgentDirectoriesFailed({
-                source: 'custom',
-                message:
-                  'Unable to create custom agents directory. Please check permissions.',
-                cause,
-              }),
-            );
-          }),
+          Effect.catch((cause) =>
+            Effect.logError(
+              'Failed to create default custom agents directory',
+            ).pipe(
+              Effect.annotateLogs({ data: cause }),
+              withLogChannel(this.options.channel),
+              Effect.andThen(
+                Effect.fail(
+                  new AgentDirectoriesFailed({
+                    source: 'custom',
+                    message:
+                      'Unable to create custom agents directory. Please check permissions.',
+                    cause,
+                  }),
+                ),
+              ),
+            ),
+          ),
         );
       yield* Effect.logDebug(
         `Using default custom agents directory: ${defaultPath}`,
@@ -224,7 +233,12 @@ export class AgentDirectoryService {
     message: string,
     docsId: AgentDirectoryDocsId,
   ): Effect.Effect<void> {
-    return this.options.issueReporter.report(message, docsId);
+    if (this.options.issueReporter) {
+      return this.options.issueReporter.report(message, docsId);
+    }
+    return Effect.logWarning(`${message}. See documentation: ${docsId}`).pipe(
+      withLogChannel(this.options.channel),
+    );
   }
 
   /** This file's one failure shape, from whatever cause raised it. */
@@ -238,7 +252,10 @@ export class AgentDirectoryService {
  * The one `AgentSource` to local-directory mapping. It reads the port, not the
  * service, so every holder of an `AgentDirectoriesPort` answers a source
  * through the same three readers and gives `remote` the same verdict, instead
- * of repeating the switch at its own composition root.
+ * of repeating the switch at its own composition root. For `builtInToolUse`
+ * it is the core directory only: tool plugin agents sit in the further roots
+ * `builtInToolUseRoots` adds, so a caller must not assume every entry of that
+ * source lies under the directory returned here.
  */
 export function agentSourceDirectory(
   directories: AgentDirectoriesPort,

@@ -1,7 +1,7 @@
 /**
  * The process's Effect runtime (PRD one-fold-three-renderers, 7.7): one
- * `ManagedRuntime` per process, made at the composition root beside
- * `initPlatform()` and disposed on the existing shutdown path. `runPromise`,
+ * `ManagedRuntime` per process, made at the composition root and disposed
+ * on the existing shutdown path. `runPromise`,
  * `runFork`, and `runSync` appear at the entries and at the outermost
  * Promise-facing methods; inside, cancellation is fiber interruption.
  *
@@ -19,7 +19,6 @@ import {
   type ManagedRuntime,
   type Path,
 } from 'effect';
-import type { ToolInjections } from '@agent/runtime/toolInjection';
 import type { AgentEngine } from '@agent/runtime/AgentEngine';
 import type { SupabaseAuth } from '@auth/SupabaseAuth';
 import type { ProcessIdentity } from '@shared/session/sessionEvents';
@@ -33,6 +32,8 @@ import type { UsageLog } from '@shared/usageLog';
 import type { GitHubSubscriptions } from '@tools/github/subscriptionBindings';
 import type { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import type { SetupPlatform } from '@tools/setup/platform';
+import type { Compositions } from '@tools/compositions';
+import type { ToolRegistry } from '@tools/toolTable';
 import type { HttpClient } from 'effect/unstable/http';
 
 import type {
@@ -57,9 +58,11 @@ import type { Secrets } from './secrets';
  * process shares, `GlobalDatabase`, that same root's one database handle,
  * which the records above and the CLI's input history read through,
  * `ProjectDatabases`, whose project-scoped borrows share each persistent
- * connection between application state and a session graph, and
+ * connection between application state and a session graph,
  * `GitHubSubscriptions`, the run-ownership tables the subscription tool and
- * the settings Git tab share.
+ * the settings Git tab share, `ToolRegistry`, the plugin table every run's
+ * offered tools are rebuilt from, and `Compositions`, the open compositions
+ * the runs pin over it.
  */
 export type ProcessServices =
   | ProcessIdentity
@@ -78,12 +81,13 @@ export type ProcessServices =
   | AgentDirectories
   | Lifecycle
   | SetupPlatform
-  | ToolInjections
   | AgentEngine
   | LeanLanguageServices
   | GitHubSubscriptions
   | UsageLog
-  | SupabaseAuth;
+  | SupabaseAuth
+  | ToolRegistry
+  | Compositions;
 
 export type ProcessRuntime = ManagedRuntime.ManagedRuntime<
   ProcessServices,

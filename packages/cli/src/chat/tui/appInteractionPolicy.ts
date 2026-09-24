@@ -32,8 +32,6 @@ export interface EscapeInterruptState {
    *  list, reverse search, or slash palette owns the keyboard. Bare Escape's
    *  deferred chord timer reads it through a ref so it sees that render. */
   readonly shortcutsActive: boolean;
-  readonly canInterruptRun: (runId: RunId) => boolean;
-  readonly onInterruptRun: (runId: RunId) => void;
 }
 
 export interface AppCtrlCState {
@@ -107,32 +105,6 @@ export function approvalVisibleForSelection({
   return (
     asking?.ancestors.some((ancestor) => ancestor.id === selectedRunId) ?? false
   );
-}
-
-export function foregroundEscapeAction({
-  activeFormEscapeAction,
-  approvalKind,
-  foregroundKind,
-}: {
-  readonly activeFormEscapeAction?: string;
-  readonly approvalKind?: PendingApprovalKind;
-  readonly foregroundKind: ForegroundSurfaceKind | undefined;
-}): string | undefined {
-  switch (foregroundKind) {
-    case undefined:
-      return undefined;
-    case 'form':
-      return activeFormEscapeAction ?? 'close';
-    case 'infoPane':
-    case 'transcriptReader':
-    case 'workPlanReader':
-    case 'workflowPopup':
-      return 'close';
-    case 'approval':
-      // Esc rejects (confirmCardKeyAction); label the consequence, not "cancel".
-      if (approvalKind === 'userQuestion') return 'skip';
-      return approvalKind === 'retry' ? 'give up' : 'reject';
-  }
 }
 
 function approvalForegroundMaxRows(

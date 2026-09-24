@@ -8,14 +8,12 @@ import { afterEach, beforeAll, describe, expect } from 'vitest';
 
 import {
   findSlashCommand,
-  listSlashCommands,
   matchSlashCommands,
   parseSlashInput,
   prefixSlashCommands,
-  registerSlashCommand,
   suggestSlashCommand,
-  unregisterSlashCommand,
   type SlashCommand,
+  installSlashCommands,
 } from '@cli/chat/tui/commands/slashRegistry';
 import { registerBuiltinSlashCommands } from '@cli/chat/tui/commands/registerBuiltins';
 import {
@@ -32,7 +30,7 @@ import {
   transientNotice,
   type SessionMeta,
 } from '@cli/chat/tui/state/cliState';
-import { activeForm } from '@cli/chat/tui/state/formSlot';
+import { activeForm, closeActiveForm } from '@cli/chat/tui/state/formSlot';
 import { notices, noticesFor } from '@cli/chat/tui/state/transcript';
 import type { CliModelAccessSelection } from '@cli/runtime/modelAccessRoute';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
@@ -95,7 +93,7 @@ function registerBuiltins(
 }
 
 afterEach(() => {
-  for (const cmd of [...listSlashCommands()]) unregisterSlashCommand(cmd.name);
+  installSlashCommands([]);
   resetCliState();
 });
 
@@ -140,9 +138,12 @@ describe('slashRegistry', () => {
     readonly isClosed: () => boolean;
   } {
     let closed = false;
+    const form = activeForm.get();
+    // Close through the slot owner, as `App` does.
     const node = renderFormAdapter<TProps>(
-      activeForm.get()?.render(() => {
+      form?.render(() => {
         closed = true;
+        closeActiveForm(form);
       }, 20),
     );
     return {
@@ -174,22 +175,11 @@ describe('slashRegistry', () => {
     expect(events).toEqual(['echo', 'outcome']);
   }
 
-  it('shares one account & access form across /api, /login, and /logout', () => {
-    registerBuiltins();
-
-    const api = requireSlashCommand('api');
-    expect(api.formComponent).toBeTypeOf('function');
-    expect(api.category).toBe('account');
-    for (const name of ['login', 'logout']) {
-      expect(requireSlashCommand(name).formComponent).toBe(api.formComponent);
-    }
-  });
-
   it('opens structured forms by registered command name or alias', () => {
     registerBuiltins();
 
-    expect(openCliSlashCommandForm('TOOLS', '')).toBe(true);
-    expect(activeForm.get()?.commandName).toBe('tools');
+    expect(openCliSlashCommandForm('LOGIN', '')).toBe(true);
+    expect(activeForm.get()?.commandName).toBe('login');
 
     expect(openCliSlashCommandForm('skill', '')).toBe(true);
     expect(activeForm.get()?.commandName).toBe('skills');
@@ -209,10 +199,16 @@ describe('slashRegistry', () => {
 
     const modelNode = renderOpenForm<{
       selectable?: boolean;
+      onClose?: () => void;
     }>();
     expect(modelNode.props).toMatchObject({
       selectable: true,
     });
+
+    // Closing the chained model picker returns to the chat input, not to the
+    // agent picker it replaced.
+    modelNode.props?.onClose?.();
+    expect(activeForm.get()).toBeUndefined();
   });
 
   it('does not advance agent picks into the model form when model selection is unavailable', async () => {
@@ -228,7 +224,7 @@ describe('slashRegistry', () => {
 
     expect(sessionMeta.get().agent).toBe('review');
     expect(agentNode.isClosed()).toBe(true);
-    expect(activeForm.get()?.commandName).toBe('agent');
+    expect(activeForm.get()).toBeUndefined();
   });
 
   it('marks the agent picker read-only when root selection is closed', () => {
@@ -336,7 +332,7 @@ describe('slashRegistry', () => {
     expect(modelNode.isClosed()).toBe(true);
   });
 
-  it('routes API picker selection failures to the shared error handler', async () => {
+  it('routes account picker selection failures to the shared error handler', async () => {
     resetCliState(CHAT_SESSION);
     const errors: string[] = [];
     registerBuiltins({
@@ -345,10 +341,10 @@ describe('slashRegistry', () => {
         errors.push(toErrorMessage(error));
       },
     });
-    const apiNode = openSlashForm<{
+    const accountNode = openSlashForm<{
       onSelect?: (value: AccountAccessFormValue) => void;
-    }>('api');
-    apiNode.props?.onSelect?.(CHATGPT_PREFERENCE_FORM_VALUE);
+    }>('login');
+    accountNode.props?.onSelect?.(CHATGPT_PREFERENCE_FORM_VALUE);
     await settleFormSelection();
 
     expect(errors).toEqual(['api mode failed']);
@@ -360,13 +356,13 @@ describe('slashRegistry', () => {
     registerBuiltins({
       onModelAccessSelect: () => Effect.promise(() => selection.promise),
     });
-    const apiNode = openSlashForm<{
+    const accountNode = openSlashForm<{
       onSelect?: (value: AccountAccessFormValue) => void;
-    }>('api');
-    apiNode.props?.onSelect?.(CHATGPT_PREFERENCE_FORM_VALUE);
+    }>('login');
+    accountNode.props?.onSelect?.(CHATGPT_PREFERENCE_FORM_VALUE);
     await settleFormSelection();
 
-    expect(apiNode.isClosed()).toBe(false);
+    expect(accountNode.isClosed()).toBe(false);
     expect(formProgress.get()).toMatchObject({
       status: 'running',
       title: 'Updating model access',
@@ -387,7 +383,6 @@ describe('slashRegistry', () => {
           }),
       });
       const keyCommand = requireSlashCommand('keys');
-      expect(keyCommand.formEscapeAction).toBe('close');
 
       expect(openRegisteredCliSlashForm(keyCommand, '')).toBe(true);
       const keyNode = renderOpenForm<{
@@ -571,17 +566,17 @@ describe('slashRegistry', () => {
         ),
     });
 
-    const apiNode = openSlashForm<{
+    const accountNode = openSlashForm<{
       onSelect?: (value: AccountAccessFormValue) => void;
-    }>('api');
-    apiNode.props?.onSelect?.(CHATGPT_PREFERENCE_FORM_VALUE);
+    }>('login');
+    accountNode.props?.onSelect?.(CHATGPT_PREFERENCE_FORM_VALUE);
     resetCliState(CHAT_SESSION);
     selection.resolve();
     await settleFormSelection();
 
     expect(outcomes).toEqual(['action settled']);
     expect(formProgress.get()).toBeUndefined();
-    expect(apiNode.isClosed()).toBe(false);
+    expect(accountNode.isClosed()).toBe(false);
   });
 
   it('interrupts the running action when a busy form is cancelled', async () => {
@@ -597,10 +592,10 @@ describe('slashRegistry', () => {
         ),
     });
 
-    const logoutNode = openSlashForm<{
+    const accountNode = openSlashForm<{
       onSelect?: (value: AccountAccessFormValue) => void;
-    }>('logout');
-    logoutNode.props?.onSelect?.({ kind: 'logout', target: 'all' });
+    }>('login');
+    accountNode.props?.onSelect?.({ kind: 'logout', target: 'all' });
     formProgress.get()?.cancel();
 
     await waitFor(() => interrupted);
@@ -672,9 +667,16 @@ describe('slashRegistry', () => {
   });
 
   it('matches by name prefix case-insensitively', () => {
-    registerSlashCommand({ name: 'model', description: 'pick a model' });
-    registerSlashCommand({ name: 'agent', description: 'pick an agent' });
-    registerSlashCommand({ name: 'merge', description: 'merge outputs' });
+    installSlashCommands([
+      {
+        pluginId: 'test',
+        commands: [
+          { name: 'model', description: 'pick a model' },
+          { name: 'agent', description: 'pick an agent' },
+          { name: 'merge', description: 'merge outputs' },
+        ],
+      },
+    ]);
     expect(matchSlashCommands('m').map((c) => c.name)).toEqual([
       'model',
       'merge',
@@ -688,18 +690,32 @@ describe('slashRegistry', () => {
   });
 
   it('matches aliases alongside the canonical name', () => {
-    registerSlashCommand({
-      name: 'help',
-      description: 'show help',
-      aliases: ['h', 'usage'],
-    });
+    installSlashCommands([
+      {
+        pluginId: 'test',
+        commands: [
+          {
+            name: 'help',
+            description: 'show help',
+            aliases: ['h', 'usage'],
+          },
+        ],
+      },
+    ]);
     expect(matchSlashCommands('h').map((c) => c.name)).toEqual(['help']);
     expect(matchSlashCommands('us').map((c) => c.name)).toEqual(['help']);
   });
 
   it('falls back to substring matches when no prefix matches', () => {
-    registerSlashCommand({ name: 'model', description: 'pick a model' });
-    registerSlashCommand({ name: 'agent', description: 'pick an agent' });
+    installSlashCommands([
+      {
+        pluginId: 'test',
+        commands: [
+          { name: 'model', description: 'pick a model' },
+          { name: 'agent', description: 'pick an agent' },
+        ],
+      },
+    ]);
 
     expect(matchSlashCommands('odel').map((c) => c.name)).toEqual(['model']);
     expect(matchSlashCommands('gen').map((c) => c.name)).toEqual(['agent']);
@@ -708,16 +724,30 @@ describe('slashRegistry', () => {
   });
 
   it('falls back to the typo suggestion when nothing matches literally', () => {
-    registerSlashCommand({ name: 'help', description: 'show help' });
-    registerSlashCommand({ name: 'model', description: 'pick a model' });
+    installSlashCommands([
+      {
+        pluginId: 'test',
+        commands: [
+          { name: 'help', description: 'show help' },
+          { name: 'model', description: 'pick a model' },
+        ],
+      },
+    ]);
 
     expect(matchSlashCommands('hlp').map((c) => c.name)).toEqual(['help']);
     expect(matchSlashCommands('frobnicate')).toEqual([]);
   });
 
   it('keeps the auto-run tier prefix-only so fallbacks never fire blind', () => {
-    registerSlashCommand({ name: 'help', description: 'show help' });
-    registerSlashCommand({ name: 'model', description: 'pick a model' });
+    installSlashCommands([
+      {
+        pluginId: 'test',
+        commands: [
+          { name: 'help', description: 'show help' },
+          { name: 'model', description: 'pick a model' },
+        ],
+      },
+    ]);
 
     expect(prefixSlashCommands('mo').map((c) => c.name)).toEqual(['model']);
     // Substring ('odel') and typo ('hlp') matches are palette-only.
@@ -726,11 +756,18 @@ describe('slashRegistry', () => {
   });
 
   it('finds exact command names and aliases case-insensitively', () => {
-    registerSlashCommand({
-      name: 'agent',
-      description: 'pick an agent',
-      aliases: ['agents'],
-    });
+    installSlashCommands([
+      {
+        pluginId: 'test',
+        commands: [
+          {
+            name: 'agent',
+            description: 'pick an agent',
+            aliases: ['agents'],
+          },
+        ],
+      },
+    ]);
 
     expect(findSlashCommand('agent')?.name).toBe('agent');
     expect(findSlashCommand('AGENTS')?.name).toBe('agent');
@@ -746,11 +783,18 @@ describe('slashRegistry', () => {
   });
 
   it('matches typo suggestions against aliases too', () => {
-    registerSlashCommand({
-      name: 'exit',
-      description: 'Exit the CLI session',
-      aliases: ['quit'],
-    });
+    installSlashCommands([
+      {
+        pluginId: 'test',
+        commands: [
+          {
+            name: 'exit',
+            description: 'Exit the CLI session',
+            aliases: ['quit'],
+          },
+        ],
+      },
+    ]);
 
     expect(suggestSlashCommand('quitt')?.name).toBe('exit');
   });

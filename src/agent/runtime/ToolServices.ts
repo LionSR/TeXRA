@@ -13,5 +13,5 @@ import type { ToolCall } from './ToolCall';
  *  roots its fiber happens to carry. */
 export type ToolServices =
   ProcessServices | Runs | ToolCall | WorkspaceFs | StorageFs | Scope.Scope;
-export type RuntimeTool<E = unknown, R = ToolServices> = ITool<E, R>;
-export type RuntimeToolRegistry = IToolRegistry<unknown, ToolServices>;
+export type RuntimeTool<E = Error, R = ToolServices> = ITool<E, R>;
+export type RuntimeToolRegistry = IToolRegistry<Error, ToolServices>;

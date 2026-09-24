@@ -63,7 +63,6 @@ interface InstallDesktopProtocolOptions {
   execPath?: string;
   devAppArg?: string;
   focusMainWindow?: () => void;
-  log?: Pick<Console, 'debug' | 'warn'>;
 }
 
 export function parseDesktopProtocolCallback(
@@ -85,11 +84,7 @@ export function findDesktopProtocolUrls(argv: readonly string[]): string[] {
   return argv.filter((arg) => parseDesktopProtocolCallback(arg) != null);
 }
 
-export function createDesktopProtocolCallbackRouter(
-  options: {
-    log?: Pick<Console, 'debug' | 'warn'>;
-  } = {},
-): DesktopProtocolCallbackRouter {
+export function createDesktopProtocolCallbackRouter(): DesktopProtocolCallbackRouter {
   const listeners = new Set<DesktopProtocolCallbackListener>();
   const pendingCallbacks: DesktopProtocolCallback[] = [];
 
@@ -107,7 +102,7 @@ export function createDesktopProtocolCallbackRouter(
   function routeUrl(rawUrl: string): boolean {
     const callback = parseDesktopProtocolCallback(rawUrl);
     if (!callback) {
-      options.log?.debug('Ignoring unsupported desktop protocol callback URL');
+      console.debug('Ignoring unsupported desktop protocol callback URL');
       return false;
     }
 
@@ -143,7 +138,7 @@ export function installDesktopProtocolCallbackLifecycle(
   options: InstallDesktopProtocolOptions,
 ): DesktopProtocolLifecycle {
   const { app } = options;
-  const router = createDesktopProtocolCallbackRouter({ log: options.log });
+  const router = createDesktopProtocolCallbackRouter();
   const ownsSingleInstanceLock = app.requestSingleInstanceLock();
 
   if (!ownsSingleInstanceLock) {
@@ -187,6 +182,6 @@ function registerProtocolClient(options: InstallDesktopProtocolOptions): void {
     : app.setAsDefaultProtocolClient(TEXRA_PROTOCOL);
 
   if (!didRegister) {
-    options.log?.warn(`Failed to register ${TEXRA_PROTOCOL}:// handler`);
+    console.warn(`Failed to register ${TEXRA_PROTOCOL}:// handler`);
   }
 }

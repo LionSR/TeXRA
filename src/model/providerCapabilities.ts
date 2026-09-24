@@ -24,12 +24,10 @@ import {
   resolveRuntimeModelConfig,
 } from './runtimeModelRegistry';
 
+/** A subscription route's effective model config and the usage route it bills. */
 export interface ProviderCapabilityProfile {
-  readonly contextWindow: number;
-  readonly inputTokenLimit?: number;
-  readonly inputPrice: number;
-  readonly outputPrice: number;
-  readonly usageRoute?: UsageRoute;
+  readonly config: ModelConfig;
+  readonly usageRoute: UsageRoute;
 }
 
 interface ProviderCapabilityKey {
@@ -122,8 +120,16 @@ const resolveCodexSubscriptionProfile = Effect.fn(
   );
 
   return {
-    ...zeroCostAccessOverrides(contextWindow),
-    inputTokenLimit,
+    config: {
+      ...model,
+      ...zeroCostAccessOverrides(contextWindow),
+      // Whether this backend takes input files is the route's fact, not the
+      // base model's, and the ChatGPT-subscription backend takes none. The
+      // binding's PDF admission reads this, so the route degrades a PDF the
+      // way any route without native PDF does instead of sending a shape the
+      // backend rejects.
+      capabilities: { ...model.capabilities, supportsNativePdf: false },
+    },
     usageRoute: 'chatgpt-subscription' as const,
   };
 });
@@ -238,7 +244,7 @@ export const resolveXaiSubscriptionCapabilities = Effect.fn(
     )
       return null;
     return {
-      ...zeroCostAccessOverrides(config.contextWindow),
+      config: { ...config, ...zeroCostAccessOverrides(config.contextWindow) },
       usageRoute: 'xai-subscription',
     };
   }),

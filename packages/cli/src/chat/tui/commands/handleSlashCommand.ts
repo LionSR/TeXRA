@@ -33,7 +33,7 @@ function runGuardedSlashCommand(
   line: string,
   command: SlashCommand,
   action: () => SlashCommandEffect,
-): Effect.Effect<void, unknown, ProcessServices> {
+): Effect.Effect<void, Error, ProcessServices> {
   return Effect.suspend(() => {
     let echoed = false;
     const echo = (): void => {
@@ -60,7 +60,7 @@ function runGuardedSlashCommand(
 export function handleTuiSlashCommand(
   line: string,
   context: SlashCommandContext,
-): Effect.Effect<boolean, unknown, ProcessServices> {
+): Effect.Effect<boolean, Error, ProcessServices> {
   return Effect.gen(function* () {
     const redactedIntent = findRedactedSlashCommandInput(line);
     const parsed = parseSlashInput(line);

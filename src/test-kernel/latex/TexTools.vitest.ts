@@ -99,6 +99,8 @@ describe('compileLatex2Pdf structured return', () => {
           expect.any(Array),
           expect.objectContaining({
             cwd: workspacePath,
+            // latexmk's engine passes are its children: a stop signals them.
+            killProcessTree: true,
             env: expect.objectContaining({
               TEXINPUTS: expect.stringContaining(
                 `${workspacePath}${D}.${D}${workspacePath}${D}`,

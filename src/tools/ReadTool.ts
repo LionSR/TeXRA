@@ -106,155 +106,146 @@ const ATTACHMENT_COPY: Record<
   },
 };
 
-export class ReadFileTool extends defineTool({
-  name: 'read_file',
-  parallelSafe: true,
-  description:
-    'Read and return workspace files. For text files you can supply an optional line range. PDFs (.pdf) and common image formats are returned as attachments so vision-capable models can inspect their pages or visual content.',
-  schema: ReadInputSchema,
-}) {
-  protected execute(input: ReadInput) {
-    return Effect.scoped(this.read(input));
+function executeReadFileTool(input: ReadInput) {
+  return Effect.scoped(read(input));
+}
+
+const read = Effect.fn('ReadFileTool.execute')(function* (
+  input: ReadInput,
+): Effect.fn.Return<
+  ToolResult,
+  Error,
+  ToolCall | Scope.Scope | FileSystem.FileSystem
+> {
+  const call = yield* ToolCall;
+  // Local reads finish in milliseconds, so no mid-read cancellation is
+  // needed — but a queued call must not start after the batch aborted.
+  const signal = yield* Effect.abortSignal;
+  if (signal.aborted) {
+    return yield* Effect.fail(new ToolError('Cancelled before execution.'));
+  }
+  const { path: resolved, display: displayPath } = yield* resolveAndFormat(
+    call.roots,
+    call.roots.workspace,
+    input.path,
+    call.workingDirectory,
+  );
+  const filePath = resolved.fsPath;
+
+  const attachmentKind = getAttachmentConfig(resolved.absolute);
+  if (attachmentKind) {
+    const result = yield* returnBinaryAttachment(
+      input,
+      attachmentKind,
+      resolved,
+    );
+    yield* recordToolFileRead(filePath);
+    return result;
   }
 
-  private readonly read = Effect.fn('ReadFileTool.execute')(function* (
-    this: ReadFileTool,
-    input: ReadInput,
-  ): Effect.fn.Return<
-    ToolResult,
-    unknown,
-    ToolCall | Scope.Scope | FileSystem.FileSystem
-  > {
-    const call = yield* ToolCall;
-    // Local reads finish in milliseconds, so no mid-read cancellation is
-    // needed — but a queued call must not start after the batch aborted.
-    const signal = yield* Effect.abortSignal;
-    if (signal.aborted) {
-      return yield* Effect.fail(new ToolError('Cancelled before execution.'));
-    }
-    const { path: resolved, display: displayPath } = yield* resolveAndFormat(
-      call.roots,
-      call.roots.workspace,
-      input.path,
-      call.workingDirectory,
-    );
-    const filePath = resolved.fsPath;
+  // EML files use complex MIME encoding (multipart, base64, quoted-printable).
+  // Parse into readable text and extract image attachments for vision models.
+  let emlImages: EmlImageAttachment[] = [];
+  let lines: string[];
 
-    const attachmentKind = this.getAttachmentConfig(resolved.absolute);
-    if (attachmentKind) {
-      const result = yield* this.returnBinaryAttachment(
-        input,
-        attachmentKind,
-        resolved,
+  // The resolution already entered the call's workspace frame, so the
+  // absolute path it produced is what the process filesystem reads: a
+  // workspace file and one under a registered external root are the same
+  // read here, through the process `FileSystem`.
+  const fs = yield* FileSystem.FileSystem;
+
+  if (hasExtension(input.path, '.eml')) {
+    const stats = yield* fs.stat(resolved.absolute);
+    if (Number(stats.size) > MAX_EML_BYTES) {
+      return yield* Effect.fail(
+        new ToolError(
+          `EML file exceeds maximum size of ${formatBytes(MAX_EML_BYTES)}.`,
+        ),
       );
-      yield* recordToolFileRead(filePath);
-      return result;
     }
-
-    // EML files use complex MIME encoding (multipart, base64, quoted-printable).
-    // Parse into readable text and extract image attachments for vision models.
-    let emlImages: EmlImageAttachment[] = [];
-    let lines: string[];
-
-    // The resolution already entered the call's workspace frame, so the
-    // absolute path it produced is what the process filesystem reads: a
-    // workspace file and one under a registered external root are the same
-    // read here, as they were through the `WorkspaceFS` facade.
-    const fs = yield* FileSystem.FileSystem;
-
-    if (hasExtension(input.path, '.eml')) {
-      const stats = yield* fs.stat(resolved.absolute);
-      if (Number(stats.size) > MAX_EML_BYTES) {
-        return yield* Effect.fail(
-          new ToolError(
-            `EML file exceeds maximum size of ${formatBytes(MAX_EML_BYTES)}.`,
-          ),
-        );
-      }
-      const raw = yield* fs
+    const raw = yield* fs
+      .readFileString(resolved.absolute)
+      .pipe(Effect.map(normalizeLineEndings));
+    const { text, images } = yield* parseEml(raw);
+    lines = splitContentLines(text);
+    emlImages = images;
+  } else {
+    lines = splitContentLines(
+      yield* fs
         .readFileString(resolved.absolute)
-        .pipe(Effect.map(normalizeLineEndings));
-      const { text, images } = yield* parseEml(raw);
-      lines = splitContentLines(text);
-      emlImages = images;
-    } else {
-      lines = splitContentLines(
-        yield* fs
-          .readFileString(resolved.absolute)
-          .pipe(Effect.map(normalizeLineEndings)),
-      );
-    }
+        .pipe(Effect.map(normalizeLineEndings)),
+    );
+  }
 
-    yield* recordToolFileRead(filePath);
+  yield* recordToolFileRead(filePath);
 
-    const range = input.range;
-    const totalLines = lines.length;
-    const startLine = range?.start ?? 1;
-    // Pass an omitted `end` through as EOF. formatFileView owns the visible
-    // line limit and needs the full requested range to report truncation.
-    const endLine = range?.end ?? totalLines;
+  const range = input.range;
+  const totalLines = lines.length;
+  const startLine = range?.start ?? 1;
+  // Pass an omitted `end` through as EOF. formatFileView owns the visible
+  // line limit and needs the full requested range to report truncation.
+  const endLine = range?.end ?? totalLines;
 
-    // Append a range-exceeded warning when the caller asked beyond EOF
-    const suffix =
-      range?.end != null && range.end > totalLines
-        ? ` (requested end ${range.end} exceeds file length ${totalLines})`
-        : '';
+  // Append a range-exceeded warning when the caller asked beyond EOF
+  const suffix =
+    range?.end != null && range.end > totalLines
+      ? ` (requested end ${range.end} exceeds file length ${totalLines})`
+      : '';
 
-    const result = formatFileView({
-      path: displayPath,
-      lines,
-      viewRange: range ? [startLine, endLine] : null,
-      summarySuffix: suffix,
-    });
-
-    if (emlImages.length > 0) {
-      result.files = yield* Effect.forEach(emlImages, (img) =>
-        buildBytesAttachment({
-          path: img.filename,
-          mimeType: img.mimeType,
-          bytes: img.bytes,
-          description: `Image attachment from email: ${img.filename}`,
-        }),
-      );
-    }
-
-    return result;
+  const result = formatFileView({
+    path: displayPath,
+    lines,
+    viewRange: range ? [startLine, endLine] : null,
+    summarySuffix: suffix,
   });
 
-  private getAttachmentConfig(filePath: string): AttachmentKind | null {
-    const mimeType = getMimeType(filePath)?.toLowerCase();
-    // Keep extension detection case-insensitive so users can reference files regardless of casing.
-    const extension = getExtensionLowercase(filePath);
-
-    if (mimeType === 'application/pdf' || extension === '.pdf') {
-      return 'pdf';
-    }
-
-    // Treat SVG as an image attachment so vision-capable models can inspect its rendered appearance
-    // even though the underlying file is XML text.
-    if (isImageMimeType(mimeType)) {
-      return 'image';
-    }
-
-    // Office documents are binary formats that cannot be read as text.
-    // Return them as attachments so models with file input support can process them.
-    if (
-      OFFICE_EXTENSIONS.has(extension) ||
-      OFFICE_MIME_TYPES.has(mimeType ?? '')
-    ) {
-      return 'document';
-    }
-
-    return null;
+  if (emlImages.length > 0) {
+    result.files = yield* Effect.forEach(emlImages, (img) =>
+      buildBytesAttachment({
+        path: img.filename,
+        mimeType: img.mimeType,
+        bytes: img.bytes,
+        description: `Image attachment from email: ${img.filename}`,
+      }),
+    );
   }
 
-  private readonly returnBinaryAttachment = Effect.fn(
-    'ReadFileTool.returnBinaryAttachment',
-  )(function* (
+  return result;
+});
+
+function getAttachmentConfig(filePath: string): AttachmentKind | null {
+  const mimeType = getMimeType(filePath)?.toLowerCase();
+  // Keep extension detection case-insensitive so users can reference files regardless of casing.
+  const extension = getExtensionLowercase(filePath);
+
+  if (mimeType === 'application/pdf' || extension === '.pdf') {
+    return 'pdf';
+  }
+
+  // Treat SVG as an image attachment so vision-capable models can inspect its rendered appearance
+  // even though the underlying file is XML text.
+  if (isImageMimeType(mimeType)) {
+    return 'image';
+  }
+
+  // Office documents are binary formats that cannot be read as text.
+  // Return them as attachments so models with file input support can process them.
+  if (
+    OFFICE_EXTENSIONS.has(extension) ||
+    OFFICE_MIME_TYPES.has(mimeType ?? '')
+  ) {
+    return 'document';
+  }
+
+  return null;
+}
+
+const returnBinaryAttachment = Effect.fn('ReadFileTool.returnBinaryAttachment')(
+  function* (
     input: ReadInput,
     kind: AttachmentKind,
     resolved: WorkspacePathResolution,
-  ): Effect.fn.Return<ToolResult, unknown, ToolCall | FileSystem.FileSystem> {
+  ): Effect.fn.Return<ToolResult, Error, ToolCall | FileSystem.FileSystem> {
     const copy = ATTACHMENT_COPY[kind];
     const attachment = yield* buildFileAttachment({
       filePath: resolved.fsPath,
@@ -271,5 +262,14 @@ export class ReadFileTool extends defineTool({
       : copy.coreOutput;
 
     return { status: 'executed', summary, output, files: [attachment] };
-  });
-}
+  },
+);
+
+export const ReadFileTool = defineTool({
+  name: 'read_file',
+  parallelSafe: true,
+  description:
+    'Read and return workspace files. For text files you can supply an optional line range. PDFs (.pdf) and common image formats are returned as attachments so vision-capable models can inspect their pages or visual content.',
+  schema: ReadInputSchema,
+  execute: executeReadFileTool,
+});

@@ -32,7 +32,7 @@ const agentDir = (files: Record<string, readonly string[]>) =>
 
 /** The scan on the process filesystem it now reads its YAML through. */
 const scanCustom = (dir: string) =>
-  scanDirectory(dir, 'custom').pipe(Effect.provide(nodePlatformLayer));
+  scanDirectory([dir], 'custom').pipe(Effect.provide(nodePlatformLayer));
 
 function toolUseAgent(name: string, systemPrompt: string): string[] {
   return [

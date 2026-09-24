@@ -1,7 +1,7 @@
 /**
  * Per-workspace roots: the four host services whose value depends on which
  * paper (workspace folder) a piece of code is working on. They live on the
- * owning `SessionHandle` rather than on the process-wide `platform()` object,
+ * owning `SessionHandle` rather than on a process-wide object,
  * so one process can hold many sessions, each rooted in its own folder.
  *
  * Resolution is by hand, not by ambient scope: a caller answers for the
@@ -24,7 +24,8 @@ export interface WorkspaceRoots {
   /**
    * Cross-workspace global storage root. Process-wide by construction — every
    * host derives it from the one storage root it opened — and carried here
-   * rather than on `platform()` so the storage paths have a single carrier.
+   * rather than as a process-wide value so the storage paths have a single
+   * carrier.
    */
   readonly globalStorage: string;
   /** Workspace-scoped configuration (project `.texra/config.json` plus global). */
@@ -35,7 +36,7 @@ export interface WorkspaceRoots {
    * Process-wide application state: the third of the three slots the settings
    * catalog resolves a row against (`config`, `workspaceState`, `globalState`).
    * Process-wide by construction like {@link globalStorage}, and carried here
-   * rather than on `platform()` so a caller that has resolved its roots holds
+   * rather than as a process-wide value so a caller that has resolved its roots holds
    * every slot. Inside Effect the owner is the `AppState` service.
    */
   readonly globalState: StateStore;

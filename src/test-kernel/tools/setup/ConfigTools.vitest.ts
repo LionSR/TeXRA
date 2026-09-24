@@ -12,8 +12,8 @@ import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 
 import { ReadConfigTool, UpdateConfigTool } from '@tools/setup/ConfigTools';
 
-const readTool = new ReadConfigTool();
-const updateTool = new UpdateConfigTool();
+const readTool = ReadConfigTool;
+const updateTool = UpdateConfigTool;
 
 function createPlatform(initial: Record<string, unknown> = {}) {
   const project = createFakeHost({ config: initial });

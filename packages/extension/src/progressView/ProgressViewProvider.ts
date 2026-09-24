@@ -16,8 +16,6 @@ import {
 } from 'effect';
 
 import { getAgent, refresh } from '@agent/index';
-import type { AgentTrace } from '@agent/trace';
-import { createChannelTrace } from '@agent/trace';
 import {
   attachTerminalResultToast,
   PdfOpenFailed,
@@ -63,14 +61,17 @@ import { onTexraAuthSessionsChanged } from '@frontend/events/onTexraAuthSessions
 import { pushManualCriticism } from '@frontend/latex/inlineCriticism';
 import { getLinterMessages } from '@frontend/latex/linter';
 import { AgentReviewService } from '@frontend/review/AgentReviewService';
+import { withLogChannel } from '@logger/effectLog';
 import { createLog } from '@logger/logUtils';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
+import { Lifecycle, SHUTDOWN_PHASE } from '@platform/interfaces';
 import type {
   StateStore,
   StateReadFailed,
   StateWriteFailed,
 } from '@platform/interfaces';
 import type { LanguageModel } from '@platform/languageModel';
+import { withProcessServices } from '@platform/processRuntime';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import {
@@ -94,7 +95,8 @@ import { createExtensionHostRequests } from './extensionHostRequests';
 
 const RECENT_COMMIT_LIMIT = 20;
 
-const log = createLog('ProgressViewProvider');
+const CHANNEL = 'ProgressViewProvider';
+const log = createLog(CHANNEL);
 
 export type ProgressRunRevealResult = 'revealed' | 'missing';
 
@@ -115,8 +117,6 @@ export class SurfacePlacementFailed extends Data.TaggedError(
 interface Port {
   readonly attached: AttachedPort;
   readonly disposables: vscode.Disposable[];
-  /** A frame for this port alone (the chime, the accelerator, the drawer). */
-  readonly send: (message: DownMessage) => void;
 }
 
 export class ProgressViewProvider implements vscode.WebviewViewProvider {
@@ -132,7 +132,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
    *  {@link dispose} closes it. */
   private readonly bridgeScope = Scope.makeUnsafe();
   private readonly contentProvider: BundledViewContentProvider;
-  private readonly logger: AgentTrace;
   private readonly disposables: vscode.Disposable[] = [];
 
   /** The sidebar's `WebviewView` while VS Code holds one resolved. */
@@ -168,7 +167,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       ProcessServices
     >,
   ) {
-    this.logger = createChannelTrace('ProgressViewProvider');
     this.session = session;
     this.contentProvider = new BundledViewContentProvider(
       context,
@@ -249,19 +247,19 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       // Already an Effect program: the typed port lets the banner read it
       // directly instead of settling it on the runtime first.
       apiKeyBanner: () =>
-        hasUsableSetupCredential(this.session.roots, this.secrets, (message) =>
-          log.warn(message),
-        ).pipe(
-          Effect.map((usable) => ({ visible: !usable })),
-          Effect.mapError(
-            (cause) =>
-              new HostSnapshotReadFailed({
-                member: 'apiKeyBanner',
-                message: 'The provider credential status could not be read.',
-                cause,
-              }),
+        hasUsableSetupCredential(this.session.roots, this.secrets)
+          .pipe(withLogChannel('Setup Credentials'))
+          .pipe(
+            Effect.map((usable) => ({ visible: !usable })),
+            Effect.mapError(
+              (cause) =>
+                new HostSnapshotReadFailed({
+                  member: 'apiKeyBanner',
+                  message: 'The provider credential status could not be read.',
+                  cause,
+                }),
+            ),
           ),
-        ),
       // Already an Effect program, and one that answers a failed probe as a
       // missing tool rather than failing, so the banner reads it directly.
       dependencyBanner: () =>
@@ -272,7 +270,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
           })),
         ),
       onError: (error) => {
-        this.logger.error('Host snapshot refresh failed', { data: error });
+        log.error('Host snapshot refresh failed', { data: error });
       },
       publish: (snapshot) => this.bridge.setHost(snapshot),
     });
@@ -385,15 +383,16 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
         // request either way, so a staging failure is reported, never swallowed.
         presentToolEdit: (request) => {
           this.runtime.runFork(
-            this.toolEditApprovals.present(request).pipe(
-              Effect.catchCause((cause) =>
-                Effect.sync(() => {
-                  this.logger.error('Tool edit preview staging failed', {
-                    data: Cause.squash(cause),
-                  });
-                }),
+            this.toolEditApprovals
+              .present(request)
+              .pipe(
+                Effect.catchCause((cause) =>
+                  Effect.logError('Tool edit preview staging failed').pipe(
+                    Effect.annotateLogs({ data: Cause.squash(cause) }),
+                    withLogChannel(CHANNEL),
+                  ),
+                ),
               ),
-            ),
           );
         },
         // An open that never committed leaves the staged preview with no
@@ -423,11 +422,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     this.disposables.push(
       { dispose: detachHostInteractions },
       { dispose: detachTerminalResultToast },
-      {
-        dispose: () => {
-          this.runtime.runFork(this.toolEditApprovals.dispose());
-        },
-      },
     );
 
     this.watchWorkspace();
@@ -440,9 +434,16 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
 
   public initialize() {
     return Effect.gen({ self: this }, function* () {
+      // `ON` phase, behind the run settlement activation registered earlier.
+      (yield* Lifecycle).onShutdown(
+        SHUTDOWN_PHASE.ON,
+        withProcessServices(this.runtime, this.dispose()),
+      );
       yield* this.snapshot.refresh;
       yield* this.refreshOnboardingFunnel();
-      this.logger.debug('ProgressViewProvider initialized');
+      yield* Effect.logDebug('ProgressViewProvider initialized').pipe(
+        withLogChannel(CHANNEL),
+      );
     });
   }
 
@@ -496,7 +497,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   /** Every credential-dependent surface: catalogs, sign-in, the funnel. */
   private refreshAfterCredentialChange() {
     return Effect.gen({ self: this }, function* () {
-      yield* refresh();
+      yield* refresh({ includeRemote: true });
       // Let every surface finish repainting even when another one fails.
       yield* allSettledVoid<
         StateReadFailed | StateWriteFailed,
@@ -634,7 +635,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
             ),
           ),
       );
-      return { attached, disposables, send };
+      return { attached, disposables };
     });
   }
 
@@ -652,12 +653,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   /** The host acting on the surfaces' shared state (PRD 8.5). */
   public surfaceAction(action: SurfaceActionMessage['action']): void {
     this.bridge.surfaceAction(action);
-  }
-
-  private frameOf(
-    action: SurfaceActionMessage['action'],
-  ): SurfaceActionMessage {
-    return { kind: 'surface.action', session: this.bridge.key, action };
   }
 
   /**
@@ -683,7 +678,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   private chime(): void {
     const port =
       this.visibleSurfacePort() ?? this.sidebarPort ?? this.editor?.port;
-    port?.send(this.frameOf({ kind: 'chime' }));
+    port?.attached.surfaceAction({ kind: 'chime' });
   }
 
   /** `texra.execute` with no configuration (Cmd+Alt+E): the composer's
@@ -694,11 +689,11 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     return Effect.gen({ self: this }, function* () {
       const port = this.visibleSurfacePort();
       if (port !== undefined && port === this.editor?.port) {
-        port.send(this.frameOf({ kind: 'submit' }));
+        port.attached.surfaceAction({ kind: 'submit' });
         return;
       }
       yield* this.showInSidebar();
-      this.sidebarPort?.send(this.frameOf({ kind: 'submit' }));
+      this.sidebarPort?.attached.surfaceAction({ kind: 'submit' });
     });
   }
 
@@ -706,7 +701,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   public toggleDrawer() {
     return Effect.gen({ self: this }, function* () {
       yield* this.showInSidebar();
-      this.sidebarPort?.send(this.frameOf({ kind: 'toggleDrawer' }));
+      this.sidebarPort?.attached.surfaceAction({ kind: 'toggleDrawer' });
     });
   }
 
@@ -814,15 +809,20 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     });
   }
 
-  public dispose(): void {
-    this.closeSidebarPort();
-    this.closePort(this.editor?.port);
-    this.editor?.panel.dispose();
-    this.editor = undefined;
-    this.runtime.runFork(Scope.close(this.bridgeScope, Exit.void));
-    for (const disposable of this.disposables.splice(0)) disposable.dispose();
-    if (ProgressViewProvider._instance === this) {
-      ProgressViewProvider._instance = undefined;
-    }
+  /** Awaits the staged tool-edit preview files' removal: runtime disposal
+   *  follows the shutdown drain and would cut a forked release short. */
+  private dispose(): Effect.Effect<void, never, ProcessServices> {
+    return Effect.gen({ self: this }, function* () {
+      this.closeSidebarPort();
+      this.closePort(this.editor?.port);
+      this.editor?.panel.dispose();
+      this.editor = undefined;
+      yield* Scope.close(this.bridgeScope, Exit.void);
+      for (const disposable of this.disposables.splice(0)) disposable.dispose();
+      yield* this.toolEditApprovals.dispose();
+      if (ProgressViewProvider._instance === this) {
+        ProgressViewProvider._instance = undefined;
+      }
+    });
   }
 }

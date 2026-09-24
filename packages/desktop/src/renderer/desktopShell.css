@@ -114,6 +114,13 @@
   pointer-events: none;
 }
 
+/* A closed pane's split panel is disabled with a zero-width divider; its
+   grip would otherwise float free in the canvas. */
+wa-split-panel[disabled] > .shell-split-handle,
+wa-split-panel[disabled] > .shell-bottom-split-handle {
+  display: none;
+}
+
 /* ── Project/task sidebar ─────────────────────────────────────────────── */
 
 .shell-sidebar-slot {
@@ -172,20 +179,12 @@ body[data-desktop-platform='darwin'] .shell-sidebar-brand {
   letter-spacing: -0.015em;
 }
 
-.shell-sidebar-brand-menu {
-  display: block;
-  font-size: var(--font-size-xs);
-  -webkit-app-region: no-drag;
-}
-
-.shell-sidebar-brand-menu wa-icon,
 .shell-project-chevron,
 .shell-section-split-handle wa-icon,
 .shell-split-handle wa-icon,
 .shell-bottom-split-handle wa-icon,
 .shell-header-button wa-icon,
 .shell-layout-toggle wa-icon,
-.shell-environment-button wa-icon,
 .shell-workbench-tab-close wa-icon,
 .shell-workbench-close wa-icon {
   display: grid;
@@ -308,21 +307,6 @@ body[data-desktop-platform='darwin'] .shell-sidebar-brand {
   align-items: center;
   min-height: 30px;
   padding: 0 8px;
-}
-
-.shell-sidebar-section-count {
-  margin-left: auto;
-  color: var(--wa-color-text-quiet);
-  font-size: var(--font-size-xs);
-}
-
-.shell-sidebar-section-count::part(base) {
-  display: inline-grid;
-  min-height: 22px;
-  min-width: 22px;
-  place-items: center;
-  padding: 1px 6px;
-  line-height: 1;
 }
 
 .shell-project-item {
@@ -597,158 +581,6 @@ body[data-desktop-platform='darwin'] .shell-sidebar-brand {
   display: block;
 }
 
-.shell-environment-button {
-  display: block;
-  max-width: min(260px, 32vw);
-  font-size: var(--font-size-sm);
-}
-
-.shell-environment-button::part(label) {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.shell-environment-popover {
-  --max-width: min(360px, calc(100vw - 28px));
-  -webkit-app-region: no-drag;
-}
-
-.shell-environment-popover::part(body) {
-  width: 340px;
-  max-width: calc(100vw - 48px);
-  max-height: min(680px, calc(100vh - 72px));
-  padding: 10px 12px;
-  overflow-y: auto;
-}
-
-.shell-environment-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  min-height: 36px;
-  padding: 0 5px 5px 8px;
-  color: var(--wa-color-text-quiet);
-  font-size: var(--font-size-lg);
-  font-weight: var(--font-weight-medium);
-  letter-spacing: -0.01em;
-}
-
-.shell-environment-refresh[disabled] wa-icon {
-  animation: spin 0.9s linear infinite;
-}
-
-.shell-environment-section {
-  padding: 6px 0;
-  border-top: 1px solid var(--wa-color-surface-border);
-}
-
-.shell-environment-section:first-of-type {
-  border-top: 0;
-}
-
-.shell-environment-section-title {
-  padding: 7px 8px 4px;
-  color: var(--wa-color-text-quiet);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
-}
-
-.shell-environment-row {
-  display: grid;
-  grid-template-columns: 24px minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 8px;
-  min-height: 32px;
-  padding: 0 8px;
-  color: var(--wa-color-text-normal);
-  font-size: var(--font-size);
-}
-
-.shell-environment-row > span {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.shell-environment-row-icon {
-  display: grid;
-  place-items: center;
-  width: var(--shell-frame-icon-box);
-  height: var(--shell-frame-icon-box);
-  color: var(--wa-color-text-quiet);
-  font-size: var(--shell-frame-icon-size);
-  line-height: 1;
-}
-
-.shell-environment-trailing {
-  display: inline-flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 4px;
-  max-width: 150px;
-  color: var(--wa-color-text-quiet);
-  font-size: var(--font-size-xs);
-  text-overflow: ellipsis;
-}
-
-.shell-environment-trailing.is-success {
-  color: var(--color-success);
-}
-
-.shell-environment-diff {
-  font-variant-numeric: tabular-nums;
-}
-
-.shell-environment-diff .is-added {
-  color: var(--color-success);
-}
-
-.shell-environment-diff .is-deleted {
-  color: var(--color-error);
-}
-
-.shell-environment-more {
-  padding: 3px 8px 4px 40px;
-  color: var(--wa-color-text-quiet);
-  font-size: var(--font-size-xs);
-}
-
-.shell-environment-popover .is-muted {
-  color: var(--wa-color-text-quiet);
-}
-
-.shell-conversation-body {
-  position: relative;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: minmax(0, 1fr);
-  min-width: 0;
-  min-height: 0;
-  overflow: hidden;
-}
-
-.shell-conversation-pane {
-  display: grid;
-  grid-area: 1 / 1;
-  grid-template-rows: minmax(0, 1fr);
-  min-width: 0;
-  min-height: 0;
-}
-
-.shell-conversation-pane[hidden] {
-  display: none;
-}
-
-.shell-conversation-pane > *,
-.shell-launcher-surface {
-  min-width: 0;
-  min-height: 0;
-  width: 100%;
-  height: 100%;
-}
-
 /* ── Optional workbench ───────────────────────────────────────────────── */
 
 .shell-workbench {
@@ -986,35 +818,6 @@ body[data-desktop-platform='darwin'] .shell-frame-collapsed .shell-header {
   .shell-main-split {
     --min: 320px;
     --max: min(720px, calc(100% - 320px));
-  }
-}
-
-@container shell-conversation (max-width: 560px) {
-  .shell-environment-button {
-    width: var(--control-size-l);
-  }
-
-  .shell-environment-button::part(base) {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: var(--control-size-l);
-    min-width: 0;
-    padding: 0;
-  }
-
-  .shell-environment-button::part(start) {
-    margin: 0;
-  }
-
-  .shell-environment-button wa-icon {
-    margin: 0;
-    line-height: 0;
-  }
-
-  .shell-environment-button::part(caret),
-  .shell-environment-button span {
-    display: none;
   }
 }
 

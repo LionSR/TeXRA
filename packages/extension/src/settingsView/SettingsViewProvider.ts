@@ -22,14 +22,33 @@ import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { AgentCategory } from '@shared/schemas';
 import type { SettingsTabPanelName } from '@shared/settingsView/settingsViewMessages';
+import { ensureError } from '@utils/errors/errorMessage';
 
 // Local file imports
 import { SettingsViewMessageHandler } from './SettingsViewMessageHandler';
+
+function isReadyMessage(message: unknown): boolean {
+  return (
+    typeof message === 'object' &&
+    message !== null &&
+    'command' in message &&
+    message.command === SETTINGS_VIEW_COMMANDS.WEBVIEW_READY
+  );
+}
 
 export class SettingsViewProvider {
   public static readonly viewType = 'texra.settingsView';
   private _view?: vscode.WebviewPanel;
   private _viewDisposables = new DisposableStore();
+  /** Whether the panel's frontend has posted `WEBVIEW_READY`. Until then a
+   *  message posted to it is dropped, since its document may not have
+   *  loaded or mounted a listener yet (#12495). */
+  private viewReady = false;
+  /** The latest tab asked for before the panel was ready, posted on ready. */
+  private pendingTab?: {
+    tab: SettingsTabPanelName;
+    agentSubTab?: AgentCategory;
+  };
   private readonly contentProvider: BundledViewContentProvider;
   private readonly messageHandler: SettingsViewMessageHandler;
 
@@ -72,13 +91,15 @@ export class SettingsViewProvider {
           ]);
           return;
         }
-        void this.postAllData(this._view.webview);
+        this.runtime.runFork(
+          this.messageHandler.sendAllData(this._view.webview),
+        );
       }
     });
   }
 
   /** Sign in to a subscription provider from a command, not the webview. */
-  public signInSubscription(providerId: SubscriptionProviderId): Promise<void> {
+  public signInSubscription(providerId: SubscriptionProviderId) {
     return this.messageHandler.signInSubscription(providerId);
   }
 
@@ -93,57 +114,68 @@ export class SettingsViewProvider {
     return this.messageHandler.refreshAfterProviderKeyChange(provider);
   }
 
-  /** Settle a full repaint of `webview` on this view's process runtime. */
-  private postAllData(webview: vscode.Webview): Promise<void> {
-    return this.runtime.runPromise(this.messageHandler.sendAllData(webview));
-  }
-
   /**
    * Create and show the webview panel (for command palette activation)
    * @param tab Optional panel name to switch to after showing
    * @param agentSubTab Optional sub-tab for the agents tab ('workflow' | 'toolUse')
    */
-  public async showSettingsView(
+  public showSettingsView(
     tab?: SettingsTabPanelName,
     agentSubTab?: AgentCategory,
+  ): Effect.Effect<void, Error, ProcessServices> {
+    return Effect.gen({ self: this }, function* () {
+      if (this._view) {
+        const panel = this._view;
+        panel.reveal(vscode.ViewColumn.One);
+        yield* this.messageHandler.sendAllData(panel.webview);
+      } else {
+        const panel = vscode.window.createWebviewPanel(
+          SettingsViewProvider.viewType,
+          'TeXRA Dashboard',
+          vscode.ViewColumn.One,
+          {
+            enableScripts: true,
+            retainContextWhenHidden: true,
+            localResourceRoots: getSharedLocalResourceRoots(
+              this.context,
+              'settingsView',
+            ),
+          },
+        );
+        panel.iconPath = new vscode.ThemeIcon('gear');
+
+        this.cleanupView();
+        this._view = panel;
+        this._viewDisposables.add(this.setupWebviewContent(panel));
+        this._viewDisposables.add(
+          panel.onDidDispose(this.cleanupView.bind(this)),
+        );
+      }
+
+      // this._view can be undefined here: the sendAllData above yields, and
+      // disposing the dashboard panel meanwhile runs cleanupView.
+      if (tab == null || !this._view) return;
+      if (this.viewReady) {
+        const webview = this._view.webview;
+        yield* Effect.tryPromise({
+          try: () => this.postTab(webview, { tab, agentSubTab }),
+          catch: ensureError,
+        });
+      } else {
+        this.pendingTab = { tab, agentSubTab };
+      }
+    });
+  }
+
+  private async postTab(
+    webview: vscode.Webview,
+    { tab, agentSubTab }: NonNullable<SettingsViewProvider['pendingTab']>,
   ): Promise<void> {
-    if (this._view) {
-      const panel = this._view;
-      panel.reveal(vscode.ViewColumn.One);
-      await this.postAllData(panel.webview);
-    } else {
-      const panel = vscode.window.createWebviewPanel(
-        SettingsViewProvider.viewType,
-        'TeXRA Dashboard',
-        vscode.ViewColumn.One,
-        {
-          enableScripts: true,
-          retainContextWhenHidden: true,
-          localResourceRoots: getSharedLocalResourceRoots(
-            this.context,
-            'settingsView',
-          ),
-        },
-      );
-      panel.iconPath = new vscode.ThemeIcon('gear');
-
-      this.cleanupView();
-      this._view = panel;
-      this._viewDisposables.add(this.setupWebviewContent(panel));
-      this._viewDisposables.add(
-        panel.onDidDispose(this.cleanupView.bind(this)),
-      );
-    }
-
-    // this._view can be undefined here: the awaited sendAllData above yields,
-    // and disposing the dashboard panel during that await runs cleanupView.
-    if (tab != null && this._view) {
-      await this._view.webview.postMessage({
-        command: SETTINGS_VIEW_COMMANDS.SET_TAB,
-        tab,
-        ...(agentSubTab && { agentSubTab }),
-      });
-    }
+    await webview.postMessage({
+      command: SETTINGS_VIEW_COMMANDS.SET_TAB,
+      tab,
+      ...(agentSubTab && { agentSubTab }),
+    });
   }
 
   /**
@@ -163,9 +195,16 @@ export class SettingsViewProvider {
         ),
       ),
     );
-    return panel.webview.onDidReceiveMessage((message) =>
-      this.messageHandler.handleMessage(message, panel),
-    );
+    return panel.webview.onDidReceiveMessage(async (message) => {
+      await this.messageHandler.handleMessage(message, panel);
+      if (this._view !== panel || !isReadyMessage(message)) return;
+      // The ready handler has repainted the view; the tab asked for while it
+      // loaded goes after that data, as a reveal of a live panel orders them.
+      this.viewReady = true;
+      const pending = this.pendingTab;
+      this.pendingTab = undefined;
+      if (pending) await this.postTab(panel.webview, pending);
+    });
   }
 
   private cleanupView(): void {
@@ -175,6 +214,8 @@ export class SettingsViewProvider {
       disposables.dispose();
     } finally {
       this._view = undefined;
+      this.viewReady = false;
+      this.pendingTab = undefined;
       this.messageHandler.clearActiveView();
     }
   }

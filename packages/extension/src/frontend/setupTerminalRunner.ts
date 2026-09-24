@@ -28,6 +28,7 @@ import {
   type TerminalRunRequest,
   type TerminalRunResult,
 } from '@hosts/uiHosts';
+import { ensureError } from '@utils/errors/errorMessage';
 
 import { firstEventOrTimeout } from './vscode/vscodeEventWait';
 
@@ -167,7 +168,11 @@ const captureExecution = Effect.fn('setupTerminalRunner.capture')(function* (
   });
   const reader = yield* Effect.forkChild(
     drainStreamTail(stream, TERMINAL_OUTPUT_MAX_CHARS).pipe(
-      Effect.catch(() => Effect.succeed('')),
+      Effect.catch((error) =>
+        Effect.logWarning(
+          `Terminal output stream failed; reporting no output: ${error.message}`,
+        ).pipe(Effect.as('')),
+      ),
     ),
     // Start on this frame so iteration begins before the caller suspends on
     // the exit-code event.
@@ -180,7 +185,11 @@ const captureExecution = Effect.fn('setupTerminalRunner.capture')(function* (
   // block the agent forever.
   const output = yield* Fiber.join(reader).pipe(
     Effect.timeout(READER_DRAIN_MS),
-    Effect.catch(() => Effect.succeed('')),
+    Effect.catch(() =>
+      Effect.logWarning(
+        `Terminal output did not drain within ${READER_DRAIN_MS}ms; reporting no output.`,
+      ).pipe(Effect.as('')),
+    ),
   );
 
   return {
@@ -207,8 +216,8 @@ function truncateTerminalOutput(output: string): string {
 function drainStreamTail(
   stream: AsyncIterable<string>,
   maxChars: number,
-): Effect.Effect<string, unknown> {
-  return Stream.fromAsyncIterable(stream, (cause) => cause).pipe(
+): Effect.Effect<string, Error> {
+  return Stream.fromAsyncIterable(stream, ensureError).pipe(
     Stream.runFold(
       () => '',
       (buf: string, chunk: string) => {

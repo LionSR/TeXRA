@@ -58,10 +58,10 @@ interface DesktopShellActionFactoryOptions extends Pick<
   openPath(filePath: string): Effect.Effect<void, PreviewUnavailable>;
   openWorkspaceFolder(): Effect.Effect<
     void,
-    unknown,
+    Error,
     FileSystem.FileSystem | Path.Path | ProjectDatabases
   >;
-  signIn(): Effect.Effect<void, unknown>;
+  signIn(): Effect.Effect<void, Error>;
   onAsyncError: (error: unknown) => void;
   /** The process runtime the composition root built; every shell action's
    *  program is forked on it rather than on a bare `Effect.run*`. */
@@ -139,9 +139,9 @@ export function createDesktopShellActions(
     runShellAction(openCustomAgentDirectory);
   }
 
-  // New Session is the header's "+" (PRD 12.4): the New-task state with
+  // Also New Session, the header's "+" (PRD 12.4): the New-task state with
   // the launcher's selections as they are.
-  function resetMainView() {
+  function showLauncher() {
     renderer.postToRenderer({
       command: DESKTOP_SHELL_COMMANDS.SHOW_LAUNCHER,
     });
@@ -168,17 +168,12 @@ export function createDesktopShellActions(
         command: DESKTOP_SHELL_COMMANDS.SAVE_FILE,
       });
     },
-    resetMainView,
-    showLauncher: () => {
-      renderer.postToRenderer({
-        command: DESKTOP_SHELL_COMMANDS.SHOW_LAUNCHER,
-      });
-    },
+    resetMainView: showLauncher,
+    showLauncher,
     openWorkbench,
     showSettings,
     toggleBottomBar: () => toggleLayout('bottomBar'),
     toggleSidePanel: () => toggleLayout('sidePanel'),
-    toggleSummaryBar: () => toggleLayout('summaryBar'),
     showFirstRunWalkthrough: () => {
       renderer.postToRenderer(buildDesktopOnboardingSetStateMessage(true));
     },

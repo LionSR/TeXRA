@@ -194,7 +194,10 @@ export function createHostSnapshotSource(
           visible: dependency.visible && !dismissed.has('dependency'),
         },
         gettingStarted: !hasInputFiles && !dismissed.has('gettingStarted'),
-        login: !authenticated && !loginBannerDismissed,
+        // The setup card is the one onboarding step on screen while it is
+        // pending; the sign-in offer returns once setup is done or skipped.
+        login:
+          !authenticated && !loginBannerDismissed && onboarding !== 'setup',
       },
       onboarding,
     }),
@@ -264,7 +267,7 @@ export function createHostSnapshotSource(
    *  its last value, and the snapshot still publishes what the others read,
    *  so a single unavailable source never leaves the shell blank. */
   const guarded = <R>(
-    ...loads: Effect.Effect<void, unknown, R>[]
+    ...loads: Effect.Effect<void, Error, R>[]
   ): Effect.Effect<void, never, R> =>
     Effect.gen(function* () {
       const settled = yield* Effect.forEach(
@@ -272,8 +275,10 @@ export function createHostSnapshotSource(
         (load) => Effect.exit(load),
         { concurrency: 'unbounded' },
       );
+      // An interrupted load is not a failure to report.
       for (const exit of settled) {
-        if (Exit.isFailure(exit)) options.onError(Cause.squash(exit.cause));
+        if (Exit.isFailure(exit) && !Cause.hasInterruptsOnly(exit.cause))
+          options.onError(Cause.squash(exit.cause));
       }
       yield* publish;
     });
@@ -330,10 +335,10 @@ export function createHostSnapshotSource(
       });
     },
     setOnboarding: (state) =>
-      Effect.sync(() => {
-        if (state === onboarding) return false;
+      Effect.suspend(() => {
+        if (state === onboarding) return Effect.void;
         onboarding = state;
-        return true;
-      }).pipe(Effect.flatMap((changed) => (changed ? publish : Effect.void))),
+        return publish;
+      }),
   };
 }

@@ -133,7 +133,7 @@ const catchLeanFailure = (
   message: (cause: unknown) => string,
   summary: string,
 ) =>
-  Effect.catchCause((cause: Cause.Cause<unknown>) => {
+  Effect.catchCause((cause: Cause.Cause<Error>) => {
     if (Cause.hasInterrupts(cause)) return Effect.failCause(cause);
     const error = Cause.squash(cause);
     return Effect.fail(
@@ -141,7 +141,80 @@ const catchLeanFailure = (
     );
   });
 
-export class LeanDiagnosticsTool extends defineTool({
+function executeLeanDiagnosticsTool(
+  input: LeanDiagnosticsInput,
+): Effect.Effect<ToolResult, Error, ToolCall | LeanLanguageServices> {
+  const { command, file } = input;
+  return diagnose(file, command).pipe(
+    catchLeanFailure(
+      (cause) => `Error: ${toErrorMessage(cause)}\n\n${LEAN_TOOLCHAIN_HELP}`,
+      'Failed to get diagnostics',
+    ),
+  );
+}
+
+const diagnose = Effect.fn('LeanDiagnosticsTool.execute')(function* (
+  file: string,
+  command: 'list' | 'count',
+) {
+  const call = yield* ToolCall;
+  const services = yield* LeanLanguageServices;
+  const absoluteFile = yield* leanFilePath(file, call);
+  const result = yield* services.fetchDiagnosticsForFile(
+    absoluteFile,
+    call.run?.runId,
+  );
+  if (!result.ok) {
+    // The adapter distinguishes a genuinely missing file from a broken or
+    // absent Lean toolchain — only the former is a "could not open file";
+    // the latter gets the same actionable setup guidance as a general
+    // tool failure.
+    if (result.kind === 'toolchain_unavailable') {
+      return errorResult(
+        `Failed to get diagnostics for ${file}: ${result.message}\n\n${LEAN_TOOLCHAIN_HELP}`,
+        { summary: 'Failed to get diagnostics' },
+      );
+    }
+    return errorResult(
+      `Could not open file: ${file}\n\nMake sure the file exists and is accessible.`,
+      { summary: 'Failed to open file' },
+    );
+  }
+  const diagnostics = result.diagnostics;
+
+  // Host capability: VS Code moves the editor cursor to the first error;
+  // CLI/desktop adapters omit it and this is a no-op rather than a pretend
+  // navigation. The tool result below still carries the diagnostic list.
+  yield* services.navigateToFirstError?.(absoluteFile, diagnostics) ??
+    Effect.void;
+
+  const counts = countBySeverity(diagnostics);
+  const countsStr = formatCounts(counts);
+
+  if (diagnostics.length === 0) {
+    return executed(NO_DIAGNOSTICS_HELP, '✓ No diagnostics');
+  }
+
+  const baseDiagnostics = { ...counts, total: diagnostics.length };
+
+  if (command === 'count') {
+    return {
+      status: 'executed',
+      summary: countsStr,
+      output: `${file}: ${countsStr}`,
+      diagnostics: baseDiagnostics,
+    } as ToolResult;
+  }
+
+  return {
+    status: 'executed',
+    summary: countsStr,
+    output: formatGroupedSections(diagnostics),
+    diagnostics: { ...baseDiagnostics, details: diagnostics },
+  } as ToolResult;
+});
+
+export const LeanDiagnosticsTool = defineTool({
   name: 'lean_diagnostics',
   description: `Get diagnostic messages (errors, warnings, info) for a Lean 4 file.
 
@@ -159,79 +232,8 @@ Tips:
 - If diagnostics seem stale, use lean_file with command "restart" to refresh the Lean server
 - Import/dependency errors may not surface as diagnostics: check imports manually`,
   schema: LeanDiagnosticsInputSchema,
-}) {
-  protected execute(
-    input: LeanDiagnosticsInput,
-  ): Effect.Effect<ToolResult, unknown, ToolCall | LeanLanguageServices> {
-    const { command, file } = input;
-    return this.diagnose(file, command).pipe(
-      catchLeanFailure(
-        (cause) => `Error: ${toErrorMessage(cause)}\n\n${LEAN_TOOLCHAIN_HELP}`,
-        'Failed to get diagnostics',
-      ),
-    );
-  }
-
-  private readonly diagnose = Effect.fn('LeanDiagnosticsTool.execute')(
-    function* (file: string, command: 'list' | 'count') {
-      const call = yield* ToolCall;
-      const services = yield* LeanLanguageServices;
-      const absoluteFile = yield* leanFilePath(file, call);
-      const result = yield* services.fetchDiagnosticsForFile(
-        absoluteFile,
-        call.run?.runId,
-      );
-      if (!result.ok) {
-        // The adapter distinguishes a genuinely missing file from a broken or
-        // absent Lean toolchain — only the former is a "could not open file";
-        // the latter gets the same actionable setup guidance as a general
-        // tool failure.
-        if (result.kind === 'toolchain_unavailable') {
-          return errorResult(
-            `Failed to get diagnostics for ${file}: ${result.message}\n\n${LEAN_TOOLCHAIN_HELP}`,
-            { summary: 'Failed to get diagnostics' },
-          );
-        }
-        return errorResult(
-          `Could not open file: ${file}\n\nMake sure the file exists and is accessible.`,
-          { summary: 'Failed to open file' },
-        );
-      }
-      const diagnostics = result.diagnostics;
-
-      // Host capability: VS Code moves the editor cursor to the first error;
-      // CLI/desktop adapters omit it and this is a no-op rather than a pretend
-      // navigation. The tool result below still carries the diagnostic list.
-      yield* services.navigateToFirstError?.(absoluteFile, diagnostics) ??
-        Effect.void;
-
-      const counts = countBySeverity(diagnostics);
-      const countsStr = formatCounts(counts);
-
-      if (diagnostics.length === 0) {
-        return executed(NO_DIAGNOSTICS_HELP, '✓ No diagnostics');
-      }
-
-      const baseDiagnostics = { ...counts, total: diagnostics.length };
-
-      if (command === 'count') {
-        return {
-          status: 'executed',
-          summary: countsStr,
-          output: `${file}: ${countsStr}`,
-          diagnostics: baseDiagnostics,
-        } as ToolResult;
-      }
-
-      return {
-        status: 'executed',
-        summary: countsStr,
-        output: formatGroupedSections(diagnostics),
-        diagnostics: { ...baseDiagnostics, details: diagnostics },
-      } as ToolResult;
-    },
-  );
-}
+  execute: executeLeanDiagnosticsTool,
+});
 
 export const LeanFileTool = defineTool({
   name: 'lean_file',
@@ -244,7 +246,7 @@ In VS Code, these commands use the Lean 4 extension. CLI and desktop provide the
   schema: LeanFileInputSchema,
   execute: (
     input: LeanFileInput,
-  ): Effect.Effect<ToolResult, unknown, ToolCall | LeanLanguageServices> => {
+  ): Effect.Effect<ToolResult, Error, ToolCall | LeanLanguageServices> => {
     const { command, file } = input;
     const { description } = LEAN_FILE_COMMANDS[command];
     return Effect.gen(function* () {
@@ -281,7 +283,7 @@ In VS Code, these commands use the Lean 4 extension. CLI and desktop provide the
   schema: LeanProjectInputSchema,
   execute: (
     input: LeanProjectInput,
-  ): Effect.Effect<ToolResult, unknown, ToolCall | LeanLanguageServices> => {
+  ): Effect.Effect<ToolResult, Error, ToolCall | LeanLanguageServices> => {
     const { command } = input;
     const { description } = LEAN_PROJECT_COMMANDS[command];
     return Effect.gen(function* () {
@@ -306,7 +308,101 @@ In VS Code, these commands use the Lean 4 extension. CLI and desktop provide the
   },
 });
 
-export class LeanInspectTool extends defineTool({
+function executeLeanInspectTool(
+  input: LeanInspectInput,
+): Effect.Effect<ToolResult, Error, ToolCall | LeanLanguageServices> {
+  const { type, file, line, column } = input;
+  // Convert to 0-indexed for LSP
+  const line0 = line - 1;
+  const col0 = column - 1;
+  const location = `${file}:${line}:${column}`;
+
+  // The three inspections differ only in which request they make and how
+  // they render an answer that carries data. Resolving the model's file
+  // against the run and ruling on an answer that carries none is the same
+  // for all three, so it is stated here once.
+  const inspect = <T>(
+    request: (
+      services: LeanLanguageServicesShape,
+      filePath: string,
+      call: ToolCallShape,
+    ) => Effect.Effect<LspResult<T>>,
+    empty: { readonly message: string; readonly summary: string },
+    render: (data: T) => ToolResult,
+  ): Effect.Effect<ToolResult, Error, ToolCall | LeanLanguageServices> =>
+    Effect.gen(function* () {
+      const call = yield* ToolCall;
+      const services = yield* LeanLanguageServices;
+      const { data, error } = yield* request(
+        services,
+        yield* leanFilePath(file, call),
+        call,
+      );
+      if (!data)
+        return noPositionData(empty.message, location, empty.summary, error);
+      return render(data);
+    });
+
+  // Each dispatch composes one program, run once below: a failed
+  // language-server request settles as this run's Exit and becomes the
+  // ToolError carrying the summary that names which inspection failed.
+  let program: Effect.Effect<
+    ToolResult,
+    Error,
+    ToolCall | LeanLanguageServices
+  >;
+  switch (type) {
+    case 'goal':
+      program = inspect(
+        (services, filePath, call) =>
+          services.getGoalState(filePath, line0, col0, call.run?.runId),
+        { message: 'Could not get goal state', summary: 'No goal state' },
+        (goal) =>
+          goal.goals.length === 0
+            ? executed(
+                'No goals at this position. The proof may be complete here.',
+                'No goals',
+              )
+            : executed(
+                goal.rendered,
+                formatResultCount(goal.goals.length, 'goal'),
+              ),
+      );
+      break;
+    case 'term_goal':
+      program = inspect(
+        (services, filePath, call) =>
+          services.getTermGoal(filePath, line0, col0, call.run?.runId),
+        { message: 'No expected type', summary: 'No term goal' },
+        (termGoal) => executed(termGoal.goal, 'Term goal'),
+      );
+      break;
+    case 'hover':
+      program = inspect(
+        (services, filePath, call) =>
+          services.getHoverInfo(filePath, line0, col0, call.run?.runId),
+        { message: 'No information', summary: 'No hover info' },
+        (hover) => {
+          const text = extractHoverText(hover.contents);
+          return text
+            ? executed(text, 'Hover info')
+            : errorResult(`Empty hover response at ${location}`, {
+                summary: 'No hover info',
+              });
+        },
+      );
+      break;
+  }
+
+  return program.pipe(
+    catchLeanFailure(
+      (cause) => `Error: ${toErrorMessage(cause)}`,
+      `Failed to get ${type}`,
+    ),
+  );
+}
+
+export const LeanInspectTool = defineTool({
   name: 'lean_inspect',
   description: `Inspect proof state or type information at a position in a Lean 4 file.
 
@@ -323,101 +419,8 @@ Line and column are 1-indexed.
 
 In VS Code, this uses the Lean 4 extension. CLI and desktop provide the corresponding direct operations where supported.`,
   schema: LeanInspectInputSchema,
-}) {
-  protected execute(
-    input: LeanInspectInput,
-  ): Effect.Effect<ToolResult, unknown, ToolCall | LeanLanguageServices> {
-    const { type, file, line, column } = input;
-    // Convert to 0-indexed for LSP
-    const line0 = line - 1;
-    const col0 = column - 1;
-    const location = `${file}:${line}:${column}`;
-
-    // The three inspections differ only in which request they make and how
-    // they render an answer that carries data. Resolving the model's file
-    // against the run and ruling on an answer that carries none is the same
-    // for all three, so it is stated here once.
-    const inspect = <T>(
-      request: (
-        services: LeanLanguageServicesShape,
-        filePath: string,
-        call: ToolCallShape,
-      ) => Effect.Effect<LspResult<T>>,
-      empty: { readonly message: string; readonly summary: string },
-      render: (data: T) => ToolResult,
-    ): Effect.Effect<ToolResult, unknown, ToolCall | LeanLanguageServices> =>
-      Effect.gen(function* () {
-        const call = yield* ToolCall;
-        const services = yield* LeanLanguageServices;
-        const { data, error } = yield* request(
-          services,
-          yield* leanFilePath(file, call),
-          call,
-        );
-        if (!data)
-          return noPositionData(empty.message, location, empty.summary, error);
-        return render(data);
-      });
-
-    // Each dispatch composes one program, run once below: a failed
-    // language-server request settles as this run's Exit and becomes the
-    // ToolError carrying the summary that names which inspection failed.
-    let program: Effect.Effect<
-      ToolResult,
-      unknown,
-      ToolCall | LeanLanguageServices
-    >;
-    switch (type) {
-      case 'goal':
-        program = inspect(
-          (services, filePath, call) =>
-            services.getGoalState(filePath, line0, col0, call.run?.runId),
-          { message: 'Could not get goal state', summary: 'No goal state' },
-          (goal) =>
-            goal.goals.length === 0
-              ? executed(
-                  'No goals at this position. The proof may be complete here.',
-                  'No goals',
-                )
-              : executed(
-                  goal.rendered,
-                  formatResultCount(goal.goals.length, 'goal'),
-                ),
-        );
-        break;
-      case 'term_goal':
-        program = inspect(
-          (services, filePath, call) =>
-            services.getTermGoal(filePath, line0, col0, call.run?.runId),
-          { message: 'No expected type', summary: 'No term goal' },
-          (termGoal) => executed(termGoal.goal, 'Term goal'),
-        );
-        break;
-      case 'hover':
-        program = inspect(
-          (services, filePath, call) =>
-            services.getHoverInfo(filePath, line0, col0, call.run?.runId),
-          { message: 'No information', summary: 'No hover info' },
-          (hover) => {
-            const text = extractHoverText(hover.contents);
-            return text
-              ? executed(text, 'Hover info')
-              : errorResult(`Empty hover response at ${location}`, {
-                  summary: 'No hover info',
-                });
-          },
-        );
-        break;
-    }
-
-    return program.pipe(
-      catchLeanFailure(
-        (cause) => `Error: ${toErrorMessage(cause)}`,
-        `Failed to get ${type}`,
-      ),
-    );
-  }
-}
+  execute: executeLeanInspectTool,
+});
 
 /**
  * Shared "language server returned nothing" error for the three inspect

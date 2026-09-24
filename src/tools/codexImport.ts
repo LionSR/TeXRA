@@ -24,7 +24,11 @@ import * as path from 'node:path';
 import { Effect } from 'effect';
 
 import { isModuleNotFoundError } from '@common/errors';
-import type { StateStore, StateReadFailed } from '@platform/interfaces';
+import type { StateReadFailed } from '@platform/interfaces';
+import type { SettingsStores } from '@shared/config/settingsAccess';
+import type { CodexSandboxMode } from '@shared/schemas';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { readSettingFrom } from '@utils/config/platformSettings';
 import { ensureError } from '@utils/errors/errorMessage';
 import { IS_WINDOWS } from '@utils/system/platformPaths';
 
@@ -121,10 +125,12 @@ const CODEX_BINARY_NAME = IS_WINDOWS ? 'codex.exe' : 'codex';
  * candidate keeps older installs usable. When `platformPkgDir` is the
  * `@openai/codex` meta-package, follow its nested platform package.
  */
-function codexBinaryInPlatformPackage(
+const codexBinaryInPlatformPackage = Effect.fn(
+  'codexImport.codexBinaryInPlatformPackage',
+)(function* (
   platformPkgDir: string,
   platformInfo: PlatformInfo,
-): string | undefined {
+): Effect.fn.Return<string | undefined> {
   const findInPlatformPackage = (packageDir: string): string | undefined => {
     const vendorDir = path.join(packageDir, 'vendor', platformInfo.triple);
     const candidates = [
@@ -144,9 +150,9 @@ function codexBinaryInPlatformPackage(
   const direct = findInPlatformPackage(platformPkgDir);
   if (direct) return direct;
 
-  const nested = resolvePackageDir(platformPkgDir, platformInfo.pkg);
+  const nested = yield* resolvePackageDir(platformPkgDir, platformInfo.pkg);
   return nested === undefined ? undefined : findInPlatformPackage(nested);
-}
+});
 
 /**
  * Locate the native Codex CLI binary. Results are cached for the session
@@ -181,14 +187,17 @@ export const getCodexConfig = Effect.promise(
 /**
  * The sandbox mode a codex call runs under: its own override, else the
  * user-configured default. The approval prompt the loop opens and the launch
- * that follows it read the same one from here.
+ * that follows it read the same one from here. The SDK-typed return is the
+ * alignment guard between the persisted schema values and the Codex sandbox
+ * union: a schema value the SDK doesn't accept fails to compile here.
  */
 export const codexSandboxMode = (
   input: { readonly sandbox_mode?: SandboxMode | null },
-  workspaceState: StateStore,
+  stores: SettingsStores,
 ): Effect.Effect<SandboxMode, StateReadFailed> =>
-  Effect.flatMap(getCodexConfig, (config) =>
-    input.sandbox_mode == null
-      ? config.getCodexSandboxMode(workspaceState)
-      : Effect.succeed(input.sandbox_mode),
-  );
+  input.sandbox_mode == null
+    ? readSettingFrom<CodexSandboxMode>(
+        stores,
+        WorkspaceStateKey.CODEX_SANDBOX_MODE,
+      )
+    : Effect.succeed(input.sandbox_mode);

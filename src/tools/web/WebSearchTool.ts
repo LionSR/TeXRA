@@ -9,6 +9,7 @@ import { retryTransientFetch, toFetchToolError } from '@tools/timeouts';
 import { defineTool } from '@tools/core/define';
 import { nullishWithDefault } from '@tools/core/inputSchema';
 import { executed } from '@tools/core/result';
+import { ensureError } from '@utils/errors/errorMessage';
 
 const DDG_TIMEOUT_MS = 15_000; // 15 s
 const DDG_RETRIES = 2;
@@ -88,7 +89,7 @@ const searchDuckDuckGo = Effect.fn('WebSearchTool.searchDuckDuckGo')(
                 retry: 0,
               })
               .json<unknown>(),
-          catch: (cause) => cause,
+          catch: ensureError,
         });
         // Validate the body at the boundary. A malformed shape is not
         // transient, so it is not retried; the classification below surfaces
@@ -183,9 +184,9 @@ export const WebSearchTool = defineTool({
   slow: true,
   parallelSafe: true,
   description:
-    'Search the web and return top results. Uses the native provider search tool when available; falls back to DuckDuckGo Instant Answers API.',
+    'Search the web and return top results from the DuckDuckGo Instant Answers API.',
   schema: WebSearchInputSchema,
-  execute: (input: WebSearchInput): Effect.Effect<ToolResult, unknown> => {
+  execute: (input: WebSearchInput): Effect.Effect<ToolResult, Error> => {
     // The owning agent run's cancellation enters here as interruption —
     // without it, a cancelled run would wait out searches (and their
     // retries) that only observe the internal timeout.

@@ -39,13 +39,13 @@ export function ResumeListForm(props: ResumeListFormProps): React.JSX.Element {
     <AsyncListForm<readonly CliHistoryEntry[], RunId>
       title="/resume"
       loadingLabel="Loading history..."
-      load={async () =>
-        listResumableCliHistoryEntries(
-          await props.runtime.runPromise(
-            listCliHistoryEntries(Effect.succeed(props.session)),
-          ),
+      load={() =>
+        Effect.map(
+          listCliHistoryEntries(Effect.succeed(props.session)),
+          listResumableCliHistoryEntries,
         )
       }
+      runtime={props.runtime}
       items={(entries) =>
         entries.map((entry) => ({
           value: entry.id,

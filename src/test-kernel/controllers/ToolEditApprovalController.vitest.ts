@@ -236,20 +236,26 @@ describe('tool edit approval controller', () => {
     await run(controller.present(approvalRequest()));
     const requestId = testHost.contextForRequest().requestId;
 
-    // `dispose` admits a release for every staged request without waiting
-    // for it, and the host's release for a refused `request.opened` lands
-    // right behind it: the second one finds the entry already dropped, so it
-    // has only the cleanup in flight to wait for.
-    await run(controller.dispose());
+    // `dispose` admits a release for every staged request before it waits on
+    // any, and the host's release for a refused `request.opened` lands right
+    // behind it: the second one finds the entry already dropped, so it has
+    // only the cleanup in flight to wait for. Both settle once it is gone.
+    let disposed = false;
+    const disposing = run(controller.dispose()).then(() => {
+      disposed = true;
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
     let released = false;
     const release = run(controller.release(requestId)).then(() => {
       released = true;
     });
     await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(disposed).toBe(false);
     expect(released).toBe(false);
 
     Deferred.doneUnsafe(disposal, Effect.void);
-    await release;
+    await Promise.all([disposing, release]);
+    expect(disposed).toBe(true);
     expect(released).toBe(true);
     expect(testHost.preview.dispose).toHaveBeenCalledOnce();
   });
@@ -288,13 +294,13 @@ describe('tool edit approval controller', () => {
     const testHost = createTestHost();
     const controller = createController(testHost.host);
     const events: string[] = [];
-    const builds: Deferred.Deferred<void, unknown>[] = [];
+    const builds: Deferred.Deferred<void, Error>[] = [];
     // The host build is a program now, and its own settlement is what a
     // release waits for, so the event it records belongs inside it.
     const firstBuildStarted = Deferred.makeUnsafe<void>();
     const secondBuildStarted = Deferred.makeUnsafe<void>();
     const openBuildDisplay = vi.fn(() => {
-      const build = Deferred.makeUnsafe<void, unknown>();
+      const build = Deferred.makeUnsafe<void, Error>();
       builds.push(build);
       Deferred.doneUnsafe(
         builds.length === 1 ? firstBuildStarted : secondBuildStarted,

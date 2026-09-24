@@ -97,4 +97,7 @@ and `JsonConfigProvider.get` keep their signatures. Effect `Config` is for
   `Schedule` and the ±20 % capped helper in `src/utils/core`; no third
   spelling.
 - `src/eventBus/AppSignals.ts` imports no `node:events`.
-- `config/ratchets/unknown-error-baseline.json` exists and shrinks.
+- No production `Effect.Effect<..., unknown, ...>` or
+  `Effect.fn.Return<..., unknown, ...>` remains: the shrink-only
+  `unknown-error-baseline.json` reached zero and was retired for the
+  hardcoded rule in `unknownErrorChannelRatchet.vitest.ts`.

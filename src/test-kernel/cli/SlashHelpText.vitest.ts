@@ -4,15 +4,14 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { formatSlashCommandHelp } from '@cli/chat/tui/commands/helpText';
 import {
-  listSlashCommands,
-  unregisterSlashCommand,
   type SlashCommand,
+  installSlashCommands,
 } from '@cli/chat/tui/commands/slashRegistry';
 import { registerBuiltinSlashCommands } from '@cli/chat/tui/commands/registerBuiltins';
 import { resetCliState } from '@cli/chat/tui/state/cliState';
 
 afterEach(() => {
-  for (const cmd of [...listSlashCommands()]) unregisterSlashCommand(cmd.name);
+  installSlashCommands([]);
   resetCliState();
 });
 

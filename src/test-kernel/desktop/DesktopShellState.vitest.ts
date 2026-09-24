@@ -17,9 +17,7 @@ import {
   setWorkbenchWidth,
   toggleFiles,
   toggleSidebar,
-  toggleSummaryBar,
   toggleWorkbench,
-  workspaceName,
   type DesktopShellState,
   type OpenWorkbenchTabRequest,
   type WorkbenchPlacement,
@@ -224,11 +222,5 @@ describe('desktop shell state model', () => {
       state,
     );
     expect(setWorkbenchTabDirty(state, 'missing', true)).toBe(state);
-  });
-
-  it('derives concise workspace labels from POSIX and Windows paths', () => {
-    expect(workspaceName('/work/My Paper/')).toBe('My Paper');
-    expect(workspaceName(String.raw`C:\work\TeXRA.paper`)).toBe('TeXRA.paper');
-    expect(workspaceName(undefined)).toBe('No project open');
   });
 });

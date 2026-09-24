@@ -19,10 +19,10 @@ import {
   writeDoctorReport,
 } from '@cli/runtime/doctor';
 import { CliExitCode } from '@cli/runtime/exitCodes';
+import { TEXRA_CLI_SUPPORTED_NODE_RANGE } from '@cli/runtime/terminalRequirements';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
-import { TEXRA_CLI_SUPPORTED_NODE_RANGE } from '@tools/externalToolDefs';
 
 const context: CliContext = createTestCliContext({
   cwd: '/workspace',

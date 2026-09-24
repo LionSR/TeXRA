@@ -3,7 +3,7 @@ import { Effect } from 'effect';
 import { execa } from 'execa';
 import { parse as shellParse } from 'shell-quote';
 
-import type { ToolProbeInputs } from '@tools/externalToolDefs';
+import type { ToolProbeInputs } from '@tools/toolProbes';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { CliExitCode } from '../runtime/exitCodes';
@@ -126,7 +126,7 @@ function toggleTool(context: CliContext, id: string, enabled: boolean) {
 // Not routed through executeCommand: install/auth guide commands are
 // interactive (they can prompt for input or open a browser), which needs true
 // stdio:'inherit' that executeCommand's buffered/streamed output can't
-// provide. `command` always comes from the static EXTERNAL_TOOL_DEFS registry,
+// provide. `command` always comes from the static TOOL_PLUGINS manifest,
 // never from user or LLM input. POSIX commands run as argv; Windows uses the
 // shell so npm/gh `.cmd` shims resolve through PATHEXT.
 const shellRun = Effect.fn('cli.tools.shellRun')(function* (command: string) {

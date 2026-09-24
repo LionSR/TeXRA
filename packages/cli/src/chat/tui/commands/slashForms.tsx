@@ -122,7 +122,6 @@ export function openRegisteredCliSlashForm(
   formProgress.set(undefined);
   takeActiveForm({
     commandName: command.name,
-    escapeAction: command.formEscapeAction,
     render: (close, availableRows) => {
       const progress = formProgress.get();
       if (progress) {

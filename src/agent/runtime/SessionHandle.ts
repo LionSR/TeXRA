@@ -186,17 +186,6 @@ export type SessionHandleInit = Partial<
   readonly transcriptMode?: StreamLogStoreMode;
 };
 
-/**
- * The graph's refusals arrive as causes; every door this class exposes reports
- * them as a plain `Error`, so one normalization serves them all.
- */
-const asTypedError = <A, E>(
-  effect: Effect.Effect<A, E>,
-): Effect.Effect<A, Error> =>
-  effect.pipe(
-    Effect.catchCause((cause) => Effect.fail(ensureError(Cause.squash(cause)))),
-  );
-
 export class SessionHandle {
   /**
    * The one session state every renderer of this session reads (PRD
@@ -518,12 +507,11 @@ export class SessionHandle {
    *  before a relaunch journals into it. */
   acquireClaims(
     id: AggregateId,
-  ): Effect.Effect<Effect.Effect<void, Error>, Error> {
-    return asTypedError(
-      this.graph
-        .acquireClaims(id)
-        .pipe(Effect.map((release) => asTypedError(release))),
-    );
+  ): Effect.Effect<
+    Effect.Effect<void, DatabaseWriteFailed>,
+    DatabaseReadFailed | DatabaseWriteFailed
+  > {
+    return this.graph.acquireClaims(id);
   }
 
   /**
@@ -541,16 +529,16 @@ export class SessionHandle {
    * never from the view: the view's liveness comes from a prober that only
    * watches owners of runs already resident in it.
    */
-  claimOwner(runId: RunId): Effect.Effect<AggregateClaim, Error> {
-    return asTypedError(this.graph.claimOwner(runId));
+  claimOwner(runId: RunId): Effect.Effect<AggregateClaim, DatabaseReadFailed> {
+    return this.graph.claimOwner(runId);
   }
 
   /** Drop this process's claim on one aggregate, so the next process resumes
    *  it instead of reading a live owner: a run's when its lease ends, a
    *  workflow checkpoint's when its invocation does. The claim belongs to the
    *  invocation, not to the process, and this is its one release. */
-  releaseClaims(id: AggregateId): Effect.Effect<void, Error> {
-    return asTypedError(this.graph.releaseClaims(id));
+  releaseClaims(id: AggregateId): Effect.Effect<void, DatabaseWriteFailed> {
+    return this.graph.releaseClaims(id);
   }
 
   /**
@@ -1149,7 +1137,7 @@ export class SessionHandle {
           (event.payload.step === 'waiting' ||
             event.payload.step === 'turn.begin'));
       if (!phaseMoved) return;
-      yield* this.runs.handleStatus(target.id);
+      this.runs.handleStatus(target.id);
     });
   }
 
@@ -1246,7 +1234,7 @@ export class SessionHandle {
    * the session's runs, whenever it releases the session (a `closeSession`,
    * the runtime's disposal, {@link dispose}). On owner-release paths
    * (`closeSession`, runtime disposal) the owner has already dropped the
-   * session from the set {@link forEachLiveSession} reads by then;
+   * session from the set {@link heldSessions} reads by then;
    * {@link dispose} unwinds first and drops the session afterwards.
    */
   unwind(): Effect.Effect<void> {
@@ -1269,16 +1257,6 @@ export class SessionHandle {
       );
     });
   }
-}
-
-/** Visit every session the process's owner holds — for process-shutdown
- * sweeps that must reach session-keyed registries (e.g. the agent-CLI session
- * stores). The owner's held set is the only list of live sessions; no module
- * keeps a second one. */
-export function forEachLiveSession(
-  callback: (session: SessionHandle) => void,
-): void {
-  for (const session of heldSessions()) callback(session);
 }
 
 /**

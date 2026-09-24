@@ -20,14 +20,7 @@
  * skip; a barrier with an intent and no result is outcome-unknown and asks;
  * a parallel-safe call without a result re-runs.
  */
-import {
-  Cause,
-  Effect,
-  Exit,
-  FileSystem,
-  Result,
-  SynchronizedRef,
-} from 'effect';
+import { Cause, Effect, Exit, FileSystem, SynchronizedRef } from 'effect';
 
 import type { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { normalizeToolCallError } from '@agent/core/tools/toolCallParsing';
@@ -48,16 +41,15 @@ import {
   type ToolResultPayload,
 } from '@shared/schemas';
 import { JsonValueSchema } from '@shared/schemas';
-import { RunLedger, RunLedgerRefused } from '@shared/session/runLedger';
+import { RunLedgerRefused } from '@shared/session/runLedger';
 import { DatabaseWriteFailed } from '@shared/session/database';
 import {
-  foldRunState,
   type RunLedgerDraft,
   type RunState,
 } from '@shared/session/runStateFold';
 import { generateShortId, getBasename, groupBy } from '@utils/core';
 import { isNonEmptyString } from '@utils/text/stringUtils';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { pathToLocationIn } from '@utils/files/fileLocation';
 import { entryExists } from '@utils/files/fsEntryExists';
 
@@ -73,15 +65,16 @@ import {
   appendRow,
   bindingRow,
   displayRow,
+  familyState,
   redactedForFact,
   rowAggregate,
   snapshotRow,
   stepRow,
-  toolUseFlowState,
   type Message,
 } from './rows';
 import type { InvokeError } from '../ModelInvoker';
 import type { Runs } from '../runRegistry';
+import type { RunCell } from './runProgram';
 
 /** Max concurrently executing tool calls within one parallel-safe partition. */
 const MAX_PARALLEL_TOOL_CALLS = 4;
@@ -254,41 +247,25 @@ function settlementContent(
 
 /** Dispatch every unsettled call of the pending response, then deliver. */
 export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
-  initial: RunState,
+  cell: RunCell,
   turn: TurnContext,
 ): Effect.fn.Return<
   DispatchOutcome,
   InvokeError,
-  AgentRun | RunLedger | ProcessServices | Runs | WorkspaceFs | StorageFs
+  AgentRun | ProcessServices | Runs | WorkspaceFs | StorageFs
 > {
   const run = yield* AgentRun;
-  const ledger = yield* RunLedger;
   const { runId, logger } = run;
   const aggregateId = rowAggregate(runId);
+  const initial = yield* cell.current;
   const pending = initial.pendingResponse;
   if (pending === null) return { state: initial, endTurn: false };
   const { responseId } = pending;
   const calls = localCallsOf(pending.turn);
-  const stateRef = yield* SynchronizedRef.make(initial);
-
-  /** Append rows under the state's semaphore: concurrent settlements of one
-   *  parallel partition serialize here and each folds onto the latest. Rows
-   *  may be built from that latest state, so a settlement that carries the
-   *  workspace it mutated records it in the order the batches commit. */
-  const append = (
-    rows:
-      | readonly RunLedgerDraft[]
-      | ((state: RunState) => readonly RunLedgerDraft[]),
-  ) =>
-    SynchronizedRef.updateEffect(stateRef, (state) =>
-      Effect.uninterruptible(
-        ledger.appendBatch(
-          runId,
-          state,
-          typeof rows === 'function' ? rows(state) : rows,
-        ),
-      ),
-    );
+  // Concurrent settlements of one parallel partition serialize under the
+  // cell's lock and each folds onto the latest state, so a settlement that
+  // carries the workspace it mutated records it in the order batches commit.
+  const { append } = cell;
   const settledOf = (state: RunState, callId: string) =>
     state.pendingResponse?.responseId === responseId
       ? (state.pendingResponse.settled[callId] ?? null)
@@ -303,7 +280,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
    * call the resume will not run again whose effects on the run are gone.
    */
   const workspaceMutation = (state: RunState): readonly StateOperation[] => {
-    const flow = toolUseFlowState(state);
+    const flow = familyState(state, 'toolUse');
     if (flow === null || flow.stateSlices === null) return [];
     return [
       {
@@ -431,7 +408,13 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     turn.workspace.interactions.recordToolCall();
     let result: ToolResult;
     if (!tool) {
-      result = { status: 'error', error: `Unknown tool ${fact.toolName}` };
+      // A name the run was not offered, or one it was offered that no longer
+      // resolves on resume: a model-visible error, and the turn continues.
+      result = {
+        status: 'error',
+        error: `tool_unavailable: the tool "${fact.toolName}" is not available in this run. Continue with the tools you were offered.`,
+        diagnostics: { code: 'tool_unavailable', tool: fact.toolName },
+      };
     } else {
       // Guard first, in the same call context: a refused path or an
       // unapproved command settles the call without the body running.
@@ -449,6 +432,9 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
               toolCallId: fact.callId,
               hooks: { onToolOutput, recordSubagentCost },
             }),
+            // The services of the run's plugins' layers, from its pinned
+            // composition.
+            Effect.provide(run.composition.services),
           ),
         ),
       );
@@ -491,7 +477,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     // the projection of an error result cannot itself fail.
     const extracted = yield* Effect.try({
       try: () => extractToolAttachments(result),
-      catch: (error) => error,
+      catch: ensureError,
     }).pipe(
       Effect.catch((error) =>
         Effect.sync(() => {
@@ -594,10 +580,6 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
       },
       cards,
       true,
-    ).pipe(
-      // A ledger refusal mid-dispatch is the loop's to stop on; it surfaces
-      // as a defect of this call's fiber so the partition unwinds with it.
-      Effect.orDie,
     );
   });
 
@@ -609,8 +591,8 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
       readonly attempt: number;
       readonly approvalRequestId: string | null;
     },
-  ): Effect.fn.Return<'rerun' | 'skip', never> {
-    let current = yield* SynchronizedRef.get(stateRef);
+  ): Effect.fn.Return<'rerun' | 'skip', InvokeError> {
+    let current = yield* cell.current;
     const question = `The tool "${fact.toolName}" may have run before the run was interrupted, and no result was recorded. Run it again, or skip it?`;
     const rerunOption = 'Run again';
     // Only a person decides this barrier: the answer's chosen option, or a
@@ -683,8 +665,8 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
           attempt: intent.attempt,
           requestId,
         }),
-      ]).pipe(Effect.orDie);
-      current = yield* SynchronizedRef.get(stateRef);
+      ]);
+      current = yield* cell.current;
     }
     // The decision is the `request.decided` row the decide command lands on
     // the tail. A plane that closes first, and every refusal a person did not
@@ -706,17 +688,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
         ),
       );
     if (row === null) return yield* Effect.interrupt;
-    yield* SynchronizedRef.update(stateRef, (state) => {
-      const folded = foldRunState(state, [row]);
-      if (Result.isFailure(folded) || folded.success === null) {
-        throw new Error(
-          `The tool-outcome decision does not fold onto the run: ${
-            Result.isFailure(folded) ? folded.failure.detail : 'no state'
-          }`,
-        );
-      }
-      return folded.success;
-    });
+    yield* cell.fold(row, 'The tool-outcome decision');
     const answer = decided(row.decision);
     if (answer === null) return yield* Effect.interrupt;
     return yield* recordOutcomeDecision(fact, call, intent, answer);
@@ -729,7 +701,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     call: LocalCall,
     intent: { readonly attempt: number },
     decision: 'rerun' | 'skip',
-  ): Effect.fn.Return<'rerun' | 'skip', never> {
+  ): Effect.fn.Return<'rerun' | 'skip', InvokeError> {
     if (decision === 'rerun') {
       yield* append([
         {
@@ -742,7 +714,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
           },
         },
         ...admittedCards(fact, call),
-      ]).pipe(Effect.orDie);
+      ]);
     }
     return decision;
   });
@@ -756,24 +728,19 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     InvokeError,
     ProcessServices | Runs | WorkspaceFs | StorageFs
   > {
-    const current = yield* SynchronizedRef.get(stateRef);
+    const current = yield* cell.current;
     if (settledOf(current, fact.callId) !== null) return;
     const call = calls[fact.ordinal];
     if (call === undefined) {
       return yield* Effect.die(new Error(`No call at ordinal ${fact.ordinal}`));
     }
     if (afterEndTurn) {
-      yield* settle(
-        fact,
-        1,
-        syntheticSettlement(SKIPPED_AFTER_END_TURN),
-        [],
-      ).pipe(Effect.orDie);
+      yield* settle(fact, 1, syntheticSettlement(SKIPPED_AFTER_END_TURN), []);
       return;
     }
     if (fact.parallelSafe) {
       const cards = admittedCards(fact, call);
-      if (cards.length > 0) yield* append(cards).pipe(Effect.orDie);
+      if (cards.length > 0) yield* append(cards);
       yield* execute(fact, call, 1);
       return;
     }
@@ -786,7 +753,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
           intent.attempt,
           syntheticSettlement(SKIPPED_OUTCOME_UNKNOWN),
           [],
-        ).pipe(Effect.orDie);
+        );
         return;
       }
       yield* execute(fact, call, intent.attempt + 1);
@@ -801,7 +768,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
         payload: { responseId, callIds: [fact.callId], attempt: 1 },
       },
       ...admittedCards(fact, call),
-    ]).pipe(Effect.orDie);
+    ]);
     yield* execute(fact, call, 1);
   });
 
@@ -814,7 +781,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     InvokeError,
     ProcessServices | Runs | WorkspaceFs | StorageFs
   > {
-    const current = yield* SynchronizedRef.get(stateRef);
+    const current = yield* cell.current;
     if (settledOf(current, fact.callId) !== null) return;
     const primary = settledOf(current, primaryId);
     if (primary === null) {
@@ -839,7 +806,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
         stateMutation: [],
       },
       [],
-    ).pipe(Effect.orDie);
+    );
   });
 
   // Partitions in order; each barrier is its own, each run of parallel-safe
@@ -858,7 +825,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
         yield* deriveDuplicate(fact, fact.duplicateOf);
       }
     }
-    const after = yield* SynchronizedRef.get(stateRef);
+    const after = yield* cell.current;
     if (!endTurn) {
       endTurn = members.some((fact) => {
         const settled = settledOf(after, fact.callId);
@@ -868,7 +835,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
   }
 
   // Delivery: the paid turn enters history once, with the complete group.
-  const settledState = yield* SynchronizedRef.get(stateRef);
+  const settledState = yield* cell.current;
   const settledPending = settledState.pendingResponse;
   if (settledPending === null || settledPending.responseId !== responseId) {
     return yield* Effect.die(
@@ -964,28 +931,26 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     );
   }
   const group: Message = { role: 'tool', results };
-  const flow = toolUseFlowState(settledState);
+  const flow = familyState(settledState, 'toolUse');
   if (flow === null) {
     return yield* Effect.die(new Error('Delivery needs an opened run.'));
   }
-  const delivered = yield* ledger.appendBatch(runId, settledState, [
+  const stateSlices =
+    flow.stateSlices === null
+      ? null
+      : {
+          ...flow.stateSlices,
+          workspaceSnapshot: turn.workspace.toSnapshot({
+            excludeAssemblyStrings: true,
+          }),
+        };
+  const delivered = yield* cell.append((state) => [
     appendRow(runId, [group], responseId),
-    snapshotRow(runId, settledState, {
+    snapshotRow(runId, state, {
       phase: 'results.ready',
-      state: {
-        ...flow,
-        stateSlices:
-          flow.stateSlices === null
-            ? null
-            : {
-                ...flow.stateSlices,
-                workspaceSnapshot: turn.workspace.toSnapshot({
-                  excludeAssemblyStrings: true,
-                }),
-              },
-      },
+      state: { family: 'toolUse', state: { ...flow, stateSlices } },
     }),
-    stepRow(runId, settledState, 'results.ready'),
+    stepRow(runId, state, 'results.ready'),
   ]);
   return { state: delivered, endTurn };
 });

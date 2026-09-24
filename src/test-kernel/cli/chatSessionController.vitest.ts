@@ -131,7 +131,6 @@ import {
 } from '@shared/schemas';
 import { TEXRA_APPROVAL_POLICY_DEFAULT } from '@shared/approvalPolicy';
 import { DatabaseReadFailed } from '@shared/session/database';
-import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
@@ -161,7 +160,7 @@ import {
 
 // The state stores the controller's setting reads land on, as ports of the
 // installed fake host rather than a module mock of `platform()`: the setting
-// path (`detachSubagentsOnStop`) reads the session's own roots, which this
+// reads (the multi-agent preset name) take the session's own roots, which this
 // file's stub takes from the installed host, and the kernel's setup file
 // installs a host before this file's mocks are registered.
 setupPlatform(
@@ -239,7 +238,7 @@ function pendingRunClaim(): {
    *  continuations before the next assertion reads what they wrote. */
   readonly settle: () => Promise<void>;
 } {
-  const claim = Deferred.makeUnsafe<void, unknown>();
+  const claim = Deferred.makeUnsafe<void, Error>();
   return {
     settled: Deferred.await(claim),
     settle: async (): Promise<void> => {
@@ -637,7 +636,7 @@ describe('createChatSessionController', () => {
       Effect.succeed<Outcome>({ kind: 'done' }),
     );
     mocks.reportRequestDefect.mockReturnValue(
-      'The request failed inside TeXRA; see the log.',
+      Effect.succeed('The request failed inside TeXRA; see the log.'),
     );
     installSession();
     mocks.resumeRun.mockImplementation(defaultResumeRun);
@@ -667,61 +666,6 @@ describe('createChatSessionController', () => {
 
     expect(mocks.appendLocalErrorTranscript).not.toHaveBeenCalled();
     expect(session.runExitCode).toBe(CliExitCode.Success);
-  });
-
-  it('reads the shared detach-subagents setting key when stopping an active run', () => {
-    const session = makeSession({
-      runId: 'a11111' as RunId,
-    });
-    holdRun('a11111' as RunId);
-    const ctrl = createChatSessionController(makeInit({ session }));
-
-    mocks.globalGet.mockReturnValue(Effect.succeed(true));
-    ctrl.stop();
-
-    expect(mocks.globalGet).toHaveBeenCalledWith(
-      GlobalStateKey.DETACH_SUBAGENTS_ON_STOP,
-    );
-    expect(mocks.request).toHaveBeenCalledWith({
-      kind: 'run.stop',
-      runId: 'a11111',
-      detachActiveChildren: true,
-    });
-  });
-
-  it('stops the focused root while preserving its agent children', () => {
-    const session = makeSession({
-      runId: 'b00001' as RunId,
-    });
-    const ctrl = createChatSessionController(makeInit({ session }));
-
-    ctrl.stopRun('b00001' as RunId);
-
-    expect(session.stopRequested).toBe(true);
-    expect(session.interruptedRunId).toBe('b00001');
-    expect(mocks.request).toHaveBeenCalledWith({
-      kind: 'run.stop',
-      runId: 'b00001',
-      detachActiveChildren: true,
-    });
-    expect(mocks.workspaceGet).not.toHaveBeenCalled();
-  });
-
-  it('stops one focused child without stopping the root session', () => {
-    const session = makeSession({
-      runId: 'b00001' as RunId,
-    });
-    const ctrl = createChatSessionController(makeInit({ session }));
-
-    ctrl.stopRun('ca0001' as RunId);
-
-    expect(session.stopRequested).toBe(false);
-    expect(session.interruptedRunId).toBeUndefined();
-    expect(mocks.request).toHaveBeenCalledWith({
-      kind: 'run.stop',
-      runId: 'ca0001',
-      detachActiveChildren: true,
-    });
   });
 
   it.live(
@@ -798,7 +742,14 @@ describe('createChatSessionController', () => {
           vi.waitFor(() => expect(runs.getHandle(childRun)).toBeDefined()),
         );
 
-        ctrl.stopRun(rootRun);
+        // The stop Ctrl-C sends under "Keep subagents running": the root
+        // stops and its live children detach.
+        const owner = mocks.sessionStub() as SessionHandle;
+        yield* owner.requests.request({
+          kind: 'run.stop',
+          runId: rootRun,
+          detachActiveChildren: true,
+        });
         yield* Effect.promise(() => awaitRunSettled(session));
 
         expect(session.runCompleted).toBe(true);
@@ -890,7 +841,7 @@ describe('createChatSessionController', () => {
     const config = makeRunRequest('Check presenter ownership.');
     ctrl.startRootRun(config);
     session.runId = 'a0000a' as RunId;
-    ctrl.stopRun('a0000a' as RunId);
+    ctrl.stop();
     for (const present of resultPresenters) present('Failure A');
     runA.resolve({
       category: 'toolUse',

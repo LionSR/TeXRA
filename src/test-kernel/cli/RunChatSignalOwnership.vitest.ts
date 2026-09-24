@@ -17,7 +17,6 @@ import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { rootRunId as rootRunIdSignal } from '@cli/chat/tui/state/cliState';
 import { currentView } from '@cli/chat/tui/state/sessionView';
-import { platform } from '@platform/platform';
 import {
   aggregateId as qualifyAggregateId,
   AgentCategory,
@@ -91,7 +90,7 @@ vi.doMock(cliRequire.resolve('ink'), () => ({
 vi.mock('@latex/texraResponseTextProcessing', () => ({
   createTexraResponseTextProcessing: () => ({
     normalizeResponseText: (text: string) => text,
-    postProcessResponse: (text: string) => text,
+    postProcessResponse: (text: string) => Effect.succeed(text),
     connectResponseText: () => Effect.succeed(' '),
   }),
 }));
@@ -281,7 +280,7 @@ describe('runChat signal ownership wiring', () => {
     // The init hands back the services the composition root holds; the fake
     // host installed above owns those stores here.
     const cliServices = () => ({
-      ...platform(),
+      ...installedHost().platform,
       globalStorage: installedHost().roots.globalStorage,
       globalState: installedHost().roots.globalState,
       secrets: installedHost().secrets,
@@ -354,7 +353,6 @@ describe('runChat signal ownership wiring', () => {
       resume: vi.fn(async () => undefined),
       startRootRun: mocks.startRootRun,
       stop: vi.fn(),
-      stopRun: vi.fn(),
       tryResumeRun: vi.fn(() => Effect.succeed(false)),
       submit: mocks.submit,
       activateSkill: vi.fn(),

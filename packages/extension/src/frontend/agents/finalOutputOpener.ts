@@ -7,6 +7,7 @@ import {
 } from '@agent/runtime';
 import { withLogChannel } from '@logger/effectLog';
 import type { SettingsStores } from '@shared/config/settingsAccess';
+import { ensureError } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'FinalOutputOpener';
 
@@ -42,7 +43,7 @@ export const openFinalOutputIfAvailable = (
             8000,
           );
         },
-        catch: (error: unknown) => error,
+        catch: ensureError,
       }),
     );
     // The preview is the whole point of this call: a failure leaves the user

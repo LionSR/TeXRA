@@ -59,10 +59,11 @@ describe('workflow sandbox host bundles', () => {
 
 function smokeEntrySource(): string {
   return `
+import { Effect } from 'effect';
 import { runScriptInSandbox } from ${JSON.stringify(sandboxPath)};
 
 async function main() {
-  const result = await runScriptInSandbox(
+  const result = await Effect.runPromise(runScriptInSandbox(
     'return 42',
     {
       asyncFns: {},
@@ -72,7 +73,7 @@ async function main() {
       realmPrelude: '',
     },
     { filename: 'bundle-smoke.workflow.js', timeoutMs: 1_000 },
-  );
+  ));
   console.log(result);
 }
 

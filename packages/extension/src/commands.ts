@@ -57,10 +57,10 @@ export function registerCommands(
       settingsViewProvider,
       progressViewProvider,
       secrets,
-      runtime,
       session,
     ),
     runtime,
+    session,
   );
 
   context.subscriptions.push(

@@ -24,11 +24,7 @@ export const DesktopSaveFileMessageSchema = z.object({
   command: z.literal(DESKTOP_SHELL_COMMANDS.SAVE_FILE),
 });
 
-const DesktopLayoutPanelSchema = z.enum([
-  'bottomBar',
-  'sidePanel',
-  'summaryBar',
-]);
+const DesktopLayoutPanelSchema = z.enum(['bottomBar', 'sidePanel']);
 export type DesktopLayoutPanel = z.infer<typeof DesktopLayoutPanelSchema>;
 
 export const DesktopToggleLayoutMessageSchema = z.object({

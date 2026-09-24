@@ -27,7 +27,8 @@ import {
   type SubscriptionAccount,
 } from '@controllers/modelAccess/subscriptionProviders';
 import { planOnboardingFunnelTransition } from '@controllers/onboarding/onboardingFunnel';
-import { createLog, warn as logWarning } from '@logger/logUtils';
+import { warn as logWarning } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import {
   API_PROVIDERS,
   apiKeyEnvName,
@@ -39,6 +40,7 @@ import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import type { LanguageModel } from '@platform/languageModel';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { ProcessRuntime } from '@platform/processRuntime';
+import type { StateWriteFailed } from '@platform/interfaces';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import {
   readOnboardingFlags,
@@ -93,8 +95,6 @@ interface OnboardingGateContext {
 }
 
 const LOG_CHANNEL = 'CLI Onboarding';
-const credentialLog = createLog('Setup Credentials');
-
 /**
  * The gate degrades to "not configured yet" when a state read or write fails,
  * which at worst re-prompts. Say why in the log so a read-only home directory
@@ -153,8 +153,7 @@ export const maybeRunCliOnboarding = Effect.fn('maybeRunCliOnboarding')(
     const hasCredential = yield* hasUsableSetupCredential(
       services,
       services.secrets,
-      credentialLog.warn,
-    );
+    ).pipe(withLogChannel('Setup Credentials'));
     // Route through the same funnel-transition planner the extension/desktop
     // hosts use, rather than a hand-copied precedence ladder. `selectSetupAgent`
     // is discarded: the CLI has no launcher agent list to steer. Clearing a
@@ -169,7 +168,9 @@ export const maybeRunCliOnboarding = Effect.fn('maybeRunCliOnboarding')(
     });
     if (transition.clearDeclined) {
       yield* setOnboardingDeclined(globalState, false).pipe(
-        Effect.catch((error) =>
+        // The handler names the channel's whole error type, so a widened
+        // channel fails to compile rather than being absorbed unlogged.
+        Effect.catch((error: StateWriteFailed) =>
           Effect.sync(() =>
             warnOnboardingFailure('Clearing the stale skip flag', error),
           ),
@@ -253,7 +254,8 @@ const runOnboardingFlow = Effect.fn('runOnboardingFlow')(function* (options: {
     // global-state write fails (read-only home, permissions), tell the user
     // rather than silently re-prompting later with no explanation.
     yield* setOnboardingDeclined(options.stores.globalState, true).pipe(
-      Effect.catch((error) =>
+      // Handler param names the whole channel, so widening it fails to compile.
+      Effect.catch((error: StateWriteFailed) =>
         Effect.sync(() => {
           warnOnboardingFailure('Saving the skip flag', error);
           writeTextStderr(
@@ -268,7 +270,8 @@ const runOnboardingFlow = Effect.fn('runOnboardingFlow')(function* (options: {
     // signed out would have the stale flag suppress onboarding and land back on
     // the dead-end. Best-effort: a failed clear only re-surfaces that rare edge.
     yield* setOnboardingDeclined(options.stores.globalState, false).pipe(
-      Effect.catch((error) =>
+      // Handler param names the whole channel, so widening it fails to compile.
+      Effect.catch((error: StateWriteFailed) =>
         Effect.sync(() =>
           warnOnboardingFailure('Clearing the stale skip flag', error),
         ),
@@ -513,16 +516,9 @@ function ChatGptProgressStep(props: {
               },
             },
           );
-          const update = yield* subscriptionProvider('chatgpt')
+          yield* subscriptionProvider('chatgpt')
             .setPreferSubscription(stores, true)
             .pipe(Effect.mapError(ensureError));
-          if (!update.effective) {
-            if (!isCancelled())
-              props.onError(
-                'Signed in with ChatGPT, but a more specific setting keeps the subscription disabled. Add a provider API key instead.',
-              );
-            return;
-          }
           if (!isCancelled()) props.onSuccess(account);
         }).pipe(
           Effect.catchCause((cause) =>

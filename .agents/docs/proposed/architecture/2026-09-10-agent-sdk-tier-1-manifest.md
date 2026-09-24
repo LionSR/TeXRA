@@ -40,6 +40,13 @@ Status: proposed
 > supersession of R1 boundary kind (c). Every count below is the surface
 > after the flip: three entries, 67 bindings, 63 distinct names.
 >
+> **2026-09-23 amendment — tools as data.** Under the owner decision
+> recorded in the rulings ledger's amendment to the `defineTool` freeze
+> (#12862), `defineTool` returns a plain tool object instead of a class to
+> subclass. The type export `DefinedToolClass` is replaced one-for-one by
+> `DefinedTool`, the object shape `defineTool` returns; the counts are
+> unchanged.
+>
 > "Declared", not "published", throughout: `packages/agent` builds and bundles
 > locally but is **not published to npm** (`AGENTS.md` §Layout), so every entry
 > and export named below is a declared package surface, not a shipped release
@@ -148,7 +155,7 @@ changed in every entry at once:
 | `ITool`                  | type  | `@agent/core/tools/ToolTypes`         |
 | `IToolRegistry`          | type  | `@agent/core/tools/ToolTypes`         |
 | `ToolHost`               | type  | `@agent/core/tools/ToolTypes`         |
-| `DefinedToolClass`       | type  | `@tools/core/definition`              |
+| `DefinedTool`            | type  | `@tools/core/definition`              |
 | `AggregateId`            | type  | `@shared/schemas` → `sessionEvent.ts` |
 | `TranscriptSubscription` | type  | `@shared/schemas` → `sessionEvent.ts` |
 | `RunId`                  | type  | `@shared/schemas` → `identifiers.ts`  |

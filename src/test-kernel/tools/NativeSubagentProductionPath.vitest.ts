@@ -43,7 +43,6 @@ import { readChildTurnState } from '@agent/storage/runRecords';
 import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { FileInteractionState } from '@agent/core/state/AgentWorkspaceState';
-import { noopTrace } from '@agent/trace';
 import type { BoundModel } from '@agent/runtime/run/modelBinding';
 import type { Message } from '@agent/runtime/loop/rows';
 import { executeAgent } from '@agent/runtime/executeAgent';
@@ -63,7 +62,6 @@ import {
   AgentResumeFailed,
   type RecoveryContinuation,
 } from '@platform/interfaces';
-import type { Platform } from '@platform/platform';
 import { withProcessServices } from '@platform/processRuntime';
 import {
   RUN_OUTCOME,
@@ -71,10 +69,14 @@ import {
   type RunId,
   AgentCategory,
 } from '@shared/schemas';
+import { noopTrace } from '@test/support/noopTrace';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
-import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
+import {
+  nativeToolTestLayer,
+  emptyPinnedComposition,
+} from '@test/support/nativeToolTestLayer';
 import {
   createTempDirPlatform,
   makeTempDir,
@@ -441,31 +443,29 @@ async function queueSecondAssertionFollowUp(
   instruction = 'Now prove the second assertion.',
 ) {
   const resumed = await testRuntime().runPromise(
-    new DelegateAgentTool()
-      .call({
-        agent: null,
-        model: null,
-        instruction,
-        memories: [],
-        working_directory: null,
-        execution_id: runId,
-      })
-      .pipe(
-        Effect.provide(
-          nativeToolTestLayer({
-            tracker: new FileInteractionState(),
-            run: {
-              runId: parentContext.runId,
-              session: parentContext.session,
-              config: AgentConfigSchema.parse({
-                agent: 'chat',
-                model: parentContext.model,
-              }),
-              toolPolicy: {},
-            },
-          }),
-        ),
+    DelegateAgentTool.call({
+      agent: null,
+      model: null,
+      instruction,
+      memories: [],
+      working_directory: null,
+      execution_id: runId,
+    }).pipe(
+      Effect.provide(
+        nativeToolTestLayer({
+          tracker: new FileInteractionState(),
+          run: {
+            runId: parentContext.runId,
+            session: parentContext.session,
+            config: AgentConfigSchema.parse({
+              agent: 'chat',
+              model: parentContext.model,
+            }),
+            toolPolicy: {},
+          },
+        }),
       ),
+    ),
   );
   expect(resumed.status).toBe('executed');
   return resumed;
@@ -509,7 +509,7 @@ async function launchWaitingChild(options: {
     workingDirectory: process.cwd(),
   });
   await Effect.runPromise(
-    registerRun(session, PARENT_RUN_ID, parentConfig, PARENT_AGENT, {
+    registerRun(session, PARENT_RUN_ID, parentConfig, {
       identity: { kind: 'agent', agent: PARENT_AGENT },
       parentRunId: OUTER_RUN_ID,
     }),
@@ -545,8 +545,8 @@ async function launchWaitingChild(options: {
       logger: noopTrace,
       toolPolicy: {
         approvalPromptsUnavailable: false,
-        runtimeUnavailableTools: [],
       },
+      composition: emptyPinnedComposition,
     },
   };
   const launch = await testRuntime().runPromise(
@@ -1106,19 +1106,18 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
             session,
             toolPolicy: {
               approvalPromptsUnavailable: false,
-              runtimeUnavailableTools: [],
             },
           },
         });
-        const reportView = yield* new ExecutionsTool()
-          .call({ path: `/executions/${runId}/report` })
-          .pipe(Effect.provide(executionToolLayer));
+        const reportView = yield* ExecutionsTool.call({
+          path: `/executions/${runId}/report`,
+        }).pipe(Effect.provide(executionToolLayer));
         expect(reportView.status).toBe('executed');
         expect(reportView.output).toContain('Result A.');
         expect(reportView.output).toContain('interrupted');
-        const resultView = yield* new ExecutionsTool()
-          .call({ path: `/executions/${runId}/result` })
-          .pipe(Effect.provide(executionToolLayer));
+        const resultView = yield* ExecutionsTool.call({
+          path: `/executions/${runId}/result`,
+        }).pipe(Effect.provide(executionToolLayer));
         expect(resultView.status).toBe('executed');
         // /result is the machine-readable chaining endpoint: the attribution
         // rides inside the JSON, never as prefixed prose.

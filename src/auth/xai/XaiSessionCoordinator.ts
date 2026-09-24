@@ -31,13 +31,11 @@ import {
   type XaiSession,
 } from './xaiSessionTypes';
 
-export type XaiSessionStorage = SubscriptionSessionStorage;
-export type XaiOAuthClient = SubscriptionOAuthClient;
 export type XaiSessionStatus = SubscriptionSessionStatus;
 
 export interface XaiSessionCoordinatorInit {
-  storage: XaiSessionStorage;
-  client?: XaiOAuthClient;
+  storage: SubscriptionSessionStorage;
+  client?: SubscriptionOAuthClient;
   now?: () => number;
 }
 

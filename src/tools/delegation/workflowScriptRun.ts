@@ -242,17 +242,14 @@ export function projectWorkflowScriptProgress<R>(
 
   // The engine's own sweep closes every stage it announced before it returns
   // or rethrows; this covers a fault that stopped it short of that. The
-  // outcome is read the way the engine's `finalize` reads it: a run stopped
-  // by interruption alone or by its abort signal was cancelled, not failed,
-  // matching the `finish(CANCELLED)` sweep the fault pre-empted.
+  // outcome is read the way the engine's terminal sweep reads it: a run
+  // stopped by interruption alone was cancelled, not failed, matching the
+  // `finish(CANCELLED)` sweep the fault pre-empted.
   const settle = (exit: Exit.Exit<unknown, unknown>): void => {
     let outcome: RunOutcome = RUN_OUTCOME.FAILED;
     if (Exit.isSuccess(exit)) {
       outcome = RUN_OUTCOME.COMPLETED;
-    } else if (
-      Cause.hasInterruptsOnly(exit.cause) ||
-      runOptions.signal?.aborted === true
-    ) {
+    } else if (Cause.hasInterruptsOnly(exit.cause)) {
       outcome = RUN_OUTCOME.CANCELLED;
     }
     for (const handle of phases.values()) {

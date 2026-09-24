@@ -18,8 +18,6 @@ import { registerCliStateResetHook } from './cliState';
 interface ActiveSlashForm {
   /** The slash command that mounted the form (for the header strip). */
   readonly commandName: string;
-  /** Status-bar verb for Escape while the form owns input. Defaults to close. */
-  readonly escapeAction?: string;
   /** Render the form body. Receives the close callback. */
   readonly render: (
     onDone: () => void,

@@ -6,11 +6,11 @@ import {
   getFileListConfig,
   type ListableFileType,
 } from '@common/files/fileListingRules';
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 
 import { getFilesRecursively } from './listing';
 
-const log = createLog('FileLister');
+const CHANNEL = 'FileLister';
 
 export class FileLister {
   public static initialize(
@@ -39,8 +39,10 @@ export class FileLister {
   public list(fileType: ListableFileType): Effect.Effect<string[]> {
     const root = this.workspacePath;
     if (!root) {
-      log.warn('No workspace folder found');
-      return Effect.succeed([]);
+      return Effect.logWarning('No workspace folder found').pipe(
+        withLogChannel(CHANNEL),
+        Effect.as([]),
+      );
     }
     return Effect.promise(() =>
       getFilesRecursively(root, getFileListConfig(fileType)),

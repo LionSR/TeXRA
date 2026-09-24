@@ -2,21 +2,22 @@ import { createReadStream, existsSync, statSync } from 'node:fs';
 import { mkdir } from 'node:fs/promises';
 import * as path from 'node:path';
 
-import { Data, Effect, Ref } from 'effect';
+import { Data, Effect, Ref, Stream } from 'effect';
 import { execa, type Subprocess } from 'execa';
 import OpenAI from 'openai';
 
 import type { ApiKeyRouteCredential } from '@agent/runtime/modelRoutes';
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
   resolveOptionalCommand,
   type ResolvedBinaryCommand,
 } from '@utils/system/binaryResolver';
 import { withExtendedPath } from '@utils/system/platformPaths';
+import { ensureError } from '@utils/errors/errorMessage';
 
-const log = createLog('AudioUtils');
+const CHANNEL = 'AudioUtils';
 
 const RECORDINGS_DIR = 'recordings';
 
@@ -45,11 +46,14 @@ class AudioRecorderError extends Data.TaggedError('AudioRecorderError')<{
  *  where the operation is named. */
 const recorderFailure =
   (operation: string) =>
-  (cause: unknown): AudioRecorderError => {
-    const message = getSdkErrorMessage(cause);
-    log.error(`Error in ${operation}: ${message}`);
-    return new AudioRecorderError({ message, cause });
-  };
+  <A, E>(self: Effect.Effect<A, E>): Effect.Effect<A, AudioRecorderError> =>
+    Effect.catch(self, (cause) => {
+      const message = getSdkErrorMessage(cause);
+      return Effect.logError(`Error in ${operation}: ${message}`).pipe(
+        withLogChannel(CHANNEL),
+        Effect.andThen(Effect.fail(new AudioRecorderError({ message, cause }))),
+      );
+    });
 
 /**
  * Upper bound on how long a SIGTERM'd sox may take to flush and exit before
@@ -101,9 +105,9 @@ function resolveSoxCommand(
 function watchRecorderExit(subprocess: Subprocess): Effect.Effect<void> {
   return Effect.tryPromise({
     try: () => subprocess,
-    catch: (cause) => cause,
+    catch: ensureError,
   }).pipe(
-    Effect.match({
+    Effect.matchEffect({
       onSuccess: (result) => {
         // On Windows, kill('SIGTERM') acts as force-kill and result.signal
         // may be 'SIGTERM' or null depending on Node version.  Also treat
@@ -111,17 +115,19 @@ function watchRecorderExit(subprocess: Subprocess): Effect.Effect<void> {
         const intentional =
           result.signal === 'SIGTERM' || result.signal === 'SIGKILL';
         if (intentional) {
-          log.info('Recording stopped intentionally');
-        } else if (result.exitCode !== 0) {
-          log.error(`Sox process exited with code ${result.exitCode}`);
-        } else {
-          log.info('Recording process completed successfully');
+          return Effect.logInfo('Recording stopped intentionally');
         }
+        if (result.exitCode !== 0) {
+          return Effect.logError(
+            `Sox process exited with code ${result.exitCode}`,
+          );
+        }
+        return Effect.logInfo('Recording process completed successfully');
       },
-      onFailure: (cause) => {
-        log.error(`Sox process error: ${getSdkErrorMessage(cause)}`);
-      },
+      onFailure: (cause) =>
+        Effect.logError(`Sox process error: ${getSdkErrorMessage(cause)}`),
     }),
+    withLogChannel(CHANNEL),
     Effect.andThen(
       Ref.update(activeRecording, (current) =>
         current?.process === subprocess ? null : current,
@@ -145,37 +151,50 @@ export function startRecording(
       });
     }
 
-    // One foreign region: resolve sox, create the directory, spawn the
-    // recorder. Nothing in it has claimed the microphone yet, so a throw
-    // leaves no state to undo.
-    const started = yield* Effect.tryPromise({
-      try: async (): Promise<ActiveRecording | null> => {
+    // Resolve sox and create the directory, then spawn the recorder. Nothing
+    // in either step has claimed the microphone yet, so a throw leaves no
+    // state to undo.
+    const prepared = yield* Effect.tryPromise({
+      try: async () => {
         const soxCommand = resolveSoxCommand(roots);
         if (!soxCommand) return null;
 
         const directory = recordingsDir(roots);
         await mkdir(directory, { recursive: true });
         const absPath = path.join(directory, `record_${Date.now()}.wav`);
+        return { soxCommand, absPath };
+      },
+      catch: ensureError,
+    }).pipe(recorderFailure('startRecording'));
+    if (!prepared) {
+      return yield* new AudioRecorderError({
+        message:
+          'Sox is required for audio recording. Please install it first.',
+      });
+    }
 
-        const soxArgs = [
-          '--default-device',
-          '--no-show-progress',
-          '--rate',
-          '16000',
-          '--channels',
-          '1',
-          '--encoding',
-          'signed-integer',
-          '--bits',
-          '16',
-          '--type',
-          'wav',
-          absPath,
-        ];
-        log.info(
-          `Starting audio recording with sox: ${soxCommand.resolvedPath} ${soxArgs.join(' ')}`,
-        );
+    const { soxCommand, absPath } = prepared;
+    const soxArgs = [
+      '--default-device',
+      '--no-show-progress',
+      '--rate',
+      '16000',
+      '--channels',
+      '1',
+      '--encoding',
+      'signed-integer',
+      '--bits',
+      '16',
+      '--type',
+      'wav',
+      absPath,
+    ];
+    yield* Effect.logInfo(
+      `Starting audio recording with sox: ${soxCommand.resolvedPath} ${soxArgs.join(' ')}`,
+    ).pipe(withLogChannel(CHANNEL));
 
+    const started = yield* Effect.try({
+      try: (): ActiveRecording => {
         const subprocess = execa(
           soxCommand.command,
           [...soxCommand.args, ...soxArgs],
@@ -184,22 +203,28 @@ export function startRecording(
             reject: false,
           },
         );
-        subprocess.stderr?.on('data', (data: Buffer) => {
-          log.debug(`Sox stderr: ${data.toString()}`);
-        });
         return { process: subprocess, path: absPath };
       },
-      catch: recorderFailure('startRecording'),
-    });
-    if (!started) {
-      return yield* new AudioRecorderError({
-        message:
-          'Sox is required for audio recording. Please install it first.',
-      });
-    }
+      catch: ensureError,
+    }).pipe(recorderFailure('startRecording'));
 
     yield* Ref.set(activeRecording, started);
     yield* Effect.forkDetach(watchRecorderExit(started.process));
+    // sox's stderr, line by line, for as long as it runs. execa's own
+    // iterable shares the stream with the result buffering; a failed sox
+    // ends it with the error `watchRecorderExit` reports.
+    yield* Effect.forkDetach(
+      Stream.fromAsyncIterable(
+        started.process.iterable({ from: 'stderr' }),
+        ensureError,
+      ).pipe(
+        Stream.runForEach((line) => Effect.logDebug(`Sox stderr: ${line}`)),
+        Effect.catch((error) =>
+          Effect.logDebug(`Sox stderr ended early: ${error.message}`),
+        ),
+        withLogChannel(CHANNEL),
+      ),
+    );
     return started.path;
   });
 }
@@ -232,8 +257,8 @@ export function stopRecording(): Effect.Effect<string, AudioRecorderError> {
 
     yield* Effect.try({
       try: () => active.process.kill('SIGTERM'),
-      catch: recorderFailure('stopRecording'),
-    });
+      catch: ensureError,
+    }).pipe(recorderFailure('stopRecording'));
 
     // Await the process this module already holds rather than guessing how
     // long sox needs to flush. `execa` was started with `reject: false`, so
@@ -242,13 +267,13 @@ export function stopRecording(): Effect.Effect<string, AudioRecorderError> {
     // would hang the tool, which the old fixed sleep could not do.
     yield* Effect.tryPromise({
       try: () => active.process,
-      catch: (cause) => cause,
+      catch: ensureError,
     }).pipe(Effect.ignore, Effect.timeoutOption(SOX_SHUTDOWN_TIMEOUT_MS));
 
     const size = yield* Effect.try({
       try: () => (existsSync(active.path) ? statSync(active.path).size : null),
-      catch: recorderFailure('stopRecording'),
-    });
+      catch: ensureError,
+    }).pipe(recorderFailure('stopRecording'));
     if (size === null) {
       return yield* new AudioRecorderError({
         message: 'Recording file not found',
@@ -291,6 +316,6 @@ export function transcribeRecording(
       });
       return result.text;
     },
-    catch: recorderFailure('transcribeRecording'),
-  });
+    catch: ensureError,
+  }).pipe(recorderFailure('transcribeRecording'));
 }

@@ -53,24 +53,19 @@ Things the tree won't tell you:
   (no NEW distinct `@agent/*` deep-import specifier from a host, type-only
   included), `host-agent-mock`,
   `architecture-edges`, and `effect-migration` (per-file allowlists of
-  shrink-only counts: `platform()`, `new AbortController(`,
+  shrink-only counts: `new AbortController(`,
   superseded package imports, `Effect.run*` boundary calls, raw catches in
   `effect`-importing files; it admits a new `Effect.run*`
   file only under `packages/{extension,desktop,cli,agent}/src/` (webview
   frontends excluded) or a named webview runtime entry in the script's
   `BOUNDARY_RUNTIME_ENTRIES`, and ESLint's
   `no-warning-comments` fails on any `@adapter-until` marker, since the owner
-  ruled there are no temporary adapters), and `pure-tier-kernel-suites` (the Ink
-  renderer suites a source scan classes as host-free but which leak process
-  terminal state into each other, so they run in the isolated `kernel` Vitest
-  project — see AGENTS.md
-  "Test tiers"), and `store-public-surface` (the frozen public method set of
-  the run log store). Three more budget the code itself rather than an
-  import edge — `file-size-baseline` (a per-file line budget over 500 lines),
-  `refuted-candidates` (the costed-and-refused refactors, with their ruling
-  anchors) and `unknown-error-baseline` (per-file counts of
-  `Effect.Effect<..., unknown, ...>`); AGENTS.md "Directory organization" has
-  the rules. The invariant to hold is "never widen a
+  ruled there are no temporary adapters), and `store-public-surface` (the
+  frozen public method set of the run log store). Two more budget the code
+  itself rather than an import edge — `file-size-baseline` (a per-file line
+  budget over 500 lines) and `refuted-candidates` (the costed-and-refused
+  refactors, with their ruling anchors); AGENTS.md "Directory organization"
+  has the rules. The invariant to hold is "never widen a
   baseline"; the open work is the Tier-1 public manifest and shrinking the
   frozen lists, not
   another lint rule. npm publication is deliberately held until a named external
@@ -78,8 +73,12 @@ Things the tree won't tell you:
   `src/test-kernel/architecture/` (including
   `approvalPolicyAuthorityRatchet.vitest.ts`, and
   `sharedSchemasDeepImportRatchet.vitest.ts`, which forbids every
-  `@shared/schemas/<leaf>` import outright) also pin single-authority
-  invariants with hardcoded rules rather than baseline JSON.
+  `@shared/schemas/<leaf>` import outright, and
+  `unknownErrorChannelRatchet.vitest.ts`, which forbids an
+  `Effect.Effect`/`Effect.fn.Return` error channel spelled `unknown` — type it
+  with the tagged error the path raises, `Error` at a host port, and
+  `ensureError` at a foreign boundary) also pin single-authority invariants
+  with hardcoded rules rather than baseline JSON.
 - **`src/utils/` is host-agnostic, not universally browser-safe.** Only the
   `BROWSER_SAFE_UTILS` allowlist in `eslint.config.mjs` (`@utils/core`,
   `@utils/errors/errorMessage`,
@@ -135,7 +134,7 @@ VS Code-free webview frontends above. This list is enforced by
 sync with this list and with each other.
 
 **VS Code-allowed zones** — platform wiring belongs here:
-`packages/extension/src/extension.ts` (calls `initPlatform()` exactly once),
+`packages/extension/src/extension.ts` (calls `installProcessRuntime()` exactly once),
 `packages/extension/src/commands/`, `packages/extension/src/frontend/`,
 `packages/extension/src/common/`, `src/platform/` interface definitions, and
 `src/auth/`. Within `src/utils/`, a browser-reachable module additionally
@@ -143,9 +142,12 @@ stays free of Node built-ins — see the browser-safe note above; that is a
 stricter constraint layered on top of the VS Code-free rule, not a
 substitute for it.
 
-Reach host services through `platform()` from `@platform/platform` (config,
-state, log, fs, workspace, storage, secrets). When agnostic code needs a
-host-only capability, add a typed `Platform` port rather than an import.
+Reach process services from the Effect context the process runtime serves
+(`Lifecycle`, `AgentDirectories`, `AppState`, `Secrets`, `FileSystem`, …; the
+composition roots install it once through `installProcessRuntime`) and
+per-workspace ones from the `WorkspaceRoots` the caller holds. When agnostic
+code needs a host-only capability, add a typed port served by that runtime
+rather than an import.
 Substitutions and the push-UI-to-the-caller rule: AGENTS.md "Platform
 decoupling rules".
 

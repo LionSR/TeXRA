@@ -19,7 +19,7 @@ import {
 import { GITHUB_TOKEN_STORAGE_KEY } from '@tools/github/githubAuth';
 import { ListApiKeysTool } from '@tools/setup/ListApiKeysTool';
 
-const tool = new ListApiKeysTool();
+const tool = ListApiKeysTool;
 
 setupPlatform();
 

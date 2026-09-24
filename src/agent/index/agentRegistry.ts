@@ -1,10 +1,9 @@
 /** Agent Registry - Flat agent metadata cache with source-priority lookup. */
 
-import { Data, Effect, FileSystem } from 'effect';
+import { Cause, Data, Effect, FileSystem } from 'effect';
 import { AgentRosterController } from '@agent/roster/AgentRosterController';
-import { createLog } from '@logger/logUtils';
-import type { StateReadFailed } from '@platform/interfaces';
-import { AgentDirectories } from '@platform/interfaces';
+import { withLogChannel } from '@logger/effectLog';
+import { AgentDirectories, type StateReadFailed } from '@platform/interfaces';
 import type { GlobalStorageFs } from '@platform/rootedFs';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type {
@@ -28,11 +27,13 @@ import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { hasDelegationTool } from '@shared/constants/delegationTools';
 import { byName } from '@utils/core';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { scanDirectory } from './agentYamlScanner';
+import { builtInToolUseRoots } from './BundledAgentDirectories';
 import { loadRemoteAgents } from './remoteAgentMeta';
 import type { AgentEntry } from './agentEntry';
 
-const log = createLog('agentRegistry');
+const CHANNEL = 'agentRegistry';
 
 /** Resolving an agent directory failed (I/O or a rejected configured path). */
 export class AgentCatalogLoadError extends Data.TaggedError(
@@ -46,20 +47,21 @@ export class AgentCatalogLoadError extends Data.TaggedError(
  * Source priority for lookups (higher priority first). Every source must be
  * listed, not omitted: `deduplicateByName` compares `indexOf`, and an absent
  * source scores `-1`, ranking it first by accident instead of by decision.
+ * Bundled outranks remote, so a stale hosted row never shadows a bundled name.
  */
 const LOOKUP_PRIORITY: AgentSource[] = [
   'custom',
-  'remote',
   'builtInWorkflow',
   'builtInToolUse',
+  'remote',
 ];
 
 /** Source priority for tool-use sessions (prefers tool-use agents over workflow). */
 const TOOL_USE_LOOKUP_PRIORITY: AgentSource[] = [
   'custom',
-  'remote',
   'builtInToolUse',
   'builtInWorkflow',
+  'remote',
 ];
 
 // =============================================================================
@@ -101,6 +103,13 @@ export interface LoadAgentsOptions {
   includeRemote?: boolean;
 }
 
+/**
+ * On {@link refresh}, `includeRemote: true` refetches remote metadata and
+ * `false` drops it. Omitted, it rescans only the local directories and keeps
+ * the remote entries the catalog already holds: a local edit costs no network.
+ */
+type RemoteMode = boolean | undefined;
+
 // =============================================================================
 // CORE API
 // =============================================================================
@@ -133,35 +142,17 @@ export function loadAgents(
  * own caller — the lane hands the next entrant off regardless.
  */
 function queueLoad(
-  includeRemote: boolean,
+  includeRemote: RemoteMode,
   loadEpoch: number,
 ): Effect.Effect<
   void,
   AgentCatalogLoadError | StateReadFailed,
   GlobalStorageFs | FileSystem.FileSystem | AgentDirectories
 > {
-  return Effect.suspend(() => {
-    if (loadEpoch !== epoch) return Effect.void;
-    return doLoad(includeRemote, loadEpoch).pipe(
-      Effect.map((loaded) => {
-        if (loaded) catalog = { includesRemote: includeRemote };
-      }),
-    );
-  });
-}
-
-function doLoad(
-  includeRemote: boolean,
-  loadEpoch: number,
-): Effect.Effect<
-  boolean,
-  AgentCatalogLoadError | StateReadFailed,
-  GlobalStorageFs | FileSystem.FileSystem | AgentDirectories
-> {
   return Effect.gen(function* () {
+    if (loadEpoch !== epoch) return;
     const startTime = Date.now();
 
-    // Load from all sources in parallel
     const dirs = yield* AgentDirectories;
     const [customDir, builtInDir, toolUseDir] = yield* Effect.all(
       [dirs.custom(), dirs.builtIn(), dirs.builtInToolUse()],
@@ -181,9 +172,9 @@ function doLoad(
     const [customScan, builtInScan, toolUseScan, remoteEntries] =
       yield* Effect.all(
         [
-          scanDirectory(customDir, 'custom'),
-          scanDirectory(builtInDir, 'builtInWorkflow'),
-          scanDirectory(toolUseDir, 'builtInToolUse'),
+          scanDirectory([customDir], 'custom'),
+          scanDirectory([builtInDir], 'builtInWorkflow'),
+          scanDirectory(builtInToolUseRoots(toolUseDir), 'builtInToolUse'),
           includeRemote
             ? loadRemoteAgents()
             : Effect.succeed([] as AgentEntry[]),
@@ -201,16 +192,26 @@ function doLoad(
       ...remoteEntries,
     ];
 
-    if (loadEpoch !== epoch) return false;
+    if (loadEpoch !== epoch) return;
 
+    // Carried-over remote entries are read at publish time, after every older
+    // load and any sign-out removal have settled.
+    const keptRemote =
+      includeRemote === undefined
+        ? [...cache.values()].filter((entry) => entry.source === 'remote')
+        : [];
     cache.clear();
     customScanIssues = Object.freeze(customScan.issues);
-    for (const entry of allEntries) {
+    for (const entry of [...allEntries, ...keptRemote]) {
       cache.set(agentKeyOf(entry), entry);
     }
+    catalog = {
+      includesRemote: includeRemote ?? catalog?.includesRemote ?? false,
+    };
 
-    log.info(`Loaded ${cache.size} agents in ${Date.now() - startTime}ms`);
-    return true;
+    yield* Effect.logInfo(
+      `Loaded ${cache.size} agents in ${Date.now() - startTime}ms`,
+    ).pipe(withLogChannel(CHANNEL));
   });
 }
 
@@ -285,7 +286,8 @@ export function getCustomAgentScanIssues(): readonly AgentScanIssue[] {
  * still queued from before. The cache keeps serving the catalog it already
  * published until the new one lands, including when the refresh fails. The
  * epoch advances only once the refresh actually starts, so constructing a
- * refresh without running it is inert.
+ * refresh without running it is inert. An omitted `includeRemote` means a
+ * local rescan here, unlike {@link loadAgents} (see {@link RemoteMode}).
  */
 export function refresh(
   options: LoadAgentsOptions = {},
@@ -295,10 +297,10 @@ export function refresh(
   GlobalStorageFs | FileSystem.FileSystem | AgentDirectories
 > {
   return Effect.suspend(() => {
-    const loadEpoch = ++epoch;
-    return onCatalogLoadLane(
-      queueLoad(options.includeRemote ?? true, loadEpoch),
-    );
+    // A local rescan is weaker than the loads queued before it, so it takes
+    // the current epoch instead of superseding a pending remote refetch.
+    const loadEpoch = options.includeRemote === undefined ? epoch : ++epoch;
+    return onCatalogLoadLane(queueLoad(options.includeRemote, loadEpoch));
   });
 }
 
@@ -321,16 +323,14 @@ export function invalidateRemoteAgentsAfterSignOut(): Effect.Effect<
     removeRemoteEntries();
     return refresh({ includeRemote: false });
   }).pipe(
-    Effect.catch((error: AgentCatalogLoadError | StateReadFailed) =>
-      Effect.sync(() => {
-        // An older in-flight remote load may have settled before the rebuild.
-        // Preserve the signed-out invariant even when local directory I/O fails.
-        removeRemoteEntries();
-        log.warn(
-          `Local agent catalog rebuild failed after sign-out: ${error.message}`,
-        );
-      }),
-    ),
+    Effect.catchCause((cause) => {
+      // Best effort, defects included: a stale catalog never blocks sign-out.
+      // Re-remove: an older remote load may have settled before the rebuild.
+      removeRemoteEntries();
+      return Effect.logWarning(
+        `Local agent catalog rebuild failed after sign-out: ${toErrorMessage(Cause.squash(cause))}`,
+      ).pipe(withLogChannel(CHANNEL));
+    }),
   );
 }
 
@@ -522,10 +522,8 @@ export function resolveAgentForLaunch(
 }
 
 /**
- * Deduplicate agents by name, keeping only the highest priority source.
- * Priority: custom > remote > builtInWorkflow > builtInToolUse.
- * When the same agent name exists in multiple sources (e.g. local + remote),
- * only the highest-priority version appears in the dropdown.
+ * Deduplicate agents by name, keeping only the highest-priority source
+ * (custom > builtInWorkflow > builtInToolUse > remote) for the dropdown.
  */
 function deduplicateByName(entries: AgentEntry[]): AgentEntry[] {
   const byKey = new Map<string, AgentEntry>();

@@ -99,16 +99,8 @@ function toolUseNodes(
 function webSearchNodes(
   entry: StreamLogEntryOf<typeof MESSAGE_TYPES.WEB_SEARCH>,
 ): ExportNode[] {
-  const { query, results = [] } = entry.data;
-  const hits = results.flatMap(({ title, url }) =>
-    url ? [{ title: title || url, url }] : [],
-  );
-  return [
-    ...(query ? [{ kind: 'web-search' as const, query }] : []),
-    ...(hits.length > 0
-      ? [{ kind: 'web-search-results' as const, results: hits }]
-      : []),
-  ];
+  const { query } = entry.data;
+  return query ? [{ kind: 'web-search', query }] : [];
 }
 
 /**

@@ -18,10 +18,7 @@ import {
   buildProviderApiKeyItems,
   formatProviderApiKeySummary,
 } from '@cli/chat/tui/forms/ProviderApiKeyForm';
-import {
-  listSlashCommands,
-  unregisterSlashCommand,
-} from '@cli/chat/tui/commands/slashRegistry';
+import { installSlashCommands } from '@cli/chat/tui/commands/slashRegistry';
 import { registerBuiltinSlashCommands } from '@cli/chat/tui/commands/registerBuiltins';
 import { openCliSlashCommandForm } from '@cli/chat/tui/commands/slashForms';
 import { ConfigApp } from '@cli/config/runConfigTui';
@@ -115,7 +112,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  for (const cmd of [...listSlashCommands()]) unregisterSlashCommand(cmd.name);
+  installSlashCommands([]);
   resetCliState();
 });
 

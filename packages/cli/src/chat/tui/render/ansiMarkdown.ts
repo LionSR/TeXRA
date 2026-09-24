@@ -17,7 +17,6 @@ import pico from 'picocolors';
 
 import { textDisplayWidth } from '@cli/runtime/terminalText';
 import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
-import { createLog } from '@logger/logUtils';
 import {
   createMarkdownProcessor,
   type MarkdownProcessorRenderEnv,
@@ -36,7 +35,6 @@ import { normalizeKnownHtmlForCliMarkdown } from './htmlMarkdownNormalize';
  *  raw control chars). */
 const ESC = String.fromCharCode(27);
 const sgr = (code: number): string => `${ESC}[${code}m`;
-const log = createLog('cli.ansiMarkdown');
 
 interface AnsiMarkdownStyle {
   readonly enabled: boolean;
@@ -77,9 +75,11 @@ function highlightForTui(
     try {
       return highlight(trimmed, { language: lang, ignoreIllegals: true });
     } catch (error) {
-      log.warn(
-        `Syntax highlighting failed for ${lang} (${trimmed.length} chars); rendering plain text: ${toErrorMessage(error)}`,
-      );
+      // The frame is the only surface the TUI has (its log sink is silent
+      // while Ink owns the screen), so the fallback carries its own notice.
+      return `${style.gray(trimmed)}\n${style.dim(
+        `[syntax highlighting failed for ${lang}; shown as plain text: ${toErrorMessage(error)}]`,
+      )}`;
     }
   }
   return style.gray(trimmed);

@@ -44,14 +44,14 @@ import {
 
 import { withLogChannel } from '@logger/effectLog';
 import { info, warn } from '@logger/logUtils';
-import { toErrorMessage } from '@utils/errors/errorMessage';
-import type { DiagnosticSeverity } from '@utils/diagnostics/diagnosticFormatting';
 import {
   makeJsonRpcConnection,
   type JsonRpcConnection,
   type JsonRpcConnectionDisposed,
   type JsonRpcRequestError,
-} from './jsonRpc';
+} from '@tools/jsonRpc';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import type { DiagnosticSeverity } from '@utils/diagnostics/diagnosticFormatting';
 import type { LeanServerRoster } from '../leanServerRegistry';
 import type {
   LeanDiagnostic,
@@ -591,7 +591,7 @@ function fileUriToPath(uri: string): Effect.Effect<string | null> {
   // escape and break diagnostics handling.
   return Effect.try({
     try: () => fileURLToPath(uri),
-    catch: (error) => error,
+    catch: ensureError,
   }).pipe(
     Effect.catch((error) =>
       Effect.logDebug(`Ignoring unmappable file URI ${uri}`).pipe(

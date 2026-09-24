@@ -1,4 +1,3 @@
-import type { ServerToolContentBlock } from '@agent/types/ServerTools';
 import {
   AgentWorkspaceStateSnapshotSchema,
   planSummaryLine,
@@ -121,20 +120,6 @@ class MediaAttachmentState {
   }
 }
 
-/**
- * Server-tool content carried across turns. Never persisted — every
- * `AgentWorkspaceState` starts it empty — so it is a plain in-memory struct
- * rather than a parse boundary.
- */
-interface ServerToolContentState {
-  contentBlocks: ServerToolContentBlock[];
-  lastAssistantContent: unknown[];
-}
-
-function emptyServerToolContent(): ServerToolContentState {
-  return { contentBlocks: [], lastAssistantContent: [] };
-}
-
 export class WorkPlanState {
   private _todos: TodoItem[];
   private _plan: Plan | null;
@@ -216,7 +201,6 @@ export class AgentWorkspaceState {
     public readonly media: MediaAttachmentState,
     public readonly reasoning: AgentWorkspaceSnapshot['reasoning'],
     public readonly interactions: FileInteractionState,
-    public readonly serverToolContent: ServerToolContentState,
     public readonly workPlan: WorkPlanState,
   ) {}
 
@@ -250,7 +234,6 @@ export class AgentWorkspaceState {
       new MediaAttachmentState(parsed.media),
       parsed.reasoning,
       new FileInteractionState(parsed.interactions),
-      emptyServerToolContent(),
       new WorkPlanState(parsed.workPlan),
     );
   }
@@ -276,10 +259,5 @@ export class AgentWorkspaceState {
 
   resetReasoning(): void {
     this.reasoning.thinkingBlocks = [];
-  }
-
-  resetServerToolContent(): void {
-    this.serverToolContent.contentBlocks = [];
-    this.serverToolContent.lastAssistantContent = [];
   }
 }

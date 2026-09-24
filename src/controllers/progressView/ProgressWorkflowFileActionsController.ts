@@ -8,7 +8,6 @@ import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 
 // Local imports
 import { withLogChannel } from '@logger/effectLog';
-import { createLog } from '@logger/logUtils';
 import { AgentResume } from '@platform/interfaces';
 import type { AcceptCopyMeta, RunId } from '@shared/schemas';
 import type { HostRequest } from '@shared/session/hostRequest';
@@ -22,7 +21,6 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { RunOutputsSource } from './runOutputs';
 
 const CHANNEL = 'ProgressWorkflowFileActions';
-const log = createLog(CHANNEL);
 
 type ProgressWorkflowFileActionsState = RunOutputsSource;
 
@@ -55,7 +53,6 @@ interface ProgressWorkflowFileActionsHost {
   readFile(file: string): FileAction<string>;
   showInfo(message: string): FileAction<void>;
   showError(message: string): FileAction<void>;
-  logError?(message: string, error: unknown): void;
 }
 
 interface ProgressWorkflowFileActionsControllerDeps {
@@ -108,12 +105,14 @@ export class ProgressWorkflowFileActionsController {
       yield* this.deps.host.openDirectory(directoryToReveal);
     }).pipe(
       Effect.catch((error) =>
-        Effect.gen({ self: this }, function* () {
-          this.deps.host.logError?.('Failed to open run folder', error);
-          yield* this.deps.host.showError(
-            `Failed to open run folder: ${toErrorMessage(error)}`,
-          );
-        }),
+        Effect.logError('Failed to open run folder', error).pipe(
+          withLogChannel(CHANNEL),
+          Effect.andThen(
+            this.deps.host.showError(
+              `Failed to open run folder: ${toErrorMessage(error)}`,
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -259,14 +258,13 @@ export class ProgressWorkflowFileActionsController {
       runBackups.set(file, content);
       this.modelOutputBackups.set(runId, runBackups);
     }).pipe(
+      // Best-effort: backup only informs the accepted-edit follow-up, but a
+      // later Accept then has no compare-time content to offer.
       Effect.catch((error) =>
-        Effect.sync(() => {
-          // Best-effort: backup only informs the accepted-edit follow-up, but a
-          // later Accept then has no compare-time content to offer.
-          log.debug(`Could not back up model output for ${file}`, {
-            data: error,
-          });
-        }),
+        Effect.logDebug(`Could not back up model output for ${file}`).pipe(
+          Effect.annotateLogs({ data: error }),
+          withLogChannel(CHANNEL),
+        ),
       ),
     );
   }

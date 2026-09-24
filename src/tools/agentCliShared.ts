@@ -6,7 +6,6 @@ import { Data, Effect } from 'effect';
 
 // Local imports
 import { registerRun } from '@agent/storage';
-import { type AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { RunHandle } from '@agent/runtime/RunHandle';
@@ -21,7 +20,8 @@ import {
   FOLLOW_UP_WAKE_FAILED_MESSAGE,
   submitFollowUp,
 } from '@agent/followUp/ToolUseFollowUp';
-import { AgentResume, type StateStore } from '@platform/interfaces';
+import { AgentResume } from '@platform/interfaces';
+import type { SettingsStores } from '@shared/config/settingsAccess';
 import {
   emptyUsageStats,
   sumUsageStats,
@@ -85,7 +85,7 @@ export type AgentCliToolFailure = ToolError | AgentCliCallFailed;
 
 /**
  * Re-raise a collaborator's rejection as its own cause: pipe this at the
- * tool's native `execute()` edge so BaseTool normalizes the original error
+ * tool's native `execute()` edge so defineTool normalizes the original error
  * without hiding the collaborator's diagnostics.
  */
 export const reraiseAgentCliCallFailure = <A, R>(
@@ -275,18 +275,12 @@ export const launchAgentCliSession = Effect.fn(
         tool: params.agentName,
       } as const;
 
-      yield* registerRun(
-        params.session,
-        runId,
-        params.config,
-        params.agentName,
-        {
-          identity,
-          userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.TERMINAL_BACKED,
-          parentRunId: params.parentRunId,
-          description: childRunDescription(params.description),
-        },
-      ).pipe(
+      yield* registerRun(params.session, runId, params.config, {
+        identity,
+        userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.TERMINAL_BACKED,
+        parentRunId: params.parentRunId,
+        description: childRunDescription(params.description),
+      }).pipe(
         Effect.mapError(
           (error) =>
             new ToolError(
@@ -384,11 +378,11 @@ const withAgentCliRun = Effect.fn('agentCliShared.withAgentCliRun')(function* <
 export const agentCliApprovalCommand = (
   agentName: string,
   prompt: string,
-  mode: (workspaceState: StateStore) => Effect.Effect<string, Error>,
+  mode: (stores: SettingsStores) => Effect.Effect<string, Error>,
 ): Effect.Effect<string, Error, ToolCall> =>
   Effect.gen(function* () {
     const { roots } = yield* ToolCall;
-    const resolved = yield* mode(roots.workspaceState);
+    const resolved = yield* mode(roots);
     return `[${agentName} ${resolved}] ${prompt}`;
   });
 
@@ -517,7 +511,7 @@ interface AgentCliLoopParams<TTurn> {
   formatError: (turn: TTurn | null, err: unknown, lastPrompt: string) => string;
   /** Omitted by providers (codex) that always throw on failure. */
   isTurnError?: (turn: TTurn) => boolean;
-  onTurnError?: (turn: TTurn, logger: AgentTrace) => void;
+  turnErrorMessage?: (turn: TTurn) => string | undefined;
   /** Logged if the loop fails after launch. */
   loopFailedMessage: string;
 }
@@ -553,7 +547,7 @@ export function buildAgentCliLaunch<TTurn>(
       formatDelivery,
       formatError,
       isTurnError,
-      onTurnError,
+      turnErrorMessage,
       loopFailedMessage,
     } = params;
     const { logger } = childRun;
@@ -595,7 +589,7 @@ export function buildAgentCliLaunch<TTurn>(
       isTerminal: () => false,
       getUsage,
       isTurnError,
-      onTurnError,
+      turnErrorMessage,
       onLoopStart: () => {
         registry.trackInFlight(target);
       },
@@ -633,9 +627,8 @@ export function buildAgentCliLaunch<TTurn>(
       // Nobody awaits an agent-CLI child: own a late loop failure here as a
       // trace diagnostic, since the loop already owns its one user-facing
       // result delivery.
-      onLoopFailed: (error: unknown): void => {
-        logger.error(loopFailedMessage, { data: error });
-      },
+      onLoopFailed: (error: unknown) =>
+        Effect.sync(() => logger.error(loopFailedMessage, { data: error })),
     };
   });
 }

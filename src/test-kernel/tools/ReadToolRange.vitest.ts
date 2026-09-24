@@ -19,13 +19,11 @@ const LARGE = Array.from({ length: 2500 }, (_, i) => `line ${i + 1}`).join(
 );
 
 const callRead = (input: unknown) =>
-  new ReadFileTool()
-    .call(input)
-    .pipe(
-      Effect.provide(
-        nativeToolTestLayer({ workingDirectory: fakePath('workspace') }),
-      ),
-    );
+  ReadFileTool.call(input).pipe(
+    Effect.provide(
+      nativeToolTestLayer({ workingDirectory: fakePath('workspace') }),
+    ),
+  );
 
 describe('read_file line ranges', () => {
   beforeEach(async () => {

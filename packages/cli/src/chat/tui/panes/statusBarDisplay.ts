@@ -1,9 +1,5 @@
 import { shortCliModelAccessRoute } from '@cli/runtime/modelAccessRoute';
 import {
-  defaultShortcutModifierLabel,
-  metaChordLabel,
-} from '@cli/runtime/shortcutLabels';
-import {
   firstFittingCandidate,
   textDisplayWidth,
   truncateSummaryToWidth,
@@ -30,12 +26,7 @@ import {
   formatFlowPositionLabel,
 } from '@shared/runs/runStatusDisplay';
 import type { RunView, SessionView } from '@shared/session/sessionView';
-import {
-  FOREGROUND_OWNERSHIP,
-  RUNNING_SESSION,
-  SESSION_LIST,
-  SUBAGENT,
-} from '@ui/copy/nestedRuns';
+import { RUNNING_SESSION, SESSION_LIST, SUBAGENT } from '@ui/copy/nestedRuns';
 import { APPROVAL_BYPASS_BADGE } from '@ui/copy/approvalBypass';
 import { assertNever, filterNotNullish, unique } from '@utils/core';
 import {
@@ -191,8 +182,6 @@ interface StatusBarTurnInput {
 interface StatusBarForegroundInput {
   /** True while a modal, form, palette, or search surface owns input. */
   readonly inputActive?: boolean;
-  /** Label for the foreground surface's Escape action while `inputActive`. */
-  readonly escapeAction?: string;
 }
 
 interface StatusBarChildListInput {
@@ -203,19 +192,12 @@ interface StatusBarChildListInput {
 }
 
 interface StatusBarShortcutsInput {
-  readonly agentSelectionAvailable?: boolean;
   /** True when slash commands and text entry are actionable in this view. */
   readonly chatInputAvailable: boolean;
   /** True when bare Escape can focus the active run's immediate parent. */
   readonly parentNavigationAvailable?: boolean;
   /** True when the persistent child list has a session row. */
   readonly childNavigationAvailable?: boolean;
-  /** True when Alt/Esc-1..9 has at least one run target. */
-  readonly runFocusAvailable?: boolean;
-  readonly modifierLabel?: string;
-  /** Advertise Shift+Enter for newline when the Kitty keyboard protocol is
-   *  active; otherwise the universal Ctrl-J is the only reliable binding. */
-  readonly shiftEnterNewline?: boolean;
   /** True when the focused run has output that can be printed in full. */
   readonly transcriptAvailable?: boolean;
 }
@@ -225,7 +207,10 @@ interface StatusBarDisplay {
   readonly bindings: string;
 }
 
-function accessModeSegment(access: UsageRoute | undefined): StatusBarSegment {
+// Own API keys are the default route, so only a subscription earns a segment.
+function accessModeSegment(
+  access: UsageRoute | undefined,
+): StatusBarSegment | undefined {
   const label = shortCliModelAccessRoute(access);
   return label === 'subscription'
     ? {
@@ -234,20 +219,7 @@ function accessModeSegment(access: UsageRoute | undefined): StatusBarSegment {
         compactText: 'sub',
         compactPriority: STATUS_BAR_COMPACT_PRIORITY.accessMode,
       }
-    : {
-        text: label,
-        color: 'dim',
-        compactPriority: STATUS_BAR_COMPACT_PRIORITY.accessMode,
-      };
-}
-
-function subscriptionProbeFailureSegment(): StatusBarSegment {
-  return {
-    text: 'subscription status unavailable',
-    compactText: 'sub unknown',
-    color: COLOR_WARNING,
-    compactPriority: STATUS_BAR_COMPACT_PRIORITY.accessMode,
-  };
+    : undefined;
 }
 
 function subscriptionQuotaSegment(
@@ -310,35 +282,6 @@ function formatUsage(
   };
 }
 
-function locationSegment(
-  location: { readonly context?: string; readonly label: string } | undefined,
-): StatusBarSegment | undefined {
-  if (!location) return undefined;
-  const text = location.context
-    ? `${location.context} › ${location.label}`
-    : location.label;
-  return {
-    text,
-    compactText: location.context ?? location.label,
-    color: 'dim',
-    compactPriority: STATUS_BAR_COMPACT_PRIORITY.location,
-  };
-}
-
-// One status-bar slot carries the loop position this run is at, in the
-// coordinate its family counts (mirrors the SubagentList row's `flowLabel`).
-function flowSegment(
-  flow: RunView['flow'] | undefined,
-): StatusBarSegment | undefined {
-  const text = formatFlowPositionLabel(flowPosition(flow));
-  if (text === undefined) return undefined;
-  return {
-    text,
-    color: 'dim',
-    compactPriority: STATUS_BAR_COMPACT_PRIORITY.flow,
-  };
-}
-
 // Lower values are removed first when the left status group exceeds the row.
 const STATUS_BAR_COMPACT_PRIORITY = {
   activeSubagent: 20,
@@ -364,57 +307,6 @@ const STATUS_BAR_COMPACT_PRIORITY = {
   // the 2-row chrome budget on narrow terminals.
   bypassBadge: 85,
 } as const;
-
-function queuedFollowUpsCountSegment(
-  messages: readonly string[],
-): StatusBarSegment | undefined {
-  return messages.length > 0
-    ? {
-        text: `queued ${messages.length}`,
-        color: COLOR_WARNING,
-        compactPriority: STATUS_BAR_COMPACT_PRIORITY.queuedFollowUp,
-      }
-    : undefined;
-}
-
-function subagentsSegment(subagents: number): StatusBarSegment | undefined {
-  return subagents > 0
-    ? {
-        text: formatResultCount(subagents, 'agent'),
-        compactText: `${subagents} ${SUBAGENT.compactCountSuffix}`,
-        color: 'dim',
-        compactPriority: STATUS_BAR_COMPACT_PRIORITY.activeSubagent,
-      }
-    : undefined;
-}
-
-function runningSessionsSegment(
-  runningSessions: number,
-): StatusBarSegment | undefined {
-  return runningSessions > 0
-    ? {
-        text: `${runningSessions} active`,
-        compactText: `${runningSessions} ${RUNNING_SESSION.compactCountSuffix}`,
-        color: 'dim',
-        compactPriority: STATUS_BAR_COMPACT_PRIORITY.activeSubagent,
-      }
-    : undefined;
-}
-
-function pendingInteractionSegment({
-  depth,
-  kind = 'approval',
-}: {
-  readonly depth: number;
-  readonly kind?: ApprovalQueueStatusKind;
-}): StatusBarSegment | undefined {
-  if (depth <= 0) return undefined;
-  return {
-    text: formatResultCount(depth, kind),
-    color: COLOR_WARNING,
-    compactPriority: STATUS_BAR_COMPACT_PRIORITY.approvalDepth,
-  };
-}
 
 function statusBarSegmentWidth(segment: StatusBarSegment): number {
   return textDisplayWidth(segment.text) + (segment.badge ? 2 : 0);
@@ -643,124 +535,43 @@ function statusBarBindingRow(
 }
 
 // Every bindings row below is a widest-first `firstFittingCandidate` cascade.
-//
-// No module-level memo: the bindings cascade below eagerly builds ~13
-// candidate rows and stringWidth-measures them until one fits, and its inputs
-// are a handful of flags that change far less often than the StatusBar
-// re-renders. Any render-path caching belongs in the React component
-// (`useMemo`), not in this pure module — module-scoped `let`s survive across
-// vitest cases and silently alias inputs if a joined value ever contains '|'.
+// The chat row names keys only; commands are one `/` away in the palette and
+// `/help`, so the bar never advertises individual slash commands.
 function statusBarBindingsText(
   {
-    agentSelectionAvailable = false,
     chatInputAvailable,
     childNavigationAvailable = false,
     parentNavigationAvailable = false,
-    runFocusAvailable = false,
-    modifierLabel = defaultShortcutModifierLabel(),
-    shiftEnterNewline = false,
     transcriptAvailable = false,
   }: StatusBarShortcutsInput,
   ctrlCAction: CtrlCAction,
   maxColumns: number | undefined,
 ): string {
-  const childList = childNavigationAvailable
-    ? keyHintText({ key: 'Tab', action: SESSION_LIST.openAction })
-    : undefined;
   const parentBack = parentNavigationAvailable
     ? keyHintText({ key: 'Esc', action: SESSION_LIST.parentAction })
     : undefined;
-  const runFocus = runFocusAvailable
-    ? keyHintText({
-        key: metaChordLabel(modifierLabel, '1..9'),
-        action: 'focus',
-      })
+  const childList = childNavigationAvailable
+    ? keyHintText({ key: 'Tab', action: SESSION_LIST.openAction })
     : undefined;
   const fullOutput = transcriptAvailable
     ? keyHintText({ key: 'Ctrl-T', action: 'transcript' })
     : undefined;
-  const chatHint = (key: string, action: string): string | undefined =>
-    chatInputAvailable ? keyHintText({ key, action }) : undefined;
-  const agent = agentSelectionAvailable
-    ? chatHint('/agent', 'agents')
+  const commands = chatInputAvailable
+    ? keyHintText({ key: '/', action: 'commands' })
     : undefined;
-  const status = chatHint('/status', 'details');
-  const model = chatHint('/model', 'models');
-  const api = chatHint('/api', 'api');
-  const newline = chatHint(
-    shiftEnterNewline ? 'Shift-Enter' : 'Ctrl-J',
-    'newline',
-  );
   const ctrlC = keyHintText({ key: 'Ctrl-C', action: ctrlCAction });
-  const setupControlsOnly =
-    chatInputAvailable && agentSelectionAvailable && !childNavigationAvailable;
-  const candidates = [
-    // Child navigation only applies when the current tree has a visible row;
-    // unrelated or not-yet-attached runs do not make Tab actionable.
-    statusBarBindingRow([
-      childList,
-      runFocus,
-      fullOutput,
-      status,
-      agent,
-      model,
-      api,
-      newline,
-      ctrlC,
-    ]),
-    setupControlsOnly &&
-      statusBarBindingRow([fullOutput, agent, model, api, newline, ctrlC]),
-    childNavigationAvailable &&
-      statusBarBindingRow([childList, fullOutput, agent, status, ctrlC]),
-    childNavigationAvailable &&
-      statusBarBindingRow([childList, fullOutput, agent, ctrlC]),
-    childNavigationAvailable &&
-      transcriptAvailable &&
-      statusBarBindingRow([childList, fullOutput, ctrlC]),
-    parentNavigationAvailable &&
-      transcriptAvailable &&
-      statusBarBindingRow([fullOutput, ctrlC]),
-    setupControlsOnly && statusBarBindingRow([agent, model, api, ctrlC]),
-    statusBarBindingRow([childList, fullOutput, agent, status, ctrlC]),
-    statusBarBindingRow([childList, fullOutput, agent, ctrlC]),
-    (childNavigationAvailable || agentSelectionAvailable) &&
-      statusBarBindingRow([childList, agent, ctrlC]),
-    childNavigationAvailable &&
-      statusBarBindingRow([childList, fullOutput, ctrlC]),
-    parentNavigationAvailable && ctrlC,
-    childNavigationAvailable && childList,
-  ].map((candidate) =>
-    parentBack && candidate
-      ? statusBarBindingRow([parentBack, candidate])
-      : candidate,
-  );
-  if (parentBack) candidates.push(parentBack);
-
-  return firstFittingCandidate({
-    candidates,
-    fallback: ctrlC,
-    maxColumns,
-    measure: textDisplayWidth,
-  });
-}
-
-function foregroundBindingsText(
-  ctrlCAction: CtrlCAction,
-  maxColumns?: number,
-  escapeAction = 'close',
-): string {
-  const ctrlCBinding = keyHintText({ key: 'Ctrl-C', action: ctrlCAction });
-  const escBinding = keyHintText({ key: 'Esc', action: escapeAction });
   return firstFittingCandidate({
     candidates: [
-      statusBarBindingRow([
-        FOREGROUND_OWNERSHIP.keysGoAbove,
-        escBinding,
-        ctrlCBinding,
-      ]),
-      statusBarBindingRow([escBinding, ctrlCBinding]),
+      statusBarBindingRow([parentBack, childList, fullOutput, commands, ctrlC]),
+      statusBarBindingRow([parentBack, childList, fullOutput, ctrlC]),
+      statusBarBindingRow([parentBack, childList, ctrlC]),
+      parentBack && statusBarBindingRow([parentBack, ctrlC]),
+      // Past Ctrl-C's width, the one navigation key still beats it: Ctrl-C
+      // works without being named, the way out of a child view does not.
+      parentBack,
+      childList,
     ],
-    fallback: ctrlCBinding,
+    fallback: ctrlC,
     maxColumns,
     measure: textDisplayWidth,
   });
@@ -814,18 +625,6 @@ function childListBindingsText(
   });
 }
 
-function rootActiveSegment(
-  input: StatusBarDisplayInput,
-): StatusBarSegment | undefined {
-  return input.ctrlCAction === 'stop root' && !isActivePhase(input.status)
-    ? {
-        text: 'root active',
-        color: COLOR_WARNING,
-        compactPriority: STATUS_BAR_COMPACT_PRIORITY.rootActive,
-      }
-    : undefined;
-}
-
 function approvalPolicySegment(
   policy: TexraApprovalPolicy | undefined,
 ): StatusBarSegment | undefined {
@@ -843,7 +642,7 @@ function approvalPolicySegment(
       };
     case 'yolo':
       return {
-        text: 'yolo',
+        text: 'auto-approve',
         color: COLOR_ERROR,
         compactPriority: STATUS_BAR_COMPACT_PRIORITY.approvalPolicy,
       };
@@ -936,11 +735,9 @@ function resolveStatusBarBindings(input: StatusBarDisplayInput): string {
   const maxColumns = statusBarInnerWidth(input.width);
   const ctrlCAction = input.ctrlCAction ?? 'exit';
   if (input.foreground.inputActive) {
-    return foregroundBindingsText(
-      ctrlCAction,
-      maxColumns,
-      input.foreground.escapeAction,
-    );
+    // The surface above prints its own keys, Esc included; only Ctrl-C,
+    // which works over every surface, is the bar's to name.
+    return keyHintText({ key: 'Ctrl-C', action: ctrlCAction });
   }
   if (input.childList.focused) {
     return childListBindingsText(input.childList, ctrlCAction, maxColumns);
@@ -955,6 +752,7 @@ export function buildStatusBarDisplay(
     { text: STATUS_DIAMOND, color: COLOR_HINT, decorative: true },
   ];
   const turn = input.turn;
+  const queuedCount = input.queuedFollowUpMessages.length;
 
   // No run yet: a child row has no status column, the root keeps its slot.
   const statusLabel = input.statusLabel ?? (input.isChildRun ? '' : '-');
@@ -1017,7 +815,6 @@ export function buildStatusBarDisplay(
   if (input.transientNotice) {
     transientNoticeIndex = left.length;
     left.push({ text: input.transientNotice.text, color: COLOR_WARNING });
-    const queuedCount = input.queuedFollowUpMessages.length;
     if (input.transientNotice.kind === 'exit' && queuedCount > 0) {
       // Exiting drops queued follow-ups silently — warn before the user
       // confirms with the second Ctrl-C.
@@ -1029,25 +826,84 @@ export function buildStatusBarDisplay(
     }
   }
 
+  // One slot carries a reflection run's round (mirrors the SubagentList row's
+  // `flowLabel`). A chat's turn count is not something anyone acts on.
+  const position = flowPosition(input.flow);
+  const flowText =
+    position?.kind === 'turn' ? undefined : formatFlowPositionLabel(position);
   left.push(
-    ...[
-      rootActiveSegment(input),
-      input.subscriptionProbeFailed
-        ? subscriptionProbeFailureSegment()
-        : accessModeSegment(input.modelAccess),
-      subscriptionQuotaSegment(input.subscriptionQuota),
-      approvalPolicySegment(input.approvalPolicy),
-      locationSegment(input.location),
-      flowSegment(input.flow),
-      formatUsage(input.contextState, input.usage),
-      queuedFollowUpsCountSegment(input.queuedFollowUpMessages),
-      subagentsSegment(input.subagents),
-      runningSessionsSegment(input.runningSessions),
-      pendingInteractionSegment({
-        depth: input.approvalDepth,
-        kind: input.approvalKind,
-      }),
-    ].filter(filterNotNullish),
+    ...(
+      [
+        input.ctrlCAction === 'stop root' && !isActivePhase(input.status)
+          ? {
+              text: 'root active',
+              color: COLOR_WARNING,
+              compactPriority: STATUS_BAR_COMPACT_PRIORITY.rootActive,
+            }
+          : undefined,
+        input.subscriptionProbeFailed
+          ? {
+              text: 'subscription status unavailable',
+              compactText: 'sub unknown',
+              color: COLOR_WARNING,
+              compactPriority: STATUS_BAR_COMPACT_PRIORITY.accessMode,
+            }
+          : accessModeSegment(input.modelAccess),
+        subscriptionQuotaSegment(input.subscriptionQuota),
+        approvalPolicySegment(input.approvalPolicy),
+        input.location
+          ? {
+              text: input.location.context
+                ? `${input.location.context} › ${input.location.label}`
+                : input.location.label,
+              compactText: input.location.context ?? input.location.label,
+              color: 'dim',
+              compactPriority: STATUS_BAR_COMPACT_PRIORITY.location,
+            }
+          : undefined,
+        flowText === undefined
+          ? undefined
+          : {
+              text: flowText,
+              color: 'dim',
+              compactPriority: STATUS_BAR_COMPACT_PRIORITY.flow,
+            },
+        formatUsage(input.contextState, input.usage),
+        queuedCount > 0
+          ? {
+              text: `queued ${queuedCount}`,
+              color: COLOR_WARNING,
+              compactPriority: STATUS_BAR_COMPACT_PRIORITY.queuedFollowUp,
+            }
+          : undefined,
+        input.subagents > 0
+          ? {
+              text: formatResultCount(input.subagents, 'agent'),
+              compactText: `${input.subagents} ${SUBAGENT.compactCountSuffix}`,
+              color: 'dim',
+              compactPriority: STATUS_BAR_COMPACT_PRIORITY.activeSubagent,
+            }
+          : undefined,
+        input.runningSessions > 0
+          ? {
+              text: `${input.runningSessions} active`,
+              compactText: `${input.runningSessions} ${RUNNING_SESSION.compactCountSuffix}`,
+              color: 'dim',
+              compactPriority: STATUS_BAR_COMPACT_PRIORITY.activeSubagent,
+            }
+          : undefined,
+        input.approvalDepth > 0
+          ? {
+              text: formatResultCount(
+                input.approvalDepth,
+                input.approvalKind ?? 'approval',
+              ),
+              color: COLOR_WARNING,
+              compactPriority: STATUS_BAR_COMPACT_PRIORITY.approvalDepth,
+            }
+          : undefined,
+      ] satisfies (StatusBarSegment | undefined)[]
+    ).filter(filterNotNullish),
   );
   for (const badge of BYPASS_BADGES) {
     if (input.bypass?.[badge.field]) {

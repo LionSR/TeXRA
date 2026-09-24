@@ -15,7 +15,8 @@
 // source and cannot drift apart.
 //
 // It is intentionally dependency-free (bare Node, only the local publicDocs.js
-// import) so it runs without installing the docs sub-project.
+// and shared walkFiles.mjs imports) so it runs without installing the docs
+// sub-project.
 
 import { existsSync, readdirSync } from 'node:fs';
 import { basename, dirname, join, relative } from 'node:path';
@@ -25,6 +26,7 @@ import {
   publicRootDirs,
   srcExclude,
 } from '../.vitepress/publicDocs.js';
+import { walkFiles } from '../../scripts/walkFiles.mjs';
 
 const docsDir = join(dirname(fileURLToPath(import.meta.url)), '..');
 const ghError = process.env.GITHUB_ACTIONS === 'true' ? '::error::' : '';
@@ -158,11 +160,9 @@ if (unclassified.length > 0) {
 }
 
 function markdownFilesUnder(dir) {
-  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
-    const file = join(dir, entry.name);
-    if (entry.isDirectory()) return markdownFilesUnder(file);
-    return entry.isFile() && entry.name.endsWith('.md') ? [file] : [];
-  });
+  return walkFiles(dir, { include: (p) => p.endsWith('.md') }).map(
+    (entry) => entry.absolutePath,
+  );
 }
 
 const untimestamped = TIMESTAMPED_DIRS.flatMap((dir) =>

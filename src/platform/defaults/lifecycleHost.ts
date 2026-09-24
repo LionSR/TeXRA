@@ -23,9 +23,11 @@ interface Registration {
  * and a handler still running when it runs out is interrupted before the
  * drain advances past it, so a late BEFORE handler cannot race the ON phase's
  * disposals without having been told to stop first. A handler whose work must
- * outlast the budget says so with `Effect.uninterruptible`. The same budget
- * bounds an explicit session close (`Sessions.close`): one settlement
- * deadline for the process, not one per caller.
+ * outlast the budget says so with `Effect.uninterruptible`: the interrupt
+ * waits on it, so the drain advances only once it settles. The same deadline
+ * bounds a session close (`Sessions.close`), counted from the close's start,
+ * and the process release closes every session it still holds at once, so
+ * they settle under one deadline for the process, not one each.
  */
 export const SHUTDOWN_PHASE_DEADLINE_MS = 5_000;
 

@@ -14,12 +14,14 @@ import {
   isCompactFormRows,
   type SelectWindowSize,
 } from '@cli/tui/selectWindow';
+import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import {
   CompactFormKeyHints,
   FormFrame,
   renderAsyncListFormTransient,
 } from './FormFrame';
 import { useAsyncListForm } from './useAsyncListForm';
+import type { Effect } from 'effect';
 
 const LIST_FORM_FRAME_ROWS = 3;
 const LIST_FORM_FOOTER_ROWS = 2;
@@ -192,8 +194,9 @@ export function pendingListFormChoice<T>(args: {
 
 interface AsyncListFormControls<TData> {
   readonly data: TData;
-  /** Re-run the loader, keeping the current data on screen until it returns. */
-  readonly reload: () => void;
+  /** Run a write, then reload the list, keeping the current data on screen
+   *  until it returns; a failed write becomes a transient notice. */
+  readonly update: (write: Effect.Effect<void, Error, ProcessServices>) => void;
 }
 
 interface AsyncPickerForm<TData, TValue> {
@@ -216,7 +219,8 @@ export function useAsyncPickerForm<TData, TValue>(args: {
   readonly title: string;
   readonly loadingLabel: string;
   readonly showTransientCloseHint?: boolean;
-  readonly load: () => Promise<TData>;
+  readonly load: () => Effect.Effect<TData, Error, ProcessServices>;
+  readonly runtime: ProcessRuntime;
   readonly isEmpty?: (data: TData) => boolean;
   readonly closeEmptyOnEnter?: boolean;
   readonly items: (data: TData) => ReadonlyArray<SelectItem<TValue>>;
@@ -228,9 +232,10 @@ export function useAsyncPickerForm<TData, TValue>(args: {
   ) => void;
   readonly onClose: () => void;
 }): AsyncPickerForm<TData, TValue> {
-  const { data, loading, error, pendingInput, clearPendingInput, reload } =
+  const { data, loading, error, pendingInput, clearPendingInput, update } =
     useAsyncListForm<TData>({
       load: args.load,
+      runtime: args.runtime,
       onClose: args.onClose,
       isEmpty: args.isEmpty,
       closeEmptyOnEnter: args.closeEmptyOnEnter,
@@ -242,7 +247,7 @@ export function useAsyncPickerForm<TData, TValue>(args: {
       args.onClose();
       return;
     }
-    if (data !== undefined) args.onSelect?.(value, { data, reload });
+    if (data !== undefined) args.onSelect?.(value, { data, update });
   };
   usePendingListFormSelection({
     loading,
@@ -273,7 +278,8 @@ interface AsyncListFormProps<TData, TValue> extends Omit<
   'items' | 'onSelect'
 > {
   readonly loadingLabel: string;
-  readonly load: () => Promise<TData>;
+  readonly load: () => Effect.Effect<TData, Error, ProcessServices>;
+  readonly runtime: ProcessRuntime;
   readonly items: (data: TData) => ReadonlyArray<SelectItem<TValue>>;
   readonly isEmpty?: (data: TData) => boolean;
   readonly showTransientCloseHint?: boolean;
@@ -293,6 +299,7 @@ export function AsyncListForm<TData, TValue>(
   const {
     loadingLabel,
     load,
+    runtime,
     items: itemsFor,
     isEmpty,
     showTransientCloseHint,
@@ -307,6 +314,7 @@ export function AsyncListForm<TData, TValue>(
     loadingLabel,
     showTransientCloseHint,
     load,
+    runtime,
     isEmpty: isEmpty ?? ((loaded) => itemsFor(loaded).length === 0),
     items: itemsFor,
     onSelect,

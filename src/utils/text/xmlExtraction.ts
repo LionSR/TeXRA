@@ -8,15 +8,12 @@
  */
 
 // Local imports - utils
-import { createLog } from '@logger/logUtils';
 import { OUTPUT_DOCUMENT_TAG } from '@shared/schemas';
 import { ensureArray, isObject } from '@utils/core';
 
 // Local imports
 import { removeCDATA } from './xmlCdata';
 import { formatContent } from './xmlConversion';
-
-const log = createLog('xmlExtraction');
 
 /** A single extracted document: its LaTeX/text content and its `name` attribute. */
 export interface NamedDocument {
@@ -94,16 +91,23 @@ function extractNamedDocuments(content: string): NamedDocument[] {
 }
 
 /**
- * Extract content from XML document element for multiple document case
- * we should have a fall back to regex if this fails
+ * Extract content from XML document element for multiple document case.
+ *
+ * Finding nothing is not an error: the caller (XmlOutputManager) owns the
+ * regex recovery and narrates it, so a miss returns the reason instead of
+ * logging it here.
  */
 export function extractContentFromXMLbyTagMultiple(
   root: Record<string, unknown>,
   containerTag: string,
-): NamedDocument[] | null {
+):
+  | { readonly documents: NamedDocument[] }
+  | { readonly documents: null; readonly reason: string } {
   if (!isObject(root)) {
-    log.error(`Invalid root object. Structure: ${getObjectStructure(root)}`);
-    return null;
+    return {
+      documents: null,
+      reason: `Invalid root object. Structure: ${getObjectStructure(root)}`,
+    };
   }
 
   if (containerTag in root) {
@@ -116,23 +120,23 @@ export function extractContentFromXMLbyTagMultiple(
         isObject,
       );
       if (documents.length > 0) {
-        return documents.map((entry) => ({
-          content: entry.content?.toString().trim() ?? '',
-          // Same missing-name contract as the regex tier (extractNamedDocuments):
-          // a document without a usable `name` attribute is named 'unnamed'
-          // rather than admitting `undefined` into downstream naming logic.
-          name: (entry.name as string | undefined) ?? 'unnamed',
-        }));
+        return {
+          documents: documents.map((entry) => ({
+            content: entry.content?.toString().trim() ?? '',
+            // Same missing-name contract as the regex tier (extractNamedDocuments):
+            // a document without a usable `name` attribute is named 'unnamed'
+            // rather than admitting `undefined` into downstream naming logic.
+            name: (entry.name as string | undefined) ?? 'unnamed',
+          })),
+        };
       }
     }
   }
 
-  // Not an error: the caller (XmlOutputManager) owns the recovery and narrates
-  // the regex fallback itself.
-  log.debug(
-    `No ${containerTag} or document elements found in output file. Structure: ${getObjectStructure(root)}`,
-  );
-  return null;
+  return {
+    documents: null,
+    reason: `No ${containerTag} or document elements found in output file. Structure: ${getObjectStructure(root)}`,
+  };
 }
 
 /**

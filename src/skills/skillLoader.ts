@@ -9,7 +9,7 @@ import { ZodError } from 'zod';
 // Local imports - common
 import { SkillNameSchema } from '@shared/schemas';
 import { isObject } from '@utils/core';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local imports - skill parsing
 import { collapseWhitespace } from '@utils/text/stringUtils';
@@ -179,7 +179,7 @@ export function loadSkillDirectory(
     try: () => fs.readFile(skillPath, 'utf8'),
     // The raw failure decides the issue code, so it is carried through
     // unwrapped rather than classified twice.
-    catch: (err) => err,
+    catch: ensureError,
   }).pipe(
     Effect.flatMap((content) =>
       Effect.try({
@@ -224,7 +224,7 @@ export function loadSkillDirectory(
 
           return { skill, errors };
         },
-        catch: (err) => err,
+        catch: ensureError,
       }),
     ),
     Effect.catch((err) =>

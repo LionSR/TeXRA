@@ -39,16 +39,13 @@ import { openGettingStarted as sysOpenGettingStarted } from '@commands/system/wa
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import { runCleanBuild } from '@housekeeping/clean';
 import type { StateStore } from '@platform/interfaces';
-import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
-import {
-  withSessionFs,
-  type StorageFs,
-  type WorkspaceFs,
-} from '@platform/rootedFs';
+import type { ProcessRuntime } from '@platform/processRuntime';
+import { withSessionFs } from '@platform/rootedFs';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import type { SettingsViewProvider } from '@settingsView/SettingsViewProvider';
 import { dispatchCommandFromRegistry } from '@shared/commands/registry';
+import { ensureError } from '@utils/errors/errorMessage';
 
 // Local file imports
 import {
@@ -62,100 +59,80 @@ export function createExtensionCommandActions(
   settingsViewProvider: SettingsViewProvider,
   progressViewProvider: ProgressViewProvider,
   secrets: PlatformSecrets,
-  runtime: ProcessRuntime,
   session: SessionHandle,
 ): ExtensionCommandActions {
   const refreshAfterProviderKeyChange = (provider: string) =>
     settingsViewProvider.refreshAfterProviderKeyChange(provider);
-
-  /**
-   * Settle a housekeeping program over the session's rooted filesystems.
-   */
-  const onSessionFiles = <A, E>(
-    program: Effect.Effect<A, E, WorkspaceFs | StorageFs | ProcessServices>,
-  ): Promise<A> => runtime.runPromise(withSessionFs(session.roots, program));
+  // The walkthrough and the docs page are VS Code calls; each is one
+  // foreign edge lifted here.
+  const fromPromise = (run: () => PromiseLike<unknown>) =>
+    Effect.asVoid(Effect.tryPromise({ try: run, catch: ensureError }));
 
   return {
-    showSettings(tab, agentSubTab) {
-      return settingsViewProvider.showSettingsView(tab, agentSubTab);
-    },
+    showSettings: (tab, agentSubTab) =>
+      settingsViewProvider.showSettingsView(tab, agentSubTab),
     // New Session is the header's "+" (PRD 12.4): the New-task state into
     // view with the launcher's selections as they are.
-    resetMainView: () =>
-      runtime.runPromise(progressViewProvider.showLauncher()),
-    cleanBuild: () => onSessionFiles(runCleanBuild),
-    pack: (config) => onSessionFiles(fileHandlePack(config)),
-    clean: (config) => onSessionFiles(fileHandleClean(config)),
-    compare: (baseLocation, editedLocation) =>
-      runtime.runPromise(latexHandleCompare(baseLocation, editedLocation)),
-    acceptEdited: (baseLocation, editedLocation, copyMeta) =>
-      runtime.runPromise(
-        latexHandleAcceptEdited(baseLocation, editedLocation, copyMeta),
-      ),
-    indentTeX: () => runtime.runPromise(handleIndentTeX(session)),
-    signIn: () => runtime.runPromise(authSignIn),
+    resetMainView: () => progressViewProvider.showLauncher(),
+    cleanBuild: () => runCleanBuild,
+    pack: fileHandlePack,
+    clean: fileHandleClean,
+    compare: latexHandleCompare,
+    acceptEdited: latexHandleAcceptEdited,
+    indentTeX: () => handleIndentTeX(session),
+    signIn: () => authSignIn,
     signInChatGpt: () => settingsViewProvider.signInSubscription('chatgpt'),
     signInGrok: () => settingsViewProvider.signInSubscription('grok'),
-    signOut: () => runtime.runPromise(authSignOut),
+    signOut: () => authSignOut,
     runSetupAssistant: () =>
-      runtime.runPromise(
-        launchSetupAssistant(secrets, globalState, session).pipe(Effect.asVoid),
-      ),
-    openGettingStarted: () => sysOpenGettingStarted(context.extension.id),
+      Effect.asVoid(launchSetupAssistant(secrets, globalState, session)),
+    openGettingStarted: () =>
+      fromPromise(() => sysOpenGettingStarted(context.extension.id)),
     createSampleProject: () =>
-      onSessionFiles(sysCreateSampleProject(context.extensionPath, session)),
-    downloadArXivSource: () =>
-      runtime.runPromise(latexDownloadArXivSource(session)),
-    openProgressViewInTab: () =>
-      runtime.runPromise(progressViewProvider.popOutToEditor()),
-    async openDoc(page) {
-      if (!page) return;
-      await vscode.env.openExternal(
-        vscode.Uri.parse(`https://texra.ai/guide/${page}.html`),
-      );
-    },
-    indentCurrentTeX: () => runtime.runPromise(latexIndentCurrentTeX(session)),
-    fixCompilation: () => runtime.runPromise(latexFixCompilation(session)),
-    getTeXCount: () => runtime.runPromise(latexGetTeXCount(session)),
-    extractTikzFigures: () =>
-      runtime.runPromise(latexExtractTikzFigures(session)),
-    compileTikzFigures: () => onSessionFiles(latexCompileTikzFigures(session)),
-    cloneOverleafProject: () =>
-      onSessionFiles(gitCloneOverleafProject(session, secrets)),
+      sysCreateSampleProject(context.extensionPath, session),
+    downloadArXivSource: () => latexDownloadArXivSource(session),
+    openProgressViewInTab: () => progressViewProvider.popOutToEditor(),
+    openDoc: (page) =>
+      page
+        ? fromPromise(() =>
+            vscode.env.openExternal(
+              vscode.Uri.parse(`https://texra.ai/guide/${page}.html`),
+            ),
+          )
+        : Effect.void,
+    indentCurrentTeX: () => latexIndentCurrentTeX(session),
+    fixCompilation: () => latexFixCompilation(session),
+    getTeXCount: () => latexGetTeXCount(session),
+    extractTikzFigures: () => latexExtractTikzFigures(session),
+    compileTikzFigures: () => latexCompileTikzFigures(session),
+    cloneOverleafProject: () => gitCloneOverleafProject(session, secrets),
     removeApiKey: () =>
-      runtime.runPromise(
-        apiRemoveApiKey(session.roots, secrets, refreshAfterProviderKeyChange),
-      ),
-    showImportOptions: sysShowImportOptions,
-    toggleView: () => runtime.runPromise(progressViewProvider.toggleDrawer()),
+      apiRemoveApiKey(session.roots, secrets, refreshAfterProviderKeyChange),
+    showImportOptions: () => sysShowImportOptions,
+    toggleView: () => progressViewProvider.toggleDrawer(),
     showProgressView: (inPlace) =>
-      runtime.runPromise(progressViewProvider.showProgressView({ inPlace })),
+      progressViewProvider.showProgressView({ inPlace }),
     setApiKey: (provider) =>
       apiSetApiKey(
         session.roots,
         secrets,
         refreshAfterProviderKeyChange,
-        runtime,
         provider,
       ),
-    // The wizard is an Effect program; the host entry's runtime, threaded in
-    // from `activate`, settles it here at the command boundary.
     createAgentWithAI: (category) =>
-      runtime.runPromise(
-        agentHandleCreateAgentWithAI(
-          context,
-          globalState,
-          category,
-          secrets,
-          session,
-        ),
+      agentHandleCreateAgentWithAI(
+        context,
+        globalState,
+        category,
+        secrets,
+        session,
       ),
     // Without a configuration the command is the composer's accelerator
     // (Cmd+Alt+E): its Send, in the view the user is in.
     execute: (input) =>
       input === undefined
-        ? runtime.runPromise(progressViewProvider.submit())
-        : runtime.runPromise(agentRunExecuteCommand(input, session)),
+        ? progressViewProvider.submit()
+        : agentRunExecuteCommand(input, session),
   };
 }
 
@@ -174,23 +151,24 @@ export function createExtensionCommandActions(
 /**
  * Register every command in the shared registry against `vscode.commands`,
  * routing each invocation through `dispatchCommandFromRegistry` so the
- * dispatch path is identical to the desktop's. The registered callback
- * returns the dispatch result (a `boolean | Promise<boolean>`) so VS Code
- * forwards the underlying promise to `executeCommand` callers — async
- * rejections propagate instead of being swallowed (the bug fixed by
- * #3782).
+ * dispatch path is identical to the desktop's. The registered callback is
+ * the command's one execution boundary: it runs the handler's program over
+ * the session's rooted filesystems and returns that promise, so VS Code
+ * forwards the program's value and rejection to `executeCommand` callers
+ * (the bug fixed by #3782 was a swallowed rejection).
  */
 export function registerExtensionCommandRegistry(
   context: vscode.ExtensionContext,
   actions: ExtensionCommandActions,
   runtime: ProcessRuntime,
+  session: SessionHandle,
 ): void {
   for (const id of Object.keys(EXTENSION_COMMAND_HANDLERS) as ReadonlyArray<
     keyof typeof EXTENSION_COMMAND_HANDLERS
   >) {
     context.subscriptions.push(
-      vscode.commands.registerCommand(id, (...rawArgs: unknown[]) =>
-        dispatchCommandFromRegistry(
+      vscode.commands.registerCommand(id, (...rawArgs: unknown[]) => {
+        const program = dispatchCommandFromRegistry(
           id,
           EXTENSION_COMMAND_HANDLERS,
           actions,
@@ -209,8 +187,11 @@ export function registerExtensionCommandRegistry(
             );
           },
           ...rawArgs,
-        ),
-      ),
+        );
+        return program === false
+          ? false
+          : runtime.runPromise(withSessionFs(session.roots, program));
+      }),
     );
   }
 }

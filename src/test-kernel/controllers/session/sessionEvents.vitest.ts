@@ -59,11 +59,12 @@ vi.mock('@effect/sql-sqlite-node/SqliteClient', async (importOriginal) => ({
 import { TraceEmitter, type ResultEvent } from '@agent/trace';
 import { runLedgerLayer } from '@agent/runtime/RunLedger';
 import { sessionEventsLayer } from '@agent/runtime/SessionEvents';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
-  forEachLiveSession,
-  type SessionHandle,
-} from '@agent/runtime/SessionHandle';
-import { closeSession, openSessionEffect } from '@agent/runtime/sessionGraph';
+  closeSession,
+  heldSessions,
+  openSessionEffect,
+} from '@agent/runtime/sessionGraph';
 import { createSessionApprovals } from '@agent/runtime/runApprovalQueue';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { inquiryRecordsLayer } from '@controllers/session/inquiryRecords';
@@ -99,6 +100,7 @@ import {
 } from '@shared/schemas';
 import { InquiryRecords } from '@shared/session/inquiryRecords';
 import { Database } from '@shared/session/database';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 import { RunLedger, RunLedgerRefused } from '@shared/session/runLedger';
 import type { RunLedgerDraft } from '@shared/session/runStateFold';
 import { ProcessIdentity, SessionEvents } from '@shared/session/sessionEvents';
@@ -284,7 +286,7 @@ describe('session events and view', () => {
               toolName: 'bash',
               input: { command: 'ls' },
             },
-          ]),
+          ]).pipe(Effect.orDie),
         );
         const settled = yield* events.publish([
           {
@@ -685,6 +687,9 @@ describe('Sessions owner', () => {
         const session = {
           view: view.ref,
           runs: { stopAgentRun },
+          roots: createFakeWorkspaceRoots({
+            globalState: { [GlobalStateKey.DETACH_SUBAGENTS_ON_STOP]: true },
+          }),
         } as unknown as SessionHandle;
         const requests = sessionRequests(
           session,
@@ -714,7 +719,11 @@ describe('Sessions owner', () => {
         }));
         // A released claim is not held, even while the display still says so.
         expect(yield* requests.request(request)).toEqual({ kind: 'done' });
-        expect(stopAgentRun).toHaveBeenCalledOnce();
+        // A stop that leaves the child policy unset takes the session's
+        // configured "Keep subagents running".
+        expect(stopAgentRun).toHaveBeenCalledExactlyOnceWith(RUN, {
+          detachActiveChildren: true,
+        });
       }).pipe(
         Effect.provide(graph([runStart])),
         Effect.provide(
@@ -734,13 +743,8 @@ describe('Sessions owner', () => {
       roots: createFakeWorkspaceRoots({ storagePath }),
       transcriptMode: { kind: 'ephemeral', reason: 'sessions owner test' },
     });
-  const isLive = (session: SessionHandle): boolean => {
-    let live = false;
-    forEachLiveSession((candidate) => {
-      live ||= candidate === session;
-    });
-    return live;
-  };
+  const isLive = (session: SessionHandle): boolean =>
+    heldSessions().includes(session);
   const track = (session: SessionHandle, runId: RunId) =>
     session.runs.track(testRunHandle({ runId, agent: 'chat' }));
 
@@ -1389,6 +1393,55 @@ describe('the C1 event table and the C6 publisher', () => {
         expect(rows).toEqual([]);
       }).pipe(
         Effect.provide(substrate(workspace())),
+        Effect.ensuring(Effect.sync(() => construct.mockRestore())),
+      );
+    }).pipe(Effect.scoped),
+  );
+
+  it.effect('keeps polling for other writers after a failed poll read', () =>
+    Effect.gen(function* () {
+      const storage = workspace();
+      let failCommitRead = false;
+      const original = SqlDriver.make;
+      const construct = vi
+        .spyOn(SqlDriver, 'make')
+        .mockImplementationOnce((options) =>
+          original(options).pipe(
+            Effect.map((client) => {
+              const unsafe = client.unsafe.bind(client);
+              // The poll's first read of the new commit fails, as a busy
+              // wait past the timeout would, after its version read passed.
+              // The commit read is built once and re-run, so the check is
+              // made on each run.
+              return Object.assign(client, {
+                unsafe: ((statement, params) => {
+                  const read = unsafe(statement, params);
+                  if (!statement.includes('sqlite_sequence')) return read;
+                  return Effect.suspend(() => {
+                    if (!failCommitRead) return read;
+                    failCommitRead = false;
+                    return Effect.die(new Error('database is locked'));
+                  });
+                }) as typeof client.unsafe,
+              });
+            }),
+          ),
+        );
+      yield* Effect.gen(function* () {
+        const follower = yield* Database;
+        yield* Effect.gen(function* () {
+          const writer = yield* Database;
+          yield* writer.appendAll([olderStart]);
+        }).pipe(Effect.provide(substrate(storage, OTHER)));
+        failCommitRead = true;
+        for (let tick = 0; tick < 8; tick++) {
+          yield* TestClock.adjust('250 millis');
+        }
+        expect(failCommitRead).toBe(false);
+        expect(yield* SubscriptionRef.get(follower.observedCommit)).toBe(1);
+        expect(yield* SubscriptionRef.get(follower.level)).toBe(1);
+      }).pipe(
+        Effect.provide(substrate(storage)),
         Effect.ensuring(Effect.sync(() => construct.mockRestore())),
       );
     }).pipe(Effect.scoped),
@@ -2301,7 +2354,11 @@ describe('RunLedger', () => {
         lastError: null,
         declinedRoutes: [],
       },
-      state: { shouldSkipCycle: false, stateSlices: null },
+      state: {
+        stateSlices: null,
+        offeredTools: [],
+        toolsetHash: '0'.repeat(64),
+      },
     },
   });
   const refusalOf = (error: unknown): RunLedgerRefused | null =>

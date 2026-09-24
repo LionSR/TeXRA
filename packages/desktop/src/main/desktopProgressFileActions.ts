@@ -1,6 +1,6 @@
 import path from 'node:path';
 
-import { Data, Effect, FileSystem } from 'effect';
+import { Data, Effect, FileSystem, type PlatformError } from 'effect';
 
 import {
   getHelperModelName,
@@ -10,6 +10,7 @@ import {
 } from '@agent/runtime';
 import { createLatexRunDiscovery } from '@agent/storage';
 import { emitAppSignal } from '@eventBus/AppSignals';
+import type { NotificationFailed, PromptFailed } from '@hosts/uiHosts';
 import { acceptEditedFileReplace } from '@latex/acceptedFileTarget';
 import { openFirstLabelMatch } from '@latex/labelSearch';
 import { LaTeXdiffService } from '@latex/latexdiff';
@@ -17,16 +18,22 @@ import {
   latexdiffAllFailedMessage,
   NO_LATEXDIFF_OPERATIONS_MESSAGE,
 } from '@latex/latexdiff/latexdiffCopy';
-import { DEFAULT_MATH_MARKUP } from '@latex/latexdiff/mathMarkup';
 import { runLatexdiffForRun } from '@latex/latexdiff/runLatexdiff';
 import type {
   DiffProgressReporter,
   DiffRunOutcome,
 } from '@latex/latexdiff/types';
 import type { StateStore, StateReadFailed } from '@platform/interfaces';
-import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
+import {
+  type ProcessRuntime,
+  type ProcessServices,
+  withProcessServices,
+} from '@platform/processRuntime';
+import type { LatexdiffMathMarkupValue } from '@shared/constants/latexConfig';
 import type { OutputFileInfo, ReadonlyRoundIndexed } from '@shared/schemas';
 import type { Rejected } from '@shared/session/requestErrors';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { readSettingFrom } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   createExternalLocation,
@@ -82,7 +89,7 @@ interface DesktopProgressFileActionHost {
   startRun(request: ValidatedRunRequest): void;
   listWorkspaceCandidateFiles(): Effect.Effect<
     readonly string[],
-    unknown,
+    PlatformError.PlatformError,
     ProcessServices
   >;
 }
@@ -153,12 +160,11 @@ export class DesktopProgressFileActions {
    * yields it already carries, so nothing settles here.
    */
   acceptEditedFile(baseFile: string, editedFile: string) {
-    return acceptEditedFileReplace(
+    return acceptEditedFileReplace<PromptFailed | NotificationFailed>(
       pathToLocationIn(this.host.session.roots.workspace, baseFile),
       pathToLocationIn(this.host.session.roots.workspace, editedFile),
       {
-        confirm: (message) =>
-          Effect.promise(() => this.ui.confirmAcceptFile(message)),
+        confirm: (message) => this.ui.confirmAcceptFile(message),
         emitWritten: (absolutePath) =>
           emitAppSignal('workspaceFilesWritten', {
             absolutePaths: [absolutePath],
@@ -168,25 +174,11 @@ export class DesktopProgressFileActions {
     );
   }
 
-  /**
-   * The window's services, handed to programs whose callers take none: the
-   * latexdiff core, the build display and the file reads below all read the
-   * process filesystem, and the ports this class satisfies declare no
-   * requirements. Nothing settles here — the caller still runs the program.
-   */
-  private withProcessServices<A, E>(
-    program: Effect.Effect<A, E, ProcessServices>,
-  ): Effect.Effect<A, E> {
-    return Effect.flatMap(this.host.runtime.contextEffect, (context) =>
-      Effect.provideContext(program, context),
-    );
-  }
-
   diffAcceptedFilePair(
     baseFile: string,
     editedFile: string,
     runContext: DesktopLatexdiffRunContext,
-  ): Effect.Effect<void, unknown> {
+  ): Effect.Effect<void, Error> {
     return Effect.gen({ self: this }, function* () {
       const outcome = yield* this.runSharedLatexdiff(runContext);
       if (outcome && (yield* this.openSharedLatexdiffResults(outcome))) return;
@@ -206,13 +198,13 @@ export class DesktopProgressFileActions {
    * accepted file pair and therefore has a single-file fallback. Here there is
    * no such pair to fall back to — the request is scoped to a run — so an empty
    * or failed outcome reports instead, matching what the VS Code command shows
-   * when a run yields no diff operations. Like the rest of the desktop
-   * latexdiff surface it uses `DEFAULT_MATH_MARKUP`, since this host has no
-   * quick-pick to choose a markup mode with.
+   * when a run yields no diff operations. This host has no quick-pick to
+   * choose a markup mode with, so every desktop diff runs with the configured
+   * `texra.latexdiff.mathMarkup`.
    */
   diffStreamToolbarAction(
     runContext: DesktopLatexdiffRunContext,
-  ): Effect.Effect<void, unknown> {
+  ): Effect.Effect<void, Error> {
     return Effect.gen({ self: this }, function* () {
       const outcome = yield* this.runSharedLatexdiff(runContext);
       if (!outcome?.results.length) {
@@ -223,7 +215,12 @@ export class DesktopProgressFileActions {
       if (yield* this.openSharedLatexdiffResults(outcome)) return;
 
       yield* this.ui.showErrorMessage(
-        latexdiffAllFailedMessage(DEFAULT_MATH_MARKUP),
+        latexdiffAllFailedMessage(
+          yield* readSettingFrom<LatexdiffMathMarkupValue>(
+            this.host.session.roots,
+            WorkspaceStateKey.LATEXDIFF_MATH_MARKUP,
+          ),
+        ),
       );
     });
   }
@@ -231,7 +228,7 @@ export class DesktopProgressFileActions {
   runLatexdiffFile(
     baseFile: string,
     editedFile: string,
-  ): Effect.Effect<void, unknown> {
+  ): Effect.Effect<void, Error> {
     return Effect.gen({ self: this }, function* () {
       const service = new LaTeXdiffService(
         DESKTOP_LATEXDIFF_CHANNEL,
@@ -241,7 +238,7 @@ export class DesktopProgressFileActions {
         pathToLocationIn(this.host.session.roots.workspace, baseFile),
         pathToLocationIn(this.host.session.roots.workspace, editedFile),
         '_diff',
-        DEFAULT_MATH_MARKUP,
+        undefined,
         { cwd: this.host.session.roots.workspace },
       );
 
@@ -251,11 +248,12 @@ export class DesktopProgressFileActions {
       }
 
       yield* this.openDiffOutput(result.diffPath);
-    }).pipe((program) => this.withProcessServices(program));
+    }).pipe((program) => withProcessServices(this.host.runtime, program));
   }
 
-  findAndOpenLabel(label: string): Effect.Effect<boolean, unknown> {
-    return this.withProcessServices(
+  findAndOpenLabel(label: string): Effect.Effect<boolean, Error> {
+    return withProcessServices(
+      this.host.runtime,
       Effect.gen({ self: this }, function* () {
         const candidates = new Set(
           yield* this.host.listWorkspaceCandidateFiles(),
@@ -294,7 +292,6 @@ export class DesktopProgressFileActions {
         outputFiles: scan?.outputFiles,
         runId: runContext.runId ?? null,
         outputsByRound: hasOutputs ? runContext.outputsByRound : null,
-        mathMarkup: DEFAULT_MATH_MARKUP,
         generateBetweenRoundDiffs: true,
         runDiscovery: createLatexRunDiscovery(this.host.session),
         latexdiff: {
@@ -326,7 +323,7 @@ export class DesktopProgressFileActions {
           }),
         ),
       );
-    }).pipe((program) => this.withProcessServices(program));
+    }).pipe((program) => withProcessServices(this.host.runtime, program));
   }
 
   /**
@@ -336,7 +333,7 @@ export class DesktopProgressFileActions {
    */
   private openSharedLatexdiffResults(
     outcome: DiffRunOutcome,
-  ): Effect.Effect<boolean, unknown> {
+  ): Effect.Effect<boolean, Error> {
     return Effect.gen({ self: this }, function* () {
       const successes = outcome.results.filter((entry) => entry.success);
 
@@ -349,8 +346,9 @@ export class DesktopProgressFileActions {
   }
 
   /** Open a generated diff file via the desktop LaTeX build display. */
-  private openDiffOutput(diffFilePath: string): Effect.Effect<void, unknown> {
-    return this.withProcessServices(
+  private openDiffOutput(diffFilePath: string): Effect.Effect<void, Error> {
+    return withProcessServices(
+      this.host.runtime,
       this.ui.openBuildDisplay(createExternalLocation(diffFilePath)),
     );
   }

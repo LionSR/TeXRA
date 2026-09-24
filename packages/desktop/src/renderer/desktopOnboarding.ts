@@ -297,10 +297,9 @@ export function createStartupTeamPanel({
           <div>
             <strong>Tabs</strong>
             <span>
-              Open a terminal, browser, or Settings from the buttons at the
-              bottom of the sidebar - or from Commands${commandsHint()}. Open
-              files from the project list; everything stays open beside a
-              running agent.
+              Open a terminal, browser, or Settings from the bottom of the
+              sidebar. Open files from the project list; everything stays open
+              beside a running agent.
             </span>
           </div>
         </li>
@@ -309,7 +308,7 @@ export function createStartupTeamPanel({
           <div>
             <strong>Commands</strong>
             <span>
-              Open Commands${commandsHint()} from the header for every action
+              Open Commands${commandsHint()} from the sidebar for every action
               and shortcut.
             </span>
           </div>

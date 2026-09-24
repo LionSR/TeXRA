@@ -21,7 +21,6 @@ import { descendantRuns } from '@shared/session/sessionView';
 import { isActivePhase } from '@shared/runs/runStatus';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-import { terminalCapabilities } from '../state/terminalCapabilities';
 import {
   codexPreferenceVersion as codexPreferenceVersionSignal,
   transientNotice as transientNoticeSignal,
@@ -70,9 +69,7 @@ interface StatusBarProps {
   readonly runningSessions?: number;
   readonly childNavigationAvailable: boolean;
   readonly commandName?: string;
-  readonly foregroundEscapeAction?: string;
   readonly foregroundInputActive?: boolean;
-  readonly runFocusAvailable: boolean;
   readonly transcriptAvailable?: boolean;
 }
 
@@ -91,7 +88,6 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
   const rootRunId = useSignal(rootRunIdSignal);
   const sessionMeta = useSignal(sessionMetaSignal);
   const transientNotice = useSignal(transientNoticeSignal);
-  const caps = useSignal(terminalCapabilities);
   const { columns } = useWindowSize();
   // The Ctrl-C stop/exit hint derives from published run-state signals, never
   // from impure session closures: memoized renders cache a closure's result
@@ -338,7 +334,6 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
         : { context: focusedRoundHeading, label: focusedLabel },
     foreground: {
       inputActive: props.foregroundInputActive,
-      escapeAction: props.foregroundEscapeAction,
     },
     childList: {
       focused: props.childListFocused,
@@ -346,12 +341,9 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
       selectionResumable: props.childListSelectionResumable,
     },
     shortcuts: {
-      agentSelectionAvailable: !rootRunPending,
       chatInputAvailable: props.chatInputAvailable,
       childNavigationAvailable: props.childNavigationAvailable,
       parentNavigationAvailable: runViewOf(view, activeRunId)?.parentId != null,
-      runFocusAvailable: props.runFocusAvailable,
-      shiftEnterNewline: caps.kittyKeyboard,
       transcriptAvailable: props.transcriptAvailable,
     },
   });

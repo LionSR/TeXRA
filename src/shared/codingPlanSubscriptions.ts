@@ -11,7 +11,6 @@ import type { UsageRoute } from './schemas/usage';
 interface CodingPlanSubscriptionDescriptor {
   readonly id: 'glmCodingPlan' | 'kimiCode';
   readonly cliProvider: 'glm-code' | 'kimi-code';
-  readonly cliAliases: readonly string[];
   readonly apiProvider: 'glm' | 'kimiCode';
   readonly exclusiveCredential: boolean;
   readonly credentialName: string;
@@ -43,7 +42,6 @@ export const CODING_PLAN_SUBSCRIPTIONS = Object.freeze([
   Object.freeze({
     id: 'kimiCode',
     cliProvider: 'kimi-code',
-    cliAliases: Object.freeze(['kimi', 'kimicode', 'kimi-code']),
     apiProvider: 'kimiCode',
     exclusiveCredential: true,
     credentialName: 'Kimi Code',
@@ -69,13 +67,6 @@ export const CODING_PLAN_SUBSCRIPTIONS = Object.freeze([
   Object.freeze({
     id: 'glmCodingPlan',
     cliProvider: 'glm-code',
-    cliAliases: Object.freeze([
-      'glm',
-      'glmcode',
-      'glm-code',
-      'glm-coding',
-      'glm-coding-plan',
-    ]),
     apiProvider: 'glm',
     exclusiveCredential: false,
     credentialName: 'GLM',

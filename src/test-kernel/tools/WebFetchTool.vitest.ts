@@ -25,9 +25,9 @@ describe('WebFetchTool', () => {
     { url: 'http://localhost/', name: 'the localhost hostname' },
   ])('rejects a fetch to $name', ({ url }) =>
     Effect.gen(function* () {
-      const result = yield* new WebFetchTool()
-        .call({ url })
-        .pipe(Effect.provide(nativeToolTestLayer()));
+      const result = yield* WebFetchTool.call({ url }).pipe(
+        Effect.provide(nativeToolTestLayer()),
+      );
 
       expect(result).toMatchObject({ status: 'error' });
       expect(result.error).toMatch(/cannot fetch/i);

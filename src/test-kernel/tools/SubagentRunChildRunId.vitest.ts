@@ -3,15 +3,19 @@
 // a detached run-loop rejection through the `childRunLoop` channel log.
 
 import { it } from '@effect/vitest';
-import { Deferred, Effect } from 'effect';
-import { beforeEach, describe, expect, vi } from 'vitest';
+import { Effect } from 'effect';
+import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { FileInteractionState } from '@agent/core/state/AgentWorkspaceState';
-import { noopTrace } from '@agent/trace';
 import { Runs } from '@agent/runtime/runRegistry';
+import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
+import { setLogSink } from '@logger/logSink';
 import type { RunId } from '@shared/schemas';
+import { emptyPinnedComposition } from '@test/support/nativeToolTestLayer';
+import { noopTrace } from '@test/support/noopTrace';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
+import { captureLogEntries } from '@test/support/logSinkCapture';
 import { testRunRegistry } from '@test/support/runHandleFixtures';
 import { fakeProcessServices } from '@test/support/setupPlatform';
 import type { DelegationParent } from '@tools/delegation/proposalFlow';
@@ -19,7 +23,6 @@ import type { DelegationParent } from '@tools/delegation/proposalFlow';
 const mocks = vi.hoisted(() => ({
   startChildRunLoop: vi.fn(),
   registerRun: vi.fn(),
-  childLoopError: vi.fn(),
 }));
 
 vi.mock('@agent/runtime/AgentLaunchContext', () => ({
@@ -35,23 +38,6 @@ vi.mock('@agent/runtime/childRunLoop', () => ({
     >
   ) => args[2],
 }));
-
-// `executeSubagent` reports a late detached-loop failure through an inline
-// `createLog('childRunLoop')` call; spread the real module so the graph's
-// other `createLog` consumers (e.g. `runLifecycle`,
-// `inBandSubagentRun`) keep working loggers.
-vi.mock('@logger/logUtils', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@logger/logUtils')>();
-  return {
-    ...actual,
-    createLog: () => ({
-      debug: vi.fn(),
-      info: vi.fn(),
-      warn: vi.fn(),
-      error: mocks.childLoopError,
-    }),
-  };
-});
 
 vi.mock('@agent/storage', () => ({
   registerRun: mocks.registerRun,
@@ -92,8 +78,8 @@ describe('executeSubagent child run launch', () => {
       logger: noopTrace,
       toolPolicy: {
         approvalPromptsUnavailable: false,
-        runtimeUnavailableTools: [],
       },
+      composition: emptyPinnedComposition,
     },
   };
 
@@ -115,6 +101,10 @@ describe('executeSubagent child run launch', () => {
     mocks.registerRun.mockReturnValue(Effect.void);
   });
 
+  afterEach(() => {
+    setLogSink(null);
+  });
+
   it.effect(
     'logs a detached run-loop rejection through the childRunLoop channel log',
     () =>
@@ -124,20 +114,23 @@ describe('executeSubagent child run launch', () => {
           Effect.forkDetach(Effect.fail(lateFailure)),
         );
 
-        const logged = yield* Deferred.make<void>();
-        mocks.childLoopError.mockImplementation(() => {
-          Deferred.doneUnsafe(logged, Effect.void);
-        });
+        const logs = captureLogEntries();
 
         expect(yield* runDefaultSubagent()).toMatchObject({
           status: 'executed',
         });
 
-        yield* Deferred.await(logged);
-        expect(mocks.childLoopError).toHaveBeenCalledWith(
+        // The report comes from the detached watcher fiber; let it run.
+        while (logs.at('ERROR', 'childRunLoop').length === 0) {
+          yield* Effect.yieldNow;
+        }
+        const [entry] = logs.at('ERROR', 'childRunLoop');
+        expect(entry?.message).toBe(
           "Subagent 'proof-checker' run loop failed after launch",
-          { data: lateFailure },
         );
-      }),
+        expect(String(entry?.annotations['data'])).toContain(
+          'late subagent finalization failed',
+        );
+      }).pipe(Effect.provide(effectDiagnosticsLayer('Trace'))),
   );
 });

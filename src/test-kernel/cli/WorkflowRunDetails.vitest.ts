@@ -91,6 +91,20 @@ afterEach(() => {
 });
 
 describe('selectWorkflowRunDetailLines', () => {
+  it('does not show a results row from an unvalidated empty missing-output round', () => {
+    const lines = selectWorkflowRunDetailLines(
+      {
+        taskGroups: [],
+        outputFilesByRound: {},
+        missingOutputsByRound: { 0: [] },
+        compileFailuresByRound: {},
+      },
+      100,
+    );
+
+    expect(lines).toEqual([]);
+  });
+
   it('renders a typed round and sanitizes terminal controls', () => {
     const lines = selectWorkflowRunDetailLines(
       {

@@ -109,7 +109,64 @@ const deliverResumeWakeFailure = Effect.fn('deliverResumeWakeFailure')(
 // ============================================================================
 
 /** Tool for delegating tasks to workflow agents (document processing). */
-export class WorkflowAgentTool extends defineTool({
+function executeWorkflowAgentTool(
+  input: WorkflowAgentInput,
+): Effect.Effect<ToolResult, Error, ToolServices> {
+  return Effect.gen(function* () {
+    const call = yield* requireDelegationParent(
+      'delegate_workflow',
+      yield* ToolCall,
+    );
+    const agent = yield* requireVisibleAgent(
+      call.roots,
+      'workflow',
+      input.agent,
+      call.run.delegationAgentScope ?? undefined,
+    );
+    const agentName = agent.name;
+
+    const model = yield* selectAvailableDelegationModel({
+      requestedModel: input.model,
+      parentModel: call.run.config.model,
+      settings: call.roots,
+    });
+
+    yield* assertWorkflowFilesExist(call.roots.workspace, [
+      { label: 'Input file', files: input.inputFiles },
+      { label: 'Context file', files: input.contextFiles },
+      { label: 'Media file', files: input.mediaFiles },
+    ]).pipe(Effect.mapError(ensureError));
+
+    const oversizedBibRejection = yield* rejectOversizedBibAttachments(
+      call.roots.workspace,
+      input.contextFiles,
+    ).pipe(Effect.mapError(ensureError));
+    if (oversizedBibRejection) return oversizedBibRejection;
+
+    // Extraction flags map to toolConfig, flowing through the proposal UI and
+    // into MediaExtractionNode → LatexMediaManager at runtime.
+    const proposal = WorkflowAgentProposalSchema.parse({
+      agentCategory: AgentCategory.Workflow,
+      agent: agentName,
+      agentSource: agent.source,
+      model,
+      instruction: input.instruction,
+      inputFiles: input.inputFiles,
+      contextFiles: input.contextFiles,
+      mediaFiles: input.mediaFiles,
+      outputFiles: input.outputFiles,
+      toolConfig: {
+        ...DEFAULT_TOOL_CONFIG,
+        ...extractionShorthandToolConfig(input),
+      },
+      memories: input.memories,
+    } satisfies WorkflowAgentProposal);
+
+    return yield* proposeAndExecute(call, proposal, agentName);
+  });
+}
+
+export const WorkflowAgentTool = defineTool({
   name: 'delegate_workflow',
   availabilityCategory: 'workflow',
   requiresApproval: true,
@@ -130,64 +187,8 @@ Optional auto-attach from the input LaTeX:
 - extractFigures=true: pull \\includegraphics / \\begin{overpic} figures into mediaFiles.
 - extractTikz=true: compile TikZ figures into standalone PDFs and attach.`,
   schema: WorkflowAgentInputSchema,
-}) {
-  protected execute(
-    input: WorkflowAgentInput,
-  ): Effect.Effect<ToolResult, unknown, ToolServices> {
-    return Effect.gen(function* () {
-      const call = requireDelegationParent(
-        'delegate_workflow',
-        yield* ToolCall,
-      );
-      const agent = yield* requireVisibleAgent(
-        call.roots,
-        'workflow',
-        input.agent,
-        call.run.delegationAgentScope ?? undefined,
-      );
-      const agentName = agent.name;
-
-      const model = yield* selectAvailableDelegationModel({
-        requestedModel: input.model,
-        parentModel: call.run.config.model,
-        settings: call.roots,
-      });
-
-      yield* assertWorkflowFilesExist(call.roots.workspace, [
-        { label: 'Input file', files: input.inputFiles },
-        { label: 'Context file', files: input.contextFiles },
-        { label: 'Media file', files: input.mediaFiles },
-      ]).pipe(Effect.mapError(ensureError));
-
-      const oversizedBibRejection = yield* rejectOversizedBibAttachments(
-        call.roots.workspace,
-        input.contextFiles,
-      ).pipe(Effect.mapError(ensureError));
-      if (oversizedBibRejection) return oversizedBibRejection;
-
-      // Extraction flags map to toolConfig, flowing through the proposal UI and
-      // into MediaExtractionNode → LatexMediaManager at runtime.
-      const proposal = WorkflowAgentProposalSchema.parse({
-        agentCategory: AgentCategory.Workflow,
-        agent: agentName,
-        agentSource: agent.source,
-        model,
-        instruction: input.instruction,
-        inputFiles: input.inputFiles,
-        contextFiles: input.contextFiles,
-        mediaFiles: input.mediaFiles,
-        outputFiles: input.outputFiles,
-        toolConfig: {
-          ...DEFAULT_TOOL_CONFIG,
-          ...extractionShorthandToolConfig(input),
-        },
-        memories: input.memories,
-      } satisfies WorkflowAgentProposal);
-
-      return yield* proposeAndExecute(call, proposal, agentName);
-    });
-  }
-}
+  execute: executeWorkflowAgentTool,
+});
 
 // ============================================================================
 // delegate_agent tool - for interactive assistants
@@ -227,7 +228,171 @@ const DelegateAgentInputSchema = z
 type DelegateAgentInput = z.infer<typeof DelegateAgentInputSchema>;
 
 /** Tool for delegating tasks to tool-use agents (interactive assistants). */
-export class DelegateAgentTool extends defineTool({
+function executeDelegateAgentTool(
+  input: DelegateAgentInput,
+): Effect.Effect<ToolResult, Error, ToolServices> {
+  return Effect.gen(function* () {
+    const call = yield* requireDelegationParent(
+      'delegate_agent',
+      yield* ToolCall,
+    );
+    // The `working_directory` opt-in, over this call's project: the schema
+    // parses the path, the session it runs on says whether worktrees are
+    // enabled for it.
+    const disabled = yield* rejectDisabledWorktreeDirectory(
+      call.roots,
+      input.working_directory ?? undefined,
+    );
+    if (disabled) return disabled;
+    // Resume path: execution_id is set
+    if (input.execution_id) {
+      return yield* resumeAgent(
+        input.execution_id,
+        input.instruction,
+        call.run.session,
+        call.run.runId,
+      );
+    }
+
+    // New-delegation path: the schema's refine() guarantees exactly one of
+    // agent/execution_id is set, so agent is defined here — refine() doesn't
+    // narrow types, hence the assertion.
+    const agent = yield* requireVisibleAgent(
+      call.roots,
+      'toolUse',
+      input.agent!,
+      call.run.delegationAgentScope ?? undefined,
+    );
+    const agentName = agent.name;
+
+    const model = yield* selectAvailableDelegationModel({
+      requestedModel: input.model,
+      parentModel: call.run.config.model,
+      settings: call.roots,
+    });
+    const rootUserInstruction = call.userInstruction;
+
+    // Construct tool-use proposal (no file fields)
+    const proposal = ToolUseAgentProposalSchema.parse({
+      agentCategory: AgentCategory.ToolUse,
+      agent: agentName,
+      agentSource: agent.source,
+      model,
+      instruction: withToolUseSubagentHandoffInstruction(
+        input.instruction,
+        rootUserInstruction,
+      ),
+      rootUserInstruction,
+      memories: input.memories,
+      workingDirectory: input.working_directory,
+    } satisfies ToolUseAgentProposal);
+
+    return yield* proposeAndExecute(call, proposal, agentName);
+  });
+}
+
+/** Queue follow-up instructions for a tool-use subagent. */
+const resumeAgent = Effect.fn('DelegateAgentTool.resumeAgent')(function* (
+  runId: RunId,
+  instruction: string,
+  session: SessionHandle,
+  callerRunId: RunId | undefined,
+): Effect.fn.Return<ToolResult, Error, Runs | AgentResume> {
+  const handle = (yield* Runs).getHandle(runId);
+  if (!handle) {
+    return yield* Effect.fail(
+      new Error(
+        `Run '${runId}' not found. Use the executions tool to check status.`,
+      ),
+    );
+  }
+
+  if (handle.category !== 'toolUse') {
+    return yield* Effect.fail(
+      new Error(
+        `Run '${runId}' is a workflow agent. Only tool-use subagents can be resumed.`,
+      ),
+    );
+  }
+
+  // Results route to the handle's parent. A detached subagent delivers
+  // nowhere, and a subagent of another orchestrator reports to that
+  // orchestrator, not the caller. Fail fast instead of silently queueing
+  // instructions whose results would never come back here.
+  if (!handle.isChild) {
+    return yield* Effect.fail(
+      new Error(
+        `Run '${runId}' was detached from its orchestrator and now runs top-level. Its results can no longer be delivered back to this session. Start a new delegation instead.`,
+      ),
+    );
+  }
+  if (callerRunId && !handle.isOwnedBy(callerRunId)) {
+    return yield* Effect.fail(
+      new Error(
+        `Run '${runId}' belongs to a different orchestrator session. Its results would be delivered there, not here. Start a new delegation instead.`,
+      ),
+    );
+  }
+
+  const framedInstruction = formatFollowUpInstruction(instruction);
+  const result = yield* submitFollowUp(handle.runId, framedInstruction, {
+    session,
+  });
+  if (result.status === 'failed') {
+    return yield* Effect.fail(
+      new Error(
+        `Follow-up for '${handle.agentName}' was not accepted (${result.reason}): ${describeFollowUpFailure(result.reason)}`,
+      ),
+    );
+  }
+  if (result.status === 'queued' && result.wake === 'failed') {
+    // The instruction is in the subagent's queue; only its wake failed.
+    // The parent learns of that through its own follow-up queue as well,
+    // the same way a child's turn failure reaches it.
+    yield* Effect.forkDetach(
+      deliverResumeWakeFailure(
+        handle,
+        session,
+        runId,
+        new Error(
+          'The subagent could not be resumed to process the follow-up.',
+        ),
+      ).pipe(
+        Effect.catch((error) =>
+          Effect.logWarning(
+            'Could not deliver the subagent wake failure.',
+          ).pipe(Effect.annotateLogs({ data: error }), withLogChannel(CHANNEL)),
+        ),
+      ),
+    );
+    return executed(
+      [
+        `Follow-up instruction queued for '${handle.agentName}', but the subagent could not be resumed. ${FOLLOW_UP_WAKE_FAILED_MESSAGE}`,
+        `Run ID: ${runId}`,
+      ].join('\n'),
+      `Follow-up queued for '${handle.agentName}' (resume failed)`,
+    );
+  }
+
+  if (result.status === 'sent') {
+    return executed(
+      [
+        `Follow-up instruction sent to '${handle.agentName}'. The subagent will process it and deliver a new result automatically.`,
+        `Run ID: ${runId}`,
+      ].join('\n'),
+      `Follow-up sent to '${handle.agentName}'`,
+    );
+  }
+  return executed(
+    [
+      `Follow-up instruction queued for '${handle.agentName}'. The subagent will process it and deliver a new result automatically.`,
+      `Run ID: ${runId}`,
+    ].join('\n'),
+    `Follow-up queued for '${handle.agentName}'`,
+  );
+});
+
+export const DelegateAgentTool = defineTool({
   name: 'delegate_agent',
   availabilityCategory: 'toolUse',
   requiresApproval: true,
@@ -253,171 +418,5 @@ Example (resume): execution_id=3f9a1c7e2b4d, instruction="Also fix the bibliogra
 
 Git worktree support: resolved from the active workspace at runtime.`,
   schema: DelegateAgentInputSchema,
-}) {
-  protected execute(
-    input: DelegateAgentInput,
-  ): Effect.Effect<ToolResult, unknown, ToolServices> {
-    const resumeAgent = this.resumeAgent;
-    return Effect.gen(function* () {
-      const call = requireDelegationParent('delegate_agent', yield* ToolCall);
-      // The `working_directory` opt-in, over this call's project: the schema
-      // parses the path, the session it runs on says whether worktrees are
-      // enabled for it.
-      const disabled = yield* rejectDisabledWorktreeDirectory(
-        call.roots,
-        input.working_directory ?? undefined,
-      );
-      if (disabled) return disabled;
-      // Resume path: execution_id is set
-      if (input.execution_id) {
-        return yield* resumeAgent(
-          input.execution_id,
-          input.instruction,
-          call.run.session,
-          call.run.runId,
-        );
-      }
-
-      // New-delegation path: the schema's refine() guarantees exactly one of
-      // agent/execution_id is set, so agent is defined here — refine() doesn't
-      // narrow types, hence the assertion.
-      const agent = yield* requireVisibleAgent(
-        call.roots,
-        'toolUse',
-        input.agent!,
-        call.run.delegationAgentScope ?? undefined,
-      );
-      const agentName = agent.name;
-
-      const model = yield* selectAvailableDelegationModel({
-        requestedModel: input.model,
-        parentModel: call.run.config.model,
-        settings: call.roots,
-      });
-      const rootUserInstruction = call.userInstruction;
-
-      // Construct tool-use proposal (no file fields)
-      const proposal = ToolUseAgentProposalSchema.parse({
-        agentCategory: AgentCategory.ToolUse,
-        agent: agentName,
-        agentSource: agent.source,
-        model,
-        instruction: withToolUseSubagentHandoffInstruction(
-          input.instruction,
-          rootUserInstruction,
-        ),
-        rootUserInstruction,
-        memories: input.memories,
-        workingDirectory: input.working_directory,
-      } satisfies ToolUseAgentProposal);
-
-      return yield* proposeAndExecute(call, proposal, agentName);
-    });
-  }
-
-  /** Queue follow-up instructions for a tool-use subagent. */
-  private readonly resumeAgent = Effect.fn('DelegateAgentTool.resumeAgent')(
-    function* (
-      runId: RunId,
-      instruction: string,
-      session: SessionHandle,
-      callerRunId: RunId | undefined,
-    ): Effect.fn.Return<ToolResult, Error, Runs | AgentResume> {
-      const handle = (yield* Runs).getHandle(runId);
-      if (!handle) {
-        return yield* Effect.fail(
-          new Error(
-            `Run '${runId}' not found. Use the executions tool to check status.`,
-          ),
-        );
-      }
-
-      if (handle.category !== 'toolUse') {
-        return yield* Effect.fail(
-          new Error(
-            `Run '${runId}' is a workflow agent. Only tool-use subagents can be resumed.`,
-          ),
-        );
-      }
-
-      // Results route to the handle's parent. A detached subagent delivers
-      // nowhere, and a subagent of another orchestrator reports to that
-      // orchestrator, not the caller. Fail fast instead of silently queueing
-      // instructions whose results would never come back here.
-      if (!handle.isChild) {
-        return yield* Effect.fail(
-          new Error(
-            `Run '${runId}' was detached from its orchestrator and now runs top-level. Its results can no longer be delivered back to this session. Start a new delegation instead.`,
-          ),
-        );
-      }
-      if (callerRunId && !handle.isOwnedBy(callerRunId)) {
-        return yield* Effect.fail(
-          new Error(
-            `Run '${runId}' belongs to a different orchestrator session. Its results would be delivered there, not here. Start a new delegation instead.`,
-          ),
-        );
-      }
-
-      const framedInstruction = formatFollowUpInstruction(instruction);
-      const result = yield* submitFollowUp(handle.runId, framedInstruction, {
-        session,
-      });
-      if (result.status === 'failed') {
-        return yield* Effect.fail(
-          new Error(
-            `Follow-up for '${handle.agentName}' was not accepted (${result.reason}): ${describeFollowUpFailure(result.reason)}`,
-          ),
-        );
-      }
-      if (result.status === 'queued' && result.wake === 'failed') {
-        // The instruction is in the subagent's queue; only its wake failed.
-        // The parent learns of that through its own follow-up queue as well,
-        // the same way a child's turn failure reaches it.
-        yield* Effect.forkDetach(
-          deliverResumeWakeFailure(
-            handle,
-            session,
-            runId,
-            new Error(
-              'The subagent could not be resumed to process the follow-up.',
-            ),
-          ).pipe(
-            Effect.catch((error) =>
-              Effect.logWarning(
-                'Could not deliver the subagent wake failure.',
-              ).pipe(
-                Effect.annotateLogs({ data: error }),
-                withLogChannel(CHANNEL),
-              ),
-            ),
-          ),
-        );
-        return executed(
-          [
-            `Follow-up instruction queued for '${handle.agentName}', but the subagent could not be resumed. ${FOLLOW_UP_WAKE_FAILED_MESSAGE}`,
-            `Run ID: ${runId}`,
-          ].join('\n'),
-          `Follow-up queued for '${handle.agentName}' (resume failed)`,
-        );
-      }
-
-      if (result.status === 'sent') {
-        return executed(
-          [
-            `Follow-up instruction sent to '${handle.agentName}'. The subagent will process it and deliver a new result automatically.`,
-            `Run ID: ${runId}`,
-          ].join('\n'),
-          `Follow-up sent to '${handle.agentName}'`,
-        );
-      }
-      return executed(
-        [
-          `Follow-up instruction queued for '${handle.agentName}'. The subagent will process it and deliver a new result automatically.`,
-          `Run ID: ${runId}`,
-        ].join('\n'),
-        `Follow-up queued for '${handle.agentName}'`,
-      );
-    },
-  );
-}
+  execute: executeDelegateAgentTool,
+});

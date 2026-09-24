@@ -98,7 +98,7 @@ In the CLI, a workflow run resumes headless: `texra resume <id>` continues a sto
 
 ## Where it is available
 
-**Agents.** The tool is only offered to agents whose configuration names it. Today that is the `orchestrator` lead (the Physicist, Mathematician, and Computer Scientist teams), `leanOrchestrator` (the Lean Project team), and the `engineer` lead (the Software Engineer team). `orchestrator` and `leanOrchestrator` are [remote agents](./remote-agents.md), so they need a TeXRA sign-in; `engineer` is built in. A [custom agent](./custom-agents.md) can list `delegate_multi_agents` in its tools too.
+**Agents.** The tool is only offered to agents whose configuration names it. Today that is the `orchestrator` lead (the Physicist, Mathematician, and Computer Scientist teams), `leanOrchestrator` (the Lean Project team), and the `engineer` lead (the Software Engineer team). All three leads ship with TeXRA and need no sign-in. A [custom agent](./custom-agents.md) can list `delegate_multi_agents` in its tools too.
 
 **The global switch.** Naming the tool is only half of the opt-in. The **Multi-Agent Workflow** switch on the **Tools** tab of the Dashboard is a kill switch on top of it: when it is off, the tool is removed from every agent's tool list, whatever the agent's configuration says. New installs start with it off, so turn it on before asking a lead to use it. From the CLI, the same switch is `texra tools enable workflow-script`.
 

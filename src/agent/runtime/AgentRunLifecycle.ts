@@ -1,7 +1,6 @@
 import { Cause, Effect } from 'effect';
 
 import { logSdkError, type ResultEvent, type StageHandle } from '@agent/trace';
-import { createChannelTrace } from '@agent/trace';
 import { finalizeRun } from '@agent/storage/runLifecycle';
 import {
   AGENT_ERROR_OUTCOME,
@@ -14,6 +13,7 @@ import {
   attachProviderError,
 } from '@common/errors/sdkError/errorMetadata';
 import { normalizeProviderError } from '@common/errors/sdkError/providerErrorFormat';
+import { withLogChannel } from '@logger/effectLog';
 import { AppState } from '@platform/interfaces';
 import type {
   RetryErrorInfo,
@@ -41,9 +41,16 @@ import {
 } from './AgentFlowResult';
 import { RunArtifactDrainError, type SessionHandle } from './SessionHandle';
 import type { AgentLaunchContext } from './AgentLaunchContext';
-import type { AgentRunServices } from './toolInjection';
+import type { AgentRunServices } from './runRegistry';
 
-const logger = createChannelTrace('agentRunLifecycle');
+const CHANNEL = 'agentRunLifecycle';
+
+/** A lifecycle diagnostic: guarded cleanup logs past its failure here. */
+const logLifecycleWarning = (message: string, data: unknown) =>
+  Effect.logWarning(message).pipe(
+    Effect.annotateLogs({ data }),
+    withLogChannel(CHANNEL),
+  );
 
 export interface RunFlowLifecycleOptions {
   /** The launching run: the parent edge on the live handle. */
@@ -176,12 +183,13 @@ const finalizeRunTerminalBody = Effect.fn('finalizeRunTerminal.body')(
         catch: ensureError,
       }).pipe(
         Effect.catch((stageErr) =>
-          Effect.sync(() => {
-            logger.warn('Failed to end parent stage', {
-              data: { agentIdentifier: handle.agentName, error: stageErr },
-            });
+          logLifecycleWarning('Failed to end parent stage', {
+            agentIdentifier: handle.agentName,
+            error: stageErr,
           }),
         ),
+        Effect.as(undefined),
+        Effect.catch((failure) => Effect.succeed(failure)),
       );
     }
     // The `run.end` row is the run's post-drain fact, and this is the drain:
@@ -197,9 +205,13 @@ const finalizeRunTerminalBody = Effect.fn('finalizeRunTerminal.body')(
       Effect.catch((failure) => Effect.succeed(failure)),
     );
     if (drainFailure !== undefined)
-      logger.warn('Failed to persist the facts this run queued', {
-        data: { runId: handle.runId, error: drainFailure },
-      });
+      yield* logLifecycleWarning(
+        'Failed to persist the facts this run queued',
+        {
+          runId: handle.runId,
+          error: drainFailure,
+        },
+      );
     // The exiting run's own report: `params.outcome` unless the drain rolled
     // its facts back, which outranks however the flow itself ended.
     const reported =
@@ -215,9 +227,8 @@ const finalizeRunTerminalBody = Effect.fn('finalizeRunTerminal.body')(
             kind: 'artifact-drain' as const,
             message: toErrorMessage(drainFailure),
           };
-    // The `run.end` row written below is the run's terminal fact, and the stop
-    // latch read above is not yet spent: the report is only the verdict for a
-    // run no stop reached.
+    // The `run.end` row written below is the run's terminal fact: the report
+    // is only the verdict for a run no stop reached.
     const outcome = stopped ? RUN_OUTCOME.CANCELLED : reported;
     // Error facts the run classified for an outcome that did not happen are not
     // facts about this run. A lost drain is the exception: the queued facts are
@@ -248,13 +259,11 @@ const finalizeRunTerminalBody = Effect.fn('finalizeRunTerminal.body')(
       output,
     });
     if (!finalization.ok) {
-      logger.warn('Failed to finalize durable run state', {
-        data: {
-          agentIdentifier: handle.agentName,
-          runId: handle.runId,
-          outcomePersisted: finalization.outcomePersisted,
-          error: finalization.error,
-        },
+      yield* logLifecycleWarning('Failed to finalize durable run state', {
+        agentIdentifier: handle.agentName,
+        runId: handle.runId,
+        outcomePersisted: finalization.outcomePersisted,
+        error: finalization.error,
       });
     }
     if (params.deliver) {
@@ -264,10 +273,9 @@ const finalizeRunTerminalBody = Effect.fn('finalizeRunTerminal.body')(
         catch: ensureError,
       }).pipe(
         Effect.catch((deliveryError) =>
-          Effect.sync(() => {
-            logger.warn('Terminal delivery hook failed', {
-              data: { agentIdentifier: handle.agentName, error: deliveryError },
-            });
+          logLifecycleWarning('Terminal delivery hook failed', {
+            agentIdentifier: handle.agentName,
+            error: deliveryError,
           }),
         ),
       );
@@ -285,10 +293,9 @@ const finalizeRunTerminalBody = Effect.fn('finalizeRunTerminal.body')(
       catch: ensureError,
     }).pipe(
       Effect.catch((cleanupErr) =>
-        Effect.sync(() => {
-          logger.warn('Post-terminal cleanup threw', {
-            data: { agentIdentifier: handle.agentName, error: cleanupErr },
-          });
+        logLifecycleWarning('Post-terminal cleanup threw', {
+          agentIdentifier: handle.agentName,
+          error: cleanupErr,
         }),
       ),
     );
@@ -299,9 +306,9 @@ const finalizeRunTerminalBody = Effect.fn('finalizeRunTerminal.body')(
   },
 );
 
-/** Failures finalizeFailedRun already logged, published, and wrapped; the
- *  outer catch rethrows these untouched instead of finalizing them again. */
-const finalizedRunFailures = new WeakSet<Error>();
+/** A failure the run already logged, published, and wrapped; the outer catch
+ *  rethrows it untouched instead of finalizing it again. */
+class FinalizedRunFailure extends AgentError {}
 
 /**
  * Recover a run's carried failure as an `Error`, so the one failure path below
@@ -396,10 +403,9 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
       // flow.
       yield* Effect.suspend(() => onRun(handle)).pipe(
         Effect.catchCause((cause) =>
-          Effect.sync(() => {
-            logger.warn('onRun callback failed', {
-              data: { agentIdentifier, error: Cause.squash(cause) },
-            });
+          logLifecycleWarning('onRun callback failed', {
+            agentIdentifier,
+            error: Cause.squash(cause),
           }),
         ),
         Effect.forkDetach({ startImmediately: true }),
@@ -515,9 +521,9 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
         );
       }
 
-      const finalizedFailure = new AgentError(errorMsg, { cause: err });
-      finalizedRunFailures.add(finalizedFailure);
-      return yield* Effect.fail(finalizedFailure);
+      return yield* Effect.fail(
+        new FinalizedRunFailure(errorMsg, { cause: err }),
+      );
     });
     /**
      * Invoke the composition-supplied hook once the live run ends.
@@ -531,10 +537,10 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
         Effect.catchCause((cause) =>
           Cause.hasInterruptsOnly(cause)
             ? Effect.interrupt
-            : Effect.sync(() => {
-                logger.warn('Failed to run the run-end hook', {
-                  data: { agentIdentifier, runId, error: Cause.squash(cause) },
-                });
+            : logLifecycleWarning('Failed to run the run-end hook', {
+                agentIdentifier,
+                runId,
+                error: Cause.squash(cause),
               }),
         ),
       );
@@ -592,23 +598,24 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
             done ? Effect.void : setFirstRunDone(globalState, true),
           ),
           Effect.catch((error) =>
-            Effect.sync(() =>
-              logger.warn('Failed to record the first completed run', {
-                data: error,
-              }),
+            logLifecycleWarning(
+              'Failed to record the first completed run',
+              error,
             ),
           ),
         );
       }
 
-      logger.debug(`Task completed with outcome: ${resolvedOutcome}`);
+      yield* Effect.logDebug(
+        `Task completed with outcome: ${resolvedOutcome}`,
+      ).pipe(withLogChannel(CHANNEL));
       return withResolvedOutcome(result, resolvedOutcome);
     });
     return yield* run.pipe(
       Effect.catchCause((cause) => {
         const err = ensureError(Cause.squash(cause));
         // A failure already classified and published retains its one error path.
-        if (finalizedRunFailures.has(err)) return Effect.fail(err);
+        if (err instanceof FinalizedRunFailure) return Effect.fail(err);
         return finalizeFailedRun(err, undefined);
       }),
       Effect.onInterrupt(() =>

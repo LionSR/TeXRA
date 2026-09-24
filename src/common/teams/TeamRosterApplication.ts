@@ -39,7 +39,7 @@ type TeamRosterApplicationResult =
 
 export interface TeamRosterApplicationDeps<R = never> {
   readonly catalog: TeamRosterCatalog;
-  readonly loadLocalCatalog: () => Effect.Effect<void, unknown, R>;
+  readonly loadLocalCatalog: () => Effect.Effect<void, Error, R>;
   readonly canAccessRemoteCatalog: () => Effect.Effect<boolean>;
   /** A decision already supplied by a non-interactive caller. */
   readonly providedChoice?: TeamAvailabilityChoice;
@@ -48,14 +48,14 @@ export interface TeamRosterApplicationDeps<R = never> {
     unavailableNames: readonly string[],
   ) => Effect.Effect<TeamAvailabilityChoice | undefined, TeamCatalogPortFailed>;
   readonly signIn: () => Effect.Effect<boolean, SignInFailed>;
-  readonly forceRefreshRemoteCatalog: () => Effect.Effect<void, unknown, R>;
+  readonly forceRefreshRemoteCatalog: () => Effect.Effect<void, Error, R>;
 }
 
 /** Host sequence for preflighting and committing one team roster. */
 export function applyTeamRosterWithPreflight<R = never>(
   presetId: string,
   deps: TeamRosterApplicationDeps<R>,
-): Effect.Effect<TeamRosterApplicationResult, unknown, R> {
+): Effect.Effect<TeamRosterApplicationResult, Error, R> {
   return Effect.gen(function* () {
     yield* deps.loadLocalCatalog();
     const initial = yield* deps.catalog.resolvePreset(presetId);

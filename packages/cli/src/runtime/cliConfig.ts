@@ -18,15 +18,14 @@ import type { ConfigProvider } from '@platform/interfaces';
 
 // Local imports - shared
 import { canonicalConfigKey } from '@shared/config/configKeys';
-import { readConfigSetting } from '@shared/config/settingsAccess';
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import {
-  CLI_CONFIG_SLOT_KEYS,
-  settingByKey,
-} from '@shared/state/stateSettings';
+import { CLI_CONFIG_SLOT_KEYS } from '@shared/state/stateSettings';
 
 // Local imports - utilities
-import { writeSettingTo } from '@utils/config/platformSettings';
+import {
+  readConfigSettingFrom,
+  writeSettingTo,
+} from '@utils/config/platformSettings';
 import { isObject } from '@utils/core';
 
 // Local file imports
@@ -122,16 +121,6 @@ export interface CliStartupConfig {
   readonly warnings: readonly string[];
 }
 
-/** A config-slot catalog row, read and validated through its own schema. */
-export function readCliConfigSetting<T>(
-  config: ConfigProvider,
-  key: string,
-): T {
-  const entry = settingByKey(key);
-  if (!entry) throw new Error(`No setting catalog entry for key: ${key}`);
-  return readConfigSetting(entry, config) as T;
-}
-
 /**
  * Agent and model for one command: its own `texra.chat` / `texra.run` section
  * over the top-level `texra.agent` / `texra.model` rows, both resolved through
@@ -144,18 +133,18 @@ export function cliCommandDefaults(
 ): CliCommandDefaults {
   const sectionKey = canonicalConfigKey(role);
   const section =
-    readCliConfigSetting<CliCommandDefaults | undefined>(
+    readConfigSettingFrom<CliCommandDefaults | undefined>(
       stores.config,
       sectionKey,
     ) ?? {};
   const modelKey = section.model ? sectionKey : canonicalConfigKey('model');
   const model =
     section.model ??
-    readCliConfigSetting<string | undefined>(stores.config, modelKey);
+    readConfigSettingFrom<string | undefined>(stores.config, modelKey);
   return {
     agent:
       section.agent ??
-      readCliConfigSetting<string | undefined>(
+      readConfigSettingFrom<string | undefined>(
         stores.config,
         canonicalConfigKey('agent'),
       ),

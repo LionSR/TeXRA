@@ -10,6 +10,7 @@
  * tool opens a prompt and no tool writes a card.
  */
 import { Effect } from 'effect';
+import { z } from 'zod';
 
 import type { ToolResult } from '@shared/schemas';
 import {
@@ -21,9 +22,12 @@ import {
   parseWorkingDirectory,
   resolveAndFormat,
 } from '@tools/pathResolution';
+import { ensureError } from '@utils/errors/errorMessage';
 
 import { ToolCall } from '../ToolCall';
 import type { RuntimeTool, ToolServices } from '../ToolServices';
+
+const JSON_OBJECT_ARGUMENTS = z.record(z.string(), z.unknown());
 
 /**
  * Apply the tool's declared guard, answering the result that replaces the
@@ -32,13 +36,17 @@ import type { RuntimeTool, ToolServices } from '../ToolServices';
 const guardRefusal = Effect.fn('toolUse.guard')(function* (
   tool: RuntimeTool,
   rawInput: unknown,
-): Effect.fn.Return<ToolResult | undefined, unknown, ToolServices> {
+): Effect.fn.Return<ToolResult | undefined, Error, ToolServices> {
   const guard = tool.guard;
   if (!guard) return undefined;
   // The guard reads the call's own validated arguments, from the same schema
-  // `call` validates with. A tool that declares a guard but no schema would
-  // have the guard quietly stop gating it, so it is a defect, not a skip.
-  const schema = tool.definition.zodSchema;
+  // `call` validates with; a tool whose parameters are a pass-through JSON
+  // Schema (an MCP server's) takes a JSON object, as its `call` checks. A tool
+  // that declares a guard but no schema would have the guard quietly stop
+  // gating it, so it is a defect, not a skip.
+  const schema =
+    tool.definition.zodSchema ??
+    (tool.definition.parameters ? JSON_OBJECT_ARGUMENTS : undefined);
   if (!schema)
     return yield* Effect.die(
       new Error(
@@ -57,7 +65,7 @@ const guardRefusal = Effect.fn('toolUse.guard')(function* (
   // becoming a defect.
   const targets = yield* Effect.try({
     try: () => guard.writes?.(input) ?? [],
-    catch: (error) => error,
+    catch: ensureError,
   });
   for (const target of targets) {
     const { path, display } = yield* resolveAndFormat(
@@ -68,7 +76,7 @@ const guardRefusal = Effect.fn('toolUse.guard')(function* (
     );
     yield* Effect.try({
       try: () => assertWritable(path, display),
-      catch: (error) => error,
+      catch: ensureError,
     });
   }
 

@@ -81,16 +81,6 @@ export const SESSION_LIST = {
   parentAction: 'parent',
 } as const;
 
-/**
- * Copy used when a modal/form/palette owns the keyboard and the status bar
- * should point the reader at that surface instead of inventing "foreground
- * panel" jargon.
- */
-export const FOREGROUND_OWNERSHIP = {
-  /** Status-bar lead-in while a modal/form owns keys. */
-  keysGoAbove: 'Keys go to the panel above',
-} as const;
-
 /** Follow-up rejection copy when the focused nested run has already finished. */
 export const FOCUSED_BACKGROUND_TASK = {
   selectedNoLongerAccepting: `The selected ${BACKGROUND_TASK_INLINE} is no longer accepting follow-ups.`,

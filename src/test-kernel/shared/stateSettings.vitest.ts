@@ -38,7 +38,6 @@ import {
   settingByKey,
   settingsViewSettingByKey,
   settingsViewSnapshotEntries,
-  stateSettingByKey,
 } from '@shared/state/stateSettings';
 import {
   dispatchSettingsViewOutbound,
@@ -76,6 +75,7 @@ import {
   isStored,
   makeFakeSettingsStores,
 } from '@test/support/settingsStoresFake';
+import { orchestratorKillDenial } from '@tools/executions/killPolicy';
 import { readSettingFrom } from '@utils/config/platformSettings';
 
 const VALID_STORES: ReadonlySet<SettingStore> = new Set<SettingStore>([
@@ -89,7 +89,7 @@ const SETTING_HOSTS: readonly SettingHost[] = ['vscode', 'cli', 'desktop'];
 const CLI_RUNTIME_COMMAND_PATTERN = /^texra\s+(?:chat|run|multi-agent run)\b/;
 
 function entryByKey(key: string): StateSettingEntry {
-  const entry = stateSettingByKey(key);
+  const entry = settingByKey(key);
   assert.ok(entry, `missing catalog entry ${key}`);
   return entry;
 }
@@ -140,7 +140,7 @@ const EXPECTED_DEFAULTS: Record<string, unknown> = {
   [GlobalStateKey.PREFER_SHORT_MODEL_NAMES]: false,
   [GlobalStateKey.USE_OPENROUTER]: false,
   [GlobalStateKey.KIMI_CODE_PREFER]: false,
-  // Region defaults mirror the PROVIDER_REGISTRY `region.default` facts the
+  // Region defaults: the provider plugins' `region.default`, which the
   // `regionSet()` getter reads through `readSettingFrom`.
   [GlobalStateKey.MOONSHOT_USE_CHINA]: true,
   [GlobalStateKey.DASHSCOPE_USE_CHINA]: false,
@@ -679,5 +679,20 @@ describe('settingsAccess', () => {
           warn.mockRestore();
         }
       }),
+  );
+
+  // #11797: the kill gate's permissive default answers only for an absent
+  // key; a stored value that fails the schema denies, loudly.
+  it.effect('denies orchestrator kills on an invalid stored policy', () =>
+    Effect.gen(function* () {
+      const { stores, globalState } = makeFakeSettingsStores();
+      assert.equal(yield* orchestratorKillDenial(stores), undefined);
+      yield* globalState.update(
+        GlobalStateKey.ALLOW_ORCHESTRATOR_KILL,
+        'false',
+      );
+      const denial = yield* orchestratorKillDenial(stores);
+      assert.match(String(denial), /denied: .* is invalid/);
+    }),
   );
 });

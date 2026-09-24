@@ -200,7 +200,6 @@ describe('desktop preview host', () => {
           >[0]['onboarding'],
           openExternalUrl: preview.openExternal,
           recheckTools: () => Effect.void,
-          logger: { warn: () => {}, error: () => {} },
         });
         yield* Effect.addFinalizer(() =>
           Effect.sync(() => {
@@ -462,7 +461,8 @@ describe('desktop preview host', () => {
             reportFailure: false,
           }),
         );
-        expect(error).toBe(browserError);
+        expect(error._tag).toBe('ExternalOpenFailed');
+        expect(error.cause).toBe(browserError);
         expect(showErrorMessage).not.toHaveBeenCalled();
       }),
   );

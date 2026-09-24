@@ -30,7 +30,7 @@ import {
   RunArtifactDrainError,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
-import type { AgentRunServices } from '@agent/runtime/toolInjection';
+import { Runs, type AgentRunServices } from '@agent/runtime/runRegistry';
 import { withLogChannel } from '@logger/effectLog';
 import {
   RUN_OUTCOME,
@@ -40,6 +40,7 @@ import {
   type RunId,
   type SubagentProgressUpdate,
 } from '@shared/schemas';
+import type { CompositionKey } from '@tools/compositions';
 import { generateRunId } from '@utils/core';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -72,6 +73,8 @@ export class SubagentDurabilityError extends Error {
 
 interface InBandSubagentRunBaseOptions extends ChildRunLaunchOptions {
   readonly configPayload: AgentConfigPayload;
+  /** The parent's composition, which the child joins. */
+  readonly composition: CompositionKey;
   /** Synchronous by contract; forwarded as the loop's `recordCost`. */
   readonly onCost?: (costUsd: number | undefined) => void;
   /**
@@ -172,7 +175,6 @@ const executeInBand = Effect.fn('executeInBand')(
     yield* registerChildRun(options.session, {
       runId,
       config,
-      agentName: options.agentName,
       userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
       parentRunId: options.parentRunId,
     }).pipe(
@@ -373,8 +375,41 @@ const executeInBand = Effect.fn('executeInBand')(
  * Launch one child under the run id its caller derived and read the typed
  * result back from the durable record. Recovering an earlier attempt belongs
  * to the caller that owns the call identity; this only ever starts a new run.
+ *
+ * The caller cancels by interruption, and the child's loop is a detached
+ * fiber that interruption does not reach, so this is the edge between the
+ * two: interrupting the caller stops the child by run id — the loop's own
+ * stop, which interrupts the child run's fiber — then waits for the child to
+ * settle its own terminal record. A launch that has no live run yet is
+ * interrupted where it is; one whose loop started inside the launch's
+ * uninterruptible hand-off is stopped once that hand-off returns.
  */
-export const executeSubagentInBand = Effect.fn('executeSubagentInBand')(
+export const executeSubagentInBand = (
+  options: InBandSubagentLaunchOptions,
+): Effect.Effect<InBandSubagentRunResult, Error, AgentRunServices> =>
+  Effect.gen(function* () {
+    const runs = yield* Runs;
+    const child = yield* Effect.forkChild(launchSubagentInBand(options), {
+      startImmediately: true,
+    });
+    return yield* Fiber.join(child).pipe(
+      Effect.onInterrupt(() =>
+        Effect.suspend(() =>
+          runs.interruptActive(options.runId)
+            ? Fiber.await(child)
+            : Fiber.interrupt(child).pipe(
+                Effect.andThen(
+                  Effect.sync(() => {
+                    runs.interruptActive(options.runId);
+                  }),
+                ),
+              ),
+        ),
+      ),
+    );
+  });
+
+const launchSubagentInBand = Effect.fn('executeSubagentInBand')(
   function* (
     options: InBandSubagentLaunchOptions,
   ): Effect.fn.Return<InBandSubagentRunResult, Error, AgentRunServices> {

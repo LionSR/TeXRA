@@ -1,6 +1,5 @@
 import { ModelProvider, type ModelConfig } from 'llm-zoo';
 
-import { isGlmOpenRouterRoute } from '@model/glmRouting';
 import {
   isKimiCodeExclusiveModel,
   type KimiSubscriptionModelFields,
@@ -83,8 +82,6 @@ export function shouldRouteModelThroughOpenRouter(
   if (config.requiresResponsesAPI) return false;
   const openRouterSelected = isOpenRouterAccessSelected(config, useOpenRouter);
   if (config.provider !== ModelProvider.GLM) return openRouterSelected;
-  return isGlmOpenRouterRoute({
-    baseUrl: config.baseUrl,
-    useOpenRouter: openRouterSelected,
-  });
+  // A per-model base URL outranks OpenRouter (`@model/routeEndpoint`).
+  return !config.baseUrl && openRouterSelected;
 }

@@ -94,11 +94,6 @@ function formatNodeContent(
       return toolResultMarker(node.text, options);
     case 'web-search':
       return toolUseMarker('web_search', { query: node.query }, options);
-    case 'web-search-results':
-      return toolResultMarker(
-        node.results.map(({ title, url }) => `${title} (${url})`).join(', '),
-        options,
-      );
     default:
       return assertNever(node, 'Unhandled export node kind');
   }
@@ -112,7 +107,6 @@ const NODE_ROLE = {
   'tool-call': 'assistant',
   'tool-result': 'user',
   'web-search': 'assistant',
-  'web-search-results': 'assistant',
 } as const satisfies Record<ExportNode['kind'], 'user' | 'assistant'>;
 
 /** Render one conversation node as the role and text conversation views show. */

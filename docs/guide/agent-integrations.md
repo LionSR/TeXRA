@@ -116,6 +116,62 @@ When the tool fires:
 <DelegatedStreamHero />
 <p class="hero-caption">The delegated session streams live in its own ProgressBoard tab (reasoning, commands, file changes, web searches, and todos), then shows <strong>Idle</strong> and hands its result back to the calling agent.</p>
 
+## MCP servers
+
+TeXRA agents can call the tools of local [Model Context Protocol](https://modelcontextprotocol.io)
+servers. List them in `~/.texra/mcp.json`, in the same shape as Claude Code's
+`.mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "github": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "env": { "GITHUB_PERSONAL_ACCESS_TOKEN": "ghp_..." }
+    }
+  }
+}
+```
+
+A server name uses letters, digits, `_` and `-` (at most 32 characters, no
+`__`). Only stdio servers (a `command` TeXRA starts) are supported. An entry
+that does not match this shape is skipped, and a run that asks for MCP tools
+shows why in its transcript.
+
+An agent gets a server's tools only when its YAML `tools:` list names them,
+either one by one as `mcp__<server>__<tool>` or all at once as
+`mcp__<server>__*`:
+
+```yaml
+tools:
+  - read_file
+  - mcp__github__*
+```
+
+- **Every call goes through shell-command approval.** The prompt shows the
+  server, the tool and its arguments. It follows **Dashboard → Tools →
+  Approval & safety** like a shell command does: no prompt under
+  Auto-approve, or under Ask with **require approval for shell commands**
+  turned off, and every call refused under Never. A session where approval
+  prompts can't be shown (a headless run) is not offered MCP tools.
+- **The server runs only while a run uses it.** TeXRA starts it when the first
+  run that names it begins and stops it when the last such run ends. Editing a
+  server's entry takes effect for runs started afterwards; runs already in
+  progress keep the server they started with. A subagent uses the servers of
+  the run that launched it.
+- **Environment.** A server inherits TeXRA's environment minus variables whose
+  names contain `KEY`, `TOKEN`, `SECRET`, `PASSWORD` or `CREDENTIAL`, so your
+  provider API keys don't reach it. Pass what a server needs through its `env`.
+- **Limits.** A call times out after 60 seconds, and output beyond 54,000
+  characters keeps its first 4,000 and last 50,000.
+- **A server that fails to start** (a missing command, no answer within 30
+  seconds, a malformed tool list) contributes no tools; the run continues with
+  the rest and its transcript names the server and the reason.
+
+Not yet supported: a project-level `.texra/mcp.json`, HTTP servers, servers
+that change their tool list while running, and MCP resources and prompts.
+
 ## Troubleshooting
 
 The exact error message is shown inline on the card, below its description. Read it before applying a fix.

@@ -9,7 +9,7 @@ import { Effect } from 'effect';
 import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
 import type { ActiveSkillSourceScope } from '@shared/schemas';
 import { byName } from '@utils/core';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local imports - skill parsing
 import { type SkillLoadIssue, issue, loadSkillDirectory } from './skillLoader';
@@ -22,6 +22,8 @@ interface DiscoveredSkill {
   skill: Skill;
   /** Canonical `SKILL.md` path, resolved while the skill was discovered. */
   realPath: string;
+  /** The skill's directory name under its root, the scan's sort key. */
+  entryName: string;
 }
 
 interface SkillRootScan {
@@ -37,6 +39,16 @@ export interface SkillSource {
   readonly path: string;
   readonly label?: string;
   readonly required?: boolean;
+}
+
+/**
+ * One precedence tier of sources. A `source` tier scans its roots one after
+ * another; a `name` tier pools its roots and orders their skills by directory
+ * name, the order one root holding all of them would give.
+ */
+export interface SkillSourceTier {
+  readonly order: 'source' | 'name';
+  readonly sources: readonly SkillSource[];
 }
 
 export interface SourcedSkill {
@@ -87,7 +99,7 @@ const scanSkillRoot = Effect.fn('skills.scanSkillRoot')(function* (
 
   const entries: Dirent[] | undefined = yield* Effect.tryPromise({
     try: () => fs.readdir(root, { withFileTypes: true }),
-    catch: (err) => err,
+    catch: ensureError,
   }).pipe(
     Effect.catch((err) =>
       Effect.sync(() => {
@@ -111,7 +123,7 @@ const scanSkillRoot = Effect.fn('skills.scanSkillRoot')(function* (
     const skillPath = path.join(skillDir, 'SKILL.md');
     const realSkillPath: string | undefined = yield* Effect.tryPromise({
       try: () => fs.realpath(skillPath),
-      catch: (err) => err,
+      catch: ensureError,
     }).pipe(
       Effect.catch((err) =>
         Effect.sync(() => {
@@ -144,7 +156,11 @@ const scanSkillRoot = Effect.fn('skills.scanSkillRoot')(function* (
     }
 
     seenNames.add(loaded.skill.name);
-    skills.push({ skill: loaded.skill, realPath: realSkillPath });
+    skills.push({
+      skill: loaded.skill,
+      realPath: realSkillPath,
+      entryName: entry.name,
+    });
   }
 
   return { skills, errors };
@@ -163,7 +179,7 @@ function validateRequiredSource(
     });
   return Effect.tryPromise({
     try: () => fs.stat(source.path),
-    catch: (err) => err,
+    catch: ensureError,
   }).pipe(
     Effect.map((sourceStat) =>
       sourceStat.isDirectory() ? undefined : notADirectory(),
@@ -189,43 +205,25 @@ function validateRequiredSource(
 }
 
 /**
- * Discover skills from several roots in precedence order.
+ * Discover skills from tiers of roots in precedence order.
  *
  * On top of the per-root scan this adds the cross-root invariants runtimes
  * need: a skill name or canonical `SKILL.md` file is accepted only from the
- * first source that provides it.
+ * first source that provides it, in the tier's order.
  */
 export const discoverSkillSources = Effect.fn('skills.discoverSkillSources')(
   function* (
-    sources: readonly SkillSource[],
+    tiers: readonly SkillSourceTier[],
   ): Effect.fn.Return<DiscoverSkillSourcesResult> {
     const skills: SourcedSkill[] = [];
     const errors: SkillLoadIssue[] = [];
     const seenNames = new Set<string>();
     const seenRealPaths = new Set<string>();
 
-    for (const source of sources) {
-      if (source.required === true) {
-        const sourceError = yield* validateRequiredSource(source);
-        if (sourceError) {
-          errors.push(sourceError);
-          continue;
-        }
-      }
-
-      const result = yield* scanSkillRoot(source.path);
-      errors.push(
-        ...result.errors.map((error) =>
-          source.required === true &&
-          error.severity === 'error' &&
-          error.code === 'read_error' &&
-          error.path === source.path
-            ? { ...error, code: 'source_read_error' as const }
-            : error,
-        ),
-      );
-
-      for (const { skill, realPath } of result.skills) {
+    const accept = (
+      found: readonly (DiscoveredSkill & { source: SkillSource })[],
+    ) => {
+      for (const { skill, realPath, source } of found) {
         if (seenRealPaths.has(realPath)) {
           errors.push(dupRealpathIssue(realPath, skill.path, skill.name));
           continue;
@@ -240,6 +238,37 @@ export const discoverSkillSources = Effect.fn('skills.discoverSkillSources')(
         seenNames.add(skill.name);
         skills.push({ skill, source });
       }
+    };
+
+    for (const tier of tiers) {
+      // A name-ordered tier accepts once, after every root is scanned.
+      const pooled: (DiscoveredSkill & { source: SkillSource })[] = [];
+      for (const source of tier.sources) {
+        if (source.required === true) {
+          const sourceError = yield* validateRequiredSource(source);
+          if (sourceError) {
+            errors.push(sourceError);
+            continue;
+          }
+        }
+
+        const result = yield* scanSkillRoot(source.path);
+        errors.push(
+          ...result.errors.map((error) =>
+            source.required === true &&
+            error.severity === 'error' &&
+            error.code === 'read_error' &&
+            error.path === source.path
+              ? { ...error, code: 'source_read_error' as const }
+              : error,
+          ),
+        );
+
+        const found = result.skills.map((entry) => ({ ...entry, source }));
+        if (tier.order === 'source') accept(found);
+        else pooled.push(...found);
+      }
+      accept(pooled.toSorted((a, b) => a.entryName.localeCompare(b.entryName)));
     }
 
     return { skills, errors };

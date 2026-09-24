@@ -46,25 +46,45 @@ try {
 }
 const { packageCommandContributions, commandKeybindings } = commandCatalog;
 
-// One chat skill per bundled `resources/skills/<name>/SKILL.md`.
-const skillsDir = path.join(
-  rootDir,
-  'packages',
-  'extension',
-  'resources',
-  'skills',
-);
-const chatSkills = (await readdir(skillsDir, { withFileTypes: true }))
-  .filter(
-    (entry) =>
-      entry.isDirectory() &&
-      existsSync(path.join(skillsDir, entry.name, 'SKILL.md')),
+// One chat skill per bundled `SKILL.md`: the core `resources/skills/<name>/`
+// and each tool plugin's `resources/plugins/<id>/skills/<name>/`. The runtime
+// pools these roots into one name-ordered bundled tier, which reads the same
+// as one directory only while the names are disjoint, so a clash throws here.
+const resourcesDir = path.join(rootDir, 'packages', 'extension', 'resources');
+
+async function bundledSkillEntries(relativeDir) {
+  const dir = path.join(resourcesDir, relativeDir);
+  return (await readdir(dir, { withFileTypes: true }))
+    .filter(
+      (entry) =>
+        entry.isDirectory() &&
+        existsSync(path.join(dir, entry.name, 'SKILL.md')),
+    )
+    .map((entry) => ({
+      name: entry.name,
+      path: `resources/${relativeDir}/${entry.name}/SKILL.md`,
+    }));
+}
+
+const pluginSkillDirs = (
+  await readdir(path.join(resourcesDir, 'plugins'), { withFileTypes: true })
+)
+  .filter((entry) => entry.isDirectory())
+  .map((entry) => `plugins/${entry.name}/skills`);
+const chatSkills = (
+  await Promise.all(
+    ['skills', ...pluginSkillDirs].map((dir) => bundledSkillEntries(dir)),
   )
-  .map((entry) => ({
-    name: entry.name,
-    path: `resources/skills/${entry.name}/SKILL.md`,
-  }))
+)
+  .flat()
   .toSorted((a, b) => a.name.localeCompare(b.name));
+for (const [index, skill] of chatSkills.entries()) {
+  if (chatSkills[index + 1]?.name === skill.name) {
+    throw new Error(
+      `Bundled skill "${skill.name}" is shipped twice (${skill.path} and ${chatSkills[index + 1].path}); core and plugin skill directory names must be disjoint.`,
+    );
+  }
+}
 
 function normalizeLineEndings(text) {
   return text.replaceAll('\r\n', '\n').replaceAll('\r', '\n');

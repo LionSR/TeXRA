@@ -10,66 +10,11 @@ import { execa } from 'execa';
 // Local imports
 import { withLogChannel } from '@logger/effectLog';
 import { exposeApiKey, lookupApiKey, apiKeyEnvName } from '@model/apiProviders';
-import type { StateReadFailed } from '@platform/interfaces';
-import type { StateStore } from '@platform/interfaces';
 import { Secrets } from '@platform/secrets';
-import type {
-  ClaudeAgentEffort,
-  ClaudeAgentModel,
-  ClaudeAgentPermissionMode,
-} from '@shared/schemas';
-import {
-  CLAUDE_AGENT_DEFAULT_EFFORT,
-  CLAUDE_AGENT_DEFAULT_MODEL,
-  CLAUDE_AGENT_DEFAULT_PERMISSION_MODE,
-  parseClaudeAgentEffort,
-  parseClaudeAgentModel,
-  parseClaudeAgentPermissionMode,
-} from '@shared/schemas';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { safeHomedir } from '@utils/system/platformPaths';
-
-// Local file imports
-import { createEnumStateGetter } from './support/enumConfig';
+import { ensureError } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'claudeAgent';
-
-// ============================================================================
-// Model — defaults to Sonnet 5; users can override per-call or via workspace state
-// ============================================================================
-
-export const getClaudeAgentModel: (
-  workspaceState: StateStore,
-) => Effect.Effect<ClaudeAgentModel, StateReadFailed> = createEnumStateGetter(
-  WorkspaceStateKey.CLAUDE_AGENT_MODEL,
-  CLAUDE_AGENT_DEFAULT_MODEL,
-  parseClaudeAgentModel,
-);
-
-// ============================================================================
-// Permission mode
-// ============================================================================
-
-export const getClaudeAgentPermissionMode: (
-  workspaceState: StateStore,
-) => Effect.Effect<ClaudeAgentPermissionMode, StateReadFailed> =
-  createEnumStateGetter(
-    WorkspaceStateKey.CLAUDE_AGENT_PERMISSION_MODE,
-    CLAUDE_AGENT_DEFAULT_PERMISSION_MODE,
-    parseClaudeAgentPermissionMode,
-  );
-
-// ============================================================================
-// Effort — adaptive thinking depth hint passed via `effort` SDK option
-// ============================================================================
-
-export const getClaudeAgentEffort: (
-  workspaceState: StateStore,
-) => Effect.Effect<ClaudeAgentEffort, StateReadFailed> = createEnumStateGetter(
-  WorkspaceStateKey.CLAUDE_AGENT_EFFORT,
-  CLAUDE_AGENT_DEFAULT_EFFORT,
-  parseClaudeAgentEffort,
-);
 
 // ============================================================================
 // Auth env — pulls ANTHROPIC_API_KEY from secrets if set
@@ -114,7 +59,7 @@ const hasClaudeOauthCredential = Effect.fn('hasClaudeOauthCredential')(
     // boolean, and this check runs before any root is resolved.
     const credentialFileExists = yield* Effect.tryPromise({
       try: () => access(path.join(configDir, '.credentials.json')),
-      catch: (error) => error,
+      catch: ensureError,
     }).pipe(
       Effect.as(true),
       // access(F_OK) succeeds when the file exists regardless of its read
@@ -133,7 +78,7 @@ const hasClaudeOauthCredential = Effect.fn('hasClaudeOauthCredential')(
               timeout: 1000,
               reject: false,
             }),
-          catch: (error) => error,
+          catch: ensureError,
         }).pipe(
           Effect.map((result) => result.exitCode),
           // Not found / `security` unavailable — try the next known service name.

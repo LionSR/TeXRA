@@ -34,9 +34,8 @@ import {
 } from '@tools/delegation/inputFields';
 
 describe('DelegationTools', () => {
-  // The bib-size probe reads the real filesystem now that the `WorkspaceFS`
-  // facade is gone, so the cases build a real tree whose files carry the
-  // sizes under test rather than stubbing a `stat`.
+  // The bib-size probe reads the real filesystem, so the cases build a real
+  // tree whose files carry the sizes under test rather than stubbing a `stat`.
   let workspaceRoot: string;
 
   beforeEach(async () => {
@@ -142,26 +141,24 @@ describe('DelegateAgentTool resume ownership', () => {
         runs: { getHandle: () => makeHandle() },
       } as never;
 
-      yield* new DelegateAgentTool()
-        .call({
-          execution_id: runId,
-          instruction: 'Keep going.',
-        })
-        .pipe(
-          Effect.provide(
-            nativeToolTestLayer({
-              run: {
-                session,
-                runId: parentRunId,
-                config: AgentConfigSchema.parse({
-                  agent: 'chat',
-                  model: 'parent-model',
-                }),
-                toolPolicy: {},
-              },
-            }),
-          ),
-        );
+      yield* DelegateAgentTool.call({
+        execution_id: runId,
+        instruction: 'Keep going.',
+      }).pipe(
+        Effect.provide(
+          nativeToolTestLayer({
+            run: {
+              session,
+              runId: parentRunId,
+              config: AgentConfigSchema.parse({
+                agent: 'chat',
+                model: 'parent-model',
+              }),
+              toolPolicy: {},
+            },
+          }),
+        ),
+      );
 
       // The wake-failure delivery is forked detached inside the tool; the mock
       // completes this deferred when that fiber makes the second call.

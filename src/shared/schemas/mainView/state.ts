@@ -216,21 +216,12 @@ export const TeamOptionDataSchema = PickerOptionBaseSchema.extend({
 export type TeamOptionData = z.infer<typeof TeamOptionDataSchema>;
 
 // ============================================================
-// Banner State Schemas
+// Banner Data Schemas
 // ============================================================
-
-const BannerStateSchema = z.object({
-  visible: z.boolean(),
-});
-export type BannerState = z.infer<typeof BannerStateSchema>;
 
 export const ApiKeyBannerDataSchema = z.object({
   provider: z.string().nullish(),
 });
-const ApiKeyBannerStateSchema = BannerStateSchema.extend(
-  ApiKeyBannerDataSchema.shape,
-);
-export type ApiKeyBannerState = z.infer<typeof ApiKeyBannerStateSchema>;
 
 export const AgentConfigBannerDataSchema = z.object({
   agentName: z.string().nullish(),
@@ -239,12 +230,6 @@ export const AgentConfigBannerDataSchema = z.object({
   sessionType: SessionTypeSchema.nullish(),
   customDirSet: z.boolean().nullish(),
 });
-const AgentConfigBannerStateSchema = BannerStateSchema.extend(
-  AgentConfigBannerDataSchema.shape,
-);
-export type AgentConfigBannerState = z.infer<
-  typeof AgentConfigBannerStateSchema
->;
 
 /**
  * One missing dependency as the host reports it: already labeled for
@@ -262,10 +247,6 @@ export type MissingTool = z.infer<typeof MissingToolSchema>;
 export const DependencyBannerDataSchema = z.object({
   missingTools: z.array(MissingToolSchema).nullish(),
 });
-const DependencyBannerStateSchema = BannerStateSchema.extend(
-  DependencyBannerDataSchema.shape,
-);
-export type DependencyBannerState = z.infer<typeof DependencyBannerStateSchema>;
 
 // ============================================================
 // File State Schemas

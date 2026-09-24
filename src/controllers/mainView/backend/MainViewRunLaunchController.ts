@@ -173,7 +173,7 @@ export function prepareSurfaceLaunch(
           host.chooseTeamAvailability(unavailableNames),
         signIn: host.signInForRemoteAgentCatalog,
       }).pipe(
-        Effect.catch((error: unknown) =>
+        Effect.catch((error) =>
           Effect.fail(
             new Rejected({
               reason: `Team launch failed: ${toErrorMessage(error)}`,

@@ -18,7 +18,6 @@ import { getRunRecords } from '@agent/storage';
 import {
   AgentConfigSchema,
   attachTerminalResultToast,
-  detachSubagentsOnStop,
   resumeRun,
   runAgent,
   type AgentConfig,
@@ -73,7 +72,6 @@ import {
 } from '@shared/session/database';
 import type { RuntimeRequest } from '@shared/session/runtimeRequest';
 import { escapeText } from '@shared/utils/xmlEscape';
-import { getDefaultUnavailableToolNames } from '@tools/registry';
 import { FOCUSED_BACKGROUND_TASK } from '@ui/copy/nestedRuns';
 import { generateRunId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -214,13 +212,10 @@ export interface ChatSessionController {
    * when the resume resolution and rehydration are complete, but the
    * continued run itself stays pending until the agent finishes or suspends.
    */
-  resume(id: RunId): Effect.Effect<void, unknown>;
+  resume(id: RunId): Effect.Effect<void, Error>;
 
   /** Request stop of the root run using the configured child policy. */
   stop(): void;
-
-  /** Stop one user-focused stream while preserving other agent runs. */
-  stopRun(runId: RunId): void;
 
   /**
    * Atomically admit a message into an interrupted root conversation.
@@ -250,7 +245,7 @@ export interface ChatSessionController {
     line: string,
     mediaFiles?: readonly string[],
     images?: readonly PastedImageEntry[],
-  ): Effect.Effect<void, unknown, ProcessServices>;
+  ): Effect.Effect<void, Error, ProcessServices>;
   /** Reserve a skill activation for the next submitted message. */
   activateSkill(selection: SkillActivation): void;
   /** Drop every reserved skill activation. */
@@ -518,18 +513,9 @@ export function createChatSessionController(
     const runId = session.runId;
     if (!runId || !runViewOf(currentView(), runId)) return;
     session.interruptedRunId = runId;
-    // Ctrl-C honors the configured child-detach policy.
-    runtime.runFork(
-      Effect.flatMap(
-        detachSubagentsOnStop(runtimeSession.roots),
-        (detachActiveChildren) =>
-          request({
-            kind: 'run.stop',
-            runId,
-            detachActiveChildren,
-          }),
-      ),
-    );
+    // Ctrl-C leaves the child policy unset, so the session's request handler
+    // applies the configured "Keep subagents running".
+    runtime.runFork(request({ kind: 'run.stop', runId }));
   };
 
   // Shared tail of the run/resume failure recovery: surface the error to
@@ -587,7 +573,6 @@ export function createChatSessionController(
     | 'session'
     | 'approvalPromptsUnavailable'
     | 'onApprovalPolicyDenial'
-    | 'runtimeUnavailableTools'
     | 'executeWorkflow'
   > => ({
     session: runtimeSession,
@@ -599,7 +584,6 @@ export function createChatSessionController(
         'Tool or edit approval',
         launchRunId,
       ),
-    runtimeUnavailableTools: getDefaultUnavailableToolNames('cli'),
     executeWorkflow: (_config, runId) =>
       Effect.fail(
         new Error(
@@ -646,7 +630,7 @@ export function createChatSessionController(
     // the claim holds the `await` of a `Deferred` the run chain completes.
     // Awaiting the deferred is a plain suspension, so a run parked at the WAIT
     // node leaves the slot pending exactly as before.
-    const claimedRun = Deferred.makeUnsafe<void, unknown>();
+    const claimedRun = Deferred.makeUnsafe<void, Error>();
     // Native launch may resolve its stream on this turn. Claim first so
     // marking the run pending cannot erase that run or a reentrant stop.
     session.markRunPending(Deferred.await(claimedRun));
@@ -671,7 +655,6 @@ export function createChatSessionController(
                   'Tool or edit approval',
                   runId,
                 ),
-              runtimeUnavailableTools: getDefaultUnavailableToolNames('cli'),
               onRunResolved: (resolvedRunId) => {
                 // Each chat round mints a fresh root run id, so
                 // bash/tool-edit/super-YOLO bypass, which is
@@ -733,7 +716,7 @@ export function createChatSessionController(
   // `restoreInterruptedRecovery` pairing, where a double hand-back or a missed
   // restore silently loses the follow-ups typed during an interruption. Don't
   // merge these two bodies.
-  const resume = (id: RunId): Effect.Effect<void, unknown> =>
+  const resume = (id: RunId): Effect.Effect<void, Error> =>
     // `Effect.suspend` is what keeps the claim handshake synchronous: its
     // body is this program's first step, so the availability check and the
     // claim are one uninterrupted synchronous callback (see
@@ -741,7 +724,7 @@ export function createChatSessionController(
     // concurrent tryResumeRun() (or another resume()) can never observe this
     // call suspended between "checked available" and "claimed".
     Effect.suspend(() => {
-      const claimedRun = Deferred.makeUnsafe<void, unknown>();
+      const claimedRun = Deferred.makeUnsafe<void, Error>();
       if (!session.tryClaimRootRunSlot(Deferred.await(claimedRun))) {
         // The slot is taken, so the deferred this attempt made is dropped
         // unsettled: nothing holds it, and no fiber is parked on it.
@@ -842,7 +825,7 @@ export function createChatSessionController(
               isCancellationRequested: () => session.stopRequested,
             });
             if ('started' in result) {
-              settleResumedTurn(result.outcome ?? RUN_OUTCOME.COMPLETED);
+              yield* settleResumedTurn(result);
             } else if (session.stopRequested) {
               session.runExitCode = CliExitCode.Interrupted;
             } else {
@@ -876,18 +859,19 @@ export function createChatSessionController(
       });
     });
 
-  /**
-   * One settlement site for a successfully resumed turn: finalize the
-   * transcript projection, map the outcome to the exit code, and announce
-   * completion. A subagent parking back to WAITING is a completed turn, not
-   * a finished agent, so it never fires `agentFinished`.
-   */
-  const settleResumedTurn = (outcome: TurnOutcome): void => {
+  /** Settle a resumed turn. A root acknowledges at idle, so its `completion`
+   *  holds this chain, and the root-run slot it settles, until the run ends.
+   *  A subagent back at WAITING is a completed turn: no `agentFinished`. */
+  const settleResumedTurn = Effect.fn('settleResumedTurn')(function* (result: {
+    readonly outcome?: TurnOutcome;
+    readonly completion?: Effect.Effect<TurnOutcome, Error>;
+  }) {
+    const outcome =
+      (result.completion ? yield* result.completion : result.outcome) ??
+      RUN_OUTCOME.COMPLETED;
     session.runExitCode = runOutcomeExitCode(outcome);
-    if (outcome !== RUN_PHASE.WAITING) {
-      notify('agentFinished');
-    }
-  };
+    if (outcome !== RUN_PHASE.WAITING) notify('agentFinished');
+  });
 
   /**
    * The controller's implementation of the CLI's agent-resume port.
@@ -1006,7 +990,7 @@ export function createChatSessionController(
         });
 
         if ('started' in result && result.delivered) {
-          settleResumedTurn(result.outcome ?? RUN_OUTCOME.COMPLETED);
+          yield* settleResumedTurn(result);
           return true;
         }
         if (isCancellationRequested()) {
@@ -1129,28 +1113,18 @@ export function createChatSessionController(
     interruptActiveRun();
   };
 
-  const stopRun = (runId: RunId): void => {
-    if (runId === session.runId) {
-      requestStop();
-      session.interruptedRunId = runId;
-    }
-    runtime.runFork(
-      request({ kind: 'run.stop', runId, detachActiveChildren: true }),
-    );
-  };
-
   const startSession = (
     instruction: string,
     mediaFiles?: readonly string[],
     displayInstruction?: string,
-  ): Effect.Effect<boolean, unknown, ProcessServices> =>
+  ): Effect.Effect<boolean, Error, ProcessServices> =>
     Effect.suspend(() => {
       followUpQueue.clear();
       let started = false;
       // The slot is claimed before the program runs, the way every other launch
       // path claims it: `startRootRun` below re-claims it for the run it mints,
       // and a refusal on the way there settles this deferred instead.
-      const startSettled = Deferred.makeUnsafe<void, unknown>();
+      const startSettled = Deferred.makeUnsafe<void, Error>();
       session.markRunPending(Deferred.await(startSettled));
       return recoverRun(
         Effect.gen(function* () {
@@ -1344,15 +1318,15 @@ export function createChatSessionController(
                 }),
                 onSuccess: (value) => ({ refused: undefined, value }),
               }),
-              // `match` recovers only the typed refusal; a collaborator that
-              // rejects defects. Read the defect the way `SessionBridge`
-              // answers `Internal`: logged, worded, the message handed back.
+              // `match` recovers only the typed refusal; a defect is read the
+              // way `SessionBridge` answers `Internal`: logged and worded.
               Effect.catchCause((cause) =>
-                Effect.sync(() =>
-                  Cause.hasInterruptsOnly(cause)
-                    ? { interrupted: true as const }
-                    : { defect: reportRequestDefect(cause) },
-                ),
+                Effect.gen(function* () {
+                  if (Cause.hasInterruptsOnly(cause)) {
+                    return { interrupted: true as const };
+                  }
+                  return { defect: yield* reportRequestDefect(cause) };
+                }),
               ),
             );
           if ('value' in outcome && outcome.value.kind === 'followUp') {
@@ -1443,7 +1417,6 @@ export function createChatSessionController(
     startRootRun,
     resume,
     stop,
-    stopRun,
     admitInterruptedFollowUp,
     clearInterruptedRecovery: () => {
       void supersedeInterruptedRecovery();

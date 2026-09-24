@@ -5,13 +5,18 @@
  * its `check` (availability), `statusLabel` (badge), and `detailCheck`
  * (human-readable detail) — caches the results, and broadcasts
  * `toolAvailabilityChanged` when inputs change so subscribed UIs refresh
- * without re-probing. Tool definitions (what to check + UI metadata) live in
- * {@link @tools/externalToolDefs}.
+ * without re-probing. What to check is each plugin's `availability` in
+ * {@link @tools/plugins}.
  *
  * Used by:
  *   - Tool dashboard — runs fresh checks via `runExternalToolChecks()`
  *   - Agent tool resolver — reads the last results via
  *     `getUnavailableToolNamesCached()`
+ *
+ * The cache is keyed by workspace root: the probes read the workspace (the
+ * GitHub group asks whether it is a git repository, Zotero reads its
+ * configuration), so on a multi-project host one workspace's results must
+ * not answer for another's.
  */
 
 // Third-party imports
@@ -22,13 +27,13 @@ import { emitAppSignal } from '@eventBus/AppSignals';
 import { withLogChannel } from '@logger/effectLog';
 import type { StateStore } from '@platform/interfaces';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import type { RegisteredToolName } from '@tools/registry';
-import {
-  EXTERNAL_TOOL_DEFS,
-  type ExternalToolDef,
-  type ToolProbeInputs,
-  type ToolProbeServices,
-} from '@tools/externalToolDefs';
+import { TOOL_PLUGINS, type ToolPlugin } from '@tools/plugins';
+import type {
+  ToolAvailabilityChecks,
+  ToolProbeError,
+  ToolProbeInputs,
+  ToolProbeServices,
+} from '@tools/toolProbes';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'toolAvailability';
@@ -40,7 +45,7 @@ const CHANNEL = 'toolAvailability';
 /** Result of running a single external tool check. */
 export interface ExternalToolCheckResult {
   readonly id: string;
-  readonly tools: readonly RegisteredToolName[];
+  readonly tools: readonly string[];
   readonly name: string;
   readonly status: 'available' | 'not-found' | 'unknown';
   /** Short status label for the dashboard badge, when the default is too generic. */
@@ -53,22 +58,21 @@ export interface ExternalToolCheckResult {
 // Check execution + cache
 // ============================================================
 
-/** The disabled tool names, from the process global state the caller holds. */
-export function getDisabledToolNames(
-  disabledIds: ReadonlySet<string>,
-): ReadonlySet<string> {
-  return new Set<string>(
-    EXTERNAL_TOOL_DEFS.filter((def) => disabledIds.has(def.id)).flatMap(
-      (def) => def.tools,
-    ),
-  );
-}
+/** A plugin with an external dependency to probe. */
+type ProbedToolPlugin = ToolPlugin & {
+  readonly availability: ToolAvailabilityChecks;
+};
+
+/** The plugins the availability layer probes, in manifest order. */
+const PROBED_PLUGINS = TOOL_PLUGINS.filter(
+  (plugin): plugin is ProbedToolPlugin => plugin.availability !== undefined,
+);
 
 /**
  * Seed the disabled-tool list for first-time users only, on any host.
  *
- * Every tool group flagged `toggleable: true` in EXTERNAL_TOOL_DEFS is
- * treated as opt-in and seeded as disabled on a fresh install. Callers pass
+ * Every plugin flagged `toggleable: true` in TOOL_PLUGINS is treated as
+ * opt-in and seeded as disabled on a fresh install. Callers pass
  * the global state store they already hold. DISABLED_TOOLS is its own
  * fresh-install signal, because this seed is the only thing that writes it
  * before the user does: an absent value means neither the seed nor the user
@@ -83,8 +87,8 @@ export const seedDisabledToolDefaults = Effect.fn('seedDisabledToolDefaults')(
     );
     if (disabledTools !== undefined) return;
 
-    const defaults = EXTERNAL_TOOL_DEFS.filter((def) => def.toggleable).map(
-      (def) => def.id,
+    const defaults = TOOL_PLUGINS.filter((plugin) => plugin.toggleable).map(
+      (plugin) => plugin.id,
     );
     yield* state.update(GlobalStateKey.DISABLED_TOOLS, defaults);
     yield* Effect.logInfo(
@@ -94,8 +98,8 @@ export const seedDisabledToolDefaults = Effect.fn('seedDisabledToolDefaults')(
 );
 
 /**
- * Coalescing cache of the last probe results — the only source for
- * availability answers. Encapsulated as a class, not bare module-level
+ * Coalescing cache of one workspace's last probe results — the only source
+ * for its availability answers. Encapsulated as a class, not bare module-level
  * `let`s, per AGENTS.md "No bare module-level mutable singletons in tested
  * code"; same shape as `AnnotationFetchBudget` in
  * `@tools/github/annotationFetchBudget`.
@@ -139,7 +143,13 @@ class ToolAvailabilityCache {
     inputs: ToolProbeInputs,
   ): Effect.Effect<ExternalToolCheckResult[], never, ToolProbeServices> {
     this.pendingRerun = false;
-    return runProbes(inputs).pipe(
+    // Every group probes at once and no group's failure cancels a sibling,
+    // because each one resolves to a result of its own.
+    return Effect.forEach(
+      PROBED_PLUGINS,
+      (plugin) => probeToolGroup(plugin, inputs),
+      { concurrency: 'unbounded' },
+    ).pipe(
       Effect.flatMap((results) => {
         this.lastResults = results;
         return this.pendingRerun
@@ -155,8 +165,23 @@ class ToolAvailabilityCache {
   }
 }
 
-/** Process-wide: one cache per host process, same lifetime as the module. */
-const toolAvailabilityCache = new ToolAvailabilityCache();
+/**
+ * Process-wide, one cache per workspace root (`undefined` = no folder open),
+ * created on first use; same lifetime as the module.
+ */
+const toolAvailabilityCaches = new Map<
+  string | undefined,
+  ToolAvailabilityCache
+>();
+
+function cacheFor(workspaceRoot: string | undefined): ToolAvailabilityCache {
+  let cache = toolAvailabilityCaches.get(workspaceRoot);
+  if (!cache) {
+    cache = new ToolAvailabilityCache();
+    toolAvailabilityCaches.set(workspaceRoot, cache);
+  }
+  return cache;
+}
 
 /**
  * Run all external tool checks in parallel.
@@ -179,31 +204,16 @@ const toolAvailabilityCache = new ToolAvailabilityCache();
 export function runExternalToolChecks(
   inputs: ToolProbeInputs,
 ): Effect.Effect<ExternalToolCheckResult[], never, ToolProbeServices> {
-  return toolAvailabilityCache.runChecks(inputs);
+  return cacheFor(inputs.workspaceRoot).runChecks(inputs);
 }
-
-const runProbes = (
-  inputs: ToolProbeInputs,
-): Effect.Effect<ExternalToolCheckResult[], never, ToolProbeServices> =>
-  Effect.suspend(() =>
-    // Same fan-out as the Promise.all this replaces: every group probes at once
-    // and no group's failure cancels a sibling, because each one resolves to a
-    // result of its own below.
-    Effect.forEach(EXTERNAL_TOOL_DEFS, (def) => probeToolGroup(def, inputs), {
-      concurrency: 'unbounded',
-    }),
-  );
 
 const probeToolGroup = Effect.fn('probeToolGroup')(function* (
   {
     id,
-    tools,
+    toolNames,
     name,
-    probe,
-    check,
-    statusLabel: getStatusLabel,
-    detailCheck,
-  }: ExternalToolDef,
+    availability: { probe, check, statusLabel: getStatusLabel, detailCheck },
+  }: ProbedToolPlugin,
   inputs: ToolProbeInputs,
 ): Effect.fn.Return<ExternalToolCheckResult, never, ToolProbeServices> {
   // Run check/status/detail from one shared probe result. Some groups
@@ -248,7 +258,7 @@ const probeToolGroup = Effect.fn('probeToolGroup')(function* (
       );
   return {
     id,
-    tools,
+    tools: toolNames,
     name,
     status,
     statusLabel,
@@ -260,7 +270,7 @@ function resolveOptionalStatus(
   getStatus:
     | ((
         probeResult?: unknown,
-      ) => Effect.Effect<string | undefined, unknown, ToolProbeServices>)
+      ) => Effect.Effect<string | undefined, ToolProbeError, ToolProbeServices>)
     | undefined,
   probeResult: unknown,
   toolName: string,
@@ -278,23 +288,14 @@ function resolveOptionalStatus(
   );
 }
 
-/** Build the set of unavailable tool names from external check results only. */
-function buildUnavailableSet(
-  results: ExternalToolCheckResult[],
-): ReadonlySet<string> {
-  return new Set<string>(
-    results
-      .filter((result) => result.status === 'not-found')
-      .flatMap((result) => result.tools),
-  );
-}
-
 /**
- * Return the last check results without re-probing. Returns null if
- * checks haven't been run yet.
+ * Return the workspace's last check results without re-probing. Returns null
+ * if checks haven't been run for that workspace yet.
  */
-export function getLastCheckResults(): ExternalToolCheckResult[] | null {
-  return toolAvailabilityCache.getLastResults();
+export function getLastCheckResults(
+  workspaceRoot: string | undefined,
+): ExternalToolCheckResult[] | null {
+  return toolAvailabilityCaches.get(workspaceRoot)?.getLastResults() ?? null;
 }
 
 /**
@@ -316,18 +317,24 @@ export const refreshToolAvailability = Effect.fn('refreshToolAvailability')(
 );
 
 /**
- * Non-blocking read — derives the unavailable tool names from the last check
- * results, or an empty set if no probe has completed yet. Never triggers I/O.
+ * Non-blocking read — derives the unavailable tool names from the workspace's
+ * last check results, or an empty set if no probe has completed for it yet.
+ * Never triggers I/O.
  *
  * Only includes tools whose external dependency is missing (not-found).
  * Disabled tools are NOT included — the caller handles those separately
- * via {@link getDisabledToolNames}.
+ * as the switched-off plugins of the run's composition (`@tools/composition`).
  *
  * Used by the agent tool resolver to avoid blocking the first tool-use
  * flow on network probes. External tools that are actually missing will
  * fail at call time with a clear error — same as pre-dashboard behavior.
  */
-export function getUnavailableToolNamesCached(): ReadonlySet<string> {
-  const lastResults = toolAvailabilityCache.getLastResults();
-  return lastResults ? buildUnavailableSet(lastResults) : new Set();
+export function getUnavailableToolNamesCached(
+  workspaceRoot: string | undefined,
+): ReadonlySet<string> {
+  return new Set<string>(
+    (getLastCheckResults(workspaceRoot) ?? [])
+      .filter((result) => result.status === 'not-found')
+      .flatMap((result) => result.tools),
+  );
 }

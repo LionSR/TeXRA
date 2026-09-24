@@ -4,7 +4,7 @@ import { Cause, Effect, Exit, FileSystem, Scope } from 'effect';
 import { ZodError } from 'zod';
 import { ModelProvider, type ModelConfig } from 'llm-zoo';
 
-import { isRemoteAgent, resolveAgentForLaunch } from '@agent/index';
+import { isRemoteAgent, refresh, resolveAgentForLaunch } from '@agent/index';
 import {
   logUserMessage,
   type AgentTrace,
@@ -234,19 +234,19 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
   ) {
     const fullConfig = input.config;
     const interactions = input.session.interactions;
-    // Single launch resolution rule (see resolveAgentForLaunch): exact
-    // (source, name) when the delegation pinned one, else the same visible-set
-    // resolver validation uses, else the full set for internal agents. Never
-    // blind source-priority on a bare name, so launch can't diverge from
-    // what was validated.
-    const resolved = yield* resolveAgentForLaunch(
+    // Single launch resolution rule (see resolveAgentForLaunch): pinned
+    // (source, name), else the visible set validation used, else the full
+    // category; never blind source-priority on a bare name. A miss rescans the
+    // local directories once, so a YAML written since the catalog loaded runs.
+    const resolve = resolveAgentForLaunch(
       input.session.roots,
       fullConfig.agentCategory,
       fullConfig.agent,
       fullConfig.agentSource,
     );
     const agentEntry =
-      resolved ??
+      (yield* resolve) ??
+      (yield* Effect.andThen(refresh(), resolve)) ??
       (yield* presentLaunchError(
         interactions,
         new AgentError(`Could not find agent: ${fullConfig.agent}`),
@@ -331,7 +331,6 @@ export type PreparedAgentDefinition = Effect.Success<
 const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
   function* (
     input: AgentLaunchInput & { session: SessionHandle },
-    runId: RunId,
   ): Effect.fn.Return<
     AgentLaunchContext,
     Error,
@@ -343,7 +342,7 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
     // The session is resolved once at the boundary (buildAgentLaunchContext)
     // and carried in, so a delegated launch inherits the parent run's session
     // policy and a root launch gets the process default exactly once.
-    const session = input.session;
+    const { session, runId } = input;
     const modelCompatibilityKey =
       input.modelCompatibilityKey ??
       (yield* inferLaunchModelCompatibilityKey(runId, session)) ??
@@ -516,15 +515,8 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
       modelConfig,
       modelCompatibilityKey,
       ownApiKeyFallback: input.ownApiKeyFallback ?? false,
-      // Frozen so nothing mutates it mid-run; `Object.freeze` is shallow, so
-      // the nested tool-name array gets its own frozen copy rather than
-      // aliasing the caller's (still mutable) array.
-      toolPolicy: Object.freeze({
-        ...input.toolPolicy,
-        runtimeUnavailableTools: input.toolPolicy?.runtimeUnavailableTools
-          ? Object.freeze([...input.toolPolicy.runtimeUnavailableTools])
-          : undefined,
-      }),
+      // Frozen so nothing mutates it mid-run.
+      toolPolicy: Object.freeze({ ...input.toolPolicy }),
       stores,
       logger: agentLogger,
       parentStage,
@@ -549,7 +541,7 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
     const { session: launchSession, runId } = input;
     const { config } = input.definition;
 
-    return yield* assembleAgentLaunchContext(input, runId).pipe(
+    return yield* assembleAgentLaunchContext(input).pipe(
       Effect.onError((cause) =>
         Effect.gen(function* () {
           const err = Cause.squash(cause);

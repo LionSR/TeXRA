@@ -4,8 +4,8 @@
  * All three composition roots (the `texra` CLI runtime, the Electron desktop
  * main process, and the VS Code extension host) open a workspace's roots and
  * register their runtime skill sources the same way. This module owns those
- * two steps so the hosts cannot drift; each host still performs the actual
- * `initPlatform(...)` call in its own composition root.
+ * two steps so the hosts cannot drift; each host still installs its process
+ * runtime in its own composition root.
  *
  * This file is a composition helper, not a core platform abstraction: it
  * deliberately reaches "up" into `@agent` and `@skills` for the registration
@@ -18,9 +18,9 @@
  */
 
 // Local imports
-import { setRuntimeSkillSources } from '@skills/runtimeSkills';
+import { installSkillContributions } from '@skills/runtimeSkills';
 import {
-  defaultSkillSources,
+  hostSkillContributions,
   type SkillSourceOptions,
 } from '@skills/skillSources';
 
@@ -81,22 +81,25 @@ export interface NodeRuntimeSkillOptions {
 }
 
 /**
- * Register runtime skill sources for a host.
+ * Install the runtime skill contributions for a host.
  *
  * All three hosts use the same precedence: explicit custom roots, project
- * skills, user skills, and bundled skills. The CLI supplies custom and interop
- * options from command-line flags; desktop and the extension use the defaults
- * so they always get project, user, and bundled runtime skills.
+ * skills, user skills, and bundled skills, where the bundled tier also holds
+ * the skills each tool plugin in `skillPluginIds` ships. The CLI supplies
+ * custom and interop options from command-line flags; desktop and the
+ * extension use the defaults so they always get project, user, and bundled
+ * runtime skills. The plugin ids are required so a caller that forgets them
+ * fails to compile rather than quietly losing plugin skills.
  */
 export function initializeNodeRuntimeSkills(
   options: NodeRuntimeSkillOptions,
+  skillPluginIds: readonly string[],
 ): void {
   // The workspace folder is not fixed here: project and interop sources are
   // resolved from the calling session's workspace at discovery time.
-  setRuntimeSkillSources((cwd) =>
-    defaultSkillSources(
-      { cwd, resourcesPath: options.resourcesPath },
-      options.skillSourceOptions,
-    ),
-  );
+  installSkillContributions({
+    resourcesPath: options.resourcesPath,
+    options: options.skillSourceOptions ?? {},
+    contributions: hostSkillContributions(skillPluginIds),
+  });
 }

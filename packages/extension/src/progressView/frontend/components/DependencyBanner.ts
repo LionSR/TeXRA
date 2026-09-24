@@ -5,7 +5,7 @@ import { repeat } from 'lit/directives/repeat.js';
 import { when } from 'lit/directives/when.js';
 
 import { IMAGE_TOOL_LABEL } from '@shared/constants/latexToolchain';
-import type { DependencyBannerState } from '@shared/schemas';
+import type { HostSnapshot } from '@shared/session/hostSnapshot';
 import { SessionUiEvents } from '@shared/session/uiEvents';
 import { designTokens, commonViewStyles, bannerStyles } from '@ui/styles';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
@@ -13,7 +13,9 @@ import { renderWarningBanner } from '@ui/wa/bannerFrame';
 import { StateVisibleBanner } from './StateVisibleBanner';
 
 @customElement('dependency-banner')
-export class DependencyBanner extends StateVisibleBanner<DependencyBannerState> {
+export class DependencyBanner extends StateVisibleBanner<
+  HostSnapshot['banners']['dependency']
+> {
   static override styles = [
     designTokens,
     commonViewStyles,
@@ -37,9 +39,10 @@ export class DependencyBanner extends StateVisibleBanner<DependencyBannerState> 
     `,
   ];
 
-  @property({ attribute: false }) state: DependencyBannerState = {
-    visible: false,
-  };
+  @property({ attribute: false }) state: HostSnapshot['banners']['dependency'] =
+    {
+      visible: false,
+    };
 
   private handleDismiss(): void {
     this.dispatchEvent(

@@ -40,17 +40,13 @@ import {
 
 // Local imports
 import { isLatexFile } from '@common/files/fileTypeUtils';
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import {
   Rejected,
   type HostRequestFailure,
 } from '@shared/session/requestErrors';
-import type {
-  RequestDecision,
-  SessionEvent,
-  RunId,
-  ToolEditApprovalAction,
-} from '@shared/schemas';
+import type { RequestDecision, SessionEvent, RunId } from '@shared/schemas';
+import type { HostRequest } from '@shared/session/hostRequest';
 import {
   previewProposedLatex,
   runLatexdiff,
@@ -61,7 +57,7 @@ import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
 
-const log = createLog('ToolEditApproval');
+const CHANNEL = 'ToolEditApproval';
 
 /**
  * The services the programs this controller composes take from the runtime a
@@ -198,7 +194,7 @@ export class ToolEditApprovalController {
    * that cleanup settles. {@link startRelease} drops the entry before
    * anything is waited for, so a second release for the same request would
    * otherwise find nothing and settle while the first was still disposing:
-   * {@link dispose} admits one release per request without waiting for it,
+   * {@link dispose} admits one release per request before it waits on any,
    * and the host's release for a `request.opened` the runtime refused lands
    * right behind it. Joining what is already running is what makes every
    * release mean the same thing, that nothing is left staged.
@@ -270,7 +266,7 @@ export class ToolEditApprovalController {
 
   handleAction(payload: {
     requestId: string;
-    action: ToolEditApprovalAction;
+    action: Extract<HostRequest, { kind: 'toolEdit' }>['action'];
     feedback?: string;
   }): Effect.Effect<void, never, PreviewServices> {
     return Effect.suspend(() => {
@@ -332,8 +328,8 @@ export class ToolEditApprovalController {
     });
   }
 
-  /** Drop every staged preview. The requests stay pending in the fold: the
-   *  runs that opened them close them with the fibers waiting on them. */
+  /** Drop every staged preview and settle once all are gone; the runs that
+   *  opened the requests, still pending in the fold, close them. */
   dispose(): Effect.Effect<void, never, PreviewServices> {
     return Effect.suspend(() => {
       if (this.disposed) return Effect.void;
@@ -344,9 +340,7 @@ export class ToolEditApprovalController {
       const cleanups = [...this.requests.keys()].map((requestId) =>
         this.startRelease(requestId),
       );
-      return Effect.forEach(cleanups, (cleanup) => this.detach(cleanup), {
-        discard: true,
-      });
+      return Effect.all(cleanups, { concurrency: 'unbounded', discard: true });
     });
   }
 
@@ -590,9 +584,11 @@ export class ToolEditApprovalController {
     return Effect.gen(function* () {
       const staging = yield* Deferred.await(entry.inFlight);
       if (Exit.isFailure(staging)) {
-        log.warn(
+        yield* Effect.logWarning(
           `The tool-edit preview for request ${requestId} failed while its release waited for it`,
-          { data: Cause.squash(staging.cause) },
+        ).pipe(
+          Effect.annotateLogs({ data: Cause.squash(staging.cause) }),
+          withLogChannel(CHANNEL),
         );
       }
       if (entry.phase !== 'pending') return;

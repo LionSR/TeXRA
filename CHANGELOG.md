@@ -48,8 +48,72 @@ All notable changes to this project will be documented in this file.
   keeps debug entries. The CLI gains a `--verbose` flag for additional debug
   diagnostics; `--quiet` suppresses diagnostics.
 
+### Features
+
+- **Install Claude Code and Codex plugins for their skills** — `texra plugin
+install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
+  adds its skills as user skills to TeXRA sessions in the terminal and in
+  VS Code, which share the install. The desktop app does not load them yet.
+  It reads the
+  plugin's own `.claude-plugin/plugin.json` or `.codex-plugin/plugin.json`,
+  installs from a marketplace repository with `--plugin <name>`, and uses a
+  local plugin folder in place. `texra plugin list`, `update` and `remove`
+  manage them, and the Skills settings tab lists them. Only skills are loaded
+  for now; a plugin's MCP servers, hooks, commands and agents are listed as
+  ignored and never run.
+- **The orchestrator and the Lean agents ship with TeXRA** — `orchestrator`,
+  `search`, `simplifier`, `presenter`, `progressCheck`, and the Lean Project
+  agents (`lean`, `leanSearch`, `leanSimplifier`, `leanBlueprint`,
+  `leanOrchestrator`) are now built in, in the VS Code extension, the desktop
+  app and the CLI. They no longer need a TeXRA sign-in, so every team's lead
+  works on a fresh install. `presenter` is now the interactive deck builder
+  that compiles your slides and checks every page visually; to turn a
+  finished paper into a deck in one pass, use the `paper2slide` workflow
+  agent. A built-in agent now takes precedence over a hosted agent with
+  the same name, so signed-in users run the built-in copies too.
+- **A subagent works with the same tool plugins as the run that launched
+  it.** Switching a tool plugin on or off in the Tools dashboard applies to
+  runs started afterwards; a delegated agent or workflow-script agent
+  launched by a run already in progress keeps that run's plugins, so one
+  task does not change tools halfway through.
+- **MCP servers** — list local stdio MCP servers in `~/.texra/mcp.json` (the
+  same shape as Claude Code's `.mcp.json`), and name their tools in an
+  agent's `tools:` list as `mcp__<server>__<tool>` or `mcp__<server>__*`.
+  Every MCP tool call goes through the same approval as a shell command. A
+  server runs
+  only while a run that uses it is open, does not inherit your API-key
+  environment variables, and a server that fails to start is named in the
+  run's transcript. See the Agent integrations guide.
+
 ### Bug Fixes
 
+- **The desktop app shuts down cleanly when startup fails early.** If
+  startup failed before the project list opened (for example, when the
+  project records could not be read), shutdown reported two errors and left a
+  state store open.
+- **Diff previews for pending tool edits no longer pile up on disk.** In
+  VS Code, the temporary files staged for tool edits still awaiting approval
+  when the window closes are now removed at shutdown.
+- **The `texra` chat no longer drops some diagnostics silently** — if session
+  resources fail to close when you exit a resumable chat, the error is now
+  printed to stderr after the terminal is restored, and a code block whose
+  syntax highlighting fails shows a dim notice under the plain text.
+- **Log entries keep their identifying fields when they carry an error.** An
+  error's stack is now written last and capped at eight frames, so it can no
+  longer push a run id or key past the log payload's size limit.
+- **An agent can only run the tools it was offered.** A model that named a
+  tool the run had not offered it (one you disabled in settings, a tool the
+  agent does not declare, or one that needs an approval prompt the current
+  host cannot show) could still have that tool run. Such a call now fails as
+  an unknown tool.
+- **A resumed run keeps the tools it was offered.** Each tool-use run now
+  records the tools it started with. When you resume it, it is offered those
+  tools that are still available and never gains one it was not offered; a
+  tool that has since been disabled or removed is named in the run's
+  transcript, and a call the model still makes to it returns a
+  `tool_unavailable` error the model can work around. Session history saved
+  by an earlier build is cleared the first time this build opens a
+  workspace, because the stored format changed to hold the offered tools.
 - **GPT-5.6 works on a ChatGPT subscription again.** Selecting GPT-5.6 sent an
   abbreviated model name the Codex service does not recognise, and it answered
   that the model "is not supported when using Codex with a ChatGPT account" —
@@ -67,6 +131,50 @@ All notable changes to this project will be documented in this file.
   subscription** when the account's plan is not known.
 - Generated agent definitions, session titles and helper answers no longer inherit document text-replacement rules.
 - Messages you queue for a run are no longer lost when you stop the run or TeXRA exits unexpectedly: they stay queued and are delivered once the run resumes.
+- A run whose final save failed can be resumed again in the same session;
+  before, it stayed marked as busy until TeXRA restarted.
+- Resuming a run in VS Code or the desktop app returns as soon as the run
+  has taken your message and is waiting, instead of holding the Resume
+  request until the whole run ends.
+- A run whose model request you retried successfully no longer resumes as
+  failed if TeXRA exits before the turn ends.
+- **Key changes show up everywhere at once.** When the setup agent removes an
+  API key, or a key is changed in another window, the Settings profile and
+  model tabs, the launcher's key banner and the model pickers now update right
+  away instead of showing the old key until something else repaints them. In
+  the CLI, saving or removing the GitHub token under `/config` re-checks tool
+  availability, so the GitHub tools are no longer reported as unavailable for
+  the next run.
+- **Desktop: Pack also copies the source PDF.** The toolbar's Pack action now
+  copies the source document's own files (its PDF) into `History/` and sweeps
+  its build files, as the VS Code extension already did, instead of packing
+  only the run's outputs.
+- **Deleting a team that no longer exists says so.** In the VS Code settings,
+  deleting a team preset that is already gone now reports "Unknown custom
+  team" instead of doing nothing, as the desktop app does. Double-clicking
+  Delete on a custom agent in the desktop app no longer asks twice.
+- One failed read of a workspace's session history (for example while another
+  TeXRA window holds it busy) no longer stops that window from seeing runs
+  the other windows write; it recovers and logs a warning. A workspace whose
+  close outlived its budget is also released once its runs settle, even when
+  one of their stops failed, instead of refusing new runs until a restart.
+- The Settings view's tool dashboard no longer spins forever when it cannot be
+  loaded; it shows an empty dashboard and logs why.
+- The "💸 Premium API pricing" warning follows a model's price instead of its
+  name: GPT-5.6 Pro ($4/$20 per million tokens) no longer carries it, and o1
+  Pro and o3 Pro now do.
+- **Desktop: tool availability is checked per project.** With several
+  projects open, one project's tool check (for example, whether it is a git
+  repository, which the GitHub tools need) no longer decides which tools a
+  run in another project gets or what that project's Tools tab shows.
+- **Desktop: signing in shows your team's agents.** After you sign in, the
+  desktop app now fetches the remote agents your account can use. Before, it
+  kept showing the catalog it loaded while signed out until you restarted it.
+- **Saving a custom agent no longer re-downloads the remote catalog.** In VS
+  Code, editing an agent YAML in your agent directories rescans only the local
+  agents and keeps the remote ones already loaded. A run that names an agent
+  the catalog has not seen yet rescans the local directories once before it
+  reports the agent as missing.
 
 ### Extension (VS Code)
 
@@ -77,10 +185,41 @@ All notable changes to this project will be documented in this file.
   walkthrough. Clean in the Progress toolbar now clears the selected run's
   output folder, and "Clean All Build Files (Workspace-wide)" is unchanged.
 
+#### Bug Fixes
+
+- **Cancelling TeXRA sign-in no longer counts as signing in.** In a
+  single-folder window, the sign-in prompt that setup, a team launch or the
+  remote agent catalog opens reported success even when you closed it without
+  signing in, so TeXRA went on as if you had. It now reports the cancellation.
+
 ### CLI and Agent SDK
 
 #### Breaking Changes
 
+- **Fewer chat slash commands** — `/api`, `/auth` and `/logout` fold into
+  `/login`, whose form already signed you in and out and set subscription
+  preferences; `/login status` prints what `/auth` did. The typed
+  preference shortcuts `/api chatgpt`, `/api grok`, `/api kimi-code` and
+  `/api glm-code` are gone with it: set which subscription serves a
+  provider's models from the `/login` form or `/config`. `/login chatgpt` and
+  `/login grok` still sign in. `/yolo` and `/goal`
+  fold into `/approval`, which also gains per-session **Auto-approve
+  commands** and **Auto-approve edits** toggles (the same grant as answering
+  a prompt with "approve for session"). `/tools` lives under `/config` →
+  Tools.
+- **Esc no longer stops the running agent** — it closes panels and returns to
+  the parent session. Stop a run with Ctrl-C, or with `k` in the session list.
+- **A quieter status bar** — the key row names keys only (`Tab`, `Ctrl-T`,
+  `/` for commands, `Ctrl-C`) and no longer repeats the open panel's own
+  keys; "API keys" and the chat turn counter are no longer shown, and the
+  auto-approve policy reads `auto-approve` instead of `yolo`.
+- **`defineTool` returns a tool object, not a class** — `@texra-ai/agent`'s
+  `defineTool` now takes `execute` in its definition and returns the tool
+  itself, ready to pass in `tools`. Subclassing it and calling `new` no longer
+  apply — `class Echo extends defineTool({...}) { protected execute(i) {...} }`
+  with `new Echo()` becomes `const Echo = defineTool({ ..., execute })`. The
+  exported `DefinedToolClass` type is replaced by `DefinedTool`, and a tool's
+  `description` is a plain string.
 - **`texra tools list` and `texra skills list` JSON changed shape** — both now
   print the same records the Tools and Skills settings tabs show. Each tool
   record gains `description`, `tools`, `installActions`, `configNotes` and
@@ -95,7 +234,7 @@ All notable changes to this project will be documented in this file.
   Bare `texra` starts a chat session when stdin and stdout are both terminals,
   and prints help when either is not. What the launcher offered lives in that
   session: `/agent` for the root agent, `/model` for its model, `/resume` for
-  history, `/api` for sign-in and keys, `/config` for settings. Start a
+  history, `/login` for sign-in and keys, `/config` for settings. Start a
   **multi-agent team** with `texra multi-agent run <preset>`; a resumed team
   session still carries its scoped roster. The launcher's team step was the one
   way to start a preset-scoped team in the interactive TUI, and that path is

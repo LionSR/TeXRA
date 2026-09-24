@@ -26,7 +26,7 @@ import {
   pathExists,
   readDirectoryTypedTolerant,
 } from '@utils/files/fsDurability';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { hasExtension } from '@utils/core/pathCore';
 import { normaliseArxivIdentifier } from './arxivIdentifier';
 import { indentLatexFilesInDirectory } from './formatter/indentDirectory';
@@ -90,14 +90,12 @@ const permanentFs = <T, R>(
   );
 
 /**
- * Whether `target` names an entry -- the question `BaseFS.exists` asked.
+ * Whether `target` names an entry, a dangling or circular symlink included.
  *
- * The facade probed with `stat`, whose provider is lstat-backed, so a dangling
- * or circular symlink named an entry; the standard library's `exists` asks the
- * stricter question of whether the path *resolves*, and answers `false` for
- * such a link. `readLink` is that half of the old probe -- a path it names is
- * a link, resolvable or not -- and `pathExists` carries the facade's other
- * reading for everything else.
+ * The standard library's `exists` asks the stricter question of whether the
+ * path *resolves*, and answers `false` for such a link. `readLink` answers the
+ * lstat half -- a path it names is a link, resolvable or not -- and
+ * `pathExists` (ENOTDIR read as absent) answers for everything else.
  *
  * The link half is what makes the clobber refusal below fire: a `main.tex`
  * symlink whose target is gone names an entry, and `rename` must refuse it
@@ -367,7 +365,7 @@ class ArxivSourceProcessor {
       if (disposition) {
         filename = yield* Effect.try({
           try: () => parseContentDisposition(disposition).parameters.filename,
-          catch: (error) => error,
+          catch: ensureError,
         }).pipe(
           Effect.catch((error) =>
             // Malformed header; the content-type fallback below handles it.

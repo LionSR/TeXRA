@@ -13,6 +13,7 @@ import * as vscode from 'vscode';
 // Local imports
 import { listBaseBranchCandidates } from '@agent/review';
 import { settleQuickInput } from '@commands/_shared/quickInputUtils';
+import type { ProcessRuntime } from '@platform/processRuntime';
 
 interface ReviewOptions {
   /** Free-text focus for the reviewer; omitted when left blank. */
@@ -36,6 +37,7 @@ const BRANCH_PROMPT_HINT =
  */
 export async function promptReviewOptions(
   cwd: string,
+  runtime: ProcessRuntime,
 ): Promise<ReviewOptions | undefined> {
   const userInstructions = await vscode.window.showInputBox({
     title: 'Agent Review — Optional Instructions',
@@ -47,7 +49,7 @@ export async function promptReviewOptions(
   if (userInstructions === undefined) return undefined;
 
   const trimmedInstructions = userInstructions.trim();
-  const candidates = await listBaseBranchCandidates(cwd);
+  const candidates = await runtime.runPromise(listBaseBranchCandidates(cwd));
   const branchItems: BranchItem[] = [
     {
       label: '$(git-branch) Auto-detect main branch',

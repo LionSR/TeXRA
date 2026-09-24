@@ -13,6 +13,7 @@ import {
   LATEX_FORMATTER_VALUES,
   LATEXDIFF_MATH_MARKUP_VALUES,
 } from '@shared/constants/latexConfig';
+import { MODEL_PROVIDER_PLUGINS } from '@shared/constants/modelProviderPlugins';
 import {
   DEFAULT_HELPER_MODEL,
   PROVIDER_ENDPOINT_STATE_ENTRIES,
@@ -44,6 +45,7 @@ import {
   CodexApprovalPolicySchema,
   CodexReasoningEffortSchema,
   CodexSandboxModeSchema,
+  InstalledPluginSchema,
   LATEXDIFF_TEMP_FILE_LOCATIONS,
   MODEL_COMPACTION_THRESHOLD_SETTING,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
@@ -803,11 +805,10 @@ const CORE_SETTINGS: readonly StateSettingEntry[] = [
 
 const GIT_AUTHOR_READER = 'src/utils/system/gitAuthorEnv.ts';
 const GIT_WORKTREE_READER = 'src/utils/config/worktreeConfig.ts';
-const CODEX_CONFIG_READER = 'src/tools/codexConfig.ts';
-const CLAUDE_AGENT_CONFIG_READER = 'src/tools/claudeAgentConfig.ts';
-const WORKFLOW_COMPILE_READER =
-  'src/agent/implementations/flows/reflection/output/compileCheck.ts';
-const ROUTE_ENDPOINT_READER = 'src/agent/runtime/run/routeEndpoint.ts';
+const CODEX_TOOL_READER = 'src/tools/codex.ts';
+const CLAUDE_AGENT_TOOL_READER = 'src/tools/claudeAgent.ts';
+const WORKFLOW_COMPILE_READER = 'src/agent/output/compileCheck.ts';
+const ROUTE_ENDPOINT_READER = 'src/model/routeEndpoint.ts';
 const PROVIDER_CONFIG_READER = 'src/utils/config/providerConfig.ts';
 
 /**
@@ -828,9 +829,9 @@ const WORKSPACE_STATE_CLI_CONFIG_SLOTS: SettingSlots = {
 
 const GIT_AUTHOR_HONORED_BY = everyHost(GIT_AUTHOR_READER);
 
-const CODEX_AGENT_HONORED_BY = everyHost(CODEX_CONFIG_READER);
+const CODEX_AGENT_HONORED_BY = everyHost(CODEX_TOOL_READER);
 
-const CLAUDE_AGENT_HONORED_BY = everyHost(CLAUDE_AGENT_CONFIG_READER);
+const CLAUDE_AGENT_HONORED_BY = everyHost(CLAUDE_AGENT_TOOL_READER);
 
 const WORKFLOW_COMPILE_HONORED_BY = everyHost(WORKFLOW_COMPILE_READER);
 
@@ -851,78 +852,29 @@ const PROVIDER_ENDPOINT_SETTINGS = PROVIDER_ENDPOINT_STATE_ENTRIES.map(
 );
 
 /**
- * Region/routing toggles resolved by `run/routeEndpoint`, each also a Models
- * tab control for its provider. The rows differ only in key, default, and
- * copy, so the shared fields are written once.
+ * Region toggles resolved by `@model/routeEndpoint`, each also a Models tab
+ * control for its provider: one row per provider plugin `region`.
  */
-const PROVIDER_ROUTING_SETTINGS = (
-  [
-    [
-      GlobalStateKey.MOONSHOT_USE_CHINA,
-      'moonshot',
-      true,
-      {
-        label: 'Kimi/Moonshot China region',
-        description:
-          'Use the China endpoint (api.moonshot.cn) instead of international (api.moonshot.ai). Enabled by default. Keys are platform-specific — get international keys at platform.moonshot.ai.',
-        warning:
-          'A platform.moonshot.cn key does not work with the international endpoint, and vice versa.',
-        warningUrl: 'https://platform.moonshot.ai/console',
-        warningUrlLabel: 'International console',
-      },
-    ],
-    [
-      GlobalStateKey.DASHSCOPE_USE_CHINA,
-      'dashscope',
-      false,
-      {
-        label: 'Qwen China region (Bailian)',
-        description:
-          'Use the China region endpoint (dashscope.aliyuncs.com) instead of international (dashscope-intl.aliyuncs.com). Display name switches to "Bailian".',
-      },
-    ],
-    [
-      GlobalStateKey.MINIMAX_USE_CHINA,
-      'minimax',
-      false,
-      {
-        label: 'MiniMax China region',
-        description:
-          'Use the China region endpoint (api.minimaxi.com) instead of international (api.minimax.io). API keys are region-specific — you must obtain a key from the matching region.',
-        warning:
-          'International keys do not work with the China endpoint, and vice versa. Coding Plan keys are also region-specific.',
-        warningUrl: 'https://platform.minimax.io/',
-        warningUrlLabel: 'Get API key',
-      },
-    ],
-    [
-      GlobalStateKey.GLM_USE_CHINA,
-      'glm',
-      true,
-      {
-        label: 'GLM China region',
-        description:
-          'Use the China region endpoint (open.bigmodel.cn) instead of international (api.z.ai). Enabled by default. API keys work with either endpoint.',
-        warningUrl: 'https://open.bigmodel.cn/',
-        warningUrlLabel: 'BigModel console',
-      },
-    ],
-  ] as const
-).map(([key, provider, defaultValue, copy]) =>
-  surfacedSetting({
-    key,
-    schema: z.boolean().prefault(defaultValue),
-    title: copy.label,
-    description: copy.description,
-    category: 'model',
-    slots: sameSlot('globalState'),
-    honoredBy: everyHost(ROUTE_ENDPOINT_READER),
-    surfaces: {
-      settingsView: 'profile',
-      cliConfig: true,
-      models: [{ provider, ...copy }],
-    },
-  }),
+const PROVIDER_ROUTING_SETTINGS = MODEL_PROVIDER_PLUGINS.flatMap(
+  ({ id: provider, region }) =>
+    region === undefined
+      ? []
+      : [
+          surfacedSetting({
+            key: region.key,
+            schema: z.boolean().prefault(region.default),
+            title: region.control.label,
+            description: region.control.description,
+            category: 'model',
+            slots: sameSlot('globalState'),
+            honoredBy: everyHost(ROUTE_ENDPOINT_READER),
+            surfaces: {
+              settingsView: 'profile',
+              cliConfig: true,
+              models: [{ provider, ...region.control }],
+            },
+          }),
+        ],
 );
 
 export const STATE_SETTINGS: readonly StateSettingEntry[] = [
@@ -990,7 +942,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
       'Allow the orchestrator to stop subagents that are no longer needed.',
     category: 'multi-agent',
     slots: sameSlot('globalState'),
-    honoredBy: everyHost('src/tools/ExecutionsTool.ts'),
+    honoredBy: everyHost('src/tools/executions/killPolicy.ts'),
     surfaces: { settingsView: 'multi-agent', cliConfig: true },
   }),
   surfacedSetting({
@@ -1006,9 +958,9 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
   }),
 
   // --- Memory ---------------------------------------------------------------
-  // Every host's runtime honors the key through the `memory` entry of
-  // `AGENT_TOOL_INJECTIONS`, but only the settings view renders it; the
-  // CLI has no `/config` row for it.
+  // Every host's runtime honors the key through the `memory` entry of the
+  // memory-workflow plugin's `injectedWhen` (`@tools/plugins`), but only the
+  // settings view renders it; the CLI has no `/config` row for it.
   surfacedSetting({
     key: GlobalStateKey.MEMORY_ENABLED,
     schema: z.boolean().prefault(true),
@@ -1016,7 +968,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     description: 'Remember useful details across chat sessions.',
     category: 'tools',
     slots: sameSlot('globalState'),
-    honoredBy: everyHost('src/agent/runtime/toolInjection.ts'),
+    honoredBy: everyHost('src/agent/runtime/agentToolResolution.ts'),
     surfaces: { settingsView: 'memory' },
   }),
 
@@ -1165,9 +1117,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
       'Generate a latexdiff between successive reflection rounds, not just against the original input.',
     category: 'latexdiff',
     slots: sameSlot('workspaceState'),
-    honoredBy: everyHost(
-      'src/agent/implementations/flows/reflection/output/LatexDiffManager.ts',
-    ),
+    honoredBy: everyHost('src/agent/output/LatexDiffManager.ts'),
     surfaces: { settingsView: 'latex' },
   }),
   surfacedSetting({
@@ -1363,8 +1313,8 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
 
   // --- External tool integrations ------------------------------------------
   // This is a list-backed global-state domain. `/config` delegates editing to
-  // the existing `/tools` form so the catalog owns discoverability while the
-  // tool dashboard remains the single editor for per-integration toggles.
+  // the tools form so the catalog owns discoverability while the tool
+  // dashboard remains the single editor for per-integration toggles.
   surfacedSetting({
     key: GlobalStateKey.DISABLED_TOOLS,
     schema: z.array(z.string()).prefault([]),
@@ -1399,6 +1349,19 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     openForm: 'skills',
     surfaces: { settingsView: 'skills', cliConfig: true },
   }),
+  // Written only by `texra plugin install|update|remove`; the settings view
+  // lists it read-only, so the CLI command stays the one home for the action.
+  surfacedSetting({
+    key: GlobalStateKey.INSTALLED_PLUGINS,
+    schema: z.array(InstalledPluginSchema).prefault([]),
+    title: 'Installed plugins',
+    description:
+      'Claude Code and Codex plugins installed with `texra plugin install`. TeXRA loads their skills as user skills.',
+    category: 'tools',
+    slots: sameSlot('globalState'),
+    honoredBy: everyHost('src/skills/runtimeSkills.ts'),
+    surfaces: { settingsView: 'skills' },
+  }),
   surfacedSetting({
     key: WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED,
     schema: z.boolean().prefault(DEFAULT_TOOL_PATH_PROTECTION_ENABLED),
@@ -1421,10 +1384,6 @@ export const ALL_SETTINGS: readonly StateSettingEntry[] = [
   ...CORE_SETTINGS,
   ...STATE_SETTINGS,
 ];
-
-const STATE_SETTINGS_BY_KEY: ReadonlyMap<string, StateSettingEntry> = new Map(
-  STATE_SETTINGS.map((entry) => [entry.key, entry]),
-);
 
 const SETTINGS_BY_KEY: ReadonlyMap<string, StateSettingEntry> = new Map(
   ALL_SETTINGS.map((entry) => [entry.key, entry]),
@@ -1450,11 +1409,6 @@ const SETTINGS_VIEW_SETTINGS_BY_KEY: ReadonlyMap<
       entry.surfaces.settingsView !== undefined,
   ).map((entry) => [entry.key, entry]),
 );
-
-/** Look up a state-backed catalog entry by its canonical `texra.*` key. */
-export function stateSettingByKey(key: string): StateSettingEntry | undefined {
-  return STATE_SETTINGS_BY_KEY.get(key);
-}
 
 /** Look up any catalog entry — config-tree or state-backed — by its key. */
 export function settingByKey(key: string): StateSettingEntry | undefined {

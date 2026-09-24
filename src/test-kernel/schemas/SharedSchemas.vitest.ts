@@ -1,135 +1,14 @@
-// Suites for loose src/shared/schemas helpers (work plan, agent CLI
-// settings, main-view housekeeping messages, web URL sanitization,
-// settings-view tab invariants).
+// Suites for loose src/shared/schemas helpers (work plan, main-view
+// housekeeping messages, settings-view tab invariants).
 
 import { describe, expect, it } from 'vitest';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import {
-  WebSearchPayloadSchema,
-  planSummaryLine,
-  parseClaudeAgentModel,
-  parseCodexApprovalPolicy,
-} from '@shared/schemas';
+import { planSummaryLine } from '@shared/schemas';
 import {
   dispatchSettingsViewOutbound,
   SETTINGS_TAB_GROUPS,
   SETTINGS_TAB_ORDER,
 } from '@shared/settingsView/settingsViewMessages';
-
-describe('parseCodexApprovalPolicy', () => {
-  it('defaults to automatic approval for invalid persisted values', () => {
-    expect(parseCodexApprovalPolicy('ask')).toBe('never');
-  });
-});
-
-describe('parseClaudeAgentModel', () => {
-  it('defaults invalid persisted selections to Sonnet', () => {
-    expect(parseClaudeAgentModel('claude-opus-3')).toBe('claude-sonnet-5');
-  });
-
-  it('defaults a retired persisted id to Sonnet rather than mapping it', () => {
-    expect(parseClaudeAgentModel('claude-fable-5')).toBe('claude-sonnet-5');
-  });
-});
-
-/**
- * Regression coverage for issue #7230: a `web_search` result `url` is
- * LLM/tool-controlled and must never carry a dangerous scheme through to a
- * rendered `<a href>` in the live webview or the exported HTML. Sanitization
- * lives in the shared schemas (`WebSearchPayloadItemSchema`, the one surviving
- * consumer of `SafeUrlSchema`) so every render path is protected by one fix.
- * Only `http:`/`https:`/`mailto:` and anchor-only (`#foo`) URLs survive;
- * empty, protocol-relative, root-relative, and dangerous schemes collapse to
- * `undefined`.
- */
-
-function parseSearchUrl(url: string): string | undefined {
-  return WebSearchPayloadSchema.parse({
-    results: [{ url, title: 'result' }],
-  }).results?.[0]?.url;
-}
-
-describe('web tool URL sanitization (issue #7230)', () => {
-  describe('dangerous schemes are stripped', () => {
-    const dangerous = [
-      'javascript:alert(1)',
-      'javascript:alert(document.cookie)',
-      'JavaScript:alert(1)', // scheme match must not be case-sensitive-bypassable
-      'data:text/html,<script>alert(1)</script>',
-      'data:text/html;base64,PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0Pg==',
-      'vbscript:msgbox(1)',
-      'file:///etc/passwd',
-      '  javascript:alert(1)', // leading whitespace shouldn't bypass the scheme check
-      'javascript:alert(1)  ', // trailing whitespace likewise
-    ];
-
-    it.each(dangerous)('strips %s from web_search results', (url) => {
-      expect(parseSearchUrl(url)).toBeUndefined();
-    });
-  });
-
-  it('strips protocol-relative URLs (no scheme to validate against)', () => {
-    expect(parseSearchUrl('//evil.example.com/path')).toBeUndefined();
-  });
-
-  it('strips the empty string', () => {
-    expect(parseSearchUrl('')).toBeUndefined();
-  });
-
-  it('strips whitespace-only URLs', () => {
-    expect(parseSearchUrl('   ')).toBeUndefined();
-  });
-
-  describe('legitimate URLs still render', () => {
-    const safe = [
-      'http://example.com',
-      'https://example.com/path?query=1#frag',
-      'mailto:someone@example.com',
-      'https://sub.example.co.uk:8443/a/b?c=d&e=f',
-      '  https://example.com/padded  ', // whitespace-padded but otherwise safe
-    ];
-
-    it.each(safe)('keeps %s as a live href for web_search results', (url) => {
-      expect(parseSearchUrl(url)).toBe(url.trim());
-    });
-  });
-
-  it('keeps anchor-only fragments as-is', () => {
-    expect(parseSearchUrl('#section-2')).toBe('#section-2');
-  });
-
-  describe('root-relative paths are rejected (issue #7230 follow-up)', () => {
-    // A standalone HTML export opens via `file://` with no origin, so a
-    // root-relative URL resolves against the filesystem root rather than a
-    // web origin — a tool-controlled `/etc/passwd` must not become a live
-    // link to a local file.
-    const rootRelative = [
-      '/etc/passwd',
-      '/Users/alice/.ssh/id_rsa',
-      '/local/path',
-    ];
-
-    it.each(rootRelative)('strips %s from web_search results', (url) => {
-      expect(parseSearchUrl(url)).toBeUndefined();
-    });
-  });
-
-  it('sanitizes each item independently in a mixed results list', () => {
-    const parsed = WebSearchPayloadSchema.parse({
-      results: [
-        { url: 'javascript:alert(1)', title: 'evil' },
-        { url: 'https://example.com', title: 'safe' },
-      ],
-    });
-
-    expect(parsed.results?.[0]?.url).toBeUndefined();
-    expect(parsed.results?.[1]?.url).toBe('https://example.com');
-  });
-
-  it('leaves a missing url as undefined without throwing', () => {
-    expect(WebSearchPayloadSchema.parse({}).results).toBeUndefined();
-  });
-});
 
 describe('settings view tool install actions', () => {
   it.each([

@@ -3,10 +3,7 @@ import { Effect } from 'effect';
 import { z } from 'zod';
 
 // Internal imports
-import type {
-  RuntimeTool as ITool,
-  RuntimeToolRegistry as IToolRegistry,
-} from '@agent/runtime/ToolServices';
+import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
 import { convertToolSchema } from '@agent/runtime/run/toolSchema';
 import {
   ToolError,
@@ -14,6 +11,7 @@ import {
   type JsonValue,
   type ToolResult,
 } from '@shared/schemas';
+import { ensureError } from '@utils/errors/errorMessage';
 
 // Local file imports
 import { defineTool } from './core/define';
@@ -179,73 +177,46 @@ export function normalizeStructuredOutputSchema(
 /**
  * Build a terminal tool from a normalized structured-output schema.
  *
- * The guarantee is the tool layer's own spine: `defineTool`/`BaseTool` validate
+ * The guarantee is the tool layer's own spine: `defineTool` validates
  * the model's call before `execute` runs, and an invalid call surfaces a
  * `ZodError` the model self-corrects. `execute` then enforces the persisted
  * JSON-value contract and hands the result to `capture`.
  *
- * `capture` is closed over by a tool class built per call, not a module-level
+ * `capture` is closed over by a tool built per call, not a module-level
  * global, so concurrent runs never share a sink.
  */
 export function buildTerminalTool(
   input: z.ZodType | Record<string, unknown>,
   capture: (value: JsonValue) => void,
-): ITool<unknown, never> {
+): ITool<Error, never> {
   const { zodSchema } = normalizeStructuredOutputSchema(input);
 
-  const GeneratedTool = defineTool<unknown, never>({
+  // Built per call, so `captured` and `capture` belong to this run alone.
+  let captured = false;
+  return defineTool<unknown, never>({
     name: SUBMIT_OUTPUT_TOOL_NAME,
     description:
       'Submit the final result. Call this exactly once, with the complete result, when the task is done.',
     schema: zodSchema,
+    // A repeated call and a malformed payload are the call's own failures,
+    // the latter keeping its Zod issues for the model's diagnostics.
+    execute: (input) =>
+      Effect.suspend(() => {
+        if (captured) {
+          return Effect.fail(
+            new ToolError('submit_output can only be accepted once per run.'),
+          );
+        }
+        const parsed = JsonValueSchema.safeParse(input);
+        if (!parsed.success) return Effect.fail(parsed.error);
+        captured = true;
+        capture(parsed.data);
+        return Effect.succeed<ToolResult>({
+          status: 'executed',
+          endTurn: true,
+          summary: 'Structured output captured.',
+          output: 'Structured output captured.',
+        });
+      }),
   });
-
-  // Built inside this call, so the class closes over this run's `capture`
-  // rather than having it threaded through a constructor.
-  class TerminalTool extends GeneratedTool {
-    private captured = false;
-
-    protected execute(input: unknown): Effect.Effect<ToolResult, unknown> {
-      return Effect.try({
-        try: (): ToolResult => {
-          if (this.captured) {
-            throw new ToolError(
-              'submit_output can only be accepted once per run.',
-            );
-          }
-          const jsonValue = JsonValueSchema.parse(input);
-          this.captured = true;
-          capture(jsonValue);
-          return {
-            status: 'executed',
-            endTurn: true,
-            summary: 'Structured output captured.',
-            output: 'Structured output captured.',
-          };
-        },
-        catch: (error) => error,
-      });
-    }
-  }
-
-  return new TerminalTool();
-}
-
-/**
- * Overlay run-scoped tools on a base registry without mutating it. Overlay
- * tools win name collisions, and later entries win collisions within the
- * overlay. Concurrent runs can therefore share `base` without seeing one
- * another's injected or structured-output tools.
- */
-export function buildOverlayToolRegistry(
-  base: IToolRegistry,
-  tools: readonly ITool[],
-): IToolRegistry {
-  const overlay = new Map(
-    tools.map((tool) => [tool.definition.name, tool] as const),
-  );
-  return {
-    get: (name) => overlay.get(name) ?? base.get(name),
-    has: (name) => overlay.has(name) || base.has(name),
-  };
 }

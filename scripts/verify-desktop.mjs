@@ -535,7 +535,13 @@ function verifySigningEnv(args) {
 // ---------------------------------------------------------------------------
 
 const desktopIconPath = join(desktopRoot, 'build', 'icon.icns');
-const bundledRuntimeResourceDirs = ['agents', 'tool_use_agents', 'skills'];
+const bundledRuntimeResourceDirs = [
+  'agents',
+  'tool_use_agents',
+  'skills',
+  'plugins',
+  'plugins/lean4/agents',
+];
 // The Codex and Claude Code SDKs each pull a per-platform package carrying a
 // 250-410 MiB native CLI binary. The desktop app resolves a user-installed CLI
 // at runtime (src/tools/codexImport.ts, src/tools/claudeAgentImport.ts), so
@@ -1162,7 +1168,7 @@ async function verifyPackage() {
     '- dist/renderer/assets/*.js',
     '- dist/renderer/assets/*.css',
     '- dist/renderer/assets Monaco worker chunks',
-    '- resources/agents, resources/tool_use_agents, and resources/skills',
+    '- resources/agents, resources/tool_use_agents, resources/skills, and resources/plugins',
     '- resources/traceViewer/index.html',
     '- package.json runtime dependencies',
     '- node_modules runtime dependency packages',

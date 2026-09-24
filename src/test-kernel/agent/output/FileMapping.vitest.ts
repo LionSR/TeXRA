@@ -8,7 +8,7 @@ import type { AgentTrace } from '@agent/trace';
 import {
   createFileMapping,
   replaceInputCommands,
-} from '@agent/implementations/flows/reflection/output/fileMapping';
+} from '@agent/output/fileMapping';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { spiedTrace } from '@test/support/spiedTrace';
 import { createExternalLocation as externalLocation } from '@utils/files/fileLocation';
