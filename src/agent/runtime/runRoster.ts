@@ -18,12 +18,11 @@
  * entry, so the helper's map is this roster's own.
  */
 
-import { Data, Deferred, Effect, type Scope } from 'effect';
+import { Data, Deferred, Effect, PubSub, type Scope } from 'effect';
 
 import type { SessionApprovals } from '@agent/runtime/runApprovalQueue';
 import type { RunId } from '@shared/schemas';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
-import { RunChangeListeners } from './runChangeListeners';
 import type { RunHandle } from './RunHandle';
 import type { ChildRunActivation } from './runRegistryTypes';
 
@@ -56,7 +55,14 @@ interface RunEntry {
 
 export class RunRoster {
   private readonly entries = new Map<RunId, RunEntry>();
-  private readonly listeners = new RunChangeListeners();
+  /** Every change a waiter can wake on, as the id of the run that changed —
+   *  see {@link waitForAnyChange} for the full wake set. A waiter is not a
+   *  record of a live run (`executions wait` waits on runs this process may
+   *  never hold), so changes are published apart from the entries and never
+   *  create one. Opened by the first waiter: a change published before any
+   *  subscription had no reader either way. Unbounded, so a publish from the
+   *  synchronous paths below never blocks or drops. */
+  private changes: PubSub.PubSub<RunId> | undefined;
   /** The stops begun for each run ({@link beginStop}), one token apiece: the
    *  run admits no new child until every one has settled ({@link throughStop})
    *  or a new generation takes the lane. Two overlapping stops of one parent
@@ -355,21 +361,52 @@ export class RunRoster {
   // --------------------------------------------------------------- waiters
 
   notifyWaiters(runId: RunId): void {
-    this.listeners.notify(runId, this.handle(runId));
+    if (this.changes !== undefined) PubSub.publishUnsafe(this.changes, runId);
   }
 
-  /** Wait for any of these runs to change; succeeds with the first to. */
+  /**
+   * Wait for any of `runIds` to change and succeed with the first that did.
+   *
+   * The full wake set, which is what an `executions wait` observes:
+   *
+   * - a status transition on this run;
+   * - a `track`, including a *replacement* handle for the same id (a resumed
+   *   generation taking over from its predecessor) — a `track` that skipped
+   *   this would strand a waiter across a resume;
+   * - an `untrack`, including for an id that holds no handle;
+   * - a `kill`, unconditionally, even when no live interrupt target was
+   *   reached;
+   * - session disposal, for every run still tracked at teardown.
+   *
+   * A caller that wants a bounded wait races or times out this effect instead
+   * of passing a deadline in: the subscription lives in this effect's scope,
+   * so interrupting the waiting fiber unsubscribes, and an abandoned wait
+   * leaves nothing registered.
+   */
   waitForAnyChange(runIds: readonly RunId[]): Effect.Effect<RunId> {
-    return this.listeners.waitForAnyChange(runIds);
+    return Effect.scoped(
+      Effect.gen({ self: this }, function* () {
+        // Build first, then install without a yield in between: `??=` over a
+        // `yield*` would read, suspend, and overwrite a hub a concurrent first
+        // waiter already subscribed to. A losing fresh hub is dropped unread.
+        const fresh = yield* PubSub.unbounded<RunId>();
+        this.changes ??= fresh;
+        const subscription = yield* PubSub.subscribe(this.changes);
+        for (;;) {
+          const changed = yield* PubSub.take(subscription);
+          if (runIds.includes(changed)) return changed;
+        }
+      }),
+    );
   }
 
   /** Resolve once every owner has left: handles, child activations, lanes and
    *  scoped holds. Terminal handle removal can precede a lane's final writes.
-   *  Interrupting the waiting fiber — what a close budget does — detaches the
-   *  listeners with it. The re-check arm is load-bearing: `raceAllFirst`
-   *  starts its arms in order, so the wait registers first and the re-check
-   *  then sees a last run that left between the read above and those
-   *  listeners, rather than waiting out the close budget for a notification
+   *  Interrupting the waiting fiber — what a close budget does — ends the
+   *  subscription with it. The re-check arm is load-bearing: `raceAllFirst`
+   *  starts its arms in order, so the wait subscribes first and the re-check
+   *  then sees a last run that left between the read above and that
+   *  subscription, rather than waiting out the close budget for a notification
    *  that can no longer come. */
   awaitDrained(): Effect.Effect<void> {
     return Effect.gen({ self: this }, function* () {
@@ -447,6 +484,5 @@ export class RunRoster {
     this.entries.clear();
     for (const runId of tracked) this.notifyWaiters(runId);
     this.stopping.clear();
-    this.listeners.clear();
   }
 }

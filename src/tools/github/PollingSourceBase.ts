@@ -213,7 +213,8 @@ export abstract class PollingSourceBase<
    *
    * The caller runs this Effect. Its short critical section commits the
    * binding and starts the source-owned poller together. A capacity refusal
-   * remains the same plain Error defect the tool already reports.
+   * remains the same plain Error defect the tool already reports, raised
+   * with `Effect.die` rather than a throw inside the suspend.
    */
   protected register(
     key: K,
@@ -224,8 +225,10 @@ export abstract class PollingSourceBase<
       Effect.flatMap(Lifecycle, (lifecycle) =>
         Effect.suspend(() => {
           if (lifecycle.shutdownRan) {
-            throw new Error(
-              `Cannot subscribe to ${this.config.name} after shutdown`,
+            return Effect.die(
+              new Error(
+                `Cannot subscribe to ${this.config.name} after shutdown`,
+              ),
             );
           }
           // A replacement host starts with fresh subscriptions. Stop the old
@@ -235,8 +238,10 @@ export abstract class PollingSourceBase<
           const created = !state;
           if (!state) {
             if (this.subscriptions.size >= this.config.maxConcurrent) {
-              throw new Error(
-                `Too many active ${this.config.name} subscriptions (max ${this.config.maxConcurrent}). Unsubscribe from one before adding another.`,
+              return Effect.die(
+                new Error(
+                  `Too many active ${this.config.name} subscriptions (max ${this.config.maxConcurrent}). Unsubscribe from one before adding another.`,
+                ),
               );
             }
             state = initState();
