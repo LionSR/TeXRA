@@ -152,12 +152,21 @@ export function hostSkillContributions(
  * stable-sorted by tier and flattened with the tier's scope stamped on; a
  * path seen twice keeps its first occurrence (and becomes required if any
  * occurrence is), so a `--skills .texra/skills` root still absorbs the
- * project root.
+ * project root. Contribution ids are unique; a repeated id is a wiring
+ * defect and throws, so the id stays a checked key for the display and
+ * toggle consumers that will read it.
  */
 export function foldSkillSources(
   contributions: readonly SkillSourceContribution[],
   call: SkillSourceCall,
 ): SkillSourceTier[] {
+  const ids = new Set<string>();
+  for (const { id } of contributions) {
+    if (ids.has(id)) {
+      throw new Error(`Duplicate skill source contribution id: ${id}`);
+    }
+    ids.add(id);
+  }
   const seen = new Map<string, { tier: number; source: SkillSource }>();
   SKILL_TIERS.forEach((tier, index) => {
     for (const contribution of contributions) {

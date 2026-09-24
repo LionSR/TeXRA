@@ -55,7 +55,7 @@ afterEach(() => {
 });
 
 describe('CLI skills runtime', () => {
-  it('deduplicates repeated source paths while preserving required custom roots', () => {
+  it('deduplicates repeated source paths while preserving required custom roots, and rejects a repeated contribution id', () => {
     const projectSkillsPath = path.resolve(
       path.sep,
       'tmp',
@@ -79,6 +79,14 @@ describe('CLI skills runtime', () => {
         required: true,
       }),
     ]);
+    expect(() =>
+      foldSkillSources(hostSkillContributions(['lean4', 'lean4']), {
+        cwd: path.resolve(path.sep, 'tmp', 'project'),
+        home: path.resolve(path.sep, 'tmp', 'home'),
+        resourcesPath: path.resolve(path.sep, 'tmp', 'resources'),
+        options: {},
+      }),
+    ).toThrow('Duplicate skill source contribution id: lean4');
   });
 
   it.effect('lists custom duplicate names before bundled skills', () =>
