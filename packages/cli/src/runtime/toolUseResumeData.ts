@@ -6,49 +6,47 @@ import type { SessionHandle } from '@agent/runtime';
 import { withLogChannel } from '@logger/effectLog';
 import {
   AgentCategory,
+  HISTORY_RUN_STATUS,
+  isTerminalCompileRejection,
   RUN_OUTCOME,
-  type FlowSnapshotPayload,
+  type HistoryRunStatus,
   type RunId,
-  type RunOutcome,
+  type RunLifecycleStatus,
 } from '@shared/schemas';
+import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'CliToolUseResumeData';
 
 /**
- * The durable facts a run's continuability is decided from. `history list`
- * reads them off the listing row it already has; `history show` reads the
- * same ones for the single run it was asked about. One rule, so the frozen
- * `status` contract cannot report two different values for one run.
+ * The durable facts a run's standing is decided from. `history list` reads
+ * them off the listing row it already has; `history show` reads the same ones
+ * for the single run it was asked about. One rule, so the frozen `status`
+ * contract cannot report two different values for one run.
  */
-export interface CliRunResumabilityFacts {
+export interface CliRunFacts {
   readonly id: RunId;
   /** A `flow.snapshot` exists on the run aggregate — one indexed read. */
   readonly checkpointPresent: boolean;
-  readonly agentCategory?: AgentConfig['agentCategory'];
-  readonly outcome?: RunOutcome;
+  /** Null when the run has no readable config: there is no category to
+   *  resume under and no config for a host to adopt, so it is not offered. */
+  readonly agentCategory: AgentConfig['agentCategory'] | null;
+  /** The run's folded status; a terminal outcome phase is its durable
+   *  outcome, anything else means no outcome has landed. */
+  readonly phase?: RunLifecycleStatus;
 }
 
-/**
- * Whether a snapshot records a compile rejection its run can no longer
- * clear: the last round's compile was rejected and no round is left to fix
- * it, so continuing only replays the same rejection. This is the reflection
- * loop's own terminal-rejection rule, read off the durable snapshot instead
- * of off the loop's in-memory state.
- */
-export function snapshotHoldsTerminalCompileRejection(
-  snapshot: FlowSnapshotPayload,
-): boolean {
-  if (snapshot.family !== 'reflection') return false;
-  return (
-    snapshot.state.unresolvedCompileRejection === true &&
-    snapshot.runtime.round + 1 >= snapshot.state.totalRounds
-  );
+/** A run's CLI history standing: the frozen `status` and the `resumable`
+ *  boolean beside it. */
+export interface CliRunStanding {
+  readonly status: HistoryRunStatus;
+  readonly resumable: boolean;
 }
 
 /**
  * Whether the CLI may offer a run as continuable, from facts that cost one
- * indexed snapshot read at most.
+ * indexed snapshot read at most, and the frozen history `status` that follows
+ * from it.
  *
  * Ownership is deliberately not inspected. A run another process is executing
  * right now has a snapshot and no outcome, so it is offered here and refused
@@ -65,32 +63,51 @@ export function snapshotHoldsTerminalCompileRejection(
  * `resolveOutcome` already ran — CANCELLED and COMPLETED, neither of which
  * `deriveRunOutcome` can produce over a terminal rejection — skip the read,
  * while FAILED and a missing outcome are read.
+ *
+ * `status` is a frozen contract (the NDJSON stream is consumed by
+ * texra-action): a checkpoint promotes only an interrupted or outcome-less
+ * run to `resumable`. A failed run that kept its checkpoint still reports
+ * `failed`; whether it can be resumed is the sibling `resumable` boolean.
+ * An outcome-less run that is not resumable reports `unknown`: nothing
+ * classifies every historical run at startup, and a run another process is
+ * executing right now is equally outcome-less, so it cannot be guessed here.
  */
-export const isCliRunResumable = Effect.fn('isCliRunResumable')(function* (
-  facts: CliRunResumabilityFacts,
+export const cliRunStanding = Effect.fn('cliRunStanding')(function* (
+  facts: CliRunFacts,
   session: SessionHandle,
-): Effect.fn.Return<boolean> {
-  if (!facts.checkpointPresent) return false;
-  if (facts.agentCategory !== AgentCategory.Workflow) return true;
+): Effect.fn.Return<CliRunStanding> {
+  const outcome = isTerminalOutcomePhase(facts.phase) ? facts.phase : undefined;
+  let resumable = facts.agentCategory !== null && facts.checkpointPresent;
   if (
-    facts.outcome === RUN_OUTCOME.CANCELLED ||
-    facts.outcome === RUN_OUTCOME.COMPLETED
+    resumable &&
+    facts.agentCategory === AgentCategory.Workflow &&
+    outcome !== RUN_OUTCOME.CANCELLED &&
+    outcome !== RUN_OUTCOME.COMPLETED
   ) {
-    return true;
+    const decision = yield* deriveResumability(facts.id, session);
+    if (decision.kind === 'unreadable') {
+      // An unreadable run is advertised here and refused at open time, out
+      // loud either way.
+      yield* Effect.logWarning(
+        `Advertising workflow ${facts.id} as resumable without reading its persisted state: ${decision.cause}`,
+      ).pipe(withLogChannel(CHANNEL));
+    } else {
+      resumable =
+        decision.kind === 'checkpoint' &&
+        !(
+          decision.snapshot.family === 'reflection' &&
+          isTerminalCompileRejection(
+            decision.snapshot.state,
+            decision.snapshot.runtime.round,
+          )
+        );
+    }
   }
-  const decision = yield* deriveResumability(facts.id, session);
-  if (decision.kind === 'unreadable') {
-    // An unreadable run is advertised here and refused at open time, out loud
-    // either way.
-    yield* Effect.logWarning(
-      `Advertising workflow ${facts.id} as resumable without reading its persisted state: ${decision.cause}`,
-    ).pipe(withLogChannel(CHANNEL));
-    return true;
-  }
-  return (
-    decision.kind === 'checkpoint' &&
-    !snapshotHoldsTerminalCompileRejection(decision.snapshot)
-  );
+  const status =
+    resumable && (outcome === undefined || outcome === RUN_OUTCOME.CANCELLED)
+      ? HISTORY_RUN_STATUS.RESUMABLE
+      : (outcome ?? HISTORY_RUN_STATUS.UNKNOWN);
+  return { status, resumable };
 });
 
 /**

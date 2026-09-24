@@ -236,7 +236,7 @@ export class RunRegistry {
     return this.roster.handle(runId);
   }
 
-  getStatus(handle: RunHandle): RunStatusInfo & { status: RunPhase } {
+  getStatus(handle: RunHandle): RunStatusInfo {
     const run = this.runView(handle.runId);
     // A tracked run whose activation has not folded yet is running: the
     // handle exists because its process is live.
