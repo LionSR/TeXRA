@@ -528,13 +528,8 @@ export async function runChat(
       onSubmit={(line, mediaFiles, images) => {
         runtime.runFork(chatController.submit(line, mediaFiles, images));
       }}
-      canInterruptRun={(runId) =>
-        (runId === session.runId && canInterruptActiveRun()) ||
-        isInFlightPhase(runtimeSession.runView(runId)?.status)
-      }
       colorEnabled={stdoutColorEnabled}
       commandName={context.commandName}
-      onInterruptRun={chatController.stopRun}
       onStaticTranscriptChange={viewportController.repaintTranscript}
       onCtrlC={() => exitController.handleSigint()}
       onSuspend={() => exitController.handleSigtstp()}

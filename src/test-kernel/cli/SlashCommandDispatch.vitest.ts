@@ -24,7 +24,10 @@ import {
   showCliMemoryList,
   showCliMemoryPreview,
 } from '@cli/chat/tui/commands/handlers/memoryCommands';
-import { loginFromChat } from '@cli/chat/tui/commands/handlers/loginCommands';
+import {
+  loginFromChat,
+  logoutFromChat,
+} from '@cli/chat/tui/commands/handlers/loginCommands';
 import {
   type SlashCommandContext,
   type SlashCommandOutput,
@@ -266,6 +269,14 @@ function dispatchSlash(
   );
 }
 
+/** The account form's sign-out action, as `/login` runs it. */
+function logout(target: string): Effect.Effect<void, unknown> {
+  return withProcessServices(
+    services.runtime,
+    logoutFromChat(target, services.stores, services.secrets),
+  );
+}
+
 function silentOutput(): SlashCommandOutput {
   return { appendOutcome: vi.fn(), setNotice: vi.fn(), writeProgress: vi.fn() };
 }
@@ -325,17 +336,9 @@ describe('handleTuiSlashCommand', () => {
       registerBuiltinSlashCommands({ ...services });
       const context = createContext();
 
-      yield* dispatchSlash('/tools', context);
-      expect(localEntries()).toEqual([]);
-
       yield* dispatchSlash('/help', context);
       expect(infoPane.get()).toMatchObject({ title: '/help' });
       expect(infoPane.get()?.lines.join('\n')).toContain('**Keyboard**');
-      expect(localEntries()).toEqual([]);
-
-      closeInfoPane();
-      yield* dispatchSlash('/goal', context);
-      expect(activeForm.get()).toMatchObject({ commandName: 'goal' });
       expect(localEntries()).toEqual([]);
     }),
   );
@@ -695,7 +698,7 @@ describe('handleTuiSlashCommand', () => {
       }),
   );
 
-  it.effect('derives /auth and /api status from the same access overview', () =>
+  it.effect('prints account and access status for /login status', () =>
     Effect.gen(function* () {
       registerBuiltinSlashCommands({ ...services });
       const overview = vi
@@ -710,15 +713,9 @@ describe('handleTuiSlashCommand', () => {
         );
       const context = createContext();
 
-      yield* dispatchSlash('/auth', context);
-      const authStatusText = lastEntryText();
-      expectAccessStatusText(authStatusText);
-
-      yield* dispatchSlash('/api status', context);
-      const apiStatusText = lastEntryText();
-      expectAccessStatusText(apiStatusText);
-      expect(apiStatusText).toBe(authStatusText);
-      expect(overview).toHaveBeenCalledTimes(2);
+      yield* dispatchSlash('/login status', context);
+      expectAccessStatusText(lastEntryText());
+      expect(overview).toHaveBeenCalledOnce();
     }),
   );
 
@@ -742,7 +739,7 @@ describe('handleTuiSlashCommand', () => {
         'glm-secret',
       );
       expect(notice).toBe(
-        "Tip: the regular GLM endpoint is the default; enable 'Prefer GLM Coding Plan' with `/api glm-code` or in `/config` to use GLM Coding Plan.",
+        "Tip: the regular GLM endpoint is the default; enable 'Prefer GLM Coding Plan' in `/login` or `/config` to use GLM Coding Plan.",
       );
     }),
   );
@@ -777,37 +774,30 @@ describe('handleTuiSlashCommand', () => {
       }),
   );
 
-  it.effect('clears TeXRA and ChatGPT credentials on /logout', () =>
-    Effect.gen(function* () {
-      registerBuiltinSlashCommands({ ...services });
-      const { signOutSupabase, signOutChatGpt } = mockSignOuts();
+  it.effect(
+    'clears TeXRA and ChatGPT credentials when signing out of all',
+    () =>
+      Effect.gen(function* () {
+        registerBuiltinSlashCommands({ ...services });
+        const { signOutSupabase, signOutChatGpt } = mockSignOuts();
 
-      const handled = yield* dispatchSlash('/logout all', createContext());
+        yield* logout('all');
 
-      expect(handled).toBe(true);
-      expect(signOutSupabase).toHaveBeenCalledOnce();
-      // The provider ids only: each call also carries the session's setting
-      // stores, and a `ConfigProvider` in an assertion argument breaks the
-      // formatter's own `inspect` probe.
-      expect(
-        signOutChatGpt.mock.calls.map(([, providerId]) => providerId),
-      ).toEqual(['chatgpt', 'grok']);
-      const entry = lastEntryText();
-      expect(entry).toContain(RESEARCHER_ACCESS_AUTH.signedOut);
-      expect(entry).toContain('Signed out of ChatGPT.');
-      expect(entry).toContain(
-        'ChatGPT subscription disabled for Codex models.',
-      );
-      expect(entry).not.toContain('\n');
-    }),
-  );
-
-  it.effect('opens an account-specific sign-out chooser for bare /logout', () =>
-    Effect.gen(function* () {
-      registerBuiltinSlashCommands({ ...services });
-
-      yield* expectFormOpens('/logout', 'logout');
-    }),
+        expect(signOutSupabase).toHaveBeenCalledOnce();
+        // The provider ids only: each call also carries the session's setting
+        // stores, and a `ConfigProvider` in an assertion argument breaks the
+        // formatter's own `inspect` probe.
+        expect(
+          signOutChatGpt.mock.calls.map(([, providerId]) => providerId),
+        ).toEqual(['chatgpt', 'grok']);
+        const entry = lastEntryText();
+        expect(entry).toContain(RESEARCHER_ACCESS_AUTH.signedOut);
+        expect(entry).toContain('Signed out of ChatGPT.');
+        expect(entry).toContain(
+          'ChatGPT subscription disabled for Codex models.',
+        );
+        expect(entry).not.toContain('\n');
+      }),
   );
 
   it.effect('signs out of only the requested account', () =>
@@ -815,11 +805,11 @@ describe('handleTuiSlashCommand', () => {
       registerBuiltinSlashCommands({ ...services });
       const { signOutSupabase, signOutChatGpt } = mockSignOuts();
 
-      yield* dispatchSlash('/logout texra', createContext());
+      yield* logout('texra');
       expect(signOutSupabase).toHaveBeenCalledOnce();
       expect(signOutChatGpt).not.toHaveBeenCalled();
 
-      yield* dispatchSlash('/logout chatgpt', createContext());
+      yield* logout('chatgpt');
       expect(signOutSupabase).toHaveBeenCalledOnce();
       expect(signOutChatGpt).toHaveBeenCalledOnce();
     }),
@@ -834,9 +824,8 @@ describe('handleTuiSlashCommand', () => {
       );
       mockModelAccessOverview();
 
-      const handled = yield* dispatchSlash('/logout all', createContext());
+      yield* logout('all');
 
-      expect(handled).toBe(true);
       const entry = lastEntryText();
       expect(entry).toContain(RESEARCHER_ACCESS_AUTH.signedOut);
       expect(entry).toContain('ChatGPT sign-out failed: Codex logout failed');
@@ -856,9 +845,8 @@ describe('handleTuiSlashCommand', () => {
         );
         mockModelAccessOverview();
 
-        const handled = yield* dispatchSlash('/logout all', createContext());
+        yield* logout('all');
 
-        expect(handled).toBe(true);
         const entry = lastEntryText();
         expect(entry).toContain(RESEARCHER_ACCESS_AUTH.signedOut);
         expect(entry).toContain('Signed out of ChatGPT.');

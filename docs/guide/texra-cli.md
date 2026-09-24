@@ -163,9 +163,9 @@ texra auth chatgpt login    # Codex models through your ChatGPT plan
 texra auth grok login       # Grok models through an xAI subscription
 ```
 
-Inside a chat, `/api` manages the same preferences: `/api chatgpt`, `/api grok`,
-`/api kimi-code`, and `/api glm-code` set which subscription serves its
-provider's models, and `/api status` prints how each model will be paid for.
+Inside a chat, `/login` manages the same preferences: its form signs you in
+or out and sets which subscription serves each provider's models, and
+`/login status` prints how each model will be paid for.
 
 **CI pipelines.** Headless pipelines can't sign in interactively. Store the
 provider API key as a CI secret and export it in the pipeline environment.
@@ -228,9 +228,10 @@ texra chat --model deepseekT        # override the session model
 texra run review --input main.tex --instruction "Check the proof." --print
 ```
 
-Slash commands inside the session: `/tools` lists and toggles integrations,
-`/api` sets which provider subscriptions serve their models and reports how
-each model will be paid for, `/model` switches to
+Slash commands inside the session: `/login` signs in and sets which provider
+subscriptions serve their models, `/approval` sets the approval policy and
+turns auto-approval of commands or edits on and off for the session,
+`/config` holds settings and integrations, `/model` switches to
 another model from the same provider mid-session (the change applies
 immediately and persists on resume), `/skills` lists available skills and
 applies one to your next request, and `/resume` restores a stored execution.
@@ -387,7 +388,7 @@ detection result.
 
 Use `--output-format json` or `--output-format ndjson` for
 scripts. `tools install <id>` prints the install guide and registered command;
-it only runs the command when passed `--run`. In the interactive TUI, `/tools`
+it only runs the command when passed `--run`. In the interactive TUI, `/config` → Tools
 opens the same integration list and toggles integrations that support enabling
 or disabling.
 

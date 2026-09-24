@@ -29,7 +29,7 @@ import {
 import { activeSubscriptionUsageRoute } from '@model/codingPlanSubscriptions';
 import { AgentCategory, MESSAGE_TYPES, type RunId } from '@shared/schemas';
 
-import { formatSlashCommandHelp, GOAL_MODE_HELP } from '../helpText';
+import { formatSlashCommandHelp } from '../helpText';
 import { listSlashCommands } from '../slashRegistry';
 import { type SlashCommandContext } from './slashContext';
 
@@ -41,10 +41,6 @@ export function showCliSlashCommandHelp(): void {
       shiftEnterNewline: terminalCapabilities.get().kittyKeyboard,
     }),
   );
-}
-
-export function showCliGoalModeHelp(): void {
-  openInfoPane('/goal', GOAL_MODE_HELP);
 }
 
 /** Open the focused run's work plan from the view it is rendered from. */

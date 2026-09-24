@@ -270,7 +270,7 @@ function finishNestedHierarchyAndFocusRoot(): void {
   focusRun(ROOT);
 }
 
-function appProps(onInterruptRun: (runId: RunId) => void): AppProps {
+function appProps(): AppProps {
   return {
     // The status bar's subscription probe never runs in these key-routing
     // suites; the App only requires the stores to be present.
@@ -281,9 +281,7 @@ function appProps(onInterruptRun: (runId: RunId) => void): AppProps {
     onSubmit: vi.fn(),
     onKillRun: vi.fn(),
     onWorkflowControl: vi.fn(),
-    canInterruptRun: () => true,
     onCtrlC: vi.fn(),
-    onInterruptRun,
   };
 }
 
@@ -297,15 +295,10 @@ async function renderApp(props: AppProps): Promise<InkRenderHandles> {
   return handles;
 }
 
-async function renderWithInterrupt(
+async function renderRoutingApp(
   extraProps: Partial<AppProps> = {},
-): Promise<InkRenderHandles & { onInterruptRun: ReturnType<typeof vi.fn> }> {
-  const onInterruptRun = vi.fn();
-  const handles = await renderApp({
-    ...appProps(onInterruptRun),
-    ...extraProps,
-  });
-  return { ...handles, onInterruptRun };
+): Promise<InkRenderHandles> {
+  return renderApp({ ...appProps(), ...extraProps });
 }
 
 async function renderDebugApp(
@@ -347,7 +340,7 @@ afterEach(() => {
 describe('App foreground Escape ownership', () => {
   it('renders the latest transcript after a burst of microtask updates', async () => {
     seedRootRun();
-    const { instance, stdout } = await renderWithInterrupt();
+    const { instance, stdout } = await renderRoutingApp();
     try {
       // Successive snapshots must not trigger effects that schedule another
       // state update after every render. Those follow-up commits exhausted
@@ -378,7 +371,7 @@ describe('App foreground Escape ownership', () => {
     seedChildHierarchy();
     focusRun(CHILD);
     openInfoPane('Reference', 'Foreground content');
-    const { instance, stdin, onInterruptRun } = await renderWithInterrupt();
+    const { instance, stdin } = await renderRoutingApp();
 
     try {
       stdin.write(ESC);
@@ -386,7 +379,6 @@ describe('App foreground Escape ownership', () => {
       await sleep(CHORD_WINDOW_EXPIRED_MS);
 
       expect(activeRunId.get()).toBe(CHILD);
-      expect(onInterruptRun).not.toHaveBeenCalled();
     } finally {
       instance.unmount();
     }
@@ -420,8 +412,7 @@ describe('App foreground Escape ownership', () => {
     seedChildRoster(WORKFLOW, [runningChild(CHILD, 'inspect')]);
     seedParentEdge(CHILD, WORKFLOW);
     markToolUseAgent(CHILD);
-    const { instance, stdin, stdout, onInterruptRun } =
-      await renderWithInterrupt();
+    const { instance, stdin, stdout } = await renderRoutingApp();
     const emit = vi.spyOn(testDefaultSession(), 'publish');
 
     try {
@@ -514,7 +505,6 @@ describe('App foreground Escape ownership', () => {
       });
       await waitFor(() => foregroundReader.get()?.kind === 'workflow');
       expect(workflowPopupView.get().expanded.has('queued')).toBe(true);
-      expect(onInterruptRun).not.toHaveBeenCalled();
     } finally {
       emit.mockRestore();
       instance.unmount();
@@ -524,15 +514,13 @@ describe('App foreground Escape ownership', () => {
   it('walks nested children back one immediate parent per bare Escape', async () => {
     seedChildHierarchy();
     focusRun(GRANDCHILD);
-    const { instance, stdin, onInterruptRun } = await renderWithInterrupt();
+    const { instance, stdin } = await renderRoutingApp();
 
     try {
       stdin.write(ESC);
       await waitFor(() => activeRunId.get() === CHILD);
       stdin.write(ESC);
       await waitFor(() => activeRunId.get() === ROOT);
-
-      expect(onInterruptRun).not.toHaveBeenCalled();
     } finally {
       instance.unmount();
     }
@@ -541,7 +529,7 @@ describe('App foreground Escape ownership', () => {
   it('does not apply delayed child back after a foreground pane opens', async () => {
     seedChildHierarchy();
     focusRun(CHILD);
-    const { instance, stdin, onInterruptRun } = await renderWithInterrupt();
+    const { instance, stdin } = await renderRoutingApp();
 
     try {
       stdin.write(ESC);
@@ -552,7 +540,6 @@ describe('App foreground Escape ownership', () => {
 
       expect(activeRunId.get()).toBe(CHILD);
       expect(infoPane.get()?.title).toBe('Late reference');
-      expect(onInterruptRun).not.toHaveBeenCalled();
     } finally {
       instance.unmount();
     }
@@ -561,7 +548,7 @@ describe('App foreground Escape ownership', () => {
   it('discards delayed child back after lifecycle focus advances', async () => {
     seedChildHierarchy();
     focusRun(GRANDCHILD);
-    const { instance, stdin, onInterruptRun } = await renderWithInterrupt();
+    const { instance, stdin } = await renderRoutingApp();
 
     try {
       stdin.write(ESC);
@@ -571,26 +558,6 @@ describe('App foreground Escape ownership', () => {
       await sleep(CHORD_WINDOW_EXPIRED_MS);
 
       expect(activeRunId.get()).toBe(ROOT);
-      expect(onInterruptRun).not.toHaveBeenCalled();
-    } finally {
-      instance.unmount();
-    }
-  });
-
-  it('treats a second bare Escape as fresh after lifecycle focus advances', async () => {
-    seedChildHierarchy();
-    focusRun(GRANDCHILD);
-    const { instance, stdin, onInterruptRun } = await renderWithInterrupt();
-
-    try {
-      stdin.write(ESC);
-      await sleep(WITHIN_CHORD_WINDOW_MS);
-      finishNestedHierarchyAndFocusRoot();
-      await waitFor(() => activeRunId.get() === ROOT);
-      stdin.write(ESC);
-      await waitFor(() => onInterruptRun.mock.calls.length === 1);
-
-      expect(onInterruptRun).toHaveBeenCalledWith(ROOT);
     } finally {
       instance.unmount();
     }
@@ -599,7 +566,7 @@ describe('App foreground Escape ownership', () => {
   it('discards delayed child back when the child is promoted', async () => {
     seedChildHierarchy();
     focusRun(CHILD);
-    const { instance, stdin, onInterruptRun } = await renderWithInterrupt();
+    const { instance, stdin } = await renderRoutingApp();
 
     try {
       stdin.write(ESC);
@@ -608,27 +575,6 @@ describe('App foreground Escape ownership', () => {
       await sleep(CHORD_WINDOW_EXPIRED_MS);
 
       expect(activeRunId.get()).toBe(CHILD);
-      expect(onInterruptRun).not.toHaveBeenCalled();
-    } finally {
-      instance.unmount();
-    }
-  });
-
-  it('treats a second Escape as fresh after topology invalidates the pending action', async () => {
-    seedChildHierarchy();
-    focusRun(CHILD);
-    const { instance, stdin, onInterruptRun } = await renderWithInterrupt();
-
-    try {
-      stdin.write(ESC);
-      await sleep(WITHIN_CHORD_WINDOW_MS);
-      seedParentEdge(CHILD, null);
-      stdin.write(ESC);
-      await waitFor(() => onInterruptRun.mock.calls.length === 1);
-
-      expect(activeRunId.get()).toBe(CHILD);
-      expect(selectedRunId.get()).toBe(CHILD);
-      expect(onInterruptRun).toHaveBeenCalledWith(CHILD);
     } finally {
       instance.unmount();
     }
@@ -652,7 +598,7 @@ describe('App foreground Escape ownership', () => {
     seedRun(CHILD, { status: childStatus });
     focusRun(CHILD);
     const onSubmit = vi.fn();
-    const { instance, stdin, onInterruptRun } = await renderWithInterrupt({
+    const { instance, stdin } = await renderRoutingApp({
       onSubmit,
     });
 
@@ -665,7 +611,6 @@ describe('App foreground Escape ownership', () => {
       await waitFor(() => onSubmit.mock.calls.length === 1);
 
       expect(onSubmit).toHaveBeenCalledWith('q', undefined, undefined);
-      expect(onInterruptRun).not.toHaveBeenCalled();
     } finally {
       instance.unmount();
     }
@@ -674,7 +619,7 @@ describe('App foreground Escape ownership', () => {
   it('does not resolve Esc-digit focus after a foreground pane opens', async () => {
     seedChildHierarchy();
     focusRun(CHILD);
-    const { instance, stdin, onInterruptRun } = await renderWithInterrupt();
+    const { instance, stdin } = await renderRoutingApp();
 
     try {
       stdin.write(ESC);
@@ -686,7 +631,6 @@ describe('App foreground Escape ownership', () => {
 
       expect(activeRunId.get()).toBe(CHILD);
       expect(infoPane.get()?.title).toBe('Late chord reference');
-      expect(onInterruptRun).not.toHaveBeenCalled();
     } finally {
       instance.unmount();
     }
@@ -695,7 +639,7 @@ describe('App foreground Escape ownership', () => {
   it('preserves two quick bare-Escape actions through the chord window', async () => {
     seedChildHierarchy();
     focusRun(GRANDCHILD);
-    const { instance, stdin, onInterruptRun } = await renderWithInterrupt();
+    const { instance, stdin } = await renderRoutingApp();
 
     try {
       stdin.write(ESC);
@@ -703,28 +647,6 @@ describe('App foreground Escape ownership', () => {
       stdin.write(ESC);
       await waitFor(() => activeRunId.get() === CHILD);
       await waitFor(() => activeRunId.get() === ROOT);
-
-      expect(onInterruptRun).not.toHaveBeenCalled();
-    } finally {
-      instance.unmount();
-    }
-  });
-
-  it('interrupts the root only once for two quick bare Escapes', async () => {
-    seedChildHierarchy();
-    focusRun(ROOT);
-    const { instance, stdin, onInterruptRun } = await renderWithInterrupt();
-
-    try {
-      stdin.write(ESC);
-      await sleep(WITHIN_CHORD_WINDOW_MS);
-      stdin.write(ESC);
-      await waitFor(() => onInterruptRun.mock.calls.length >= 1);
-      await sleep(CHORD_WINDOW_EXPIRED_MS);
-
-      expect(activeRunId.get()).toBe(ROOT);
-      expect(onInterruptRun).toHaveBeenCalledOnce();
-      expect(onInterruptRun).toHaveBeenCalledWith(ROOT);
     } finally {
       instance.unmount();
     }
@@ -739,7 +661,7 @@ describe('App foreground Escape ownership', () => {
         [CHILD, true],
       ]),
     );
-    const { instance, stdin, onInterruptRun } = await renderWithInterrupt();
+    const { instance, stdin } = await renderRoutingApp();
 
     try {
       stdin.write(ESC);
@@ -749,7 +671,6 @@ describe('App foreground Escape ownership', () => {
       await sleep(CHORD_WINDOW_EXPIRED_MS);
 
       expect(activeRunId.get()).toBe(GRANDCHILD);
-      expect(onInterruptRun).not.toHaveBeenCalled();
     } finally {
       instance.unmount();
     }
@@ -759,9 +680,8 @@ describe('App foreground Escape ownership', () => {
     seedChildHierarchy();
     focusRun(ROOT);
     const onSubmit = vi.fn();
-    const onInterruptRun = vi.fn();
     const { instance, stdin, stdout } = await renderDebugApp(
-      { ...appProps(onInterruptRun), onSubmit },
+      { ...appProps(), onSubmit },
       { columns: 100, rows: 30 },
     );
 
@@ -818,7 +738,6 @@ describe('App foreground Escape ownership', () => {
         undefined,
         undefined,
       );
-      expect(onInterruptRun).not.toHaveBeenCalled();
     } finally {
       instance.unmount();
     }
@@ -829,7 +748,7 @@ describe('App foreground Escape ownership', () => {
     const onSubmit = vi.fn();
     const detail = runUnreadableMessage('checkpoint is malformed');
     const { instance, stdin, stdout } = await renderDebugApp(
-      { ...appProps(vi.fn()), onSubmit },
+      { ...appProps(), onSubmit },
       { columns: 240, rows: 30 },
     );
 
@@ -854,7 +773,7 @@ describe('App foreground Escape ownership', () => {
       seedRun(CHILD, { status });
       focusRun(CHILD);
       const onSubmit = vi.fn();
-      const { instance, stdin } = await renderWithInterrupt({ onSubmit });
+      const { instance, stdin } = await renderRoutingApp({ onSubmit });
 
       try {
         stdin.write('child follow-up\r');
@@ -925,7 +844,7 @@ describe('App foreground Escape ownership', () => {
       });
       focusRun(CHILD);
       const onSubmit = vi.fn();
-      const { instance, stdin, stdout } = await renderWithInterrupt({
+      const { instance, stdin, stdout } = await renderRoutingApp({
         onSubmit,
       });
 
@@ -943,8 +862,7 @@ describe('App foreground Escape ownership', () => {
   it('treats list Escape as cancel and Tab as the explicit ownership transfer', async () => {
     seedChildHierarchy();
     focusRun(CHILD);
-    const { instance, stdin, stdout, onInterruptRun } =
-      await renderWithInterrupt();
+    const { instance, stdin, stdout } = await renderRoutingApp();
 
     try {
       stdin.write('\t');
@@ -956,7 +874,6 @@ describe('App foreground Escape ownership', () => {
       );
 
       expect(activeRunId.get()).toBe(CHILD);
-      expect(onInterruptRun).not.toHaveBeenCalled();
 
       const beforeListFocus = stdout.output.length;
       stdin.write('\t');
@@ -976,7 +893,7 @@ describe('App foreground Escape ownership', () => {
   it('does not transfer idle input arrows to an available child list', async () => {
     seedChildHierarchy();
     focusRun(ROOT);
-    const { instance, stdin, stdout } = await renderWithInterrupt();
+    const { instance, stdin, stdout } = await renderRoutingApp();
 
     try {
       for (const arrowInput of Object.values(ARROW_KEYS)) {
@@ -986,52 +903,6 @@ describe('App foreground Escape ownership', () => {
 
       expect(stdout.output).not.toContain('Session list');
       expect(activeRunId.get()).toBe(ROOT);
-    } finally {
-      instance.unmount();
-    }
-  });
-
-  it('keeps a locally owned detached run reachable as a control target', async () => {
-    seedChildHierarchy();
-    seedParentEdge(CHILD, null);
-    focusRun(CHILD);
-    const { instance, stdin, onInterruptRun } = await renderWithInterrupt();
-
-    try {
-      stdin.write(ESC);
-      await waitFor(() => onInterruptRun.mock.calls.length === 1);
-
-      expect(onInterruptRun).toHaveBeenCalledWith(CHILD);
-      expect(selectedRunId.get()).toBe(CHILD);
-      expect(activeRunId.get()).toBe(CHILD);
-    } finally {
-      instance.unmount();
-    }
-  });
-
-  it('returns keyboard ownership to prompt history after stopping the root', async () => {
-    seedRootRun();
-    const onInterruptRun = vi.fn((runId: RunId) => {
-      seedRun(runId, { status: RUN_PHASE.CANCELLED });
-      rootRunPending.set(false);
-    });
-    const { instance, stdin, stdout } = await renderApp({
-      ...appProps(onInterruptRun),
-      history: fakeHistory(['older prompt', 'latest prompt']),
-    });
-
-    try {
-      stdin.write(ESC);
-      await sleep(WITHIN_CHORD_WINDOW_MS);
-      stdin.write(ARROW_KEYS.Up);
-      await waitFor(() => onInterruptRun.mock.calls.length === 1);
-      await waitFor(() => stdout.output.includes('latest prompt'));
-      stdin.write(ARROW_KEYS.Up);
-      await waitFor(() => stdout.output.includes('older prompt'));
-      stdin.write(ARROW_KEYS.Down);
-      await waitFor(() => stdout.output.includes('latest prompt'));
-
-      expect(stdout.output).not.toContain('Session list');
     } finally {
       instance.unmount();
     }

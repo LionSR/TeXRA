@@ -1,4 +1,4 @@
-// `/tools` form. It mirrors `texra tools list` inside an active TUI session
+// `/config` → Tools form. It mirrors `texra tools list` inside an active TUI session
 // and toggles integrations that are marked toggleable in TOOL_PLUGINS.
 
 import { Text } from 'ink';
@@ -67,8 +67,8 @@ function formatToolDescriptionForTui(tool: ToolDashboardItem): string {
 export function ToolsListForm(props: ToolsListFormProps): React.JSX.Element {
   return (
     <AsyncListForm<readonly ToolDashboardItem[], string>
-      title="/tools"
-      compactTitle="/tools · Toggle available external integrations."
+      title="/config · Tools"
+      compactTitle="/config · Tools · Toggle external integrations."
       loadingLabel="Checking tool integrations..."
       load={() =>
         props.runtime.runPromise(

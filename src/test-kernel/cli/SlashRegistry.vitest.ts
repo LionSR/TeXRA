@@ -175,22 +175,11 @@ describe('slashRegistry', () => {
     expect(events).toEqual(['echo', 'outcome']);
   }
 
-  it('shares one account & access form across /api, /login, and /logout', () => {
-    registerBuiltins();
-
-    const api = requireSlashCommand('api');
-    expect(api.formComponent).toBeTypeOf('function');
-    expect(api.category).toBe('account');
-    for (const name of ['login', 'logout']) {
-      expect(requireSlashCommand(name).formComponent).toBe(api.formComponent);
-    }
-  });
-
   it('opens structured forms by registered command name or alias', () => {
     registerBuiltins();
 
-    expect(openCliSlashCommandForm('TOOLS', '')).toBe(true);
-    expect(activeForm.get()?.commandName).toBe('tools');
+    expect(openCliSlashCommandForm('LOGIN', '')).toBe(true);
+    expect(activeForm.get()?.commandName).toBe('login');
 
     expect(openCliSlashCommandForm('skill', '')).toBe(true);
     expect(activeForm.get()?.commandName).toBe('skills');
@@ -343,7 +332,7 @@ describe('slashRegistry', () => {
     expect(modelNode.isClosed()).toBe(true);
   });
 
-  it('routes API picker selection failures to the shared error handler', async () => {
+  it('routes account picker selection failures to the shared error handler', async () => {
     resetCliState(CHAT_SESSION);
     const errors: string[] = [];
     registerBuiltins({
@@ -352,10 +341,10 @@ describe('slashRegistry', () => {
         errors.push(toErrorMessage(error));
       },
     });
-    const apiNode = openSlashForm<{
+    const accountNode = openSlashForm<{
       onSelect?: (value: AccountAccessFormValue) => void;
-    }>('api');
-    apiNode.props?.onSelect?.(CHATGPT_PREFERENCE_FORM_VALUE);
+    }>('login');
+    accountNode.props?.onSelect?.(CHATGPT_PREFERENCE_FORM_VALUE);
     await settleFormSelection();
 
     expect(errors).toEqual(['api mode failed']);
@@ -367,13 +356,13 @@ describe('slashRegistry', () => {
     registerBuiltins({
       onModelAccessSelect: () => Effect.promise(() => selection.promise),
     });
-    const apiNode = openSlashForm<{
+    const accountNode = openSlashForm<{
       onSelect?: (value: AccountAccessFormValue) => void;
-    }>('api');
-    apiNode.props?.onSelect?.(CHATGPT_PREFERENCE_FORM_VALUE);
+    }>('login');
+    accountNode.props?.onSelect?.(CHATGPT_PREFERENCE_FORM_VALUE);
     await settleFormSelection();
 
-    expect(apiNode.isClosed()).toBe(false);
+    expect(accountNode.isClosed()).toBe(false);
     expect(formProgress.get()).toMatchObject({
       status: 'running',
       title: 'Updating model access',
@@ -394,7 +383,6 @@ describe('slashRegistry', () => {
           }),
       });
       const keyCommand = requireSlashCommand('keys');
-      expect(keyCommand.formEscapeAction).toBe('close');
 
       expect(openRegisteredCliSlashForm(keyCommand, '')).toBe(true);
       const keyNode = renderOpenForm<{
@@ -578,17 +566,17 @@ describe('slashRegistry', () => {
         ),
     });
 
-    const apiNode = openSlashForm<{
+    const accountNode = openSlashForm<{
       onSelect?: (value: AccountAccessFormValue) => void;
-    }>('api');
-    apiNode.props?.onSelect?.(CHATGPT_PREFERENCE_FORM_VALUE);
+    }>('login');
+    accountNode.props?.onSelect?.(CHATGPT_PREFERENCE_FORM_VALUE);
     resetCliState(CHAT_SESSION);
     selection.resolve();
     await settleFormSelection();
 
     expect(outcomes).toEqual(['action settled']);
     expect(formProgress.get()).toBeUndefined();
-    expect(apiNode.isClosed()).toBe(false);
+    expect(accountNode.isClosed()).toBe(false);
   });
 
   it('interrupts the running action when a busy form is cancelled', async () => {
@@ -604,10 +592,10 @@ describe('slashRegistry', () => {
         ),
     });
 
-    const logoutNode = openSlashForm<{
+    const accountNode = openSlashForm<{
       onSelect?: (value: AccountAccessFormValue) => void;
-    }>('logout');
-    logoutNode.props?.onSelect?.({ kind: 'logout', target: 'all' });
+    }>('login');
+    accountNode.props?.onSelect?.({ kind: 'logout', target: 'all' });
     formProgress.get()?.cancel();
 
     await waitFor(() => interrupted);

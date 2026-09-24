@@ -1,5 +1,5 @@
 // Shared "work in progress" row for async transient states (list-form data
-// fetches, /api status loading). Animated off the shared 1 Hz ticker
+// fetches, /login status loading). Animated off the shared 1 Hz ticker
 // (useLiveNowMs) — the same clock the status bar uses for active-run liveness
 // — instead of an autonomous per-component interval. Replaces `@inkjs/ui`'s
 // `<Spinner>`, whose own ~80ms `setInterval` (driven by `cli-spinners`) runs

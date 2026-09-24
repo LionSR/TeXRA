@@ -243,7 +243,7 @@ export function createHeadlessCliHostInteractions(
         // double call is pre-existing retry behavior, not a bug to "fix".
         hooks.beforePrompt?.();
         // The prompt surface owns the retry hint: the operator must see the
-        // `/api personal` / coding-plan switch guidance in the prompt they
+        // own-key / coding-plan switch guidance in the prompt they
         // actually answer, not only in the pre-prompt stderr line.
         // `formatRetryRequestMessage` is the single retry formatter.
         const summary = formatRetryRequestMessage(payload.data);
