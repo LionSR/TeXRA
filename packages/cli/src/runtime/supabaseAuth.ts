@@ -1,5 +1,5 @@
 // Third-party imports
-import { Effect, FileSystem } from 'effect';
+import { Effect } from 'effect';
 
 // Local imports
 import { invalidateRemoteAgentsAfterSignOut } from '@agent/index';
@@ -17,9 +17,10 @@ import {
   memoryPendingOAuthSlots,
   PendingOAuthStore,
 } from '@controllers/auth/pendingOAuthStore';
-import type { AgentDirectories } from '@platform/interfaces';
-import type { ProcessRuntime } from '@platform/processRuntime';
-import type { GlobalStorageFs } from '@platform/rootedFs';
+import type {
+  AgentCatalogServices,
+  ProcessRuntime,
+} from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import { ensureError } from '@utils/errors/errorMessage';
 import { processEnvConfigLayer } from '@utils/system/envFlags';
@@ -212,7 +213,7 @@ export const signInCliSupabaseDeviceCode = Effect.fn(
 export function signOutCliSupabase(): Effect.Effect<
   void,
   Error,
-  GlobalStorageFs | FileSystem.FileSystem | AgentDirectories
+  AgentCatalogServices
 > {
   return Effect.gen(function* () {
     const authCoordinator = yield* Effect.try({

@@ -18,9 +18,8 @@ import {
   modelOptionsFrom,
   readModelAvailabilityInputs,
 } from '@model/computeModelOptions';
-import type { AgentDirectories } from '@platform/interfaces';
 import type { LanguageModel } from '@platform/languageModel';
-import type { GlobalStorageFs } from '@platform/rootedFs';
+import type { AgentCatalogServices } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { type FileOptions, type SessionType } from '@shared/schemas';
@@ -97,14 +96,14 @@ export interface HostSnapshotSource {
   readonly refresh: Effect.Effect<
     void,
     never,
-    GlobalStorageFs | LanguageModel | FileSystem.FileSystem | AgentDirectories
+    AgentCatalogServices | LanguageModel
   >;
   /** The agent, team, and model catalogs changed (a roster edit, a
    *  credential, a sign-in). */
   readonly refreshCatalogs: Effect.Effect<
     void,
     never,
-    GlobalStorageFs | LanguageModel | FileSystem.FileSystem | AgentDirectories
+    AgentCatalogServices | LanguageModel
   >;
   /** The project's files changed on disk, or the surface asked for a relist. */
   readonly refreshFiles: Effect.Effect<void, never, FileSystem.FileSystem>;
@@ -249,12 +248,15 @@ export function createHostSnapshotSource(
   const catalogLoads = [loadAgents, loadTeams, loadModels];
 
   return {
-    refresh: guarded<
-      GlobalStorageFs | LanguageModel | FileSystem.FileSystem | AgentDirectories
-    >(...catalogLoads, loadFiles, loadCommits, loadHostBanners),
-    refreshCatalogs: guarded<
-      GlobalStorageFs | LanguageModel | FileSystem.FileSystem | AgentDirectories
-    >(...catalogLoads),
+    refresh: guarded<AgentCatalogServices | LanguageModel>(
+      ...catalogLoads,
+      loadFiles,
+      loadCommits,
+      loadHostBanners,
+    ),
+    refreshCatalogs: guarded<AgentCatalogServices | LanguageModel>(
+      ...catalogLoads,
+    ),
     refreshFiles: guarded(loadFiles),
     refreshCommits: guarded(loadCommits),
     refreshHostBanners: guarded(loadHostBanners),

@@ -1,5 +1,6 @@
 import { it as effectIt } from '@effect/vitest';
 import { Effect } from 'effect';
+import { FetchHttpClient } from 'effect/unstable/http';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -100,32 +101,33 @@ describe('fetchLatestCliVersion', () => {
   effectIt.effect.each([
     {
       name: 'returns the version field from the latest dist-tag',
-      fetchImpl: async () => jsonResponse({ version: '9.9.9' }),
+      impl: async () => jsonResponse({ version: '9.9.9' }),
       expected: '9.9.9',
     },
     {
       name: 'returns undefined on non-ok responses',
-      fetchImpl: async () => jsonResponse({ version: '9.9.9' }, 500),
+      impl: async () => jsonResponse({ version: '9.9.9' }, 500),
       expected: undefined,
     },
     {
       name: 'returns undefined when the fetch throws (offline)',
-      fetchImpl: async () => {
+      impl: async () => {
         throw new Error('offline');
       },
       expected: undefined,
     },
     {
       name: 'returns undefined when the body lacks a version',
-      fetchImpl: async () => jsonResponse({}),
+      impl: async () => jsonResponse({}),
       expected: undefined,
     },
-  ])('$name', ({ fetchImpl, expected }) =>
+  ])('$name', ({ impl, expected }) =>
     Effect.gen(function* () {
-      expect(
-        yield* fetchLatestCliVersion({ fetchImpl: fetchImpl as typeof fetch }),
-      ).toBe(expected);
-    }),
+      expect(yield* fetchLatestCliVersion()).toBe(expected);
+    }).pipe(
+      Effect.provideService(FetchHttpClient.Fetch, impl as typeof fetch),
+      Effect.provide(FetchHttpClient.layer),
+    ),
   );
 });
 
