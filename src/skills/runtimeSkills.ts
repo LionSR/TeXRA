@@ -20,16 +20,30 @@ import {
   type SourcedSkill,
 } from './loadSkills';
 
-/**
- * Builds the skill sources for one workspace folder. Project and interop
- * sources live under the folder, so they are resolved per call from the
- * calling session's workspace rather than fixed once per process: a desktop
- * with several papers open discovers each run's project skills in that run's
- * own folder.
- */
-type RuntimeSkillSourceResolver = (cwd: string) => readonly SkillSource[];
+import {
+  foldSkillSources,
+  type SkillSourceContribution,
+  type SkillSourceOptions,
+} from './skillSources';
 
-let resolveRuntimeSkillSources: RuntimeSkillSourceResolver = () => [];
+/**
+ * The skill contributions a host installed, with its bundled resources tree
+ * and its process-wide source options. Only data is fixed here: project and
+ * interop sources live under the workspace folder, so they are resolved per
+ * call from the calling session's workspace, and a desktop with several
+ * papers open discovers each run's project skills in that run's own folder.
+ */
+interface SkillContributionsInstall {
+  readonly resourcesPath: string;
+  readonly options: SkillSourceOptions;
+  readonly contributions: readonly SkillSourceContribution[];
+}
+
+let installed: SkillContributionsInstall = {
+  resourcesPath: '',
+  options: {},
+  contributions: [],
+};
 
 interface RuntimeSkillCatalogResult {
   catalog: string;
@@ -42,15 +56,30 @@ interface DisabledSkills {
   readonly scopes: readonly ActiveSkillSourceScope[];
 }
 
-/**
- * Install the runtime skill sources: a resolver from the workspace folder, or
- * a fixed list for sources that do not depend on the folder.
- */
-export function setRuntimeSkillSources(
-  sources: readonly SkillSource[] | RuntimeSkillSourceResolver,
+/** Install the process's skill contributions; the default installs none. */
+export function installSkillContributions(
+  install: SkillContributionsInstall,
 ): void {
-  resolveRuntimeSkillSources =
-    typeof sources === 'function' ? sources : () => sources;
+  installed = install;
+}
+
+/**
+ * The installed contributions folded for one folder. `options` replaces the
+ * installed options for one call: the CLI's `skills list` flags.
+ */
+export function runtimeSkillSources(
+  cwd: string,
+  options: SkillSourceOptions = installed.options,
+) {
+  return foldSkillSources(installed.contributions, {
+    cwd,
+    // `safeHomedir()` never throws (unlike raw `os.homedir()`, which can
+    // raise UV_ENOENT in containers/CI); `/nonexistent` matches the fallback
+    // used by other agnostic-zone callers (e.g. `claudeAgentConfig.ts`).
+    home: safeHomedir() ?? '/nonexistent',
+    resourcesPath: installed.resourcesPath,
+    options,
+  });
 }
 
 /**
@@ -61,9 +90,7 @@ export function setRuntimeSkillSources(
  */
 function discoverRuntimeSkills(workspaceRoot: string | undefined) {
   return discoverSkillSources(
-    resolveRuntimeSkillSources(
-      workspaceRoot ?? safeHomedir() ?? '/nonexistent',
-    ),
+    runtimeSkillSources(workspaceRoot ?? safeHomedir() ?? '/nonexistent'),
   );
 }
 

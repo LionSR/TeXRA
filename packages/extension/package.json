@@ -951,23 +951,23 @@
       },
       {
         "name": "lean-blueprint",
-        "path": "resources/skills/lean-blueprint/SKILL.md"
+        "path": "resources/plugins/lean4/skills/lean-blueprint/SKILL.md"
       },
       {
         "name": "lean-proof-assistant",
-        "path": "resources/skills/lean-proof-assistant/SKILL.md"
+        "path": "resources/plugins/lean4/skills/lean-proof-assistant/SKILL.md"
       },
       {
         "name": "lean-search",
-        "path": "resources/skills/lean-search/SKILL.md"
+        "path": "resources/plugins/lean4/skills/lean-search/SKILL.md"
       },
       {
         "name": "lean-simplifier",
-        "path": "resources/skills/lean-simplifier/SKILL.md"
+        "path": "resources/plugins/lean4/skills/lean-simplifier/SKILL.md"
       },
       {
         "name": "lean-tactic-improver",
-        "path": "resources/skills/lean-tactic-improver/SKILL.md"
+        "path": "resources/plugins/lean4/skills/lean-tactic-improver/SKILL.md"
       },
       {
         "name": "literature-search",

@@ -1,13 +1,8 @@
 import * as path from 'node:path';
 
-import { safeHomedir } from '@utils/system/platformPaths';
+import type { ActiveSkillSourceScope } from '@shared/schemas';
 
-import type { SkillSource } from './loadSkills';
-
-interface SkillSourceContext {
-  readonly cwd: string;
-  readonly resourcesPath: string;
-}
+import type { SkillSource, SkillSourceTier } from './loadSkills';
 
 export interface SkillSourceOptions {
   readonly includeInterop?: boolean;
@@ -21,80 +16,178 @@ export const INTEROP_SKILL_DIRS = [
   '.gemini',
 ] as const;
 
-function bundledSkillSources(resourcesPath: string): SkillSource[] {
-  return [
-    {
-      scope: 'bundled',
-      path: path.join(resourcesPath, 'skills'),
-      label: 'bundled',
-    },
-  ];
+/**
+ * The skill tiers in precedence order. A tier fixes the persisted scope its
+ * sources carry, so a contribution never picks its own scope: a tool plugin
+ * can only land in `bundled`, and the `ActiveSkillSourceScope` vocabulary in
+ * `texra.skills.disabledSources` and the active-skills snapshot cannot drift.
+ * A `source` tier keeps its roots in registration order; the `name` tier
+ * pools its roots and orders their skills by directory name, so bundled
+ * skills read the same whether one directory or several ship them.
+ */
+const SKILL_TIERS = [
+  { id: 'custom', scope: 'custom', order: 'source' },
+  { id: 'project', scope: 'project', order: 'source' },
+  { id: 'interop-project', scope: 'interop', order: 'source' },
+  { id: 'user', scope: 'user', order: 'source' },
+  { id: 'interop-user', scope: 'interop', order: 'source' },
+  { id: 'bundled', scope: 'bundled', order: 'name' },
+] as const satisfies readonly {
+  id: string;
+  scope: ActiveSkillSourceScope;
+  order: SkillSourceTier['order'];
+}[];
+
+type SkillTierId = (typeof SKILL_TIERS)[number]['id'];
+
+/** What one discovery asks of the contributions: its folder and flags. */
+interface SkillSourceCall {
+  readonly cwd: string;
+  readonly home: string;
+  readonly resourcesPath: string;
+  readonly options: SkillSourceOptions;
 }
 
-function interopSkillSources(base: string, scopeLabel: string): SkillSource[] {
+interface SkillRoot {
+  readonly path: string;
+  readonly label: string;
+  readonly required?: true;
+}
+
+/**
+ * One producer of skill roots: a stable id, the tier it lands in, and its
+ * roots as a function of the call, so project sources follow each session's
+ * workspace and the CLI's per-command flags.
+ */
+export interface SkillSourceContribution {
+  readonly id: string;
+  readonly tier: SkillTierId;
+  readonly roots: (call: SkillSourceCall) => readonly SkillRoot[];
+}
+
+function interopRoots(base: string, scopeLabel: string): SkillRoot[] {
   return INTEROP_SKILL_DIRS.map((dir) => ({
-    scope: 'interop',
     path: path.join(base, dir, 'skills'),
     label: `${dir} ${scopeLabel}`,
   }));
 }
 
-function uniqueSources(sources: readonly SkillSource[]): SkillSource[] {
-  const seen = new Map<string, SkillSource>();
-  for (const source of sources) {
-    const key = path.resolve(source.path);
-    const existing = seen.get(key);
-    if (existing) {
-      if (source.required === true) {
-        seen.set(key, { ...existing, required: true });
-      }
-    } else {
-      seen.set(key, { ...source, path: key });
-    }
-  }
-  return [...seen.values()];
+const CORE_SKILL_CONTRIBUTIONS: readonly SkillSourceContribution[] = [
+  {
+    id: 'core:custom',
+    tier: 'custom',
+    roots: ({ cwd, options }) =>
+      (options.additionalPaths ?? []).map((candidate) => ({
+        path: path.resolve(cwd, candidate),
+        label: 'custom',
+        required: true,
+      })),
+  },
+  {
+    id: 'core:project',
+    tier: 'project',
+    roots: ({ cwd }) => [
+      { path: path.join(cwd, '.texra', 'skills'), label: 'project' },
+    ],
+  },
+  {
+    id: 'core:interop-project',
+    tier: 'interop-project',
+    roots: ({ cwd, options }) =>
+      options.includeInterop === true ? interopRoots(cwd, 'project') : [],
+  },
+  {
+    id: 'core:user',
+    tier: 'user',
+    roots: ({ home }) => [
+      { path: path.join(home, '.texra', 'skills'), label: 'user' },
+    ],
+  },
+  {
+    id: 'core:interop-user',
+    tier: 'interop-user',
+    roots: ({ home, options }) =>
+      options.includeInterop === true ? interopRoots(home, 'user') : [],
+  },
+  {
+    id: 'core:bundled',
+    tier: 'bundled',
+    roots: ({ resourcesPath }) => [
+      { path: path.join(resourcesPath, 'skills'), label: 'bundled' },
+    ],
+  },
+];
+
+/** A tool plugin's bundled skills, shipped at `resources/plugins/<id>/skills`. */
+function pluginSkillContribution(pluginId: string): SkillSourceContribution {
+  return {
+    id: pluginId,
+    tier: 'bundled',
+    roots: ({ resourcesPath }) => [
+      {
+        path: path.join(resourcesPath, 'plugins', pluginId, 'skills'),
+        label: 'bundled',
+      },
+    ],
+  };
 }
 
-export function defaultSkillSources(
-  context: SkillSourceContext,
-  options: SkillSourceOptions = {},
-): SkillSource[] {
-  // `safeHomedir()` never throws (unlike raw `os.homedir()`, which can raise
-  // UV_ENOENT in containers/CI); `/nonexistent` matches the fallback used by
-  // other agnostic-zone callers (e.g. `claudeAgentConfig.ts`).
-  const home = safeHomedir() ?? '/nonexistent';
-  const sources: SkillSource[] = [];
+/**
+ * The contributions a host installs: the core sources, then the bundled
+ * skills of each tool plugin that ships them. The ids come in as strings from
+ * the host bootstrap, which reads the tool plugin manifest, so `@skills` keeps
+ * no edge to `@tools`.
+ */
+export function hostSkillContributions(
+  skillPluginIds: readonly string[],
+): readonly SkillSourceContribution[] {
+  return [
+    ...CORE_SKILL_CONTRIBUTIONS,
+    ...skillPluginIds.map(pluginSkillContribution),
+  ];
+}
 
-  for (const candidate of options.additionalPaths ?? []) {
-    sources.push({
-      scope: 'custom',
-      path: path.resolve(context.cwd, candidate),
-      label: 'custom',
-      required: true,
-    });
-  }
-
-  sources.push({
-    scope: 'project',
-    path: path.join(context.cwd, '.texra', 'skills'),
-    label: 'project',
+/**
+ * Fold contributions into the tiers one discovery scans. Contributions are
+ * stable-sorted by tier and flattened with the tier's scope stamped on; a
+ * path seen twice keeps its first occurrence (and becomes required if any
+ * occurrence is), so a `--skills .texra/skills` root still absorbs the
+ * project root.
+ */
+export function foldSkillSources(
+  contributions: readonly SkillSourceContribution[],
+  call: SkillSourceCall,
+): SkillSourceTier[] {
+  const seen = new Map<string, { tier: number; source: SkillSource }>();
+  SKILL_TIERS.forEach((tier, index) => {
+    for (const contribution of contributions) {
+      if (contribution.tier !== tier.id) continue;
+      for (const root of contribution.roots(call)) {
+        const key = path.resolve(root.path);
+        const existing = seen.get(key);
+        if (existing) {
+          if (root.required === true) {
+            existing.source = { ...existing.source, required: true };
+          }
+          continue;
+        }
+        seen.set(key, {
+          tier: index,
+          source: {
+            scope: tier.scope,
+            path: key,
+            label: root.label,
+            ...(root.required === true ? { required: true } : {}),
+          },
+        });
+      }
+    }
   });
-
-  if (options.includeInterop === true) {
-    sources.push(...interopSkillSources(context.cwd, 'project'));
-  }
-
-  sources.push({
-    scope: 'user',
-    path: path.join(home, '.texra', 'skills'),
-    label: 'user',
+  const entries = [...seen.values()];
+  return SKILL_TIERS.flatMap((tier, index) => {
+    const sources = entries
+      .filter((entry) => entry.tier === index)
+      .map((entry) => entry.source);
+    return sources.length === 0 ? [] : [{ order: tier.order, sources }];
   });
-
-  if (options.includeInterop === true) {
-    sources.push(...interopSkillSources(home, 'user'));
-  }
-
-  sources.push(...bundledSkillSources(context.resourcesPath));
-
-  return uniqueSources(sources);
 }

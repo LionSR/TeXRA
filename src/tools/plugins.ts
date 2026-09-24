@@ -6,11 +6,11 @@
  * differ from `toolNames` here; keeping implementations out keeps this
  * module's closure (and its readers') small.
  *
- * Derived from this list: the Tools dashboard (in list order), the
- * availability probes, the first-install toggle seed, the switched-off
- * plugins and the injected tools of a run's tool composition
- * (`@tools/composition`), install/auth terminal actions and `texra tools`
- * guides.
+ * Derived from this list: the Tools dashboard (in list order), availability
+ * probes, the first-install toggle seed, switched-off plugins and a run's
+ * injected tools (`@tools/composition`), install/auth terminal actions,
+ * `texra tools` guides, and the skill roots the host bootstrap installs in
+ * the bundled tier for each `skills` plugin, not gated by switch or probe.
  *
  * Rules: an id is persisted (the disabled-tools key), so it never changes and
  * is never reused; every tool belongs to exactly one plugin (checked below
@@ -62,22 +62,20 @@ export interface ToolPlugin {
   readonly description: string;
   /** Checked for availability but listed on no Tools dashboard. */
   readonly hidden?: boolean;
-  /**
-   * Tools of this plugin offered to every tool-use agent, declared or not,
-   * while a boolean catalog setting is on: tool name to setting key. An
-   * injected tool still passes the host and approval gates; reflection runs
-   * get none.
-   */
+  /** Tools of this plugin offered to every tool-use agent, declared or not,
+   *  while a boolean catalog setting is on: tool name to setting key. An
+   *  injected tool still passes the host and approval gates; reflection
+   *  runs get none. */
   readonly injectedWhen?: Readonly<Record<string, string>>;
-  /**
-   * Opt-in: the dashboard shows an enable/disable toggle, a fresh install
-   * seeds the plugin disabled, and while disabled its tools are withheld from
-   * every agent.
-   */
+  /** Opt-in: the dashboard shows an enable/disable toggle, a fresh install
+   *  seeds the plugin disabled, and while disabled its tools are withheld
+   *  from every agent. */
   readonly toggleable?: boolean;
   /** Owns resources: a layer in `@tools/registry`, built while an open
    *  composition includes the plugin (`@tools/compositions`). */
   readonly layer?: true;
+  /** Ships skills at `resources/plugins/<id>/skills` (see the header). */
+  readonly skills?: true;
   readonly installGuide?: string;
   readonly installUrl?: string;
   /** VS Code extension ID — when present, the dashboard offers a direct "Install" button. */
@@ -270,6 +268,7 @@ const MANIFEST = [
       'VS Code build: requires the leanprover.lean4 extension. ' +
       'CLI / desktop builds: requires `lake` on PATH; each Lake project can have its own language server, and idle ones stop after thirty minutes, surfaced below.',
     availability: LEAN4_AVAILABILITY,
+    skills: true,
   },
   {
     id: 'workflow-script',

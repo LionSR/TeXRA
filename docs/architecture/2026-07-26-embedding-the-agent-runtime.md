@@ -545,10 +545,14 @@ The caller knows which case it is in, and says so with
 
 ## 4. What degrades gracefully (safe to skip)
 
-- **`initializeNodeRuntimeSkills({…})`:** Runtime skills degrade to an empty
-  catalog: `if (sources.length === 0) return { catalog: '', issues: [] };`
-  (`src/skills/runtimeSkills.ts:57-59`; registration at
-  `src/platform/defaults/nodeHost.ts:157-169`).
+- **`initializeNodeRuntimeSkills({…}, skillPluginIds)`:** Runtime skills
+  degrade to an empty catalog: with no installed skill contributions the
+  fold yields no sources and discovery finds nothing
+  (`installSkillContributions` in `src/skills/runtimeSkills.ts`; registration
+  in `src/platform/defaults/nodeHost.ts`). An embedder that does call it must
+  pass the ids of the tool plugins that ship skills (`bootstrapHost` passes
+  every manifest entry with `skills: true`, today `lean4`); an empty list
+  drops those plugins' bundled skills.
 - **`seedDisabledToolDefaults(key)`:** No first-install tool defaults are
   written, so no toggleable external tools are default-disabled. More tools
   are available, not fewer (`src/tools/toolAvailability.ts:77-95`).
