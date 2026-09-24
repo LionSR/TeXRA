@@ -27,7 +27,7 @@ const CHANNEL = 'agentRegistry';
 /**
  * One file- or directory-level scan failure. Scanning is a best-effort
  * projection: a bad YAML file becomes an issue entry and an unreadable
- * directory becomes an empty scan with one issue, so the error never escapes
+ * root becomes one issue that contributes no files, so the error never escapes
  * `scanDirectory`'s channel — it exists to be recovered from, and the channel
  * is `never` at the export. Defects (programming errors) stay defects.
  */
@@ -69,7 +69,8 @@ export function extractToolNames(
  * tool-use source is the core directory plus each tool plugin's), and they are
  * pooled into one scan, so names stay unique and `inherits` resolves across
  * the whole source. Files list in absolute-path order, as one directory holding
- * them all would list them.
+ * them all would list them. A root that cannot be listed is one issue and
+ * drops only its own files.
  */
 export function scanDirectory(
   roots: readonly string[],
@@ -79,32 +80,40 @@ export function scanDirectory(
   if (dirs.length === 0) return Effect.succeed({ entries: [], issues: [] });
 
   return Effect.gen(function* () {
-    const files = (yield* Effect.forEach(dirs, (root) =>
-      Effect.tryPromise({
-        try: () =>
-          glob('**/*.yaml', {
-            cwd: root,
-            absolute: true,
-            nodir: true,
-          }),
-        catch: (cause) =>
-          new AgentScanError({
-            path: root,
-            message: toErrorMessage(cause),
-            cause,
-          }),
-      }).pipe(
-        Effect.map((paths) => paths.map((yamlPath) => ({ root, yamlPath }))),
-      ),
-    ))
-      .flat()
-      // Code-unit order, as the default sort of one directory's paths gave.
-      .toSorted((a, b) => (a.yamlPath < b.yamlPath ? -1 : 1));
     const issues: AgentScanIssue[] = [];
+    // Each file with the root it was found under; a path two roots share
+    // keeps the first.
+    const rootOf = new Map<string, string>();
+    for (const root of dirs) {
+      const listed = yield* Effect.result(
+        Effect.tryPromise({
+          try: () =>
+            glob('**/*.yaml', { cwd: root, absolute: true, nodir: true }),
+          catch: (cause) =>
+            new AgentScanError({
+              path: root,
+              message: toErrorMessage(cause),
+              cause,
+            }),
+        }),
+      );
+      if (Result.isFailure(listed)) {
+        const { message } = listed.failure;
+        yield* Effect.logError(`Failed to scan ${root}: ${message}`).pipe(
+          withLogChannel(CHANNEL),
+        );
+        issues.push({ path: root, message });
+        continue;
+      }
+      for (const yamlPath of listed.success) {
+        if (!rootOf.has(yamlPath)) rootOf.set(yamlPath, root);
+      }
+    }
     const parsed: ParsedAgentYaml[] = [];
     for (const result of yield* Effect.forEach(
-      files,
-      ({ root, yamlPath }) => Effect.result(readYamlDefinition(yamlPath, root)),
+      // Code-unit order, which the default sort gave one directory's paths.
+      [...rootOf].toSorted(([a], [b]) => Number(a > b) - Number(a < b)),
+      ([yamlPath, root]) => Effect.result(readYamlDefinition(yamlPath, root)),
       { concurrency: 8 },
     )) {
       if (Result.isSuccess(result)) parsed.push(result.success);
@@ -141,17 +150,7 @@ export function scanDirectory(
       `Scanned ${entries.length} agents from ${source}`,
     ).pipe(withLogChannel(CHANNEL));
     return { entries, issues };
-  }).pipe(
-    Effect.catch((error: AgentScanError) =>
-      Effect.logError(`Failed to scan ${error.path}: ${error.message}`).pipe(
-        withLogChannel(CHANNEL),
-        Effect.as({
-          entries: [],
-          issues: [{ path: error.path, message: error.message }],
-        }),
-      ),
-    ),
-  );
+  });
 }
 
 function entriesWithUniqueNames(

@@ -223,7 +223,13 @@ describe('agent registry', () => {
         installPluginAgentDirectories(resourcesPath, []);
         yield* onGlobalStorage(refresh({ includeRemote: false }));
         expect(getAgent('lean', AgentCategory.ToolUse)).toBeUndefined();
-      }),
+      }).pipe(
+        // The install is module state: a failed assertion must not leave the
+        // plugin directory installed for the rest of the file.
+        Effect.ensuring(
+          Effect.sync(() => installPluginAgentDirectories(resourcesPath, [])),
+        ),
+      ),
   );
 
   it('treats lookup category as priority, not a filter', () => {
