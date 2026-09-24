@@ -194,7 +194,10 @@ export function createHostSnapshotSource(
           visible: dependency.visible && !dismissed.has('dependency'),
         },
         gettingStarted: !hasInputFiles && !dismissed.has('gettingStarted'),
-        login: !authenticated && !loginBannerDismissed,
+        // The setup card is the one onboarding step on screen while it is
+        // pending; the sign-in offer returns once setup is done or skipped.
+        login:
+          !authenticated && !loginBannerDismissed && onboarding !== 'setup',
       },
       onboarding,
     }),
