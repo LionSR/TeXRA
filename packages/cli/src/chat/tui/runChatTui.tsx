@@ -162,41 +162,36 @@ export async function runChat(
     resourcesPath: context.resourcesPath,
     minimumLogLevel: context.minimumLogLevel,
   });
-  const { services, runtimeSession } = await runtime.runPromise(
-    Effect.gen(function* () {
-      const built = yield* initCliPlatform({ ...context, quietLogs: true });
-      return { services: built, runtimeSession: yield* built.session };
-    }),
-  );
   const initialResume = init.initialResume;
-  runtimeSession.setApprovalPolicy(context.approvalPolicy);
-  // First-run gate (interactive only; headless already rejected above). A
-  // credential-less user signs in or saves a key here; the model
-  // resolution below then see the freshly-set credentials in the same process.
-  const { maybeRunCliOnboarding } =
-    await import('@cli/onboarding/runOnboarding');
-  const onboarding = await runtime.runPromise(
-    maybeRunCliOnboarding(services, context),
-  );
-  if (onboarding.declined) {
-    // The user saw the picker and chose "Skip for now"; the skip summary already
-    // told them how to set up later. Exit cleanly instead of falling through to
-    // the no-models resolution error, the dead-end this feature exists to fix.
-    return { exitCode: CliExitCode.Success };
-  }
-  // First-run setup yields to an explicitly selected agent.
-  const explicitAgent = initialResume?.config.agent ?? init.agentOverride;
-  const setupAgentOverride = firstRunSetupAgentOverride({
-    onboardingConfigured: onboarding.configured,
-    firstRunDone: await runtime.runPromise(
-      getFirstRunDone(services.globalState),
-    ),
-    pinnedAgent: explicitAgent ?? context.envAgent,
-  });
-  const defaults = await runtime.runPromise(
+  // One startup program; an early exit is its `exitCode` arm.
+  const startup = await runtime.runPromise(
     Effect.gen(function* () {
+      const services = yield* initCliPlatform({ ...context, quietLogs: true });
+      const runtimeSession = yield* services.session;
+      runtimeSession.setApprovalPolicy(context.approvalPolicy);
+      // First-run gate (interactive only; headless already rejected above). A
+      // credential-less user signs in or saves a key here, and the model
+      // resolution below sees those credentials in the same process.
+      const { maybeRunCliOnboarding } = yield* Effect.promise(
+        () => import('@cli/onboarding/runOnboarding'),
+      );
+      const onboarding = yield* maybeRunCliOnboarding(services, context);
+      if (onboarding.declined) {
+        // The user saw the picker and chose "Skip for now"; the skip summary
+        // already told them how to set up later. Exit cleanly instead of
+        // falling through to the no-models resolution error, the dead-end this
+        // feature exists to fix.
+        return { exitCode: CliExitCode.Success };
+      }
+      // First-run setup yields to an explicitly selected agent.
+      const explicitAgent = initialResume?.config.agent ?? init.agentOverride;
+      const setupAgentOverride = firstRunSetupAgentOverride({
+        onboardingConfigured: onboarding.configured,
+        firstRunDone: yield* getFirstRunDone(services.globalState),
+        pinnedAgent: explicitAgent ?? context.envAgent,
+      });
       yield* loadAgents();
-      return resolveChatDefaults({
+      const defaults = resolveChatDefaults({
         stores: services,
         agentOverride: explicitAgent ?? setupAgentOverride,
         modelOverride: initialResume?.config.model ?? init.modelOverride,
@@ -207,40 +202,84 @@ export async function runChat(
           AgentCategory.ToolUse,
         ),
       });
+      const agentUsageError = yield* chatToolUseAgentUsageError(
+        services,
+        defaults.agent,
+      );
+      if (agentUsageError) {
+        writeTextStderr(agentUsageError);
+        return { exitCode: CliExitCode.Usage };
+      }
+      // One API mode for the whole session: an explicit --api-mode/env
+      // override wins, otherwise the persisted account default. Model
+      // resolution, the no-models hints, and the header/status all read this
+      // same value so they can never disagree.
+      const modelSelectionExit = yield* Effect.exit(
+        selectCliRunnableModel(defaults.model, {
+          stores: services,
+          fallbackReason: defaults.modelSource,
+          noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
+            CHAT_STARTUP_MODEL_RECOVERY,
+          ),
+        }).pipe(
+          Effect.tap((selection) =>
+            setCliHelperModel(services.globalState, selection.model),
+          ),
+        ),
+      );
+      if (Exit.isFailure(modelSelectionExit)) {
+        writeTextStderr(toErrorMessage(Cause.squash(modelSelectionExit.cause)));
+        return { exitCode: CliExitCode.Usage };
+      }
+      const modelSelection = modelSelectionExit.value;
+      // Both persisted team fields are `.nullish()` on the wire, so a resumed
+      // run that never carried a preset lands `null` where `SessionMeta` wants
+      // absent.
+      const initialPresetId =
+        initialResume?.config.cli?.multiAgentPresetId ?? undefined;
+      sessionMetaSignal.set({
+        agent: defaults.agent,
+        model: modelSelection.model,
+        modelSource: defaults.modelSource,
+        cwd: context.cwd,
+        approvalPolicy: runtimeSession.approvalPolicy,
+        teamName: yield* readCliMultiAgentPresetName(
+          runtimeSession.roots.workspaceState,
+          initialPresetId,
+        ),
+        cliMultiAgentPresetId: initialPresetId,
+        delegationAgentScope:
+          initialResume?.config.delegationAgentScope ?? undefined,
+        version: yield* Effect.promise(readCliVersion),
+      });
+      if (modelSelection.notice) {
+        appendLocalAssistantTranscript(modelSelection.notice);
+      }
+      // First-run handoff explanation: when the setup agent owns this session
+      // (decided here for both the bare-`texra` and `texra chat` entries), say
+      // so - display-only, so the agent waits for the user's first message.
+      const startupNotice =
+        init.startupNotice ??
+        (setupAgentOverride ? SETUP_AGENT_HANDOFF_NOTICE : undefined);
+      if (startupNotice) {
+        appendLocalAssistantTranscript(startupNotice);
+      }
+      return {
+        services,
+        runtimeSession,
+        defaults,
+        model: modelSelection.model,
+        inputHistory: yield* loadInputHistory,
+        // The drain lives as long as the process runtime; the graceful exit
+        // waits on `idle` before that runtime is disposed.
+        followUpQueue: yield* makeFollowUpDeliveryQueue(runtime.scope),
+      };
     }),
   );
-  const agentUsageError = await runtime.runPromise(
-    chatToolUseAgentUsageError(services, defaults.agent),
-  );
-  if (agentUsageError) {
-    writeTextStderr(agentUsageError);
-    return { exitCode: CliExitCode.Usage };
-  }
-  // One API mode for the whole session: an explicit --api-mode/env override
-  // wins, otherwise the persisted account default. Model resolution, the
-  // no-models hints, and the header/status all read this same value so they can
-  // never disagree.
-  const modelSelectionExit = await runtime.runPromiseExit(
-    selectCliRunnableModel(defaults.model, {
-      stores: services,
-      fallbackReason: defaults.modelSource,
-      noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
-        CHAT_STARTUP_MODEL_RECOVERY,
-      ),
-    }).pipe(
-      Effect.tap((selection) =>
-        setCliHelperModel(services.globalState, selection.model),
-      ),
-    ),
-  );
-  if (Exit.isFailure(modelSelectionExit)) {
-    writeTextStderr(toErrorMessage(Cause.squash(modelSelectionExit.cause)));
-    return { exitCode: CliExitCode.Usage };
-  }
-  const modelSelection = modelSelectionExit.value;
+  if (startup.exitCode !== undefined) return { exitCode: startup.exitCode };
+  const { services, runtimeSession, defaults, model } = startup;
+  const { inputHistory, followUpQueue } = startup;
   const { agent } = defaults;
-  const model = modelSelection.model;
-  const version = await readCliVersion();
 
   const getApprovalPolicy = (): TexraApprovalPolicy =>
     runtimeSession.approvalPolicy;
@@ -272,42 +311,6 @@ export async function runChat(
     resetSession: resetSessionForClear,
     resumeRun: chatController.resume,
   });
-  // Both persisted team fields are `.nullish()` on the wire, so a resumed run
-  // that never carried a preset lands `null` where `SessionMeta` wants absent.
-  const initialPresetId =
-    initialResume?.config.cli?.multiAgentPresetId ?? undefined;
-  const initialPresetName = await runtime.runPromise(
-    readCliMultiAgentPresetName(
-      runtimeSession.roots.workspaceState,
-      initialPresetId,
-    ),
-  );
-  sessionMetaSignal.set({
-    agent,
-    model,
-    modelSource: defaults.modelSource,
-    cwd: context.cwd,
-    approvalPolicy: runtimeSession.approvalPolicy,
-    teamName: initialPresetName,
-    cliMultiAgentPresetId: initialPresetId,
-    delegationAgentScope:
-      initialResume?.config.delegationAgentScope ?? undefined,
-    version,
-  });
-  if (modelSelection.notice) {
-    appendLocalAssistantTranscript(modelSelection.notice);
-  }
-  // First-run handoff explanation: when the setup agent owns this session
-  // (decided here for both the bare-`texra` and `texra chat` entries), say so -
-  // display-only, so the agent waits for the user's first message.
-  const startupNotice =
-    init.startupNotice ??
-    (setupAgentOverride ? SETUP_AGENT_HANDOFF_NOTICE : undefined);
-  if (startupNotice) {
-    appendLocalAssistantTranscript(startupNotice);
-  }
-
-  const inputHistory = await runtime.runPromise(loadInputHistory);
 
   // DA1 sentinel discovery runs *before* Ink mounts so it owns the raw-mode
   // toggle exclusively, interleaving with Ink's own raw-mode lifecycle (set
@@ -367,11 +370,6 @@ export async function runChat(
   );
   syncTranscriptSubscriptions();
 
-  // The drain lives as long as the process runtime; the graceful exit waits
-  // on `idle` before that runtime is disposed.
-  const followUpQueue = await runtime.runPromise(
-    makeFollowUpDeliveryQueue(runtime.scope),
-  );
   const rootRunStatus = (): RunPhase | undefined =>
     runPhaseOf(runViewOf(currentView(), session.runId));
   const hasActiveToolUseFlow = (): boolean =>
