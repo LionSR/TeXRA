@@ -43,8 +43,8 @@ catalogs:
       specifier: ^0.155.1
       version: 0.155.1
     '@openrouter/sdk':
-      specifier: ^1.3.8
-      version: 1.3.8
+      specifier: ^1.3.11
+      version: 1.3.11
     '@supabase/supabase-js':
       specifier: 2.116.0
       version: 2.116.0
@@ -242,7 +242,7 @@ importers:
         version: 0.155.1
       '@openrouter/sdk':
         specifier: 'catalog:'
-        version: 1.3.8
+        version: 1.3.11
       '@supabase/supabase-js':
         specifier: 'catalog:'
         version: 2.116.0(@opentelemetry/api@1.9.1)
@@ -558,7 +558,7 @@ importers:
         version: 0.155.1
       '@openrouter/sdk':
         specifier: 'catalog:'
-        version: 1.3.8
+        version: 1.3.11
       '@supabase/supabase-js':
         specifier: 'catalog:'
         version: 2.116.0(@opentelemetry/api@1.9.1)
@@ -1906,8 +1906,8 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@openrouter/sdk@1.3.8':
-    resolution: {integrity: sha512-hwLKi+iEjW97trBMPZklZbdEVfIz3kQEQziE40Yp+HqQY2duk/P64zG5RPb/7F84A4G2u7OSfXLhDPdk4POhOg==}
+  '@openrouter/sdk@1.3.11':
+    resolution: {integrity: sha512-6IM4kp/vSuA7a4Z62BzSSpFMinID4cfMjB+3VxRsaym5tURmNYKdZM/PWGimkZBigC1KdEjNvlaP1HOZ0EGYNA==}
 
   '@opentelemetry/api@1.9.1':
     resolution: {integrity: sha512-gLyJlPHPZYdAk1JENA9LeHejZe1Ti77/pTeFm/nMXmQH/HFZlcS/O2XJB+L8fkbrNSqhdtlvjBVjxwUYanNH5Q==}
@@ -6936,7 +6936,7 @@ snapshots:
   '@openai/codex@0.155.1-win32-x64':
     optional: true
 
-  '@openrouter/sdk@1.3.8':
+  '@openrouter/sdk@1.3.11':
     dependencies:
       zod: 4.4.3
 
