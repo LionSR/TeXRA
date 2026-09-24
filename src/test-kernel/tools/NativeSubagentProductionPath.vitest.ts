@@ -514,13 +514,18 @@ async function launchWaitingChild(options: {
       parentRunId: OUTER_RUN_ID,
     }),
   );
+  // Admitted on the run's lane like every production launch, so the run's
+  // fiber is its stop target by run id.
   parentFiber = testRuntime().runFork(
-    prepareAgentDefinition({ config: parentConfig, session }).pipe(
-      Effect.flatMap((definition) =>
-        executeAgent(definition, PARENT_RUN_ID, {
-          session,
-          parentRunId: OUTER_RUN_ID,
-        }),
+    session.runs.launchRun(
+      PARENT_RUN_ID,
+      prepareAgentDefinition({ config: parentConfig, session }).pipe(
+        Effect.flatMap((definition) =>
+          executeAgent(definition, PARENT_RUN_ID, {
+            session,
+            parentRunId: OUTER_RUN_ID,
+          }),
+        ),
       ),
     ),
   );

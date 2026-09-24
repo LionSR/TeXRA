@@ -330,7 +330,9 @@ export class RunRoster {
         const fiber = yield* Effect.forkChild(operation, {
           startImmediately: true,
         });
-        this.setFiber(runId, fiber);
+        // An inactive-run step is not a generation: it holds the lane, and
+        // the run's next generation queues behind it rather than refusing.
+        if (!refuseWhenLive) this.setFiber(runId, fiber);
         return yield* Fiber.join(fiber);
       });
       return Effect.raceFirst(

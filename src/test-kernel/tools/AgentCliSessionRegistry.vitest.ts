@@ -114,7 +114,7 @@ describe('AgentCliSessionRegistry', () => {
     const runId = 'run-in-flight' as RunId;
     const interrupt = vi.fn(() => true);
     const registry = new AgentCliSessionRegistry({
-      interrupt,
+      interruptActive: interrupt,
     } as unknown as RunRegistry);
     const releaseClaim = registry.claim('reserved-session');
 

@@ -52,7 +52,7 @@ const mocks = vi.hoisted(() => ({
   ownerRuntime: undefined as ProcessRuntime | undefined,
   loadAgents: vi.fn(),
   runValidatedAgent: vi.fn(),
-  getRunHandle: vi.fn(),
+  interruptRun: vi.fn(),
   /** Every session the owner built for the package, with what it was
    *  built over: one per storage root. */
   sessionInits: [] as { readonly roots: { readonly storage: string } }[],
@@ -95,7 +95,9 @@ vi.mock('@agent/runtime', async () => {
   const { Deferred, Effect, Stream, SubscriptionRef } = await import('effect');
   const { emptySessionView } = await import('@shared/session/sessionView');
   class FakeSession {
-    readonly runs = { getHandle: mocks.getRunHandle };
+    readonly runs = {
+      interrupt: mocks.interruptRun,
+    };
     /** The session's view level: the pre-launch session, no run yet. */
     readonly view = Effect.runSync(
       SubscriptionRef.make<FakeSessionView>({
@@ -277,7 +279,7 @@ describe('agent package sessions', () => {
     );
     mocks.foldDeath = Effect.runSync(Deferred.make<never, Error>());
     mocks.loadAgents.mockReturnValue(Effect.void);
-    mocks.getRunHandle.mockReturnValue(undefined);
+    mocks.interruptRun.mockReturnValue(false);
     mocks.runValidatedAgent.mockImplementation(
       (_input: unknown, options: RunAgentOptions) => driveRun(options),
     );
@@ -296,14 +298,14 @@ describe('agent package sessions', () => {
         const observations: string[] = [];
         mocks.runValidatedAgent.mockImplementationOnce(async () => {
           await new Promise<void>((resolve) => {
-            // The native run owns this handle before it reserves a run id.
-            // Interruption reaches that owner while registration is masked.
-            mocks.getRunHandle.mockReturnValue({
-              interrupt: () => {
-                observations.push('aborted');
-                Deferred.doneUnsafe(aborted, Effect.void);
-                resolve();
-              },
+            // The native run's fiber is its stop, by run id, from the
+            // instant it is admitted: interruption reaches it while the
+            // hand-off is masked.
+            mocks.interruptRun.mockImplementation(() => {
+              observations.push('aborted');
+              Deferred.doneUnsafe(aborted, Effect.void);
+              resolve();
+              return true;
             });
             Deferred.doneUnsafe(entered, Effect.void);
           });
@@ -327,7 +329,7 @@ describe('agent package sessions', () => {
           yield* Deferred.await(aborted);
           expect(observations).toEqual(['aborted']);
           expect(interruption.pollUnsafe()).toBeUndefined();
-          expect(mocks.getRunHandle).toHaveBeenCalledWith(expect.any(String));
+          expect(mocks.interruptRun).toHaveBeenCalledWith(expect.any(String));
           finishCleanup();
           yield* Fiber.join(interruption);
           expect(observations).toEqual(['aborted', 'settled']);

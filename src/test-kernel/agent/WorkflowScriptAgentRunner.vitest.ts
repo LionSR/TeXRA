@@ -14,7 +14,12 @@ import { RunRoster } from '@agent/runtime/runRoster';
 import { Runs } from '@agent/runtime/runRegistry';
 import type { WorkflowAgentInvocation } from '@agent/workflowScript/types';
 import type { AgentEntry } from '@agent/index/agentEntry';
-import { RunUsageTotalsSchema, type RunEnd, type RunId } from '@shared/schemas';
+import {
+  aggregateId,
+  RunUsageTotalsSchema,
+  type RunEnd,
+  type RunId,
+} from '@shared/schemas';
 import { emptyPinnedComposition } from '@test/support/nativeToolTestLayer';
 import { noopTrace } from '@test/support/noopTrace';
 import { createFakeWorkspaceRoots, fakePath } from '@test/support/FakePlatform';
@@ -227,10 +232,15 @@ const structuredResult: RunEnd = {
   },
 };
 
-// The in-process half of the fence, real: a case makes a run live here by
-// taking its lane, exactly as a launch or a resume of that run would. One
-// registry stub for every stub session, so sessions compare equal.
-let lanes = new RunRoster(createSessionApprovals());
+// The fence, real: a case makes a run live here by taking its lane, exactly
+// as a launch or a resume of that run would, and the hold carries the run's
+// claim, which the stub session answers. One registry stub for every stub
+// session, so sessions compare equal.
+const fenceRoster = () =>
+  new RunRoster(createSessionApprovals(), (runId) =>
+    mocks.acquireClaims(aggregateId('run', runId)),
+  );
+let lanes = fenceRoster();
 const runs = {
   holdInactiveRun: (runId: RunId) => lanes.holdInactive(runId),
 };
@@ -393,7 +403,7 @@ function useToolUseAgentEntries(): void {
 describe('createWorkflowScriptAgentRunner', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    lanes = new RunRoster(createSessionApprovals());
+    lanes = fenceRoster();
     mocks.preparedOptions.length = 0;
     mocks.probedRunIds.length = 0;
     launchedRows.clear();
@@ -1527,7 +1537,7 @@ describe('createWorkflowScriptAgentRunner', () => {
         expect(error).toMatchObject({
           name: 'WorkflowRunAbortError',
           message: expect.stringContaining(
-            'could not be claimed against a concurrent resume',
+            'held by a concurrent resume',
           ),
         });
         expect(mocks.executeSubagentInBand).not.toHaveBeenCalled();
@@ -1555,7 +1565,7 @@ describe('createWorkflowScriptAgentRunner', () => {
         expect(error).toMatchObject({
           name: 'WorkflowRunAbortError',
           message: expect.stringContaining(
-            'could not be claimed against a concurrent resume',
+            'held by a concurrent resume',
           ),
         });
         expect(mocks.executeSubagentInBand).not.toHaveBeenCalled();
@@ -1585,7 +1595,7 @@ describe('createWorkflowScriptAgentRunner', () => {
         expect(error).toMatchObject({
           name: 'WorkflowRunAbortError',
           message: expect.stringContaining(
-            'could not be claimed against a concurrent resume',
+            'held by a concurrent resume',
           ),
         });
         expect(mocks.executeSubagentInBand).not.toHaveBeenCalled();
@@ -1610,7 +1620,7 @@ describe('createWorkflowScriptAgentRunner', () => {
         expect(error).toMatchObject({
           name: 'WorkflowRunAbortError',
           message: expect.stringContaining(
-            'could not be claimed against a concurrent resume',
+            'held by a concurrent resume',
           ),
         });
         expect(mocks.executeSubagentInBand).toHaveBeenCalledOnce();

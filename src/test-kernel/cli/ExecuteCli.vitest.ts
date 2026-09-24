@@ -252,11 +252,13 @@ function stubHangingRun(published: Deferred.Deferred<LeaseOptions>): {
       null,
     );
     const runs = options.session?.runs;
+    // The launch's stop target is its run's roster fiber; the hanging
+    // promise is the test's to resolve, as the run's own result is, and the
+    // generation ends with it.
+    let generation: { interruptUnsafe(): void } | undefined;
     if (runs) {
       runs.track(launchHandle);
-      // The launch's stop target is its run's roster fiber; the hanging
-      // promise is the test's to resolve, as the run's own result is.
-      admitInterruptibleRun(runs, runId, () => undefined);
+      generation = admitInterruptibleRun(runs, runId, () => undefined);
     }
     try {
       return await new Promise((resolve, reject) => {
@@ -264,6 +266,7 @@ function stubHangingRun(published: Deferred.Deferred<LeaseOptions>): {
         rejectRun = reject;
       });
     } finally {
+      generation?.interruptUnsafe();
       if (runs && runs.getHandle(runId) === launchHandle) {
         runs.untrack(runId);
       }
