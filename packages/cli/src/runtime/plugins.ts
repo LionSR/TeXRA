@@ -42,7 +42,9 @@ export interface PluginEnv {
 
 const GITHUB_SHORTHAND =
   /^(?:https?:\/\/)?github\.com\/([\w.-]+)\/([\w.-]+?)(?:\.git)?(?:@([^@\s]+))?$/;
-const GIT_URL = /^(?:(?:https?|ssh|git|file):\/\/|[\w.-]+@[\w.-]+:)/;
+// Remote transports only: a local repository is installed by its path, so a
+// marketplace cannot name `file://` to copy another checkout on this machine.
+const GIT_URL = /^(?:(?:https?|ssh|git):\/\/|[\w.-]+@[\w.-]+:)/;
 /** A ref git takes as a plain name: no leading dash, no option smuggling. */
 const SAFE_REF = /^[\w][\w./-]*$/;
 

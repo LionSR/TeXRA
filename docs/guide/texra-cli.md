@@ -321,7 +321,7 @@ copied, so edits to it show up at once; removing it only forgets it.
 A repository with a marketplace file (`.claude-plugin/marketplace.json` or
 `.agents/plugins/marketplace.json`) and no plugin manifest of its own installs
 the plugin it lists. When it lists several, name the ones you want with
-`--plugin <name>`, which may be repeated.
+`--plugin <name>`, which may be repeated. <!-- guidance-refs-ignore -->
 
 Plugin skills count as user skills: they rank below the skills in
 `~/.texra/skills` and above imported and bundled skills, and the user source
