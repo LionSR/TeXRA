@@ -168,7 +168,7 @@ const BARE_EFFECT_RUN_SITES: Readonly<Record<string, number>> = {
   // the secrets file — resolve before `installProcessRuntime`, because three
   // of them are the values that install is given, and so does the account
   // plane it hands that install.
-  'packages/desktop/src/main/platform/index.ts': 2,
+  'packages/desktop/src/main/platform/index.ts': 1,
   // The VS Code entry's two pre-runtime folds, plus the account-plane and
   // process-identity resolution in `initVscodePlatform`: `activate` reports a failed
   // activation and runs the cleanup that disposes the process runtime, so it

@@ -1863,49 +1863,51 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
   app
     .whenReady()
     .then(async () => {
-      // Every resume call is run-time or user-triggered, so the registry is
-      // open by the time the owner reads it.
-      let projects!: DesktopProjectRegistry;
-      // Both are read through thunks by the resume owner below, which must
-      // exist before `initializeElectronPlatform` builds either of them: it is
-      // the resume port that call installs. Neither thunk is a lookup; each
-      // reads this entry's own local.
+      // Opened by the startup program below; a startup that fails before it
+      // runs the shutdown handlers that read it.
+      let projects: DesktopProjectRegistry | undefined;
+      // Read through thunks: the resume owner is the port that
+      // `initializeElectronPlatform` installs, so it exists before either.
       const processResumeOwner = new DesktopProcessResumeOwner({
         sessions: () =>
-          [projects.fallback(), ...projects.list()].map((p) => p.session),
+          (projects ? [projects.fallback(), ...projects.list()] : []).map(
+            (p) => p.session,
+          ),
         runtime: () => runtime,
         onLaunchSettled: Effect.suspend(
           () => afterLaunchFunnelRefresh.current ?? Effect.void,
         ),
       });
-      const platformInit = await initializeElectronPlatform(
-        desktopMainDir,
-        processResumeOwner,
-      );
-      // The process runtime the platform above built: the shutdown handlers,
-      // the startup program, and every surface they wire run on it.
-      const { lifecycle, runtime } = platformInit;
+      // The shutdown handlers, the startup program, and every surface they
+      // wire run on the process runtime the platform builds.
+      const { lifecycle, runtime, processScope, initialize } =
+        await initializeElectronPlatform(desktopMainDir, processResumeOwner);
       registerRuntimeShutdownHandlers(lifecycle, {
         beforeAgentShutdown: [Effect.sync(() => processResumeOwner.disable())],
         afterAgentShutdown: [killActiveRecording()],
         // Agent shutdown runs first so its final events enter the
         // process-owned stores. Flush in BEFORE so persistence cannot be
         // delayed by a later ON-phase language-service disposal.
-        flushArtifacts: Effect.suspend(() => projects.flushArtifacts()),
+        flushArtifacts: Effect.suspend(
+          () => projects?.flushArtifacts() ?? Effect.void,
+        ),
         // The external-editor patch directories recorded by every window's
         // diff host are removed here, once, while the process is still alive.
         afterFlushArtifacts: [removeExternalDiffPatchDirs],
         afterRunSettlement: [
           // Every project's session, most recently opened first, settled
-          // before the runtime they run on goes.
-          Effect.suspend(() => projects.dispose()),
+          // before the runtime they run on goes (or, before the registry
+          // opened, the fallback project's scope it would own).
+          Effect.suspend(
+            () => projects?.dispose() ?? Scope.close(processScope, Exit.void),
+          ),
           disposeProcessRuntime(runtime),
         ],
       });
 
-      // Until the initial window is fully wired, any startup failure must run
-      // the same process-session shutdown used by an ordinary application
-      // exit. Once this program completes, the lifecycle owns that cleanup.
+      // Until the initial window is fully wired, any startup failure (platform
+      // init included) runs the shutdown an ordinary application exit does.
+      // Once this program completes, the lifecycle owns that cleanup.
       const startup = await runtime.runPromiseExit(
         // One program on this runtime's context, not nested runs behind a
         // promise. The original failure is re-raised, not wrapped: the fatal
@@ -1913,11 +1915,12 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
         Effect.gen(function* () {
           const warn = (message: string) =>
             console.warn(`[desktop] ${message}`);
+          const platformInit = yield* initialize;
           const projectRecords = yield* openDesktopProjectRecords;
-          projects = yield* openDesktopProjectRegistry({
+          const registry = yield* openDesktopProjectRegistry({
             dataRoot: platformInit.dataRoot,
             processRoots: platformInit.processRoots,
-            processScope: platformInit.processScope,
+            processScope,
             globalConfigStore: platformInit.globalConfigStore,
             records: projectRecords,
             warn,
@@ -1926,6 +1929,7 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
               secrets: platformInit.secrets,
             },
           });
+          projects = registry;
           // Reopen every folder left open last time and show the one shown
           // last. A folder that is gone or no longer opens is reported once the
           // window exists; the others open regardless.
@@ -1939,7 +1943,7 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
           yield* Effect.forEach(
             remembered.roots,
             (root) =>
-              projects.open(root).pipe(
+              registry.open(root).pipe(
                 Effect.catch((error) =>
                   Effect.sync(() => {
                     unopenedProjects.push(`${root}: ${toErrorMessage(error)}`);
@@ -1948,7 +1952,7 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
               ),
             { discard: true },
           );
-          yield* projects.activate(projects.list().at(-1)?.root);
+          yield* registry.activate(registry.list().at(-1)?.root);
           yield* Effect.sync(() => {
             // Ask the renderer to close before draining process services. A dirty
             // editor can veto that close and remain fully operational. Once the
@@ -1969,7 +1973,7 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
             installContentSecurityPolicy();
             reopenMainWindow = () =>
               createWindow({
-                projects,
+                projects: registry,
                 supabaseAuth: platformInit.supabaseAuth,
                 pendingOAuthStore,
                 globalState: platformInit.globalState,
@@ -1999,12 +2003,9 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
                   cause,
                 }),
             }).pipe(
-              // Exhaustive: a second failure added here fails to compile.
-              Effect.catch((error: NotificationFailed) =>
-                Effect.sync(() => console.error(error)),
-              ),
-              Effect.catchDefect((defect) =>
-                Effect.sync(() => console.error(defect)),
+              // Its failure or a defect: detached, nothing else reports it.
+              Effect.catchCause((cause) =>
+                Effect.sync(() => console.error(Cause.squash(cause))),
               ),
               Effect.forkDetach,
             );
