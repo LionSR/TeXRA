@@ -68,6 +68,10 @@ All notable changes to this project will be documented in this file.
 
 ### Bug Fixes
 
+- **The `texra` chat no longer drops some diagnostics silently** — if session
+  resources fail to close when you exit a resumable chat, the error is now
+  printed to stderr after the terminal is restored, and a code block whose
+  syntax highlighting fails shows a dim notice under the plain text.
 - **Log entries keep their identifying fields when they carry an error.** An
   error's stack is now written last and capped at eight frames, so it can no
   longer push a run id or key past the log payload's size limit.
