@@ -208,7 +208,7 @@ export const buildUserVars = Effect.fn('buildUserVars')(function* (
     )),
     ...requiredVars,
     ...outputFileVars,
-    ...getToolFlags(agentSetting, agentPrompt),
+    ...getRoundsVar(agentSetting, agentPrompt),
     ATTACHED_MEMORIES: attachedMemories.xml,
     ATTACHED_MEMORY_MISSES: attachedMemories.misses,
     AVAILABLE_SKILLS: runtimeSkills.catalog,
@@ -588,34 +588,13 @@ function resolveOutputFiles(
   };
 }
 
-type ToolFlagVars = Pick<
-  UserVars,
-  'CODEX_GUIDANCE' | 'CLAUDE_CODE_GUIDANCE' | 'ROUNDS'
->;
+type RoundsVar = Pick<UserVars, 'ROUNDS'>;
 
-const TOOL_GUIDANCE = {
-  codex:
-    'Choose codex for coding tasks that benefit from a separate OpenAI agent. It runs in its own sandbox with independent tool use, async and multi-turn like delegate_agent. ' +
-    'When multiple codex agents must edit the same files, or to isolate experimental changes, use a git worktree (`git worktree add ../worktree-name branch-name`) and pass its path as working_directory.',
-  claude_code:
-    'Choose claude_code for coding tasks that benefit from a separate Anthropic Claude Code agent. It runs in its own workspace with independent file editing, search, and shell access, async and multi-turn like delegate_agent. ' +
-    'codex and claude_code are both independent sandboxed coders distinct from the in-process delegate_agent specialists. Prefer whichever vendor fits the task, and for parallel or isolated edits run them against a git worktree.',
-} as const;
-
-function getToolFlags(
+function getRoundsVar(
   agentSetting: AgentSetting,
   agentPrompt: AgentPrompt,
-): ToolFlagVars {
-  function hasTool(name: string): boolean {
-    return agentSetting.tools.some((tool) => tool.name === name);
-  }
-
-  const flags: ToolFlagVars = {
-    CODEX_GUIDANCE: hasTool('codex') ? TOOL_GUIDANCE.codex : '',
-    CLAUDE_CODE_GUIDANCE: hasTool('claude_code')
-      ? TOOL_GUIDANCE.claude_code
-      : '',
-  };
+): RoundsVar {
+  const flags: RoundsVar = {};
 
   // Only compute ROUNDS for workflow agents, not tool-use agents
   if (agentSetting.agentCategory !== AgentCategory.ToolUse) {

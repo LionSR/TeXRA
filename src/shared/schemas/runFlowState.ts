@@ -225,9 +225,13 @@ const UserVarsSchema = z.object({
   MEDIA_FILE: z.string().nullable(),
   /** Resolved output file list; absent when no usable outputs are configured. */
   OUTPUT_FILES: z.array(z.string()).optional(),
-  /** When-to-choose guidance, '' when the tool is not on the roster. */
-  CODEX_GUIDANCE: z.string(),
-  CLAUDE_CODE_GUIDANCE: z.string(),
+  /**
+   * Retired: the codex / claude_code guidance now lives in those tools'
+   * descriptions and nothing writes these. Kept so the stored session format
+   * (pinned by sessionEventFormat.vitest.ts) does not move.
+   */
+  CODEX_GUIDANCE: z.string().optional(),
+  CLAUDE_CODE_GUIDANCE: z.string().optional(),
   /** Effective round count; workflow agents only. */
   ROUNDS: z.number().optional(),
 
