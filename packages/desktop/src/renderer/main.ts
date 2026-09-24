@@ -77,8 +77,6 @@ import {
   setWorkbenchWidth,
   toggleFiles,
   toggleSidebar,
-  toggleSummaryBar,
-  workspaceName,
   type DesktopShellState,
   type WorkbenchTab,
   type WorkbenchPlacement,
@@ -88,7 +86,6 @@ import { isSafeAbsolutePdfPath } from '../shared/desktopPdfMessages';
 import { getRendererPlatform } from './rendererPlatform';
 import { createDesktopPromptOverlay } from './promptOverlay';
 import { createLogsPane } from './logsPane';
-import { createEnvironmentPopover } from './environmentPopover';
 import { disposePendingFileRequests } from './fileRequests';
 import { createProjectWorkbench } from './projectWorkbench';
 import { createMessageRoutes } from './messageRoutes';
@@ -208,15 +205,6 @@ const railProjects = (): RailProject[] =>
   });
 const activeRailProject = (projects: readonly RailProject[]) =>
   projects.find((project) => project.display.key === shell.active);
-/** The active project's runs in rail order, for the palette. */
-const activeRuns = () => {
-  const active = activeRailProject(railProjects());
-  if (!active) return [];
-  return active.view.order.flatMap((id) => {
-    const run = active.view.runs.get(id);
-    return run ? [run] : [];
-  });
-};
 const rendererPlatform = getRendererPlatform(document.defaultView);
 document.body.dataset.desktopPlatform = rendererPlatform;
 const desktopMenuEntries = getDesktopCommandMenuEntries(rendererPlatform);
@@ -313,11 +301,6 @@ function toggleSidePanelVisibility(): void {
   currentWorkbench().workbench.togglePlacementVisibility('right', 'settings');
 }
 
-function toggleSummaryBarVisibility(): void {
-  environmentPopover.close();
-  updateShell(toggleSummaryBar(shellState()));
-}
-
 // `<settings-app>` and `<progress-app>` are instantiated once and slotted into
 // the shell template via Lit's DOM-node interpolation, so Lit preserves their
 // internal state across re-renders and tab switches.
@@ -378,14 +361,6 @@ const promptOverlay = createDesktopPromptOverlay(appRoot, (message) =>
 );
 applyTheme();
 
-const environmentPopover = createEnvironmentPopover({
-  getWorkbenchTabs: () => shellState().workbenchTabs,
-  getChildRunCount: () =>
-    activeRuns().reduce((total, run) => total + run.rollup.total, 0),
-  postMessage: (command, payload) =>
-    postMessage(command, { ...payload, session: shell.active }),
-});
-
 function shellConversationTemplate(): TemplateResult {
   const startupPanelVisible = startupTeamPanel.isVisible();
   const projects = railProjects();
@@ -404,11 +379,11 @@ function shellConversationTemplate(): TemplateResult {
   if (sidebarCollapsedWithPendingApproval) {
     sidebarToggleLabel = 'Show sidebar - approval pending';
   }
-  const workspacePath = activeProjectRoot();
-  // Names the button even when the ≤560px container query collapses it to the
-  // icon: the shadow button then has no visible text, so only `aria-label`
-  // reaches its accessible name (the `<wa-tooltip>` shows it on hover).
-  const environmentButtonLabel = `${workspaceName(workspacePath)} environment`;
+  // One card at a time: with no folder open the walkthrough takes the
+  // open-folder panel's place instead of stacking on it.
+  const noWorkspaceContent = startupPanelVisible
+    ? startupTeamPanel.template()
+    : noWorkspacePlaceholder;
   return html`
     <main class="shell-conversation" aria-label="Task conversation">
       <header class="shell-header">
@@ -439,51 +414,11 @@ function shellConversationTemplate(): TemplateResult {
             : nothing
         }
         <span class="shell-header-spacer"></span>
-        ${
-          shellState().summaryBarVisible
-            ? html`
-                <wa-button
-                  id="shellEnvironmentButton"
-                  type="button"
-                  class="shell-environment-button btn-secondary"
-                  appearance="outlined"
-                  size="s"
-                  aria-label=${environmentButtonLabel}
-                  with-caret
-                >
-                  ${waIcon('folder-open', { slot: 'start' })}
-                  <span>${workspaceName(workspacePath)}</span>
-                </wa-button>
-                <wa-tooltip for="shellEnvironmentButton"
-                  >${environmentButtonLabel}</wa-tooltip
-                >
-              `
-            : nothing
-        }
-        ${renderIconActionButton({
-          id: 'shellCommandPalette',
-          icon: 'ellipsis',
-          label: commandLabel(DESKTOP_COMMAND_PALETTE_ID),
-          tooltip: commandTitle(DESKTOP_COMMAND_PALETTE_ID),
-          className: 'shell-header-button icon-button',
-          size: 'l',
-          onClick: openCommandPalette,
-        })}
         <div
           class="shell-layout-controls"
           role="group"
           aria-label="Layout controls"
         >
-          ${renderIconActionButton({
-            id: 'shellToggleSummaryBar',
-            icon: 'list-ul',
-            label: commandLabel(DESKTOP_LOCAL_COMMANDS.TOGGLE_SUMMARY_BAR),
-            tooltip: commandTitle(DESKTOP_LOCAL_COMMANDS.TOGGLE_SUMMARY_BAR),
-            className: 'shell-layout-toggle',
-            size: 'l',
-            pressed: shellState().summaryBarVisible,
-            onClick: toggleSummaryBarVisibility,
-          })}
           ${renderIconActionButton({
             id: 'shellToggleBottomBar',
             icon: 'window-maximize',
@@ -505,11 +440,6 @@ function shellConversationTemplate(): TemplateResult {
             onClick: toggleSidePanelVisibility,
           })}
         </div>
-        ${
-          shellState().summaryBarVisible
-            ? environmentPopover.template(workspacePath)
-            : nothing
-        }
       </header>
       <div class="shell-conversation-body" id="desktop-center">
         <section class="shell-conversation-pane" data-pane="conversation">
@@ -523,10 +453,10 @@ function shellConversationTemplate(): TemplateResult {
                   >
                     ${conversationView} ${conversationDockTemplate()}
                   </section>
+                  ${startupTeamPanel.template()}
                 `
-              : noWorkspacePlaceholder
+              : noWorkspaceContent
           }
-          ${startupTeamPanel.template()}
         </section>
       </div>
     </main>
@@ -690,10 +620,11 @@ function shellTemplate(): TemplateResult {
               (tab) => tab.kind === 'subagents',
             ),
             commandsLabel: commandLabel(DESKTOP_COMMAND_PALETTE_ID),
+            commandsTitle: commandTitle(DESKTOP_COMMAND_PALETTE_ID),
           },
           {
             onNewTask: returnToLauncher,
-            onSearch: openCommandPalette,
+            onOpenCommands: openCommandPalette,
             onToggleFiles: () => {
               const next = toggleFiles(shellState());
               updateShell(next);
@@ -724,7 +655,6 @@ function shellTemplate(): TemplateResult {
               currentWorkbench().workbench.openKind('browser'),
             onOpenSettings: () =>
               currentWorkbench().workbench.openKind('settings'),
-            onOpenLogs: () => currentWorkbench().workbench.openKind('logs'),
             onOpenSubagents: () =>
               currentWorkbench().workbench.openKind('subagents'),
           },
@@ -940,7 +870,6 @@ const desktopRendererCommandActions: DesktopCommandActions = {
   },
   toggleBottomBar: toggleBottomBarVisibility,
   toggleSidePanel: toggleSidePanelVisibility,
-  toggleSummaryBar: toggleSummaryBarVisibility,
   // New Session is the header's "+" (PRD 12.4): the New-task state with
   // the launcher's selections as they are, the same as the extension.
   resetMainView: returnToLauncher,
@@ -980,7 +909,6 @@ function returnToLauncher(): void {
 const LAYOUT_PANEL_TOGGLES: Record<DesktopLayoutPanel, () => void> = {
   bottomBar: toggleBottomBarVisibility,
   sidePanel: toggleSidePanelVisibility,
-  summaryBar: toggleSummaryBarVisibility,
 };
 
 const MESSAGE_ROUTES = createMessageRoutes({
@@ -1113,15 +1041,9 @@ const MESSAGE_ROUTES = createMessageRoutes({
     }
     rerenderShell();
     if (previousKey !== message.activeKey) {
-      environmentPopover.close();
       currentWorkbench().workbench.layoutVisibleSurfaces({ focus: false });
       currentWorkbench().workbench.syncBrowserViewBounds();
     }
-  },
-  environment: (session, summary) => {
-    if (session !== shell.active) return;
-    environmentPopover.set(summary);
-    rerenderShell();
   },
 });
 

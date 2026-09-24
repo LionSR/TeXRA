@@ -39,7 +39,7 @@ test.afterAll(async () => {
  */
 test('first launch shows a usable launcher chrome', async () => {
   await showLauncher(launched);
-  // The workspace directory and command palette button must be reachable.
+  // The workspace directory and the Commands entry must be reachable.
   const workspaceDirectory =
     launched.workspacePath.split(/[\\/]/).at(-1) ?? launched.workspacePath;
   const directoryLabel = await launched.page
@@ -48,7 +48,9 @@ test('first launch shows a usable launcher chrome', async () => {
     .innerText();
   expect(directoryLabel).toContain(workspaceDirectory);
   await expect(
-    launched.page.locator('.shell-header-button[aria-label="Show Commands"]'),
+    launched.page
+      .locator('.shell-sidebar-primary .shell-sidebar-action')
+      .filter({ hasText: 'Commands' }),
   ).toBeVisible();
   // The conversation view renders the launcher or the no-workspace empty
   // state — both are valid first-launch outcomes. The audit doc tracks which

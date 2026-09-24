@@ -105,7 +105,6 @@ export const DesktopShellStateSchema = z.object({
   sidebarCollapsed: z.boolean(),
   sidebarWidth: z.number(),
   filesExpanded: z.boolean(),
-  summaryBarVisible: z.boolean(),
   workbenchWidth: z.number(),
   workbenchTabs: z.array(WorkbenchTabSchema),
   nextTerminalSerial: z.int().positive(),
@@ -127,7 +126,6 @@ export function initialDesktopShellState(): DesktopShellState {
     sidebarCollapsed: false,
     sidebarWidth: 288,
     filesExpanded: true,
-    summaryBarVisible: true,
     workbenchWidth: 640,
     workbenchTabs: [],
     nextTerminalSerial: 1,
@@ -409,10 +407,6 @@ export function toggleFiles(state: DesktopShellState): DesktopShellState {
   return { ...state, filesExpanded: !state.filesExpanded };
 }
 
-export function toggleSummaryBar(state: DesktopShellState): DesktopShellState {
-  return { ...state, summaryBarVisible: !state.summaryBarVisible };
-}
-
 // Shared by the dimension setters below: every stored size is a rounded,
 // clamped pixel/percent value.
 function clampedDimension(value: number, min: number, max: number): number {
@@ -455,10 +449,4 @@ export function setWorkbenchWidth(
       WORKBENCH_MAX_WIDTH,
     ),
   };
-}
-
-export function workspaceName(workspacePath: string | undefined): string {
-  if (!workspacePath) return 'No project open';
-  // A slash-only root has no basename, so show the path rather than nothing.
-  return getBasename(workspacePath) || workspacePath;
 }

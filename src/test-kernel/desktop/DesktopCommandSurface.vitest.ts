@@ -30,7 +30,6 @@ const DESKTOP_DISPATCH_CASES: ReadonlyArray<
   ['texra.mainView.reset', 'resetMainView', []],
   ['texra.desktop.toggleBottomBar', 'toggleBottomBar', []],
   ['texra.desktop.toggleSidePanel', 'toggleSidePanel', []],
-  ['texra.desktop.toggleSummaryBar', 'toggleSummaryBar', []],
   ['texra.showMemory', 'showSettings', ['memory']],
   ['texra.showModels', 'showSettings', ['models']],
   ['texra.showAgents', 'showSettings', ['agents']],
@@ -57,7 +56,6 @@ function makeDesktopActions(): MockedDesktopActions {
     showSettings: vi.fn(),
     toggleBottomBar: vi.fn(),
     toggleSidePanel: vi.fn(),
-    toggleSummaryBar: vi.fn(),
   };
 }
 

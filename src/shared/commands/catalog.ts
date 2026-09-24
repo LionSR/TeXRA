@@ -416,6 +416,7 @@ export const commandCatalog = [
     id: 'texra.desktop.showCommands',
     host: 'desktop',
     title: 'Show Commands',
+    shortTitle: 'Commands',
     category: 'TeXRA',
     keybinding: { key: 'ctrl+k', mac: 'cmd+k' },
   },
@@ -432,13 +433,6 @@ export const commandCatalog = [
     title: 'Toggle Side Panel',
     category: 'View',
     keybinding: { key: 'ctrl+alt+b', mac: 'cmd+option+b' },
-  },
-  {
-    id: 'texra.desktop.toggleSummaryBar',
-    host: 'desktop',
-    title: 'Toggle Summary Bar',
-    category: 'View',
-    keybinding: { key: 'ctrl+alt+s', mac: 'cmd+option+s' },
   },
   {
     id: 'texra.desktop.saveFile',

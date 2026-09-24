@@ -42,7 +42,6 @@ import {
   DESKTOP_WORKSPACE_COMMANDS,
   DesktopWorkspaceInboundMessageSchema,
   type DesktopBrowserBounds,
-  type DesktopEnvironmentSummary,
 } from '../shared/desktopWorkspaceMessages.js';
 import type {
   DesktopCommandMessage,
@@ -70,10 +69,6 @@ interface DesktopWorkspaceIpcOptions {
    * compares to.
    */
   getWorkspacePath(): string | undefined;
-  /** The project's git summary. Its git reads report their own failures and
-   *  settle on the empty summary, so the renderer's loading state always
-   *  clears. */
-  getEnvironmentSummary(): Effect.Effect<DesktopEnvironmentSummary>;
   onAsyncError(error: unknown): void;
   /** The process runtime the window was handed; every program below settles
    *  on it. */
@@ -473,17 +468,6 @@ export function createDesktopWorkspaceIpc(
     );
   }
 
-  function postEnvironment() {
-    return options.getEnvironmentSummary().pipe(
-      Effect.map((environment) => {
-        renderer.postToRenderer({
-          command: DESKTOP_WORKSPACE_COMMANDS.ENVIRONMENT_STATE,
-          environment,
-        });
-      }),
-    );
-  }
-
   return {
     disposeRendererResources() {
       options.ptyHost.disposeAll();
@@ -544,9 +528,6 @@ export function createDesktopWorkspaceIpc(
           return true;
         case DESKTOP_WORKSPACE_COMMANDS.BROWSER_CLOSE:
           options.browserViews.close(data.tabId);
-          return true;
-        case DESKTOP_WORKSPACE_COMMANDS.ENVIRONMENT_REQUEST:
-          options.runtime.runFork(postEnvironment());
           return true;
       }
     },

@@ -81,10 +81,7 @@ import { registerRuntimeShutdownHandlers } from '@tools/agentCliSessionStores';
 import { refreshToolAvailability } from '@tools/toolAvailability';
 import { killActiveRecording } from '@tools/media/audio';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
-import {
-  readGitEnvironmentSummary,
-  readRecentCommits,
-} from '@utils/git/repositoryOverview';
+import { readRecentCommits } from '@utils/git/repositoryOverview';
 import { findToolInCommonPaths } from '@utils/system/platformPaths';
 import {
   checkToolInstalled,
@@ -120,7 +117,6 @@ import {
 import {
   DESKTOP_WORKSPACE_COMMANDS,
   DesktopWorkspaceInboundMessageSchema,
-  EMPTY_DESKTOP_ENVIRONMENT_SUMMARY,
 } from '../shared/desktopWorkspaceMessages.js';
 import { DESKTOP_PROJECT_COMMANDS } from '../shared/desktopProjectMessages.js';
 import { installDesktopProtocolCallbackLifecycle } from './desktopProtocolCallbacks.js';
@@ -1643,17 +1639,6 @@ function createWindow(options: {
         },
         runtime,
         getWorkspacePath: () => project.root,
-        getEnvironmentSummary: () =>
-          project.root
-            ? readGitEnvironmentSummary(project.root, {
-                settings: project.roots,
-                onError: reportBackgroundError,
-              }).pipe(
-                Effect.map(
-                  (summary) => summary ?? EMPTY_DESKTOP_ENVIRONMENT_SUMMARY,
-                ),
-              )
-            : Effect.succeed(EMPTY_DESKTOP_ENVIRONMENT_SUMMARY),
         onAsyncError: reportAsyncError,
       },
     );

@@ -174,7 +174,6 @@ export function createDesktopShellActions(
     showSettings,
     toggleBottomBar: () => toggleLayout('bottomBar'),
     toggleSidePanel: () => toggleLayout('sidePanel'),
-    toggleSummaryBar: () => toggleLayout('summaryBar'),
     showFirstRunWalkthrough: () => {
       renderer.postToRenderer(buildDesktopOnboardingSetStateMessage(true));
     },

@@ -18,7 +18,10 @@ import {
   dispatchSettingsViewOutbound,
   type SettingsTabPanelName,
 } from '@shared/settingsView/settingsViewMessages';
-import { isKnownUnsupported } from '@shared/utils/dispatcher';
+import {
+  isKnownUnsupported,
+  isUnrecognizedCommand,
+} from '@shared/utils/dispatcher';
 import { commonViewStyles, designTokens } from '@ui/styles';
 import { registerTeXRAWebAwesomeIcons, waIcon } from '@ui/wa/webAwesomeIcons';
 
@@ -128,6 +131,10 @@ export class SettingsApp extends SignalWatcher(LitElement) {
   private readonly messageListener = (event: MessageEvent): void => {
     const raw: unknown = event.data;
     dispatchSettingsViewOutbound(raw, settingsViewHandlers, (error) => {
+      // On the desktop this element shares the window with the whole shell,
+      // so every desktop message reaches this listener too; one whose command
+      // is not a settings-view command is another surface's, not a defect.
+      if (this.isDesktopHost && isUnrecognizedCommand(error)) return;
       const command =
         raw && typeof raw === 'object' && 'command' in raw
           ? String((raw as { command: unknown }).command)

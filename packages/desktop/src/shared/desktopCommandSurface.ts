@@ -30,7 +30,6 @@ export const DESKTOP_LOCAL_COMMANDS = {
   SHOW_LOGS: 'texra.desktop.showLogs',
   TOGGLE_BOTTOM_BAR: 'texra.desktop.toggleBottomBar',
   TOGGLE_SIDE_PANEL: 'texra.desktop.toggleSidePanel',
-  TOGGLE_SUMMARY_BAR: 'texra.desktop.toggleSummaryBar',
   OPEN_LOG_FOLDER: 'texra.desktop.openLogFolder',
   OPEN_WORKSPACE_FOLDER: 'texra.desktop.openWorkspaceFolder',
   SAVE_FILE: 'texra.desktop.saveFile',
@@ -72,7 +71,6 @@ export const DESKTOP_MENU_GROUPS = [
     DESKTOP_LOCAL_COMMANDS.SHOW_LOGS,
     DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER,
     'texra.showDashboard',
-    DESKTOP_LOCAL_COMMANDS.TOGGLE_SUMMARY_BAR,
     DESKTOP_LOCAL_COMMANDS.TOGGLE_BOTTOM_BAR,
     DESKTOP_LOCAL_COMMANDS.TOGGLE_SIDE_PANEL,
     'texra.mainView.reset',
@@ -95,7 +93,7 @@ export const DESKTOP_FILE_COMMANDS = [
 /**
  * The desktop-local commands the renderer is allowed to post over IPC. Narrower
  * than `DESKTOP_LOCAL_COMMANDS` on purpose: the main-process actions for
- * `SAVE_FILE` and the three `TOGGLE_*` commands post *back* to the renderer, so
+ * `SAVE_FILE` and the two `TOGGLE_*` commands post *back* to the renderer, so
  * accepting them here would let a renderer message bounce.
  */
 export const DESKTOP_SHELL_IPC_COMMANDS = [
@@ -185,7 +183,6 @@ const DESKTOP_COMMAND_ICONS = {
   [DESKTOP_LOCAL_COMMANDS.SHOW_LOGS]: 'file-lines',
   [DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER]: 'folder',
   'texra.showDashboard': 'gear',
-  [DESKTOP_LOCAL_COMMANDS.TOGGLE_SUMMARY_BAR]: 'list-ul',
   [DESKTOP_LOCAL_COMMANDS.TOGGLE_BOTTOM_BAR]: 'window-maximize',
   [DESKTOP_LOCAL_COMMANDS.TOGGLE_SIDE_PANEL]: 'picture-in-picture',
   'texra.mainView.reset': 'file-circle-plus',
@@ -227,7 +224,6 @@ export interface DesktopCommandActions {
   resetMainView(): void;
   toggleBottomBar(): void;
   toggleSidePanel(): void;
-  toggleSummaryBar(): void;
 }
 
 interface DesktopSettingsTabMessage {
@@ -277,9 +273,6 @@ const DESKTOP_COMMAND_HANDLERS = {
   ),
   [DESKTOP_LOCAL_COMMANDS.TOGGLE_SIDE_PANEL]: action((a) =>
     a.toggleSidePanel(),
-  ),
-  [DESKTOP_LOCAL_COMMANDS.TOGGLE_SUMMARY_BAR]: action((a) =>
-    a.toggleSummaryBar(),
   ),
   'texra.showDashboard': action((a) => a.showSettings()),
   'texra.mainView.reset': action((a) => a.resetMainView()),

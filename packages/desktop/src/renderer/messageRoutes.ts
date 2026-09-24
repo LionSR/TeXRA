@@ -36,7 +36,6 @@ import {
 } from '../shared/desktopPromptMessages';
 import {
   DesktopBrowserStateMessageSchema,
-  DesktopEnvironmentStateMessageSchema,
   DesktopFileErrorMessageSchema,
   DesktopFileReadMessageSchema,
   DesktopFilesListErrorMessageSchema,
@@ -47,7 +46,6 @@ import {
   DesktopTerminalExitMessageSchema,
   DesktopTerminalOpenCommandMessageSchema,
   DesktopWorkspaceFilesChangedMessageSchema,
-  type DesktopEnvironmentSummary,
 } from '../shared/desktopWorkspaceMessages';
 import { takePendingFileRequest } from './fileRequests';
 import type { WorkbenchKind } from '../shared/desktopShellState';
@@ -87,8 +85,6 @@ interface DesktopMessageRouteHandlers {
   };
   openTerminalCommand(session: string, initialCommand: string): void;
   renameBrowserTab(session: string, tabId: string, title: string): void;
-  /** Adopts a freshly reported environment summary and repaints the shell. */
-  environment(session: string, summary: DesktopEnvironmentSummary): void;
   /** Adopts the open projects and which one this window shows. */
   projects(message: DesktopProjectsMessage): void;
 }
@@ -219,9 +215,6 @@ export function createMessageRoutes(
     // generic "Browser".
     messageRoute(DesktopBrowserStateMessageSchema, (message) =>
       handlers.renameBrowserTab(message.session, message.tabId, message.title),
-    ),
-    messageRoute(DesktopEnvironmentStateMessageSchema, (message) =>
-      handlers.environment(message.session, message.environment),
     ),
     messageRoute(DesktopProjectsMessageSchema, (message) =>
       handlers.projects(message),
