@@ -161,7 +161,10 @@ class VscodeToolEditPreview implements ToolEditPreview {
       this.tabCloseListener?.dispose();
     }).pipe(
       Effect.andThen(this.diffViewHost.closeDiff(this.diffSession)),
-      Effect.andThen(this.staged.cleanup),
+      // The files go whether the tab close succeeds, fails, or is cut off:
+      // at window teardown that RPC can reject or outlive the shutdown
+      // phase's deadline, and the files would otherwise stay on disk.
+      Effect.ensuring(this.staged.cleanup),
     );
   }
 

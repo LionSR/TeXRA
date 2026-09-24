@@ -236,20 +236,26 @@ describe('tool edit approval controller', () => {
     await run(controller.present(approvalRequest()));
     const requestId = testHost.contextForRequest().requestId;
 
-    // `dispose` admits a release for every staged request without waiting
-    // for it, and the host's release for a refused `request.opened` lands
-    // right behind it: the second one finds the entry already dropped, so it
-    // has only the cleanup in flight to wait for.
-    await run(controller.dispose());
+    // `dispose` admits a release for every staged request before it waits on
+    // any, and the host's release for a refused `request.opened` lands right
+    // behind it: the second one finds the entry already dropped, so it has
+    // only the cleanup in flight to wait for. Both settle once it is gone.
+    let disposed = false;
+    const disposing = run(controller.dispose()).then(() => {
+      disposed = true;
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
     let released = false;
     const release = run(controller.release(requestId)).then(() => {
       released = true;
     });
     await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(disposed).toBe(false);
     expect(released).toBe(false);
 
     Deferred.doneUnsafe(disposal, Effect.void);
-    await release;
+    await Promise.all([disposing, release]);
+    expect(disposed).toBe(true);
     expect(released).toBe(true);
     expect(testHost.preview.dispose).toHaveBeenCalledOnce();
   });

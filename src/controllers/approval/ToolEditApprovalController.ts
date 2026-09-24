@@ -194,7 +194,7 @@ export class ToolEditApprovalController {
    * that cleanup settles. {@link startRelease} drops the entry before
    * anything is waited for, so a second release for the same request would
    * otherwise find nothing and settle while the first was still disposing:
-   * {@link dispose} admits one release per request without waiting for it,
+   * {@link dispose} admits one release per request before it waits on any,
    * and the host's release for a `request.opened` the runtime refused lands
    * right behind it. Joining what is already running is what makes every
    * release mean the same thing, that nothing is left staged.
@@ -328,8 +328,8 @@ export class ToolEditApprovalController {
     });
   }
 
-  /** Drop every staged preview. The requests stay pending in the fold: the
-   *  runs that opened them close them with the fibers waiting on them. */
+  /** Drop every staged preview and settle once all are gone; the runs that
+   *  opened the requests, still pending in the fold, close them. */
   dispose(): Effect.Effect<void, never, PreviewServices> {
     return Effect.suspend(() => {
       if (this.disposed) return Effect.void;
@@ -340,9 +340,7 @@ export class ToolEditApprovalController {
       const cleanups = [...this.requests.keys()].map((requestId) =>
         this.startRelease(requestId),
       );
-      return Effect.forEach(cleanups, (cleanup) => this.detach(cleanup), {
-        discard: true,
-      });
+      return Effect.all(cleanups, { concurrency: 'unbounded', discard: true });
     });
   }
 
