@@ -161,14 +161,26 @@ function encodeLine(message: object): Uint8Array {
   return Buffer.from(`${JSON.stringify(message)}\n`, 'utf8');
 }
 
-const parseBody = (body: string) =>
+const parseBody = (
+  body: string,
+): Effect.Effect<JsonRpcMessage, JsonRpcFrameError> =>
   Effect.try({
-    try: (): JsonRpcMessage => JSON.parse(body) as JsonRpcMessage,
+    try: (): unknown => JSON.parse(body),
     catch: (error) =>
       new JsonRpcFrameError({
         message: `Frame body is not JSON: ${toErrorMessage(error)}`,
       }),
-  });
+  }).pipe(
+    Effect.flatMap((value) =>
+      typeof value === 'object' && value !== null && !Array.isArray(value)
+        ? Effect.succeed(value as JsonRpcMessage)
+        : Effect.fail(
+            new JsonRpcFrameError({
+              message: `Frame body is not a JSON-RPC object: ${body.slice(0, 200)}`,
+            }),
+          ),
+    ),
+  );
 
 /** Split complete lines off the front of `buffer`, parsing each non-blank one. */
 const takeLines = (

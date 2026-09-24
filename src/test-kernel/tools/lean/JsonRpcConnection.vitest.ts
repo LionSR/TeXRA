@@ -201,6 +201,20 @@ describe('JsonRpcConnection', () => {
     }),
   );
 
+  it.effect('closes the connection on a frame body that is not an object', () =>
+    Effect.gen(function* () {
+      const { connection, serverSends, collectClientFrames } = yield* makePair;
+      const pending = yield* Effect.forkChild(
+        Effect.flip(connection.request('waiting')),
+      );
+      yield* collectClientFrames;
+      serverSends(null);
+      expect(yield* Fiber.join(pending)).toMatchObject({
+        _tag: 'JsonRpcConnectionDisposed',
+      });
+    }),
+  );
+
   it.effect('fails pending and later requests with the close reason', () =>
     Effect.gen(function* () {
       const { connection, collectClientFrames } = yield* makePair;
