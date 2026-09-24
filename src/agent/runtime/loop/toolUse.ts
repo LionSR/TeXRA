@@ -25,7 +25,10 @@ import type { FollowUpBatch } from '@agent/followUp/RunInput';
 import { maybeBuildGoalContinuation } from '@agent/goal/maybeBuildGoalContinuation';
 import { buildInitialToolUsePrompts } from '@agent/prompt/PromptBuilder';
 import { USER_VAR_INSTRUCTION, USER_VAR_MODEL } from '@agent/prompt/userVars';
-import { resolveModelCompatibilityKey } from '@agent/runtime/modelRoutes';
+import {
+  resolveModelRoute,
+  routeCompatibilityKey,
+} from '@agent/runtime/modelRoutes';
 import { logUserMessage } from '@agent/trace';
 import {
   getRuntimeModelConfig,
@@ -45,7 +48,6 @@ import {
 import { RunLedger } from '@shared/session/runLedger';
 import { type RunState } from '@shared/session/runStateFold';
 import { goalOf, pauseGoal, setGoalSessionAutoApproval } from '@tools/goal';
-import { getUseOpenRouter } from '@utils/config/providerConfig';
 
 import { AgentRun } from '../run/AgentRun';
 import { compactIfNeeded } from '../run/compaction';
@@ -201,11 +203,8 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         if (current.modelId === model) return undefined;
         const nextConfig = getRuntimeModelConfig(model);
         if (!nextConfig) return `Model ${model} is not registered`;
-        const nextKey = yield* resolveModelCompatibilityKey(
-          nextConfig,
-          run.stores.globalState,
-          yield* getUseOpenRouter(run.stores),
-        );
+        const route = yield* resolveModelRoute(run.stores, nextConfig);
+        const nextKey = yield* routeCompatibilityKey(nextConfig, route);
         if (!nextKey)
           return `Unsupported model provider: ${nextConfig.provider}`;
         return current.compatibilityKey === nextKey

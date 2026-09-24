@@ -5,8 +5,6 @@ import {
   type KimiSubscriptionModelFields,
 } from '@shared/model/kimiCodeRetryGate';
 
-import { isApiProvider, type ApiProvider } from './apiProviders';
-
 interface OpenRouterRoutingConfig {
   provider?: string;
   requiresResponsesAPI?: boolean;
@@ -44,16 +42,6 @@ export function isOpenRouterRoutingUnsupported(
       ? shouldRouteModelThroughOpenRouter(config, useOpenRouter)
       : isOpenRouterAccessSelected(config, useOpenRouter);
   return openRouterSelected && config.capabilities?.reasoningMode !== undefined;
-}
-
-/** API-key owner for the direct route, independent of the global OpenRouter choice. */
-export function resolveDirectModelApiKeyProvider(
-  config: Pick<ModelRoutingConfig, 'provider' | 'kimiSubscription' | 'baseUrl'>,
-): ApiProvider | undefined {
-  if (isKimiCodeExclusiveModel(config)) return 'kimiCode';
-  return config.provider && isApiProvider(config.provider)
-    ? config.provider
-    : undefined;
 }
 
 /** Product-facing model source; direct managed services own their own group. */

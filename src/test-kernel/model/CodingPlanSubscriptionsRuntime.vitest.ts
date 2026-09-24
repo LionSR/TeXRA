@@ -1,22 +1,44 @@
 // Third-party imports
 import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { MODEL_CONFIGS, ModelProvider } from 'llm-zoo';
+import { MODEL_CONFIGS, type ModelConfig } from 'llm-zoo';
 import { afterEach, beforeEach, describe, expect } from 'vitest';
 
 // Local imports
 import { apiKeySecretName, invalidateApiKeyCache } from '@model/apiProviders';
 import { codingPlanSubscriptionRuntimes } from '@model/codingPlanSubscriptions';
 import { readProspectiveUsageRoute } from '@model/computeModelOptions';
+import { decideModelRoute, readRouteFacts } from '@model/modelRoute';
 import { resolveRouteEndpoint } from '@model/routeEndpoint';
 import {
   LanguageModel,
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
 } from '@platform/languageModel';
+import type { DeclinableUsageRoute } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { hostStores, setupPlatform } from '@test/support/setupPlatform';
 
-const GLM52 = { name: 'glm52', provider: ModelProvider.GLM } as const;
+const GLM52 = MODEL_CONFIGS.glm52;
+
+/** The endpoint and plan the decided route binds `config` to. */
+const boundEndpoint = (
+  config: ModelConfig,
+  declinedRoutes?: readonly DeclinableUsageRoute[],
+) =>
+  Effect.gen(function* () {
+    const route = decideModelRoute(config, {
+      ...(yield* readRouteFacts(hostStores(), declinedRoutes)),
+      validation: false,
+      prefersCopilot: false,
+    });
+    if (route.kind !== 'api-key' && route.kind !== 'openrouter') {
+      throw new Error(`unexpected ${route.kind} route`);
+    }
+    const baseUrl = yield* resolveRouteEndpoint(hostStores(), config, route);
+    return route.kind === 'api-key' && route.usageRoute !== 'api-key'
+      ? { baseUrl, usageRoute: route.usageRoute }
+      : { baseUrl };
+  });
 
 describe('coding-plan subscription runtime', () => {
   setupPlatform({
@@ -99,9 +121,7 @@ describe('coding-plan subscription runtime', () => {
         useChina,
       );
 
-      expect(yield* resolveRouteEndpoint(hostStores(), GLM52, false)).toEqual(
-        expected,
-      );
+      expect(yield* boundEndpoint(GLM52)).toEqual(expected);
     }),
   );
 
@@ -152,11 +172,10 @@ describe('coding-plan subscription runtime', () => {
         );
         if (modelBaseUrl) MODEL_CONFIGS.glm52.baseUrl = modelBaseUrl;
 
-        const endpoint = yield* resolveRouteEndpoint(
-          hostStores(),
-          { ...GLM52, baseUrl: modelBaseUrl },
-          useOpenRouter,
-        );
+        const endpoint = yield* boundEndpoint({
+          ...GLM52,
+          baseUrl: modelBaseUrl,
+        });
 
         expect(endpoint).toEqual({
           baseUrl,
@@ -185,13 +204,11 @@ describe('coding-plan subscription runtime', () => {
           true,
         );
 
+        expect((yield* boundEndpoint(GLM52)).usageRoute).toBe(
+          'glm-coding-plan-subscription',
+        );
         expect(
-          (yield* resolveRouteEndpoint(hostStores(), GLM52, false)).usageRoute,
-        ).toBe('glm-coding-plan-subscription');
-        expect(
-          yield* resolveRouteEndpoint(hostStores(), GLM52, false, [
-            'glm-coding-plan-subscription',
-          ]),
+          yield* boundEndpoint(GLM52, ['glm-coding-plan-subscription']),
         ).toEqual({ baseUrl: expect.stringMatching(/\/api\/paas\/v4$/) });
         // The decline is the asking run's, so the user's switch is untouched and
         // a concurrent run still routes through the plan.

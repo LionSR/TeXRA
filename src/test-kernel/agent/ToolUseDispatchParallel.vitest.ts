@@ -188,7 +188,6 @@ function boundModel(): BoundModel {
     supportsForcedToolChoice: true,
     wireRouteKey: 'wire',
     modelRetryRouteKey: 'wire:gpt54',
-    routedOnKimiCode: false,
     backgroundCapable: false,
   };
 }
