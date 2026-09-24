@@ -102,18 +102,18 @@ type PendingApprovalFact = SessionView['requests'][number] & {
 };
 
 /**
- * The fold's pending requests under {@link PendingApprovalKind}: the fold
- * lists every kind, including an `externalInquiry` a persisted session
- * carries from another host, and this surface renders none of those, so the
- * narrowing is a filter rather than an assertion.
+ * The fold's pending requests under {@link PendingApprovalKind} of a live run:
+ * not an `externalInquiry`, which this surface never renders, nor one a
+ * stopped run left for its resume to ask again, whose modal would trap keys.
  */
-function pendingApprovalFacts(
-  view: SessionView,
-): readonly PendingApprovalFact[] {
+const LIVE_GROUPS: ReadonlySet<string> = new Set(['running', 'waiting']);
+function pendingApprovalFacts(view: SessionView): PendingApprovalFact[] {
   const included = currentSessionRunIds(view);
   return view.requests.filter(
     (request): request is PendingApprovalFact =>
-      included.has(request.runId) && request.payload.kind !== 'externalInquiry',
+      included.has(request.runId) &&
+      request.payload.kind !== 'externalInquiry' &&
+      LIVE_GROUPS.has(view.runs.get(request.runId)?.group ?? ''),
   );
 }
 

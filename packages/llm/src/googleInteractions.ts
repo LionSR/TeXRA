@@ -259,16 +259,16 @@ const lowerMessages = Effect.fn('llm.google.lowerMessages')(function* (
             break;
           }
           case 'reasoning':
+            // Another model's thoughts are omitted, as the other codecs do.
+            if (!sameModelOrigin(message.origin, origin)) break;
             if (
-              !sameModelOrigin(message.origin, origin) ||
               part.content !== undefined ||
               (part.evidence !== null &&
                 part.evidence.kind !== 'google-interactions-thought-signature')
             ) {
               return yield* new ModelError({
                 kind: 'unsupported',
-                message:
-                  'Google reasoning requires its original binding and supported thought evidence.',
+                message: 'Google reasoning needs supported thought evidence.',
               });
             }
             steps.push({
