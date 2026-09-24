@@ -43,9 +43,12 @@ which needs an owner, not a routine.
    eleven read-only mappers over exactly these seams (session ledger, model
    routing, tools/delegation, settings/config, platform/hosts, persistence, UI
    state, wire schemas, agents/resources, signals+logging, latex/controllers).
-   Output: eleven filed deletions (#13052–#13063) and one candidate parked for
-   an owner ruling. Candidates already investigated and refused are pinned as
-   data in `refuted-candidates.json` behind two CI gates.
+   Output: eleven bounded deletions and one candidate parked for an owner
+   ruling. The eleven were filed as #13052–#13063 and have since **all landed
+   and closed `completed`** via merged PR #13064 ("one owner per fact — eleven
+   SSOT deletions … −1,732 lines"), so that backlog is cleared, not pending.
+   Candidates already investigated and refused are pinned as data in
+   `refuted-candidates.json` behind two CI gates.
 
 3. **Plan API-surface simplification / align with SDK patterns.** The plan is
    the Tier-1 public manifest
@@ -76,8 +79,6 @@ which needs an owner, not a routine.
 - **Owner ruling on the two agent-creation systems** (survey §2). Independent of
   the ruling, `tool_catalog.md` is drifting from the registry and should be
   reconciled.
-- The eleven filed issues #13052–#13063 are bounded deletions ready to be
-  worked when prioritised.
 
 ## Verified cleanups already done since their proposals
 
@@ -86,10 +87,18 @@ which needs an owner, not a routine.
   exporting it, and it is `yield*`ed nowhere. The frozen set already shrank here.
 - Model providers as plugin contributions (#13094) and CLI slash commands /
   MCP servers as plugins (#13092, #13093): landed at HEAD.
+- The eleven SSOT deletions from the 2026-09-23 survey (#13052–#13063): landed
+  and closed `completed` via merged PR #13064 (−1,732 lines) on 2026-09-23,
+  before this note was written. `src/platform/platform.ts`,
+  `src/agent/types/ServerTools.ts`, `src/tools/support/enumConfig.ts` and
+  `src/latex/latexdiff/mathMarkup.ts` are all absent from the tree, confirming
+  the deletions. Only the survey §2 candidate (two agent-creation systems)
+  remains open, awaiting an owner ruling.
 
 ## Recommendation
 
-No refactor to land autonomously from this charter. The next actions are
-human-owned: pin the Tier-1 manifest, then let the frozen-list shrink and the
-filed issues follow it. Re-running this audit as a routine adds no signal until
-the manifest moves — the map is current.
+No refactor to land autonomously from this charter. The 2026-09-23 survey's
+eleven bounded deletions already merged (#13064). The remaining actions are
+human-owned: pin the Tier-1 manifest, let the frozen-list shrink follow it, and
+rule on the survey §2 candidate. Re-running this audit as a routine adds no
+signal until the manifest moves — the map is current.
