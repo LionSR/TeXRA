@@ -110,7 +110,10 @@ const rawGit = (sg: SimpleGit, args: string[]): Effect.Effect<string | null> =>
     ),
   );
 
-/** The repository root containing `cwd`, or null outside a working tree. */
+/**
+ * The repository root containing `cwd`, or null outside a working tree.
+ * Fails with {@link ReviewDiffFailed} when the reported root cannot be opened.
+ */
 const resolveRepoRoot = Effect.fnUntraced(function* (cwd: string) {
   const sg = yield* tryMakeGit(cwd);
   if (!sg) return null;
@@ -121,8 +124,16 @@ const resolveRepoRoot = Effect.fnUntraced(function* (cwd: string) {
     '--show-toplevel',
   ]))?.trim();
   if (!repoRoot) return null;
-  const sgRoot = yield* tryMakeGit(repoRoot);
-  return sgRoot ? { repoRoot, sgRoot } : null;
+  // Git just reported this root, so failing to open it is a real error to
+  // surface, not "outside a working tree".
+  const sgRoot = yield* Effect.try({
+    try: () => makeGit(repoRoot),
+    catch: (err) =>
+      new ReviewDiffFailed({
+        message: `Cannot open the repository root ${repoRoot}: ${ensureError(err).message}`,
+      }),
+  });
+  return { repoRoot, sgRoot };
 });
 
 /**
