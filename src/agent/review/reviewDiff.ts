@@ -65,9 +65,9 @@ interface ReviewDiff {
   truncated: boolean;
 }
 
-/** The diff could not be collected; `reason` is shown to the user as-is. */
+/** The diff could not be collected; `message` is shown to the user as-is. */
 class ReviewDiffFailed extends Data.TaggedError('ReviewDiffFailed')<{
-  readonly reason: string;
+  readonly message: string;
 }> {}
 
 function makeGit(cwd: string): SimpleGit {
@@ -319,7 +319,7 @@ const resolveOnBaseBranch = Effect.fnUntraced(function* (
  *
  * All paths in the result are relative to {@link ReviewDiff.repoRoot}, which
  * may be above `options.cwd` when the workspace is a repository subfolder.
- * Fails with {@link ReviewDiffFailed} carrying a user-facing reason.
+ * Fails with {@link ReviewDiffFailed} carrying a user-facing message.
  */
 export const collectReviewDiff = Effect.fn('collectReviewDiff')(function* (
   options: CollectReviewDiffOptions,
@@ -327,7 +327,7 @@ export const collectReviewDiff = Effect.fn('collectReviewDiff')(function* (
   const resolved = yield* resolveRepoRoot(options.cwd);
   if (!resolved) {
     return yield* new ReviewDiffFailed({
-      reason: 'The workspace is not a git repository.',
+      message: 'The workspace is not a git repository.',
     });
   }
   const { repoRoot, sgRoot } = resolved;
@@ -343,7 +343,7 @@ export const collectReviewDiff = Effect.fn('collectReviewDiff')(function* (
       : yield* detectBaseBranch(sgRoot);
     if (!base) {
       return yield* new ReviewDiffFailed({
-        reason: options.baseBranch
+        message: options.baseBranch
           ? `Could not resolve the base branch "${options.baseBranch}"; it may have been deleted.`
           : `Could not find the repository's main branch (looked for origin/HEAD plus local and origin remote-tracking ${BASE_BRANCH_CANDIDATES.join('/')}).`,
       });
@@ -366,7 +366,7 @@ export const collectReviewDiff = Effect.fn('collectReviewDiff')(function* (
       const mergeBase = yield* rawGit(sgRoot, ['merge-base', 'HEAD', base.ref]);
       if (!mergeBase) {
         return yield* new ReviewDiffFailed({
-          reason: `Could not determine the merge base between HEAD and ${base.ref}.`,
+          message: `Could not determine the merge base between HEAD and ${base.ref}.`,
         });
       }
       baseRef = mergeBase.trim();
@@ -388,7 +388,7 @@ export const collectReviewDiff = Effect.fn('collectReviewDiff')(function* (
   // text would reject every finding as outside the change set.
   if (diffText === null || nameOnly === null) {
     return yield* new ReviewDiffFailed({
-      reason: `git diff against ${baseRef} failed.`,
+      message: `git diff against ${baseRef} failed.`,
     });
   }
   const changedFiles = splitOutputLines(nameOnly);

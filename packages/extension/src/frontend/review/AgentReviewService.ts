@@ -14,7 +14,6 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { Cause, Effect, Exit, Result } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
@@ -40,12 +39,12 @@ import {
   showLoggedMessage,
 } from '@frontend/ui/errorHandlingUtils';
 import { lineToRange } from '@frontend/vscode/vscodeEditor';
-import { withLogChannel } from '@logger/effectLog';
+import { createLog } from '@logger/logUtils';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import { presentLaunchedProgressRun } from '@progressView/progressNavigation';
-import { RUN_OUTCOME, AgentCategory } from '@shared/schemas';
+import { RUN_OUTCOME, type RunOutcome, AgentCategory } from '@shared/schemas';
 import { groupBy } from '@utils/core';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { formatResultCount } from '@utils/text/stringUtils';
 import {
   AgentReviewRunController,
@@ -53,6 +52,7 @@ import {
 } from './AgentReviewRunController';
 
 const CHANNEL = 'AgentReview';
+const log = createLog(CHANNEL);
 const COLLECTION_NAME = 'texra-agent-review';
 const SOURCE_LABEL = 'TeXRA Agent Review';
 /** Tool-use agent that performs the review and reports issues via the tool sink. */
@@ -157,11 +157,6 @@ class AgentReviewServiceImpl {
     return runtime;
   }
 
-  /** Write one entry on the review channel through the process runtime. */
-  private log(entry: Effect.Effect<void>): void {
-    this.host.runFork(entry.pipe(withLogChannel(CHANNEL)));
-  }
-
   getState(): AgentReviewStateSnapshot {
     return {
       running: this.reviewRuns.isActive,
@@ -229,30 +224,19 @@ class AgentReviewServiceImpl {
     this.emitter.fire();
 
     try {
-      await this.host.runPromise(
-        Effect.tryPromise({
-          try: () =>
-            vscode.window.withProgress(
-              {
-                location: { viewId: AGENT_REVIEW_VIEW_ID },
-                title: 'Agent review',
-              },
-              () => this.executeReview(cwd, trigger, options, run),
-            ),
-          catch: ensureError,
-        }).pipe(
-          // Backstop for anything executeReview's own handling missed — the
-          // summary must never stay stuck on "Reviewing changes…".
-          Effect.catch((err) => {
-            const errorMsg = toErrorMessage(err);
-            this.summary = `Review failed: ${errorMsg}`;
-            return Effect.logWarning(
-              `Agent review failed unexpectedly: ${errorMsg}`,
-            );
-          }),
-          withLogChannel(CHANNEL),
-        ),
+      await vscode.window.withProgress(
+        {
+          location: { viewId: AGENT_REVIEW_VIEW_ID },
+          title: 'Agent review',
+        },
+        () => this.executeReview(cwd, trigger, options, run),
       );
+    } catch (err) {
+      // Backstop for anything executeReview's own handling missed — the
+      // summary must never stay stuck on "Reviewing changes…".
+      const errorMsg = toErrorMessage(err);
+      this.summary = `Review failed: ${errorMsg}`;
+      log.warn(`Agent review failed unexpectedly: ${errorMsg}`);
     } finally {
       if (this.reviewRuns.finish(run)) {
         const pending = this.pendingCommitReview;
@@ -276,24 +260,18 @@ class AgentReviewServiceImpl {
     // `clear()` discards the run. Check before collecting so a clear that
     // landed during the initial context-key update cannot start stale work.
     if (!this.reviewRuns.isCurrent(run)) return;
-    const collected = await runtime.runPromise(
-      Effect.result(
-        collectReviewDiff({
-          cwd,
-          baseRef: options.baseRef,
-          baseDescription: options.baseDescription,
-          baseBranch: options.baseBranch,
-        }),
-      ),
-    );
+    // A failed collection settles to its user-facing reason (ReviewDiffFailed).
+    const collected = await runtime
+      .runPromise(collectReviewDiff({ ...options, cwd }))
+      .catch(toErrorMessage);
     if (!this.reviewRuns.isCurrent(run)) return;
     if (run.stopRequested) {
       this.summary = 'Review cancelled';
       return;
     }
 
-    if (Result.isFailure(collected)) {
-      const { reason } = collected.failure;
+    if (typeof collected === 'string') {
+      const reason = collected;
       // Issues from the previous run stay available rather than vanishing on
       // a transient failure; the summary marks them as previous results.
       this.summary = `Review failed: ${reason}${this.issues.length > 0 ? ' · showing previous results' : ''}`;
@@ -302,13 +280,13 @@ class AgentReviewServiceImpl {
           showLoggedErrorMessage(CHANNEL, 'Agent review failed', reason),
         );
       } else {
-        this.log(Effect.logWarning(`Agent review failed: ${reason}`));
+        log.warn(`Agent review failed: ${reason}`);
       }
       return;
     }
 
     const { repoRoot, baseDescription, diff, changedFiles, truncated } =
-      collected.success;
+      collected;
     if (!diff) {
       this.baseDescription = baseDescription;
       this.issues = [];
@@ -340,70 +318,64 @@ class AgentReviewServiceImpl {
     });
     this.emitter.fire();
 
-    // Everything from here until the session ends is one program folded to
-    // its Exit: the panel was already cleared above, so any setup failure
-    // (config parsing included) must restore the snapshot rather than leave
-    // the panel empty.
-    const exit = await runtime.runPromise(
-      Effect.try({
-        try: () =>
-          AgentConfigSchema.parse({
-            agent: REVIEW_AGENT,
-            // changeReviewer is a tool-use agent; set the category explicitly so
-            // launch resolves it within tool-use (the config default is Workflow).
-            agentCategory: AgentCategory.ToolUse,
-            instruction: buildReviewInstruction({
-              baseDescription,
-              changedFiles,
-              diff,
-              truncated,
-              userInstructions: options.userInstructions,
-            }),
-            displayInstruction: `Agent review: diff with ${baseDescription} (${formatResultCount(changedFiles.length, 'file')})${options.userInstructions ? ' · custom focus' : ''}`,
-            // The instruction's paths are repo-relative; anchor the session's
-            // tool calls (read_file, grep, bash) to the repository root, which
-            // may sit above the opened workspace folder.
-            workingDirectory: repoRoot,
-          }),
-        catch: ensureError,
-      }).pipe(
-        // Run the reviewer session directly (the `texra.execute` path minus
-        // its fire-and-forget error swallowing) so the panel can distinguish
-        // a completed review from a failed or cancelled one. The run itself
-        // is visible as a regular tool-use session in the progress view.
-        Effect.flatMap((config) =>
-          runAgent(
-            { kind: 'fresh', config },
-            {
-              openWorkflowOutput: (result) =>
-                openFinalOutputIfAvailable(run.session.roots, result),
-              stopAfterCycle: true,
-              session: run.session,
-              onRun: (handle) => this.reviewRuns.bind(run, handle),
-              onRunResolved: presentLaunchedProgressRun,
-            },
-          ),
+    let outcome: RunOutcome;
+    try {
+      // Everything from here until the session ends sits inside one
+      // try/catch: the panel was already cleared above, so any setup
+      // failure (config parsing included) must restore the snapshot
+      // rather than leave the panel empty.
+      const instruction = buildReviewInstruction({
+        baseDescription,
+        changedFiles,
+        diff,
+        truncated,
+        userInstructions: options.userInstructions,
+      });
+      const config = AgentConfigSchema.parse({
+        agent: REVIEW_AGENT,
+        // changeReviewer is a tool-use agent; set the category explicitly so
+        // launch resolves it within tool-use (the config default is Workflow).
+        agentCategory: AgentCategory.ToolUse,
+        instruction,
+        displayInstruction: `Agent review: diff with ${baseDescription} (${formatResultCount(changedFiles.length, 'file')})${options.userInstructions ? ' · custom focus' : ''}`,
+        // The instruction's paths are repo-relative; anchor the session's
+        // tool calls (read_file, grep, bash) to the repository root, which
+        // may sit above the opened workspace folder.
+        workingDirectory: repoRoot,
+      });
+
+      // Run the reviewer session directly (the `texra.execute` path minus
+      // its fire-and-forget error swallowing) so the panel can distinguish
+      // a completed review from a failed or cancelled one. The run itself
+      // is visible as a regular tool-use session in the progress view.
+      const result = await runtime.runPromise(
+        runAgent(
+          { kind: 'fresh', config },
+          {
+            openWorkflowOutput: (result) =>
+              openFinalOutputIfAvailable(run.session.roots, result),
+            stopAfterCycle: true,
+            session: run.session,
+            onRun: (handle) => this.reviewRuns.bind(run, handle),
+            onRunResolved: presentLaunchedProgressRun,
+          },
         ),
-        Effect.exit,
-      ),
-    );
-    if (Exit.isFailure(exit)) {
+      );
+      outcome = result.outcome;
+    } catch (err) {
       if (!this.reviewRuns.isCurrent(run)) return;
       // Run-lifecycle failures are already logged and surfaced; keep the
       // panel state honest without a second notification.
-      const errorMsg = toErrorMessage(Cause.squash(exit.cause));
+      const errorMsg = toErrorMessage(err);
       const restored = this.restorePreviousResults(previous);
       this.summary = `Review failed: ${errorMsg}${restored ? ' · showing previous results' : ''}`;
-      this.log(Effect.logWarning(`Agent review session failed: ${errorMsg}`));
+      log.warn(`Agent review session failed: ${errorMsg}`);
       return;
     }
-    const { outcome } = exit.value;
 
     if (!this.reviewRuns.isCurrent(run)) {
-      this.log(
-        Effect.logInfo(
-          'Agent review results were cleared while the session ran; discarding its outcome',
-        ),
+      log.info(
+        'Agent review results were cleared while the session ran; discarding its outcome',
       );
       return;
     }
@@ -422,7 +394,7 @@ class AgentReviewServiceImpl {
         suffix = ` · showing the ${formatResultCount(this.issues.length, 'issue')} reported before the session ended`;
       }
       this.summary = `Review ${verb}${suffix}`;
-      this.log(Effect.logWarning(`Agent review session ${verb}`));
+      log.warn(`Agent review session ${verb}`);
       return;
     }
 
@@ -431,10 +403,8 @@ class AgentReviewServiceImpl {
       count === 0
         ? `No issues found (diff with ${baseDescription})`
         : `Found ${formatResultCount(count, 'potential issue')} (diff with ${baseDescription})${truncated ? ' · diff truncated' : ''}`;
-    this.log(
-      Effect.logInfo(
-        `Agent review (${trigger}): ${count} issue(s) across ${changedFiles.length} changed file(s)`,
-      ),
+    log.info(
+      `Agent review (${trigger}): ${count} issue(s) across ${changedFiles.length} changed file(s)`,
     );
   }
 
@@ -555,31 +525,22 @@ class AgentReviewServiceImpl {
     }
 
     const instruction = buildFixInstruction(targets, this.baseDescription);
-    const launched = await this.host.runPromise(
-      Effect.tryPromise({
-        try: () =>
-          vscode.commands.executeCommand('texra.execute', {
-            agent: FIX_AGENT,
-            // coder is a tool-use agent; set the category explicitly so launch
-            // resolves it within tool-use (the config default is Workflow).
-            agentCategory: AgentCategory.ToolUse,
-            instruction,
-            // Issue paths are relative to the reviewed repository root.
-            ...(this.reviewRoot ? { workingDirectory: this.reviewRoot } : {}),
-          }),
-        catch: ensureError,
-      }).pipe(
-        Effect.as(true),
-        Effect.catch((err) =>
-          showLoggedErrorMessage(
-            CHANNEL,
-            'Could not launch the fix agent',
-            err,
-          ).pipe(Effect.as(false)),
-        ),
-      ),
-    );
-    if (!launched) return;
+    try {
+      await vscode.commands.executeCommand('texra.execute', {
+        agent: FIX_AGENT,
+        // coder is a tool-use agent; set the category explicitly so launch
+        // resolves it within tool-use (the config default is Workflow).
+        agentCategory: AgentCategory.ToolUse,
+        instruction,
+        // Issue paths are relative to the reviewed repository root.
+        ...(this.reviewRoot ? { workingDirectory: this.reviewRoot } : {}),
+      });
+    } catch (err) {
+      await this.host.runPromise(
+        showLoggedErrorMessage(CHANNEL, 'Could not launch the fix agent', err),
+      );
+      return;
+    }
     void vscode.window.showInformationMessage(
       `Launched the ${FIX_AGENT} agent to fix ${formatResultCount(targets.length, 'review issue')}. Run the review again once it finishes.`,
     );
