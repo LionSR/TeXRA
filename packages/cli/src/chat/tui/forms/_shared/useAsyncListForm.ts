@@ -158,7 +158,10 @@ export function useAsyncListForm<T>(
 
   // The load as a program that settles into the form state and recovers from
   // its whole cause: the mount runs it, `reload` re-runs it, and `update`
-  // sequences it after a write in the same run.
+  // sequences it after a write in the same run. Every run is a `runFork`, not
+  // a fire-and-forget `runPromise`: shutdown interrupts a load or write still
+  // in flight, and the process runtime's fork reporting keeps that
+  // interrupts-only exit silent where a dropped promise would reject unhandled.
   const settleLoad = useCallback(
     (isCancelled: () => boolean) =>
       Effect.suspend(() => {
@@ -182,11 +185,11 @@ export function useAsyncListForm<T>(
   );
 
   const reload = useCallback(() => {
-    void runtime.runPromise(settleLoad(() => false));
+    runtime.runFork(settleLoad(() => false));
   }, [runtime, settleLoad]);
 
   const update = (write: Effect.Effect<void, Error, ProcessServices>): void => {
-    void runtime.runPromise(
+    runtime.runFork(
       write.pipe(
         Effect.matchCauseEffect({
           onSuccess: () => settleLoad(() => false),
@@ -201,7 +204,7 @@ export function useAsyncListForm<T>(
 
   // Load once on mount, matching the original per-form `useEffect(..., [])`.
   useCancellableEffect((isCancelled) => {
-    void runtime.runPromise(settleLoad(isCancelled));
+    runtime.runFork(settleLoad(isCancelled));
   }, []);
 
   return {
