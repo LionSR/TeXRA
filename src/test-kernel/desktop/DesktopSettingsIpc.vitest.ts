@@ -1,7 +1,7 @@
 import '@test/support/defaultSessionTestSetup';
 
 import { it } from '@effect/vitest';
-import { Effect } from 'effect';
+import { Effect, Exit, Scope } from 'effect';
 import {
   afterEach,
   beforeAll,
@@ -89,9 +89,7 @@ type CapturedSettingsFixtureOverrides = Omit<
 
 let createDesktopSettingsIpc!: DesktopSettingsIpcModule['createDesktopSettingsIpc'];
 
-const liveSettingsIpcs: ReturnType<
-  DesktopSettingsIpcModule['createDesktopSettingsIpc']
->[] = [];
+const liveScopes: Scope.Closeable[] = [];
 
 function createSettingsFixture(overrides: SettingsFixtureOverrides = {}) {
   const {
@@ -120,33 +118,37 @@ function createSettingsFixture(overrides: SettingsFixtureOverrides = {}) {
   if (overrides.session === undefined) {
     onTestFinished(() => Effect.runPromise(session.dispose()));
   }
-  const settings = createDesktopSettingsIpc({
-    runtime: testRuntime(),
-    ...settingsOverrides,
-    agentSettingsController:
-      overrides.agentSettingsController ??
-      createStubDesktopAgentSettingsController(),
-    credentialSettingsController:
-      overrides.credentialSettingsController ??
-      createStubDesktopCredentialSettingsController({
-        globalState,
-        workspaceState,
-      }),
-    toolingSettingsController:
-      overrides.toolingSettingsController ??
-      createStubDesktopToolingSettingsController(),
-    globalState,
-    secrets,
-    externalOpener: overrides.externalOpener ?? {
-      openExternal: () => Effect.void,
-    },
-    ui: createStubDesktopSettingsUiHost(ui),
-    session,
-    postToRenderer,
-  });
   // The IPC subscribes to its session's goal facts and the process app-signal
-  // bus, so a fixture left undisposed would keep reacting to later tests' emits.
-  liveSettingsIpcs.push(settings);
+  // bus, so a fixture whose scope stayed open would keep reacting to later
+  // tests' emits.
+  const scope = Scope.makeUnsafe();
+  liveScopes.push(scope);
+  const settings = testRuntime().runSync(
+    createDesktopSettingsIpc({
+      runtime: testRuntime(),
+      ...settingsOverrides,
+      agentSettingsController:
+        overrides.agentSettingsController ??
+        createStubDesktopAgentSettingsController(),
+      credentialSettingsController:
+        overrides.credentialSettingsController ??
+        createStubDesktopCredentialSettingsController({
+          globalState,
+          workspaceState,
+        }),
+      toolingSettingsController:
+        overrides.toolingSettingsController ??
+        createStubDesktopToolingSettingsController(),
+      globalState,
+      secrets,
+      externalOpener: overrides.externalOpener ?? {
+        openExternal: () => Effect.void,
+      },
+      ui: createStubDesktopSettingsUiHost(ui),
+      session,
+      postToRenderer,
+    }).pipe(Scope.provide(scope)),
+  );
   return { globalState, session, settings, workspaceState };
 }
 
@@ -219,7 +221,8 @@ describe('desktop settings IPC', () => {
   });
 
   afterEach(() => {
-    for (const settings of liveSettingsIpcs.splice(0)) settings.dispose();
+    for (const scope of liveScopes.splice(0))
+      testRuntime().runFork(Scope.close(scope, Exit.void));
     vi.clearAllMocks();
   });
 

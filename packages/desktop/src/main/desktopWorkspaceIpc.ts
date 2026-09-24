@@ -25,6 +25,7 @@ import {
 } from '@common/files/fileListingRules';
 import { FILE_HANDLING_RULES } from '@common/files/fileHandlingRules';
 import { getIncludedExtensions } from '@common/files/fileTypeUtils';
+import { onAppSignal } from '@eventBus/AppSignals';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import { normalizeFilePath } from '@utils/core';
 import { locateInWorkspace } from '@utils/files/workspaceFS';
@@ -40,11 +41,9 @@ import { normalizeLineEndings } from '@utils/text/stringUtils';
 import {
   DESKTOP_WORKSPACE_COMMANDS,
   DesktopWorkspaceInboundMessageSchema,
-  EMPTY_DESKTOP_ENVIRONMENT_SUMMARY,
   type DesktopBrowserBounds,
   type DesktopEnvironmentSummary,
 } from '../shared/desktopWorkspaceMessages.js';
-import { subscribeDesktopAppSignal } from './desktopAppSignalSubscription.js';
 import type {
   DesktopCommandMessage,
   DesktopMessageHandler,
@@ -71,7 +70,10 @@ interface DesktopWorkspaceIpcOptions {
    * compares to.
    */
   getWorkspacePath(): string | undefined;
-  getEnvironmentSummary(): Promise<DesktopEnvironmentSummary>;
+  /** The project's git summary. Its git reads report their own failures and
+   *  settle on the empty summary, so the renderer's loading state always
+   *  clears. */
+  getEnvironmentSummary(): Effect.Effect<DesktopEnvironmentSummary>;
   onAsyncError(error: unknown): void;
   /** The process runtime the window was handed; every program below settles
    *  on it. */
@@ -88,12 +90,11 @@ interface DesktopWorkspaceIpc extends DesktopMessageHandler {
   disposeRendererResources(): void;
 
   /**
-   * Releases the app-signal subscription. Separate from
-   * {@link DesktopWorkspaceIpc.disposeRendererResources} because that one also
-   * runs on renderer reload, where the subscription must survive — this one is
-   * window-scoped, and `createWindow` runs again on macOS dock reactivation.
+   * Tells the renderer to re-list its file tree when a write lands inside
+   * this project, until interrupted. The window forks it into the project
+   * binding's scope, which a renderer reload replaces along with this IPC.
    */
-  dispose(): void;
+  readonly followFilesWritten: Effect.Effect<void>;
 }
 
 /**
@@ -114,7 +115,7 @@ class WorkspaceRequestRefused extends Data.TaggedError(
 class WorkspaceHostCallFailed extends Data.TaggedError(
   'WorkspaceHostCallFailed',
 )<{
-  readonly member: 'ptyHost.create' | 'getEnvironmentSummary';
+  readonly member: 'ptyHost.create';
   readonly message: string;
   readonly cause: unknown;
 }> {}
@@ -267,8 +268,7 @@ export function createDesktopWorkspaceIpc(
   // watcher behind it — this signal is its only notice, and without it the
   // tree stays stale until the user hits Refresh. A write outside the
   // workspace root cannot appear in the tree, so it is not worth a re-list.
-  const unsubscribeFilesWritten = subscribeDesktopAppSignal(
-    options.runtime,
+  const followFilesWritten = onAppSignal(
     'workspaceFilesWritten',
     ({ absolutePaths }) => {
       const root = options.getWorkspacePath();
@@ -474,25 +474,7 @@ export function createDesktopWorkspaceIpc(
   }
 
   function postEnvironment() {
-    return Effect.tryPromise({
-      try: () => options.getEnvironmentSummary(),
-      catch: (cause) =>
-        new WorkspaceHostCallFailed({
-          member: 'getEnvironmentSummary',
-          message: toErrorMessage(cause),
-          cause,
-        }),
-    }).pipe(
-      // The renderer's loading state clears either way, but the failure still
-      // reaches the window's reporter instead of being swallowed. The handler's
-      // parameter is the whole error type this expression can carry, so a
-      // second failure added here fails to compile.
-      Effect.catch((error: WorkspaceHostCallFailed) =>
-        Effect.sync(() => {
-          options.onAsyncError(error);
-          return EMPTY_DESKTOP_ENVIRONMENT_SUMMARY;
-        }),
-      ),
+    return options.getEnvironmentSummary().pipe(
       Effect.map((environment) => {
         renderer.postToRenderer({
           command: DESKTOP_WORKSPACE_COMMANDS.ENVIRONMENT_STATE,
@@ -508,9 +490,7 @@ export function createDesktopWorkspaceIpc(
       options.browserViews.disposeAll();
     },
 
-    dispose() {
-      unsubscribeFilesWritten();
-    },
+    followFilesWritten,
 
     handleMessage(message: DesktopCommandMessage) {
       const parsed = DesktopWorkspaceInboundMessageSchema.safeParse(message);

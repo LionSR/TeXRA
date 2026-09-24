@@ -76,6 +76,10 @@ All notable changes to this project will be documented in this file.
 
 ### Bug Fixes
 
+- **The desktop app shuts down cleanly when startup fails early.** If
+  startup failed before the project list opened (for example, when the
+  project records could not be read), shutdown reported two errors and left a
+  state store open.
 - **Diff previews for pending tool edits no longer pile up on disk.** In
   VS Code, the temporary files staged for tool edits still awaiting approval
   when the window closes are now removed at shutdown.

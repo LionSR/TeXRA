@@ -49,7 +49,7 @@ export class DesktopProcessResumeOwner {
        * recomputes the onboarding funnel here so a first run that completes
        * via resume still clears the setup card.
        */
-      readonly onLaunchSettled?: () => void;
+      readonly onLaunchSettled?: Effect.Effect<void>;
     },
   ) {}
 
@@ -130,7 +130,7 @@ export class DesktopProcessResumeOwner {
           );
         }),
       ),
-      Effect.ensuring(Effect.sync(() => this.options.onLaunchSettled?.())),
+      Effect.ensuring(this.options.onLaunchSettled ?? Effect.void),
     );
   }
 }

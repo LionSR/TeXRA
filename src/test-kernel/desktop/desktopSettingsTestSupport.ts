@@ -132,7 +132,7 @@ export function createStubDesktopToolingSettingsController(
       runInstallCommand: noOpEffect,
     },
     postStartupData: noOpEffect,
-    dispose: () => undefined,
+    followToolAvailability: Effect.void,
     ...overrides,
   };
 }

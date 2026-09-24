@@ -1,5 +1,5 @@
 import { it } from '@effect/vitest';
-import { Deferred, Effect } from 'effect';
+import { Deferred, Effect, Exit, Scope } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
@@ -109,7 +109,7 @@ type ControllerOptions = ConstructorParameters<
   typeof DefaultDesktopToolingSettingsController
 >[0];
 
-const liveControllers: DefaultDesktopToolingSettingsController[] = [];
+const liveScopes: Scope.Closeable[] = [];
 
 /** Restores the doubles a test has not replaced. The refresh double emits as
  *  the real `refreshToolAvailability` does once its probes land: that emit is
@@ -175,9 +175,15 @@ function createFixture(
     // default is restated here rather than left to the fixture's shape.
     runtime: overrides.runtime ?? testRuntime(),
   });
-  // The controller subscribes to a process-global bus, so a fixture left
-  // undisposed would keep reacting to later tests' emits.
-  liveControllers.push(controller);
+  // The controller follows a process-global bus, so a fixture whose scope
+  // stayed open would keep reacting to later tests' emits.
+  const scope = Scope.makeUnsafe();
+  liveScopes.push(scope);
+  testRuntime().runSync(
+    Effect.forkIn(controller.followToolAvailability, scope, {
+      startImmediately: true,
+    }),
+  );
 
   return {
     controller,
@@ -192,7 +198,8 @@ describe('DefaultDesktopToolingSettingsController', () => {
   beforeEach(installDefaultToolDataDoubles);
 
   afterEach(() => {
-    for (const controller of liveControllers.splice(0)) controller.dispose();
+    for (const scope of liveScopes.splice(0))
+      testRuntime().runFork(Scope.close(scope, Exit.void));
   });
 
   it.live('posts cached startup data before refreshing external tools', () =>
