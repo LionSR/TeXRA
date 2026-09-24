@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events';
 
-import { SubscriptionRef } from 'effect';
+import { Exit, Scope, SubscriptionRef } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
@@ -64,12 +64,17 @@ function installTitle(
   session: TitleSession,
   workspacePath = '/work/geometry',
 ): () => void {
-  return installDesktopWindowTitle(
-    window as unknown as Parameters<typeof installDesktopWindowTitle>[0],
-    session,
-    workspacePath,
-    testRuntime(),
+  const scope = Scope.makeUnsafe();
+  testRuntime().runSync(
+    installDesktopWindowTitle(
+      window as unknown as Parameters<typeof installDesktopWindowTitle>[0],
+      session,
+      workspacePath,
+    ).pipe(Scope.provide(scope)),
   );
+  return () => {
+    testRuntime().runFork(Scope.close(scope, Exit.void));
+  };
 }
 
 /** The fold publishes on the runtime; one macrotask lets its drain land. */

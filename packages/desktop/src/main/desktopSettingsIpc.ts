@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 
-import { Cause, Effect, Exit } from 'effect';
+import { Cause, Effect, Exit, type Scope, Stream } from 'effect';
 
 import type { SessionHandle } from '@agent/runtime';
 import { formatError } from '@common/errors';
@@ -16,6 +16,7 @@ import {
   noActiveGitHubSubscriptionMessage,
   unsubscribeGitHubKey,
 } from '@controllers/settingsView/githubSubscriptions';
+import { onAppSignal } from '@eventBus/AppSignals';
 import {
   NotificationFailed,
   PromptFailed,
@@ -47,7 +48,7 @@ import {
 import { buildSettingsSnapshotMessage } from '@shared/settingsView/handlers/settingsSnapshot';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { loadRuntimeSkillDisplay } from '@skills/runtimeSkills';
-import { goalList } from '@tools/goal';
+import { goalList, goalStateChanges } from '@tools/goal';
 import { refreshToolAvailability } from '@tools/toolAvailability';
 import {
   GITHUB_TOKEN_PROMPT,
@@ -58,8 +59,6 @@ import {
   resolveGitHubTokenSource,
 } from '@tools/github/githubAuth';
 import { ensureError } from '@utils/errors/errorMessage';
-import { subscribeDesktopAppSignal } from './desktopAppSignalSubscription.js';
-import { subscribeDesktopGoalChanges } from './desktopGoalSubscription.js';
 import type {
   DesktopCommandMessage,
   DesktopMessageHandler,
@@ -129,19 +128,19 @@ export interface DesktopSettingsIpc extends DesktopMessageHandler {
     deferAgentCatalogRefresh?: boolean;
   }): Effect.Effect<void, Error, ProcessServices>;
   signInChatGpt(): Effect.Effect<void, Error, ProcessServices>;
-  /**
-   * Releases the goal and app-signal subscriptions. They are scoped to the
-   * window that built this IPC, not to the process: `createWindow` runs again
-   * on macOS dock reactivation, so an undisposed listener would post to a
-   * destroyed window's renderer — and, for `githubTokenInvalid`, raise a
-   * dialog against a `BrowserWindow` that no longer exists.
-   */
-  dispose(): void;
 }
 
+/**
+ * The settings surface of one project, with its goal, app-signal and tool
+ * availability subscriptions forked into the caller's scope. They belong to
+ * the window's project binding, not to the process: `createWindow` runs again
+ * on macOS dock reactivation, so a listener that outlived its scope would
+ * post to a destroyed window's renderer — and, for `githubTokenInvalid`,
+ * raise a dialog against a `BrowserWindow` that no longer exists.
+ */
 export function createDesktopSettingsIpc(
   options: DesktopSettingsIpcOptions,
-): DesktopSettingsIpc {
+): Effect.Effect<DesktopSettingsIpc, never, Scope.Scope> {
   const { globalState, runtime } = options;
   const { roots } = options.session;
   const { workspaceState, config } = roots;
@@ -406,17 +405,21 @@ export function createDesktopSettingsIpc(
   // Agent runs execute in this same main process and the settings panel shares
   // the app window with run progress, so a Goals tab left open during a run
   // needs the push. The session outlives the window, so the subscription is
-  // window-scoped and released in `dispose` below.
+  // forked into the caller's scope below.
   //
-  // App signals and goal changes deliver on their own fiber of this window's
-  // runtime, not on the emitter's stack. Every refresh a signal triggers reads
-  // this paper's own session, which these posters take from `options.session`.
-  const subscriptions = [
-    subscribeDesktopGoalChanges(
-      options.session,
-      () => runAsync(postGoalList()),
-      runtime,
+  // App signals and goal changes deliver on their own fiber, not on the
+  // emitter's stack; each refresh they trigger still forks through `runAsync`,
+  // so one slow refresh never holds the next event. Every refresh reads this
+  // paper's own session, which these posters take from `options.session`.
+  const subscriptions: Array<Effect.Effect<void>> = [
+    Stream.runForEach(goalStateChanges(options.session), () =>
+      Effect.sync(() => runAsync(postGoalList())),
+    ).pipe(
+      Effect.catchCause((cause) =>
+        Effect.logWarning('The settings goal subscription stopped', cause),
+      ),
     ),
+    options.toolingSettingsController.followToolAvailability,
   ];
 
   // ── GitHub token + PR/repo/issue subscriptions (Git tab) ──
@@ -471,14 +474,14 @@ export function createDesktopSettingsIpc(
   // releases a PR, repo or issue subscription changes the list the Git tab is
   // showing, which the desktop used to re-read only when the user asked.
   subscriptions.push(
-    subscribeDesktopAppSignal(runtime, 'githubSubscriptionsChanged', () =>
+    onAppSignal('githubSubscriptionsChanged', () =>
       runAsync(postGitHubSubscriptions()),
     ),
     // `apply_team` writes the roster straight from the setup agent, so the
     // open view is showing agents and a team it just replaced. The signal
     // comes from whichever paper's run applied the team; the catalog is
     // rebuilt from this paper's presets, not the emitter's.
-    subscribeDesktopAppSignal(runtime, 'agentRosterChanged', () =>
+    onAppSignal('agentRosterChanged', () =>
       runAsync(options.agentSettingsController.refreshCatalogData()),
     ),
     // Outside VS Code a rejected token left the pollers failing in silence.
@@ -486,7 +489,7 @@ export function createDesktopSettingsIpc(
     // which store holds a token, and rejection leaves the secret in place, so
     // re-posting the status would repaint the same "token set" badge. Marking
     // a stored token as rejected would need a new status on the wire.
-    subscribeDesktopAppSignal(runtime, 'githubTokenInvalid', ({ message }) =>
+    onAppSignal('githubTokenInvalid', ({ message }) =>
       runAsync(
         options.ui.showErrorMessage(gitHubTokenRejectedMessage(message)),
       ),
@@ -497,7 +500,7 @@ export function createDesktopSettingsIpc(
     // token gates the `github_subscription` tool group, so it re-probes, and
     // `toolAvailabilityChanged` repaints the Tools tab. Other entries (OAuth
     // tokens, sign-in nonces) are ignored.
-    subscribeDesktopAppSignal(runtime, 'credentialChanged', ({ key }) => {
+    onAppSignal('credentialChanged', ({ key }) => {
       const provider = apiProviderOfSecretName(key);
       if (provider !== undefined) {
         runAsync(
@@ -625,13 +628,9 @@ export function createDesktopSettingsIpc(
     revealGoalRun: (message) => revealRun(message.runId),
   };
 
-  return {
+  const settingsIpc: DesktopSettingsIpc = {
     refreshAuthDependentData,
     signInChatGpt: () => options.credentialSettingsController.signInChatGpt(),
-
-    dispose() {
-      for (const unsubscribe of subscriptions.splice(0)) unsubscribe();
-    },
 
     handleMessage(message: DesktopCommandMessage) {
       const parsed = SettingsViewInboundMessageSchema.safeParse(message);
@@ -642,4 +641,13 @@ export function createDesktopSettingsIpc(
       return true;
     },
   };
+  return Effect.as(
+    Effect.forEach(
+      subscriptions,
+      (subscription) =>
+        Effect.forkScoped(subscription, { startImmediately: true }),
+      { discard: true },
+    ),
+    settingsIpc,
+  );
 }

@@ -6,6 +6,7 @@ import {
   buildToolDashboardItems,
   planToolTerminalAction,
 } from '@controllers/settingsView/ToolDashboardData';
+import { onAppSignal } from '@eventBus/AppSignals';
 import type { ConfigProvider, StateStore } from '@platform/interfaces';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
@@ -21,8 +22,6 @@ import {
 } from '@tools/toolAvailability';
 import { ensureError } from '@utils/errors/errorMessage';
 import { setToolEnabled } from '@utils/config/constants';
-
-import { subscribeDesktopAppSignal } from './desktopAppSignalSubscription.js';
 
 const NO_EXTENSION_HOSTING =
   'TeXRA Desktop runs standalone and cannot host VS Code extensions.';
@@ -62,19 +61,21 @@ export interface DesktopToolingSettingsController {
   readonly latexHandlers: DesktopLatexHandlers;
   postStartupData(): Effect.Effect<void, Error, ProcessServices>;
   /**
-   * Releases the app-signal subscription. Scoped to the window that built this
-   * controller: `createWindow` runs again on macOS dock reactivation, so an
-   * undisposed subscription would keep repainting a destroyed window's
-   * renderer and pile up one listener per reopen.
+   * Repaints the Tools tab on every re-probe, whoever triggered it — the
+   * shared Re-check arm, a GitHub token write, or any future core-side input
+   * change — until interrupted. Following the signal rather than posting
+   * after each call site is what makes the dashboard follow availability
+   * instead of following the one path that remembered to re-post. The
+   * settings IPC forks it into the window's project scope.
    */
-  dispose(): void;
+  readonly followToolAvailability: Effect.Effect<void>;
 }
 
 /** Owns the desktop settings Tools and LaTeX domains. */
 export class DefaultDesktopToolingSettingsController implements DesktopToolingSettingsController {
   readonly toolHandlers: DesktopToolHandlers;
   readonly latexHandlers: DesktopLatexHandlers;
-  private readonly unsubscribeToolAvailability: () => void;
+  readonly followToolAvailability: Effect.Effect<void>;
 
   constructor(
     private readonly options: DefaultDesktopToolingSettingsControllerOptions,
@@ -93,24 +94,11 @@ export class DefaultDesktopToolingSettingsController implements DesktopToolingSe
       runInstallCommand: (message) =>
         this.runLatexInstallCommand(message.installCommand),
     };
-    // Every re-probe repaints the Tools tab, whoever triggered it — the
-    // shared Re-check arm, a GitHub token write, or any future core-side input
-    // change. Subscribing here rather than posting after each call site is
-    // what makes the dashboard follow availability instead of following the
-    // one path that remembered to re-post.
-    this.unsubscribeToolAvailability = subscribeDesktopAppSignal(
-      options.runtime,
-      'toolAvailabilityChanged',
-      () => {
-        options.runtime.runFork(
-          this.reportingFailure(this.postToolDashboardData()),
-        );
-      },
-    );
-  }
-
-  dispose(): void {
-    this.unsubscribeToolAvailability();
+    this.followToolAvailability = onAppSignal('toolAvailabilityChanged', () => {
+      options.runtime.runFork(
+        this.reportingFailure(this.postToolDashboardData()),
+      );
+    });
   }
 
   postStartupData(): Effect.Effect<void, Error, ProcessServices> {

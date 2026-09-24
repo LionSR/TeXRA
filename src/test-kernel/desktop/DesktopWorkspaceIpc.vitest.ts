@@ -9,7 +9,7 @@ import {
 import { join } from 'node:path';
 
 import { it } from '@effect/vitest';
-import { Deferred, Effect } from 'effect';
+import { Deferred, Effect, Exit, Scope } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 import {
@@ -72,9 +72,13 @@ function createIpc(
     ...overrides,
   };
   const ipc = createDesktopWorkspaceIpc({ postToRenderer }, options);
-  // The IPC subscribes to a process-global bus, so a fixture left undisposed
-  // would keep reacting to later tests' emits.
-  liveWorkspaceIpcs.push(ipc);
+  // The IPC follows a process-global bus, so a fixture whose scope stayed
+  // open would keep reacting to later tests' emits.
+  const scope = Scope.makeUnsafe();
+  liveScopes.push(scope);
+  options.runtime.runSync(
+    Effect.forkIn(ipc.followFilesWritten, scope, { startImmediately: true }),
+  );
   return {
     ...ipc,
     handleMessage(message: Parameters<typeof ipc.handleMessage>[0]) {
@@ -83,7 +87,7 @@ function createIpc(
   };
 }
 
-const liveWorkspaceIpcs: ReturnType<typeof createDesktopWorkspaceIpc>[] = [];
+const liveScopes: Scope.Closeable[] = [];
 
 /** Resolve the returned promise the next time `mock` is called with an
  *  argument matching `predicate`. The mock's own return stays undefined. */
@@ -127,7 +131,8 @@ describe('desktop workspace IPC', () => {
   });
 
   afterEach(() => {
-    for (const ipc of liveWorkspaceIpcs.splice(0)) ipc.dispose();
+    for (const scope of liveScopes.splice(0))
+      testRuntime().runFork(Scope.close(scope, Exit.void));
   });
 
   // The file tree caches its listing and there is no filesystem watcher, so a

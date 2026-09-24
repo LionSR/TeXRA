@@ -25,6 +25,7 @@ import {
 } from '@common/files/fileListingRules';
 import { FILE_HANDLING_RULES } from '@common/files/fileHandlingRules';
 import { getIncludedExtensions } from '@common/files/fileTypeUtils';
+import { onAppSignal } from '@eventBus/AppSignals';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import { normalizeFilePath } from '@utils/core';
 import { locateInWorkspace } from '@utils/files/workspaceFS';
@@ -43,7 +44,6 @@ import {
   type DesktopBrowserBounds,
   type DesktopEnvironmentSummary,
 } from '../shared/desktopWorkspaceMessages.js';
-import { subscribeDesktopAppSignal } from './desktopAppSignalSubscription.js';
 import type {
   DesktopCommandMessage,
   DesktopMessageHandler,
@@ -90,12 +90,11 @@ interface DesktopWorkspaceIpc extends DesktopMessageHandler {
   disposeRendererResources(): void;
 
   /**
-   * Releases the app-signal subscription. Separate from
-   * {@link DesktopWorkspaceIpc.disposeRendererResources} because that one also
-   * runs on renderer reload, where the subscription must survive — this one is
-   * window-scoped, and `createWindow` runs again on macOS dock reactivation.
+   * Tells the renderer to re-list its file tree when a write lands inside
+   * this project, until interrupted. The window forks it into the project
+   * binding's scope, which a renderer reload replaces along with this IPC.
    */
-  dispose(): void;
+  readonly followFilesWritten: Effect.Effect<void>;
 }
 
 /**
@@ -269,8 +268,7 @@ export function createDesktopWorkspaceIpc(
   // watcher behind it — this signal is its only notice, and without it the
   // tree stays stale until the user hits Refresh. A write outside the
   // workspace root cannot appear in the tree, so it is not worth a re-list.
-  const unsubscribeFilesWritten = subscribeDesktopAppSignal(
-    options.runtime,
+  const followFilesWritten = onAppSignal(
     'workspaceFilesWritten',
     ({ absolutePaths }) => {
       const root = options.getWorkspacePath();
@@ -492,9 +490,7 @@ export function createDesktopWorkspaceIpc(
       options.browserViews.disposeAll();
     },
 
-    dispose() {
-      unsubscribeFilesWritten();
-    },
+    followFilesWritten,
 
     handleMessage(message: DesktopCommandMessage) {
       const parsed = DesktopWorkspaceInboundMessageSchema.safeParse(message);

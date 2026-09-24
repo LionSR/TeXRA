@@ -382,16 +382,15 @@ function createWindow(options: {
   // creation, and the `closed` handler disposes the store (LIFO) instead of
   // running a hand-ordered teardown ledger.
   const windowResources = new DisposableStore();
-  // Project root: every resource bound to the project the window shows (its
-  // title, its settings surface, its progress bridge) registers here and is
-  // replaced when the window switches projects.
-  let projectResources = new DisposableStore();
+  // Project root: the resources bound to the project the window shows (its
+  // title, its settings surface and their subscriptions) live in this scope,
+  // which is closed and replaced when the window switches projects.
+  let projectScope: Scope.Closeable | undefined;
   let attachedProject: DesktopProject | undefined;
   windowResources.add(() => {
-    const project = attachedProject;
     attachedProject = undefined;
-    if (project) projectResources.dispose();
-    else projectResources.dispose();
+    settingsIpcRef.current = undefined;
+    if (projectScope) runtime.runFork(Scope.close(projectScope, Exit.void));
   });
   const ipcRef: {
     current?: { postToRenderer(message: unknown): void };
@@ -1039,7 +1038,14 @@ function createWindow(options: {
         handleHostRequest: (request, portId) =>
           hostRequests.handleHostRequest(request, portId),
         onPortClosed: (portId) => hostRequests.closePort(portId),
-      }).pipe(Scope.provide(bridgeScope)),
+      }).pipe(
+        Effect.tap(() =>
+          Effect.forkScoped(workspace.followFilesWritten, {
+            startImmediately: true,
+          }),
+        ),
+        Scope.provide(bridgeScope),
+      ),
     );
     const snapshot = createHostSnapshotSource({
       project: projectDisplayOf(project.key, project.root),
@@ -1139,7 +1145,6 @@ function createWindow(options: {
       browserViews,
       dispose() {
         workspace.disposeRendererResources();
-        workspace.dispose();
         // The port before the bridge, as the extension's `dispose` does.
         // The port's release (its map entry, its transcript set,
         // `onPortClosed`) is synchronous by construction and runs inside
@@ -1252,21 +1257,15 @@ function createWindow(options: {
     const project = activeProject();
     if (project === attachedProject && !documentChanged) return;
     const documentBinding = projectBindings.get(project.key);
-    const previous = attachedProject;
-    const previousResources = projectResources;
+    const previousScope = projectScope;
     attachedProject = project;
-    projectResources = new DisposableStore();
-    const owner = projectResources;
+    const owner = Scope.makeUnsafe();
+    projectScope = owner;
     const postForActiveProject = (message: unknown) => {
-      if (projectResources !== owner) return false;
+      if (projectScope !== owner) return false;
       return postToRendererIfAlive(message);
     };
-    if (previous) {
-      previousResources.dispose();
-    }
-    projectResources.add(
-      installDesktopWindowTitle(window, project.session, project.root, runtime),
-    );
+    if (previousScope) runtime.runFork(Scope.close(previousScope, Exit.void));
     const agentSettingsController = new DefaultDesktopAgentSettingsController({
       roster: createWorkspaceAgentRosterController({
         workspaceState: project.roots.workspaceState,
@@ -1460,33 +1459,32 @@ function createWindow(options: {
           onDetectionError: reportBackgroundError,
         }),
       });
-    projectResources.add(() => toolingSettingsController.dispose());
-    const settingsIpc = createDesktopSettingsIpc({
-      postToRenderer: postForActiveProject,
-      agentSettingsController,
-      credentialSettingsController,
-      toolingSettingsController,
-      globalState: options.globalState,
-      secrets: options.secrets,
-      // The one browser hand-off every settings URL takes. Its failure
-      // reaches the settings IPC's own report, so the opener shows no dialog
-      // of its own: one failed open, one dialog.
-      externalOpener: {
-        openExternal: (url) => openExternalProgram(url, false),
-      },
-      ui: settingsUi,
-      session: project.session,
-      runtime,
-    });
-    settingsIpcRef.current = settingsIpc;
-    // Holds project-scoped subscriptions (goal state and app signals) that
-    // would otherwise accumulate one listener per switch or dock reactivation.
-    projectResources.add(() => {
-      if (settingsIpcRef.current === settingsIpc) {
-        settingsIpcRef.current = undefined;
-      }
-      settingsIpc.dispose();
-    });
+    settingsIpcRef.current = runtime.runSync(
+      createDesktopSettingsIpc({
+        postToRenderer: postForActiveProject,
+        agentSettingsController,
+        credentialSettingsController,
+        toolingSettingsController,
+        globalState: options.globalState,
+        secrets: options.secrets,
+        // The one browser hand-off every settings URL takes. Its failure
+        // reaches the settings IPC's own report, so the opener shows no dialog
+        // of its own: one failed open, one dialog.
+        externalOpener: {
+          openExternal: (url) => openExternalProgram(url, false),
+        },
+        ui: settingsUi,
+        session: project.session,
+        runtime,
+      }).pipe(
+        // Last, so the scope's close stops the title before the old
+        // session's stream can write over the new project's.
+        Effect.tap(() =>
+          installDesktopWindowTitle(window, project.session, project.root),
+        ),
+        Scope.provide(owner),
+      ),
+    );
   };
   windowResources.add(
     options.projects.onChange(() => {
