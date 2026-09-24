@@ -68,6 +68,9 @@ All notable changes to this project will be documented in this file.
 
 ### Bug Fixes
 
+- **Log entries keep their identifying fields when they carry an error.** An
+  error's stack is now written last and capped at eight frames, so it can no
+  longer push a run id or key past the log payload's size limit.
 - **An agent can only run the tools it was offered.** A model that named a
   tool the run had not offered it (one you disabled in settings, a tool the
   agent does not declare, or one that needs an approval prompt the current
