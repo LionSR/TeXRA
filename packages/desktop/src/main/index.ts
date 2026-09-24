@@ -1247,11 +1247,10 @@ function createWindow(options: {
     });
   };
   /**
-   * Bind the window to the project it shows. The settings controllers read the
-   * project's workspace state and config, the settings surface subscribes to
-   * the project's session (goal facts, approval policy), the title follows its
-   * activity. These active settings bindings are replaced on selection;
-   * the session bridge and workbench remain with their project.
+   * Bind the window to the project it shows: settings controllers, settings
+   * surface and title; the session bridge and workbench stay with their project.
+   * The old settings IPC is detached first, so an attach that throws partway
+   * leaves settings messages unhandled, not routed to a closed project's IPC.
    */
   const attachActiveProject = (documentChanged = false) => {
     const project = activeProject();
@@ -1265,6 +1264,7 @@ function createWindow(options: {
       if (projectScope !== owner) return false;
       return postToRendererIfAlive(message);
     };
+    settingsIpcRef.current = undefined;
     if (previousScope) runtime.runFork(Scope.close(previousScope, Exit.void));
     const agentSettingsController = new DefaultDesktopAgentSettingsController({
       roster: createWorkspaceAgentRosterController({
