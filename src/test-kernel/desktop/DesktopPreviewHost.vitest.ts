@@ -192,7 +192,6 @@ describe('desktop preview host', () => {
           resourcesPath: '/resources',
           postToRenderer: () => {},
           postSurfaceAction: () => {},
-          signIn: () => Effect.void,
           getCustomAgentDirectory: () => Effect.succeed('/agents'),
           showFirstRunWalkthrough: () => {},
           onboarding: {} as Parameters<

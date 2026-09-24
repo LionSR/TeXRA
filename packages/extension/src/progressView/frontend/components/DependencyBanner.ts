@@ -1,8 +1,7 @@
 import '@awesome.me/webawesome/dist/components/button/button.js';
-import { html, css, type TemplateResult } from 'lit';
+import { html, css, LitElement, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
-import { when } from 'lit/directives/when.js';
 
 import { IMAGE_TOOL_LABEL } from '@shared/constants/latexToolchain';
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
@@ -10,12 +9,9 @@ import { SessionUiEvents } from '@shared/session/uiEvents';
 import { designTokens, commonViewStyles, bannerStyles } from '@ui/styles';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { renderWarningBanner } from '@ui/wa/bannerFrame';
-import { StateVisibleBanner } from './StateVisibleBanner';
 
 @customElement('dependency-banner')
-export class DependencyBanner extends StateVisibleBanner<
-  HostSnapshot['banners']['dependency']
-> {
+export class DependencyBanner extends LitElement {
   static override styles = [
     designTokens,
     commonViewStyles,
@@ -67,37 +63,31 @@ export class DependencyBanner extends StateVisibleBanner<
       id: 'dependencyBanner',
       role: 'status',
       body: html`
-        ${when(
-          tools.length === 0,
-          () => html`<span>No dependencies are missing.</span>`,
-          () => html`
-            <span>Missing dependencies:</span>
-            <ul class="missing-tools">
-              ${repeat(
-                tools,
-                (tool) => tool.id,
-                (tool) => html`
-                  <li class="dependency-item">
-                    <span
-                      ><bdi dir="auto">${tool.label}</bdi>${
-                        tool.interchangeable ? ' (choose one)' : ''
-                      }</span
-                    >
-                    <wa-button
-                      class="dependency-install-button"
-                      appearance="plain"
-                      size="s"
-                      aria-label=${`Open ${tool.label} install guide`}
-                      @click=${() => this.handleInstall(tool.id)}
-                    >
-                      ${waIcon('book', { slot: 'start' })} Install guide
-                    </wa-button>
-                  </li>
-                `,
-              )}
-            </ul>
-          `,
-        )}
+        <span>Missing dependencies:</span>
+        <ul class="missing-tools">
+          ${repeat(
+            tools,
+            (tool) => tool.id,
+            (tool) => html`
+              <li class="dependency-item">
+                <span
+                  ><bdi dir="auto">${tool.label}</bdi>${
+                    tool.interchangeable ? ' (choose one)' : ''
+                  }</span
+                >
+                <wa-button
+                  class="dependency-install-button"
+                  appearance="plain"
+                  size="s"
+                  aria-label=${`Open ${tool.label} install guide`}
+                  @click=${() => this.handleInstall(tool.id)}
+                >
+                  ${waIcon('book', { slot: 'start' })} Install guide
+                </wa-button>
+              </li>
+            `,
+          )}
+        </ul>
         <div class="actions">
           <wa-button
             id="dependencyRecheckButton"

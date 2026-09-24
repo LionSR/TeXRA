@@ -409,8 +409,6 @@
   );
 
   /* Lists — no native WA equivalent yet (#3690). */
-  --wa-color-list-active-bg: var(--desktop-color-accent);
-  --wa-color-list-active-fg: light-dark(#ffffff, #0d0d0d);
   --wa-color-list-hover-bg: var(--desktop-color-list-hover);
   --wa-color-list-warning-fg: var(--desktop-color-warning);
 
@@ -587,7 +585,6 @@ body.vscode-high-contrast-light {
   --desktop-color-warning: CanvasText;
   --desktop-color-info: Highlight;
   --desktop-color-success: Highlight;
-  --wa-color-list-active-fg: HighlightText;
   --wa-color-brand-on-loud: HighlightText;
   --wa-color-brand-border-loud: CanvasText;
 

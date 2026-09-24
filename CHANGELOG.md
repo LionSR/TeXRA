@@ -224,10 +224,29 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
   tool calls, the GPT-5 reasoning summary and Google background responses
   keep their defaults and are set in `.texra/config.json`.
 
+#### Changes
+
+- **The TeXRA panel is calmer.** A run shows one header row with one Stop
+  and one ⋯ menu instead of two stacked headers. A new project shows one
+  card at a time (setup, then "No LaTeX files yet") and at most one warning
+  above the composer; the "TeXRA account — Sign in" card is gone (sign in
+  from Settings). The run header's AUTO-EDIT, AUTO-BASH and AUTO-TASK
+  toggles are replaced by an "Auto-approving …" chip that appears only while
+  a grant from an approval card is on; click it to go back to asking. Open
+  dashboard and Attach TeX Count left the ⋯ menu (the gear and the Input
+  file menu have them). The desktop app no longer draws a second header,
+  Sessions button and New task inside its own window.
+- **Deleting a session asks first.** The × on a Sessions row, which deleted
+  the conversation in one click, is gone. Delete now lives at the end of
+  the run's ⋯ menu, asks for confirmation, and is not offered while the run
+  is still going.
+
 #### Bug Fixes
 
 - **Clearing the agent commit name or email in Settings resets it to the
   default.** The field used to go blank while the old value stayed in use.
+- **The selected session row is readable on desktop.** It drew dark text on
+  a black background.
 
 - **Cancelling TeXRA sign-in no longer counts as signing in.** In a
   single-folder window, the sign-in prompt that setup, a team launch or the

@@ -9,7 +9,6 @@ import {
   sameModelOrigin,
   type ModelOrigin,
 } from './protocol.js';
-import { admittedFingerprint } from './prefixFingerprint.js';
 
 // Local imports - canonical messages
 import {
@@ -126,33 +125,6 @@ export const boundOperation = Effect.fn('llm.boundOperation')(function* (
     });
   return parsed.data;
 });
-
-/**
- * Whether an observed completion may leave a continuation anchor.
- *
- * The operation records what the provider was actually given. A resume
- * rebuilds the turn from the caller's current system text, so a drifted
- * rebuild still gets its result but must leave no anchor: the next round then
- * resends the transcript instead of chaining on instructions the answer never
- * saw. The admitted storage mode is part of what makes an anchor safe: a turn
- * re-derived stored for a temporary operation must not chain.
- */
-export const admittedInputsChain = (
-  domain: string,
-  turn: Parameters<typeof admittedFingerprint>[1] & {
-    readonly controls: { readonly store: boolean };
-  },
-  operation: RemoteOperation,
-): Effect.Effect<boolean> =>
-  turn.controls.store === operation.store &&
-  admittedFingerprint(domain, turn) === operation.admittedFingerprint
-    ? Effect.succeed(true)
-    : Effect.as(
-        Effect.logWarning(
-          `The admitted inputs of background operation ${operation.providerResponseId} changed since it was accepted; its completion leaves no continuation.`,
-        ),
-        false,
-      );
 
 /**
  * What a cancel reply's status says about the work: `cancelled` confirms it,

@@ -67,11 +67,16 @@ The header provides a summary and actions for the selected stream:
 <p class="hero-caption">The status dot: green while running, blue while waiting for input, gray once finished, red on error.</p>
 
 - **Token and cost summary**: Displays the combined input and output token counts from all completed rounds (e.g., `r0`, `r1`, `r2`, …) along with the estimated cost.
-- **Stream header actions**: A toolbar of icon buttons acting on the selected stream. Workflow streams get Stop, Run New, Resume, Restore, Open in run storage, Export, Copy run context, Diff, Clean, and Pack; tool-use streams get Stop, AUTO-EDIT, AUTO-BASH, AUTO-TASK, Compact, Restore, Open in run storage, and Export. Export saves the conversation as Markdown, HTML, or PDF.
-
-<StreamHeaderActions />
-
-<p class="hero-caption">The stream header: identity and token/cost summary on the left, the action toolbar on the right, every icon mapped to its action.</p>
+- **One header row**: the Sessions button, the run's title, its status and
+  time, **Stop** while it runs, **New task**, and one **More** menu (⋯).
+  The menu holds the run's actions and, under a divider, Open sessions in
+  editor, LaTeXDiffs, and Figures. Workflow runs offer Run again from
+  scratch, Resume, Edit as new task, Open run folder, Export, Copy run
+  context, latexdiff, Archive outputs, and Delete output files; tool-use
+  runs offer Compact, Edit as new task, Open run folder, and Export. Export
+  saves the conversation as Markdown, HTML, or PDF.
+- **Delete session…**: at the end of the menu, for a run that has stopped.
+  It asks before it removes the conversation and its run folder.
 
 Each action in detail:
 
@@ -94,9 +99,14 @@ Each action in detail:
 Reviewed outputs are accepted per file: each row under **Generated Files** has
 an **Accept** action that copies the edited version into your workspace.
 
-### Auto-approve toggles
+### Auto-approving in a run
 
-The header has three auto-approve toggles for the current run, matching the CLI status-bar badges. **AUTO-EDIT** (pencil) auto-approves file edits; **AUTO-BASH** (terminal) auto-approves shell commands — those two are independent, so turning one on does not take the other with it. **AUTO-TASK** (rocket) auto-approves delegated agent tasks and also later edits and commands — turning AUTO-TASK off returns all three to asking, including an AUTO-EDIT or AUTO-BASH grant you made on its own. Use them for work you trust; turn them off when you want to review each step.
+You grant auto-approval from an approval card: its ▾ menu approves this
+request and every later one of the same kind in the run (edits, commands,
+or agent work, which covers the other two). While a grant is on, the header
+shows an amber **Auto-approving** chip naming what it covers. Click the chip
+to go back to asking. The CLI shows the same grants as AUTO-EDIT, AUTO-BASH,
+and AUTO-TASK badges.
 
 ### Context utilization
 
