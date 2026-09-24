@@ -18,10 +18,7 @@ import {
   dispatchSettingsViewOutbound,
   type SettingsTabPanelName,
 } from '@shared/settingsView/settingsViewMessages';
-import {
-  isKnownUnsupported,
-  isUnrecognizedCommand,
-} from '@shared/utils/dispatcher';
+import { isUnrecognizedCommand } from '@shared/utils/dispatcher';
 import { commonViewStyles, designTokens } from '@ui/styles';
 import { registerTeXRAWebAwesomeIcons, waIcon } from '@ui/wa/webAwesomeIcons';
 
@@ -81,7 +78,10 @@ import {
   goalItems,
   helperModel,
   inlineCriticismEnabled,
-  latexConfigValues,
+  latexdiffBetweenRounds,
+  latexdiffChangesOnly,
+  latexdiffMathMarkup,
+  latexFormatter,
   latexSettingsLoaded,
   latexSettingsStatus,
   memoryEnabled,
@@ -105,7 +105,9 @@ import {
   toolDashboardLoaded,
   toolPathProtectionEnabled,
   agentSelectionItems,
-  unsupportedCommands,
+  workflowAutoCompile,
+  workflowAutoOpenPdf,
+  workflowRejectOnCompileFailure,
   userEmail,
 } from './settingsState';
 
@@ -378,13 +380,15 @@ export class SettingsApp extends SignalWatcher(LitElement) {
           <latex-tab
             .settings=${latexSettingsStatus.get()}
             .loaded=${latexSettingsLoaded.get()}
-            .configValues=${latexConfigValues.get()}
-            .inlineCriticismEnabled=${inlineCriticismEnabled.get()}
             .desktopHost=${desktopHost}
-            .inlineCriticismSupported=${!isKnownUnsupported(
-              unsupportedCommands.get(),
-              SETTINGS_VIEW_COMMANDS.GET_INLINE_CRITICISM_ENABLED,
-            )}
+            .autoCompile=${workflowAutoCompile.get()}
+            .autoOpenPdf=${workflowAutoOpenPdf.get()}
+            .rejectOnCompileFailure=${workflowRejectOnCompileFailure.get()}
+            .diffBetweenRounds=${latexdiffBetweenRounds.get()}
+            .diffChangesOnly=${latexdiffChangesOnly.get()}
+            .diffMathMarkup=${latexdiffMathMarkup.get()}
+            .formatter=${latexFormatter.get()}
+            .inlineCriticismEnabled=${inlineCriticismEnabled.get()}
           ></latex-tab>
         `;
       case 'git':

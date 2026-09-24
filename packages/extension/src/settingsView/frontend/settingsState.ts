@@ -60,7 +60,6 @@ import {
   type ToolDashboardItem,
 } from '@shared/settingsView/settingsViewMessages';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
-import type { LatexConfigValues } from '@shared/constants/latexConfig';
 import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
 
 // ---------------------------------------------------------------------------
@@ -285,26 +284,35 @@ export const latexSettingsStatus = trackedSignal(() => ({
   ...DEFAULT_LATEX_SETTINGS_STATUS,
 }));
 export const latexSettingsLoaded = trackedSignal(() => false);
-export const latexConfigValues = trackedSignal<LatexConfigValues>(() => ({}));
-export const inlineCriticismEnabled = trackedSignal(() => false);
+export const workflowAutoCompile = settingSignal<boolean>(
+  WorkspaceStateKey.WORKFLOW_AUTO_COMPILE,
+);
+export const workflowAutoOpenPdf = settingSignal<boolean>(
+  WorkspaceStateKey.WORKFLOW_AUTO_OPEN_PDF,
+);
+export const workflowRejectOnCompileFailure = settingSignal<boolean>(
+  WorkspaceStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE,
+);
+export const latexdiffBetweenRounds = settingSignal<boolean>(
+  WorkspaceStateKey.LATEXDIFF_BETWEEN_ROUNDS,
+);
+export const latexdiffChangesOnly = settingSignal<boolean>(
+  WorkspaceStateKey.LATEXDIFF_CHANGES_ONLY,
+);
+export const latexdiffMathMarkup = settingSignal<string>(
+  WorkspaceStateKey.LATEXDIFF_MATH_MARKUP,
+);
+export const latexFormatter = settingSignal<string>(
+  WorkspaceStateKey.LATEX_FORMATTER,
+);
+export const inlineCriticismEnabled = settingSignal<boolean>(
+  GlobalStateKey.INLINE_CRITICISM_ENABLED,
+);
 
 // ---------------------------------------------------------------------------
 // Goal settings state
 // ---------------------------------------------------------------------------
 export const goalItems = trackedSignal<readonly GoalListItem[]>(() => []);
-
-// ---------------------------------------------------------------------------
-// Derived capability view: commands the active host's inbound registry
-// declares `unsupported(...)`, sent once at webview-ready (see
-// `unsupportedCommands` in `@shared/utils/dispatcher`). Replaces
-// `isDesktopHost` checks for command-availability gating. `null` before
-// that broadcast arrives — checked via `isKnownUnsupported`, which treats
-// "not yet known" as unsupported so a control never flashes visible then
-// hidden once the real capability set lands.
-// ---------------------------------------------------------------------------
-export const unsupportedCommands = trackedSignal<ReadonlySet<string> | null>(
-  () => null,
-);
 
 // ---------------------------------------------------------------------------
 // Reset — module-level state is shared across remounts in the same JS context

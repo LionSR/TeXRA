@@ -44,7 +44,7 @@ TeXRA uses LaTeX Workshop when available. For example, after generating a compar
 
 To keep your project directory clean, configure LaTeX Workshop to place its build output files (such as `.aux`, `.log`, `.pdf`) in a separate subdirectory. TeXRA is aware of this common practice.
 
-The Dashboard's LaTeX tab applies this for you. Its recommended settings list includes **LaTeX Output Directory** (`latex-workshop.latex.outDir`, set to `%DIR%/build/`) and **Explorer Auto-Reveal Exclude** (so the `build/` folder stays out of the Explorer), each with an **Apply** button, plus **Apply All** to set both at once.
+The Dashboard's LaTeX tab applies this for you. Its **Recommended VS Code settings** section lists **LaTeX Output Directory** (`latex-workshop.latex.outDir`, set to `%DIR%/build/`) and **Explorer Auto-Reveal Exclude** (so the `build/` folder stays out of the Explorer), each with an **Apply** button, plus **Apply all** in the section heading to set both at once.
 
 If you prefer to set it by hand, LaTeX Workshop is a separate VS Code extension, so the setting lives in VS Code's own settings:
 

@@ -847,7 +847,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
   );
   context.subscriptions.push(gitHubAuthListener);
   await runtime.runPromise(
-    registerInlineCriticism(context, runtime, runtimeSession, globalState).pipe(
+    registerInlineCriticism(context, runtime, runtimeSession, roots).pipe(
       Effect.andThen(
         registerLanguageModelTools(context, runtime, runtimeSession),
       ),

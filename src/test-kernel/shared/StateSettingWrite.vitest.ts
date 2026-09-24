@@ -99,6 +99,38 @@ describe('applyStateSettingUpdate', () => {
   );
 
   it.effect(
+    'lets CLI /config write its rows that the settings view does not render',
+    () =>
+      Effect.gen(function* () {
+        const fake = makeFakeSettingsStores();
+        const key = WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS;
+
+        expect(
+          yield* applyStateSettingUpdate(key, 20000, {
+            stores: fake.stores,
+            host: 'cli',
+          }),
+        ).toMatchObject({ kind: 'applied', entry: { key } });
+        expect(yield* fake.workspaceState.get(key)).toBe(20000);
+        expect(
+          yield* applyStateSettingUpdate(key, null, {
+            stores: fake.stores,
+            host: 'cli',
+          }),
+        ).toMatchObject({ kind: 'applied' });
+        expect(yield* isStored(fake.workspaceState, key)).toBe(false);
+
+        // The settings view still cannot write a row it does not render.
+        expect(
+          yield* applyStateSettingUpdate(key, 20000, {
+            stores: fake.stores,
+            host: 'vscode',
+          }),
+        ).toEqual({ kind: 'ignored' });
+      }),
+  );
+
+  it.effect(
     'ignores unknown keys and preserves catalog validation errors',
     () =>
       Effect.gen(function* () {
@@ -113,15 +145,15 @@ describe('applyStateSettingUpdate', () => {
 
         expect(
           yield* applyStateSettingUpdate(
-            WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS,
-            1000.5,
+            WorkspaceStateKey.LATEXDIFF_MATH_MARKUP,
+            'bogus',
             ports,
           ),
         ).toMatchObject({
           kind: 'rejected',
           entry: {
-            key: WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS,
-            surfaces: { settingsView: 'latex', cliConfig: true },
+            key: WorkspaceStateKey.LATEXDIFF_MATH_MARKUP,
+            surfaces: { settingsView: 'latex' },
           },
           error: expect.any(Error),
         });

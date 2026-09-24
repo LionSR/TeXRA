@@ -9,6 +9,7 @@
  */
 
 // Local imports - shared webview
+import { html, type TemplateResult } from 'lit';
 import { postMessage } from '@shared/hostBridge';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 
@@ -18,10 +19,12 @@ import {
   settingEnumChoices,
   settingsViewSettingByKey,
 } from '@shared/state/stateSettings';
+import { readSelectValue } from '@ui/wa/selectTemplates';
 import { renderSettingsToggleRow } from '@ui/wa/settingsSection';
 
 // Third-party imports
-import type { TemplateResult } from 'lit';
+import '@awesome.me/webawesome/dist/components/select/select.js';
+import '@awesome.me/webawesome/dist/components/option/option.js';
 
 import type WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
 
@@ -88,4 +91,57 @@ export function renderStateSettingToggleRow(
         Boolean((event.target as WaSwitch | null)?.checked),
       ),
   });
+}
+
+interface StateSettingSelectRowOptions {
+  /** Canonical enum catalog key this select writes and takes its copy from. */
+  readonly key: string;
+  readonly value: string;
+}
+
+/**
+ * The select counterpart of {@link renderStateSettingToggleRow}: label, help
+ * text, and options (with their per-value descriptions) all come from the
+ * catalog row, and a change posts the write itself.
+ */
+export function renderStateSettingSelectRow(
+  options: StateSettingSelectRowOptions,
+): TemplateResult {
+  const entry = settingsViewSettingByKey(options.key);
+  if (!entry?.title) {
+    throw new Error(
+      `Settings-view catalog row "${options.key}" is missing or has no title`,
+    );
+  }
+  const id = `settings-select-${options.key.replaceAll('.', '-')}`;
+  return html`
+    <div class="settings-row">
+      <div class="settings-row-text">
+        <label class="settings-row-label" for=${id}>${entry.title}</label>
+        <span class="settings-row-help">${entry.description}</span>
+      </div>
+      <div class="settings-row-control">
+        <wa-select
+          id=${id}
+          .value=${options.value}
+          @change=${(event: Event) => {
+            const selected = readSelectValue(event);
+            if (selected) postStateSetting(options.key, selected);
+          }}
+        >
+          ${catalogEnumChoices(options.key).map(
+            (choice) => html`
+              <wa-option value=${choice.value}
+                >${
+                  choice.description
+                    ? `${choice.label} — ${choice.description}`
+                    : choice.label
+                }</wa-option
+              >
+            `,
+          )}
+        </wa-select>
+      </div>
+    </div>
+  `;
 }

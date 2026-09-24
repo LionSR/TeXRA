@@ -543,26 +543,10 @@ const UpdateLatexSettingsStatusMessageSchema = z.object({
   settings: LatexSettingsStatusSchema,
 });
 
-/** Outbound: backend → frontend inline criticism toggle state */
-const UpdateInlineCriticismEnabledMessageSchema = z.object({
-  command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_INLINE_CRITICISM_ENABLED),
-  enabled: z.boolean(),
-});
-
 /** Outbound: pushed when the list changes or in response to GET_GOAL_LIST. */
 const UpdateGoalListMessageSchema = z.object({
   command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_GOAL_LIST),
   items: z.array(GoalListItemSchema),
-});
-
-/**
- * Outbound: sent once at webview-ready with the commands this host's inbound
- * registry declares `unsupported(...)` — the derived capability view (see
- * `unsupportedCommands` in `@shared/utils/dispatcher`).
- */
-const SetUnsupportedCommandsMessageSchema = z.object({
-  command: z.literal(SETTINGS_VIEW_COMMANDS.SET_UNSUPPORTED_COMMANDS),
-  commands: z.array(z.string()),
 });
 
 // ============================================================
@@ -585,10 +569,8 @@ const SettingsViewOutboundMessageSchema = z.discriminatedUnion('command', [
   UpdateSubscriptionUsageMessageSchema,
   UpdatePRSubscriptionsMessageSchema,
   UpdateLatexSettingsStatusMessageSchema,
-  UpdateInlineCriticismEnabledMessageSchema,
   UpdateGoalListMessageSchema,
   UpdateProfileMessageSchema,
-  SetUnsupportedCommandsMessageSchema,
 ]);
 
 type SettingsViewOutboundMessage = z.infer<
@@ -809,14 +791,6 @@ const RunInstallCommandMessageSchema = z.object({
   installCommand: z.string().min(1),
 });
 
-// Experimental settings inbound messages
-const GetInlineCriticismEnabledMessageSchema = commandOnly(
-  SETTINGS_VIEW_COMMANDS.GET_INLINE_CRITICISM_ENABLED,
-);
-const SetInlineCriticismEnabledMessageSchema = enabledFlag(
-  SETTINGS_VIEW_COMMANDS.SET_INLINE_CRITICISM_ENABLED,
-);
-
 // Generic catalog-driven setting write. This boundary accepts exactly the
 // value shapes used by catalog entries; the selected entry's schema performs
 // the narrower per-key validation in the backend handler.
@@ -866,8 +840,6 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     ApplyLatexSettingsMessageSchema,
     InstallLatexWorkshopMessageSchema,
     RunInstallCommandMessageSchema,
-    GetInlineCriticismEnabledMessageSchema,
-    SetInlineCriticismEnabledMessageSchema,
     // Memory messages
     GetMemoryDataMessageSchema,
     GetMemoryPreviewMessageSchema,

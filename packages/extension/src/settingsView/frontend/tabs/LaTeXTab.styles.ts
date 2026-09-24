@@ -2,18 +2,9 @@
 
 import { css, type CSSResult } from 'lit';
 
-import { visuallyHiddenDeclarations } from '@ui/styles';
-
 export const latexTabStyles: CSSResult = css`
   :host {
     display: block;
-  }
-
-  .latex-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: var(--wa-space-s);
   }
 
   .dependency-card {
@@ -27,25 +18,17 @@ export const latexTabStyles: CSSResult = css`
     gap: var(--wa-space-xs);
   }
 
-  .dependency-icon,
-  .setting-status-icon {
+  .dependency-icon {
     flex-shrink: 0;
     font-size: var(--font-size-lg);
   }
 
-  .dependency-icon.installed,
-  .setting-status-icon.is-set {
+  .dependency-icon.installed {
     color: var(--color-status-ok);
   }
 
   .dependency-icon.missing {
     color: var(--color-status-error);
-  }
-
-  /* Using-default state for non-boolean settings (number/enum). Not a
-     problem — just hasn't been overridden. Render neutral, not red. */
-  .setting-status-icon.is-default {
-    color: var(--color-text-secondary);
   }
 
   .dependency-info {
@@ -116,51 +99,6 @@ export const latexTabStyles: CSSResult = css`
     flex-wrap: nowrap;
   }
 
-  .setting-number-input {
-    width: 140px;
-  }
-
-  .setting-enum-select {
-    min-width: 180px;
-  }
-
-  /* These Web Awesome slots name and describe the inner native controls.
-     The same copy already renders in the row's visible text column. */
-  .setting-control-metadata::part(form-control-label),
-  .setting-control-metadata::part(label),
-  .setting-control-metadata::part(hint) {
-    ${visuallyHiddenDeclarations}
-  }
-
-  .replacement-groups-row,
-  .replacement-map-row {
-    align-items: flex-start;
-  }
-
-  .replacement-category-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-    gap: var(--wa-space-xs);
-    margin-top: var(--wa-space-s);
-  }
-
-  .replacement-map-row wa-textarea {
-    width: min(760px, 100%);
-    margin-top: var(--wa-space-s);
-    font-family: var(--wa-font-family-mono, monospace), monospace;
-  }
-
-  .replacement-json-error {
-    display: block;
-    margin-top: var(--wa-space-2xs);
-    color: var(--color-status-error);
-    font-size: var(--font-size-sm);
-  }
-
-  .replacement-json-error:empty {
-    display: none;
-  }
-
   .setting-config-key {
     font-family: var(--wa-font-family-mono, monospace), monospace;
     font-size: var(--font-size-sm);
@@ -172,6 +110,11 @@ export const latexTabStyles: CSSResult = css`
     font-family: var(--wa-font-family-mono, monospace), monospace;
     font-size: var(--font-size-sm);
     color: var(--wa-color-text-link);
+  }
+
+  /* Wide enough for the catalog's "value — description" option text. */
+  .settings-row-control wa-select {
+    min-width: 17rem;
   }
 
   wa-tag.setting-badge {

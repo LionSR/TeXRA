@@ -11,8 +11,10 @@
  *      `pushManualCriticism` here for tool-use agents that want to flag issues
  *      without inserting the macro.
  *
- * Gated on the `INLINE_CRITICISM_ENABLED` global state key, surfaced as a
- * toggle in the LaTeX settings tab (default: false).
+ * Gated on the `texra.inlineCriticism.enabled` catalog row (global state,
+ * default false), a switch on the LaTeX settings page. The settings write goes
+ * through the generic catalog path; {@link syncInlineCriticism} then reconciles
+ * the diagnostics with the stored value.
  */
 
 // Third-party imports
@@ -25,10 +27,12 @@ import { subscribeOutputFiles } from '@frontend/events/runFactSubscriptions';
 import { lineToRange } from '@frontend/vscode/vscodeEditor';
 import { parseCriticismAnnotations } from '@latex/criticismParser';
 import { withLogChannel } from '@logger/effectLog';
-import type { StateStore, StateReadFailed } from '@platform/interfaces';
+import type { StateReadFailed } from '@platform/interfaces';
 import type { ProcessRuntime } from '@platform/processRuntime';
+import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { AddOutputFilesPayload, OutputFileInfo } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import { readSettingFrom } from '@utils/config/platformSettings';
 import { hasExtension } from '@utils/core/pathCore';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
@@ -44,7 +48,7 @@ interface CriticismRegistration {
   readonly context: vscode.ExtensionContext;
   readonly session: Pick<SessionHandle, 'events' | 'now'>;
   readonly runtime: ProcessRuntime;
-  readonly globalState: StateStore;
+  readonly stores: SettingsStores;
 }
 
 let collection: vscode.DiagnosticCollection | undefined;
@@ -58,20 +62,6 @@ function mapSeverity(severity: number): vscode.DiagnosticSeverity {
   if (severity >= 4) return vscode.DiagnosticSeverity.Warning;
   if (severity >= 3) return vscode.DiagnosticSeverity.Information;
   return vscode.DiagnosticSeverity.Hint;
-}
-
-/** Read the shared state store; before registration the feature is off. */
-export function isInlineCriticismEnabled(): Effect.Effect<
-  boolean,
-  StateReadFailed
-> {
-  return Effect.suspend(() =>
-    registration
-      ? registration.globalState
-          .get<boolean>(GlobalStateKey.INLINE_CRITICISM_ENABLED, false)
-          .pipe(Effect.map((enabled) => enabled === true))
-      : Effect.succeed(false),
-  );
 }
 
 function buildDiagnostic(
@@ -176,19 +166,29 @@ function enable({ context, session, runtime }: CriticismRegistration): boolean {
   return true;
 }
 
-const logEnabled = Effect.logInfo('Inline criticism diagnostics enabled').pipe(
-  withLogChannel(CHANNEL),
-);
-
-function disable(): void {
+/** Answers whether this call disabled the diagnostics (false when already off). */
+function disable(): boolean {
   outputUnsubscribe?.();
   outputUnsubscribe = undefined;
-  if (collection) {
-    collection.clear();
-    collection.dispose();
-    collection = undefined;
-  }
+  if (!collection) return false;
+  collection.clear();
+  collection.dispose();
+  collection = undefined;
+  return true;
 }
+
+/** Turn the diagnostics on or off to match the stored setting. */
+const reconcile = Effect.fnUntraced(function* (current: CriticismRegistration) {
+  const enabled = yield* readSettingFrom<boolean>(
+    current.stores,
+    GlobalStateKey.INLINE_CRITICISM_ENABLED,
+  );
+  if (enabled ? enable(current) : disable()) {
+    yield* Effect.logInfo(
+      `Inline criticism diagnostics ${enabled ? 'enabled' : 'disabled'}`,
+    ).pipe(withLogChannel(CHANNEL));
+  }
+});
 
 /**
  * Append a criticism entry from a tool-use agent. Returns false when the
@@ -228,43 +228,30 @@ export function registerInlineCriticism(
   context: vscode.ExtensionContext,
   runtime: ProcessRuntime,
   session: Pick<SessionHandle, 'events' | 'now'>,
-  globalState: StateStore,
+  stores: SettingsStores,
 ): Effect.Effect<void, StateReadFailed> {
-  return Effect.gen(function* () {
-    const enabled = yield* globalState.get<boolean>(
-      GlobalStateKey.INLINE_CRITICISM_ENABLED,
-      false,
-    );
-    registration = { context, session, runtime, globalState };
-    if (enabled === true && enable(registration)) yield* logEnabled;
+  return Effect.suspend(() => {
+    registration = { context, session, runtime, stores };
     context.subscriptions.push({ dispose: disable });
+    return reconcile(registration);
   });
 }
 
-/** Persist the setting before reconciling the active diagnostics. */
-export function setInlineCriticismEnabled(
-  enabled: boolean,
-): Effect.Effect<void, Error> {
-  return Effect.gen(function* () {
-    const current = registration;
-    if (!current) {
-      return yield* Effect.fail(
-        new Error(
-          'setInlineCriticismEnabled called before registerInlineCriticism',
+/**
+ * Reconcile the diagnostics after a write to the setting. The settings view
+ * calls this once the catalog write has landed.
+ */
+export function syncInlineCriticism(): Effect.Effect<
+  void,
+  StateReadFailed | Error
+> {
+  return Effect.suspend(() =>
+    registration
+      ? reconcile(registration)
+      : Effect.fail(
+          new Error(
+            'syncInlineCriticism called before registerInlineCriticism',
+          ),
         ),
-      );
-    }
-    yield* current.globalState.update(
-      GlobalStateKey.INLINE_CRITICISM_ENABLED,
-      enabled,
-    );
-    if (enabled) {
-      if (enable(current)) yield* logEnabled;
-    } else {
-      disable();
-      yield* Effect.logInfo('Inline criticism diagnostics disabled').pipe(
-        withLogChannel(CHANNEL),
-      );
-    }
-  });
+  );
 }

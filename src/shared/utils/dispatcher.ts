@@ -82,42 +82,6 @@ export type DispatcherFn<TMessage extends CommandMessage> = (
 ) => boolean;
 
 /**
- * Projects a registry to the list of commands it declares `unsupported(...)`.
- * This is how the frontend capability view stays derived from the registry
- * instead of duplicating the same fact in a hand-maintained manifest: a host
- * computes this once (e.g. at webview-ready) from its own registry and sends
- * it down, and the frontend gates controls off the result instead of an
- * `isDesktopHost` check.
- *
- * Takes any `HandlerRegistry<TMessage>` (widened to a plain string-keyed
- * record here — TypeScript can't invert the mapped type to infer `TMessage`
- * from a call site's concrete registry value, and this function only needs
- * to read each entry, not reconstruct its per-command type).
- */
-export function unsupportedCommands(
-  handlers: Readonly<Record<string, unknown>>,
-): string[] {
-  return Object.keys(handlers).filter((command) =>
-    isUnsupported(handlers[command]),
-  );
-}
-
-/**
- * Frontend-side capability check for a command gated by a set the host sent
- * via `unsupportedCommands()` above. `commands` is `null` before the host's
- * one-shot capability broadcast has arrived — treated as "unsupported" (the
- * control stays hidden) rather than "supported" (which would flash a control
- * the active host can't act on before disappearing once the real data
- * lands). Once the broadcast arrives, this reflects the registry exactly.
- */
-export function isKnownUnsupported(
-  commands: ReadonlySet<string> | null,
-  command: string,
-): boolean {
-  return commands === null || commands.has(command);
-}
-
-/**
  * Creates a type-safe message dispatcher for a given schema.
  *
  * @param schema - Zod schema for the message union (must output { command: string, ... })
