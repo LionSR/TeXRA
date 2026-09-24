@@ -207,6 +207,7 @@ function installFromRoot(
           source: candidate.dir,
           path: candidate.dir,
           skills: plugin.skills.map((skill) => path.join(candidate.dir, skill)),
+          enabled: true,
         });
         continue;
       }
@@ -236,6 +237,7 @@ function installFromRoot(
         commit: fetched.commit,
         path: pluginPath,
         skills: plugin.skills.map((skill) => path.join(pluginPath, skill)),
+        enabled: true,
       });
     }
     return records;
@@ -353,6 +355,29 @@ export function removePlugin(name: string, env: PluginEnv) {
       yield* removeDir(path.join(env.pluginsDir, plugin.name));
     }
     return plugin;
+  });
+}
+
+/**
+ * Switch a recorded plugin on or off. A disabled plugin stays installed and
+ * pinned, and contributes nothing: its skills leave the catalog until it is
+ * enabled again.
+ */
+export function setPluginEnabled(
+  name: string,
+  enabled: boolean,
+  env: PluginEnv,
+) {
+  return Effect.gen(function* () {
+    const installed = yield* readInstalledPlugins(env.stores);
+    const plugin = yield* requireInstalled(installed, name);
+    yield* writeInstalledPlugins(
+      env.stores,
+      installed.map((entry) =>
+        entry.name === name ? { ...entry, enabled } : entry,
+      ),
+    );
+    return { ...plugin, enabled };
   });
 }
 

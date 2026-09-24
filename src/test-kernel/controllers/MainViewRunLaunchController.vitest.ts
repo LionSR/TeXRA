@@ -4,7 +4,7 @@ import { Effect, FileSystem, Layer } from 'effect';
 import { beforeEach, describe, expect, vi } from 'vitest';
 
 // Local imports
-import { AgentDirectories } from '@platform/interfaces';
+import { AgentDirectories, AppState } from '@platform/interfaces';
 import type { GlobalStorageFs } from '@platform/rootedFs';
 import { AgentCategory } from '@shared/schemas';
 import type { HostRequest } from '@shared/session/hostRequest';
@@ -25,7 +25,7 @@ function onGlobalStorage<A, E>(
   program: Effect.Effect<
     A,
     E,
-    GlobalStorageFs | FileSystem.FileSystem | AgentDirectories
+    GlobalStorageFs | FileSystem.FileSystem | AgentDirectories | AppState
   >,
 ): Effect.Effect<A, E> {
   return Effect.provide(
@@ -34,6 +34,7 @@ function onGlobalStorage<A, E>(
       unusedGlobalStorageFs(),
       nodePlatformLayer,
       AgentDirectories.layer(fakeHostAgentDirectories),
+      AppState.layer(new FakeStateStore()),
     ),
   );
 }

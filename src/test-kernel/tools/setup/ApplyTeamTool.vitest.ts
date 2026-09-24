@@ -8,10 +8,11 @@ import { afterEach, beforeAll, beforeEach, describe, expect, vi } from 'vitest';
 
 // Local imports
 import { refresh } from '@agent/index/agentRegistry';
-import { AgentDirectories } from '@platform/interfaces';
+import { AgentDirectories, AppState } from '@platform/interfaces';
 import type { AgentRosterSelection } from '@shared/schemas';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { getDefaultTeamId } from '@shared/state/onboardingState';
+import { FakeStateStore } from '@test/support/FakePlatform';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { fakeSupabaseAuth } from '@test/support/fakeSupabaseAuth';
 import {
@@ -104,6 +105,7 @@ beforeAll(async () => {
         unusedGlobalStorageFs(),
         nodePlatformLayer,
         AgentDirectories.layer(fakeHostAgentDirectories),
+        AppState.layer(new FakeStateStore()),
       ),
     ),
   );

@@ -28,6 +28,7 @@ import type { MessageHost } from '@hosts/uiHosts';
 import { withLogChannel } from '@logger/effectLog';
 import type {
   AgentDirectories,
+  AppState,
   StateReadFailed,
   StateStore,
 } from '@platform/interfaces';
@@ -140,7 +141,7 @@ export function prepareSurfaceLaunch(
 ): Effect.Effect<
   ValidatedRunRequest,
   Rejected | Cancelled | StateReadFailed,
-  GlobalStorageFs | FileSystem.FileSystem | AgentDirectories
+  GlobalStorageFs | FileSystem.FileSystem | AgentDirectories | AppState
 > {
   return Effect.gen(function* () {
     let preparation: LaunchPreparation;

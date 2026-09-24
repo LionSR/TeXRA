@@ -14,7 +14,7 @@ import { validateAgentYamlContent } from '@agent/runtime/agentLoad';
 import { renderAgentTemplateString } from '@agent/templates/agentTemplateRenderer';
 import { withLogChannel } from '@logger/effectLog';
 import type { ModelOptionStores } from '@model/computeModelOptions';
-import type { AgentDirectories } from '@platform/interfaces';
+import type { AgentDirectories, AppState } from '@platform/interfaces';
 import type { LanguageModel } from '@platform/languageModel';
 import type { GlobalStorageFs } from '@platform/rootedFs';
 import type { AgentCategory } from '@shared/schemas';
@@ -217,7 +217,11 @@ export interface AgentCreatorUI {
   ): Effect.Effect<
     void,
     AgentCreatorUiFailed,
-    GlobalStorageFs | FileSystem.FileSystem | AgentDirectories | LanguageModel
+    | GlobalStorageFs
+    | FileSystem.FileSystem
+    | AgentDirectories
+    | AppState
+    | LanguageModel
   >;
   openCreatedFile(filePath: string): Effect.Effect<void, AgentCreatorUiFailed>;
   renderTemplate(template: string, vars: Record<string, unknown>): string;
@@ -415,6 +419,7 @@ export const runAgentCreator = Effect.fn('runAgentCreator')(function* (
   | LanguageModel
   | HttpClient.HttpClient
   | AgentDirectories
+  | AppState
 > {
   const categoryLabel = category === 'toolUse' ? 'Tool Use' : 'Workflow';
   const agentName = yield* ui.promptAgentName(categoryLabel);

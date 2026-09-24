@@ -10,6 +10,7 @@
 // Third-party imports
 import { Cause, Effect, Exit } from 'effect';
 import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
+import { childCompositionRefusal } from '@agent/runtime/agentToolResolution';
 
 // Local imports
 import {
@@ -174,6 +175,19 @@ export const executeSubagent = Effect.fn('executeSubagent')(function* (
     suppressErrorNotification: true,
   });
   const { config } = definition;
+  // A detached child launches after this call settles, so a child that needs
+  // a plugin its parent's composition lacks is refused here, on the call
+  // that asked for it, before any row records it.
+  const refusal = childCompositionRefusal(
+    parent.run.composition.key.composition,
+    definition.setting.tools,
+    agentName,
+  );
+  if (refusal !== undefined) {
+    return errorResult(refusal, {
+      summary: `Subagent '${agentName}' not launched`,
+    });
+  }
   const isToolUse = config.agentCategory === AgentCategory.ToolUse;
   // One decision for the child's follow-up capability: the roster row it
   // registers under and the run it launches must agree.

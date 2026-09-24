@@ -75,6 +75,7 @@ import {
 } from '@model/computeModelOptions';
 import type {
   AgentDirectories,
+  AppState,
   StateStore,
   StateReadFailed,
   StateWriteFailed,
@@ -423,7 +424,7 @@ export function createExtensionHostRequests(
   ): Effect.Effect<
     void,
     HostCallFailed | RequestRefusal | StateReadFailed,
-    GlobalStorageFs | FileSystem.FileSystem | AgentDirectories
+    GlobalStorageFs | FileSystem.FileSystem | AgentDirectories | AppState
   > {
     return Effect.gen(function* () {
       const { launch: form } = request;

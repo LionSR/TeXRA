@@ -61,6 +61,7 @@ import {
   AgentDirectories,
   AgentResume,
   AgentResumeFailed,
+  AppState,
   type RecoveryContinuation,
 } from '@platform/interfaces';
 import { withProcessServices } from '@platform/processRuntime';
@@ -70,6 +71,7 @@ import {
   type RunId,
   AgentCategory,
 } from '@shared/schemas';
+import { FakeStateStore } from '@test/support/FakePlatform';
 import { noopTrace } from '@test/support/noopTrace';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRuntime } from '@test/support/testProcessRuntime';
@@ -585,6 +587,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
           unusedGlobalStorageFs(),
           nodePlatformLayer,
           AgentDirectories.layer(fakeHostAgentDirectories),
+          AppState.layer(new FakeStateStore()),
         ),
       ),
     );

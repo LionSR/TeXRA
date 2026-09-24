@@ -29,7 +29,7 @@ import {
   type SignInCallbackOutcome,
 } from '@controllers/auth/supabaseSignIn';
 import { withLogChannel } from '@logger/effectLog';
-import type { AgentDirectories } from '@platform/interfaces';
+import type { AgentDirectories, AppState } from '@platform/interfaces';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { GlobalStorageFs } from '@platform/rootedFs';
 import type { PlatformSecrets, SecretsFailed } from '@platform/secrets';
@@ -218,6 +218,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
     | HttpClient.HttpClient
     | FileSystem.FileSystem
     | AgentDirectories
+    | AppState
   > {
     return Effect.gen({ self: this }, function* () {
       const session = yield* this.sessionCoordinator.loadSession();
@@ -244,7 +245,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
   ): Effect.Effect<
     vscode.AuthenticationSession[],
     AuthPortError,
-    GlobalStorageFs | FileSystem.FileSystem | AgentDirectories
+    GlobalStorageFs | FileSystem.FileSystem | AgentDirectories | AppState
   > {
     return Effect.gen({ self: this }, function* () {
       if (Date.now() >= session.expiresAt) {
@@ -283,7 +284,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
   ): Effect.Effect<
     void,
     AuthPortError,
-    GlobalStorageFs | FileSystem.FileSystem | AgentDirectories
+    GlobalStorageFs | FileSystem.FileSystem | AgentDirectories | AppState
   > {
     return Effect.gen({ self: this }, function* () {
       // The rejected credential is already unusable. Do not call the client's
@@ -439,7 +440,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
   clearStoredSession(): Effect.Effect<
     boolean,
     AuthPortError,
-    GlobalStorageFs | FileSystem.FileSystem | AgentDirectories
+    GlobalStorageFs | FileSystem.FileSystem | AgentDirectories | AppState
   > {
     return Effect.gen({ self: this }, function* () {
       const session = yield* this.sessionCoordinator.loadSession();
@@ -461,7 +462,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
   removeStoredSession(): Effect.Effect<
     boolean,
     AuthPortError | SecretsFailed,
-    GlobalStorageFs | FileSystem.FileSystem | AgentDirectories
+    GlobalStorageFs | FileSystem.FileSystem | AgentDirectories | AppState
   > {
     const cancelPending = this.signIn.cancel();
     return Effect.gen({ self: this }, function* () {
@@ -478,7 +479,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
   ): Effect.Effect<
     void,
     AuthPortError,
-    GlobalStorageFs | FileSystem.FileSystem | AgentDirectories
+    GlobalStorageFs | FileSystem.FileSystem | AgentDirectories | AppState
   > {
     return Effect.gen({ self: this }, function* () {
       yield* this.sessionCoordinator.clearSession();
@@ -491,7 +492,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
   ): Effect.Effect<
     boolean,
     AuthPortError,
-    GlobalStorageFs | FileSystem.FileSystem | AgentDirectories
+    GlobalStorageFs | FileSystem.FileSystem | AgentDirectories | AppState
   > {
     return Effect.gen({ self: this }, function* () {
       const cleared =
@@ -507,7 +508,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
   ): Effect.Effect<
     void,
     never,
-    GlobalStorageFs | FileSystem.FileSystem | AgentDirectories
+    GlobalStorageFs | FileSystem.FileSystem | AgentDirectories | AppState
   > {
     return invalidateRemoteAgentsAfterSignOut().pipe(
       Effect.andThen(

@@ -48,8 +48,9 @@ vi.mock('@frontend/ui/errorHandlingUtils', () => ({
 // Local imports
 import { SupabaseAuth, type SupabaseAuthShape } from '@auth/SupabaseAuth';
 import { signIn, signOut } from '@commands/auth/authCommands';
-import { AgentDirectories } from '@platform/interfaces';
+import { AgentDirectories, AppState } from '@platform/interfaces';
 import { GlobalStorageFs } from '@platform/rootedFs';
+import { FakeStateStore } from '@test/support/FakePlatform';
 import { fakeSupabaseAuth } from '@test/support/fakeSupabaseAuth';
 import {
   nodePlatformLayer,
@@ -63,11 +64,16 @@ const withAuth = <A>(
   program: Effect.Effect<
     A,
     never,
-    GlobalStorageFs | SupabaseAuth | FileSystem.FileSystem | AgentDirectories
+    | GlobalStorageFs
+    | SupabaseAuth
+    | FileSystem.FileSystem
+    | AgentDirectories
+    | AppState
   >,
 ): Effect.Effect<A> =>
   Effect.provideService(program, SupabaseAuth, auth).pipe(
     Effect.provideService(AgentDirectories, fakeHostAgentDirectories),
+    Effect.provideService(AppState, new FakeStateStore()),
     // The sign-out path rebuilds the local agent catalog, which names the
     // process's global storage view and the filesystem its scan reads
     // through; this suite's catalog read is mocked.

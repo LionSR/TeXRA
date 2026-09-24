@@ -1325,7 +1325,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     schema: z.array(z.string()).prefault([]),
     title: 'Tool integrations',
     description:
-      'Enable or disable external tool integration groups used by agent tool resolution.',
+      'Enable or disable tool plugins. A disabled plugin withholds its tools, its bundled skills and its bundled agents.',
     category: 'tools',
     slots: sameSlot('globalState'),
     honoredBy: everyHost('src/tools/toolAvailability.ts'),
@@ -1361,7 +1361,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     schema: z.array(InstalledPluginSchema).prefault([]),
     title: 'Installed plugins',
     description:
-      'Claude Code and Codex plugins installed with `texra plugin install`. TeXRA loads their skills as user skills.',
+      'Claude Code and Codex plugins installed with `texra plugin install`. TeXRA loads the skills of each enabled one as user skills; `texra plugin disable` hides a plugin without removing it.',
     category: 'tools',
     slots: sameSlot('globalState'),
     honoredBy: everyHost('src/skills/runtimeSkills.ts'),

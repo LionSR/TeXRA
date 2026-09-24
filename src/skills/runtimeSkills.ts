@@ -66,8 +66,8 @@ export function installSkillContributions(
 
 /**
  * The installed contributions folded for one folder, with the plugins
- * recorded in `stores`. `options` replaces the installed options for one
- * call: the CLI's `skills list` flags.
+ * recorded in `stores` and the tool plugins switched off there. `options`
+ * replaces the installed options for one call: the CLI's `skills list` flags.
  */
 export function runtimeSkillSources(
   cwd: string,
@@ -79,6 +79,10 @@ export function runtimeSkillSources(
       stores,
       GlobalStateKey.INSTALLED_PLUGINS,
     );
+    const disabledPlugins = yield* readSettingFrom<string[]>(
+      stores,
+      GlobalStateKey.DISABLED_TOOLS,
+    );
     return foldSkillSources(installed.contributions, {
       cwd,
       // `safeHomedir()` never throws (unlike raw `os.homedir()`, which can
@@ -89,6 +93,7 @@ export function runtimeSkillSources(
       resourcesPath: installed.resourcesPath,
       options,
       plugins,
+      disabledPlugins: new Set(disabledPlugins),
     });
   });
 }

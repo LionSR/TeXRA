@@ -1,4 +1,5 @@
 import { Effect } from 'effect';
+import { refresh as refreshAgentCatalog } from '@agent/index';
 import type { SettingsViewInboundHandlerRegistry } from '@controllers/settingsView/settingsViewDispatch';
 
 import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
@@ -172,9 +173,10 @@ export class DefaultDesktopToolingSettingsController implements DesktopToolingSe
   }
 
   private toggleTool(toolId: string, enabled: boolean) {
-    return Effect.andThen(
-      setToolEnabled(toolId, enabled, this.options.globalState),
-      this.postToolDashboardData(),
+    return setToolEnabled(toolId, enabled, this.options.globalState).pipe(
+      // A plugin's bundled agents follow its switch.
+      Effect.andThen(refreshAgentCatalog()),
+      Effect.andThen(this.postToolDashboardData()),
     );
   }
 

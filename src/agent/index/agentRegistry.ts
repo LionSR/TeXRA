@@ -4,6 +4,7 @@ import { Cause, Data, Effect, FileSystem } from 'effect';
 import { AgentRosterController } from '@agent/roster/AgentRosterController';
 import { withLogChannel } from '@logger/effectLog';
 import { AgentDirectories, type StateReadFailed } from '@platform/interfaces';
+import type { AppState } from '@platform/interfaces';
 import type { GlobalStorageFs } from '@platform/rootedFs';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type {
@@ -28,7 +29,7 @@ import { byName } from '@utils/core';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { scanDirectory } from './agentYamlScanner';
-import { builtInToolUseRoots } from './BundledAgentDirectories';
+import { enabledToolUseRoots } from './BundledAgentDirectories';
 import { loadRemoteAgents } from './remoteAgentMeta';
 import type { AgentEntry } from './agentEntry';
 
@@ -115,7 +116,7 @@ export function loadAgents(
 ): Effect.Effect<
   void,
   AgentCatalogLoadError | StateReadFailed,
-  GlobalStorageFs | FileSystem.FileSystem | AgentDirectories
+  GlobalStorageFs | FileSystem.FileSystem | AgentDirectories | AppState
 > {
   const includeRemote = options.includeRemote ?? true;
   return onCatalogLoadLane(
@@ -138,7 +139,7 @@ function queueLoad(
 ): Effect.Effect<
   void,
   AgentCatalogLoadError | StateReadFailed,
-  GlobalStorageFs | FileSystem.FileSystem | AgentDirectories
+  GlobalStorageFs | FileSystem.FileSystem | AgentDirectories | AppState
 > {
   return Effect.gen(function* () {
     if (loadEpoch !== epoch) return;
@@ -160,12 +161,13 @@ function queueLoad(
       ),
     );
 
+    const toolUseRoots = yield* enabledToolUseRoots(toolUseDir);
     const [customScan, builtInScan, toolUseScan, remoteEntries] =
       yield* Effect.all(
         [
           scanDirectory([customDir], 'custom'),
           scanDirectory([builtInDir], 'builtInWorkflow'),
-          scanDirectory(builtInToolUseRoots(toolUseDir), 'builtInToolUse'),
+          scanDirectory(toolUseRoots, 'builtInToolUse'),
           includeRemote
             ? loadRemoteAgents()
             : Effect.succeed([] as AgentEntry[]),
@@ -272,7 +274,7 @@ export function refresh(
 ): Effect.Effect<
   void,
   AgentCatalogLoadError | StateReadFailed,
-  GlobalStorageFs | FileSystem.FileSystem | AgentDirectories
+  GlobalStorageFs | FileSystem.FileSystem | AgentDirectories | AppState
 > {
   return Effect.suspend(() => {
     // A local rescan is weaker than the loads queued before it, so it takes
@@ -295,7 +297,7 @@ function removeRemoteEntries(): void {
 export function invalidateRemoteAgentsAfterSignOut(): Effect.Effect<
   void,
   never,
-  GlobalStorageFs | FileSystem.FileSystem | AgentDirectories
+  GlobalStorageFs | FileSystem.FileSystem | AgentDirectories | AppState
 > {
   return Effect.suspend(() => {
     removeRemoteEntries();
@@ -543,7 +545,7 @@ export function computeAgentOptionsData(
 ): Effect.Effect<
   AgentOptionsDataPayload,
   AgentCatalogLoadError | StateReadFailed,
-  GlobalStorageFs | FileSystem.FileSystem | AgentDirectories
+  GlobalStorageFs | FileSystem.FileSystem | AgentDirectories | AppState
 > {
   return Effect.gen(function* () {
     yield* loadAgents();

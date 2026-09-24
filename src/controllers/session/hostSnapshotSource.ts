@@ -22,6 +22,7 @@ import {
 } from '@model/computeModelOptions';
 import type {
   AgentDirectories,
+  AppState,
   StateStore,
   StateWriteFailed,
 } from '@platform/interfaces';
@@ -112,13 +113,18 @@ export interface HostSnapshotSource {
     | SupabaseAuth
     | FileSystem.FileSystem
     | AgentDirectories
+    | AppState
   >;
   /** The agent, team, and model catalogs changed (a roster edit, a
    *  credential, a sign-in). */
   readonly refreshCatalogs: Effect.Effect<
     void,
     never,
-    GlobalStorageFs | LanguageModel | FileSystem.FileSystem | AgentDirectories
+    | GlobalStorageFs
+    | LanguageModel
+    | FileSystem.FileSystem
+    | AgentDirectories
+    | AppState
   >;
   /** The project's files changed on disk, or the surface asked for a relist. */
   readonly refreshFiles: Effect.Effect<void, never, FileSystem.FileSystem>;
@@ -292,9 +298,14 @@ export function createHostSnapshotSource(
       | SupabaseAuth
       | FileSystem.FileSystem
       | AgentDirectories
+      | AppState
     >(...catalogLoads, loadFiles, loadCommits, loadAuth, loadHostBanners),
     refreshCatalogs: guarded<
-      GlobalStorageFs | LanguageModel | FileSystem.FileSystem | AgentDirectories
+      | GlobalStorageFs
+      | LanguageModel
+      | FileSystem.FileSystem
+      | AgentDirectories
+      | AppState
     >(...catalogLoads),
     refreshFiles: guarded(loadFiles),
     refreshCommits: guarded(loadCommits),

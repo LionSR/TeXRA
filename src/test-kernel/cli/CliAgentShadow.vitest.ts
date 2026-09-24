@@ -22,10 +22,11 @@ import {
   resolveCliRunAgent,
 } from '@cli/runtime/agents';
 import { TuiSession } from '@cli/chat/tui/state/sessionRunState';
-import { AgentDirectories } from '@platform/interfaces';
+import { AgentDirectories, AppState } from '@platform/interfaces';
 import type { ProcessServices } from '@platform/processRuntime';
 import { GlobalStorageFs } from '@platform/rootedFs';
 import { AgentCategory } from '@shared/schemas';
+import { FakeStateStore } from '@test/support/FakePlatform';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { REPO_ROOT } from '@test/support/repoScan';
@@ -107,6 +108,7 @@ describe('CLI agent validation with a shadowed name', () => {
           {} as RootedFileSystem,
         ).pipe(
           Effect.provideService(AgentDirectories, fakeHostAgentDirectories),
+          Effect.provideService(AppState, new FakeStateStore()),
         ),
         nodePlatformLayer,
       ),

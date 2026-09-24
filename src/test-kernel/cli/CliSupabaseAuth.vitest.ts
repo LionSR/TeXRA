@@ -4,9 +4,10 @@ import * as path from 'node:path';
 import { it } from '@effect/vitest';
 import { Effect, Exit, Fiber, Logger } from 'effect';
 import { beforeAll, beforeEach, describe, expect, vi } from 'vitest';
-import { AgentDirectories } from '@platform/interfaces';
+import { AgentDirectories, AppState } from '@platform/interfaces';
 import { AgentCategory } from '@shared/schemas';
 import { UpdateCheckRecords } from '@shared/session/updateCheckRecords';
+import { FakeStateStore } from '@test/support/FakePlatform';
 
 // Local imports
 import {
@@ -318,6 +319,7 @@ describe('CLI Supabase auth', () => {
         Effect.provide(globalStorageFsTestLayer(globalStorage)),
         Effect.provide(nodePlatformLayer),
         Effect.provideService(AgentDirectories, bundledAgentDirectories()),
+        Effect.provideService(AppState, new FakeStateStore()),
       );
 
       expect(mocks.authCoordinator.clearSession).toHaveBeenCalledOnce();
@@ -375,6 +377,7 @@ describe('CLI Supabase auth', () => {
           Effect.provide(globalStorageFsTestLayer(globalStorage)),
           Effect.provide(nodePlatformLayer),
           Effect.provideService(AgentDirectories, rebuildDies),
+          Effect.provideService(AppState, new FakeStateStore()),
           Effect.withLogger(capture),
         ),
       ).toBeUndefined();

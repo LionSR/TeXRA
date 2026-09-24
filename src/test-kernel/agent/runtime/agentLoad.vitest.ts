@@ -22,10 +22,12 @@ import {
 import {
   AgentDirectories,
   AgentDirectoriesFailed,
+  AppState,
   type AgentDirectoriesPort,
 } from '@platform/interfaces';
 import type { GlobalStorageFs } from '@platform/rootedFs';
 import { AgentCategory } from '@shared/schemas';
+import { FakeStateStore } from '@test/support/FakePlatform';
 import {
   fakeHostAgentDirectories,
   installPlatform,
@@ -45,7 +47,7 @@ function onGlobalStorage<A, E>(
   program: Effect.Effect<
     A,
     E,
-    GlobalStorageFs | FileSystem.FileSystem | AgentDirectories
+    GlobalStorageFs | FileSystem.FileSystem | AgentDirectories | AppState
   >,
 ): Effect.Effect<A, E> {
   return Effect.provide(
@@ -54,6 +56,7 @@ function onGlobalStorage<A, E>(
       unusedGlobalStorageFs(),
       nodePlatformLayer,
       AgentDirectories.layer(fakeHostAgentDirectories),
+      AppState.layer(new FakeStateStore()),
     ),
   );
 }
