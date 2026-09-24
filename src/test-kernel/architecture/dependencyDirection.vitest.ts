@@ -159,16 +159,11 @@ const BARE_EFFECT_RUN_SITES: Readonly<Record<string, number>> = {
   // lifecycle host and no runtime — the drain it runs is what disposes the
   // process runtime — so the quit follows the drain on the default runner.
   'packages/desktop/src/main/desktopWindowLifecycle.ts': 1,
-  // The desktop entry's startup-failure path: a `whenReady` program that died
-  // before the window was wired runs the same shutdown an ordinary quit does,
-  // and that drain disposes the runtime it would otherwise borrow.
+  // The desktop entry: one program from `whenReady` to the wired window,
+  // which builds the process runtime (its identity, stores and account plane
+  // resolve before `installProcessRuntime`, being the values that install is
+  // given) and, when startup fails, runs the drain that disposes it.
   'packages/desktop/src/main/index.ts': 1,
-  // The desktop composition root, for the same reason: its process identity
-  // and its four stores — global and workspace state, the config pair, and
-  // the secrets file — resolve before `installProcessRuntime`, because three
-  // of them are the values that install is given, and so does the account
-  // plane it hands that install.
-  'packages/desktop/src/main/platform/index.ts': 1,
   // The VS Code entry's two pre-runtime folds, plus the account-plane and
   // process-identity resolution in `initVscodePlatform`: `activate` reports a failed
   // activation and runs the cleanup that disposes the process runtime, so it

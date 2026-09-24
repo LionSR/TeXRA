@@ -1,4 +1,4 @@
-import { Cause, Effect, Exit } from 'effect';
+import { Cause, Effect } from 'effect';
 import { z } from 'zod';
 
 import { SerializedWrites, settleFailure } from '@auth/authProgram';
@@ -47,7 +47,7 @@ interface DesktopSupabaseAuth {
     provider?: OAuthProvider,
     options?: { timeoutMs?: number },
   ): Effect.Effect<boolean>;
-  signOut(): Promise<void>;
+  signOut(): Effect.Effect<void, Error>;
   dispose(): void;
 }
 
@@ -261,8 +261,9 @@ export function createDesktopSupabaseAuth(
       waitOptions = {},
     ) => runAttempt(provider, waitOptions.timeoutMs),
 
-    async signOut() {
-      const cleared = await runtime.runPromiseExit(
+    signOut: () =>
+      withProcessServices(
+        runtime,
         Effect.gen(function* () {
           yield* coordinator.signOut();
           yield* warnOnNotificationFailure(
@@ -270,9 +271,11 @@ export function createDesktopSupabaseAuth(
             'Desktop auth surface refresh failed',
           );
         }),
-      );
-      if (Exit.isFailure(cleared)) throw settleFailure(cleared.cause);
-    },
+      ).pipe(
+        Effect.catchCause((cause) =>
+          Effect.fail(ensureError(settleFailure(cause))),
+        ),
+      ),
 
     /**
      * Closing this window unsubscribes it from the protocol router, and
