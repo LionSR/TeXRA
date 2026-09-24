@@ -174,7 +174,8 @@ interface SubscriptionRouteRow {
   /** The API key the model bills while signed out ('OpenAI'). */
   readonly apiKeyName: string;
   /** The route's own config (context ceiling, zero price), or null when the
-   *  preference is off or the model is not eligible. */
+   *  preference is off, OpenRouter is selected, the model is OpenRouter-only,
+   *  or the model is not eligible. */
   readonly resolveCapabilities: (
     stores: SettingsStores,
     config: ModelConfig,
