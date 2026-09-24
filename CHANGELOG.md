@@ -92,20 +92,12 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
   any round but the last was cut off and continued stopped at the next round
   with `continuationIndex 0 is below 1`. The continuation count now restarts
   with each round, as the agent always wrote it.
-- **`texra` reports config problems instead of ignoring them.** A setting in
+- **`texra` reports config settings it cannot use.** A setting in
   `.texra/config.json` or the user config whose value has the wrong type
   (`"texra.model.retry.maxAttempts": "five"`) now prints a warning that names
-  the key, the value and the default used in its place; before, only
-  `texra.approvalPolicy` warned and every other setting fell back silently.
-  `texra doctor` reports those warnings, and a malformed or non-object
-  project config file, as WARN rather than PASS.
-- **Headless `texra` output is quieter and more accurate.** Piped progress on
-  stderr prints a line when the run's state changes, not one per second.
-  `--output-format ndjson` no longer streams a run's debug-level `log` events
-  unless `--verbose` is set. A workflow run's `output.diffs` in the JSON
-  result now lists the output diffs instead of always being empty.
-  `texra history show` no longer prints a tool-use run's unused
-  `editedFiles: []` beside the files the run edited.
+  the key, the value and the default used in its place, and `texra doctor`
+  reports it as WARN; before, only `texra.approvalPolicy` warned and every
+  other setting fell back silently.
 - **Clearer `texra` errors.** An invalid or missing argument prints the error
   and a pointer to `--help` instead of the full help screen followed by the
   error, and honors `--no-color` and `FORCE_COLOR=0`. An `--output` or
@@ -115,9 +107,8 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
   "did you mean" suggestion.
 - **zsh completion completes model and agent names.** The completion
   function no longer shadows `$PATH`, which hid the `texra` and `awk` it calls.
-- **`texra config agents --all` help says what it does** — it sets the
-  workspace roster to every agent, as `--team` and `--inherit` set theirs; the
-  help and examples described it as a read-only listing.
+- **Bundled skill descriptions no longer name Codex** — they read "Use when
+  you need…" in every host.
 - **The desktop app shuts down cleanly when startup fails early.** If
   startup failed before the project list opened (for example, when the
   project records could not be read), shutdown reported two errors and left a
