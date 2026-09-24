@@ -22,7 +22,7 @@ export const GOAL_MODE_HELP = [
 ].join('\n');
 
 // Help sections in display order; `undefined` collects uncategorized
-// (plugin-style) registrations into a trailing "Other" section.
+// commands into a trailing "Other" section.
 const CATEGORY_SECTIONS: ReadonlyArray<{
   readonly category: SlashCommandCategory | undefined;
   readonly label: string;
