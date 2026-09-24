@@ -13,7 +13,7 @@ import {
   loadApiKeyStatusMap,
   type ApiProvider,
 } from '@model/apiProviders';
-import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
+import type { ProcessServices } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { PROVIDER_DISPLAY_NAMES } from '@shared/constants/providers';
@@ -115,9 +115,6 @@ function pickApiProvider(
  * Set an API key. Migrated to the shared command registry in
  * #3781 batch 4. The registry forwards a single typed argument so the
  * optional `provider` is parsed at the dispatch boundary.
- *
- * Keeps a Promise face: `extension.ts` registers it directly on the
- * no-folder welcome path, outside the command surface's runtime arm.
  */
 export function setApiKey(
   stores: SettingsStores,
@@ -125,36 +122,31 @@ export function setApiKey(
   refreshAfterKeyChange: (
     provider: string,
   ) => Effect.Effect<void, Error, ProcessServices>,
-  runtime: ProcessRuntime,
   provider?: ApiProvider,
-): Promise<void> {
-  return runtime.runPromise(
-    Effect.gen(function* () {
-      const target =
-        provider ??
-        (yield* pickApiProvider(
-          secrets,
-          'Select API provider',
-          "Keys are stored in VS Code's encrypted secret store, never on disk.",
-        ));
+) {
+  return Effect.gen(function* () {
+    const target =
+      provider ??
+      (yield* pickApiProvider(
+        secrets,
+        'Select API provider',
+        "Keys are stored in VS Code's encrypted secret store, never on disk.",
+      ));
 
-      if (!target) return;
+    if (!target) return;
 
-      const keyUrl = yield* getProviderKeyUrl(stores, target);
-      const apiKey = yield* Effect.promise(() =>
-        promptForApiKey(target, keyUrl),
+    const keyUrl = yield* getProviderKeyUrl(stores, target);
+    const apiKey = yield* Effect.promise(() => promptForApiKey(target, keyUrl));
+    if (!apiKey) return;
+
+    yield* createProfileKeyController(stores, secrets, refreshAfterKeyChange)
+      .commitProviderKey(target, apiKey)
+      .pipe(
+        Effect.catchTag('ProviderKeyActionFailed', (error) =>
+          showLoggedErrorMessage(CHANNEL, error.message, error.cause),
+        ),
       );
-      if (!apiKey) return;
-
-      yield* createProfileKeyController(stores, secrets, refreshAfterKeyChange)
-        .commitProviderKey(target, apiKey)
-        .pipe(
-          Effect.catchTag('ProviderKeyActionFailed', (error) =>
-            showLoggedErrorMessage(CHANNEL, error.message, error.cause),
-          ),
-        );
-    }),
-  );
+  });
 }
 
 /**

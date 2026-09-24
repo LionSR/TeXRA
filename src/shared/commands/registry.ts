@@ -4,40 +4,33 @@ import type { z } from 'zod';
 /**
  * Handler for a registry-dispatched command.
  *
- * Handlers may be sync (return `boolean`) or async (return
- * `Promise<boolean>`). The dispatcher returns whatever the handler
- * returns, so async work performed by the handler is observable to
- * callers — they can `await` the dispatch and surface rejections.
+ * A handler's result is whatever its host settles at the native entry:
+ * `TResult` defaults to `boolean | Promise<boolean>` (the desktop registry's
+ * sync handlers), and a host whose actions are Effect programs instantiates
+ * it with the program type and runs it once at its registration boundary.
+ * Either way the dispatcher returns the handler's result untouched, so the
+ * work stays observable to callers and rejections propagate (a
+ * fire-and-forget `void actions.X(); return true;` swallowed them, #3782).
  *
- * Returning `void`-ish promises is unsafe inside a handler: the
- * dispatcher would settle before the work finished, swallowing errors
- * (the bug fixed by #3782). Handlers that perform async work must
- * either `return actions.X()` (let the dispatcher forward the promise)
- * or `await` and return `true`.
- *
- * No-arg commands keep the legacy callable shape for backward
- * compatibility (the existing view-routing handlers and the desktop
- * registry are all no-arg). Parameterized commands declare a Zod tuple
- * schema for their positional arguments via `definedHandler` — the
+ * No-arg commands are plain callables. Parameterized commands declare a Zod
+ * tuple schema for their positional arguments via `definedHandler` — the
  * dispatcher parses the raw argument list at the boundary and only calls
  * `run` once parsing succeeds, keeping handlers free of parsing boilerplate.
- *
- * The legacy shape is preserved as a callable so existing entries like
- * `(actions) => actions.showSettings()` still type-check; the new shape
- * is an object with `run` + `argsSchema`.
  */
 export type CommandHandler<
   TActions,
   TArgs extends readonly unknown[] = readonly unknown[],
+  TResult = boolean | Promise<boolean>,
 > =
-  | ((actions: TActions) => boolean | Promise<boolean>)
-  | TypedCommandHandler<TActions, TArgs>;
+  | ((actions: TActions) => TResult)
+  | TypedCommandHandler<TActions, TArgs, TResult>;
 
 export interface TypedCommandHandler<
   TActions,
   TArgs extends readonly unknown[],
+  TResult = boolean | Promise<boolean>,
 > {
-  run: (actions: TActions, ...args: TArgs) => boolean | Promise<boolean>;
+  run: (actions: TActions, ...args: TArgs) => TResult;
   argsSchema: z.ZodType<TArgs>;
 }
 
@@ -47,13 +40,13 @@ export interface TypedCommandHandler<
  * declare entries with `definedHandler` (or a plain function for no-arg
  * commands) and the dispatcher narrows at lookup time.
  */
-type CommandHandlerMap<TId extends string, TActions> = Partial<
+type CommandHandlerMap<TId extends string, TActions, TResult> = Partial<
   // `any` here is load-bearing: each entry can declare its own `TArgs`
   // shape via `definedHandler`. Using `unknown` would force-unify across
   // the map and break per-entry inference. The dispatcher is the only
   // consumer of this map and parses raw args through the entry's own
   // schema, so the loose map type doesn't leak into call sites.
-  Record<TId, CommandHandler<TActions, any>>
+  Record<TId, CommandHandler<TActions, any, TResult>>
 >;
 
 /**
@@ -61,23 +54,15 @@ type CommandHandlerMap<TId extends string, TActions> = Partial<
  * for the args parameter. Without this helper, TypeScript can't widen the
  * inline object literal back into the union return type.
  */
-export function definedHandler<TActions, TArgs extends readonly unknown[]>(
+export function definedHandler<
+  TActions,
+  TArgs extends readonly unknown[],
+  TResult = boolean | Promise<boolean>,
+>(
   argsSchema: z.ZodType<TArgs>,
-  run: (actions: TActions, ...args: TArgs) => boolean | Promise<boolean>,
-): TypedCommandHandler<TActions, TArgs> {
+  run: (actions: TActions, ...args: TArgs) => TResult,
+): TypedCommandHandler<TActions, TArgs, TResult> {
   return { run, argsSchema };
-}
-
-/**
- * Wrap a promise-returning action so the dispatcher awaits it before
- * settling. Sync handlers that miss this helper regressed in #3778 — the
- * original `void actions.X(); return true;` shape fired-and-forgot the
- * promise, swallowing rejections (#3782). Handlers should use this helper
- * whenever they delegate to an async action so failures propagate to
- * `executeCommand` callers.
- */
-export function awaitTrue(p: PromiseLike<unknown>): Promise<boolean> {
-  return Promise.resolve(p).then(() => true);
 }
 
 export type CommandDispatchFailure<TId extends string> =
@@ -86,18 +71,20 @@ export type CommandDispatchFailure<TId extends string> =
 
 /**
  * Dispatch a command through its registered handler. Returns the
- * handler's result directly — sync handlers settle immediately;
- * async handlers return a promise that callers can `await` so
- * rejections propagate (rather than the fire-and-forget pattern that
- * regressed in #3778 and was caught in #3782).
+ * handler's result directly, or `false` when the id is unhandled or its
+ * arguments fail to parse.
  */
-export function dispatchCommandFromRegistry<TId extends string, TActions>(
+export function dispatchCommandFromRegistry<
+  TId extends string,
+  TActions,
+  TResult = boolean | Promise<boolean>,
+>(
   id: TId,
-  registry: CommandHandlerMap<TId, TActions>,
+  registry: CommandHandlerMap<TId, TActions, TResult>,
   actions: TActions,
   onFailure?: (failure: CommandDispatchFailure<TId>) => void,
   ...rawArgs: unknown[]
-): boolean | Promise<boolean> {
+): TResult | false {
   const handler = registry[id];
   if (!handler) {
     onFailure?.({ kind: 'unhandled', id });

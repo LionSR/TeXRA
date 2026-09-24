@@ -646,7 +646,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
       // No settings view exists before a folder is open, so there is no
       // credential surface to refresh after the key write.
       vscode.commands.registerCommand(EXTENSION_COMMANDS.SET_API_KEY, () =>
-        apiSetApiKey(roots, secrets, () => Effect.void, runtime),
+        runtime.runPromise(apiSetApiKey(roots, secrets, () => Effect.void)),
       ),
     );
     registerWalkthroughWorkspaceAction(context, false, runtime);
