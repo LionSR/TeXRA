@@ -125,14 +125,15 @@ async function seedMessages(window, view) {
     `
       (async () => {
         const element = document.querySelector(${JSON.stringify(view.tagName)});
-        if (!element || typeof element.handleMessage !== 'function') {
+        if (!element) {
           throw new Error(${JSON.stringify(
-            `Cannot seed ${view.tagName}: handleMessage is unavailable.`,
+            `Cannot seed ${view.tagName}: the element is not mounted.`,
           )});
         }
         const messages = ${JSON.stringify(messages)};
         for (const message of messages) {
-          element.handleMessage(message);
+          // The views listen for host messages on window, as a webview does.
+          window.dispatchEvent(new MessageEvent('message', { data: message }));
           if (element.updateComplete && typeof element.updateComplete.then === 'function') {
             await Promise.race([
               element.updateComplete,

@@ -33,7 +33,6 @@ const DESKTOP_DISPATCH_CASES: ReadonlyArray<
   ['texra.showModels', 'showSettings', ['models']],
   ['texra.showAgents', 'showSettings', ['agents']],
   ['texra.showTools', 'showSettings', ['tools']],
-  ['texra.showMultiAgent', 'showSettings', ['agents']],
   ['texra.showGitSettings', 'showSettings', ['general']],
   ['texra.desktop.openWorkspaceFolder', 'openWorkspaceFolder', []],
   ['texra.desktop.saveFile', 'saveFile', []],
