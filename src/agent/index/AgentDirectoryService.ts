@@ -19,6 +19,7 @@ import { entryExists } from '@utils/files/fsEntryExists';
 import {
   BUILTIN_WORKFLOW_AGENTS_DIR,
   BUILTIN_TOOL_USE_AGENTS_DIR,
+  builtInToolUseRoots,
 } from './BundledAgentDirectories';
 
 interface CustomAgentDirectoryStore {
@@ -102,7 +103,10 @@ export class AgentDirectoryService {
       const entries: AgentDirectoryEntry[] = [
         { directory: customDir, source: 'custom' },
         { directory: builtInDir, source: 'builtInWorkflow' },
-        { directory: builtInToolUseDir, source: 'builtInToolUse' },
+        ...builtInToolUseRoots(builtInToolUseDir).map((directory) => ({
+          directory,
+          source: 'builtInToolUse' as const,
+        })),
       ];
       return entries;
     });
@@ -248,7 +252,10 @@ export class AgentDirectoryService {
  * The one `AgentSource` to local-directory mapping. It reads the port, not the
  * service, so every holder of an `AgentDirectoriesPort` answers a source
  * through the same three readers and gives `remote` the same verdict, instead
- * of repeating the switch at its own composition root.
+ * of repeating the switch at its own composition root. For `builtInToolUse`
+ * it is the core directory only: tool plugin agents sit in the further roots
+ * `builtInToolUseRoots` adds, so a caller must not assume every entry of that
+ * source lies under the directory returned here.
  */
 export function agentSourceDirectory(
   directories: AgentDirectoriesPort,

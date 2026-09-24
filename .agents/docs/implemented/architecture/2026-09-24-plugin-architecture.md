@@ -189,6 +189,13 @@ unregister, no plugin state, no event channel) now covers:
   `packages/extension/resources/plugins/lean4/skills/`, passed to
   `hostSkillContributions` from `src/platform/defaults/nodeHost.ts`. Plugin
   skills are not gated by the plugin's switch.
+- **Bundled agent directories.** `ToolPlugin.agents: true` lets a tool plugin
+  ship bundled tool-use agents: lean4's five Lean agents live in
+  `packages/extension/resources/plugins/lean4/agents/`. The host bootstrap
+  installs those directories with `installPluginAgentDirectories`
+  (`src/agent/index/BundledAgentDirectories.ts`), and the `builtInToolUse`
+  scan pools them with the core directory. They are the same YAML in the same
+  persisted source, so agent keys do not change and no agent source is added.
 
 ## What is deliberately core
 
@@ -198,7 +205,9 @@ decision:
 - **Agent sources.** Agents are one unified YAML format loaded by
   `src/agent/runtime/agentLoad.ts` from its fixed sources (bundled
   `packages/extension/resources/agents/`, user, remote). A plugin-contributed agent kind would be a second
-  format and a second loader for the same thing.
+  format and a second loader for the same thing. A plugin's bundled agents
+  (above) add directories to the existing `builtInToolUse` source, not a
+  source or a kind.
 - **Prompt sections.** `src/agent/prompt/PromptBuilder.ts` owns the system
   prompt, which is recorded on the snapshot next to `offeredTools`. Plugin
   prompt fragments would make the recorded prompt depend on inputs the

@@ -8,10 +8,10 @@ by a specific package.
 - `agents/remote/workflow/` contains canonical workflow agents that TeXRA Cloud
   may deliver remotely for whole-document transformations.
 - The tool-use agents and specialists (the orchestrator, `search`,
-  `simplifier`, `presenter`, `progressCheck`, and the Lean 4 agents under
-  `Lean4/`) ship bundled in
+  `simplifier`, `presenter`, and `progressCheck`) ship bundled in
   `packages/extension/resources/tool_use_agents/`, which is their only
-  source of truth. The remote delivery path still accepts tool-use agents
+  source of truth. The Lean 4 agents belong to the lean4 tool plugin and
+  ship in `packages/extension/resources/plugins/lean4/agents/`. The remote delivery path still accepts tool-use agents
   under `agents/remote/tool_use/`; none live there today.
 - `agents/remote/catalog.json` gives each remote agent its storage folder and
   visibility; `npm run sync:remote-agents` turns it and the YAML into the
@@ -24,6 +24,7 @@ Package-owned prompts stay next to the code that packages them:
 
 - `packages/extension/resources/agents/`
 - `packages/extension/resources/tool_use_agents/`
+- `packages/extension/resources/plugins/<id>/agents/`
 - `packages/extension/resources/templates/`
 
 Reusable agent skills stay under `packages/extension/resources/skills/` (the

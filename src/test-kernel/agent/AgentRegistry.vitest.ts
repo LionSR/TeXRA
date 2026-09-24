@@ -17,6 +17,7 @@ import {
   loadAgents,
   refresh,
 } from '@agent/index/agentRegistry';
+import { installPluginAgentDirectories } from '@agent/index/BundledAgentDirectories';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { registerAgentDirectoryRoots } from '@frontend/setup';
 import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
@@ -206,6 +207,29 @@ describe('agent registry', () => {
           expect.objectContaining({ kind: 'builtInToolUse', writable: false }),
         );
       }),
+  );
+
+  it.effect(
+    'pools tool plugin agent directories into the builtInToolUse source',
+    () =>
+      Effect.gen(function* () {
+        installPluginAgentDirectories(resourcesPath, ['lean4']);
+        yield* onGlobalStorage(refresh({ includeRemote: false }));
+        const lean = getAgent('lean', AgentCategory.ToolUse);
+        expect(lean?.source).toBe('builtInToolUse');
+        expect(lean?.path).toBe(
+          resolve(resourcesPath, 'plugins/lean4/agents/lean.yaml'),
+        );
+        installPluginAgentDirectories(resourcesPath, []);
+        yield* onGlobalStorage(refresh({ includeRemote: false }));
+        expect(getAgent('lean', AgentCategory.ToolUse)).toBeUndefined();
+      }).pipe(
+        // The install is module state: a failed assertion must not leave the
+        // plugin directory installed for the rest of the file.
+        Effect.ensuring(
+          Effect.sync(() => installPluginAgentDirectories(resourcesPath, [])),
+        ),
+      ),
   );
 
   it('treats lookup category as priority, not a filter', () => {
