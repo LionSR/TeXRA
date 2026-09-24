@@ -41,6 +41,7 @@ import type {
   UsageRoute,
 } from '@shared/schemas';
 import type { SettingsStores } from '@shared/config/settingsAccess';
+import { findModelProviderPlugin } from '@shared/constants/modelProviderPlugins';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { ensureError } from '@utils/errors/errorMessage';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
@@ -53,26 +54,6 @@ const CHANNEL = 'modelRoutes';
  * only; it is never sent to a dashboard custom endpoint or OpenRouter.
  */
 const XAI_SUBSCRIPTION_ENDPOINT = 'https://api.x.ai/v1';
-
-// Record (not Map) so TypeScript enforces exhaustiveness over ModelProvider.
-// A new enum value in llm-zoo without an entry here will fail typecheck.
-const PROVIDER_COMPATIBILITY_KEYS: Record<
-  ModelProvider,
-  ModelCompatibilityKey
-> = {
-  [ModelProvider.ANTHROPIC]: 'Anthropic',
-  [ModelProvider.OPENAI]: 'OpenAI',
-  [ModelProvider.GOOGLE]: 'GoogleInteractions',
-  [ModelProvider.DEEPSEEK]: 'DeepSeek',
-  [ModelProvider.XAI]: 'XAI',
-  [ModelProvider.MOONSHOT]: 'Kimi',
-  [ModelProvider.DASHSCOPE]: 'DashScope',
-  [ModelProvider.MINIMAX]: 'MiniMax',
-  [ModelProvider.GLM]: 'GLM',
-  [ModelProvider.META]: 'Meta',
-  [ModelProvider.OTHERS]: 'OpenRouterNative',
-  [ModelProvider.COPILOT]: 'VscodeLm',
-};
 
 /**
  * Check if OpenAI Responses API should be used for this config. Talking to
@@ -431,15 +412,16 @@ export const resolveModelCompatibilityKey = Effect.fn(
 });
 
 /**
- * Guarded route-table read. The table is exhaustive over `ModelProvider`, so a
- * miss means a provider string from outside the enum (stale registry entry or
+ * Guarded plugin read. The provider plugin manifest gives every
+ * `ModelProvider` a compatibility key (checked at compile time), so a miss
+ * means a provider string from outside the enum (stale registry entry or
  * persisted config). Report it here instead of crashing on the property
  * access; the caller turns the missing route into a named failure.
  */
 function providerCompatibilityKey(
   provider: ModelProvider,
 ): Effect.Effect<ModelCompatibilityKey | undefined> {
-  const key = PROVIDER_COMPATIBILITY_KEYS[provider];
+  const key = findModelProviderPlugin(provider)?.compatibilityKey;
   if (key) return Effect.succeed(key);
   return Effect.logWarning(
     `No model route is registered for provider ${provider}`,

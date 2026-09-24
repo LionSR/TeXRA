@@ -8,16 +8,13 @@ import { Data, Deferred, Effect, Redacted } from 'effect';
 import { LRUCache } from 'lru-cache';
 
 import type { PlatformSecrets, SecretsFailed } from '@platform/secrets';
+import { findModelProviderPlugin } from '@shared/constants/modelProviderPlugins';
 import { API_KEY_PROVIDER_IDS } from '@shared/constants/providers';
 import { isNonEmptyString } from '@utils/text/stringUtils';
 
 export const API_PROVIDERS = API_KEY_PROVIDER_IDS;
 
 export type ApiProvider = (typeof API_PROVIDERS)[number];
-
-const API_KEY_ENV_NAME_OVERRIDES: Partial<Record<ApiProvider, string>> = {
-  kimiCode: 'KIMI_CODE_API_KEY',
-};
 
 /** Runtime-checked narrowing for provider strings. */
 export function isApiProvider(provider: string): provider is ApiProvider {
@@ -43,7 +40,8 @@ export function apiProviderOfSecretName(key: string): ApiProvider | undefined {
 /** Environment variable name for a provider's API key. */
 export function apiKeyEnvName(provider: ApiProvider): string {
   return (
-    API_KEY_ENV_NAME_OVERRIDES[provider] ?? `${provider.toUpperCase()}_API_KEY`
+    findModelProviderPlugin(provider)?.apiKeyEnvName ??
+    `${provider.toUpperCase()}_API_KEY`
   );
 }
 

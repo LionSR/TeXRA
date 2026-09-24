@@ -13,6 +13,7 @@ import {
   LATEX_FORMATTER_VALUES,
   LATEXDIFF_MATH_MARKUP_VALUES,
 } from '@shared/constants/latexConfig';
+import { MODEL_PROVIDER_PLUGINS } from '@shared/constants/modelProviderPlugins';
 import {
   DEFAULT_HELPER_MODEL,
   PROVIDER_ENDPOINT_STATE_ENTRIES,
@@ -850,78 +851,29 @@ const PROVIDER_ENDPOINT_SETTINGS = PROVIDER_ENDPOINT_STATE_ENTRIES.map(
 );
 
 /**
- * Region/routing toggles resolved by `@model/routeEndpoint`, each also a Models
- * tab control for its provider. The rows differ only in key, default, and
- * copy, so the shared fields are written once.
+ * Region toggles resolved by `@model/routeEndpoint`, each also a Models tab
+ * control for its provider: one row per provider plugin `region`.
  */
-const PROVIDER_ROUTING_SETTINGS = (
-  [
-    [
-      GlobalStateKey.MOONSHOT_USE_CHINA,
-      'moonshot',
-      true,
-      {
-        label: 'Kimi/Moonshot China region',
-        description:
-          'Use the China endpoint (api.moonshot.cn) instead of international (api.moonshot.ai). Enabled by default. Keys are platform-specific — get international keys at platform.moonshot.ai.',
-        warning:
-          'A platform.moonshot.cn key does not work with the international endpoint, and vice versa.',
-        warningUrl: 'https://platform.moonshot.ai/console',
-        warningUrlLabel: 'International console',
-      },
-    ],
-    [
-      GlobalStateKey.DASHSCOPE_USE_CHINA,
-      'dashscope',
-      false,
-      {
-        label: 'Qwen China region (Bailian)',
-        description:
-          'Use the China region endpoint (dashscope.aliyuncs.com) instead of international (dashscope-intl.aliyuncs.com). Display name switches to "Bailian".',
-      },
-    ],
-    [
-      GlobalStateKey.MINIMAX_USE_CHINA,
-      'minimax',
-      false,
-      {
-        label: 'MiniMax China region',
-        description:
-          'Use the China region endpoint (api.minimaxi.com) instead of international (api.minimax.io). API keys are region-specific — you must obtain a key from the matching region.',
-        warning:
-          'International keys do not work with the China endpoint, and vice versa. Coding Plan keys are also region-specific.',
-        warningUrl: 'https://platform.minimax.io/',
-        warningUrlLabel: 'Get API key',
-      },
-    ],
-    [
-      GlobalStateKey.GLM_USE_CHINA,
-      'glm',
-      true,
-      {
-        label: 'GLM China region',
-        description:
-          'Use the China region endpoint (open.bigmodel.cn) instead of international (api.z.ai). Enabled by default. API keys work with either endpoint.',
-        warningUrl: 'https://open.bigmodel.cn/',
-        warningUrlLabel: 'BigModel console',
-      },
-    ],
-  ] as const
-).map(([key, provider, defaultValue, copy]) =>
-  surfacedSetting({
-    key,
-    schema: z.boolean().prefault(defaultValue),
-    title: copy.label,
-    description: copy.description,
-    category: 'model',
-    slots: sameSlot('globalState'),
-    honoredBy: everyHost(ROUTE_ENDPOINT_READER),
-    surfaces: {
-      settingsView: 'profile',
-      cliConfig: true,
-      models: [{ provider, ...copy }],
-    },
-  }),
+const PROVIDER_ROUTING_SETTINGS = MODEL_PROVIDER_PLUGINS.flatMap(
+  ({ id: provider, region }) =>
+    region === undefined
+      ? []
+      : [
+          surfacedSetting({
+            key: region.key,
+            schema: z.boolean().prefault(region.default),
+            title: region.control.label,
+            description: region.control.description,
+            category: 'model',
+            slots: sameSlot('globalState'),
+            honoredBy: everyHost(ROUTE_ENDPOINT_READER),
+            surfaces: {
+              settingsView: 'profile',
+              cliConfig: true,
+              models: [{ provider, ...region.control }],
+            },
+          }),
+        ],
 );
 
 export const STATE_SETTINGS: readonly StateSettingEntry[] = [
