@@ -280,11 +280,13 @@ describe('CLI context config defaults', () => {
           globalArgs: { cwd: workspace },
         });
 
-        // Degraded to the internal workspace config store, never fatal.
+        // Degraded to the internal workspace config store, never fatal; the
+        // degradation is one `contextFromArgs` prints even under `--quiet`.
         expect(context.approvalPolicy).toBe('ask');
-        expect(warnSpy).toHaveBeenCalledWith(
+        expect(context.configDegradations).toEqual([
           expect.stringContaining('.texra/config.json'),
-        );
+        ]);
+        expect(context.configWarnings).toEqual(context.configDegradations);
       } finally {
         warnSpy.mockRestore();
       }

@@ -153,12 +153,7 @@ describe('probeOutputPath', () => {
 
   it.effect('preserves unexpected mkdir failures', () =>
     Effect.gen(function* () {
-      const denied = sysError(
-        'PermissionDenied',
-        'makeDirectory',
-        '/missing',
-        'EACCES',
-      );
+      const denied = sysError('Unknown', 'makeDirectory', '/missing', 'EIO');
       const error = yield* Effect.flip(
         probeOutputPathForTests('/missing/output.tex', '--output').pipe(
           Effect.provide(probeLayer(() => Effect.fail(denied))),

@@ -92,7 +92,32 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
   any round but the last was cut off and continued stopped at the next round
   with `continuationIndex 0 is below 1`. The continuation count now restarts
   with each round, as the agent always wrote it.
-
+- **`texra` reports config problems instead of ignoring them.** A setting in
+  `.texra/config.json` or the user config whose value has the wrong type
+  (`"texra.model.retry.maxAttempts": "five"`) now prints a warning that names
+  the key, the value and the default used in its place; before, only
+  `texra.approvalPolicy` warned and every other setting fell back silently.
+  `texra doctor` reports those warnings, and a malformed or non-object
+  project config file, as WARN rather than PASS.
+- **Headless `texra` output is quieter and more accurate.** Piped progress on
+  stderr prints a line when the run's state changes, not one per second.
+  `--output-format ndjson` no longer streams a run's debug-level `log` events
+  unless `--verbose` is set. A workflow run's `output.diffs` in the JSON
+  result now lists the output diffs instead of always being empty.
+  `texra history show` no longer prints a tool-use run's unused
+  `editedFiles: []` beside the files the run edited.
+- **Clearer `texra` errors.** An invalid or missing argument prints the error
+  and a pointer to `--help` instead of the full help screen followed by the
+  error, and honors `--no-color` and `FORCE_COLOR=0`. An `--output` or
+  `--output-dir` the CLI may not create is a usage error that names the path,
+  not a crash report. `texra memory show` for a missing memory says so plainly.
+  Mistyped subcommands with swapped letters (`texra agents lsit`) now get a
+  "did you mean" suggestion.
+- **zsh completion completes model and agent names.** The completion
+  function no longer shadows `$PATH`, which hid the `texra` and `awk` it calls.
+- **`texra config agents --all` help says what it does** — it sets the
+  workspace roster to every agent, as `--team` and `--inherit` set theirs; the
+  help and examples described it as a read-only listing.
 - **The desktop app shuts down cleanly when startup fails early.** If
   startup failed before the project list opened (for example, when the
   project records could not be read), shutdown reported two errors and left a
@@ -295,6 +320,16 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
   `installActions`). Each skill record renames `sourceLabel` to `label` and
   `source` to `sourcePath`, and gains `enabled`. The text output of both
   commands is unchanged.
+- **`texra run --output-format json` result changed shape** — the result
+  (and the NDJSON `result` / `agent-result` record) now carries the run's
+  output under `output`: `output.category`, and `output.outputs`,
+  `output.compileFailures` and `output.diffs` for a workflow run, or
+  `output.response` and `output.files` for a tool-use run. `executionId` and
+  `streamId` are replaced by `runId`, and `totalCostUsd` by `usage.totalCost`,
+  beside the run's other token totals in `usage`. `outcome`, `workingDirectory`,
+  `runDirectory`, `copiedOutput` and `copiedOutputs` are unchanged. A
+  workflow run's `output.diffs` lists the text diff of each output against its
+  original, written under `diffs/` in the run directory.
 - Node.js 22.19.0 or later in 22.x, or Node.js 24 or later is required.
 - **`texra orchestrate` is gone, and bare `texra` now opens chat** — the
   launcher menu that sat in front of every interactive command is retired.

@@ -1,3 +1,6 @@
+// Node imports
+import path from 'node:path';
+
 // Third-party imports
 import { Effect } from 'effect';
 import { MODEL_CONFIGS, ModelProvider } from 'llm-zoo';
@@ -7,15 +10,23 @@ import { JsonConfigProvider } from '@platform/defaults/jsonConfigProvider';
 import { nodeFileServices, type JsonStore } from '@platform/defaults/jsonStore';
 import {
   DEFAULT_NODE_STORAGE_ROOT,
+  TEXRA_CONFIG_FILE_NAME,
   workspaceTexraConfigPath,
 } from '@platform/defaults/nodeStorage';
 import { openTexraConfigStores } from '@platform/defaults/nodeStores';
+import { resolveGlobalStoragePath } from '@platform/defaults/workspaceStorage';
 import type { ConfigProvider } from '@platform/interfaces';
 
 // Local imports - shared
 import { canonicalConfigKey } from '@shared/config/configKeys';
-import type { SettingsStores } from '@shared/config/settingsAccess';
-import { CLI_CONFIG_SLOT_KEYS } from '@shared/state/stateSettings';
+import {
+  settingDefault,
+  type SettingsStores,
+} from '@shared/config/settingsAccess';
+import {
+  CLI_CONFIG_SLOT_KEYS,
+  settingByKey,
+} from '@shared/state/stateSettings';
 
 // Local imports - utilities
 import {
@@ -23,9 +34,6 @@ import {
   writeSettingTo,
 } from '@utils/config/platformSettings';
 import { isObject } from '@utils/core';
-
-// Local file imports
-import { writeTextStderr } from './logSinks';
 
 /**
  * The model a `texra` command starts on when nothing else names one.
@@ -114,7 +122,14 @@ export interface CliStartupConfig {
    * both ends fall back to the internal workspace store.
    */
   readonly config: ConfigProvider;
+  /** Every config problem found at open, for the CLI and `texra doctor`. */
   readonly warnings: readonly string[];
+  /**
+   * The subset of `warnings` saying the project file could not be used at all
+   * (malformed JSON, not an object, not writable): actionable degradation,
+   * not routine noise, so it is printed even under `--quiet`.
+   */
+  readonly degradations: readonly string[];
 }
 
 /**
@@ -199,40 +214,47 @@ const COMMAND_SECTION_CONFIG_KEYS: ReadonlySet<string> = new Set(
 );
 
 /**
- * Names the project-file keys nothing reads — a typo (`texra.modle`,
- * `texra.chat.modle`) is otherwise a setting that silently never applies. Only
- * the workspace file is walked: the user file is shared by all three hosts and
- * holds rows the CLI does not honor, so its unrecognized keys are not the
- * CLI's to report.
+ * Names the config-file entries that cannot apply. An unknown project key (a
+ * typo such as `texra.modle` or `texra.chat.modle`) is a setting that silently
+ * never applies, and so is a known key whose value its catalog row rejects:
+ * every read resolves it to the default. Unknown keys are reported for the
+ * project file only: the user file is shared by all three hosts and holds rows
+ * the CLI does not honor, so its unrecognized keys are not the CLI's to report.
+ * Invalid values are reported for both files, since the CLI reads both.
  */
-function unknownKeyWarnings(
-  store: JsonStore,
-  filePath: string,
+function configFileWarnings(
+  files: readonly {
+    readonly store: JsonStore;
+    readonly filePath: string;
+    readonly isProjectFile: boolean;
+  }[],
 ): readonly string[] {
   const warnings: string[] = [];
-  for (const key of store.keys()) {
-    if (!KNOWN_CONFIG_KEYS.has(key)) {
-      warnings.push(`Ignoring unknown ${filePath} key "${key}".`);
-      continue;
-    }
-    if (!COMMAND_SECTION_CONFIG_KEYS.has(key)) continue;
-    const section = store.get<unknown>(key);
-    if (!isObject(section)) continue;
-    for (const nested of Object.keys(section)) {
-      if (COMMAND_SECTION_KEYS.has(nested)) continue;
-      warnings.push(`Ignoring unknown ${filePath} key "${key}.${nested}".`);
+  for (const { store, filePath, isProjectFile } of files) {
+    for (const key of store.keys()) {
+      if (!KNOWN_CONFIG_KEYS.has(key)) {
+        if (isProjectFile) {
+          warnings.push(`Ignoring unknown ${filePath} key "${key}".`);
+        }
+        continue;
+      }
+      const value = store.get<unknown>(key);
+      const entry = settingByKey(key);
+      if (entry && !entry.schema.safeParse(value).success) {
+        warnings.push(
+          `Ignoring invalid ${filePath} value ${JSON.stringify(value)} for "${key}"; using the default ${JSON.stringify(settingDefault(entry))}.`,
+        );
+        continue;
+      }
+      if (!isProjectFile || !COMMAND_SECTION_CONFIG_KEYS.has(key)) continue;
+      if (!isObject(value)) continue;
+      for (const nested of Object.keys(value)) {
+        if (COMMAND_SECTION_KEYS.has(nested)) continue;
+        warnings.push(`Ignoring unknown ${filePath} key "${key}.${nested}".`);
+      }
     }
   }
   return warnings;
-}
-
-/**
- * Malformed or unwritable project config is actionable degradation, not
- * routine progress noise, so it reaches stderr immediately rather than joining
- * the `--quiet`-gated warnings the caller prints.
- */
-function showPersistentConfigWarning(message: string): void {
-  writeTextStderr(`[warn] [cli.config] ${message}`);
 }
 
 /**
@@ -247,17 +269,31 @@ export function loadCliStartupConfig(
 ): Effect.Effect<CliStartupConfig, Error> {
   return Effect.provide(
     Effect.gen(function* () {
-      const stores = yield* openTexraConfigStores(
-        storageRoot,
-        cwd,
-        showPersistentConfigWarning,
+      const degradations: string[] = [];
+      const stores = yield* openTexraConfigStores(storageRoot, cwd, (message) =>
+        degradations.push(message),
       );
       return {
         config: new JsonConfigProvider(stores),
-        warnings: unknownKeyWarnings(
-          stores.workspace,
-          workspaceTexraConfigPath(cwd),
-        ),
+        warnings: [
+          ...degradations,
+          ...configFileWarnings([
+            {
+              store: stores.workspace,
+              filePath: workspaceTexraConfigPath(cwd),
+              isProjectFile: true,
+            },
+            {
+              store: stores.global,
+              filePath: path.join(
+                resolveGlobalStoragePath(storageRoot),
+                TEXRA_CONFIG_FILE_NAME,
+              ),
+              isProjectFile: false,
+            },
+          ]),
+        ],
+        degradations,
       };
     }),
     nodeFileServices,

@@ -405,11 +405,57 @@ const computeAndWriteWorkflowDiffs = Effect.fn(
 // Built terminal results
 // ============================================================================
 
+type WorkflowRunEndOutput = Extract<RunEndOutput, { category: 'workflow' }>;
+
+/**
+ * A workflow output with its diffs: computes them against each output's
+ * original, writes them as files to the run's run directory, and records
+ * their paths on the output so a reader can open them on demand. The one
+ * owner of `diffs`/`diffsUnavailable`, for both deliveries that report a
+ * workflow run: a subagent's record and the CLI's `texra run` result.
+ * Diff computation failure is non-fatal: the output is returned without
+ * diffs, and `diffsUnavailable` says why.
+ */
+export const withWorkflowDiffs = Effect.fn('subagentResults.withWorkflowDiffs')(
+  function* (
+    storageRoot: string,
+    runId: RunId,
+    output: WorkflowRunEndOutput,
+  ): Effect.fn.Return<WorkflowRunEndOutput, never, FileSystem.FileSystem> {
+    if (output.outputs.length === 0) return output;
+    let diffsUnavailable: string | undefined;
+    const diffInfos = yield* computeAndWriteWorkflowDiffs(
+      storageRoot,
+      runId,
+      output.outputs,
+    ).pipe(
+      Effect.catch((err) => {
+        diffsUnavailable = toErrorMessage(err);
+        return Effect.logWarning(
+          `Diff computation failed for ${runId}: ${diffsUnavailable}`,
+        ).pipe(withLogChannel(DELIVERY_CHANNEL), Effect.as(undefined));
+      }),
+    );
+    return {
+      ...output,
+      ...(diffInfos
+        ? {
+            diffs: output.outputs.flatMap((file) => {
+              const diff = diffInfos.get(file.absolutePath);
+              return diff ? [{ path: file.absolutePath, ...diff }] : [];
+            }),
+          }
+        : {}),
+      ...(diffsUnavailable !== undefined ? { diffsUnavailable } : {}),
+    };
+  },
+);
+
 /**
  * Build a subagent's persistence record. For workflow results, computes
- * latexdiffs and writes them as files to the run's run directory first — the
- * record and the delivery reference diff file paths so the orchestrator can
- * read them on demand via /executions/{id}/files/.
+ * the output diffs first ({@link withWorkflowDiffs}) — the record and the
+ * delivery reference diff file paths so the orchestrator can read them on
+ * demand via /executions/{id}/files/.
  */
 export const buildSubagentResult = Effect.fn(
   'subagentResults.buildSubagentResult',
@@ -423,40 +469,10 @@ export const buildSubagentResult = Effect.fn(
     readonly storageRoot: string;
   },
 ): Effect.fn.Return<SubagentResultMeta, never, FileSystem.FileSystem> {
-  let diffInfos: Map<string, DiffFileInfo> | undefined;
-  let diffsUnavailable: string | undefined;
-  if (output.category === 'workflow' && output.outputs.length > 0) {
-    // Diff computation failure is non-fatal: deliver without diffs, but tell
-    // the orchestrator to read the output files directly.
-    diffInfos = yield* computeAndWriteWorkflowDiffs(
-      options.storageRoot,
-      runId,
-      output.outputs,
-    ).pipe(
-      Effect.catch((err) => {
-        diffsUnavailable = toErrorMessage(err);
-        return Effect.logWarning(
-          `Diff computation failed for ${runId}: ${diffsUnavailable}`,
-        ).pipe(withLogChannel(DELIVERY_CHANNEL), Effect.as(undefined));
-      }),
-    );
-  }
-
-  const wallTimeMs = Date.now() - options.startedAt;
   const enriched: RunEndOutput =
     output.category === 'workflow'
-      ? {
-          ...output,
-          ...(diffInfos
-            ? {
-                diffs: output.outputs.flatMap((file) => {
-                  const diff = diffInfos.get(file.absolutePath);
-                  return diff ? [{ path: file.absolutePath, ...diff }] : [];
-                }),
-              }
-            : {}),
-          ...(diffsUnavailable !== undefined ? { diffsUnavailable } : {}),
-        }
+      ? yield* withWorkflowDiffs(options.storageRoot, runId, output)
       : output;
+  const wallTimeMs = Date.now() - options.startedAt;
   return buildSubagentResultMeta(agentName, enriched, wallTimeMs);
 });

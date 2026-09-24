@@ -1280,8 +1280,11 @@ describe('runCli usage output stream routing', () => {
     // Mirrors the documented repro: a usage error under --output-format json.
     const result = await runCli(['run', '--output-format', 'json']);
     expectUsageError(result, 'Missing required positional argument: AGENT');
-    // Usage banner goes to the diagnostic stream alongside the error line.
-    expect(stderr).toContain('USAGE');
+    // The error leads, followed by a pointer to the usage rather than the
+    // full help screen that used to bury it.
+    expect(stderr).toMatch(
+      /^Missing required positional argument: AGENT\nRun `texra run --help` for usage\.\n$/,
+    );
   });
 
   it('prints explicit --help usage to stdout, not stderr', async () => {
@@ -1466,7 +1469,7 @@ describe('runCli usage output stream routing', () => {
 
   it('shows full command paths for nested usage errors', async () => {
     const result = await runCli(['history', 'show']);
-    expectUsageError(result, 'USAGE texra history show');
+    expectUsageError(result, 'Run `texra history show --help` for usage.');
   });
 
   it('defaults bare history to list while accepting global flags', async () => {
