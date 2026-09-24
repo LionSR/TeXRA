@@ -96,7 +96,7 @@ export function buildBaseModelOption(
   return {
     value: model,
     label: config.label,
-    provider: resolveModelSource(config) ?? config.provider,
+    provider: resolveModelSource(config),
     context: formatContext(config.contextWindow),
     cost: formatCost(config.inputPrice, config.outputPrice),
     hint: buildModelHint(hintConfig),

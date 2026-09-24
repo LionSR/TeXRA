@@ -10,13 +10,13 @@ import {
   type SessionHandle,
 } from '@agent/runtime';
 import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
-import {
-  resolveSetupLaunchModel,
-  SETUP_INSTRUCTION,
-} from '@controllers/onboarding/setupLaunch';
+import { SETUP_INSTRUCTION } from '@controllers/onboarding/setupLaunch';
 import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
 import { withLogChannel } from '@logger/effectLog';
-import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
+import {
+  hasUsableSetupCredential,
+  resolveSetupLaunchModel,
+} from '@model/setupCredentialAccess';
 import type {
   StateReadFailed,
   StateStore,
@@ -37,34 +37,6 @@ import { getUseOpenRouter } from '@utils/config/providerConfig';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'SetupAssistant';
-interface LaunchModelResolution {
-  model: string;
-  requiresOpenRouter: boolean;
-}
-
-/**
- * The extension additionally offers the OpenRouter access-list model as a
- * last resort (`ensureRoutingConfigured` already prompted the user, so the
- * fallback's flag flip is expected, unlike desktop's silent-launch path).
- */
-function selectLaunchModel(
-  stores: SettingsStores,
-  secrets: PlatformSecrets,
-): Effect.Effect<LaunchModelResolution | null, StateReadFailed, LanguageModel> {
-  return resolveSetupLaunchModel(stores, secrets, true).pipe(
-    Effect.map((resolution) =>
-      resolution
-        ? {
-            model: resolution.model,
-            requiresOpenRouter:
-              resolution.reason === 'router-config' ||
-              resolution.reason === 'access-list-default',
-          }
-        : null,
-    ),
-  );
-}
-
 /**
  * Temporarily flip `useOpenRouter` on for the OR-only launch path and always
  * restore it, including failures before `executeAgent` starts. The flip is the
@@ -188,10 +160,7 @@ const ensureCredentialOrPrompt = Effect.fn('ensureCredentialOrPrompt')(
 // Routing is fine when the current configuration resolves any setup model.
 // A managed direct route can remain runnable even when global OpenRouter is
 // enabled without an OpenRouter key.
-function isRoutingConfigured(
-  stores: SettingsStores,
-  secrets: PlatformSecrets,
-): Effect.Effect<boolean, StateReadFailed, LanguageModel> {
+function isRoutingConfigured(stores: SettingsStores, secrets: PlatformSecrets) {
   return Effect.gen(function* () {
     if (!(yield* getUseOpenRouter(stores))) return true;
     return (yield* resolveSetupLaunchModel(stores, secrets, false)) !== null;
@@ -270,9 +239,8 @@ export function launchSetupAssistant(
 
     // Check routing configuration before credentials: a ChatGPT-
     // subscription user whose "Use OpenRouter" flag is on without an OR
-    // key would otherwise fall into the credential prompt first because
-    // isCodexSubscriptionActive returns false because
-    // shouldUseCodexSubscription short-circuits when useOpenRouter is true.
+    // key would otherwise fall into the credential prompt first, because the
+    // picker never routes through the subscription while OpenRouter is on.
     if (!(yield* ensureRoutingConfigured(session.roots, secrets))) {
       void vscode.window.showInformationMessage(
         'Setup assistant cancelled. Fix the "Use OpenRouter" setting in Dashboard → Models, then run `TeXRA: Run Setup Assistant` again.',
@@ -288,7 +256,11 @@ export function launchSetupAssistant(
       return 'not-started' as const;
     }
 
-    const resolution = yield* selectLaunchModel(session.roots, secrets);
+    const resolution = yield* resolveSetupLaunchModel(
+      session.roots,
+      secrets,
+      true,
+    );
     if (!resolution) {
       // Edge case: no setup-model candidate is usable with the current
       // credentials. Refuse launch rather than pick a model that crashes at

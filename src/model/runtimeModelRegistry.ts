@@ -2,7 +2,10 @@ import { Deferred, Effect } from 'effect';
 import { MODEL_CONFIGS, type ModelConfig } from 'llm-zoo';
 
 import type { ApiProvider } from '@model/apiProviders';
-import { resolveModelApiKeyProvider } from '@model/openRouterRouting';
+import {
+  resolveDirectModelApiKeyProvider,
+  shouldRouteModelThroughOpenRouter,
+} from '@model/openRouterRouting';
 import { zeroCostAccessOverrides } from '@model/subscriptionAccessOverrides';
 import {
   LanguageModel,
@@ -273,6 +276,8 @@ export function getRuntimeModelDirectFallback(
 ): RuntimeModelDirectFallback | undefined {
   const config = MODEL_CONFIGS[model];
   if (!config) return undefined;
-  const provider = resolveModelApiKeyProvider(config, useOpenRouter);
+  const provider = shouldRouteModelThroughOpenRouter(config, useOpenRouter)
+    ? 'openRouter'
+    : resolveDirectModelApiKeyProvider(config);
   return provider ? { model, provider } : undefined;
 }

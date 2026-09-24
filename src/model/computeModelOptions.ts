@@ -1,5 +1,10 @@
 import { Data, Effect } from 'effect';
-import { MODEL_CONFIGS, type ModelConfig, type ReasoningEffort } from 'llm-zoo';
+import {
+  MODEL_CONFIGS,
+  ModelProvider,
+  type ModelConfig,
+  type ReasoningEffort,
+} from 'llm-zoo';
 import { z } from 'zod';
 
 import {
@@ -18,12 +23,10 @@ import {
   MODEL_AVAILABILITY_STATUS,
   type ModelAvailabilityKind,
   type ModelOptionData,
+  type UsageRoute,
 } from '@shared/schemas';
 import { REASONING_LEVEL_LABELS } from '@shared/settingsView/settingsViewMessages';
-import {
-  DEFAULT_HELPER_MODEL,
-  providerDisplayName,
-} from '@shared/constants/providers';
+import { providerDisplayName } from '@shared/constants/providers';
 import {
   isKimiCodeExclusiveModel,
   isKimiSubscriptionEligible,
@@ -45,10 +48,10 @@ import {
   type ProviderCapabilityProfile,
 } from './providerCapabilities';
 import {
+  isKimiCodeRoute,
   kimiCodeEffectiveConfig,
   type KimiCodeRoutingFacts,
 } from './kimiCodeSubscriptionRouting';
-import { resolveEffectiveHelperModel } from './helperModelSelection';
 import {
   buildBaseModelOption,
   DEFAULT_MODELS,
@@ -60,6 +63,7 @@ import {
   resolveModelSource,
   shouldRouteModelThroughOpenRouter,
 } from './openRouterRouting';
+import { resolveRouteEndpoint } from './routeEndpoint';
 import {
   copilotRouteUnavailableReason,
   prefersCopilotRoute,
@@ -97,6 +101,8 @@ interface ModelAvailabilityStatus {
   copilotConfig?: ModelConfig;
   /** The dispatch path's own wording, on the two unavailable Copilot kinds. */
   copilotReason?: string;
+  /** The subscription paying for the next request; absent means own keys. */
+  usageRoute?: UsageRoute;
 }
 
 function availabilityStatus(
@@ -162,23 +168,15 @@ const UNAVAILABLE_REASON_BUILDERS: Record<
     if (reason === 'openrouter-missing-key') {
       return `Model "${model}" requires an OpenRouter API key.`;
     }
-    const modelSource = resolveModelSource(config) ?? config.provider;
-    const providerName = providerDisplayName(modelSource);
+    const providerName = providerDisplayName(resolveModelSource(config));
     return `Model "${model}" requires your ${providerName} API key. Provide it to continue.`;
   },
-  // Both Copilot arms ship the dispatch path's own wording
-  // ({@link copilotRouteUnavailableReason}), captured when the model was
-  // routed, so the picker shows exactly the sentence a run would fail with.
-  // The `??` arm is unreachable: these kinds are only chosen inside the
-  // `prefersCopilotRoute` branch, which is the one case that helper never
-  // answers `undefined` for.
+  // Both Copilot arms ship the dispatch path's own wording, captured when the
+  // model was routed, so the picker shows the sentence a run would fail with.
   'copilot-consent-required': copilotUnavailableReason,
   'copilot-unavailable': copilotUnavailableReason,
-  // Unreachable from `modelUnavailableReasonFrom` today (it returns its own
-  // "not recognized" message before a config resolves far enough to compute
-  // availability at all), but the table must still cover it: `unknown-model`
-  // is `available: false`, so leaving it out would defeat the whole point of
-  // this table being compiler-checked.
+  // Unreachable from `modelUnavailableReasonFrom` (it answers "not recognized"
+  // first), but an `available: false` kind the table must still cover.
   'unknown-model': ({ model }) => `Model "${model}" is not recognized.`,
 };
 
@@ -231,9 +229,10 @@ interface ModelAvailabilityContext extends ModelRouteContext {
   keyStatuses: ProviderKeyStatuses;
 }
 
-/** The one provider whose key decides a model the ladder did not settle. */
+/** The one provider whose key decides a model, and the plan it pays through. */
 interface ProviderKeyGate {
   needsProviderKey: ApiProvider;
+  usageRoute?: UsageRoute;
 }
 
 /** The ladder's answer for one model: a verdict, or the provider still to consult. */
@@ -323,6 +322,7 @@ function resolveModelRoute(
         return {
           ...availabilityStatus('subscription-access'),
           providerCapabilities: subscriptionCapabilities,
+          usageRoute: subscriptionCapabilities.usageRoute,
         };
       }
     }
@@ -341,6 +341,7 @@ function resolveModelRoute(
         return {
           ...availabilityStatus('xai-subscription-access'),
           providerCapabilities: subscriptionCapabilities,
+          usageRoute: subscriptionCapabilities.usageRoute,
         };
       }
     }
@@ -354,12 +355,20 @@ function resolveModelRoute(
       };
     }
 
-    // Dispatch sends every remaining request to the direct provider, so only its
-    // key makes the model ready. The live-route branch above is the only source
-    // of 'openrouter-key'.
+    // Every remaining request goes to the direct provider, so only its key
+    // makes the model ready; that key may pay through a coding plan.
     const provider = resolveDirectModelApiKeyProvider(config);
     if (!provider) return availabilityStatus('missing-key');
-    return { needsProviderKey: provider };
+    if (isKimiCodeRoute(config, ctx.kimiRouting)) {
+      return {
+        needsProviderKey: provider,
+        usageRoute: 'kimi-code-subscription' as const,
+      };
+    }
+    if (config.provider !== ModelProvider.GLM)
+      return { needsProviderKey: provider };
+    const { usageRoute } = yield* resolveRouteEndpoint(stores, config, false);
+    return { needsProviderKey: provider, usageRoute };
   });
 }
 
@@ -385,23 +394,15 @@ function resolveModelAvailability(
       `Model "${model}" routes to the "${provider}" API key, but that provider's key status was never read. A route decision reached the verdict without passing through the batch read.`,
     );
   }
-  return availabilityStatus(usable ? 'provider-key' : 'missing-key');
+  if (!usable) return availabilityStatus('missing-key');
+  return { kind: 'provider-key', usageRoute: route.usageRoute };
 }
 
 /**
- * A host fact this module reads synchronously — a workspace preference, a
- * config switch, a stored state entry — could not be read at all, because the
- * host's config or state store threw. That is environmental, not a bug in this
- * module, so it belongs in the typed failure channel rather than as a defect:
- * a caller that already degrades on an unreadable host (the delegation
- * annotation skips its "Available models:" line and logs) recovers from it
- * exactly as it recovers from an unreadable secret store, and a caller that
- * runs this program at its boundary gets the rejection the async wrapper used
- * to give it.
- *
- * The module's own invariant — a verdict reached for a provider whose key
- * status was never read ({@link resolveModelAvailability}) — stays a defect:
- * it can only be a programming error here, and no caller should paper over it.
+ * A host fact (a preference, a config switch, a stored state entry) could not
+ * be read because the host's store threw. Environmental, so it is a typed
+ * failure a caller recovers from like an unreadable secret store. The module's
+ * own invariant ({@link resolveModelAvailability}) stays a defect.
  */
 export class ModelHostFactUnreadable extends Data.TaggedError(
   'ModelHostFactUnreadable',
@@ -699,26 +700,11 @@ export function setModelEnabled(input: {
         }),
       );
     }
-    // If the helper model was just removed, pin the built-in default. Do not
-    // fall back to the first remaining picker model — that is a premium default,
-    // not the cheap auxiliary.
-    const pinsHelper =
-      !input.enabled &&
-      resolveEffectiveHelperModel(
-        yield* state.get<string | undefined>(GlobalStateKey.HELPER_MODEL),
-        current,
-      ) === input.model;
-
+    // A helper model disabled here is not rewritten: the helper choice counts
+    // only while enabled, which `resolveEffectiveHelperModel` enforces at read.
     return yield* state
       .update(GlobalStateKey.MODEL_SELECTION, next)
-      .pipe(
-        Effect.andThen(
-          pinsHelper
-            ? state.update(GlobalStateKey.HELPER_MODEL, DEFAULT_HELPER_MODEL)
-            : Effect.void,
-        ),
-        Effect.as(nextEnabled),
-      );
+      .pipe(Effect.as(nextEnabled));
   });
 }
 
@@ -778,7 +764,7 @@ function buildModelOptionData(
   ) {
     const via = shouldRouteModelThroughOpenRouter(config, ctx.useOpenRouter)
       ? 'OpenRouter'
-      : providerDisplayName(resolveModelSource(config) ?? config.provider);
+      : providerDisplayName(resolveModelSource(config));
     routeLabel = `Via ${via}`;
   }
   return withAvailabilityFields(
@@ -813,26 +799,13 @@ export interface ModelAvailabilityInputs {
 }
 
 /**
- * Read everything one availability computation runs over, in two steps: the
- * facts every model shares, then one key-status read per provider the visible
- * models actually consult, with each model routed once in between so that
- * batch consults exactly the providers the ladder reached.
- *
- * This is the module's only host call, and it is an Effect so that a caller
- * inside a program yields it instead of bridging a promise: the store read
- * behind it is interruptible and its failure is typed. Every host read it
- * makes fails in that channel, the synchronous preference and state reads
- * included ({@link ModelHostFactUnreadable}), so an unreadable host reaches a
- * caller as a failure it can recover from rather than as a defect.
- *
- * When `models` is provided the caller's view of the visible-models list is
- * honored verbatim. Nothing here is cached beyond the caches its reads already
- * own: the secret reads behind `hasUsableApiKey` in `apiProviders`
- * (`invalidateApiKeyCache`), the Copilot route catalogue in
- * `runtimeModelRegistry` (`invalidateRuntimeModelRegistry`), and the rest are
- * synchronous config and state reads plus the probe-backed sign-in status
- * (`isCodexSignedIn`, `isXaiSignedIn`, live by design), so there is no second
- * cache to keep fresh here.
+ * Read everything one availability computation runs over: the facts every
+ * model shares, each model routed once, then one key-status read per provider
+ * the routes consult. The module's only host call; every host read fails in
+ * its typed channel ({@link ModelHostFactUnreadable}). `models`, when given,
+ * is honored verbatim. Nothing is cached here beyond the caches its reads own
+ * (`invalidateApiKeyCache`, `invalidateRuntimeModelRegistry`); the sign-in
+ * probes are live by design.
  */
 export const readModelAvailabilityInputs = Effect.fn(
   'readModelAvailabilityInputs',
@@ -851,11 +824,10 @@ export const readModelAvailabilityInputs = Effect.fn(
       ),
       routeCtx,
     ));
-  // Stage 1 is computation over the stage-0 facts except for the one live
-  // state read in its ladder, the Copilot route preference, so an unreadable
-  // state store fails it the same way it fails the reads above.
+  // Stage 1's live state reads (the Copilot route preference, the GLM endpoint
+  // settings) fail like the reads above.
   const routed = yield* hostFact(
-    'the Copilot route preference',
+    'the route preferences',
     routeModels(stores, visible, routeCtx),
   );
   const context = yield* withConsultedKeyStatuses(
@@ -877,6 +849,35 @@ export function modelOptionsFrom(
     buildModelOptionData(model, inputs.routed.get(model), inputs.context),
   );
 }
+
+/**
+ * The subscription the picker decided will pay for `model`'s next request, or
+ * `undefined` when the user's own key would: the one prospective route. Pure,
+ * like {@link modelUnavailableReasonFrom}; `inputs` must cover `model`.
+ */
+export function usageRouteFrom(
+  inputs: ModelAvailabilityInputs,
+  model: string,
+): UsageRoute | undefined {
+  const decision = inputs.routed.get(model);
+  return decision
+    ? resolveModelAvailability(
+        model,
+        decision.route,
+        inputs.context.keyStatuses,
+      ).usageRoute
+    : undefined;
+}
+
+/** {@link usageRouteFrom} for one model, read fresh. */
+export const readProspectiveUsageRoute = Effect.fn('readProspectiveUsageRoute')(
+  function* (stores: ModelOptionStores, model: string) {
+    return usageRouteFrom(
+      yield* readModelAvailabilityInputs(stores, [model]),
+      model,
+    );
+  },
+);
 
 /**
  * A human-readable reason why a model is unavailable, or `null` if available.

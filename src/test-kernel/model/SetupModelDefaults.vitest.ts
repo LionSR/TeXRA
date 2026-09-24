@@ -45,8 +45,8 @@ describe('SETUP_MODEL_BY_PROVIDER', () => {
             `${provider}: "${model}" is OpenRouter-only`,
           );
         }
-        // CHATGPT_SETUP_MODEL feeds isCodexSubscriptionActive, which accepts only
-        // Codex-eligible model ids.
+        // CHATGPT_SETUP_MODEL proves ChatGPT subscription access, which only a
+        // Codex-eligible model id can.
         assert.equal(CHATGPT_SETUP_MODEL, SETUP_MODEL_BY_PROVIDER.openai);
         assert.ok(
           yield* resolveCodexSubscriptionCapabilities(

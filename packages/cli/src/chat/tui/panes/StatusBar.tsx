@@ -1,13 +1,12 @@
 import { Box, Text, useStderr, useWindowSize } from 'ink';
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 
-import { resolveCliModelAccessRoute } from '@cli/runtime/modelAccessRoute';
 import { loadingFrameAt } from '@cli/tui/ui/LoadingIndicator';
 import { COLOR_ERROR } from '@cli/tui/ui/colors';
 import { useLiveNowMsSince } from '@cli/tui/useLiveNowMs';
 import { usePollingInterval } from '@cli/tui/usePollingInterval';
 import { SubscriptionUsageService } from '@controllers/modelAccess/subscriptionUsage/SubscriptionUsageService';
-import { activeSubscriptionUsageRoute } from '@model/codingPlanSubscriptions';
+import { readProspectiveUsageRoute } from '@model/computeModelOptions';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
@@ -148,10 +147,7 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     resolutionCurrent &&
     subscriptionResolution?.failed === true &&
     displayUsage?.usageRoute === undefined;
-  const modelAccess = resolveCliModelAccessRoute({
-    usageRoute: displayUsage?.usageRoute,
-    prospectiveRoute,
-  });
+  const modelAccess = displayUsage?.usageRoute ?? prospectiveRoute;
 
   // Both periodic reads run on the shared poll registry (`usePollingInterval`)
   // so cadence and cleanup live in one place; the `resetKey` re-fires
@@ -180,7 +176,7 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
       const requestGeneration = ++subscriptionRequestGenerationRef.current;
       void props.runtime
         .runPromise(
-          activeSubscriptionUsageRoute(
+          readProspectiveUsageRoute(
             { ...props.stores, secrets: props.secrets },
             accessModel,
           ),

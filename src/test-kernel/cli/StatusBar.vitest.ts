@@ -6,10 +6,7 @@ import {
   subscriptionUsageProviderForStatus,
   type StatusBarDisplayInput,
 } from '@cli/chat/tui/panes/statusBarDisplay';
-import {
-  resolveCliModelAccessRoute,
-  shortCliModelAccessRoute,
-} from '@cli/runtime/modelAccessRoute';
+import { shortCliModelAccessRoute } from '@cli/runtime/modelAccessRoute';
 import { KEY_HINT_SEPARATOR } from '@cli/tui/ui/KeyHints';
 import { RUN_PHASE, type RunId, RUN_LIFECYCLE_READY } from '@shared/schemas';
 import { runStatusCopy } from '@shared/runs/runStatusDisplay';
@@ -515,10 +512,7 @@ describe('CLI StatusBar display model', () => {
       leftTexts(
         buildStatusBarDisplay(
           statusInput({
-            modelAccess: resolveCliModelAccessRoute({
-              usageRoute,
-              prospectiveRoute: 'chatgpt-subscription',
-            }),
+            modelAccess: usageRoute,
             usage: {
               inputTokens: 1_000,
               outputTokens: 100,

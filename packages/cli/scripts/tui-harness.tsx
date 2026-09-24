@@ -128,7 +128,6 @@ import {
 } from '../src/chat/tui/state/transcript';
 import { clearTerminalScrollback } from '../src/tui/terminalCleanup';
 import { defaultShortcutModifierLabel } from '../src/runtime/shortcutLabels';
-import { resolveCliModelAccessRoute } from '../src/runtime/modelAccessRoute';
 import { updateCliModelAccess } from '../src/runtime/modelAccessSelection';
 import { installCliProcessRuntime } from '../src/runtime/cliProcessRuntime';
 import { initCliPlatform } from '../src/runtime/initPlatform';
@@ -1589,9 +1588,7 @@ function appendHarnessStatus(): void {
       agent: meta.agent,
       model: meta.model,
       teamName: meta.teamName,
-      modelAccess: resolveCliModelAccessRoute({
-        usageRoute: run?.usage.usageRoute,
-      }),
+      modelAccess: run?.usage.usageRoute,
       approvalPolicy: harnessRuntimeSession.approvalPolicy,
       approvalBypasses: view.policy.get(runId)?.bypasses,
       statusLabel: run?.statusLabel,
