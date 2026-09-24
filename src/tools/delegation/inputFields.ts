@@ -17,7 +17,7 @@ import { resolveChildRunOutput } from '@agent/storage';
 import { WorkflowRunAbortError } from '@agent/workflowScript/runWorkflowScript';
 import type { WorkflowAgentCallOptions } from '@agent/workflowScript/types';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { formatError } from '@common/errors';
+import { formatError, isFileNotFoundError } from '@common/errors';
 import type { RunId } from '@shared/schemas';
 import type { ToolResult } from '@shared/schemas';
 import type { SettingsStores } from '@shared/config/settingsAccess';
@@ -322,10 +322,15 @@ export const resolveInvocationFileList = Effect.fn('resolveInvocationFileList')(
   > {
     return yield* Effect.gen(function* () {
       const { storage, workspace } = session.roots;
+      // Storage is created by the first store that writes to it, so a
+      // session that has not written (an ephemeral one) may have none yet;
+      // then no referenced file can lie under it.
       const storageRoot = yield* Effect.tryPromise({
         try: () => realpath(storage),
         catch: ensureError,
-      });
+      }).pipe(
+        Effect.catchIf(isFileNotFoundError, () => Effect.succeed(undefined)),
+      );
       const references = yield* Effect.forEach(
         files,
         (file) =>
@@ -335,9 +340,14 @@ export const resolveInvocationFileList = Effect.fn('resolveInvocationFileList')(
               try: () => realpath(absolutePath),
               catch: ensureError,
             });
-            const relative = path.relative(storageRoot, canonicalPath);
+            const relative =
+              storageRoot === undefined
+                ? undefined
+                : path.relative(storageRoot, canonicalPath);
             const storagePath =
-              !path.isAbsolute(relative) && relative.split(path.sep)[0] !== '..'
+              relative !== undefined &&
+              !path.isAbsolute(relative) &&
+              relative.split(path.sep)[0] !== '..'
                 ? path.join(storage, relative)
                 : undefined;
             if (
