@@ -1,5 +1,6 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { Effect } from 'effect';
 import { createSessionExitController } from '@cli/chat/tui/sessionExitController';
 import { TuiSession } from '@cli/chat/tui/state/sessionRunState';
 import { CliExitCode } from '@cli/runtime/exitCodes';
@@ -7,6 +8,7 @@ import { DisposableStore } from '@platform/disposable';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import type { RunId } from '@shared/schemas';
 import { createDeferred } from '@test/support/asyncTestUtils';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import { bindTestSessionView } from './fixtures/sessionViewFixture';
 
 const mocks = vi.hoisted(() => ({
@@ -91,10 +93,10 @@ describe('chat TUI session exit controller', () => {
       cwd: '/tmp/project',
       disposables: new DisposableStore(),
       disposeTerminalRestoreOnExit: vi.fn(),
-      awaitFollowUpsIdle: async () => undefined,
-      awaitRunSettled: async () => undefined,
+      runtime: testRuntime(),
+      followUpsIdle: Effect.void,
       getApprovalPolicy: () => 'ask',
-      flushArtifacts: vi.fn().mockRejectedValue(new Error('disk full')),
+      flushArtifacts: Effect.fail(new Error('disk full')),
       repaintAfterTerminalResume: vi.fn(),
       suspendTerminalTitle: vi.fn(),
       resumeTerminalTitle: vi.fn(),
