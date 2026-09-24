@@ -58,7 +58,6 @@
     "packages/llm/src/openrouterChat.ts": 1105,
     "packages/llm/src/turn.ts": 1089,
     "src/agent/followUp/ToolUseFollowUpQueueManager.ts": 741,
-    "src/agent/implementations/agentCreator/agentCreatorFlow.ts": 534,
     "src/agent/index/agentRegistry.ts": 616,
     "src/agent/output/compileCheck.ts": 562,
     "src/agent/output/extraction/filenameHeaders.ts": 564,

@@ -21,7 +21,6 @@ import {
   IMAGEMAGICK_INSTALL_GUIDE,
   LATEXMK_INSTALL_GUIDE,
   TEXFMT_INSTALL_GUIDE,
-  WOLFRAM_INSTALL_GUIDE,
   getInstallGuide,
 } from '@shared/constants/latexToolchain';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
@@ -74,7 +73,6 @@ const PERL_INSTRUCTIONS = installGuide(PERL_INSTALL_GUIDE);
 const GHOSTSCRIPT_INSTRUCTIONS = installGuide(GHOSTSCRIPT_INSTALL_GUIDE);
 const GM_INSTRUCTIONS = installGuide(GRAPHICSMAGICK_INSTALL_GUIDE);
 const MAGICK_INSTRUCTIONS = installGuide(IMAGEMAGICK_INSTALL_GUIDE);
-const WOLFRAM_INSTRUCTIONS = installGuide(WOLFRAM_INSTALL_GUIDE);
 const PDFLATEX_INSTRUCTIONS = installGuide(PDFLATEX_INSTALL_GUIDE);
 const LATEXMK_INSTRUCTIONS = installGuide(LATEXMK_INSTALL_GUIDE);
 
@@ -129,9 +127,9 @@ const TOOL_CONFIGS: Record<string, ToolConfig> = {
         : 'gs --version',
     },
   ),
+  // Probe only: the wolfram plugin's manifest entry owns the install copy.
   wolframscript: withDocs(
-    '"wolframscript" is not installed or not in your PATH.\n' +
-      WOLFRAM_INSTRUCTIONS,
+    '"wolframscript" is not installed or not in your PATH.',
     { command: 'wolframscript -version', docs: false },
   ),
 
