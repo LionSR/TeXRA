@@ -7,9 +7,10 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { it } from '@effect/vitest';
-import { Effect, Fiber } from 'effect';
+import { Effect, Fiber, FileSystem } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 import { withProcessServices } from '@platform/processRuntime';
+import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { findToolPlugin } from '@tools/plugins';
 import { resolveWorkspaceRoot } from '@tools/lean/direct/leanServerPool';
@@ -59,8 +60,10 @@ describe('extractHoverText', () => {
 describe('resolveWorkspaceRoot', () => {
   let scratch: string;
 
-  const resolve = (filePath: string): Effect.Effect<string | null> =>
-    resolveWorkspaceRoot(filePath);
+  const resolve = (filePath: string) =>
+    FileSystem.FileSystem.use((fs) => resolveWorkspaceRoot(fs, filePath)).pipe(
+      Effect.provide(nodePlatformLayer),
+    );
 
   beforeEach(() => {
     scratch = mkdtempSync(path.join(tmpdir(), 'texra-lean-root-'));

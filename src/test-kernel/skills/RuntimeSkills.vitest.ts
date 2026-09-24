@@ -18,6 +18,7 @@ import {
   formatRuntimeSkillActivation,
   loadRuntimeSkillCatalog as loadRuntimeSkillCatalogEffect,
 } from '@skills/runtimeSkills';
+import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { installTestSkillRoots, writeSkill } from '@test/support/skillFixtures';
@@ -28,7 +29,12 @@ const tempRoots = useTempDirs();
 
 const loadRuntimeSkillCatalog = (
   ...args: Parameters<typeof loadRuntimeSkillCatalogEffect>
-) => Effect.runPromise(loadRuntimeSkillCatalogEffect(...args));
+) =>
+  Effect.runPromise(
+    loadRuntimeSkillCatalogEffect(...args).pipe(
+      Effect.provide(nodePlatformLayer),
+    ),
+  );
 
 async function createTempRoot(): Promise<string> {
   return makeTempDir('texra-runtime-skills-', tempRoots);
@@ -184,7 +190,7 @@ describe('runtime skills', () => {
       );
 
       expect(result.skills.map((skill) => skill.name)).toStrictEqual(expected);
-    }),
+    }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
   it('bounds the accepted set once before prompt and snapshot projection', async () => {

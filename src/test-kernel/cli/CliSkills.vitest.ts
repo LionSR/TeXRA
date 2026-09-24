@@ -4,7 +4,7 @@ import * as path from 'node:path';
 
 import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { afterEach, describe, expect, vi } from 'vitest';
+import { afterEach, expect, vi } from 'vitest';
 
 import { installPlugins, removePlugin } from '@cli/runtime/plugins';
 import {
@@ -19,6 +19,7 @@ import {
   readDisabledSkills,
   skillDisplayItem,
 } from '@skills/runtimeSkills';
+import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { installTestSkillRoots } from '@test/support/skillFixtures';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
@@ -56,7 +57,7 @@ afterEach(() => {
   commandMocks.initCliPlatform.mockReset();
 });
 
-describe('CLI skills runtime', () => {
+it.layer(nodePlatformLayer)('CLI skills runtime', (it) => {
   it('deduplicates repeated source paths while preserving required custom roots, and rejects a repeated contribution id', () => {
     const projectSkillsPath = path.resolve(
       path.sep,

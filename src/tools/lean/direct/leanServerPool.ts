@@ -15,7 +15,6 @@
  * closing, and retries once. Closing the pool's scope ends map and servers.
  */
 
-import { access } from 'node:fs/promises';
 import * as path from 'node:path';
 
 import {
@@ -24,6 +23,7 @@ import {
   Deferred,
   type Duration,
   Effect,
+  FileSystem,
   Layer,
   LayerMap,
   RcMap,
@@ -34,6 +34,7 @@ import {
 import { withLogChannel } from '@logger/effectLog';
 import type { RunId } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import { pathExists } from '@utils/files/fsDurability';
 
 import { runLakeCommand } from './lakeCommands';
 import { LeanServer, type LeanStartError } from './leanServer';
@@ -135,7 +136,7 @@ export class LeanServerPool extends Context.Service<
   ): Layer.Layer<
     LeanServerPool,
     never,
-    ChildProcessSpawner.ChildProcessSpawner
+    ChildProcessSpawner.ChildProcessSpawner | FileSystem.FileSystem
   > => Layer.effect(LeanServerPool)(make(options));
 }
 
@@ -143,6 +144,7 @@ const make = Effect.fn('LeanServerPool.make')(function* ({
   lakeCommand,
   idleTimeToLive,
 }: LeanServerPoolOptions) {
+  const fs = yield* FileSystem.FileSystem;
   // This pool's own roster, so the dashboard's list ends when the pool does.
   const roster = createLeanServerRoster();
   const servers = yield* LayerMap.make(
@@ -291,7 +293,7 @@ const make = Effect.fn('LeanServerPool.make')(function* ({
     filePath: string,
   ) {
     const absolute = path.resolve(filePath);
-    const root = yield* resolveWorkspaceRoot(absolute);
+    const root = yield* resolveWorkspaceRoot(fs, absolute);
     if (!root) {
       return yield* new LeanProjectNotFound({
         message: `No Lean project found for ${absolute}. Lake projects need a lakefile.lean or lakefile.toml in an ancestor directory.`,
@@ -580,21 +582,16 @@ function isFileTableExhausted(error: unknown): boolean {
   return false;
 }
 
-// Uses fs/promises directly: this runs before any process runtime exists,
-// during early startup / test harness setup.
-const pathExists = (target: string): Effect.Effect<boolean> =>
-  Effect.isSuccess(Effect.tryPromise(() => access(target)));
-
 /** Walk up from `filePath` looking for a Lake project root. */
 export const resolveWorkspaceRoot = Effect.fn(
   'LeanServerPool.resolveWorkspaceRoot',
-)(function* (filePath: string) {
+)(function* (fs: FileSystem.FileSystem, filePath: string) {
   let dir = path.dirname(path.resolve(filePath));
   const root = path.parse(dir).root;
   for (;;) {
     if (
-      (yield* pathExists(path.join(dir, 'lakefile.lean'))) ||
-      (yield* pathExists(path.join(dir, 'lakefile.toml')))
+      (yield* pathExists(fs, path.join(dir, 'lakefile.lean'))) ||
+      (yield* pathExists(fs, path.join(dir, 'lakefile.toml')))
     ) {
       return dir;
     }
