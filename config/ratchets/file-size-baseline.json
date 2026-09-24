@@ -85,7 +85,7 @@
     "src/controllers/session/sessionLayer.ts": 1196,
     "src/latex/arxivProcessor.ts": 736,
     "src/latex/LatexMediaManager.ts": 716,
-    "src/model/computeModelOptions.ts": 943,
+    "src/model/computeModelOptions.ts": 940,
     "src/replacement/maxRules.ts": 668,
     "src/replacement/rules.ts": 830,
     "src/shared/commands/catalog.ts": 537,

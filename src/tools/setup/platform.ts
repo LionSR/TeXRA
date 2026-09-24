@@ -21,7 +21,7 @@ import type {
   TerminalRunRequest,
   TerminalRunResult,
 } from '@hosts/uiHosts';
-import { isCodexSubscriptionActive } from '@model/providerCapabilities';
+import { readProspectiveUsageRoute } from '@model/computeModelOptions';
 import { CHATGPT_SETUP_MODEL } from '@model/setupModelDefaults';
 import type { LanguageModel } from '@platform/languageModel';
 import { Secrets } from '@platform/secrets';
@@ -171,7 +171,7 @@ export const getSetupAuthStatus = Effect.fn('getSetupAuthStatus')(function* () {
 class SubscriptionProbeFailed extends Data.TaggedError(
   'SubscriptionProbeFailed',
 )<{
-  readonly member: 'isCodexSubscriptionActive';
+  readonly member: 'readProspectiveUsageRoute';
   readonly message: string;
   readonly cause: unknown;
 }> {}
@@ -190,18 +190,18 @@ export const getChatGptSubscriptionStatus = Effect.fn(
   const status = yield* getCodexStatus(secrets);
   // Routing is only consulted for a signed-in account, as the `&&` did.
   if (!status.signedIn) return { signedIn: false, enabled: false };
-  const enabled = yield* isCodexSubscriptionActive(
-    stores,
+  const route = yield* readProspectiveUsageRoute(
+    { ...stores, secrets },
     CHATGPT_SETUP_MODEL,
   ).pipe(
     Effect.mapError(
       (cause) =>
         new SubscriptionProbeFailed({
-          member: 'isCodexSubscriptionActive',
+          member: 'readProspectiveUsageRoute',
           message: 'ChatGPT subscription routing could not be resolved.',
           cause,
         }),
     ),
   );
-  return { signedIn: true, enabled };
+  return { signedIn: true, enabled: route === 'chatgpt-subscription' };
 });

@@ -46,17 +46,6 @@ export function isOpenRouterRoutingUnsupported(
   return openRouterSelected && config.capabilities?.reasoningMode !== undefined;
 }
 
-/** API-key owner for the route `modelRoutes` will use for this model. */
-export function resolveModelApiKeyProvider(
-  config: ModelRoutingConfig,
-  useOpenRouter: boolean,
-): ApiProvider | undefined {
-  if (shouldRouteModelThroughOpenRouter(config, useOpenRouter)) {
-    return 'openRouter';
-  }
-  return resolveDirectModelApiKeyProvider(config);
-}
-
 /** API-key owner for the direct route, independent of the global OpenRouter choice. */
 export function resolveDirectModelApiKeyProvider(
   config: Pick<ModelRoutingConfig, 'provider' | 'kimiSubscription' | 'baseUrl'>,
@@ -69,8 +58,8 @@ export function resolveDirectModelApiKeyProvider(
 
 /** Product-facing model source; direct managed services own their own group. */
 export function resolveModelSource(
-  config: Pick<ModelRoutingConfig, 'provider' | 'kimiSubscription' | 'baseUrl'>,
-): string | undefined {
+  config: Pick<ModelConfig, 'provider' | 'kimiSubscription' | 'baseUrl'>,
+): string {
   return isKimiCodeExclusiveModel(config) ? 'kimiCode' : config.provider;
 }
 

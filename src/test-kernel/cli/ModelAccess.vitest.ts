@@ -17,10 +17,9 @@ import {
 } from '@cli/runtime/modelAccess';
 import type { ProcessServices } from '@platform/processRuntime';
 import type { ModelOptionData } from '@shared/schemas';
-import { GlobalStateKey } from '@shared/state/stateKeys';
 import { testRuntime } from '@test/support/testProcessRuntime';
-import { FakeStateStore, fakeStores } from '@test/support/FakePlatform';
-import { hostStores, setupPlatform } from '@test/support/setupPlatform';
+import { fakeStores } from '@test/support/FakePlatform';
+import { setupPlatform } from '@test/support/setupPlatform';
 
 const readModelAvailabilityInputsMock = vi.hoisted(() => vi.fn());
 
@@ -29,6 +28,7 @@ vi.mock('@model/computeModelOptions', () => ({
   // Availability is read once and finished purely, so a case seeds the option
   // rows on the read and the pure finisher hands them straight back.
   modelOptionsFrom: (rows: readonly ModelOptionData[]) => rows,
+  usageRouteFrom: () => undefined,
 }));
 
 vi.mock('llm-zoo', async (importOriginal) => {
@@ -42,45 +42,11 @@ vi.mock('llm-zoo', async (importOriginal) => {
         fullName: 'user-facing-fixture',
         label: 'User Facing Fixture',
       },
-      glmCustomFixture: {
-        ...actual.MODEL_CONFIGS.glm52,
-        baseUrl: 'https://model.test/v4',
-      },
     },
   };
 });
 
-/**
- * The GLM routing settings the status formatter reads, as the installed fake
- * host's global state rather than a module mock of `@utils/config/providerConfig`:
- * the read path (`resolveRouteEndpoint` -> `readSettingFrom`) answers from the
- * stores the host publishes, and the kernel's setup file installs one before
- * this file's mocks are registered.
- */
-const routingSettings = new FakeStateStore();
-
-setupPlatform({}, { globalState: routingSettings });
-
-function seedGlmRouting(settings: {
-  readonly codingPlan?: boolean;
-  readonly providerEndpoint?: string;
-  readonly useOpenRouter?: boolean;
-}) {
-  return Effect.all([
-    routingSettings.update(
-      GlobalStateKey.GLM_CODING_PLAN,
-      settings.codingPlan ?? false,
-    ),
-    routingSettings.update(
-      GlobalStateKey.ENDPOINT_GLM,
-      settings.providerEndpoint ?? '',
-    ),
-    routingSettings.update(
-      GlobalStateKey.USE_OPENROUTER,
-      settings.useOpenRouter ?? false,
-    ),
-  ]).pipe(Effect.asVoid);
-}
+setupPlatform({});
 
 function model(
   value: string,
@@ -168,9 +134,8 @@ function expectModelOptionsRequested(models: string[]): void {
 }
 
 describe('CLI model access resolution', () => {
-  beforeEach(async () => {
+  beforeEach(() => {
     readModelAvailabilityInputsMock.mockReset();
-    await Effect.runPromise(seedGlmRouting({}));
   });
 
   it('keeps the requested model when it is currently runnable', async () => {
@@ -271,92 +236,33 @@ describe('CLI model access resolution', () => {
     status: 'api key set',
   });
 
-  effectIt.effect.each([
+  it.each([
     {
       name: 'prefixes a provider-key status with the api label',
       entry: DEEPSEEK_PROVIDER_KEY_ENTRY,
       expected: 'api: api key set',
     },
     {
-      name: 'labels a GLM provider-key row as GLM Coding Plan when the toggle is on',
+      name: 'names the GLM Coding Plan when the picker says it pays',
       entry: model('glm52', {
         model: modelOption('glm52', {
           availability: 'provider-key',
           provider: 'glm',
         }),
         status: 'api key set',
+        usageRoute: 'glm-coding-plan-subscription',
       }),
-      codingPlan: true,
       expected: 'api: GLM Coding Plan',
     },
-    {
-      name: 'keeps the plain api status for a custom GLM provider endpoint',
-      entry: model('glm52', {
-        model: modelOption('glm52', {
-          availability: 'provider-key',
-          provider: 'glm',
-        }),
-        status: 'api key set',
-      }),
-      codingPlan: true,
-      providerEndpoint: 'proxy.test/api/paas/v4',
-      expected: 'api: api key set',
-    },
-    {
-      name: 'keeps the plain api status for a model custom GLM endpoint',
-      entry: model('glmCustomFixture', {
-        model: modelOption('glmCustomFixture', {
-          availability: 'provider-key',
-          provider: 'glm',
-        }),
-        status: 'api key set',
-      }),
-      codingPlan: true,
-      providerEndpoint: 'proxy.test/api/paas/v4',
-      useOpenRouter: true,
-      expected: 'api: api key set',
-    },
-    {
-      name: 'keeps the plain api status for GLM provider-key rows when the toggle is off',
-      entry: model('glm52', {
-        model: modelOption('glm52', {
-          availability: 'provider-key',
-          provider: 'glm',
-        }),
-        status: 'api key set',
-      }),
-      codingPlan: false,
-      expected: 'api: api key set',
-    },
-    {
-      name: 'never claims GLM Coding Plan for an OpenRouter-routed GLM row',
-      entry: model('glm52', {
-        model: modelOption('glm52', {
-          availability: 'openrouter-key',
-          provider: 'glm',
-        }),
-        status: 'openrouter key',
-      }),
-      codingPlan: true,
-      useOpenRouter: true,
-      expected: 'api: openrouter key',
-    },
-  ])(
-    'formats model picker status: $name',
-    ({ entry, expected, codingPlan, providerEndpoint, useOpenRouter }) =>
-      Effect.gen(function* () {
-        yield* seedGlmRouting({ codingPlan, providerEndpoint, useOpenRouter });
-        expect(yield* formatModelStatusForCli(hostStores(), entry)).toBe(
-          expected,
-        );
-      }),
-  );
+  ])('formats model picker status: $name', ({ entry, expected }) => {
+    expect(formatModelStatusForCli(entry)).toBe(expected);
+  });
 
   effectIt.effect(
     'builds model picker rows from the access-list source of truth',
     () =>
       Effect.gen(function* () {
-        const rows = yield* modelSelectItemsForCli(hostStores(), [
+        const rows = yield* modelSelectItemsForCli([
           model('deepseekT', {
             model: modelOption('deepseekT', {
               label: 'DeepSeek',
@@ -399,7 +305,6 @@ describe('CLI model access resolution', () => {
       Effect.gen(function* () {
         expect(
           yield* modelSelectItemsForCli(
-            hostStores(),
             [
               model('sonnet46T', {
                 model: modelOption('sonnet46T', {
@@ -447,7 +352,7 @@ describe('CLI model access resolution', () => {
     () =>
       Effect.gen(function* () {
         expect(
-          yield* modelSelectItemsForCli(hostStores(), [
+          yield* modelSelectItemsForCli([
             model('deepseekT', {
               available: false,
               model: modelOption('deepseekT', {

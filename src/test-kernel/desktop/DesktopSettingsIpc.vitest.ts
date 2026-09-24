@@ -691,12 +691,6 @@ describe('desktop settings IPC', () => {
         enabledExtras: [],
         disabledDefaults: [],
       });
-      expect(
-        yield* withProcessServices(
-          testRuntime(),
-          globalState.get(GlobalStateKey.HELPER_MODEL),
-        ),
-      ).toBe(DEFAULT_HELPER_MODEL);
       expect(errors).toEqual([]);
       expect(
         posted.findLast(

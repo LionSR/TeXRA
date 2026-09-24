@@ -6,10 +6,8 @@ import { afterEach, beforeEach, describe, expect } from 'vitest';
 
 // Local imports
 import { apiKeySecretName, invalidateApiKeyCache } from '@model/apiProviders';
-import {
-  activeSubscriptionUsageRoute,
-  codingPlanSubscriptionRuntimes,
-} from '@model/codingPlanSubscriptions';
+import { codingPlanSubscriptionRuntimes } from '@model/codingPlanSubscriptions';
+import { readProspectiveUsageRoute } from '@model/computeModelOptions';
 import { resolveRouteEndpoint } from '@model/routeEndpoint';
 import {
   LanguageModel,
@@ -165,7 +163,7 @@ describe('coding-plan subscription runtime', () => {
           ...(usageRoute && { usageRoute }),
         });
         expect(
-          yield* activeSubscriptionUsageRoute(hostStores(), 'glm52').pipe(
+          yield* readProspectiveUsageRoute(hostStores(), 'glm52').pipe(
             Effect.provide(
               LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT),
             ),
