@@ -6,14 +6,12 @@
 import { memo } from 'react';
 import { Text } from 'ink';
 
-import { fillRows } from '@cli/runtime/terminalText';
 import { renderAnsiMarkdown } from './ansiMarkdown';
 
 interface MarkdownProps {
   readonly content: string;
   readonly width?: number;
   readonly colorEnabled?: boolean;
-  readonly fillWidth?: boolean;
 }
 
 // Memoized: props are scalars, so unchanged entries skip even the LRU lookup
@@ -24,19 +22,12 @@ export const Markdown = memo(function Markdown(
   // `renderAnsiMarkdown` trims trailing newlines so Ink doesn't add a blank
   // line at the bottom of each conversation entry; the parent
   // `<Box marginBottom={1}>` already provides separation between entries.
-  const rendered = renderAnsiMarkdown(props.content, {
-    width: props.width,
-    colorEnabled: props.colorEnabled,
-  });
-  const columns =
-    props.width == null || !Number.isFinite(props.width)
-      ? undefined
-      : Math.max(1, Math.floor(props.width));
   return (
     <Text>
-      {props.fillWidth === true && columns !== undefined
-        ? fillRows(rendered, columns)
-        : rendered}
+      {renderAnsiMarkdown(props.content, {
+        width: props.width,
+        colorEnabled: props.colorEnabled,
+      })}
     </Text>
   );
 });
