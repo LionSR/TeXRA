@@ -65,6 +65,14 @@ All notable changes to this project will be documented in this file.
   runs started afterwards; a delegated agent or workflow-script agent
   launched by a run already in progress keeps that run's plugins, so one
   task does not change tools halfway through.
+- **MCP servers** — list local stdio MCP servers in `~/.texra/mcp.json` (the
+  same shape as Claude Code's `.mcp.json`), and name their tools in an
+  agent's `tools:` list as `mcp__<server>__<tool>` or `mcp__<server>__*`.
+  Every MCP tool call goes through the same approval as a shell command. A
+  server runs
+  only while a run that uses it is open, does not inherit your API-key
+  environment variables, and a server that fails to start is named in the
+  run's transcript. See the Agent integrations guide.
 
 ### Bug Fixes
 

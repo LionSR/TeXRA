@@ -3,8 +3,9 @@
  *
  * A composition names what a run may be offered: the plugins still on (the
  * user's switches and the dependency probes applied), the switches that took
- * one off, the host and approval gates, the agent's declared tools and the
- * tools the manifest injects. It is plain data keyed by a sha256 of its
+ * one off, the loaded plugins the declared tools name (an MCP server, by the
+ * spec its resources are built from), the host and approval gates, the
+ * agent's declared tools and the tools the manifest injects. It is plain data keyed by a sha256 of its
  * canonical JSON, so two runs with the same composition are offered the same
  * tools, and a named preset can later be a stored composition.
  *
@@ -18,13 +19,21 @@ import { z } from 'zod';
 
 import type { ToolHost } from '@agent/core/tools/ToolTypes';
 import { findToolPlugin } from '@tools/plugins';
-import type { ToolTable } from '@tools/toolTable';
+import type { LoadedPlugin, ToolTable } from '@tools/toolTable';
 
 const CompositionSchema = z.object({
   /** Plugin ids whose tools may be offered, sorted. */
   plugins: z.array(z.string()),
   /** Plugin ids the user switched off, sorted. */
   disabled: z.array(z.string()),
+  /**
+   * The loaded plugins (`@tools/toolTable`) the declared tools name, sorted
+   * by id, each with the spec its resources are built from: an edited spec
+   * is a different composition, built beside the one in use.
+   */
+  loaded: z.array(
+    z.object({ id: z.string(), spec: z.record(z.string(), z.unknown()) }),
+  ),
   /** The product host; `null` when no composition root named one. */
   host: z.enum(['cli', 'desktop', 'extension']).nullable(),
   /** Whether approval-gated tools are withheld (no interactive channel). */
@@ -46,6 +55,7 @@ export function compositionFor(inputs: {
   readonly table: ToolTable;
   readonly disabledIds: ReadonlySet<string>;
   readonly unavailableTools: ReadonlySet<string>;
+  readonly loaded: readonly LoadedPlugin[];
   readonly host: ToolHost | undefined;
   readonly approvalPromptsUnavailable: boolean;
   readonly tools: readonly string[];
@@ -71,6 +81,9 @@ export function compositionFor(inputs: {
   return {
     plugins,
     disabled,
+    loaded: inputs.loaded
+      .map(({ id, spec }) => ({ id, spec: { ...spec } }))
+      .toSorted((a, b) => Number(a.id > b.id) - Number(a.id < b.id)),
     host: inputs.host ?? null,
     approvalPromptsUnavailable: inputs.approvalPromptsUnavailable,
     tools: [...new Set(inputs.tools)],
