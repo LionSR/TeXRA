@@ -38,7 +38,7 @@ import type {
 } from './runRegistryTypes';
 
 /**
- * Session-owned registry of active runs and their change listeners. One
+ * Session-owned registry of active runs and their change waiters. One
  * instance belongs to each session, built by the session layer in that
  * session's scope and provided as {@link Runs}.
  */
