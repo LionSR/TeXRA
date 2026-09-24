@@ -6,7 +6,6 @@ import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { afterEach, describe, expect, vi } from 'vitest';
 
-import { parsePluginSource } from '@cli/commands/plugin';
 import { installPlugins, removePlugin } from '@cli/runtime/plugins';
 import {
   formatCliSkillList,
@@ -350,7 +349,7 @@ describe('CLI skills runtime', () => {
         initializeNodeRuntimeSkills({ resourcesPath: resources }, []);
 
         const [installed] = yield* installPlugins(
-          parsePluginSource(plugin, plugin, undefined),
+          { kind: 'local', path: plugin },
           [],
           env,
         );

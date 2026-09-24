@@ -37,7 +37,7 @@ const GITHUB_SHORTHAND =
  * directory. Refused here, before anything runs, so a bad source is a usage
  * error. `--ref` applies to git sources only.
  */
-export function parsePluginSource(
+function parsePluginSource(
   input: string,
   cwd: string,
   ref: string | undefined,
