@@ -22,13 +22,13 @@ Not on the registry yet. Inside this workspace, depend on it by name:
 `effect` and `zod` (v4) are peer dependencies of the whole package: the bundle
 imports `effect` at runtime (`dist/index.js` opens with
 `import ... from 'effect'`). Install both alongside it, `effect` at the exact
-version the package pins (`4.0.0-rc.116`). Two copies of `effect` in one
+version the package pins (`4.0.0-rc.117`). Two copies of `effect` in one
 process do not work at all: Streams, Fibers and Context built by one copy do
 not interoperate with another's, and a peer dependency is how a consumer gets
 one copy rather than a second nested one.
 
 ```jsonc
-{ "dependencies": { "effect": "4.0.0-rc.116", "zod": "^4.4.3" } }
+{ "dependencies": { "effect": "4.0.0-rc.117", "zod": "^4.4.3" } }
 ```
 
 ## Usage
