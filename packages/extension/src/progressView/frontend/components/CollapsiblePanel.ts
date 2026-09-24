@@ -1,52 +1,47 @@
 /** Shared base for stream panels rendered inside a collapsible wa-details. */
 
 // Third-party imports
-import {
-  LitElement,
-  html,
-  type PropertyValues,
-  type TemplateResult,
-} from 'lit';
+import { LitElement, html, type TemplateResult } from 'lit';
 import { property } from 'lit/decorators.js';
 
-import { DetailsOpenController } from '@shared/litControllers/DetailsOpenController';
+import type { RunId } from '@shared/schemas';
+import type { Surface } from '@shared/session/surface';
+import { dispatchGroupToggle } from '../utils';
 
 // Web Awesome native components
 import '@awesome.me/webawesome/dist/components/details/details.js';
 
 /**
- * Holds the collapse-on-context-switch state shared by the stream panels:
- * the parent bumps `collapseKey` (e.g. on stream switches) to reset the
- * panel, and wa-show/wa-hide keep `open` in sync with user toggles.
+ * A stream panel's open state is the surface's (`Surface.groups`, under the
+ * run and the panel's `groupKey`), like the dispatch card's: it survives a
+ * run switch and a reload, and a toggle is dispatched, never kept here.
  */
 export abstract class CollapsiblePanel extends LitElement {
-  /** When this key changes, the panel collapses. Used by the parent to reset
-   *  open state on context switches (e.g. switching runs). */
-  @property({ type: String }) collapseKey = '';
+  @property({ attribute: false }) runId: RunId | null = null;
+  @property({ attribute: false }) surface: Surface | null = null;
 
-  private readonly details = new DetailsOpenController(this);
+  /** The panel's key in `Surface.groups` for its run. */
+  protected abstract readonly groupKey: string;
 
-  protected override willUpdate(changed: PropertyValues): void {
-    if (
-      changed.has('collapseKey') &&
-      changed.get('collapseKey') !== undefined
-    ) {
-      this.details.open = false;
-    }
-  }
+  private readonly handleToggle = (event: Event): void => {
+    dispatchGroupToggle(this, event, this.runId, this.groupKey);
+  };
 
   /** The shared collapsible scaffold; `body` renders inside the details. */
   protected renderCollapsibleDetails(options: {
     summary: string;
     body: TemplateResult;
   }): TemplateResult {
+    const open =
+      this.runId !== null &&
+      this.surface?.groups.get(this.runId)?.get(this.groupKey) === true;
     return html`
       <wa-details
         class="panel-collapsible is-boxed"
         summary=${options.summary}
-        ?open=${this.details.open}
-        @wa-show=${this.details.handleShow}
-        @wa-hide=${this.details.handleHide}
+        ?open=${open}
+        @wa-show=${this.handleToggle}
+        @wa-hide=${this.handleToggle}
       >
         ${options.body}
       </wa-details>

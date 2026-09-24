@@ -104,7 +104,7 @@ describe('main-view run launch controller', () => {
     Effect.gen(function* () {
       const { config } = yield* onGlobalStorage(
         prepareSurfaceLaunch(
-          launchRequest({ agent: { toolUse: 'orchestrator' } }),
+          launchRequest({ agent: 'orchestrator' }),
           createHost(),
           workspaceState,
           STORAGE_ROOT,
@@ -138,7 +138,7 @@ describe('main-view run launch controller', () => {
 
         expect(error).toMatchObject({
           _tag: 'Rejected',
-          reason: 'Choose an agent, a model, and a run type first.',
+          reason: 'Choose an agent and a model first.',
         });
       }),
   );
@@ -148,7 +148,7 @@ describe('main-view run launch controller', () => {
       const error = yield* Effect.flip(
         onGlobalStorage(
           prepareSurfaceLaunch(
-            launchRequest({ sessionType: 'workflow' }),
+            launchRequest({ sessionType: 'workflow', agent: 'correct' }),
             createHost(),
             workspaceState,
             STORAGE_ROOT,
@@ -250,7 +250,7 @@ describe('main-view run launch controller', () => {
             launchRequest({
               launchTarget: 'team',
               selectedTeamId: 'physicist',
-              agent: { toolUse: 'stale-renderer-agent' },
+              agent: 'stale-renderer-agent',
             }),
             host,
             workspaceState,

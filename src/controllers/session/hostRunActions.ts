@@ -704,9 +704,9 @@ export function launchPatchOf(config: AgentConfig) {
   const resolvedAgent = resolveAgentKey(config.agent, agentCategory);
   return LaunchSurfaceSchema.parse({
     sessionType: agentCategory,
-    agent: { [agentCategory]: resolvedAgent },
+    agent: resolvedAgent,
     model: config.model,
-    instruction: { [agentCategory]: config.instruction },
+    instruction: config.instruction,
     editedFile: config.editedFile,
     inputFiles: config.inputFiles,
     contextFiles: config.contextFiles,

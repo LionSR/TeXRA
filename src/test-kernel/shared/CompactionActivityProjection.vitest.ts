@@ -62,6 +62,38 @@ function advancingEntry(
 }
 
 describe('compaction activity projection', () => {
+  it('carries the freed figures on the running block', () => {
+    const projection = projectCompactionActivities([
+      activityEntry(2, 'a', 'started'),
+      StreamLogEntrySchema.parse({
+        seqNo: 3,
+        id: 'event-3',
+        type: STREAM_LOG_ENTRY_TYPES.LOG,
+        level: 'info',
+        timestamp: 30,
+        messageType: MESSAGE_TYPES.CONTEXT_MANAGEMENT,
+        data: {
+          action: 'compaction',
+          tokensBefore: 50_000,
+          tokensAfter: 9_000,
+          contextWindow: 64_000,
+          utilizationBefore: 78.1,
+          utilizationAfter: 14.1,
+        },
+      }),
+      activityEntry(4, 'a', 'completed'),
+    ]);
+
+    expect(projection.blocks[0]).toMatchObject({
+      status: 'completed',
+      freed: {
+        tokens: 41_000,
+        utilizationBefore: 78.1,
+        utilizationAfter: 14.1,
+      },
+    });
+  });
+
   it('updates one stable block from start to terminal outcome', () => {
     const projection = projectCompactionActivities([
       activityEntry(2, 'a', 'started'),

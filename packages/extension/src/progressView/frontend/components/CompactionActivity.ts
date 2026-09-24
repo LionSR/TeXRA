@@ -2,10 +2,7 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import { LitElement, css, html, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
-import {
-  COMPACTION_ACTIVITY_LABEL,
-  type CompactionActivityStatus,
-} from '@shared/runs/compactionActivityProjection';
+import type { CompactionActivityStatus } from '@shared/runs/compactionActivityProjection';
 import { designTokens, commonViewStyles } from '@ui/styles';
 import type { TeXRAIconName } from '@ui/wa/iconNames';
 import { stopSpinnerMotion } from '@ui/wa/spinner';
@@ -86,9 +83,10 @@ export class CompactionActivity extends LitElement {
   ];
 
   @property({ attribute: false }) status: CompactionActivityStatus = 'running';
+  /** The row's label (`compactionActivityRow`), figures included. */
+  @property({ attribute: false }) label = '';
 
   override render(): TemplateResult {
-    const label = COMPACTION_ACTIVITY_LABEL[this.status];
     return html`<div
       class=${`activity activity--${this.status}`}
       role="status"
@@ -103,7 +101,7 @@ export class CompactionActivity extends LitElement {
             ></wa-spinner>`
           : waIcon(ACTIVITY_ICON[this.status], { className: 'icon' })
       }
-      <span class="label">${label}</span>
+      <span class="label">${this.label}</span>
     </div>`;
   }
 }

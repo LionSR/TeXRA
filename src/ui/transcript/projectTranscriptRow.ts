@@ -232,18 +232,13 @@ function statisticsItems(stats: Partial<ExtendedTokenUsageStats>): StatItem[] {
 }
 
 const CONTEXT_MANAGEMENT_LABEL: Readonly<Record<string, string>> = {
-  compaction: 'Compacted',
   clear_tool_uses: 'Cleared tool uses',
   clear_thinking: 'Cleared thinking',
   truncation: 'Truncated',
   max_tokens_reduced: 'Max tokens reduced',
 };
 
-const TOKENS_FREED_ACTIONS = new Set([
-  'clear_tool_uses',
-  'clear_thinking',
-  'compaction',
-]);
+const TOKENS_FREED_ACTIONS = new Set(['clear_tool_uses', 'clear_thinking']);
 
 /**
  * A `max_tokens_reduced` event whose adjusted ceiling is still this high is a
@@ -424,6 +419,9 @@ export function projectTranscriptRow(
 
     case MESSAGE_TYPES.CONTEXT_MANAGEMENT: {
       const data = entry.data;
+      // A client compaction is one row, its activity, which carries these
+      // figures (`compactionActivityRow`); a second row would repeat it.
+      if (data.action === 'compaction') return undefined;
       const reduced = data.action === 'max_tokens_reduced';
       if (
         reduced &&

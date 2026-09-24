@@ -90,6 +90,8 @@ export class TodoList extends CollapsiblePanel {
 
   @property({ attribute: false }) todos: TodoItem[] = [];
 
+  protected readonly groupKey = 'tasks';
+
   override render(): TemplateResult | typeof nothing {
     if (this.todos.length === 0) {
       return nothing;
@@ -111,7 +113,11 @@ export class TodoList extends CollapsiblePanel {
         }
       </div>
       ${this.renderCollapsibleDetails({
-        summary: `Tasks (${completed} of ${total} complete)`,
+        // The task in progress is the one fact a watcher needs, so the
+        // summary names it rather than hiding it behind the disclosure.
+        summary: activeTodo
+          ? `Tasks ${completed}/${total} · ${activeTodo.activeForm}`
+          : `Tasks ${completed}/${total}`,
         body: html`
           <ol class="todo-list" aria-label="Tasks">
             ${repeat(

@@ -12,5 +12,6 @@ export function formatCompactionActivityTemplate(
 ): FormatResult {
   return html`<compaction-activity
     .status=${row.block.status}
+    .label=${row.label}
   ></compaction-activity>`;
 }

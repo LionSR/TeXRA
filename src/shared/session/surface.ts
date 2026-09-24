@@ -29,7 +29,12 @@ import type { HostSnapshot } from './hostSnapshot';
 import type { RequestErrorWire } from './sessionFrames';
 import type { SessionView, RunView } from './sessionView';
 
-/** The new-task composer's selections, separate from host-derived state. */
+/**
+ * The new-task composer's selections, separate from host-derived state.
+ * One agent and one instruction: the agent's category is the run type, so
+ * `sessionType` is always written together with `agent` and never chosen
+ * on its own.
+ */
 export const LaunchSurfaceSchema = UIFileFieldsSchema.merge(
   ToolConfigFieldsSchema,
 ).extend({
@@ -37,34 +42,32 @@ export const LaunchSurfaceSchema = UIFileFieldsSchema.merge(
   launchTarget: LaunchTargetSchema.prefault('agent'),
   selectedTeamId: z.string().prefault(''),
   workingDirectory: z.string().prefault(''),
-  agent: z
-    .object({
-      workflow: z.string().prefault('correct'),
-      toolUse: z.string().prefault('orchestrator'),
-    })
-    .prefault({}),
+  agent: z.string().prefault('orchestrator'),
   model: z.string().prefault(DEFAULT_AGENT_MODEL),
   commit: z.string().prefault('HEAD'),
-  instruction: z
-    .object({
-      workflow: z.string().prefault(''),
-      toolUse: z.string().prefault(''),
-    })
-    .prefault({}),
+  instruction: z.string().prefault(''),
   baseFile: z.string().prefault(''),
 });
 type LaunchSurface = z.infer<typeof LaunchSurfaceSchema>;
 
-/** A change to the launcher: the per-category records merge one level
- *  deep, so a host can name the tool-use agent without knowing the
- *  workflow one. Zod because the host's `surface.action` carries it. */
-const PerCategoryPatchSchema = z
-  .object({ workflow: z.string().optional(), toolUse: z.string().optional() })
-  .optional();
-export const LaunchPatchSchema = LaunchSurfaceSchema.partial().extend({
-  agent: PerCategoryPatchSchema,
-  instruction: PerCategoryPatchSchema,
-});
+type LaunchShape = typeof LaunchSurfaceSchema.shape;
+
+/** A change to the launcher, carried by the host's `surface.action`: every
+ *  field optional with its `.prefault` unwrapped, since `.partial()` keeps
+ *  prefaults that Zod runs for an absent key, so `{ commit }` would reset
+ *  the agent, the draft and the file lists. */
+export const LaunchPatchSchema = z.object(
+  Object.fromEntries(
+    Object.entries(LaunchSurfaceSchema.shape).map(([key, field]) => [
+      key,
+      (field instanceof z.ZodPrefault ? field.unwrap() : field).optional(),
+    ]),
+  ) as {
+    [K in keyof LaunchShape]: z.ZodOptional<
+      LaunchShape[K] extends z.ZodPrefault<infer Inner> ? Inner : LaunchShape[K]
+    >;
+  },
+);
 type LaunchPatch = z.infer<typeof LaunchPatchSchema>;
 
 /** An image of a follow-up: the `[fileName]` chip its text carries and
@@ -109,7 +112,7 @@ export interface Surface {
    */
   readonly selected: RunId | null;
   readonly drafts: ReadonlyMap<RunId, Draft>;
-  /** Foreground polish operations, keyed by stream id or `launch:<mode>`. Never persisted. */
+  /** Foreground polish operations, keyed by stream id or `launch`. Never persisted. */
   readonly polishing: ReadonlySet<string>;
   /** Streams awaiting follow-up admission. Never persisted. */
   readonly sending: ReadonlySet<RunId>;
@@ -459,21 +462,13 @@ export function applySurfaceAction(
         }),
       };
     case 'launch': {
-      const { agent, instruction, ...rest } = action.patch;
-      const launch = {
-        ...surface.launch,
-        ...rest,
-        agent: { ...surface.launch.agent, ...agent },
-        instruction: { ...surface.launch.instruction, ...instruction },
-      };
-      // A team is a tool-use launch target: leaving that mode launches the
-      // mode's agent, whatever target the tool-use mode had chosen.
+      const launch = { ...surface.launch, ...action.patch };
+      // Naming an agent targets it, and only a tool-use launch runs a team.
+      const toAgent =
+        action.patch.agent !== undefined || launch.sessionType !== 'toolUse';
       return {
         ...surface,
-        launch:
-          launch.sessionType === 'toolUse'
-            ? launch
-            : { ...launch, launchTarget: 'agent' },
+        launch: toAgent ? { ...launch, launchTarget: 'agent' } : launch,
       };
     }
     case 'inquiryDraft':
