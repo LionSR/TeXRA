@@ -81,17 +81,20 @@ describe('MCP server plugins', () => {
         );
         const pidFile = path.join(dir, 'pid');
         writeFileSync(path.join(dir, 'server.cjs'), FIXTURE_SERVER);
-        writeFileSync(
-          path.join(dir, 'mcp.json'),
-          JSON.stringify({
-            mcpServers: {
-              fixture: {
-                command: process.execPath,
-                args: [path.join(dir, 'server.cjs'), pidFile],
+        const writeConfig = (mode: string) =>
+          writeFileSync(
+            path.join(dir, 'mcp.json'),
+            JSON.stringify({
+              mcpServers: {
+                fixture: {
+                  command: process.execPath,
+                  args: [path.join(dir, 'server.cjs'), pidFile],
+                  env: { FIXTURE_MODE: mode },
+                },
               },
-            },
-          }),
-        );
+            }),
+          );
+        writeConfig('a');
         // A credential-shaped variable of this process never reaches the
         // server unless its entry names it.
         process.env.FIXTURE_API_KEY = 'secret';
@@ -108,16 +111,18 @@ describe('MCP server plugins', () => {
             LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT),
           ),
         );
-        const pin = yield* Scope.make();
         const warnings: string[] = [];
-        const resolved = yield* resolveAgentTools({
-          tools: [{ name: 'mcp__fixture__*' }],
-          logger: { warn: (message) => warnings.push(message) },
-          injectTools: false,
-          stores: hostStores(),
-          workspaceRoot: undefined,
-          host: 'cli',
-        }).pipe(Scope.provide(pin), Effect.provideContext(services));
+        const open = (pin: Scope.Scope) =>
+          resolveAgentTools({
+            tools: [{ name: 'mcp__fixture__*' }],
+            logger: { warn: (message) => warnings.push(message) },
+            injectTools: false,
+            stores: hostStores(),
+            workspaceRoot: undefined,
+            host: 'cli',
+          }).pipe(Scope.provide(pin), Effect.provideContext(services));
+        const pin = yield* Scope.make();
+        const resolved = yield* open(pin);
         expect(warnings).toEqual([]);
         expect(resolved.definitions).toEqual([
           expect.objectContaining({
@@ -127,6 +132,16 @@ describe('MCP server plugins', () => {
         ]);
         const pid = Number(readFileSync(pidFile, 'utf8'));
         expect(isAlive(pid)).toBe(true);
+
+        // An edited env value is a new composition: a run opened now gets its
+        // own server, while the open run keeps the one it started with.
+        writeConfig('b');
+        const editedPin = yield* Scope.make();
+        const edited = yield* open(editedPin);
+        const editedPid = Number(readFileSync(pidFile, 'utf8'));
+        expect(editedPid).not.toBe(pid);
+        expect(edited.pinned.key.hash).not.toBe(resolved.pinned.key.hash);
+        yield* Scope.close(editedPin, Exit.void);
 
         // The call goes through the loop's guard: a bash request the
         // session's approval authority opens, answered here.
@@ -179,9 +194,10 @@ describe('MCP server plugins', () => {
         // the server.
         yield* Scope.close(pin, Exit.void);
         yield* Effect.gen(function* () {
-          while (isAlive(pid)) yield* Effect.sleep(Duration.millis(20));
+          while (isAlive(pid) || isAlive(editedPid))
+            yield* Effect.sleep(Duration.millis(20));
         }).pipe(Effect.timeout(Duration.seconds(5)));
-        expect(isAlive(pid)).toBe(false);
+        expect([isAlive(pid), isAlive(editedPid)]).toEqual([false, false]);
       }).pipe(Effect.scoped, Effect.provide(nativeToolTestLayer())),
     20_000,
   );

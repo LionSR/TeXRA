@@ -28,11 +28,16 @@ const CompositionSchema = z.object({
   disabled: z.array(z.string()),
   /**
    * The loaded plugins (`@tools/toolTable`) the declared tools name, sorted
-   * by id, each with the spec its resources are built from: an edited spec
-   * is a different composition, built beside the one in use.
+   * by id, each with the spec its resources are built from and the revision
+   * of what the spec leaves out: an edit to either is a different
+   * composition, built beside the one in use.
    */
   loaded: z.array(
-    z.object({ id: z.string(), spec: z.record(z.string(), z.unknown()) }),
+    z.object({
+      id: z.string(),
+      spec: z.record(z.string(), z.unknown()),
+      revision: z.string(),
+    }),
   ),
   /** The product host; `null` when no composition root named one. */
   host: z.enum(['cli', 'desktop', 'extension']).nullable(),
@@ -82,7 +87,7 @@ export function compositionFor(inputs: {
     plugins,
     disabled,
     loaded: inputs.loaded
-      .map(({ id, spec }) => ({ id, spec: { ...spec } }))
+      .map(({ id, spec, revision }) => ({ id, spec: { ...spec }, revision }))
       .toSorted((a, b) => Number(a.id > b.id) - Number(a.id < b.id)),
     host: inputs.host ?? null,
     approvalPromptsUnavailable: inputs.approvalPromptsUnavailable,

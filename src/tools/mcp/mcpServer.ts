@@ -39,14 +39,17 @@ import {
 import { z } from 'zod';
 
 import type { RuntimeTool } from '@agent/runtime/ToolServices';
-import { MAX_TOOL_RESULT_TEXT_LENGTH } from '@agent/runtime/run/toolResultText';
+import {
+  TOOL_RESULT_TRUNCATION_HEAD_CHARS,
+  TOOL_RESULT_TRUNCATION_TAIL_CHARS,
+} from '@agent/runtime/run/toolResultText';
 import { withLogChannel } from '@logger/effectLog';
 import type { ToolResult } from '@shared/schemas';
 import { makeJsonRpcConnection, type JsonRpcConnection } from '@tools/jsonRpc';
 import { errorResult, executed } from '@tools/core/result';
 import type { LoadedPluginTools } from '@tools/toolTable';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { appendHead } from '@utils/text/appendTail';
+import { appendHead, appendTail } from '@utils/text/appendTail';
 
 import type { McpServerConfig } from './mcpConfig';
 
@@ -87,7 +90,7 @@ const ListToolsResultSchema = z.looseObject({
     z.looseObject({
       name: z.string().min(1),
       description: z.string().nullish(),
-      inputSchema: z.looseObject({ type: z.literal('object') }),
+      inputSchema: z.record(z.string(), z.unknown()),
     }),
   ),
   nextCursor: z.string().nullish(),
@@ -162,7 +165,11 @@ const decode = <T>(
       );
 };
 
-/** The text a call result carries, capped like every tool result. */
+/**
+ * The text a call result carries, cut head and tail past the cap a shell
+ * command's output takes, since a long result's summary or error sits at its
+ * end.
+ */
 function resultText(result: z.infer<typeof CallToolResultSchema>): string {
   const parts = result.content.map((item) =>
     item.type === 'text' && item.text != null
@@ -172,9 +179,12 @@ function resultText(result: z.infer<typeof CallToolResultSchema>): string {
   if (parts.length === 0 && result.structuredContent !== undefined)
     parts.push(JSON.stringify(result.structuredContent));
   const text = parts.join('\n');
-  return text.length <= MAX_TOOL_RESULT_TEXT_LENGTH
-    ? text
-    : `${appendHead('', text, MAX_TOOL_RESULT_TEXT_LENGTH)}\n[... output truncated at ${MAX_TOOL_RESULT_TEXT_LENGTH.toLocaleString()} characters ...]`;
+  const cap =
+    TOOL_RESULT_TRUNCATION_HEAD_CHARS + TOOL_RESULT_TRUNCATION_TAIL_CHARS;
+  if (text.length <= cap) return text;
+  const head = appendHead('', text, TOOL_RESULT_TRUNCATION_HEAD_CHARS);
+  const tail = appendTail('', text, TOOL_RESULT_TRUNCATION_TAIL_CHARS);
+  return `${head}\n\n[... ${(text.length - head.length - tail.length).toLocaleString()} characters elided ...]\n\n${tail}`;
 }
 
 /** One listed tool as a runtime tool over the server's connection. */
@@ -192,7 +202,9 @@ function mcpTool(
       description:
         listed.description ??
         `The "${listed.name}" tool of the MCP server "${server}".`,
-      parameters: listed.inputSchema,
+      // Providers take an object schema; MCP does not require the top-level
+      // `type`, and a tool's arguments are always an object.
+      parameters: { ...listed.inputSchema, type: 'object' },
     },
     requiresApproval: true,
     slow: true,

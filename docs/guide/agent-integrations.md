@@ -163,8 +163,8 @@ tools:
 - **Environment.** A server inherits TeXRA's environment minus variables whose
   names contain `KEY`, `TOKEN`, `SECRET`, `PASSWORD` or `CREDENTIAL`, so your
   provider API keys don't reach it. Pass what a server needs through its `env`.
-- **Limits.** A call times out after 60 seconds, and output beyond 200,000
-  characters is cut off.
+- **Limits.** A call times out after 60 seconds, and output beyond 54,000
+  characters keeps its first 4,000 and last 50,000.
 - **A server that fails to start** (a missing command, no answer within 30
   seconds, a malformed tool list) contributes no tools; the run continues with
   the rest and its transcript names the server and the reason.

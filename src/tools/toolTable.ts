@@ -40,9 +40,10 @@ export interface LoadedPlugin {
   /** What the composition records and hashes. */
   readonly spec: Readonly<Record<string, unknown>>;
   /**
-   * A digest of what the spec leaves out (an MCP server's env values): a
-   * changed revision builds fresh resources for compositions opened after
-   * it, while open ones keep theirs.
+   * A keyed digest of what the spec leaves out (an MCP server's env values),
+   * which the composition records beside it: a changed revision is a new
+   * composition, built with fresh resources beside the open ones. Keyed
+   * per process, so it reveals nothing about the values it digests.
    */
   readonly revision: string;
   /**

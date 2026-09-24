@@ -8,15 +8,16 @@
  * (`mcp__<server>__<tool>`, or `mcp__<server>__*` for every tool the server
  * lists), and only the servers the declarations name become plugins, so a
  * run that declares none reads nothing and starts nothing. Each is plugin
- * `mcp:<server>`; its spec (name, command, args and env names, never env
- * values) is what the run's composition records, so an edited entry is a
- * new composition and a new process beside the one open runs keep.
+ * `mcp:<server>`; its spec (name, command, args and env names) and a keyed
+ * digest of its env values are what the run's composition records, so an
+ * edited entry is a new composition and a new process beside the one open
+ * runs keep.
  *
  * An entry that does not validate is skipped with a warning the resolving
  * run shows in its transcript. The project-level `.texra/mcp.json` is not
  * read: a checked-in file that spawns processes needs a trust prompt first.
  */
-import { createHash } from 'node:crypto';
+import { createHmac, randomBytes } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
@@ -24,6 +25,7 @@ import { Effect } from 'effect';
 import stableStringify from 'safe-stable-stringify';
 import { z } from 'zod';
 
+import { isFileNotFoundError } from '@common/errors';
 import { TEXRA_STORAGE_DIR_NAME } from '@platform/defaults/nodeStorage';
 import type { LoadedPlugin, PluginLoader } from '@tools/toolTable';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
@@ -63,6 +65,13 @@ const McpConfigFileSchema = z.object({
   mcpServers: z.record(z.string(), z.unknown()),
 });
 
+/**
+ * The key a server's env values are digested under for its revision: fresh
+ * per process, so the digest (which the composition records and a debug log
+ * may show) cannot be checked against a guessed value.
+ */
+const REVISION_KEY = randomBytes(32);
+
 /** One configured stdio server, as the plugin spawns it. */
 export interface McpServerConfig {
   readonly name: string;
@@ -79,7 +88,7 @@ const readConfigText = (file: string) =>
   }).pipe(
     Effect.map((text): string | null => text),
     Effect.catch((error) =>
-      (error as NodeJS.ErrnoException).code === 'ENOENT'
+      isFileNotFoundError(error)
         ? Effect.succeed(null)
         : Effect.fail(
             new Error(`Could not read ${file}: ${toErrorMessage(error)}`),
@@ -132,7 +141,7 @@ function mcpPlugin(config: McpServerConfig): LoadedPlugin {
       args: [...config.args],
       envKeys: Object.keys(config.env).toSorted(),
     },
-    revision: createHash('sha256')
+    revision: createHmac('sha256', REVISION_KEY)
       .update(stableStringify(config.env))
       .digest('hex'),
     acquire: acquireMcpServer(config),

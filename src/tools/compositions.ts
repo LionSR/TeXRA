@@ -18,8 +18,8 @@
  * build caches nothing, and its runs fail to open.
  *
  * A loaded plugin (an MCP server, `@tools/toolTable`) joins an entry the same
- * way: `load` records the latest resources for each spec it reads, one layer
- * object per spec and revision, so compositions naming the same server share
+ * way: `load` records the resources of each spec and revision it reads, one
+ * layer object for each, so compositions naming the same server share
  * one process, and its tools join the entry's table once it is up. A plugin
  * that failed to start joins with no tools and its reason in `failures`.
  *
@@ -86,15 +86,16 @@ class CompositionTable extends Context.Service<
   Pick<PinnedComposition, 'table' | 'failures'>
 >()('@texra/tools/CompositionTable') {}
 
-/** One spec's resources: the layer every entry naming it shares. */
+/** One spec revision's resources: the layer every entry naming it shares. */
 interface LoadedEntry {
-  readonly revision: string;
   readonly key: Context.Key<LoadedPluginTools, LoadedPluginTools>;
   readonly layer: Layer.Layer<LoadedPluginTools>;
 }
 
-const specKey = (plugin: Pick<LoadedPlugin, 'id' | 'spec'>): string =>
-  `${plugin.id}#${createHash('sha256').update(stableStringify(plugin.spec)).digest('hex')}`;
+const specKey = (
+  plugin: Pick<LoadedPlugin, 'id' | 'spec' | 'revision'>,
+): string =>
+  `${plugin.id}#${createHash('sha256').update(stableStringify(plugin.spec)).digest('hex')}#${plugin.revision}`;
 
 export class Compositions extends Context.Service<
   Compositions,
@@ -120,8 +121,8 @@ const compositionsLayer = (
     Compositions,
     Effect.gen(function* () {
       const table = yield* ToolRegistry;
-      // The latest resources of every spec a load has read, for the life of
-      // the process: a pin builds from here, and a child joining its
+      // The resources of every spec and revision a load has read, for the
+      // life of the process: a pin builds from here, and a child joining its
       // parent's key finds the spec its parent loaded.
       const loadedEntries = new Map<string, LoadedEntry>();
       // Each layer's own service key: two revisions of one spec never share.
@@ -132,14 +133,12 @@ const compositionsLayer = (
             Effect.sync(() => {
               for (const plugin of plugins) {
                 const id = specKey(plugin);
-                if (loadedEntries.get(id)?.revision === plugin.revision)
-                  continue;
+                if (loadedEntries.has(id)) continue;
                 loadedSequence += 1;
                 const key = Context.Service<LoadedPluginTools>(
                   `@texra/tools/LoadedPlugin/${loadedSequence}`,
                 );
                 loadedEntries.set(id, {
-                  revision: plugin.revision,
                   key,
                   layer: Layer.effect(key)(plugin.acquire),
                 });
