@@ -25,11 +25,16 @@ which needs an owner, not a routine.
    mapped, with ownership stated:
    - Agent core: `src/agent/core/` (`definition/`, `state/`, `tools/`), doc'd in
      `src/agent/core/README.md`. Run programs are `@agent/runtime/loop/`
-     (`toolUse.ts`, `reflection.ts`); the one model call is
-     `@agent/runtime/ModelInvoker.ts`.
-   - Model handler: provider APIs are reached only through the `packages/llm`
-     `Model` bound by `runtime/run/modelBinding.ts`. As of `7326fb4` model
-     providers are plugin contributions (#13094).
+     (`toolUse.ts`, `reflection.ts`); the run loop's model call is
+     `@agent/runtime/ModelInvoker.ts` (helper-model `helperModel.ts` and run
+     compaction `run/compaction.ts` call the bound `Model` directly — deliberate
+     exceptions, not a second handler).
+   - Model handler: chat/model-turn provider calls are reached only through the
+     `packages/llm` `Model` bound by `runtime/run/modelBinding.ts` (tool-level
+     exceptions outside the model handler: audio transcription builds `OpenAI`
+     directly in `src/tools/media/audio.ts`, and the Codex tool uses
+     `@openai/codex-sdk`). As of `7326fb4` model providers are plugin
+     contributions (#13094).
    - Logger: `src/logger/` (`effectLog.ts`, `logSink.ts`, `redaction.ts`, …);
      `createLog` retirement is mid-flight (#12886, commit `6560915`), tracked
      to the redacting log sink as the one owner (#13056).
@@ -60,8 +65,9 @@ which needs an owner, not a routine.
    not missing.
 
 4. **Design subagent boundaries.** Already a first-class runtime concept, not a
-   design gap: subagent dispatch and resume own their own `executionId` and go
-   through `executeAgent` (not `runAgent`); bundled agents are YAML under
+   design gap: subagent dispatch mints its own `runId` (`RunId`, via
+   `generateRunId()` in `subagentRun.ts`) and dispatches through `executeAgent`
+   (not `runAgent`, per `nativeSubagentStrategy.ts`); bundled agents are YAML under
    `packages/extension/resources/agents/` and `.../tool_use_agents/`. The
    remaining boundary decision — collapsing the two AI-agent-creation systems
    (`texra.createAgentWithAI` wizard vs. the `creator` tool-use agent) to one
@@ -71,9 +77,11 @@ which needs an owner, not a routine.
 ## Genuinely open (needs an owner, not a routine)
 
 - **Ratify the Tier-1 public manifest** — exact exports and actual consumers;
-  everything else on `packages/agent`'s surface then seals or sheds. Blocks the
-  `StreamTabId`/`ExecutionId` vocabulary collapse
-  (`2026-09-10-collapse-duplicate-concepts.md`).
+  everything else on `packages/agent`'s surface then seals or sheds. (The
+  `ExecutionId`→`RunId` vocabulary collapse this once blocked has since landed —
+  the survivor is `RunId`, zero `StreamTabId`/`ExecutionId` occurrences remain;
+  only residual `runId`/`storageKey` spelling consolidation is left,
+  `2026-09-10-collapse-duplicate-concepts.md` §4A.)
 - **Shrink the frozen lists** (host-agent-import, effect-migration,
   store-public-surface) as the manifest ratifies each edge; never widen.
 - **Owner ruling on the two agent-creation systems** (survey §2). Independent of
@@ -101,4 +109,6 @@ No refactor to land autonomously from this charter. The 2026-09-23 survey's
 eleven bounded deletions already merged (#13064). The remaining actions are
 human-owned: pin the Tier-1 manifest, let the frozen-list shrink follow it, and
 rule on the survey §2 candidate. Re-running this audit as a routine adds no
-signal until the manifest moves — the map is current.
+signal until the manifest moves — the map is current as of the `7326fb4` pin
+(the audited structure is unchanged at the PR base `a62e3b84`, but the pin, not
+the PR tip, is what this note verified).
