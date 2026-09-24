@@ -1199,10 +1199,7 @@ describe('CLI run progress renderer', () => {
             yield* Effect.promise(() => settle());
             // The roster is the fold's: the parent's `childIds` and the child's own
             // row, derived beside the line that folded them.
-            const detach = attachCliSessionProgressProjection(
-              testRuntime(),
-              session,
-            );
+            const detach = yield* attachCliSessionProgressProjection(session);
             session.publish([
               {
                 type: 'run.start',
@@ -1215,7 +1212,7 @@ describe('CLI run progress renderer', () => {
               },
             ]);
             yield* Effect.promise(() => settle());
-            yield* detach();
+            yield* detach;
           }),
         );
 
