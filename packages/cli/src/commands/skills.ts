@@ -33,7 +33,7 @@ function listSkills(
   return Effect.gen(function* () {
     const services = yield* initCliPlatform({ ...context, quietLogs: true });
     const roots = services.roots;
-    const result = yield* readCliSkills(context, roots, options);
+    const result = yield* readCliSkills(context.cwd, roots, options);
     const exitCode = result.errors.some(
       (issue) =>
         issue.code === 'missing_source' ||

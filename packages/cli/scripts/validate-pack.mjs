@@ -75,19 +75,28 @@ function assertNoForbiddenTarballEntries(entries) {
 }
 
 function assertBundledSkillsIncluded(entries) {
-  const hasBundledSkillManifest = entries.some((entry) => {
-    const relative = entry.startsWith(packageDir)
-      ? entry.slice(packageDir.length)
-      : entry;
-    return (
+  const relativeEntries = entries.map((entry) =>
+    entry.startsWith(packageDir) ? entry.slice(packageDir.length) : entry,
+  );
+  const hasBundledSkillManifest = relativeEntries.some(
+    (relative) =>
       relative.startsWith('dist/resources/skills/') &&
-      relative.endsWith('/SKILL.md')
-    );
-  });
+      relative.endsWith('/SKILL.md'),
+  );
+  // Tool plugins ship their skills under resources/plugins/<id>/skills.
+  const hasPluginSkillManifest = relativeEntries.some((relative) =>
+    /^dist\/resources\/plugins\/[^/]+\/skills\/[^/]+\/SKILL\.md$/.test(
+      relative,
+    ),
+  );
 
   assert(
     hasBundledSkillManifest,
     'npm package should include bundled CLI skill manifests.',
+  );
+  assert(
+    hasPluginSkillManifest,
+    'npm package should include tool plugin skill manifests (dist/resources/plugins/*/skills/).',
   );
 }
 

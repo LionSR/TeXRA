@@ -37,6 +37,7 @@ import { installLongRunningModelDispatcher } from '@platform/defaults/longRunnin
 import type { PlatformSecrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { SettingHost } from '@shared/state/stateSettings';
+import { TOOL_PLUGINS } from '@tools/plugins';
 import { seedDisabledToolDefaults } from '@tools/toolAvailability';
 import { initProcessSettingHost } from '@utils/config/platformSettings';
 
@@ -82,8 +83,15 @@ export const bootstrapHost = Effect.fn('bootstrapHost')(function* (
   // layer is bring-your-own-key. See installTexraAccountProbes.
   installTexraAccountProbes(init.secrets);
   // Project skills follow each session's workspace; only the bundle is fixed
-  // here, so this is a registration rather than a scan.
-  initializeNodeRuntimeSkills(init.skills);
+  // here, so this is a registration rather than a scan. Tool plugins that ship
+  // skills contribute them to the bundled tier; the ids cross as strings so
+  // `@skills` and `@platform` take no value edge to `@tools`.
+  initializeNodeRuntimeSkills(
+    init.skills,
+    TOOL_PLUGINS.flatMap((plugin) =>
+      plugin.skills === true ? [plugin.id] : [],
+    ),
+  );
   // Seed first-install defaults (e.g. disabled tools). No-ops once
   // DISABLED_TOOLS exists, so upgrading users keep the tools they enabled.
   yield* seedDisabledToolDefaults(init.roots.globalState);

@@ -17,11 +17,10 @@ import { StreamLog } from '@shared/session/traceEntries';
 import {
   formatRuntimeSkillActivation,
   loadRuntimeSkillCatalog as loadRuntimeSkillCatalogEffect,
-  setRuntimeSkillSources,
 } from '@skills/runtimeSkills';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { setupPlatform } from '@test/support/setupPlatform';
-import { writeSkill } from '@test/support/skillFixtures';
+import { installTestSkillRoots, writeSkill } from '@test/support/skillFixtures';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { attachTestTranscriptFold } from '@test/support/sessionTestUtils';
 
@@ -43,7 +42,7 @@ const WORKSPACE_ROOT = '/workspace';
 setupPlatform({ workspacePath: WORKSPACE_ROOT });
 
 afterEach(async () => {
-  setRuntimeSkillSources([]);
+  installTestSkillRoots([]);
   await Effect.runPromise(
     testWorkspaceRoots().config.update(
       WorkspaceStateKey.DISABLED_SKILLS,
@@ -93,9 +92,7 @@ describe('runtime skills', () => {
       },
       'Use manuscript-review when it applies.',
     );
-    setRuntimeSkillSources([
-      { scope: 'project', path: root, label: 'project' },
-    ]);
+    installTestSkillRoots([{ tier: 'project', path: root }]);
 
     const result = await loadRuntimeSkillCatalog(
       WORKSPACE_ROOT,
@@ -129,7 +126,7 @@ describe('runtime skills', () => {
       },
       'Apply the skill.',
     );
-    setRuntimeSkillSources([{ scope: 'project', path: root }]);
+    installTestSkillRoots([{ tier: 'project', path: root }]);
 
     const result = await loadRuntimeSkillCatalog(
       WORKSPACE_ROOT,
@@ -175,9 +172,9 @@ describe('runtime skills', () => {
           description: 'User skill.',
         }),
       );
-      setRuntimeSkillSources([
-        { scope: 'project', path: projectRoot },
-        { scope: 'user', path: userRoot },
+      installTestSkillRoots([
+        { tier: 'project', path: projectRoot },
+        { tier: 'user', path: userRoot },
       ]);
       yield* testWorkspaceRoots().config.update(key, value);
 
@@ -204,7 +201,7 @@ describe('runtime skills', () => {
         );
       }),
     );
-    setRuntimeSkillSources([{ scope: 'project', path: root }]);
+    installTestSkillRoots([{ tier: 'project', path: root }]);
 
     const result = await loadRuntimeSkillCatalog(
       WORKSPACE_ROOT,

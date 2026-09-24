@@ -10,16 +10,18 @@ import {
   formatCliSkillList,
   readCliSkills as readCliSkillsEffect,
 } from '@cli/runtime/skills';
-import { defaultSkillSources } from '@skills/skillSources';
+import { initializeNodeRuntimeSkills } from '@platform/defaults/nodeHost';
+import { foldSkillSources, hostSkillContributions } from '@skills/skillSources';
 import {
   loadEnabledRuntimeSkills,
   readDisabledSkills,
-  setRuntimeSkillSources,
   skillDisplayItem,
 } from '@skills/runtimeSkills';
+import { installTestSkillRoots } from '@test/support/skillFixtures';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
+import { TOOL_PLUGINS } from '@tools/plugins';
 
 const tempRoots = useTempDirs();
 
@@ -48,12 +50,12 @@ async function writeSkill(
 }
 
 afterEach(() => {
-  setRuntimeSkillSources([]);
+  installTestSkillRoots([]);
   commandMocks.initCliPlatform.mockReset();
 });
 
 describe('CLI skills runtime', () => {
-  it('deduplicates repeated source paths while preserving required custom roots', () => {
+  it('deduplicates repeated source paths while preserving required custom roots, and rejects a repeated contribution id', () => {
     const projectSkillsPath = path.resolve(
       path.sep,
       'tmp',
@@ -61,15 +63,12 @@ describe('CLI skills runtime', () => {
       '.texra',
       'skills',
     );
-    const sources = defaultSkillSources(
-      {
-        cwd: path.resolve(path.sep, 'tmp', 'project'),
-        resourcesPath: path.resolve(path.sep, 'tmp', 'resources'),
-      },
-      {
-        additionalPaths: ['.texra/skills'],
-      },
-    );
+    const sources = foldSkillSources(hostSkillContributions([]), {
+      cwd: path.resolve(path.sep, 'tmp', 'project'),
+      home: path.resolve(path.sep, 'tmp', 'home'),
+      resourcesPath: path.resolve(path.sep, 'tmp', 'resources'),
+      options: { additionalPaths: ['.texra/skills'] },
+    }).flatMap((tier) => tier.sources);
 
     expect(
       sources.filter((source) => source.path === projectSkillsPath),
@@ -80,6 +79,14 @@ describe('CLI skills runtime', () => {
         required: true,
       }),
     ]);
+    expect(() =>
+      foldSkillSources(hostSkillContributions(['lean4', 'lean4']), {
+        cwd: path.resolve(path.sep, 'tmp', 'project'),
+        home: path.resolve(path.sep, 'tmp', 'home'),
+        resourcesPath: path.resolve(path.sep, 'tmp', 'resources'),
+        options: {},
+      }),
+    ).toThrow('Duplicate skill source contribution id: lean4');
   });
 
   it.effect('lists custom duplicate names before bundled skills', () =>
@@ -105,16 +112,10 @@ describe('CLI skills runtime', () => {
         writeSkill(custom, 'custom-only', 'The custom-only skill.'),
       );
 
-      const result = yield* readCliSkillsEffect(
-        {
-          cwd: resources,
-          resourcesPath: resources,
-        },
-        settings,
-        {
-          additionalPaths: [custom],
-        },
-      );
+      initializeNodeRuntimeSkills({ resourcesPath: resources }, []);
+      const result = yield* readCliSkillsEffect(resources, settings, {
+        additionalPaths: [custom],
+      });
 
       const disabled = yield* readDisabledSkills(settings);
       expect(
@@ -147,11 +148,12 @@ describe('CLI skills runtime', () => {
 
   it.effect('reports missing explicit custom skill sources', () =>
     Effect.gen(function* () {
+      initializeNodeRuntimeSkills(
+        { resourcesPath: path.resolve(path.sep, 'tmp', 'resources') },
+        [],
+      );
       const result = yield* readCliSkillsEffect(
-        {
-          cwd: path.resolve(path.sep, 'tmp', 'project'),
-          resourcesPath: path.resolve(path.sep, 'tmp', 'resources'),
-        },
+        path.resolve(path.sep, 'tmp', 'project'),
         settings,
         {
           additionalPaths: ['missing-skills'],
@@ -181,16 +183,10 @@ describe('CLI skills runtime', () => {
           fs.writeFile(sourceFile, 'not a directory'),
         );
 
-        const result = yield* readCliSkillsEffect(
-          {
-            cwd: root,
-            resourcesPath: root,
-          },
-          settings,
-          {
-            additionalPaths: [sourceFile],
-          },
-        );
+        initializeNodeRuntimeSkills({ resourcesPath: root }, []);
+        const result = yield* readCliSkillsEffect(root, settings, {
+          additionalPaths: [sourceFile],
+        });
 
         expect(result.skills).toEqual([]);
         expect(result.errors).toContainEqual(
@@ -213,13 +209,7 @@ describe('CLI skills runtime', () => {
         yield* Effect.promise(() =>
           writeSkill(root, 'proof-audit', 'Review mathematical proof steps.'),
         );
-        setRuntimeSkillSources([
-          {
-            scope: 'project',
-            path: root,
-            label: 'project',
-          },
-        ]);
+        installTestSkillRoots([{ tier: 'project', path: root }]);
 
         const result = yield* loadEnabledRuntimeSkills(root, settings);
 
@@ -234,6 +224,63 @@ describe('CLI skills runtime', () => {
             label: 'project',
           },
         ]);
+        expect(result.errors).toEqual([]);
+      }),
+  );
+
+  it.effect(
+    'discovers tool plugin skills in the bundled tier, in name order with the core bundle',
+    () =>
+      Effect.gen(function* () {
+        const resources = path.resolve(
+          import.meta.dirname,
+          '../../../packages/extension/resources',
+        );
+        const skillPluginIds = TOOL_PLUGINS.flatMap((plugin) =>
+          plugin.skills === true ? [plugin.id] : [],
+        );
+        const pluginSkillDirs = (dir: string) =>
+          Effect.promise(() =>
+            fs.readdir(path.join(resources, dir), { withFileTypes: true }),
+          ).pipe(
+            Effect.map((entries) =>
+              entries
+                .filter((entry) => entry.isDirectory())
+                .map((entry) => entry.name),
+            ),
+          );
+        // Both ways: a manifest `skills: true` has a skills root, and a
+        // plugin skills root belongs to a manifest entry that claims it.
+        const pluginRoots = yield* pluginSkillDirs('plugins');
+        expect(pluginRoots.toSorted()).toEqual(skillPluginIds.toSorted());
+        expect(skillPluginIds).toContain('lean4');
+
+        const workspace = yield* Effect.promise(() =>
+          makeTempDir('texra-cli-skills-', tempRoots),
+        );
+        initializeNodeRuntimeSkills(
+          { resourcesPath: resources },
+          skillPluginIds,
+        );
+        const result = yield* readCliSkillsEffect(workspace, settings, {});
+        const bundled = result.skills.filter(
+          (entry) => entry.source.scope === 'bundled',
+        );
+        const shipped = [
+          ...(yield* pluginSkillDirs('skills')),
+          ...(yield* Effect.forEach(skillPluginIds, (id) =>
+            pluginSkillDirs(path.join('plugins', id, 'skills')),
+          )).flat(),
+        ].toSorted((a, b) => a.localeCompare(b));
+
+        expect(bundled.map((entry) => entry.skill.name)).toEqual(shipped);
+        expect(
+          bundled.find((entry) => entry.skill.name === 'lean-search')?.source,
+        ).toEqual({
+          scope: 'bundled',
+          label: 'bundled',
+          path: path.join(resources, 'plugins', 'lean4', 'skills'),
+        });
         expect(result.errors).toEqual([]);
       }),
   );
