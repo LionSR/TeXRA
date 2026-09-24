@@ -62,6 +62,26 @@ type ExecuteCommandOptions = Omit<
 // tracked shell keeps running while the descendant holds the inherited stdio.
 const SLEEPER_SCRIPT = 'sleep 60 & echo $! > "$PID_FILE"; wait';
 
+// The shell's `>` creates the pid file before `echo` writes to it, so under
+// load the file can exist and still be empty; wait for a parseable pid.
+async function waitForPublishedPid(pidFile: string): Promise<number> {
+  let pid = Number.NaN;
+  await waitForCondition(
+    () => {
+      pid = existsSync(pidFile)
+        ? Number.parseInt(readFileSync(pidFile, 'utf8'), 10)
+        : Number.NaN;
+      return Number.isInteger(pid) && pid > 0;
+    },
+    {
+      timeoutMs: 1000,
+      intervalMs: 20,
+      timeoutMessage: `Timed out waiting for a pid in ${pidFile}`,
+    },
+  );
+  return pid;
+}
+
 describe('executeCommand', () => {
   const tempDirs = useTempDirs();
 
@@ -91,13 +111,7 @@ describe('executeCommand', () => {
       }),
     );
 
-    await waitForCondition(() => existsSync(pidFile), {
-      timeoutMs: 1000,
-      intervalMs: 20,
-      timeoutMessage: `Timed out waiting for ${pidFile}`,
-    });
-    const childPid = Number.parseInt(readFileSync(pidFile, 'utf8'), 10);
-    assert.ok(Number.isInteger(childPid) && childPid > 0);
+    const childPid = await waitForPublishedPid(pidFile);
     return { promise, childPid };
   }
 
@@ -270,18 +284,12 @@ describe('executeCommand', () => {
             env: { PID_FILE: pidFile },
           }),
         );
-        yield* Effect.promise(() =>
-          waitForCondition(() => existsSync(pidFile), {
-            timeoutMs: 1000,
-            intervalMs: 20,
-            timeoutMessage: `Timed out waiting for ${pidFile}`,
-          }),
+        const childPid = yield* Effect.promise(() =>
+          waitForPublishedPid(pidFile),
         );
-        const childPid = Number.parseInt(readFileSync(pidFile, 'utf8'), 10);
         yield* Fiber.interrupt(fiber);
         expect(Exit.hasInterrupts(yield* Fiber.await(fiber))).toBe(true);
 
-        assert.ok(Number.isInteger(childPid) && childPid > 0);
         // The interrupt is the only teardown here: no abort signal is threaded
         // through, so the backgrounded sleep dies because `executeCommand`'s own
         // finalizer signalled the detached shell's process group.
