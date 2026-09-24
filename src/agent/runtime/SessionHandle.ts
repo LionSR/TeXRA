@@ -509,7 +509,7 @@ export class SessionHandle {
     id: AggregateId,
   ): Effect.Effect<
     Effect.Effect<void, DatabaseWriteFailed>,
-    DatabaseReadFailed | DatabaseWriteFailed
+    DatabaseNotOwner | DatabaseReadFailed | DatabaseWriteFailed
   > {
     return this.graph.acquireClaims(id);
   }
