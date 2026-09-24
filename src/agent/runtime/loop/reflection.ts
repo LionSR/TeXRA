@@ -306,8 +306,9 @@ export const runReflection = Effect.fn('reflection.run')(function* (
 
   /**
    * A committed response's text as the round writes it, and whether it ended
-   * the turn: a stop with text, or a stop sequence (whose stripped tag is
-   * restored so extraction sees the document it closed).
+   * the turn: a stop with text. The turn sends no stop sequence — the Google,
+   * OpenAI Chat and OpenAI Responses protocols refuse one — so the closing
+   * tag stays in the text and the continuation check reads it there.
    */
   const responseOf = (turn: NonNullable<RunState['lastTurn']>) =>
     Effect.map(
@@ -315,14 +316,9 @@ export const runReflection = Effect.fn('reflection.run')(function* (
         turnText(turn),
         session.roots.config,
       ),
-      (processed) => {
+      (text) => {
         const finish = finishReasonOf(turn);
-        const text =
-          finish === 'stop-sequence' && !processed.includes(OUTPUT_END_TAG)
-            ? `${processed}\n${OUTPUT_END_TAG}`
-            : processed;
-        const endTurn =
-          text !== '' && (finish === 'stop' || finish === 'stop-sequence');
+        const endTurn = text !== '' && finish === 'stop';
         return { finish, text, endTurn };
       },
     );
@@ -989,7 +985,6 @@ export const runReflection = Effect.fn('reflection.run')(function* (
             system,
             tools: [],
             toolChoice: undefined,
-            stopSequences: [OUTPUT_END_TAG],
             round,
             debugName: `r${round}`,
           });
