@@ -1,55 +1,55 @@
+import { Effect, type Fiber, FiberSet, Scope } from 'effect';
+
 import { warn as logWarning } from '@logger/logUtils';
 
-export interface ImagePasteAttempt {
-  readonly isCurrent: () => boolean;
-}
-
 export class ImagePasteQueue {
-  private readonly pending = new Set<Promise<void>>();
+  // The set lives as long as the input bar that owns the queue, so its scope
+  // is never closed; a discard interrupts the in-flight pastes instead.
+  private readonly pastes = Effect.runSync(
+    FiberSet.make<void>().pipe(Scope.provide(Scope.makeUnsafe())),
+  );
   private deferredAction: (() => void) | null = null;
-  private generation = 0;
 
   get hasPending(): boolean {
-    return this.pending.size > 0;
+    return Effect.runSync(FiberSet.size(this.pastes)) > 0;
   }
 
   get hasDeferredAction(): boolean {
     return this.deferredAction !== null;
   }
 
-  beginAttempt(): ImagePasteAttempt {
-    const generation = this.generation;
-    return { isCurrent: () => generation === this.generation };
-  }
-
-  track(work: Promise<void>): void {
-    this.pending.add(work);
-    // This catch keeps only the bookkeeping chain alive — whoever created
-    // `work` owns its rejection — and the warn is that chain's one rejection
-    // observer: a throw out of `flush`'s deferred action would otherwise
-    // vanish here.
-    void work
-      .finally(() => {
-        this.pending.delete(work);
-        this.flush();
-      })
-      .catch((error: unknown) => {
-        logWarning(
-          'cli.tui',
-          'The image-paste bookkeeping chain rejected after the paste settled.',
-          { data: error },
-        );
-      });
+  add(paste: Fiber.Fiber<void>): void {
+    FiberSet.addUnsafe(this.pastes, paste);
   }
 
   runWhenIdle(action: () => void): void {
     if (!this.deferUntilIdle(action)) action();
   }
 
-  /** First submit wins while an image paste is pending. */
+  /** First submit wins while an image paste is pending; it runs once the set
+   *  drains. A throw out of the action is logged, not lost. */
   deferUntilIdle(action: () => void): boolean {
     if (!this.hasPending) return false;
-    this.deferredAction ??= action;
+    if (this.deferredAction !== null) return true;
+    this.deferredAction = action;
+    Effect.runFork(
+      FiberSet.awaitEmpty(this.pastes).pipe(
+        Effect.andThen(
+          Effect.sync(() => {
+            const deferred = this.deferredAction;
+            this.deferredAction = null;
+            deferred?.();
+          }),
+        ),
+        Effect.tapCause((cause) =>
+          Effect.sync(() =>
+            logWarning('cli.tui', 'The deferred image-paste action failed.', {
+              data: cause,
+            }),
+          ),
+        ),
+      ),
+    );
     return true;
   }
 
@@ -57,17 +57,9 @@ export class ImagePasteQueue {
     this.deferredAction = null;
   }
 
-  /** Detach all work that belongs to a discarded draft. */
+  /** Interrupt all work that belongs to a discarded draft. */
   discardPending(): void {
-    this.generation += 1;
-    this.pending.clear();
     this.deferredAction = null;
-  }
-
-  private flush(): void {
-    if (this.hasPending) return;
-    const action = this.deferredAction;
-    this.deferredAction = null;
-    action?.();
+    Effect.runFork(FiberSet.clear(this.pastes));
   }
 }

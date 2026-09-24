@@ -1,5 +1,7 @@
 /** Global, bounded CLI input history. Older entries are replaced, not archived. */
-import { Clock, Effect, Result, Semaphore } from 'effect';
+import { Clock, Effect, Semaphore } from 'effect';
+
+import { warn as logWarning } from '@logger/logUtils';
 
 import {
   GlobalDatabase,
@@ -28,10 +30,18 @@ export const loadInputHistory: Effect.Effect<
 > = Effect.gen(function* () {
   const database = yield* GlobalDatabase;
   // History failure must not prevent typing. A subsequent push may retry storage.
-  let records: readonly InputHistoryRecord[] = Result.getOrElse(
-    yield* Effect.result(database.readInputHistory()),
-    () => [],
-  );
+  let records: readonly InputHistoryRecord[] = yield* database
+    .readInputHistory()
+    .pipe(
+      Effect.catch((error) =>
+        Effect.sync(() => {
+          logWarning('cli.tui', 'Input history could not be read.', {
+            data: error,
+          });
+          return [];
+        }),
+      ),
+    );
   const pushes = Semaphore.makeUnsafe(1);
   return {
     push: (line) =>

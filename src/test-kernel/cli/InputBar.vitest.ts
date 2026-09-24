@@ -257,10 +257,14 @@ describe('InputBar slash submit', () => {
     const submitted: string[] = [];
     let draft = '/h';
 
-    imagePasteQueue.track(
-      paste.promise.then(() => {
-        draft = `/h${chipSuffix}`;
-      }),
+    imagePasteQueue.add(
+      Effect.runFork(
+        Effect.promise(() => paste.promise).pipe(
+          Effect.map(() => {
+            draft = `/h${chipSuffix}`;
+          }),
+        ),
+      ),
     );
 
     imagePasteQueue.runWhenIdle(() => {
@@ -323,21 +327,22 @@ describe('InputBar draft discard', () => {
 
   it('invalidates an image paste that resolves after the draft is cleared', async () => {
     const imagePasteQueue = new ImagePasteQueue();
-    const attempt = imagePasteQueue.beginAttempt();
     const paste = createDeferred<string>();
     const inserted: string[] = [];
 
-    imagePasteQueue.track(
-      paste.promise.then((chip) => {
-        if (attempt.isCurrent()) inserted.push(chip);
-      }),
+    imagePasteQueue.add(
+      Effect.runFork(
+        Effect.promise(() => paste.promise).pipe(
+          Effect.map((chip) => inserted.push(chip)),
+          Effect.asVoid,
+        ),
+      ),
     );
     imagePasteQueue.discardPending();
     paste.resolve('[Image #1]');
     await paste.promise;
     await flushPromiseQueue();
 
-    expect(attempt.isCurrent()).toBe(false);
     expect(inserted).toEqual([]);
   });
 
@@ -346,7 +351,7 @@ describe('InputBar draft discard', () => {
     const paste = createDeferred();
     const submitted: string[] = [];
 
-    imagePasteQueue.track(paste.promise);
+    imagePasteQueue.add(Effect.runFork(Effect.promise(() => paste.promise)));
     imagePasteQueue.deferUntilIdle(() => submitted.push('stale draft'));
     imagePasteQueue.discardPending();
     paste.resolve();

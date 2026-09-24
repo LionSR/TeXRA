@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import { applyTerminalInputChunk } from '@cli/chat/tui/input/textInputBindings';
 import {
-  applyTerminalInputChunk,
   deleteAtCursor,
   deleteBeforeCursor,
   deleteNextWord,
