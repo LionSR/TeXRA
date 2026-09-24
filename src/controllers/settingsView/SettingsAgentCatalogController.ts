@@ -4,12 +4,8 @@ import { Effect } from 'effect';
 // Local imports
 import type { AgentRosterController } from '@agent/roster/AgentRosterController';
 import { TeamCatalogPortFailed } from '@common/teams/TeamAvailabilityPreflight';
-import {
-  findTeamPreset,
-  planTeamRun,
-  teamPresets,
-  type TeamPreset,
-} from '@common/teams/TeamPlan';
+import { planTeamRun } from '@common/teams/TeamPlan';
+import { findTeamPreset, type TeamPreset } from '@common/teams/TeamPresets';
 import {
   resolveTeamRoster,
   type TeamRosterCatalog,
@@ -19,7 +15,6 @@ import type { StateStore } from '@platform/interfaces';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
   AGENT_CATEGORIES,
-  AGENT_MODE_PRESETS_BY_ID,
   agentKey,
   agentKeyOf,
   agentMatchesIdentifier,
@@ -122,15 +117,7 @@ export class SettingsAgentCatalogController implements TeamRosterCatalog {
   getPresetToolUseRoot(toolUseAgents: string[], presetId?: string) {
     return Effect.gen({ self: this }, function* () {
       const knownPreset = presetId
-        ? findTeamPreset(
-            teamPresets(
-              yield* this.deps.workspaceState.get<unknown>(
-                WorkspaceStateKey.CUSTOM_AGENT_PRESETS,
-                [],
-              ),
-            ),
-            presetId,
-          )
+        ? findTeamPreset(yield* this.deps.roster.allPresets(), presetId)
         : undefined;
       const preset: TeamPreset = knownPreset ?? {
         id: 'settings-preview',
@@ -159,15 +146,16 @@ export class SettingsAgentCatalogController implements TeamRosterCatalog {
 
   resolvePreset(presetId: string) {
     return Effect.gen({ self: this }, function* () {
-      const preset =
-        AGENT_MODE_PRESETS_BY_ID.get(presetId) ??
-        (yield* this.getCustomPreset(presetId));
+      const preset = findTeamPreset(
+        yield* this.deps.roster.allPresets(),
+        presetId,
+      );
       if (!preset)
         return { ok: false as const, reason: 'unknownPreset' as const };
       return {
         ok: true as const,
         preset,
-        resolution: resolveTeamRoster(this.deps, preset),
+        resolution: resolveTeamRoster(this.deps.roster, preset),
       };
     });
   }

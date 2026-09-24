@@ -10,7 +10,12 @@ import {
   type AgentConfig,
 } from '@agent/runtime';
 import { getRunRecords } from '@agent/storage';
-import { AgentCategory, type RunId } from '@shared/schemas';
+import {
+  AgentCategory,
+  agentKey,
+  agentName,
+  type RunId,
+} from '@shared/schemas';
 import { runHeldByProcessMessage } from '@shared/runs/runStatusDisplay';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -157,8 +162,16 @@ export async function runResumeCommand(
         return { kind: 'chat', config } as const;
       }
 
+      // The launch pinned the resolved source on the record, so resume checks
+      // that exact entry rather than re-resolving the bare name.
       const agent = yield* Effect.result(
-        resolveCliLaunchAgent(stores, config.agent, 'workflowResume'),
+        resolveCliLaunchAgent(
+          stores,
+          config.agentSource
+            ? agentKey(config.agentSource, agentName(config.agent))
+            : config.agent,
+          'workflowResume',
+        ),
       );
       if (Result.isFailure(agent)) {
         const error = agent.failure;

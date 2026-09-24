@@ -212,6 +212,7 @@ export const runMultiAgentPreset = Effect.fn('runMultiAgentPreset')(function* (
             .join('\n\n');
         const config: AgentConfigPayload = {
           agent: rootAgent.name,
+          agentSource: rootAgent.source,
           model,
           inputFiles,
           contextFiles,

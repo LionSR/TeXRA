@@ -8,7 +8,6 @@
 
 import { Cause, Effect, Exit } from 'effect';
 
-import { isRemoteAgent } from '@agent/index';
 import {
   isAgentRunRecord,
   type RunRecord,
@@ -102,6 +101,10 @@ export const registerRun = Effect.fn('registerRun')(function* (
       const category = isAgentRunRecord(pinned)
         ? pinned.agentCategory
         : (options.category ?? AgentCategory.ToolUse);
+      // The launch stamped the resolved source on the record; the registry is
+      // not consulted again.
+      const isRemote =
+        isAgentRunRecord(pinned) && pinned.agentSource === 'remote';
       const events: SessionEventDraft[] = [];
       if (!prior) {
         // The worktree the fold spells is the run's working directory as a
@@ -115,9 +118,7 @@ export const registerRun = Effect.fn('registerRun')(function* (
           userFollowUpSupport:
             options.userFollowUpSupport ?? USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
           category,
-          isRemote:
-            options.identity.kind === 'agent' &&
-            isRemoteAgent(options.identity.agent),
+          isRemote,
           worktree: worktreeCwd ? { workingDirectory: worktreeCwd } : undefined,
           parent:
             options.parentRunId === undefined
@@ -139,7 +140,7 @@ export const registerRun = Effect.fn('registerRun')(function* (
           category,
           ...(options.identity.kind === 'agent' &&
           options.identity.tool === undefined
-            ? { isRemote: isRemoteAgent(options.identity.agent) }
+            ? { isRemote }
             : {}),
         },
       );

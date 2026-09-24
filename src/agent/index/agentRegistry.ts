@@ -20,7 +20,6 @@ import {
   agentKeyOf,
   agentMatchesIdentifier,
   agentName,
-  parseAgentModePresets,
 } from '@shared/schemas';
 import { PREFERRED_TOOL_USE_AGENTS } from '@shared/constants/agents';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
@@ -53,14 +52,6 @@ const LOOKUP_PRIORITY: AgentSource[] = [
   'custom',
   'builtInWorkflow',
   'builtInToolUse',
-  'remote',
-];
-
-/** Source priority for tool-use sessions (prefers tool-use agents over workflow). */
-const TOOL_USE_LOOKUP_PRIORITY: AgentSource[] = [
-  'custom',
-  'builtInToolUse',
-  'builtInWorkflow',
   'remote',
 ];
 
@@ -216,30 +207,17 @@ function queueLoad(
 }
 
 /**
- * Canonical agent resolver: look up an agent by identifier.
- *
- * Supports "source:name" format or just "name". Plain names use the default
- * source priority unless `lookupCategory` requests a category-specific
- * priority. This is not a category filter: callers that require a category
- * must check the returned entry.
- *
- * All other lookups in this module (`resolveAgentKey`, `isRemoteAgent`,
- * `updateAgent*`) delegate here.
+ * Category-blind catalog lookup by identifier: a "source:name" key hits its
+ * entry directly, and a plain name takes the first source in
+ * `LOOKUP_PRIORITY`. Callers that require a category resolve through
+ * `getCategoryAgent` or `resolveAgentForLaunch` instead.
  */
-export function getAgent(
-  identifier: string,
-  lookupCategory?: AgentCategoryType,
-): AgentEntry | undefined {
+export function getAgent(identifier: string): AgentEntry | undefined {
   // Direct lookup for source:name format (already resolved)
   const direct = cache.get(identifier);
   if (direct) return direct;
 
-  // Find first match using session-appropriate priority
-  const priority =
-    lookupCategory === AgentCategory.ToolUse
-      ? TOOL_USE_LOOKUP_PRIORITY
-      : LOOKUP_PRIORITY;
-  for (const source of priority) {
+  for (const source of LOOKUP_PRIORITY) {
     const entry = cache.get(agentKey(source, identifier));
     if (entry) return entry;
   }
@@ -339,21 +317,6 @@ export function invalidateRemoteAgentsAfterSignOut(): Effect.Effect<
 // =============================================================================
 
 /**
- * Resolve an agent identifier to its full source:name key.
- * Handles both plain names ("criticize") and existing keys ("builtIn:criticize").
- * Falls back to original identifier if agent not found.
- */
-export function resolveAgentKey(
-  agentIdentifier: string,
-  lookupCategory?: AgentCategoryType,
-): string {
-  if (!agentIdentifier) return agentIdentifier;
-  const entry = getAgent(agentIdentifier, lookupCategory);
-  if (!entry) return agentIdentifier;
-  return agentKeyOf(entry);
-}
-
-/**
  * Resolve one roster identifier without collapsing an exact source key.
  * Module-local: the roster controller it exists for is built here, so no
  * caller outside this file needs the resolution rule on its own.
@@ -366,19 +329,8 @@ function getRosterAgent(
   const entry =
     identifier === name
       ? getCategoryAgent(category, identifier)
-      : getAgent(identifier, category);
+      : getAgent(identifier);
   return entry?.category === category ? entry : undefined;
-}
-
-// =============================================================================
-// SOURCE HELPERS
-// =============================================================================
-
-/** Check if identifier refers to a remote agent. */
-export function isRemoteAgent(identifier: string | undefined): boolean {
-  if (!identifier) return false;
-  const entry = getAgent(identifier);
-  return entry?.source === 'remote';
 }
 
 // =============================================================================
@@ -413,9 +365,7 @@ export function createWorkspaceAgentRosterController(
     globalState,
     getAgents,
     getPresets: () =>
-      workspaceState
-        .get(WorkspaceStateKey.CUSTOM_AGENT_PRESETS, [])
-        .pipe(Effect.map(parseAgentModePresets)),
+      workspaceState.get<unknown>(WorkspaceStateKey.CUSTOM_AGENT_PRESETS),
     resolveAgent: getRosterAgent,
   });
 }
@@ -502,7 +452,10 @@ export function getCategoryAgent(
 
 /** Resolve a launch by pinned source, visible roster, then full category.
  * Each tier runs only when the preceding one has no match, preserving the
- * exact agent chosen during validation even when visibility changes.
+ * exact agent chosen during validation even when visibility changes. The
+ * source is pinned either by `source` or by a `source:name` identifier; the
+ * pinned tier is category-blind, so a caller that requires a category checks
+ * the returned entry.
  */
 export function resolveAgentForLaunch(
   stores: AgentRosterStores,
@@ -511,10 +464,11 @@ export function resolveAgentForLaunch(
   source?: AgentSource | null,
 ) {
   return Effect.gen(function* () {
+    const pinnedKey = source
+      ? agentKey(source, agentName(identifier))
+      : identifier !== agentName(identifier) && identifier;
     return (
-      (source
-        ? getAgent(agentKey(source, agentName(identifier)))
-        : undefined) ??
+      (pinnedKey ? cache.get(pinnedKey) : undefined) ??
       (yield* getVisibleAgent(stores, category, identifier)) ??
       getCategoryAgent(category, identifier)
     );

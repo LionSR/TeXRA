@@ -15,7 +15,7 @@ import {
   SubscriptionRef,
 } from 'effect';
 
-import { getAgent, refresh } from '@agent/index';
+import { getCategoryAgent, refresh } from '@agent/index';
 import {
   attachTerminalResultToast,
   PdfOpenFailed,
@@ -181,7 +181,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
           yield* this.snapshot.setOnboarding(transition.state);
           if (!transition.selectSetupAgent) return;
           // Resolve the registry key so the dropdown matches by value.
-          const entry = getAgent('setup', AgentCategory.ToolUse);
+          const entry = getCategoryAgent(AgentCategory.ToolUse, 'setup');
           this.surfaceAction({
             kind: 'launch',
             patch: {

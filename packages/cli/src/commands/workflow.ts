@@ -119,11 +119,11 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
   }
 
   const services = yield* initCliPlatform({ ...context, quietLogs: true });
-  // Pre-validate the resolved agent so usage errors land before stdin is read
-  // or the runtime host starts.
-  const agent = yield* resolveCliRunAgent(services, init.agent);
-  if (agent.category === AgentCategory.ToolUse) {
-    return yield* runToolUseAgent(context, init, instruction, services);
+  // Resolve once, before stdin is read or the runtime host starts; the run
+  // pins the resolved source.
+  const { category, source } = yield* resolveCliRunAgent(services, init.agent);
+  if (category === AgentCategory.ToolUse) {
+    return yield* runToolUseAgent(context, init, source, instruction, services);
   }
 
   // A workflow agent with no `--input` cannot run, and the output probes below
@@ -132,12 +132,9 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
   if (init.inputFiles.length === 0) {
     return yield* failUsage(WORKFLOW_INPUT_REQUIRED_MESSAGE);
   }
-  // Reject `--output-dir <path>` early when the path already points at a
-  // non-directory (else we'd run the full workflow and EEXIST at the end).
+  // Fast-fail an `--output-dir` or `--output` path the final copy would reject
+  // (`EEXIST` / `EISDIR`) only after the full agent run.
   yield* assertOutputDirAvailable(init.outputDir, context.cwd);
-  // Same fast-fail for `--output <path>`: existing directory or file-typed
-  // parent component blows up at copy time (`EISDIR` / `EEXIST`) after the
-  // full agent run otherwise.
   yield* assertOutputFileAvailable(init.output, context.cwd);
   if (init.output && hasMixedStdinWorkflowInputSpecs(init.inputFiles)) {
     return yield* failUsage(MULTI_INPUT_OUTPUT_MESSAGE);
@@ -180,6 +177,7 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
         );
         const config: AgentConfigPayload = {
           agent: init.agent,
+          agentSource: source,
           model,
           inputFiles,
           contextFiles,
@@ -217,6 +215,7 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
 const runToolUseAgent = Effect.fn('runToolUseAgent')(function* (
   context: CliContext,
   init: HeadlessRunInit,
+  agentSource: AgentConfigPayload['agentSource'],
   instruction: string,
   services: CliPlatformServices,
 ): Effect.fn.Return<number, Error, CliRunServices> {
@@ -250,6 +249,7 @@ const runToolUseAgent = Effect.fn('runToolUseAgent')(function* (
       Effect.gen(function* () {
         const config: AgentConfigPayload = {
           agent: init.agent,
+          agentSource,
           model,
           inputFiles,
           contextFiles,

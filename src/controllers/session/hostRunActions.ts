@@ -11,7 +11,6 @@ import {
 
 import { presentFollowUpResult, submitFollowUp } from '@agent/followUp';
 import { getRunRecords } from '@agent/storage';
-import { resolveAgentKey } from '@agent/index/agentRegistry';
 import type { RunRequest } from '@agent/core/state/runRequests';
 import {
   AgentConfigSchema,
@@ -38,6 +37,8 @@ import {
 import { Secrets, type SecretsFailed } from '@platform/secrets';
 import {
   AgentCategory,
+  agentKey,
+  agentName,
   cloneRoundIndexed,
   ExhaustionReasonSchema,
   isPlainAgentIdentity,
@@ -699,9 +700,10 @@ export const createHostRunActions = (
 
 /** The launcher's form of a run configuration (PRD 8.5, `launch`). */
 export function launchPatchOf(config: AgentConfig) {
-  const toolConfig = config.toolConfig;
-  const agentCategory = config.agentCategory;
-  const resolvedAgent = resolveAgentKey(config.agent, agentCategory);
+  const { toolConfig, agentCategory } = config;
+  const resolvedAgent = config.agentSource
+    ? agentKey(config.agentSource, agentName(config.agent))
+    : config.agent;
   return LaunchSurfaceSchema.parse({
     sessionType: agentCategory,
     agent: { [agentCategory]: resolvedAgent },

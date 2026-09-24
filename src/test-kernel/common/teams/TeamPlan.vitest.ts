@@ -4,7 +4,6 @@ import { describe, expect, vi } from 'vitest';
 
 import {
   canLaunchTeam,
-  findTeamPreset,
   loadTeamOptions,
   planTeamRun,
   refreshRemoteCatalogForGaps,
@@ -13,11 +12,15 @@ import {
   teamLaunchBlockReason,
   teamPlanHasGaps,
   teamPlanStatus,
-  teamPresets,
   type TeamCatalogAgent,
-  type TeamPreset,
   type TeamRunPlan,
 } from '@common/teams/TeamPlan';
+import {
+  findTeamPreset,
+  launchableTeamPresets,
+  teamPresets,
+  type TeamPreset,
+} from '@common/teams/TeamPresets';
 import { AGENT_MODE_PRESETS, STARTER_AGENT_MODE_PRESET } from '@shared/schemas';
 
 const delegateTools = ['delegate_agent'];
@@ -68,7 +71,7 @@ function manualPlan(overrides: Partial<TeamRunPlan> = {}): TeamRunPlan {
 describe('teamPresets', () => {
   it('tags built-ins and customs while preserving provenance and order', () => {
     const custom = preset({ id: 'zeta', name: 'Zeta' });
-    const presets = teamPresets([custom]);
+    const presets = launchableTeamPresets([custom]);
     const builtIn = presets.slice(0, AGENT_MODE_PRESETS.length);
 
     expect(builtIn.map((item) => item.id)).toEqual(
@@ -78,16 +81,21 @@ describe('teamPresets', () => {
     expect(presets.at(-1)).toMatchObject({ id: 'zeta', source: 'custom' });
   });
 
-  it('excludes the starter preset and drops custom built-in id collisions', () => {
+  it('tags the starter setup-only and drops custom built-in id collisions', () => {
     const collision = preset({
       id: AGENT_MODE_PRESETS[0].id,
       name: 'Shadow Built-in',
     });
     const presets = teamPresets([STARTER_AGENT_MODE_PRESET, collision]);
 
-    expect(presets).toHaveLength(AGENT_MODE_PRESETS.length);
+    expect(presets).toHaveLength(AGENT_MODE_PRESETS.length + 1);
     expect(
-      presets.some((item) => item.id === STARTER_AGENT_MODE_PRESET.id),
+      presets.filter((item) => item.id === STARTER_AGENT_MODE_PRESET.id),
+    ).toEqual([expect.objectContaining({ setupOnly: true })]);
+    expect(
+      launchableTeamPresets([STARTER_AGENT_MODE_PRESET]).some(
+        (item) => item.id === STARTER_AGENT_MODE_PRESET.id,
+      ),
     ).toBe(false);
     expect(presets.find((item) => item.id === collision.id)?.source).toBe(
       'built-in',

@@ -13,12 +13,11 @@ import {
   type CliMultiAgentPresetRunPlan,
 } from '@cli/runtime/multiAgentPresets';
 import {
-  findTeamPreset,
   planTeamRun,
   planTeamRuns,
   teamPlanHasGaps,
-  teamPresets,
 } from '@common/teams/TeamPlan';
+import { findTeamPreset, teamPresets } from '@common/teams/TeamPresets';
 import { AgentCategory } from '@shared/schemas';
 
 function agent(

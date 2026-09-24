@@ -3,13 +3,12 @@ import { Effect } from 'effect';
 import { getAgentsByCategory, loadAgents, refresh } from '@agent/index';
 import { supabaseAuthenticated } from '@auth/SupabaseAuth';
 import {
-  findTeamPreset,
   planTeamRun,
   planTeamRuns,
   refreshRemoteCatalogForGaps,
   teamPlanHasGaps,
-  type TeamPreset,
 } from '@common/teams/TeamPlan';
+import { findTeamPreset, type TeamPreset } from '@common/teams/TeamPresets';
 import type { StateStore } from '@platform/interfaces';
 import { byCategory } from '@shared/schemas';
 

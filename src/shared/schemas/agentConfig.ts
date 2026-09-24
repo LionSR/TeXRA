@@ -36,11 +36,11 @@ const CliOutputFieldsSchema = z.object({
 const AgentConfigSharedFieldsSchema = NullableFileFieldsSchema.extend({
   agent: z.string().prefault(DEFAULT_WORKFLOW_AGENT),
   /**
-   * Resolved source of `agent`, captured once when the delegation is validated
-   * (`getVisibleAgent`). Launch resolves the exact `(source, name)` entry by key
-   * instead of re-resolving the ambiguous bare name, so it lands on the same
-   * entry validation picked. Absent for legacy records and direct launches that
-   * don't pin a source — those fall back to name-based resolution.
+   * Resolved source of `agent`. A boundary that validated the agent pins it;
+   * launch (`prepareAgentDefinition`) stamps the entry it resolved, so every
+   * run record carries it. Launch, resume, rerun and the remote checks read
+   * this instead of re-resolving the ambiguous bare name. Absent only on
+   * records written before launches stamped it; those resolve by name.
    */
   agentSource: AgentSourceSchema.nullish(),
   model: z.string().prefault(DEFAULT_AGENT_MODEL),
