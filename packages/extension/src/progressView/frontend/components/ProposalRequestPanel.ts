@@ -242,7 +242,11 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
                       >${data.agent} · ${modelLabel}</span
                     >
                     <span class="proposal-card__phase-calls"
-                      >${workflowScriptStepCount(phase.declaredTasks.length)}</span
+                      >${
+                        phase.declaredTasks.length > 0
+                          ? workflowScriptStepCount(phase.declaredTasks.length)
+                          : ''
+                      }</span
                     >
                   </div>
                 `,
@@ -253,11 +257,6 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
       <div class="workflow-proposal__cost-warning">
         ${waIcon('triangle-exclamation')}
         ${WORKFLOW_SCRIPT_PROPOSAL_COPY.costWarning}
-        ${
-          workflow.tasks.length > 0
-            ? WORKFLOW_SCRIPT_PROPOSAL_COPY.declaredItemsNote
-            : WORKFLOW_SCRIPT_PROPOSAL_COPY.dynamicCallsNote
-        }
       </div>
       <wa-details
         class="workflow-proposal__workflow-details"

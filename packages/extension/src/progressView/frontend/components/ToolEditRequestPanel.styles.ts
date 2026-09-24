@@ -9,13 +9,6 @@ export const toolEditRequestPanelStyles: CSSResult = css`
     --request-accent: var(--wa-color-text-normal);
   }
 
-  .tool-edit__source-tool {
-    font-family: var(--wa-font-family-mono);
-    font-variant-ligatures: none;
-    color: var(--wa-color-text-normal);
-    overflow-wrap: anywhere;
-  }
-
   .tool-edit__diff {
     display: inline-flex;
     align-items: baseline;

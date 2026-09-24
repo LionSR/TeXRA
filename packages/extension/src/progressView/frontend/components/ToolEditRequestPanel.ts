@@ -6,7 +6,7 @@ import { customElement } from 'lit/decorators.js';
 import { when } from 'lit/directives/when.js';
 
 // Side-effect imports - register WA components used by this template
-import '@awesome.me/webawesome/dist/components/button-group/button-group.js';
+import '@awesome.me/webawesome/dist/components/dropdown/dropdown.js';
 import '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
@@ -17,12 +17,8 @@ import type { RuntimeRequest } from '@shared/session/runtimeRequest';
 import { RUN_GRANT_LABEL } from '@ui/copy/delegationApproval';
 
 // Local imports - shared helpers
-import {
-  renderLabeledActionButton,
-  renderLabeledActionButtonParts,
-} from '@ui/wa/actionButtons';
-import { renderDotMeta, type MetaPart } from '@ui/wa/metaStrip';
-import { renderSplitButtonMenuParts } from '@ui/wa/splitButton';
+import { renderLabeledActionButton } from '@ui/wa/actionButtons';
+import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { pluralize } from '@utils/text/stringUtils';
 
 // Local imports - base class
@@ -30,6 +26,7 @@ import { BaseRequestPanel, type RunGrant } from './BaseRequestPanel';
 
 // Local imports - styles
 import { toolEditRequestPanelStyles } from './ToolEditRequestPanel.styles';
+import type { WaSelectEvent } from '@awesome.me/webawesome/dist/events/events.js';
 
 @customElement('tool-edit-request-panel')
 export class ToolEditRequestPanel extends BaseRequestPanel<'toolEdit'> {
@@ -93,17 +90,8 @@ export class ToolEditRequestPanel extends BaseRequestPanel<'toolEdit'> {
   }
 
   override render(): TemplateResult {
-    const data = this.permission.data;
-    const metaParts: MetaPart[] = [this.renderDiffMeta()];
-    if (data.sourceTool) {
-      metaParts.push(html`
-        Requested by
-        <bdi class="tool-edit__source-tool" dir="ltr">${data.sourceTool}</bdi>
-      `);
-    }
-
     return this.renderCard(
-      html`<div class="request-card__meta">${renderDotMeta(metaParts)}</div>`,
+      html`<div class="request-card__meta">${this.renderDiffMeta()}</div>`,
       this.renderDiffActions(),
     );
   }
@@ -112,46 +100,47 @@ export class ToolEditRequestPanel extends BaseRequestPanel<'toolEdit'> {
   // Diff-specific rendering
   // ===========================================================================
 
+  /**
+   * Open diff, and for a LaTeX file a labeled "Preview PDF" menu: the
+   * proposed version compiled, or a LaTeXdiff with the changes marked.
+   */
   private renderDiffActions(): TemplateResult {
-    const hasMenu = Boolean(this.permission.data.isLatex && !this.readOnly);
-    const buttonOptions = {
+    const openDiff = renderLabeledActionButton({
       id: 'tool-edit-diff-button',
-      icon: 'code-compare' as const,
+      icon: 'code-compare',
       text: 'Open diff',
       tooltip: 'Open diff (d)',
       action: 'openDiff',
-      className: 'diff-main-button',
       disabled: this.readOnly,
       onClick: this.handleDiffAction,
-    };
-
-    if (!hasMenu) return renderLabeledActionButton(buttonOptions);
-
-    const diffButton = renderLabeledActionButtonParts({
-      ...buttonOptions,
-      nativeChrome: true,
     });
-    const diffMenu = renderSplitButtonMenuParts({
-      classPrefix: 'diff-dropdown',
-      triggerId: 'tool-edit-diff-dropdown-trigger',
-      triggerAriaLabel: 'More diff actions',
-      tooltip: 'More diff actions',
-      items: html`
-        <wa-dropdown-item value="previewProposed"
-          >Preview proposed PDF</wa-dropdown-item
-        >
-        <wa-dropdown-item value="showLatexdiff"
-          >Show LaTeXdiff</wa-dropdown-item
-        >
-      `,
-      onSelect: this.handleMenuSelect,
-    });
+    if (!this.permission.data.isLatex || this.readOnly) return openDiff;
 
     return html`
-      <wa-button-group class="diff-dropdown split-group" label="Diff actions">
-        ${diffButton.button} ${diffMenu.menu}
-      </wa-button-group>
-      ${diffButton.tooltip} ${diffMenu.tooltip}
+      ${openDiff}
+      <wa-dropdown
+        class="diff-dropdown-menu"
+        placement="bottom-start"
+        @wa-select=${this.handleMenuSelect}
+      >
+        <wa-button
+          slot="trigger"
+          class="action-button"
+          appearance="plain"
+          variant="neutral"
+          size="s"
+          type="button"
+          with-caret
+          data-action="previewMenu"
+          >${waIcon('file-pdf', { slot: 'start' })}Preview PDF</wa-button
+        >
+        <wa-dropdown-item value="previewProposed"
+          >Proposed version</wa-dropdown-item
+        >
+        <wa-dropdown-item value="showLatexdiff"
+          >With changes marked (LaTeXdiff)</wa-dropdown-item
+        >
+      </wa-dropdown>
     `;
   }
 
@@ -189,7 +178,9 @@ export class ToolEditRequestPanel extends BaseRequestPanel<'toolEdit'> {
   // Diff menu handlers
   // ===========================================================================
 
-  private handleMenuSelect = (action: string): void => {
+  private handleMenuSelect = (event: WaSelectEvent): void => {
+    const { item } = event.detail;
+    const action = 'value' in item ? item.value : undefined;
     switch (action) {
       case 'showLatexdiff':
       case 'previewProposed':

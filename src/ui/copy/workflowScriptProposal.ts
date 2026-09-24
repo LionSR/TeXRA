@@ -6,11 +6,8 @@ import type { WorkflowDeclaredPlan } from '@shared/schemas';
  * and the calls the script actually issues appear only when it issues them.
  */
 export const WORKFLOW_SCRIPT_PROPOSAL_COPY = {
-  costWarning: 'Calls may run concurrently and incur high model cost.',
-  declaredItemsNote:
-    'Steps are labels from the script; the actual calls appear as it runs.',
-  dynamicCallsNote:
-    'This script decides its steps as it runs; they appear as it issues them.',
+  costWarning:
+    'Agents may run in parallel, which can cost more than a single run.',
   filesHeading: 'Files available to the script',
   defaults: (agent: string, model: string): string =>
     `Defaults: ${agent} (${model}) — each call may name its own agent and model.`,
