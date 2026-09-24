@@ -584,14 +584,10 @@ export async function runChat(
     cwd: context.cwd,
     disposables,
     disposeTerminalRestoreOnExit,
-    awaitFollowUpsIdle: () => runtime.runPromise(followUpQueue.idle),
-    awaitRunSettled: () =>
-      session.runSettled
-        ? runtime.runPromise(session.runSettled)
-        : Promise.resolve(),
+    runtime,
+    followUpsIdle: followUpQueue.idle,
     getApprovalPolicy,
-    flushArtifacts: () =>
-      runtime.runPromise(runtimeSession.settlePublications()),
+    flushArtifacts: runtimeSession.settlePublications(),
     repaintAfterTerminalResume: viewportController.repaintAfterTerminalResume,
     suspendTerminalTitle: terminalTitleUpdates.suspend,
     resumeTerminalTitle: terminalTitleUpdates.resume,

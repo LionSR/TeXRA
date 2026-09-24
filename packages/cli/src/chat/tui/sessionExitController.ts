@@ -12,6 +12,7 @@
 // A signal cause restores terminal modes synchronously before its first await,
 // then skips the graceful queue/run drain and exits with the signal code.
 
+import { Cause, Effect } from 'effect';
 import { readCliCwd } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import {
@@ -26,11 +27,12 @@ import {
 } from '@cli/tui/terminalCleanup';
 import type { DisposableStore } from '@platform/disposable';
 import type { LifecycleHost } from '@platform/interfaces';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import type { RunId } from '@shared/schemas';
 import type { SessionView } from '@shared/session/sessionView';
 import { assertNever } from '@utils/core';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
   resetCliState,
@@ -84,16 +86,15 @@ interface SessionExitControllerContext {
   readonly disposables: DisposableStore;
   /** Removes the process-exit terminal backstop after terminal restoration. */
   readonly disposeTerminalRestoreOnExit: () => void;
+  /** The process runtime the exit drain runs on: one run per exit path. */
+  readonly runtime: ProcessRuntime;
   /** Settles once the follow-up delivery queue has drained; a graceful exit
    *  waits on it before it returns. */
-  readonly awaitFollowUpsIdle: () => Promise<void>;
-  /** Runs the claimed root run's settlement, read when the drain asks for it:
-   *  the slot holds a program, and this entry point is where it is run. */
-  readonly awaitRunSettled: () => Promise<void>;
+  readonly followUpsIdle: Effect.Effect<void>;
   /** Reads the live approval policy for the resume hint. */
   readonly getApprovalPolicy: () => TexraApprovalPolicy;
   /** Materialize buffered trace chunks + drain debounced StreamLog writes. */
-  readonly flushArtifacts: () => Promise<void>;
+  readonly flushArtifacts: Effect.Effect<void, Error>;
   /** Repaint the TUI from a known origin after a `fg`/SIGCONT resume. */
   readonly repaintAfterTerminalResume: () => void;
   /** Replace a live attention title with the idle project title while stopped. */
@@ -182,16 +183,21 @@ export function createSessionExitController(
   // Platform shutdown then settles executions whose leases are still held,
   // including the WAITING flow whose checkpoint this exit preserves.
   const persistBeforePlatformShutdown = async (): Promise<void> => {
-    try {
-      await ctx.flushArtifacts();
-    } catch (error) {
-      // Signal exit remains best-effort, but platform shutdown must still run.
-      // The resume hint is printed before this runs, so a silent failure hands
-      // the user a `texra resume` for a session whose tail was never written.
-      await writeTextStderrAndWait(
-        `[warn] [cli.lifecycle] Transcript flush failed during signal exit; the session tail may be missing: ${toErrorMessage(error)}`,
-      );
-    }
+    await ctx.runtime.runPromise(
+      ctx.flushArtifacts.pipe(
+        // Signal exit remains best-effort, but platform shutdown must still
+        // run. The resume hint is printed before this runs, so a silent failure
+        // hands the user a `texra resume` for a session whose tail was never
+        // written.
+        Effect.catchCause((cause) =>
+          Effect.promise(() =>
+            writeTextStderrAndWait(
+              `[warn] [cli.lifecycle] Transcript flush failed during signal exit; the session tail may be missing: ${toErrorMessage(Cause.squash(cause))}`,
+            ),
+          ),
+        ),
+      ),
+    );
     // `runCliPlatformShutdownSequence` catches its own failures and never
     // rejects, so there is no rejection arm to write here.
     await runPlatformShutdown();
@@ -319,14 +325,6 @@ export function createSessionExitController(
       );
     }
 
-    let disposalFailed = false;
-    let disposalFailure: unknown;
-    try {
-      ctx.disposables.dispose();
-    } catch (error) {
-      disposalFailed = true;
-      disposalFailure = error;
-    }
     // A suspended (idle/WAITING) root session is resumable, so it is left
     // uninterrupted: the checkpoint survives either way since #11304/#11315,
     // but interrupting would persist a CANCELLED outcome, clear approvals and
@@ -359,17 +357,31 @@ export function createSessionExitController(
     // never observes `stopRequested` — draining first would block the quit
     // behind a long model turn. Re-check after the drain for a run the drain
     // itself started.
-    let interrupted = interruptPendingRun();
-    await ctx.awaitFollowUpsIdle();
-    interrupted = interruptPendingRun() || interrupted;
-    const resumableIdle = ctx.isResumableIdle();
-    if (interrupted) {
-      // Only await a run we actually interrupted/finished. A resumableIdle run
-      // is parked at the WAIT node and never settles, so awaiting it would
-      // hang the process here.
-      await ctx.awaitRunSettled();
-    }
-    await ctx.flushArtifacts();
+    const { disposalFailure, resumableIdle } = await ctx.runtime.runPromise(
+      Effect.gen(function* () {
+        // A disposal failure does not stop the exit: it is reported and
+        // rethrown once the session is persisted and the terminal restored.
+        const disposalFailure = yield* Effect.try({
+          try: () => ctx.disposables.dispose(),
+          catch: ensureError,
+        }).pipe(
+          Effect.match({
+            onFailure: (error) => error,
+            onSuccess: () => undefined,
+          }),
+        );
+        let interrupted = interruptPendingRun();
+        yield* ctx.followUpsIdle;
+        interrupted = interruptPendingRun() || interrupted;
+        const idle = ctx.isResumableIdle();
+        // Only await a run we actually interrupted/finished. A resumableIdle
+        // run is parked at the WAIT node and never settles, so awaiting it
+        // would hang the process here.
+        if (interrupted && session.runSettled) yield* session.runSettled;
+        yield* ctx.flushArtifacts;
+        return { disposalFailure, resumableIdle: idle };
+      }),
+    );
     cleanupTerminalModes();
     ctx.disposeTerminalRestoreOnExit();
     // Print the resume hint after the terminal modes are restored, but before
@@ -384,16 +396,16 @@ export function createSessionExitController(
       // usage logs flush — bin/texra.ts's finally won't on exit().
       // Terminal modes are restored, so stderr is the operator's again; the
       // log sink is silent for the whole TUI session and would drop this.
-      if (disposalFailed) {
+      if (disposalFailure) {
         await writeTextStderrAndWait(
           `[error] [cli.sessionExit] Session resource disposal failed during exit: ${toErrorMessage(disposalFailure)}`,
         );
       }
       await runPlatformShutdown();
-      if (disposalFailed) session.runExitCode = CliExitCode.AgentError;
+      if (disposalFailure) session.runExitCode = CliExitCode.AgentError;
       process.exit(session.runExitCode);
     }
-    if (disposalFailed) throw disposalFailure;
+    if (disposalFailure) throw disposalFailure;
   };
 
   const teardown = (cause: ExitCause): Promise<void> => {

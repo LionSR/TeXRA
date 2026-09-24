@@ -91,10 +91,9 @@ interface ElectronPlatformInitResult {
   setupAuth: DesktopSetupAuth;
 }
 
-export async function initializeElectronPlatform(
-  mainDirname: string,
-  agentResume: AgentResumePort,
-) {
+export const initializeElectronPlatform = Effect.fn(
+  'initializeElectronPlatform',
+)(function* (mainDirname: string, agentResume: AgentResumePort) {
   // The default handler's console.error is mirrored into the desktop app log,
   // so shutdown-handler failures land at error severity like the other hosts.
   const lifecycle = createLifecycleHost();
@@ -110,34 +109,32 @@ export async function initializeElectronPlatform(
   // Identity and secrets precede the runtime; application state is acquired
   // by its own runtime layer, whose scope owns the database.
   const { processStart, configStores, secrets, supabaseAuth } =
-    await Effect.runPromise(
-      Effect.gen(function* () {
-        const processStart = yield* nodeProcesses.selfIdentity();
-        const [configStores, secretsStore] = yield* Effect.all(
-          [
-            openTexraConfigStores(storage, undefined, (message) =>
-              console.warn(`[desktop] ${message}`),
-            ),
-            JsonStore.open(join(userDataPath, 'secrets.json')),
-          ],
-          { concurrency: 'unbounded' },
-        );
-        const secrets = new ElectronSecrets(secretsStore, {
-          showWarningMessage: (message) =>
-            Effect.tryPromise({
-              try: () => showDesktopWarningDialog(message),
-              catch: (cause) =>
-                new NotificationFailed({
-                  member: 'showWarningMessage',
-                  message: toErrorMessage(cause),
-                  cause,
-                }),
-            }),
-        });
-        const supabaseAuth = yield* createSupabaseAuth({ secrets });
-        return { processStart, configStores, secrets, supabaseAuth };
-      }).pipe(Effect.provide(nodeFileServices)),
-    );
+    yield* Effect.gen(function* () {
+      const processStart = yield* nodeProcesses.selfIdentity();
+      const [configStores, secretsStore] = yield* Effect.all(
+        [
+          openTexraConfigStores(storage, undefined, (message) =>
+            console.warn(`[desktop] ${message}`),
+          ),
+          JsonStore.open(join(userDataPath, 'secrets.json')),
+        ],
+        { concurrency: 'unbounded' },
+      );
+      const secrets = new ElectronSecrets(secretsStore, {
+        showWarningMessage: (message) =>
+          Effect.tryPromise({
+            try: () => showDesktopWarningDialog(message),
+            catch: (cause) =>
+              new NotificationFailed({
+                member: 'showWarningMessage',
+                message: toErrorMessage(cause),
+                cause,
+              }),
+          }),
+      });
+      const supabaseAuth = yield* createSupabaseAuth({ secrets });
+      return { processStart, configStores, secrets, supabaseAuth };
+    }).pipe(Effect.provide(nodeFileServices));
   // The one Effect runtime of this process (PRD 7.7), over the stores it
   // serves: every project's session graph and Promise-facing fiber runs on
   // it, and the entry disposes it last (`disposeProcessRuntime`), after run
@@ -235,4 +232,4 @@ export async function initializeElectronPlatform(
     };
   });
   return { lifecycle, runtime, processScope, initialize };
-}
+});

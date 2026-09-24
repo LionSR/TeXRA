@@ -63,16 +63,14 @@ export function createExtensionCommandActions(
 ): ExtensionCommandActions {
   const refreshAfterProviderKeyChange = (provider: string) =>
     settingsViewProvider.refreshAfterProviderKeyChange(provider);
-  // The settings view and the walkthrough still settle their own work; each
-  // is one foreign edge lifted here.
+  // The walkthrough and the docs page are VS Code calls; each is one
+  // foreign edge lifted here.
   const fromPromise = (run: () => PromiseLike<unknown>) =>
     Effect.asVoid(Effect.tryPromise({ try: run, catch: ensureError }));
 
   return {
     showSettings: (tab, agentSubTab) =>
-      fromPromise(() =>
-        settingsViewProvider.showSettingsView(tab, agentSubTab),
-      ),
+      settingsViewProvider.showSettingsView(tab, agentSubTab),
     // New Session is the header's "+" (PRD 12.4): the New-task state into
     // view with the launcher's selections as they are.
     resetMainView: () => progressViewProvider.showLauncher(),
@@ -83,10 +81,8 @@ export function createExtensionCommandActions(
     acceptEdited: latexHandleAcceptEdited,
     indentTeX: () => handleIndentTeX(session),
     signIn: () => authSignIn,
-    signInChatGpt: () =>
-      fromPromise(() => settingsViewProvider.signInSubscription('chatgpt')),
-    signInGrok: () =>
-      fromPromise(() => settingsViewProvider.signInSubscription('grok')),
+    signInChatGpt: () => settingsViewProvider.signInSubscription('chatgpt'),
+    signInGrok: () => settingsViewProvider.signInSubscription('grok'),
     signOut: () => authSignOut,
     runSetupAssistant: () =>
       Effect.asVoid(launchSetupAssistant(secrets, globalState, session)),

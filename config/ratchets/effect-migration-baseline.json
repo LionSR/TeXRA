@@ -6,7 +6,6 @@
       "src/tools/claudeAgent.ts": 1
     },
     "catch:effect-importer": {
-      "packages/desktop/src/main/index.ts": 1,
       "src/tools/github/PollingSourceBase.ts": 1
     }
   }

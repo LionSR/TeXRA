@@ -1821,9 +1821,15 @@ function createWindow(options: {
 }
 
 if (protocolLifecycle.ownsSingleInstanceLock) {
-  app
-    .whenReady()
-    .then(async () => {
+  // The desktop entry: one program from Electron's `whenReady` to the wired
+  // window. Its fatal report is the one fold, and it runs on the default
+  // runner because it is what builds the process runtime.
+  void Effect.runPromise(
+    Effect.gen(function* () {
+      yield* Effect.tryPromise({
+        try: () => app.whenReady(),
+        catch: ensureError,
+      });
       // Opened by the startup program below; a startup that fails before it
       // runs the shutdown handlers that read it.
       let projects: DesktopProjectRegistry | undefined;
@@ -1842,7 +1848,7 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
       // The shutdown handlers, the startup program, and every surface they
       // wire run on the process runtime the platform builds.
       const { lifecycle, runtime, processScope, initialize } =
-        await initializeElectronPlatform(desktopMainDir, processResumeOwner);
+        yield* initializeElectronPlatform(desktopMainDir, processResumeOwner);
       registerRuntimeShutdownHandlers(lifecycle, {
         beforeAgentShutdown: [Effect.sync(() => processResumeOwner.disable())],
         afterAgentShutdown: [killActiveRecording()],
@@ -1868,11 +1874,11 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
 
       // Until the initial window is fully wired, any startup failure (platform
       // init included) runs the shutdown an ordinary application exit does.
-      // Once this program completes, the lifecycle owns that cleanup.
-      const startup = await runtime.runPromiseExit(
-        // One program on this runtime's context, not nested runs behind a
-        // promise. The original failure is re-raised, not wrapped: the fatal
-        // reporter below prints `error.stack` from the `Cause.squash`'d error.
+      // Once this program completes, the lifecycle owns that cleanup. The
+      // original failure is re-raised, not wrapped: the fatal report below
+      // prints `error.stack` from the `Cause.squash`'d error.
+      yield* withProcessServices(
+        runtime,
         Effect.gen(function* () {
           const warn = (message: string) =>
             console.warn(`[desktop] ${message}`);
@@ -1972,21 +1978,13 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
             );
           }
         }),
-      );
-      if (Exit.isFailure(startup)) {
-        await Effect.runPromise(lifecycle.runShutdown);
-        throw Cause.squash(startup.cause);
-      }
-    })
-    // The one catch this entry keeps. It guards `initializeElectronPlatform`
-    // itself, which is what builds the process Effect runtime, so there is no
-    // runtime to fold this failure on: a platform init that dies before
-    // `installProcessRuntime` never returns the runtime this entry would have
-    // folded the error on. Electron's `whenReady()` promise is the real
-    // foreign boundary here.
-    .catch((error: unknown) => {
-      reportFatalStartupError(error);
-    });
+      ).pipe(Effect.onError(() => lifecycle.runShutdown));
+    }).pipe(
+      Effect.catchCause((cause) =>
+        Effect.sync(() => reportFatalStartupError(Cause.squash(cause))),
+      ),
+    ),
+  );
 }
 
 app.on('window-all-closed', () => {

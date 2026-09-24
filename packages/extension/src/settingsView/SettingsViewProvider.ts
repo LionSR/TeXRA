@@ -22,6 +22,7 @@ import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { AgentCategory } from '@shared/schemas';
 import type { SettingsTabPanelName } from '@shared/settingsView/settingsViewMessages';
+import { ensureError } from '@utils/errors/errorMessage';
 
 // Local file imports
 import { SettingsViewMessageHandler } from './SettingsViewMessageHandler';
@@ -90,13 +91,15 @@ export class SettingsViewProvider {
           ]);
           return;
         }
-        void this.postAllData(this._view.webview);
+        this.runtime.runFork(
+          this.messageHandler.sendAllData(this._view.webview),
+        );
       }
     });
   }
 
   /** Sign in to a subscription provider from a command, not the webview. */
-  public signInSubscription(providerId: SubscriptionProviderId): Promise<void> {
+  public signInSubscription(providerId: SubscriptionProviderId) {
     return this.messageHandler.signInSubscription(providerId);
   }
 
@@ -111,56 +114,57 @@ export class SettingsViewProvider {
     return this.messageHandler.refreshAfterProviderKeyChange(provider);
   }
 
-  /** Settle a full repaint of `webview` on this view's process runtime. */
-  private postAllData(webview: vscode.Webview): Promise<void> {
-    return this.runtime.runPromise(this.messageHandler.sendAllData(webview));
-  }
-
   /**
    * Create and show the webview panel (for command palette activation)
    * @param tab Optional panel name to switch to after showing
    * @param agentSubTab Optional sub-tab for the agents tab ('workflow' | 'toolUse')
    */
-  public async showSettingsView(
+  public showSettingsView(
     tab?: SettingsTabPanelName,
     agentSubTab?: AgentCategory,
-  ): Promise<void> {
-    if (this._view) {
-      const panel = this._view;
-      panel.reveal(vscode.ViewColumn.One);
-      await this.postAllData(panel.webview);
-    } else {
-      const panel = vscode.window.createWebviewPanel(
-        SettingsViewProvider.viewType,
-        'TeXRA Dashboard',
-        vscode.ViewColumn.One,
-        {
-          enableScripts: true,
-          retainContextWhenHidden: true,
-          localResourceRoots: getSharedLocalResourceRoots(
-            this.context,
-            'settingsView',
-          ),
-        },
-      );
-      panel.iconPath = new vscode.ThemeIcon('gear');
+  ): Effect.Effect<void, Error, ProcessServices> {
+    return Effect.gen({ self: this }, function* () {
+      if (this._view) {
+        const panel = this._view;
+        panel.reveal(vscode.ViewColumn.One);
+        yield* this.messageHandler.sendAllData(panel.webview);
+      } else {
+        const panel = vscode.window.createWebviewPanel(
+          SettingsViewProvider.viewType,
+          'TeXRA Dashboard',
+          vscode.ViewColumn.One,
+          {
+            enableScripts: true,
+            retainContextWhenHidden: true,
+            localResourceRoots: getSharedLocalResourceRoots(
+              this.context,
+              'settingsView',
+            ),
+          },
+        );
+        panel.iconPath = new vscode.ThemeIcon('gear');
 
-      this.cleanupView();
-      this._view = panel;
-      this._viewDisposables.add(this.setupWebviewContent(panel));
-      this._viewDisposables.add(
-        panel.onDidDispose(this.cleanupView.bind(this)),
-      );
-    }
+        this.cleanupView();
+        this._view = panel;
+        this._viewDisposables.add(this.setupWebviewContent(panel));
+        this._viewDisposables.add(
+          panel.onDidDispose(this.cleanupView.bind(this)),
+        );
+      }
 
-    // this._view can be undefined here: the awaited sendAllData above yields,
-    // and disposing the dashboard panel during that await runs cleanupView.
-    if (tab == null || !this._view) return;
-    if (this.viewReady) {
-      await this.postTab(this._view.webview, { tab, agentSubTab });
-    } else {
-      this.pendingTab = { tab, agentSubTab };
-    }
+      // this._view can be undefined here: the sendAllData above yields, and
+      // disposing the dashboard panel meanwhile runs cleanupView.
+      if (tab == null || !this._view) return;
+      if (this.viewReady) {
+        const webview = this._view.webview;
+        yield* Effect.tryPromise({
+          try: () => this.postTab(webview, { tab, agentSubTab }),
+          catch: ensureError,
+        });
+      } else {
+        this.pendingTab = { tab, agentSubTab };
+      }
+    });
   }
 
   private async postTab(

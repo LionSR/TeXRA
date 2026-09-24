@@ -47,7 +47,7 @@ import type { SettingsStatePorts } from '@shared/settingsView/types';
 import { ACCOUNT_OUTCOME } from '@ui/copy/accountAuth';
 import { getProviderKeyUrl } from '@utils/config/providerConfig';
 import { allSettledVoid } from '@utils/core/allSettledVoid';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 interface DesktopCredentialSettingsControllerOptions extends SettingsStatePorts {
   readonly config: ConfigProvider;
@@ -93,7 +93,7 @@ interface DesktopCredentialSettingsControllerOptions extends SettingsStatePorts 
   readonly notifications: MessageHost;
   readonly auth: {
     signIn(): Effect.Effect<void, Error>;
-    signOut(): Promise<void>;
+    signOut(): Effect.Effect<void, Error>;
   };
   readonly subscriptionUsage?: Pick<
     SubscriptionUsageService,
@@ -246,11 +246,7 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
       // The settings view's Sign in button is a host entry, so the sign-in
       // program settles here.
       signIn: () => options.auth.signIn(),
-      signOut: () =>
-        Effect.tryPromise({
-          try: () => options.auth.signOut(),
-          catch: ensureError,
-        }),
+      signOut: () => options.auth.signOut(),
     };
     // Each arm is a settings-view message, so the subscription programs settle
     // here exactly as the profile arms above do.

@@ -216,7 +216,7 @@ const acceptFiles = Effect.fn('AcceptRunFilesTool.acceptFiles')(function* (
     files,
     (mapping) =>
       Effect.gen(function* () {
-        assertNoParentTraversal(mapping.path);
+        yield* assertNoParentTraversal(mapping.path);
 
         const sourceLocation = yield* resolveSourceFile(
           runId,
@@ -229,8 +229,8 @@ const acceptFiles = Effect.fn('AcceptRunFilesTool.acceptFiles')(function* (
         // under any root, but the destination is this session's.
         const dest = locateInWorkspace(call.roots.workspace, destPath);
         if (dest.kind === 'external') {
-          throw new ToolError(
-            `original must be inside the workspace: ${destPath}`,
+          return yield* Effect.fail(
+            new ToolError(`original must be inside the workspace: ${destPath}`),
           );
         }
         const workspaceFs: FileSystem.FileSystem = yield* WorkspaceFs;
@@ -433,16 +433,22 @@ const resolveSourceFile = Effect.fn('AcceptRunFilesTool.resolveSourceFile')(
       case 'file':
         return entry.location;
       case 'symlink':
-        throw new ToolError(
-          `Cannot accept ${runPath} from run ${runId}: the run-storage entry is a symlink, meaning this round did not emit the file. Accepting it would propagate snapshot or workspace content rather than agent output.`,
+        return yield* Effect.fail(
+          new ToolError(
+            `Cannot accept ${runPath} from run ${runId}: the run-storage entry is a symlink, meaning this round did not emit the file. Accepting it would propagate snapshot or workspace content rather than agent output.`,
+          ),
         );
       case 'directory':
       case 'unsupported':
-        throw new ToolError(
-          `Cannot accept ${runPath} from run ${runId}: the run-storage entry is not a regular file.`,
+        return yield* Effect.fail(
+          new ToolError(
+            `Cannot accept ${runPath} from run ${runId}: the run-storage entry is not a regular file.`,
+          ),
         );
       case 'invalid':
-        throw new ToolError(`Cannot accept ${runPath}: ${entry.reason}`);
+        return yield* Effect.fail(
+          new ToolError(`Cannot accept ${runPath}: ${entry.reason}`),
+        );
       case 'missing':
         break;
     }
@@ -459,9 +465,11 @@ const resolveSourceFile = Effect.fn('AcceptRunFilesTool.resolveSourceFile')(
       return createWorkspaceLocation(wsLoc.absolutePath, wsLoc.relativePath);
     }
 
-    throw new ToolError(
-      `File not found in run storage or workspace: ${runPath}. ` +
-        `Use executions tool with path /executions/${runId}/files to list available files.`,
+    return yield* Effect.fail(
+      new ToolError(
+        `File not found in run storage or workspace: ${runPath}. ` +
+          `Use executions tool with path /executions/${runId}/files to list available files.`,
+      ),
     );
   },
 );
