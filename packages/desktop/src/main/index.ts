@@ -1537,8 +1537,6 @@ function createWindow(options: {
       // card's program runs, not when the port is built.
       signInWithChatGpt: () =>
         Effect.suspend(() => requireSettingsIpc().signInChatGpt()),
-      onAsyncError: reportAsyncError,
-      runtime,
     },
   );
   onboardingIpcRef.current = onboardingIpc;
@@ -1637,9 +1635,7 @@ function createWindow(options: {
             height: Math.round(bounds.height * zoom),
           };
         },
-        runtime,
         getWorkspacePath: () => project.root,
-        onAsyncError: reportAsyncError,
       },
     );
     return { workspace, browserViews };
@@ -1649,13 +1645,14 @@ function createWindow(options: {
       message: Parameters<DesktopMessageHandler['handleMessage']>[0],
     ) {
       const parsed = DesktopWorkspaceInboundMessageSchema.safeParse(message);
-      if (!parsed.success) return false;
+      if (!parsed.success) return undefined;
       const binding = projectBindings.get(parsed.data.session);
       if (!binding) {
-        console.warn(
-          `Dropped a workspace request for closed project ${parsed.data.session}`,
+        return Effect.sync(() =>
+          console.warn(
+            `Dropped a workspace request for closed project ${parsed.data.session}`,
+          ),
         );
-        return true;
       }
       // Hidden projects retain their resources, but cannot cover the visible project
       // with a late browser-bounds notification.
@@ -1663,9 +1660,8 @@ function createWindow(options: {
         parsed.data.command === DESKTOP_WORKSPACE_COMMANDS.BROWSER_BOUNDS &&
         binding.project !== activeProject()
       )
-        return true;
-      binding.workspace.handleMessage(message);
-      return true;
+        return Effect.void;
+      return binding.workspace.handleMessage(message);
     },
     disposeRendererResources() {
       // Navigation destroys the document, including its request correlations
@@ -1706,7 +1702,6 @@ function createWindow(options: {
         if (result.canceled || !result.filePath) return;
         await writeFile(result.filePath, text, 'utf8');
       },
-      onAsyncError: reportAsyncError,
     },
   );
   // One handler per inbound command namespace: the message's `command` names
@@ -1716,7 +1711,7 @@ function createWindow(options: {
     prompt: promptController,
     settings: {
       handleMessage: (message) =>
-        settingsIpcRef.current?.handleMessage(message) ?? false,
+        settingsIpcRef.current?.handleMessage(message),
     },
     onboarding: onboardingIpc,
     projects: createDesktopProjectsIpc({
@@ -1734,7 +1729,19 @@ function createWindow(options: {
         const route = desktopInboundRoute(message.command);
         // A command no surface owns is renderer drift, not a session
         // message: session frames are keyed by `kind`, never `command`.
-        if (route) desktopRoutes[route].handleMessage(message);
+        const program = route && desktopRoutes[route].handleMessage(message);
+        // The one run site for every namespace's program, and its one report:
+        // a failure or defect reaches the window's async-error reporter.
+        if (program)
+          runtime.runFork(
+            program.pipe(
+              Effect.catchCause((cause) =>
+                Cause.hasInterruptsOnly(cause)
+                  ? Effect.void
+                  : Effect.sync(() => reportAsyncError(Cause.squash(cause))),
+              ),
+            ),
+          );
         return;
       }
       // A session message names its project: that project's port answers it.

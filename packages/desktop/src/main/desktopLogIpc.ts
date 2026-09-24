@@ -1,3 +1,7 @@
+import { Effect } from 'effect';
+
+import { ensureError } from '@utils/errors/errorMessage';
+
 import {
   DESKTOP_LOG_COMMANDS,
   type DesktopLogSnapshot,
@@ -12,7 +16,6 @@ export interface DesktopLogIpcOptions {
   readLog(): DesktopLogSnapshot;
   copyLog(text: string): Promise<void>;
   exportLog(text: string): Promise<void>;
-  onAsyncError: (error: unknown) => void;
 }
 
 export function createDesktopLogIpc(
@@ -29,19 +32,22 @@ export function createDesktopLogIpc(
   }
 
   return {
-    handleMessage(message: DesktopCommandMessage): boolean {
+    handleMessage(message: DesktopCommandMessage) {
       switch (message.command) {
         case DESKTOP_LOG_COMMANDS.REQUEST_LOG:
-          postSnapshot();
-          return true;
+          return Effect.sync(postSnapshot);
         case DESKTOP_LOG_COMMANDS.COPY_LOG:
-          options.copyLog(postSnapshot().text).catch(options.onAsyncError);
-          return true;
+          return Effect.tryPromise({
+            try: () => options.copyLog(postSnapshot().text),
+            catch: ensureError,
+          });
         case DESKTOP_LOG_COMMANDS.EXPORT_LOG:
-          options.exportLog(postSnapshot().text).catch(options.onAsyncError);
-          return true;
+          return Effect.tryPromise({
+            try: () => options.exportLog(postSnapshot().text),
+            catch: ensureError,
+          });
         default:
-          return false;
+          return undefined;
       }
     },
   };

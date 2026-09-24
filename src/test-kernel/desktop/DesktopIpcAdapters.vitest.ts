@@ -83,16 +83,14 @@ async function createOnboardingHarness({
   const state = new FakeStateStore({ ...seed });
   const update = vi.spyOn(state, 'update');
   const postToRenderer = vi.fn();
-  const runtime = options.runtime ?? testRuntime();
+  const runtime = testRuntime();
   const onboarding = createDesktopOnboardingIpc(
     { postToRenderer },
     {
       hasCredential: () => Effect.succeed(false),
       kickoffSetup: () => Effect.void,
       signInWithChatGpt: () => Effect.void,
-      onAsyncError: vi.fn(),
       ...options,
-      runtime,
       state,
     },
   );
@@ -117,12 +115,12 @@ describe('desktop IPC adapters', () => {
   it('claims only the desktop-local shell commands', async () => {
     const { postToRenderer, shellIpc } = await createShellHarness();
 
-    expect(shellIpc.handleMessage({ command: 'texra.totallyUnknown' })).toBe(
-      false,
-    );
+    expect(
+      shellIpc.handleMessage({ command: 'texra.totallyUnknown' }),
+    ).toBeUndefined();
     expect(
       shellIpc.handleMessage({ command: 'texra.desktop.openDesktopDocs' }),
-    ).toBe(true);
+    ).toBeDefined();
     expect(postToRenderer).not.toHaveBeenCalled();
   });
 
@@ -148,28 +146,28 @@ describe('desktop IPC adapters', () => {
         // Fresh install with no credential: State 0 (welcome card).
         expectFunnelState(onboarding, 'needs-credential');
         postToRenderer.mockClear();
+        // Runs an owned command's program the way the window's router does.
+        const send = (command: string) =>
+          withProcessServices(
+            runtime,
+            onboarding.handleMessage({ command }) ??
+              Effect.die(`${command} is not an onboarding command`),
+          );
 
-        expect(
-          onboarding.handleMessage({ command: 'desktop:requestOnboarding' }),
-        ).toBe(true);
+        yield* send('desktop:requestOnboarding');
         expect(postToRenderer).toHaveBeenLastCalledWith({
           command: 'desktop:setOnboarding',
           shouldShow: true,
         });
 
-        expect(
-          onboarding.handleMessage({ command: 'desktop:dismissOnboarding' }),
-        ).toBe(true);
-        yield* Effect.promise(() => Promise.resolve());
+        yield* send('desktop:dismissOnboarding');
         expect(update).toHaveBeenCalledWith(dismissedStateKey, true);
         expect(postToRenderer).toHaveBeenLastCalledWith({
           command: 'desktop:setOnboarding',
           shouldShow: false,
         });
 
-        expect(
-          onboarding.handleMessage({ command: 'desktop:requestOnboarding' }),
-        ).toBe(true);
+        yield* send('desktop:requestOnboarding');
         expect(postToRenderer).toHaveBeenLastCalledWith({
           command: 'desktop:setOnboarding',
           shouldShow: false,
@@ -177,7 +175,7 @@ describe('desktop IPC adapters', () => {
 
         expect(
           onboarding.handleMessage({ command: 'desktop:showOnboarding' }),
-        ).toBe(false);
+        ).toBeUndefined();
 
         postToRenderer.mockClear();
         yield* withProcessServices(runtime, onboarding.skipOnboarding());
