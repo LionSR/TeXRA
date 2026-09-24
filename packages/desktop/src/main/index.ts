@@ -137,6 +137,7 @@ import {
 import { DesktopPromptController } from './desktopPromptController.js';
 import { DefaultDesktopAgentSettingsController } from './desktopAgentSettingsController.js';
 import { DefaultDesktopCredentialSettingsController } from './desktopCredentialSettingsController.js';
+import { desktopSignInPresenters } from './desktopSignInPresenters.js';
 import {
   createDesktopSettingsIpc,
   type DesktopSettingsIpc,
@@ -1359,61 +1360,7 @@ function createWindow(options: {
           // missing browser itself and falls back to a device code.
           openExternal: (url) => openExternalProgram(url, true),
           openSubscriptionSignInUrl: (url) => openExternalProgram(url, false),
-          presentSubscriptionSignInUrl: (url, productName) =>
-            Effect.tryPromise({
-              try: () =>
-                dialog.showMessageBox(window, {
-                  type: 'info',
-                  message: `Signing in with ${productName}`,
-                  detail:
-                    `Opened your default browser. Using a different browser for ${productName}? ` +
-                    'Open this link there instead:\n\n' +
-                    `${url}`,
-                  buttons: ['Copy Sign-in Link', 'Close'],
-                  defaultId: 0,
-                  cancelId: 1,
-                }),
-              catch: ensureError,
-            }).pipe(
-              Effect.flatMap((result) =>
-                result.response === 0
-                  ? Effect.try({
-                      try: () => clipboard.writeText(url),
-                      catch: ensureError,
-                    })
-                  : Effect.void,
-              ),
-            ),
-          presentSubscriptionDeviceCode: (prompt, productName) =>
-            Effect.gen(function* () {
-              // Copied up front: the dialog closes on any button.
-              yield* Effect.try({
-                try: () => clipboard.writeText(prompt.userCode),
-                catch: ensureError,
-              });
-              const result = yield* Effect.tryPromise({
-                try: () =>
-                  dialog.showMessageBox(window, {
-                    type: 'info',
-                    message: `Sign in with ${productName}`,
-                    detail:
-                      `No browser could take the sign-in callback, so ${productName} ` +
-                      'is signing in with a one-time code instead.\n\n' +
-                      `1. Open ${prompt.verificationUrl}\n` +
-                      `2. Enter the code: ${prompt.userCode} (copied to the clipboard)\n\n` +
-                      'TeXRA is waiting for you to approve it.',
-                    buttons: ['Open Verification Page', 'Close'],
-                    defaultId: 0,
-                    cancelId: 1,
-                  }),
-                catch: ensureError,
-              });
-              if (result.response === 0) {
-                yield* previewHost.openExternal(
-                  prompt.verificationUrlComplete ?? prompt.verificationUrl,
-                );
-              }
-            }),
+          ...desktopSignInPresenters(window, previewHost.openExternal),
         },
         notifications: {
           showInfoMessage,

@@ -26,7 +26,7 @@
     "packages/desktop/src/main/desktopHostRequests.ts": 822,
     "packages/desktop/src/main/desktopSettingsIpc.ts": 653,
     "packages/desktop/src/main/desktopWorkspaceIpc.ts": 554,
-    "packages/desktop/src/main/index.ts": 2033,
+    "packages/desktop/src/main/index.ts": 1994,
     "packages/desktop/src/renderer/desktopShell.ts": 699,
     "packages/desktop/src/renderer/editorPane.ts": 627,
     "packages/desktop/src/renderer/main.ts": 1247,
