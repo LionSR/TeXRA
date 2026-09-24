@@ -636,7 +636,7 @@ const launchClaudeAgentSession = Effect.fn(
   // service, neither of which is workspace-scoped.
   const env = yield* config.buildClaudeAgentEnv();
   const pathToClaudeCodeExecutable = yield* agentCliCall(
-    Effect.try({ try: findClaudeBinaryPath, catch: ensureError }),
+    findClaudeBinaryPath(),
   );
   // Synthetic run metadata for the child run: the Claude Code CLI runs outside
   // the normal run loop, so the tool-use category and a stable model label are

@@ -1364,11 +1364,13 @@ if (SHOW_EDIT_APPROVAL) {
     // exactly as `requestToolEditApproval` stages it. Staging hands back the
     // release for an open that never commits; this request is opened right
     // below, so the harness holds that program and never runs it.
-    const releaseStagedPreview = session().interactions.presentToolEdit({
-      ...request,
-      roots: session().roots,
-      permission,
-    });
+    const releaseStagedPreview = harnessRuntime.runSync(
+      session().interactions.presentToolEdit({
+        ...request,
+        roots: session().roots,
+        permission,
+      }),
+    );
     requestHarnessApproval(
       request.runId,
       { kind: 'toolEdit', data: permission },

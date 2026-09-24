@@ -274,48 +274,49 @@ export const requestToolEditApproval = Effect.fn('requestToolEditApproval')(
       // for what it staged, bound to the host it staged on; the one case no
       // decision ever reaches is an open that never committed, which
       // `openRequest` owns and runs this for.
-      prompt: Effect.suspend(() => {
-        const releaseStaged = session.interactions.presentToolEdit(staged);
-        return session
-          .openRequest(
-            runId,
-            { kind: 'toolEdit', data: permission },
-            {
-              // The host's own cleanup program, composed into the open:
-              // this call waits for it, and a host that fails to release
-              // says so here rather than through the refusal this tool
-              // reports, so cleanup never masks the caller's outcome.
-              onNeverCommitted: releaseStaged
-                ? releaseStaged.pipe(
-                    Effect.catchCause((cause) =>
-                      Effect.logWarning(
-                        `Failed to release the tool-edit preview staged for request ${permission.requestId}`,
-                      ).pipe(
-                        Effect.annotateLogs({ data: Cause.squash(cause) }),
-                        withLogChannel(CHANNEL),
+      prompt: session.interactions.presentToolEdit(staged).pipe(
+        Effect.flatMap((releaseStaged) =>
+          session
+            .openRequest(
+              runId,
+              { kind: 'toolEdit', data: permission },
+              {
+                // The host's own cleanup program, composed into the open:
+                // this call waits for it, and a host that fails to release
+                // says so here rather than through the refusal this tool
+                // reports, so cleanup never masks the caller's outcome.
+                onNeverCommitted: releaseStaged
+                  ? releaseStaged.pipe(
+                      Effect.catchCause((cause) =>
+                        Effect.logWarning(
+                          `Failed to release the tool-edit preview staged for request ${permission.requestId}`,
+                        ).pipe(
+                          Effect.annotateLogs({ data: Cause.squash(cause) }),
+                          withLogChannel(CHANNEL),
+                        ),
                       ),
+                    )
+                  : Effect.void,
+              },
+            )
+            .pipe(
+              Effect.map((decided): ToolEditApprovalResult => {
+                if (decided.action !== 'approve') {
+                  return refusalOf('toolEdit', decided);
+                }
+                return finalizeApprovalResult(
+                  {
+                    action: 'apply',
+                    appliedContent: normalizeLineEndings(
+                      decided.content ?? preparedRequest.proposedContent,
                     ),
-                  )
-                : Effect.void,
-            },
-          )
-          .pipe(
-            Effect.map((decided): ToolEditApprovalResult => {
-              if (decided.action !== 'approve') {
-                return refusalOf('toolEdit', decided);
-              }
-              return finalizeApprovalResult(
-                {
-                  action: 'apply',
-                  appliedContent: normalizeLineEndings(
-                    decided.content ?? preparedRequest.proposedContent,
-                  ),
-                },
-                preparedRequest,
-              );
-            }),
-          );
-      }),
+                  },
+                  preparedRequest,
+                );
+              }),
+            ),
+        ),
+      ),
       bypassed: Effect.sync(acceptProposedAsIs),
     });
   },

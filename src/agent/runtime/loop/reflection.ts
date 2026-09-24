@@ -303,19 +303,23 @@ export const runReflection = Effect.fn('reflection.run')(function* (
    * the turn: a stop with text, or a stop sequence (whose stripped tag is
    * restored so extraction sees the document it closed).
    */
-  const responseOf = (turn: NonNullable<RunState['lastTurn']>) => {
-    const finish = finishReasonOf(turn);
-    let text = session.responseTextProcessing.postProcessResponse(
-      turnText(turn),
-      session.roots.config,
+  const responseOf = (turn: NonNullable<RunState['lastTurn']>) =>
+    Effect.map(
+      session.responseTextProcessing.postProcessResponse(
+        turnText(turn),
+        session.roots.config,
+      ),
+      (processed) => {
+        const finish = finishReasonOf(turn);
+        const text =
+          finish === 'stop-sequence' && !processed.includes(OUTPUT_END_TAG)
+            ? `${processed}\n${OUTPUT_END_TAG}`
+            : processed;
+        const endTurn =
+          text !== '' && (finish === 'stop' || finish === 'stop-sequence');
+        return { finish, text, endTurn };
+      },
     );
-    if (finish === 'stop-sequence' && !text.includes(OUTPUT_END_TAG)) {
-      text = `${text}\n${OUTPUT_END_TAG}`;
-    }
-    const endTurn =
-      text !== '' && (finish === 'stop' || finish === 'stop-sequence');
-    return { finish, text, endTurn };
-  };
 
   /** The files a round works on: inputs first, then the previous outputs. */
   const filesForRound = (round: number): FileLocation[] => {
@@ -568,7 +572,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
         new Error('A response is processed only after its row and its round.'),
       );
     }
-    const { finish, text, endTurn } = responseOf(turn);
+    const { finish, text, endTurn } = yield* responseOf(turn);
     logger.debug(`Stop reason: ${finish}`);
     const scratchpad = extractScratchpad(text, SCRATCHPAD_TAG);
     if (scratchpad) {
@@ -902,7 +906,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     // Whether the round's last response ended the turn, from the folded
     // turn: the same rule `processResponse` applied before committing
     // `output.pending`.
-    const { endTurn } = responseOf(state.lastTurn);
+    const { endTurn } = yield* responseOf(state.lastTurn);
     // The canonical raw output the pipeline reads is the round's cycle files
     // concatenated in index order; re-entry rewrites it whole from the same
     // coordinates.

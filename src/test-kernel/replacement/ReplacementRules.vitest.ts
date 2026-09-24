@@ -47,7 +47,7 @@ describe('max-style operator formatting', () => {
       applyReplacements(
         String.raw`x_\TransformerEncoder`,
         MAX_STYLE_REPLACEMENTS,
-      ),
+      ).text,
       String.raw`x_{\TransformerEncoder}`,
     );
   });
@@ -56,7 +56,8 @@ describe('max-style operator formatting', () => {
 describe('LaTeX operator spacing', () => {
   it('cleans a left operator before the generic delimiter rule', () => {
     assert.strictEqual(
-      applyReplacements(String.raw`)\!\left\!(`, LATEX_SPACING_REPLACEMENTS),
+      applyReplacements(String.raw`)\!\left\!(`, LATEX_SPACING_REPLACEMENTS)
+        .text,
       String.raw`) \left (`,
     );
   });
@@ -91,7 +92,7 @@ describe('caption spacing normalization', () => {
     },
   ])('$name', ({ input, expected }) => {
     assert.strictEqual(
-      applyReplacements(input, EQUATION_STYLE_REPLACEMENTS),
+      applyReplacements(input, EQUATION_STYLE_REPLACEMENTS).text,
       expected,
     );
   });
@@ -141,7 +142,7 @@ x = y\\
     },
   ])('$name', ({ input, expected }) => {
     assert.strictEqual(
-      applyReplacements(input, EQUATION_STYLE_REPLACEMENTS),
+      applyReplacements(input, EQUATION_STYLE_REPLACEMENTS).text,
       expected,
     );
   });
@@ -205,7 +206,7 @@ x = y
     },
   ])('$name', ({ input, expected }) => {
     assert.strictEqual(
-      applyReplacements(input, EQUATION_MACRO_REPLACEMENTS),
+      applyReplacements(input, EQUATION_MACRO_REPLACEMENTS).text,
       expected,
     );
   });
@@ -315,7 +316,7 @@ content
     },
   ])('$name', ({ input, expected }) => {
     assert.strictEqual(
-      applyReplacements(input, FENCED_LATEX_BLOCK_REPLACEMENTS),
+      applyReplacements(input, FENCED_LATEX_BLOCK_REPLACEMENTS).text,
       expected,
     );
   });
@@ -325,9 +326,9 @@ content
 &= 0
 :::
 `;
-    const once = applyReplacements(input, FENCED_LATEX_BLOCK_REPLACEMENTS);
+    const once = applyReplacements(input, FENCED_LATEX_BLOCK_REPLACEMENTS).text;
     assert.strictEqual(
-      applyReplacements(once, FENCED_LATEX_BLOCK_REPLACEMENTS),
+      applyReplacements(once, FENCED_LATEX_BLOCK_REPLACEMENTS).text,
       once,
     );
   });
@@ -347,7 +348,7 @@ describe('html entity replacements', () => {
     const result = applyReplacements(input, [
       HTML_ENTITY_REPLACEMENTS,
       LATEX_XML_REPLACEMENTS,
-    ]);
+    ]).text;
 
     assert.strictEqual(result, expected);
   });
@@ -356,7 +357,7 @@ describe('html entity replacements', () => {
     const input = 'Usage&nbsp;&amp;&nbsp;limits remain &le; 10';
     const expected = 'Usage~\\&~limits remain \\leq 10';
 
-    const result = applyReplacements(input, HTML_ENTITY_REPLACEMENTS);
+    const result = applyReplacements(input, HTML_ENTITY_REPLACEMENTS).text;
 
     assert.strictEqual(result, expected);
   });
@@ -367,7 +368,7 @@ describe('html entity replacements', () => {
     const expected =
       'Angles \\neq 0 \\alpha\\Rightarrow\\infty \\sum=1 45^{\\circ} "quoted" \\frac{1}{2}~items \\Delta\\theta';
 
-    const result = applyReplacements(input, HTML_ENTITY_REPLACEMENTS);
+    const result = applyReplacements(input, HTML_ENTITY_REPLACEMENTS).text;
 
     assert.strictEqual(result, expected);
   });
@@ -416,7 +417,7 @@ describe('latex forbidden commands replacements', () => {
     },
   ])('$name', ({ input, expected }) => {
     assert.strictEqual(
-      applyReplacements(input, LATEX_FORBIDDEN_REPLACEMENTS),
+      applyReplacements(input, LATEX_FORBIDDEN_REPLACEMENTS).text,
       expected,
     );
   });
@@ -438,7 +439,7 @@ describe('personal style contextual replacements', () => {
 
     const result = replacementEngine.applyAll(input, (key) =>
       testWorkspaceRoots().config.get(key),
-    );
+    ).text;
 
     const expected = [
       '\\newcommand{\\tr}{\\mathrm{Tr}}',
@@ -485,7 +486,7 @@ describe('reference underscore replacements', () => {
     },
   ])('$name', ({ input, expected }) => {
     assert.strictEqual(
-      applyReplacements(input, EQUATION_STYLE_REPLACEMENTS),
+      applyReplacements(input, EQUATION_STYLE_REPLACEMENTS).text,
       expected,
     );
   });

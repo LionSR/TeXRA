@@ -9,7 +9,7 @@
  *   - fan out to subscribers
  *   - swallow per-subscriber exceptions so one bad sink can't break the run
  */
-import { createLog } from '@logger/logUtils';
+import { LOG_CHANNEL, writeLogEntry } from '@logger/logSink';
 import {
   RUN_OUTCOME,
   type LogLevel,
@@ -39,7 +39,7 @@ import type {
   UsageEmitOptions,
 } from './AgentTrace';
 
-const log = createLog('TraceEmitter');
+const CHANNEL = 'TraceEmitter';
 
 export class TraceEmitter implements AgentTrace {
   /**
@@ -63,16 +63,24 @@ export class TraceEmitter implements AgentTrace {
       try {
         sub(event);
       } catch (err) {
-        // A misbehaving subscriber must not break the run. Log via the
-        // output-channel logger (not back through this emitter) so a throwing
-        // sink is diagnosable without recursing into the trace stream.
+        // A misbehaving subscriber must not break the run. Write the entry
+        // to the host log sink directly (not back through this emitter, and
+        // not through a fiber: `emit` is the trace plane's one synchronous
+        // publication point) so a throwing sink is diagnosable without
+        // recursing into the trace stream.
         // `warn`, not `debug`: swallowing a subscriber fault at debug level is
         // the quiet-degradation shape the guardrail forbids, and it matches the
         // sibling session plane (`SessionHandle.publish`) and the app-signal
         // bus, whose delivery fiber warns and keeps its subscription.
-        log.warn(
-          `Trace subscriber threw while handling event: ${toErrorMessage(err)}`,
-        );
+        writeLogEntry({
+          level: 'WARN',
+          fiberId: '',
+          timestamp: new Date().toISOString(),
+          message: `Trace subscriber threw while handling event: ${toErrorMessage(err)}`,
+          cause: undefined,
+          annotations: { [LOG_CHANNEL]: CHANNEL },
+          spans: {},
+        });
       }
     }
   }

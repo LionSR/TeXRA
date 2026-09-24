@@ -165,8 +165,9 @@ function handleAddOutputFiles(
   );
 }
 
-function enable({ context, session, runtime }: CriticismRegistration): void {
-  if (collection) return;
+/** Answers whether this call enabled the diagnostics (false when already on). */
+function enable({ context, session, runtime }: CriticismRegistration): boolean {
+  if (collection) return false;
   collection = vscode.languages.createDiagnosticCollection(COLLECTION_NAME);
   context.subscriptions.push(collection);
   outputUnsubscribe = subscribeOutputFiles(
@@ -174,8 +175,12 @@ function enable({ context, session, runtime }: CriticismRegistration): void {
     (payload) => handleAddOutputFiles(payload, runtime),
     runtime,
   );
-  log.info('Inline criticism diagnostics enabled');
+  return true;
 }
+
+const logEnabled = Effect.logInfo('Inline criticism diagnostics enabled').pipe(
+  withLogChannel(CHANNEL),
+);
 
 function disable(): void {
   outputUnsubscribe?.();
@@ -234,7 +239,7 @@ export function registerInlineCriticism(
       false,
     );
     registration = { context, session, runtime, globalState };
-    if (enabled === true) enable(registration);
+    if (enabled === true && enable(registration)) yield* logEnabled;
     context.subscriptions.push({ dispose: disable });
   });
 }
@@ -256,7 +261,8 @@ export function setInlineCriticismEnabled(
       GlobalStateKey.INLINE_CRITICISM_ENABLED,
       enabled,
     );
-    if (enabled) enable(current);
-    else disable();
+    if (enabled) {
+      if (enable(current)) yield* logEnabled;
+    } else disable();
   });
 }

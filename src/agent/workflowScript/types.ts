@@ -432,14 +432,14 @@ export interface WorkflowScriptRunOptions<R = never> {
     readonly childRunId: RunId;
   }) => Effect.Effect<void, Error, R>;
   /**
-   * Synchronous observer for every validated result this invocation consumes,
+   * Observer for every validated result this invocation consumes,
    * whether replayed or live. It fires after the call reaches its terminal
    * cached/completed status and before the result becomes visible to the
    * script; an onEvent throw during that status prevents both this
    * callback and consumption. A live entry is already durably committed by
    * onJournalEntry when this observer fires.
    */
-  onJournalEntryConsumed?: (entry: WorkflowJournalEntry) => void;
+  onJournalEntryConsumed?: (entry: WorkflowJournalEntry) => Effect.Effect<void>;
   /** Synchronous observer of every {@link WorkflowScriptEvent}, in order. */
   onEvent?: (event: WorkflowScriptEvent) => void;
   /**

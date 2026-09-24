@@ -109,7 +109,7 @@ describe('codex tool - atomic resume fallback', () => {
     mocks.findCodexBinaryPath.mockReset();
 
     mocks.registerRun.mockReturnValue(Effect.void);
-    mocks.findCodexBinaryPath.mockReturnValue(undefined);
+    mocks.findCodexBinaryPath.mockReturnValue(Effect.succeed(undefined));
     mocks.createChildRun.mockReturnValue(
       Effect.succeed(createFakeAgentCliChildRun(childRunId)),
     );

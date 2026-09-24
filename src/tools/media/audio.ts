@@ -153,37 +153,50 @@ export function startRecording(
       });
     }
 
-    // One foreign region: resolve sox, create the directory, spawn the
-    // recorder. Nothing in it has claimed the microphone yet, so a throw
-    // leaves no state to undo.
-    const started = yield* Effect.tryPromise({
-      try: async (): Promise<ActiveRecording | null> => {
+    // Resolve sox and create the directory, then spawn the recorder. Nothing
+    // in either step has claimed the microphone yet, so a throw leaves no
+    // state to undo.
+    const prepared = yield* Effect.tryPromise({
+      try: async () => {
         const soxCommand = resolveSoxCommand(roots);
         if (!soxCommand) return null;
 
         const directory = recordingsDir(roots);
         await mkdir(directory, { recursive: true });
         const absPath = path.join(directory, `record_${Date.now()}.wav`);
+        return { soxCommand, absPath };
+      },
+      catch: ensureError,
+    }).pipe(recorderFailure('startRecording'));
+    if (!prepared) {
+      return yield* new AudioRecorderError({
+        message:
+          'Sox is required for audio recording. Please install it first.',
+      });
+    }
 
-        const soxArgs = [
-          '--default-device',
-          '--no-show-progress',
-          '--rate',
-          '16000',
-          '--channels',
-          '1',
-          '--encoding',
-          'signed-integer',
-          '--bits',
-          '16',
-          '--type',
-          'wav',
-          absPath,
-        ];
-        log.info(
-          `Starting audio recording with sox: ${soxCommand.resolvedPath} ${soxArgs.join(' ')}`,
-        );
+    const { soxCommand, absPath } = prepared;
+    const soxArgs = [
+      '--default-device',
+      '--no-show-progress',
+      '--rate',
+      '16000',
+      '--channels',
+      '1',
+      '--encoding',
+      'signed-integer',
+      '--bits',
+      '16',
+      '--type',
+      'wav',
+      absPath,
+    ];
+    yield* Effect.logInfo(
+      `Starting audio recording with sox: ${soxCommand.resolvedPath} ${soxArgs.join(' ')}`,
+    ).pipe(withLogChannel(CHANNEL));
 
+    const started = yield* Effect.try({
+      try: (): ActiveRecording => {
         const subprocess = execa(
           soxCommand.command,
           [...soxCommand.args, ...soxArgs],
@@ -192,6 +205,7 @@ export function startRecording(
             reject: false,
           },
         );
+        // Emitter callback outside any fiber: the synchronous writer.
         subprocess.stderr?.on('data', (data: Buffer) => {
           log.debug(`Sox stderr: ${data.toString()}`);
         });
@@ -199,12 +213,6 @@ export function startRecording(
       },
       catch: ensureError,
     }).pipe(recorderFailure('startRecording'));
-    if (!started) {
-      return yield* new AudioRecorderError({
-        message:
-          'Sox is required for audio recording. Please install it first.',
-      });
-    }
 
     yield* Ref.set(activeRecording, started);
     yield* Effect.forkDetach(watchRecorderExit(started.process));

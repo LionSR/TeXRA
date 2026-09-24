@@ -125,10 +125,12 @@ const CODEX_BINARY_NAME = IS_WINDOWS ? 'codex.exe' : 'codex';
  * candidate keeps older installs usable. When `platformPkgDir` is the
  * `@openai/codex` meta-package, follow its nested platform package.
  */
-function codexBinaryInPlatformPackage(
+const codexBinaryInPlatformPackage = Effect.fn(
+  'codexImport.codexBinaryInPlatformPackage',
+)(function* (
   platformPkgDir: string,
   platformInfo: PlatformInfo,
-): string | undefined {
+): Effect.fn.Return<string | undefined> {
   const findInPlatformPackage = (packageDir: string): string | undefined => {
     const vendorDir = path.join(packageDir, 'vendor', platformInfo.triple);
     const candidates = [
@@ -148,9 +150,9 @@ function codexBinaryInPlatformPackage(
   const direct = findInPlatformPackage(platformPkgDir);
   if (direct) return direct;
 
-  const nested = resolvePackageDir(platformPkgDir, platformInfo.pkg);
+  const nested = yield* resolvePackageDir(platformPkgDir, platformInfo.pkg);
   return nested === undefined ? undefined : findInPlatformPackage(nested);
-}
+});
 
 /**
  * Locate the native Codex CLI binary. Results are cached for the session

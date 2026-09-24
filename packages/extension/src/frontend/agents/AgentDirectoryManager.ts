@@ -200,9 +200,9 @@ class AgentDirectoryManager {
             yield* this.watchExternalDirectory(directory);
           }
         }
-        log.info(
+        yield* Effect.logInfo(
           `Agent directory watchers enabled: ${directories.map((d) => d.directory).join(', ')}`,
-        );
+        ).pipe(withLogChannel(CHANNEL));
       }),
     );
   }
@@ -240,11 +240,9 @@ class AgentDirectoryManager {
         this.watcherDisposables.push({ dispose: () => watcher.close() });
       }),
       Effect.catch((error) =>
-        Effect.sync(() =>
-          log.warn(
-            `Unable to watch agent directory ${directory}: ${toErrorMessage(error)}`,
-          ),
-        ),
+        Effect.logWarning(
+          `Unable to watch agent directory ${directory}: ${toErrorMessage(error)}`,
+        ).pipe(withLogChannel(CHANNEL)),
       ),
     );
   }

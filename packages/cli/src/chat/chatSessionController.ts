@@ -1331,15 +1331,15 @@ export function createChatSessionController(
                 }),
                 onSuccess: (value) => ({ refused: undefined, value }),
               }),
-              // `match` recovers only the typed refusal; a collaborator that
-              // rejects defects. Read the defect the way `SessionBridge`
-              // answers `Internal`: logged, worded, the message handed back.
+              // `match` recovers only the typed refusal; a defect is read the
+              // way `SessionBridge` answers `Internal`: logged and worded.
               Effect.catchCause((cause) =>
-                Effect.sync(() =>
-                  Cause.hasInterruptsOnly(cause)
-                    ? { interrupted: true as const }
-                    : { defect: reportRequestDefect(cause) },
-                ),
+                Effect.gen(function* () {
+                  if (Cause.hasInterruptsOnly(cause)) {
+                    return { interrupted: true as const };
+                  }
+                  return { defect: yield* reportRequestDefect(cause) };
+                }),
               ),
             );
           if ('value' in outcome && outcome.value.kind === 'followUp') {

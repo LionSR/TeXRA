@@ -633,7 +633,7 @@ describe('createChatSessionController', () => {
       Effect.succeed<Outcome>({ kind: 'done' }),
     );
     mocks.reportRequestDefect.mockReturnValue(
-      'The request failed inside TeXRA; see the log.',
+      Effect.succeed('The request failed inside TeXRA; see the log.'),
     );
     installSession();
     mocks.resumeRun.mockImplementation(defaultResumeRun);

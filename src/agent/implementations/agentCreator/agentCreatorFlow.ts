@@ -440,13 +440,12 @@ const generateAgentYaml = Effect.fn('agentCreator.generateYaml')(function* (
 
     const extracted = extractTextFromTag(text, 'yaml');
     const candidate = (extracted || text).trim();
-    yield* Effect.try({
-      try: () => validateAgentYamlContent(candidate),
-      catch: (error) => {
+    yield* validateAgentYamlContent(candidate).pipe(
+      Effect.mapError((error) => {
         lastValidationError = toErrorMessage(error);
         return new Error(`Generated YAML was invalid: ${lastValidationError}`);
-      },
-    });
+      }),
+    );
 
     yield* Effect.logInfo(
       `AI generation succeeded for ${blueprint.category} agent`,

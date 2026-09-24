@@ -2,9 +2,10 @@
  * Utilities for managing text replacements in the codebase.
  */
 
+import { Effect, Result } from 'effect';
 import { LRUCache } from 'lru-cache';
 
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import type {
   NonRegexReplacementCategory,
   RegexReplacementCategory,
@@ -20,6 +21,7 @@ import {
 } from './types';
 import {
   applyLatexQuotesFormatting,
+  type ReplacementDiagnostic,
   replaceMathUnicode,
   fixLatexQuoteIssues,
   escapeTextttUnderscores,
@@ -54,7 +56,29 @@ import {
   FENCED_LATEX_BLOCK_REPLACEMENTS,
 } from './rulesRegex';
 
-const log = createLog('ReplacementEngine');
+const CHANNEL = 'ReplacementEngine';
+
+/**
+ * Replaced text plus what the passes had to say about it. The engine is pure,
+ * so it returns its diagnostics and the program running it logs them with
+ * {@link logReplacementDiagnostics}.
+ */
+interface ReplacementResult {
+  readonly text: string;
+  readonly diagnostics: readonly ReplacementDiagnostic[];
+}
+
+/** Write a replacement run's diagnostics on the engine's log channel. */
+export function logReplacementDiagnostics(
+  diagnostics: readonly ReplacementDiagnostic[],
+): Effect.Effect<void> {
+  return Effect.forEach(
+    diagnostics,
+    ({ level, message }) =>
+      level === 'error' ? Effect.logError(message) : Effect.logDebug(message),
+    { discard: true },
+  ).pipe(withLogChannel(CHANNEL));
+}
 
 /**
  * How a policy reads its replacement settings by key: a reader over the
@@ -66,26 +90,42 @@ export type ReplacementConfigRead = <T>(path: string) => T;
 function applyNonRegexPolicy(
   text: string,
   read: ReplacementConfigRead,
-): string {
-  const processed = applyReplacements(text, getAllReplacements(read)).trim();
-  return shouldWrapCritiqueInAlign(read)
-    ? wrapCritiqueInAlign(processed)
-    : processed;
+): ReplacementResult {
+  const processed = applyReplacements(text, getAllReplacements(read));
+  const trimmed = processed.text.trim();
+  return {
+    text: shouldWrapCritiqueInAlign(read)
+      ? wrapCritiqueInAlign(trimmed)
+      : trimmed,
+    diagnostics: processed.diagnostics,
+  };
 }
 
-function applyAllPolicy(text: string, read: ReplacementConfigRead): string {
+function applyAllPolicy(
+  text: string,
+  read: ReplacementConfigRead,
+): ReplacementResult {
   const replacements = getAllReplacements(read);
   const wrapCritique = shouldWrapCritiqueInAlign(read);
 
-  let result = applyReplacements(text, replacements, {
+  const nonRegex = applyReplacements(text, replacements, {
     cleanupPasses: false,
-  }).trim();
+  });
+  let result = nonRegex.text.trim();
   if (wrapCritique) result = wrapCritiqueInAlign(result);
-  result = applyReplacements(result, getAllReplacementsRegex(read), {
+  const regex = applyReplacements(result, getAllReplacementsRegex(read), {
     cleanupPasses: false,
-  }).trim();
-  result = applyReplacements(result, replacements).trim();
-  return wrapCritique ? wrapCritiqueInAlign(result) : result;
+  });
+  const final = applyReplacements(regex.text.trim(), replacements);
+  result = final.text.trim();
+  return {
+    text: wrapCritique ? wrapCritiqueInAlign(result) : result,
+    diagnostics: [
+      ...nonRegex.diagnostics,
+      ...regex.diagnostics,
+      ...final.diagnostics,
+    ],
+  };
 }
 
 /**
@@ -115,22 +155,30 @@ const replacementEngine = {
     text: string,
     purpose: 'xml-content' | 'tex-write',
     read: ReplacementConfigRead,
-  ): string {
+  ): ReplacementResult {
     switch (purpose) {
-      case 'xml-content':
+      case 'xml-content': {
         // XML output normalization runs the full non-regex pipeline (which
         // already covers latex_xml) and then the fenced-LaTeX-block regex.
         // The fenced-block pass is deliberate and unconditional here: it is
         // part of this purpose's contract, independent of the
         // `enabledReplacementsRegex` config that gates applyAll's regex pass.
-        return applyReplacements(
-          applyNonRegexPolicy(text, read),
+        const nonRegex = applyNonRegexPolicy(text, read);
+        const fenced = applyReplacements(
+          nonRegex.text,
           FENCED_LATEX_BLOCK_REPLACEMENTS,
         );
-      case 'tex-write':
+        return {
+          text: fenced.text,
+          diagnostics: [...nonRegex.diagnostics, ...fenced.diagnostics],
+        };
+      }
+      case 'tex-write': {
         // Writing a .tex file runs the full pipeline and then restores the
         // LaTeX built-in section sign from the KaTeX-only destination.
-        return restoreLatexSectionSign(applyAllPolicy(text, read));
+        const all = applyAllPolicy(text, read);
+        return { ...all, text: restoreLatexSectionSign(all.text) };
+      }
       default:
         return assertNever(purpose, 'Unknown replacement purpose');
     }
@@ -271,7 +319,8 @@ export function applyReplacements(
     /** Whether to run trailing whole-document cleanup passes (defaults to true). */
     cleanupPasses?: boolean;
   },
-): string {
+): ReplacementResult {
+  const diagnostics: ReplacementDiagnostic[] = [];
   // Apply Unicode replacements in math environments first.
   let result = replaceMathUnicode(text);
 
@@ -282,20 +331,27 @@ export function applyReplacements(
   for (const category of categories) {
     if (category.isRegex) {
       for (const [pattern, repl] of Object.entries(category.patterns)) {
-        try {
-          const regex = getCompiledRegex(pattern, category.flags);
-          // Both arms call the same `replace` overload with the same
-          // arguments — the runtime behavior doesn't depend on the branch.
-          // The `typeof` check exists only so TS can select a `replace`
-          // overload; it can't choose one from `repl`'s union type directly.
-          result =
-            typeof repl === 'string'
-              ? result.replace(regex, repl)
-              : result.replace(regex, repl);
-        } catch (regexErr) {
-          log.error(
-            `Error with regex pattern "${pattern}": ${toErrorMessage(regexErr)}`,
-          );
+        const current = result;
+        const replaced = Result.try({
+          try: () => {
+            const regex = getCompiledRegex(pattern, category.flags);
+            // Both arms call the same `replace` overload with the same
+            // arguments — the runtime behavior doesn't depend on the branch.
+            // The `typeof` check exists only so TS can select a `replace`
+            // overload; it can't choose one from `repl`'s union type directly.
+            return typeof repl === 'string'
+              ? current.replace(regex, repl)
+              : current.replace(regex, repl);
+          },
+          catch: toErrorMessage,
+        });
+        if (Result.isSuccess(replaced)) {
+          result = replaced.success;
+        } else {
+          diagnostics.push({
+            level: 'error',
+            message: `Error with regex pattern "${pattern}": ${replaced.failure}`,
+          });
         }
       }
     } else {
@@ -306,12 +362,13 @@ export function applyReplacements(
   }
 
   if (options?.cleanupPasses !== false) {
-    result = applyLatexQuotesFormatting(result);
-    result = fixLatexQuoteIssues(result);
+    const quoted = applyLatexQuotesFormatting(result);
+    diagnostics.push(...quoted.diagnostics);
+    result = fixLatexQuoteIssues(quoted.text);
     result = escapeTextttUnderscores(result);
   }
 
-  return result;
+  return { text: result, diagnostics };
 }
 
 export default replacementEngine;

@@ -16,7 +16,7 @@ import {
   AgentConfigSchema,
   type AgentConfigPayload,
 } from '@agent/core/definition/AgentConfig';
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import {
   AgentCategory,
   TODO_STATUS,
@@ -41,8 +41,6 @@ import type { DelegationParent } from './proposalFlow';
 // ============================================================================
 // Shared utilities
 // ============================================================================
-
-const log = createLog('childRunLoop');
 
 /**
  * One compact trace line per child progress update, for the in-band arm where
@@ -218,14 +216,13 @@ export const executeSubagent = Effect.fn('executeSubagent')(function* (
             Effect.andThen(
               Effect.sync(() => ({
                 strategy: createNativeSubagentStrategy(strategyParams),
-                onLoopFailed: (error: unknown): void => {
-                  log.error(
+                onLoopFailed: (error: unknown) =>
+                  Effect.logError(
                     `Subagent '${agentName}' run loop failed after launch`,
-                    {
-                      data: error,
-                    },
-                  );
-                },
+                  ).pipe(
+                    Effect.annotateLogs({ data: error }),
+                    withLogChannel('childRunLoop'),
+                  ),
               })),
             ),
           ),

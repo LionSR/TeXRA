@@ -37,9 +37,6 @@ const mocks = vi.hoisted(() => ({
   openTextDocument: vi.fn(async (uri: unknown) => ({ uri })),
   showTextDocument: vi.fn(async () => undefined),
   showErrorMessage: vi.fn(async () => undefined),
-  warn: vi.fn(),
-  error: vi.fn(),
-  info: vi.fn(),
   showLoggedMessage: vi.fn((_channel: string, _message: string) =>
     Effect.succeed(''),
   ),
@@ -84,18 +81,6 @@ const withHostFs = <A, E>(
 
 vi.mock('@frontend/ui/errorHandlingUtils', () => ({
   showLoggedMessage: mocks.showLoggedMessage,
-}));
-
-vi.mock('@logger/logUtils', () => ({
-  createLog: (channel: string) => ({
-    debug: vi.fn(),
-    info: (message: string) => mocks.info(channel, message),
-    warn: (message: string) => mocks.warn(channel, message),
-    error: (message: string) => mocks.error(channel, message),
-  }),
-  warn: mocks.warn,
-  error: mocks.error,
-  info: mocks.info,
 }));
 
 vi.mock('vscode', () => ({
@@ -201,6 +186,7 @@ describe('openBuildDisplayIfTex viewer delivery', () => {
     'keeps workspace LaTeX Workshop build failures out of the delivery boolean',
     () =>
       Effect.gen(function* () {
+        const logs = captureLogEntries();
         mocks.executeCommand.mockImplementation(async (command: string) => {
           if (command === 'latex-workshop.build') {
             throw new Error('build failed');
@@ -209,16 +195,17 @@ describe('openBuildDisplayIfTex viewer delivery', () => {
         });
 
         const delivery = yield* Effect.forkChild(
-          withHostFs(openBuildDisplayIfTex(session, workspaceTex)),
+          withHostFs(openBuildDisplayIfTex(session, workspaceTex)).pipe(
+            Effect.provide(effectDiagnosticsLayer('Trace')),
+          ),
           { startImmediately: true },
         );
         yield* TestClock.adjust(LATEX_VIEWER_OPEN_DELAY_MS);
 
         expect(yield* Fiber.join(delivery)).toBe(true);
-        expect(mocks.warn).toHaveBeenCalledWith(
-          'OpenBuildUtils',
-          expect.stringContaining('LaTeX Workshop build failed'),
-        );
+        expect(
+          logs.has('WARN', 'OpenBuildUtils', 'LaTeX Workshop build failed'),
+        ).toBe(true);
       }),
   );
 

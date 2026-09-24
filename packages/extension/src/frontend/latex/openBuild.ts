@@ -9,7 +9,6 @@ import { isLatexFile } from '@common/files/fileTypeUtils';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import { compileLatex2Pdf } from '@latex/texTools';
 import { withLogChannel } from '@logger/effectLog';
-import { createLog } from '@logger/logUtils';
 import { withSessionFs } from '@platform/rootedFs';
 import type { FileLocation } from '@shared/schemas';
 import {
@@ -96,9 +95,9 @@ export const invokeLatexWorkshopBuild = (
     vscode.commands.executeCommand('latex-workshop.build', uri),
   ).pipe(
     Effect.catch((err) =>
-      Effect.sync(() => {
-        createLog(channel).warn(`${warnLabel}: ${toErrorMessage(err)}`);
-      }),
+      Effect.logWarning(`${warnLabel}: ${toErrorMessage(err)}`).pipe(
+        withLogChannel(channel),
+      ),
     ),
   );
 

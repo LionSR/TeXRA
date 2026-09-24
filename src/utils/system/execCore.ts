@@ -41,9 +41,6 @@ export type ExecOutput = Extract<StdoutStderrOption, string>;
 
 const MAX_OUTPUT_LENGTH = 150;
 
-/** Channel-bound logger view (see `createLog` in `@logger/logUtils`). */
-export type Log = ReturnType<typeof createLog>;
-
 function normalizeOutput(text: string | null | undefined): string {
   return text?.trim() ?? '';
 }
@@ -107,7 +104,7 @@ export function resultFromProcessOutput(
   };
 }
 
-function resultFromExecutionError(err: unknown): ExecResult {
+export function resultFromExecutionError(err: unknown): ExecResult {
   if (err instanceof ExecaError) {
     const outputLimitExceeded = err.isMaxBuffer ?? false;
     return {
@@ -129,7 +126,7 @@ function resultFromExecutionError(err: unknown): ExecResult {
   };
 }
 
-export function logExecutionErrorAndBuildResult(
+function logExecutionErrorAndBuildResult(
   err: unknown,
   options: { quiet?: boolean; channel?: string },
 ): ExecResult {
@@ -141,19 +138,22 @@ export function logExecutionErrorAndBuildResult(
   return resultFromExecutionError(err);
 }
 
-export function logCommandStderr(
-  log: Log,
+/**
+ * The debug line that reports a command's stderr, or undefined when there is
+ * none. The caller writes it on its own channel.
+ */
+export function commandStderrLogLine(
   stderr: string | null | undefined,
   truncate = false,
-): void {
+): string | undefined {
   const normalizedStderr = normalizeOutput(stderr);
-  if (!normalizedStderr) return;
+  if (!normalizedStderr) return undefined;
 
   const stderrForLog =
     truncate && normalizedStderr.length > MAX_OUTPUT_LENGTH
       ? `...${normalizedStderr.slice(-MAX_OUTPUT_LENGTH)}`
       : normalizedStderr;
-  log.debug(`Command stderr: ${stderrForLog}`);
+  return `Command stderr: ${stderrForLog}`;
 }
 
 /**
@@ -240,9 +240,10 @@ export function executeCommandSync(
     const exitCode = result.exitCode ?? 1;
     const timedOut = result.timedOut ?? false;
 
-    if (!options.quiet) {
-      logCommandStderr(log, stderr, options.truncate);
-    }
+    const stderrLine = options.quiet
+      ? undefined
+      : commandStderrLogLine(stderr, options.truncate);
+    if (stderrLine !== undefined) log.debug(stderrLine);
 
     return resultFromProcessOutput(stdout, stderr, exitCode, { timedOut });
   } catch (err) {

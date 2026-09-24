@@ -32,7 +32,7 @@ function connectResponseText(
 export function createNeutralResponseTextProcessing(): ResponseTextProcessing {
   return {
     normalizeResponseText: preserveResponseText,
-    postProcessResponse: preserveResponseText,
+    postProcessResponse: (text) => Effect.succeed(text),
     connectResponseText,
   };
 }

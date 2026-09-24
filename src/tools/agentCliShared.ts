@@ -627,9 +627,8 @@ export function buildAgentCliLaunch<TTurn>(
       // Nobody awaits an agent-CLI child: own a late loop failure here as a
       // trace diagnostic, since the loop already owns its one user-facing
       // result delivery.
-      onLoopFailed: (error: unknown): void => {
-        logger.error(loopFailedMessage, { data: error });
-      },
+      onLoopFailed: (error: unknown) =>
+        Effect.sync(() => logger.error(loopFailedMessage, { data: error })),
     };
   });
 }

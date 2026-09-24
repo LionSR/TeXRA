@@ -17,7 +17,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@tools/claudeAgentImport', async (importActual) => ({
   ...(await importActual<typeof import('@tools/claudeAgentImport')>()),
   importClaudeAgentSdk: () => Effect.succeed(mocks.query),
-  findClaudeBinaryPath: () => undefined,
+  findClaudeBinaryPath: () => Effect.succeed(undefined),
 }));
 
 const runId = 'stream:claude-child' as RunId;

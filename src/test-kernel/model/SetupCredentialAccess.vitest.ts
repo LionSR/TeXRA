@@ -92,7 +92,7 @@ describe('setup credential access', () => {
     access.chatGptSubscription = false;
     access.grokSubscription = false;
     access.keys = {};
-    mocks.reportProbeFailure.mockReset();
+    mocks.reportProbeFailure.mockReset().mockReturnValue(Effect.void);
     mocks.isCodexSubscriptionActive.mockReset().mockImplementation(() =>
       Effect.sync(() => {
         events.push('subscription:chatgpt');
