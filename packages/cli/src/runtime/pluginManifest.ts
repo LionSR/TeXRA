@@ -381,7 +381,7 @@ export function countSkills(root: string) {
   }).pipe(
     Effect.flatMap((entries) =>
       Effect.forEach(entries, (entry) =>
-        entry.isDirectory()
+        entry.isDirectory() || entry.isSymbolicLink()
           ? pathExists(path.join(root, entry.name, 'SKILL.md'))
           : Effect.succeed(false),
       ),

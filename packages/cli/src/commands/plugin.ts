@@ -1,3 +1,4 @@
+import * as os from 'node:os';
 import * as path from 'node:path';
 
 import { defineCommand } from 'citty';
@@ -13,11 +14,13 @@ import { DEFERRED_COMPONENT_LABELS } from '../runtime/pluginManifest';
 import {
   installPlugins,
   listPlugins,
-  parsePluginSource,
   removePlugin,
   updatePlugins,
+  GIT_URL,
+  SAFE_REF,
   type PluginEnv,
   type PluginListing,
+  type PluginOrigin,
   type PluginUpdate,
 } from '../runtime/plugins';
 
@@ -25,6 +28,55 @@ import { defineCliCommand } from './_helpers/defineCliCommand';
 import { withUsageSections } from './_helpers/dispatch';
 import { GLOBAL_ARGS, collectStringFlagValues } from './_helpers/globalArgs';
 import { emitCliResult } from './_helpers/output';
+
+const GITHUB_SHORTHAND =
+  /^(?:https?:\/\/)?github\.com\/([\w.-]+)\/([\w.-]+?)(?:\.git)?(?:@([^@\s]+))?$/;
+
+/**
+ * Parse `<source>`: `github.com/<owner>/<repo>[@ref]`, a git URL, or a local
+ * directory. Refused here, before anything runs, so a bad source is a usage
+ * error. `--ref` applies to git sources only.
+ */
+export function parsePluginSource(
+  input: string,
+  cwd: string,
+  ref: string | undefined,
+): PluginOrigin {
+  const github = GITHUB_SHORTHAND.exec(input);
+  const pinned = github?.[3];
+  if (pinned !== undefined && ref !== undefined) {
+    throw new CliUsageError(
+      `Give the ref once: either ${input} or --ref ${ref}, not both.`,
+    );
+  }
+  const gitRef = pinned ?? ref;
+  if (gitRef !== undefined && !SAFE_REF.test(gitRef)) {
+    throw new CliUsageError(`"${gitRef}" is not a git branch, tag or commit.`);
+  }
+  if (github) {
+    return {
+      kind: 'git',
+      url: `https://github.com/${github[1]}/${github[2]}.git`,
+      ...(gitRef ? { ref: gitRef } : {}),
+    };
+  }
+  if (GIT_URL.test(input)) {
+    return { kind: 'git', url: input, ...(gitRef ? { ref: gitRef } : {}) };
+  }
+  if (/^[a-z][\w+.-]*:\/\//i.test(input)) {
+    throw new CliUsageError(
+      `${input} is not a remote git URL (https, ssh or git). Install a local plugin by its directory path.`,
+    );
+  }
+  if (ref !== undefined) {
+    throw new CliUsageError('--ref applies to git sources only.');
+  }
+  const expanded =
+    input === '~' || input.startsWith(`~${path.sep}`)
+      ? path.join(os.homedir(), input.slice(1))
+      : input;
+  return { kind: 'local', path: path.resolve(cwd, expanded) };
+}
 
 /**
  * A mistake in what the user asked (an unknown name, a taken name, a

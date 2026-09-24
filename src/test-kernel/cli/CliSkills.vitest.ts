@@ -6,11 +6,8 @@ import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { afterEach, describe, expect, vi } from 'vitest';
 
-import {
-  installPlugins,
-  parsePluginSource,
-  removePlugin,
-} from '@cli/runtime/plugins';
+import { parsePluginSource } from '@cli/commands/plugin';
+import { installPlugins, removePlugin } from '@cli/runtime/plugins';
 import {
   formatCliSkillList,
   readCliSkills as readCliSkillsEffect,

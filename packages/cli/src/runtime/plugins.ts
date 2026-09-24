@@ -3,7 +3,6 @@
 // Nothing from a plugin runs: git only fetches, and v1 reads skills alone.
 
 import * as fs from 'node:fs/promises';
-import * as os from 'node:os';
 import * as path from 'node:path';
 
 import { Effect } from 'effect';
@@ -29,7 +28,7 @@ import {
 } from './pluginManifest';
 
 /** Where a plugin comes from, as the user named it. */
-type PluginOrigin =
+export type PluginOrigin =
   | { readonly kind: 'git'; readonly url: string; readonly ref?: string }
   | { readonly kind: 'local'; readonly path: string };
 
@@ -40,54 +39,11 @@ export interface PluginEnv {
   readonly pluginsDir: string;
 }
 
-const GITHUB_SHORTHAND =
-  /^(?:https?:\/\/)?github\.com\/([\w.-]+)\/([\w.-]+?)(?:\.git)?(?:@([^@\s]+))?$/;
 // Remote transports only: a local repository is installed by its path, so a
 // marketplace cannot name `file://` to copy another checkout on this machine.
-const GIT_URL = /^(?:(?:https?|ssh|git):\/\/|[\w.-]+@[\w.-]+:)/;
+export const GIT_URL = /^(?:(?:https?|ssh|git):\/\/|[\w.-]+@[\w.-]+:)/;
 /** A ref git takes as a plain name: no leading dash, no option smuggling. */
-const SAFE_REF = /^[\w][\w./-]*$/;
-
-/**
- * Parse `<source>`: `github.com/<owner>/<repo>[@ref]`, a git URL, or a local
- * directory. Refused here, before anything runs, so a bad source is a usage
- * error. `--ref` applies to git sources only.
- */
-export function parsePluginSource(
-  input: string,
-  cwd: string,
-  ref: string | undefined,
-): PluginOrigin {
-  const github = GITHUB_SHORTHAND.exec(input);
-  const pinned = github?.[3];
-  if (pinned !== undefined && ref !== undefined) {
-    throw new CliUsageError(
-      `Give the ref once: either ${input} or --ref ${ref}, not both.`,
-    );
-  }
-  const gitRef = pinned ?? ref;
-  if (gitRef !== undefined && !SAFE_REF.test(gitRef)) {
-    throw new CliUsageError(`"${gitRef}" is not a git branch, tag or commit.`);
-  }
-  if (github) {
-    return {
-      kind: 'git',
-      url: `https://github.com/${github[1]}/${github[2]}.git`,
-      ...(gitRef ? { ref: gitRef } : {}),
-    };
-  }
-  if (GIT_URL.test(input)) {
-    return { kind: 'git', url: input, ...(gitRef ? { ref: gitRef } : {}) };
-  }
-  if (ref !== undefined) {
-    throw new CliUsageError('--ref applies to git sources only.');
-  }
-  const expanded =
-    input === '~' || input.startsWith(`~${path.sep}`)
-      ? path.join(os.homedir(), input.slice(1))
-      : input;
-  return { kind: 'local', path: path.resolve(cwd, expanded) };
-}
+export const SAFE_REF = /^[\w][\w./-]*$/;
 
 function git(args: readonly string[]) {
   return Effect.tryPromise({
@@ -107,38 +63,38 @@ function git(args: readonly string[]) {
 }
 
 /**
+ * Check `rev` out detached in `dir`, forced and cleaned, so the directory
+ * matches that commit exactly. Symlinks check out as plain files, so nothing
+ * in the tree can point outside it.
+ */
+function checkoutDetached(dir: string, rev: string) {
+  const inDir = ['-C', dir, '-c', 'core.symlinks=false'];
+  return git([
+    ...inDir,
+    '-c',
+    'advice.detachedHead=false',
+    'checkout',
+    '--quiet',
+    '--force',
+    '--detach',
+    rev,
+  ]).pipe(Effect.andThen(git([...inDir, 'clean', '--quiet', '-ffdx'])));
+}
+
+/**
  * Fetch `ref` (the remote's HEAD when absent) from `url` into `dir` and check
- * it out detached, returning the commit. The same steps install and update:
- * a shallow fetch of exactly one commit, then a forced checkout and clean,
- * so the managed directory always matches that commit. Symlinks check out as
- * plain files, so nothing in the tree can point outside it.
+ * it out, returning the commit. Install and update take the same steps: a
+ * shallow fetch of exactly one commit, then {@link checkoutDetached}.
  */
 function fetchPinned(dir: string, url: string, ref: string | undefined) {
   return Effect.gen(function* () {
     yield* git(['init', '--quiet', dir]);
-    const inDir = ['-C', dir, '-c', 'core.symlinks=false'];
     yield* git([
-      ...inDir,
-      'fetch',
-      '--quiet',
-      '--depth',
-      '1',
-      '--no-tags',
-      '--',
-      url,
-      ref ?? 'HEAD',
+      ...['-C', dir, '-c', 'protocol.file.allow=never', 'fetch', '--quiet'],
+      ...['--depth', '1', '--no-tags'],
+      ...['--', url, ref ?? 'HEAD'],
     ]);
-    yield* git([
-      ...inDir,
-      '-c',
-      'advice.detachedHead=false',
-      'checkout',
-      '--quiet',
-      '--force',
-      '--detach',
-      'FETCH_HEAD',
-    ]);
-    yield* git([...inDir, 'clean', '--quiet', '-ffdx']);
+    yield* checkoutDetached(dir, 'FETCH_HEAD');
     return yield* git(['-C', dir, 'rev-parse', 'HEAD']);
   });
 }
@@ -421,41 +377,52 @@ export interface PluginUpdate {
 /**
  * Update the named plugins, or every one. A fetched plugin refetches its ref
  * into its managed directory and pins the new commit; every plugin rereads
- * its manifest, so a changed `skills` path takes effect.
+ * its manifest, so a changed `skills` path takes effect. Each plugin is
+ * recorded as soon as it is updated, and one whose new commit cannot be read
+ * is checked back out at its recorded commit, so the record and the
+ * directory never disagree.
  */
 export function updatePlugins(names: readonly string[], env: PluginEnv) {
   return Effect.gen(function* () {
-    const installed = yield* readInstalledPlugins(env.stores);
-    const targets = yield* Effect.forEach(names, (name) =>
-      requireInstalled(installed, name),
-    );
-    const selected = new Set(
-      (names.length === 0 ? installed : targets).map((plugin) => plugin.name),
-    );
+    let current = yield* readInstalledPlugins(env.stores);
+    const targets =
+      names.length === 0
+        ? current
+        : yield* Effect.forEach(names, (name) =>
+            requireInstalled(current, name),
+          );
     const updates: PluginUpdate[] = [];
-    const next: InstalledPlugin[] = [];
-    for (const plugin of installed) {
-      if (!selected.has(plugin.name)) {
-        next.push(plugin);
-        continue;
-      }
+    for (const plugin of targets) {
+      const dir = path.join(env.pluginsDir, plugin.name);
       const commit =
         plugin.commit === undefined
           ? undefined
-          : yield* fetchPinned(
-              path.join(env.pluginsDir, plugin.name),
-              plugin.source,
-              plugin.ref,
-            );
-      const reread = yield* rereadPlugin(plugin).pipe(
+          : yield* fetchPinned(dir, plugin.source, plugin.ref);
+      const skills = yield* rereadPlugin(plugin).pipe(
         Effect.map((resolved) =>
           resolved.skills.map((skill) => path.join(plugin.path, skill)),
         ),
+        Effect.tapError(() =>
+          plugin.commit === undefined
+            ? Effect.void
+            : checkoutDetached(dir, plugin.commit).pipe(
+                // The reread failure is the one to report; a failed restore
+                // is named beside it.
+                Effect.catch((error) =>
+                  Effect.logWarning(
+                    `Could not restore ${dir} to ${plugin.commit}: ${error.message}`,
+                  ),
+                ),
+              ),
+        ),
       );
-      next.push({ ...plugin, ...(commit ? { commit } : {}), skills: reread });
+      const updated = { ...plugin, ...(commit ? { commit } : {}), skills };
+      current = current.map((entry) =>
+        entry.name === plugin.name ? updated : entry,
+      );
+      yield* writeInstalledPlugins(env.stores, current);
       updates.push({ name: plugin.name, from: plugin.commit, to: commit });
     }
-    yield* writeInstalledPlugins(env.stores, next);
     return updates;
   });
 }
