@@ -12,6 +12,7 @@ import {
   AgentCategory,
   RunIdSchema,
   type AgentDelegationScope,
+  type AgentSource,
   type RunId,
 } from '@shared/schemas';
 import {
@@ -44,6 +45,8 @@ import type { PastedImageEntry } from '../input/draftAttachments';
  */
 export interface SessionMeta {
   readonly agent: string;
+  /** The source of the entry `agent` resolved to, pinned on every root run. */
+  readonly agentSource?: AgentSource;
   readonly model: string;
   readonly modelSource: RunModelDecisionReason;
   readonly cwd: string;

@@ -28,6 +28,7 @@ export type { AgentEntry } from './agentEntry';
 export {
   loadAgents,
   getAgent,
+  getCategoryAgent,
   resolveAgentForLaunch,
   getAgentsByCategory,
   getCustomAgentScanIssues,
@@ -35,8 +36,6 @@ export {
   invalidateRemoteAgentsAfterSignOut,
   // Typed data options
   computeAgentOptionsData,
-  // Source helpers
-  isRemoteAgent,
   // Visible agents (for dropdowns and tools)
   getVisibleAgents,
   createWorkspaceAgentRosterController,

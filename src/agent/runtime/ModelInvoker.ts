@@ -40,7 +40,6 @@ import {
 } from '@texra-ai/llm/turn';
 
 import { maybeSaveDebugObject } from '@agent/debug/debugMessageSaver';
-import { isRemoteAgent } from '@agent/index/agentRegistry';
 import {
   logContextManagementEvent,
   logErrorData,
@@ -273,7 +272,7 @@ export const modelInvokerLayer = (): Layer.Layer<
             logger,
             runId,
             modelName: run.config.model,
-            isRemote: isRemoteAgent(run.config.agent),
+            isRemote: run.config.agentSource === 'remote',
             roots: session.roots,
           },
           fileOptions: { continuationCount: round, baseName },

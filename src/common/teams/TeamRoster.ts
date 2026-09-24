@@ -2,7 +2,6 @@ import type { TeamCatalogPortFailed } from '@common/teams/TeamAvailabilityPrefli
 import {
   AGENT_CATEGORIES,
   agentKeyOf,
-  agentMatchesIdentifier,
   byCategory,
   type AgentCategory,
   type AgentModePreset,
@@ -11,8 +10,17 @@ import {
 } from '@shared/schemas';
 import type { Effect } from 'effect';
 
-interface TeamRosterAgentCatalog {
-  getAgents(category: AgentCategory): { name: string; source: AgentSource }[];
+/**
+ * The roster's own identity rule (`AgentRosterController.resolveAgent`): a
+ * bare name matches within the category, a `source:name` key matches exactly.
+ * Resolving through it keeps this preflight and the roster snapshot's
+ * `unresolvedNames` in agreement.
+ */
+interface TeamRosterAgentResolver {
+  resolveAgent(
+    category: AgentCategory,
+    identifier: string,
+  ): { name: string; source: AgentSource } | undefined;
 }
 
 export interface TeamRosterResolution {
@@ -57,11 +65,13 @@ export interface TeamRosterCatalog {
 
 /** Resolve a team against the current catalog without writing roster state. */
 export function resolveTeamRoster(
-  state: TeamRosterAgentCatalog,
+  roster: TeamRosterAgentResolver,
   preset: AgentModePreset,
 ): TeamRosterResolution {
   const resolved = byCategory((category) =>
-    resolvePresetAgents(preset.agents[category], state.getAgents(category)),
+    resolvePresetAgents(preset.agents[category], (name) =>
+      roster.resolveAgent(category, name),
+    ),
   );
   return {
     keys: byCategory((category) => resolved[category].resolved.map(agentKeyOf)),
@@ -71,17 +81,15 @@ export function resolveTeamRoster(
   };
 }
 
-/** Split a preset's member names into catalog entries and unmatched names. */
-export function resolvePresetAgents<
-  T extends { readonly name: string; readonly source: AgentSource },
->(
+/** Split a preset's member names into resolved entries and unmatched names. */
+export function resolvePresetAgents<T>(
   names: readonly string[],
-  agents: readonly T[],
+  resolve: (name: string) => T | undefined,
 ): { resolved: T[]; missing: string[] } {
   const resolved: T[] = [];
   const missing: string[] = [];
   for (const name of names) {
-    const entry = agents.find((agent) => agentMatchesIdentifier(agent, name));
+    const entry = resolve(name);
     if (entry) resolved.push(entry);
     else missing.push(name);
   }

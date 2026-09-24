@@ -19,24 +19,18 @@ import { ToolCall } from '@agent/runtime/ToolCall';
 
 import {
   createWorkspaceAgentRosterController,
-  getAgentsByCategory,
   loadAgents,
   refresh,
 } from '@agent/index/agentRegistry';
 import { TeamCatalogPortFailed } from '@common/teams/TeamAvailabilityPreflight';
+import { findTeamPreset, teamPresets } from '@common/teams/TeamPresets';
 import {
   resolveTeamRoster,
   type TeamRosterCatalog,
 } from '@common/teams/TeamRoster';
 import { applyTeamRosterWithPreflight } from '@common/teams/TeamRosterApplication';
 import { emitAppSignal } from '@eventBus/AppSignals';
-import {
-  AGENT_MODE_PRESETS,
-  AGENT_MODE_PRESETS_BY_ID,
-  agentName,
-  STARTER_AGENT_MODE_PRESET,
-  ToolError,
-} from '@shared/schemas';
+import { agentName, ToolError } from '@shared/schemas';
 import { executed } from '@tools/core/result';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -44,10 +38,10 @@ import { defineTool } from '../core/define';
 import { getSetupAuthStatus, SetupPlatform } from './platform';
 
 /**
- * Built from the actual preset list (plus the hidden starter team) so the
- * enum can't drift from `AGENT_MODE_PRESETS`.
+ * The shared catalog's built-in teams (the setup starter included), so the
+ * enum can't drift from the presets the roster accepts.
  */
-const TEAM_CHOICES = [...AGENT_MODE_PRESETS, STARTER_AGENT_MODE_PRESET];
+const TEAM_CHOICES = teamPresets(undefined);
 const TEAM_IDS = TEAM_CHOICES.map((preset) => preset.id);
 
 function describeTeams(): string {
@@ -77,7 +71,6 @@ const applyTeam = Effect.fn('ApplyTeamTool.execute')(function* (
   input: ApplyTeamInput,
 ) {
   const call = yield* ToolCall;
-  const state = { getAgents: getAgentsByCategory };
   const roster = createWorkspaceAgentRosterController(call.roots);
   const { signIn } = yield* SetupPlatform;
   const authStatus = yield* getSetupAuthStatus();
@@ -87,16 +80,13 @@ const applyTeam = Effect.fn('ApplyTeamTool.execute')(function* (
   // only the roster, since it has no notion of a fresh-workspace default.
   const catalog: TeamRosterCatalog = {
     resolvePreset: (presetId) =>
-      Effect.sync(() => {
-        const preset =
-          presetId === STARTER_AGENT_MODE_PRESET.id
-            ? STARTER_AGENT_MODE_PRESET
-            : AGENT_MODE_PRESETS_BY_ID.get(presetId);
-        if (!preset) return { ok: false, reason: 'unknownPreset' };
+      Effect.gen(function* () {
+        const preset = findTeamPreset(yield* roster.allPresets(), presetId);
+        if (!preset) return { ok: false, reason: 'unknownPreset' } as const;
         return {
           ok: true,
           preset,
-          resolution: resolveTeamRoster(state, preset),
+          resolution: resolveTeamRoster(roster, preset),
         };
       }),
     commitPreset: (preset) =>

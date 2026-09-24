@@ -11,7 +11,6 @@ const launchMocks = vi.hoisted(() => ({
 
 vi.mock('@agent/index', async (importActual) => ({
   ...(await importActual<typeof import('@agent/index')>()),
-  isRemoteAgent: () => false,
   resolveAgentForLaunch: launchMocks.resolveAgent,
 }));
 vi.mock('@agent/runtime/agentLoad', async (importActual) => ({

@@ -7,10 +7,7 @@ import {
   agentKeyOf,
   agentMatchesIdentifier,
   byCategory,
-  parseAgentModePresets,
-  STARTER_AGENT_MODE_PRESET,
   type AgentDelegationScope,
-  type AgentModePreset,
   type AgentSource,
   type ByCategory,
   type TeamOptionData,
@@ -27,47 +24,12 @@ import {
   type TeamAvailabilityChoice,
   type TeamCatalogPortFailed,
 } from './TeamAvailabilityPreflight';
+import {
+  findTeamPreset,
+  launchableTeamPresets,
+  type TeamPreset,
+} from './TeamPresets';
 import { resolvePresetAgents } from './TeamRoster';
-
-type TeamPresetSource = 'built-in' | 'custom';
-
-export interface TeamPreset extends AgentModePreset {
-  readonly source: TeamPresetSource;
-}
-
-/**
- * Return launchable team presets in display order. Built-in ids are reserved:
- * a custom preset with the same id is dropped so the built-in always wins. The
- * setup-only starter id is reserved as well and never appears in this listing.
- */
-export function teamPresets(customRaw: unknown): TeamPreset[] {
-  const builtInIds = new Set([
-    ...AGENT_MODE_PRESETS.map((preset) => preset.id),
-    STARTER_AGENT_MODE_PRESET.id,
-  ]);
-  return [
-    ...AGENT_MODE_PRESETS.map((preset) => ({
-      ...preset,
-      source: 'built-in' as const,
-    })),
-    ...parseAgentModePresets(customRaw)
-      .filter((preset) => !builtInIds.has(preset.id))
-      .map((preset) => ({ ...preset, source: 'custom' as const })),
-  ];
-}
-
-export function findTeamPreset(
-  presets: readonly TeamPreset[],
-  query: string,
-): TeamPreset | undefined {
-  const key = lookupKey(query);
-  return presets.find(
-    (preset) =>
-      lookupKey(preset.id) === key ||
-      lookupKey(preset.name) === key ||
-      slugKey(preset.name) === key,
-  );
-}
 
 export interface TeamCatalogAgent {
   readonly name: string;
@@ -83,8 +45,17 @@ export interface TeamRunPlan<T extends TeamCatalogAgent = TeamCatalogAgent> {
   readonly missingAgents: ByCategory<readonly string[]>;
 }
 
+/**
+ * The roster's member identity rule (`getCategoryAgent` in production): a bare
+ * name matches within the category, a `source:name` key matches exactly.
+ */
+type TeamAgentResolver<T> = (
+  category: AgentCategory,
+  identifier: string,
+) => T | undefined;
+
 interface TeamRunOptions<T extends TeamCatalogAgent> {
-  readonly agents: ByCategory<readonly T[]>;
+  readonly resolveAgent: TeamAgentResolver<T>;
   readonly agentOverride?: string;
 }
 
@@ -93,14 +64,16 @@ export function planTeamRun<T extends TeamCatalogAgent>(
   options: TeamRunOptions<T>,
 ): TeamRunPlan<T> {
   const resolved = byCategory((category) =>
-    resolvePresetAgents(preset.agents[category], options.agents[category]),
+    resolvePresetAgents(preset.agents[category], (name) =>
+      options.resolveAgent(category, name),
+    ),
   );
-  const override = resolveAgentOverride(
-    options.agentOverride,
-    options.agents.toolUse,
-  );
+  const overrideQuery = options.agentOverride?.trim();
+  const overrideAgent = overrideQuery
+    ? options.resolveAgent(AgentCategory.ToolUse, overrideQuery)
+    : undefined;
   const rootAgent =
-    override.agent ??
+    overrideAgent ??
     selectTeamRootAgent(resolved.toolUse.resolved, {
       presetOrder: preset.agents.toolUse,
       presetSource: preset.source,
@@ -112,7 +85,8 @@ export function planTeamRun<T extends TeamCatalogAgent>(
   return {
     preset,
     rootAgent,
-    missingAgentOverride: override.missing,
+    missingAgentOverride:
+      overrideQuery && !overrideAgent ? overrideQuery : undefined,
     agentKeys: {
       workflow: resolved.workflow.resolved.map(agentKeyOf),
       toolUse: toolUseAgents.map(agentKeyOf),
@@ -251,15 +225,15 @@ function buildTeamOptions(plans: readonly TeamRunPlan[]): TeamOptionData[] {
 export function loadTeamOptions<T extends TeamCatalogAgent, R = never>(ports: {
   customPresetsRaw: unknown;
   ensureCatalogLoaded: () => Effect.Effect<void, Error, R>;
-  getAgents: (category: AgentCategory) => readonly T[];
+  resolveAgent: TeamAgentResolver<T>;
   canAccessRemoteCatalog: () => Effect.Effect<boolean>;
   refreshRemote: () => Effect.Effect<void, Error, R>;
 }): Effect.Effect<TeamOptionData[], Error, R> {
   return Effect.gen(function* () {
     yield* ports.ensureCatalogLoaded();
-    const presets = teamPresets(ports.customPresetsRaw);
+    const presets = launchableTeamPresets(ports.customPresetsRaw);
     const planCurrent = () =>
-      planTeamRuns(presets, currentCatalogOptions(ports.getAgents));
+      planTeamRuns(presets, { resolveAgent: ports.resolveAgent });
     const result = yield* refreshRemoteCatalogForGaps(
       planCurrent(),
       (plans) => plans.some(teamPlanHasGaps),
@@ -296,7 +270,7 @@ export function resolveTeamLaunch<T extends TeamCatalogAgent, R = never>(args: {
   teamId: string;
   customPresetsRaw: unknown;
   ensureCatalogLoaded: () => Effect.Effect<void, Error, R>;
-  getAgents: (category: AgentCategory) => readonly T[];
+  resolveAgent: TeamAgentResolver<T>;
   canAccessRemoteCatalog: () => Effect.Effect<boolean>;
   refreshRemote: () => Effect.Effect<void, Error, R>;
   choose: (
@@ -307,14 +281,14 @@ export function resolveTeamLaunch<T extends TeamCatalogAgent, R = never>(args: {
 }): Effect.Effect<TeamLaunchResolution, Error, R> {
   return Effect.gen(function* () {
     const preset = findTeamPreset(
-      teamPresets(args.customPresetsRaw),
+      launchableTeamPresets(args.customPresetsRaw),
       args.teamId,
     );
     if (!preset) return { status: 'unknown-team' as const };
 
     yield* args.ensureCatalogLoaded();
     const planCurrent = () =>
-      planTeamRun(preset, currentCatalogOptions(args.getAgents));
+      planTeamRun(preset, { resolveAgent: args.resolveAgent });
     const refreshed = yield* refreshRemoteCatalogForGaps(
       planCurrent(),
       teamPlanHasGaps,
@@ -466,33 +440,16 @@ export function formatPartialTeamLaunchMessage(
   return `This team will run with available members only. Unavailable members: ${missingNames.join(', ')}.`;
 }
 
-/** Snapshot the current agent catalog into run options for (re)planning. */
-function currentCatalogOptions<T extends TeamCatalogAgent>(
-  getAgents: (category: AgentCategory) => readonly T[],
-): TeamRunOptions<T> {
-  return { agents: byCategory((category) => getAgents(category)) };
-}
-
 /** Missing workflow and tool-use member names, in preset-declaration order. */
 function missingMemberNames(plan: TeamRunPlan): string[] {
   return AGENT_CATEGORIES.flatMap((category) => plan.missingAgents[category]);
-}
-
-function resolveAgentOverride<T extends TeamCatalogAgent>(
-  override: string | undefined,
-  agents: readonly T[],
-): { agent?: T; missing?: string } {
-  const query = override?.trim();
-  if (!query) return {};
-  const agent = agents.find((entry) => agentMatchesIdentifier(entry, query));
-  return agent ? { agent } : { missing: query };
 }
 
 function selectTeamRootAgent<T extends TeamCatalogAgent>(
   agents: readonly T[],
   options: {
     readonly presetOrder: readonly string[];
-    readonly presetSource: TeamPresetSource;
+    readonly presetSource: TeamPreset['source'];
   },
 ): T | undefined {
   const delegatingAgents = implicitDefaultToolUseAgents(agents).filter(
@@ -548,12 +505,4 @@ function presetAgentAvailability(
 function formatTeamOptionDisabledReason(reason: string): string {
   if (reason === 'no runnable team root') return 'No runnable team lead.';
   return `${capitalize(reason)}.`;
-}
-
-function lookupKey(value: string): string {
-  return value.trim().toLowerCase();
-}
-
-function slugKey(value: string): string {
-  return lookupKey(value).replaceAll(/\s+/g, '-');
 }

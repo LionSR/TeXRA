@@ -40,7 +40,7 @@ const cliRequire = createRequire(
 
 const mocks = vi.hoisted(() => ({
   callOrder: [] as string[],
-  chatToolUseAgentUsageError: vi.fn(),
+  resolveChatToolUseAgent: vi.fn(),
   cleanupTerminalModes: vi.fn(),
   createChatSessionController: vi.fn(),
   submit: vi.fn(async () => undefined),
@@ -131,7 +131,7 @@ vi.mock(
       >();
     return {
       ...actual,
-      chatToolUseAgentUsageError: mocks.chatToolUseAgentUsageError,
+      resolveChatToolUseAgent: mocks.resolveChatToolUseAgent,
     };
   },
 );
@@ -312,7 +312,9 @@ describe('runChat signal ownership wiring', () => {
       model: 'gpt-test',
       modelSource: 'default',
     });
-    mocks.chatToolUseAgentUsageError.mockReturnValue(Effect.succeed(undefined));
+    mocks.resolveChatToolUseAgent.mockReturnValue(
+      Effect.succeed({ source: 'builtInToolUse' }),
+    );
     mocks.selectCliRunnableModel.mockReturnValue(
       Effect.succeed({ model: 'gpt-test' }),
     );

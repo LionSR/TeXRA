@@ -39,14 +39,38 @@ const registry = vi.hoisted(() => ({
   refreshAgents: vi.fn(() => Effect.void),
 }));
 
-vi.mock('@agent/index', async () => ({
-  ...(await vi.importActual<typeof import('@agent/index')>('@agent/index')),
-  loadAgents: registry.loadAgents,
-  refresh: registry.refreshAgents,
-  getAgentsByCategory: (category: AgentCategory) => registry.catalog[category],
-  getVisibleAgents: (category: AgentCategory) =>
-    Effect.succeed(registry.catalog[category]),
-}));
+vi.mock('@agent/index', async () => {
+  const actual =
+    await vi.importActual<typeof import('@agent/index')>('@agent/index');
+  const { agentMatchesIdentifier } =
+    await vi.importActual<typeof import('@shared/schemas')>('@shared/schemas');
+  return {
+    ...actual,
+    loadAgents: registry.loadAgents,
+    refresh: registry.refreshAgents,
+    getAgentsByCategory: (category: AgentCategory) =>
+      registry.catalog[category],
+    getVisibleAgents: (category: AgentCategory) =>
+      Effect.succeed(registry.catalog[category]),
+    // The roster resolves members against the same fixture catalog.
+    createWorkspaceAgentRosterController: (
+      roots: Parameters<typeof actual.createWorkspaceAgentRosterController>[0],
+    ) =>
+      new actual.AgentRosterController({
+        workspaceState: roots.workspaceState,
+        globalState: roots.globalState,
+        getAgents: (category) => registry.catalog[category],
+        getPresets: () =>
+          roots.workspaceState.get<unknown>(
+            WorkspaceStateKey.CUSTOM_AGENT_PRESETS,
+          ),
+        resolveAgent: (category, identifier) =>
+          registry.catalog[category].find((entry) =>
+            agentMatchesIdentifier(entry, identifier),
+          ),
+      }),
+  };
+});
 
 const { AgentHandlers } = await import('@settingsView/handlers/agentHandlers');
 

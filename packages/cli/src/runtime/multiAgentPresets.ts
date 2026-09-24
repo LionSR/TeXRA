@@ -6,17 +6,19 @@ import type { AgentEntry } from '@agent/index';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import {
   availableTeamMemberCount,
-  findTeamPreset,
   teamAvailability,
   teamLaunchBlockReason,
   teamPlanHasGaps,
   teamPlanStatus,
-  teamPresets,
   type TeamAgentAvailability,
   type TeamAvailability,
-  type TeamPreset,
   type TeamRunPlan,
 } from '@common/teams/TeamPlan';
+import {
+  findTeamPreset,
+  launchableTeamPresets,
+  type TeamPreset,
+} from '@common/teams/TeamPresets';
 import type { StateStore } from '@platform/interfaces';
 import { hasDelegationTool } from '@shared/constants/delegationTools';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
@@ -62,7 +64,7 @@ export function readCliMultiAgentPresets(workspaceState: StateStore) {
     const customRaw = yield* workspaceState.get<unknown>(
       WorkspaceStateKey.CUSTOM_AGENT_PRESETS,
     );
-    return teamPresets(customRaw);
+    return launchableTeamPresets(customRaw);
   });
 }
 

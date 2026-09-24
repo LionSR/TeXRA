@@ -1,6 +1,6 @@
 // Local imports
 import { Effect, FileSystem } from 'effect';
-import { getAgentsByCategory, loadAgents, refresh } from '@agent/index';
+import { getCategoryAgent, loadAgents, refresh } from '@agent/index';
 import { supabaseAuthenticated } from '@auth/SupabaseAuth';
 import type { AgentDirectories, StateStore } from '@platform/interfaces';
 import type { GlobalStorageFs } from '@platform/rootedFs';
@@ -20,7 +20,7 @@ export function createTeamCatalogPorts(workspaceState: StateStore) {
         WorkspaceStateKey.CUSTOM_AGENT_PRESETS,
       ),
       ensureCatalogLoaded: () => loadAgents(),
-      getAgents: getAgentsByCategory,
+      resolveAgent: getCategoryAgent,
       canAccessRemoteCatalog: () => supabaseAuthenticated,
       refreshRemote: () => refresh({ includeRemote: true }),
     };

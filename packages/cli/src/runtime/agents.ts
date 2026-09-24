@@ -10,13 +10,7 @@ import {
   type AgentRosterStores,
 } from '@agent/index';
 import { SupabaseAuth } from '@auth/SupabaseAuth';
-import {
-  AGENT_CATEGORIES,
-  AgentSourceSchema,
-  agentKeyOf,
-  agentName,
-  AgentCategory,
-} from '@shared/schemas';
+import { AGENT_CATEGORIES, agentKeyOf, AgentCategory } from '@shared/schemas';
 import { formatResultCount } from '@utils/text/stringUtils';
 
 import { CliUsageError } from './cliContext';
@@ -97,11 +91,10 @@ export function missingMultiAgentPresetMessage(name: string): string {
 }
 
 /**
- * Resolve an identifier the way launch resolves it: scoped to `category`, with
- * a valid `source:name` prefix carried as the pinned source so a name shadowed
- * by a higher-priority source still lands on the entry the user named. Returns
- * undefined when the identifier resolves outside `category` — including through
- * the pinned-source tier, which is category-blind by design.
+ * Resolve an identifier the way launch resolves it, scoped to `category`: a
+ * `source:name` identifier lands on its exact entry even when a higher-priority
+ * source shadows the name. Returns undefined when the identifier resolves
+ * outside `category`.
  */
 export function resolveCliAgentInCategory(
   stores: AgentRosterStores,
@@ -109,18 +102,7 @@ export function resolveCliAgentInCategory(
   category: AgentCategory,
 ) {
   return Effect.gen(function* () {
-    const name = agentName(identifier);
-    const pinned = AgentSourceSchema.safeParse(
-      identifier === name
-        ? undefined
-        : identifier.slice(0, identifier.length - name.length - 1),
-    );
-    const entry = yield* resolveAgentForLaunch(
-      stores,
-      category,
-      identifier,
-      pinned.success ? pinned.data : undefined,
-    );
+    const entry = yield* resolveAgentForLaunch(stores, category, identifier);
     return entry?.category === category ? entry : undefined;
   });
 }
@@ -162,8 +144,10 @@ export function checkCliAgentLaunch(
  *
  * CLI commands start with a local-only load so signed-out users avoid remote
  * auth/network work. Missing agents still get a remote-inclusive fallback, and
- * signed-in sessions reload bare names so the registry's normal
- * source priority can prefer remote definitions.
+ * signed-in sessions reload bare names: bundled outranks remote in source
+ * priority, but a workspace roster that selects a remote entry by key makes
+ * the visible tier answer a bare name with it, which a local-only catalog
+ * cannot see.
  *
  * A launch category resolves through the launch resolver, so validation lands
  * on the exact entry the launch will load; without one this is a display

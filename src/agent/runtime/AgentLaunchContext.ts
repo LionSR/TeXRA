@@ -4,7 +4,7 @@ import { Cause, Deferred, Effect, Exit, FileSystem, Scope } from 'effect';
 import { ZodError } from 'zod';
 import { ModelProvider, type ModelConfig } from 'llm-zoo';
 
-import { isRemoteAgent, refresh, resolveAgentForLaunch } from '@agent/index';
+import { refresh, resolveAgentForLaunch } from '@agent/index';
 import {
   logUserMessage,
   type AgentTrace,
@@ -313,13 +313,14 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
     yield* failIfLaunchStopped(input.stopped);
 
     // Block category mismatch: prevent launching a tool-use agent as a workflow
-    // (or vice versa). Source-pinned resolution already guarantees launch lands on
-    // the entry validation chose, so this catches only the residual case the
-    // registry's pre-merge category can't see: a child agent that `inherits` a
-    // parent of the other category resolves with the scanner's pre-merge category
-    // (used by getVisibleAgent) but loads a post-merge `setting.agentCategory`
-    // that differs. Only enforced when the caller opts in and the category was
-    // explicitly supplied before schema defaults were applied.
+    // (or vice versa). Category-scoped resolution already lands on an entry of
+    // the requested category, so this catches only what the registry's
+    // pre-merge category can't see: a child agent that `inherits` a parent of
+    // the other category resolves with the scanner's pre-merge category but
+    // loads a post-merge `setting.agentCategory` that differs, and a pinned
+    // `agentSource` (category-blind) read from a run record. Enforced only when
+    // the caller opts in: chat root runs, the CLI, subagents and resume do; a
+    // fresh host launch runs under the loaded setting's category.
     if (
       input.enforceCategory &&
       fullConfig.agentCategory !== setting.agentCategory
@@ -344,9 +345,14 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
     yield* failIfAborted(input.signal);
     yield* failIfLaunchStopped(input.stopped);
 
+    // The resolved entry's source is stamped on the config, so the run record
+    // carries the decided identity: resume, rerun and every remote check read
+    // it instead of resolving the name again. `agent` stays as the caller
+    // spelled it (the resume-id contract).
     const config: AgentConfig = {
       ...fullConfig,
       agentCategory: setting.agentCategory,
+      agentSource: agentEntry.source,
     };
     return { config, setting, prompt, agentEntry, modelConfig };
   },
@@ -439,7 +445,7 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
     const agentLogger = runTrace.trace;
 
     yield* failIfLaunchStopped(input.stopped);
-    const isRemote = isRemoteAgent(config.agent);
+    const isRemote = agentEntry.source === 'remote';
     // Registration committed creation, configuration and initial activation,
     // each awaited; a resumed turn appends only its new activation, awaited
     // here. Both are durable before the run resolves, so this path drains
