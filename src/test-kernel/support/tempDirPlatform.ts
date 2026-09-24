@@ -11,7 +11,10 @@ import { afterEach } from 'vitest';
 // Local imports
 import { closeSession, listSessions } from '@agent/runtime/sessionGraph';
 import { MemoryStateStore } from '@platform/defaults/memoryState';
-import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
+import {
+  resolveGlobalStoragePath,
+  resolveWorkspaceStoragePath,
+} from '@platform/defaults/workspaceStorage';
 
 // Local file imports
 import { createFakeHost, type FakeHost } from './setupPlatform';
@@ -47,12 +50,11 @@ export async function createTempDirPlatform(
   const tempDir = await makeTempDir(prefix, tempDirs);
   const workspaceDir = path.join(tempDir, 'workspace');
   const storageRoot = path.join(tempDir, 'storage');
-  const storage = new WorkspaceStorageProvider(storageRoot, workspaceDir);
   return createFakeHost(
     {
       workspacePath: workspaceDir,
-      storagePath: storage.getStoragePath(),
-      globalStoragePath: storage.getGlobalStoragePath(),
+      storagePath: resolveWorkspaceStoragePath(storageRoot, workspaceDir),
+      globalStoragePath: resolveGlobalStoragePath(storageRoot),
     },
     {
       globalState: new MemoryStateStore(),

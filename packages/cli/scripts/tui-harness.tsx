@@ -23,10 +23,10 @@ import React from 'react';
 import { loadAgents } from '@agent/index';
 import { tryDefaultSession } from '@agent/runtime';
 import { tuiOutputStreamForColor } from '@cli/tui/noColorOutput';
+import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { DEFAULT_MODELS } from '@model/modelOptionsBasic';
 import { apiKeySecretName } from '@model/apiProviders';
 import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
-import { MEMORY_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import {
   formatTexraApprovalPolicy,
   parseTexraApprovalPolicy,
@@ -356,7 +356,10 @@ if (!harnessRoots) {
 // get descending mtimes in list order, so the first name is the newest row
 // and the listing order is deterministic.
 if (HARNESS_MEMORY_FILES.length > 0) {
-  const memoryRoot = path.join(harnessRoots.storage, MEMORY_STORAGE_DIR);
+  const memoryRoot = path.join(
+    harnessRoots.storage,
+    WORKSPACE_STORAGE_LAYOUT.memory,
+  );
   const newestEpochSeconds = Date.now() / 1000;
   HARNESS_MEMORY_FILES.forEach((name, index) => {
     const filePath = path.join(memoryRoot, name);

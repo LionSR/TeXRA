@@ -9,11 +9,7 @@ import { ToolCall } from '@agent/runtime/ToolCall';
 import type { HostInteractions } from '@agent/runtime/HostInteractions';
 import { withLogChannel } from '@logger/effectLog';
 import { type ToolResult, ToolError } from '@shared/schemas';
-import {
-  resolveWorkspaceRelativePath,
-  workspacePathPorts,
-  type WorkspacePathPorts,
-} from '@tools/pathResolution';
+import { resolveToolPath, type ToolPathCall } from '@tools/pathResolution';
 import { executed } from '@tools/core/result';
 import {
   countBySeverity,
@@ -31,21 +27,10 @@ const CHANNEL = 'DiagnosticsTool';
  * The host capabilities and working directory this tool reads from the
  * session, resolved in the caller's run context before the program runs.
  */
-interface DiagnosticsPorts extends WorkspacePathPorts {
+interface DiagnosticsPorts {
+  readonly call: ToolPathCall;
   readonly readDiagnostics: HostInteractions['readDiagnostics'];
   readonly addCriticism: HostInteractions['addCriticism'];
-}
-
-/** Resolve an input path to an absolute path against the active working directory. */
-function resolveAbsolutePath(filePath: string, ports: WorkspacePathPorts) {
-  return Effect.gen(function* () {
-    return (yield* resolveWorkspaceRelativePath(
-      ports.settings,
-      ports.workspaceRoot,
-      filePath,
-      ports.toolRoot(),
-    )).absolute;
-  });
 }
 
 const DiagnosticsPathSchema = z
@@ -105,7 +90,7 @@ const readDiagnostics = Effect.fn('DiagnosticsTool.readDiagnostics')(function* (
   input: Extract<DiagnosticsInput, { command: 'list' | 'count' }>,
 ): Effect.fn.Return<ToolResult, Error> {
   const { command, path } = input;
-  const diagnosticsPath = yield* resolveAbsolutePath(path, ports);
+  const diagnosticsPath = (yield* resolveToolPath(ports.call, path)).absolute;
   const linter = ports.readDiagnostics;
   if (!linter) {
     return yield* Effect.fail(
@@ -179,7 +164,7 @@ const addCriticism = Effect.fn('DiagnosticsTool.addCriticism')(function* (
 
   // Path resolution shares the sink's failure report: both are the "add"
   // command failing before it could annotate anything.
-  const absolutePath = yield* resolveAbsolutePath(path, ports);
+  const absolutePath = (yield* resolveToolPath(ports.call, path)).absolute;
   const added = yield* Effect.try({
     try: () => {
       return {
@@ -221,7 +206,7 @@ const diagnose = Effect.fn('DiagnosticsTool.call')(function* (
       new ToolError('Diagnostics requires an active session.'),
     );
   const ports: DiagnosticsPorts = {
-    ...workspacePathPorts(call),
+    call,
     readDiagnostics: interactions.readDiagnostics,
     addCriticism: interactions.addCriticism,
   };

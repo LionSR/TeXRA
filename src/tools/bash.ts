@@ -46,7 +46,6 @@ import { nullishWithDefault } from './core/inputSchema';
 import { requireToolRun } from './core/toolRun';
 import { childRunDescription, createChildRun } from './delegation/childRun';
 import { startDetachedChildRunLoop } from './delegation/detachedChildRun';
-import { parseWorkingDirectory } from './pathResolution';
 
 const BACKGROUND_OUTPUT_TAIL_CHARS = 12_000;
 /**
@@ -372,9 +371,7 @@ function executeBashTool(input: BashInput) {
       );
     }
 
-    const cwd =
-      parseWorkingDirectory(toolCall.workingDirectory) ??
-      toolCall.roots.workspace;
+    const cwd = toolCall.workingDirectory ?? toolCall.roots.workspace;
 
     if (input.run_in_background) {
       const run = yield* requireToolRun('bash run_in_background', toolCall);

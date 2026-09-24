@@ -9,8 +9,8 @@ import { z } from 'zod';
 import { Runs } from '@agent/runtime/runRegistry';
 import { ToolCall } from '@agent/runtime/ToolCall';
 import type { ToolServices } from '@agent/runtime/ToolServices';
+import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { withLogChannel } from '@logger/effectLog';
-import { MEMORY_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import { StorageFs } from '@platform/rootedFs';
 import { ToolError, type RunId, type ToolResult } from '@shared/schemas';
 import { replaceLiteralMatches } from '@tools/fileEditFlow';
@@ -317,7 +317,7 @@ const view = Effect.fn('MemoryTool.view')(function* (
   // Handle non-existent root directory gracefully - return empty listing
   // instead of error (consistent with MemoryViewMessageHandler behavior)
   if (!exists) {
-    if (resolvedPath === MEMORY_STORAGE_DIR) {
+    if (resolvedPath === WORKSPACE_STORAGE_LAYOUT.memory) {
       return executed(
         `The memory directory is empty. This is a fresh start - use the create command to add memory files.`,
         'Viewed empty memory directory',
@@ -385,7 +385,9 @@ const create = Effect.fn('MemoryTool.create')(function* (
   // Relative to the session's storage root, which the view captured when
   // its layer was built, so no path here names a root of its own.
   const storageFs = yield* StorageFs;
-  yield* storageFs.makeDirectory(MEMORY_STORAGE_DIR, { recursive: true });
+  yield* storageFs.makeDirectory(WORKSPACE_STORAGE_LAYOUT.memory, {
+    recursive: true,
+  });
   yield* storageFs.makeDirectory(path.dirname(resolvedPath), {
     recursive: true,
   });

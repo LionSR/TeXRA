@@ -46,6 +46,7 @@ import {
   RUN_OUTCOME,
 } from '@shared/schemas';
 import { UsageLog } from '@shared/usageLog';
+import { parseWorkingDirectory } from '@tools/pathResolution';
 import { createRunTrace, type RunTrace } from '@transcript';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -388,6 +389,13 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
     yield* failIfLaunchStopped(input.stopped);
     const { config, setting, prompt, agentEntry, modelConfig } =
       input.definition;
+    // The run's working directory is decided here, once: absolute or absent.
+    // Every tool call of the run carries it as `ToolCall.workingDirectory`
+    // and trusts it rather than re-validating.
+    const workingDirectory = yield* Effect.try({
+      try: () => parseWorkingDirectory(config.workingDirectory),
+      catch: ensureError,
+    });
 
     // The session is resolved once at the boundary (buildAgentLaunchContext)
     // and carried in, so a delegated launch inherits the parent run's session
@@ -490,7 +498,6 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
     if (visionWarning) agentLogger.warn(visionWarning);
 
     const agentPath = path.dirname(agentEntry.path);
-    const workingDirectory = config.workingDirectory?.trim() || undefined;
     // The run's one stop. `interrupt()` completes it; the runner races it and
     // the program is interrupted from it. A launch that already owns a stop
     // hands it in, so a stop that landed while the launch prepared is this

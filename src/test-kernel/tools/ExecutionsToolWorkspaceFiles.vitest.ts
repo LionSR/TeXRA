@@ -16,7 +16,6 @@ import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { initializeDefaultSession } from '@agent/runtime/sessionGraph';
 import { closeSession } from '@agent/runtime/sessionGraph';
-import { resolveRunStoragePath } from '@platform/defaults/workspaceStorage';
 import { RUN_PHASE, DEFAULT_TOOL_CONFIG, aggregateId } from '@shared/schemas';
 import {
   RunIdSchema,
@@ -41,6 +40,7 @@ import {
 import { withTempDirEffect } from '@test/support/tempDirPlatform';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
+import { resolveRunStoragePath } from '@utils/files/runStorageFs';
 
 /**
  * Move a run's phase the way its loop does: a `flow.step` row, which is the

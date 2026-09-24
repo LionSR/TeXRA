@@ -10,10 +10,6 @@ import {
   workspaceTexraConfigPath,
 } from '@platform/defaults/nodeStorage';
 import { openTexraConfigStores } from '@platform/defaults/nodeStores';
-import {
-  resolveGlobalStoragePath,
-  resolveWorkspaceStoragePath,
-} from '@platform/defaults/workspaceStorage';
 import type { ConfigProvider } from '@platform/interfaces';
 
 // Local imports - shared
@@ -244,11 +240,6 @@ function showPersistentConfigWarning(message: string): void {
  * services it needs: `buildCliContext` yields it before `initCliPlatform` (and
  * with it `installCliProcessRuntime`) exists, and `contextFromArgs` is the one
  * place the whole pre-runtime program is run.
- *
- * The storage paths come from the pure calculators rather than
- * `WorkspaceStorageProvider`'s getters: opening a config store must not create
- * a directory under a storage root a command (`clone`) may only be able to
- * read.
  */
 export function loadCliStartupConfig(
   cwd: string,
@@ -257,10 +248,7 @@ export function loadCliStartupConfig(
   return Effect.provide(
     Effect.gen(function* () {
       const stores = yield* openTexraConfigStores(
-        {
-          getStoragePath: () => resolveWorkspaceStoragePath(storageRoot, cwd),
-          getGlobalStoragePath: () => resolveGlobalStoragePath(storageRoot),
-        },
+        storageRoot,
         cwd,
         showPersistentConfigWarning,
       );

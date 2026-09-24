@@ -9,7 +9,10 @@ import { getRunRecords } from '@agent/storage';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { ChatExportController } from '@controllers/progressView/ChatExportController';
 import { MemoryStateStore } from '@platform/defaults/memoryState';
-import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
+import {
+  resolveGlobalStoragePath,
+  resolveWorkspaceStoragePath,
+} from '@platform/defaults/workspaceStorage';
 import {
   aggregateId,
   LOG_LEVELS,
@@ -39,12 +42,11 @@ async function installStoragePlatform(): Promise<void> {
   const tempDir = await makeTempDir('texra-html-export-', tempDirs);
   const workspaceDir = path.join(tempDir, 'workspace');
   const storageRoot = path.join(tempDir, 'storage');
-  const storage = new WorkspaceStorageProvider(storageRoot, workspaceDir);
   await installPlatform(
     {
       workspacePath: workspaceDir,
-      storagePath: storage.getStoragePath(),
-      globalStoragePath: storage.getGlobalStoragePath(),
+      storagePath: resolveWorkspaceStoragePath(storageRoot, workspaceDir),
+      globalStoragePath: resolveGlobalStoragePath(storageRoot),
     },
     {
       globalState: new MemoryStateStore(),

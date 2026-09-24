@@ -1,5 +1,4 @@
 import { resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 import { Effect, FileSystem, type PlatformError } from 'effect';
 
@@ -8,13 +7,12 @@ import {
   type ListableFileType,
 } from '@common/files/fileListingRules';
 import { getIncludedExtensions } from '@common/files/fileTypeUtils';
-import { attachDroppedPaths } from '@controllers/mainView/MainViewDroppedFilesController';
+import { attachDroppedFiles } from '@controllers/mainView/MainViewDroppedFilesController';
 import { workspaceFileOptions } from '@controllers/session/workspaceFileOptions';
 import { relativeToRoot } from '@platform/defaults/nodeWorkspace';
 import type { DocumentFileType, FileOptions } from '@shared/schemas';
 import { Rejected } from '@shared/session/requestErrors';
 import { normalizeFilePath } from '@utils/core';
-import { ensureError } from '@utils/errors/errorMessage';
 
 interface DesktopFileSelectionDialogOptions {
   title: string;
@@ -89,34 +87,6 @@ function toWorkspaceRelative(workspacePath: string, filePath: string): string {
   );
 }
 
-/**
- * One dropped path, answered with its workspace-relative name or `null` when
- * the launcher does not take it.
- *
- * A path outside the paper, and one that does not name a regular file, are
- * both dropped. So is one that is no longer there: a drag whose source moved
- * between the drop and this probe is the user's own race, and `NotFound` is
- * the only absence this treats as one. Every other stat failure — an
- * unreadable folder, a symlink loop — fails the whole drop instead of quietly
- * shrinking it, because a path discarded in silence looks to the user like a
- * file the launcher refused.
- */
-const droppedWorkspaceFile = Effect.fn(
-  'desktopFileSelection.droppedWorkspaceFile',
-)(function* (workspacePath: string, raw: string) {
-  const dropped = raw.startsWith('file:') ? fileURLToPath(raw) : raw;
-  const relative = relativeToRoot(workspacePath, dropped);
-  if (relative === undefined) return null;
-  const fs = yield* FileSystem.FileSystem;
-  const info = yield* fs.stat(resolve(workspacePath, relative)).pipe(
-    Effect.catchIf(
-      (error) => error.reason._tag === 'NotFound',
-      () => Effect.succeed(undefined),
-    ),
-  );
-  return info?.type === 'File' ? relative : null;
-});
-
 export function createDesktopFileSelection(
   options: DesktopFileSelectionOptions,
 ): DesktopFileSelection {
@@ -149,22 +119,11 @@ export function createDesktopFileSelection(
       );
     },
     attachDroppedFiles(paths, category) {
-      const probed: Effect.Effect<
-        Array<string | null>,
-        PlatformError.PlatformError,
-        FileSystem.FileSystem
-      > = workspacePath
-        ? Effect.forEach(
-            paths,
-            (raw) => droppedWorkspaceFile(workspacePath, raw),
-            { concurrency: 'unbounded' },
-          )
-        : Effect.succeed(paths.map(() => null));
-      return Effect.flatMap(probed, (resolved) =>
-        attachDroppedPaths(resolved, getIncludedExtensions(category)).pipe(
-          Effect.map((attached) => attached.paths),
-        ),
-      );
+      return attachDroppedFiles(
+        workspacePath,
+        paths,
+        getIncludedExtensions(category),
+      ).pipe(Effect.map((attached) => attached.paths));
     },
   };
 }

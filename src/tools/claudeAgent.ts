@@ -53,7 +53,6 @@ import type {
 import { DELIVERY_TAG } from '@shared/deliveryTags';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { buildSyntheticToolUseConfig } from '@tools/core/syntheticAgentConfig';
-import { parseWorkingDirectory } from '@tools/pathResolution';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import { linkAbortSignals } from '@utils/core';
 import {
@@ -623,7 +622,6 @@ const launchClaudeAgentSession = Effect.fn(
 > {
   const config = yield* getClaudeAgentConfig;
   const { roots } = yield* ToolCall;
-  const workingDir = parseWorkingDirectory(parentWorkingDirectory);
   // Mirrors codex behavior so subagents can see the project: when the call
   // is made from inside the workspace, the agent runs in that directory but
   // is also granted read access to the workspace root so it can inspect
@@ -631,7 +629,7 @@ const launchClaudeAgentSession = Effect.fn(
   // claude-agent-sdk's `Options` type names these fields `cwd` /
   // `additionalDirectories`, unlike codex's `workingDirectory`.
   const { workingDirectory, additionalDirectories } =
-    buildAgentWorkspaceOptions(roots.workspace, workingDir);
+    buildAgentWorkspaceOptions(roots.workspace, parentWorkingDirectory);
   // The env block reads only the process environment and the `Secrets`
   // service, neither of which is workspace-scoped.
   const env = yield* config.buildClaudeAgentEnv();

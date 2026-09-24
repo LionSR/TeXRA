@@ -28,6 +28,7 @@ import { openGettingStarted } from '@commands/system/walkthroughCommands';
 import { createSampleProjectWithoutWorkspace } from '@commands/system/sampleProjectCommands';
 import { tryResumeFromResumeData } from '@commands/agent/resumeFromResumeData';
 import { isFileNotFoundError } from '@common/errors';
+import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import {
   disposeProcessRuntime,
   installProcessRuntime,
@@ -101,8 +102,8 @@ import { DEFAULT_NODE_STORAGE_ROOT } from '@platform/defaults/nodeStorage';
 import { openTexraConfigStores } from '@platform/defaults/nodeStores';
 import { JsonConfigProvider } from '@platform/defaults/jsonConfigProvider';
 import {
-  RUNS_STORAGE_DIR,
-  WorkspaceStorageProvider,
+  resolveGlobalStoragePath,
+  resolveWorkspaceStoragePath,
 } from '@platform/defaults/workspaceStorage';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
@@ -196,15 +197,16 @@ async function initVscodePlatform(
 }> {
   // `~/.texra` is one history across CLI/desktop/extension (#8622). The
   // process runtime precedes the config stores below, which open on it.
-  const storage = new WorkspaceStorageProvider(
+  const storage = resolveWorkspaceStoragePath(
     DEFAULT_NODE_STORAGE_ROOT,
     workspaceRoot,
   );
+  const globalStorage = resolveGlobalStoragePath(DEFAULT_NODE_STORAGE_ROOT);
   const secrets = new VscodeSecrets(context);
   const appState = Layer.effect(
     AppState,
     Effect.map(GlobalDatabase, (database) =>
-      appStateStoreFromDatabase(storage.getGlobalStoragePath(), database),
+      appStateStoreFromDatabase(globalStorage, database),
     ),
   );
   const authReadiness: AuthReadinessGate = { uriHandlerInstalled: false };
@@ -248,7 +250,7 @@ async function initVscodePlatform(
       : undefined;
   const runtime = installProcessRuntime({
     processStart: Effect.succeed(processStart),
-    globalStorage: storage.getGlobalStoragePath(),
+    globalStorage,
     secrets,
     appState,
     auth,
@@ -282,7 +284,7 @@ async function initVscodePlatform(
     // The process's one handle on that same global root: the inquiry
     // threads, the update check and the CLI-shared input history read
     // through it for as long as this runtime lives.
-    globalDatabase: globalDatabaseLayer(storage.getGlobalStoragePath()),
+    globalDatabase: globalDatabaseLayer(globalStorage),
     // The Output channel owns filtering, so emit every level.
     minimumLogLevel: 'Trace',
   });
@@ -292,9 +294,7 @@ async function initVscodePlatform(
   const { globalState, workspaceState } = await runtime.runPromise(
     Effect.gen(function* () {
       const globalState = yield* AppState;
-      const projectState = yield* openProjectStateStore(
-        storage.getStoragePath(),
-      );
+      const projectState = yield* openProjectStateStore(storage);
       const gitRepoRoot = workspaceRoot
         ? yield* resolveGitCommonRoot(workspaceRoot)
         : undefined;
@@ -310,15 +310,17 @@ async function initVscodePlatform(
   // changes, so the configuration stores stay pinned for this process.
   const config = new JsonConfigProvider(
     await runtime.runPromise(
-      openTexraConfigStores(storage, workspaceRoot, (message) =>
-        log.warn(message),
+      openTexraConfigStores(
+        DEFAULT_NODE_STORAGE_ROOT,
+        workspaceRoot,
+        (message) => log.warn(message),
       ),
     ),
   );
   const roots = createNodeWorkspaceRoots({
     workspacePath: workspaceRoot,
-    storage: storage.getStoragePath(),
-    globalStorage: storage.getGlobalStoragePath(),
+    storage,
+    globalStorage,
     config,
     workspaceState,
     globalState,
@@ -734,7 +736,9 @@ async function activateExtension(context: vscode.ExtensionContext) {
     withSessionFs(
       runtimeSession.roots,
       Effect.flatMap(Effect.service(StorageFs), (storageFs) =>
-        storageFs.makeDirectory(RUNS_STORAGE_DIR, { recursive: true }),
+        storageFs.makeDirectory(WORKSPACE_STORAGE_LAYOUT.runs, {
+          recursive: true,
+        }),
       ),
     ),
   );

@@ -22,7 +22,10 @@ import type { ConfigStore } from '@platform/defaults/jsonConfigProvider';
 import { createNodeWorkspaceRoots } from '@platform/defaults/nodeHost';
 import { openTexraWorkspaceConfigStore } from '@platform/defaults/nodeStores';
 import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
-import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
+import {
+  resolveGlobalStoragePath,
+  resolveWorkspaceStoragePath,
+} from '@platform/defaults/workspaceStorage';
 import {
   TEXRA_APPROVAL_POLICY_CONFIG_KEY,
   type TexraApprovalPolicy,
@@ -274,11 +277,7 @@ export function openDesktopProjectRegistry(
           const existing = projects.get(root);
           if (existing) return existing;
           yield* options.records.remember(root);
-          const storageProvider = new WorkspaceStorageProvider(
-            options.dataRoot,
-            root,
-          );
-          const storage = storageProvider.getStoragePath();
+          const storage = resolveWorkspaceStoragePath(options.dataRoot, root);
           const projectScope = yield* Scope.make();
           return yield* Effect.gen(function* () {
             const [workspaceState, workspaceConfig] = yield* Effect.all(
@@ -291,7 +290,7 @@ export function openDesktopProjectRegistry(
             const roots = createNodeWorkspaceRoots({
               workspacePath: root,
               storage,
-              globalStorage: storageProvider.getGlobalStoragePath(),
+              globalStorage: resolveGlobalStoragePath(options.dataRoot),
               config: {
                 workspace: workspaceConfig,
                 global: options.globalConfigStore,

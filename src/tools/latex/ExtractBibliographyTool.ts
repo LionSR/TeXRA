@@ -13,10 +13,9 @@ import {
   summarizeBibliographyEntries,
 } from '@latex/extractBibliography';
 import { WorkspaceFs } from '@platform/rootedFs';
-import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { ToolResult } from '@shared/schemas';
 import { formatToolOutput } from '@tools/formatting';
-import { resolveAndFormat } from '@tools/pathResolution';
+import { resolveToolPath, type ToolPathCall } from '@tools/pathResolution';
 import { defineTool } from '@tools/core/define';
 import { executed } from '@tools/core/result';
 import { pathExists } from '@utils/files/fsDurability';
@@ -42,11 +41,9 @@ type ExtractBibliographyInput = z.infer<typeof ExtractBibliographyInputSchema>;
 
 const DEFAULT_MAX_ENTRIES = 25;
 
-function formatPathList(roots: WorkspaceRoots, filePaths: string[]) {
+function formatPathList(call: ToolPathCall, filePaths: string[]) {
   return Effect.forEach(filePaths, (filePath) =>
-    resolveAndFormat(roots, roots.workspace, filePath).pipe(
-      Effect.map(({ display }) => display),
-    ),
+    resolveToolPath(call, filePath).pipe(Effect.map(({ display }) => display)),
   ).pipe(Effect.map((paths) => paths.join(', ')));
 }
 
@@ -72,12 +69,7 @@ const extractBibliography = Effect.fn('ExtractBibliographyTool.execute')(
       bibPath || call.roots.config.get<string>('texra.bib.defaultPath');
 
     if (effectiveBibPath) {
-      const { path: resolved } = yield* resolveAndFormat(
-        call.roots,
-        call.roots.workspace,
-        effectiveBibPath,
-        call.workingDirectory,
-      );
+      const resolved = yield* resolveToolPath(call, effectiveBibPath);
       // `fsPath` records where the bibliography landed: workspace-relative
       // inside the session's folder, absolute for a path the caller chose
       // outside it. So the confined `WorkspaceFs` view of this call's own
@@ -102,7 +94,7 @@ const extractBibliography = Effect.fn('ExtractBibliographyTool.execute')(
     const missingBibliographyNote =
       missingBibliographyFiles.length > 0
         ? `Missing bibliography files: ${yield* formatPathList(
-            call.roots,
+            call,
             missingBibliographyFiles,
           )}.`
         : undefined;

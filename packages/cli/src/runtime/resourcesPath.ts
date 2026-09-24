@@ -25,5 +25,11 @@ export function resolveCliResourcesPath(anchorUrl = import.meta.url): string {
     path.resolve(packageDir, 'dist/resources'),
     path.resolve(packageDir, '../extension/resources'),
   ];
-  return candidates.find((candidate) => existsSync(candidate)) ?? candidates[0];
+  const found = candidates.find((candidate) => existsSync(candidate));
+  if (found === undefined) {
+    throw new Error(
+      `TeXRA CLI resources not found; looked in: ${candidates.join(', ')}`,
+    );
+  }
+  return found;
 }

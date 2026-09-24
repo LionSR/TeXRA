@@ -6,13 +6,12 @@ import { ToolCall } from '@agent/runtime/ToolCall';
 // Local imports
 import { ToolError, type ToolFileAttachment } from '@shared/schemas';
 import {
-  resolveAndFormat,
-  type WorkspacePathResolution,
+  resolveToolPath,
+  type ToolPathResolution,
 } from '@tools/pathResolution';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getMimeType, isImageMimeType } from '@utils/files/mimeUtils';
 import { entryExists } from '@utils/files/fsEntryExists';
-import { toPosixPath } from '@utils/core/pathCore';
 import { formatBytes, isNonEmptyString } from '@utils/text/stringUtils';
 
 export interface BuildFileAttachmentOptions {
@@ -23,11 +22,11 @@ export interface BuildFileAttachmentOptions {
   /** Override detected MIME type */
   mimeType?: string;
   /**
-   * Pre-resolved path. When provided, skips the internal resolveAndFormat()
+   * Pre-resolved path. When provided, skips the internal resolveToolPath()
    * call — use this to avoid double-resolution when the caller already
    * resolved the path (e.g. ReadTool).
    */
-  resolved?: WorkspacePathResolution;
+  resolved?: ToolPathResolution;
 }
 
 const ATTACHMENT_MAX_BYTES = 15 * 1024 * 1024; // 15 MiB
@@ -131,18 +130,14 @@ export const buildFileAttachment = Effect.fn('buildFileAttachment')(function* ({
 
   // An unresolvable path rejects with a ToolError the tool runner reports to
   // the model, so it stays a failure rather than becoming a defect.
-  const { path, display } = resolved
-    ? { path: resolved, display: toPosixPath(resolved.relative) }
-    : yield* resolveAndFormat(
-        call.roots,
-        call.roots.workspace,
-        filePath,
-        call.workingDirectory,
-      ).pipe(
-        Effect.mapError(
-          attachmentFailure(`Failed to resolve attachment ${filePath}`),
-        ),
-      );
+  const path =
+    resolved ??
+    (yield* resolveToolPath(call, filePath).pipe(
+      Effect.mapError(
+        attachmentFailure(`Failed to resolve attachment ${filePath}`),
+      ),
+    ));
+  const { display } = path;
   const fs = yield* FileSystem.FileSystem;
   const present = yield* entryExists(fs, path.absolute).pipe(
     Effect.mapError(
