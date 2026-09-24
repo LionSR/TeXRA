@@ -7,6 +7,11 @@ import { Effect } from 'effect';
 import { afterEach, describe, expect, vi } from 'vitest';
 
 import {
+  installPlugins,
+  parsePluginSource,
+  removePlugin,
+} from '@cli/runtime/plugins';
+import {
   formatCliSkillList,
   readCliSkills as readCliSkillsEffect,
 } from '@cli/runtime/skills';
@@ -14,6 +19,7 @@ import { initializeNodeRuntimeSkills } from '@platform/defaults/nodeHost';
 import { foldSkillSources, hostSkillContributions } from '@skills/skillSources';
 import {
   loadEnabledRuntimeSkills,
+  loadRuntimeSkillCatalog,
   readDisabledSkills,
   skillDisplayItem,
 } from '@skills/runtimeSkills';
@@ -68,6 +74,7 @@ describe('CLI skills runtime', () => {
       home: path.resolve(path.sep, 'tmp', 'home'),
       resourcesPath: path.resolve(path.sep, 'tmp', 'resources'),
       options: { additionalPaths: ['.texra/skills'] },
+      plugins: [],
     }).flatMap((tier) => tier.sources);
 
     expect(
@@ -85,6 +92,7 @@ describe('CLI skills runtime', () => {
         home: path.resolve(path.sep, 'tmp', 'home'),
         resourcesPath: path.resolve(path.sep, 'tmp', 'resources'),
         options: {},
+        plugins: [],
       }),
     ).toThrow('Duplicate skill source contribution id: lean4');
   });
@@ -282,6 +290,102 @@ describe('CLI skills runtime', () => {
           path: path.join(resources, 'plugins', 'lean4', 'skills'),
         });
         expect(result.errors).toEqual([]);
+      }),
+  );
+
+  it.effect(
+    'installs a Claude Code plugin from a local directory into the user tier, and removes it',
+    () =>
+      Effect.gen(function* () {
+        // Shaped like github.com/LionSR/AgenticPublicationProtocol: both
+        // plugin manifests, a marketplace listing itself, skills/<name>/SKILL.md.
+        const plugin = yield* Effect.promise(() =>
+          makeTempDir('texra-cli-plugin-', tempRoots),
+        );
+        const resources = yield* Effect.promise(() =>
+          makeTempDir('texra-cli-plugin-', tempRoots),
+        );
+        const manifest = {
+          name: 'paper-protocol',
+          description: 'Publish academic papers as AI agents',
+          version: '1.0.0',
+          author: { name: 'LionSR' },
+        };
+        yield* Effect.promise(async () => {
+          await fs.mkdir(path.join(plugin, '.claude-plugin'));
+          await fs.mkdir(path.join(plugin, '.codex-plugin'));
+          await fs.writeFile(
+            path.join(plugin, '.claude-plugin', 'plugin.json'),
+            JSON.stringify(manifest),
+          );
+          await fs.writeFile(
+            path.join(plugin, '.claude-plugin', 'marketplace.json'),
+            JSON.stringify({
+              name: 'paper-protocol',
+              owner: { name: 'LionSR' },
+              plugins: [{ name: 'paper-protocol', source: './' }],
+            }),
+          );
+          await fs.writeFile(
+            path.join(plugin, '.codex-plugin', 'plugin.json'),
+            JSON.stringify({ ...manifest, skills: './skills/' }),
+          );
+          await writeSkill(
+            path.join(plugin, 'skills'),
+            'load-paper',
+            'Load a published paper repository.',
+          );
+          await writeSkill(
+            path.join(plugin, 'skills'),
+            'publish-paper',
+            'Publish a paper as an agent.',
+          );
+          await fs.mkdir(path.join(plugin, 'scripts'));
+          // A bundled skill of the same name: the installed plugin wins.
+          await writeSkill(
+            path.join(resources, 'skills'),
+            'load-paper',
+            'The bundled copy.',
+          );
+        });
+        const stores = makeFakeSettingsStores().stores;
+        const env = { stores, pluginsDir: path.join(resources, 'plugins') };
+        initializeNodeRuntimeSkills({ resourcesPath: resources }, []);
+
+        const [installed] = yield* installPlugins(
+          parsePluginSource(plugin, plugin, undefined),
+          [],
+          env,
+        );
+        expect(installed).toMatchObject({
+          name: 'paper-protocol',
+          path: yield* Effect.promise(() => fs.realpath(plugin)),
+        });
+        expect(installed?.commit).toBeUndefined();
+
+        const catalog = yield* loadRuntimeSkillCatalog(resources, stores);
+        const fromPlugin = catalog.skills.filter((skill) =>
+          ['load-paper', 'publish-paper'].includes(skill.name),
+        );
+        expect(fromPlugin).toEqual([
+          expect.objectContaining({ name: 'load-paper', source: 'user' }),
+          expect.objectContaining({ name: 'publish-paper', source: 'user' }),
+        ]);
+        expect(catalog.catalog).toContain(
+          '- load-paper: Load a published paper repository.\n  Source: plugin paper-protocol',
+        );
+        expect(catalog.catalog).not.toContain('The bundled copy.');
+
+        yield* removePlugin('paper-protocol', env);
+        const after = yield* loadRuntimeSkillCatalog(resources, stores);
+        expect(after.catalog).not.toContain('plugin paper-protocol');
+        expect(after.skills).toContainEqual(
+          expect.objectContaining({ name: 'load-paper', source: 'bundled' }),
+        );
+        // A local plugin is referenced in place, so removing it keeps it.
+        yield* Effect.promise(() =>
+          fs.access(path.join(plugin, 'skills', 'load-paper', 'SKILL.md')),
+        );
       }),
   );
 });

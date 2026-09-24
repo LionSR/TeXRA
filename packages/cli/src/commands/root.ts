@@ -43,6 +43,7 @@ import { installGithubActionCommand } from './installGithubAction';
 import { memoryCommand } from './memory';
 import { modelsCommand } from './models';
 import { multiAgentCommand } from './multiAgent';
+import { pluginCommand } from './plugin';
 import { resumeCommand } from './resume';
 import { setupCommand } from './setup';
 import { skillsCommand } from './skills';
@@ -85,6 +86,7 @@ export const rootCommand = withUsageSections(
       memory: memoryCommand,
       agents: agentsCommand,
       skills: skillsCommand,
+      plugin: pluginCommand,
       tools: toolsCommand,
       'multi-agent': multiAgentCommand,
       models: modelsCommand,
@@ -119,6 +121,10 @@ export const rootCommand = withUsageSections(
         ['texra run <agent> --input file.tex', 'run an agent headless'],
         ['texra agents list', 'list the available agents'],
         ['texra config agents --all', 'show all agents in this workspace'],
+        [
+          'texra plugin install github.com/<owner>/<repo>',
+          'install a Claude Code or Codex plugin for its skills',
+        ],
         ['texra init', 'save workspace defaults to .texra/config.json'],
         [
           'texra install-github-action',

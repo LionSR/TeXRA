@@ -72,6 +72,7 @@ import {
   detachSubagentsOnStop,
   disabledSkills,
   disabledSkillSources,
+  installedPlugins,
   multiAgentSettingsRevision,
   editApprovalEnabled,
   gitAuthorEmail,
@@ -348,6 +349,7 @@ export class SettingsApp extends SignalWatcher(LitElement) {
             .masterEnabled=${agentSkillsEnabled.get()}
             .disabledSkills=${disabledSkills.get()}
             .disabledSources=${disabledSkillSources.get()}
+            .plugins=${installedPlugins.get()}
             .skills=${skillsList.get()}
             .issues=${skillLoadIssues.get()}
           ></skills-tab>
