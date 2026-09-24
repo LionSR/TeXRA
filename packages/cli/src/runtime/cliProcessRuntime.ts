@@ -68,7 +68,6 @@ import { nodeProcesses } from '@platform/defaults/nodeProcesses';
 import { resolveGlobalStoragePath } from '@platform/defaults/workspaceStorage';
 import { GlobalDatabase } from '@shared/session/database';
 import { usageLogLayer } from '@telemetry/UsageLogService';
-import { directLeanLanguageServices } from '@tools/lean/direct/directLspAdapter';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { readCliVersion } from './cliContext';
@@ -293,7 +292,6 @@ export function installCliProcessRuntime(
             ),
           ),
       },
-      lean: directLeanLanguageServices(),
       // CLI model traffic goes to the same Supabase usage log the extension
       // writes to, tagged with editorType 'cli' and the CLI version. The
       // runtime's disposal drains the queue, and that disposal is the last

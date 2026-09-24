@@ -66,13 +66,6 @@ export interface RunFlowLifecycleOptions {
    * the run, so the run forks it detached and logs whatever it ends on.
    */
   onRun?: (handle: AgentRunHandle) => Effect.Effect<void, Error>;
-  /**
-   * Run-end side effect supplied by the composition layer. The lifecycle owns
-   * its terminal timing and logs failures without replacing the run result.
-   * Kept injected so this module does not statically reach tool-domain
-   * services such as the Lean language adapter.
-   */
-  onRunEnd?: (runId: RunId) => Effect.Effect<void, never, AgentRunServices>;
 }
 
 interface FinalizeRunTerminalParams {
@@ -496,26 +489,6 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
         new FinalizedRunFailure(errorMsg, { cause: err }),
       );
     });
-    /**
-     * Invoke the composition-supplied hook once the live run ends.
-     */
-    const runOnRunEnd = Effect.gen(function* () {
-      if (!options?.onRunEnd) return;
-      // Guarded on every cause but interruption: this runs as a finalizer,
-      // where a failure or defect would otherwise replace the result this run
-      // already published.
-      yield* options.onRunEnd(runId).pipe(
-        Effect.catchCause((cause) =>
-          Cause.hasInterruptsOnly(cause)
-            ? Effect.interrupt
-            : logLifecycleWarning('Failed to run the run-end hook', {
-                agentIdentifier,
-                runId,
-                error: Cause.squash(cause),
-              }),
-        ),
-      );
-    });
     const run = Effect.gen(function* () {
       // `run.start` is already out: the launch context published it at its
       // reservation commit point. Publish the run config before the RUNNING
@@ -596,12 +569,7 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
         // owned terminal result before cleanup while retaining interruption.
         finalizeTerminal({ outcome: RUN_OUTCOME.CANCELLED }).pipe(Effect.orDie),
       ),
-      Effect.ensuring(
-        Effect.gen(function* () {
-          detachRunInterrupt();
-          yield* runOnRunEnd;
-        }),
-      ),
+      Effect.ensuring(Effect.sync(detachRunInterrupt)),
     );
   },
 );
