@@ -85,8 +85,9 @@ flowchart LR
 
 `ToolRegistry` and `Compositions` (`src/tools/toolTable.ts`,
 `src/tools/compositions.ts`) are process services provided by
-`installProcessRuntime` (`src/controllers/session/sessionLayer.ts`) through
-`toolTableLayer` (#13089, #13090). `Compositions` is a `LayerMap` keyed by
+`installProcessRuntime` (`src/controllers/session/sessionLayer.ts`), which
+installs `toolRegistryLayer` from `src/tools/registry.ts`: `toolTableLayer`
+applied to `TOOL_TABLE` and the MCP loader (#13089, #13090). `Compositions` is a `LayerMap` keyed by
 `CompositionKey` (hash plus value).
 
 - **Pin.** `resolveAgentTools` pins the run's composition in the caller's
@@ -125,8 +126,9 @@ A tool-use run records `offeredTools` (names in offer order) and
 `toolsetHash` on `ToolUseSnapshotStateSchema`
 (`src/shared/schemas/runFlowState.ts`), written by the opening `flow.snapshot`
 through the one ledger writer (#13088). The hash covers each tool's
-`{ name, parameters }` without descriptions, per-parameter descriptions
-included (#13111), so rewording docs is not drift.
+`{ name, parameters }` with every `description` keyword removed: the tool's
+own and, since #13111, each schema node's. Rewording a tool's or a
+parameter's documentation is therefore not drift.
 
 On resume, `agentRunLayer` offers **recorded ∩ available** in recorded order.
 A resume never gains a tool it was not offered. Each missing tool is logged
