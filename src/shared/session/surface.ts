@@ -364,16 +364,15 @@ export function canSendFollowUp(run: RunView, draft: Draft): boolean {
 }
 
 /**
- * The phase the run board shows for a stream: the surface's choice while
- * the model still has it, else the current phase (the last opened one, or
- * the first declared), else `null` for a run with no phases.
+ * The phase a workflow view shows — the run board and the terminal popup
+ * alike: the viewer's choice while the model still has it, else the current
+ * phase (the last opened one, or the first declared), else `null` for a run
+ * with no phases.
  */
 export function resolvePhase(
-  surface: Surface,
-  runId: RunId,
+  chosen: string | undefined,
   phases: readonly { readonly key: string; readonly opened: boolean }[],
 ): string | null {
-  const chosen = surface.phase.get(runId);
   if (chosen !== undefined && phases.some((phase) => phase.key === chosen)) {
     return chosen;
   }

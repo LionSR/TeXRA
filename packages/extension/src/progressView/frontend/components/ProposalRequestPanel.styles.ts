@@ -69,17 +69,15 @@ export const proposalRequestPanelStyles: CSSResult = css`
     flex-shrink: 0;
   }
 
-  .proposal-card__phase-agents {
-    flex: 1 1 auto;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+  .proposal-card__defaults {
+    padding: ${sp.small} ${sp.medium} 0;
     color: var(--color-text-secondary);
+    font-size: var(--font-size-sm);
   }
 
   .proposal-card__phase-calls {
     flex: 0 0 auto;
+    margin-inline-start: auto;
     font-variant-numeric: tabular-nums;
     color: var(--color-text-secondary);
   }

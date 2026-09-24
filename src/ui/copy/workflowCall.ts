@@ -1,16 +1,17 @@
 import {
-  WORKFLOW_TASK_STATUS_LABEL,
+  workflowCallStatusLabel,
   type TaskGroup,
   type WorkflowCallKind,
   type WorkflowCallProgress,
+  type WorkflowTally,
 } from '@shared/schemas';
 import { filterNotNullish } from '@utils/core';
 import { formatCompactDuration, formatCostUsd } from '@utils/text/stringUtils';
 
 /** Result-contract label of one issued call, shared by every host. */
 const WORKFLOW_CALL_KIND_LABEL = {
-  document: 'Document',
-  structured: 'Structured',
+  document: 'Edits files',
+  structured: 'Returns data',
 } as const satisfies Record<WorkflowCallKind, string>;
 
 const CALL_FILE_PREVIEW_LIMIT = 3;
@@ -146,21 +147,22 @@ export function formatWorkflowCallLine(call: WorkflowCallProgress): string {
   const suffix = metadata.length > 0 ? ` · ${metadata.join(' · ')}` : '';
   const detail = workflowCallDetail(call);
   const explanation = detail ? ` — ${detail.text}` : '';
-  return `${WORKFLOW_TASK_STATUS_LABEL[call.status]}: ${call.label}${suffix}${explanation}`;
+  return `${workflowCallStatusLabel(call)}: ${call.label}${suffix}${explanation}`;
 }
 
 /**
  * One glyph per call status — the vocabulary every host paints, so a strip
  * of cells reads the same on the terminal and on the board, and reads
- * without colour: pending and running, done and failed, skipped and cached
- * are all distinct shapes.
+ * without colour: planned, queued and running fill in as the call advances,
+ * and done, reused, stopped and failed are all distinct shapes. None of them
+ * is a checkbox: nothing here is a thing to tick.
  */
 export const WORKFLOW_CALL_STATUS_GLYPH = {
-  declared: '□',
-  queued: '□',
-  running: '☐',
-  completed: '☑',
-  cached: '✓',
+  declared: '·',
+  queued: '○',
+  running: '◐',
+  completed: '✓',
+  cached: '↺',
   skipped: '⊘',
   cancelled: '⊘',
   failed: '✗',
@@ -174,42 +176,22 @@ export const TOKENS_GENERATED = '↓';
  *  declared. */
 export const WORKFLOW_PHASE_GLYPH = { opened: '◆', declared: '◇' } as const;
 
-/**
- * A run's or a phase's tally as the run model folds it: `done` counts every
- * settled call (cancelled and skipped included — they are distinct from
- * `failed`), `declared` how many plan tasks are still unissued. Every
- * reader, `/executions/{id}` included, takes it from the run model.
- */
-export interface WorkflowTally {
-  readonly done: number;
-  readonly total: number;
-  readonly running: number;
-  readonly failed: number;
-  readonly declared: number;
-}
+const WORKFLOW_TALLY_WORDS = [
+  ['ok', 'ok'],
+  ['running', 'running'],
+  ['queued', 'queued'],
+  ['planned', 'planned'],
+  ['failed', 'failed'],
+  ['cancelled', 'cancelled'],
+  ['skipped', 'skipped'],
+  ['notRun', 'not run'],
+] as const satisfies readonly (readonly [keyof WorkflowTally, string])[];
 
-/** `done/total · N running · N failed` — the one spelling of a tally. */
+/** `6 ok · 1 failed · 1 not run` — the one spelling of a tally, by outcome,
+ *  so no count can read as "done" beside a failure it includes. */
 export function formatWorkflowTally(tally: WorkflowTally): string {
-  return [
-    `${tally.done}/${tally.total}`,
-    tally.running > 0 ? `${tally.running} running` : undefined,
-    tally.failed > 0 ? `${tally.failed} failed` : undefined,
-  ]
-    .filter(filterNotNullish)
-    .join(' · ');
-}
-
-/** A phase's tally: an opened phase counts its calls and, while the plan
- *  still holds tasks it has not issued, how many; a phase known only from the
- *  plan has no calls to count, so its declared count is the whole story. */
-export function formatWorkflowPhaseTally(phase: {
-  readonly opened: boolean;
-  readonly tally: WorkflowTally;
-}): string {
-  const { declared } = phase.tally;
-  const declaredText = declared > 0 ? `${declared} declared` : undefined;
-  if (!phase.opened) return declaredText ?? 'declared';
-  return [formatWorkflowTally(phase.tally), declaredText]
-    .filter(filterNotNullish)
-    .join(' · ');
+  const parts = WORKFLOW_TALLY_WORDS.filter(([key]) => tally[key] > 0).map(
+    ([key, word]) => `${tally[key]} ${word}`,
+  );
+  return parts.length > 0 ? parts.join(' · ') : 'no calls';
 }

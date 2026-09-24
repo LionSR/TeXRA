@@ -191,7 +191,7 @@ describe('createWorkflowScriptStrategy', () => {
         expect(delivery).toContain('with scriptPath:');
         expect(delivery).toContain('<workflow-summary>');
         expect(delivery).toContain('"outcome":"completed"');
-        expect(delivery).toContain('"taskDone":1');
+        expect(delivery).toContain('"ok":1');
         expect(delivery).toContain('"costUsd":0.42');
         expect(delivery).toContain(
           '"files":[{"path":"paper.tex","added":12,"removed":8}]',
@@ -273,8 +273,7 @@ return await agent('Solve.', {
       expect(ports.recordCost).toHaveBeenCalledOnce();
       expect(ports.recordCost).toHaveBeenCalledWith(0);
       const delivery = yield* onFakeHost(strategy.formatDelivery(turn, 0));
-      expect(delivery).toContain('Saved result');
-      expect(delivery).not.toContain('Using saved result');
+      expect(delivery).toContain('Reused: saved call');
       expect(delivery).toContain(
         '"files":[{"path":"paper.tex","added":12,"removed":8}]',
       );
@@ -409,12 +408,11 @@ throw new Error('script failed after replay')`;
         );
         expect(errText).toContain('with scriptPath:');
         expect(errText).toContain('"outcome":"failed"');
-        // The failure line's tallies come from the engine's terminal snapshot —
-        // the run replayed one cached call and declared no phases — not from a
+        // The failure line's tallies come from the run's own cards — the run
+        // replayed one cached call and declared no phases — not from a
         // re-parse of the checkpoint's script.
         expect(errText).toContain('"phaseCount":0');
-        expect(errText).toContain('"taskDone":1');
-        expect(errText).toContain('"taskTotal":1');
+        expect(errText).toContain('"total":1,"ok":1');
       }),
   );
 
@@ -433,7 +431,9 @@ return await agent('malformed stale')`;
           ...finalResult,
           output: {
             category: 'workflow',
-            outputs: [{ ...paperOutput, relativePath: 'stale.tex' }],
+            outputs: [
+              { ...paperOutput, relativePath: 'stale.tex', originalPath: null },
+            ],
             compileFailures: [],
             diffs: [],
           },
@@ -454,7 +454,13 @@ return await agent('malformed stale')`;
           usage: RunUsageTotalsSchema.parse({ totalCost: 0.25 }),
           output: {
             category: 'workflow',
-            outputs: [{ ...paperOutput, relativePath: 'current.tex' }],
+            outputs: [
+              {
+                ...paperOutput,
+                relativePath: 'current.tex',
+                originalPath: null,
+              },
+            ],
             compileFailures: [],
             diffs: [],
           },
@@ -488,7 +494,7 @@ throw new Error('current revision failed')`,
   );
 
   it.effect(
-    'keeps the delivery summary at the last durable journal state when journaling fails',
+    'reports the call whose journal write failed, and none of its files',
     () =>
       Effect.gen(function* () {
         const session = testDefaultSession();
@@ -528,8 +534,8 @@ throw new Error('current revision failed')`,
 
         const errText = strategy.formatError(null, new Error('boom'));
         expect(errText).toContain('"outcome":"failed"');
-        expect(errText).toContain('"taskDone":0');
-        expect(errText).toContain('"taskTotal":0');
+        expect(errText).toContain('"total":1,"ok":0');
+        expect(errText).toContain('"failed":1');
         expect(errText).not.toContain('paper.tex');
       }),
   );

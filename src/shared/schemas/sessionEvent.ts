@@ -521,8 +521,9 @@ const WorkflowCheckpointDraftSchema = z.discriminatedUnion('type', [
    *
    * `supersededRunId` is the one authorization that closes a child which
    * already started work: a user retrying that child through the workflow's
-   * control surface. The engine writes this row for the next attempt before
-   * it asks for the replacement, naming the child the retry superseded, so
+   * control surface. The engine writes this row at that child's own attempt,
+   * naming it, before it asks for the replacement (the mark stays put, so the
+   * replacement's id reads as the free slot above it), so
    * the recovery probe advances past an attempt it would otherwise refuse to
    * repeat. Absent on every mark a launch writes for itself, which is what
    * keeps restart recovery fail-closed for a child nobody retried.

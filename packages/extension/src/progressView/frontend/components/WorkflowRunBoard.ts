@@ -36,6 +36,7 @@ import { SessionUiEvents } from '@shared/session/uiEvents';
 import {
   formatWorkflowRowGroup,
   workflowPhaseRows,
+  workflowPlanEntryLabel,
   type WorkflowPhaseModel,
   type WorkflowPhaseRow,
   type WorkflowRowGroup,
@@ -236,7 +237,7 @@ export class WorkflowRunBoard extends LitElement {
   private expandedGroups(phaseKey: string): ReadonlySet<WorkflowRowGroup> {
     const groups = this.surface.groups.get(this.run.id);
     return new Set(
-      (['finished', 'queued', 'declared'] as const).filter(
+      (['finished', 'queued', 'planned', 'not run'] as const).filter(
         (group) => groups?.get(groupKey(phaseKey, group)) === true,
       ),
     );
@@ -252,6 +253,7 @@ export class WorkflowRunBoard extends LitElement {
     );
     const rows = workflowPhaseRows(phase, {
       expanded: this.expandedGroups(phase.key),
+      settled: this.model?.settled === true,
       waiting,
     });
     const blocks: Block[] = [];
@@ -291,8 +293,7 @@ export class WorkflowRunBoard extends LitElement {
   // -- events --------------------------------------------------------------
 
   /** Skip and retry act on one call, so the request names that call's own
-   *  child run: `Retry failed` fires one per failed row and each row
-   *  keeps its own answer instead of N sharing the run's slot. */
+   *  child run and each row keeps its own answer. */
   private control(rowId: string, action: 'skip' | 'retry'): void {
     const child = this.childOf(rowId);
     if (!child) return;
@@ -331,17 +332,13 @@ export class WorkflowRunBoard extends LitElement {
     );
   }
 
-  /** Every failed card with a child to retry, in phase order. */
+  /** Every failed card, in phase order. */
   private failedRows(): readonly { phase: string; row: WorkflowTaskRow }[] {
     return (this.model?.phases ?? []).flatMap((phase) =>
       phase.tasks
         .filter((row) => row.call.status === 'failed')
         .map((row) => ({ phase: phase.key, row })),
     );
-  }
-
-  private retryFailed(): void {
-    for (const { row } of this.failedRows()) this.control(row.id, 'retry');
   }
 
   /** Focus the failed card after the focused one, wrapping, and show its
@@ -383,7 +380,7 @@ export class WorkflowRunBoard extends LitElement {
     const { tally } = model;
     return html`<div class="summary">
       <wa-badge variant="neutral" appearance="outlined" pill
-        >${tally.done} / ${tally.total}</wa-badge
+        >${tally.ok} / ${tally.total} ok</wa-badge
       >
       ${this.renderStatusCount('running', tally.running)}
       ${this.renderStatusCount('failed', tally.failed)}
@@ -424,7 +421,7 @@ export class WorkflowRunBoard extends LitElement {
         ${
           phase.opened
             ? html`<span class="quiet"
-                >${phase.tally.done}/${phase.tally.total}</span
+                >${phase.tally.ok}/${phase.tally.total}</span
               >`
             : nothing
         }
@@ -433,8 +430,8 @@ export class WorkflowRunBoard extends LitElement {
     >`;
   }
 
-  /** A waiting card opens the run that is asking; a failed one retries
-   *  or skips. */
+  /** A waiting card opens the run that is asking; a running one retries
+   *  or skips — the engine acts on a call only while it is in flight. */
   private renderActions(
     row: WorkflowTaskRow,
     child: RunView | undefined,
@@ -453,7 +450,7 @@ export class WorkflowRunBoard extends LitElement {
         ></span
       >`;
     }
-    if (row.call.status !== 'failed') return nothing;
+    if (row.call.status !== 'running') return nothing;
     const canAct = this.canControl && child !== undefined;
     return html`<span class="row-actions"
       ><wa-button
@@ -572,7 +569,9 @@ export class WorkflowRunBoard extends LitElement {
         return html`<div class="row status-declared" role="listitem">
           <span class="row-icon">${waIcon('circle')}</span>
           <bdi class="row-label" dir="auto">${row.task.label}</bdi>
-          <span class="row-last">Declared</span>
+          <span class="row-last"
+            >${workflowPlanEntryLabel(this.model?.settled === true)}</span
+          >
         </div>`;
       case 'group':
         // A group row reaches the board only as a fold's header.
@@ -650,7 +649,7 @@ export class WorkflowRunBoard extends LitElement {
 
   /** Shown only when a call failed or the runtime refused a request on
    *  this run. Next failed only navigates, so it stays live on a settled
-   *  run; Retry failed follows `canControl`. The run itself stops from the
+   *  run. The run itself stops from the
    *  header, whose refusal lands in the note; a call's lands on its row. */
   private renderControls(): TemplateResult | typeof nothing {
     const failed = this.failedRows().length;
@@ -663,18 +662,11 @@ export class WorkflowRunBoard extends LitElement {
         failed === 0
           ? nothing
           : html`<wa-button
-                size="s"
-                appearance="outlined"
-                @click=${this.nextFailed}
-                >Next failed</wa-button
-              >
-              <wa-button
-                size="s"
-                appearance="outlined"
-                ?disabled=${!this.canControl}
-                @click=${this.retryFailed}
-                >Retry failed</wa-button
-              >`
+              size="s"
+              appearance="outlined"
+              @click=${this.nextFailed}
+              >Next failed</wa-button
+            >`
       }
       ${
         rejected === undefined
@@ -689,7 +681,10 @@ export class WorkflowRunBoard extends LitElement {
   override render(): TemplateResult | typeof nothing {
     const model = this.model;
     if (!model) return nothing;
-    const active = resolvePhase(this.surface, this.run.id, model.phases);
+    const active = resolvePhase(
+      this.surface.phase.get(this.run.id),
+      model.phases,
+    );
     return html`${this.summary ? this.renderSummary(model) : nothing}
       <wa-tab-group
         class=${classMap({ phases: true, settled: this.settled })}

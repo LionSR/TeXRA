@@ -436,7 +436,7 @@ describe('CLI conversation transcript', () => {
       { width: 40 },
     );
 
-    expect(layout.lines[0]?.startsWith('  ☑ ')).toBe(true);
+    expect(layout.lines[0]?.startsWith('  ✓ ')).toBe(true);
     expect(layout.lines.slice(1).every((line) => line.startsWith('    '))).toBe(
       true,
     );

@@ -157,7 +157,7 @@ return { papers, question: args.question };`;
       'Literature synthesis',
     );
     expect(container.querySelector('wa-icon[name="list-ul"]')).not.toBeNull();
-    expect(labels).toEqual(['Agent:', 'Script:', 'Args:', 'Files:']);
+    expect(labels).toEqual(['Default agent:', 'Script:', 'Args:', 'Files:']);
     expect(container.textContent).toContain('research');
     expect(scriptBlock?.querySelector('code')?.textContent).toBe(script);
     expect(scriptBlock?.textContent).toContain('JavaScript');

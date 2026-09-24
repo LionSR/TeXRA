@@ -634,7 +634,7 @@ return null`;
           status: 'executed',
           summary: "Launched workflow script 'tool-test' (async)",
         });
-        expect(result.output).toContain(`Run ID: ${runId}`);
+        expect(result.output).toContain(`launched as run ${runId}.`);
         expect(result.output).toContain(
           'Script file: .texra/workflow-scripts/draft-tool-call.mjs',
         );

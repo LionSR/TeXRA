@@ -2098,7 +2098,9 @@ const SCENARIOS = [
       'Recent',
       'nested Interrupted',
       'Resume',
-      '[2 total · 0 running · 2 finished]',
+      // A workflow run counts its calls (the run model's tally), not the
+      // child runs its attempts opened.
+      '[1 ok]',
     ],
     ordered: [
       { before: 'Running', after: 'Waiting on you' },

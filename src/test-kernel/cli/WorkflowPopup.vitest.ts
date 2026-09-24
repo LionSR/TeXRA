@@ -26,7 +26,7 @@ import {
 const ROOT = 'workflow-root' as RunId;
 
 const VIEW: WorkflowPopupView = {
-  phaseIndex: 0,
+  phaseKey: undefined,
   selectedKey: undefined,
   expanded: new Set(),
   filter: '',
@@ -59,6 +59,7 @@ async function renderPopup(
   taskGroups: readonly TaskGroup[],
   rows: readonly TranscriptRow[],
   availableRows: number,
+  view: WorkflowPopupView = VIEW,
 ) {
   const model = workflowRunModel({
     taskGroups,
@@ -97,7 +98,7 @@ async function renderPopup(
       onViewChange,
       onWorkflowControl: vi.fn(),
       runId: ROOT,
-      view: VIEW,
+      view,
     }),
     { columns: 100 },
   );
@@ -170,13 +171,14 @@ describe('workflow popup', () => {
       ],
       [taskRow('done', 'completed'), taskRow('bad', 'failed', 'Check')],
       20,
+      { ...VIEW, phaseKey: 'phase-Derive' },
     );
     try {
-      await waitFor(() => stdout.output.includes('1 finished'));
+      await waitFor(() => stdout.output.includes('done'));
       stdin.write('f');
       await waitFor(() => onViewChange.mock.calls.length > 0);
       expect(onViewChange).toHaveBeenLastCalledWith({
-        phaseIndex: 1,
+        phaseKey: 'phase-Check',
         selectedKey: 'task:task-bad',
       });
     } finally {

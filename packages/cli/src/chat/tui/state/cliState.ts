@@ -308,7 +308,9 @@ export function openTranscriptReader(runId: RunId): void {
  *  here rather than in the component so a repaint or a foreground surface
  *  taking over (an approval) hands the popup back exactly as it was. */
 export interface WorkflowPopupView {
-  readonly phaseIndex: number;
+  /** The phase tab the user chose; unset follows the run's active phase
+   *  (`resolvePhase`), as the board does. */
+  readonly phaseKey: string | undefined;
   readonly selectedKey: string | undefined;
   readonly expanded: ReadonlySet<WorkflowRowGroup>;
   /** Live filter text; empty means none. */
@@ -318,7 +320,7 @@ export interface WorkflowPopupView {
 }
 
 const INITIAL_WORKFLOW_POPUP_VIEW: WorkflowPopupView = {
-  phaseIndex: 0,
+  phaseKey: undefined,
   selectedKey: undefined,
   expanded: new Set(),
   filter: '',

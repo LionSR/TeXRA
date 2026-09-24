@@ -12,6 +12,7 @@ import {
   flowPosition,
   formatFlowPositionLabel,
 } from '@shared/runs/runStatusDisplay';
+import { formatWorkflowTally } from '@ui/copy/workflowCall';
 import { formatResultCount } from '@utils/text/stringUtils';
 
 import { childElapsed } from '../state/childControls';
@@ -119,6 +120,13 @@ function SessionRow({
     : undefined;
   const summary = run.description;
   const color = CHILD_TONE_COLOR[run.tone];
+  // A workflow's children are its calls' attempts, a retry included, so its
+  // count is the run model's tally of calls — the one the popup shows.
+  const workflowTally = run.transcript.run?.tally;
+  let rollup: string | undefined;
+  if (workflowTally) rollup = formatWorkflowTally(workflowTally);
+  else if (!expanded && run.rollup.total > 0)
+    rollup = `${run.rollup.total} total · ${run.rollup.running} running · ${run.rollup.finished} finished`;
   return (
     <Box
       flexDirection="row"
@@ -147,9 +155,9 @@ function SessionRow({
         {modelLabel ? ` · ${modelLabel}` : ''}
         {!metadataColumn && elapsed ? ` · ${elapsed}` : ''}
       </RowSegment>
-      {!expanded && run.rollup.total > 0 ? (
+      {rollup ? (
         <RowSegment color={color} flexShrink={metadataColumn ? 0 : 1}>
-          {` [${run.rollup.total} total · ${run.rollup.running} running · ${run.rollup.finished} finished]`}
+          {` [${rollup}]`}
         </RowSegment>
       ) : null}
       {run.group === 'interrupted' && run.resumeEligible ? (

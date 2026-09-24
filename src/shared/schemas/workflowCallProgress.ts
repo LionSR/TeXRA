@@ -254,12 +254,86 @@ export function interruptedWorkflowCall(
 }
 
 export const WORKFLOW_TASK_STATUS_LABEL = {
-  declared: 'Declared',
+  declared: 'Planned',
   queued: 'Queued',
   running: 'Running',
   completed: 'Finished',
-  cached: 'Saved result',
+  cached: 'Reused',
   skipped: 'Skipped',
   cancelled: 'Cancelled',
   failed: 'Failed',
 } as const satisfies Record<WorkflowCallStatus, string>;
+
+/** What a plan entry the run never ran reads as once the run has ended. */
+export const WORKFLOW_NOT_RUN_LABEL = 'Not run';
+
+/** The status word of one card: its status's label, except a call the run
+ *  ended before reaching, which was not skipped by anyone — it did not run. */
+export function workflowCallStatusLabel(call: WorkflowCallProgress): string {
+  return call.status === 'skipped' && call.reason === 'not-reached'
+    ? WORKFLOW_NOT_RUN_LABEL
+    : WORKFLOW_TASK_STATUS_LABEL[call.status];
+}
+
+/**
+ * A run's or a phase's calls counted by outcome — the one tally every
+ * surface prints, the delivery summary included. `planned` and `notRun` are
+ * the same plan entries read before and after the run ends: an entry the
+ * script has not issued yet is planned while the run can still reach it and
+ * not run once it cannot.
+ */
+export const WorkflowTallySchema = z.strictObject({
+  total: z.int().nonnegative(),
+  ok: z.int().nonnegative(),
+  running: z.int().nonnegative(),
+  queued: z.int().nonnegative(),
+  planned: z.int().nonnegative(),
+  failed: z.int().nonnegative(),
+  cancelled: z.int().nonnegative(),
+  /** Skipped by the user. */
+  skipped: z.int().nonnegative(),
+  notRun: z.int().nonnegative(),
+});
+export type WorkflowTally = z.infer<typeof WorkflowTallySchema>;
+
+/** Count `cards` plus `unissued` plan entries that have no card yet. */
+export function tallyWorkflowCalls(
+  cards: readonly WorkflowCallProgress[],
+  unissued: number,
+  settled: boolean,
+): WorkflowTally {
+  const tally = {
+    total: cards.length + unissued,
+    ok: 0,
+    running: 0,
+    queued: 0,
+    planned: 0,
+    failed: 0,
+    cancelled: 0,
+    skipped: 0,
+    notRun: 0,
+  };
+  const unrun = settled ? 'notRun' : 'planned';
+  tally[unrun] += unissued;
+  for (const call of cards) {
+    switch (call.status) {
+      case 'completed':
+      case 'cached':
+        tally.ok += 1;
+        break;
+      case 'running':
+      case 'queued':
+      case 'failed':
+      case 'cancelled':
+        tally[call.status] += 1;
+        break;
+      case 'declared':
+        tally[unrun] += 1;
+        break;
+      case 'skipped':
+        tally[call.reason === 'not-reached' ? 'notRun' : 'skipped'] += 1;
+        break;
+    }
+  }
+  return tally;
+}
