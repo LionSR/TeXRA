@@ -8,7 +8,6 @@ import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
 import { acquireResumedRunOwnership } from '@agent/storage/runLifecycle';
 import { persistedParentRunId } from '@agent/storage/runRecords';
 import { AgentError } from '@common/errors';
-import { ensureError } from '@utils/errors/errorMessage';
 import { createLog } from '@logger/logUtils';
 import type { ProcessServices } from '@platform/processRuntime';
 import { sessionFsLayer } from '@platform/rootedFs';
@@ -27,6 +26,7 @@ import {
 import { RunLedger } from '@shared/session/runLedger';
 import type { RunState } from '@shared/session/runStateFold';
 import { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
+import { ensureError } from '@utils/errors/errorMessage';
 import { ensureRunDirUnder } from '@utils/files/runStorageFs';
 
 import {
