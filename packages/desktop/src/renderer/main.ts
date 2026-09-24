@@ -870,9 +870,6 @@ const desktopRendererCommandActions: DesktopCommandActions = {
   },
   toggleBottomBar: toggleBottomBarVisibility,
   toggleSidePanel: toggleSidePanelVisibility,
-  // New Session is the header's "+" (PRD 12.4): the New-task state with
-  // the launcher's selections as they are, the same as the extension.
-  resetMainView: returnToLauncher,
 };
 const shortcutBootstrap = createDesktopShortcutBootstrap({
   createRegistry: (openCommands) =>

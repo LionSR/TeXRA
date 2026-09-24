@@ -176,9 +176,9 @@ function handleRequestEnsureProgressView(
           {
             modal: false,
             detail:
-              'TeXRA agents run in the background; track them in the Progress view.',
+              'TeXRA agents run in the background; track them under Sessions in the TeXRA panel.',
           },
-          'Show Progress View',
+          'Show Sessions',
         ),
       catch: ensureError,
     });

@@ -6,7 +6,7 @@ view; TeXRA does not contribute product settings to VS Code's Settings editor.
 
 ## Open TeXRA settings
 
-- **VS Code extension:** run **TeXRA: Show Settings Dashboard** from the
+- **VS Code extension:** run **TeXRA: Open Settings** from the
   Command Palette.
 - **Desktop app:** open **Settings**.
 - **CLI:** run `texra config`, or enter `/config` during a chat.

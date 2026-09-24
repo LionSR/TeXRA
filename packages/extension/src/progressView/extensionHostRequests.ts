@@ -26,7 +26,6 @@ import {
   createFileSelectionPickers,
   getCurrentFile,
 } from '@commands/files/fileSelectionCommands';
-import { setActiveSidebarView } from '@common/webview';
 import { getIncludedExtensions } from '@common/files/fileTypeUtils';
 import { teamAvailabilityPrompt } from '@common/teams/TeamPlan';
 import type { ToolEditApprovalController } from '@controllers/approval/ToolEditApprovalController';
@@ -791,11 +790,6 @@ export function createExtensionHostRequests(
         yield* refreshOnboardingFunnel;
       }),
       openGettingStarted: commandVerb(GETTING_STARTED_COMMANDS.openWalkthrough),
-    },
-    setActiveView: (view, port) => {
-      // Only the sidebar port names the sidebar's state; the editor tab
-      // has no view-title menu of its own.
-      if (port === 'sidebar') setActiveSidebarView(view);
     },
   };
 

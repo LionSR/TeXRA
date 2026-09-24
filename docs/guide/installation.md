@@ -344,7 +344,7 @@ To verify that TeXRA and its dependencies are installed correctly:
 2. Select the TeXRA icon in the Secondary Side Bar
 3. The TeXRA panel should load without errors
 4. Create or open a LaTeX document
-5. Try a simple command like `TeXRA: Indent Current TeX` from the Command Palette (the editor title bar only shows TeXRA's Fix Compilation button for LaTeX files)
+5. Try a simple command like `TeXRA: Format Current LaTeX File` from the Command Palette (the editor title bar only shows TeXRA's Fix Compilation button for LaTeX files)
 
 If a component is missing, TeXRA shows an error message that names what needs to be installed.
 

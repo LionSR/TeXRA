@@ -8,7 +8,6 @@
  * conversation.
  */
 import { hostBridge } from '@shared/hostBridge';
-import { resolveSelected } from '@shared/session/surface';
 import { createWebviewStorage } from '@shared/state/PersistedState';
 
 import { createSessionSurfaces } from './sessionSurfaces';
@@ -53,19 +52,10 @@ export function mountProgressWebview(app: ProgressApp): () => void {
     sessions.submit(sessionKey);
   });
 
-  let reportedView: 'main' | 'progress' | null = null;
   const assign = (): void => {
-    const view = session.view$.get();
-    const surface = session.surface$.get();
-    const host = session.host$.get();
-    app.view = view;
-    app.surface = surface;
-    app.host = host;
-    if (app.placement !== 'sidebar') return;
-    const shown = resolveSelected(view, surface) === null ? 'main' : 'progress';
-    if (shown === reportedView) return;
-    reportedView = shown;
-    sessions.hostRequest(sessionKey, { kind: 'setActiveView', view: shown });
+    app.view = session.view$.get();
+    app.surface = session.surface$.get();
+    app.host = session.host$.get();
   };
   const unsubscribe = sessions.onChange(assign);
   assign();
