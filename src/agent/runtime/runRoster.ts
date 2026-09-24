@@ -386,7 +386,11 @@ export class RunRoster {
   waitForAnyChange(runIds: readonly RunId[]): Effect.Effect<RunId> {
     return Effect.scoped(
       Effect.gen({ self: this }, function* () {
-        this.changes ??= yield* PubSub.unbounded<RunId>();
+        // Build first, then install without a yield in between: `??=` over a
+        // `yield*` would read, suspend, and overwrite a hub a concurrent first
+        // waiter already subscribed to. A losing fresh hub is dropped unread.
+        const fresh = yield* PubSub.unbounded<RunId>();
+        this.changes ??= fresh;
         const subscription = yield* PubSub.subscribe(this.changes);
         for (;;) {
           const changed = yield* PubSub.take(subscription);
