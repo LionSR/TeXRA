@@ -279,9 +279,9 @@ export class SettingsViewMessageHandler {
    * the command palette gets the status round-trip and credential refresh
    * tail instead of a bespoke sign-in that leaves both stale.
    */
-  public signInSubscription(providerId: SubscriptionProviderId): Promise<void> {
+  public signInSubscription(providerId: SubscriptionProviderId) {
     const handlers = { chatgpt: this.chatgptHandlers, grok: this.grokHandlers };
-    return this.runtime.runPromise(handlers[providerId].handleSignIn());
+    return handlers[providerId].handleSignIn();
   }
 
   /** Each command builds a program; the message entry runs the selected one. */
