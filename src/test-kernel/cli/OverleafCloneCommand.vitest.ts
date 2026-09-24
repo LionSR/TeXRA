@@ -143,11 +143,11 @@ describe('CLI Overleaf clone command', () => {
     spawn.calls = scripted.calls;
     spawn.killed = scripted.killed;
     const runtime = testRuntime();
-    const runPromise = runtime.runPromise.bind(runtime);
+    const runPromiseExit = runtime.runPromiseExit.bind(runtime);
     runtimeSpy = vi
-      .spyOn(runtime, 'runPromise')
+      .spyOn(runtime, 'runPromiseExit')
       .mockImplementation((program, options) =>
-        runPromise(program.pipe(Effect.provide(scripted.layer)), {
+        runPromiseExit(program.pipe(Effect.provide(scripted.layer)), {
           ...options,
           signal: options?.signal ?? hostAbort?.signal,
         }),
@@ -230,17 +230,17 @@ describe('CLI Overleaf clone command', () => {
       return 'hang';
     };
 
-    await expect(
-      runCli([
-        'clone',
-        PROJECT_ID,
-        '--cwd',
-        workspacePath,
-        '--output-format',
-        'json',
-        '--no-input',
-      ]),
-    ).rejects.toBeInstanceOf(Error);
+    const result = await runCli([
+      'clone',
+      PROJECT_ID,
+      '--cwd',
+      workspacePath,
+      '--output-format',
+      'json',
+      '--no-input',
+    ]);
+
+    expect(result.exitCode).toBe(CliExitCode.Interrupted);
 
     expect(cloneCalls()).toHaveLength(1);
     expect(spawn.killed.filter(isClone)).toHaveLength(1);
