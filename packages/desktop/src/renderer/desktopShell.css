@@ -178,8 +178,6 @@ body[data-desktop-platform='darwin'] .shell-sidebar-brand {
   font-weight: var(--font-weight-semibold);
   letter-spacing: -0.015em;
 }
-
-.shell-section-split-handle wa-icon,
 .shell-split-handle wa-icon,
 .shell-bottom-split-handle wa-icon,
 .shell-header-button wa-icon,
@@ -262,17 +260,6 @@ body[data-desktop-platform='darwin'] .shell-sidebar-brand {
   background: var(--wa-color-focus);
 }
 
-.shell-section-split-handle {
-  display: grid;
-  place-items: center;
-  width: 18px;
-  height: 18px;
-  color: var(--wa-color-text-quiet);
-  font-size: var(--font-size-xs);
-  line-height: 1;
-  pointer-events: none;
-}
-
 .shell-sidebar-section {
   width: 100%;
   min-width: 0;
@@ -281,10 +268,6 @@ body[data-desktop-platform='darwin'] .shell-sidebar-brand {
   box-sizing: border-box;
   overflow: auto;
   scrollbar-width: thin;
-}
-
-.shell-history-section {
-  padding-top: 4px;
 }
 
 .shell-sidebar-section-label {
@@ -443,8 +426,6 @@ body[data-desktop-platform='darwin'] .shell-sidebar-brand {
   display: flex;
   min-width: 0;
   min-height: 0;
-  --background-color: transparent;
-  --color-border: transparent;
 }
 
 .shell-sidebar-footer {
@@ -579,19 +560,6 @@ body[data-desktop-platform='darwin'] .shell-sidebar-brand {
   font-size: var(--font-size);
   font-weight: var(--font-weight-medium);
   letter-spacing: -0.01em;
-}
-
-.shell-header-spacer {
-  flex: 1 1 auto;
-}
-
-.shell-layout-controls {
-  display: flex;
-  align-items: center;
-  flex: 0 0 auto;
-  gap: 3px;
-  padding-left: 2px;
-  -webkit-app-region: no-drag;
 }
 
 .shell-layout-toggle {
@@ -939,8 +907,6 @@ body[data-desktop-platform='darwin']
 .shell-subagents > run-tabs {
   display: flex;
   min-width: 0;
-  --background-color: transparent;
-  --color-border: transparent;
 }
 
 .shell-subagents-note,

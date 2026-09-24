@@ -15,19 +15,6 @@
 :root {
   color-scheme: light dark;
 
-  /* Heading scale shared with extension litStyles.ts. Use these tokens
-     instead of hardcoded heading sizes so extension and desktop hosts
-     render headings at the same visual scale. */
-  --font-size-h1: 1.5em;
-  --font-size-h2: 1.25em;
-  --font-size-h3: 1em;
-
-  /* Shared pane-header height. The rail header, the conversation header, and
-     the editor tree header all pin to this so every pane starts its content on
-     the same baseline. Roomier than the extension's 34px: this is a window, not
-     a sidebar. */
-  --height-header: 46px;
-
   /* ==========================================================================
      Palette
      --------------------------------------------------------------------------
@@ -163,7 +150,7 @@
   /* 14px chrome, as desktop agent apps run: the conversation is the primary
      surface here, not a sidebar beside an editor, and the ramp's small steps
      (0.8x for meta rows) stay legible from it. The editor and terminal read
-     the same size (desktopTypography); prose opts up via --font-size-prose. */
+     the same size (desktopTypography). */
   --wa-font-size-m: var(--desktop-font-size, 14px);
   --wa-font-weight-normal: var(--desktop-font-weight, 400);
   --wa-font-weight-semibold: 600;
@@ -273,7 +260,6 @@
   --wa-border-radius-pill: 9999px;
   --wa-border-radius-circle: 50%;
   --wa-border-radius-square: 0px;
-  --border-radius-medium: var(--wa-border-radius-m);
 
   /* Control metrics for the shared Lit components (litStyles.ts reads these
      with the VS Code-compact values as fallbacks). A standalone window can
@@ -284,122 +270,12 @@
   --wa-height-header: 46px;
   --wa-height-button: 34px;
   --wa-height-option: 32px;
-  --height-control-compact: var(--wa-height-control-compact);
-  --height-button: var(--wa-height-button);
 
-  /* ==========================================================================
-     Shared control layer — the desktop's values for the tokens declared in
-     src/ui/styles/litStyles.ts.
-     --------------------------------------------------------------------------
-     These are :root duplicates of the shared :host declarations on purpose:
-     light DOM (styles.css, and every imperatively-built overlay) cannot adopt
-     a Lit CSSResult, so the renderer's document tree needs its own copy. The
-     shared sheet's `:host` block covers shadow DOM. Keep the two in sync — a
-     token added there and missing here silently resolves to nothing in the
-     desktop's light DOM.
-
-     The geometry values below are also the shared sheet's `--wa-*` fallbacks,
-     so shadow DOM lands on this density without the desktop overriding
-     anything. The extension is the host that overrides, via `--wa-row-height`
-     and friends in packages/extension/src/common/styles/common.css.
-     ========================================================================== */
-
-  /* State overlays. Alpha, never hue and never geometry, so one token is
-     correct on every surface in the ladder. The light/dark alphas differ
-     because the same alpha does not read as the same step against paper-white
-     and charcoal. */
-  --surface-hover: light-dark(rgb(0 0 0 / 7%), rgb(255 255 255 / 15%));
-  --surface-active: light-dark(rgb(0 0 0 / 5%), rgb(255 255 255 / 10%));
-  --surface-selected: light-dark(rgb(0 0 0 / 9%), rgb(255 255 255 / 12%));
-
-  /* Border widths and the caps tracking. Previously missing from this mirror
-     while styles.css and reviewPane.css consumed them 14 times: in light DOM
-     `border: var(--border-thin) solid X` with --border-thin undefined makes the
-     whole shorthand invalid at computed-value time, so those seams were not
-     rendering as authored. */
-  --border-thin: 1px;
-  --border-medium: 2px;
-  --letter-spacing-caps: 0.06em;
-
-  /* Status foregrounds. Same names the shared :host block declares, so a rule
-     moved between light and shadow DOM keeps its meaning. */
-  --color-success: var(--wa-color-success-on-quiet);
-  --color-error: var(--wa-color-danger-on-quiet);
-  --color-warning: var(--wa-color-warning-on-quiet);
-  --color-text-link: var(--wa-color-text-link);
-  --color-text-link-active: var(--wa-color-text-link-active);
-
-  /* De-emphasis that survives a contrast check — mirror of the same two tokens
-     in litStyles.ts. See that file for why the step is 55% and not 45%. */
-  --color-text-muted: color-mix(
-    in srgb,
-    var(--wa-color-text-normal) 55%,
-    transparent
-  );
-  --border-control: color-mix(
-    in srgb,
-    var(--wa-color-text-normal) 55%,
-    transparent
-  );
-
-  /* Seams. Only where a border is load-bearing; large regions separate by a
-     background step. */
-  --border-hairline: light-dark(rgb(0 0 0 / 10%), rgb(255 255 255 / 10%));
-  --border-hairline-strong: light-dark(
-    rgb(0 0 0 / 15%),
-    rgb(255 255 255 / 20%)
-  );
-
-  /* Control geometry. */
-  --control-size-s: 24px;
-  --control-size-m: 28px;
-  --control-size-l: 32px;
-  --control-padding-inline: 6px;
-  --control-fill: light-dark(rgb(0 0 0 / 5%), rgb(255 255 255 / 5%));
-  --control-fill-hover: light-dark(rgb(0 0 0 / 8%), rgb(255 255 255 / 9%));
-  --opacity-disabled: 0.5;
-  --row-height: 36px;
-  --row-radius: var(--wa-border-radius-m);
-  --row-padding: 6px 10px;
-  --focus-ring-width: 2px;
-  --focus-ring-offset: 2px;
-  --textarea-h-s: 2.75rem;
-  --textarea-h-m: 6rem;
-
-  /* Two typographic regimes: 13px chrome (this hosts a code editor and a
-     terminal, where 16px chrome would cost real content width) and 16px prose
-     for the transcript and launcher. The shared multiplier ramp
-     (--font-size-sm/-lg/-xs) derives from --font-size.
-
-     Both names are set because they reach different trees: shadow roots read
-     --font-size from litStyles' own `:host` (which aliases --wa-font-size-m,
-     overridden below), while light DOM reads it from here. Setting only one
-     would render the two trees at different sizes. */
-  --font-size: var(--wa-font-size-m);
-  --font-size-lg: calc(var(--font-size) * 1.2);
-  --font-size-sm: calc(var(--font-size) * 0.9);
-  --font-size-xs: calc(var(--font-size) * 0.8);
-  --font-size-icon: var(--font-size-lg);
-  --font-size-icon-sm: var(--font-size);
-  --font-size-prose: 16px;
-  --line-height-tight: 1;
-  --line-height-heading: 1.25;
-  --line-height-normal: 1.4;
-  --line-height-relaxed: 1.5;
-  --line-height-prose: 1.625;
-  /* Three weights, not a continuum. Chrome runs 400/500; 600 is reserved for
-     dialog and section titles. Arbitrary intermediate weights (550, 650, 750)
-     read as noise across a variable font and are invisible on a static one. */
-  --font-weight: var(--wa-font-weight-normal);
-  --font-weight-medium: 500;
-  --font-weight-semibold: 600;
-  --letter-spacing-tight: -0.005em;
-
-  /* Motion. One easing, two durations; only background-color, opacity, and
-     box-shadow are ever transitioned. */
-  --transition-ease: cubic-bezier(0.2, 0, 0, 1);
-  --transition-fast: 120ms var(--transition-ease);
-  --transition-normal: 180ms var(--transition-ease);
+  /* The semantic tokens (type ramp, control geometry, overlays, seams,
+     motion) are not declared here: src/ui/styles/litStyles.ts defines them
+     once for `:root` and `:host`, and the renderer adopts that sheet on its
+     document. This file sets only the --desktop-* palette and the --wa-*
+     inputs those tokens read. */
 
   /* Buttons — niche tokens consumers still need. */
   --wa-color-button-hover: var(--desktop-color-accent-hover);

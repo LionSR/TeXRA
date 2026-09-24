@@ -7,6 +7,7 @@ import '@fontsource-variable/jetbrains-mono';
 
 import './styles.css';
 import './themeTokens.css';
+import './designTokens';
 
 import '@ui/wa';
 import '@awesome.me/webawesome/dist/components/button/button.js';

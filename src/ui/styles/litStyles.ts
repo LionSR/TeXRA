@@ -1,6 +1,13 @@
 import { css, type CSSResult } from 'lit';
 
+/**
+ * The one definition of the semantic tokens every host renders with. It
+ * matches `:root` as well as `:host`, so a host adopts it once on its
+ * document for light DOM and every component adopts it for its shadow root;
+ * hosts set only the `--wa-*` inputs and colors these read.
+ */
 export const designTokens: CSSResult = css`
+  :root,
   :host {
     /* Text colors */
     --color-text-secondary: var(--wa-color-text-quiet);
@@ -173,9 +180,11 @@ export const designTokens: CSSResult = css`
     --opacity-normal: 0.85;
     --opacity-full: 1;
 
-    /* Transitions */
-    --transition-fast: 0.15s ease;
-    --transition-normal: 0.2s ease;
+    /* Motion. One easing, two durations; only background-color, opacity,
+       and box-shadow are ever transitioned. */
+    --transition-ease: cubic-bezier(0.2, 0, 0, 1);
+    --transition-fast: 120ms var(--transition-ease);
+    --transition-normal: 180ms var(--transition-ease);
 
     /* Letter spacing. Caps for uppercase labels/badges, tight for display type
        (em scales with font-size). */
