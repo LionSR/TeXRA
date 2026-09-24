@@ -10,6 +10,8 @@ import {
   type PackConfig,
 } from '@commands/housekeeping/fileOpSchemas';
 import { API_PROVIDERS, type ApiProvider } from '@model/apiProviders';
+import type { ProcessServices } from '@platform/processRuntime';
+import type { StorageFs, WorkspaceFs } from '@platform/rootedFs';
 import {
   AcceptCopyMetaSchema,
   AgentCategorySchema,
@@ -24,11 +26,8 @@ import {
   settingsTabByCommand,
   type SettingsTabCommandId,
 } from '@shared/commands/catalog';
-import {
-  awaitTrue,
-  definedHandler,
-  type CommandHandler,
-} from '@shared/commands/registry';
+import { definedHandler, type CommandHandler } from '@shared/commands/registry';
+import type { Effect } from 'effect';
 
 /**
  * This module is deliberately free of `vscode` imports (unlike
@@ -73,6 +72,17 @@ type ExtensionRegistryCommandId =
   ExtensionRegistryCatalogCommandId | InternalExtensionRegistryCommandId;
 
 /**
+ * A command's program. The registration boundary in
+ * `extensionCommandSurface.ts` runs it once, over the session's rooted
+ * filesystems, and settles `executeCommand` with its value.
+ */
+type CommandProgram<A = void> = Effect.Effect<
+  A,
+  Error,
+  ProcessServices | WorkspaceFs | StorageFs
+>;
+
+/**
  * Capabilities the registry handlers need from the extension host. Mirrors
  * `DesktopCommandActions` in shape — both register parallel handler maps
  * over the same `CommandId` union with their host-specific actions.
@@ -81,44 +91,44 @@ export interface ExtensionCommandActions {
   showSettings(
     tab?: SettingsTabPanelName,
     agentSubTab?: AgentCategory,
-  ): Promise<void>;
-  resetMainView(): Promise<void>;
-  cleanBuild(): Promise<void>;
-  pack(config: PackConfig): Promise<void>;
-  clean(config: CleanConfig): Promise<void>;
+  ): CommandProgram;
+  resetMainView(): CommandProgram;
+  cleanBuild(): CommandProgram;
+  pack(config: PackConfig): CommandProgram;
+  clean(config: CleanConfig): CommandProgram;
   compare(
     baseLocation: FileLocation,
     editedLocation: FileLocation,
-  ): Promise<void>;
+  ): CommandProgram;
   acceptEdited(
     baseLocation: FileLocation,
     editedLocation: FileLocation,
     copyMeta?: AcceptCopyMeta,
-  ): Promise<boolean>;
-  indentTeX(): Promise<void>;
-  signIn(): Promise<boolean>;
-  signInChatGpt(): Promise<void>;
-  signInGrok(): Promise<void>;
-  signOut(): Promise<void>;
-  runSetupAssistant(): Promise<void>;
-  openGettingStarted(): Thenable<unknown>;
-  createSampleProject(): Promise<void>;
-  downloadArXivSource(): Promise<void>;
-  openProgressViewInTab(): Promise<void>;
-  openDoc(page: string): Promise<void>;
-  indentCurrentTeX(): Promise<void>;
-  fixCompilation(): Promise<void>;
-  getTeXCount(): Promise<void>;
-  extractTikzFigures(): Promise<void>;
-  compileTikzFigures(): Promise<void>;
-  cloneOverleafProject(): Promise<void>;
-  removeApiKey(): Promise<void>;
-  showImportOptions(): Promise<void>;
-  toggleView(): Promise<void>;
-  showProgressView(inPlace: boolean): Promise<void>;
-  setApiKey(provider: ApiProvider | undefined): Promise<void>;
-  createAgentWithAI(category: AgentCategory): Promise<void>;
-  execute(input: unknown): Promise<void>;
+  ): CommandProgram<boolean>;
+  indentTeX(): CommandProgram;
+  signIn(): CommandProgram<boolean>;
+  signInChatGpt(): CommandProgram;
+  signInGrok(): CommandProgram;
+  signOut(): CommandProgram;
+  runSetupAssistant(): CommandProgram;
+  openGettingStarted(): CommandProgram;
+  createSampleProject(): CommandProgram;
+  downloadArXivSource(): CommandProgram;
+  openProgressViewInTab(): CommandProgram;
+  openDoc(page: string): CommandProgram;
+  indentCurrentTeX(): CommandProgram;
+  fixCompilation(): CommandProgram;
+  getTeXCount(): CommandProgram;
+  extractTikzFigures(): CommandProgram;
+  compileTikzFigures(): CommandProgram;
+  cloneOverleafProject(): CommandProgram;
+  removeApiKey(): CommandProgram;
+  showImportOptions(): CommandProgram;
+  toggleView(): CommandProgram;
+  showProgressView(inPlace: boolean): CommandProgram;
+  setApiKey(provider: ApiProvider | undefined): CommandProgram;
+  createAgentWithAI(category: AgentCategory): CommandProgram;
+  execute(input: unknown): CommandProgram;
 }
 
 /**
@@ -135,32 +145,30 @@ const SETTINGS_TAB_COMMAND_HANDLERS = Object.fromEntries(
     ][]
   ).map(([id, tab]) => [
     id,
-    (actions: ExtensionCommandActions) => awaitTrue(actions.showSettings(tab)),
+    (actions: ExtensionCommandActions) => actions.showSettings(tab),
   ]),
 ) as Record<
   SettingsTabCommandId,
-  (actions: ExtensionCommandActions) => Promise<boolean>
+  (actions: ExtensionCommandActions) => CommandProgram
 >;
 
 export const EXTENSION_COMMAND_HANDLERS = {
   ...SETTINGS_TAB_COMMAND_HANDLERS,
-  'texra.showDashboard': (actions) => awaitTrue(actions.showSettings()),
-  'texra.mainView.reset': (actions) => awaitTrue(actions.resetMainView()),
-  'texra.cleanBuild': (actions) => awaitTrue(actions.cleanBuild()),
+  'texra.showDashboard': (actions) => actions.showSettings(),
+  'texra.mainView.reset': (actions) => actions.resetMainView(),
+  'texra.cleanBuild': (actions) => actions.cleanBuild(),
   'texra.pack': definedHandler(
     z.tuple([PackConfigSchema]),
-    (actions: ExtensionCommandActions, config) =>
-      awaitTrue(actions.pack(config)),
+    (actions: ExtensionCommandActions, config) => actions.pack(config),
   ),
   'texra.clean': definedHandler(
     z.tuple([CleanConfigSchema]),
-    (actions: ExtensionCommandActions, config) =>
-      awaitTrue(actions.clean(config)),
+    (actions: ExtensionCommandActions, config) => actions.clean(config),
   ),
   'texra.compare': definedHandler(
     z.tuple([FileLocationSchema, FileLocationSchema]),
     (actions: ExtensionCommandActions, baseLocation, editedLocation) =>
-      awaitTrue(actions.compare(baseLocation, editedLocation)),
+      actions.compare(baseLocation, editedLocation),
   ),
   'texra.acceptEdited': definedHandler(
     z.tuple([
@@ -175,72 +183,64 @@ export const EXTENSION_COMMAND_HANDLERS = {
       copyMeta?: AcceptCopyMeta,
     ) => actions.acceptEdited(baseLocation, editedLocation, copyMeta),
   ),
-  'texra.indentTeX': (actions) => awaitTrue(actions.indentTeX()),
-  'texra.auth.signIn': (actions) => awaitTrue(actions.signIn()),
-  'texra.auth.chatgpt.signIn': (actions) => awaitTrue(actions.signInChatGpt()),
-  'texra.auth.grok.signIn': (actions) => awaitTrue(actions.signInGrok()),
-  'texra.auth.signOut': (actions) => awaitTrue(actions.signOut()),
-  'texra.auth.viewProfile': (actions) =>
-    awaitTrue(actions.showSettings('account')),
+  'texra.indentTeX': (actions) => actions.indentTeX(),
+  'texra.auth.signIn': (actions) => actions.signIn(),
+  'texra.auth.chatgpt.signIn': (actions) => actions.signInChatGpt(),
+  'texra.auth.grok.signIn': (actions) => actions.signInGrok(),
+  'texra.auth.signOut': (actions) => actions.signOut(),
+  'texra.auth.viewProfile': (actions) => actions.showSettings('account'),
   [EXTENSION_COMMANDS.RUN_SETUP_ASSISTANT]: (actions) =>
-    awaitTrue(actions.runSetupAssistant()),
+    actions.runSetupAssistant(),
   [EXTENSION_COMMANDS.OPEN_GETTING_STARTED]: (actions) =>
-    awaitTrue(actions.openGettingStarted()),
+    actions.openGettingStarted(),
   [EXTENSION_COMMANDS.CREATE_SAMPLE_PROJECT]: (actions) =>
-    awaitTrue(actions.createSampleProject()),
+    actions.createSampleProject(),
   [EXTENSION_COMMANDS.DOWNLOAD_ARXIV_SOURCE]: (actions) =>
-    awaitTrue(actions.downloadArXivSource()),
-  'texra.openProgressViewInTab': (actions) =>
-    awaitTrue(actions.openProgressViewInTab()),
+    actions.downloadArXivSource(),
+  'texra.openProgressViewInTab': (actions) => actions.openProgressViewInTab(),
   'texra.openDoc': definedHandler(
     z.tuple([z.string()]),
-    (actions: ExtensionCommandActions, page) =>
-      awaitTrue(actions.openDoc(page)),
+    (actions: ExtensionCommandActions, page) => actions.openDoc(page),
   ),
-  'texra.indentCurrentTeX': (actions) => awaitTrue(actions.indentCurrentTeX()),
-  'texra.fixCompilation': (actions) => awaitTrue(actions.fixCompilation()),
-  'texra.getTeXCount': (actions) => awaitTrue(actions.getTeXCount()),
-  'texra.extractTikzFigures': (actions) =>
-    awaitTrue(actions.extractTikzFigures()),
-  'texra.compileTikzFigures': (actions) =>
-    awaitTrue(actions.compileTikzFigures()),
+  'texra.indentCurrentTeX': (actions) => actions.indentCurrentTeX(),
+  'texra.fixCompilation': (actions) => actions.fixCompilation(),
+  'texra.getTeXCount': (actions) => actions.getTeXCount(),
+  'texra.extractTikzFigures': (actions) => actions.extractTikzFigures(),
+  'texra.compileTikzFigures': (actions) => actions.compileTikzFigures(),
   [EXTENSION_COMMANDS.CLONE_OVERLEAF_PROJECT]: (actions) =>
-    awaitTrue(actions.cloneOverleafProject()),
-  'texra.removeApiKey': (actions) => awaitTrue(actions.removeApiKey()),
-  'texra.showImportOptions': (actions) =>
-    awaitTrue(actions.showImportOptions()),
-  'texra.toggleView': (actions) => awaitTrue(actions.toggleView()),
+    actions.cloneOverleafProject(),
+  'texra.removeApiKey': (actions) => actions.removeApiKey(),
+  'texra.showImportOptions': (actions) => actions.showImportOptions(),
+  'texra.toggleView': (actions) => actions.toggleView(),
   'texra.showProgressView': definedHandler(
     z.tuple([z.strictObject({ inPlace: z.boolean().optional() }).optional()]),
     (actions: ExtensionCommandActions, options?: { inPlace?: boolean }) =>
-      awaitTrue(actions.showProgressView(options?.inPlace ?? false)),
+      actions.showProgressView(options?.inPlace ?? false),
   ),
   'texra.setApiKey': definedHandler(
     z.tuple([z.enum(API_PROVIDERS).optional()]),
     (actions: ExtensionCommandActions, provider?: ApiProvider) =>
-      awaitTrue(actions.setApiKey(provider)),
+      actions.setApiKey(provider),
   ),
   'texra.createAgentWithAI': definedHandler(
     z.tuple([AgentCategorySchema.optional()]),
     (actions: ExtensionCommandActions, category?: AgentCategory) =>
-      awaitTrue(actions.createAgentWithAI(category ?? 'workflow')),
+      actions.createAgentWithAI(category ?? 'workflow'),
   ),
   'texra.execute': definedHandler(
     z.tuple([z.unknown().optional()]),
     (actions: ExtensionCommandActions, input?: unknown) =>
-      awaitTrue(actions.execute(input)),
+      actions.execute(input),
   ),
   'texra.showAgents': definedHandler(
     z.tuple([AgentCategorySchema.optional()]),
     (actions: ExtensionCommandActions, subTab?: AgentCategory) =>
-      awaitTrue(
-        actions.showSettings(settingsTabByCommand['texra.showAgents'], subTab),
-      ),
+      actions.showSettings(settingsTabByCommand['texra.showAgents'], subTab),
   ),
 } as const satisfies Record<
   ExtensionRegistryCommandId,
   // Typed handlers carry their own argument tuples via `definedHandler`.
   // Matching the registry map's per-entry TArgs widening (`any`) keeps
   // inference per entry without unifying every entry on `unknown`.
-  CommandHandler<ExtensionCommandActions, any>
+  CommandHandler<ExtensionCommandActions, any, CommandProgram<unknown>>
 >;
