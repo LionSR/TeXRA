@@ -64,7 +64,7 @@ function capStack(stack: string | undefined): string | undefined {
   if (lines.length <= keep) return stack;
   return [
     ...lines.slice(0, keep),
-    `    … ${lines.length - keep} more frames`,
+    `    … ${lines.length - keep} more frame${lines.length - keep === 1 ? '' : 's'}`,
   ].join('\n');
 }
 
@@ -86,11 +86,17 @@ function isPlainObject(value: object): value is Record<string, unknown> {
 export function formatLogData(data: unknown): string {
   if (typeof data !== 'object' || data === null) return String(data);
   const flattened = new WeakMap<Error, Record<string, unknown>>();
-  const render = (value: unknown): string =>
+  // `splitRoot` is the payload a split render copied its fields out of. Each
+  // half is a fresh object, so the payload itself is never on the
+  // stringifier's stack; a field that reaches it again is a cycle, rendered
+  // as `"[Circular]"` exactly as an unsplit render would.
+  const render = (value: unknown, splitRoot?: object): string =>
     safeStringify(
       value,
-      (_key, field) =>
-        field instanceof Error ? flattenError(field, flattened) : field,
+      (_key, field) => {
+        if (field === splitRoot) return '[Circular]';
+        return field instanceof Error ? flattenError(field, flattened) : field;
+      },
       2,
     ) ?? String(value);
   if (!isPlainObject(data)) return render(data);
@@ -99,8 +105,9 @@ export function formatLogData(data: unknown): string {
   if (errorFields.length === 0) return render(data);
   const head = render(
     Object.fromEntries(fields.filter(([, field]) => !(field instanceof Error))),
+    data,
   );
-  const tail = render(Object.fromEntries(errorFields));
+  const tail = render(Object.fromEntries(errorFields), data);
   if (head === '{}') return tail;
   // Both halves are indented objects at the same depth: drop the head's
   // closing `\n}` and the tail's opening `{\n`, and join the field lists.
