@@ -14,7 +14,7 @@ import { promisify } from 'node:util';
 
 import { Effect } from 'effect';
 
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import type { OwnerId } from '@shared/schemas';
 import { ensureError } from '@utils/errors/errorMessage';
 
@@ -27,7 +27,7 @@ export function processOwnerId(processStart: string | undefined): OwnerId {
   ]);
 }
 
-const log = createLog('NodeProcesses');
+const CHANNEL = 'NodeProcesses';
 const execFileAsync = promisify(execFile);
 
 /** The one wrap of this module's `node:fs` edge. */
@@ -134,18 +134,17 @@ const readIdentity = (pid: number): Effect.Effect<string | undefined> =>
         return readPsIdentity(pid);
     }
   }).pipe(
+    // The source fails when the pid does not exist; callers probing a
+    // foreign pid separate that case with `kill(pid, 0)`. Any failure to
+    // read this process's own identity is worth seeing once.
     Effect.catch((error) =>
-      Effect.sync(() => {
-        // The source fails when the pid does not exist; callers probing a
-        // foreign pid separate that case with `kill(pid, 0)`. Any failure to
-        // read this process's own identity is worth seeing once.
-        if (pid === process.pid) {
-          log.warn('Could not read this process start identity', {
-            data: error,
-          });
-        }
-        return undefined;
-      }),
+      pid === process.pid
+        ? Effect.logWarning('Could not read this process start identity').pipe(
+            Effect.annotateLogs({ data: error }),
+            withLogChannel(CHANNEL),
+            Effect.as(undefined),
+          )
+        : Effect.succeed(undefined),
     ),
   );
 

@@ -52,7 +52,6 @@ import {
 import { packRunOutputs, runCleanRunDir } from '@housekeeping/runDirOps';
 import { LaTeXdiffService } from '@latex/latexdiff';
 import { withLogChannel } from '@logger/effectLog';
-import { createLog } from '@logger/logUtils';
 import {
   modelOptionsFrom,
   readModelAvailabilityInputs,
@@ -161,8 +160,6 @@ export interface DesktopHostRequests {
 }
 
 const CHANNEL = 'DesktopHostRequests';
-/** For the controller callbacks below that report outside any fiber. */
-const log = createLog(CHANNEL);
 
 type WorkflowFileOperation = 'pack' | 'clean';
 
@@ -536,7 +533,6 @@ export function createDesktopHostRequests(
         showInfo: (message) => host.showInfoMessage(message),
         showWarning: (message) => host.showWarningMessage(message),
         showError: rejectRequestEffect,
-        reportDetail: (message) => log.error(message),
         getController: getChatExportController,
         getTraceViewerTemplate: () =>
           path.join(options.resourcesPath, 'traceViewer', 'index.html'),
