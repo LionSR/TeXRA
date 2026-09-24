@@ -71,7 +71,6 @@ import { chooseTeamAvailabilityViaDialog } from '@frontend/ui/dialogs';
 import { ExternalOpenFailed } from '@hosts/uiHosts';
 import { parseVersionControlDiffFilename } from '@latex/latexdiff/diffFileNameManager';
 import { withLogChannel } from '@logger/effectLog';
-import { createLog } from '@logger/logUtils';
 import {
   modelOptionsFrom,
   readModelAvailabilityInputs,
@@ -134,9 +133,6 @@ import {
 } from '@utils/text/stringUtils';
 
 const CHANNEL = 'ExtensionHostRequests';
-// Only the transcript export's synchronous `reportDetail` port still writes
-// through this; the port's owner (`exportTranscript`) is to log it itself.
-const log = createLog(CHANNEL);
 
 interface ExtensionHostRequestsOptions {
   readonly session: SessionHandle;
@@ -405,7 +401,6 @@ export function createExtensionHostRequests(
       showInfo: (message) => vscodeUi.showInfoMessage(message),
       showWarning: (message) => vscodeUi.showWarningMessage(message),
       showError: (message) => vscodeUi.showErrorMessage(message),
-      reportDetail: (message, data) => log.error(message, { data }),
       getController: Effect.sync(
         () =>
           (chatExportController ??= new ChatExportController({
