@@ -25,7 +25,6 @@ import { subscribeOutputFiles } from '@frontend/events/runFactSubscriptions';
 import { lineToRange } from '@frontend/vscode/vscodeEditor';
 import { parseCriticismAnnotations } from '@latex/criticismParser';
 import { withLogChannel } from '@logger/effectLog';
-import { createLog } from '@logger/logUtils';
 import type { StateStore, StateReadFailed } from '@platform/interfaces';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { AddOutputFilesPayload, OutputFileInfo } from '@shared/schemas';
@@ -35,7 +34,6 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
 
 const CHANNEL = 'InlineCriticism';
-const log = createLog(CHANNEL);
 const COLLECTION_NAME = 'texra-criticism';
 const SOURCE_LABEL = 'TeXRA';
 const CODE_PARSED = 'criticize';
@@ -190,7 +188,6 @@ function disable(): void {
     collection.dispose();
     collection = undefined;
   }
-  log.info('Inline criticism diagnostics disabled');
 }
 
 /**
@@ -263,6 +260,11 @@ export function setInlineCriticismEnabled(
     );
     if (enabled) {
       if (enable(current)) yield* logEnabled;
-    } else disable();
+    } else {
+      disable();
+      yield* Effect.logInfo('Inline criticism diagnostics disabled').pipe(
+        withLogChannel(CHANNEL),
+      );
+    }
   });
 }

@@ -1,10 +1,7 @@
 // Pure viewport math for bounded pending transcript panes.
 
-import { createLog } from '@logger/logUtils';
 import type { RunLabels } from '@shared/tools/executionsDisplay';
 import type { TranscriptRow } from '@ui/transcript';
-import { createBoundedIdSet } from '@utils/core/boundedIdSet';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   transcriptEntryLayout,
   transcriptEntryLayoutRows,
@@ -12,11 +9,6 @@ import {
 import { isRenderableTranscriptEntry } from './transcriptEntries';
 
 const FAILED_ENTRY_ESTIMATE_ROWS = 1;
-const BROKEN_ENTRY_REPORT_CAP = 1000;
-const log = createLog('transcriptViewport');
-/** Entry ids already reported, so a persistently-throwing entry is logged once
- *  instead of once per stream-sync tick (the estimate path runs per frame). */
-const brokenEntryIdsReported = createBoundedIdSet(BROKEN_ENTRY_REPORT_CAP);
 
 // Live mode captures the pending-pane paint contract: assistant text uses its
 // capped raw tail, while rich tool rows keep one descriptor line per terminal
@@ -30,13 +22,10 @@ export function estimateLiveTranscriptEntryRows(
     return transcriptEntryLayoutRows(
       transcriptEntryLayout(entry, { runLabels, mode: 'live', width }),
     );
-  } catch (error) {
-    if (!brokenEntryIdsReported.has(entry.id)) {
-      brokenEntryIdsReported.add(entry.id);
-      log.warn(
-        `Failed to estimate rows for ${entry.kind} row ${entry.id}; assuming ${FAILED_ENTRY_ESTIMATE_ROWS}: ${toErrorMessage(error)}`,
-      );
-    }
+  } catch {
+    // The entry itself renders through the same live layout inside its
+    // `EntryErrorBoundary`, so the throw surfaces there as the inline failure
+    // marker -- one row, which is what this reserves.
     return FAILED_ENTRY_ESTIMATE_ROWS;
   }
 }

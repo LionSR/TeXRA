@@ -2,14 +2,13 @@ import { createReadStream, existsSync, statSync } from 'node:fs';
 import { mkdir } from 'node:fs/promises';
 import * as path from 'node:path';
 
-import { Data, Effect, Ref } from 'effect';
+import { Data, Effect, Ref, Stream } from 'effect';
 import { execa, type Subprocess } from 'execa';
 import OpenAI from 'openai';
 
 import type { ApiKeyRouteCredential } from '@agent/runtime/modelRoutes';
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
 import { withLogChannel } from '@logger/effectLog';
-import { createLog } from '@logger/logUtils';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
   resolveOptionalCommand,
@@ -19,7 +18,6 @@ import { withExtendedPath } from '@utils/system/platformPaths';
 import { ensureError } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'AudioUtils';
-const log = createLog(CHANNEL);
 
 const RECORDINGS_DIR = 'recordings';
 
@@ -205,10 +203,6 @@ export function startRecording(
             reject: false,
           },
         );
-        // Emitter callback outside any fiber: the synchronous writer.
-        subprocess.stderr?.on('data', (data: Buffer) => {
-          log.debug(`Sox stderr: ${data.toString()}`);
-        });
         return { process: subprocess, path: absPath };
       },
       catch: ensureError,
@@ -216,6 +210,21 @@ export function startRecording(
 
     yield* Ref.set(activeRecording, started);
     yield* Effect.forkDetach(watchRecorderExit(started.process));
+    // sox's stderr, line by line, for as long as it runs. execa's own
+    // iterable shares the stream with the result buffering; a failed sox
+    // ends it with the error `watchRecorderExit` reports.
+    yield* Effect.forkDetach(
+      Stream.fromAsyncIterable(
+        started.process.iterable({ from: 'stderr' }),
+        ensureError,
+      ).pipe(
+        Stream.runForEach((line) => Effect.logDebug(`Sox stderr: ${line}`)),
+        Effect.catch((error) =>
+          Effect.logDebug(`Sox stderr ended early: ${error.message}`),
+        ),
+        withLogChannel(CHANNEL),
+      ),
+    );
     return started.path;
   });
 }

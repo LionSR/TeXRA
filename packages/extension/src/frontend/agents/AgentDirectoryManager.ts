@@ -2,7 +2,14 @@
 import { watch } from 'node:fs';
 
 // Third-party imports
-import { Effect, FileSystem, type PlatformError } from 'effect';
+import {
+  type Cause,
+  Effect,
+  FileSystem,
+  type PlatformError,
+  Queue,
+  Stream,
+} from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
@@ -14,7 +21,6 @@ import {
 import { showLoggedMessageWithDocs } from '@frontend/ui/errorHandlingUtils';
 import { type OpenDialogFailed, selectFolder } from '@frontend/ui/dialogs';
 import { withLogChannel } from '@logger/effectLog';
-import { createLog } from '@logger/logUtils';
 import {
   type AgentDirectoriesFailed,
   type StateWriteFailed,
@@ -28,7 +34,6 @@ import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'AgentLoad';
-const log = createLog(CHANNEL);
 
 /** The two host services `initialize()` hands the manager, kept together so
  *  one guard covers both. */
@@ -231,13 +236,28 @@ class AgentDirectoryManager {
         }),
       catch: ensureError,
     }).pipe(
-      Effect.map((watcher) => {
-        watcher.on('error', (error) =>
-          log.warn(
-            `Agent directory watcher failed for ${directory}: ${toErrorMessage(error)}`,
-          ),
-        );
+      Effect.flatMap((watcher) => {
         this.watcherDisposables.push({ dispose: () => watcher.close() });
+        return Effect.gen(function* () {
+          // The 'error' listener is attached before this program yields and
+          // stays until close: Node's JS recursive watcher (Linux) can emit
+          // 'error' more than once without closing, and an emit with no
+          // listener throws out of the fs callback. A fiber that lives as
+          // long as the watcher logs each failure.
+          const errors = yield* Queue.unbounded<unknown, Cause.Done>();
+          watcher.on('error', (error) => Queue.offerUnsafe(errors, error));
+          watcher.once('close', () => Queue.endUnsafe(errors));
+          yield* Effect.forkDetach(
+            Stream.fromQueue(errors).pipe(
+              Stream.runForEach((error) =>
+                Effect.logWarning(
+                  `Agent directory watcher failed for ${directory}: ${toErrorMessage(error)}`,
+                ),
+              ),
+              withLogChannel(CHANNEL),
+            ),
+          );
+        });
       }),
       Effect.catch((error) =>
         Effect.logWarning(
