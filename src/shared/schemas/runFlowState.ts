@@ -228,7 +228,9 @@ const UserVarsSchema = z.object({
   /**
    * Retired: the codex / claude_code guidance now lives in those tools'
    * descriptions and nothing writes these. Kept so the stored session format
-   * (pinned by sessionEventFormat.vitest.ts) does not move.
+   * (pinned by sessionEventFormat.vitest.ts) does not move. They stay in the
+   * runtime token list, so a custom template that still names them renders
+   * an empty string.
    */
   CODEX_GUIDANCE: z.string().optional(),
   CLAUDE_CODE_GUIDANCE: z.string().optional(),
