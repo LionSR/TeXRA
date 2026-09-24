@@ -256,6 +256,12 @@ for a second purpose without checking that the exit still holds. Treating
 it; the exits above are what happens if a module is withdrawn, not a system
 maintained in parallel.
 
+**Amendment (owner decision, 2026-09-24; plugin architecture).** Effect
+unstable modules are allowed for the plugin work. `effect/unstable/process` is
+no longer type-only: the MCP plugin (#13092) spawns its stdio servers through
+it at runtime (`src/tools/mcp/mcpServer.ts`). The exit named in the table is
+unchanged. See the [plugin architecture note](./2026-09-24-plugin-architecture.md).
+
 ## Per-session `LayerMap`, per-run `Layer.effect`: decision 8's "one provide at the process entry" is amended (ruled 2026-09-18)
 
 **Question.** Decision 8 of the
