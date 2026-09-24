@@ -1,7 +1,6 @@
 import { Box } from 'ink';
 
 import { AgentCategory } from '@shared/schemas';
-import type { RunLabels } from '@shared/tools/executionsDisplay';
 
 import { selectedRunId as selectedRunIdSignal } from '../state/cliState';
 import { sessionView, runPhaseOf, runViewOf } from '../state/sessionView';
@@ -30,7 +29,6 @@ interface ConversationPaneProps {
   readonly availableWidth?: number;
   readonly maxRows?: number;
   readonly colorEnabled?: boolean;
-  readonly subagentRunLabels?: RunLabels;
 }
 
 /**
@@ -63,11 +61,7 @@ export function ConversationPane(
   const pendingRowReserve = newestPendingEntry
     ? Math.min(
         Math.max(0, maxRows),
-        estimateLiveTranscriptEntryRows(
-          newestPendingEntry,
-          props.width,
-          props.subagentRunLabels,
-        ),
+        estimateLiveTranscriptEntryRows(newestPendingEntry, props.width),
       )
     : 0;
   const detailCapacity = Math.max(0, maxRows - pendingRowReserve);
@@ -90,7 +84,6 @@ export function ConversationPane(
     displayEntries,
     Math.max(0, maxRows - detailRows),
     props.width,
-    props.subagentRunLabels,
   );
   return (
     <Box flexDirection="column" maxHeight={maxRows} overflowY="hidden">
@@ -104,7 +97,6 @@ export function ConversationPane(
             colorEnabled={props.colorEnabled}
             entry={entry}
             maxRows={visibleEntries.rowLimits.get(entry.id)}
-            subagentRunLabels={props.subagentRunLabels}
             width={props.width}
           />
         </EntryErrorBoundary>

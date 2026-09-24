@@ -24,8 +24,6 @@ import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { type RunId, type WorkflowControlAction } from '@shared/schemas';
-import type { SessionView } from '@shared/session/sessionView';
-import type { RunLabels } from '@shared/tools/executionsDisplay';
 import { SESSION_LIST } from '@ui/copy/nestedRuns';
 import {
   APPROVAL_FOREGROUND_MAX_ROWS,
@@ -108,19 +106,6 @@ function focusRunAndPromoteApprovals(runId: RunId): void {
   promoteApprovalsForRun(runId);
 }
 
-/** Labels for child executions whose label differs from the id, as a content
- *  key: App memoizes the map on it, so layout caches keyed on the map's
- *  identity survive the fold ticks that do not touch a label. */
-function runLabelsKey(view: SessionView): string {
-  const labels: Array<[string, string]> = [];
-  for (const run of view.runs.values()) {
-    if (run.parentId !== null && run.label !== run.id) {
-      labels.push([run.id, run.label]);
-    }
-  }
-  return JSON.stringify(labels);
-}
-
 export interface AppProps {
   /**
    * The secret store the status bar's subscription probes read, threaded from
@@ -186,11 +171,6 @@ export function App(props: AppProps): React.JSX.Element {
   const { columns, rows } = useWindowSize();
   const activeDraftRegistry = useMemo(() => createActiveDraftRegistry(), []);
   const activeRun = runViewOf(view, activeRunId);
-  const labelsKey = runLabelsKey(view);
-  const subagentRunLabels = useMemo<RunLabels>(
-    () => new Map(JSON.parse(labelsKey) as Array<[string, string]>),
-    [labelsKey],
-  );
   const activeApprovalVisible = approvalVisibleForSelection({
     pending,
     selectedRunId: activeRunId,
@@ -334,7 +314,6 @@ export function App(props: AppProps): React.JSX.Element {
         return (
           <TranscriptReader
             availableRows={availableRows}
-            runLabels={subagentRunLabels}
             onClose={() => {
               // A workflow's log is only ever opened from its popup (a
               // workflow is never a viewport), so closing it goes back there.
@@ -687,7 +666,6 @@ export function App(props: AppProps): React.JSX.Element {
           foregroundKind,
           childListFocused,
           selectedChildValue,
-          subagentRunLabels,
         }}
         onCancelChildList={cancelChildList}
         onFocusSession={focusSession}

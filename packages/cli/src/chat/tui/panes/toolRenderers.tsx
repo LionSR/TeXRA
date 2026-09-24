@@ -25,14 +25,9 @@ import {
   TOOL_OUTPUT_CORNER,
 } from '@cli/tui/ui/glyphs';
 import { TOOL_CALL_STATUS } from '@shared/schemas';
-import { type RunLabels } from '@shared/tools/executionsDisplay';
-import {
-  isMcpToolName,
-  normalizeToolName,
-} from '@shared/tools/toolDisplayName';
+import { isMcpToolName } from '@shared/tools/toolDisplayName';
 import { toolDisplayKind } from '@shared/tools/toolKind';
 import {
-  toolHeaderPreview,
   transcriptText,
   type ToolRow,
   type ToolSection,
@@ -82,8 +77,6 @@ interface DisplayLineOptions {
   readonly elide?: boolean;
   /** Terminal columns when the projection must match rich rendered rows. */
   readonly width?: number;
-  /** Retained subagent identities used by executions wait/view headers. */
-  readonly runLabels?: RunLabels;
   /** Include complete output even when the ordinary tool card omits it. */
   readonly showFullOutput?: boolean;
 }
@@ -320,8 +313,8 @@ function patchTextLines(
 function buildStyledLines(
   { model, toolUse }: ToolRow,
   options: DisplayLineOptions,
-  headerPreview: string,
 ): readonly ToolDisplayLine[] {
+  const { headerPreview } = model;
   const elide = options.elide !== false;
   const isBashKind = toolDisplayKind(toolUse.toolName) === 'bash';
 
@@ -430,21 +423,11 @@ export function toolUseStyledLines(
   toolRow: ToolRow,
   options: DisplayLineOptions = {},
 ): readonly ToolDisplayLine[] {
-  const { toolUse } = toolRow;
-  // Subagent run labels name live executions, so they only exist at
-  // paint time and the shared model was built without them. Re-derive the
-  // preview through the shared rule rather than restating its precedence here.
-  const headerPreview =
-    normalizeToolName(toolUse.toolName) === 'executions' && options.runLabels
-      ? toolHeaderPreview(toolUse, {
-          runLabels: options.runLabels,
-        })
-      : toolRow.model.headerPreview;
-  const key = `${options.elide === false ? 'f' : 'e'}|${options.showFullOutput ? 'f' : 'n'}|${options.width ?? 'd'}|${headerPreview}`;
+  const key = `${options.elide === false ? 'f' : 'e'}|${options.showFullOutput ? 'f' : 'n'}|${options.width ?? 'd'}`;
   let cached = styledLinesCache.get(toolRow);
   const hit = cached?.get(key);
   if (hit) return hit;
-  const lines = buildStyledLines(toolRow, options, headerPreview);
+  const lines = buildStyledLines(toolRow, options);
   if (!cached) {
     cached = new Map();
     styledLinesCache.set(toolRow, cached);

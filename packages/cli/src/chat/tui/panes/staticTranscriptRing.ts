@@ -6,7 +6,6 @@
 
 import type { RunPhase } from '@shared/schemas';
 import { getModelLabel } from '@shared/model/modelLabel';
-import type { RunLabels } from '@shared/tools/executionsDisplay';
 import type { TranscriptRow } from '@ui/transcript';
 
 import {
@@ -43,8 +42,6 @@ export interface StaticTranscriptState {
   readonly scan: StaticTranscriptScanCursor;
   /** The layout width `rowCount`/`byteCount` were measured under. */
   readonly layoutWidth: number | undefined;
-  /** The run labels `rowCount`/`byteCount` were measured under. */
-  readonly runLabels: RunLabels | undefined;
   /** Incremented whenever items change non-append-only (trim, header insert,
    *  hard reset, fold rebuild) so the `<Static>` identity remounts and
    *  `onRenderKeyChange` repaints the bounded tail with replace semantics. */
@@ -156,7 +153,6 @@ interface StaticTranscriptItemMetrics {
 function staticTranscriptItemMetrics(
   item: StaticTranscriptItem,
   width?: number,
-  runLabels?: RunLabels,
 ): StaticTranscriptItemMetrics {
   if (item.kind === 'header') {
     return {
@@ -175,7 +171,6 @@ function staticTranscriptItemMetrics(
   }
 
   const layout = transcriptEntryLayout(item.entry, {
-    runLabels,
     mode: 'scrollback-budget',
     previousEntry: undefined,
     width,
@@ -294,12 +289,11 @@ class StaticTranscriptTotalsAccumulator {
 function staticTranscriptItemsTotals(
   items: readonly StaticTranscriptItem[],
   width?: number,
-  runLabels?: RunLabels,
 ): StaticTranscriptTotals {
   const totals = new StaticTranscriptTotalsAccumulator();
   let aboveMarginBottomRows = 0;
   for (const item of items) {
-    const metrics = staticTranscriptItemMetrics(item, width, runLabels);
+    const metrics = staticTranscriptItemMetrics(item, width);
     totals.insert(aboveMarginBottomRows, metrics, undefined);
     aboveMarginBottomRows = metrics.marginBottomRows;
   }
@@ -315,7 +309,6 @@ export function trimStaticTranscriptItems(
   items: readonly StaticTranscriptItem[],
   options: {
     readonly budgets?: StaticTranscriptRingBudgets;
-    readonly runLabels?: RunLabels;
     readonly totals: StaticTranscriptTotals;
     readonly width?: number;
   },
@@ -336,7 +329,7 @@ export function trimStaticTranscriptItems(
   const totals = new StaticTranscriptTotalsAccumulator(options.totals);
   const headerCount = nextItems[0]?.kind === 'header' ? 1 : 0;
   const metricsOf = (item: StaticTranscriptItem): StaticTranscriptItemMetrics =>
-    staticTranscriptItemMetrics(item, options.width, options.runLabels);
+    staticTranscriptItemMetrics(item, options.width);
   // Only the oldest non-header item is ever dropped, so the item above the
   // trim point stays the header (or nothing) for every pass.
   const aboveMarginBottomRows = itemMarginBottomRows(
@@ -377,7 +370,6 @@ function retainedStaticTranscriptTail(
   items: readonly StaticTranscriptItem[],
   options: {
     readonly budgets?: StaticTranscriptRingBudgets;
-    readonly runLabels?: RunLabels;
     readonly width?: number;
   },
 ): {
@@ -391,11 +383,7 @@ function retainedStaticTranscriptTail(
   const budgets = options.budgets ?? DEFAULT_STATIC_TRANSCRIPT_RING_BUDGETS;
   const headerCount = items[0]?.kind === 'header' ? 1 : 0;
   if (items.length <= headerCount) {
-    const totals = staticTranscriptItemsTotals(
-      items,
-      options.width,
-      options.runLabels,
-    );
+    const totals = staticTranscriptItemsTotals(items, options.width);
     return { items, totals, trimmed: false };
   }
 
@@ -403,7 +391,7 @@ function retainedStaticTranscriptTail(
   // a seam from the neighbour's bottom margin alone, so growing the tail never
   // triggers a second layout pass for an item that is already measured.
   const metricsOf = (item: StaticTranscriptItem): StaticTranscriptItemMetrics =>
-    staticTranscriptItemMetrics(item, options.width, options.runLabels);
+    staticTranscriptItemMetrics(item, options.width);
 
   const headerItem = headerCount > 0 ? items[0] : undefined;
   const headerMarginBottomRows = itemMarginBottomRows(headerItem);
@@ -444,7 +432,6 @@ function retainedStaticTranscriptTail(
       : items.slice(start);
   const retained = trimStaticTranscriptItems(candidateItems, {
     budgets,
-    runLabels: options.runLabels,
     totals: totals.totals,
     width: options.width,
   });
@@ -489,7 +476,6 @@ function staticTranscriptItemsEquivalent(
 
 function ensureStaticSessionHeader({
   byteCount,
-  runLabels,
   items,
   maxRows,
   meta,
@@ -498,7 +484,6 @@ function ensureStaticSessionHeader({
   width,
 }: {
   readonly byteCount: number;
-  readonly runLabels?: RunLabels;
   readonly items: readonly StaticTranscriptItem[];
   readonly maxRows?: number;
   readonly meta: SessionMeta;
@@ -533,10 +518,10 @@ function ensureStaticSessionHeader({
   // The header goes in at the very top, so nothing sits above it.
   totals.insert(
     0,
-    staticTranscriptItemMetrics(header, width, runLabels),
+    staticTranscriptItemMetrics(header, width),
     firstItem === undefined
       ? undefined
-      : staticTranscriptItemMetrics(firstItem, width, runLabels),
+      : staticTranscriptItemMetrics(firstItem, width),
   );
   const fitsBudget = maxRows === undefined || totals.rows <= maxRows;
   if (!fitsBudget) {
@@ -553,7 +538,6 @@ function ensureStaticSessionHeader({
 
 interface BuildStaticTranscriptItemsOptions {
   readonly source: StaticScrollbackSource;
-  readonly runLabels?: RunLabels;
   readonly meta: SessionMeta;
   readonly maxRows?: number;
   readonly width?: number;
@@ -572,7 +556,6 @@ export function buildStaticTranscriptItems(
 ): StaticTranscriptBuildResult {
   const {
     source,
-    runLabels,
     meta,
     maxRows,
     width,
@@ -583,7 +566,6 @@ export function buildStaticTranscriptItems(
   }
   const header = ensureStaticSessionHeader({
     byteCount: 0,
-    runLabels,
     items: [],
     maxRows,
     meta,
@@ -602,7 +584,6 @@ export function buildStaticTranscriptItems(
 
   const retained = retainedStaticTranscriptTail(items, {
     budgets: ringBudgets,
-    runLabels,
     width,
   });
   return {
@@ -628,7 +609,6 @@ function scanStaticTranscriptFromStart(
 }
 
 export function buildStaticTranscriptState({
-  runLabels,
   eraseRequest,
   maxRows,
   meta,
@@ -638,7 +618,6 @@ export function buildStaticTranscriptState({
   source,
   width,
 }: {
-  readonly runLabels?: RunLabels;
   readonly maxRows?: number;
   readonly meta: SessionMeta;
   readonly ownerKey: string;
@@ -650,7 +629,6 @@ export function buildStaticTranscriptState({
 }): StaticTranscriptState {
   const built = buildStaticTranscriptItems({
     source,
-    runLabels,
     meta,
     maxRows,
     ringBudgets,
@@ -675,7 +653,6 @@ export function buildStaticTranscriptState({
     byteCount: built.byteCount,
     scan,
     layoutWidth: width,
-    runLabels,
     repaintEpoch,
     eraseRequest: eraseRequest ?? 0,
   };
@@ -684,7 +661,6 @@ export function buildStaticTranscriptState({
 export function advanceStaticTranscriptState(
   current: StaticTranscriptState,
   {
-    runLabels,
     eraseRequest = current.eraseRequest,
     maxRows,
     meta,
@@ -693,7 +669,6 @@ export function advanceStaticTranscriptState(
     source,
     width,
   }: {
-    readonly runLabels?: RunLabels;
     readonly eraseRequest?: number;
     readonly maxRows?: number;
     readonly meta: SessionMeta;
@@ -710,7 +685,6 @@ export function advanceStaticTranscriptState(
   const rebuildState = (repaintEpoch: number): StaticTranscriptState =>
     buildStaticTranscriptState({
       eraseRequest,
-      runLabels,
       maxRows,
       meta,
       ownerKey,
@@ -738,7 +712,6 @@ export function advanceStaticTranscriptState(
     if (
       rebuilt.ownerKey === current.ownerKey &&
       rebuilt.layoutWidth === current.layoutWidth &&
-      rebuilt.runLabels === current.runLabels &&
       staticTranscriptItemsEquivalent(rebuilt.items, current.items)
     ) {
       return current;
@@ -757,12 +730,8 @@ export function advanceStaticTranscriptState(
     return current;
   }
 
-  // A label change (a child's human label arriving after its executions row
-  // printed) rewrites rows already in scrollback, so it repaints from a known
-  // origin; a bare width change is repainted by Ink's resize path. The App keeps
-  // the label map identity-stable, so a new reference is a content change.
-  const labelsChanged = runLabels !== current.runLabels;
-  const layoutChanged = width !== current.layoutWidth || labelsChanged;
+  // A bare width change is repainted by Ink's resize path.
+  const layoutChanged = width !== current.layoutWidth;
   let nextItems = current.items;
   let nextRowCount = current.rowCount;
   let nextByteCount = current.byteCount;
@@ -770,17 +739,16 @@ export function advanceStaticTranscriptState(
   let changed = layoutChanged;
 
   if (layoutChanged) {
-    const recomputed = staticTranscriptItemsTotals(nextItems, width, runLabels);
+    const recomputed = staticTranscriptItemsTotals(nextItems, width);
     const trimmed = trimStaticTranscriptItems(nextItems, {
       budgets: ringBudgets,
-      runLabels,
       totals: recomputed,
       width,
     });
     nextItems = trimmed.items;
     nextRowCount = trimmed.totals.rows;
     nextByteCount = trimmed.totals.bytes;
-    if (trimmed.trimmed || labelsChanged) {
+    if (trimmed.trimmed) {
       nextRepaintEpoch += 1;
     }
   }
@@ -797,7 +765,6 @@ export function advanceStaticTranscriptState(
 
   const header = ensureStaticSessionHeader({
     byteCount: nextByteCount,
-    runLabels,
     items: nextItems,
     maxRows,
     meta,
@@ -820,7 +787,7 @@ export function advanceStaticTranscriptState(
   let aboveMarginBottomRows = itemMarginBottomRows(nextItems.at(-1));
   for (const entry of plan.appended) {
     const item: StaticTranscriptItem = { id: entry.id, kind: 'entry', entry };
-    const metrics = staticTranscriptItemMetrics(item, width, runLabels);
+    const metrics = staticTranscriptItemMetrics(item, width);
     totals.insert(aboveMarginBottomRows, metrics, undefined);
     aboveMarginBottomRows = metrics.marginBottomRows;
     nextItems = [...nextItems, item];
@@ -831,7 +798,6 @@ export function advanceStaticTranscriptState(
 
   const trimmed = trimStaticTranscriptItems(nextItems, {
     budgets: ringBudgets,
-    runLabels,
     totals: { rows: nextRowCount, bytes: nextByteCount },
     width,
   });
@@ -858,7 +824,6 @@ export function advanceStaticTranscriptState(
     byteCount: nextByteCount,
     scan: cursor,
     layoutWidth: width,
-    runLabels,
     repaintEpoch: nextRepaintEpoch,
     eraseRequest,
   };

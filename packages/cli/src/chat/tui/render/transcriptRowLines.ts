@@ -7,7 +7,6 @@
 
 import { safeTerminalText } from '@cli/runtime/terminalText';
 import { CROSS, TICK, TOOL_OUTPUT_CORNER } from '@cli/tui/ui/glyphs';
-import { redactSecrets } from '@logger/redaction';
 import {
   elideText,
   type StatItem,
@@ -120,11 +119,10 @@ export function transcriptRowBodyLines(
         return [];
     }
   })();
-  // One place for the terminal's two defensive passes over producer text:
-  // control sequences a terminal would execute, and credential shapes the
-  // recorder's redaction did not already cover (a raw provider error body
-  // reaches this row verbatim).
+  // One place for the terminal's defensive pass over producer text: control
+  // sequences a terminal would execute. Redaction is not a painter's job; the
+  // recorder (`redactTraceDraft`) already redacted every committed row.
   return lines.length === 0
     ? lines
-    : cornerBlock(lines.map((line) => redactSecrets(safeTerminalText(line))));
+    : cornerBlock(lines.map((line) => safeTerminalText(line)));
 }

@@ -10,7 +10,6 @@ import { useLayoutEffect, type ReactNode } from 'react';
 import { clampModalWidth } from '@cli/tui/ui/theme';
 import type { RunId } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
-import type { RunLabels } from '@shared/tools/executionsDisplay';
 import { clamp } from '@utils/core';
 
 // Local imports - conversation panes and layout
@@ -53,7 +52,6 @@ interface ConversationRegionSnapshot {
   readonly foregroundKind: ForegroundSurfaceKind | undefined;
   readonly selectedChildValue: RunId | undefined;
   readonly childListFocused: boolean;
-  readonly subagentRunLabels: RunLabels;
 }
 
 interface ConversationRegionProps {
@@ -202,7 +200,6 @@ export function ConversationRegion({
         onRenderKeyChange={onStaticTranscriptChange}
         renderKey={staticTranscriptKey}
         scrollbackRunId={scrollbackTarget.runId}
-        subagentRunLabels={snapshot.subagentRunLabels}
         width={transcriptWidth}
       />
       <Box flexDirection="column">
@@ -213,7 +210,6 @@ export function ConversationRegion({
               colorEnabled={colorEnabled}
               width={transcriptWidth}
               maxRows={conversationRows}
-              subagentRunLabels={snapshot.subagentRunLabels}
             />
           ) : null}
           {foregroundSurface ? (

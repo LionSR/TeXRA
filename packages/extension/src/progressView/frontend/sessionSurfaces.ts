@@ -28,7 +28,6 @@ import {
   PersistedSurfaceSchema,
   pruneSurface,
   reconcileLaunch,
-  resolveSelected,
   type Surface,
   type SurfaceAction,
 } from '@shared/session/surface';
@@ -121,7 +120,7 @@ export function createSessionSurfaces(options: {
     const view = entry.view$.get();
     const aggregates = transcriptAggregates(
       view,
-      resolveSelected(view, entry.surface$.get()),
+      entry.surface$.get().selected,
     );
     return {
       transcript: aggregates.map((aggregate) => aggregate.id).join('/'),
@@ -320,7 +319,7 @@ export function createSessionSurfaces(options: {
 
   function hostRequestFor(entry: Held, request: HostRequest): void {
     const surface = entry.surface$.get();
-    let runId = resolveSelected(entry.view$.get(), surface);
+    let runId = surface.selected;
     if (request.kind === 'record' && request.action.kind === 'start') {
       runId = request.action.target === 'launch' ? null : request.action.target;
     }
@@ -420,7 +419,7 @@ export function createSessionSurfaces(options: {
   function submit(entry: Held): void {
     const surface = entry.surface$.get();
     const view = entry.view$.get();
-    const runId = resolveSelected(view, surface);
+    const runId = surface.selected;
     if (runId !== null) {
       const run = view.runs.get(runId);
       const draft = surface.drafts.get(runId) ?? EMPTY_DRAFT;
