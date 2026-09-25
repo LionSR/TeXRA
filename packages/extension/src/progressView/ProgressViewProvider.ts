@@ -172,7 +172,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
 
   constructor(
     private readonly context: vscode.ExtensionContext,
-    private readonly globalState: StateStore,
+    globalState: StateStore,
     private readonly secrets: PlatformSecrets,
     /** Process runtime shared with every extension surface. */
     private readonly runtime: ProcessRuntime,

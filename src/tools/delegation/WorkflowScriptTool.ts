@@ -3,7 +3,14 @@ import * as nodePath from 'node:path';
 
 // Third-party imports
 import { z } from 'zod';
-import { Cause, Effect, Exit, Fiber, FileSystem } from 'effect';
+import {
+  Cause,
+  Effect,
+  Exit,
+  Fiber,
+  FileSystem,
+  SynchronizedRef,
+} from 'effect';
 
 // Local imports
 import { getRunRecords } from '@agent/storage';
@@ -36,7 +43,10 @@ import {
   DatabaseNotOwner,
   DatabaseWriteFailed,
 } from '@shared/session/database';
-import { DELEGATE_MULTI_AGENTS_TOOL_NAME } from '@shared/constants/delegationTools';
+import {
+  DELEGATE_MULTI_AGENTS_TOOL_NAME,
+  formatWorkflowLaunchLead,
+} from '@shared/constants/delegationTools';
 import { configureDelegatedChildApprovals } from '@tools/approval';
 import {
   assertWritable,
@@ -340,11 +350,11 @@ function executeWorkflowScriptTool(
       if (totalCost !== undefined) recordSubagentCost?.(totalCost);
     };
 
-    // The parent's model at the instant of dispatch. `run.config.model` is
-    // the live cell a parent model switch mutates, and a detached workflow
+    // The parent's model at the instant of dispatch. `run.model` is the
+    // live cell a parent model switch sets, and a detached workflow
     // resolves its `agent()` calls on a forked fiber after this call has
     // settled, so the value is read once, here, and threaded through.
-    const parentModel = parent.run.config.model;
+    const parentModel = (yield* SynchronizedRef.get(parent.run.model)).modelId;
 
     // Same availability gate as delegate_agent/delegate_workflow: a run model
     // the active credentials cannot serve fails here, with the available list,
@@ -615,11 +625,9 @@ function executeWorkflowScriptTool(
       return withScriptReference(
         executed(
           [
-            `Workflow script '${meta.name}' launched. Its result and run log will be delivered automatically as a follow-up message when the run completes.`,
-            `Run ID: ${runId}`,
-            `Agent: ${defaultAgent.name} (part of the checkpoint identity with meta.name)`,
-            `The result arrives automatically. Continue other work meanwhile. To check progress: executions tool with path=/executions/${runId}; use action=wait only when you cannot proceed without it.`,
-            `To resume after a timeout or interruption: call this tool again with the same meta.name and agent.`,
+            `${formatWorkflowLaunchLead(meta.name, runId)} Its result and run log arrive automatically as a follow-up message when it ends; do not wait on it — continue other work.`,
+            `Default agent: ${defaultAgent.name}. To resume after a timeout or interruption, call this tool again with the same meta.name and agent.`,
+            `To look at progress without waiting: executions tool with path=/executions/${runId}.`,
           ].join('\n'),
           `Launched workflow script '${meta.name}' (async)`,
         ),
@@ -659,7 +667,7 @@ Script rules:
 
 Structured output: agent(prompt, { agentName, model, schema }) runs a tool-use agent that finishes by calling submit_output with a value matching the JSON Schema. Structured calls do not accept file options and must name the tool-use agent explicitly; model remains optional. The call resolves to an envelope whose .structured is the validated object rather than edited files.
 
-Async: this tool returns immediately with a run ID and runs the workflow as its own detached run. The script's return value plus the run log (phases, log() lines, per-call outcomes with cost) are delivered back as a follow-up message when the run completes. Check intermediate progress with the executions tool (path=/executions/<id>, action=wait).
+Async: this tool returns immediately with a run ID and runs the workflow as its own detached run. The script's return value plus the run log (phases, log() lines, per-call outcomes with cost) are delivered back as a follow-up message when the run completes. Do not wait on it with the executions tool: the result arrives on its own. Read intermediate progress at path=/executions/<id>.
 
 Example:
 export const meta = {

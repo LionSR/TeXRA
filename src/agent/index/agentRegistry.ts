@@ -172,8 +172,7 @@ function queueLoad(
         ],
         { concurrency: 'unbounded' },
       );
-    // builtInScan.issues and toolUseScan.issues are intentionally unused:
-    // only custom-agent scan failures are a product surface.
+    // Only custom-agent scan issues are a product surface; the rest go unused.
 
     // Register all entries.
     const allEntries = [

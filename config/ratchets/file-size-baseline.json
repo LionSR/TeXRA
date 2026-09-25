@@ -8,7 +8,7 @@
     "packages/cli/src/chat/tui/panes/InputBar.tsx": 539,
     "packages/cli/src/chat/tui/panes/staticTranscriptRing.ts": 794,
     "packages/cli/src/chat/tui/panes/statusBarDisplay.ts": 928,
-    "packages/cli/src/chat/tui/panes/WorkflowPopup.tsx": 591,
+    "packages/cli/src/chat/tui/panes/WorkflowPopup.tsx": 509,
     "packages/cli/src/chat/tui/render/ansiMarkdown.ts": 555,
     "packages/cli/src/chat/tui/runChatTui.tsx": 606,
     "packages/cli/src/chat/tui/state/approvalQueue.ts": 561,

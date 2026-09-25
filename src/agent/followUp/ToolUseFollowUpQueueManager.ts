@@ -17,6 +17,7 @@ import {
   DatabaseReadFailed,
   DatabaseWriteFailed,
 } from '@shared/session/database';
+import { foldRunRows, freshRunRows } from '@shared/session/runRows';
 import type { Append } from '@shared/session/sessionEvents';
 import { createBoundedIdSet } from '@utils/core/boundedIdSet';
 import { ensureError } from '@utils/errors/errorMessage';
@@ -566,23 +567,17 @@ export class ToolUseFollowUpQueue {
       const settled = yield* Effect.exit(
         Effect.gen(function* () {
           // This job is the only admission running, so an id is judged
-          // against rows that committed, never against one being written.
-          const known = new Map<string, 'pending' | 'consumed'>();
-          if (replayable.size > 0) {
-            for (const row of yield* port.rows(runId)) {
-              if (
-                (row.type === 'followup.queued' ||
-                  row.type === 'followup.consumed') &&
-                replayable.has(row.followUpId)
-              ) {
-                known.set(
-                  row.followUpId,
-                  row.type === 'followup.consumed' ? 'consumed' : 'pending',
-                );
-              }
-            }
-          }
-          const fresh = followUps.filter((f) => !known.has(f.followUpId));
+          // against rows that committed, never against one being written: a
+          // replayed id the rows already name is not written again, and it
+          // stays queued unless the rows consumed it.
+          const rows =
+            replayable.size > 0
+              ? foldRunRows(yield* port.rows(runId))
+              : freshRunRows();
+          const pending = new Set(rows.followUps.map((f) => f.followUpId));
+          const known = ({ followUpId }: QueuedFollowUp) =>
+            replayable.has(followUpId) && rows.followUpIds.has(followUpId);
+          const fresh = followUps.filter((f) => !known(f));
           if (fresh.length > 0) {
             yield* append(
               fresh.map((followUp): SessionEventDraft => ({
@@ -594,7 +589,7 @@ export class ToolUseFollowUpQueue {
           }
           return {
             queued: followUps.filter(
-              (f) => known.get(f.followUpId) !== 'consumed',
+              (f) => !known(f) || pending.has(f.followUpId),
             ),
             wrote: fresh.length > 0,
           };

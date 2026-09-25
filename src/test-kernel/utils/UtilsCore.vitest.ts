@@ -2,19 +2,13 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  aggregateError,
   createFlushableDebounce,
-  ensureArray,
-  filterNotNull,
-  filterNotNullish,
   getBasename,
   getFileStem,
   linkAbortSignals,
-  throwAggregated,
-  toNewestFirstByTimestamp,
   type FlushableDebounce,
 } from '@utils/core';
-import { deriveRunId, truncatedHexId } from '@utils/core/idHash';
+import { deriveRunId } from '@utils/core/idHash';
 
 describe('getBasename', () => {
   it.each([

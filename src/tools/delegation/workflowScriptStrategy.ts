@@ -33,13 +33,14 @@ import type {
   WorkflowScriptDeliverySummary,
   WorkflowScriptFiles,
 } from '@shared/schemas';
-import { RunEndSchema, WORKFLOW_CALL_STATUS } from '@shared/schemas';
+import { RunEndSchema, tallyWorkflowCalls } from '@shared/schemas';
 import { DELIVERY_TAG } from '@shared/deliveryTags';
 import { DELEGATE_MULTI_AGENTS_TOOL_NAME } from '@shared/constants/delegationTools';
 import { escapeText } from '@shared/utils/xmlEscape';
 import { onAbort } from '@utils/core';
 import { truncateSummary } from '@utils/text/stringUtils';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { workspaceRelativePath } from '@utils/files/workspaceFS';
 import { formatDelivery } from './deliveryEnvelope';
 
 // Local file imports
@@ -156,49 +157,37 @@ export function createWorkflowScriptStrategy(
 
   /**
    * Delivery-summary facts, collected without changing the model-facing run
-   * report.
-   *
-   * `taskDone` counts the tasks that produced a result (completed or cached),
-   * which is deliberately narrower than the phase header's `done/total`
-   * (the run model's tally), where every settled call counts, failures and
-   * skips included. The two answer different questions, so the delivery line
-   * labels its count "succeeded".
-   *
-   * Every task and phase number is read off the same cards the boards paint
-   * (`projection.board()`): `phaseCount` is every declared phase plus every
-   * dynamically entered one, `taskDone` the cards that settled completed or
-   * cached, so this line can never disagree with the board about the same
-   * run. A run that died before the engine constructed its state has no
-   * cards, and reports zero work.
+   * report. The phase count and the tally are read off the same cards the
+   * boards paint, through the same count (`projection.tally()`), so this
+   * line can never disagree with the board about the same run. A run that
+   * died before the engine constructed its state has no cards, and reports
+   * zero work.
    */
   const summaryFiles = new Map<
     string,
     WorkflowScriptDeliverySummary['files'][number]
   >();
   let startedAt = Date.now();
-  let phaseCount = 0;
-  let taskDone = 0;
-  let taskTotal = 0;
+  let board: ReturnType<WorkflowScriptProgressProjection<never>['tally']> = {
+    phaseCount: 0,
+    tally: tallyWorkflowCalls([], 0, true),
+  };
   let settledCostUsd = 0;
+  // A delivered file reads as the workspace file it replaces, not the
+  // run-storage copy that carries it.
+  const workspacePath = (path: string): string =>
+    workspaceRelativePath(params.session.roots.workspace, path);
 
   const settleSummary = (
     run: {
       readonly journal: readonly WorkflowJournalEntry[];
-      readonly board: ReturnType<
-        WorkflowScriptProgressProjection<never>['board']
-      >;
+      readonly board: typeof board;
     },
     costUsd: number,
   ): Effect.Effect<void> =>
     Effect.gen(function* () {
       settledCostUsd = costUsd;
-      phaseCount = run.board.phaseCount;
-      taskDone = run.board.calls.filter(
-        (call) =>
-          call.status === WORKFLOW_CALL_STATUS.COMPLETED ||
-          call.status === WORKFLOW_CALL_STATUS.CACHED,
-      ).length;
-      taskTotal = run.board.calls.length;
+      board = run.board;
       for (const entry of run.journal) {
         const parsed = RunEndSchema.safeParse(entry.result);
         if (!parsed.success) {
@@ -217,8 +206,12 @@ export function createWorkflowScriptStrategy(
         }
         if (parsed.data.output.category === 'workflow') {
           for (const output of parsed.data.output.outputs) {
-            summaryFiles.set(output.relativePath, {
-              path: output.relativePath,
+            const path =
+              output.originalPath === null
+                ? output.relativePath
+                : workspacePath(output.originalPath);
+            summaryFiles.set(path, {
+              path,
               added: output.added,
               removed: output.removed,
             });
@@ -238,9 +231,8 @@ export function createWorkflowScriptStrategy(
     const summary: WorkflowScriptDeliverySummary = {
       name: params.name,
       outcome,
-      phaseCount,
-      taskDone,
-      taskTotal,
+      phaseCount: board.phaseCount,
+      tally: board.tally,
       costUsd: settledCostUsd,
       durationMs: Date.now() - startedAt,
       files: [...summaryFiles.values()],
@@ -322,7 +314,7 @@ export function createWorkflowScriptStrategy(
                 attemptJournalByKey.set(entry.key, entry);
                 const journal = attemptJournal();
                 return settleSummary(
-                  { journal, board: projection.board() },
+                  { journal, board: projection.tally() },
                   attemptCost.total(journal),
                 );
               }),
@@ -341,7 +333,7 @@ export function createWorkflowScriptStrategy(
             const journal = attemptJournal();
             const costUsd = attemptCost.total(journal);
             ports.recordCost(costUsd);
-            return { journal, board: projection.board(), costUsd };
+            return { journal, board: projection.tally(), costUsd };
           },
           catch: ensureError,
         }).pipe(
@@ -379,14 +371,8 @@ export function createWorkflowScriptStrategy(
           ),
         );
         if (Exit.isFailure(result)) {
-          const settlement = yield* Effect.exit(
-            Effect.try({
-              try: () => {
-                ports.recordCost(attemptCost.total(attemptJournal()));
-              },
-              catch: ensureError,
-            }),
-          );
+          // A failed run's delivery reports what it did too.
+          const settlement = yield* Effect.exit(settleAttempt);
           if (Exit.isFailure(settlement)) {
             const settlementError = Cause.squash(settlement.cause);
             params.logger.warn(

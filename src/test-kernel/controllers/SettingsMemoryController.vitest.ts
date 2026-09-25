@@ -2,7 +2,7 @@
 import { strict as assert } from 'node:assert';
 import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { afterEach, describe, it as plainIt, vi } from 'vitest';
+import { afterEach, describe, vi } from 'vitest';
 
 import { createFakeUIHosts } from '../support/FakeHosts';
 

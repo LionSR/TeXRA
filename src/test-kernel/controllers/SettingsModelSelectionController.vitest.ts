@@ -10,7 +10,6 @@ import {
 } from '@model/computeModelOptions';
 import { buildBaseModelOption, DEFAULT_MODELS } from '@model/modelOptionsBasic';
 import type { CopilotModelRoute } from '@model/copilotRouting';
-import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { ModelOptionData } from '@shared/schemas';
 import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
 import { GlobalStateKey } from '@shared/state/stateKeys';

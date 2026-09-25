@@ -33,7 +33,6 @@ import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { chooseTeamAvailabilityViaDialog } from '@frontend/ui/dialogs';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
-import { NotificationFailed } from '@hosts/uiHosts';
 import { withLogChannel } from '@logger/effectLog';
 import type { ProcessServices } from '@platform/processRuntime';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
@@ -47,7 +46,7 @@ import {
 } from '@shared/settingsView/handlers/agentSelectionHandlers';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { allSettledVoid } from '@utils/core/allSettledVoid';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError } from '@utils/errors/errorMessage';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
 
 import {

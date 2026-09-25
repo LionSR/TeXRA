@@ -25,6 +25,7 @@ import { writeLogLine } from '@logger/logSink';
 import {
   aggregateId as qualifyAggregateId,
   isDisplaySessionEvent,
+  type AggregateId,
   type CommitOrdinal,
   type SessionEvent,
   type DisplaySessionEvent,
@@ -37,6 +38,7 @@ import {
   type DatabaseReadFailed,
   type DatabaseWriteFailed,
 } from '@shared/session/database';
+import { closesRunWindow } from '@shared/session/runRows';
 import {
   SessionEvents,
   type Append,
@@ -151,9 +153,32 @@ export const sessionEventsLayer = Layer.effect(
   SessionEvents,
   Effect.gen(function* () {
     const log = yield* Database;
+    // The streams each aggregate has open, kept as this publisher commits
+    // them, so closing them at a park or an end reads no rows. The fold
+    // closes every stream at a phase move that rests or ends the run, and
+    // so does this; a stream some earlier process opened is closed by that
+    // same move, and holds no text here to close it with.
+    const openStreams = new Map<AggregateId, Set<string>>();
+    const track = (rows: readonly SessionEvent[]) => {
+      for (const row of rows) {
+        if (row.type === 'run.removed' || closesRunWindow(row)) {
+          openStreams.delete(row.aggregateId);
+        } else if (row.type === 'stream.start') {
+          const open = openStreams.get(row.aggregateId) ?? new Set<string>();
+          openStreams.set(row.aggregateId, open.add(row.id));
+        } else if (row.type === 'stream.end') {
+          const open = openStreams.get(row.aggregateId);
+          open?.delete(row.id);
+          if (open?.size === 0) openStreams.delete(row.aggregateId);
+        }
+      }
+    };
     // Both of `appendAll`'s refusals pass through typed (D6 b): a lost
     // single-owner race is the caller's fact to act on, not a defect.
-    const append: Append = (events) => log.appendAll(events);
+    const append: Append = (events) =>
+      log
+        .appendAll(events)
+        .pipe(Effect.tap((rows) => Effect.sync(() => track(rows))));
     const inbox = yield* Queue.unbounded<PublicationJob, Cause.Done>();
     const consumer = yield* Effect.forkScoped(
       Stream.fromQueue(inbox).pipe(
@@ -280,6 +305,7 @@ export const sessionEventsLayer = Layer.effect(
       exclusive,
       detach,
       settle,
+      openStreams: (aggregateId) => [...(openStreams.get(aggregateId) ?? [])],
       listing: () =>
         Stream.fromIterableEffect(log.readListing()).pipe(
           Stream.filter(isDisplaySessionEvent),

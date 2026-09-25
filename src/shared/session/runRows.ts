@@ -17,14 +17,16 @@
  * `sessionFold` reads whatever the listing, the aggregate or the tail
  * delivered, where the same row means the opening simply never arrived.
  */
-import type {
-  FlowStep,
-  PermissionPayload,
-  RequestDecision,
-  RoundOutput,
-  RunFamily,
-  RunOutcome,
-  SessionEvent,
+import {
+  type FlowStep,
+  type PermissionPayload,
+  type RequestDecision,
+  type RoundOutput,
+  RUN_PHASE,
+  type RunFamily,
+  type RunOutcome,
+  type RunPhase,
+  type SessionEvent,
 } from '@shared/schemas';
 
 /** The rows this module owns, and the only rows it accepts. A type listed
@@ -256,4 +258,65 @@ export function applyRunRow(
       if (current === null) return { kind: 'unchanged' };
       return applied({ roundOutputs: row.rounds });
   }
+}
+
+/**
+ * The slice one run's whole committed aggregate folds to: for a reader that
+ * holds every row of the run and needs only what these rows say (is this
+ * request open, is this follow-up queued), with no `RunState` to build. A
+ * whole aggregate answers every decision it holds, so a contradiction or an
+ * unresolved decision is a malformed aggregate and throws, as it refuses
+ * in `runStateFold`.
+ */
+export function foldRunRows(rows: readonly SessionEvent[]): RunRows {
+  let slice = freshRunRows();
+  for (const row of rows) {
+    if (!isSharedRunRow(row)) continue;
+    const verdict = applyRunRow(slice, row);
+    if (verdict.kind === 'contradiction' || verdict.kind === 'unresolved') {
+      throw new Error(
+        `${row.type} on ${row.aggregateId}: ${
+          verdict.kind === 'unresolved'
+            ? `decision names no request ${verdict.requestId}`
+            : verdict.detail
+        }`,
+      );
+    }
+    if (verdict.kind === 'applied') slice = { ...slice, ...verdict.rows };
+  }
+  return slice;
+}
+
+/**
+ * The phase a lifecycle row moves its run to (one run model, 3.3), or null
+ * for a row that moves none: an activation and every loop step but
+ * `waiting` and `halted` open the run window, `waiting` and a child's park
+ * rest it, `run.end` ends it on its outcome. `halted` is the loop's own word
+ * and leaves the phase to `run.end`. The one statement of the rule: the
+ * session fold's run window, the transcript boundary, the held chunk text
+ * and the publisher's open streams all move on it.
+ */
+export function phaseMoveOf(row: SessionEvent): RunPhase | null {
+  switch (row.type) {
+    case 'run.activate':
+      return RUN_PHASE.RUNNING;
+    case 'flow.step':
+      if (row.payload.step === 'halted') return null;
+      return row.payload.step === 'waiting'
+        ? RUN_PHASE.WAITING
+        : RUN_PHASE.RUNNING;
+    case 'child.park':
+      return row.phase === 'parked' ? RUN_PHASE.WAITING : RUN_PHASE.RUNNING;
+    case 'run.end':
+      return row.outcome;
+    default:
+      return null;
+  }
+}
+
+/** Whether the row's phase move rests or ends the run: the move that closes
+ *  its run window, every open stream and every held chunk with it. */
+export function closesRunWindow(row: SessionEvent): boolean {
+  const phase = phaseMoveOf(row);
+  return phase !== null && phase !== RUN_PHASE.RUNNING;
 }

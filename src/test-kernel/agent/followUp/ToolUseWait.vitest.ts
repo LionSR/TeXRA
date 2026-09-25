@@ -49,7 +49,6 @@ import {
   EMPTY_RUN_USAGE_TOTALS,
   MESSAGE_TYPES,
   RUN_OUTCOME,
-  RUN_PHASE,
   type RetryErrorInfo,
   type RunId,
 } from '@shared/schemas';
@@ -316,7 +315,6 @@ function agentRunTestLayer(init: LoopInit) {
           { agentName: 'chat', agentCategory: AgentCategory.ToolUse },
         ),
         callbacks: {
-          onModelChanged: vi.fn(),
           ...(init.onIdle ? { onIdle: init.onIdle } : {}),
         },
       } satisfies AgentRunShape;
@@ -889,8 +887,17 @@ describe('the batch a parked run consumes', () => {
         name: 'proofread-pipeline',
         outcome: 'completed',
         phaseCount: 1,
-        taskDone: 2,
-        taskTotal: 2,
+        tally: {
+          total: 2,
+          ok: 2,
+          running: 0,
+          queued: 0,
+          planned: 0,
+          failed: 0,
+          cancelled: 0,
+          skipped: 0,
+          notRun: 0,
+        },
         costUsd: 0.19,
         durationMs: 5_000,
         files: [{ path: 'paper.tex', added: 12, removed: 8 }],

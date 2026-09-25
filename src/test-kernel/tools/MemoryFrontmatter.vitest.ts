@@ -4,9 +4,7 @@ import { describe, expect, it } from 'vitest';
 // Local imports - memory metadata
 import {
   buildFile,
-  createMeta,
   parseFrontmatter,
-  setPinnedMeta,
   type MemoryFileMeta,
 } from '@tools/memory/memoryMeta';
 

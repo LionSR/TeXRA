@@ -1,6 +1,6 @@
 // Node imports
 import { readFile as nodeReadFile, writeFile } from 'node:fs/promises';
-import path, { join } from 'node:path';
+import { join } from 'node:path';
 
 // Third-party imports
 import { it } from '@effect/vitest';
