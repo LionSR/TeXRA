@@ -16,7 +16,7 @@ TeXRA has two run programs over one ledger:
 
 |                            | File                                                         | Lines       |
 | -------------------------- | ------------------------------------------------------------ | ----------- |
-| Tool-use loop              | `src/agent/runtime/loop/toolUse.ts` (+ `toolUseDispatch.ts`) | 796 (+ 956) |
+| Tool-use loop              | `src/agent/runtime/loop/toolUse.ts` (+ `toolUseDispatch.ts`) | 796 (+ 974) |
 | Reflection loop            | `src/agent/runtime/loop/reflection.ts`                       | 1,165       |
 | Reflection output pipeline | `src/agent/output/`                                          | 3,734       |
 
@@ -31,7 +31,7 @@ That is the tool-use loop with no tools, plus two things:
 
 1. **At idle, something decides the next turn.** The tool-use loop already has
    one such decider: goal mode (`maybeBuildGoalContinuation`,
-   `toolUse.ts:676`). Rounds would be the second.
+   `toolUse.ts:679`). Rounds would be the second.
 2. **After a turn, something processes the text.** This is the documents
    output pipeline, which becomes a plugin.
 
@@ -39,19 +39,28 @@ This proposal makes both of those seams explicit, moves the documents pipeline
 behind the second one, runs workflow agents through the tool-use loop, and
 then deletes `reflection.ts`.
 
-A prototype (not merged) ran real `polish` and `correct` jobs on DeepSeek
-through the CLI in both modes:
+A prototype (not merged) was measured twice on DeepSeek through the CLI:
+once by the study that wrote it, and once by an independent review that
+rebased it onto `394c301b0a`. The review's numbers:
 
-|                                               | Reflection   | Round mode   |
-| --------------------------------------------- | ------------ | ------------ |
-| Model calls (2-round polish)                  | 2            | 2            |
-| Ledger rows                                   | 101          | 91           |
-| Round-2 input tokens served from prompt cache | 896 of 1,463 | 896 of 1,460 |
-| Request bytes                                 | —            | identical    |
+|                                       | Reflection | Round mode |
+| ------------------------------------- | ---------- | ---------- |
+| Model calls (2-round polish)          | 2          | 2          |
+| Ledger rows                           | 99         | 91         |
+| Request bytes                         | —          | identical  |
+| paper2slide (2 rounds, compile fails) | FAILED     | FAILED     |
+| Crash in round 2, then resume         | 1 request  | 1 request  |
 
-It also resumed a run interrupted in round 2, re-issuing only the open request
-and keeping round 1's output. And it continued a round that the output limit
-cut off, within that same round.
+In both crash windows tested (during the round-2 request, and between a
+round's response row and its `output.produced`), round mode re-issued only
+the open request, byte-identical, and kept round 1's output. A round forced
+to hit the output limit continued within that round in both modes. Prompt
+cache hits depend on run order, because the provider cache is shared across
+runs, so they are not a mode comparison.
+
+The review also found six parity gaps, four reproduced live. They are folded
+into the checklist below and marked **(review)**. The prototype does not
+typecheck on current main (two TS2322 errors in `documentRounds.ts`).
 
 ## What gets deleted
 
@@ -83,10 +92,12 @@ plugin boundary unchanged.
 
 ## What stays
 
-- **The workflow category.** Agent YAML keeps `category: workflow`, and the 45
+- **The workflow category.** Agent YAML keeps `category: workflow`, and the 44
   production files that branch on it keep doing so for UI and output opening.
   The category now selects the documents plugin and round count instead of a
-  loop.
+  loop. It also forces an empty toolset: `toolDefinitionsFor(run.setting.tools)`
+  (`toolUse.ts:566`) would otherwise offer a workflow YAML's declared `tools:`
+  (`agentSettingTools.ts:31-39`).
 - **Round semantics:** the `rounds:` count, `userRequest` templates per round,
   compile-failure context injected into the next round, reject-on-compile-
   failure, latexdiff and the auto-opened PDF.
@@ -129,7 +140,14 @@ threaded through a parameter object; the prototype's `start.rounds?` field is
 not the shape to land.
 
 A round-mode run takes no user input. A failed turn ends the run instead of
-parking for a follow-up, as reflection does today.
+parking for a follow-up. Resuming a failed run must retry the round, as
+reflection does by leaving the phase at `model.ready` (`reflection.ts:380-382`).
+The prototype parked in `waiting` with `lastError` set, so its resume issued no
+request and failed again at once **(review, reproduced)**. The policy's resume
+path clears the error and re-opens the round's turn.
+
+Round index and total come from the policy: index is `turn - 1`, never
+`state.round`, which tool-use bumps on every model call (`toolUse.ts:586`).
 
 ### Seam 2: after-turn output handler
 
@@ -157,7 +175,8 @@ Today only reflection continues a response cut off by `length`, and only
 reflection retries once after a forced compaction on `context-window-exceeded`
 (`reflection.ts:601-698`). The tool-use loop does neither. Both move into a
 sibling module of the tool-use loop, `loop/continuation.ts`, because
-`toolUse.ts` is at its 797-line budget. From then on they apply to every
+`toolUse.ts` is exactly at its 796-line budget (`file-size-baseline.json:68`).
+The idle seam of PR 1 lives in a sibling module for the same reason. From then on they apply to every
 agent, and a chat agent cut off mid-answer continues too. That is a
 behavior change for tool-use agents; see "Risks".
 
@@ -169,9 +188,31 @@ Two corrections to the prototype:
 - **A continuation turn is marked by a row field, not recognized by its prompt
   prefix.** The prototype's `roundTextOf` scans for `"Your response got cut
 off"`, and a user could type that.
+- **`continuationIndex` resets at `turn.begin`.** Tool-use never writes it
+  today, and the fold checks monotonicity within one `round` only
+  (`runRows.ts:155-164`).
+- **Reflection's stop rules are kept exactly** (`reflection.ts:636-698`): no
+  continuation once the text contains `</documents>`, none after a `length`
+  cut that left empty text, the 1.5M input-token stop, and the prompt text
+  "marked by </documents>". The prototype continued on any `length`, empty
+  text included, and dropped that phrase from the prompt **(review)**. On a
+  reasoning model whose budget went to reasoning, the empty case would loop
+  10 times.
+- **Cycles are joined with `connectResponseText`** (`reflection.ts:636-653`),
+  a helper-model call on every host (`textConnection.ts:52-90`). The
+  prototype concatenated raw text **(review)**. The call is skipped on cycle
+  0, whose result reflection throws away.
 
-`overflowRecoveredAtRound` (`runStateFold.ts:192`) already exists in the fold
-and carries over unchanged.
+`overflowRecoveredAtRound` (`runStateFold.ts:192`) exists in the fold, but it
+is keyed on `state.round`, which tool-use bumps on every model call. Keyed
+that way, "once" never holds, so the guard is re-keyed to the turn
+**(review)**.
+
+**Threshold compaction.** Tool-use compacts before every model call once the
+history passes the threshold (`toolUse.ts:570-584`, default 75%,
+`coreSettings.ts:67-70`). Reflection compacts only on provider overflow. On a
+long paper, the default would summarize round 1's document before round 2,
+which depends on it. Round mode turns threshold compaction off.
 
 ### State the plugin needs across resume
 
@@ -180,10 +221,13 @@ Reflection's family snapshot carries `totalRounds`, `compileFailureContext`,
 
 - **`totalRounds`** comes from configuration, as it already does on resume
   (`reflection.ts:383`).
-- **Compile-rejection facts** are derived from the `output.produced` row.
-  The row already carries each round's `compileFailures`
-  (`output.ts:267`), so "the last round has an unresolved rejection" is a
-  fold of rows plus the current reject-on-compile-failure setting, which
+- **Compile-rejection facts** are derived from `output.produced`. Each row
+  carries the whole round collection, not one round (`runRows.ts:255-257`),
+  including each round's `compileFailures` (`output.ts:267`). The rule is "the
+  last round that ran a compile check", not the last row: an empty
+  `compileFailures` also means "no outputs" or "the check itself failed under
+  `recoverWarn`", and reflection keeps the earlier rejection in those cases
+  (`reflection.ts:876-890`) **(review)**. That rule is a fold of rows plus the current reject-on-compile-failure setting, which
   reflection already re-reads on resume (`reflection.ts:286`). The one open
   point is the next round's prompt context: `formatCompileFailureRoundContext`
   reads the full `CompileResult`, not the stored failures. PR 3 either
@@ -198,40 +242,71 @@ Reflection's family snapshot carries `totalRounds`, `compileFailureContext`,
 Resume is the tool-use resume, reading the same rows. The one new case is a
 crash between a round's completed turn and its `output.produced` row. The rule
 is: when the folded state has a completed turn for round _n_ and no
-`output.produced` for _n_, run the handler for _n_ before the idle decision.
-The pipeline is already idempotent by round coordinate (`reflection.ts:893-897`),
-so this replaces the `output.pending` phase with a fact derivable from rows.
+`roundOutputs` entry for _n_, run the handler for _n_ before the idle decision.
+The pipeline writes the same files for the same round coordinate
+(`reflection.ts:893-897`), so this replaces the `output.pending` phase with a
+fact derivable from rows. It is not free of side effects: a rerun repeats
+file-open requests, the missing-outputs instruction, latexdiff and the compile.
+Reflection's `output.pending` re-entry repeats the same work. A round that
+extracted nothing records an empty entry, so it does not rerun on every
+resume.
+
+Resume entry point after PR 5: `resumeToolUseFromResumeData` rejects non-tool-use
+categories today (`executeAgent.ts`), and hosts resume workflows through
+`runAgentRequest` (`hostRunActions.ts:598-605`). PR 5 widens the former to
+both categories and points the latter at it.
+
+### Child runs
+
+A workflow agent run as a child is one child turn today only because
+`launchReflectionRun` wraps the whole program in `options.turns.run(...)`
+(`executeAgent.ts:247`). If round mode passed `turns` into `runToolUse`, each
+round would call `beginTurn`, commit a `child.turn accepted` row and take a
+budget permit (`childRunLoop.ts:1121-1127`), and `workflowScriptAgentRunner.ts:644-661`
+refuses a child whose accepted turn never settled. So round mode keeps the
+outer wrap: the launch for the workflow category wraps the whole round-mode
+program in one child turn and does not pass `turns` inward. That wrap moves
+into `executeAgent.ts`'s workflow branch when PR 5 deletes
+`launchReflectionRun`. This was read, not run live.
 
 ## Parity checklist
 
 Everything `reflection.ts` does, and where it lands:
 
-| Behavior                                                      | Where                                         |
-| ------------------------------------------------------------- | --------------------------------------------- |
-| Round prompt, `userRequest` templates, TeXCount               | plugin `opening` / `nextRound`                |
-| Input media on round 0, previous round's figures on round _n_ | plugin (**not in prototype**)                 |
-| Compile-failure context in next round                         | plugin `nextRound`                            |
-| Warn that declared `tools:` are not offered                   | plugin opening (unchanged text)               |
-| Length continuation, 10-cycle cap, 1.5M input-token stop      | `loop/continuation.ts`                        |
-| Overflow retry once per round after forced compaction         | `loop/continuation.ts` (**not in prototype**) |
-| Output-token multiplier warning                               | `loop/continuation.ts`                        |
-| Scratchpad extraction to transcript                           | plugin `afterTurn`                            |
-| XML extraction, lineage, latexdiff, compile check, summary    | plugin `afterTurn` (moved as-is)              |
-| Fallback that drops a round's outputs on pipeline failure     | plugin `afterTurn`                            |
-| Missing-outputs instruction, open files, auto-open PDF        | plugin `afterTurn`                            |
-| Reject-on-compile-failure outcome                             | idle policy `finish`                          |
-| Relaunch a halted run if rounds remain                        | idle policy                                   |
-| Configured `rounds` lowered since the snapshot                | idle policy (reads config)                    |
-| Round stages `r0`, `r1` with index/total                      | stage label from the policy (about 5 lines)   |
-| Run-workspace preparation before round 0                      | plugin `opening`                              |
+| Behavior                                                      | Where                                                            |
+| ------------------------------------------------------------- | ---------------------------------------------------------------- |
+| Round prompt, `userRequest` templates, TeXCount               | plugin `opening` / `nextRound`                                   |
+| Input media on round 0, previous round's figures on round _n_ | plugin (**not in prototype**)                                    |
+| Compile-failure context in next round                         | plugin `nextRound`                                               |
+| Warn that declared `tools:` are not offered                   | plugin opening, with the toolset forced empty                    |
+| Length continuation, 10-cycle cap, 1.5M input-token stop      | `loop/continuation.ts`                                           |
+| `</documents>` and empty-text stop rules, prompt text         | `loop/continuation.ts` **(review)**                              |
+| `connectResponseText` between cycles                          | `loop/continuation.ts` **(review)**                              |
+| No threshold compaction                                       | round policy turns it off **(review)**                           |
+| Resume after a failed round retries the round                 | round policy resume path **(review)**                            |
+| Overflow retry once per round after forced compaction         | `loop/continuation.ts`, keyed on the turn (**not in prototype**) |
+| Output-token multiplier warning                               | `loop/continuation.ts`                                           |
+| Scratchpad extraction to transcript                           | plugin `afterTurn`                                               |
+| XML extraction, lineage, latexdiff, compile check, summary    | plugin `afterTurn` (moved as-is)                                 |
+| Fallback that drops a round's outputs on pipeline failure     | plugin `afterTurn`                                               |
+| Missing-outputs instruction, open files, auto-open PDF        | plugin `afterTurn`                                               |
+| Reject-on-compile-failure outcome                             | idle policy `finish`                                             |
+| Relaunch a halted run if rounds remain                        | idle policy                                                      |
+| Configured `rounds` lowered since the snapshot                | idle policy (reads config)                                       |
+| Round stages `r0`, `r1` with index/total                      | stage label from the policy                                      |
+| Progress badge `r1/2` in every host                           | `flowPosition` reads the category **(review)**                   |
+| CLI resume hint and history resumability                      | category check, not family **(review)**                          |
+| Transcript does not show each round's document as the answer  | round mode skips `response.finalized` **(review)**               |
+| Run-workspace preparation on every entry, resume included     | plugin, on every entry (idempotent)                              |
+| Workflow child is one child turn                              | outer wrap in the workflow launch **(review)**                   |
 
 ## PR sequence
 
 Each PR is green and shippable alone. Nothing changes user-visible behavior
 until PR 4.
 
-1. **Continuation-at-idle seam, goal mode as its first user.** Behavior-
-   preserving; about +20 lines.
+1. **Continuation-at-idle seam, goal mode as its first user**, in a sibling
+   module of `toolUse.ts`. Behavior-preserving; about +20 lines.
 2. **Length continuation and overflow recovery in `loop/continuation.ts`**,
    for tool-use agents. This includes the continuation marker field. It
    changes tool-use behavior deliberately, and gets a CHANGELOG entry.
@@ -241,12 +316,24 @@ until PR 4.
 4. **Workflow agents run in round mode.** The category selects the round
    policy and the documents plugin, and new runs no longer call
    `launchReflectionRun`. A resumed run whose rows are in the `reflection`
-   family still resumes through `reflection.ts`, until PR 5. This PR runs the bundled workflow agents live on the cheap test
-   models, in both fresh and resumed runs.
+   family still resumes through `reflection.ts`, until PR 5. The
+   user-visible items land here, not after: the progress badge
+   (`runStatusDisplay.ts:180-190` and its six consumers), the CLI resume hint
+   and history resumability (`cli/commands/workflow.ts:336`,
+   `cli/runtime/toolUseResumeData.ts:98`), the Ctrl-C message (round mode
+   printed "All fibers interrupted without error / This looks like a bug"),
+   and the transcript rows. This PR runs `polish`, `correct` and
+   `paper2slide` live on the cheap test models, fresh and resumed, and
+   includes a resume after a failed round.
 5. **Delete `reflection.ts`, the `reflection` snapshot arm, the two phases and
    the resume family split.** This bumps `SESSION_EVENT_FORMAT`, which clears
    stored sessions of every kind (`Database.ts:1334-1343`), so it shares the
-   next planned bump rather than forcing one of its own.
+   next planned bump rather than forcing one of its own. Scope: the other
+   readers of the `reflection` family (`runStatusDisplay.ts:184`,
+   `AgentRun.ts:262`, `SessionResumeRetrieval.ts:51`, the `RunFamily` enum at
+   `runLedgerEvent.ts:46`) and the 11 test files that reference the family or
+   `runReflection`. Nothing outside `reflection.ts` and the schema reads the
+   two phases.
 
 PRs 1–3 are worth landing even if 4–5 stop: PR 1 is the plugin seam goal
 mode needs, PR 2 fixes cut-off chat answers, and PR 3 puts the documents
@@ -254,21 +341,30 @@ pipeline behind a boundary.
 
 ## Risks
 
-- **Tool-use agents start continuing cut-off responses (PR 2).** A model that
-  hits `length` mid-tool-call has no text to continue, so continuation applies
-  only to text-only responses, as the prototype does. Anything else keeps
-  today's behavior.
+- **Tool-use agents start continuing cut-off responses (PR 2).** Continuation
+  applies only to text-only responses with non-empty text. A response cut
+  mid-tool-call goes to dispatch as today. The continuation check runs before
+  the final-tool forcing and the blank-after-tool-result prompt, in the
+  prototype's order. A replayed `response.ready` with `length` appends the
+  continuation once.
 - **Format bump (PR 5).** Unfinished workflow runs from before the bump cannot
   be resumed, the same cost as every bump. Batching limits it to one wipe.
-- **paper2slide** is only in the remote catalog, so the prototype did not
-  run it. PR 4's live check must include it.
 - **Round structure becomes less obvious to read.** In reflection the rounds
   are a visible `for` loop. In round mode they are "idle, then the policy
   opens the next turn". The idle policy and the documents plugin sit side by
   side in the output folder so a reader finds both.
-- **Progress labels.** Until the stage label comes from the policy, workflow
-  runs would show `t1/t2` instead of `r1/2`. The label change lands in PR 4,
-  not after it.
+- **Progress labels come from the snapshot family, not the stage.** The
+  prototype already opened stages named `r0`/`r1`, and the CLI still showed
+  `[t1]`/`[t2]` and an `Idle` state between rounds. The fix is in
+  `flowPosition`, not the stage label.
+- **A pre-existing silent result.** In reflection today, with a small max
+  output (400 or 900 tokens) and a reasoning model, the run completes with
+  zero outputs and no continuation. This is not caused by the proposal. It is
+  a separate bug, found while testing.
+- **Reflection's resume makes helper calls a fresh run does not.** A resume
+  made two `connectResponseText` helper calls that a fresh `texra run` did
+  not. This is unexplained, and PR 2 should find out why before porting the
+  connector.
 
 ## Not in scope
 
@@ -284,7 +380,13 @@ pipeline behind a boundary.
 - Prototype diff and scratch runs: the 2026-09-24 agent-core study (not in the
   repo; the diff adds `loop/roundPolicy.ts`, 38 lines, and
   `output/documentRounds.ts`, 332 lines).
+- Independent review, 2026-09-25, at `394c301b0a`: 20+ live DeepSeek CLI runs
+  (polish, correct, paper2slide, forced continuation, SIGKILL and SIGINT with
+  resume, relaunch of a completed run, resume after a forced 400). The ledger
+  was compared by SQLite queries and the wire bodies byte for byte, and
+  `ReflectionLoop.vitest.ts` passed 29/29. Child runs, media per round,
+  declared-tools dispatch and compile-rejection edge cases were read, not run.
 - Reflection-only bugs fixed the same day: #13150, #13157.
-- Goal continuation at idle: `toolUse.ts:676-686`.
+- Goal continuation at idle: `toolUse.ts:678-686`.
 - Shared conversation across rounds: `reflection.ts:516-520`.
 - Overflow recovery and continuation: `reflection.ts:566-741`.
