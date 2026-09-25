@@ -82,7 +82,7 @@ duplicated is scaffolding, not architecture.
    newest round when a session is reopened, which is why today's
    `addOutputFiles` row already carries its whole map. The alternative is
    the discriminator-aware grouping the
-   [schema-collapse note](./2026-09-20-tools-and-schema-surface-collapse.md)
+   [schema-collapse note](../../archived/simplification/2026-09-20-tools-and-schema-surface-collapse.md)
    specifies for `run.fact`, applied to a round key; take it only if the map
    grows past what one row should carry. Move the pipeline to
    `src/agent/output/` and delete the `implementations/flows/` segments.

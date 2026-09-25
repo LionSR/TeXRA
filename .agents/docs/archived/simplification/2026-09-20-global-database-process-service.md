@@ -4,7 +4,7 @@ Date: 2026-09-20
 Status: implemented — delivered by #12904 (`379419f1`, 2026-09-21): `GlobalDatabase` is a process-runtime service, `withScopedDatabase` is deleted, and the desktop has one global root. Blocker 1 was resolved by `appStateStoreFromDatabase` wrapping a handle it neither opens nor closes.
 Archived: 2026-09-25
 Baseline: `main` at `3378a967`. Parent:
-[service scopes and ownership ledger](../../proposed/simplification/2026-09-20-service-scope-ownership-ledger.md),
+[service scopes and ownership ledger](./2026-09-20-service-scope-ownership-ledger.md),
 candidate P1. Consolidates under #12422 (runtime boundary residue and
 resource lifetime).
 
