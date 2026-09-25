@@ -34,6 +34,7 @@ jobs:
     timeout-minutes: 5
     outputs:
       code: ${{ steps.detect.outputs.code }}
+      desktop: ${{ steps.detect.outputs.desktop }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -50,6 +51,7 @@ jobs:
           if [ "${{ github.event_name }}" != "pull_request" ]; then
             echo "Event '${{ github.event_name }}' -> full validation."
             echo "code=true" >> "$GITHUB_OUTPUT"
+            echo "desktop=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           base='${{ github.event.pull_request.base.sha }}'
@@ -94,6 +96,17 @@ jobs:
           if printf 'M\tREADME.md\n' | code_change_match; then
             echo 'code-change classifier self-test failed (markdown outside docs)' >&2
             exit 1
+          fi
+
+          # The desktop e2e suite runs when a PR touches what the desktop
+          # window renders or boots: its own package, the conversation and
+          # settings views it hosts, the shared UI and session code under
+          # them, the e2e profile seed, the lockfile, or this workflow.
+          desktop_paths='^(packages/desktop/|packages/extension/src/(progressView|settingsView)/|src/ui/|src/shared/|src/controllers/|src/platform/|scripts/desktop-package-smoke-environment|pnpm-lock\.yaml$|\.github/workflows/ci\.yml$)'
+          if printf '%s\n' "$files" | grep -Eq "$desktop_paths"; then
+            echo "desktop=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "desktop=false" >> "$GITHUB_OUTPUT"
           fi
 
           if printf '%s\n' "$name_status" | code_change_match; then
@@ -358,6 +371,48 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+  desktop-e2e:
+    name: desktop e2e (macOS)
+    needs: changes
+    # The Playwright suite that launches the built Electron app: quit, the
+    # project seed, workbench tabs, Monaco, the pty. Nothing else exercises
+    # the app end to end, and it broke twice unnoticed before it ran here.
+    # macOS because its window-lifecycle specs are macOS behaviour and the
+    # runner needs no virtual display; gated to PRs that touch the desktop,
+    # since macOS bills at 10x Linux rates.
+    if: needs.changes.outputs.code == 'true' && needs.changes.outputs.desktop == 'true' && github.event_name != 'schedule'
+    runs-on: macos-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup workspace
+        uses: ./.github/actions/setup-workspace
+
+      # The three bundles only: typecheck is the Linux static-checks job's.
+      - name: Build desktop app
+        run: |
+          pnpm --filter @texra/desktop run build:main
+          pnpm --filter @texra/desktop run build:preload
+          pnpm --filter @texra/desktop run build:renderer
+
+      - name: Run desktop e2e suite
+        env:
+          TEXRA_DISABLE_KEYCHAIN: '1'
+          TEXRA_NO_UPDATE_CHECK: '1'
+        run: pnpm --filter @texra/desktop test:e2e
+
+      - name: Upload desktop e2e results
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: texra-desktop-e2e-results
+          path: packages/desktop/tests/e2e/test-results/
+          if-no-files-found: ignore
+          retention-days: 14
+
   runtime-validation:
     name: runtime validation (linux)
     # Runs on push to main, the nightly schedule (whose whole purpose is this
@@ -430,6 +485,7 @@ jobs:
       - test
       - build
       - webview-smoke
+      - desktop-e2e
       - runtime-validation
       - docs-check
     if: always()
@@ -463,6 +519,7 @@ jobs:
             'test:${{ needs.test.result }}' \
             'build:${{ needs.build.result }}' \
             'webview-smoke:${{ needs.webview-smoke.result }}' \
+            'desktop-e2e:${{ needs.desktop-e2e.result }}' \
             'runtime-validation:${{ needs.runtime-validation.result }}' \
             'docs-check:${{ needs.docs-check.result }}'; do
             name="${result%%:*}"
