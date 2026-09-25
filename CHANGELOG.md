@@ -138,6 +138,10 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
 
 ### Bug Fixes
 
+- **Tool availability rechecks after a change made during a check.** If a
+  credential or setting changed just as a tool-availability check started,
+  the follow-up check could be skipped, leaving a tool shown as missing or
+  available when it no longer was.
 - **The VS Code dashboard shows your agents, teams and saved settings
   again.** The Agents page listed no tool-use or workflow agents and no
   teams, and several pages showed defaults instead of your saved values
@@ -327,6 +331,10 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
 
 #### Breaking Changes
 
+- **Removed: the Agent Review panel in Source Control** — the Find Issues
+  section, its commands, the `changeReviewer` agent and the "Automatically
+  review your changes after each commit" setting are gone. To review a
+  change, ask the `codeReviewer` agent in the TeXRA panel.
 - **"Clean All LLM Output Files (Workspace-wide)" is removed** — it is gone
   from the command palette, the Progress toolbar and the getting-started
   walkthrough. Clean in the Progress toolbar now clears the selected run's

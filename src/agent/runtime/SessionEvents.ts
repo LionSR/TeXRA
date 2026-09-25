@@ -25,6 +25,7 @@ import { writeLogLine } from '@logger/logSink';
 import {
   aggregateId as qualifyAggregateId,
   isDisplaySessionEvent,
+  isTerminalWorkflowCallProgress,
   type AggregateId,
   type CommitOrdinal,
   type SessionEvent,
@@ -42,6 +43,7 @@ import { closesRunWindow } from '@shared/session/runRows';
 import {
   SessionEvents,
   type Append,
+  type OpenWork,
   type SessionCursor,
   type SessionEventsShape,
 } from '@shared/session/sessionEvents';
@@ -153,24 +155,48 @@ export const sessionEventsLayer = Layer.effect(
   SessionEvents,
   Effect.gen(function* () {
     const log = yield* Database;
-    // The streams each aggregate has open, kept as this publisher commits
-    // them, so closing them at a park or an end reads no rows. The fold
-    // closes every stream at a phase move that rests or ends the run, and
-    // so does this; a stream some earlier process opened is closed by that
-    // same move, and holds no text here to close it with.
-    const openStreams = new Map<AggregateId, Set<string>>();
+    // What each aggregate has open, kept as this publisher commits it, so
+    // closing it at a park, an end or a host exit reads no rows. The fold
+    // closes every stream at a phase move that rests or ends the run, and so
+    // does this; stages and workflow calls close only on their own rows,
+    // there and here. Work some earlier process opened is not here: its
+    // streams close at that same phase move, and a stage or call it left
+    // open reads as its run's settled outcome once the run is durably final
+    // (`taskGroupDisplayStatus`, `workflowRunModel`'s interrupted card).
+    const open = new Map<AggregateId, Map<string, OpenWork>>();
     const track = (rows: readonly SessionEvent[]) => {
       for (const row of rows) {
-        if (row.type === 'run.removed' || closesRunWindow(row)) {
-          openStreams.delete(row.aggregateId);
-        } else if (row.type === 'stream.start') {
-          const open = openStreams.get(row.aggregateId) ?? new Set<string>();
-          openStreams.set(row.aggregateId, open.add(row.id));
-        } else if (row.type === 'stream.end') {
-          const open = openStreams.get(row.aggregateId);
-          open?.delete(row.id);
-          if (open?.size === 0) openStreams.delete(row.aggregateId);
+        if (row.type === 'run.removed') {
+          open.delete(row.aggregateId);
+          continue;
         }
+        const work = open.get(row.aggregateId) ?? new Map<string, OpenWork>();
+        const close = (kind: OpenWork['kind'], id: string) => {
+          if (work.get(id)?.kind === kind) work.delete(id);
+        };
+        if (closesRunWindow(row)) {
+          for (const [id, { kind }] of work) {
+            if (kind === 'stream') work.delete(id);
+          }
+        } else if (row.type === 'stream.start' || row.type === 'stage.start') {
+          const kind = row.type === 'stream.start' ? 'stream' : 'stage';
+          work.set(row.id, { kind, id: row.id });
+        } else if (row.type === 'stream.end') {
+          close('stream', row.id);
+        } else if (row.type === 'stage.end') {
+          close('stage', row.id);
+        } else if (row.type === 'workflow.call') {
+          if (isTerminalWorkflowCallProgress(row.call)) {
+            close('call', row.logId);
+          } else {
+            const { logId: id, stageId, call } = row;
+            work.set(id, { kind: 'call', id, stageId, call });
+          }
+        } else {
+          continue;
+        }
+        if (work.size === 0) open.delete(row.aggregateId);
+        else open.set(row.aggregateId, work);
       }
     };
     // Both of `appendAll`'s refusals pass through typed (D6 b): a lost
@@ -305,7 +331,7 @@ export const sessionEventsLayer = Layer.effect(
       exclusive,
       detach,
       settle,
-      openStreams: (aggregateId) => [...(openStreams.get(aggregateId) ?? [])],
+      openWork: (aggregateId) => [...(open.get(aggregateId)?.values() ?? [])],
       listing: () =>
         Stream.fromIterableEffect(log.readListing()).pipe(
           Stream.filter(isDisplaySessionEvent),
