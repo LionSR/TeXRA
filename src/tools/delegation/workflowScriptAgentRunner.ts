@@ -104,7 +104,7 @@ const resolveWorkflowCallConfig = Effect.fn('resolveWorkflowCallConfig')(
     defaultAgent: AgentEntry,
     runId: RunId,
   ): Effect.fn.Return<
-    { configPayload: AgentConfigPayload; agentName: string },
+    AgentConfigPayload,
     Error,
     Secrets | AppState | FileSystem.FileSystem | LanguageModel
   > {
@@ -137,15 +137,12 @@ const resolveWorkflowCallConfig = Effect.fn('resolveWorkflowCallConfig')(
         parentModel,
       );
       return {
-        configPayload: {
-          ...sharedConfigFields,
-          agent: agent.name,
-          agentSource: agent.source,
-          model,
-          agentCategory: AgentCategory.ToolUse,
-          outputSchema: call.options.schema,
-        },
-        agentName: agent.name,
+        ...sharedConfigFields,
+        agent: agent.name,
+        agentSource: agent.source,
+        model,
+        agentCategory: AgentCategory.ToolUse,
+        outputSchema: call.options.schema,
       };
     } else {
       const requestedAgentName = call.options.agentName;
@@ -202,17 +199,14 @@ const resolveWorkflowCallConfig = Effect.fn('resolveWorkflowCallConfig')(
         throw new WorkflowRunAbortError(oversizedBibRejection.error);
       }
       return {
-        configPayload: {
-          ...sharedConfigFields,
-          agent: agent.name,
-          agentSource: agent.source,
-          model,
-          inputFiles,
-          contextFiles,
-          mediaFiles,
-          agentCategory: AgentCategory.Workflow,
-        },
-        agentName: agent.name,
+        ...sharedConfigFields,
+        agent: agent.name,
+        agentSource: agent.source,
+        model,
+        inputFiles,
+        contextFiles,
+        mediaFiles,
+        agentCategory: AgentCategory.Workflow,
       };
     }
   },
@@ -802,23 +796,21 @@ export function createWorkflowScriptAgentRunner(
         },
         prepare: () =>
           Effect.gen(function* () {
-            const { configPayload, agentName } =
-              yield* resolveWorkflowCallConfig(
-                invocation,
-                parent,
-                parentModel,
-                defaultAgent,
-                run.runId,
-              );
+            const configPayload = yield* resolveWorkflowCallConfig(
+              invocation,
+              parent,
+              parentModel,
+              defaultAgent,
+              run.runId,
+            );
             // Surface the resolved child model so the engine can attach it to
             // this call's `agent:end` progress event.
             invocation.report({
               model: configPayload.model,
-              agent: agentName,
+              agent: configPayload.agent,
             });
             return {
               configPayload,
-              agentName,
               parentRunId: run.runId,
               session,
               approvalPromptsUnavailable:

@@ -276,7 +276,6 @@ function delegationOptions(
       agentCategory: AgentCategory.ToolUse,
       model: 'deepseekT',
     },
-    agentName: 'review',
     parentRunId: IN_BAND_PARENT_RUN_ID,
     session: inBandSession,
     composition: emptyPinnedComposition.key,

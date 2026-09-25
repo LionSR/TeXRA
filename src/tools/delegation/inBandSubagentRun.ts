@@ -177,7 +177,7 @@ const executeInBand = Effect.fn('executeInBand')(
     const refusal = childCompositionRefusal(
       options.composition.composition,
       definition.setting.tools,
-      options.agentName,
+      config.agent,
     );
     if (refusal !== undefined) return yield* Effect.fail(new Error(refusal));
 
@@ -202,7 +202,7 @@ const executeInBand = Effect.fn('executeInBand')(
         session: options.session,
         runId,
         parentRunId: options.parentRunId,
-        agentName: options.agentName,
+        agentName: config.agent,
         recordCost: options.onCost,
         // The parent is blocked awaiting this child, so it rides the parent's
         // budget slot (child-run budget design note).
@@ -433,7 +433,7 @@ const launchSubagentInBand = Effect.fn('executeSubagentInBand')(
     ) {
       return yield* Effect.fail(
         new WorkflowRunAbortError(
-          `Workflow agent '${prepared.agentName}' edits files: pass options.inputFiles ` +
+          `Workflow agent '${definition.config.agent}' edits files: pass options.inputFiles ` +
             `with files that still exist (its result carries output files and ` +
             `diffs, not response text).`,
         ),

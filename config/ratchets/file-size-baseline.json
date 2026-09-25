@@ -54,7 +54,7 @@
     "packages/llm/src/turn.ts": 1089,
     "src/agent/followUp/ToolUseFollowUpQueueManager.ts": 741,
     "src/agent/index/agentRegistry.ts": 544,
-    "src/agent/output/compileCheck.ts": 562,
+    "src/agent/output/compileCheck.ts": 526,
     "src/agent/output/extraction/filenameHeaders.ts": 564,
     "src/agent/output/LatexDiffManager.ts": 502,
     "src/agent/output/XmlOutputManager.ts": 558,

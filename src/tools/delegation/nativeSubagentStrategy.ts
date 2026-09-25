@@ -41,7 +41,6 @@ import {
  * field mapping.
  */
 export interface ChildRunLaunchOptions {
-  readonly agentName: string;
   /** The launching run: the child's parent edge. */
   readonly parentRunId: RunId;
   readonly session: SessionHandle;
@@ -133,7 +132,7 @@ export function createNativeSubagentStrategy(
     if (!cachedBuilt) {
       cachedBuilt = yield* buildSubagentResult(
         params.runId,
-        params.agentName,
+        config.agent,
         turn.output,
         {
           startedAt: params.startedAt,
@@ -237,7 +236,7 @@ export function createNativeSubagentStrategy(
         cachedDelivery = yield* Effect.try({
           try: () =>
             formatSubagentDelivery(
-              params.agentName,
+              config.agent,
               { outcome: turn.outcome, output: built.output },
               {
                 runId: params.runId,
@@ -256,16 +255,11 @@ export function createNativeSubagentStrategy(
       if (params.resultOnly) return '';
       const wallTimeMs = Date.now() - params.startedAt;
       const result = turn ?? lastResult;
-      return formatSubagentError(
-        params.runId,
-        params.agentName,
-        lastErr ?? err,
-        {
-          wallTimeMs,
-          workingDirectory: params.workingDirectory,
-          memoryMisses: result?.memoryMisses,
-        },
-      );
+      return formatSubagentError(params.runId, config.agent, lastErr ?? err, {
+        wallTimeMs,
+        workingDirectory: params.workingDirectory,
+        memoryMisses: result?.memoryMisses,
+      });
     },
 
     buildResultMeta: (turn, isError) =>
@@ -276,7 +270,7 @@ export function createNativeSubagentStrategy(
           // turn produced none.
           const result = turn ?? lastResult;
           return buildSubagentResultMeta(
-            params.agentName,
+            config.agent,
             result?.output ?? emptyRunEndOutput(config.agentCategory),
             Date.now() - params.startedAt,
           );

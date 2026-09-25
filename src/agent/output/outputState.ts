@@ -13,7 +13,6 @@
 
 import type { AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import type { AgentWorkflowSetting } from '@agent/core/definition/AgentDataclass';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
   type CompileFailure,
@@ -32,7 +31,6 @@ export interface OutputState {
 
 /** What the output pipeline reads of the reflection run. */
 export interface OutputDependencies {
-  readonly setting: AgentWorkflowSetting;
   readonly config: AgentConfig;
   readonly baseFiles: FileLocation[];
   readonly logger: AgentTrace;
