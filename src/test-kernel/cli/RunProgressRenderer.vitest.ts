@@ -7,7 +7,6 @@ import type {
 } from '@agent/runtime/runtimePresentationEvents';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { pickGlobalArgs } from '@cli/runtime/globalArgs';
 import {
   createRunProgressRenderer,
   shouldRenderRunProgress,

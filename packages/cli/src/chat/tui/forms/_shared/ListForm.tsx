@@ -162,7 +162,7 @@ export function ListForm<T>(props: ListFormProps<T>): React.JSX.Element {
   );
 }
 
-export function listFormShortcutLabel(itemCount: number): string {
+function listFormShortcutLabel(itemCount: number): string {
   if (itemCount <= 0) return 'Enter';
   if (itemCount === 1) return '1/Enter';
   if (itemCount <= 9) return `1-${itemCount}/Enter`;

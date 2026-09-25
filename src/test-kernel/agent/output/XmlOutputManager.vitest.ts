@@ -14,7 +14,7 @@ import {
 } from '@agent/output/outputState';
 
 import { XmlOutputManager } from '@agent/output/XmlOutputManager';
-import type { FileLocation, OutputFileInfo, RunId } from '@shared/schemas';
+import type { FileLocation, RunId } from '@shared/schemas';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { installPlatform } from '@test/support/setupPlatform';
 import { fakePath } from '@test/support/FakePlatform';

@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 // Local imports
 import type { RunTabs } from '@progressView/frontend/components/RunTabs';
 import type { HostRequest } from '@shared/session/hostRequest';
-import type { SessionView, RunView } from '@shared/session/sessionView';
+import type { SessionView } from '@shared/session/sessionView';
 import {
   applySurfaceAction,
   emptySurface,

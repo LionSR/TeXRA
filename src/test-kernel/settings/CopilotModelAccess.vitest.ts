@@ -59,12 +59,6 @@ function copilotSection(
   return tab.shadowRoot?.querySelector<HTMLElement>('#copilot-access');
 }
 
-function sectionButtons(
-  section: HTMLElement | null | undefined,
-): HTMLElement[] {
-  return [...(section?.querySelectorAll<HTMLElement>('wa-button') ?? [])];
-}
-
 describe('Copilot model access settings', () => {
   useLitComponentTestDom(
     () => import('@settingsView/frontend/tabs/SubscriptionsTab'),

@@ -2,11 +2,7 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports - CLI TUI rendering
-import {
-  toolUseDisplayLines,
-  toolUseStyledLines,
-} from '@cli/chat/tui/panes/toolRenderers';
-import { toolDisplaySpanTextProps } from '@cli/chat/tui/panes/ToolUseRow';
+import { toolUseDisplayLines } from '@cli/chat/tui/panes/toolRenderers';
 import { textDisplayWidth } from '@cli/runtime/terminalText';
 
 // Local imports - shared schemas

@@ -486,6 +486,7 @@ export function createFakeWorkspaceRoots(
 
 const FAKE_AGENT_DIRECTORIES: AgentDirectoriesPort = {
   custom: () => Effect.sync(() => fakePath('workspace/.texra/agents')),
+  customConfigured: () => Effect.succeed(false),
   builtIn: () => Effect.sync(() => fakePath('workspace/resources/agents')),
   builtInToolUse: () =>
     Effect.sync(() => fakePath('workspace/resources/tool_use_agents')),

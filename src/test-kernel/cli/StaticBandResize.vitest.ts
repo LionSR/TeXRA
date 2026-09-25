@@ -9,7 +9,6 @@ import stripAnsi from 'strip-ansi';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 // Local imports
-import type { TuiRepaintOptions } from '@cli/chat/tui/render/tuiViewportController';
 import type { SessionMeta } from '@cli/chat/tui/state/cliState';
 import type { RunId } from '@shared/schemas';
 import {

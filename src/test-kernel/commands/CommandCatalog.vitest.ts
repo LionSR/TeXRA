@@ -1,6 +1,5 @@
 // Standard library imports
 import { strict as assert } from 'node:assert';
-import { createRequire } from 'node:module';
 
 // Third-party imports
 import { describe, it } from 'vitest';
@@ -9,30 +8,8 @@ import { describe, it } from 'vitest';
 import {
   commandCatalog,
   commandKeybindings,
-  packageCommandContributions,
   type CommandCatalogEntry,
 } from '@shared/commands/catalog';
-
-interface CommandPaletteItem {
-  command: string;
-  when?: string;
-}
-
-interface PackageJson {
-  contributes: {
-    commands: unknown[];
-    keybindings?: unknown[];
-    menus?: {
-      commandPalette?: CommandPaletteItem[];
-    };
-  };
-}
-
-// Anchor on the repo root (vitest runs from it) rather than import.meta.url.
-const packageRequire = createRequire(`${process.cwd()}/package.json`);
-const packageJson = packageRequire(
-  './packages/extension/package.json',
-) as PackageJson;
 
 describe('commandCatalog', () => {
   // package.json contributes.commands/keybindings are code-generated from the

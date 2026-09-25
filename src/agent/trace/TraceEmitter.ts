@@ -9,7 +9,7 @@
  *   - fan out to subscribers
  *   - swallow per-subscriber exceptions so one bad sink can't break the run
  */
-import { LOG_CHANNEL, writeLogEntry } from '@logger/logSink';
+import { writeLogLine } from '@logger/logSink';
 import {
   RUN_OUTCOME,
   type LogLevel,
@@ -72,15 +72,11 @@ export class TraceEmitter implements AgentTrace {
         // the quiet-degradation shape the guardrail forbids, and it matches the
         // sibling session plane (`SessionHandle.publish`) and the app-signal
         // bus, whose delivery fiber warns and keeps its subscription.
-        writeLogEntry({
-          level: 'WARN',
-          fiberId: '',
-          timestamp: new Date().toISOString(),
-          message: `Trace subscriber threw while handling event: ${toErrorMessage(err)}`,
-          cause: undefined,
-          annotations: { [LOG_CHANNEL]: CHANNEL },
-          spans: {},
-        });
+        writeLogLine(
+          'WARN',
+          CHANNEL,
+          `Trace subscriber threw while handling event: ${toErrorMessage(err)}`,
+        );
       }
     }
   }

@@ -7,7 +7,6 @@ import {
   type SlashCommand,
   installSlashCommands,
 } from '@cli/chat/tui/commands/slashRegistry';
-import { registerBuiltinSlashCommands } from '@cli/chat/tui/commands/registerBuiltins';
 import { resetCliState } from '@cli/chat/tui/state/cliState';
 
 afterEach(() => {

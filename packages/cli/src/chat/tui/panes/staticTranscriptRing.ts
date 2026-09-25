@@ -61,7 +61,7 @@ export interface StaticTranscriptRingBudgets {
 /** Bounded tail at native-terminal-scrollback scale. The high/low split is
  *  hysteresis: a burst can overflow the high-water mark, then trim once down
  *  to the low-water mark instead of trimming on every subsequent append. */
-export const DEFAULT_STATIC_TRANSCRIPT_RING_BUDGETS: StaticTranscriptRingBudgets =
+const DEFAULT_STATIC_TRANSCRIPT_RING_BUDGETS: StaticTranscriptRingBudgets =
   Object.freeze({
     rowHighWater: 2_000,
     rowLowWater: 1_500,

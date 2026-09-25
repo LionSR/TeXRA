@@ -3,7 +3,7 @@
 // Third-party imports
 import { it } from '@effect/vitest';
 import { Cause, Deferred, Effect, Exit, Fiber } from 'effect';
-import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
+import { beforeEach, describe, expect, vi } from 'vitest';
 
 // Local imports
 import { getRunRecords, registerRun } from '@agent/storage';
@@ -29,7 +29,6 @@ import {
   launchAgentCliSession,
   reraiseAgentCliCallFailure,
 } from '@tools/agentCliShared';
-import { codexThreadsFor } from '@tools/agentCliSessionStores';
 import { createChildRun, type ChildRun } from '@tools/delegation/childRun';
 
 // Local file imports
@@ -41,11 +40,8 @@ import {
 
 const runId = 'c11111' as RunId;
 const parentRunId = 'c11112' as RunId;
-const loopRunId = 'c11113' as RunId;
 const stoppedRunId = 'c11114' as RunId;
-const cancelledRunId = 'c11115' as RunId;
 const failedRunId = 'c11116' as RunId;
-const noProjectionAutoCloseRunId = 'c11118' as RunId;
 const workflowRelaunchRunId = 'c11119' as RunId;
 const setupRetryRunId = 'c11120' as RunId;
 const config = AgentConfigSchema.parse({
@@ -496,7 +492,6 @@ describe('child run progress events', () => {
       Effect.gen(function* () {
         const setupError = new Error('child loop setup failed');
         const session = testDefaultSession();
-        const recorded = recordSessionEvents(session);
         let childRun: ChildRun | undefined;
         let childRunId: RunId | undefined;
         let visibleBeforeLoop = true;

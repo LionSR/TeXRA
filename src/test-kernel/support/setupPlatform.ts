@@ -31,7 +31,6 @@ import type { ProcessServices } from '@platform/processRuntime';
 import type {
   AgentDirectoriesPort,
   AgentResumePort,
-  AppState,
   LifecycleHost,
   StateStore,
 } from '@platform/interfaces';
@@ -40,7 +39,7 @@ import {
   type LanguageModelPort,
 } from '@platform/languageModel';
 import { globalStorageFsLayer } from '@platform/rootedFs';
-import type { PlatformSecrets, Secrets } from '@platform/secrets';
+import type { PlatformSecrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { processOwnerId } from '@platform/defaults/nodeProcesses';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
@@ -58,7 +57,7 @@ import {
   LeanLanguageServices,
   type LeanLanguageServicesShape,
 } from '@tools/lean/leanLanguageServices';
-import type { SetupPlatform, SetupPlatformShape } from '@tools/setup/platform';
+import type { SetupPlatformShape } from '@tools/setup/platform';
 import { toolTableLayer } from '@tools/compositions';
 import { toolTable } from '@tools/toolTable';
 import { nodeSpawnerLayer } from './childProcessTestLayer';
@@ -337,6 +336,8 @@ export const fakeHostAgentResume: AgentResumePort = {
  *  runtime does not. */
 export const fakeHostAgentDirectories: AgentDirectoriesPort = {
   custom: () => installedHost().platform.agentDirectories.custom(),
+  customConfigured: () =>
+    installedHost().platform.agentDirectories.customConfigured(),
   builtIn: () => installedHost().platform.agentDirectories.builtIn(),
   builtInToolUse: () =>
     installedHost().platform.agentDirectories.builtInToolUse(),

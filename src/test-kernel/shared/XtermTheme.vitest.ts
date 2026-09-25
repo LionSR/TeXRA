@@ -14,25 +14,6 @@ import { useLitComponentTestDom } from '../settings/litComponentTestUtils';
 
 useLitComponentTestDom();
 
-const ANSI_TOKENS = [
-  ['black', '--wa-color-terminal-ansi-black', '#010101'],
-  ['red', '--wa-color-terminal-ansi-red', '#ff0000'],
-  ['green', '--wa-color-terminal-ansi-green', '#00ff00'],
-  ['yellow', '--wa-color-terminal-ansi-yellow', '#ffff00'],
-  ['blue', '--wa-color-terminal-ansi-blue', '#0000ff'],
-  ['magenta', '--wa-color-terminal-ansi-magenta', '#ff00ff'],
-  ['cyan', '--wa-color-terminal-ansi-cyan', '#00ffff'],
-  ['white', '--wa-color-terminal-ansi-white', '#f0f0f0'],
-  ['brightBlack', '--wa-color-terminal-ansi-bright-black', '#111111'],
-  ['brightRed', '--wa-color-terminal-ansi-bright-red', '#ff1111'],
-  ['brightGreen', '--wa-color-terminal-ansi-bright-green', '#11ff11'],
-  ['brightYellow', '--wa-color-terminal-ansi-bright-yellow', '#ffff11'],
-  ['brightBlue', '--wa-color-terminal-ansi-bright-blue', '#1111ff'],
-  ['brightMagenta', '--wa-color-terminal-ansi-bright-magenta', '#ff11ff'],
-  ['brightCyan', '--wa-color-terminal-ansi-bright-cyan', '#11ffff'],
-  ['brightWhite', '--wa-color-terminal-ansi-bright-white', '#ffffff'],
-] as const;
-
 describe('resolveXtermTheme', () => {
   let warn: MockInstance<typeof console.warn>;
 

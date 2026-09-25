@@ -8,6 +8,7 @@ import {
   Data,
   Duration,
   Effect,
+  Exit,
   FileSystem,
   Option,
   Path,
@@ -22,10 +23,8 @@ import * as tar from 'tar';
 import { withLogChannel } from '@logger/effectLog';
 import { randomizedExponentialBackoff } from '@utils/core/backoffSchedule';
 import { isTransientHttpStatus } from '@utils/core/httpStatus';
-import {
-  pathExists,
-  readDirectoryTypedTolerant,
-} from '@utils/files/fsDurability';
+import { readDirectoryTypedTolerant } from '@utils/files/fsDurability';
+import { entryExists } from '@utils/files/fsEntryExists';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { hasExtension } from '@utils/core/pathCore';
 import { normaliseArxivIdentifier } from './arxivIdentifier';
@@ -90,32 +89,6 @@ const permanentFs = <T, R>(
   effect: Effect.Effect<T, PlatformError.PlatformError, R>,
 ): Effect.Effect<T, ArxivSourcePermanentError, R> =>
   effect.pipe(Effect.mapError(permanentFsError));
-
-/**
- * Whether `target` names an entry, a dangling or circular symlink included.
- *
- * The standard library's `exists` asks the stricter question of whether the
- * path *resolves*, and answers `false` for such a link. `readLink` answers the
- * lstat half -- a path it names is a link, resolvable or not -- and
- * `pathExists` (ENOTDIR read as absent) answers for everything else.
- *
- * The link half is what makes the clobber refusal below fire: a `main.tex`
- * symlink whose target is gone names an entry, and `rename` must refuse it
- * rather than replace the user's link with a regular file.
- */
-const existsAt = (
-  fs: FileSystem.FileSystem,
-  target: string,
-): Effect.Effect<boolean, PlatformError.PlatformError> =>
-  Effect.gen(function* () {
-    const named = yield* fs.readLink(target).pipe(
-      Effect.as(true),
-      // Not a link, or not there at all: the probe below decides.
-      Effect.catch(() => Effect.succeed(false)),
-    );
-    if (named) return true;
-    return yield* pathExists(fs, target);
-  });
 
 /**
  * Abort foreign stream work on interruption, then join its actual promise.
@@ -553,7 +526,7 @@ class ArxivSourceProcessor {
         return false;
       }
       const fs = yield* FileSystem.FileSystem;
-      if (!(yield* permanentFs(existsAt(fs, paperDirFull)))) {
+      if (!(yield* permanentFs(entryExists(fs, paperDirFull)))) {
         return false;
       }
       // The tolerant listing is the facade's `readDir`: the provider typed
@@ -577,8 +550,9 @@ class ArxivSourceProcessor {
   /**
    * Download the arXiv source tarball into a unique staging directory, reject
    * PDF-only submissions, and place the source files into the paper root. The
-   * staging directory is removed by a scope finalizer, so the caller must run
-   * this inside `Effect.scoped`.
+   * staging directory, and a paper directory this call created but did not
+   * finish, are removed by scope finalizers, so the caller must run this
+   * inside `Effect.scoped`.
    */
   private readonly fetchAndPlaceSource = Effect.fn(
     'arxivProcessor.fetchAndPlaceSource',
@@ -592,7 +566,22 @@ class ArxivSourceProcessor {
       progressCallback: DownloadSourceOptions['progressCallback'],
     ) {
       const fs = yield* FileSystem.FileSystem;
+      // A paper directory this download creates is its own until the source is
+      // fully placed. Any other exit -- a PDF-only submission, a failed
+      // extraction, or Cancel mid-extraction -- removes it, because tar writes
+      // straight into it and a partial tree holding one `.tex` would pass
+      // `hasExistingSource` on the next Download. A directory that was already
+      // there, and the workspace root, belong to the user and stay.
+      const ownsPaperDir =
+        !isRoot && !(yield* permanentFs(entryExists(fs, paperDirFull)));
       yield* permanentFs(fs.makeDirectory(paperDirFull, { recursive: true }));
+      yield* Effect.addFinalizer((exit) =>
+        ownsPaperDir && !Exit.isSuccess(exit)
+          ? this.cleanUpBestEffort(paperDirFull, 'paper dir', {
+              recursive: true,
+            })
+          : Effect.void,
+      );
 
       // Use a unique staging directory name to avoid clobbering an existing 'download/' folder at root
       const stagingDirName = `.arxiv-download-${id.replaceAll('/', '_')}`;
@@ -623,13 +612,6 @@ class ArxivSourceProcessor {
 
       // Detect PDF-only submissions (no LaTeX source available)
       if (hasExtension(downloadedPath, '.pdf')) {
-        yield* permanentFs(fs.remove(downloadedPath, { force: true }));
-        // Only clean up the paper directory when it was created for this download
-        if (!isRoot) {
-          yield* this.cleanUpBestEffort(paperDirFull, 'paper dir', {
-            recursive: true,
-          });
-        }
         return yield* Effect.fail(
           new ArxivSourcePermanentError({ message: PDF_ONLY_SUBMISSION_ERROR }),
         );
@@ -715,10 +697,12 @@ class ArxivSourceProcessor {
       // Rename to main.tex and move to paper root. The facade's `rename`
       // refused to clobber an existing target (its platform provider threw
       // `EEXIST`), while the standard library's `rename` is node's, which
-      // overwrites silently — so the refusal is spelled out here.
+      // overwrites silently — so the refusal is spelled out here. A dangling
+      // `main.tex` symlink names an entry too, and must block the rename
+      // rather than be replaced by a regular file.
       const targetPath = path.join(paperDirFull, 'main.tex');
       if (sourceFilePath !== targetPath) {
-        if (yield* permanentFs(existsAt(fs, targetPath))) {
+        if (yield* permanentFs(entryExists(fs, targetPath))) {
           return yield* Effect.fail(
             new ArxivSourcePermanentError({
               message: `Target already exists: ${targetPath}`,

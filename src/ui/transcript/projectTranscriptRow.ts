@@ -13,7 +13,7 @@
  */
 import {
   MESSAGE_TYPES,
-  WORKFLOW_TASK_STATUS_LABEL,
+  workflowCallStatusLabel,
   type ErrorLogData,
   type ExtendedTokenUsageStats,
   type FileListEntry,
@@ -286,7 +286,7 @@ export function workflowTaskRow(
     kind: 'workflowTask',
     call,
     line: formatWorkflowCallLine(call),
-    statusLabel: WORKFLOW_TASK_STATUS_LABEL[call.status],
+    statusLabel: workflowCallStatusLabel(call),
     metadataParts: formatWorkflowCallMetadataParts(call),
     ...(detail ? { detail } : {}),
   };

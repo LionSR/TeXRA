@@ -98,6 +98,7 @@ import {
   type SessionEvent,
 } from '@shared/schemas';
 import { InquiryRecords } from '@shared/session/inquiryRecords';
+import { closesRunWindow } from '@shared/session/runRows';
 import { ProcessIdentity, SessionEvents } from '@shared/session/sessionEvents';
 import type { SessionView } from '@shared/session/sessionView';
 import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
@@ -286,7 +287,7 @@ const sessionHandleLayer = (
 ) =>
   Layer.effectContext(
     Effect.gen(function* () {
-      const { publish, exclusive, detach, settle, ...reads } =
+      const { publish, exclusive, detach, settle, openStreams, ...reads } =
         yield* SessionEvents;
       const eventLog = yield* Database;
       const identity = yield* ProcessIdentity;
@@ -382,6 +383,7 @@ const sessionHandleLayer = (
             }
             return pieces.reverse().join('');
           },
+          openStreams: (runId) => openStreams(qualifyAggregateId('run', runId)),
           acquireClaims: (id) =>
             eventLog
               .acquireClaims([id])
@@ -577,8 +579,8 @@ const sessionHandleLayer = (
             Effect.andThen(() => {
               // A row that closes live text drops the held chunks: a
               // stream's final text or a card's terminal result drop their
-              // own; the run's transcript boundary (either park, the end,
-              // the removal) drops every chunk of the run, so a card an
+              // own; a phase move that rests or ends the run, and its
+              // removal, drop every chunk of the run, so a card an
               // interrupted run closed without a terminal row holds nothing.
               const runId = aggregateTarget(event.aggregateId).id;
               let drop: ((key: string) => boolean) | null = null;
@@ -590,10 +592,8 @@ const sessionHandleLayer = (
               ) {
                 drop = (key) => key === `${runId}/${event.logId}`;
               } else if (
-                event.type === 'run.end' ||
                 event.type === 'run.removed' ||
-                (event.type === 'child.park' && event.phase === 'parked') ||
-                (event.type === 'flow.step' && event.payload.step === 'waiting')
+                closesRunWindow(event)
               ) {
                 drop = (key) => key.startsWith(`${runId}/`);
               }

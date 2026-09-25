@@ -1,5 +1,5 @@
 import { it } from '@effect/vitest';
-import { Effect, Layer } from 'effect';
+import { Effect } from 'effect';
 import { beforeEach, describe, expect, vi } from 'vitest';
 
 import type { ModelOptionStores } from '@model/computeModelOptions';
@@ -101,11 +101,6 @@ const DELEGATE_AGENT_TOOL: ToolInput = {
  * mocked reader answers off the value, so any stores value serves.
  */
 const annotationSettings = hostStores();
-
-const RESEARCH_NUMERICS_AGENTS = [
-  { name: 'research', description: 'Derive and verify.' },
-  { name: 'numerics', description: 'Run simulations.', tools: ['bash'] },
-];
 
 /**
  * Annotate with the given roster visible and no model list, so only the

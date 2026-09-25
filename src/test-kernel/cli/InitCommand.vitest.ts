@@ -40,7 +40,6 @@ vi.mock('@cli/runtime/modelAccess', async (importOriginal) => {
 });
 
 import { runCli } from '@cli/commands/root';
-import { initCommand } from '@cli/commands/init';
 import {
   initWizardDefaultAgentIndex,
   initWizardModelSelectItems,
@@ -87,6 +86,7 @@ let customAgentsDir: string;
 /** The real agent directories the installed host serves. */
 const bundledAgentDirectories = () => ({
   custom: () => Effect.succeed(customAgentsDir),
+  customConfigured: () => Effect.succeed(false),
   builtIn: () =>
     Effect.succeed(path.join(REPO_ROOT, 'packages/extension/resources/agents')),
   builtInToolUse: () =>

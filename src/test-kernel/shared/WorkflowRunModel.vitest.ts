@@ -122,13 +122,7 @@ describe('workflow run model', () => {
       'report',
     ]);
     expect(model.phases[0]?.cells).toStrictEqual(['running', 'running']);
-    expect(model.tally).toStrictEqual({
-      done: 0,
-      total: 4,
-      running: 4,
-      failed: 0,
-      declared: 0,
-    });
+    expect(model.tally).toMatchObject({ total: 4, ok: 0, running: 4 });
   });
 
   it('scopes resumed calls and phase boundaries to the newest attempt', () => {
@@ -196,13 +190,7 @@ describe('workflow run model', () => {
       newEmpty.id,
       `unphased-${resumedUngrouped.id}`,
     ]);
-    expect(model.tally).toStrictEqual({
-      done: 1,
-      total: 2,
-      running: 1,
-      failed: 0,
-      declared: 0,
-    });
+    expect(model.tally).toMatchObject({ total: 2, ok: 1, running: 1 });
   });
 
   it("settles an interrupted run's cards in the producer's vocabulary", () => {
@@ -243,7 +231,13 @@ describe('workflow run model', () => {
       },
       undefined,
     ]);
-    expect(model.tally).toMatchObject({ done: 3, total: 3, running: 0 });
+    expect(model.tally).toMatchObject({
+      total: 3,
+      ok: 1,
+      failed: 1,
+      notRun: 1,
+      running: 0,
+    });
   });
 
   it('uses a new plan boundary before its calls or tagged phases arrive', () => {
@@ -307,16 +301,22 @@ describe('workflow run model', () => {
       );
 
     // Failed, then running, transcript order within each, then one
-    // counted row per collapsed group: finished, queued, declared.
+    // counted row per collapsed group: finished, queued, planned.
     expect(
-      summarize(workflowPhaseRows(phase, { expanded: new Set(), filter: '' })),
+      summarize(
+        workflowPhaseRows(phase, {
+          expanded: new Set(),
+          settled: false,
+          filter: '',
+        }),
+      ),
     ).toStrictEqual([
       'task:task-bad',
       'task:task-r1',
       'task:task-r2',
       '▸ 2 finished',
       '▸ 2 queued',
-      '▸ 1 declared',
+      '▸ 1 planned',
     ]);
     // A waiting card outranks a failed one; an opened group lists its
     // members under its header, in place.
@@ -324,6 +324,7 @@ describe('workflow run model', () => {
       summarize(
         workflowPhaseRows(phase, {
           expanded: new Set(['finished', 'queued']),
+          settled: false,
           filter: '',
           waiting: new Set(['task-r2']),
         }),
@@ -338,25 +339,37 @@ describe('workflow run model', () => {
       '▾ 2 queued',
       'task:task-q1',
       'task:task-q2',
-      '▸ 1 declared',
+      '▸ 1 planned',
     ]);
     // A filter is one flat list of matches, groups and all.
     expect(
       summarize(
-        workflowPhaseRows(phase, { expanded: new Set(), filter: 'ok' }),
+        workflowPhaseRows(phase, {
+          expanded: new Set(),
+          settled: false,
+          filter: 'ok',
+        }),
       ),
     ).toStrictEqual(['task:task-ok1', 'task:task-ok2']);
     expect(
       summarize(
-        workflowPhaseRows(phase, { expanded: new Set(), filter: 'later' }),
+        workflowPhaseRows(phase, {
+          expanded: new Set(),
+          settled: false,
+          filter: 'later',
+        }),
       ),
     ).toStrictEqual(['declared:later']);
     expect(phase.tally).toStrictEqual({
-      done: 3,
-      total: 7,
+      total: 8,
+      ok: 2,
       running: 2,
+      queued: 2,
+      planned: 1,
       failed: 1,
-      declared: 1,
+      cancelled: 0,
+      skipped: 0,
+      notRun: 0,
     });
   });
 

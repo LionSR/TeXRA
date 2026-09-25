@@ -285,20 +285,13 @@ export function runWorkflowScript<R = never>(
       // transition beneath it.
       yield* Effect.addFinalizer((exit) =>
         Effect.sync(() => {
-          const interrupted =
-            Exit.isFailure(exit) && Cause.hasInterruptsOnly(exit.cause);
           let terminalOutcome: RunOutcome = RUN_OUTCOME.FAILED;
           if (Exit.isSuccess(exit)) {
             terminalOutcome = RUN_OUTCOME.COMPLETED;
-          } else if (interrupted) {
+          } else if (Cause.hasInterruptsOnly(exit.cause)) {
             terminalOutcome = RUN_OUTCOME.CANCELLED;
           }
-          workflowRunState.finish(
-            terminalOutcome,
-            Exit.isFailure(exit) && !interrupted
-              ? toErrorMessage(Cause.squash(exit.cause))
-              : undefined,
-          );
+          workflowRunState.finish(terminalOutcome);
         }),
       );
 

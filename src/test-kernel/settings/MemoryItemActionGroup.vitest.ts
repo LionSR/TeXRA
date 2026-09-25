@@ -41,13 +41,6 @@ function query<T extends Element>(
   return element.shadowRoot?.querySelector<T>(selector);
 }
 
-function tooltipText(
-  element: MemoryItem,
-  buttonId: string,
-): string | null | undefined {
-  return query(element, `wa-tooltip[for="${buttonId}"]`)?.textContent;
-}
-
 /**
  * Regression coverage for the wa-button-group + tooltip consolidation onto
  * `renderIconActionButtonParts` (src/ui/wa/actionButtons.ts): the

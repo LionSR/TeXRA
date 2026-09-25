@@ -1,7 +1,7 @@
 import { mkdir, utimes, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 import { it } from '@effect/vitest';
-import { Effect, FileSystem, Fiber, PlatformError } from 'effect';
+import { Effect, FileSystem, PlatformError } from 'effect';
 
 import { describe, expect, vi } from 'vitest';
 import type { ToolServices } from '@agent/runtime/ToolServices';

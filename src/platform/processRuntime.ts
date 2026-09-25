@@ -94,13 +94,15 @@ export type ProcessServices =
 
 /**
  * The services an agent catalog load reads: the global and filesystem views
- * the local agent directories are scanned through, and the HTTP client the
- * remote catalog is listed with.
+ * the local agent directories are scanned through, the app state the
+ * disabled-plugin switch is read from, and the HTTP client the remote catalog
+ * is listed with.
  */
 export type AgentCatalogServices =
   | GlobalStorageFs
   | FileSystem.FileSystem
   | AgentDirectories
+  | AppState
   | HttpClient.HttpClient;
 
 export type ProcessRuntime = ManagedRuntime.ManagedRuntime<
