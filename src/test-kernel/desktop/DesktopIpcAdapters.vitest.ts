@@ -112,24 +112,26 @@ function expectFunnelState(
 }
 
 describe('desktop IPC adapters', () => {
-  it('claims only the desktop-local shell commands', async () => {
-    const openExternalUrl = vi.fn(() => Effect.void);
-    const { postToRenderer, shellIpc } = await createShellHarness({
-      openExternalUrl,
-    });
+  it.effect('claims only the desktop-local shell commands', () =>
+    Effect.gen(function* () {
+      const openExternalUrl = vi.fn(() => Effect.void);
+      const { postToRenderer, shellIpc } = yield* Effect.promise(() =>
+        createShellHarness({ openExternalUrl }),
+      );
 
-    expect(
-      shellIpc.handleMessage({ command: 'texra.totallyUnknown' }),
-    ).toBeUndefined();
-    const program = shellIpc.handleMessage({
-      command: 'texra.desktop.openDesktopDocs',
-    });
-    expect(program).toBeDefined();
-    await testRuntime().runPromise(program!);
-    await flushAsync();
-    expect(openExternalUrl).toHaveBeenCalledTimes(1);
-    expect(postToRenderer).not.toHaveBeenCalled();
-  });
+      expect(
+        shellIpc.handleMessage({ command: 'texra.totallyUnknown' }),
+      ).toBeUndefined();
+      const program = shellIpc.handleMessage({
+        command: 'texra.desktop.openDesktopDocs',
+      });
+      expect(program).toBeDefined();
+      yield* withProcessServices(testRuntime(), program!);
+      yield* Effect.promise(() => flushAsync());
+      expect(openExternalUrl).toHaveBeenCalledTimes(1);
+      expect(postToRenderer).not.toHaveBeenCalled();
+    }),
+  );
 
   it.effect(
     'persists first-run walkthrough dismissal in the onboarding adapter',
