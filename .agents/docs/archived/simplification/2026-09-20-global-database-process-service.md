@@ -1,7 +1,8 @@
 # One process-scoped database for the global root
 
 Date: 2026-09-20
-Status: proposed
+Status: implemented — delivered by #12904 (`379419f1`, 2026-09-21): `GlobalDatabase` is a process-runtime service, the four runtime callers use it, `withScopedDatabase` became file-local to the app-state store, and the desktop has one global root. Blocker 1 stayed as §3 concluded: the pre-runtime app-state store kept operation-scoped access (`openAppStateStore` still builds its own scoped `databaseLayer('persistent')`), and #13008 later reshaped it into `appStateStoreFromDatabase`, which borrows a caller-owned handle.
+Archived: 2026-09-25
 Baseline: `main` at `3378a967`. Parent:
 [service scopes and ownership ledger](./2026-09-20-service-scope-ownership-ledger.md),
 candidate P1. Consolidates under #12422 (runtime boundary residue and

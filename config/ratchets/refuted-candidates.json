@@ -153,7 +153,7 @@
       "id": "SCOPE-held-sessions-as-effects",
       "candidate": "current/held as Effects, deleting HeldSessions",
       "why": "Zero production breaks, but 414 testDefaultSession() call sites in 45 suites and one dev harness, for about 35 LoC. Fails the tests-are-a-budget bar.",
-      "ruling": ".agents/docs/proposed/simplification/2026-09-20-service-scope-ownership-ledger.md#33-refuted-with-the-evidence",
+      "ruling": ".agents/docs/archived/simplification/2026-09-20-service-scope-ownership-ledger.md#33-refuted-with-the-evidence",
       "symbols": [
         {
           "file": "src/controllers/session/sessionLayer.ts",
@@ -166,7 +166,7 @@
       "id": "SCOPE-external-roots-standalone-service",
       "candidate": "ExternalRoots as a standalone service",
       "why": "One writer, four VS Code-free readers, keyed by kind not by session: a process-wide allowlist with a sound freeze rule. A process service is the correct shape but is +4 signatures for 0 deletions today; recorded as a hazard on #12071.",
-      "ruling": ".agents/docs/proposed/simplification/2026-09-20-service-scope-ownership-ledger.md#33-refuted-with-the-evidence",
+      "ruling": ".agents/docs/archived/simplification/2026-09-20-service-scope-ownership-ledger.md#33-refuted-with-the-evidence",
       "symbols": [
         {
           "file": "src/utils/files/externalRoots.ts",
