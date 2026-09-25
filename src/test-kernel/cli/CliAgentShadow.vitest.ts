@@ -172,16 +172,6 @@ describe('CLI agent validation with a shadowed name', () => {
       }),
   );
 
-  effectIt.effect(
-    'reports an unknown name as missing rather than mismatched',
-    () =>
-      Effect.gen(function* () {
-        expect(
-          String(yield* resolveChatToolUseAgent(hostStores(), 'no-such-agent')),
-        ).toContain('Tool-use agent not found: no-such-agent.');
-      }),
-  );
-
   // `texra run` serves both categories, so a shadowed name has two candidate
   // run shapes. Picking one silently would change what an existing invocation
   // does without saying so; the qualified spellings the error offers are

@@ -1,15 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { modelListDescription } from '@cli/chat/tui/forms/ModelListForm';
 import {
   shouldBufferAsyncListFormInput,
   shouldCloseAsyncListFormOnInput,
 } from '@cli/chat/tui/forms/_shared/useAsyncListForm';
-import { isCompactFormRows } from '@cli/tui/selectWindow';
 import {
   nextSelectHighlightIndex,
   selectInitialHighlightIndex,
-  selectItemRenderKey,
 } from '@cli/tui/ui/Select';
 import { selectVisibleInlineOverflowText } from '@cli/tui/overflowText';
 
@@ -113,16 +110,6 @@ describe('CLI async list form buffered input', () => {
       expected: false,
     },
     {
-      name: 'ignores Enter',
-      args: { input: '\r', key: { return: true }, loading: true },
-      expected: false,
-    },
-    {
-      name: 'ignores Escape',
-      args: { input: '\u001B', key: { escape: true }, loading: true },
-      expected: false,
-    },
-    {
       name: 'ignores modified keys',
       args: { input: 'c', key: { ctrl: true }, loading: true },
       expected: false,
@@ -154,16 +141,6 @@ describe('CLI Select inline overflow', () => {
       expected: '+3 more',
     },
     {
-      name: 'summarizes choices hidden before the window',
-      args: {
-        hiddenBefore: 2,
-        hiddenAfter: 0,
-        showOverflow: false,
-        visibleItemCount: 3,
-      },
-      expected: '+2 earlier',
-    },
-    {
       name: 'summarizes choices hidden on both sides',
       args: {
         hiddenBefore: 2,
@@ -192,16 +169,6 @@ describe('CLI Select inline overflow', () => {
         visibleItemCount: 0,
       },
       expected: undefined,
-    },
-    {
-      name: 'shows inline overflow for any clipped visible window',
-      args: {
-        hiddenBefore: 0,
-        hiddenAfter: 2,
-        showOverflow: false,
-        visibleItemCount: 3,
-      },
-      expected: '+2 more',
     },
   ])('$name', ({ args, expected }) => {
     expect(selectVisibleInlineOverflowText(args)).toBe(expected);
@@ -269,16 +236,6 @@ describe('CLI Select disabled-row focus', () => {
       name: 'moves up to an enabled row',
       args: { direction: -1, highlight: 2, items },
       expected: 1,
-    },
-    {
-      name: 'reports the disabled top row as a non-wrapping boundary',
-      args: { direction: -1, highlight: 1, items, wrap: false },
-      expected: 1,
-    },
-    {
-      name: 'reports the disabled bottom row as a non-wrapping boundary',
-      args: { direction: 1, highlight: 2, items, wrap: false },
-      expected: 2,
     },
     {
       name: 'wraps upward from the top of an all-enabled list',

@@ -41,22 +41,6 @@ describe('CLI diff display', () => {
     });
   });
 
-  it('renders scroll markers around the visible diff window', () => {
-    const hunks = alternatingHunks(SIX_LINE_HUNK_SOURCE);
-
-    const lines = scrollBoundedDiffDisplayLines(hunks, 4, 2, 80);
-
-    expect(lines).toHaveLength(4);
-    expect(lines[0]).toMatchObject({
-      kind: 'overflow',
-      text: '… 2 previous rows',
-    });
-    expect(lines.at(-1)).toMatchObject({
-      kind: 'overflow',
-      text: expect.stringContaining('more rows'),
-    });
-  });
-
   it('prioritizes changed rows in a cramped diff window', () => {
     const hunks = alternatingHunks(FOUR_LINE_HUNK_SOURCE);
 

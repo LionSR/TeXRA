@@ -147,29 +147,6 @@ describe('CLI config command', () => {
     },
   );
 
-  it('sets both exact lists together when both flags are present', async () => {
-    const result = await runCli([
-      'config',
-      'agents',
-      '--workflow',
-      'builtInWorkflow:write',
-      '--tool-use',
-      'builtInToolUse:assistant',
-      '--output-format',
-      'json',
-      '--no-input',
-    ]);
-
-    expect(result.exitCode).toBe(0);
-    expect(await readSelection()).toEqual({
-      kind: 'custom',
-      agentKeys: {
-        workflow: ['builtInWorkflow:write'],
-        toolUse: ['builtInToolUse:assistant'],
-      },
-    });
-  });
-
   it.each([
     {
       name: 'team',

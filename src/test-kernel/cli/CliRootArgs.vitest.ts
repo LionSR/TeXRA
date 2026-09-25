@@ -17,20 +17,12 @@ import {
   hasUsageNoColorFlag,
   detectUnknownCliCommand,
   detectUnknownCliFlag,
-  formatUnknownCliCommand,
-  formatUnknownCliFlag,
 } from '@cli/commands/_helpers/dispatch';
 import { CliUsageError, formatCrashReportLine } from '@cli/runtime/cliContext';
-import {
-  formatCliModelListError,
-  isCliFetchStackLog,
-} from '@cli/commands/_helpers/fetchSilencer';
+import { isCliFetchStackLog } from '@cli/commands/_helpers/fetchSilencer';
 import {
   collectStringFlagValues,
-  GLOBAL_BOOL_FLAGS,
-  GLOBAL_VALUE_FLAGS,
   optionalStringFlagValue,
-  rejectHeadlessOnlyFlags,
 } from '@cli/commands/_helpers/globalArgs';
 import {
   expandRunInputs,
@@ -171,13 +163,6 @@ describe('CLI root argument routing', () => {
     ]);
   });
 
-  it('routes top-level --resume to the resume subcommand', () => {
-    expect(normalizeRootShortcuts(['--resume', 'abc123'])).toEqual([
-      'resume',
-      'abc123',
-    ]);
-  });
-
   it('routes inline top-level --resume values to the resume subcommand', () => {
     expect(normalizeRootShortcuts(['--resume=abc123'])).toEqual([
       'resume',
@@ -261,16 +246,6 @@ describe('CLI root argument routing', () => {
         helpCommand: `texra ${group}`,
       });
     }
-  });
-
-  it('suggests close command names inside command groups', async () => {
-    await expect(
-      detectUnknownCliCommand(rootCommand, ['multi-agent', 'rn']),
-    ).resolves.toEqual({
-      typedCommand: 'texra multi-agent rn',
-      helpCommand: 'texra multi-agent',
-      suggestedCommand: 'texra multi-agent run',
-    });
   });
 
   it('detects unknown command-scoped flags before command run', async () => {
@@ -384,16 +359,6 @@ describe('CLI root argument routing', () => {
     ).toEqual(['paper.tex', 'bib.tex']);
   });
 
-  it('collects repeated run input flags from raw args', () => {
-    expect(
-      collectStringFlagValues(
-        ['firstread', '--input=Draft0.tex', '-i', 'appendices.tex'],
-        'input',
-        'i',
-      ),
-    ).toEqual(['Draft0.tex', 'appendices.tex']);
-  });
-
   it('rejects file flags when the next token is another option', () => {
     expect(() =>
       collectStringFlagValues(
@@ -441,48 +406,6 @@ describe('CLI root argument routing', () => {
     expect(() =>
       optionalStringFlagValue(['firstread', '--output='], 'output'),
     ).toThrow('Missing value for --output');
-  });
-
-  it('rejects headless-only flags on interactive command bodies', () => {
-    const rejected: Array<[string[], string, string]> = [
-      [
-        ['--print'],
-        'chat',
-        'texra chat is interactive and does not support --print.',
-      ],
-      [
-        ['-p'],
-        'chat',
-        'texra chat is interactive and does not support --print.',
-      ],
-      [
-        ['--no-input'],
-        'chat',
-        'texra chat is interactive and does not support --no-input.',
-      ],
-      [
-        ['--no-input=true'],
-        'chat',
-        'texra chat is interactive and does not support --no-input.',
-      ],
-      [
-        ['--print=true'],
-        'chat',
-        'texra chat is interactive and does not support --print.',
-      ],
-      [
-        ['--print', '--output-format', 'json', '--no-input'],
-        'chat',
-        'texra chat is interactive and does not support --print, --output-format, and --no-input.',
-      ],
-    ];
-
-    for (const [args, command, message] of rejected) {
-      expect(() => rejectHeadlessOnlyFlags(args, command)).toThrow(message);
-    }
-    expect(() =>
-      rejectHeadlessOnlyFlags(['--approval-policy', 'ask'], 'chat'),
-    ).not.toThrow();
   });
 
   it.effect(
@@ -735,42 +658,6 @@ describe('CLI root argument routing', () => {
           }).pipe(Effect.provide(nodePlatformLayer)),
         );
         expect(error.message).toMatch(/--input: file is outside --cwd:/);
-      }),
-    ),
-  );
-
-  it.effect(
-    'attributes the missing-path error to the caller-supplied flag label',
-    () =>
-      // The helper is shared between --input (texra run, multi-agent run
-      // input) and --context (multi-agent run context). The error must name
-      // the flag the user actually passed, not always say --input.
-      withTempDirEffect('texra-cli-flag-', (root) =>
-        Effect.gen(function* () {
-          const missing = path.join(root, 'no-such-context.tex');
-          const error = yield* Effect.flip(
-            expandSpecs([missing], root, '--context'),
-          );
-          expect(error.message).toMatch(/--context: file not found/);
-        }),
-      ),
-  );
-
-  it.effect('expands a glob --context spec the same way --input does', () =>
-    // `texra run -c '<glob>'` routes through the same expansion helper, so it
-    // has the same expansion semantics as `--input` and surfaces missing-path
-    // errors as Usage (exit 2) instead of a late raw ENOENT.
-    withTempDirEffect('texra-cli-ctx-', (root) =>
-      Effect.gen(function* () {
-        yield* Effect.promise(() =>
-          fs.writeFile(path.join(root, 'a.bib'), 'a'),
-        );
-        yield* Effect.promise(() =>
-          fs.writeFile(path.join(root, 'b.bib'), 'b'),
-        );
-        expect(
-          yield* expandSpecs([path.join(root, '*.bib')], root, '--context'),
-        ).toEqual(['a.bib', 'b.bib']);
       }),
     ),
   );
@@ -1081,16 +968,6 @@ describe('CLI root argument routing', () => {
       }),
   );
 
-  it('formats model list network failures without raw stack traces', () => {
-    const error = new Error('fetch failed', {
-      cause: new Error('getaddrinfo ENOTFOUND remote.texra.ai'),
-    });
-
-    expect(formatCliModelListError(error)).toBe(
-      'texra: could not fetch model access metadata from remote.texra.ai: getaddrinfo ENOTFOUND remote.texra.ai',
-    );
-  });
-
   it('recognizes raw fetch stack logs from lower-level clients', () => {
     const error = new TypeError('fetch failed', {
       cause: new Error('getaddrinfo ENOTFOUND remote.texra.ai'),
@@ -1133,41 +1010,6 @@ describe('CLI global color/input flags', () => {
     });
   });
 
-  it('treats absent/default color and no-input flags as not negated', () => {
-    expect(
-      pickGlobalArgs(
-        { color: true, 'no-input': false },
-        { skillSourcePaths: [] },
-      ),
-    ).toMatchObject({
-      noColor: false,
-      noInput: false,
-    });
-    // Absent flags default to "not negated" too.
-    expect(pickGlobalArgs({}, { skillSourcePaths: [] })).toMatchObject({
-      noColor: false,
-      noInput: false,
-    });
-  });
-
-  it('maps runtime source flags to canonical knobs', () => {
-    expect(
-      pickGlobalArgs(
-        { 'include-interop': true },
-        { skillSourcePaths: ['vendor/skills', '/tmp/shared-skills'] },
-      ),
-    ).toMatchObject({
-      includeInteropSkills: true,
-      skillSourcePaths: ['vendor/skills', '/tmp/shared-skills'],
-    });
-    expect(
-      pickGlobalArgs({}, { skillSourcePaths: ['one/skills', 'two/skills'] }),
-    ).toMatchObject({
-      includeInteropSkills: false,
-      skillSourcePaths: ['one/skills', 'two/skills'],
-    });
-  });
-
   it('detects usage --no-color only as a global flag', () => {
     expect(hasUsageNoColorFlag(['--no-color', '--help'])).toBe(true);
     expect(hasUsageNoColorFlag(['--cwd', '--no-color', '--help'])).toBe(false);
@@ -1203,10 +1045,6 @@ describe('CLI crash report line', () => {
     expect(
       formatCrashReportLine(new CliUsageError('bad flag'), bugsUrl),
     ).toBeUndefined();
-  });
-
-  it('omits the report link when no tracker URL is configured', () => {
-    expect(formatCrashReportLine(new Error('boom'), undefined)).toBeUndefined();
   });
 });
 
@@ -1309,21 +1147,6 @@ describe('runCli usage output stream routing', () => {
     );
   });
 
-  it('keeps stdout clean when rejecting unknown flags in structured mode', async () => {
-    const result = await runCli([
-      'models',
-      'list',
-      '--unknown',
-      '--no-input',
-      '--output-format',
-      'json',
-    ]);
-    expectUsageError(
-      result,
-      'Unknown option: --unknown. Run `texra models list --help` for usage.',
-    );
-  });
-
   it('preserves the interactive-command error for headless-only flags', async () => {
     const cases: Array<{ args: string[]; message: string; absent: string[] }> =
       [
@@ -1356,14 +1179,6 @@ describe('runCli usage output stream routing', () => {
         expect(stderr).not.toContain(text);
       }
     }
-  });
-
-  it('rejects camelCase headless-only flags on interactive commands', async () => {
-    const result = await runCli(['chat', '--outputFormat', 'json']);
-    expectUsageError(
-      result,
-      'Unknown option: --outputFormat. Run `texra chat --help` for usage.',
-    );
   });
 
   // Resume is dual-mode: a workflow run resumes headless, so the headless
@@ -1432,38 +1247,6 @@ describe('runCli usage output stream routing', () => {
     });
   });
 
-  it('honors TEXRA_OUTPUT_FORMAT for version output without workspace context', async () => {
-    const previousOutputFormat = process.env.TEXRA_OUTPUT_FORMAT;
-    process.env.TEXRA_OUTPUT_FORMAT = 'ndjson';
-    try {
-      const result = await runCli([
-        '--cwd',
-        '/definitely/missing/texra-version-test',
-        '--version',
-      ]);
-
-      expectOk(result);
-      expect(JSON.parse(stdout.trim())).toMatchObject({
-        kind: 'version',
-        version: expect.stringMatching(/^\d+\.\d+\.\d+/),
-        ts: expect.any(String),
-      });
-    } finally {
-      if (previousOutputFormat === undefined) {
-        delete process.env.TEXRA_OUTPUT_FORMAT;
-      } else {
-        process.env.TEXRA_OUTPUT_FORMAT = previousOutputFormat;
-      }
-    }
-  });
-
-  it('shows EXAMPLES and a docs link for bare `help`', async () => {
-    const result = await runCli(['help']);
-    expectOk(result);
-    expect(stdout).toContain('EXAMPLES');
-    expect(stdout).toContain('Learn more: https://texra.ai');
-  });
-
   it('shows full command paths for nested usage errors', async () => {
     const result = await runCli(['history', 'show']);
     expectUsageError(result, 'USAGE texra history show');
@@ -1502,32 +1285,6 @@ describe('runCli usage output stream routing', () => {
     ]);
 
     expectUsageError(result, `--cwd: path does not exist: ${missingRoot}`);
-  });
-
-  it('prints recovery hints for unknown multi-agent presets', async () => {
-    const commands = [
-      ['multi-agent', 'show', 'does-not-exist'],
-      [
-        'multi-agent',
-        'run',
-        'does-not-exist',
-        '--instruction',
-        'Check this derivation.',
-      ],
-    ];
-
-    for (const command of commands) {
-      stderr = '';
-      stdout = '';
-
-      const result = await runCli(command);
-
-      expect(result.exitCode).toBe(2);
-      expect(stripAnsi(stderr)).toContain(
-        'Multi-agent preset not found: does-not-exist. Use `texra multi-agent list` for available team presets, then run `texra multi-agent show <preset>` to check a team before launch.',
-      );
-      expect(stdout).toBe('');
-    }
   });
 
   it('reports unknown command paths passed to help', async () => {

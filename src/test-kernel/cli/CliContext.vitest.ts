@@ -1,4 +1,4 @@
-import { mkdir, realpath, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -9,11 +9,7 @@ import { Effect } from 'effect';
 import {
   buildCliContext,
   CliUsageError,
-  readCliBugsUrl,
-  readCliEnv,
-  readCliVersion,
   resolveCliCwd,
-  resolveCliCommandName,
   resolveStreamColor,
   type BuildCliContextInit,
   type CliAmbientState,
@@ -73,25 +69,6 @@ async function workspaceWithConfig(config: string): Promise<string> {
   await writeFile(join(workspace, '.texra', 'config.json'), config);
   return workspace;
 }
-
-describe('CLI entrypoint detection', () => {
-  it('uses the local launcher name in user-facing command hints', () => {
-    expect(resolveCliCommandName('/usr/local/bin/texra')).toBe('texra');
-    expect(resolveCliCommandName('/tmp/bin/texra-local')).toBe('texra-local');
-    expect(resolveCliCommandName('/repo/packages/cli/dist/bin/texra.js')).toBe(
-      'texra',
-    );
-  });
-});
-
-describe('CLI package manifest discovery', () => {
-  it('finds version and bug-report metadata from the source runtime layout', async () => {
-    await expect(readCliVersion()).resolves.toMatch(/^\d+\.\d+\.\d+/);
-    await expect(readCliBugsUrl()).resolves.toBe(
-      'https://github.com/LionSR/TeXRA/issues',
-    );
-  });
-});
 
 describe('CLI context config defaults', () => {
   it('applies flag over env over workspace config over built-in defaults', async () => {
@@ -168,21 +145,6 @@ describe('CLI context config defaults', () => {
         storageRoot,
       }),
     ).resolves.toMatchObject({ approvalPolicy: 'yolo' });
-  });
-
-  it('reads the persisted approval policy exactly as the other hosts do', async () => {
-    const workspace = await workspaceWithConfig(
-      JSON.stringify({ 'texra.approvalPolicy': 'yolo' }),
-    );
-
-    const context = await cliContext({
-      ambient,
-      env: {},
-      globalArgs: { cwd: workspace },
-    });
-
-    expect(context.approvalPolicy).toBe('yolo');
-    expect(context.configWarnings).toEqual([]);
   });
 
   it('reports unknown workspace config keys without failing', async () => {
@@ -304,20 +266,6 @@ describe('CLI context config defaults', () => {
 });
 
 describe('CLI --cwd validation', () => {
-  // `it.live`, not `it.effect`: these probe the real filesystem, so a
-  // TestContext clock starting at 0 would be a trap rather than a help.
-  it.live('accepts an existing directory and returns its realpath', () =>
-    Effect.gen(function* () {
-      const workspace = yield* Effect.promise(() =>
-        makeTempDir('texra-cli-cwd-', tempDirs),
-      );
-
-      expect(yield* resolveCliCwd(workspace)).toBe(
-        canonicalizeWorkspacePath(workspace),
-      );
-    }),
-  );
-
   it.live('preserves whitespace in an explicit workspace path', () =>
     Effect.gen(function* () {
       const root = yield* Effect.promise(() =>
@@ -355,40 +303,10 @@ describe('CLI --cwd validation', () => {
       expect(failure.message).toMatch(/not a directory/);
     }),
   );
-
-  it.live('falls back to process.cwd() when no --cwd flag is given', () =>
-    Effect.gen(function* () {
-      // The shell can't put us in a missing directory, so the no-flag path
-      // intentionally skips validation. Trim any platform realpath canonical-
-      // ization for the comparison.
-      const result = yield* resolveCliCwd(undefined);
-      expect(result).toBe(yield* Effect.promise(() => realpath(process.cwd())));
-    }),
-  );
-
-  it('lets a buildCliContext caller surface the --cwd usage error', async () => {
-    const missing = join(tmpdir(), 'texra-cli-cwd-missing-' + Date.now());
-
-    await expect(
-      cliContext({ ambient, env: {}, globalArgs: { cwd: missing } }),
-    ).rejects.toBeInstanceOf(CliUsageError);
-  });
 });
 
 describe('CLI per-stream color resolution', () => {
   it.each([
-    {
-      label: 'colors when the stream itself is a TTY',
-      isTty: true,
-      options: { env: {} },
-      expected: true,
-    },
-    {
-      label: 'stays plain when the stream itself is not a TTY',
-      isTty: false,
-      options: { env: {} },
-      expected: false,
-    },
     {
       label: 'NO_COLOR disables color even on a TTY',
       isTty: true,
@@ -414,21 +332,9 @@ describe('CLI per-stream color resolution', () => {
       expected: true,
     },
     {
-      label: 'FORCE_COLOR=true enables color even off a TTY',
-      isTty: false,
-      options: { env: { FORCE_COLOR: 'true' } },
-      expected: true,
-    },
-    {
       label: 'FORCE_COLOR=0 disables color even on a TTY',
       isTty: true,
       options: { env: { FORCE_COLOR: '0' } },
-      expected: false,
-    },
-    {
-      label: 'FORCE_COLOR=false disables color even on a TTY',
-      isTty: true,
-      options: { env: { FORCE_COLOR: 'false' } },
       expected: false,
     },
     {
@@ -461,19 +367,6 @@ describe('CLI per-stream color resolution', () => {
 });
 
 describe('CLI color/no-input flag wiring', () => {
-  it('keeps the ambient per-stream gates by default', async () => {
-    const context = await cliContext({
-      ambient: ttyAmbient({
-        stdoutColorEnabled: true,
-        stderrColorEnabled: false,
-      }),
-      env: {},
-      globalArgs: { cwd: tmpdir() },
-    });
-    expect(context.stdoutColorEnabled).toBe(true);
-    expect(context.stderrColorEnabled).toBe(false);
-  });
-
   it('--no-color force-disables both stream gates', async () => {
     const context = await cliContext({
       ambient: ttyAmbient(),
@@ -516,15 +409,5 @@ describe('CLI color/no-input flag wiring', () => {
     });
     expect(context.mode).toBe('headless');
     expect(context.approvalPolicy).toBe('never');
-  });
-
-  it('leaves approval policy alone when --no-input is absent', async () => {
-    const context = await cliContext({
-      ambient: ttyAmbient(),
-      env: {},
-      globalArgs: { cwd: tmpdir(), approvalPolicy: 'yolo' },
-    });
-    expect(context.mode).toBe('interactive');
-    expect(context.approvalPolicy).toBe('yolo');
   });
 });

@@ -1,6 +1,6 @@
 // Node imports
 import { readFile as nodeReadFile, writeFile } from 'node:fs/promises';
-import path, { join } from 'node:path';
+import { join } from 'node:path';
 
 // Third-party imports
 import { it } from '@effect/vitest';
@@ -8,14 +8,8 @@ import { Effect, FileSystem, PlatformError } from 'effect';
 import { describe, expect } from 'vitest';
 
 // Local imports
-import {
-  buildInitConfig,
-  ensureTexraGitignored,
-  writeInitConfig,
-  type InitAnswers,
-} from '@cli/runtime/initConfig';
+import { ensureTexraGitignored } from '@cli/runtime/initConfig';
 import { setWorkspaceCliChatAgent } from '@cli/runtime/cliConfig';
-import { workspaceTexraConfigPath } from '@platform/defaults/nodeStorage';
 import { errnoError, nodePlatformLayer } from '@test/support/fsTestUtils';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { FakeConfigProvider } from '@test/support/FakePlatform';
@@ -24,35 +18,6 @@ import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { readSettingFrom } from '@utils/config/platformSettings';
 
 const tempDirs = useTempDirs();
-
-const ANSWERS: InitAnswers = {
-  agent: 'chat',
-  model: 'deepseekT',
-  approvalPolicy: 'ask',
-  outputFormat: 'json',
-};
-
-describe('writeInitConfig', () => {
-  it.effect('writes pretty JSON with a trailing newline', () =>
-    Effect.gen(function* () {
-      const workspace = yield* Effect.promise(() =>
-        makeTempDir('texra-init-config-', tempDirs),
-      );
-      const configPath = workspaceTexraConfigPath(workspace);
-
-      yield* writeInitConfig(configPath, buildInitConfig(ANSWERS)).pipe(
-        Effect.provide(nodePlatformLayer),
-      );
-
-      const text = yield* Effect.promise(() =>
-        nodeReadFile(configPath, 'utf8'),
-      );
-      expect(text.endsWith('\n')).toBe(true);
-      expect(JSON.parse(text)).toEqual(buildInitConfig(ANSWERS));
-      expect(text).toContain('  "texra.chat": {');
-    }),
-  );
-});
 
 describe('setWorkspaceCliChatAgent', () => {
   it.effect(

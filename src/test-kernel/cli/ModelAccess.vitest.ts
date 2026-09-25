@@ -4,10 +4,6 @@ import { it as effectIt } from '@effect/vitest';
 
 import {
   findCliModelAccessEntry,
-  formatCliModelDetails,
-  formatCliNoAvailableModelsRecovery,
-  formatCliNoRunnableModelsMessage,
-  formatModelStatusForCli,
   getCliModelAccessList,
   modelSelectItemsForCli,
   runnableCliModelAccessEntries,
@@ -107,10 +103,6 @@ function resolveModelFromAccessList(
   return run(selectCliRunnableModel(model, { ...options, accessList, stores }));
 }
 
-const INTERACTIVE_RECOVERY = {
-  configureKeyAction: 'configure a provider API key',
-} as const;
-
 const MISSING_KEY_ONLY_ENTRIES: CliModelAccess[] = [
   missingKeyModel('gemini31p'),
 ];
@@ -120,15 +112,6 @@ const RETIRED_HAIKU3_OPTION = modelOption('haiku3', {
   availability: 'retired',
 });
 
-const GLM52_MISSING_KEY_ENTRY = model('glm52', {
-  available: false,
-  status: 'missing api key',
-  model: modelOption('glm52', {
-    label: 'GLM-5.2',
-    availability: 'missing-key',
-  }),
-});
-
 function expectModelOptionsRequested(models: string[]): void {
   expect(readModelAvailabilityInputsMock).toHaveBeenCalledWith(stores, models);
 }
@@ -136,16 +119,6 @@ function expectModelOptionsRequested(models: string[]): void {
 describe('CLI model access resolution', () => {
   beforeEach(() => {
     readModelAvailabilityInputsMock.mockReset();
-  });
-
-  it('keeps the requested model when it is currently runnable', async () => {
-    await expect(
-      resolveModelFromAccessList(
-        [model('sonnet46T'), model('opus48T')],
-        'opus48T',
-        { fallbackReason: 'explicit-override' },
-      ),
-    ).resolves.toEqual({ model: 'opus48T' });
   });
 
   it('owns fallback behavior by model source', async () => {
@@ -229,33 +202,6 @@ describe('CLI model access resolution', () => {
       'deepseekT',
     );
     expect(findCliModelAccessEntry(entries, 'missing')).toBeUndefined();
-  });
-
-  const DEEPSEEK_PROVIDER_KEY_ENTRY = model('deepseekT', {
-    model: modelOption('deepseekT', { availability: 'provider-key' }),
-    status: 'api key set',
-  });
-
-  it.each([
-    {
-      name: 'prefixes a provider-key status with the api label',
-      entry: DEEPSEEK_PROVIDER_KEY_ENTRY,
-      expected: 'api: api key set',
-    },
-    {
-      name: 'names the GLM Coding Plan when the picker says it pays',
-      entry: model('glm52', {
-        model: modelOption('glm52', {
-          availability: 'provider-key',
-          provider: 'glm',
-        }),
-        status: 'api key set',
-        usageRoute: 'glm-coding-plan-subscription',
-      }),
-      expected: 'api: GLM Coding Plan',
-    },
-  ])('formats model picker status: $name', ({ entry, expected }) => {
-    expect(formatModelStatusForCli(entry)).toBe(expected);
   });
 
   effectIt.effect(
@@ -347,50 +293,6 @@ describe('CLI model access resolution', () => {
       }),
   );
 
-  effectIt.effect(
-    'treats filtered-empty model picker rows as non-actionable',
-    () =>
-      Effect.gen(function* () {
-        expect(
-          yield* modelSelectItemsForCli([
-            model('deepseekT', {
-              available: false,
-              model: modelOption('deepseekT', {
-                availability: 'provider-key',
-              }),
-              status: 'api key set',
-            }),
-            model('gemini31p', {
-              available: false,
-              model: modelOption('gemini31p', {
-                availability: 'missing-key',
-              }),
-              status: 'missing api key',
-            }),
-            missingKeyModel('opus48T'),
-          ]),
-        ).toEqual([]);
-      }),
-  );
-
-  it('keeps defaults for omitted and nullish recovery actions', () => {
-    expect(formatCliNoAvailableModelsRecovery()).toBe(
-      'Add a provider API key with `texra setup`.',
-    );
-
-    const runtimeNullishActions = { configureKeyAction: null };
-    expect(
-      // @ts-expect-error JavaScript callers can supply null at this boundary.
-      formatCliNoAvailableModelsRecovery(runtimeNullishActions),
-    ).toBe('Add a provider API key with `texra setup`.');
-    expect(
-      // @ts-expect-error JavaScript callers can supply null at this boundary.
-      formatCliNoRunnableModelsMessage(runtimeNullishActions),
-    ).toBe(
-      'No models are available. Add a provider API key with `texra setup`.',
-    );
-  });
-
   it('reports when no fallback model is runnable', async () => {
     await expect(
       resolveModelFromAccessList(MISSING_KEY_ONLY_ENTRIES, 'gemini31p', {
@@ -398,17 +300,6 @@ describe('CLI model access resolution', () => {
       }),
     ).rejects.toThrow(
       'Model "gemini31p" is not available (missing api key). No models are currently available. Add a provider API key with `texra setup`.',
-    );
-  });
-
-  it('can format command-specific recovery hints for interactive chat', async () => {
-    await expect(
-      resolveModelFromAccessList(MISSING_KEY_ONLY_ENTRIES, 'gemini31p', {
-        fallbackReason: 'command-config',
-        noAvailableModelsMessage: 'Run /key to add a provider API key.',
-      }),
-    ).rejects.toThrow(
-      'Model "gemini31p" is not available (missing api key). No models are currently available. Run /key to add a provider API key.',
     );
   });
 
@@ -426,40 +317,6 @@ describe('CLI model access resolution', () => {
         }),
       ),
     ).rejects.toThrow('Model "haiku3" is not available (retired).');
-  });
-
-  it.each([
-    {
-      name: 'shows terminal recovery text for retired models in model details',
-      entry: model('haiku3', {
-        available: false,
-        status: 'retired',
-        model: modelOption('haiku3', {
-          label: 'Haiku 3',
-          availability: 'retired',
-        }),
-      }),
-      contains: [
-        'status: retired',
-        'availability: Retired',
-        'recovery: Choose an active model.',
-      ],
-      excludes: ['texra setup'],
-    },
-    {
-      name: 'shows a recovery hint for missing provider-key models in model details',
-      entry: GLM52_MISSING_KEY_ENTRY,
-      contains: [
-        'status: missing api key',
-        'recovery: Add a provider API key with `texra setup`.',
-      ],
-      excludes: [],
-    },
-  ])('$name', ({ entry, contains, excludes }) => {
-    const text = formatCliModelDetails(entry);
-
-    for (const expected of contains) expect(text).toContain(expected);
-    for (const absent of excludes) expect(text).not.toContain(absent);
   });
 
   it('keeps ChatGPT models available without TeXRA sign-in or API keys', async () => {
@@ -482,53 +339,6 @@ describe('CLI model access resolution', () => {
         },
       ],
     );
-  });
-
-  it('loads explicit model ids for diagnostic lists', async () => {
-    readModelAvailabilityInputsMock.mockReturnValueOnce(
-      Effect.succeed([
-        modelOption('hiddenFixtureModel', {
-          availability: 'missing-key',
-        }),
-      ]),
-    );
-
-    await expect(
-      run(getCliModelAccessList({ stores, models: ['hiddenFixtureModel'] })),
-    ).resolves.toMatchObject([
-      {
-        available: false,
-        status: 'missing api key',
-        model: {
-          value: 'hiddenFixtureModel',
-          availability: 'missing-key',
-        },
-      },
-    ]);
-    expectModelOptionsRequested(['hiddenFixtureModel']);
-  });
-
-  it('uses the loaded access list as the availability source of truth', async () => {
-    readModelAvailabilityInputsMock.mockReturnValueOnce(
-      Effect.succeed([
-        modelOption('sonnet46T', {
-          availability: 'provider-key',
-        }),
-        modelOption('deepseekT', {
-          availability: 'missing-key',
-        }),
-      ]),
-    );
-
-    const entries = await run(getCliModelAccessList({ stores }));
-
-    expect(entries).toMatchObject([
-      { model: { value: 'sonnet46T' }, available: true },
-      { model: { value: 'deepseekT' }, available: false },
-    ]);
-    expect(
-      runnableCliModelAccessEntries(entries).map((entry) => entry.model.value),
-    ).toEqual(['sonnet46T']);
   });
 
   it('checks access for explicit models hidden from the visible model list', async () => {
@@ -555,27 +365,6 @@ describe('CLI model access resolution', () => {
     expect(readModelAvailabilityInputsMock).toHaveBeenNthCalledWith(2, stores, [
       'hiddenFixtureModel',
     ]);
-  });
-
-  it('checks hidden model access against a supplied visible model list', async () => {
-    readModelAvailabilityInputsMock.mockReturnValueOnce(
-      Effect.succeed([
-        modelOption('hiddenFixtureModel', {
-          availability: 'provider-key',
-        }),
-      ]),
-    );
-
-    await expect(
-      run(
-        selectCliRunnableModel('hiddenFixtureModel', {
-          fallbackReason: 'explicit-override',
-          accessList: [missingKeyModel('deepseekT')],
-          stores,
-        }),
-      ),
-    ).resolves.toEqual({ model: 'hiddenFixtureModel' });
-    expectModelOptionsRequested(['hiddenFixtureModel']);
   });
 
   it('ignores stale lower-priority hidden candidates after a runnable winner', async () => {

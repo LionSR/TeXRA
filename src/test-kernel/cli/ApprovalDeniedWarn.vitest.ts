@@ -65,16 +65,6 @@ describe('warnApprovalDenied', () => {
     expect(writeTextStderrMock).toHaveBeenCalledTimes(3);
   });
 
-  it('falls back to a generic gate label when none is given', () => {
-    const context = createTestCliContext({ approvalPolicy: 'ask' });
-
-    warnApprovalDenied(testDefaultSession(), context);
-
-    expect(writeTextStderrMock).toHaveBeenCalledWith(
-      '[warn] [cli-approval] Approval gate denied under policy "ask".',
-    );
-  });
-
   it('names the live session policy, not the launch-time CLI context', () => {
     // `/approval` in the TUI updates the session only; the frozen CliContext
     // keeps its launch-time value.

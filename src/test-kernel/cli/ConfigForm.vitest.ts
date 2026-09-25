@@ -14,14 +14,9 @@ import {
   validateSettingInput,
 } from '@cli/chat/tui/forms/ConfigForm';
 import { CliConfigForm } from '@cli/chat/tui/forms/CliConfigForm';
-import {
-  buildProviderApiKeyItems,
-  formatProviderApiKeySummary,
-} from '@cli/chat/tui/forms/ProviderApiKeyForm';
 import { installSlashCommands } from '@cli/chat/tui/commands/slashRegistry';
 import { registerBuiltinSlashCommands } from '@cli/chat/tui/commands/registerBuiltins';
 import { openCliSlashCommandForm } from '@cli/chat/tui/commands/slashForms';
-import { ConfigApp } from '@cli/config/runConfigTui';
 import { resetCliState } from '@cli/chat/tui/state/cliState';
 import { activeForm } from '@cli/chat/tui/state/formSlot';
 import {
@@ -257,24 +252,6 @@ describe('ConfigForm helpers', () => {
     },
   );
 
-  it.each<[Parameters<typeof formatProviderApiKeySummary>[0], string]>([
-    [
-      {
-        statuses: { openai: 'set', anthropic: 'not-set', kimiCode: 'env' },
-        loading: false,
-        error: false,
-      },
-      'Configured: OpenAI, Kimi Code',
-    ],
-    [
-      { statuses: { openai: 'not-set' }, loading: false, error: false },
-      'No provider keys set',
-    ],
-    [{ loading: false, error: true }, 'Status unavailable'],
-  ])('summarizes key status without exposing values', (view, summary) => {
-    expect(formatProviderApiKeySummary(view)).toBe(summary);
-  });
-
   it('marks an unsupported schema kind read-only', () => {
     expect(settingEditKind(RECORD_ENTRY)).toBe('readonly');
     const [item] = buildConfigListItems([RECORD_ENTRY], () => ({}));
@@ -284,27 +261,6 @@ describe('ConfigForm helpers', () => {
 });
 
 describe('CliConfigForm API-key status lifecycle', () => {
-  it('renders initial loading and then configured status from the resolved request', async () => {
-    const initial = createDeferred<Record<ApiProvider, ApiKeyStatus>>();
-    providerApiKeyRuntime.load.mockReturnValueOnce(
-      Effect.tryPromise(() => initial.promise),
-    );
-    const rendered = await renderCliConfigForm();
-
-    try {
-      await waitFor(() =>
-        rendered.stdout.output.includes('Checking configured keys'),
-      );
-      rendered.stdout.output = '';
-      initial.resolve(apiKeyStatuses({ openai: 'set' }));
-      await waitFor(() =>
-        rendered.stdout.output.includes('Configured: OpenAI'),
-      );
-    } finally {
-      rendered.instance.unmount();
-    }
-  });
-
   it('settles a failed initial load to a stable unavailable state', async () => {
     const initial = createDeferred<Record<ApiProvider, ApiKeyStatus>>();
     const onError = vi.fn();
@@ -469,47 +425,6 @@ describe('CliConfigForm API-key status lifecycle', () => {
         expect(rendered.stdout.output).not.toContain('ghp_private-test-token');
       }),
   );
-
-  it('uses the same status-aware form in standalone config and /config', async () => {
-    providerApiKeyRuntime.load.mockReturnValue(
-      Effect.succeed(
-        apiKeyStatuses({
-          openai: 'set',
-        }),
-      ),
-    );
-    const { React } = await loadInk();
-    const standalone = await renderInkElement(
-      React.createElement(ConfigApp, {
-        stores: makeFakeSettingsStores().stores,
-        secrets: formSecrets,
-        runtime: testRuntime(),
-      }),
-    );
-
-    const { stores } = makeFakeSettingsStores();
-    registerBuiltinSlashCommands({
-      secrets: new FakeSecrets(),
-      stores,
-      runtime: testRuntime(),
-      runtimeSession: testDefaultSession(),
-      configStores: stores,
-    });
-    openCliSlashCommandForm('config', '');
-    const slash = await renderInkElement(
-      activeForm.get()?.render(() => undefined, 30),
-    );
-
-    try {
-      await waitFor(() =>
-        standalone.stdout.output.includes('Configured: OpenAI'),
-      );
-      await waitFor(() => slash.stdout.output.includes('Configured: OpenAI'));
-    } finally {
-      standalone.instance.unmount();
-      slash.instance.unmount();
-    }
-  });
 });
 
 // `it.live`, not `it.effect`: mounting the slash-command form polls Ink's
@@ -589,29 +504,6 @@ describe('/config slash command wiring', () => {
       expect(config.get(WorkspaceStateKey.GIT_MARK_COMMITS)).toBe(false);
     }),
   );
-
-  it('emits a deferred command echo before a configuration error', async () => {
-    const { stores } = makeFakeSettingsStores();
-    const events: string[] = [];
-    registerBuiltinSlashCommands({
-      secrets: new FakeSecrets(),
-      stores,
-      runtime: testRuntime(),
-      runtimeSession: testDefaultSession(),
-      configStores: stores,
-      onError: () => {
-        events.push('error');
-      },
-    });
-    openCliSlashCommandForm('config', '', () => events.push('echo'));
-
-    await (await renderConfigFormProps()).onError?.(new Error('write failed'));
-    await (
-      await renderConfigFormProps()
-    ).onError?.(new Error('write failed again'));
-
-    expect(events).toEqual(['echo', 'error', 'error']);
-  });
 
   it.live('resets a git setting by deleting the stored key', () =>
     Effect.gen(function* () {

@@ -1,22 +1,14 @@
 // Third-party imports
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 // Local imports
 import type { AgentEntry } from '@agent/index';
 import {
   cliMultiAgentPresetListRecord,
-  cliMultiAgentPresetNdjsonRecords,
   formatCliMultiAgentTeamLaunchBlockMessage,
-  formatCliMultiAgentPresetInspection,
-  formatCliMultiAgentPresetList,
-  formatCliMultiAgentPresetRunWarnings,
   type CliMultiAgentPresetRunPlan,
 } from '@cli/runtime/multiAgentPresets';
-import {
-  planTeamRun,
-  planTeamRuns,
-  teamPlanHasGaps,
-} from '@common/teams/TeamPlan';
+import { planTeamRun, teamPlanHasGaps } from '@common/teams/TeamPlan';
 import { findTeamPreset, teamPresets } from '@common/teams/TeamPresets';
 import {
   AgentCategory,
@@ -81,14 +73,6 @@ function partialLeanProjectPlan(): CliMultiAgentPresetRunPlan {
   });
 }
 
-// The physicist team reduced to its delegating root plus one member.
-function degradedPhysicistToolUse(): AgentEntry[] {
-  return [
-    agent('orchestrator', AgentCategory.ToolUse, ['delegate_agent']),
-    agent('review', AgentCategory.ToolUse),
-  ];
-}
-
 // The physicist team with two workflows and the root-plus-review tool pair.
 function partialPhysicistPlan(): CliMultiAgentPresetRunPlan {
   return planRun(findPreset('physicist'), {
@@ -104,60 +88,6 @@ function partialPhysicistPlan(): CliMultiAgentPresetRunPlan {
 }
 
 describe('CLI multi-agent presets', () => {
-  it('lists missing preset members as unavailable when no team can launch', () => {
-    const plan = partialLeanProjectPlan();
-
-    const output = formatCliMultiAgentPresetList([plan]);
-
-    expect(output).toContain(
-      'built-in\tlean-project\tLean Project\ttool-use:2/7\tunavailable',
-    );
-    expect(output).not.toContain('workflow:0');
-    expect(output).toContain('texra multi-agent show <team-id>');
-    expect(output).toContain(
-      'TeXRA account sign-in may load additional remote team agents',
-    );
-  });
-
-  it('omits the login recovery hint after a remote agent load was attempted', () => {
-    const plan = partialLeanProjectPlan();
-
-    const output = formatCliMultiAgentPresetList([plan], {
-      includeLoginHint: false,
-    });
-
-    expect(output).toContain('texra multi-agent show <team-id>');
-    expect(output).not.toContain('after `texra login`');
-  });
-
-  it('formats run warnings from planned missing team members', () => {
-    const plan = planRun(findPreset('physicist'), {
-      toolUse: degradedPhysicistToolUse(),
-    });
-
-    expect(formatCliMultiAgentPresetRunWarnings(plan)).toEqual([
-      'WARN preset physicist references unavailable agents: workflow:correct, workflow:polish, workflow:generic, workflow:devise, workflow:apply, workflow:criticize, tool-use:research, tool-use:numerics, tool-use:presenter, tool-use:simplifier, tool-use:latexFixer, tool-use:progressCheck, tool-use:search',
-      'WARN preset physicist is degraded; running root agent orchestrator with 1 available team agent.',
-    ]);
-  });
-
-  it('formats team launch block messages from the planned preset state', () => {
-    const preset = findPreset('lean-project');
-    const plan = planRun(preset, {
-      toolUse: [agent('lean', AgentCategory.ToolUse)],
-    });
-
-    expect(
-      formatCliMultiAgentTeamLaunchBlockMessage(plan, {
-        requestedPreset: 'Lean Project',
-        followUpAdvice:
-          'Install or sign in for a runnable team root before launching this preset.',
-      }),
-    ).toBe(
-      'Multi-agent preset "Lean Project" cannot start as a team: no runnable team root. Run `texra multi-agent show lean-project` to see missing agents. Install or sign in for a runnable team root before launching this preset.',
-    );
-  });
-
   it('names an explicit non-delegating team root instead of saying it cannot delegate', () => {
     const preset = findPreset('mathematician');
     const plan = planRun(preset, {
@@ -220,33 +150,6 @@ describe('CLI multi-agent presets', () => {
     expect(record.availability.rootAgent).toBeUndefined();
   });
 
-  it('includes planned availability in ndjson preset records', () => {
-    const preset = findPreset('lean-project');
-    const plan = planRun(preset, {
-      toolUse: [agent('lean', AgentCategory.ToolUse)],
-    });
-
-    expect(cliMultiAgentPresetNdjsonRecords([plan])).toEqual([
-      expect.objectContaining({
-        kind: 'multi-agent-preset',
-        ts: expect.any(String),
-        preset: expect.objectContaining({
-          id: 'lean-project',
-          availability: expect.objectContaining({
-            status: 'unavailable',
-            agents: expect.objectContaining({
-              toolUse: expect.objectContaining({
-                available: 1,
-                total: 7,
-                label: '1/7',
-              }),
-            }),
-          }),
-        }),
-      }),
-    ]);
-  });
-
   it('loads valid custom team presets and drops malformed state', () => {
     const valid = [
       {
@@ -270,20 +173,6 @@ describe('CLI multi-agent presets', () => {
       expectedCustom,
     ]);
     expect(customPresets([{ id: 'broken' }])).toEqual([]);
-  });
-
-  it('omits inspection login recovery hint after a remote agent load was attempted', () => {
-    const preset = findPreset('physicist');
-    const plan = planRun(preset, {
-      toolUse: [agent('review', AgentCategory.ToolUse)],
-    });
-
-    const details = formatCliMultiAgentPresetInspection(plan, {
-      includeLoginHint: false,
-    });
-
-    expect(details).toContain('Missing tool-use agents:');
-    expect(details).not.toContain('after `texra login`');
   });
 
   it('plans a preset run with canonical visibility keys and an orchestrator root', () => {

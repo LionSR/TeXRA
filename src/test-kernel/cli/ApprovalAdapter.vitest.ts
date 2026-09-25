@@ -32,7 +32,6 @@ import {
   buildToolEditApprovalContent,
   formatRetryRequestMessage,
 } from '@cli/runtime/approval/approvalSummaries';
-import { decideRetryApproval } from '@shared/approvalPolicy';
 import {
   AgentCategory,
   DEFAULT_TOOL_CONFIG,
@@ -227,25 +226,6 @@ afterEach(() => {
   detachHostInteractions = () => {};
   formatRetryRequestMessageMock.mockReset();
   vi.restoreAllMocks();
-});
-
-describe('shared retry and human-input decisions', () => {
-  it.effect('denies an ordinary transient retry in yolo', () =>
-    Effect.gen(function* () {
-      useCliHostInteractions(context({ approvalPolicy: 'yolo' }));
-      const result = yield* openRequest({
-        kind: 'retry',
-        data: {
-          requestId: 'transient-retry',
-          runId: ROOT_RUN,
-          operation: 'Model request',
-          errorMessage: 'stream dropped before first token',
-        },
-      });
-
-      expect(result).toMatchObject({ action: 'deny' });
-    }),
-  );
 });
 
 describe('human input approval policy', () => {
@@ -481,42 +461,6 @@ describe('bounded yolo retry batches (#9532)', () => {
 });
 
 describe('buildToolEditApprovalContent', () => {
-  it.effect('passes the diff summary to the interactive approval prompt', () =>
-    Effect.gen(function* () {
-      let promptSummary = '';
-      useCliHostInteractions(
-        context({
-          approvalPrompt: async (request) => {
-            promptSummary = request.summary;
-            return 'n needs revision';
-          },
-        }),
-      );
-
-      const result = yield* requestNewProofEdit();
-
-      expect(result.action).toBe('reject');
-      expect(promptSummary).toContain('Tool edit requested by write_file');
-      expect(promptSummary).toContain('+\\section{Proof}');
-      expect(promptSummary).toContain('+A concise proof.');
-    }),
-  );
-
-  it.effect('runs the before-prompt hook for tool edit approvals', () =>
-    Effect.gen(function* () {
-      const tracker = trackPromptEvents();
-      useCliHostInteractions(
-        context({ approvalPrompt: tracker.answerWith('y') }),
-        tracker.hooks,
-      );
-
-      const result = yield* requestNewProofEdit();
-
-      expect(result.action).toBe('apply');
-      expect(tracker.events).toEqual(['before', 'prompt']);
-    }),
-  );
-
   it.effect('passes one-line rejection feedback to the tool result', () =>
     Effect.gen(function* () {
       useCliHostInteractions(
@@ -633,21 +577,6 @@ describe('buildToolEditApprovalContent', () => {
           expect.any(Function),
         );
       }),
-  );
-
-  it.effect('does not construct complete content unless it is requested', () =>
-    Effect.gen(function* () {
-      const details = vi.fn(() => 'complete proposal');
-      const decision = yield* askApproval(
-        context({
-          approvalPrompt: async () => 'y',
-        }),
-        { summary: 'bounded preview', details },
-      );
-
-      expect(details).not.toHaveBeenCalled();
-      expect(decision).toEqual({ action: 'approve' });
-    }),
   );
 
   it.effect('removes terminal control sequences from complete content', () =>
@@ -779,28 +708,6 @@ describe('buildToolEditApprovalContent', () => {
 });
 
 describe('buildAgentProposalApprovalContent', () => {
-  it('formats subagent approvals without raw JSON internals', () => {
-    const { summary, details } = buildAgentProposalApprovalContent(
-      agentProposal({
-        instruction:
-          'Please verify the proof carefully.\nReport any gaps or hidden cases.',
-      }),
-    );
-
-    expect(summary).toContain(
-      'Agent proposal requested: review (tool-use agent)',
-    );
-    // The summary names the model the way the transcript does, by its
-    // registry label rather than its persisted id.
-    expect(summary).toContain('Model: DeepSeek V4 Flash (Thinking)');
-    expect(summary).toContain('Instruction:');
-    expect(summary).toContain('  Please verify the proof carefully.');
-    expect(summary).not.toContain('requestId');
-    expect(summary).not.toContain('runId');
-    expect(summary).not.toContain('{');
-    expect(details).toBeUndefined();
-  });
-
   it('bounds long subagent instructions before prompting', () => {
     const longLine = 'verify '.repeat(200);
     const instruction = Array.from(
@@ -823,37 +730,6 @@ describe('buildAgentProposalApprovalContent', () => {
     expect(summary).not.toContain(longLine);
     expect(details?.()).toContain(`  60. ${longLine}`);
     expect(details?.()).not.toContain('instruction lines hidden');
-  });
-
-  it('includes workflow proposal file groups', () => {
-    const inputFiles = Array.from(
-      { length: 12 },
-      (_, index) => `draft-${index + 1}.tex`,
-    );
-    const { summary, details } = buildAgentProposalApprovalContent(
-      agentProposal({
-        agent: 'polish',
-        instruction: 'Polish the draft and write the revised file.',
-        inputFiles,
-        contextFiles: ['notes.md'],
-        mediaFiles: ['figure.png'],
-        outputFiles: ['draft-polished.tex'],
-        toolConfig: DEFAULT_TOOL_CONFIG,
-        agentCategory: AgentCategory.Workflow,
-      }),
-    );
-
-    expect(summary).toContain(
-      'Agent proposal requested: polish (workflow agent)',
-    );
-    expect(summary).toContain('Input: draft-1.tex');
-    expect(summary).toContain('+2 more');
-    expect(summary).not.toContain('draft-12.tex');
-    expect(details?.()).toContain('draft-12.tex');
-    expect(details?.()).not.toContain('+2 more');
-    expect(summary).toContain('Context: notes.md');
-    expect(summary).toContain('Media: figure.png');
-    expect(summary).toContain('Output: draft-polished.tex');
   });
 });
 

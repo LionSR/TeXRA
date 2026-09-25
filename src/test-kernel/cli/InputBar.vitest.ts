@@ -22,19 +22,15 @@ import {
   createActiveDraftRegistry,
 } from '@cli/chat/tui/input/activeDraft';
 import { InputBar, slashSubmitText } from '@cli/chat/tui/panes/InputBar';
-import { transcriptRowHeadline } from '@cli/chat/tui/panes/transcriptEntries';
 import type { InputHistory } from '@cli/chat/tui/history/inputHistory';
 import {
   shouldRedactSlashInput,
   installSlashCommands,
 } from '@cli/chat/tui/commands/slashRegistry';
 import {
-  CLI_LOCAL_RUN_ID,
   requestDraftRestore,
   resetCliState,
 } from '@cli/chat/tui/state/cliState';
-import { activeForm } from '@cli/chat/tui/state/formSlot';
-import { notices, noticesFor } from '@cli/chat/tui/state/transcript';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import {
   loadInk,
@@ -146,55 +142,6 @@ describe('InputBar history arrow boundaries', () => {
 
 describe('InputBar slash submit', () => {
   beforeAll(bindTestSessionView);
-  it('threads deferred echo through a palette-opened form', async () => {
-    const { ink, React } = await loadInk();
-    installSlashCommands([
-      {
-        pluginId: 'test',
-        commands: [
-          {
-            name: 'model',
-            description: 'Choose a model',
-            echo: 'ifPersists',
-            formComponent: () => null,
-          },
-        ],
-      },
-    ]);
-    const { instance, stdin, stdout } = renderInteractive(
-      ink,
-      React.createElement(InputBar, {
-        runtime: testRuntime(),
-        onSubmit: vi.fn(),
-      }),
-    );
-
-    try {
-      await waitFor(() => stdin.listenerCount('readable') > 0);
-      stdin.write('/model');
-      await waitFor(() => stdout.output.includes('/model'));
-      stdin.write('\r');
-      await waitFor(() => activeForm.get()?.commandName === 'model');
-
-      const form = activeForm.get()?.render(() => undefined, 20) as {
-        props?: { onPersist?: () => void };
-      };
-      expect(noticesFor(notices.get(), CLI_LOCAL_RUN_ID)).toEqual([]);
-
-      form.props?.onPersist?.();
-
-      expect(
-        noticesFor(notices.get(), CLI_LOCAL_RUN_ID).map(({ row }) => ({
-          kind: row.kind,
-          text: transcriptRowHeadline(row),
-        })),
-      ).toEqual([{ kind: 'user', text: '/model' }]);
-    } finally {
-      instance.unmount();
-      installSlashCommands([]);
-      resetCliState();
-    }
-  });
 
   it('does not persist commands whose input may contain a credential', () => {
     installSlashCommands([

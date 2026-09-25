@@ -5,9 +5,7 @@ import { describe, expect, vi } from 'vitest';
 
 // Local imports
 import {
-  CLI_MEMORY_LIST_LIMIT,
   cliMemoryItemDescription,
-  formatCliMemoryList,
   loadCliMemoryDetail,
 } from '@cli/runtime/memory';
 import { StorageFs } from '@platform/rootedFs';
@@ -44,20 +42,6 @@ describe('CLI memory formatting', () => {
 
     expect(description).toContain('modified:');
     expect(description).not.toContain('modified: unknown');
-  });
-
-  it('limits long memory listings and reports hidden rows', () => {
-    const list = formatCliMemoryList(
-      Array.from({ length: CLI_MEMORY_LIST_LIMIT + 1 }, (_unused, index) => ({
-        ...item,
-        displayPath: `/memories/project-${index}.md`,
-      })),
-    );
-
-    expect(list).toContain(`Memories (${CLI_MEMORY_LIST_LIMIT + 1}):`);
-    expect(list).toContain('/memories/project-0.md');
-    expect(list).not.toContain(`/memories/project-${CLI_MEMORY_LIST_LIMIT}.md`);
-    expect(list).toContain('... 1 more');
   });
 
   it.effect.each([

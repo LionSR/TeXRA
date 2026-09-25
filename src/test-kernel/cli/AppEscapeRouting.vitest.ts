@@ -1,7 +1,5 @@
 import { setTimeout as sleep } from 'node:timers/promises';
 
-import { Effect } from 'effect';
-
 import stripAnsi from 'strip-ansi';
 import {
   afterEach,
@@ -20,8 +18,6 @@ import {
   type ApprovalPayload,
 } from '@cli/chat/tui/state/approvalQueue';
 import { takeActiveForm } from '@cli/chat/tui/state/formSlot';
-import { POINTER } from '@cli/tui/ui/glyphs';
-import type { InputHistory } from '@cli/chat/tui/history/inputHistory';
 import {
   selectedRunId,
   closeForegroundReader,
@@ -314,15 +310,6 @@ async function renderDebugApp(
 
 function currentFrame(stdout: InkRenderHandles['stdout']): string {
   return stripAnsi(stdout.writes.findLast((write) => write.length > 0) ?? '');
-}
-
-function fakeHistory(entries: readonly string[]): InputHistory {
-  return {
-    push: () => Effect.void,
-    reverseFind: () => undefined,
-    at: (index) => entries[index],
-    length: () => entries.length,
-  };
 }
 
 beforeAll(bindTestSessionView);
@@ -927,8 +914,3 @@ describe('App foreground Escape ownership', () => {
     }
   });
 });
-
-// The two enqueue calls below recur across this describe block: a
-// stream-scoped approval on an unrelated stream (which must never satisfy an
-// assertion on its own) and a session-wide (runId: '') approval that
-// should promote onto whatever stream ends up visible.

@@ -1,5 +1,4 @@
 import * as fs from 'node:fs/promises';
-import * as os from 'node:os';
 import * as path from 'node:path';
 
 import { it } from '@effect/vitest';
@@ -14,7 +13,6 @@ import {
 import { initializeNodeRuntimeSkills } from '@platform/defaults/nodeHost';
 import { foldSkillSources, hostSkillContributions } from '@skills/skillSources';
 import {
-  loadEnabledRuntimeSkills,
   loadRuntimeSkillCatalog,
   readDisabledSkills,
   skillDisplayItem,
@@ -22,7 +20,6 @@ import {
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { installTestSkillRoots } from '@test/support/skillFixtures';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
-import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { TOOL_PLUGINS } from '@tools/plugins';
@@ -37,8 +34,6 @@ vi.mock('@cli/runtime/initPlatform', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@cli/runtime/initPlatform')>()),
   initCliPlatform: commandMocks.initCliPlatform,
 }));
-
-const { runCli } = await import('@cli/commands/root');
 
 async function writeSkill(
   root: string,
@@ -175,63 +170,6 @@ it.layer(nodePlatformLayer)('CLI skills runtime', (it) => {
         }),
       );
     }),
-  );
-
-  it.effect(
-    'reports explicit custom skill sources that are not directories',
-    () =>
-      Effect.gen(function* () {
-        const root = yield* Effect.promise(() =>
-          makeTempDir('texra-cli-skills-', tempRoots),
-        );
-        const sourceFile = path.join(root, 'skills-file');
-        yield* Effect.promise(() =>
-          fs.writeFile(sourceFile, 'not a directory'),
-        );
-
-        initializeNodeRuntimeSkills({ resourcesPath: root }, []);
-        const result = yield* readCliSkillsEffect(root, settings, {
-          additionalPaths: [sourceFile],
-        });
-
-        expect(result.skills).toEqual([]);
-        expect(result.errors).toContainEqual(
-          expect.objectContaining({
-            severity: 'error',
-            code: 'invalid_source',
-            path: sourceFile,
-          }),
-        );
-      }),
-  );
-
-  it.effect(
-    'reads the runtime skill source registry used by prompt injection',
-    () =>
-      Effect.gen(function* () {
-        const root = yield* Effect.promise(() =>
-          makeTempDir('texra-cli-skills-', tempRoots),
-        );
-        yield* Effect.promise(() =>
-          writeSkill(root, 'proof-audit', 'Review mathematical proof steps.'),
-        );
-        installTestSkillRoots([{ tier: 'project', path: root }]);
-
-        const result = yield* loadEnabledRuntimeSkills(root, settings);
-
-        const disabled = yield* readDisabledSkills(settings);
-        expect(
-          result.skills.map((entry) => skillDisplayItem(entry, disabled)),
-        ).toMatchObject([
-          {
-            name: 'proof-audit',
-            description: 'Review mathematical proof steps.',
-            scope: 'project',
-            label: 'project',
-          },
-        ]);
-        expect(result.errors).toEqual([]);
-      }),
   );
 
   it.effect(

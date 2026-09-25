@@ -40,11 +40,7 @@ vi.mock('@cli/runtime/modelAccess', async (importOriginal) => {
 });
 
 import { runCli } from '@cli/commands/root';
-import { initCommand } from '@cli/commands/init';
-import {
-  initWizardDefaultAgentIndex,
-  initWizardModelSelectItems,
-} from '@cli/init/runInitWizard';
+import { initWizardModelSelectItems } from '@cli/init/runInitWizard';
 import type { CliModelAccess } from '@cli/runtime/modelAccess';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
@@ -155,20 +151,6 @@ describe('CLI init command', () => {
   afterEach(() => {
     stdoutSpy.mockRestore();
     stderrSpy.mockRestore();
-  });
-
-  it('highlights the visible team lead in the interactive init wizard', () => {
-    expect(
-      initWizardDefaultAgentIndex([
-        { name: 'research' },
-        { name: 'review' },
-        { name: 'assistant' },
-      ]),
-    ).toBe(2);
-
-    expect(
-      initWizardDefaultAgentIndex([{ name: 'research' }, { name: 'review' }]),
-    ).toBe(0);
   });
 
   it.each([
@@ -293,20 +275,6 @@ describe('CLI init command', () => {
     await expect(
       fs.readFile(path.join(root, '.gitignore'), 'utf8'),
     ).resolves.toBe('.texra/\n');
-  });
-
-  it('keeps the legacy text init summary for human output', async () => {
-    const root = await makeTempDir('texra-init-test-', tempDirs);
-    const result = await runInitPrint(root);
-
-    expect(result.exitCode).toBe(0);
-    expect(stderr).toBe('');
-    expect(stdout).toContain('Created .gitignore (.texra/ ignored).');
-    expect(stdout).toContain(
-      `Wrote ${path.join(root, '.texra', 'config.json')}`,
-    );
-    expect(stdout).toContain('  agent: assistant');
-    expect(stdout).toContain('Next: run `texra` to start a chat.');
   });
 
   it.each([

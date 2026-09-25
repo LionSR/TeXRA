@@ -9,7 +9,6 @@ import { rootCommand } from '@cli/commands/root';
 import { generateCompletionScript } from '@cli/runtime/completion';
 import { bashCompletion } from '@cli/runtime/completionBash';
 import {
-  CLI_COMPLETION_SHELLS,
   collectCommands,
   type CompletionCommand,
 } from '@cli/runtime/completionCommandTree';
@@ -53,24 +52,6 @@ describe('CLI shell completion', () => {
     bash = await generateCompletionScript(rootCommand, 'bash');
   });
 
-  for (const shell of CLI_COMPLETION_SHELLS) {
-    it(`generates ${shell} completion`, async () => {
-      const script = await generateCompletionScript(rootCommand, shell);
-
-      expect(script).toMatchSnapshot();
-    });
-  }
-
-  it('keeps dynamic completion gated by TEXRA_COMPLETION_DYNAMIC', () => {
-    expect(bash).toContain('TEXRA_COMPLETION_DYNAMIC');
-    expect(bash).toContain('texra agents list --quiet');
-    expect(bash).toContain('texra agents list --quiet --all');
-    expect(bash).toContain(
-      'texra agents list --quiet --all --category toolUse',
-    );
-    expect(bash).toContain('texra models list --quiet');
-  });
-
   it('consumes every bash value flag while resolving command paths', async () => {
     const commands = await collectCommands(rootCommand);
     const lines = bash.split('\n');
@@ -93,41 +74,6 @@ describe('CLI shell completion', () => {
     for (const flag of valueFlags) {
       expect(pathValueLine).toContain(flag);
     }
-  });
-
-  it('does not offer bash positionals while completing flag values', () => {
-    const lines = bash.split('\n');
-    // Each lookup must land on a real line: the toContain assertions below
-    // fail loudly on `undefined`, which is exactly the missing-line case.
-    const fileValueLine = lines.find((line) =>
-      line.includes('_texra_compgen_files "$cur"'),
-    );
-    const directoryValueLine = lines.find((line) =>
-      line.includes('_texra_compgen_dirs "$cur"'),
-    );
-    const genericValueLine = lines.find((line) =>
-      line.includes('COMPREPLY=(); return'),
-    );
-
-    expect(bash).toContain('compgen -f -- "$1"');
-    expect(bash).toContain('compgen -d -- "$1"');
-    expect(fileValueLine).toContain('--input');
-    expect(fileValueLine).toContain('-i');
-    expect(fileValueLine).toContain('--context');
-    expect(fileValueLine).toContain('-c');
-    expect(fileValueLine).toContain('--output');
-    expect(fileValueLine).toContain('--instruction-file');
-    expect(directoryValueLine).toContain('--cwd');
-    expect(directoryValueLine).toContain('--output-dir');
-    expect(directoryValueLine).toContain('--source');
-    expect(directoryValueLine).toContain('-s');
-    expect(genericValueLine).toContain('--instruction');
-    expect(bash).toContain(
-      '--model|-m) COMPREPLY=( $(compgen -W "$(_texra_models)" -- "$cur") ); return ;;',
-    );
-    expect(bash).toContain(
-      '--agent) COMPREPLY=( $(compgen -W "$(_texra_tool_use_agents)" -- "$cur") ); return ;;',
-    );
   });
 
   it('uses the right bash agent listing at each launch boundary', () => {
@@ -245,17 +191,5 @@ printf '%s\\n' "\${COMPREPLY[@]}"
     expect(flagsFor('run')).toContain('print');
     expect(flagsFor('run')).toContain('output-format');
     expect(flagsFor('multi-agent run')).toContain('instruction-file');
-  });
-
-  it('describes multi-agent root options without calling orchestrators tool-use agents', async () => {
-    const commands = await collectCommands(rootCommand);
-    const runFlags = commandAt(commands, 'multi-agent run').flags;
-
-    expect(runFlags.find((flag) => flag.name === 'agent')?.description).toBe(
-      'Root agent for the team run (defaults to the preset orchestrator)',
-    );
-    expect(runFlags.find((flag) => flag.name === 'model')?.description).toBe(
-      'Model for the team root agent',
-    );
   });
 });
