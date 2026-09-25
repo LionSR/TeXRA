@@ -193,6 +193,10 @@ function buildCommand(
     // `env` is already complete; extending would merge `process.env` back in
     // and restore the Windows `Path`/`PATH` duplicate `commandEnv` removed.
     extendEnv: false,
+    // Nothing writes to a command's stdin, so it gets EOF at once: a child
+    // that reads stdin (a git hook, a lake build script) must not block on a
+    // pipe no one will close.
+    stdin: 'ignore' as const,
     forceKillAfter: FORCE_KILL_AFTER,
   };
   if (Array.isArray(command)) {
