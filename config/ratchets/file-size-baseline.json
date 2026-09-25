@@ -86,7 +86,7 @@
     "src/shared/session/runStateFold.ts": 819,
     "src/shared/session/sessionFold.ts": 1486,
     "src/shared/session/surface.ts": 511,
-    "src/shared/settingsView/settingsViewMessages.ts": 940,
+    "src/shared/settingsView/settingsViewMessages.ts": 891,
     "src/shared/state/stateSettings.ts": 1565,
     "src/telemetry/UsageLogService.ts": 571,
     "src/tools/agentCliShared.ts": 634,
