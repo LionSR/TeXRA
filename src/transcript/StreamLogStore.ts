@@ -108,11 +108,6 @@ export class StreamLogStore {
     return new StreamLogStore(mode, database, debug);
   }
 
-  /** The run's cached transcript, or undefined when nothing holds one. */
-  get(runId: RunId): StreamLog | undefined {
-    return this.runs.get(runId)?.log;
-  }
-
   /** Read a complete event prefix without changing residency. */
   readEntries(runId: RunId) {
     return this.database
