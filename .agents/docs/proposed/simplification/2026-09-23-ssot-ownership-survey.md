@@ -218,8 +218,9 @@ finalizer and holds either way.
 
 3. **Park-time closure folds the whole run cold.** `streamClosureFacts`
    (`SessionHandle.ts:640`) calls `readRunTranscript`, a full `readRunEvents`
-   plus `foldRunTranscript`, on every park (`toolUse.ts:742`,
-   `runLifecycle.ts:260`) to learn which stream ids are open. Correct (the
+   plus `foldRunTranscript`, on every park (`toolUse.ts:742`) and on terminal
+   finalize (`runLifecycle.ts:260`) to learn which stream ids are open. The
+   park site is the per-turn cost; finalize runs once per run. Correct (the
    resident view is subscription-scoped and may not hold the run), but linear
    per turn and so quadratic over a long chat. The publisher already sees
    every `stream.start`/`stream.end` (`SessionHandle.runEventPublication`),
