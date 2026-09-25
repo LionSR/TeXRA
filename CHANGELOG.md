@@ -127,6 +127,10 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
 
 ### Bug Fixes
 
+- **Tool availability rechecks after a change made during a check.** If a
+  credential or setting changed just as a tool-availability check started,
+  the follow-up check could be skipped, leaving a tool shown as missing or
+  available when it no longer was.
 - **The VS Code dashboard shows your agents, teams and saved settings
   again.** The Agents page listed no tool-use or workflow agents and no
   teams, and several pages showed defaults instead of your saved values
