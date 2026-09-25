@@ -207,8 +207,9 @@ export function formatWorkflowPhaseTally(phase: {
   readonly tally: WorkflowTally;
 }): string {
   const { declared } = phase.tally;
-  const declaredText = declared > 0 ? `${declared} declared` : undefined;
-  if (!phase.opened) return declaredText ?? 'declared';
+  const notStarted = WORKFLOW_TASK_STATUS_LABEL.declared.toLowerCase();
+  const declaredText = declared > 0 ? `${declared} ${notStarted}` : undefined;
+  if (!phase.opened) return declaredText ?? notStarted;
   return [formatWorkflowTally(phase.tally), declaredText]
     .filter(filterNotNullish)
     .join(' · ');

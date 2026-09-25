@@ -297,6 +297,12 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
   the conversation in one click, is gone. Delete now lives at the end of
   the run's ⋯ menu, asks for confirmation, and is not offered while the run
   is still going.
+- **A finished session says what to do next.** Where the message box
+  stood, an ended session now shows "This session has ended." with an
+  **Edit as new task** button (it opens New task with the same agent and
+  instruction), plus **Resume** when the session was interrupted. Workflow
+  runs get the same line. Edit as new task left the ⋯ menu. The run board
+  calls steps it has not reached "Not started" instead of "Declared".
 
 #### Bug Fixes
 

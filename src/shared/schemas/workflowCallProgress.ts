@@ -240,7 +240,7 @@ export function interruptedWorkflowCall(
 }
 
 export const WORKFLOW_TASK_STATUS_LABEL = {
-  declared: 'Declared',
+  declared: 'Not started',
   queued: 'Queued',
   running: 'Running',
   completed: 'Finished',
