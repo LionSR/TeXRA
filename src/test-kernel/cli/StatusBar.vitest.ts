@@ -6,15 +6,12 @@ import {
   subscriptionUsageProviderForStatus,
   type StatusBarDisplayInput,
 } from '@cli/chat/tui/panes/statusBarDisplay';
-import { shortCliModelAccessRoute } from '@cli/runtime/modelAccessRoute';
 import { KEY_HINT_SEPARATOR } from '@cli/tui/ui/KeyHints';
 import { RUN_PHASE, type RunId, RUN_LIFECYCLE_READY } from '@shared/schemas';
 import { runStatusCopy } from '@shared/runs/runStatusDisplay';
 import type { SessionView, RunView } from '@shared/session/sessionView';
+import { OWN_API_KEYS } from '@ui/copy/modelAccess';
 import { makeRunView, viewWith } from './fixtures/sessionViewFixture';
-
-// The bar renders the short access-route label.
-const PERSONAL_API_MODE_LABEL = shortCliModelAccessRoute('api-key');
 
 type StatusBarDisplay = ReturnType<typeof buildStatusBarDisplay>;
 
@@ -529,7 +526,7 @@ describe('CLI StatusBar display model', () => {
       'subscription',
     );
     // Own API keys are the default route: no access segment at all.
-    expect(accessLabel('api-key')).not.toContain(PERSONAL_API_MODE_LABEL);
+    expect(accessLabel('api-key')).not.toContain(OWN_API_KEYS.compactLabel);
     expect(accessLabel('api-key')).not.toContain('subscription');
   });
 
