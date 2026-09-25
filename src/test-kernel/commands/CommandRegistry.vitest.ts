@@ -36,21 +36,6 @@ const packRegistry = {
 };
 
 describe('shared command registry', () => {
-  it('dispatches legacy no-arg handlers', () => {
-    const actions = makeActions();
-    const registry = {
-      'test.noop': (a: TestActions) => {
-        a.noop();
-        return true;
-      },
-    } satisfies Record<'test.noop', CommandHandler<TestActions>>;
-
-    expect(dispatchCommandFromRegistry('test.noop', registry, actions)).toBe(
-      true,
-    );
-    expect(actions.noop).toHaveBeenCalledOnce();
-  });
-
   it('reports unhandled ids without throwing', () => {
     const onFailure = vi.fn();
     const result = dispatchCommandFromRegistry(

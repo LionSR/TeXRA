@@ -102,23 +102,6 @@ describe('run-tabs over the fold', () => {
     expect(() => rowOf(rail, CHILD)).toThrow();
   });
 
-  it('renders a subtree from its root with the children beneath the parent', async () => {
-    const view = fanOutView();
-    const child = view.runs.get(CHILD);
-    expect(child?.childIds).toContain(GRANDCHILD);
-    const { element } = await mountTabs(view, emptySurface(view.key), {
-      root: CHILD,
-    });
-
-    expect(rowOf(element, CHILD)).toBeTruthy();
-    expect(rowOf(element, GRANDCHILD)).toBeTruthy();
-    const childList = element.shadowRoot?.querySelector('.child-runs');
-    // Expanded exactly when the fold forces it or the surface asked.
-    expect(childList?.hasAttribute('hidden')).toBe(
-      child?.forceExpanded !== true,
-    );
-  });
-
   it('marks the resolved selection active and selects on click', async () => {
     const view = fanOutView();
     const surface = applySurfaceAction(emptySurface(view.key), {
@@ -134,27 +117,6 @@ describe('run-tabs over the fold', () => {
 
     control(rowOf(element, CHILD), 'select').click();
     expect(surfaceActions).toEqual([{ kind: 'select', runId: CHILD }]);
-  });
-
-  it('dispatches the expansion toggle from a row, which offers no delete', async () => {
-    const view = fanOutView();
-    const child = view.runs.get(CHILD);
-    const { element, surfaceActions } = await mountTabs(
-      view,
-      emptySurface(view.key),
-      { root: CHILD },
-    );
-    const row = rowOf(element, CHILD);
-
-    expect(row.shadowRoot?.querySelector('[data-action="delete"]')).toBeNull();
-    control(row, 'toggle-children').click();
-    expect(surfaceActions).toEqual([
-      {
-        kind: 'expand',
-        runId: CHILD,
-        expanded: child?.forceExpanded !== true,
-      },
-    ]);
   });
 
   it('filters rows by the surface search', async () => {

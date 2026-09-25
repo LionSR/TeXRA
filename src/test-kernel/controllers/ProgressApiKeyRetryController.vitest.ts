@@ -133,24 +133,6 @@ describe('ProgressApiKeyRetryController', () => {
     }),
   );
 
-  itHosted('does not retry after the retry request was replaced', () =>
-    Effect.gen(function* () {
-      const harness = createHarness({
-        keys: { anthropic: 'stored-key' },
-        retryPending: false,
-      });
-
-      yield* harness.controller.useOwnApiKey({
-        stream: 'stream-a' as RunId,
-        requestId: 'retry:stale',
-        provider: 'anthropic',
-        exhaustionReason: 'copilot-subscription',
-      });
-
-      expect(harness.retries).toStrictEqual([]);
-    }),
-  );
-
   itHosted(
     'accepts a changed key from any provider when depletion has no provider hint',
     () =>

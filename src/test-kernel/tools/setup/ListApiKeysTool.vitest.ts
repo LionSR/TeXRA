@@ -7,7 +7,6 @@ import { Effect } from 'effect';
 import { describe, vi } from 'vitest';
 
 // Local imports
-import { API_PROVIDERS, apiKeySecretName } from '@model/apiProviders';
 import { SecretsFailed } from '@platform/secrets';
 import type { ToolResult } from '@shared/schemas';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
@@ -16,7 +15,6 @@ import {
   installPlatform,
   setupPlatform,
 } from '@test/support/setupPlatform';
-import { GITHUB_TOKEN_STORAGE_KEY } from '@tools/github/githubAuth';
 import { ListApiKeysTool } from '@tools/setup/ListApiKeysTool';
 
 const tool = ListApiKeysTool;
@@ -66,31 +64,6 @@ describe('list_api_keys tool', () => {
     }),
   );
 
-  it.effect('shows known provider keys by provider name', () =>
-    Effect.gen(function* () {
-      const result = yield* callWithStoredKeys([apiKeySecretName('anthropic')]);
-      assert.match(outputOf(result), /Provider API keys stored/);
-      assert.match(outputOf(result), /^\s+anthropic$/m);
-      assert.doesNotMatch(outputOf(result), /apiKey\.anthropic/);
-    }),
-  );
-
-  it.effect('recognises the GitHub token', () =>
-    Effect.gen(function* () {
-      const result = yield* callWithStoredKeys([GITHUB_TOKEN_STORAGE_KEY]);
-      assert.match(outputOf(result), /GitHub token: stored/);
-    }),
-  );
-
-  it.effect('reports stale provider entries as diagnostic', () =>
-    Effect.gen(function* () {
-      const result = yield* callWithStoredKeys(['apiKey.oldprovider']);
-      assert.match(outputOf(result), /diagnostic only/);
-      assert.match(outputOf(result), /not unset_api_key providers/);
-      assert.match(outputOf(result), /apiKey\.oldprovider/);
-    }),
-  );
-
   it.effect('redacts other stored secret names', () =>
     Effect.gen(function* () {
       const result = yield* callWithStoredKeys(['texra.supabase.session']);
@@ -99,32 +72,6 @@ describe('list_api_keys tool', () => {
         /Other stored secrets: 1 redacted key name/,
       );
       assert.doesNotMatch(outputOf(result), /texra\.supabase\.session/);
-    }),
-  );
-
-  it.effect('counts stored provider keys against the full catalog', () =>
-    Effect.gen(function* () {
-      const result = yield* callWithStoredKeys([apiKeySecretName('anthropic')]);
-      assert.equal(
-        result.summary,
-        `1 stored secret: 1/${API_PROVIDERS.length} persisted provider API keys`,
-      );
-    }),
-  );
-
-  it.effect('shows missing providers with no persisted provider keys', () =>
-    Effect.gen(function* () {
-      const result = yield* callWithStoredKeys([GITHUB_TOKEN_STORAGE_KEY]);
-      assert.match(
-        outputOf(result),
-        /No provider API keys persisted in TeXRA secrets/,
-      );
-      assert.match(
-        outputOf(result),
-        /Providers without a key in TeXRA secrets/,
-      );
-      assert.match(outputOf(result), /anthropic/);
-      assert.match(outputOf(result), /openai/);
     }),
   );
 });

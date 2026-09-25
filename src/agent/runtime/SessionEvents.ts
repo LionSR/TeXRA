@@ -24,7 +24,9 @@ import { withLogChannel } from '@logger/effectLog';
 import { writeLogLine } from '@logger/logSink';
 import {
   aggregateId as qualifyAggregateId,
+  aggregateTarget,
   isDisplaySessionEvent,
+  isTerminalWorkflowCallProgress,
   type AggregateId,
   type CommitOrdinal,
   type SessionEvent,
@@ -38,10 +40,18 @@ import {
   type DatabaseReadFailed,
   type DatabaseWriteFailed,
 } from '@shared/session/database';
-import { closesRunWindow } from '@shared/session/runRows';
+import {
+  applyRunRow,
+  closesRunWindow,
+  foldRunRows,
+  freshRunRows,
+  isFollowUpRow,
+  type RunRows,
+} from '@shared/session/runRows';
 import {
   SessionEvents,
   type Append,
+  type OpenWork,
   type SessionCursor,
   type SessionEventsShape,
 } from '@shared/session/sessionEvents';
@@ -153,24 +163,63 @@ export const sessionEventsLayer = Layer.effect(
   SessionEvents,
   Effect.gen(function* () {
     const log = yield* Database;
-    // The streams each aggregate has open, kept as this publisher commits
-    // them, so closing them at a park or an end reads no rows. The fold
-    // closes every stream at a phase move that rests or ends the run, and
-    // so does this; a stream some earlier process opened is closed by that
-    // same move, and holds no text here to close it with.
-    const openStreams = new Map<AggregateId, Set<string>>();
+    // What each aggregate has open, kept as this publisher commits it, so
+    // closing it at a park, an end or a host exit reads no rows. The fold
+    // closes every stream at a phase move that rests or ends the run, and so
+    // does this; stages and workflow calls close only on their own rows,
+    // there and here. Work some earlier process opened is not here: its
+    // streams close at that same phase move, and a stage or call it left
+    // open reads as its run's settled outcome once the run is durably final
+    // (`taskGroupDisplayStatus`, `workflowRunModel`'s interrupted card).
+    const open = new Map<AggregateId, Map<string, OpenWork>>();
+    // Each run's follow-ups, kept the same way by the one reducer
+    // (`applyRunRow`). Rows an earlier owner committed enter where a claim
+    // moves here (`hydrateFollowUps`); while this process holds the claim,
+    // no other process commits to the run, so what it tracks stays whole.
+    const followUps = new Map<AggregateId, RunRows>();
+    const hydrated = new Set<AggregateId>();
     const track = (rows: readonly SessionEvent[]) => {
       for (const row of rows) {
-        if (row.type === 'run.removed' || closesRunWindow(row)) {
-          openStreams.delete(row.aggregateId);
-        } else if (row.type === 'stream.start') {
-          const open = openStreams.get(row.aggregateId) ?? new Set<string>();
-          openStreams.set(row.aggregateId, open.add(row.id));
-        } else if (row.type === 'stream.end') {
-          const open = openStreams.get(row.aggregateId);
-          open?.delete(row.id);
-          if (open?.size === 0) openStreams.delete(row.aggregateId);
+        if (row.type === 'run.removed') {
+          open.delete(row.aggregateId);
+          followUps.delete(row.aggregateId);
+          hydrated.delete(row.aggregateId);
+          continue;
         }
+        if (isFollowUpRow(row)) {
+          const slice = followUps.get(row.aggregateId) ?? freshRunRows();
+          const verdict = applyRunRow(slice, row);
+          if (verdict.kind === 'applied')
+            followUps.set(row.aggregateId, { ...slice, ...verdict.rows });
+          continue;
+        }
+        const work = open.get(row.aggregateId) ?? new Map<string, OpenWork>();
+        const close = (kind: OpenWork['kind'], id: string) => {
+          if (work.get(id)?.kind === kind) work.delete(id);
+        };
+        if (closesRunWindow(row)) {
+          for (const [id, { kind }] of work) {
+            if (kind === 'stream') work.delete(id);
+          }
+        } else if (row.type === 'stream.start' || row.type === 'stage.start') {
+          const kind = row.type === 'stream.start' ? 'stream' : 'stage';
+          work.set(row.id, { kind, id: row.id });
+        } else if (row.type === 'stream.end') {
+          close('stream', row.id);
+        } else if (row.type === 'stage.end') {
+          close('stage', row.id);
+        } else if (row.type === 'workflow.call') {
+          if (isTerminalWorkflowCallProgress(row.call)) {
+            close('call', row.logId);
+          } else {
+            const { logId: id, stageId, call } = row;
+            work.set(id, { kind: 'call', id, stageId, call });
+          }
+        } else {
+          continue;
+        }
+        if (work.size === 0) open.delete(row.aggregateId);
+        else open.set(row.aggregateId, work);
       }
     };
     // Both of `appendAll`'s refusals pass through typed (D6 b): a lost
@@ -305,7 +354,38 @@ export const sessionEventsLayer = Layer.effect(
       exclusive,
       detach,
       settle,
-      openStreams: (aggregateId) => [...(openStreams.get(aggregateId) ?? [])],
+      openWork: (aggregateId) => [...(open.get(aggregateId)?.values() ?? [])],
+      pendingFollowUps: (aggregateId) =>
+        followUps.get(aggregateId)?.followUps ?? [],
+      hydrateFollowUps: (aggregateId, claimMoved, rows) =>
+        Effect.gen(function* () {
+          if (aggregateTarget(aggregateId).kind !== 'run') return;
+          if (!claimMoved && hydrated.has(aggregateId)) return;
+          const read = foldRunRows(
+            (rows ?? (yield* log.readAggregate(aggregateId, 1))).filter(
+              isFollowUpRow,
+            ),
+          );
+          const live = followUps.get(aggregateId) ?? freshRunRows();
+          const livePending = new Set(live.followUps.map((f) => f.followUpId));
+          // A row the read holds keeps its place unless this publisher
+          // consumed it since; one it tracked that the read does not name
+          // committed after the read, and follows it.
+          followUps.set(aggregateId, {
+            ...read,
+            followUps: [
+              ...read.followUps.filter(
+                ({ followUpId: id }) =>
+                  !live.followUpIds.has(id) || livePending.has(id),
+              ),
+              ...live.followUps.filter(
+                ({ followUpId }) => !read.followUpIds.has(followUpId),
+              ),
+            ],
+            followUpIds: new Set([...read.followUpIds, ...live.followUpIds]),
+          });
+          hydrated.add(aggregateId);
+        }),
       listing: () =>
         Stream.fromIterableEffect(log.readListing()).pipe(
           Stream.filter(isDisplaySessionEvent),

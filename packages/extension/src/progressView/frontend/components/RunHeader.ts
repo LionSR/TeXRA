@@ -623,9 +623,8 @@ export class RunHeader extends LitElement {
     progress: ConversationProgress | undefined,
     flow: RunView['flow'],
   ): TemplateResult | typeof nothing {
-    if (!flow && !progress?.toolCallCount) {
-      return nothing;
-    }
+    const content = renderProgressBadgeContent(progress, flow);
+    if (content === nothing) return nothing;
     const progressTitle = getProgressBadgeTitle(progress, flow);
     return html`<wa-tag
         id=${ELEMENT_IDS.PROGRESS_BADGE}
@@ -633,7 +632,7 @@ export class RunHeader extends LitElement {
         variant="neutral"
         size="s"
       >
-        ${waIcon('chart-line')} ${renderProgressBadgeContent(progress, flow)}
+        ${waIcon('chart-line')} ${content}
       </wa-tag>
       ${
         progressTitle

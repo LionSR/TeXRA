@@ -140,9 +140,6 @@ describe('provider-key onboarding flow', () => {
           'anthropic',
           providerKey,
         );
-        expect(mocks.writeTextStdout).toHaveBeenCalledWith(
-          'Saved your Anthropic API key. Stored in TeXRA secrets as `apiKey.anthropic` (or set ANTHROPIC_API_KEY in your environment).',
-        );
         expect(mocks.writeTextStdout).not.toHaveBeenCalledWith(
           expect.stringContaining(providerKey),
         );

@@ -638,17 +638,6 @@ const CORE_SETTING_ROWS: Record<
       cli: { writer: 'src/tools/setup/ConfigTools.ts' },
     },
   },
-  'agentReview.runOnCommit': {
-    schema: z.boolean().prefault(false),
-    description:
-      'Automatically review your changes for issues after each commit.',
-    honoredBy: {
-      vscode: {
-        reader:
-          'packages/extension/src/frontend/review/agentReviewCommitWatcher.ts',
-      },
-    },
-  },
   'audio.soxPath': {
     schema: z.string().prefault(''),
     description: 'Path to the SoX executable. Overrides automatic detection.',
@@ -668,7 +657,7 @@ const CORE_SETTING_ROWS: Record<
     schema: z.boolean().prefault(TELEMETRY_ENABLED_DEFAULT),
     title: 'Share usage telemetry',
     description:
-      'Send model, token, cost, timing, route, and host metadata. TeXRA never sends prompt text, document content, or file names. Turning this off stops reporting for rounds billed to your own API keys; rounds covered by a subscription are still recorded, because they meter your usage against your plan.',
+      'Send model, token, cost, timing, route, and host metadata. TeXRA never sends prompt text, document content, or file names. Turning this off stops all reporting.',
     category: 'account',
     configTarget: 'global',
     honoredBy: everyHost('src/telemetry/UsageLogService.ts'),

@@ -45,7 +45,7 @@ TeXRA panel offers the main access choices:
    (the <wa-icon library="texra" name="settings-gear"></wa-icon> gear icon at the top of the TeXRA panel) and
    set your provider's key in the **API keys** list, or place a `.env` file in your workspace with
    variables like `OPENAI_API_KEY`.
-2. **Use ChatGPT subscription**: Codex models through your ChatGPT plan. Open the Dashboard's **Models**
+2. **Use ChatGPT subscription**: Codex models through your ChatGPT plan. Open the Settings **Models**
    page and use the **ChatGPT subscription** sign-in section.
 3. **Use another provider subscription**: Grok (xAI), Kimi Code, and the GLM Coding Plan also run on a plan you
    already pay for. Connect them from the same **Models** page.

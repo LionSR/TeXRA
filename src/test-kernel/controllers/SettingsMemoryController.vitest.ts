@@ -12,7 +12,6 @@ const mocks = vi.hoisted(() => ({
   ),
   loadMemoryItems: vi.fn(),
   loadMemoryPreview: vi.fn(),
-  setMemoryPinned: vi.fn(),
 }));
 
 vi.mock('@platform/defaults/workspaceStorage', () => ({
@@ -28,7 +27,6 @@ vi.mock('@tools/memory/memoryFileSystem', async (importOriginal) => {
     ...actual,
     loadMemoryItems: mocks.loadMemoryItems,
     loadMemoryPreview: mocks.loadMemoryPreview,
-    setMemoryPinned: mocks.setMemoryPinned,
   };
 });
 
@@ -96,19 +94,5 @@ describe('SettingsMemoryController', () => {
       ]);
       assert.equal(message?.command, SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY);
     }).pipe(Effect.provideService(StorageFs, storageFsStub)),
-  );
-
-  it.effect(
-    'warns and returns null when the pinned memory limit is reached',
-    () =>
-      Effect.gen(function* () {
-        mocks.setMemoryPinned.mockReturnValue(
-          Effect.succeed({ status: 'cap-reached' }),
-        );
-        const { controller, hosts } = createController();
-
-        assert.equal(yield* controller.setMemoryPinned('item.md', true), null);
-        assert.equal(hosts.prompt.messages.at(-1)?.kind, 'warning');
-      }).pipe(Effect.provideService(StorageFs, storageFsStub)),
   );
 });

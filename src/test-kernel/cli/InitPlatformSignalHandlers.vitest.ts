@@ -88,40 +88,34 @@ describe('CLI platform signal handlers', () => {
     expect(killSpy).not.toHaveBeenCalled();
   }, 30_000);
 
-  it('handOffCliShutdownSignalHandlers removes exactly the listeners it installed', async () => {
+  it('defers SIGINT while a foreground command owns the terminal', async () => {
     vi.resetModules();
+    vi.doMock('@cli/runtime/foregroundCommand', async (importOriginal) => ({
+      ...(await importOriginal<
+        typeof import('@cli/runtime/foregroundCommand')
+      >()),
+      terminalForegroundHeld: () => true,
+    }));
     const handlers = captureSignalHandlers();
-    const removed: Array<[string | symbol, unknown]> = [];
-    vi.spyOn(process, 'removeListener').mockImplementation(((
-      event: string | symbol,
-      listener: (...args: unknown[]) => void,
-    ) => {
-      removed.push([event, listener]);
-      return process;
-    }) as typeof process.removeListener);
+    const exitSpy = vi
+      .spyOn(process, 'exit')
+      .mockImplementation((() => undefined as never) as typeof process.exit);
+    const runShutdown = vi.fn(async () => undefined);
 
-    const {
-      installCliShutdownSignalHandlers,
-      handOffCliShutdownSignalHandlers,
-    } = await import('@cli/runtime/initPlatform');
-    installCliShutdownSignalHandlers(
-      fakeLifecycle(vi.fn(async () => undefined)),
-    );
-    expect(handlers.size).toBe(2);
+    const { installCliShutdownSignalHandlers } =
+      await import('@cli/runtime/initPlatform');
+    installCliShutdownSignalHandlers(fakeLifecycle(runShutdown));
+    const sigint = handlers.get('SIGINT');
+    handlers.delete('SIGINT');
 
-    handOffCliShutdownSignalHandlers();
+    await sigint?.();
 
-    // The install-order disposers are released LIFO, so SIGTERM first.
-    expect(removed).toEqual([
-      ['SIGTERM', handlers.get('SIGTERM')],
-      ['SIGINT', handlers.get('SIGINT')],
-    ]);
-
-    // A second handoff (e.g. a stray second call) is a no-op, not a crash or
-    // a spurious removeListener call for listeners already handed off.
-    removed.length = 0;
-    handOffCliShutdownSignalHandlers();
-    expect(removed).toEqual([]);
+    // The pager (or installer) gets the Ctrl-C; the CLI keeps running and
+    // listens again, so the next SIGINT reaches it.
+    expect(runShutdown).not.toHaveBeenCalled();
+    expect(exitSpy).not.toHaveBeenCalled();
+    expect(handlers.get('SIGINT')).toBe(sigint);
+    vi.doUnmock('@cli/runtime/foregroundCommand');
   });
 
   it('waits for persistent stderr writes before shutdown resolves', async () => {

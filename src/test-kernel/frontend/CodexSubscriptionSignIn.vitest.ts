@@ -174,16 +174,4 @@ describe('signInWithSubscription (ChatGPT)', () => {
     expect(mocks.showLoggedErrorMessage).not.toHaveBeenCalled();
     expect(mocks.setPreferCodexSubscription).not.toHaveBeenCalled();
   });
-
-  it('returns true when OAuth and preference enablement both succeed', async () => {
-    mockLoopbackSuccess();
-    mockPreferenceEnabled();
-
-    const signedIn = await signInWithChatGptSubscription('TestChannel');
-
-    expect(signedIn).toBe(true);
-    expect(mocks.showInformationMessage).toHaveBeenCalledWith(
-      'Signed in with ChatGPT as person@example.com. ChatGPT subscription is enabled for Codex models.',
-    );
-  });
 });

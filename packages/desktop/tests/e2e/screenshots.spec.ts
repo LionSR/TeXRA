@@ -58,8 +58,9 @@ async function commandPaletteIsClosed(): Promise<boolean> {
 }
 
 test('startup team chooser screenshot', async () => {
-  const panel = launched.page.locator('.desktop-startup-panel');
-  await expect(panel).toBeVisible();
+  const panel = launched.page.locator('wa-dialog.desktop-onboarding');
+  // The dialog host has no box of its own; its open state is the check.
+  await expect(panel).toHaveAttribute('open', '');
   await expect(
     panel.locator('wa-checkbox').filter({
       hasText: "Don't show this at startup",
