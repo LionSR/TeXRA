@@ -81,7 +81,6 @@ import {
   resetCliState,
   patchSessionMeta,
   sessionViewFailure as sessionViewFailureSignal,
-  rootRunIds as rootRunIdsSignal,
   sessionMeta as sessionMetaSignal,
 } from './state/cliState';
 import {
@@ -423,12 +422,6 @@ export async function runChat(
     chatController.clearInterruptedRecovery();
     chatController.clearPendingSkills();
     session.clearRunState();
-    // Release this conversation's resident transcripts when their remaining
-    // readers and writers leave. Clearing the terminal does not delete history.
-    const store = runtimeSession.transcripts;
-    for (const runId of rootRunIdsSignal.get()) {
-      store.requestEviction(runId);
-    }
     resetCliState(meta);
     clearTerminalScrollback();
     // The erase above happened outside Ink, so everything the static

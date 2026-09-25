@@ -22,6 +22,7 @@ import React from 'react';
 
 import { loadAgents } from '@agent/index';
 import { tryDefaultSession } from '@agent/runtime';
+import { TraceEmitter } from '@agent/trace';
 import { tuiOutputStreamForColor } from '@cli/tui/noColorOutput';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { DEFAULT_MODELS } from '@model/modelOptionsBasic';
@@ -77,7 +78,6 @@ import {
 } from '@test/shared/session/fanOutScenario';
 import { clearGoal, setGoalSessionAutoApproval, startGoal } from '@tools/goal';
 import { prepareToolEditApprovalPrompt } from '@tools/approval/toolEditApproval';
-import { createRunTrace } from '@transcript';
 import { FOCUSED_BACKGROUND_TASK } from '@ui/copy/nestedRuns';
 import { generateRunId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -1168,26 +1168,23 @@ async function seedRunningWorkflow(): Promise<void> {
     userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
   });
   seedPhase(childRunId, RUN_PHASE.RUNNING);
-  const residency = await harnessRuntime.runPromise(
-    session().transcripts.acquireRunResidency(childRunId),
-  );
-  const runTrace = createRunTrace(residency);
-  const detachRunTrace = session().attachRunTrace(runTrace.trace, childRunId);
-  const runStage = runTrace.trace.openStage(
+  const trace = new TraceEmitter();
+  const detachRunTrace = session().attachRunTrace(trace, childRunId);
+  const runStage = trace.openStage(
     "Workflow script 'live-workflow-validation'",
     {
       id: 'harness-workflow-running-run',
       kind: 'run',
     },
   );
-  const phaseStage = runTrace.trace.openStage('Proofread', {
+  const phaseStage = trace.openStage('Proofread', {
     id: 'harness-workflow-running-phase',
     index: 0,
     kind: 'phase',
     parent: runStage,
     total: 1,
   });
-  runTrace.trace.emit({
+  trace.emit({
     type: 'workflow.call',
     logId: 'harness-workflow-running-task-a',
     call: {
@@ -1199,7 +1196,7 @@ async function seedRunningWorkflow(): Promise<void> {
     },
     stageId: phaseStage.id,
   });
-  runTrace.trace.emit({
+  trace.emit({
     type: 'workflow.call',
     logId: 'harness-workflow-running-task-b',
     call: {
@@ -1224,7 +1221,6 @@ async function seedRunningWorkflow(): Promise<void> {
     phaseStage.end('cancelled');
     runStage.end('cancelled');
     detachRunTrace();
-    runTrace.dispose();
   });
 }
 

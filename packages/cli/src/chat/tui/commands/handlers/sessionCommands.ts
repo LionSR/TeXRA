@@ -68,8 +68,8 @@ export function showCliWorkPlan(session: SessionHandle): void {
  *  only for a run whose transcript tier some port subscribes. */
 function activeSkillNamesFor(session: SessionHandle, runId: RunId | undefined) {
   if (runId === undefined) return Effect.succeed([]);
-  return session.transcripts
-    .readEvents(runId)
+  return session
+    .readRunEvents(runId)
     .pipe(
       Effect.map(
         (events) =>
