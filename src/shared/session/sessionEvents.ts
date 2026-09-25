@@ -98,6 +98,12 @@ export class SessionEvents extends Context.Service<
      *  decides what its loss means (`SessionHandle` holds it for the drain
      *  that stamps its run's terminal row). */
     readonly settle: Effect.Effect<CommitOrdinal | null>;
+    /** The stream ids this publisher committed a `stream.start` for on one
+     *  aggregate and no `stream.end` since, nor a phase move that rests or
+     *  ends its run: what a park or an end closes. Read on the publisher
+     *  fiber (inside a job) or after a settle, it counts every commit
+     *  before. */
+    readonly openStreams: (aggregateId: AggregateId) => readonly string[];
     /** The cold listing hydrate (C8): the latest row per aggregate and type
      *  for the listing fact types plus the outstanding approvals, in commit
      *  order; never a transcript row; completes. */
