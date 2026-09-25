@@ -10,9 +10,10 @@ import type { SettingsStores } from '@shared/config/settingsAccess';
 import { bumpCodexPreferenceVersion } from './cliState';
 
 /**
- * Flip an OAuth subscription preference (ChatGPT, Grok) and refresh the TUI
- * views. The login commands and the access picker write it; nothing else
- * does, so the persist-then-refresh sequence lives in one place.
+ * Flip an OAuth subscription preference (ChatGPT, Grok) on `/login` and
+ * refresh the TUI views. The access picker, sign-out, `/config` and the key
+ * prompt write access state through their own paths and bump
+ * `codexPreferenceVersion` themselves.
  */
 export function setCliSubscriptionPreference(
   stores: SettingsStores,

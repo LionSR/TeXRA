@@ -48,7 +48,6 @@ import {
 import type { RunId } from '@shared/schemas';
 import { AgentCategory, RUN_PHASE } from '@shared/schemas';
 import { subscribeToSignalChanges } from '@shared/signals';
-import { descendantRuns } from '@shared/session/sessionView';
 import { getFirstRunDone } from '@shared/state/onboardingState';
 import {
   isActivePhase,
@@ -82,7 +81,7 @@ import {
   resetCliState,
   patchSessionMeta,
   sessionViewFailure as sessionViewFailureSignal,
-  rootRunId as rootRunIdSignal,
+  rootRunIds as rootRunIdsSignal,
   sessionMeta as sessionMetaSignal,
 } from './state/cliState';
 import {
@@ -430,9 +429,7 @@ export async function runChat(
     // Release this conversation's resident transcripts when their remaining
     // readers and writers leave. Clearing the terminal does not delete history.
     const store = runtimeSession.transcripts;
-    for (const runId of descendantRuns(currentView(), rootRunIdSignal.get(), {
-      includeRoot: true,
-    })) {
+    for (const runId of rootRunIdsSignal.get()) {
       store.requestEviction(runId);
     }
     resetCliState(meta);

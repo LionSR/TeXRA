@@ -18,11 +18,10 @@ import {
   type RunId,
 } from '@shared/schemas';
 import { toSignal, type StreamSignal } from '@shared/signals';
-import {
-  descendantRuns,
-  type FollowUpHost,
-  type SessionView,
-  type RunView,
+import type {
+  FollowUpHost,
+  SessionView,
+  RunView,
 } from '@shared/session/sessionView';
 import {
   flowPosition,
@@ -148,16 +147,6 @@ export function runningChildCount(
   return (run?.childIds ?? []).filter(
     (id) => view.runs.get(id)?.status === RUN_PHASE.RUNNING,
   ).length;
-}
-
-/** Whether the root or any run under it is in the RUNNING phase. */
-export function anyRunRunning(
-  view: SessionView,
-  rootRunId: RunId | undefined,
-): boolean {
-  return descendantRuns(view, rootRunId, { includeRoot: true }).some(
-    (id) => view.runs.get(id)?.status === RUN_PHASE.RUNNING,
-  );
 }
 
 /**
