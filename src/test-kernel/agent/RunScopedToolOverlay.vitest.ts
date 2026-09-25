@@ -91,9 +91,7 @@ function runLayer(
     followUpsLayer,
     nativeToolTestLayer(),
   ).pipe(
-    Layer.provideMerge(
-      agentRunLayer(ctx, { tools, callbacks: { onModelChanged: () => {} } }),
-    ),
+    Layer.provideMerge(agentRunLayer(ctx, { tools, callbacks: {} })),
     Layer.provideMerge(Layer.succeed(RunLedger, ctx.session.ledger)),
     Layer.provideMerge(LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT)),
     Layer.provideMerge(testHttpClientLayer),

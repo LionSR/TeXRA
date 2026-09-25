@@ -265,6 +265,7 @@ export const modelInvokerLayer = (): Layer.Layer<
         objectType: 'messages' | 'response',
         round: number,
         baseName: string,
+        bound: BoundModel,
       ) =>
         maybeSaveDebugObject({
           object,
@@ -272,7 +273,7 @@ export const modelInvokerLayer = (): Layer.Layer<
           context: {
             logger,
             runId,
-            modelName: run.config.model,
+            modelName: bound.modelId,
             isRemote: run.config.agentSource === 'remote',
             roots: session.roots,
           },
@@ -480,6 +481,7 @@ export const modelInvokerLayer = (): Layer.Layer<
           'response',
           request.round,
           `${request.debugName}_response`,
+          bound,
         );
         const usage = priceTurnUsage(bound, turn.usage, responseTimeMs, logger);
         if (
@@ -620,6 +622,7 @@ export const modelInvokerLayer = (): Layer.Layer<
           'messages',
           request.round,
           request.debugName,
+          bound,
         );
         // R4: the input estimate where the provider offers one. A count that
         // fails is logged and the provider enforces its own limit; an input

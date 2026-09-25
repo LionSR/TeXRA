@@ -315,7 +315,6 @@ function agentRunTestLayer(init: LoopInit) {
           { agentName: 'chat', agentCategory: AgentCategory.ToolUse },
         ),
         callbacks: {
-          onModelChanged: vi.fn(),
           ...(init.onIdle ? { onIdle: init.onIdle } : {}),
         },
       } satisfies AgentRunShape;

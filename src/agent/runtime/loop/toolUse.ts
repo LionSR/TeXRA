@@ -271,6 +271,10 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         temperature: run.setting.temperature,
       }).pipe(Scope.provide(run.scope));
       userChannels[USER_VAR_MODEL] = next.modelId;
+      // The snapshot's model id is the run's one model fact. The record a
+      // listing or a resume reads and the display row both restate it in
+      // the same batch, so no reader sees one without the other.
+      const config = { ...run.config, model: next.modelId };
       const switched = yield* cell.append([
         {
           type: 'model.compaction',
@@ -284,6 +288,12 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
               state.continuation === null ? null : 'history-replaced',
           },
         },
+        {
+          type: 'run.record',
+          aggregateId: rowAggregate(runId),
+          record: config,
+        },
+        { type: 'run.config', aggregateId: rowAggregate(runId), config },
         snapshot(state, {
           phase: state.phase ?? 'model.ready',
           runtime: {
@@ -292,18 +302,8 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           },
         }),
       ]);
-      const nextAgentConfig = { ...run.config, model: next.modelId };
-      session.publish([
-        {
-          type: 'run.record',
-          aggregateId: rowAggregate(runId),
-          record: nextAgentConfig,
-        },
-      ]);
       yield* SynchronizedRef.set(run.model, next);
       yield* releaseBindingUploads(current.model, current.modelId);
-      run.callbacks.onModelChanged(next.modelId);
-      logger.emit({ type: 'run.config', runId, config: nextAgentConfig });
       return switched;
     },
   );
