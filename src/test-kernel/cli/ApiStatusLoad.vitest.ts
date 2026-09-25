@@ -88,6 +88,17 @@ function codingPlans(
   };
 }
 
+function subscriptions(chatgpt: {
+  readonly preferSubscription: boolean;
+  readonly signedIn: boolean;
+  readonly email?: string;
+}) {
+  return {
+    chatgpt: { provider: 'chatgpt', ...chatgpt },
+    grok: { provider: 'grok', signedIn: false, preferSubscription: false },
+  };
+}
+
 function accountStatusLines(): Promise<string[]> {
   // The status program reads subscription usage, whose credential reads take
   // the process HTTP client from context — so it settles on the kernel's
@@ -104,20 +115,18 @@ function renderPreferenceRoute(
 ): Promise<string[]> {
   mocks.readCliModelAccessStatus.mockReturnValue(
     Effect.succeed({
-      preferences: {
-        chatGpt: route === 'chatGpt' ? preference : 'off',
-        grok: 'off',
-      },
+      subscriptions: subscriptions({
+        preferSubscription: route === 'chatGpt' && preference === 'on',
+        signedIn: route === 'chatGpt' && enabled,
+        email:
+          route === 'chatGpt' && enabled ? 'chatgpt@example.com' : undefined,
+      }),
       codingPlans: codingPlans(
         route === 'kimiCode' && preference === 'on',
         route === 'kimiCode' && enabled,
         route === 'glmCode' && preference === 'on',
         route === 'glmCode' && enabled,
       ),
-      chatGptSignedIn: route === 'chatGpt' && enabled,
-      grokSignedIn: false,
-      chatGptAccountLabel:
-        route === 'chatGpt' && enabled ? 'chatgpt@example.com' : undefined,
     }),
   );
   return accountStatusLines();
@@ -132,13 +141,11 @@ describe('CLI model-access status lines', () => {
     );
     mocks.readCliModelAccessStatus.mockReset().mockReturnValue(
       Effect.succeed({
-        preferences: {
-          chatGpt: 'off',
-          grok: 'off',
-        },
+        subscriptions: subscriptions({
+          preferSubscription: false,
+          signedIn: false,
+        }),
         codingPlans: codingPlans(),
-        chatGptSignedIn: false,
-        grokSignedIn: false,
       }),
     );
     mocks.lookupApiKeyOrigin
@@ -162,14 +169,12 @@ describe('CLI model-access status lines', () => {
   it('renders preferred Kimi and ChatGPT routes with their owned credentials', async () => {
     mocks.readCliModelAccessStatus.mockReturnValue(
       Effect.succeed({
-        preferences: {
-          chatGpt: 'on',
-          grok: 'off',
-        },
+        subscriptions: subscriptions({
+          preferSubscription: true,
+          signedIn: true,
+          email: 'chatgpt@example.com',
+        }),
         codingPlans: codingPlans(true, true),
-        chatGptSignedIn: true,
-        grokSignedIn: false,
-        chatGptAccountLabel: 'chatgpt@example.com',
       }),
     );
     mocks.getCliAuthProfile.mockReturnValue(
@@ -203,13 +208,11 @@ describe('CLI model-access status lines', () => {
       Effect.gen(function* () {
         mocks.readCliModelAccessStatus.mockReturnValue(
           Effect.succeed({
-            preferences: {
-              chatGpt: 'off',
-              grok: 'off',
-            },
+            subscriptions: subscriptions({
+              preferSubscription: false,
+              signedIn: false,
+            }),
             codingPlans: codingPlans(true, true, true, true),
-            chatGptSignedIn: false,
-            grokSignedIn: false,
           }),
         );
         mocks.getSubscriptionUsage.mockImplementation((provider: string) =>
@@ -316,13 +319,11 @@ describe('CLI model-access status lines', () => {
   it('keeps a shared GLM key in the personal-key inventory', async () => {
     mocks.readCliModelAccessStatus.mockReturnValue(
       Effect.succeed({
-        preferences: {
-          chatGpt: 'off',
-          grok: 'off',
-        },
+        subscriptions: subscriptions({
+          preferSubscription: false,
+          signedIn: false,
+        }),
         codingPlans: codingPlans(false, false, false, true),
-        chatGptSignedIn: false,
-        grokSignedIn: false,
       }),
     );
     setPersonalKeys('glm');
@@ -350,14 +351,12 @@ describe('CLI model-access status lines', () => {
       Effect.gen(function* () {
         mocks.readCliModelAccessStatus.mockReturnValue(
           Effect.succeed({
-            preferences: {
-              chatGpt: 'on',
-              grok: 'off',
-            },
+            subscriptions: subscriptions({
+              preferSubscription: true,
+              signedIn: true,
+              email: 'chatgpt@example.com',
+            }),
             codingPlans: codingPlans(),
-            chatGptSignedIn: true,
-            grokSignedIn: false,
-            chatGptAccountLabel: 'chatgpt@example.com',
           }),
         );
         mocks.getCliAuthProfile.mockReturnValue(
@@ -372,14 +371,12 @@ describe('CLI model-access status lines', () => {
 
         expect(yield* loadCliModelAccessOverview(stores, secrets)).toEqual({
           access: {
-            preferences: {
-              chatGpt: 'on',
-              grok: 'off',
-            },
+            subscriptions: subscriptions({
+              preferSubscription: true,
+              signedIn: true,
+              email: 'chatgpt@example.com',
+            }),
             codingPlans: codingPlans(),
-            chatGptSignedIn: true,
-            grokSignedIn: false,
-            chatGptAccountLabel: 'chatgpt@example.com',
             texraSignedIn: true,
             texraAccountLabel: 'texra@example.com',
           },

@@ -173,16 +173,22 @@ function mockModelAccessOverview(): void {
   vi.spyOn(apiStatus, 'loadCliModelAccessOverview').mockReturnValue(
     Effect.succeed({
       access: {
-        preferences: {
-          chatGpt: 'off',
-          grok: 'off',
+        subscriptions: {
+          chatgpt: {
+            provider: 'chatgpt',
+            signedIn: false,
+            preferSubscription: false,
+          },
+          grok: {
+            provider: 'grok',
+            signedIn: false,
+            preferSubscription: false,
+          },
         },
         codingPlans: {
           kimiCode: { preferred: false, keySet: false },
           glmCodingPlan: { preferred: false, keySet: false },
         },
-        chatGptSignedIn: false,
-        grokSignedIn: false,
         texraSignedIn: false,
       },
       lines: ['model access: Your own API keys'],
