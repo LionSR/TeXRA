@@ -1,17 +1,14 @@
-import { Effect, type Fiber, FiberSet, Scope } from 'effect';
-
 import { warn as logWarning } from '@logger/logUtils';
+import type { Fiber } from 'effect';
 
+/** The in-flight clipboard image pastes of one input bar, as the fibers the
+ *  runtime forked for them, and the submit deferred until they land. */
 export class ImagePasteQueue {
-  // The set lives as long as the input bar that owns the queue, so its scope
-  // is never closed; a discard interrupts the in-flight pastes instead.
-  private readonly pastes = Effect.runSync(
-    FiberSet.make<void>().pipe(Scope.provide(Scope.makeUnsafe())),
-  );
+  private readonly pastes = new Set<Fiber.Fiber<void>>();
   private deferredAction: (() => void) | null = null;
 
   get hasPending(): boolean {
-    return Effect.runSync(FiberSet.size(this.pastes)) > 0;
+    return this.pastes.size > 0;
   }
 
   get hasDeferredAction(): boolean {
@@ -19,37 +16,21 @@ export class ImagePasteQueue {
   }
 
   add(paste: Fiber.Fiber<void>): void {
-    FiberSet.addUnsafe(this.pastes, paste);
+    this.pastes.add(paste);
+    paste.addObserver(() => {
+      this.pastes.delete(paste);
+      this.flush();
+    });
   }
 
   runWhenIdle(action: () => void): void {
     if (!this.deferUntilIdle(action)) action();
   }
 
-  /** First submit wins while an image paste is pending; it runs once the set
-   *  drains. A throw out of the action is logged, not lost. */
+  /** First submit wins while an image paste is pending. */
   deferUntilIdle(action: () => void): boolean {
     if (!this.hasPending) return false;
-    if (this.deferredAction !== null) return true;
-    this.deferredAction = action;
-    Effect.runFork(
-      FiberSet.awaitEmpty(this.pastes).pipe(
-        Effect.andThen(
-          Effect.sync(() => {
-            const deferred = this.deferredAction;
-            this.deferredAction = null;
-            deferred?.();
-          }),
-        ),
-        Effect.tapCause((cause) =>
-          Effect.sync(() =>
-            logWarning('cli.tui', 'The deferred image-paste action failed.', {
-              data: cause,
-            }),
-          ),
-        ),
-      ),
-    );
+    this.deferredAction ??= action;
     return true;
   }
 
@@ -60,6 +41,22 @@ export class ImagePasteQueue {
   /** Interrupt all work that belongs to a discarded draft. */
   discardPending(): void {
     this.deferredAction = null;
-    Effect.runFork(FiberSet.clear(this.pastes));
+    for (const paste of this.pastes) paste.interruptUnsafe();
+    this.pastes.clear();
+  }
+
+  /** Run the deferred submit once the last paste lands. A throw out of it is
+   *  logged: it runs inside a fiber observer, where it would otherwise vanish. */
+  private flush(): void {
+    if (this.hasPending) return;
+    const action = this.deferredAction;
+    this.deferredAction = null;
+    try {
+      action?.();
+    } catch (error) {
+      logWarning('cli.tui', 'The deferred image-paste action failed.', {
+        data: error,
+      });
+    }
   }
 }
