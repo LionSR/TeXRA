@@ -97,7 +97,7 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
     const data = this.permission.data;
     if (data.agentCategory === AgentCategory.Workflow && data.workflowScript) {
       return html`Start a multi-agent run:
-        <strong>${data.workflowScript.name}</strong> on
+        <strong>${data.workflowScript.name}</strong> with ${data.agent} on
         ${getModelLabel(data.model)}`;
     }
     const agent =

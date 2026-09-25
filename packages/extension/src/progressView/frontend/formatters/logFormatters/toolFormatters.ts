@@ -16,7 +16,7 @@
 import { html, nothing, type TemplateResult } from 'lit';
 
 // Local imports - shared utilities
-import { parseDelegationToolInput } from '@shared/schemas';
+import { AgentCategory, parseDelegationToolInput } from '@shared/schemas';
 import { SessionUiEvents } from '@shared/session/uiEvents';
 import {
   DELEGATE_MULTI_AGENTS_TOOL_NAME,
@@ -152,9 +152,14 @@ export function formatToolUseTemplate(row: ToolRow): FormatResult {
   // stopSummaryToggleKeydown for why the keydown path additionally needs an
   // explicit stopPropagation. The click binding carries the parsed proposal
   // itself, so nothing has to survive a round trip through a DOM attribute.
+  // A workflow proposal carries its files; a delegate_agent input has none.
+  const copied =
+    proposal?.agentCategory === AgentCategory.Workflow
+      ? 'agent, model, instruction and files'
+      : 'agent, model and instruction';
   // prettier-ignore
   const setupButton = proposal
-    ? html`<button type="button" class="proposal-restore-link proposal-banner-setup" title="Copy this subagent's agent, model, instruction and files into a new task" @click=${(event: Event) => { event.preventDefault(); event.currentTarget?.dispatchEvent(SessionUiEvents.host({ kind: 'restoreProposalConfig', proposal })); }} @keydown=${stopSummaryToggleKeydown}>${waIcon('reply')} Copy to new task</button>`
+    ? html`<button type="button" class="proposal-restore-link proposal-banner-setup" title="Copy this subagent's ${copied} into a new task" @click=${(event: Event) => { event.preventDefault(); event.currentTarget?.dispatchEvent(SessionUiEvents.host({ kind: 'restoreProposalConfig', proposal })); }} @keydown=${stopSummaryToggleKeydown}>${waIcon('reply')} Copy to new task</button>`
     : nothing;
   // prettier-ignore
   const extraContent = html`${timerTemplate}${setupButton}`;
