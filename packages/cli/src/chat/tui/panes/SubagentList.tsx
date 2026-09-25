@@ -27,7 +27,7 @@ import {
   CHILD_TONE_COLOR,
   pendingApprovalRowDisplay,
 } from './SubagentListDisplay';
-import { expandedRuns, type SessionListRow } from '../state/cliState';
+import { actOnSurface, type SessionListRow } from '../state/cliState';
 import {
   pendingApprovalKindsByRun,
   type PendingApprovalKind,
@@ -229,7 +229,7 @@ export function SubagentList(
       const { run, expanded } = selectedRow;
       if (key.leftArrow || key.rightArrow || input === ' ') {
         const next = key.rightArrow || (!key.leftArrow && !expanded);
-        expandedRuns.set(new Map(expandedRuns.get()).set(run.id, next));
+        actOnSurface({ kind: 'expand', runId: run.id, expanded: next });
       } else if (input.toLowerCase() === 'r' && resumableRunId(run)) {
         props.onFocusRun?.(run.id);
       } else if (input.toLowerCase() === 'k') {

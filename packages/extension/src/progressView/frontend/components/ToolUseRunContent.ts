@@ -1,7 +1,7 @@
 import { css, html, nothing, type TemplateResult } from 'lit';
 import { customElement } from 'lit/decorators.js';
 
-import { acceptsFollowUp } from '@shared/session/surface';
+import { acceptsFollowUp } from '@shared/session/sessionView';
 import { BaseRunContent } from './BaseRunContent';
 import { conversationContentStyles } from './ConversationContent.styles';
 import './TodoList';
@@ -27,7 +27,7 @@ export class ToolUseRunContent extends BaseRunContent {
     if (!run || run.category !== 'toolUse') return nothing;
     // The follow-up line shows while the run can still take one, which is
     // the same rule Send and the run accelerator take (`acceptsFollowUp`).
-    const showComposer = acceptsFollowUp(run);
+    const showComposer = acceptsFollowUp(run, { terminalBacked: true });
     return html`
       <div class="conversation-content">
         ${this.renderApprovalDock()}

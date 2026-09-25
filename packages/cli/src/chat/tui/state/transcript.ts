@@ -18,8 +18,8 @@ import { transcriptText, type TranscriptRow } from '@ui/transcript';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   CLI_LOCAL_RUN_ID,
-  activeRunId,
   focusRun,
+  selectedRunId,
   rootRunId,
   registerCliStateResetHook,
 } from './cliState';
@@ -95,7 +95,7 @@ function appendLocalTranscriptEntry(
   const normalized = text.trim();
   if (!normalized) return;
   const view = currentView();
-  const active = activeRunId.get();
+  const active = selectedRunId.get();
   const runId =
     explicitRunId ??
     resolveLocalTranscriptRunId({
@@ -104,7 +104,7 @@ function appendLocalTranscriptEntry(
       parentOf: (id) => runViewOf(view, id)?.parentId ?? undefined,
       rootRunId: rootRunId.get(),
     });
-  focusRun(runId, { onlyIfUnset: true });
+  focusRun(runId, { when: 'unset' });
   const afterSeq = rowSeq(runViewOf(view, runId)?.transcript.rows.at(-1));
   notices.set([
     ...notices.get(),
@@ -152,16 +152,14 @@ export function moveLocalTranscriptToRun(runId: RunId): void {
         : notice,
     ),
   );
-  if (activeRunId.get() === CLI_LOCAL_RUN_ID) focusRun(runId);
+  focusRun(runId, { when: 'local' });
 }
 
 export function clearLocalTranscript(): void {
   const current = notices.get();
   const kept = current.filter((notice) => notice.runId !== CLI_LOCAL_RUN_ID);
   if (kept.length !== current.length) notices.set(kept);
-  if (activeRunId.get() === CLI_LOCAL_RUN_ID) {
-    activeRunId.set(undefined);
-  }
+  focusRun(null, { when: 'local' });
 }
 
 export function noticesFor(

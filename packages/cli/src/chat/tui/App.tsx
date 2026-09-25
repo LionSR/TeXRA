@@ -24,6 +24,7 @@ import {
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
+import { acceptsFollowUp } from '@shared/session/sessionView';
 import { type RunId, type WorkflowControlAction } from '@shared/schemas';
 import { SESSION_LIST } from '@ui/copy/nestedRuns';
 import {
@@ -82,7 +83,7 @@ import {
   sessionView,
   runLabelOf,
   runViewOf,
-  focusedChildAcceptsFollowUps,
+  CLI_FOLLOW_UP_HOST,
   runningChildCount,
 } from './state/sessionView';
 import { useSignal } from './state/useSignal';
@@ -195,7 +196,7 @@ export function App(props: AppProps): React.JSX.Element {
   const childInputHidden =
     activeRun !== undefined &&
     activeRun.parentId !== null &&
-    !focusedChildAcceptsFollowUps(activeRun);
+    !acceptsFollowUp(activeRun, CLI_FOLLOW_UP_HOST);
   const unavailableDetail = activeRun?.readOnly
     ? (activeRun.statusDetail ?? activeRun.statusLabel)
     : undefined;

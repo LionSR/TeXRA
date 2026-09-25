@@ -221,6 +221,31 @@ export function isLiveRun(run: Pick<RunView, 'group' | 'status'>): boolean {
   return run.group !== 'interrupted' && !isTerminalOutcomePhase(run.status);
 }
 
+/** What a host can do with a follow-up, the only input the host brings to
+ *  `acceptsFollowUp`: whether it delivers one to a terminal-backed run (an
+ *  external agent CLI such as codex). */
+export interface FollowUpHost {
+  readonly terminalBacked: boolean;
+}
+
+/**
+ * Whether a run takes a follow-up at all, the one rule every host reads: what
+ * decides the composer is shown for it, and therefore what a host action
+ * aimed at it may assume. A run that declares no follow-up support, a
+ * terminal-backed run on a host that cannot drive one, and a run this process
+ * may not act on take none; otherwise a run still going or waiting takes one,
+ * as does a conversation that has not started (`ready` with nothing written
+ * yet).
+ */
+export function acceptsFollowUp(run: RunView, host: FollowUpHost): boolean {
+  if (run.followUpSupport === 'unsupported' || run.readOnly) return false;
+  if (run.followUpSupport === 'terminalBacked' && !host.terminalBacked) {
+    return false;
+  }
+  if (run.group === 'running' || run.group === 'waiting') return true;
+  return run.status === 'ready' && run.lastTimestamp === null;
+}
+
 /** A pending request: which run is asking, the payload the UI shows (its
  *  `kind` is the request's kind), and the earlier request it continues (an
  *  inquiry's thread). The list is a set keyed by `requestId` (5.2): opened

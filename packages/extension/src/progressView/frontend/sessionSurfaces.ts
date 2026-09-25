@@ -426,7 +426,8 @@ export function createSessionSurfaces(options: {
       // The same decision the composer's Send takes, from the same fold
       // fields: a run that ended or that another process owns takes no
       // follow-up, however the send was reached.
-      if (!run || !canSendFollowUp(run, draft)) return;
+      if (!run || !canSendFollowUp(run, draft, { terminalBacked: true }))
+        return;
       const text = draft.text.trim();
       const mediaFiles = draft.images.flatMap((image) =>
         image.path === null ? [] : [image.path],
