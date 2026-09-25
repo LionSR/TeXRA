@@ -219,16 +219,15 @@ export const buttonStyles: CSSResult = css`
     color: var(--wa-color-text-normal);
   }
 
+  /* Pressed and toggled-on are the shared overlays, like every state. */
   .icon-button::part(base):active,
-  .action-icon-button::part(base):active,
+  .action-icon-button::part(base):active {
+    background: var(--surface-active);
+  }
+
   .icon-button[aria-pressed='true']::part(base),
   .action-icon-button[aria-pressed='true']::part(base) {
-    border-color: color-mix(
-      in srgb,
-      var(--wa-color-focus) 34%,
-      var(--border-hairline)
-    );
-    background: var(--wa-color-brand-fill-quiet);
+    background: var(--surface-selected);
     color: var(--wa-color-text-normal);
   }
 
