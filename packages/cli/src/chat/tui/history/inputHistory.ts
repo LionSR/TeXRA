@@ -2,6 +2,7 @@
 import { Clock, Effect, Semaphore } from 'effect';
 
 import { withLogChannel } from '@logger/effectLog';
+
 import {
   GlobalDatabase,
   INPUT_HISTORY_LIMIT,
@@ -34,8 +35,8 @@ export const loadInputHistory: Effect.Effect<
     .pipe(
       Effect.catch((error) =>
         Effect.logWarning('Input history could not be read.').pipe(
-          withLogChannel('cli.tui'),
           Effect.annotateLogs({ data: error }),
+          withLogChannel('cli.tui'),
           Effect.as([]),
         ),
       ),

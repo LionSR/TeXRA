@@ -19,7 +19,7 @@ import {
 import { SupabaseAuth } from '@auth/SupabaseAuth';
 import { SUPABASE_CUSTOM_DOMAIN } from '@auth/config';
 import { withLogChannel } from '@logger/effectLog';
-import { createLog } from '@logger/logUtils';
+import { writeLogLine } from '@logger/logSink';
 import type { ConfigProvider } from '@platform/interfaces';
 import {
   TELEMETRY_ENABLED_DEFAULT,
@@ -39,7 +39,6 @@ import { isEnvFlagEnabled } from '@utils/system/envFlags';
 import { unrefSleepClock } from '@utils/system/unrefSleepClock';
 
 const CHANNEL = 'UsageLogService';
-const log = createLog(CHANNEL);
 
 const USAGE_LOG_ENDPOINT = `https://${SUPABASE_CUSTOM_DOMAIN}/functions/v1/log-usage`;
 const MAX_QUEUE_SIZE = 1000;
@@ -60,7 +59,6 @@ const DEFAULT_CONFIG: UsageLogConfig = {
 
 /**
  * Environment variables that switch usage logging off without editing config.
- *
  * `TEXRA_NO_TELEMETRY` is ours; `DO_NOT_TRACK` is the cross-tool console
  * convention, honoured so a user who exports it once opts out of every tool
  * that respects it. Either one overrides {@link TELEMETRY_ENABLED_KEY} — an
@@ -72,9 +70,8 @@ const TELEMETRY_OPT_OUT_ENV_VARS = [
   'DO_NOT_TRACK',
 ] as const;
 
-function isTelemetryDisabledByEnv(): boolean {
-  return TELEMETRY_OPT_OUT_ENV_VARS.some((name) => isEnvFlagEnabled(name));
-}
+const telemetryOptOutEnvVar = (): string | undefined =>
+  TELEMETRY_OPT_OUT_ENV_VARS.find((name) => isEnvFlagEnabled(name));
 
 /**
  * The user's usage-logging opt-out, read live rather than snapshotted when
@@ -92,7 +89,7 @@ function isTelemetryDisabledByEnv(): boolean {
 function isTelemetryEnabledBySetting(config: ConfigProvider): boolean {
   // Checked before the config read so the kill switch also holds on a host that
   // has not initialized its platform yet.
-  if (isTelemetryDisabledByEnv()) return false;
+  if (telemetryOptOutEnvVar()) return false;
 
   const inspection = config.inspect<unknown>(TELEMETRY_ENABLED_KEY);
   const configuredValues = [
@@ -107,7 +104,10 @@ function isTelemetryEnabledBySetting(config: ConfigProvider): boolean {
     (value) => typeof value !== 'boolean',
   );
   if (malformed !== undefined) {
-    log.warn(
+    // A sync read (`log`, `texra doctor`) has no fiber: it writes the sink.
+    writeLogLine(
+      'WARN',
+      CHANNEL,
       `Ignoring non-boolean ${TELEMETRY_ENABLED_KEY} (got ${typeof malformed}); treating usage logging as disabled`,
     );
     return false;
@@ -131,9 +131,7 @@ export type UsageLoggingOptOut =
  * report of "off" cannot drift from the behaviour.
  */
 export function usageLoggingOptOut(config: ConfigProvider): UsageLoggingOptOut {
-  const envVar = TELEMETRY_OPT_OUT_ENV_VARS.find((name) =>
-    isEnvFlagEnabled(name),
-  );
+  const envVar = telemetryOptOutEnvVar();
   if (envVar) return { source: 'environment', envVar };
   return isTelemetryEnabledBySetting(config) ? null : { source: 'setting' };
 }
@@ -217,7 +215,7 @@ class UsageLogServiceImpl {
     // and account plane come from.
     yield* Effect.addFinalizer(() => this.drainAndStop());
 
-    if (isTelemetryDisabledByEnv()) {
+    if (telemetryOptOutEnvVar()) {
       yield* Effect.logInfo(
         `Usage logging is disabled by the environment (${TELEMETRY_OPT_OUT_ENV_VARS.join(' / ')})`,
       ).pipe(withLogChannel(CHANNEL));
@@ -239,7 +237,8 @@ class UsageLogServiceImpl {
     if (!isTelemetryEnabledBySetting(config)) return;
 
     if (this.queue.length >= MAX_QUEUE_SIZE) {
-      log.warn('Queue full, dropping oldest entry');
+      // `log` is synchronous (UsageMonitor): its lines go straight to the sink.
+      writeLogLine('WARN', CHANNEL, 'Queue full, dropping oldest entry');
       this.queue.shift();
     }
 
@@ -252,7 +251,8 @@ class UsageLogServiceImpl {
       },
       config,
     });
-    log.debug(`Queued usage entry (queue size: ${this.queue.length})`);
+    const queued = `Queued usage entry (queue size: ${this.queue.length})`;
+    writeLogLine('DEBUG', CHANNEL, queued);
 
     if (this.queue.length >= this.config.batchSize) {
       this.requestFlush();

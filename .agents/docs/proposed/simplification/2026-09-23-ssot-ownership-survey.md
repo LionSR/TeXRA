@@ -151,7 +151,9 @@ These parts of the twelve candidates were refuted by at least one skeptic at
   three callers, and `sessionView.ts` D5 forbids a settled-groups rewrite.
   `ToolRowModel.showOutput` renamed is churn (R5). (The
   `UsageMonitor.lastSeenTotals` refutation that stood here is reopened by
-  section 4, finding 1.)
+  section 4, finding 1, and reversed 2026-09-25: `finalizeRun` reads the
+  ledger's `RunState.usage` on every terminal path and the cache is
+  deleted.)
 - **Pass-throughs.** `requireDelegationParent` was refuted in wave 8, because
   `requireToolRun` returns a `ToolRun`, not a `DelegationParent`.
 - **Platform singleton.** The ESLint composition-root rule is the only lint

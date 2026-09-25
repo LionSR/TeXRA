@@ -261,7 +261,7 @@ describe('InputBar slash submit', () => {
           }),
         ),
       );
-      imagePasteQueue.add(pasteFiber);
+      imagePasteQueue.add(pasteFiber, testRuntime());
 
       imagePasteQueue.runWhenIdle(() => {
         submitted.push(slashSubmitText(draft, 'help', '', 'h'));
@@ -334,6 +334,7 @@ describe('InputBar draft discard', () => {
               Effect.asVoid,
             ),
           ),
+          testRuntime(),
         );
         imagePasteQueue.discardPending();
         paste.resolve('[Image #1]');
@@ -354,6 +355,7 @@ describe('InputBar draft discard', () => {
 
         imagePasteQueue.add(
           yield* Effect.forkChild(Effect.promise(() => paste.promise)),
+          testRuntime(),
         );
         imagePasteQueue.deferUntilIdle(() => submitted.push('stale draft'));
         imagePasteQueue.discardPending();
