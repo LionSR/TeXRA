@@ -1755,7 +1755,6 @@ function renderHarnessApp(): React.JSX.Element {
       runtime={harnessRuntime}
       session={session()}
       onSubmit={handleHarnessSubmit}
-      colorEnabled={HARNESS_COLOR_ENABLED}
       history={HARNESS_INPUT_HISTORY}
       onStaticTranscriptChange={viewportController.repaintTranscript}
       onCtrlC={handleHarnessCtrlC}
