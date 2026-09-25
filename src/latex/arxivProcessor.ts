@@ -8,6 +8,7 @@ import {
   Data,
   Duration,
   Effect,
+  Exit,
   FileSystem,
   Option,
   Path,
@@ -549,8 +550,9 @@ class ArxivSourceProcessor {
   /**
    * Download the arXiv source tarball into a unique staging directory, reject
    * PDF-only submissions, and place the source files into the paper root. The
-   * staging directory is removed by a scope finalizer, so the caller must run
-   * this inside `Effect.scoped`.
+   * staging directory, and a paper directory this call created but did not
+   * finish, are removed by scope finalizers, so the caller must run this
+   * inside `Effect.scoped`.
    */
   private readonly fetchAndPlaceSource = Effect.fn(
     'arxivProcessor.fetchAndPlaceSource',
@@ -564,7 +566,22 @@ class ArxivSourceProcessor {
       progressCallback: DownloadSourceOptions['progressCallback'],
     ) {
       const fs = yield* FileSystem.FileSystem;
+      // A paper directory this download creates is its own until the source is
+      // fully placed. Any other exit -- a PDF-only submission, a failed
+      // extraction, or Cancel mid-extraction -- removes it, because tar writes
+      // straight into it and a partial tree holding one `.tex` would pass
+      // `hasExistingSource` on the next Download. A directory that was already
+      // there, and the workspace root, belong to the user and stay.
+      const ownsPaperDir =
+        !isRoot && !(yield* permanentFs(entryExists(fs, paperDirFull)));
       yield* permanentFs(fs.makeDirectory(paperDirFull, { recursive: true }));
+      yield* Effect.addFinalizer((exit) =>
+        ownsPaperDir && !Exit.isSuccess(exit)
+          ? this.cleanUpBestEffort(paperDirFull, 'paper dir', {
+              recursive: true,
+            })
+          : Effect.void,
+      );
 
       // Use a unique staging directory name to avoid clobbering an existing 'download/' folder at root
       const stagingDirName = `.arxiv-download-${id.replaceAll('/', '_')}`;
@@ -595,13 +612,6 @@ class ArxivSourceProcessor {
 
       // Detect PDF-only submissions (no LaTeX source available)
       if (hasExtension(downloadedPath, '.pdf')) {
-        yield* permanentFs(fs.remove(downloadedPath, { force: true }));
-        // Only clean up the paper directory when it was created for this download
-        if (!isRoot) {
-          yield* this.cleanUpBestEffort(paperDirFull, 'paper dir', {
-            recursive: true,
-          });
-        }
         return yield* Effect.fail(
           new ArxivSourcePermanentError({ message: PDF_ONLY_SUBMISSION_ERROR }),
         );
