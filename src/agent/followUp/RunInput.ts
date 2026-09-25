@@ -4,7 +4,7 @@
  * `followup.consumed`, plus the follow-ups the session's admission boundary
  * queues for that owner while it runs.
  */
-import { Queue, type Cause, Effect } from 'effect';
+import { Queue, type Cause, Data, Effect } from 'effect';
 
 import type { SessionEvent } from '@shared/schemas';
 
@@ -22,6 +22,16 @@ export type QueuedFollowUp = Pick<
 export type FollowUpBatch =
   | { readonly synthetic: false; readonly followUps: readonly QueuedFollowUp[] }
   | { readonly synthetic: true; readonly text: string };
+
+/** A live consumer claim refused: another consumer already holds the run's queue. */
+export class FollowUpContinuationOwned extends Data.TaggedError(
+  'FollowUpContinuationOwned',
+)<{ readonly message: string }> {}
+
+/** A run whose rows do not fold into the follow-ups its queue starts from. */
+export class FollowUpsUnseedable extends Data.TaggedError(
+  'FollowUpsUnseedable',
+)<{ readonly message: string; readonly cause: unknown }> {}
 
 type InputEntry =
   | { readonly kind: 'followUp'; readonly followUp: QueuedFollowUp }

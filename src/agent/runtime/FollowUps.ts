@@ -30,6 +30,7 @@ import {
   userFollowUpInstruction,
 } from '@agent/followUp/followUpMessages';
 import {
+  FollowUpContinuationOwned,
   RunInput,
   type FollowUpBatch,
   type QueuedFollowUp,
@@ -121,11 +122,9 @@ export const followUpsLayer: Layer.Layer<
     );
     const input = manager.attachInput(runId, created, lease);
     if (!input) {
-      return yield* Effect.fail(
-        new Error(
-          `Follow-up continuation already has an owner for run ${runId}.`,
-        ),
-      );
+      return yield* new FollowUpContinuationOwned({
+        message: `Follow-up continuation already has an owner for run ${runId}.`,
+      });
     }
     let syntheticPending = false;
 

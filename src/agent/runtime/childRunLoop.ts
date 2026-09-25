@@ -9,7 +9,12 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { resolveChildRunConcurrencyBudget } from '@agent/runtime/childRunBudget';
 import type { RunParent } from '@agent/runtime/RunHandle';
 import { Runs, type RunRegistry } from '@agent/runtime/runRegistry';
-import { RunInput, type QueuedFollowUp } from '@agent/followUp/RunInput';
+import {
+  FollowUpContinuationOwned,
+  FollowUpsUnseedable,
+  RunInput,
+  type QueuedFollowUp,
+} from '@agent/followUp/RunInput';
 import type {
   FollowUpConsumerLease,
   FollowUpQueueInput,
@@ -841,15 +846,15 @@ export function startChildRunLoop<TTurn, R = never>(
     // Fresh children already own their DB claim. Recovery retains its pending
     // queue until the run lane acquires the claim and transfers it below.
     const claimed = yield* Effect.exit(
-      Effect.sync(() => {
+      Effect.gen(function* () {
         // A stop sees the handle only from here, with its target reserved.
         childRun?.track();
         queueLease =
           params.queueLease ?? runSession.followUps.claimChildRun(runId);
         if (!queueLease) {
-          throw new Error(
-            `Follow-up continuation already has an owner for child ${runId}.`,
-          );
+          return yield* new FollowUpContinuationOwned({
+            message: `Follow-up continuation already has an owner for child ${runId}.`,
+          });
         }
         if (!params.queueLease)
           input = runSession.followUps.attachInput(runId, created, queueLease)!;
@@ -872,30 +877,27 @@ export function startChildRunLoop<TTurn, R = never>(
               yield* runSession.readAggregate(aggregateId('run', runId)),
             )
           : null;
-        yield* Effect.sync(() => {
-          strategy.onLoopStart?.(runSession);
-          if (folded !== null) {
-            if (Result.isFailure(folded)) {
-              throw new Error(
-                `Child run ${runId} has rows its follow-up queue cannot be seeded from: ${folded.failure.detail}`,
-                { cause: folded.failure },
-              );
-            }
-            input.seed(
-              folded.success?.followUps ?? [],
-              folded.success?.followUpIds,
-            );
+        strategy.onLoopStart?.(runSession);
+        if (folded !== null && Result.isFailure(folded)) {
+          return yield* new FollowUpsUnseedable({
+            message: `Child run ${runId} has rows its follow-up queue cannot be seeded from: ${folded.failure.detail}`,
+            cause: folded.failure,
+          });
+        }
+        if (folded !== null)
+          input.seed(
+            folded.success?.followUps ?? [],
+            folded.success?.followUpIds,
+          );
+        if (strategy.ownsBackgroundProcess === true) {
+          // The one handle slot shutdown drain reads (#8155): kill the
+          // leaked OS process without touching the loop that reports it.
+          const handle = runs.getHandle(runId);
+          if (handle) {
+            handle.backgroundProcess = { kill: () => loop.interrupt() };
           }
-          if (strategy.ownsBackgroundProcess === true) {
-            // The one handle slot shutdown drain reads (#8155): kill the
-            // leaked OS process without touching the loop that reports it.
-            const handle = runs.getHandle(runId);
-            if (handle) {
-              handle.backgroundProcess = { kill: () => loop.interrupt() };
-            }
-          }
-          sessionStage = trace?.openStage(strategy.stageLabel);
-        });
+        }
+        sessionStage = trace?.openStage(strategy.stageLabel);
       }),
     );
     if (Exit.isFailure(setup)) {

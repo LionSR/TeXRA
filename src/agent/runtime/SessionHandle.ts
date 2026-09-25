@@ -37,7 +37,10 @@ import { Cause, Effect, Exit, Option, Stream, SubscriptionRef } from 'effect';
 
 import type { AgentEvent, AgentTrace, ResultEvent } from '@agent/trace';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
-import { finalizeRun } from '@agent/storage/runLifecycle';
+import {
+  finalizeRun,
+  RunOutcomeUnpersisted,
+} from '@agent/storage/runLifecycle';
 import type { ResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { withLogChannel } from '@logger/effectLog';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
@@ -1352,17 +1355,20 @@ export const settleLiveSessionRuns: Effect.Effect<void> = Effect.gen(
                   }),
             });
             if (!finalization.ok) {
-              throw new Error(
-                `Failed to persist the CANCELLED outcome for run ${runId}`,
-                { cause: finalization.error },
-              );
+              return yield* new RunOutcomeUnpersisted({
+                message: `Failed to persist the CANCELLED outcome for run ${runId}`,
+                cause: finalization.error,
+              });
             }
             // A failed read or a rolled-back closure must still pass through
             // the owner's release choreography after recording the terminal
             // outcome.
             if (Exit.isFailure(transcript))
-              throw Cause.squash(transcript.cause);
-            if (closureFailure !== undefined) throw closureFailure;
+              return yield* Effect.fail(
+                ensureError(Cause.squash(transcript.cause)),
+              );
+            if (closureFailure !== undefined)
+              return yield* Effect.fail(closureFailure);
           }),
         );
       });

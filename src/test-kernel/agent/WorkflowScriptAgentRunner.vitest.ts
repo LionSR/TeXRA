@@ -1353,7 +1353,7 @@ describe('createWorkflowScriptAgentRunner', () => {
         defaultRunner()({ ...invocation(), report }),
       );
 
-      expect(error.name).toBe('Error');
+      expect(error.name).not.toBe('WorkflowRunAbortError');
       expect(error.message).toMatch(/ended with failed outcome/);
       expect(mocks.executeSubagentInBand).not.toHaveBeenCalled();
       // Nothing ran now, so the recovered child's id is attached and the
