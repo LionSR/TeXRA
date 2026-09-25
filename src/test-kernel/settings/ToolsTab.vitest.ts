@@ -88,10 +88,10 @@ describe('tools-tab availability summary', () => {
   });
 
   it('shows the available count without a decorative progress ring', async () => {
-    const element = await mount([
-      tool('ready', 'available'),
-      tool('missing', 'not-found'),
-    ]);
+    const element = await mount(
+      [tool('ready', 'available'), tool('missing', 'not-found')],
+      { section: 'tools' },
+    );
     expect(element.shadowRoot?.querySelector('wa-progress-ring')).toBeNull();
     expect(element.shadowRoot?.textContent).toContain('1/2 available');
   });
@@ -99,7 +99,7 @@ describe('tools-tab availability summary', () => {
   it('renders and updates working-directory path protection', async () => {
     await expectTogglableSwitch({
       items: [tool('file-ops', 'available')],
-      props: { toolPathProtectionEnabled: false },
+      props: { toolPathProtectionEnabled: false, section: 'tools' },
       id: 'settings-toggle-restrict-tool-paths-to-the-working-directory',
       label: 'Restrict tool paths to the working directory',
       initialChecked: false,
