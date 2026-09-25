@@ -134,9 +134,16 @@ export class AppState extends Context.Service<AppState, StateStore>()(
 // Lifecycle
 // ---------------------------------------------------------------------------
 
+/**
+ * The drain's three phases, in order, each with its own deadline budget.
+ * `RELEASE` follows every `ON` handler, whenever it was registered: it is
+ * where the process's sessions and then its runtime are released, so no
+ * handler can run on a runtime already gone.
+ */
 export const SHUTDOWN_PHASE = {
   BEFORE: 'beforeShutdown',
   ON: 'onShutdown',
+  RELEASE: 'releaseProcess',
 } as const;
 
 export type ShutdownPhase =
@@ -160,7 +167,7 @@ export interface LifecycleHost {
    */
   onShutdown(phase: ShutdownPhase, handler: ShutdownHandler): Disposable;
   /**
-   * Drain both phases, once: concurrent callers join the drain in flight
+   * Drain the phases, once: concurrent callers join the drain in flight
    * rather than starting a second one.
    */
   readonly runShutdown: Effect.Effect<void>;

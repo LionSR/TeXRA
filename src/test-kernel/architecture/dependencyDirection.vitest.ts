@@ -164,20 +164,14 @@ const BARE_EFFECT_RUN_SITES: Readonly<Record<string, number>> = {
   // resolve before `installProcessRuntime`, being the values that install is
   // given) and, when startup fails, runs the drain that disposes it.
   'packages/desktop/src/main/index.ts': 1,
-  // The VS Code entry's two pre-runtime folds, plus the account-plane and
-  // process-identity resolution in `initVscodePlatform`: `activate` reports a failed
-  // activation and runs the cleanup that disposes the process runtime, so it
-  // cannot borrow the runtime it is tearing down (the reason
-  // `initPlatform.ts` above is pinned), the workspace `.env` load happens
-  // before `initVscodePlatform` installs a runtime at all, and the
-  // account-plane build degrades a missing-credentials throw to the
-  // unavailable shape BEFORE the runtime that will serve it exists, and reads
-  // the process identity that install is given on the same run. All three
-  // programs are service-free. The fourth is `deactivate`'s shutdown: the
-  // drain and the teardown that follows it dispose the process runtime, so
-  // that one program cannot settle on it either. Every other Effect in this
-  // file settles on the local `ProcessRuntime` the entry holds.
-  'packages/extension/src/extension.ts': 4,
+  // The VS Code entry: one program from `activate` to the last registration,
+  // which builds the process runtime (its account plane and identity resolve
+  // before `installProcessRuntime`, being values that install is given) and
+  // closes its scope when activation fails; and `deactivate`, which closes
+  // that same scope. The scope's finalizer is the shutdown drain that
+  // disposes the process runtime, so neither can settle on it. Every other
+  // Effect in this file settles on the local `ProcessRuntime` the entry holds.
+  'packages/extension/src/extension.ts': 2,
 };
 
 function sourceFilesUnder(

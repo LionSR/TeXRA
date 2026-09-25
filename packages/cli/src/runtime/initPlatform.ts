@@ -374,11 +374,10 @@ export function initCliPlatform(
               const session = tryDefaultSession();
               return session ? session.settlePublications() : Effect.void;
             }),
-            afterRunSettlement: [
-              closeProject,
-              flushNdjsonStdout(),
-              disposeCliProcessRuntime,
-            ],
+            releaseSessions: closeProject.pipe(
+              Effect.ensuring(flushNdjsonStdout()),
+            ),
+            disposeRuntime: disposeCliProcessRuntime,
           });
 
           installedRoots = roots;
