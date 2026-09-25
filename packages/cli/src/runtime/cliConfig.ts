@@ -2,7 +2,7 @@
 import path from 'node:path';
 
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, FileSystem } from 'effect';
 import { MODEL_CONFIGS, ModelProvider } from 'llm-zoo';
 
 // Local imports - platform
@@ -23,6 +23,9 @@ import {
   CLI_CONFIG_SLOT_KEYS,
   settingByKey,
 } from '@shared/state/stateSettings';
+
+// Local imports - tools
+import { mcpConfigWarnings, USER_MCP_CONFIG_PATH } from '@tools/mcp/mcpConfig';
 
 // Local imports - utilities
 import {
@@ -268,6 +271,12 @@ export function loadCliStartupConfig(
       const stores = yield* openTexraConfigStores(storageRoot, cwd, (message) =>
         degradations.push(message),
       );
+      // The user's MCP server config, which only a run declaring MCP tools
+      // otherwise reads: a broken file warns here, not first mid-run.
+      const mcpWarnings = yield* mcpConfigWarnings(
+        yield* FileSystem.FileSystem,
+        USER_MCP_CONFIG_PATH,
+      );
       return {
         config: new JsonConfigProvider(stores),
         warnings: [
@@ -287,6 +296,7 @@ export function loadCliStartupConfig(
               isProjectFile: false,
             },
           ]),
+          ...mcpWarnings,
         ],
         degradations,
       };

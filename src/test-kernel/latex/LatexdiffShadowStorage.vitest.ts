@@ -327,6 +327,35 @@ describe('LaTeXdiffService shadow output', () => {
       }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
+  // #13191: a failed diff's message is written verbatim into the run
+  // transcript, so latexdiff's stderr is scrubbed where it enters.
+  it.effect('scrubs secrets from a failed diff message', () =>
+    Effect.gen(function* () {
+      const { sourceDir, shadowDir } = yield* Effect.promise(() =>
+        prepareDiffWorkspace(
+          'texra-latexdiff-secret-',
+          '\\documentclass{article}\n\\begin{document}\nold\n\\end{document}\n',
+          '\\documentclass{article}\n\\begin{document}\nnew\n\\end{document}\n',
+        ),
+      );
+      mocks.executeCommand.mockReturnValueOnce(
+        Effect.succeed({
+          success: false,
+          stdout: '',
+          stderr:
+            'OPENAI_API_KEY=sk-abcdefghijklmnop1234 Authorization: Bearer tok.en-123',
+        }),
+      );
+
+      const result = yield* runShadowDiff(sourceDir, shadowDir);
+
+      expect(result.success).toBe(false);
+      expect(result.message).toContain('Failed to run');
+      expect(result.message).not.toContain('sk-abcdefghijklmnop1234');
+      expect(result.message).not.toContain('tok.en-123');
+    }).pipe(Effect.provide(nodePlatformLayer)),
+  );
+
   it.effect(
     'sanitizes latexdiff markers from flattened bibliography macro preambles',
     () =>

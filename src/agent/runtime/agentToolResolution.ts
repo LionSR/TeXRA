@@ -8,8 +8,14 @@
  * reflection). The run pins its composition in the process's `Compositions`
  * for the scope it resolves in (the run's), or joins the one its parent
  * pinned: a delegated child's plugins are its parent's, whatever the
- * switches say now. The offered registry is rebuilt from the pinned
- * composition's table, in this order:
+ * switches say now. A child only narrows its parent: it is offered its own
+ * declared tools from its parent's pinned table, under its own host and
+ * approval gates and its parent's, and a child that declares a loaded plugin
+ * its parent's composition does not record fails to open
+ * (`childCompositionRefusal`). A resumed tool-use child resolves afresh but
+ * is held to the toolset it recorded at open (`AgentRun`), which was already
+ * narrowed. The offered registry is rebuilt from the pinned composition's
+ * table, in this order:
  *   1. The declared tools, in declaration order, each with the table's own
  *      contract (description, parameter schema). An MCP server's tools
  *      (`mcp__<server>__<tool>`, or `mcp__<server>__*` for all it lists)
@@ -49,7 +55,11 @@ import {
 import type { LanguageModel } from '@platform/languageModel';
 import type { AgentDelegationScope, ToolDefinition } from '@shared/schemas';
 import { hasDelegationTool } from '@shared/constants/delegationTools';
-import { compositionFor, compositionHash } from '@tools/composition';
+import {
+  compositionFor,
+  compositionHash,
+  type Composition,
+} from '@tools/composition';
 import { CompositionKey, Compositions } from '@tools/compositions';
 import { mcpPluginId, mcpServerOfToolName } from '@tools/mcp/mcpServer';
 import { findToolPlugin } from '@tools/plugins';
@@ -132,6 +142,42 @@ function availableDelegationModelNamesForTools(
   );
 }
 
+/** A declaration's tool names, in order. */
+const declaredToolNames = (
+  tools: AgentToolUseSetting['tools'],
+): readonly string[] =>
+  (Array.isArray(tools) ? tools : []).map((toolConfig) =>
+    typeof toolConfig === 'string' ? toolConfig : toolConfig.name,
+  );
+
+/**
+ * Why a delegated child cannot launch under its parent's composition, or
+ * `undefined` when it can. A child can only narrow its parent: a built-in
+ * plugin the parent's composition holds off (a switch, a missing dependency)
+ * is off for the child too, and its tools are withheld as they are for any
+ * run; but a loaded plugin (an MCP server) exists for a run only when its
+ * composition records it, so a child naming one its parent did not load asks
+ * for more than its parent was given, and is refused before it starts.
+ */
+export function childCompositionRefusal(
+  composition: Composition,
+  tools: AgentToolUseSetting['tools'],
+  agentName?: string,
+): string | undefined {
+  const loaded = new Set(composition.loaded.map(({ id }) => id));
+  const outside = declaredToolNames(tools).flatMap((tool) => {
+    const server = mcpServerOfToolName(tool);
+    if (server === undefined) return [];
+    return loaded.has(mcpPluginId(server)) ? [] : [{ tool, server }];
+  });
+  if (outside.length === 0) return undefined;
+  const servers = [...new Set(outside.map(({ server }) => `"${server}"`))];
+  return [
+    `Subagent${agentName ? ` '${agentName}'` : ''} was not launched: it declares ${outside.map(({ tool }) => tool).join(', ')}, from MCP server${servers.length > 1 ? 's' : ''} ${servers.join(', ')}, which this run's tool composition does not include.`,
+    "A subagent can only narrow its parent's tools: declare the plugin on the parent agent, or delegate to an agent that does not need it.",
+  ].join(' ');
+}
+
 /**
  * Resolve the effective tool list for a single agent run: the composition it
  * pinned (held until the caller's scope closes), and the offered definitions
@@ -162,9 +208,15 @@ export const resolveAgentTools = Effect.fn('resolveAgentTools')(function* ({
       }
     }
   }
-  const declared = (Array.isArray(tools) ? tools : []).map((toolConfig) =>
-    typeof toolConfig === 'string' ? toolConfig : toolConfig.name,
-  );
+  const declared = declaredToolNames(tools);
+  // A child that needs a plugin its parent's composition lacks fails to open
+  // rather than running with less than it declared; the delegation tool
+  // checks the same before a detached launch, and this is the check every
+  // launch path shares.
+  if (inherited) {
+    const refusal = childCompositionRefusal(inherited.composition, tools);
+    if (refusal !== undefined) return yield* Effect.fail(new Error(refusal));
+  }
   const compositions = yield* Compositions;
   // The loaded plugins (MCP servers) the declared tools name, read fresh; a
   // child joins its parent's instead. The read's problems (an invalid
@@ -198,21 +250,42 @@ export const resolveAgentTools = Effect.fn('resolveAgentTools')(function* ({
     [...pinned.table.plugins.values()].flatMap((tools) => [...tools]),
   );
 
-  /** Tools the approval gate withheld, reported once below. */
-  const withheldForApproval = new Set<string>();
-  /** The host and approval gates, shared by declared and injected tools. */
+  // The host and approval gates, shared by declared and injected tools. A
+  // child passes its parent's gates as well as its own, so a tool its parent
+  // was withheld (no approval channel, another host) never reaches it.
+  const gates = [
+    { owner: 'this run', host, approvalPromptsUnavailable },
+    ...(inherited
+      ? [
+          {
+            owner: 'its parent run',
+            host: inherited.composition.host ?? undefined,
+            approvalPromptsUnavailable:
+              inherited.composition.approvalPromptsUnavailable,
+          },
+        ]
+      : []),
+  ];
+  /** Tools the approval gate withheld, by the run whose gate withheld
+   *  them, reported once below. */
+  const withheldForApproval = new Map<string, string>();
   const passesRuntimeGates = (name: string): boolean => {
     const tool = enabled.get(name) ?? table.get(name);
     const excluded = tool?.unavailableHosts ?? [];
-    if (excluded.length > 0 && host === undefined) {
-      logger.warn(
-        `Tool "${name}" is not offered: it depends on the product host, and this process named none.`,
-      );
-      return false;
+    for (const gate of gates) {
+      if (excluded.length > 0 && gate.host === undefined) {
+        logger.warn(
+          `Tool "${name}" is not offered: it depends on the product host, and ${gate.owner} named none.`,
+        );
+        return false;
+      }
+      if (gate.host !== undefined && excluded.includes(gate.host)) return false;
     }
-    if (host !== undefined && excluded.includes(host)) return false;
-    if (approvalPromptsUnavailable && tool?.requiresApproval) {
-      withheldForApproval.add(name);
+    const approvalGate = tool?.requiresApproval
+      ? gates.find((gate) => gate.approvalPromptsUnavailable)
+      : undefined;
+    if (approvalGate) {
+      withheldForApproval.set(name, approvalGate.owner);
       return false;
     }
     return true;
@@ -235,7 +308,7 @@ export const resolveAgentTools = Effect.fn('resolveAgentTools')(function* ({
     if (!serverTools) {
       reportServer(
         server,
-        `MCP server "${server}" is not configured in ${inherited ? "this run's parent" : 'the MCP config'}; its tools are not offered.`,
+        `MCP server "${server}" is not configured in the MCP config; its tools are not offered.`,
       );
       return [];
     }
@@ -295,14 +368,15 @@ export const resolveAgentTools = Effect.fn('resolveAgentTools')(function* ({
       ])
     : new Set<string>();
   const withheld = [...withheldForApproval].filter(
-    (name) => !parentWithheld.has(name),
+    ([name]) => !parentWithheld.has(name),
   );
-  if (withheld.length > 0) {
+  for (const owner of new Set(withheld.map(([, by]) => by))) {
+    const names = withheld.filter(([, by]) => by === owner).map(([n]) => n);
     logger.warn(
-      `Not offering ${withheld.join(', ')}: these tools need approval, and this run can neither show an approval prompt nor auto-approve under its approval policy. Use the yolo approval policy to allow them.`,
+      `Not offering ${names.join(', ')}: these tools need approval, and ${owner} can neither show an approval prompt nor auto-approve under its approval policy. Use the yolo approval policy to allow them.`,
     );
-    onApprovalPolicyDenial?.(withheld);
   }
+  if (withheld.length > 0) onApprovalPolicyDenial?.(withheld.map(([n]) => n));
 
   const availableModelNames = yield* availableDelegationModelNamesForTools(
     resolved,

@@ -49,6 +49,11 @@ primitives). Where those families are absent, hand-rolled equivalents live.
    itself with its last such caller, as its own header says, not before.
    This is the first step of the still-unstarted
    [observability plane](../architecture/2026-09-09-observability-plane.md).
+   Status 2026-09-25: every call inside an Effect program is converted; 36
+   calls in 18 files remain, each in a plain synchronous function (the
+   extension's review service and activation handlers, the CLI's TUI host
+   adapters and approval queue, `platformPaths`, `unifiedDiff`, the usage
+   log service), so each waits on its own execution boundary.
 3. One `[1, 2)` backoff `Schedule` in a host-neutral module, replacing the
    two spellings in `tools/timeouts.ts` and `latex/arxivProcessor.ts`. The
    ±20 % capped helper in `src/utils/core` is a separate contract and stays.

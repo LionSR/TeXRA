@@ -138,6 +138,14 @@ class AgentDirectoryManager {
     return Effect.suspend(() => this.getHost().directories.custom());
   }
 
+  customConfigured(): Effect.Effect<
+    boolean,
+    AgentDirectoriesFailed,
+    FileSystem.FileSystem
+  > {
+    return Effect.suspend(() => this.getHost().directories.customConfigured());
+  }
+
   promptCustom(): Effect.Effect<
     string | undefined,
     OpenDialogFailed | PlatformError.PlatformError | StateWriteFailed,

@@ -56,6 +56,7 @@ let customAgentsDir: string;
 
 const bundledAgentDirectories = () => ({
   custom: () => Effect.succeed(customAgentsDir),
+  customConfigured: () => Effect.succeed(false),
   builtIn: () =>
     Effect.succeed(path.join(REPO_ROOT, 'packages/extension/resources/agents')),
   builtInToolUse: () =>

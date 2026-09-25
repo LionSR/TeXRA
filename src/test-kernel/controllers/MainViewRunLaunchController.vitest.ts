@@ -4,7 +4,7 @@ import { Effect, Layer } from 'effect';
 import { beforeEach, describe, expect, vi } from 'vitest';
 
 // Local imports
-import { AgentDirectories } from '@platform/interfaces';
+import { AgentDirectories, AppState } from '@platform/interfaces';
 import type { AgentCatalogServices } from '@platform/processRuntime';
 import { AgentCategory } from '@shared/schemas';
 import type { HostRequest } from '@shared/session/hostRequest';
@@ -32,6 +32,7 @@ function onGlobalStorage<A, E>(
       nodePlatformLayer,
       testHttpClientLayer,
       AgentDirectories.layer(fakeHostAgentDirectories),
+      AppState.layer(new FakeStateStore()),
     ),
   );
 }

@@ -17,6 +17,7 @@ import {
   Path,
 } from 'effect';
 import { FetchHttpClient, type HttpClient } from 'effect/unstable/http';
+import * as tar from 'tar';
 import { afterEach, describe, expect, vi } from 'vitest';
 
 // Local imports
@@ -167,6 +168,51 @@ describe('arXiv source download filenames', () => {
             fs.readFile(path.join(paperDir, 'main.tex'), 'utf8'),
           ),
         ).toBe(tex);
+      }).pipe(Effect.provide(httpPlatformLayer)),
+  );
+
+  it.live(
+    'removes a paper directory it created when extraction stops partway',
+    () =>
+      Effect.gen(function* () {
+        const workspaceRoot = yield* Effect.promise(() =>
+          makeTempDir('texra-arxiv-partial-', tempDirs),
+        );
+        // `main.tex` lands whole; the archive is cut inside the next entry, so
+        // tar writes one `.tex` into the paper directory before it rejects.
+        // Cancel mid-extraction leaves the same partial tree.
+        const archive = yield* Effect.promise(async () => {
+          const srcDir = await makeTempDir('texra-arxiv-tar-', tempDirs);
+          await fs.writeFile(path.join(srcDir, 'main.tex'), 'whole');
+          await fs.writeFile(path.join(srcDir, 'z.tex'), 'x'.repeat(4096));
+          const tarPath = path.join(srcDir, 'source.tar');
+          await tar.c({ cwd: srcDir, file: tarPath }, ['main.tex', 'z.tex']);
+          return (await fs.readFile(tarPath)).subarray(0, 2048);
+        });
+        const fetchMock = vi.fn(
+          async () =>
+            new Response(archive, {
+              headers: {
+                'content-disposition': 'attachment; filename="source.tar"',
+              },
+            }),
+        );
+        const exit = yield* Effect.exit(
+          ArxivProcessor.downloadSource('2404.12175', {
+            workspaceRoot,
+            formatter: null,
+            autoIndent: false,
+          }).pipe(onFetch(fetchMock)),
+        );
+        expect(Exit.isFailure(exit)).toBe(true);
+        expect(
+          yield* Effect.promise(() => fs.readdir(workspaceRoot)),
+        ).toStrictEqual(['References']);
+        expect(
+          yield* Effect.promise(() =>
+            fs.readdir(path.join(workspaceRoot, 'References')),
+          ),
+        ).toStrictEqual([]);
       }).pipe(Effect.provide(httpPlatformLayer)),
   );
 

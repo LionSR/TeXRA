@@ -11,7 +11,7 @@ import { rateLimitedApiCall } from '@tools/support/rateLimiter';
 
 /** The rate-limited lookup of `operation` as a tool program runs it. */
 const lookup = <T>(operation: () => Promise<T>) =>
-  rateLimitedApiCall('test-api', 0, 'Lookup failed', operation);
+  rateLimitedApiCall('test-api', 0, 60_000, 'Lookup failed', operation);
 
 /** Let the forked lookup take its slot and start its request. */
 const started = Effect.promise(

@@ -76,6 +76,20 @@ describe('AgentDirectoryService', () => {
     );
   }
 
+  it('uses the default custom directory when no custom path is configured', async () => {
+    const { service } = createService('   ');
+
+    assert.equal(
+      await runDirectories(service.custom()),
+      path.join(storageBase(), 'custom_agents'),
+    );
+    assert.equal(
+      await pathExists(path.join(storageBase(), 'custom_agents')),
+      true,
+    );
+    assert.equal(await runDirectories(service.customConfigured()), false);
+  });
+
   it('uses a configured absolute custom directory with an existing parent', async () => {
     const parentDir = await makeTempDir('texra-agent-parent-', tempDirs);
     const customPath = path.join(parentDir, 'custom');
@@ -88,6 +102,7 @@ describe('AgentDirectoryService', () => {
       false,
     );
     assert.deepEqual(reporter.reports, []);
+    assert.equal(await runDirectories(service.customConfigured()), true);
   });
 
   it.each([
@@ -117,6 +132,8 @@ describe('AgentDirectoryService', () => {
       assert.deepEqual(reporter.reports, [
         { message, docsId: 'custom-agents' },
       ]);
+      // The banner asks the same question: a rejected path is not "set".
+      assert.equal(await runDirectories(service.customConfigured()), false);
     },
   );
 
