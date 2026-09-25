@@ -690,7 +690,7 @@ describe('claude_agent tool launch and resume fallback', () => {
       );
       expect(firstTurn).toMatchObject({
         isError: true,
-        usage: { input_tokens: 7, output_tokens: 3 },
+        usage: { inputTokens: 7, outputTokens: 3 },
         totalCostUsd: 0.25,
         errorMessage: expect.stringContaining(
           'Claude Code fork did not create a distinct session',

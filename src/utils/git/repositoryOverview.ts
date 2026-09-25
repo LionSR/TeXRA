@@ -1,7 +1,7 @@
 /**
  * Host-neutral git reads behind the "recent commits" and environment-summary
- * surfaces the hosts render (VS Code `texra.getRecentCommits`, desktop
- * launcher banner / workspace header). Previously implemented separately in
+ * surfaces the hosts render (the launcher's commit picker through the host
+ * snapshot, the desktop workspace header). Previously implemented separately in
  * `packages/extension/src/commands/git/gitCommands.ts` and
  * `packages/desktop/src/main/desktopGitHost.ts`; this module is the single
  * owner.
@@ -11,9 +11,9 @@
  * timeout/output policy, the shared `isGitRepository` probe, and the shared
  * `COMMIT_LABEL_FORMAT`, so all hosts produce byte-identical labels.
  *
- * Wiring stays in the hosts: workspace-path resolution, the commit limit
- * (extension setting vs desktop constant), and the per-host failure mapping
- * (`null` vs `{ commits: [], isGitRepo }` vs the wire-schema constant).
+ * Wiring stays with the callers: workspace-path resolution, the commit limit
+ * (the `texra.git.numberOfCommitsToShow` setting for the launcher), and the
+ * failure mapping.
  */
 
 import { Effect } from 'effect';
@@ -84,22 +84,21 @@ export interface GitRecentCommits {
 }
 
 /**
- * Read up to `limit` recent commit labels (`<shortHash>: <subject>
- * (<relativeDate>)`) from an already-probed repository. Returns `undefined`
- * when `git log` itself fails (also on a zero-commit repo, where `log`
- * exits non-zero); callers map that to their host's empty-result convention.
- *
- * Callers own the repository probe so host policy can sit between probe and
- * read (the extension validates its commit-limit setting in between); hosts
- * without such policy should use `readRecentCommits` instead.
+ * Probing recent-commits read: up to `limit` labels (`<shortHash>: <subject>
+ * (<relativeDate>)`), or `isGitRepo: false` when the workspace is not a
+ * repository. A failed `git log` (also a zero-commit repo, where `log` exits
+ * non-zero) answers `[]`: the probe already passed, so it is still a repo.
  */
-export const readRecentCommitLabels = Effect.fn(
-  'repositoryOverview.readRecentCommitLabels',
+export const readRecentCommits = Effect.fn(
+  'repositoryOverview.readRecentCommits',
 )(function* (
   workspacePath: string,
   limit: number,
   options: GitReadOptions,
-): Effect.fn.Return<string[] | undefined, never, ChildProcessSpawner> {
+): Effect.fn.Return<GitRecentCommits, never, ChildProcessSpawner> {
+  if (!(yield* isGitRepository(workspacePath, options.settings))) {
+    return { commits: [], isGitRepo: false };
+  }
   const output = yield* readGit(
     workspacePath,
     [
@@ -112,24 +111,8 @@ export const readRecentCommitLabels = Effect.fn(
     ],
     options,
   );
-  return output === undefined ? undefined : splitCommitLines(output);
-});
-
-/**
- * Probing recent-commits read: reports `isGitRepo: false` when the workspace
- * is not a repository, otherwise the labels (`[]` when the log read fails —
- * the probe already passed, so a failed log is still a git repo).
- */
-export const readRecentCommits = Effect.fn(
-  'repositoryOverview.readRecentCommits',
-)(function* (
-  workspacePath: string,
-  limit: number,
-  options: GitReadOptions,
-): Effect.fn.Return<GitRecentCommits, never, ChildProcessSpawner> {
-  if (!(yield* isGitRepository(workspacePath, options.settings))) {
-    return { commits: [], isGitRepo: false };
-  }
-  const commits = yield* readRecentCommitLabels(workspacePath, limit, options);
-  return { commits: commits ?? [], isGitRepo: true };
+  return {
+    commits: output === undefined ? [] : splitCommitLines(output),
+    isGitRepo: true,
+  };
 });

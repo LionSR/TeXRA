@@ -1,6 +1,4 @@
-import { type ModelConfig } from 'llm-zoo';
-
-import { getRuntimeModelConfig } from './runtimeModelRegistry';
+import { MODEL_CONFIGS, type ModelConfig } from 'llm-zoo';
 
 /** Trailing llm-zoo date pin (`-2026-04-23`) on a model `fullName`. */
 const CODEX_MODEL_DATE_PIN = /-\d{4}-\d{2}-\d{2}$/;
@@ -30,6 +28,6 @@ export function codexBackendModelId(
   // it is the one field that still identifies the model. A config the
   // registry does not know (a runtime-discovered entry) has no canonical name
   // to read, so its own `fullName` is the only answer available.
-  const canonical = getRuntimeModelConfig(config.name)?.fullName;
+  const canonical = MODEL_CONFIGS[config.name]?.fullName;
   return (canonical ?? config.fullName).replace(CODEX_MODEL_DATE_PIN, '');
 }

@@ -10,15 +10,7 @@
  * on the entry.
  */
 
-import {
-  Data,
-  Deferred,
-  Effect,
-  Fiber,
-  Latch,
-  PubSub,
-  type Scope,
-} from 'effect';
+import { Data, Deferred, Effect, Fiber, Latch, type Scope } from 'effect';
 
 import type { SessionApprovals } from '@agent/runtime/runApprovalQueue';
 import type { RunId } from '@shared/schemas';
@@ -56,9 +48,9 @@ interface RunEntry {
 
 export class RunRoster {
   private readonly entries = new Map<RunId, RunEntry>();
-  /** Every change a waiter can wake on ({@link waitForAnyChange}), apart from
-   *  the entries; opened by the first waiter, unbounded so publish never blocks. */
-  private changes: PubSub.PubSub<RunId> | undefined;
+  /** Completed when the last entry leaves ({@link awaitDrained}); made by
+   *  the first drain that finds entries, dropped once it completes. */
+  private emptied: Deferred.Deferred<void> | undefined;
   /** The stops begun for each run ({@link beginStop}), one token apiece, so
    *  of two overlapping stops the first to settle cannot admit a child the
    *  second's snapshot already left behind. */
@@ -104,8 +96,14 @@ export class RunRoster {
     if (entry.hold !== undefined || entry.launches > 0) return;
     if (this.entries.get(runId) === entry) {
       this.entries.delete(runId);
-      this.notifyWaiters(runId);
+      if (this.entries.size === 0) this.completeDrain();
     }
+  }
+
+  private completeDrain(): void {
+    const emptied = this.emptied;
+    this.emptied = undefined;
+    if (emptied !== undefined) Deferred.doneUnsafe(emptied, Effect.void);
   }
 
   // ------------------------------------------------------------------ fiber
@@ -118,7 +116,6 @@ export class RunRoster {
       if (entry[slot] === fiber) {
         entry[slot] = undefined;
         this.prune(runId, entry);
-        this.notifyWaiters(runId);
       }
     });
   }
@@ -154,15 +151,11 @@ export class RunRoster {
     entry.handle = handle;
   }
 
-  /** Remove a run handle and notify waiters; a run with no handle still
-   *  wakes its waiters, since the call is the change they wait on. */
   deleteHandle(runId: RunId): void {
     const entry = this.entries.get(runId);
-    if (entry) {
-      entry.handle = undefined;
-      this.prune(runId, entry);
-    }
-    this.notifyWaiters(runId);
+    if (!entry) return;
+    entry.handle = undefined;
+    this.prune(runId, entry);
   }
 
   /** Remove `handle` only if it is still the current registration. */
@@ -190,8 +183,6 @@ export class RunRoster {
     if (entry?.activation !== expected) return;
     entry.activation = undefined;
     this.prune(runId, entry);
-    // The loop's last record is gone: a waiter on its settlement wakes.
-    this.notifyWaiters(runId);
   }
 
   *activeChildActivations(parentRunId: RunId): Generator<ChildRunActivation> {
@@ -267,13 +258,18 @@ export class RunRoster {
 
   // ---------------------------------------------------------------- liveness
 
-  /** Whether this process holds a live generation of the run: its fiber, an
-   *  admitted launch, or a live tool-use flow on its handle. */
+  /** Whether this process holds a live generation of the run: its fiber, a
+   *  hold, or an admitted launch. A live tool-use flow is not a fourth arm:
+   *  the flow attaches and detaches inside the run program, which runs on
+   *  the generation's fiber. */
   isLive(runId: RunId): boolean {
     const entry = this.entries.get(runId);
     if (entry === undefined) return false;
-    if (entry.fiber ?? entry.hold ?? entry.launches > 0) return true;
-    return entry.handle?.getToolUseFlow() !== undefined;
+    return (
+      entry.fiber !== undefined ||
+      entry.hold !== undefined ||
+      entry.launches > 0
+    );
   }
 
   /** Run `operation` on `runId`'s lane: claim the lane synchronously, fork
@@ -364,9 +360,9 @@ export class RunRoster {
               yield* Latch.await(latch);
             }),
           ).pipe(Effect.catch((error) => Deferred.fail(ready, error)));
-          // Registered as its first step, synchronous with the test, as in
-          // `launch`: a launch during the claim below already sees the hold.
-          const fiber = yield* Effect.forkChild(
+          // Registered as its first step, as in `launch`; scoped, not a child,
+          // so the hold outlives the fiber that took it until the scope closes.
+          const fiber = yield* Effect.forkScoped(
             Effect.withFiber((self) => {
               if (
                 this.isLive(runId) ||
@@ -389,59 +385,14 @@ export class RunRoster {
     );
   }
 
-  // --------------------------------------------------------------- waiters
-
-  notifyWaiters(runId: RunId): void {
-    if (this.changes !== undefined) PubSub.publishUnsafe(this.changes, runId);
-  }
-
-  /**
-   * Wait for any of `runIds` to change and succeed with the first that did.
-   * The wake set: a status transition; a `track` (a replacement handle
-   * included, so a waiter is not stranded across a resume); an `untrack`,
-   * even of an id holding no handle; every `kill`; and session disposal. A
-   * bounded wait races this effect: the subscription lives in its scope.
-   */
-  waitForAnyChange(runIds: readonly RunId[]): Effect.Effect<RunId> {
-    return Effect.scoped(
-      Effect.gen({ self: this }, function* () {
-        // Build first, then install without a yield in between: `??=` over a
-        // `yield*` would read, suspend, and overwrite a hub a concurrent first
-        // waiter already subscribed to. A losing fresh hub is dropped unread.
-        const fresh = yield* PubSub.unbounded<RunId>();
-        this.changes ??= fresh;
-        const subscription = yield* PubSub.subscribe(this.changes);
-        for (;;) {
-          const changed = yield* PubSub.take(subscription);
-          if (runIds.includes(changed)) return changed;
-        }
-      }),
-    );
-  }
-
-  /** Resolve once every owner has left: each entry's fiber or hold by
-   *  `Fiber.await`, then handles, activations and lanes through the hub. The
-   *  re-check arm is load-bearing: `raceAllFirst` starts its arms in order,
-   *  so a last run leaving before the subscription is still seen. */
+  /** Resolve once every owner has left: every fiber, hold, handle,
+   *  activation and lane. The size test and the install of {@link emptied}
+   *  share one synchronous step, so a last run leaving is never missed. */
   awaitDrained(): Effect.Effect<void> {
-    return Effect.gen({ self: this }, function* () {
-      for (;;) {
-        const head = this.entries.values().next();
-        if (head.done) return;
-        const fiber = head.value.fiber ?? head.value.hold;
-        if (fiber !== undefined) {
-          yield* Fiber.await(fiber);
-          continue;
-        }
-        const active = [...this.entries.keys()];
-        if (active.length === 0) return;
-        yield* Effect.raceAllFirst([
-          this.waitForAnyChange(active).pipe(Effect.asVoid),
-          Effect.suspend(() =>
-            this.entries.size === 0 ? Effect.void : Effect.never,
-          ),
-        ]);
-      }
+    return Effect.suspend(() => {
+      if (this.entries.size === 0) return Effect.void;
+      this.emptied ??= Deferred.makeUnsafe<void>();
+      return Deferred.await(this.emptied);
     });
   }
 
@@ -486,15 +437,14 @@ export class RunRoster {
   // --------------------------------------------------------------- teardown
 
   /** Drop every local record at session disposal, refuse every step admitted
-   *  but not started, and wake the waiters on every run the roster tracked. */
+   *  but not started, and release a drain waiting on the records. */
   clear(disposal: Error): void {
     for (const refusal of this.waiting) {
       Deferred.doneUnsafe(refusal, Effect.fail(disposal));
     }
     this.waiting.clear();
-    const tracked = [...this.entries.keys()];
     this.entries.clear();
-    for (const runId of tracked) this.notifyWaiters(runId);
+    this.completeDrain();
     this.stopping.clear();
   }
 }

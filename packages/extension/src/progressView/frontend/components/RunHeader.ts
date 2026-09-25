@@ -391,10 +391,10 @@ export class RunHeader extends LitElement {
         <slot name="start"></slot>
         ${this.renderAncestors(run)}
         <h1 id=${ELEMENT_IDS.ACTIVE_RUN_NAME} data-run=${run.id}>
-          ${run.label}
+          ${run.description || run.label}
         </h1>
         <wa-tooltip for=${ELEMENT_IDS.ACTIVE_RUN_NAME}
-          >${run.description ?? run.label} · ${run.id}</wa-tooltip
+          >${run.label} · ${run.id}</wa-tooltip
         >
         <span
           id=${ELEMENT_IDS.STATUS_INDICATOR}

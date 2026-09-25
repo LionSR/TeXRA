@@ -10,11 +10,11 @@
  * own `CliPlatformServices`, or the `AppState` service), so the read and the
  * write that follows it hit the same store.
  */
+import { MODEL_CONFIGS } from 'llm-zoo';
 import { Effect } from 'effect';
 
 import { getEnabledModels, setModelEnabled } from '@model/computeModelOptions';
 import { isDeprecatedModel, isRetiredModel } from '@model/modelOptionsBasic';
-import { getRuntimeModelConfig } from '@model/runtimeModelRegistry';
 import type { StateReadFailed, StateStore } from '@platform/interfaces';
 import { StateWriteFailed } from '@platform/interfaces';
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -40,7 +40,7 @@ export function listCliEnabledModelCatalog(state: StateStore) {
     return knownCliModelIds()
       .filter((id) => !isRetiredModel(id))
       .map((id) => {
-        const config = getRuntimeModelConfig(id);
+        const config = MODEL_CONFIGS[id];
         return {
           id,
           label: getModelLabel(id),

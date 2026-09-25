@@ -238,9 +238,7 @@ export function SubagentList(
       if (key.leftArrow || key.rightArrow || input === ' ') {
         const next = key.rightArrow || (!key.leftArrow && !expanded);
         actOnSurface({ kind: 'expand', runId: run.id, expanded: next });
-      } else if (input.toLowerCase() === 'r' && resumableRunId(run)) {
-        props.onFocusRun?.(run.id);
-      } else if (input.toLowerCase() === 'k') {
+      } else if (input === 'x') {
         const runId = killableRunId(run);
         if (runId) props.onKillRun?.(runId);
       }

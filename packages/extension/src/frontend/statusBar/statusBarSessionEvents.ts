@@ -9,7 +9,10 @@ interface StatusBarSessionEventOptions {
   session: Pick<SessionHandle, 'viewChanges'>;
   /** What the two callbacks paint: the subscription refreshes the bar when
    *  one of these projections moves, and nothing else. */
-  tracker: Pick<StatusBarUsageTracker, 'activeRunCount' | 'totalUsage'>;
+  tracker: Pick<
+    StatusBarUsageTracker,
+    'activity' | 'activeRunCount' | 'totalUsage'
+  >;
   onStatusChanged: () => void;
   onUsageChanged: () => void;
   /** The host entry's process runtime, which the subscription fiber runs on. */
@@ -38,14 +41,14 @@ export function subscribeStatusBarSessionEvents({
   // and that first emission must paint both projections (a run already
   // RUNNING when the bar subscribes would otherwise read Idle until the count
   // next changes).
-  let activeRuns: number | undefined;
+  let status: string | undefined;
   let usage: StatusBarUsageTracker['totalUsage'] | undefined;
   const fiber = runtime.runFork(
     Stream.runForEach(session.viewChanges, () =>
       Effect.sync(() => {
-        const nextActiveRuns = tracker.activeRunCount;
-        if (nextActiveRuns !== activeRuns) {
-          activeRuns = nextActiveRuns;
+        const nextStatus = `${tracker.activity}/${tracker.activeRunCount}`;
+        if (nextStatus !== status) {
+          status = nextStatus;
           onStatusChanged();
         }
         const nextUsage = tracker.totalUsage;

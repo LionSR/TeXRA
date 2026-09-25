@@ -1,7 +1,6 @@
 /**
- * The one attention rule for a pending request in this window, whatever its
- * kind (tool edit, command, proposal, plan, question, inquiry, retry): the
- * sidebar view's badge counts the requests waiting on the user, and a new
+ * The extension's reading of the one attention rule (`attentionOf`): the
+ * sidebar view's badge counts the requests this window can answer, and a new
  * one brings its run on screen without taking focus. The card stays the one
  * place to answer; nothing here decides a request.
  */
@@ -10,10 +9,7 @@ import { Effect, Stream } from 'effect';
 import type { SessionHandle } from '@agent/runtime';
 import { withLogChannel } from '@logger/effectLog';
 import type { RunId } from '@shared/schemas';
-import {
-  requestAnswerability,
-  type SessionView,
-} from '@shared/session/sessionView';
+import { attentionOf, type SessionView } from '@shared/session/sessionView';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { formatResultCount } from '@utils/text/stringUtils';
 import type * as vscode from 'vscode';
@@ -26,17 +22,6 @@ interface AttentionSurface {
   /** The focus command: the only way to open a never-resolved sidebar. */
   showInSidebar(): Effect.Effect<void, Error>;
   showSessions(runId: RunId): void;
-}
-
-/** The requests the card lets this window answer (`requestAnswerability`). */
-function answerableHere(view: SessionView): SessionView['requests'] {
-  return view.requests.filter((request) => {
-    const run = view.runs.get(request.runId);
-    return (
-      run !== undefined &&
-      requestAnswerability(run, request.payload) === 'answerable'
-    );
-  });
 }
 
 export class RequestAttention {
@@ -52,14 +37,13 @@ export class RequestAttention {
   follow(session: Pick<SessionHandle, 'viewChanges'>): Effect.Effect<void> {
     // Unseeded: the first view is what was already pending when the window
     // subscribed, which the badge shows and nothing reveals.
-    let known: ReadonlySet<string> | undefined;
+    let previous: SessionView | undefined;
     return Stream.runForEach(session.viewChanges, (view) => {
-      const open = answerableHere(view);
-      const key = (r: (typeof open)[number]) => `${r.runId}/${r.requestId}`;
-      const arrived = known && open.find((r) => !known?.has(key(r)));
-      known = new Set(open.map(key));
-      this.setCount(open.length);
-      return arrived ? this.bringForward(arrived.runId) : Effect.void;
+      const { requests, arrived } = attentionOf(view, previous);
+      previous = view;
+      this.setCount(requests.length);
+      const [first] = arrived;
+      return first ? this.bringForward(first.runId) : Effect.void;
     });
   }
 

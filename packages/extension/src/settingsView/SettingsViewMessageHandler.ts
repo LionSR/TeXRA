@@ -53,12 +53,9 @@ import {
   loadApiKeyStatusMap,
 } from '@model/apiProviders';
 import {
-  invalidateRuntimeModelRegistry,
-  copilotRouteForModel,
-  discoveredCopilotRoutes,
-  refreshRuntimeModelRegistry,
-} from '@model/runtimeModelRegistry';
-import { setCopilotRoutePreference } from '@model/copilotRouting';
+  discoverCopilotRoutes,
+  setCopilotRoutePreference,
+} from '@model/copilotRouting';
 import { withSessionFs } from '@platform/rootedFs';
 import type { StateStore } from '@platform/interfaces';
 import type { LanguageModel } from '@platform/languageModel';
@@ -153,7 +150,7 @@ export class SettingsViewMessageHandler {
           readModelAvailabilityInputs(stores, models),
           modelOptionsFrom,
         ),
-      copilotRoutes: discoveredCopilotRoutes(),
+      copilotRoutes: discoverCopilotRoutes(),
     });
     this.profileController = new SettingsProfileController({
       host: 'vscode',
@@ -768,20 +765,10 @@ export class SettingsViewMessageHandler {
     context: vscode.ExtensionContext,
   ) {
     return Effect.gen({ self: this }, function* () {
-      // Repeat one superseded discovery, then fail closed rather than
-      // authorize from the retained presentation catalogue. A failed probe
-      // fails the program: authorization never falls back to the retained
-      // catalogue.
+      // Discover now: authorization acts only on the route the editor
+      // reports for this request, and a failed probe fails the program.
       const discovery = yield* Effect.exit(
-        refreshRuntimeModelRegistry({ forceDiscovery: true }).pipe(
-          Effect.repeat({
-            until: (result): boolean => result === 'current',
-            times: 1,
-          }),
-          Effect.map((result) =>
-            result === 'current' ? copilotRouteForModel(modelName) : undefined,
-          ),
-        ),
+        Effect.map(discoverCopilotRoutes(), (routes) => routes.get(modelName)),
       );
       const route = Exit.isSuccess(discovery) ? discovery.value : undefined;
       let result: Exit.Exit<unknown, unknown> = discovery;
@@ -883,7 +870,6 @@ export class SettingsViewMessageHandler {
     }).pipe(
       Effect.ensuring(
         Effect.gen({ self: this }, function* () {
-          invalidateRuntimeModelRegistry();
           yield* allSettledVoid([
             this.progressView.refreshCatalogs(),
             this.withActiveWebview((webview) =>
