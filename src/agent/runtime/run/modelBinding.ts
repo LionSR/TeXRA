@@ -820,9 +820,12 @@ function backgroundCapable<P extends HttpProtocol>(
  * owned the choice.
  */
 const responsesWebSocketSelected = Effect.fn('responsesWebSocketSelected')(
-  function* (credential: RouteCredential, globalState: StateStore) {
+  function* (credential: RouteCredential, stores: SettingsStores) {
     if (
-      !(yield* globalState.get<boolean>(GlobalStateKey.WEBSOCKET_OPENAI, false))
+      !(yield* readSettingFrom<boolean>(
+        stores,
+        GlobalStateKey.WEBSOCKET_OPENAI,
+      ))
     ) {
       return false;
     }
@@ -991,10 +994,7 @@ export const bindModel = Effect.fn('bindModel')(function* (
   input: BindModelInput,
 ): Effect.fn.Return<BoundModel, Error, Scope.Scope | HttpClient.HttpClient> {
   // The wire identity the preference promises, applied to the bound config.
-  const requested = yield* withShortModelName(
-    input.config,
-    input.stores.globalState,
-  );
+  const requested = yield* withShortModelName(input.config, input.stores);
   const route = yield* resolveModelRoute(input.stores, requested, input);
   const compatibilityKey =
     input.compatibilityKey ?? (yield* routeCompatibilityKey(requested, route));
@@ -1071,7 +1071,7 @@ export const bindModel = Effect.fn('bindModel')(function* (
       },
       input.stores,
     )) &&
-    (yield* responsesWebSocketSelected(credential, input.stores.globalState));
+    (yield* responsesWebSocketSelected(credential, input.stores));
   const model =
     configuration.protocol === 'openai-responses' && onWebSocket
       ? yield* openaiResponsesWebSocketModel(

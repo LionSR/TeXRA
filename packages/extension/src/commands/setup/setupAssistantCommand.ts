@@ -17,11 +17,7 @@ import {
   hasUsableSetupCredential,
   resolveSetupLaunchModel,
 } from '@model/setupCredentialAccess';
-import type {
-  StateReadFailed,
-  StateStore,
-  StateWriteFailed,
-} from '@platform/interfaces';
+import type { StateReadFailed, StateWriteFailed } from '@platform/interfaces';
 import type { LanguageModel } from '@platform/languageModel';
 import type { PlatformSecrets } from '@platform/secrets';
 import { presentLaunchedProgressRun } from '@progressView/progressNavigation';
@@ -47,13 +43,12 @@ const CHANNEL = 'SetupAssistant';
  * only after the write it undoes has committed.
  */
 function withOpenRouterFlagOn<A, E, R>(
-  globalState: StateStore,
+  stores: SettingsStores,
   program: Effect.Effect<A, E, R>,
 ): Effect.Effect<A, E | StateReadFailed, R> {
+  const { globalState } = stores;
   return Effect.gen(function* () {
-    const prior =
-      (yield* globalState.get<boolean>(GlobalStateKey.USE_OPENROUTER)) === true;
-    if (prior) return yield* program;
+    if (yield* getUseOpenRouter(stores)) return yield* program;
 
     return yield* Effect.acquireUseRelease(
       // The acquisition's failure is the launch's own, and it is uninterruptible
@@ -214,7 +209,6 @@ const ensureRoutingConfigured = Effect.fn('ensureRoutingConfigured')(function* (
  */
 export function launchSetupAssistant(
   secrets: PlatformSecrets,
-  globalState: StateStore,
   session: SessionHandle,
 ) {
   return Effect.gen(function* () {
@@ -308,7 +302,7 @@ export function launchSetupAssistant(
     );
 
     yield* resolution.requiresOpenRouter
-      ? withOpenRouterFlagOn(globalState, launch)
+      ? withOpenRouterFlagOn(session.roots, launch)
       : launch;
     return 'launched' as const;
   }).pipe(

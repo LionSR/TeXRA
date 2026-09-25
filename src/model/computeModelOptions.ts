@@ -581,7 +581,7 @@ export function setModelEnabled(input: {
       );
     }
     // A helper model disabled here is not rewritten: the helper choice counts
-    // only while enabled, which `resolveEffectiveHelperModel` enforces at read.
+    // only while enabled, which `getHelperModelName` enforces at read.
     return yield* state
       .update(GlobalStateKey.MODEL_SELECTION, next)
       .pipe(Effect.as(nextEnabled));

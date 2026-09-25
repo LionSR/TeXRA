@@ -919,7 +919,6 @@ function createWindow(options: {
       runtime,
       session: project.session,
       secrets: options.secrets,
-      globalState: options.globalState,
       draftRequests: hostDraftRequests,
       host: {
         ...agentRunHost,

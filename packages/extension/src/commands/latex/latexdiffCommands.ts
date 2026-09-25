@@ -41,7 +41,6 @@ import { withSessionFs } from '@platform/rootedFs';
 import type { FileLocation } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { settingByKey, settingEnumChoices } from '@shared/state/stateSettings';
-import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latexConfig';
 import type { LatexdiffMathMarkupValue } from '@shared/constants/latexConfig';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
@@ -422,11 +421,10 @@ const handleRunLatexdiff = Effect.fnUntraced(function* (
 
       yield* Effect.logInfo(`Running latexdiff, math markup: ${mathMarkup}`);
 
-      const generateBetweenRoundDiffs =
-        yield* session.roots.workspaceState.get<boolean>(
-          WorkspaceStateKey.LATEXDIFF_BETWEEN_ROUNDS,
-          LATEX_CONFIG_DEFAULTS.latexdiffBetweenRounds,
-        );
+      const generateBetweenRoundDiffs = yield* readSettingFrom<boolean>(
+        session.roots,
+        WorkspaceStateKey.LATEXDIFF_BETWEEN_ROUNDS,
+      );
       yield* Effect.logDebug(`Between rounds: ${generateBetweenRoundDiffs}`);
 
       const outputsByRound = normalizeRunLatexdiffOutputsByRound(

@@ -10,7 +10,6 @@ import type { DiffRunOutcome, DiffRunResult } from '@latex/latexdiff/types';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { OutputFileInfo } from '@shared/schemas';
 import { Rejected } from '@shared/session/requestErrors';
-import { FakeStateStore } from '@test/support/FakePlatform';
 import { createModuleMocks } from '@test/support/moduleMocks';
 
 import { createStubDesktopAgentRunHost } from './desktopAgentRunTestHarness.ts';
@@ -148,7 +147,6 @@ async function loadFileActions(options: {
         snapshots: { read: vi.fn() },
         roots: { workspace: absolutePath('workspace') },
       } as unknown as SessionHandle,
-      globalState: new FakeStateStore(),
       // Every latexdiff program this suite reaches is mocked, so the services
       // the actions take from the window's runtime are never read.
       runtime: {

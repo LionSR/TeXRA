@@ -8,6 +8,7 @@ import {
 } from 'llm-zoo';
 
 // Local imports
+import { getHelperModelName } from '@agent/runtime/helperModelName';
 import {
   reasoningEffortOverrides,
   supportsReasoningLevel,
@@ -15,7 +16,6 @@ import {
 import { preferredCopilotRouteModels } from '@model/copilotRouting';
 import { resolveModelSource } from '@model/openRouterRouting';
 import type { CopilotModelRoute } from '@model/runtimeModelRegistry';
-import { resolveEffectiveHelperModel } from '@model/helperModelSelection';
 import {
   getEnabledModels,
   setModelEnabled,
@@ -38,6 +38,7 @@ import {
   MODEL_SOURCE_ORDER,
 } from '@shared/constants/providers';
 import { byName } from '@utils/core';
+import { readSettingFrom } from '@utils/config/platformSettings';
 
 interface SettingsModelSelectionControllerDeps<R> {
   /**
@@ -89,9 +90,6 @@ export class SettingsModelSelectionController<R = never> {
 
   buildSelectionData(): Effect.Effect<SettingsModelSelectionData, Error, R> {
     return Effect.gen({ self: this }, function* () {
-      const visibleModels = yield* getEnabledModels(
-        this.deps.stores.globalState,
-      );
       const routes = yield* this.deps.copilotRoutes;
       const preferredModels = new Set(
         yield* this.deps.getPreferredCopilotRouteModels?.() ??
@@ -100,15 +98,10 @@ export class SettingsModelSelectionController<R = never> {
       const models = yield* this.buildSelectionItems(routes, preferredModels);
       return {
         models,
-        helperModel: resolveEffectiveHelperModel(
-          yield* this.deps.stores.globalState.get<string | undefined>(
-            GlobalStateKey.HELPER_MODEL,
-          ),
-          visibleModels,
-        ),
-        preferShortModelNames: yield* this.deps.stores.globalState.get<boolean>(
+        helperModel: yield* getHelperModelName(this.deps.stores),
+        preferShortModelNames: yield* readSettingFrom<boolean>(
+          this.deps.stores,
           GlobalStateKey.PREFER_SHORT_MODEL_NAMES,
-          false,
         ),
         copilotModels: this.buildCopilotRouteInfos(routes, preferredModels),
       };

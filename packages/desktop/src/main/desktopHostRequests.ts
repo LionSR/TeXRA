@@ -55,7 +55,7 @@ import {
   modelOptionsFrom,
   readModelAvailabilityInputs,
 } from '@model/computeModelOptions';
-import type { AgentDirectoriesFailed, StateStore } from '@platform/interfaces';
+import type { AgentDirectoriesFailed } from '@platform/interfaces';
 import {
   withProcessServices,
   type ProcessRuntime,
@@ -113,10 +113,8 @@ import type { DesktopFileSelection } from './desktopFileSelection.js';
 
 interface DesktopHostRequestsOptions {
   session: SessionHandle;
-  /** The process stores the desktop root holds: the model catalog reads both,
-   *  and the merge run reads the helper model from the state store. */
+  /** The process secret store the model catalog reads. */
   secrets: PlatformSecrets;
-  globalState: StateStore;
   host: DesktopAgentRunHost;
   run: DesktopAgentRun;
   files: DesktopFileSelection;
@@ -254,7 +252,6 @@ export function createDesktopHostRequests(
     },
     {
       session,
-      globalState: options.globalState,
       runtime,
       // The request schedules a merge; its later run failure belongs to this
       // lifecycle callback, after the request has already completed.
