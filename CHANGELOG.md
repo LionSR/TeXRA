@@ -486,6 +486,14 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
 
 #### Bug Fixes
 
+- **The "use your own API key" retry works the same everywhere** — when a
+  Kimi Code or GLM Coding Plan quota runs out and the matching provider key
+  is already saved, every app now retries on that key by itself, including
+  runs with nobody watching and subagents, and says so in the run. Before,
+  only the terminal app did this. When the key is not saved yet, pressing
+  `k` in the terminal app now asks for it instead of telling you to use
+  `/key` first, and a key whose account ran out of credit can be replaced
+  from the terminal app's retry prompt too.
 - **Google image uploads fail visibly** — a missing or failed Gemini
   attachment now stops the request instead of sending it without the file.
 - **Finished and crashed runs are no longer treated as still running** — TeXRA

@@ -1,23 +1,18 @@
 import { CHATGPT_AUTH, GROK_AUTH } from '@ui/copy/accountAuth';
-import {
-  CODING_PLAN_SUBSCRIPTIONS,
-  type CodingPlanSubscriptionId,
-} from './codingPlanSubscriptions';
+import { CODING_PLAN_SUBSCRIPTIONS } from './codingPlanSubscriptions';
 import type { ExhaustionReason } from './schemas/errors';
+import type { DeclinableUsageRoute } from './schemas/usage';
 
 /**
- * One switchable quota-fallback route: when its usage quota is exhausted,
- * accepting "use your own API key" turns off this route's preference so the
- * same model retries on the fallback credential.
+ * One switchable quota-fallback route: when its usage quota is exhausted, a
+ * retry on the user's own credential declines this route for the run so the
+ * same model retries on its own provider key.
  *
- * Policy only — preference get/set lives in `@model/quotaFallbackRoutes`.
- * Keeping this module dependency-free lets the CLI classifier, retry
- * controller, and browser retry copy share one catalog.
+ * Copy and detection only: whether a failure offers the switch is the retry
+ * owner's decision (`ModelInvoker`), carried on the retry request. Keeping
+ * this module dependency-free lets the error formatter, the invoker, and the
+ * CLI retry copy share one catalog.
  */
-type OauthQuotaFallbackRouteId = 'chatgpt' | 'grok';
-export type QuotaFallbackRouteId =
-  OauthQuotaFallbackRouteId | CodingPlanSubscriptionId;
-
 export type QuotaFallbackExhaustionReason = Extract<
   ExhaustionReason,
   | 'chatgpt-subscription'
@@ -27,39 +22,30 @@ export type QuotaFallbackExhaustionReason = Extract<
 >;
 
 export interface QuotaFallbackRoute {
-  readonly id: QuotaFallbackRouteId;
+  readonly usageRoute: DeclinableUsageRoute;
   readonly exhaustionReason: QuotaFallbackExhaustionReason;
-  /** Direct-key provider the retry should prompt for, when it differs from
-   *  the forwarded SDK provider. */
-  readonly fallbackApiProvider?: 'openai' | 'xai';
   readonly retryFallbackName: string;
   readonly retrySourceName: string;
 }
 
-const OAUTH_QUOTA_FALLBACK_ROUTES = Object.freeze([
-  Object.freeze({
-    id: 'chatgpt',
-    exhaustionReason: 'chatgpt-subscription',
-    fallbackApiProvider: 'openai',
-    retryFallbackName: 'your own OpenAI API key',
-    retrySourceName: CHATGPT_AUTH.subscriptionLabel,
-  }),
-  Object.freeze({
-    id: 'grok',
-    exhaustionReason: 'xai-subscription',
-    fallbackApiProvider: 'xai',
-    retryFallbackName: 'your own xAI API key',
-    retrySourceName: GROK_AUTH.subscriptionLabel,
-  }),
-] as const satisfies readonly QuotaFallbackRoute[]);
-
 /** Canonical catalog of quota-fallback routes supported by every host. */
 export const QUOTA_FALLBACK_ROUTES: readonly QuotaFallbackRoute[] =
   Object.freeze([
-    ...OAUTH_QUOTA_FALLBACK_ROUTES,
+    Object.freeze({
+      usageRoute: 'chatgpt-subscription',
+      exhaustionReason: 'chatgpt-subscription',
+      retryFallbackName: 'your own OpenAI API key',
+      retrySourceName: CHATGPT_AUTH.subscriptionLabel,
+    }),
+    Object.freeze({
+      usageRoute: 'xai-subscription',
+      exhaustionReason: 'xai-subscription',
+      retryFallbackName: 'your own xAI API key',
+      retrySourceName: GROK_AUTH.subscriptionLabel,
+    }),
     ...CODING_PLAN_SUBSCRIPTIONS.map((plan) =>
       Object.freeze({
-        id: plan.id,
+        usageRoute: plan.usageRoute,
         exhaustionReason: plan.exhaustionReason,
         retryFallbackName: plan.retryFallbackName,
         retrySourceName: plan.retrySourceName,
@@ -67,20 +53,17 @@ export const QUOTA_FALLBACK_ROUTES: readonly QuotaFallbackRoute[] =
     ),
   ]);
 
-const ROUTE_BY_EXHAUSTION = new Map<ExhaustionReason, QuotaFallbackRoute>(
-  QUOTA_FALLBACK_ROUTES.map((route) => [route.exhaustionReason, route]),
+const ROUTE_BY_USAGE = new Map<DeclinableUsageRoute, QuotaFallbackRoute>(
+  QUOTA_FALLBACK_ROUTES.map((route) => [route.usageRoute, route]),
 );
 
-/** Resolve the quota-fallback route that a classified exhaustion should switch. */
-export function quotaFallbackRouteForExhaustion(
-  reason: ExhaustionReason | undefined,
-): QuotaFallbackRoute | undefined {
-  return reason === undefined ? undefined : ROUTE_BY_EXHAUSTION.get(reason);
-}
-
-/** True when `id` is one of {@link CODING_PLAN_SUBSCRIPTIONS}. */
-export function isCodingPlanQuotaRoute(
-  id: QuotaFallbackRouteId,
-): id is CodingPlanSubscriptionId {
-  return CODING_PLAN_SUBSCRIPTIONS.some((plan) => plan.id === id);
+/** The catalog entry of a declinable route. Every declinable route has one. */
+export function quotaFallbackRouteFor(
+  usageRoute: DeclinableUsageRoute,
+): QuotaFallbackRoute {
+  const route = ROUTE_BY_USAGE.get(usageRoute);
+  if (route === undefined) {
+    throw new Error(`No quota-fallback route for ${usageRoute}.`);
+  }
+  return route;
 }

@@ -24,12 +24,7 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { MessageHost, NotificationFailed } from '@hosts/uiHosts';
 import { withLogChannel } from '@logger/effectLog';
 import type { ApiProvider } from '@model/apiProviders';
-import {
-  API_PROVIDERS,
-  lookupApiKey,
-  hasUsableApiKey,
-  isApiProvider,
-} from '@model/apiProviders';
+import { lookupApiKey, hasUsableApiKey } from '@model/apiProviders';
 import type { ModelHostFactUnreadable } from '@model/computeModelOptions';
 import { getRuntimeModelDirectFallback } from '@model/copilotRouting';
 import type { StateReadFailed } from '@platform/interfaces';
@@ -43,7 +38,6 @@ import {
   AgentCategory,
   agentKey,
   agentName,
-  ExhaustionReasonSchema,
   isPlainAgentIdentity,
   type RunId,
 } from '@shared/schemas';
@@ -143,7 +137,7 @@ export interface HostRunActionPorts {
    * closes the prompt without entering a key is not a failure.
    */
   promptForApiKey(
-    provider?: ApiProvider,
+    provider: ApiProvider,
   ): Effect.Effect<void, ApiKeyPromptFailed>;
   /** The notification surface, shared with {@link MessageHost}: a host that
    *  could not present fails with `NotificationFailed`, and a user who
@@ -396,7 +390,6 @@ export const createHostRunActions = (
         );
 
     const apiKeyRetry = new ProgressApiKeyRetryController({
-      providers: API_PROVIDERS,
       readKey: (provider) => lookupApiKey(secrets, provider),
       hasUsableKey: (provider) => hasUsableApiKey(secrets, provider),
       // A host that could not ask returns the port's `ApiKeyPromptFailed`.
@@ -426,14 +419,6 @@ export const createHostRunActions = (
       },
     });
 
-    /** The wire carries the reason as text; an unknown one is no reason. */
-    const exhaustionReasonOf = (
-      request: Extract<HostRequest, { kind: 'useOwnApiKey' }>,
-    ) => {
-      const parsed = ExhaustionReasonSchema.safeParse(request.exhaustionReason);
-      return parsed.success ? parsed.data : undefined;
-    };
-
     /** The Copilot subscription's fallback: a replacement run on the user's
      *  own key for the model Copilot served, then the pending retry is
      *  cancelled in its favor. */
@@ -451,7 +436,6 @@ export const createHostRunActions = (
           );
           return;
         }
-        const exhaustionReason = exhaustionReasonOf(request);
         let fallback = getRuntimeModelDirectFallback(
           request.model,
           yield* getUseOpenRouter(session.roots),
@@ -466,10 +450,10 @@ export const createHostRunActions = (
         // OpenRouter preference while that prompt is open. Revalidate both the
         // exact retry identity and the effective credential owner after each
         // prompt so an old action cannot launch or alter a replacement request.
-        let prepared = yield* apiKeyRetry.ensureOwnApiKey({
-          provider: fallback.provider,
-          exhaustionReason,
-        });
+        let prepared = yield* apiKeyRetry.ensureOwnApiKey(
+          fallback.provider,
+          false,
+        );
         if (!prepared || !isRetryPending(runId, requestId)) return;
         const currentFallback = getRuntimeModelDirectFallback(
           request.model,
@@ -481,10 +465,10 @@ export const createHostRunActions = (
         }
         if (currentFallback.provider !== fallback.provider) {
           fallback = currentFallback;
-          prepared = yield* apiKeyRetry.ensureOwnApiKey({
-            provider: fallback.provider,
-            exhaustionReason,
-          });
+          prepared = yield* apiKeyRetry.ensureOwnApiKey(
+            fallback.provider,
+            false,
+          );
           if (!prepared || !isRetryPending(runId, requestId)) return;
           const finalFallback = getRuntimeModelDirectFallback(
             request.model,
@@ -666,19 +650,13 @@ export const createHostRunActions = (
         }
       }),
       useOwnApiKey(request) {
-        if (request.exhaustionReason === 'copilot-subscription') {
-          return copilotFallback(request);
-        }
-        const provider =
-          request.provider != null && isApiProvider(request.provider)
-            ? request.provider
-            : undefined;
+        const offer = request.credentialSwitch;
+        if (offer.kind === 'copilot-fallback') return copilotFallback(request);
         return apiKeyRetry.useOwnApiKey({
           stream: request.runId,
           requestId: request.requestId,
-          model: request.model ?? undefined,
-          provider,
-          exhaustionReason: exhaustionReasonOf(request),
+          provider: offer.provider,
+          requireNewKey: offer.kind === 'new-key',
         });
       },
       restoreState: Effect.fn('HostRunActions.restoreState')(function* (runId) {

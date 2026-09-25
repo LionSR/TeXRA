@@ -182,6 +182,7 @@ function boundModel(): BoundModel {
     compatibilityKey: 'OpenAI',
     model,
     origin: ORIGIN,
+    route: { kind: 'api-key', provider: 'openai', usageRoute: 'api-key' },
     usageRoute: 'api-key',
     contextWindow: MODEL_CONFIGS.gpt54.contextWindow,
     supportsVision: false,

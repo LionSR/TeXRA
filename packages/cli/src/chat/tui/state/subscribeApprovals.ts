@@ -4,11 +4,11 @@
 // `view.requests` until a `request.decided` answers it, and the modal reads
 // that list (`approvalQueue.ts`). This module owns only what a request needs
 // before it can be shown or answered on this host: the CLI policy's own
-// answer for the kinds it settles with nobody to ask, a retry's personal-key
-// lookup and the unattended switch that lookup enables, and the decision it
-// lands for the `useOwnApiKey` capability. The credential rules behind that
-// capability are not here — they are `ProgressApiKeyRetryController`'s, the
-// same ones the extension and the desktop switch on.
+// answer for the kinds it settles with nobody to ask, and the decision it
+// lands for the `useOwnApiKey` capability. Whether a retry offers a move onto
+// the user's own key, and whether that move was taken without asking, is the
+// run's decision carried on the request; the key entry behind the capability
+// is `ProgressApiKeyRetryController`'s, shared with the extension and desktop.
 //
 // The attached host answers nothing: it stages a tool edit's preview,
 // mirrors bypass state onto its wire, and presents events.
@@ -17,10 +17,6 @@ import { Effect } from 'effect';
 
 import type { HostInteractions, SessionHandle } from '@agent/runtime';
 import {
-  cliRetryQuotaRoute,
-  isCliApiSwitchableRetry,
-} from '@cli/runtime/approval/approvalPrompts';
-import {
   settleExecutable,
   settleHumanInputDenial,
   settleRetry,
@@ -28,24 +24,17 @@ import {
 import { promptForCliProviderApiKey } from '@cli/chat/tui/hosts/cliProviderKeys';
 import type { CliContext } from '@cli/runtime/cliContext';
 import type { CliRuntimeHost } from '@cli/runtime/cliPresentationHost';
-import { missingApiKeyRetryMessage } from '@cli/tui/ui/retryCopy';
 import {
   ApiKeyPromptFailed,
   ProgressApiKeyRetryController,
 } from '@controllers/progressView/ProgressApiKeyRetryController';
 import { withLogChannel } from '@logger/effectLog';
-import {
-  API_PROVIDERS,
-  type ApiProvider,
-  hasUsableApiKey,
-  isApiProvider,
-  lookupApiKey,
-} from '@model/apiProviders';
+import { hasUsableApiKey, lookupApiKey } from '@model/apiProviders';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
-import { getExhaustionReason, type RetryPermission } from '@shared/schemas';
+import { providerDisplayName } from '@shared/constants/providers';
+import type { RetryPermission } from '@shared/schemas';
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import { isCodingPlanQuotaRoute } from '@shared/quotaFallbackRoutes';
 import type { HostRequest } from '@shared/session/hostRequest';
 import { subscribeToSignalChanges } from '@shared/signals';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -85,12 +74,6 @@ interface TuiApprovalStores {
   readonly runtime: ProcessRuntime;
 }
 
-/** The provider a retry failed on, when it names one this host has keys for. */
-function retryProvider(permission: RetryPermission): ApiProvider | undefined {
-  const requested = permission.errorDetails?.provider;
-  return requested && isApiProvider(requested) ? requested : undefined;
-}
-
 /**
  * Create the TUI's presentation host, and answer for its lifetime the
  * pending requests this host settles without the modal.
@@ -118,9 +101,6 @@ export function createTuiHostInteractions(
     acted.delete(requestId);
     switched.delete(requestId);
   };
-  /** Retries this host switched without asking, which get the notification. */
-  const automaticSwitches = new Set<string>();
-
   const pendingRetry = (requestId: string): RetryPermission | undefined => {
     const pending = attentionRequests
       .get()
@@ -129,49 +109,34 @@ export function createTuiHostInteractions(
   };
 
   /**
-   * The shared credential-switch policy, bound to this host's stores: which
-   * provider a quota-exhausted route falls back to, whether the user already
-   * has a usable key for it, and the prompt that asks for one when they do
-   * not. Only the decision this host lands on the request is its own — the
-   * rules above it are the same three ways on every host.
+   * The shared key entry, bound to this host's stores: whether the user
+   * already has a usable key for the provider the run's offer names, and the
+   * prompt that asks for one when they do not. Only the decision this host
+   * lands on the request is its own.
    */
   const apiKeyRetry = new ProgressApiKeyRetryController({
-    providers: API_PROVIDERS,
     readKey: (provider) => lookupApiKey(stores.secrets, provider),
     hasUsableKey: (provider) => hasUsableApiKey(stores.secrets, provider),
     promptForApiKey: (provider) =>
-      provider
-        ? promptForCliProviderApiKey(
-            stores.secrets,
-            stores.settings,
-            provider,
-          ).pipe(
-            Effect.mapError(
-              (cause) =>
-                new ApiKeyPromptFailed({
-                  provider,
-                  message: toErrorMessage(cause),
-                  cause,
-                }),
-            ),
-          )
-        : Effect.fail(
+      promptForCliProviderApiKey(
+        stores.secrets,
+        stores.settings,
+        provider,
+      ).pipe(
+        Effect.mapError(
+          (cause) =>
             new ApiKeyPromptFailed({
-              provider: undefined,
-              message:
-                'The failed API provider could not be identified, so TeXRA did not ask for a key.',
+              provider,
+              message: toErrorMessage(cause),
+              cause,
             }),
-          ),
+        ),
+      ),
     isRetryPending: (_stream, requestId) =>
       !disposed && pendingRetry(requestId) !== undefined,
     triggerRetry: (runId, requestId) =>
       Effect.sync(() => {
         switched.add(requestId);
-        // The notice belongs to the switch itself, not to the program that
-        // asked for it: the controller only reaches here on a live
-        // attachment (`isRetryPending`), and saying it here cannot race the
-        // fold dropping the request.
-        if (automaticSwitches.has(requestId)) notify('credentialSwitched');
         // This capability already selected the credential route; decomposing
         // the decision again would call the capability recursively.
         landRequestDecision(
@@ -187,9 +152,9 @@ export function createTuiHostInteractions(
   });
 
   /**
-   * A retry on the user's own key: the shared controller resolves the
-   * credential owner, checks the store, asks for a key when there is none,
-   * and lands the retry through `triggerRetry`. What stays here is the
+   * A retry on the user's own key: the shared controller checks the store
+   * for the key the run's offer names, asks for one when there is none, and
+   * lands the retry through `triggerRetry`. What stays here is the
    * answer a switch that did not happen still owes the run: the request is
    * durable and nobody else re-asks it, so it leaves as a denial worded for
    * this surface rather than as a card the user can no longer see.
@@ -204,7 +169,17 @@ export function createTuiHostInteractions(
       );
       return;
     }
-    const provider = retryProvider(permission);
+    const offer = permission.credentialSwitch;
+    // The Copilot route is the editor's; no run on this host binds it.
+    if (offer == null || offer.kind === 'copilot-fallback') {
+      stores.runtime.runFork(
+        Effect.logWarning(
+          `Retry ${requestId} offers no move onto a provider key: no credential switch was made.`,
+        ).pipe(withLogChannel('cli.tui')),
+      );
+      return;
+    }
+    const provider = offer.provider;
     stores.runtime.runFork(
       Effect.gen(function* () {
         const failure = yield* Effect.match(
@@ -212,8 +187,7 @@ export function createTuiHostInteractions(
             stream: permission.runId,
             requestId,
             provider,
-            model: permission.model,
-            exhaustionReason: getExhaustionReason(permission.errorDetails),
+            requireNewKey: offer.kind === 'new-key',
           }),
           {
             onSuccess: () => undefined,
@@ -227,7 +201,9 @@ export function createTuiHostInteractions(
         // Success and failure have the same lifetime: a lookup that finishes
         // after this attachment leaves must not answer for its next owner.
         if (disposed || pendingRetry(requestId) === undefined) return;
-        const reason = failure ?? missingApiKeyRetryMessage(provider);
+        const reason =
+          failure ??
+          `No ${providerDisplayName(provider)} API key was entered, so the retry did not switch to it. Use \`/key\` to add one.`;
         yield* Effect.logWarning(
           `The retry could not switch to your own API key: ${reason}`,
         ).pipe(withLogChannel('cli.tui'));
@@ -258,80 +234,9 @@ export function createTuiHostInteractions(
   };
 
   /**
-   * A retry's presentation: the keychain lookup that decides whether `k` is
-   * offered, and the switch a coding-plan quota permits without asking.
-   * Coding-plan quotas (Kimi Code, GLM Coding Plan) have a fallback route
-   * that re-uses an already-stored key, so this host switches when that key
-   * exists — which is what lets a delegated subagent recover with no human
-   * present. OAuth subscriptions (ChatGPT, Grok) stay explicit: changing
-   * credential ownership must not hide the quota warning or silently spend
-   * API-key quota. Kimi Code-exclusive models never reach the switch: the
-   * classifier gates them to no route, so they keep the modal.
-   */
-  const prepareRetry = (permission: RetryPermission): void => {
-    const requestId = permission.requestId;
-    if (!isCliApiSwitchableRetry(permission)) {
-      stagePresentation({ kind: 'retry', data: permission, tui: {} });
-      return;
-    }
-    const provider = retryProvider(permission);
-    stores.runtime.runFork(
-      Effect.gen(function* () {
-        // Preparation only adorns the card, so no lookup outcome may stop it
-        // from being staged: a request whose modal never appears waits on
-        // nobody. The keychain read folds to the card copy either way.
-        const tui = provider
-          ? yield* Effect.matchEffect(
-              hasUsableApiKey(stores.secrets, provider),
-              {
-                onSuccess: (personalApiKeyAvailable) =>
-                  Effect.succeed({
-                    personalApiKeyAvailable,
-                    missingPersonalApiKeyMessage:
-                      missingApiKeyRetryMessage(provider),
-                  }),
-                // A keychain failure must not permit a credential switch nobody asked for.
-                onFailure: (error) =>
-                  Effect.logWarning(
-                    `Keychain lookup for ${provider} failed: ${toErrorMessage(error)}`,
-                  ).pipe(
-                    withLogChannel('cli.tui'),
-                    Effect.as({
-                      personalApiKeyAvailable: false,
-                      missingPersonalApiKeyMessage: missingApiKeyRetryMessage(
-                        provider,
-                        'unavailable',
-                      ),
-                    }),
-                  ),
-              },
-            )
-          : {
-              personalApiKeyAvailable: false,
-              missingPersonalApiKeyMessage: missingApiKeyRetryMessage(provider),
-            };
-        // Preparation has the same attachment lifetime as the decision: an
-        // old lookup cannot replace the next host's card or switch its retry.
-        if (disposed || pendingRetry(requestId) === undefined) return;
-        const route = cliRetryQuotaRoute(permission);
-        if (
-          tui.personalApiKeyAvailable &&
-          route &&
-          isCodingPlanQuotaRoute(route.id)
-        ) {
-          automaticSwitches.add(requestId);
-          useOwnApiKey(requestId);
-          return;
-        }
-        stagePresentation({ kind: 'retry', data: permission, tui });
-      }),
-    );
-  };
-
-  /**
    * What this host does with each newly listed request: the policy's own
    * decision for a gated plan or delegation, the denial a run with no human
-   * input available gets for a question, and a retry's preparation. Bash and
+   * input available gets for a question, and a retry's card. Bash and
    * tool-edit policy is decided at the tool boundary before their request
    * opens, so those always wait for the modal.
    */
@@ -342,7 +247,7 @@ export function createTuiHostInteractions(
     // it, however they settled: a decision taken on another surface or a run
     // interruption drops the fact without passing through this surface.
     forgetSettledRequests(live);
-    pruneToLive(live, acted, automaticSwitches, switched);
+    pruneToLive(live, acted, switched);
     for (const request of pending) {
       if (acted.has(request.requestId)) continue;
       const payload = request.payload;
@@ -400,7 +305,7 @@ export function createTuiHostInteractions(
             );
             continue;
           }
-          prepareRetry(payload.data);
+          stagePresentation({ kind: 'retry', data: payload.data });
           continue;
         }
       }

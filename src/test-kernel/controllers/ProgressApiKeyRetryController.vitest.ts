@@ -24,11 +24,6 @@ function itHosted<A, E>(
   it.effect(name, () => Effect.provide(body(), fakeProcessServices()));
 }
 
-const PROVIDERS = [
-  'openai',
-  'anthropic',
-] as const satisfies readonly ApiProvider[];
-
 /** The controller's deps are file-local; derive them from its constructor. */
 type ProgressApiKeyRetryControllerDeps = ConstructorParameters<
   typeof ProgressApiKeyRetryController
@@ -45,7 +40,7 @@ interface HarnessOptions {
 function createHarness(options: HarnessOptions = {}): {
   controller: ProgressApiKeyRetryController;
   keys: Map<ApiProvider, string | undefined>;
-  prompts: Array<ApiProvider | undefined>;
+  prompts: ApiProvider[];
   retries: string[];
 } {
   const keys = new Map<ApiProvider, string | undefined>(
@@ -53,7 +48,7 @@ function createHarness(options: HarnessOptions = {}): {
       [ApiProvider, string | undefined]
     >,
   );
-  const prompts: Array<ApiProvider | undefined> = [];
+  const prompts: ApiProvider[] = [];
   const retries: string[] = [];
 
   return {
@@ -61,7 +56,6 @@ function createHarness(options: HarnessOptions = {}): {
     prompts,
     retries,
     controller: new ProgressApiKeyRetryController({
-      providers: PROVIDERS,
       readKey: (provider) =>
         Effect.sync(() => {
           // The fixture keeps plain strings; the port hands out sealed values,
@@ -104,7 +98,7 @@ describe('ProgressApiKeyRetryController', () => {
           stream: 'stream-a' as RunId,
           requestId: 'retry-a',
           provider: 'anthropic',
-          exhaustionReason: 'upstream-credit',
+          requireNewKey: true,
         });
 
         expect(harness.prompts).toStrictEqual(['anthropic']);
@@ -125,7 +119,7 @@ describe('ProgressApiKeyRetryController', () => {
         stream: 'stream-a' as RunId,
         requestId: 'retry-a',
         provider: 'anthropic',
-        exhaustionReason: 'upstream-credit',
+        requireNewKey: true,
       });
 
       expect(harness.prompts).toStrictEqual(['anthropic']);
@@ -144,33 +138,11 @@ describe('ProgressApiKeyRetryController', () => {
         stream: 'stream-a' as RunId,
         requestId: 'retry:stale',
         provider: 'anthropic',
-        exhaustionReason: 'copilot-subscription',
+        requireNewKey: false,
       });
 
       expect(harness.retries).toStrictEqual([]);
     }),
-  );
-
-  itHosted(
-    'accepts a changed key from any provider when depletion has no provider hint',
-    () =>
-      Effect.gen(function* () {
-        const harness = createHarness({
-          keys: { openai: 'old-openai', anthropic: undefined },
-          prompt: (keys) => {
-            keys.set('anthropic', 'new-anthropic');
-          },
-        });
-
-        yield* harness.controller.useOwnApiKey({
-          stream: 'stream-b' as RunId,
-          requestId: 'retry-b',
-          exhaustionReason: 'upstream-credit',
-        });
-
-        expect(harness.prompts).toStrictEqual([undefined]);
-        expect(harness.retries).toStrictEqual(['stream-b']);
-      }),
   );
 
   itHosted('retries with the existing OpenAI key without prompting', () =>
@@ -181,7 +153,7 @@ describe('ProgressApiKeyRetryController', () => {
         stream: 'stream-d' as RunId,
         requestId: 'retry-d',
         provider: 'openai',
-        exhaustionReason: 'chatgpt-subscription',
+        requireNewKey: false,
       });
 
       // The subscription quota failed, not the key — a stored key is already
@@ -201,7 +173,7 @@ describe('ProgressApiKeyRetryController', () => {
         stream: 'stream-e' as RunId,
         requestId: 'retry-e',
         provider: 'openai',
-        exhaustionReason: 'chatgpt-subscription',
+        requireNewKey: false,
       });
 
       // No usable key exists, so the prompt is still shown (then declined here).
@@ -218,10 +190,10 @@ describe('ProgressApiKeyRetryController', () => {
           keys: { anthropic: 'stored-anthropic' },
         });
 
-        const proceeded = yield* harness.controller.ensureOwnApiKey({
-          provider: 'anthropic',
-          exhaustionReason: 'copilot-subscription',
-        });
+        const proceeded = yield* harness.controller.ensureOwnApiKey(
+          'anthropic',
+          false,
+        );
 
         expect(proceeded).toBe(true);
         expect(harness.prompts).toStrictEqual([]);
@@ -229,22 +201,6 @@ describe('ProgressApiKeyRetryController', () => {
         // in place, and no preference of the user's is written.
         expect(harness.retries).toStrictEqual([]);
       }),
-  );
-
-  itHosted('refuses the API-key switch for a Kimi Code-exclusive model', () =>
-    Effect.gen(function* () {
-      const harness = createHarness({ keys: { openai: 'stored-openai' } });
-
-      yield* harness.controller.useOwnApiKey({
-        stream: 'stream-kimi-exclusive' as RunId,
-        requestId: 'retry-kimi-exclusive',
-        model: 'kimiCoding',
-        exhaustionReason: 'kimi-code-subscription',
-      });
-
-      expect(harness.prompts).toStrictEqual([]);
-      expect(harness.retries).toStrictEqual([]);
-    }),
   );
 
   itHosted('rechecks the retry identity after the key prompt', () =>
@@ -262,66 +218,11 @@ describe('ProgressApiKeyRetryController', () => {
         stream: 'stream-stale' as RunId,
         requestId: 'retry-stale',
         provider: 'openai',
-        exhaustionReason: 'chatgpt-subscription',
+        requireNewKey: false,
       });
 
       expect(harness.retries).toStrictEqual([]);
       expect(pendingChecks).toBe(1);
     }),
-  );
-
-  itHosted(
-    'prompts for the kimiCode credential when an exclusive model rebinds on credit depletion',
-    () =>
-      Effect.gen(function* () {
-        const harness = createHarness({
-          keys: { kimiCode: 'old-kimi', moonshot: 'old-moonshot' },
-          prompt: (keys) => {
-            keys.set('kimiCode', 'new-kimi');
-          },
-        });
-
-        yield* harness.controller.useOwnApiKey({
-          stream: 'stream-kimi-credit' as RunId,
-          requestId: 'retry-kimi-credit',
-          model: 'kimiCoding',
-          provider: 'moonshot',
-          exhaustionReason: 'upstream-credit',
-        });
-
-        // The SDK error identifies the open-platform Moonshot provider, but the
-        // exclusive model binds with `kimiCode`; the prompt and key check must
-        // target the same credential or the retry repeats the same failure.
-        expect(harness.prompts).toStrictEqual(['kimiCode']);
-        expect(harness.keys.get('kimiCode')).toBe('new-kimi');
-        expect(harness.keys.get('moonshot')).toBe('old-moonshot');
-        expect(harness.retries).toStrictEqual(['stream-kimi-credit']);
-      }),
-  );
-
-  itHosted(
-    'prompts for the forwarded provider on a dual-backend Kimi credit retry',
-    () =>
-      Effect.gen(function* () {
-        const harness = createHarness({
-          keys: { moonshot: 'old-moonshot', kimiCode: 'old-kimi' },
-          prompt: (keys) => {
-            keys.set('moonshot', 'new-moonshot');
-          },
-        });
-
-        yield* harness.controller.useOwnApiKey({
-          stream: 'stream-kimi-dual' as RunId,
-          requestId: 'retry-kimi-dual',
-          model: 'kimi3',
-          provider: 'moonshot',
-          exhaustionReason: 'upstream-credit',
-        });
-
-        expect(harness.prompts).toStrictEqual(['moonshot']);
-        expect(harness.keys.get('moonshot')).toBe('new-moonshot');
-        expect(harness.keys.get('kimiCode')).toBe('old-kimi');
-        expect(harness.retries).toStrictEqual(['stream-kimi-dual']);
-      }),
   );
 });
