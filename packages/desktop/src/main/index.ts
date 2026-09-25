@@ -736,15 +736,10 @@ function createWindow(options: {
     );
   };
   let teamSignInPending = false;
-  /** Every surface an account change touches, as one program: the open
-   *  papers' auth snapshots, the settings view, then the onboarding funnel. */
+  /** Every surface an account change touches, as one program: the agent
+   *  catalog, the settings view, then the onboarding funnel. */
   const refreshDesktopAuthSurfaces = () =>
     Effect.gen(function* () {
-      yield* Effect.forEach(
-        [...projectBindings.values()],
-        (binding) => binding.snapshot.refreshAuth,
-        { concurrency: 'unbounded', discard: true },
-      );
       // Sign-in: a signed-out load already stamped the catalog as including
       // remote, so only a forced refetch picks up the new account's agents.
       // Sign-out also lands here, after the coordinator dropped the remote
@@ -1112,7 +1107,6 @@ function createWindow(options: {
       resourcesPath: options.resourcesPath,
       postToRenderer: postToRendererIfAlive,
       postSurfaceAction: (action) => bridge.surfaceAction(action),
-      signIn,
       getCustomAgentDirectory,
       showFirstRunWalkthrough: () => shellActions.showFirstRunWalkthrough(),
       onboarding: requireOnboardingIpc(),

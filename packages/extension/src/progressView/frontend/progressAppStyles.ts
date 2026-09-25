@@ -90,8 +90,8 @@ export const progressAppStyles = css`
     flex: 1 1 auto;
   }
 
-  .stop-button {
-    color: var(--color-error);
+  .header-run {
+    flex: 1 1 auto;
   }
 
   .shell-body {
@@ -213,6 +213,14 @@ export const progressAppStyles = css`
     font-size: var(--font-size-sm);
     line-height: var(--line-height-normal, 1.5);
     color: var(--color-text-secondary);
+  }
+
+  .hero-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: var(--wa-space-2xs);
+    margin-top: var(--wa-space-2xs);
   }
 
   .context::part(base) {

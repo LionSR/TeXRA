@@ -241,6 +241,8 @@ const MissingToolSchema = z.object({
   id: z.string(),
   label: z.string(),
   interchangeable: z.boolean(),
+  /** What TeXRA can't do without it, completing "TeXRA can't …". */
+  usedFor: z.string(),
 });
 export type MissingTool = z.infer<typeof MissingToolSchema>;
 
