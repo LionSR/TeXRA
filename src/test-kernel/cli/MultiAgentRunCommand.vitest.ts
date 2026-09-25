@@ -255,8 +255,6 @@ function mockMaterializedStdin(inputFiles: string[]): void {
 
 describe('CLI multi-agent run command', () => {
   const tempDirs = useTempDirs();
-  const approvalUnavailableWarning =
-    'WARN preset mathematician may run without subagent delegation because approval policy "never" denies approval-gated delegation tools. Use an interactive run to answer prompts, or pass --approval-policy yolo only when you intentionally want to auto-approve privileged tools.';
   const headlessAskError =
     'Cannot run multi-agent preset "mathematician" with headless approval policy "ask": delegation prompts cannot be answered. Use an interactive run to answer prompts, pass --approval-policy never to deny approval-gated tools, or pass --approval-policy yolo only when you intentionally want to auto-approve privileged tools.';
 
@@ -415,38 +413,6 @@ describe('CLI multi-agent run command', () => {
       }),
   );
 
-  it('reports resolved remote agent loads without implying final missing agents', async () => {
-    const remoteLoadMessage =
-      'Preset mathematician loaded remote agents before launch. Run `texra multi-agent show mathematician` to view the resolved team.';
-    mocks.teamPlanHasGaps.mockReturnValueOnce(true).mockReturnValueOnce(false);
-    authProbes.push(true);
-
-    const exitCode = await runPreset({
-      inputFiles: ['problem.tex'],
-      instruction: 'Solve the problem with the team.',
-    });
-
-    expect(exitCode).toBe(0);
-    expect(cliLogSinksMock.writeTextStderr).toHaveBeenCalledWith(
-      remoteLoadMessage,
-    );
-    expect(cliLogSinksMock.writeTextStderr).not.toHaveBeenCalledWith(
-      expect.stringContaining('not available locally'),
-    );
-  });
-
-  it('warns when approval policy never blocks team delegation', async () => {
-    const exitCode = await runPreset({
-      inputFiles: ['problem.tex'],
-      instruction: 'Solve the problem with the team.',
-    });
-
-    expect(exitCode).toBe(0);
-    expect(cliLogSinksMock.writeTextStderr).toHaveBeenCalledWith(
-      approvalUnavailableWarning,
-    );
-  });
-
   it('refuses headless ask before launching a team run', async () => {
     const exitCode = await runPreset(
       {
@@ -467,66 +433,6 @@ describe('CLI multi-agent run command', () => {
     });
     expect(mocks.withExpandedRunInputs).not.toHaveBeenCalled();
     expect(mocks.executeCliToolUseConfig).not.toHaveBeenCalled();
-  });
-
-  it('does not warn when yolo can auto-approve delegation', async () => {
-    const exitCode = await runPreset(
-      {
-        inputFiles: ['problem.tex'],
-        instruction: 'Solve the problem with the team.',
-      },
-      createRunCommandCliContext({ approvalPolicy: 'yolo' }),
-    );
-
-    expect(exitCode).toBe(0);
-    expect(cliLogSinksMock.writeTextStderr).not.toHaveBeenCalledWith(
-      expect.stringContaining('may run without subagent delegation'),
-    );
-  });
-
-  it('shows attached inputs instead of orchestration guidance without an instruction', async () => {
-    mockExpandedRunInputs({
-      inputFiles: ['problem.tex'],
-      contextFiles: ['reference.tex'],
-    });
-    const exitCode = await runPreset({
-      inputFiles: [' problem.tex '],
-      contextFiles: [' reference.tex '],
-      instruction: '',
-    });
-
-    expect(exitCode).toBe(0);
-    const config = mocks.executeCliToolUseConfig.mock.calls[0]?.[0];
-    expect(config?.displayInstruction).toContain('Attached input files:');
-    expect(config?.displayInstruction).toContain('- "problem.tex"');
-    expect(config?.displayInstruction).toContain(
-      '\n\nAttached read-only context files:\n- "reference.tex"',
-    );
-    expect(config?.displayInstruction).not.toContain(
-      'Run the "Mathematician" multi-agent team preset.',
-    );
-    expect(config?.displayInstruction).not.toContain(
-      'Read and use them before delegating work.',
-    );
-    expect(config?.instruction).toContain(
-      'Run the "Mathematician" multi-agent team preset.',
-    );
-  });
-
-  it('uses a stable display label for a file-only stdin launch', async () => {
-    mockMaterializedStdin(['.texra-tmp/texra-stdin-123/stdin.tex']);
-
-    const exitCode = await runPreset({ inputFiles: [' - '], instruction: '' });
-
-    expect(exitCode).toBe(0);
-    const config = mocks.executeCliToolUseConfig.mock.calls[0]?.[0];
-    expect(config?.displayInstruction).toBe(
-      'Attached input files:\n- Standard input',
-    );
-    expect(config?.displayInstruction).not.toContain('texra-stdin-123');
-    expect(config?.inputFiles).toEqual([
-      '.texra-tmp/texra-stdin-123/stdin.tex',
-    ]);
   });
 
   it('allows instruction-file-only team runs without input files', async () => {

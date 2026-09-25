@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 
 import {
   cliModelRecord,
-  formatNoListableModelsMessage,
   listableModelAccessEntries,
   type CliModelAccess,
 } from '@cli/runtime/modelAccess';
@@ -77,18 +76,6 @@ describe('CLI model JSON record', () => {
 });
 
 describe('CLI model list filtering', () => {
-  it('lists only currently runnable models by default', () => {
-    const entries = [
-      access('sonnet46T'),
-      unavailableAccess('opus48T'),
-      access('deepseekT'),
-    ];
-
-    expect(
-      listableModelAccessEntries(entries).map((entry) => entry.model.value),
-    ).toEqual(['sonnet46T', 'deepseekT']);
-  });
-
   it('does not recompute availability from model metadata', () => {
     const personalModeEntries = [
       access('sonnet46T', {
@@ -121,16 +108,5 @@ describe('CLI model list filtering', () => {
         (entry) => entry.model.value,
       ),
     ).toEqual(['sonnet46T', 'opus48T']);
-  });
-});
-
-describe('CLI model list empty-state text', () => {
-  it('does not suggest --all when unavailable models were already requested', () => {
-    const text = formatNoListableModelsMessage({
-      includeUnavailable: true,
-    });
-
-    expect(text).toContain('No models are currently available.');
-    expect(text).not.toContain('models list --all');
   });
 });

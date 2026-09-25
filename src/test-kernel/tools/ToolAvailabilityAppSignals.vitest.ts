@@ -56,47 +56,6 @@ afterEach(() => {
 });
 
 describe('tool availability app signals', () => {
-  it.effect('emits toolAvailabilityChanged after a refresh', () =>
-    Effect.gen(function* () {
-      vi.doMock('@tools/plugins', () => ({
-        TOOL_PLUGINS: [
-          {
-            id: 'test-tool',
-            toolNames: [],
-            name: 'Test tool',
-            category: 'ai-agents',
-            availability: {
-              check: vi.fn(() => Effect.succeed(true)),
-            },
-          },
-        ],
-      }));
-      const { onAppSignal } = yield* Effect.promise(
-        () => import('@eventBus/AppSignals'),
-      );
-      const { refreshToolAvailability } = yield* Effect.promise(
-        () => import('@tools/toolAvailability'),
-      );
-      const events: undefined[] = [];
-      const delivered = Deferred.makeUnsafe<void>();
-      // The subscriber drains on its own fiber: the yield lets it register
-      // before the probe publishes, and the wait lets the delivery land.
-      const fiber = yield* Effect.forkChild(
-        onAppSignal('toolAvailabilityChanged', (payload) => {
-          events.push(payload);
-          Deferred.doneUnsafe(delivered, Effect.void);
-        }),
-      );
-      yield* Effect.yieldNow;
-
-      yield* refreshToolAvailability(probeInputs);
-
-      yield* Deferred.await(delivered);
-      expect(events).toEqual([undefined]);
-      yield* Fiber.interrupt(fiber);
-    }).pipe(Effect.provide(probeServices)),
-  );
-
   it.effect(
     're-probes every open workspace when a key a plugin declares changes',
     () =>
@@ -163,6 +122,41 @@ describe('tool availability app signals', () => {
         sessionGraph.initSessionOwner(undefined);
         yield* Fiber.interrupt(reprobe);
         yield* Fiber.interrupt(listener);
+      }).pipe(Effect.provide(probeServices)),
+  );
+
+  it.effect(
+    're-probes for a caller that joins before the probe fiber starts',
+    () =>
+      Effect.gen(function* () {
+        const check = vi.fn(() => Effect.succeed(true));
+        vi.doMock('@tools/plugins', () => ({
+          TOOL_PLUGINS: [
+            {
+              id: 'probed-tool',
+              toolNames: ['probed'],
+              name: 'Probed tool',
+              category: 'ai-agents',
+              availability: { check },
+            },
+          ],
+        }));
+        const { runExternalToolChecks } = yield* Effect.promise(
+          () => import('@tools/toolAvailability'),
+        );
+        // The first caller claims the slot and forks the probe; the second
+        // joins before that fiber's first step and asks for a rerun.
+        const first = yield* Effect.forkChild(
+          runExternalToolChecks(probeInputs),
+          { startImmediately: true },
+        );
+        const second = yield* Effect.forkChild(
+          runExternalToolChecks(probeInputs),
+          { startImmediately: true },
+        );
+        yield* Fiber.join(first);
+        yield* Fiber.join(second);
+        expect(check).toHaveBeenCalledTimes(2);
       }).pipe(Effect.provide(probeServices)),
   );
 

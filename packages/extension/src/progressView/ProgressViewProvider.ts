@@ -56,7 +56,6 @@ import { createAgentPresentationHost } from '@frontend/events/agentEventListener
 import { onTexraAuthSessionsChanged } from '@frontend/events/onTexraAuthSessionsChanged';
 import { pushManualCriticism } from '@frontend/latex/inlineCriticism';
 import { getLinterMessages } from '@frontend/latex/linter';
-import { AgentReviewService } from '@frontend/review/AgentReviewService';
 import { withLogChannel } from '@logger/effectLog';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import { Lifecycle, SHUTDOWN_PHASE } from '@platform/interfaces';
@@ -387,10 +386,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
                 cause,
               }),
           }),
-        // Findings from the changeReviewer tool-use session flow in through
-        // the report_review_issue tool and land in the panel + diagnostics.
-        reportReviewIssue: (report) =>
-          AgentReviewService.addIssueReport(report),
         // Staging is the host's half of a `request.opened`; the fold lists the
         // request either way, so a staging failure is reported, never swallowed.
         presentToolEdit: (request) => {
@@ -786,7 +781,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       }
       const panel = vscode.window.createWebviewPanel(
         'texra.progress.panel',
-        'TeXRA',
+        'TeXRA Sessions',
         vscode.ViewColumn.One,
         {
           enableScripts: true,

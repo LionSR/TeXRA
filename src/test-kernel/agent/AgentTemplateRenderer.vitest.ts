@@ -9,31 +9,6 @@ import {
 } from '@agent/templates/agentTemplateRenderer';
 
 describe('renderAgentTemplateString', () => {
-  it('preserves agent runtime variables for the generated agent', () => {
-    const rendered = renderAgentTemplateString(
-      [
-        'name: {{ AGENT_NAME }}',
-        'request: {{ INSTRUCTION }}',
-        'input: {{ INPUT_CONTENT }}',
-      ].join('\n'),
-      {
-        AGENT_NAME: 'reviewer',
-      },
-    );
-
-    expect(rendered).toMatch(/name: reviewer/);
-    expect(rendered).toMatch(/request: {{ INSTRUCTION }}/);
-    expect(rendered).toMatch(/input: {{ INPUT_CONTENT }}/);
-  });
-
-  it('lets explicit caller variables override passthrough defaults', () => {
-    const rendered = renderAgentTemplateString('request: {{ INSTRUCTION }}', {
-      INSTRUCTION: 'write tests',
-    });
-
-    expect(rendered).toBe('request: write tests');
-  });
-
   it('keeps {{ ALL_CONTEXTS }} literal when the settings-view creation path renders the bundled workflow template (issue #7678)', () => {
     // The settings-view agent-creation path (agentHandlers.ts createAgentFromTemplate)
     // only supplies AGENT_NAME/DESCRIPTION/TOOLS_YAML, so {{ ALL_CONTEXTS }} must

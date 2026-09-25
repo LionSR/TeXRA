@@ -80,78 +80,6 @@ function sonnet46CopilotRoutes(
 }
 
 describe('SettingsModelSelectionController', () => {
-  it.effect(
-    'does not expose a reasoning selector for Kimi K3 fixed max effort',
-    () =>
-      Effect.gen(function* () {
-        const controller = createController({
-          stores: {
-            ...makeFakeSettingsStores().stores,
-            globalState: new FakeStateStore({
-              [GlobalStateKey.REASONING_LEVELS]: { kimi3: 'low' },
-            }),
-          },
-        });
-
-        const { models } = yield* controller.buildSelectionData();
-        const kimi3 = models.find((model) => model.name === 'kimi3');
-
-        expect(MODEL_CONFIGS.kimi3.capabilities).toMatchObject({
-          supportsReasoningEffort: true,
-          reasoningEffort: 'max',
-        });
-        expect(kimi3).not.toHaveProperty('supportsReasoningLevel');
-        expect(kimi3).not.toHaveProperty('reasoningLevel');
-      }),
-  );
-
-  it.effect(
-    'groups membership models under Kimi Code rather than Moonshot',
-    () =>
-      Effect.gen(function* () {
-        const controller = createController();
-
-        const { models } = yield* controller.buildSelectionData();
-
-        expect(
-          models.find((model) => model.name === 'kimiCoding'),
-        ).toMatchObject({
-          provider: 'kimiCode',
-          label: 'Kimi for Coding',
-        });
-      }),
-  );
-
-  it.effect(
-    'keeps Kimi K3 under Moonshot while preserving its effective route',
-    () =>
-      Effect.gen(function* () {
-        const controller = createController({
-          resolveModelOptions: (_stores, models) =>
-            Effect.succeed(
-              modelOptions(models).map((option) =>
-                option.value === 'kimi3'
-                  ? {
-                      ...option,
-                      provider: 'kimiCode',
-                      routeLabel: 'Via Kimi Code',
-                    }
-                  : option,
-              ),
-            ),
-        });
-
-        expect(
-          (yield* controller.buildSelectionData()).models.find(
-            (model) => model.name === 'kimi3',
-          ),
-        ).toMatchObject({
-          provider: 'moonshot',
-          routeLabel: 'Via Kimi Code',
-        });
-      }),
-  );
-
   it.effect('resolves a disabled helper to the built-in default', () =>
     Effect.gen(function* () {
       const globalState = new FakeStateStore({
@@ -292,33 +220,6 @@ describe('SettingsModelSelectionController', () => {
             preferred: true,
           },
         ]);
-      }),
-  );
-
-  it.effect(
-    'does not expose reasoning controls for a preferred VS Code route',
-    () =>
-      Effect.gen(function* () {
-        const controller = createController({
-          getPreferredCopilotRouteModels: () => Effect.succeed(['sonnet46']),
-          copilotRoutes: Effect.succeed(
-            sonnet46CopilotRoutes('allowed', {
-              ...MODEL_CONFIGS.sonnet46.capabilities,
-              supportsReasoningEffort: false,
-              maxReasoningEffort: undefined,
-              supportedReasoningEfforts: undefined,
-            }),
-          ),
-        });
-
-        const sonnet = (yield* controller.buildSelectionData()).models.find(
-          (model) => model.name === 'sonnet46',
-        );
-        expect(
-          MODEL_CONFIGS.sonnet46.capabilities.supportsReasoningEffort,
-        ).toBe(true);
-        expect(sonnet).not.toHaveProperty('supportsReasoningLevel');
-        expect(sonnet).not.toHaveProperty('reasoningLevel');
       }),
   );
 

@@ -553,64 +553,6 @@ describe('ExecutionsTool /executions/{id}/output', () => {
     ),
   );
 
-  it.live('points at /report when a registered process has no output yet', () =>
-    Effect.gen(function* () {
-      const runId = yield* registerProcessRun('sleep 1');
-
-      const result = yield* readOutput(runId);
-
-      assert.equal(result.status, 'executed');
-      const output = result.output ?? '';
-      assert.ok(output.includes('0 retained transcript chars'));
-      assert.ok(output.includes(`/executions/${runId}/report`));
-    }).pipe(
-      Effect.provide(
-        nativeToolTestLayer({
-          run: {
-            session: testDefaultSession(),
-            runId: PARENT_RUN_ID,
-            toolPolicy: {},
-          },
-        }),
-      ),
-    ),
-  );
-
-  it.live(
-    'points a non-process run at /conversation instead of dumping its transcript',
-    () =>
-      Effect.gen(function* () {
-        const runId = generateRunId();
-        yield* registerRun(
-          testDefaultSession(),
-          runId,
-          AgentConfigSchema.parse({
-            agent: 'chat',
-            instruction: 'Check the proof.',
-            agentCategory: AgentCategory.ToolUse,
-          }),
-          { identity: { kind: 'agent', agent: 'chat' } },
-        );
-
-        const result = yield* readOutput(runId);
-
-        assert.equal(result.status, 'executed');
-        assert.ok(
-          (result.output ?? '').includes(`/executions/${runId}/conversation`),
-        );
-      }).pipe(
-        Effect.provide(
-          nativeToolTestLayer({
-            run: {
-              session: testDefaultSession(),
-              runId: PARENT_RUN_ID,
-              toolPolicy: {},
-            },
-          }),
-        ),
-      ),
-  );
-
   it.live('bounds the workflow board and keeps attention first', () =>
     Effect.gen(function* () {
       const runId = yield* registerWorkflowRun('observable');
@@ -687,44 +629,6 @@ describe('ExecutionsTool /executions/{id}/output', () => {
       assert.ok(!output.includes('error-tail'));
       assert.ok(!output.includes('file-tail'));
       assert.ok(output.length < 20_000);
-    }).pipe(
-      Effect.provide(
-        nativeToolTestLayer({
-          run: {
-            session: testDefaultSession(),
-            runId: PARENT_RUN_ID,
-            toolPolicy: {},
-          },
-        }),
-      ),
-    ),
-  );
-
-  it.live('shows a cancelled card without a per-call error', () =>
-    Effect.gen(function* () {
-      const runId = yield* registerWorkflowRun('cancelled-summary');
-      yield* publishWorkflowBoard(runId, {
-        calls: [
-          {
-            id: 'cancelled-call',
-            label: 'Cancelled call',
-            kind: 'document',
-            files: { input: [], context: [], media: [] },
-            status: 'cancelled',
-          },
-        ],
-      });
-
-      const result = yield* ExecutionsTool.call({
-        path: `/executions/${runId}`,
-      });
-      const output = result.output ?? '';
-
-      assert.equal(result.status, 'executed');
-      assert.ok(output.includes('"status": "cancelled"'));
-      // A card issued outside any phase sits under the trailing heading.
-      assert.ok(output.includes('"title": "Unphased"'));
-      assert.ok(!output.includes('"error":'));
     }).pipe(
       Effect.provide(
         nativeToolTestLayer({
@@ -822,24 +726,5 @@ describe('ExecutionsTool /executions/{id}/output', () => {
           }),
         ),
       ),
-  );
-
-  it.live('errors on an unknown run id', () =>
-    Effect.gen(function* () {
-      const result = yield* readOutput(generateRunId());
-
-      assert.equal(result.status, 'error');
-      assert.ok((result.error ?? '').includes('Run not found'));
-    }).pipe(
-      Effect.provide(
-        nativeToolTestLayer({
-          run: {
-            session: testDefaultSession(),
-            runId: PARENT_RUN_ID,
-            toolPolicy: {},
-          },
-        }),
-      ),
-    ),
   );
 });

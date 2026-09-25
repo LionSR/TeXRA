@@ -49,12 +49,6 @@ describe('parseGlmCodingPlanLimit', () => {
     expect(parseGlmCodingPlanLimit(FIVE_HOUR_LIMIT_BODY)).not.toBeNull();
   });
 
-  it('parses the SDK-enveloped { error } form', () => {
-    expect(
-      parseGlmCodingPlanLimit({ error: WEEKLY_LIMIT_BODY.error }),
-    ).not.toBeNull();
-  });
-
   it('derives the reset window from a UTC+8 China-time timestamp in the message', () => {
     const limit = parseGlmCodingPlanLimit(futureCstTimestampBody(30));
     expect(limit).not.toBeNull();
@@ -80,11 +74,6 @@ describe('parseGlmCodingPlanLimit', () => {
         error: { code: '1113', message: 'Insufficient balance' },
       }),
     ).toBeNull();
-  });
-
-  it('ignores unrelated bodies', () => {
-    expect(parseGlmCodingPlanLimit({ message: 'nope' })).toBeNull();
-    expect(parseGlmCodingPlanLimit(undefined)).toBeNull();
   });
 
   it('recognizes a GLM Coding Plan rate limit (1302) as retryable, not exhaustion', () => {

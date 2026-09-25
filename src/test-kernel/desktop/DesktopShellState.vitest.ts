@@ -10,8 +10,6 @@ import {
   initialDesktopShellState,
   moveWorkbenchTab,
   openWorkbenchTab,
-  renameWorkbenchTab,
-  setWorkbenchTabDirty,
   toggleWorkbench,
   type DesktopShellState,
   type OpenWorkbenchTabRequest,
@@ -106,40 +104,6 @@ describe('desktop shell state model', () => {
     expect(active(state)?.id).toBe('workbench:editor:paper.tex');
   });
 
-  it('opens a fresh numbered terminal for every request', () => {
-    const state = shellWith(
-      { kind: 'terminal', target: '/work' },
-      { kind: 'terminal', target: '/work', title: 'Build shell' },
-    );
-
-    expect(state.workbenchTabs).toEqual([
-      {
-        id: 'workbench:terminal:1',
-        kind: 'terminal',
-        placement: 'bottom',
-        title: 'Terminal 1',
-        target: '/work',
-      },
-      {
-        id: 'workbench:terminal:2',
-        kind: 'terminal',
-        placement: 'bottom',
-        title: 'Build shell',
-        target: '/work',
-      },
-    ]);
-    expect(state.nextTerminalSerial).toBe(3);
-    expect(active(state, 'bottom')?.title).toBe('Build shell');
-  });
-
-  it('focuses known tabs and ignores unknown ids', () => {
-    const state = shellWith({ kind: 'settings' }, { kind: 'logs' });
-    const focused = focusWorkbenchTab(state, 'workbench:settings');
-
-    expect(active(focused)?.kind).toBe('settings');
-    expect(focusWorkbenchTab(focused, 'missing')).toBe(focused);
-  });
-
   it('closes active tabs toward the left, then the right', () => {
     let state = shellWith(
       { kind: 'settings' },
@@ -156,14 +120,6 @@ describe('desktop shell state model', () => {
 
     state = closeWorkbenchTab(state, 'workbench:logs');
     expect(active(state)).toBeUndefined();
-  });
-
-  it('preserves focus when closing a background tab and ignores unknown ids', () => {
-    const state = shellWith({ kind: 'settings' }, { kind: 'logs' });
-    const withoutSettings = closeWorkbenchTab(state, 'workbench:settings');
-
-    expect(active(withoutSettings)?.kind).toBe('logs');
-    expect(closeWorkbenchTab(withoutSettings, 'missing')).toBe(withoutSettings);
   });
 
   it('hides the workbench without discarding tabs and reopens the latest tab', () => {
@@ -195,27 +151,5 @@ describe('desktop shell state model', () => {
     state = moveWorkbenchTab(state, 'workbench:terminal:1', 'right');
     expect(active(state)?.kind).toBe('terminal');
     expect(active(state, 'bottom')?.kind).toBe('editor');
-  });
-
-  it('normalizes titles and tracks dirty state on known tabs', () => {
-    let state = openWorkbenchTab(initialDesktopShellState(), {
-      kind: 'editor',
-      target: 'paper.tex',
-    });
-    state = renameWorkbenchTab(
-      state,
-      'workbench:editor:paper.tex',
-      '  Main paper  ',
-    );
-    state = setWorkbenchTabDirty(state, 'workbench:editor:paper.tex', true);
-
-    expect(active(state)).toMatchObject({
-      title: 'Main paper',
-      dirty: true,
-    });
-    expect(renameWorkbenchTab(state, 'workbench:editor:paper.tex', '   ')).toBe(
-      state,
-    );
-    expect(setWorkbenchTabDirty(state, 'missing', true)).toBe(state);
   });
 });

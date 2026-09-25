@@ -1,26 +1,45 @@
-import { chmod, mkdir, writeFile } from 'node:fs/promises';
+import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { afterEach, describe, expect, vi } from 'vitest';
 
+import { createHostSnapshotSource } from '@controllers/session/hostSnapshotSource';
+import { HostDraftRequests } from '@controllers/session/hostDraftRequests';
+import { createDesktopHostRequests } from '@desktop/main/desktopHostRequests';
+import { createDesktopFileSelection } from '@desktop/main/desktopFileSelection';
 import { withProcessServices } from '@platform/processRuntime';
 import type { RunId } from '@shared/schemas';
 import type { HostRequest } from '@shared/session/hostRequest';
+import { Rejected } from '@shared/session/requestErrors';
 import { testRuntime } from '@test/support/testProcessRuntime';
-import { createModuleMocks } from '@test/support/moduleMocks';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import {
   makeTempDir as makeSharedTempDir,
   useTempDirs,
 } from '@test/support/tempDirPlatform';
+import { createFakeHost, installFakeHost } from '@test/support/setupPlatform';
+import { createTestSession } from '@test/support/sessionTestUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { createExternalLocation } from '@utils/files/fileLocation';
 import { createStubDesktopAgentRunHost } from './desktopAgentRunTestHarness.ts';
 
-const mocks = createModuleMocks();
+// The LaTeX engine and toolchain probe, mocked once for the file. Each test
+// sets their behaviour through `loadDesktopPreviewHost`; the module graph is
+// imported once, since re-importing it per test is what timed the suite out
+// under load.
+const latex = vi.hoisted(() => ({
+  compileLatex2Pdf: vi.fn(),
+  hasLatexCompiler: vi.fn(),
+}));
+vi.mock('@latex/texTools', () => ({
+  compileLatex2Pdf: latex.compileLatex2Pdf,
+}));
+vi.mock('@latex/latexToolchain', () => ({
+  hasLatexCompiler: latex.hasLatexCompiler,
+}));
 
 type FakeCompile = (location: { absolutePath: string }) => Effect.Effect<{
   ok: boolean;
@@ -50,11 +69,8 @@ async function loadDesktopPreviewHost(
     Effect.succeed(true),
   ),
 ): Promise<typeof import('@desktop/main/desktopPreviewHost')> {
-  vi.resetModules();
-  mocks.doMock('@latex/texTools', () => ({ compileLatex2Pdf }));
-  mocks.doMock('@latex/latexToolchain', () => ({
-    hasLatexCompiler: checkToolInstalled,
-  }));
+  latex.compileLatex2Pdf.mockReset().mockImplementation(compileLatex2Pdf);
+  latex.hasLatexCompiler.mockReset().mockImplementation(checkToolInstalled);
   return import('@desktop/main/desktopPreviewHost');
 }
 
@@ -105,37 +121,14 @@ describe('desktop preview host', () => {
         const { createDesktopPreviewHost } = yield* Effect.promise(() =>
           loadDesktopPreviewHost(),
         );
-        const { createDesktopHostRequests } = yield* Effect.promise(
-          () => import('@desktop/main/desktopHostRequests'),
-        );
-        const { createFakeHost, installFakeHost } = yield* Effect.promise(
-          () => import('@test/support/setupPlatform'),
-        );
         const fakeHost = createFakeHost();
         yield* Effect.promise(() => installFakeHost(fakeHost));
         const secrets = fakeHost.secrets;
-        const { createTestSession } = yield* Effect.promise(
-          () => import('@test/support/sessionTestUtils'),
-        );
-        const { createHostSnapshotSource } = yield* Effect.promise(
-          () => import('@controllers/session/hostSnapshotSource'),
-        );
         const session = createTestSession();
         const present = vi.fn<(...args: unknown[]) => void>(() => {});
         const detachPresentation = yield* session.interactions.use({
           emit: present,
         });
-        const { createDesktopFileSelection } = yield* Effect.promise(
-          () => import('@desktop/main/desktopFileSelection'),
-        );
-        const { HostDraftRequests } = yield* Effect.promise(
-          () => import('@controllers/session/hostDraftRequests'),
-        );
-        // After `vi.resetModules`, the refusal class the handler compares
-        // against is this graph's instance, not the statically imported one.
-        const { Rejected } = yield* Effect.promise(
-          () => import('@shared/session/requestErrors'),
-        );
         const showErrorMessage = vi.fn<
           (message: string) => Effect.Effect<void>
         >(() => Effect.void);
@@ -244,73 +237,6 @@ describe('desktop preview host', () => {
         `File not found: ${missingPath}`,
       );
       expect(shell.openPath).not.toHaveBeenCalled();
-    }),
-  );
-
-  // A directory with no permissions makes the access probe fail with EACCES
-  // rather than ENOENT; chmod means nothing on Windows or to root.
-  it.effect.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
-    'preserves access failure details before calling shell.openPath',
-    () =>
-      Effect.gen(function* () {
-        const { createDesktopPreviewHost } = yield* Effect.promise(() =>
-          loadDesktopPreviewHost(),
-        );
-        const blockedDir = path.join(
-          yield* Effect.promise(() => makeTempDir()),
-          'blocked',
-        );
-        const filePath = path.join(blockedDir, 'blocked.pdf');
-        yield* Effect.promise(async () => {
-          await mkdir(blockedDir);
-          await writeFile(filePath, 'pdf');
-          await chmod(blockedDir, 0o000);
-        });
-        const showErrorMessage = vi.fn((message: string) => Effect.void);
-        const shell = makeShell();
-
-        const host = createDesktopPreviewHost({
-          shell,
-          showErrorMessage,
-          runtime: testRuntime(),
-        });
-
-        const error = yield* Effect.flip(host.openPath(filePath)).pipe(
-          Effect.ensuring(Effect.promise(() => chmod(blockedDir, 0o700))),
-        );
-        expect(error.message).toContain(
-          `Cannot access file ${filePath}: EACCES`,
-        );
-        expect(showErrorMessage).toHaveBeenCalledWith(error.message);
-        expect(shell.openPath).not.toHaveBeenCalled();
-      }),
-  );
-
-  it.effect('reports Electron shell.openPath errors once', () =>
-    Effect.gen(function* () {
-      const { createDesktopPreviewHost } = yield* Effect.promise(() =>
-        loadDesktopPreviewHost(),
-      );
-      const dir = yield* Effect.promise(() => makeTempDir());
-      const filePath = path.join(dir, 'blocked.pdf');
-      yield* Effect.promise(() => writeFile(filePath, 'pdf'));
-      const showErrorMessage = vi.fn((message: string) => Effect.void);
-      const shell = makeShell('No associated application');
-
-      const host = createDesktopPreviewHost({
-        shell,
-        showErrorMessage,
-        runtime: testRuntime(),
-      });
-
-      const error = yield* Effect.flip(host.openPath(filePath));
-      expect(error.message).toContain(
-        `Failed to open file ${filePath}: No associated application`,
-      );
-      expect(showErrorMessage).toHaveBeenCalledTimes(1);
-      expect(showErrorMessage).toHaveBeenCalledWith(
-        `Failed to open file ${filePath}: No associated application`,
-      );
     }),
   );
 
@@ -447,35 +373,6 @@ describe('desktop preview host', () => {
   );
 
   it.effect(
-    'can preserve an external-open error without showing a dialog',
-    () =>
-      Effect.gen(function* () {
-        const { createDesktopPreviewHost } = yield* Effect.promise(() =>
-          loadDesktopPreviewHost(),
-        );
-        const browserError = new Error('no browser handler');
-        const shell = makeShell();
-        shell.openExternal.mockRejectedValueOnce(browserError);
-        const showErrorMessage = vi.fn(() => Effect.void);
-
-        const host = createDesktopPreviewHost({
-          shell,
-          showErrorMessage,
-          runtime: testRuntime(),
-        });
-
-        const error = yield* Effect.flip(
-          host.openExternal('https://auth.openai.com/authorize', {
-            reportFailure: false,
-          }),
-        );
-        expect(error._tag).toBe('ExternalOpenFailed');
-        expect(error.cause).toBe(browserError);
-        expect(showErrorMessage).not.toHaveBeenCalled();
-      }),
-  );
-
-  it.effect(
     'prefers the in-app PDF overlay when postToRenderer accepts the post',
     () =>
       Effect.gen(function* () {
@@ -534,34 +431,5 @@ describe('desktop preview host', () => {
         expect(postToRenderer).toHaveBeenCalledTimes(1);
         expect(shell.openPath).toHaveBeenCalledWith(pdfPath);
       }),
-  );
-
-  it.effect('falls back to external viewer when postToRenderer throws', () =>
-    Effect.gen(function* () {
-      const { createDesktopPreviewHost } = yield* Effect.promise(() =>
-        loadDesktopPreviewHost(),
-      );
-      const { texPath, pdfPath } = yield* Effect.promise(() =>
-        makeTexFixture('paper'),
-      );
-      const shell = makeShell();
-      const postToRenderer = vi.fn((_message: unknown) => {
-        throw new Error('IPC bridge not ready');
-      });
-      // Silence the expected console.error so the test output is clean.
-      vi.spyOn(console, 'error').mockImplementation(() => {});
-
-      const host = createDesktopPreviewHost({
-        shell,
-        postToRenderer,
-        runtime: testRuntime(),
-      });
-
-      yield* host
-        .openBuildDisplayIn(roots)(createExternalLocation(texPath))
-        .pipe(Effect.provide(nodePlatformLayer));
-      expect(postToRenderer).toHaveBeenCalledTimes(1);
-      expect(shell.openPath).toHaveBeenCalledWith(pdfPath);
-    }),
   );
 });

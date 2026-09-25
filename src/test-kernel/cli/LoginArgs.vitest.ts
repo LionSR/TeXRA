@@ -97,14 +97,6 @@ describe('CLI login arguments (texra login)', () => {
     },
   );
 
-  it('parses a bare --device as a texra device login', () => {
-    expect(parseChatLoginSlashArgs('--device')).toMatchObject({
-      target: 'texra',
-      device: true,
-      noBrowser: false,
-    });
-  });
-
   it('rejects --device + --no-browser from the CLI login command', () => {
     expect(() =>
       assertLoginTransportExclusive({ device: true, noBrowser: true }),

@@ -39,9 +39,10 @@ import { isObject } from '@utils/core';
 import {
   applyRunRow,
   byId,
-  freshRunRows,
+  freshRunPosition,
+  isFollowUpRow,
   isSharedRunRow,
-  type RunRows,
+  type RunPosition,
   type SharedRunRow,
 } from './runRows';
 import type { z } from 'zod';
@@ -155,7 +156,7 @@ type PendingIntent = {
  * because giving it one invites persisting it (C10). Every field is derived
  * from the row that produced it.
  */
-export type RunState = RunRows & {
+export type RunState = RunPosition & {
   /** The last folded row. */
   readonly commit: CommitOrdinal;
   readonly snapshotCommit: CommitOrdinal | null;
@@ -254,7 +255,7 @@ const IGNORED = new Set<string>(Object.keys(IGNORED_ROW_TYPES));
 /** The state a run starts from: every field at its zero, no family bound
  *  yet. Both run programs open from this and stamp their own family. */
 export const freshRunState = (commit: CommitOrdinal): RunState => ({
-  ...freshRunRows(),
+  ...freshRunPosition(),
   commit,
   snapshotCommit: null,
   rowsBeforeSnapshot: 0,
@@ -275,19 +276,6 @@ export const freshRunState = (commit: CommitOrdinal): RunState => ({
   overflowRecoveredAtRound: null,
 });
 
-/** The recovery bindings the rows carry (R5): the `model.retry` permit's
- *  request and every pending intent's `tool.binding`. */
-function requestBindings(state: RunState): ReadonlySet<string> {
-  const bindings = new Set<string>();
-  if (state.pendingRetry !== null) bindings.add(state.pendingRetry.requestId);
-  for (const intent of Object.values(state.pendingIntents)) {
-    if (intent.approvalRequestId !== null) {
-      bindings.add(intent.approvalRequestId);
-    }
-  }
-  return bindings;
-}
-
 /**
  * The undecided requests nothing can recover: no binding names them, and
  * they are not the one kind that outlives the process that asked. A request
@@ -300,7 +288,12 @@ function requestBindings(state: RunState): ReadonlySet<string> {
  * snapshot its run writes.
  */
 export function unboundRequests(state: RunState): readonly string[] {
-  const bindings = requestBindings(state);
+  // The recovery bindings the rows carry (R5): the `model.retry` permit's
+  // request and every pending intent's `tool.binding`.
+  const bindings = new Set<string | null>(
+    Object.values(state.pendingIntents).map((i) => i.approvalRequestId),
+  );
+  if (state.pendingRetry !== null) bindings.add(state.pendingRetry.requestId);
   return Object.entries(state.requests).flatMap(([requestId, request]) =>
     request.resolved ||
     bindings.has(requestId) ||
@@ -428,6 +421,11 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
     commit,
     rowsBeforeSnapshot: state.rowsBeforeSnapshot + 1,
   });
+  // Pending input is the publisher's: a queued row only opens an empty run.
+  if (isFollowUpRow(row))
+    return current === null && row.type === 'followup.queued'
+      ? Result.succeed(freshRunState(commit))
+      : null;
   if (isSharedRunRow(row)) {
     // The rows `sessionFold` reads too: applied once, in `runRows.ts`.
     // `unresolved` is a malformed aggregate here: this fold reads a run's

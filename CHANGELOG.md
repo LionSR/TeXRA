@@ -134,6 +134,17 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
 
 ### Bug Fixes
 
+- **Turning telemetry off now stops all usage reporting** — rounds run on a
+  ChatGPT, Grok, Kimi, or GLM subscription were still sent after you opted
+  out, on the grounds that they metered a plan cap. Nothing has enforced
+  that cap since the relay was removed, so the setting, `TEXRA_NO_TELEMETRY`,
+  and `DO_NOT_TRACK` now cover every round, and `texra doctor` no longer says
+  subscription rounds are still recorded.
+
+- **Tool availability rechecks after a change made during a check.** If a
+  credential or setting changed just as a tool-availability check started,
+  the follow-up check could be skipped, leaving a tool shown as missing or
+  available when it no longer was.
 - **The VS Code dashboard shows your agents, teams and saved settings
   again.** The Agents page listed no tool-use or workflow agents and no
   teams, and several pages showed defaults instead of your saved values
@@ -323,6 +334,10 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
 
 #### Breaking Changes
 
+- **Removed: the Agent Review panel in Source Control** — the Find Issues
+  section, its commands, the `changeReviewer` agent and the "Automatically
+  review your changes after each commit" setting are gone. To review a
+  change, ask the `codeReviewer` agent in the TeXRA panel.
 - **"Clean All LLM Output Files (Workspace-wide)" is removed** — it is gone
   from the command palette, the Progress toolbar and the getting-started
   walkthrough. Clean in the Progress toolbar now clears the selected run's
@@ -338,7 +353,7 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
   button does it), Indent All LaTeX Files, Import or Create LaTeX Project,
   and Sign In with Grok Subscription (Settings has it). **TeXRA: Sign In** is
   now **Sign In to TeXRA Account (Remote Agents)**, since model access never
-  needed it. The panel's title bar shows only the Settings gear; it no longer
+  needed it. The panel's title bar no longer
   swaps in workspace-wide Indent and Clean buttons over a conversation.
   **Delete All build/ Folders in Workspace** (formerly Clean All Build Files)
   now lists the folders and asks before deleting them, then says what it
@@ -377,6 +392,12 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
 
 #### Changes
 
+- **Settings has a gear in the TeXRA panel header**, next to New task, in
+  every state and in the editor tab; the hover-only gear in the view's title
+  bar is gone. Editor tabs read "TeXRA Sessions" and "TeXRA Settings", a
+  session row says "2 background tasks · 1 running" and "Needs approval" instead of
+  bare number badges, and the run header's chip reads "3 tool calls"
+  rather than "t1, 3 tool calls".
 - **The TeXRA panel is calmer.** A run shows one header row with one Stop
   and one ⋯ menu instead of two stacked headers. A new project shows one
   card at a time (setup, then "No LaTeX files yet") and at most one warning
@@ -385,8 +406,8 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
   TeXRA can't do without it. The run header's AUTO-EDIT, AUTO-BASH and AUTO-TASK
   toggles are replaced by an "Auto-approving …" chip that appears only while
   a grant from an approval card is on; click it to go back to asking. Open
-  dashboard and Attach TeX Count left the ⋯ menu (the gear and the Input
-  file menu have them). The desktop app no longer draws a second header,
+  dashboard and Attach TeX Count left the ⋯ menu (the header's Settings
+  gear and the Input file menu have them). The desktop app no longer draws a second header,
   Sessions button and New task inside its own window.
 - **Deleting a session asks first.** The × on a Sessions row, which deleted
   the conversation in one click, is gone. Delete now lives at the end of
@@ -398,6 +419,12 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
   instruction), plus **Resume** when the session was interrupted. Workflow
   runs get the same line. Edit as new task left the ⋯ menu. The run board
   calls steps it has not reached "Not started" instead of "Declared".
+- **Run and diff buttons say what they do.** A delegated agent's row reads
+  "Subagent: lint" with **Copy to new task** (was "Delegate agent" and
+  "Restore setup"); the multi-agent proposal names its model in the first
+  line; and the LaTeXDiffs buttons are **Diff vs. edited**, **Diff vs.
+  commit**, **Move to Diffs folder** (was "Pack") and **Delete diff files**,
+  with refresh icons on the two refresh buttons.
 
 #### Bug Fixes
 

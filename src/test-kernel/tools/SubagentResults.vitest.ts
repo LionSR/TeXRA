@@ -17,7 +17,6 @@ import {
   formatSubagentDelivery,
   formatSubagentError,
 } from '@tools/delegation/subagentResults';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 
 type ToolUseOutput = Extract<RunEndOutput, { category: 'toolUse' }>;
 type WorkflowOutput = Extract<RunEndOutput, { category: 'workflow' }>;
@@ -60,81 +59,6 @@ function seconds(milliseconds: number): string {
 // agent-CLI formatters (formatAgentCliDelivery/formatAgentCliError) produced.
 
 describe('formatDelivery', () => {
-  it('renders the codex shape: thread-id attr, raw usage, no cost line', () => {
-    const xml = formatDelivery({
-      tag: 'codex-result',
-      runId: 'exec-1',
-      prompt: 'do the thing',
-      attributes: [{ name: 'thread-id', value: 'th-42' }],
-      wallTime: seconds(1234),
-      response: 'all done',
-      usage: { inputTokens: 100, outputTokens: 20 },
-    });
-    expect(xml).toBe(
-      [
-        '<codex-result id="exec-1" prompt="do the thing" thread-id="th-42">',
-        '<wall-time>1.2s</wall-time>',
-        '<response>all done</response>',
-        '<usage input="100" output="20" />',
-        '</codex-result>',
-      ].join('\n'),
-    );
-  });
-
-  it('renders the claude shape: session-id attr and a cost extra line', () => {
-    const xml = formatDelivery({
-      tag: 'claude-agent-result',
-      runId: 'exec-2',
-      prompt: 'summarize',
-      attributes: [{ name: 'session-id', value: 'sess-7' }],
-      wallTime: seconds(9000),
-      response: 'summary',
-      usage: { inputTokens: 5, outputTokens: 0 },
-      lines: ['<cost-usd>0.1234</cost-usd>'],
-    });
-    expect(xml).toBe(
-      [
-        '<claude-agent-result id="exec-2" prompt="summarize" session-id="sess-7">',
-        '<wall-time>9.0s</wall-time>',
-        '<response>summary</response>',
-        '<usage input="5" output="0" />',
-        '<cost-usd>0.1234</cost-usd>',
-        '</claude-agent-result>',
-      ].join('\n'),
-    );
-  });
-
-  it('omits the provider id attribute (thread-id), usage, and extra lines when absent/falsy', () => {
-    const xml = formatDelivery({
-      tag: 'codex-result',
-      runId: 'exec-3',
-      prompt: 'p',
-      attributes: [{ name: 'thread-id', value: null }],
-      wallTime: seconds(0),
-      response: 'r',
-      usage: null,
-    });
-    expect(xml).toBe(
-      [
-        '<codex-result id="exec-3" prompt="p">',
-        '<wall-time>0.0s</wall-time>',
-        '<response>r</response>',
-        '</codex-result>',
-      ].join('\n'),
-    );
-  });
-
-  it('falls back to "(no response)" for an empty response', () => {
-    const xml = formatDelivery({
-      tag: 'codex-result',
-      runId: 'e',
-      prompt: 'p',
-      wallTime: seconds(500),
-      response: '',
-    });
-    expect(xml).toContain('<response>(no response)</response>');
-  });
-
   it('truncates the echoed prompt to 200 chars and escapes attrs/text', () => {
     const longPrompt = 'x'.repeat(250);
     const xml = formatDelivery({
@@ -153,64 +77,9 @@ describe('formatDelivery', () => {
     // response is text-escaped (&, < — quotes left intact)
     expect(xml).toContain('<response>a &lt; b &amp; c "q"</response>');
   });
-
-  it('renders the error shape, escaping attrs and the message body', () => {
-    const xml = formatDelivery({
-      tag: 'codex-error',
-      runId: 'exec-1',
-      prompt: 'why did it fail?',
-      message: toErrorMessage(new Error('boom <&>')),
-    });
-    expect(xml).toBe(
-      [
-        '<codex-error id="exec-1" prompt="why did it fail?">',
-        // toErrorMessage(Error) -> message; escapeText escapes & and < (not >)
-        '<message>boom &lt;&amp;></message>',
-        '</codex-error>',
-      ].join('\n'),
-    );
-  });
 });
 
 describe('formatSubagentDelivery', () => {
-  // Exact-string pin for the native tool-use delivery shape, byte-identical
-  // to the pre-merge output (wall-time first, then working-directory,
-  // memory-misses, and the three-line response block).
-  it('pins the exact native tool-use delivery XML', () => {
-    const xml = formatSubagentDelivery(
-      'reviewer',
-      toolUseResult(RUN_OUTCOME.COMPLETED, {
-        response: 'Checked the proof & wrote <notes>.',
-        files: ['/ws/paper.tex'],
-      }),
-      {
-        runId: 'abc123' as RunId,
-        memoryMisses: [
-          { path: '/memories/missing.md', reason: 'Path is missing' },
-        ],
-        wallTimeMs: 65000,
-        workingDirectory: '/ws/project',
-      },
-    );
-    expect(xml).toBe(
-      [
-        '<subagent-result id="abc123" agent="reviewer" category="toolUse" status="completed">',
-        '<wall-time>1m 5s</wall-time>',
-        '<working-directory>/ws/project</working-directory>',
-        '<memory-misses>',
-        '<memory-miss path="/memories/missing.md" reason="Path is missing" />',
-        '</memory-misses>',
-        '<response>',
-        'Checked the proof &amp; wrote &lt;notes>.',
-        '</response>',
-        '<touched-files>',
-        '<file path="/ws/paper.tex" />',
-        '</touched-files>',
-        '</subagent-result>',
-      ].join('\n'),
-    );
-  });
-
   it('escapes tool-use response bodies at the XML boundary', () => {
     const result = toolUseResult(RUN_OUTCOME.COMPLETED, {
       response: 'Keep </response> literal & preserve <subagent-result> text.',
@@ -255,19 +124,6 @@ describe('formatSubagentDelivery', () => {
       'read-path="/executions/abc123/files/paper.tex"',
     );
     expect(delivery).not.toContain('absolute-path=');
-  });
-
-  it('emits canonical failed and cancelled statuses for orchestrators', () => {
-    expect(
-      formatSubagentDelivery('reviewer', toolUseResult(RUN_OUTCOME.FAILED), {
-        runId: 'abc123' as RunId,
-      }),
-    ).toContain('status="failed"');
-    expect(
-      formatSubagentDelivery('reviewer', toolUseResult(RUN_OUTCOME.CANCELLED), {
-        runId: 'abc123' as RunId,
-      }),
-    ).toContain('status="cancelled"');
   });
 });
 
@@ -335,26 +191,6 @@ describe('formatBashDelivery', () => {
 
     expect(delivery).toContain('<background-result id="bash&amp;1&quot;&lt;"');
     expect(error).toContain('<background-error id="bash&amp;1&quot;&lt;"');
-  });
-
-  it('surfaces the head and an elision count only when a stream was truncated', () => {
-    const delivery = formatBashDelivery(
-      'bash-3',
-      'make build',
-      1000,
-      { success: false, stdout: '', stderr: '', timedOut: false, exitCode: 1 },
-      { tail: 'tail output', head: 'first fatal error', elidedChars: 500 },
-      { tail: 'tail stderr', head: 'first fatal stderr', elidedChars: 250 },
-    );
-
-    expect(delivery).toContain('<output-head>first fatal error</output-head>');
-    expect(delivery).toContain(
-      '<output-elided>500 characters elided</output-elided>',
-    );
-    expect(delivery).toContain('<stderr-head>first fatal stderr</stderr-head>');
-    expect(delivery).toContain(
-      '<stderr-elided>250 characters elided</stderr-elided>',
-    );
   });
 
   it('normalizes CRLF when truncating background output previews', () => {

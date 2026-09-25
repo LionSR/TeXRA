@@ -5,7 +5,6 @@ import { afterEach, describe, expect, vi } from 'vitest';
 
 // Local imports
 import * as codexAuth from '@auth/codex';
-import * as computeModelOptions from '@model/computeModelOptions';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import {
   fakeProcessServices,
@@ -62,28 +61,6 @@ describe('shared setup capabilities', () => {
         expect(status).not.toHaveProperty('account');
         expect(JSON.stringify(status)).not.toContain('researcher@example.com');
         expect(JSON.stringify(status)).not.toContain('account-private-id');
-      }).pipe(Effect.provide(fakeProcessServices())),
-  );
-
-  it.effect(
-    'reports ChatGPT as disabled when runtime routing cannot use it',
-    () =>
-      Effect.gen(function* () {
-        vi.spyOn(codexAuth, 'getCodexStatus').mockReturnValue(
-          Effect.succeed({
-            signedIn: true,
-            email: 'researcher@example.com',
-          }),
-        );
-        vi.spyOn(
-          computeModelOptions,
-          'readProspectiveUsageRoute',
-        ).mockReturnValue(Effect.succeed(undefined));
-
-        expect(yield* getChatGptSubscriptionStatus(hostStores())).toEqual({
-          signedIn: true,
-          enabled: false,
-        });
       }).pipe(Effect.provide(fakeProcessServices())),
   );
 });

@@ -4,9 +4,6 @@ import { Effect } from 'effect';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import {
-  closeInfoPane,
-  infoPane,
-  openInfoPane,
   rootRunId,
   resetCliState,
   setTransientNotice,
@@ -118,21 +115,6 @@ describe('focus over the session view', () => {
 });
 
 describe('cliState surface fields', () => {
-  it('preserves multiple reference results until each is dismissed', () => {
-    openInfoPane('/memory list', 'first\r\nresult');
-    openInfoPane('/memory preview', 'second result');
-
-    expect(infoPane.get()).toEqual({
-      title: '/memory list',
-      lines: ['first', 'result'],
-    });
-    closeInfoPane();
-    expect(infoPane.get()).toEqual({
-      title: '/memory preview',
-      lines: ['second result'],
-    });
-  });
-
   it('normalizes transient notices to the status bar single-line contract', () => {
     setTransientNotice('Usage: /login target\n       /login chatgpt --device');
 
@@ -147,25 +129,13 @@ describe('CLI TUI row allocation', () => {
   it.each([
     {
       name: 'keeps foreground approval and form surfaces inside the middle row budget',
-      options: {
-        footerRows: 5,
-        foregroundOpen: true,
-        reverseSearchOpen: false,
-        rows: 24,
-        slashPaletteOpen: false,
-      },
+      options: { footerRows: 5, foregroundOpen: true, rows: 24 },
       transcriptRows: 1,
       foregroundRows: 18,
     },
     {
       name: 'returns disabled input rows to tiny foreground surfaces',
-      options: {
-        footerRows: 2,
-        foregroundOpen: true,
-        reverseSearchOpen: false,
-        rows: 10,
-        slashPaletteOpen: false,
-      },
+      options: { footerRows: 2, foregroundOpen: true, rows: 10 },
       transcriptRows: 1,
       foregroundRows: 7,
     },
@@ -175,91 +145,37 @@ describe('CLI TUI row allocation', () => {
         footerRows: 5,
         foregroundMaxRows: 12,
         foregroundOpen: true,
-        reverseSearchOpen: false,
         rows: 40,
-        slashPaletteOpen: false,
       },
       transcriptRows: 1,
       foregroundRows: 12,
     },
     {
-      name: 'uses the whole middle region for the transcript without foreground UI',
-      options: {
-        footerRows: 5,
-        foregroundOpen: false,
-        reverseSearchOpen: false,
-        rows: 24,
-        slashPaletteOpen: false,
-      },
-      transcriptRows: 19,
-      foregroundRows: 0,
-    },
-    {
-      name: 'reserves queued follow-up panel rows above the stable input chrome',
+      name: 'reserves queued follow-up, palette and static rows before the transcript',
       options: {
         footerRows: 5,
         foregroundOpen: false,
         queuedFollowUpPanelRows: 3,
-        reverseSearchOpen: false,
-        rows: 24,
-        slashPaletteOpen: false,
-      },
-      transcriptRows: 16,
-      foregroundRows: 0,
-    },
-    {
-      name: 'accounts for capped static transcript rows above the stable input chrome',
-      options: {
-        footerRows: 5,
-        foregroundOpen: false,
-        queuedFollowUpPanelRows: 3,
-        reverseSearchOpen: false,
-        rows: 10,
-        slashPaletteOpen: false,
-        staticTranscriptRows: 2,
-      },
-      transcriptRows: 0,
-      foregroundRows: 0,
-    },
-  ])('$name', ({ options, transcriptRows, foregroundRows }) => {
-    const layout = allocateMiddleRows(options);
-
-    expect(layout.transcriptRows).toBe(transcriptRows);
-    expect(layout.foregroundRows).toBe(foregroundRows);
-  });
-
-  it.each([
-    {
-      name: 'reserves rows for reverse-search input chrome',
-      options: {
-        footerRows: 5,
-        foregroundOpen: false,
-        reverseSearchOpen: true,
-        rows: 24,
-        slashPaletteOpen: false,
-      },
-      transcriptRows: 14,
-      foregroundRows: 0,
-    },
-    {
-      name: 'returns former header rows to the transcript when slash palette is open',
-      options: {
-        footerRows: 5,
-        foregroundOpen: false,
-        reverseSearchOpen: false,
         rows: 24,
         slashPaletteOpen: true,
+        staticTranscriptRows: 2,
       },
-      transcriptRows: 6,
+      transcriptRows: 1,
       foregroundRows: 0,
     },
   ])('$name', ({ options, transcriptRows, foregroundRows }) => {
-    const layout = allocateMiddleRows(options);
+    const layout = allocateMiddleRows({
+      reverseSearchOpen: false,
+      slashPaletteOpen: false,
+      ...options,
+    });
 
     expect(layout.transcriptRows).toBe(transcriptRows);
     expect(layout.foregroundRows).toBe(foregroundRows);
   });
+});
 
+describe('CLI TUI session run state', () => {
   it.each([
     {
       name: 'before the stream resolves',

@@ -9,7 +9,7 @@ Tool-use agents in TeXRA can save notes that persist across conversations. The n
 
 <MemoryHero />
 
-<p class="hero-caption">The Memory tab in the Dashboard: toggle memory for chat agents, and browse, pin, open, or delete the notes agents have saved.</p>
+<p class="hero-caption">The Memory tab in Settings: toggle memory for chat agents, and browse, pin, open, or delete the notes agents have saved.</p>
 
 ## What memory is for
 
@@ -24,7 +24,7 @@ Memory is **not** a chat transcript. The agent doesn't replay old conversations;
 
 ## Enabling memory
 
-Memory is **on by default**. To turn it off, open the **Dashboard** (Command Palette → `TeXRA: Open Settings`), switch to the **Memory** tab, and flip the **Enable memory for chat agents** switch. The same switch turns it back on.
+Memory is **on by default**. To turn it off, open **Settings** (Command Palette → `TeXRA: Open Settings`), switch to the **Memory** tab, and flip the **Enable memory for chat agents** switch. The same switch turns it back on.
 
 When memory is on, every tool-use agent run has access to the `memory` tool: it can create, view, update, rename, delete, pin, and unpin notes under `/memories`.
 
@@ -43,7 +43,7 @@ Agents work with memory through a small set of commands on the `memory` tool:
 | `pin`         | Mark a note as a **core long-term memory** (loaded at every session start) |
 | `unpin`       | Remove the pinned status                                                   |
 
-Every note is a Markdown file. Agents see them at `/memories/<name>.md`; on disk they live in the shared TeXRA root at `~/.texra/workspace-storage/<workspace-name>-<hash>/memories/`, which the VS Code extension, the desktop app, and the CLI all share for the same workspace. Each file carries a small YAML header that records which agent last modified it, when, and whether it's pinned. That header is what the metadata strip in the Dashboard shows.
+Every note is a Markdown file. Agents see them at `/memories/<name>.md`; on disk they live in the shared TeXRA root at `~/.texra/workspace-storage/<workspace-name>-<hash>/memories/`, which the VS Code extension, the desktop app, and the CLI all share for the same workspace. Each file carries a small YAML header that records which agent last modified it, when, and whether it's pinned. That header is what the metadata strip in Settings shows.
 
 <MemoryCommandsHero />
 
@@ -55,13 +55,13 @@ Unpinned notes are searchable context: the agent can read them when it needs to,
 
 **Pinned notes are different.** They're loaded at the start of every session, so put only the highest-value notes there: conventions, hard-won techniques, recurring pitfalls. You can pin up to **10 notes**; if you hit the limit, unpin a stale note before pinning the next one.
 
-The pinned indicator in the Dashboard is a blue left border plus a `Pinned` badge in the metadata strip.
+The pinned indicator in Settings is a blue left border plus a `Pinned` badge in the metadata strip.
 
 <MemoryPinHero />
 
 <p class="hero-caption">Pinned notes carry the blue left border and a <code>Pinned</code> badge and load every session; unpinned notes stay as searchable context the agent reads on demand.</p>
 
-## Managing memories from the Dashboard
+## Managing memories from Settings
 
 The Memory tab shows every saved note, with pinned notes first and the rest sorted by most recently
 updated. For each note you get:
@@ -78,7 +78,7 @@ The toolbar above the list has **Refresh** and **Open folder**. Open folder reve
 <p class="hero-caption">One expanded note, part by part: the <code>/memories/...</code> path, the metadata strip, the pin / open / delete actions, and the collapsible Contents preview, with Refresh and Open folder in the toolbar above.</p>
 
 The same store is inspectable from a terminal. Memory is shared state, not a
-Dashboard feature:
+Settings feature:
 
 <CliMemoryHero />
 
@@ -99,5 +99,5 @@ If you end up with a long list of stale, never-pinned notes, delete them. The ag
 ## Related
 
 - [ProgressBoard](./progress-board.md): see what an agent is doing in real time, including which memories it has read or written
-- [Configuration](./configuration.md): the full list of Dashboard tabs
+- [Configuration](./configuration.md): the full list of Settings tabs
 - [Custom agents](./custom-agents.md): give your own tool-use agents access to the `memory` tool
