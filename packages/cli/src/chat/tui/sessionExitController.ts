@@ -324,8 +324,11 @@ export function createSessionExitController(
         const idle = session.isResumableIdle();
         // Only await a run we actually interrupted/finished. A resumableIdle
         // run is parked at the WAIT node and never settles, so awaiting it
-        // would hang the process here.
-        if (interrupted && session.runSettled) yield* session.runSettled;
+        // would hang the process here. The run's own outcome is not the exit's
+        // concern: an interrupt-only settle must not skip the teardown below.
+        if (interrupted && session.runSettled) {
+          yield* Effect.ignoreCause(session.runSettled);
+        }
         yield* persistSession;
         return { disposalFailure, resumableIdle: idle };
       }),
