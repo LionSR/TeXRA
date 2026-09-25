@@ -6,10 +6,11 @@ import { strict as assert } from 'node:assert';
 // Third-party imports
 import { it } from '@effect/vitest';
 import { Effect, Exit } from 'effect';
-import { describe, vi } from 'vitest';
+import { describe } from 'vitest';
 
 // Local imports
-import * as logger from '@logger/logUtils';
+import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
+import { setLogSink } from '@logger/logSink';
 import {
   MODEL_COMPACTION_THRESHOLD_SETTING,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
@@ -43,6 +44,7 @@ import {
   FakeStateStore,
 } from '@test/support/FakePlatform';
 import { REPO_ROOT } from '@test/support/repoScan';
+import { captureLogEntries } from '@test/support/logSinkCapture';
 import { installPlatform } from '@test/support/setupPlatform';
 import {
   isStored,
@@ -253,7 +255,7 @@ describe('catalog-derived settings snapshots', () => {
     'builds the LaTeX message from validated catalog values and defaults',
     () =>
       Effect.gen(function* () {
-        const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+        const logs = captureLogEntries();
         const { stores, workspaceState } = makeFakeSettingsStores();
         yield* workspaceState.update(
           WorkspaceStateKey.WORKFLOW_AUTO_COMPILE,
@@ -288,11 +290,11 @@ describe('catalog-derived settings snapshots', () => {
             message.values[WorkspaceStateKey.LATEX_FORMATTER],
             'tex-fmt',
           );
-          assert.equal(warn.mock.calls.length, 1);
+          assert.equal(logs.at('WARN', 'settingsAccess').length, 1);
         } finally {
-          warn.mockRestore();
+          setLogSink(null);
         }
-      }),
+      }).pipe(Effect.provide(effectDiagnosticsLayer('Trace'))),
   );
 });
 
@@ -468,7 +470,7 @@ describe('settingsAccess', () => {
     'resolves reliability rows on the merged scope, bounded by their schema',
     () =>
       Effect.gen(function* () {
-        const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+        const logs = captureLogEntries();
         const reliabilityRows = [
           {
             setting: MODEL_COMPACTION_THRESHOLD_SETTING,
@@ -507,9 +509,9 @@ describe('settingsAccess', () => {
             }
           }
         } finally {
-          warn.mockRestore();
+          setLogSink(null);
         }
-      }),
+      }).pipe(Effect.provide(effectDiagnosticsLayer('Trace'))),
   );
 
   // #12710: the five Models-tab provider toggles declare `configTarget:
@@ -551,7 +553,7 @@ describe('settingsAccess', () => {
     'falls back to the default for a stored value that no longer validates',
     () =>
       Effect.gen(function* () {
-        const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+        const logs = captureLogEntries();
         const { stores, workspaceState } = makeFakeSettingsStores();
         const entry = entryByKey(WorkspaceStateKey.LATEX_FORMATTER);
         yield* workspaceState.update(entry.key, 'stale-bogus-value');
@@ -560,17 +562,17 @@ describe('settingsAccess', () => {
             yield* readSetting(entry, stores, 'vscode'),
             LATEX_CONFIG_DEFAULTS.latexFormatter,
           );
-          assert.equal(warn.mock.calls.length, 1);
-          assert.equal(warn.mock.calls[0]?.[0], 'settingsAccess');
+          const warnings = logs.at('WARN', 'settingsAccess');
+          assert.equal(warnings.length, 1);
           assert.ok(
-            String(warn.mock.calls[0]?.[1]).startsWith(
+            String(warnings[0]?.message).startsWith(
               `Ignoring invalid persisted value for setting "${entry.key}"`,
             ),
           );
         } finally {
-          warn.mockRestore();
+          setLogSink(null);
         }
-      }),
+      }).pipe(Effect.provide(effectDiagnosticsLayer('Trace'))),
   );
 
   // #11797: the kill gate's permissive default answers only for an absent

@@ -1,5 +1,7 @@
-import { warn as logWarning } from '@logger/logUtils';
-import type { Fiber } from 'effect';
+import { Effect, type Fiber } from 'effect';
+
+import { withLogChannel } from '@logger/effectLog';
+import type { ProcessRuntime } from '@platform/processRuntime';
 
 /** The in-flight clipboard image pastes of one input bar, as the fibers the
  *  runtime forked for them, and the submit deferred until they land. */
@@ -15,11 +17,12 @@ export class ImagePasteQueue {
     return this.deferredAction !== null;
   }
 
-  add(paste: Fiber.Fiber<void>): void {
+  /** `runtime` is the process runtime `paste` was forked on. */
+  add(paste: Fiber.Fiber<void>, runtime: ProcessRuntime): void {
     this.pastes.add(paste);
     paste.addObserver(() => {
       this.pastes.delete(paste);
-      this.flush();
+      this.flush(runtime);
     });
   }
 
@@ -46,17 +49,21 @@ export class ImagePasteQueue {
   }
 
   /** Run the deferred submit once the last paste lands. A throw out of it is
-   *  logged: it runs inside a fiber observer, where it would otherwise vanish. */
-  private flush(): void {
+   *  logged on the paste's runtime: it runs inside a fiber observer, where
+   *  it would otherwise vanish. */
+  private flush(runtime: ProcessRuntime): void {
     if (this.hasPending) return;
     const action = this.deferredAction;
     this.deferredAction = null;
     try {
       action?.();
     } catch (error) {
-      logWarning('cli.tui', 'The deferred image-paste action failed.', {
-        data: error,
-      });
+      runtime.runFork(
+        Effect.logWarning('The deferred image-paste action failed.').pipe(
+          Effect.annotateLogs({ data: error }),
+          withLogChannel('cli.tui'),
+        ),
+      );
     }
   }
 }

@@ -3,7 +3,6 @@ import { randomUUID } from 'node:crypto';
 import { Cause, Effect, Exit, Result } from 'effect';
 
 import { withLogChannel } from '@logger/effectLog';
-import { createLog } from '@logger/logUtils';
 import type { RecoveryContinuation } from '@platform/interfaces';
 import {
   aggregateId,
@@ -25,7 +24,6 @@ import { ensureError } from '@utils/errors/errorMessage';
 import type { QueuedFollowUp, RunInput } from './RunInput';
 
 const CHANNEL = 'ToolUseFollowUpQueue';
-const logger = createLog(CHANNEL);
 
 /** What a producer hands the admission boundary. */
 export interface FollowUpQueueInput {
@@ -187,6 +185,9 @@ export class ToolUseFollowUpQueue {
    *  admission took for it is released ({@link releaseAdoptedClaim}). */
   private readonly releasing = new WeakSet<FollowUpConsumerLease>();
   private disposed = false;
+  /** Log on the session's publisher: release paths also run off-fiber. */
+  private readonly log = (entry: Effect.Effect<void>): void =>
+    this.port.detach(entry.pipe(withLogChannel(CHANNEL)));
 
   constructor(private readonly port: FollowUpRowPort) {}
 
@@ -634,7 +635,8 @@ export class ToolUseFollowUpQueue {
       entry.owner = undefined;
       if (next === 'recoverable' || this.entries.get(runId) !== entry) return;
       this.entries.delete(runId);
-      logger.debug(`Terminalized follow-up queue for run ${runId}.`);
+      const ended = `Terminalized follow-up queue for run ${runId}.`;
+      this.log(Effect.logDebug(ended));
       this.notifyReleaseObservers(runId);
     };
     this.releaseAdoptedClaim(runId, entry, finish);
@@ -694,9 +696,9 @@ export class ToolUseFollowUpQueue {
     for (const notify of this.releaseObservers) {
       const ran = Result.try({ try: () => notify(runId), catch: ensureError });
       if (Result.isFailure(ran)) {
-        logger.warn(`Release observer threw for run ${runId}`, {
-          data: ran.failure,
-        });
+        const threw = `Release observer threw for run ${runId}`;
+        const failure = { data: ran.failure };
+        this.log(Effect.logWarning(threw).pipe(Effect.annotateLogs(failure)));
       }
     }
   }

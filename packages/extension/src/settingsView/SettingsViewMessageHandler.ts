@@ -41,7 +41,6 @@ import {
   showLoggedInfoMessage,
 } from '@frontend/ui/errorHandlingUtils';
 import { withLogChannel } from '@logger/effectLog';
-import { createLog, type Log } from '@logger/logUtils';
 import {
   discoverCopilotRoutes,
   setCopilotRoutePreference,
@@ -58,10 +57,7 @@ import {
 import { TEXRA_APPROVAL_POLICY_CONFIG_KEY } from '@shared/approvalPolicy';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import type {
-  SettingsMessageFor,
-  ToolDashboardItem,
-} from '@shared/settingsView/settingsViewMessages';
+import type { ToolDashboardItem } from '@shared/settingsView/settingsViewMessages';
 import { loadRuntimeSkillDisplay } from '@skills/runtimeSkills';
 import { getLastCheckResults } from '@tools/toolAvailability';
 import { ACCOUNT_OUTCOME } from '@ui/copy/accountAuth';
@@ -95,7 +91,6 @@ const showDocument = (
 export class SettingsViewMessageHandler {
   private readonly viewName = 'SettingsView';
   private readonly channel = `${this.viewName}MessageHandler`;
-  private readonly log: Log = createLog(this.channel);
 
   /** Active webview reference, tracked on every dispatch. */
   private activeView: SettingsWebview | undefined;
@@ -119,10 +114,9 @@ export class SettingsViewMessageHandler {
   ) {
     const ctx: SettingsHandlerContext = {
       channel: this.channel,
-      log: this.log,
       withActiveWebview: (fn) => this.withActiveWebview(fn),
     };
-    this.latexHandlers = new LatexSettingsHandlers(ctx);
+    this.latexHandlers = new LatexSettingsHandlers(ctx, runtime);
     this.body = createSettingsViewBody({
       host: 'vscode',
       session,
@@ -324,30 +318,25 @@ export class SettingsViewMessageHandler {
           Effect.andThen(refreshAgentCatalog()),
           Effect.andThen(this.sendToolDashboardData({ skipChecks: true })),
         ),
-      runToolCommand: (message) =>
-        Effect.sync(() => this.handleRunToolCommand(message)),
+      runToolCommand: (data) => {
+        const action = planToolTerminalAction({
+          toolId: data.toolId,
+          commandKind: data.kind,
+        });
+        if (action.kind === 'none') {
+          return Effect.logDebug('No command for tool').pipe(
+            Effect.annotateLogs({ data: { ...data, reason: action.reason } }),
+            withLogChannel(this.channel),
+          );
+        }
+        return Effect.sync(() => {
+          const terminal = vscode.window.createTerminal({ name: action.name });
+          terminal.show();
+          terminal.sendText(action.command);
+        });
+      },
       ...this.latexHandlers.handlers,
     };
-  }
-
-  private handleRunToolCommand(
-    data: SettingsMessageFor<typeof SETTINGS_VIEW_COMMANDS.RUN_TOOL_COMMAND>,
-  ): void {
-    const action = planToolTerminalAction({
-      toolId: data.toolId,
-      commandKind: data.kind,
-    });
-    if (action.kind === 'none') {
-      this.log.debug('No command for tool', {
-        data: { ...data, reason: action.reason },
-      });
-      return;
-    }
-    const terminal = vscode.window.createTerminal({
-      name: action.name,
-    });
-    terminal.show();
-    terminal.sendText(action.command);
   }
 
   /** Clear the tracked active view. */
@@ -374,11 +363,12 @@ export class SettingsViewMessageHandler {
     webviewView: SettingsWebview,
   ): Promise<void> {
     this.activeView = webviewView;
-    const program = this.body.handleMessage(message, this.handlerRegistry);
-    if (!program) {
-      this.log.debug('Message validation failed', { data: message });
-      return Promise.resolve();
-    }
+    const program =
+      this.body.handleMessage(message, this.handlerRegistry) ??
+      Effect.logDebug('Message validation failed').pipe(
+        Effect.annotateLogs({ data: message }),
+        withLogChannel(this.channel),
+      );
     return this.runtime.runPromise(program);
   }
 

@@ -1,6 +1,6 @@
 // Shared constants and helpers for the Claude Code CLI tool.
 
-import { warn } from '@logger/logUtils';
+import { writeLogLine } from '@logger/logSink';
 import type {
   ClaudeAgentEffort,
   TokenUsageStats,
@@ -15,7 +15,7 @@ import type {
   SDKResultMessage,
 } from '@anthropic-ai/claude-agent-sdk';
 
-const LOG_CHANNEL = 'claudeAgent';
+const CHANNEL = 'claudeAgent';
 
 /**
  * Compile-time guard: `ClaudeAgentEffort` in `@shared` (the single source of
@@ -126,10 +126,13 @@ function toToolInputRecord(
 ): Record<string, unknown> | undefined {
   if (input === undefined) return undefined;
   if (isToolRecord(input)) return input;
-  warn(
-    LOG_CHANNEL,
+  // Direct sink write: this runs inside the SDK stream's `for await` drain
+  // (one `Effect.tryPromise` in claudeAgent.ts), where no fiber is current.
+  writeLogLine(
+    'WARN',
+    CHANNEL,
     `Claude tool "${toolName}" sent a non-object input; expected a JSON object per the tool-use protocol.`,
-    { data: { input } },
+    { input },
   );
   return undefined;
 }

@@ -66,19 +66,6 @@ vi.mock('@frontend/ui/errorHandlingUtils', () => ({
   showLoggedMessageWithDocs: vi.fn(() => Effect.void),
 }));
 
-vi.mock('@logger/logUtils', () => ({
-  createLog: () => ({
-    debug: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-  }),
-  debug: vi.fn(),
-  info: vi.fn(),
-  warn: vi.fn(),
-  error: vi.fn(),
-}));
-
 const { agentDirectories } =
   await import('@frontend/agents/AgentDirectoryManager');
 

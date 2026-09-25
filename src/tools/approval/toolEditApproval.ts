@@ -30,7 +30,12 @@ import { entryExists } from '@utils/files/fsEntryExists';
 import { readNormalizedFile } from '@utils/files/fsDurability';
 import { workspaceRelativePath } from '@utils/files/workspaceFS';
 import { applyPatchToText } from '@utils/text/diff';
-import { buildDiffHunks, unifiedDiffText } from '@utils/text/unifiedDiff';
+import {
+  buildDiffHunks,
+  reportDiffTimeout,
+  unifiedDiffText,
+  type DiffHunks,
+} from '@utils/text/unifiedDiff';
 import {
   countLines,
   isNonEmptyString,
@@ -107,26 +112,30 @@ export function prepareToolEditApprovalPrompt(
     request: Omit<ToolEditApprovalRequest, 'permission' | 'roots'>;
     relativePath: string;
   },
-): ToolEditPermission {
+): { permission: ToolEditPermission; diffTimeout: string | undefined } {
   const { requestId, request, relativePath } = params;
   const { runId } = request;
   const isBypassed = runId
     ? session.approvals.toolEdit.bypass.isBypassed(runId)
     : false;
-  const lineChanges = computeLineChangeSummary(
+  const { hunks, timeout } = diffEdit(
     request.originalContent,
     request.proposedContent,
   );
+  const lineChanges = countLineChanges(hunks);
   return {
-    requestId,
-    path: request.path,
-    relativePath,
-    sourceTool: request.sourceTool,
-    allowBypass: !isBypassed,
-    runId: runId ?? '',
-    addedLines: lineChanges.added,
-    removedLines: lineChanges.removed,
-    isLatex: isLatexFile(request.path),
+    permission: {
+      requestId,
+      path: request.path,
+      relativePath,
+      sourceTool: request.sourceTool,
+      allowBypass: !isBypassed,
+      runId: runId ?? '',
+      addedLines: lineChanges.added,
+      removedLines: lineChanges.removed,
+      isLatex: isLatexFile(request.path),
+    },
+    diffTimeout: timeout,
   };
 }
 
@@ -134,28 +143,41 @@ export function prepareToolEditApprovalPrompt(
 // Pure diff helpers, shared with the hosts' native approval/diff surfaces
 // ============================================================================
 
-/**
- * Added/removed line counts for an edit, folded from the very hunks the host
- * renders underneath them — the CLI card's `+N / −M` header and the diff body
- * below it are now two readings of one computation, not two engines.
- */
-export function computeLineChangeSummary(
-  original: string,
-  proposed: string,
-): LineChanges {
-  if (original === proposed) {
-    return { added: 0, removed: 0 };
-  }
+/** One diff pass over an edit; identical texts skip the engine entirely. */
+function diffEdit(original: string, proposed: string): DiffHunks {
+  return original === proposed
+    ? { hunks: [], timeout: undefined }
+    : buildDiffHunks(original, proposed);
+}
 
+/** Added/removed line counts folded over hunks a caller already holds. */
+export function countLineChanges(hunks: DiffHunks['hunks']): LineChanges {
   let added = 0;
   let removed = 0;
-  for (const hunk of buildDiffHunks(original, proposed)) {
+  for (const hunk of hunks) {
     for (const line of hunk.lines) {
       if (line.startsWith('+')) added += 1;
       else if (line.startsWith('-')) removed += 1;
     }
   }
   return { added, removed };
+}
+
+/**
+ * Added/removed line counts for an edit, folded from the very hunks the host
+ * renders underneath them — the CLI card's `+N / −M` header and the diff body
+ * below it are now two readings of one computation, not two engines.
+ * The approval hosts call this (and {@link firstChangedLine}) on the pair
+ * {@link requestToolEditApproval} already diffed and reported a timeout for,
+ * so these re-readings do not report it again. A caller diffing a pair of its
+ * own diffs it with `buildDiffHunks`, reports the timeout, and folds the hunks
+ * with {@link countLineChanges}.
+ */
+export function computeLineChangeSummary(
+  original: string,
+  proposed: string,
+): LineChanges {
+  return countLineChanges(diffEdit(original, proposed).hunks);
 }
 
 /**
@@ -167,11 +189,14 @@ export function firstChangedLine(
   original: string,
   proposed: string,
 ): number | null {
-  if (original === proposed) {
-    return null;
-  }
+  return firstChangedLineIn(diffEdit(original, proposed).hunks, proposed);
+}
 
-  const [hunk] = buildDiffHunks(original, proposed);
+function firstChangedLineIn(
+  hunks: DiffHunks['hunks'],
+  proposed: string,
+): number | null {
+  const [hunk] = hunks;
   if (!hunk) return null;
 
   const lastProposedLine = Math.max(countLines(proposed) - 1, 0);
@@ -232,7 +257,7 @@ export const requestToolEditApproval = Effect.fn('requestToolEditApproval')(
     const isRunBypassed = Boolean(
       runId && session.approvals.toolEdit.bypass.isBypassed(runId),
     );
-    const acceptProposedAsIs = (): ToolEditApprovalResult =>
+    const acceptProposedAsIs = (): Effect.Effect<ToolEditApprovalResult> =>
       finalizeApprovalResult(
         { action: 'apply', appliedContent: preparedRequest.proposedContent },
         preparedRequest,
@@ -243,7 +268,7 @@ export const requestToolEditApproval = Effect.fn('requestToolEditApproval')(
       scopedBypass: isRunBypassed,
       canPresent: run.toolPolicy.approvalPromptsUnavailable !== true,
     });
-    if (decision === 'allow') return acceptProposedAsIs();
+    if (decision === 'allow') return yield* acceptProposedAsIs();
     if (isTexraApprovalDenied(decision)) {
       run.onApprovalPolicyDenial?.();
       return { action: 'deny', reason: texraApprovalDenialMessage(decision) };
@@ -254,7 +279,7 @@ export const requestToolEditApproval = Effect.fn('requestToolEditApproval')(
       );
     }
 
-    const permission = prepareToolEditApprovalPrompt(session, {
+    const { permission, diffTimeout } = prepareToolEditApprovalPrompt(session, {
       requestId: `approval-${generateShortId()}`,
       request: preparedRequest,
       // The call's own workspace root, as data: the display path a host shows
@@ -265,6 +290,7 @@ export const requestToolEditApproval = Effect.fn('requestToolEditApproval')(
         preparedRequest.path,
       ),
     });
+    yield* reportDiffTimeout(diffTimeout);
     const staged: ToolEditApprovalRequest = { ...preparedRequest, permission };
     return yield* session.approvals.toolEdit.enqueue(runId, {
       // The preview is staged before the request opens, and stays staged
@@ -300,9 +326,9 @@ export const requestToolEditApproval = Effect.fn('requestToolEditApproval')(
               },
             )
             .pipe(
-              Effect.map((decided): ToolEditApprovalResult => {
+              Effect.flatMap((decided) => {
                 if (decided.action !== 'approve') {
-                  return refusalOf('toolEdit', decided);
+                  return Effect.succeed(refusalOf('toolEdit', decided));
                 }
                 return finalizeApprovalResult(
                   {
@@ -317,7 +343,7 @@ export const requestToolEditApproval = Effect.fn('requestToolEditApproval')(
             ),
         ),
       ),
-      bypassed: Effect.sync(acceptProposedAsIs),
+      bypassed: Effect.suspend(acceptProposedAsIs),
     });
   },
 );
@@ -325,24 +351,25 @@ export const requestToolEditApproval = Effect.fn('requestToolEditApproval')(
 function finalizeApprovalResult(
   result: ToolEditApprovalResult,
   request: Omit<ToolEditApprovalRequest, 'permission'>,
-): ToolEditApprovalResult {
+): Effect.Effect<ToolEditApprovalResult> {
   if (result.action !== 'apply') {
-    return result;
+    return Effect.succeed(result);
   }
 
   const { appliedContent } = result;
+  // One pass answers both the start line and the counts.
+  const { hunks, timeout } = diffEdit(request.originalContent, appliedContent);
 
   // Compute startLine once here (convert 0-based to 1-based; null → line 1).
-  const startLine =
-    (firstChangedLine(request.originalContent, appliedContent) ?? 0) + 1;
+  const startLine = (firstChangedLineIn(hunks, appliedContent) ?? 0) + 1;
 
-  return {
-    ...result,
-    lineChanges:
-      result.lineChanges ??
-      computeLineChangeSummary(request.originalContent, appliedContent),
-    startLine,
-  };
+  return reportDiffTimeout(timeout).pipe(
+    Effect.as({
+      ...result,
+      lineChanges: result.lineChanges ?? countLineChanges(hunks),
+      startLine,
+    }),
+  );
 }
 
 /** The `action: 'apply'` branch of {@link ToolEditApprovalResult}. */
@@ -421,11 +448,15 @@ export function appendApprovalDiffNote(
   path: string,
   proposedContent: string,
   appliedContent: string,
-): string {
-  const diffBody = unifiedDiffText(proposedContent, appliedContent);
-  return diffBody
-    ? `${baseOutput}\n\nUser adjustments to ${path}:\n\n\`\`\`diff\n${diffBody}\n\`\`\``
-    : baseOutput;
+): Effect.Effect<string> {
+  const diff = unifiedDiffText(proposedContent, appliedContent);
+  return reportDiffTimeout(diff.timeout).pipe(
+    Effect.as(
+      diff.text
+        ? `${baseOutput}\n\nUser adjustments to ${path}:\n\n\`\`\`diff\n${diff.text}\n\`\`\``
+        : baseOutput,
+    ),
+  );
 }
 
 export function buildApprovalRejectedResult(

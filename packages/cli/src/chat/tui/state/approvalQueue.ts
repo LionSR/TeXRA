@@ -13,7 +13,7 @@ import { computed, signal } from '@lit-labs/signals';
 import { Cause, Effect } from 'effect';
 
 import { type SessionHandle } from '@agent/runtime';
-import { warn as logWarning } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type {
   PermissionPayload,
@@ -438,14 +438,13 @@ function decideRequest(
   }
   for (const arm of arms) {
     if (!('host' in arm)) continue;
-    if (!hostCapability) {
-      logWarning(
-        'cli.tui',
-        `No attached host performs ${arm.host.kind}: request ${request.requestId} stays pending.`,
+    if (hostCapability) hostCapability(arm.host);
+    else
+      runtime.runFork(
+        Effect.logWarning(
+          `No attached host performs ${arm.host.kind}: request ${request.requestId} stays pending.`,
+        ).pipe(withLogChannel('cli.tui')),
       );
-      continue;
-    }
-    hostCapability(arm.host);
   }
   // Both approve-all actions on a proposal turn the run's delegated-work
   // bypass on, so the work already queued behind it follows.
@@ -499,9 +498,10 @@ export function decidePendingRequest(
     .get()
     .find((pending) => pending.requestId === requestId);
   if (!request) {
-    logWarning(
-      'cli.tui',
-      `Request ${requestId} is no longer pending: its ${decision.action} decision was not sent.`,
+    runtime.runFork(
+      Effect.logWarning(
+        `Request ${requestId} is no longer pending: its ${decision.action} decision was not sent.`,
+      ).pipe(withLogChannel('cli.tui')),
     );
     return;
   }
