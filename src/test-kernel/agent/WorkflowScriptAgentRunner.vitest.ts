@@ -1536,9 +1536,7 @@ describe('createWorkflowScriptAgentRunner', () => {
 
         expect(error).toMatchObject({
           name: 'WorkflowRunAbortError',
-          message: expect.stringContaining(
-            'held by a concurrent resume',
-          ),
+          message: expect.stringContaining('held by a concurrent resume'),
         });
         expect(mocks.executeSubagentInBand).not.toHaveBeenCalled();
       }),
@@ -1564,9 +1562,7 @@ describe('createWorkflowScriptAgentRunner', () => {
 
         expect(error).toMatchObject({
           name: 'WorkflowRunAbortError',
-          message: expect.stringContaining(
-            'held by a concurrent resume',
-          ),
+          message: expect.stringContaining('held by a concurrent resume'),
         });
         expect(mocks.executeSubagentInBand).not.toHaveBeenCalled();
       }),
@@ -1594,9 +1590,7 @@ describe('createWorkflowScriptAgentRunner', () => {
 
         expect(error).toMatchObject({
           name: 'WorkflowRunAbortError',
-          message: expect.stringContaining(
-            'held by a concurrent resume',
-          ),
+          message: expect.stringContaining('held by a concurrent resume'),
         });
         expect(mocks.executeSubagentInBand).not.toHaveBeenCalled();
       }),
@@ -1619,9 +1613,7 @@ describe('createWorkflowScriptAgentRunner', () => {
 
         expect(error).toMatchObject({
           name: 'WorkflowRunAbortError',
-          message: expect.stringContaining(
-            'held by a concurrent resume',
-          ),
+          message: expect.stringContaining('held by a concurrent resume'),
         });
         expect(mocks.executeSubagentInBand).toHaveBeenCalledOnce();
       }),

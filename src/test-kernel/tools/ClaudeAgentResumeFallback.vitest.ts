@@ -39,8 +39,7 @@ vi.mock('@agent/followUp/ToolUseFollowUp', () => ({
 // The session-keyed registry resolves live handles through its session's
 // RunRegistry. Tests stage a handle here for the lookups they exercise;
 // unset slots miss, like an untracked run.
-const sessionHandles: { byRunId?: unknown; interruptActive?: () => void } =
-  {};
+const sessionHandles: { byRunId?: unknown; interruptActive?: () => void } = {};
 const testSession = {
   followUps: { acquire: () => ({ enqueue: vi.fn() }) },
   runs: {
