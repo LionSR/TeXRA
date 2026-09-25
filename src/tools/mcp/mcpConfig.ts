@@ -98,14 +98,22 @@ const readConfigText = (
 /**
  * What `JSON.parse` rejected, without the file's text. V8 quotes an excerpt
  * of the source into the messages that carry no position, and this file
- * holds server credentials; those messages are cut at the first quote. The
- * messages with a position quote no source and pass whole.
+ * holds server credentials; those messages are cut at the first quote.
  */
 function jsonSyntaxError(error: unknown): string {
   const message = toErrorMessage(error);
-  if (message.includes(' at position ')) return message;
-  const kind = message.split(/['"]/, 1)[0].replace(/[,\s]+$/, '');
-  return kind || 'Unexpected content';
+  const position = /at position \d+(?: \(line \d+ column \d+\))?/.exec(
+    message,
+  )?.[0];
+  if (position === undefined)
+    return (
+      message.split(/['"]/, 1)[0].replace(/[,\s]+$/, '') || 'Unexpected content'
+    );
+  // Even a message with a position is cut at its first double quote, so a
+  // V8 that one day quotes source there still leaks nothing; the position
+  // itself is digits only.
+  const kind = message.split('"', 1)[0].replace(/[,\s]+$/, '');
+  return kind.includes(position) ? kind : `${kind} ${position}`;
 }
 
 /** Parse the config file's servers, skipping each invalid entry loudly. */
