@@ -9,8 +9,11 @@ import { Effect, Stream } from 'effect';
 
 import type { SessionHandle } from '@agent/runtime';
 import { withLogChannel } from '@logger/effectLog';
-import { requestParksItsCaller, type RunId } from '@shared/schemas';
-import type { SessionView } from '@shared/session/sessionView';
+import type { RunId } from '@shared/schemas';
+import {
+  requestAnswerability,
+  type SessionView,
+} from '@shared/session/sessionView';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { formatResultCount } from '@utils/text/stringUtils';
 import type * as vscode from 'vscode';
@@ -25,15 +28,14 @@ interface AttentionSurface {
   showSessions(runId: RunId): void;
 }
 
-/** A parked caller is answerable only while this window holds its run
- *  (`SessionRequests.decide`); an inquiry, at any time. A `readOnly` run is
- *  out either way: its card's actions no-op in this window
- *  (`BaseRequestPanel`), so there is nothing here to answer with. */
+/** The requests the card lets this window answer (`requestAnswerability`). */
 function answerableHere(view: SessionView): SessionView['requests'] {
   return view.requests.filter((request) => {
     const run = view.runs.get(request.runId);
-    if (run === undefined || run.readOnly) return false;
-    return run.approval === 'own' || !requestParksItsCaller(request.payload);
+    return (
+      run !== undefined &&
+      requestAnswerability(run, request.payload) === 'answerable'
+    );
   });
 }
 
