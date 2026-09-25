@@ -30,6 +30,7 @@ import type {
 } from '@shared/schemas';
 import type {
   AggregateClaim,
+  DatabaseNotOwner,
   DatabaseReadFailed,
   DatabaseWriteFailed,
   SessionOpenError,
@@ -75,7 +76,7 @@ export interface SessionGraph {
     id: AggregateId,
   ) => Effect.Effect<
     Effect.Effect<void, DatabaseWriteFailed>,
-    DatabaseReadFailed | DatabaseWriteFailed
+    DatabaseNotOwner | DatabaseReadFailed | DatabaseWriteFailed
   >;
   /** Drop this process's claim on one aggregate: a run's when its lease
    *  ends, a workflow checkpoint's when its invocation does. */

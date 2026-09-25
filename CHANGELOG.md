@@ -98,6 +98,10 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
 
 ### Bug Fixes
 
+- **A run another TeXRA window takes over at the same moment is reported as
+  running elsewhere.** When two windows or processes resume or relaunch the
+  same run at once, the one that loses now says the run is held elsewhere,
+  instead of failing with a generic database write error.
 - **File tools no longer follow a symlink out of the workspace.** A symlink
   inside the workspace (for example `up -> ..`) let `write_file`, `edit_file`
   and `read_file` reach files outside it, and the approval prompt showed the
