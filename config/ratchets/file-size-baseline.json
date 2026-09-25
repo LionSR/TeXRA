@@ -77,7 +77,7 @@
     "src/controllers/approval/ToolEditApprovalController.ts": 726,
     "src/controllers/session/Database.ts": 1466,
     "src/controllers/session/hostRunActions.ts": 722,
-    "src/controllers/session/sessionLayer.ts": 1196,
+    "src/controllers/session/sessionLayer.ts": 1195,
     "src/latex/arxivProcessor.ts": 734,
     "src/latex/LatexMediaManager.ts": 716,
     "src/model/computeModelOptions.ts": 940,

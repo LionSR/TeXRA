@@ -8,9 +8,7 @@
  */
 import { hostname } from 'node:os';
 
-import { readFile } from 'node:fs/promises';
-
-import { Data, Effect } from 'effect';
+import { Data, Effect, FileSystem } from 'effect';
 import * as ChildProcess from 'effect/unstable/process/ChildProcess';
 import { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
@@ -29,21 +27,32 @@ export function processOwnerId(processStart: string | undefined): OwnerId {
 
 const CHANNEL = 'NodeProcesses';
 
+/** What reading a start identity takes: `/proc` on Linux, `ps` or PowerShell
+ *  elsewhere. */
+export type ProcessProbe = FileSystem.FileSystem | ChildProcessSpawner;
+
 /** A start identity that could not be read or parsed for `pid`. */
 class ProcessIdentityUnreadable extends Data.TaggedError(
   'ProcessIdentityUnreadable',
 )<{ readonly pid: number; readonly detail: string }> {}
 
-/** The one wrap of this module's `node:fs` edge. */
+/** The one filesystem read of this module, worded by its errno text. */
 const readTextFile = (
   pid: number,
   file: string,
-): Effect.Effect<string, ProcessIdentityUnreadable> =>
-  Effect.tryPromise({
-    try: () => readFile(file, 'utf8'),
-    catch: (error) =>
-      new ProcessIdentityUnreadable({ pid, detail: toErrorMessage(error) }),
-  });
+): Effect.Effect<string, ProcessIdentityUnreadable, FileSystem.FileSystem> =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    return yield* fs.readFileString(file);
+  }).pipe(
+    Effect.mapError(
+      (error) =>
+        new ProcessIdentityUnreadable({
+          pid,
+          detail: toErrorMessage(error.reason.cause ?? error),
+        }),
+    ),
+  );
 
 /**
  * The one child-process edge of this module: `file args`, stdout as text.
@@ -87,7 +96,7 @@ let linuxBootId: string | undefined;
 
 const readLinuxIdentity = (
   pid: number,
-): Effect.Effect<string, ProcessIdentityUnreadable> =>
+): Effect.Effect<string, ProcessIdentityUnreadable, FileSystem.FileSystem> =>
   Effect.gen(function* () {
     linuxBootId ??= (yield* readTextFile(
       pid,
@@ -163,17 +172,19 @@ const readWindowsIdentity = (
 
 const readIdentity = (
   pid: number,
-): Effect.Effect<string | undefined, never, ChildProcessSpawner> =>
-  Effect.suspend(() => {
-    switch (process.platform) {
-      case 'linux':
-        return readLinuxIdentity(pid);
-      case 'win32':
-        return readWindowsIdentity(pid);
-      default:
-        return readPsIdentity(pid);
-    }
-  }).pipe(
+): Effect.Effect<string | undefined, never, ProcessProbe> =>
+  Effect.suspend(
+    (): Effect.Effect<string, ProcessIdentityUnreadable, ProcessProbe> => {
+      switch (process.platform) {
+        case 'linux':
+          return readLinuxIdentity(pid);
+        case 'win32':
+          return readWindowsIdentity(pid);
+        default:
+          return readPsIdentity(pid);
+      }
+    },
+  ).pipe(
     // The source fails when the pid does not exist; callers probing a
     // foreign pid separate that case with `kill(pid, 0)`. Any failure to
     // read this process's own identity is worth seeing once.
@@ -202,11 +213,7 @@ let selfIdentity: string | undefined;
  */
 export const nodeProcesses = {
   identity: readIdentity,
-  selfIdentity: (): Effect.Effect<
-    string | undefined,
-    never,
-    ChildProcessSpawner
-  > =>
+  selfIdentity: (): Effect.Effect<string | undefined, never, ProcessProbe> =>
     Effect.suspend(() =>
       selfIdentity === undefined
         ? Effect.map(readIdentity(process.pid), (identity) => {

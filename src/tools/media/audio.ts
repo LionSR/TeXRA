@@ -1,5 +1,7 @@
-import { createReadStream, existsSync, statSync } from 'node:fs';
-import { mkdir } from 'node:fs/promises';
+// The transcription upload stays a Node read stream: the OpenAI SDK names the
+// multipart file from the stream's path, and the endpoint reads the audio
+// format from that name.
+import { createReadStream } from 'node:fs';
 import * as path from 'node:path';
 
 import {
@@ -8,6 +10,8 @@ import {
   Duration,
   Effect,
   Exit,
+  FileSystem,
+  PlatformError,
   Ref,
   Scope,
   Stream,
@@ -25,7 +29,7 @@ import {
 } from '@utils/system/binaryResolver';
 import { withExtendedPath } from '@utils/system/platformPaths';
 import { ensureError } from '@utils/errors/errorMessage';
-import type { PlatformError } from 'effect/PlatformError';
+import { absentReason } from '@utils/files/fsEntryExists';
 import type {
   ChildProcessHandle,
   ChildProcessSpawner,
@@ -57,14 +61,19 @@ class AudioRecorderError extends Data.TaggedError('AudioRecorderError')<{
 }> {}
 
 /** The failure a foreign call of `operation` carries back, logged once here
- *  where the operation is named. */
+ *  where the operation is named. A filesystem failure is worded by its errno
+ *  text. */
 const recorderFailure =
   (operation: string) =>
   <A, E, R>(
     self: Effect.Effect<A, E, R>,
   ): Effect.Effect<A, AudioRecorderError, R> =>
     Effect.catch(self, (cause) => {
-      const message = getSdkErrorMessage(cause);
+      const message = getSdkErrorMessage(
+        cause instanceof PlatformError.PlatformError
+          ? (cause.reason.cause ?? cause)
+          : cause,
+      );
       return Effect.logError(`Error in ${operation}: ${message}`).pipe(
         withLogChannel(CHANNEL),
         Effect.andThen(Effect.fail(new AudioRecorderError({ message, cause }))),
@@ -98,7 +107,7 @@ const resolveSoxCommand = Effect.fnUntraced(function* (
 ): Effect.fn.Return<
   ResolvedBinaryCommand | null,
   AudioRecorderError,
-  ChildProcessSpawner
+  FileSystem.FileSystem | ChildProcessSpawner
 > {
   const configuredPath = roots.config.get<string>('texra.audio.soxPath');
   if (configuredPath) {
@@ -114,7 +123,12 @@ const resolveSoxCommand = Effect.fnUntraced(function* (
     }
     // A configured binary that is missing fails loudly too: silently
     // recording with whatever `sox` is on PATH is not what was configured.
-    if (!existsSync(configuredPath)) {
+    const fs = yield* FileSystem.FileSystem;
+    const exists = yield* fs.exists(configuredPath).pipe(
+      Effect.catchIf(absentReason, () => Effect.succeed(false)),
+      recorderFailure('startRecording'),
+    );
+    if (!exists) {
       return yield* new AudioRecorderError({
         message: `Configured sox path does not exist: ${configuredPath}`,
       });
@@ -162,7 +176,11 @@ function watchRecorderExit(recording: ActiveRecording): Effect.Effect<void> {
  */
 export function startRecording(
   roots: WorkspaceRoots,
-): Effect.Effect<string, AudioRecorderError, ChildProcessSpawner> {
+): Effect.Effect<
+  string,
+  AudioRecorderError,
+  FileSystem.FileSystem | ChildProcessSpawner
+> {
   return Effect.gen(function* () {
     if ((yield* Ref.get(activeRecording)) !== null) {
       return yield* new AudioRecorderError({
@@ -181,10 +199,10 @@ export function startRecording(
       });
     }
     const directory = recordingsDir(roots);
-    yield* Effect.tryPromise({
-      try: () => mkdir(directory, { recursive: true }),
-      catch: ensureError,
-    }).pipe(recorderFailure('startRecording'));
+    const fs = yield* FileSystem.FileSystem;
+    yield* fs
+      .makeDirectory(directory, { recursive: true })
+      .pipe(recorderFailure('startRecording'));
     const absPath = path.join(directory, `record_${Date.now()}.wav`);
     const soxArgs = [
       '--default-device',
@@ -233,7 +251,7 @@ export function startRecording(
         Stream.decodeText(),
         Stream.splitLines,
         Stream.runForEach((line) => Effect.logDebug(`Sox stderr: ${line}`)),
-        Effect.catch((error: PlatformError) =>
+        Effect.catch((error: PlatformError.PlatformError) =>
           Effect.logDebug(`Sox stderr ended early: ${error.reason._tag}`),
         ),
         withLogChannel(CHANNEL),
@@ -261,7 +279,11 @@ export function killActiveRecording(): Effect.Effect<void> {
  * microphone running. The captured file is validated here too, because "what
  * the take captured" is the answer this step owes its caller.
  */
-export function stopRecording(): Effect.Effect<string, AudioRecorderError> {
+export function stopRecording(): Effect.Effect<
+  string,
+  AudioRecorderError,
+  FileSystem.FileSystem
+> {
   return Effect.gen(function* () {
     const active = yield* Ref.getAndSet(activeRecording, null);
     if (!active) {
@@ -275,10 +297,12 @@ export function stopRecording(): Effect.Effect<string, AudioRecorderError> {
     // join on its exit, so the file is complete before it is read.
     yield* Scope.close(active.scope, Exit.void);
 
-    const size = yield* Effect.try({
-      try: () => (existsSync(active.path) ? statSync(active.path).size : null),
-      catch: ensureError,
-    }).pipe(recorderFailure('stopRecording'));
+    const fs = yield* FileSystem.FileSystem;
+    const size = yield* fs.stat(active.path).pipe(
+      Effect.map((info) => Number(info.size)),
+      Effect.catchIf(absentReason, () => Effect.succeed(null)),
+      recorderFailure('stopRecording'),
+    );
     if (size === null) {
       return yield* new AudioRecorderError({
         message: 'Recording file not found',
