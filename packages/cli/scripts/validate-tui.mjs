@@ -456,8 +456,10 @@ const SCENARIOS = [
       'tool-output-line-10 hidden-middle',
       'wide-column-F',
       'tool-output-line-18',
+      'Esc close',
     ],
-    expectPatterns: [/PgUp\/PgDn page.*Esc close/],
+    // The whole transcript fits, so the footer offers no scroll keys.
+    unexpect: ['PgUp/PgDn page'],
   },
   {
     name: 'slash-palette',
@@ -2369,13 +2371,9 @@ const SCENARIOS = [
     },
     bootExpect: 'Tab sessions',
     keys: ['\t', RIGHT, DOWN, DOWN, DOWN, '\r', DC4],
-    expect: [
-      'Transcript: strategy',
-      'strategy detail line 01',
-      'PgUp/PgDn page',
-      'Esc close',
-    ],
+    expect: ['Transcript: strategy', 'strategy detail line 01', 'Esc close'],
     unexpect: [
+      'PgUp/PgDn page',
       'entry-1 chat history line',
       'signal read during notification phase',
       'ERROR',
@@ -2468,18 +2466,8 @@ const SCENARIOS = [
     },
     bootExpect: 'Tab sessions',
     keys: ['\t', RIGHT, DOWN, DOWN, DOWN, 'k'],
-    expect: [
-      'Harness kill requested for aaaa0005f10e.',
-      '● strategy Stopped',
-      'Enter focus',
-      'Tab input',
-      'Esc input',
-    ],
-    unexpect: [
-      'v full output',
-      'k kill',
-      'Harness kill requested for aaaa0005f10e.\n\nHarness kill requested for aaaa0005f10e.',
-    ],
+    expect: ['● strategy Stopped', 'Enter focus', 'Tab input', 'Esc input'],
+    unexpect: ['v full output', 'k kill'],
   },
   {
     name: 'focused-stopped-subagent',
@@ -2615,10 +2603,9 @@ const SCENARIOS = [
       '[Completed] Split theorem into algebraic and analytic checks',
       '[In progress] Ask leanSolver to verify the finite case',
       '[Pending] Merge subagent conclusions into final answer',
-      'PgUp/PgDn page',
       'Esc close',
     ],
-    unexpect: ['Unknown command: /plan'],
+    unexpect: ['Unknown command: /plan', 'PgUp/PgDn page'],
     maxLineColumns: 72,
   },
   {

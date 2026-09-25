@@ -93,10 +93,7 @@ import {
 } from './state/sessionView';
 import { notifyStaticTranscriptErased } from './state/staticTranscriptRepaint';
 import { discoverTerminalCapabilities } from './state/terminalCapabilities';
-import {
-  appendLocalAssistantTranscript,
-  describeRequestError,
-} from './state/transcript';
+import { appendLocalAssistantTranscript } from './state/transcript';
 import { installTerminalTitleUpdates } from './terminalTitle';
 import {
   chatTuiCanStartRootRun,
@@ -503,22 +500,6 @@ export async function runChat(
       onStaticTranscriptChange={viewportController.repaintTranscript}
       onCtrlC={() => exitController.handleSigint()}
       onSuspend={() => exitController.handleSigtstp()}
-      onKillRun={(runId) => {
-        runtime.runFork(
-          runtimeSession.requests
-            .request({ kind: 'run.stop', runId })
-            .pipe(
-              Effect.catch((error) =>
-                Effect.sync(() =>
-                  appendLocalAssistantTranscript(describeRequestError(error)),
-                ),
-              ),
-            ),
-        );
-      }}
-      onWorkflowControl={(runId, action) => {
-        runtimeSession.workflowControls.control(runId, action);
-      }}
       history={inputHistory}
     />,
     {

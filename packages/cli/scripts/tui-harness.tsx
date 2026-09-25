@@ -1553,20 +1553,6 @@ function applyHarnessApprovalPolicySelection(
   setHarnessApprovalPolicy(policy);
 }
 
-function markHarnessRunStopped(runId: RunId): void {
-  const child = currentView().runs.get(runId);
-  if (!child) return;
-  appendHarnessAssistantTranscript(
-    `Harness kill requested for ${runId}.`,
-    HARNESS_RUN_ID,
-  );
-  appendHarnessAssistantTranscript(
-    'Harness kill requested for this sub-workflow.',
-    child.id,
-  );
-  seedRunEnd(child.id, RUN_OUTCOME.CANCELLED);
-}
-
 function handleHarnessSubmit(line: string): void {
   if (handleHarnessSlashCommand(line)) return;
   const view = currentView();
@@ -1776,8 +1762,6 @@ function renderHarnessApp(): React.JSX.Element {
       runtime={harnessRuntime}
       session={session()}
       onSubmit={handleHarnessSubmit}
-      onKillRun={markHarnessRunStopped}
-      onWorkflowControl={() => undefined}
       colorEnabled={HARNESS_COLOR_ENABLED}
       history={HARNESS_INPUT_HISTORY}
       onStaticTranscriptChange={viewportController.repaintTranscript}

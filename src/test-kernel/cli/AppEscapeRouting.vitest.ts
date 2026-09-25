@@ -279,8 +279,6 @@ function appProps(): AppProps {
     runtime: testRuntime(),
     session: testDefaultSession(),
     onSubmit: vi.fn(),
-    onKillRun: vi.fn(),
-    onWorkflowControl: vi.fn(),
     onCtrlC: vi.fn(),
   };
 }
