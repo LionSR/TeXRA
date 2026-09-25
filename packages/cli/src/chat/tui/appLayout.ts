@@ -11,55 +11,28 @@ const COMPACT_STATIC_TRANSCRIPT_MAX_ROWS = 14;
 const COMPACT_LIVE_TRANSCRIPT_RESERVE_ROWS = 2;
 
 export const PINNED_CHROME_ROWS = {
-  input: 3,
+  /** The input bar's round border, above and below its draft rows. */
+  inputBorder: 2,
   status: 2,
 } as const;
-
-function pinnedChromeRows({
-  inputVisible = true,
-  inputRows = PINNED_CHROME_ROWS.input,
-  queuedFollowUpPanelRows = 0,
-  reverseSearchOpen,
-  slashPaletteOpen,
-  staticTranscriptRows = 0,
-}: {
-  readonly inputVisible?: boolean;
-  /** Measured input-bar height (borders + windowed draft rows). Defaults to
-   *  the single-line height; a multi-line draft reports its real height so
-   *  the transcript shrinks instead of the frame outgrowing the terminal. */
-  readonly inputRows?: number;
-  readonly queuedFollowUpPanelRows?: number;
-  readonly reverseSearchOpen: boolean;
-  readonly slashPaletteOpen: boolean;
-  readonly staticTranscriptRows?: number;
-}): number {
-  const baseRows =
-    PINNED_CHROME_ROWS.status +
-    (inputVisible ? inputRows : 0) +
-    queuedFollowUpPanelRows +
-    staticTranscriptRows;
-  return (
-    baseRows +
-    (slashPaletteOpen ? SLASH_PALETTE_ROWS : 0) +
-    (reverseSearchOpen ? REVERSE_SEARCH_ROWS : 0)
-  );
-}
+/** Each bottom panel owns one separator row above its content, and a lone
+ *  row cannot hold separator plus content. */
+const BOTTOM_PANEL_MIN_ROWS = 2;
 
 export function allocateMiddleRows({
+  footerRows,
   foregroundMaxRows,
   foregroundOpen,
-  inputVisible = true,
-  inputRows,
   queuedFollowUpPanelRows = 0,
   reverseSearchOpen,
   rows,
   slashPaletteOpen,
   staticTranscriptRows = 0,
 }: {
+  /** The status bar plus the input bar's measured height when it shows. */
+  readonly footerRows: number;
   readonly foregroundMaxRows?: number;
   readonly foregroundOpen: boolean;
-  readonly inputVisible?: boolean;
-  readonly inputRows?: number;
   readonly queuedFollowUpPanelRows?: number;
   readonly reverseSearchOpen: boolean;
   readonly rows: number;
@@ -72,14 +45,11 @@ export function allocateMiddleRows({
   const availableRows = Math.max(
     0,
     rows -
-      pinnedChromeRows({
-        inputVisible,
-        inputRows,
-        queuedFollowUpPanelRows,
-        reverseSearchOpen,
-        slashPaletteOpen,
-        staticTranscriptRows,
-      }),
+      footerRows -
+      queuedFollowUpPanelRows -
+      staticTranscriptRows -
+      (slashPaletteOpen ? SLASH_PALETTE_ROWS : 0) -
+      (reverseSearchOpen ? REVERSE_SEARCH_ROWS : 0),
   );
   if (!foregroundOpen) {
     return { foregroundRows: 0, transcriptRows: availableRows };
@@ -111,14 +81,12 @@ export function allocateConversationPanelRows({
   maxRows,
   sessionCount,
   childListFocused,
-  minimumSessionPanelRows = 2,
   todosPlanContentRows,
   transcriptRows,
 }: {
   readonly maxRows: number;
   readonly sessionCount: number;
   readonly childListFocused: boolean;
-  readonly minimumSessionPanelRows?: number;
   readonly todosPlanContentRows: number;
   readonly transcriptRows: number;
 }): {
@@ -141,12 +109,11 @@ export function allocateConversationPanelRows({
   // stays collapsed until the user focuses it — a large workflow must not take
   // transcript space merely because it is running in the background — and the
   // todos/plan panel hides while the list has focus
-  // (`shouldShowTodosPlanPanel`). Each panel owns one separator row above its
-  // content, and a lone row cannot hold separator plus content.
+  // (`shouldShowTodosPlanPanel`).
   if (childListFocused) {
     if (sessionCount === 0) return none;
     const rows = Math.min(maxRows, sessionCount + 1, panelBudget);
-    if (rows < minimumSessionPanelRows) return none;
+    if (rows < BOTTOM_PANEL_MIN_ROWS) return none;
     return {
       bottomPanelRows: rows,
       conversationRows: availableTranscriptRows - rows,
@@ -160,7 +127,7 @@ export function allocateConversationPanelRows({
     todosPlanContentRows + 1,
     Math.floor(panelBudget / 2),
   );
-  if (rows < 2) return none;
+  if (rows < BOTTOM_PANEL_MIN_ROWS) return none;
   return {
     bottomPanelRows: rows,
     conversationRows: availableTranscriptRows - rows,
