@@ -81,6 +81,7 @@ export function ModelListForm(props: ModelListFormProps): React.JSX.Element {
         </Text>
       }
       compactDetail={<Text dimColor>Available models</Text>}
+      emptyClosesOnEnter
       emptyMessage={formatCliNoRunnableModelsMessage(
         CHAT_API_MODE_MODEL_RECOVERY,
       )}

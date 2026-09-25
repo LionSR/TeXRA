@@ -58,6 +58,8 @@ interface ListFormProps<T> {
   readonly compactVisibleItems?: number;
   readonly emptyMessage?: string;
   readonly emptyShowCloseHint?: boolean;
+  /** The empty picker also closes on Enter; its footer says so. */
+  readonly emptyClosesOnEnter?: boolean;
   readonly selectMarginTop?: number;
   readonly action: string;
   /** Form-specific keys shown between the select and `Esc` hints. */
@@ -74,10 +76,21 @@ export function ListForm<T>(props: ListFormProps<T>): React.JSX.Element {
       <FormFrame
         color={COLOR_WARNING}
         title={props.title}
-        showCloseHint={props.emptyShowCloseHint}
+        showCloseHint={!props.emptyClosesOnEnter && props.emptyShowCloseHint}
       >
         <Text>{props.emptyMessage}</Text>
         {props.detail}
+        {props.emptyClosesOnEnter ? (
+          <Box marginTop={1}>
+            <KeyHints
+              hints={[
+                { key: 'Enter', action: 'close' },
+                { key: 'Esc', action: 'close' },
+              ]}
+              confirmCancel={false}
+            />
+          </Box>
+        ) : null}
       </FormFrame>
     );
   }

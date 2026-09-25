@@ -165,6 +165,7 @@ export function useAsyncResource<T, R extends ProcessServices>(options: {
   const refresh = useCallback(
     (): Effect.Effect<void, never, R> =>
       Effect.suspend(() => {
+        if (!mounted.current) return Effect.void;
         const request = ++sequence.current;
         const current = (): boolean =>
           mounted.current && request === sequence.current;
