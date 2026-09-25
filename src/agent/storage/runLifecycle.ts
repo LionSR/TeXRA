@@ -144,6 +144,15 @@ export const registerRun = Effect.fn('registerRun')(function* (
             : {}),
         },
       );
+      // Enforcement is the session's in-memory policy; the row is its
+      // projection. A re-registration writes no `run.start`, so the
+      // activation re-stamps the snapshot enforcement now holds.
+      if (prior)
+        events.push({
+          type: 'approval.policy',
+          aggregateId: target,
+          snapshot: session.approvalPolicySnapshotFor(runId),
+        });
       if (options.description !== undefined)
         events.push({
           type: 'run.description',
