@@ -35,7 +35,6 @@ const probeInputs: ToolProbeInputs = {
 
 const secretsLayer = Secrets.layer({
   get: unreadSecret,
-  getStored: unreadSecret,
   set: unreadSecret,
   delete: unreadSecret,
   listStoredKeys: unreadSecret,

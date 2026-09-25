@@ -1,10 +1,10 @@
 import { it } from '@effect/vitest';
 import { Cause, Effect, Exit } from 'effect';
 import { MODEL_CONFIGS } from 'llm-zoo';
-import { beforeEach, describe, expect } from 'vitest';
+import { describe, expect } from 'vitest';
 
 import { bindModel } from '@agent/runtime/run/modelBinding';
-import { apiKeySecretName, invalidateApiKeyCache } from '@model/apiProviders';
+import { apiKeySecretName } from '@model/apiProviders';
 import {
   isOpenRouterRoutingUnsupported,
   shouldRouteModelThroughOpenRouter,
@@ -80,10 +80,6 @@ describe('bindModel', () => {
       [GlobalStateKey.PREFER_SHORT_MODEL_NAMES]: true,
     },
     secrets: { [apiKeySecretName('openai')]: 'openai-key' },
-  });
-
-  beforeEach(() => {
-    invalidateApiKeyCache();
   });
 
   const bind = (config: (typeof MODEL_CONFIGS)[string]) =>
