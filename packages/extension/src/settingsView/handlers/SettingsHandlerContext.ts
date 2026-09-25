@@ -3,17 +3,15 @@ import { Cause, Effect, Exit } from 'effect';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import type { Log } from '@logger/logUtils';
 import { ensureError } from '@utils/errors/errorMessage';
-import type { ExtensionContext, Webview } from 'vscode';
+import type { Webview } from 'vscode';
 
 /** Host transport and presentation available to settings command programs. */
 export interface SettingsHandlerContext {
   readonly channel: string;
   readonly log: Log;
-  readonly extensionContext: ExtensionContext;
   withActiveWebview<E, R>(
     fn: (webview: Webview) => Effect.Effect<void, E, R>,
   ): Effect.Effect<void, E, R>;
-  postMessageToActiveWebview(message: unknown): Effect.Effect<void, Error>;
 }
 
 /**

@@ -1,6 +1,6 @@
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Effect, FileSystem } from 'effect';
+import { Effect } from 'effect';
 import { beforeEach, describe, expect, it as vitestIt, vi } from 'vitest';
 
 import { withProcessServices } from '@platform/processRuntime';
@@ -14,7 +14,6 @@ const EXTERNAL_FIRST = '/external/first';
 
 const mocks = vi.hoisted(() => ({
   getAllLocal: vi.fn<() => Promise<unknown[]>>(),
-  selectFolder: vi.fn(() => Effect.succeed<string | null>(null)),
   liveWatchers: new Set<string>(),
 }));
 
@@ -67,10 +66,6 @@ vi.mock('@frontend/ui/errorHandlingUtils', () => ({
   showLoggedMessageWithDocs: vi.fn(() => Effect.void),
 }));
 
-vi.mock('@frontend/ui/dialogs', () => ({
-  selectFolder: mocks.selectFolder,
-}));
-
 vi.mock('@logger/logUtils', () => ({
   createLog: () => ({
     debug: vi.fn(),
@@ -96,7 +91,6 @@ describe('agent directory watchers', () => {
   beforeEach(() => {
     mocks.liveWatchers.clear();
     mocks.getAllLocal.mockReset();
-    mocks.selectFolder.mockReturnValue(Effect.succeed(null));
     agentDirectories.initialize(
       new FakeStateStore(),
       '/resources',
@@ -105,20 +99,13 @@ describe('agent directory watchers', () => {
   });
 
   it.effect(
-    'shares directory selection and reset with the settings state store',
+    'reads the custom directory and its reset from the settings state store',
     () =>
       Effect.gen(function* () {
         const globalState = new FakeStateStore();
         agentDirectories.initialize(globalState, '/resources', testRuntime());
-        mocks.selectFolder.mockReturnValue(Effect.succeed(EXTERNAL_FIRST));
-        yield* agentDirectories
-          .promptCustom()
-          .pipe(
-            Effect.provide(
-              FileSystem.layerNoop({ makeDirectory: () => Effect.void }),
-            ),
-          );
-        expect(yield* globalState.get(GlobalStateKey.CUSTOM_AGENT_DIR)).toBe(
+        yield* globalState.update(
+          GlobalStateKey.CUSTOM_AGENT_DIR,
           EXTERNAL_FIRST,
         );
         expect(

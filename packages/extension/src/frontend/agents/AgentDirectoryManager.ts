@@ -10,17 +10,11 @@ import {
 import * as vscode from 'vscode';
 
 // Local imports
-import {
-  AgentDirectoryService,
-  type AgentSource,
-  agentSourceDirectory,
-} from '@agent/index';
+import { AgentDirectoryService } from '@agent/index';
 import { showLoggedMessageWithDocs } from '@frontend/ui/errorHandlingUtils';
-import { type OpenDialogFailed, selectFolder } from '@frontend/ui/dialogs';
 import { withLogChannel } from '@logger/effectLog';
 import {
   type AgentDirectoriesFailed,
-  type StateWriteFailed,
   type StateStore,
 } from '@platform/interfaces';
 import type { ProcessRuntime } from '@platform/processRuntime';
@@ -114,56 +108,12 @@ class AgentDirectoryManager {
     return Effect.suspend(() => this.getHost().directories.builtInToolUse());
   }
 
-  /**
-   * Get the directory for a given source type.
-   * Returns undefined for Remote sources (which have no local directory).
-   */
-  getDirectory(
-    source: AgentSource,
-  ): Effect.Effect<
-    string | undefined,
-    AgentDirectoriesFailed,
-    GlobalStorageFs | FileSystem.FileSystem
-  > {
-    return Effect.suspend(() =>
-      agentSourceDirectory(this.getHost().directories, source),
-    );
-  }
-
   custom(): Effect.Effect<
     string,
     AgentDirectoriesFailed,
     GlobalStorageFs | FileSystem.FileSystem
   > {
     return Effect.suspend(() => this.getHost().directories.custom());
-  }
-
-  promptCustom(): Effect.Effect<
-    string | undefined,
-    OpenDialogFailed | PlatformError.PlatformError | StateWriteFailed,
-    FileSystem.FileSystem
-  > {
-    return Effect.gen({ self: this }, function* () {
-      const selectedPath = yield* selectFolder({ openLabel: 'Select Folder' });
-      if (!selectedPath) {
-        return undefined;
-      }
-
-      // The picked folder is the user's, outside every session root. A
-      // directory already there is the post-condition, and a recursive
-      // makeDirectory is a no-op on one, so nothing here is recovered: a real
-      // fault (the path is a file, the volume is read-only) fails and
-      // surfaces instead of writing the setting anyway.
-      const fs = yield* FileSystem.FileSystem;
-      yield* fs.makeDirectory(selectedPath, { recursive: true });
-
-      yield* this.getHost().globalState.update(
-        GlobalStateKey.CUSTOM_AGENT_DIR,
-        selectedPath,
-      );
-
-      return selectedPath;
-    });
   }
 
   /**
