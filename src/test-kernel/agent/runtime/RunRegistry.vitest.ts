@@ -1246,3 +1246,22 @@ it.effect(
       registry.dispose();
     }),
 );
+
+it.effect('holds a run against launches without making it a stop target', () =>
+  Effect.gen(function* () {
+    const { registry } = createRegistry();
+    const runId = 'abcd13' as RunId;
+    yield* Effect.scoped(
+      Effect.gen(function* () {
+        yield* registry.holdInactiveRun(runId);
+        expect(registry.isLive(runId)).toBe(true);
+        // A run only held is not running: a stop by run id reaches nothing.
+        expect(registry.interruptActive(runId)).toBe(false);
+        const launch = registry.launchRun(runId, Effect.void);
+        expect(yield* Effect.flip(launch)).toBeInstanceOf(RunLive);
+      }),
+    );
+    expect(registry.isLive(runId)).toBe(false);
+    registry.dispose();
+  }),
+);

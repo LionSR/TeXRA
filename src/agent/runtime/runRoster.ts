@@ -37,12 +37,14 @@ export class RunLive extends Data.TaggedError('RunLive')<{
   }
 }
 
+type AnyFiber = Fiber.Fiber<unknown, unknown>;
 /** Everything this process holds for one run. The entry exists exactly while
  *  one of its fields does, which is what makes it the liveness authority. */
 interface RunEntry {
   /** The fiber running this run here — its liveness, stop target and terminal
    *  owner — written by that fiber's first step, erased by its own exit. */
-  fiber?: Fiber.Fiber<unknown, unknown>;
+  fiber?: AnyFiber;
+  hold?: AnyFiber;
   handle?: RunHandle;
   activation?: ChildRunActivation;
   /** The run's hand-off chain while a fiber holds or waits on it. */
@@ -99,7 +101,7 @@ export class RunRoster {
   /** Drop an entry that records nothing: the run is not here any more. */
   private prune(runId: RunId, entry: RunEntry): void {
     if (entry.fiber ?? entry.handle ?? entry.activation ?? entry.lane) return;
-    if (entry.launches > 0) return;
+    if (entry.hold !== undefined || entry.launches > 0) return;
     if (this.entries.get(runId) === entry) {
       this.entries.delete(runId);
       this.notifyWaiters(runId);
@@ -108,14 +110,13 @@ export class RunRoster {
 
   // ------------------------------------------------------------------ fiber
 
-  /** Register the run's fiber on its entry: admission, stop and drain all
-   *  read the one value, and the fiber's own exit erases it. */
-  private setFiber(runId: RunId, fiber: Fiber.Fiber<unknown, unknown>): void {
+  /** Register a fiber in `slot` on its entry; its own exit erases it. */
+  private setFiber(runId: RunId, fiber: AnyFiber, slot: 'fiber' | 'hold') {
     const entry = this.entryFor(runId);
-    entry.fiber = fiber;
+    entry[slot] = fiber;
     fiber.addObserver(() => {
-      if (entry.fiber === fiber) {
-        entry.fiber = undefined;
+      if (entry[slot] === fiber) {
+        entry[slot] = undefined;
         this.prune(runId, entry);
         this.notifyWaiters(runId);
       }
@@ -271,7 +272,7 @@ export class RunRoster {
   isLive(runId: RunId): boolean {
     const entry = this.entries.get(runId);
     if (entry === undefined) return false;
-    if (entry.fiber !== undefined || entry.launches > 0) return true;
+    if (entry.fiber ?? entry.hold ?? entry.launches > 0) return true;
     return entry.handle?.getToolUseFlow() !== undefined;
   }
 
@@ -326,7 +327,7 @@ export class RunRoster {
           refuseWhenLive
             ? operation
             : Effect.withFiber((self) => {
-                this.setFiber(runId, self);
+                this.setFiber(runId, self, 'fiber');
                 return operation;
               }),
           { startImmediately: true },
@@ -345,8 +346,8 @@ export class RunRoster {
 
   /** Hold `runId` against local ownership for the caller's scope, refusing
    *  as an inactive-run step does ({@link launch}). The hold is an idle fiber
-   *  on the entry, so {@link isLive} reports it, and the run's DB claim rides
-   *  that fiber's lifetime: owner and claim are fenced by one construct. */
+   *  on the entry, which {@link isLive} reports and no stop reaches, and the
+   *  run's DB claim rides its lifetime: one construct fences owner and claim. */
   holdInactive(
     runId: RunId,
   ): Effect.Effect<void, RunLive | Error, Scope.Scope> {
@@ -362,12 +363,11 @@ export class RunRoster {
           )
             return Effect.fail(new RunLive({ runId }));
           return Effect.gen({ self: this }, function* () {
-            // The claim gates the hold itself: a run another owner holds is
-            // refused here, synchronously with the admission.
             const releaseClaim = this.claimRun
               ? yield* this.claimRun(runId)
               : undefined;
             const latch = yield* Latch.make(false);
+            // Started at once, as `launch`'s is, so it always runs its release.
             const fiber = yield* Effect.forkChild(
               Latch.await(latch).pipe(
                 Effect.ensuring(
@@ -376,13 +376,13 @@ export class RunRoster {
                     : releaseClaim.pipe(Effect.orDie),
                 ),
               ),
+              { startImmediately: true },
             );
-            this.setFiber(runId, fiber);
+            this.setFiber(runId, fiber, 'hold');
             return { latch, fiber };
           });
         }),
-        // The release is the hold's whole unwinding: the DB claim the fiber
-        // carries has landed before the caller's scope closes.
+        // The join awaits the claim release before the caller's scope closes.
         ({ latch, fiber }) =>
           Latch.open(latch).pipe(Effect.andThen(Fiber.join(fiber))),
       ),
@@ -419,8 +419,8 @@ export class RunRoster {
     );
   }
 
-  /** Resolve once every owner has left: each entry's fiber by `Fiber.await`,
-   *  then handles, activations, lanes and holds through the change hub. The
+  /** Resolve once every owner has left: each entry's fiber or hold by
+   *  `Fiber.await`, then handles, activations and lanes through the hub. The
    *  re-check arm is load-bearing: `raceAllFirst` starts its arms in order,
    *  so a last run leaving before the subscription is still seen. */
   awaitDrained(): Effect.Effect<void> {
@@ -428,7 +428,7 @@ export class RunRoster {
       for (;;) {
         const head = this.entries.values().next();
         if (head.done) return;
-        const fiber = head.value.fiber;
+        const fiber = head.value.fiber ?? head.value.hold;
         if (fiber !== undefined) {
           yield* Fiber.await(fiber);
           continue;
