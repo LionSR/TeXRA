@@ -657,7 +657,11 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           }
           // A child's idle is its parent's to decide; the policy sees a
           // failed turn too.
-          const next = isChild() ? null : yield* continuation.atIdle(state);
+          const canContinue =
+            !run.toolPolicy.stopAfterCycle && !followUps.hasQueued();
+          const next = isChild()
+            ? null
+            : yield* continuation.atIdle(state, canContinue);
           // Every park is idle, a failed turn's included: a resume
           // acknowledges at the first one.
           run.callbacks.onIdle?.();

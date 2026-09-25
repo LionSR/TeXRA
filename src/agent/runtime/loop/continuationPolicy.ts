@@ -5,7 +5,8 @@
  * it blocks on the follow-up queue it asks the run's continuation policy once:
  * a `turn` opens a synthetic turn with that text, and null parks the run. A
  * follow-up that is already queued outranks the policy's turn; that choice is
- * the loop's, since the loop owns the queue.
+ * the loop's, since the loop owns the queue, and the loop tells the policy
+ * whether a turn could be taken at all so an unusable one is never built.
  *
  * The run resolves its policy once, when the loop is set up. Goal mode is the
  * one policy today.
@@ -20,9 +21,13 @@ import { goalOf, pauseGoal, setGoalSessionAutoApproval } from '@tools/goal';
 import type { SessionHandle } from '../SessionHandle';
 
 interface ContinuationPolicy {
-  /** At idle: the next synthetic turn, or null to park. */
+  /**
+   * At idle: the next synthetic turn, or null to park. `canContinue` is
+   * false when the run ends at this park or a follow-up is already queued.
+   */
   readonly atIdle: (
     state: RunState,
+    canContinue: boolean,
   ) => Effect.Effect<{ readonly turn: string } | null, Error>;
 }
 
@@ -36,7 +41,10 @@ export const goalContinuation = (
   session: SessionHandle,
   runId: RunId,
 ): ContinuationPolicy => ({
-  atIdle: Effect.fn('goal.atIdle')(function* (state: RunState) {
+  atIdle: Effect.fn('goal.atIdle')(function* (
+    state: RunState,
+    canContinue: boolean,
+  ) {
     if (state.lastError !== null) {
       if (goalOf(session, runId)?.status === 'active') {
         yield* pauseGoal(session, runId);
@@ -44,6 +52,7 @@ export const goalContinuation = (
       }
       return null;
     }
+    if (!canContinue) return null;
     const text = yield* maybeBuildGoalContinuation(session, runId);
     return text === null ? null : { turn: text };
   }),
