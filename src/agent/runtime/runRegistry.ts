@@ -388,9 +388,9 @@ export class RunRegistry {
 
   /** Kill the background OS process of every run whose child loop declared
    *  one (`RunHandle.backgroundProcess`), leaving every other run untouched
-   *  (#8155): an agent run is deliberately left running for restart recovery,
-   *  and its status is rewritten from its durable facts, never from a phase a
-   *  later pass rewrites.
+   *  (#8155): a native agent run is deliberately left running for restart
+   *  recovery, and its status is rewritten from its durable facts, never
+   *  from a phase a later pass rewrites.
    */
   killBackgroundProcesses(): void {
     for (const handle of this.roster.allHandles()) {

@@ -11,10 +11,6 @@ import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
 import { StateWriteFailed } from '@platform/interfaces';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { createTestSession } from '@test/support/sessionTestUtils';
-import {
-  claudeAgentSessionsFor,
-  codexThreadsFor,
-} from '@tools/agentCliSessionStores';
 
 type SignalSpyEvent = 'SIGINT' | 'SIGTERM';
 type SignalRegistration = {
@@ -276,26 +272,17 @@ describe('CLI platform init', () => {
       yield* disposeInstalledRuntime;
       yield* initCliPlatform(cliContext({ installSignalHandlers: false }));
       const session = createTestSession();
-      const interruptCodex = vi
-        .spyOn(codexThreadsFor(session.runs), 'interruptAll')
+      const drain = vi
+        .spyOn(session.runs, 'killBackgroundProcesses')
         .mockImplementation(() => {});
-      const interruptClaude = vi
-        .spyOn(claudeAgentSessionsFor(session.runs), 'interruptAll')
-        .mockImplementation(() => {});
-      yield* Effect.addFinalizer(() =>
-        Effect.sync(() => {
-          interruptCodex.mockRestore();
-          interruptClaude.mockRestore();
-        }),
-      );
+      yield* Effect.addFinalizer(() => Effect.sync(() => drain.mockRestore()));
 
-      // Registration alone must not interrupt anything; the drain belongs to
-      // the CLI lifecycle host every exit path runs (bin/texra.ts's finally,
-      // the signal handlers, the TUI's exitNow).
-      expect(interruptCodex).not.toHaveBeenCalled();
+      // Registration alone must not kill anything; the drain belongs to the
+      // CLI lifecycle host every exit path runs (bin/texra.ts's finally, the
+      // signal handlers, the TUI's exitNow).
+      expect(drain).not.toHaveBeenCalled();
       for (const handler of mocks.shutdownHandlers) yield* handler;
-      expect(interruptCodex).toHaveBeenCalledOnce();
-      expect(interruptClaude).toHaveBeenCalledOnce();
+      expect(drain).toHaveBeenCalledOnce();
     }),
   );
 });
