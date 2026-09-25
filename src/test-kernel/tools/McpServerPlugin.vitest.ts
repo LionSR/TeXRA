@@ -261,4 +261,26 @@ describe('MCP server plugins', () => {
         ]);
       }).pipe(Effect.scoped, Effect.provide(nativeToolTestLayer())),
   );
+
+  it.live('reports an invalid config without quoting its text', () =>
+    Effect.gen(function* () {
+      const dir = mkdtempSync(path.join(os.tmpdir(), 'texra-mcp-'));
+      yield* Effect.addFinalizer(() =>
+        Effect.sync(() => rmSync(dir, { recursive: true, force: true })),
+      );
+      const file = path.join(dir, 'mcp.json');
+      // An unquoted value: V8's message for it quotes the surrounding text.
+      writeFileSync(
+        file,
+        '{"mcpServers": {"s": {"command": "x", "env": {"K": sk-secret}}}}',
+      );
+      const fs = yield* FileSystem.FileSystem;
+      const { plugins, warnings } = yield* mcpPluginLoader(
+        fs,
+        file,
+      )(['mcp__s__*']);
+      expect(plugins).toEqual([]);
+      expect(warnings).toEqual([`${file} is not valid JSON: Unexpected token`]);
+    }).pipe(Effect.scoped, Effect.provide(nodePlatformLayer)),
+  );
 });

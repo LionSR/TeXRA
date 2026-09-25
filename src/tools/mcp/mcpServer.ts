@@ -298,14 +298,21 @@ const connect = (config: McpServerConfig) =>
       onRequest: (method) =>
         method === 'ping' ? Effect.succeed({}) : undefined,
     });
-    // The process ended: fail what waits on it, with its exit and stderr.
+    // The process ended: fail what waits on it with its exit code. Its stderr
+    // goes to the process log only: a server prints what it likes there, its
+    // credentials included, and the failure message reaches tool results.
     yield* Effect.forkScoped(
       Effect.gen(function* () {
         const exit = yield* Effect.result(handle.exitCode);
         const tail = (yield* Ref.get(stderrTail)).trim();
         const code = exit._tag === 'Success' ? exit.success : 'unknown';
+        if (tail) {
+          yield* Effect.logWarning(
+            `MCP server "${config.name}" exited (code ${code}); its stderr:\n${tail}`,
+          ).pipe(withLogChannel(CHANNEL));
+        }
         yield* rpc.close(
-          `MCP server "${config.name}" exited (code ${code})${tail ? `: ${tail}` : ''}`,
+          `MCP server "${config.name}" exited (code ${code})${tail ? `; its stderr is in the TeXRA log (${CHANNEL})` : ''}`,
         );
       }),
     );

@@ -1,11 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  buildAuthenticatedRemoteUrl,
-  buildGitCredential,
+  overleafGitClone,
   overleafTokenSpec,
   parseLatexGitUrl,
-  redactSensitive,
 } from '@latex/overleafProject';
 
 const ID = '0123456789abcdef01234567';
@@ -69,31 +67,20 @@ describe('overleafTokenSpec', () => {
   });
 });
 
-describe('credential helpers', () => {
-  it('url-encodes the token and tracks both forms for redaction', () => {
-    const cred = buildGitCredential('olp_a/b+c');
-    // Hardcoded expectations so an encoding-strategy change fails the test
-    // instead of mirroring the implementation on both sides.
-    expect(cred.remote).toBe('git:olp_a%2Fb%2Bc');
-    expect(cred.sensitive).toEqual(['olp_a/b+c', 'olp_a%2Fb%2Bc']);
-  });
-
-  it('builds the authenticated clone URL from remote + credential', () => {
-    expect(
-      buildAuthenticatedRemoteUrl(OVERLEAF_REMOTE, buildGitCredential('olp_x')),
-    ).toBe(`https://git:olp_x@git.overleaf.com/${ID}`);
-  });
-
-  it('redacts both the raw and encoded token forms from a message', () => {
-    // A token with special chars makes the raw and encoded forms differ
-    // (`olp_a/b+c` vs `olp_a%2Fb%2Bc`), so this proves each is redacted
-    // independently rather than collapsing to one form.
-    const cred = buildGitCredential('olp_a/b+c');
-    expect(cred.sensitive[0]).not.toBe(cred.sensitive[1]);
-    const leaked = `fatal: auth failed for git:${cred.sensitive[1]} (olp_a/b+c)`;
-    const redacted = redactSensitive(leaked, cred.sensitive);
-    expect(redacted).not.toContain('olp_a/b+c');
-    expect(redacted).not.toContain('olp_a%2Fb%2Bc');
-    expect(redacted).toContain('***');
+describe('overleafGitClone', () => {
+  it('clones a tokenless remote and hands the token to git out of band', () => {
+    const clone = overleafGitClone(OVERLEAF_REMOTE, 'olp_a/b+c');
+    // The recorded remote and every argument are free of the token; only
+    // the helper's environment and the approval input carry it.
+    expect(clone.args.slice(-3)).toEqual([
+      'clone',
+      `https://git@git.overleaf.com/${ID}`,
+      '.',
+    ]);
+    expect(clone.args.join(' ')).not.toContain('olp_');
+    expect(clone.env).toEqual({ TEXRA_GIT_TOKEN: 'olp_a/b+c' });
+    expect(clone.approval).toBe(
+      'protocol=https\nhost=git.overleaf.com\nusername=git\npassword=olp_a/b+c\n\n',
+    );
   });
 });
