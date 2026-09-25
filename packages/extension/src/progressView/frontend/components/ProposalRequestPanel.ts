@@ -204,7 +204,8 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
   /**
    * The proposal card (board W0): what the run will be, as the run model
    * folds the plan for a run that has not started. Every declared phase in
-   * order with its declared calls (the model is in the ask above), and the
+   * order with its declared calls (the model is in the ask above), and,
+   * above the phases so the sticky action row never covers it, the
    * honest note that calls may run concurrently. No cost estimate
    * (the fold has none) and no script link (the file list below has it).
    */
@@ -227,6 +228,10 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
         <span class="proposal-card__summary"
           >${workflowScriptPlanSummary(workflow)}</span
         >
+      </div>
+      <div class="workflow-proposal__cost-warning">
+        ${waIcon('triangle-exclamation')}
+        ${WORKFLOW_SCRIPT_PROPOSAL_COPY.costWarning}
       </div>
       ${
         phases.length > 0
@@ -251,10 +256,6 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
             </div>`
           : nothing
       }
-      <div class="workflow-proposal__cost-warning">
-        ${waIcon('triangle-exclamation')}
-        ${WORKFLOW_SCRIPT_PROPOSAL_COPY.costWarning}
-      </div>
       <wa-details
         class="workflow-proposal__workflow-details"
         summary="Instruction and files"
