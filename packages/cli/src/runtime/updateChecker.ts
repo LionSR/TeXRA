@@ -4,6 +4,7 @@ import { z } from 'zod';
 
 import { Effect, Result } from 'effect';
 import { parseJsonWith } from '@common/parsing/safeParseJson';
+import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
 import { UPDATE_CHECK_SKIP_ENV } from '@utils/system/semverUpdateCheck';
 import { executeCommand } from '@utils/system/execUtils';
 import { isEnvFlagEnabled } from '@utils/system/envFlags';
@@ -15,8 +16,8 @@ import {
 
 import {
   readCliAmbientState,
+  readCliCwd,
   readCliEntrypointPath,
-  resolveCliCwd,
   type CliContext,
 } from './cliContext';
 import { installCliProcessRuntime } from './cliProcessRuntime';
@@ -144,7 +145,7 @@ const readCommandStdout: CommandRunner = (command, args, timeoutMs, cwd) =>
     // explicit cwd — the wrapper's workspace-root default would throw — no
     // setting slots, since none are open yet, and quiet: true so wrapper debug
     // lines can't leak to the console sink.
-    const workingDir = cwd ?? (yield* resolveCliCwd(undefined));
+    const workingDir = cwd ?? canonicalizeWorkspacePath(readCliCwd());
     const result = yield* executeCommand([command, ...args], {
       timeout: timeoutMs,
       cwd: workingDir,

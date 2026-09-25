@@ -6,7 +6,7 @@ import type { ProcessRuntime } from '@platform/processRuntime';
 import type { GlobalStorageFs } from '@platform/rootedFs';
 import type { ProjectDatabases } from '@shared/session/database';
 import type { AgentCategory } from '@shared/schemas';
-import type { SettingsTabPanelName } from '@shared/settingsView/settingsViewMessages';
+import type { SettingsTarget } from '@shared/settingsView/settingsViewMessages';
 import {
   DESKTOP_SHELL_COMMANDS,
   type DesktopLayoutPanel,
@@ -119,10 +119,7 @@ export function createDesktopShellActions(
     });
   }
 
-  function showSettings(
-    tab?: SettingsTabPanelName,
-    agentSubTab?: AgentCategory,
-  ) {
+  function showSettings(tab?: SettingsTarget, agentSubTab?: AgentCategory) {
     postDesktopSettingsView(
       (message) => renderer.postToRenderer(message),
       tab,
@@ -138,7 +135,7 @@ export function createDesktopShellActions(
 
   function openAgentDirectory(customDirSet?: boolean) {
     if (customDirSet !== true) {
-      showSettings('agents');
+      showSettings('agents/library');
       return;
     }
     runShellAction(openCustomAgentDirectory);
@@ -199,15 +196,16 @@ export function createDesktopShellIpc(
   actions: DesktopShellActions,
 ): DesktopMessageHandler {
   return {
-    handleMessage(message: DesktopCommandMessage): boolean {
+    handleMessage(message: DesktopCommandMessage) {
       const id = DESKTOP_SHELL_IPC_COMMANDS.find(
         (candidate) => candidate === message.command,
       );
-      if (id == null) return false;
-      // Every registry handler runs its action synchronously and returns
-      // `true`; `boolean | Promise<boolean>` is the shared dispatcher
-      // signature, so narrow it here rather than widening this contract.
-      return dispatchDesktopCommand(id, actions) === true;
+      if (id == null) return undefined;
+      // Every registry handler runs its action synchronously; an action that
+      // forks host work reports its own failure.
+      return Effect.sync(() => {
+        void dispatchDesktopCommand(id, actions);
+      });
     },
   };
 }

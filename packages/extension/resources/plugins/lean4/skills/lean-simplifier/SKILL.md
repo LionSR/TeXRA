@@ -1,6 +1,6 @@
 ---
 name: lean-simplifier
-description: Refactor Lean 4 code and proofs toward Mathlib-quality style without changing theorem statements or computational meaning. Use when Codex needs to simplify tactic scripts, generalize declarations, improve naming and organization, remove duplication, or make Lean code cleaner and more upstream-ready.
+description: Refactor Lean 4 code and proofs toward Mathlib-quality style without changing theorem statements or computational meaning. Use when you need to simplify tactic scripts, generalize declarations, improve naming and organization, remove duplication, or make Lean code cleaner and more upstream-ready.
 ---
 
 # Lean Simplifier

@@ -3,18 +3,16 @@ import { Effect } from 'effect';
 import { describe, expect } from 'vitest';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
-import { resolveModelCompatibilityKey } from '@agent/runtime/modelRoutes';
-
 import {
-  resolveDirectModelApiKeyProvider,
-  shouldRouteModelThroughOpenRouter,
-} from '@model/openRouterRouting';
+  routeCompatibilityKey,
+  type BindableRoute,
+} from '@agent/runtime/modelRoutes';
+import { decideModelRoute, OWN_KEY_ROUTE_FACTS } from '@model/modelRoute';
 import {
   isKimiCodeExclusiveModel,
   isKimiCodeExclusiveRetryModel,
   isKimiCodeSubscriptionRetryBlocked,
 } from '@shared/model/kimiCodeRetryGate';
-import { FakeStateStore } from '@test/support/FakePlatform';
 
 describe('Kimi Code exclusivity single-source', () => {
   it('keeps the retry model-id gate aligned with the shared field predicate', () => {
@@ -47,59 +45,50 @@ describe('Kimi Code exclusivity single-source', () => {
 });
 
 describe('Kimi Code routing', () => {
-  const globalState = new FakeStateStore();
+  const route = (model: string, useOpenRouter: boolean) =>
+    decideModelRoute(MODEL_CONFIGS[model], {
+      ...OWN_KEY_ROUTE_FACTS,
+      useOpenRouter,
+    }) as BindableRoute;
 
   it('keeps the direct Kimi Code route when OpenRouter is globally enabled', () => {
-    expect(resolveDirectModelApiKeyProvider(MODEL_CONFIGS.kimiCoding)).toBe(
-      'kimiCode',
-    );
-    expect(
-      shouldRouteModelThroughOpenRouter(MODEL_CONFIGS.kimiCoding, true),
-    ).toBe(false);
+    expect(route('kimiCoding', true)).toEqual({
+      kind: 'api-key',
+      provider: 'kimiCode',
+      usageRoute: 'kimi-code-subscription',
+    });
   });
 
-  it.effect('uses the shared Kimi handler', () =>
-    Effect.gen(function* () {
-      expect(
-        yield* resolveModelCompatibilityKey(
-          MODEL_CONFIGS.kimiCoding,
-          globalState,
-          false,
-        ),
-      ).toBe('Kimi');
-    }),
-  );
-
   it.effect(
-    'routes dual-backend kimi3 through OpenRouter when the toggle is on',
+    'uses the shared Kimi handler, and OpenRouter for kimi3 when on',
     () =>
       Effect.gen(function* () {
-        // The factory's Kimi Code reroute is guarded on compat key
-        // 'Kimi'. Because kimi3 carries an openrouterFullName, an
-        // OpenRouter-enabled session persists as 'OpenRouterNative'
-        // instead — so a resumed 'Kimi' kimi3 was, by construction, a
-        // direct (non-OpenRouter) session, which is why the resume path's
-        // useOpenRouter=false is correct.
         expect(
-          yield* resolveModelCompatibilityKey(
-            MODEL_CONFIGS.kimi3,
-            globalState,
-            false,
+          yield* routeCompatibilityKey(
+            MODEL_CONFIGS.kimiCoding,
+            route('kimiCoding', false),
           ),
         ).toBe('Kimi');
         expect(
-          yield* resolveModelCompatibilityKey(
+          yield* routeCompatibilityKey(
             MODEL_CONFIGS.kimi3,
-            globalState,
-            true,
+            route('kimi3', false),
+          ),
+        ).toBe('Kimi');
+        expect(
+          yield* routeCompatibilityKey(
+            MODEL_CONFIGS.kimi3,
+            route('kimi3', true),
           ),
         ).toBe('OpenRouterNative');
       }),
   );
 
   it('does not divert other moonshot models off their normal routes', () => {
-    expect(resolveDirectModelApiKeyProvider(MODEL_CONFIGS.kimi25T)).toBe(
-      'moonshot',
-    );
+    expect(route('kimi25T', false)).toEqual({
+      kind: 'api-key',
+      provider: 'moonshot',
+      usageRoute: 'api-key',
+    });
   });
 });

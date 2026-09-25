@@ -1,6 +1,6 @@
 ---
 name: scientific-simplifier
-description: Simplify scientific code, LaTeX, and technical prose while preserving exact behavior, results, and meaning. Use when Codex needs to remove duplication, reduce unnecessary abstraction, clean up AI-generated bloat, or make a research codebase or manuscript clearer without changing its substance.
+description: Simplify scientific code, LaTeX, and technical prose while preserving exact behavior, results, and meaning. Use when you need to remove duplication, reduce unnecessary abstraction, clean up AI-generated bloat, or make a research codebase or manuscript clearer without changing its substance.
 ---
 
 # Scientific Simplifier

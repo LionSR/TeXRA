@@ -2,13 +2,13 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 
 // Local imports - shared schemas
+import { LOG_LEVELS, MESSAGE_TYPES } from '@shared/schemas';
+import type { RunLabels } from '@shared/tools/executionsDisplay';
+import { decodeToolUseLog } from '@shared/toolUse';
 import {
-  LOG_LEVELS,
-  STREAM_LOG_ENTRY_TYPES,
-  StreamLogEntrySchema,
-} from '@shared/schemas';
-import {
-  projectTranscriptRow,
+  logPayloadRow,
+  streamingTextRow,
+  toolRow,
   type ErrorRow,
   type StreamingTextRow,
   type ToolRow,
@@ -66,23 +66,18 @@ function renderTemplateInDocument(template: FormatterTemplate): HTMLElement {
   return container;
 }
 
-/** The projected tool row for an INFO-level tool-use log entry. */
+/** The tool row an INFO-level tool-use payload builds. */
 function toolUseRow(
   id: string,
-  data: unknown,
-  runLabels?: Map<string, string>,
+  data: Record<string, unknown>,
+  runLabels?: RunLabels,
 ): ToolRow {
-  const entry = StreamLogEntrySchema.parse({
-    type: STREAM_LOG_ENTRY_TYPES.LOG,
-    seqNo: 1,
-    id,
-    text: '',
-    level: LOG_LEVELS.INFO,
-    timestamp: 1,
-    messageType: 'toolUse',
-    data,
-  });
-  return projectTranscriptRow(entry, runLabels ? { runLabels } : {}) as ToolRow;
+  return toolRow(
+    { id, seqNo: 1, level: LOG_LEVELS.INFO, timestamp: 1 },
+    decodeToolUseLog(data),
+    undefined,
+    runLabels,
+  );
 }
 
 /** Renders an `executions` tool call with subagent labels and returns the title. */
@@ -95,7 +90,7 @@ function executionsTitle(
       toolUseRow(
         'executions-title',
         { toolName: 'executions', input },
-        new Map(labels),
+        new Map(labels.map(([id, label]) => [id, { label }])),
       ),
     ),
   );
@@ -487,17 +482,17 @@ const SUMMARY_CONTROL_CASES = [
     controlSelector: 'wa-button.banner-content-copy',
     buildTemplate: () =>
       formatBannerContentTemplate(
-        projectTranscriptRow(
-          StreamLogEntrySchema.parse({
-            type: STREAM_LOG_ENTRY_TYPES.LOG,
-            seqNo: 1,
+        streamingTextRow(
+          {
             id: 'thinking-1',
-            text: 'some thinking content',
+            seqNo: 1,
             level: LOG_LEVELS.INFO,
             timestamp: 1,
-            messageType: 'thinking',
-            data: {},
-          }),
+            messageType: MESSAGE_TYPES.THINKING,
+          },
+          'thinking',
+          'some thinking content',
+          false,
         ) as StreamingTextRow,
       ),
   },
@@ -507,21 +502,23 @@ const SUMMARY_CONTROL_CASES = [
     controlSelector: 'wa-button.banner-content-copy',
     buildTemplate: () =>
       formatErrorTemplate(
-        projectTranscriptRow(
-          StreamLogEntrySchema.parse({
-            type: STREAM_LOG_ENTRY_TYPES.LOG,
-            seqNo: 1,
+        logPayloadRow(
+          {
             id: 'error-1',
-            text: 'something failed',
+            seqNo: 1,
             level: LOG_LEVELS.ERROR,
             timestamp: 1,
-            messageType: 'error',
+            messageType: MESSAGE_TYPES.ERROR,
+          },
+          'something failed',
+          {
+            messageType: MESSAGE_TYPES.ERROR,
             data: {
               message: 'something failed',
               operation: 'test-op',
               userRetryable: false,
             },
-          }),
+          },
         ) as ErrorRow,
       ),
   },

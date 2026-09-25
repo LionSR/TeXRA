@@ -144,7 +144,6 @@ export interface InvokeRequest {
   /** The tools this turn advertises; a reflection turn advertises none. */
   readonly tools: TurnRequest['tools'];
   readonly toolChoice: TurnRequest['toolChoice'];
-  readonly stopSequences?: TurnRequest['stopSequences'];
   /** The turn's round ordinal, for debug file naming. */
   readonly round: number;
   /** The debug file base name of the family issuing the turn. */
@@ -308,9 +307,6 @@ export const modelInvokerLayer = (): Layer.Layer<
         ...(request.tools !== undefined ? { tools: request.tools } : {}),
         ...(request.toolChoice !== undefined
           ? { toolChoice: request.toolChoice }
-          : {}),
-        ...(request.stopSequences !== undefined
-          ? { stopSequences: request.stopSequences }
           : {}),
         ...(state.continuation !== null &&
         state.continuation.origin.protocol === bound.origin.protocol &&
@@ -983,9 +979,8 @@ export const modelInvokerLayer = (): Layer.Layer<
               aggregateId,
               requestId,
               // The row is committed here rather than at the session's door
-              // (`openRequest`), so the scrub that door applies happens here:
-              // a provider message echoing an `Authorization` header never
-              // reaches a durable row.
+              // (`openRequest`), so the door's `rawErrorBody` drop happens
+              // here too: the raw response body never reaches a durable row.
               payload: redactedForFact({ kind: 'retry', data: request }),
               thread: null,
             },

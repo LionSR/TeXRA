@@ -6,17 +6,8 @@ import {
   type AgentTrace,
   type AgentEvent,
 } from '@agent/trace';
-import {
-  MESSAGE_TYPES,
-  type RunId,
-  type StreamLogEntry,
-} from '@shared/schemas';
-import { StreamLog } from '@shared/session/traceEntries';
+import { MESSAGE_TYPES, type RunId } from '@shared/schemas';
 import { createTestRunTrace } from '@test/support/sessionTestUtils';
-
-function streamEntries(store: StreamLog): StreamLogEntry[] {
-  return store.toJSON();
-}
 
 function openDeferredThinking(
   logger: AgentTrace,
@@ -24,12 +15,30 @@ function openDeferredThinking(
   return logger.openRun(MESSAGE_TYPES.THINKING, { deferStart: true });
 }
 
-/** Run against a fresh, test-local store. */
-function withStore(run: (store: StreamLog, logger: AgentTrace) => void): void {
-  const store = new StreamLog();
-  const handle = createTestRunTrace('stream' as RunId, store);
+/** The stream lifecycle a trace emitted: its starts and ends. */
+function streamFacts(
+  events: readonly AgentEvent[],
+): { type: string; kind?: string; finalText?: string }[] {
+  const facts: { type: string; kind?: string; finalText?: string }[] = [];
+  for (const event of events) {
+    if (event.type === 'stream.start') {
+      facts.push({ type: event.type, kind: event.kind });
+    } else if (event.type === 'stream.end') {
+      facts.push({ type: event.type, finalText: event.finalText });
+    }
+  }
+  return facts;
+}
+
+/** Run against a fresh, test-local trace, recording what it emits. */
+function withTrace(
+  run: (events: AgentEvent[], logger: AgentTrace) => void,
+): void {
+  const handle = createTestRunTrace('stream' as RunId);
+  const events: AgentEvent[] = [];
+  handle.trace.subscribe((event) => events.push(event));
   try {
-    run(store, handle.trace);
+    run(events, handle.trace);
   } finally {
     handle.dispose();
   }
@@ -41,39 +50,35 @@ describe('AgentTrace stream output', () => {
   });
 
   it('materializes runs at stream start, before any delta', () => {
-    withStore((store, logger) => {
+    withTrace((events, logger) => {
       const thinking = logger.openRun(MESSAGE_TYPES.THINKING);
 
-      // The running entry exists immediately — the CLI keys its "model is
+      // The running stream exists immediately: the CLI keys its "model is
       // thinking" indicator off it, and hidden reasoning may never emit a
       // first chunk.
-      let entries = streamEntries(store);
-      expect(entries).toHaveLength(1);
-      expect(entries[0]?.messageType).toBe(MESSAGE_TYPES.THINKING);
-      expect(entries[0]?.text).toBe('');
-      expect(entries[0]?.data).toEqual({ status: 'running' });
+      expect(streamFacts(events)).toEqual([
+        { type: 'stream.start', kind: MESSAGE_TYPES.THINKING },
+      ]);
 
       thinking.finalize();
-      entries = streamEntries(store);
-      expect(entries).toHaveLength(1);
-      expect(entries[0]?.data).toEqual({ status: 'completed' });
+      expect(streamFacts(events)).toEqual([
+        { type: 'stream.start', kind: MESSAGE_TYPES.THINKING },
+        { type: 'stream.end', finalText: '' },
+      ]);
     });
   });
 
   it('emits nothing for a deferred stream until the first chunk', () => {
-    withStore((store, logger) => {
-      const events: AgentEvent[] = [];
-      logger.subscribe((event) => events.push(event));
+    withTrace((events, logger) => {
       const thinking = openDeferredThinking(logger);
 
-      expect(store.toJSON()).toEqual([]);
+      expect(events).toEqual([]);
 
       thinking.append('reasoning delta');
 
-      const entries = streamEntries(store);
-      expect(entries).toHaveLength(1);
-      expect(entries[0]?.messageType).toBe(MESSAGE_TYPES.THINKING);
-      expect(entries[0]?.text).toBe('');
+      expect(streamFacts(events)).toEqual([
+        { type: 'stream.start', kind: MESSAGE_TYPES.THINKING },
+      ]);
 
       expect(thinking.finalize()).toBe('reasoning delta');
       expect(events.at(-1)).toMatchObject({
@@ -81,37 +86,34 @@ describe('AgentTrace stream output', () => {
         id: thinking.id,
         finalText: 'reasoning delta',
       });
-      expect(streamEntries(store)[0]?.data).toEqual({
-        status: 'completed',
-      });
     });
   });
 
   it('leaves no trace for a deferred stream finalized without content', () => {
-    withStore((store, logger) => {
+    withTrace((events, logger) => {
       const thinking = openDeferredThinking(logger);
 
       expect(thinking.finalize()).toBe('');
-      expect(store.toJSON()).toEqual([]);
+      expect(events).toEqual([]);
     });
   });
 
   it('materializes a deferred stream finalized with reasoning text', () => {
-    withStore((store, logger) => {
+    withTrace((events, logger) => {
       const thinking = openDeferredThinking(logger);
 
       // Mirrors providers that only return reasoning in the final response.
       expect(thinking.finalize('final reasoning')).toBe('final reasoning');
 
-      const entries = streamEntries(store);
-      expect(entries).toHaveLength(1);
-      expect(entries[0]?.text).toBe('final reasoning');
-      expect(entries[0]?.data).toEqual({ status: 'completed' });
+      expect(streamFacts(events)).toEqual([
+        { type: 'stream.start', kind: MESSAGE_TYPES.THINKING },
+        { type: 'stream.end', finalText: 'final reasoning' },
+      ]);
     });
   });
 
   it('announces phase boundaries without content for phase-only runs', () => {
-    withStore((store, logger) => {
+    withTrace((events, logger) => {
       // Workflow runs hide the response text (it is extracted and logged
       // separately) but still announce that the response phase started.
       const output = logger.openRun(MESSAGE_TYPES.MODEL_RESPONSE, {
@@ -119,28 +121,28 @@ describe('AgentTrace stream output', () => {
         phaseOnly: true,
       });
 
-      expect(store.toJSON()).toEqual([]);
+      expect(events).toEqual([]);
 
       output.append('hidden partial output');
 
-      let entries = streamEntries(store);
-      expect(entries).toHaveLength(1);
-      expect(entries[0]?.messageType).toBe(MESSAGE_TYPES.MODEL_RESPONSE);
-      expect(entries[0]?.text).toBe('');
-      expect(entries[0]?.data).toEqual({ status: 'running' });
+      expect(streamFacts(events)).toEqual([
+        { type: 'stream.start', kind: MESSAGE_TYPES.MODEL_RESPONSE },
+      ]);
+      expect(events.some((event) => event.type === 'stream.chunk')).toBe(false);
 
       // finalize returns the locally buffered text but never publishes it.
       expect(output.finalize('full output')).toBe('full output');
-      entries = streamEntries(store);
-      expect(entries[0]?.text).toBe('');
-      expect(entries[0]?.data).toEqual({ status: 'completed' });
+      expect(streamFacts(events).at(-1)).toEqual({
+        type: 'stream.end',
+        finalText: undefined,
+      });
     });
   });
 
   it('accumulates disabled progress runs without scheduled updates', () => {
     vi.useFakeTimers();
 
-    withStore((store, logger) => {
+    withTrace((events, logger) => {
       const stream = logger.openRun(MESSAGE_TYPES.MODEL_RESPONSE, {
         progressViewEnabled: false,
       });
@@ -149,18 +151,18 @@ describe('AgentTrace stream output', () => {
       stream.append('b');
       stream.append('c');
 
-      expect(store.toJSON()).toEqual([]);
+      expect(events).toEqual([]);
       expect(vi.getTimerCount()).toBe(0);
       expect(stream.finalize()).toBe('abc');
-      expect(store.toJSON()).toEqual([]);
+      expect(events).toEqual([]);
     });
   });
 });
 
 describe('tool-use card input redaction', () => {
   it('reuses the captured groupId when endToolUseCard is called with no explicit stage', () => {
-    const store = new StreamLog();
-    const logger = createTestRunTrace('stream' as RunId, store).trace;
+    const runTrace = createTestRunTrace('stream' as RunId);
+    const logger = runTrace.trace;
     const outer = logger.openStage('outer');
     const ref = startToolUseCard(logger, 'demoTool', { arg: 1 }, outer.id);
 
@@ -174,8 +176,7 @@ describe('tool-use card input redaction', () => {
       output: 'ok',
     });
 
-    const entries = streamEntries(store);
-    const toolEntry = entries.find((e) => e.id === ref.logId);
-    expect(toolEntry?.groupId).toBe(ref.groupId);
+    const toolRow = runTrace.rows().find((row) => row.id === ref.logId);
+    expect(toolRow?.groupId).toBe(ref.groupId);
   });
 });

@@ -237,7 +237,6 @@ function boundModel(
       ORIGIN.requestedModel,
       'gpt54',
     ]),
-    routedOnKimiCode: false,
     backgroundCapable: false,
     ...overrides,
   };
@@ -308,7 +307,6 @@ function agentRun(
       { agentName: CONFIG.agent, agentCategory: SETTING.agentCategory },
     ),
     callbacks: { onModelChanged: () => undefined },
-    interrupt: () => undefined,
   };
 }
 

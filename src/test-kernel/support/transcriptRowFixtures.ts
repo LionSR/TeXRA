@@ -1,13 +1,11 @@
-// Test-only builders for stream-log projections the suites replay.
+// Test-only builders for the transcript rows the suites replay.
 //
 // The CLI paints `@ui/transcript` rows directly, so a tool row is a
-// normalized payload plus the shared fold over it — exactly what
-// `projectTranscriptRow` hands the painter. Suites that hand-build rows
+// normalized payload plus the shared fold over it, as `toolRow` hands the
+// painter. Suites that hand-build rows
 // (ToolRenderers, ConversationTranscript, SubagentListDisplay,
 // StaticBandResize, TuiStateAndFocus) construct them here so the payload and
-// its model can never drift apart in a fixture. The task-group replay below
-// has the same shape as one projection: entries folded through the production
-// reducer.
+// its model can never drift apart in a fixture.
 
 import {
   orderedStaticTranscriptEntries,
@@ -16,11 +14,8 @@ import {
 import {
   TOOL_CALL_STATUS,
   type NormalizedToolUse,
-  type StreamLogEntry,
   type RunPhase,
-  type TaskGroup,
 } from '@shared/schemas';
-import { upsertTaskGroupFromStreamLog } from '@shared/runs/taskGroupProjection';
 import type { CompactionActivityStatus } from '@shared/runs/compactionActivityProjection';
 import { COMPACTION_ACTIVITY_LABEL } from '@shared/runs/compactionActivityProjection';
 import { toolRowModel } from '@ui/transcript/toolRowModel';
@@ -64,6 +59,11 @@ export function toolRowFixture(
     ...(settlementSeqNo !== undefined ? { settlementSeqNo } : {}),
     toolUse: normalized,
     model: toolRowModel(normalized),
+    log: {
+      toolName: normalized.toolName,
+      input: normalized.input,
+      status: normalized.status,
+    },
   };
 }
 
@@ -136,18 +136,6 @@ export function compactionRowFixture(
       ...(status !== 'running' ? { finishedAt: 200 } : {}),
     },
   };
-}
-
-/** Test-local full replay through the production reducer (the resync path). */
-export function projectTaskGroupsFromStreamLog(
-  entries: Iterable<StreamLogEntry>,
-): TaskGroup[] {
-  const taskGroups: TaskGroup[] = [];
-  const taskGroupIndex = new Map<string, number>();
-  for (const entry of entries) {
-    upsertTaskGroupFromStreamLog(taskGroups, taskGroupIndex, entry);
-  }
-  return taskGroups;
 }
 
 /** The CLI's two panes' rows for one slice: the settled `<Static>` prefix and

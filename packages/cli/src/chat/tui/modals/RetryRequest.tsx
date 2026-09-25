@@ -86,7 +86,7 @@ export function RetryRequest(props: RetryRequestProps): React.JSX.Element {
           ? [
               {
                 key: 'k',
-                label: 'retry with your own API key',
+                action: 'retry with your own API key',
                 decision: switchDecision,
               },
             ]

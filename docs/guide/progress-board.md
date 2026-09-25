@@ -71,10 +71,14 @@ The header provides a summary and actions for the selected stream:
   time, **Stop** while it runs, **New task**, and one **More** menu (⋯).
   The menu holds the run's actions, then Open sessions in editor,
   LaTeXDiffs, and Figures. Workflow runs offer Run again from
-  scratch, Resume, Edit as new task, Open run folder, Export, Copy run
-  context, latexdiff, Archive outputs, and Delete output files; tool-use
-  runs offer Compact, Edit as new task, Open run folder, and Export. Export
-  saves the conversation as Markdown, HTML, or PDF.
+  scratch, Resume, Open run folder, Export, Copy run context, latexdiff,
+  Archive outputs, and Delete output files; tool-use runs offer Compact,
+  Open run folder, and Export. Export saves the conversation as Markdown,
+  HTML, or PDF.
+- **Once a session ends**: where the message box stood, the session says
+  it has ended and offers **Edit as new task**, which opens New task with
+  the same agent, files, and instruction. An interrupted session also
+  offers **Resume**.
 - **Delete session…**: at the end of the menu, for a run that has stopped.
   It asks before it removes the conversation and its run folder.
 
@@ -83,7 +87,7 @@ Each action in detail:
 - <wa-icon library="texra" name="circle-stop"></wa-icon> **Stop**: Stops the running task for this stream. For providers supporting `AbortController` (like OpenAI or Anthropic) the active request is aborted immediately; otherwise the current API call finishes before stopping.
 - <wa-icon library="texra" name="play"></wa-icon> **Run New**: Starts a fresh run of the task associated with this stream using the _exact same configuration_ (agent, model, files, instruction), discarding previous outputs. Useful for retrying failed tasks or reproducing results.
 - <wa-icon library="texra" name="forward-step"></wa-icon> **Resume**: Continues the run from its saved outputs, picking up where it left off instead of starting over.
-- <wa-icon library="texra" name="reply"></wa-icon> **Restore**: Loads the configuration (agent, model, files, instruction) from this stream back into the main TeXRA view, so you can modify and re-run a previous task.
+- <wa-icon library="texra" name="reply"></wa-icon> **Edit as new task**: Shown once the session ends. Loads the configuration (agent, model, files, instruction) from this stream back into New task, so you can modify and re-run a previous task.
 - <wa-icon library="texra" name="code-compare"></wa-icon> **Diff**: Runs `latexdiff` to compare the original input file(s) with the generated output `.tex` file(s) from this stream. If no base file was selected, TeXRA uses the original file. Requires `latexdiff` to be installed. Read the [LaTeX Diff guide](./latex-diff.md).
 - <wa-icon library="texra" name="folder-open"></wa-icon> **Open in run storage**:
   Reveals the run folder under run storage so you can browse generated

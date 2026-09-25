@@ -288,7 +288,7 @@ test('loads tools, centers every compact nav icon, and customizes shortcuts', as
     .toBeLessThanOrEqual(520);
 
   await page.evaluate(() => {
-    window.postMessage({ command: 'setTab', tab: 'tools' }, '*');
+    window.postMessage({ command: 'setTab', tab: 'tools/tools' }, '*');
   });
   await expect(page.locator('tools-tab tool-card').first()).toBeVisible({
     timeout: 5_000,
@@ -298,7 +298,9 @@ test('loads tools, centers every compact nav icon, and customizes shortcuts', as
   const compactButtons = await page.evaluate(() => {
     const root = document.querySelector('settings-app')?.shadowRoot;
     const buttons =
-      root?.querySelectorAll<HTMLElement>('.settings-page-button') ?? [];
+      root?.querySelectorAll<HTMLElement>(
+        '.settings-page-button[data-panel]',
+      ) ?? [];
     return [...buttons].map((button) => {
       const start =
         button.shadowRoot?.querySelector<HTMLElement>('[part~="start"]');

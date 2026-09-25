@@ -446,7 +446,7 @@ describe('desktop process resume owner', () => {
       Effect.gen(function* () {
         yield* Effect.promise(() => mockWorkflowResume());
         const harness = yield* Effect.promise(() => createResumeHarness());
-        vi.spyOn(harness.session.transcripts, 'readEvents').mockReturnValue(
+        vi.spyOn(harness.session, 'readRunEvents').mockReturnValue(
           Effect.succeed([]),
         );
 

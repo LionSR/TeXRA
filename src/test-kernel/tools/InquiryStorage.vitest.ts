@@ -11,7 +11,7 @@ import { processOwnerId } from '@platform/defaults/nodeProcesses';
 import { RunIdSchema, ToolError } from '@shared/schemas';
 import { InquiryRecords } from '@shared/session/inquiryRecords';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
-import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
+import { nodePlatformLayer } from '@test/support/fsTestUtils';
 
 const RUN_A = RunIdSchema.parse('1a1a1a1a1a1a');
 const RUN_B = RunIdSchema.parse('1b1b1b1b1b1b');
@@ -28,7 +28,7 @@ describe('InquiryStorage', () => {
         Layer.provide(
           globalDatabaseLayer(storage).pipe(
             Layer.provide(ProcessIdentity.layer(processOwnerId(undefined))),
-            Layer.provide(nodeSpawnerLayer),
+            Layer.provide(nodePlatformLayer),
             Layer.orDie,
           ),
         ),

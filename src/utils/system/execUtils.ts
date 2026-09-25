@@ -9,6 +9,7 @@ import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { ExecResult } from '@shared/schemas';
 import { onAbort } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import { inheritedEnv } from '@utils/system/envFlags';
 import { getGitAuthorEnv } from '@utils/system/gitAuthorEnv';
 import { IS_WINDOWS, withExtendedPath } from '@utils/system/platformPaths';
 import { toWindowsCommand } from '@utils/system/windowsCommandLine';
@@ -30,7 +31,7 @@ function normalizeOutput(text: string | null | undefined): string {
 }
 
 /**
- * The complete environment a command runs with: `process.env` on the
+ * The complete environment a command runs with: {@link inheritedEnv} on the
  * extended PATH, the git author identity, the caller's overrides, and the
  * project context an agent orients by.
  */
@@ -44,7 +45,7 @@ function commandEnv(
   // leave both spellings on the environment handed to the shell, and the one
   // the shell resolves against is then undefined.
   const env = withExtendedPath({
-    ...process.env,
+    ...inheritedEnv(),
     ...authorEnv,
     ...envOverrides,
   });
@@ -181,8 +182,9 @@ function buildCommand(
   const common = {
     cwd: options.cwd,
     env,
-    // `env` is already complete; extending would merge `process.env` back in
-    // and restore the Windows `Path`/`PATH` duplicate `commandEnv` removed.
+    // `env` is already complete; extending would merge `process.env` back in,
+    // restoring the withheld credential variables and the Windows
+    // `Path`/`PATH` duplicate `commandEnv` removed.
     extendEnv: false,
     // Nothing writes to a command's stdin, so it gets EOF at once: a child
     // that reads stdin (a git hook, a lake build script) must not block on a

@@ -12,7 +12,6 @@ import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { isEmptyUsage } from '@shared/schemas';
-import { descendantRuns } from '@shared/session/sessionView';
 import { isActivePhase } from '@shared/runs/runStatus';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -20,9 +19,7 @@ import {
   codexPreferenceVersion as codexPreferenceVersionSignal,
   transientNotice as transientNoticeSignal,
   selectedRunId as selectedRunIdSignal,
-  claimedRunId as claimedRunIdSignal,
-  rootRunPending as rootRunPendingSignal,
-  rootRunId as rootRunIdSignal,
+  rootRunIds as rootRunIdsSignal,
   sessionMeta as sessionMetaSignal,
 } from '../state/cliState';
 import {
@@ -34,8 +31,9 @@ import {
 import {
   chatTuiCanStopActiveRun,
   chatTuiCanStopVisibleRun,
+  runStopFacts as runStopFactsSignal,
 } from '../state/sessionRunState';
-import { attentionRequests } from '../state/approvalQueue';
+import { attentionRequests as attentionRequestsSignal } from '../state/approvalQueue';
 import { useSignal } from '../state/useSignal';
 import {
   approvalQueueStatusKind,
@@ -124,25 +122,15 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
   const { write: writeStderr } = useStderr();
   const activeRunId = useSignal(selectedRunIdSignal);
   const view = useSignal(sessionView());
-  const rootRunId = useSignal(rootRunIdSignal);
   const sessionMeta = useSignal(sessionMetaSignal);
   const transientNotice = useSignal(transientNoticeSignal);
   const { columns } = useWindowSize();
-  // The Ctrl-C stop/exit hint derives from published run-state signals, never
-  // from impure session closures: memoized renders cache a closure's result
-  // on the closure's identity, which froze the hint at its boot-time value
-  // for the whole run (#8273).
-  const rootRunPending = useSignal(rootRunPendingSignal);
-  const claimedRunId = useSignal(claimedRunIdSignal);
-  const runStopFacts = {
-    runPending: rootRunPending,
-    runId: claimedRunId,
-    status: runPhaseOf(runViewOf(view, claimedRunId)),
-  };
-  const ownedRunIds = useMemo(
-    () => descendantRuns(view, rootRunId, { includeRoot: true }),
-    [view, rootRunId],
-  );
+  // The Ctrl-C stop/exit hint derives from the run-claim signal, never from
+  // impure session closures: memoized renders cache a closure's result on the
+  // closure's identity, which froze the hint at its boot-time value for the
+  // whole run (#8273).
+  const runStopFacts = useSignal(runStopFactsSignal);
+  const ownedRunIds = useSignal(rootRunIdsSignal);
   const target = statusBarRunTarget({
     activeRunId,
     canStopActiveRun: chatTuiCanStopVisibleRun(runStopFacts),
@@ -232,10 +220,9 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
       : undefined;
   const now = useLiveNowMsSince([runStartedAt]);
 
-  const subagentCount = displayRun?.rollup.total ?? 0;
   // Every request awaiting the user: the fold's pending approvals, the
   // same list the modal and the title read.
-  const attention = attentionRequests(view);
+  const attention = useSignal(attentionRequestsSignal);
 
   // Nested-session location: the nearest ancestor's open phase or loop
   // position, then the focused stream's label.
@@ -249,30 +236,14 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
       ? undefined
       : ancestorPositionLabel(view, focusedRunId);
 
-  const display = buildStatusBarDisplay({
-    status: displayStatus,
-    statusLabel: displayRun?.statusLabel,
+  const display = buildStatusBarDisplay(displayRun, view, {
     turn: {
       elapsedMs: runStartedAt !== undefined ? now - runStartedAt : undefined,
       runningFrame:
         runStartedAt !== undefined ? loadingFrameAt(now) : undefined,
-      thinkingActive: displayRun?.thinkingActive ?? false,
-      compactingActive: displayRun?.compactingActive ?? false,
     },
     transientNotice,
     commandName: props.commandName,
-    bypass:
-      displayRunId === undefined
-        ? undefined
-        : view.policy.get(displayRunId)?.bypasses,
-    queuedFollowUpMessages: (displayRunId === undefined
-      ? []
-      : (view.queuedFollowUps.get(displayRunId) ?? [])
-    ).map((followUp) => followUp.text),
-    usage: displayUsage,
-    contextState: displayRun?.context ?? undefined,
-    flow: displayRun?.flow ?? undefined,
-    subagents: subagentCount,
     runningSessions: props.runningSessions ?? 0,
     approvalDepth: attention.length,
     approvalKind: approvalQueueStatusKind(
@@ -284,7 +255,6 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     approvalPolicy: sessionMeta.approvalPolicy,
     width: columns,
     ctrlCAction: target.ctrlCAction,
-    isChildRun: target.isChildRun,
     location:
       focusedLabel === undefined
         ? undefined

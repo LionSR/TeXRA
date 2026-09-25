@@ -14,7 +14,16 @@ import { RunRoster } from '@agent/runtime/runRoster';
 import { Runs } from '@agent/runtime/runRegistry';
 import type { WorkflowAgentInvocation } from '@agent/workflowScript/types';
 import type { AgentEntry } from '@agent/index/agentEntry';
-import { RunUsageTotalsSchema, type RunEnd, type RunId } from '@shared/schemas';
+import {
+  aggregateId,
+  RunUsageTotalsSchema,
+  type RunEnd,
+  type RunId,
+} from '@shared/schemas';
+import {
+  DatabaseClaimRefused,
+  DatabaseWriteFailed,
+} from '@shared/session/database';
 import { emptyPinnedComposition } from '@test/support/nativeToolTestLayer';
 import { noopTrace } from '@test/support/noopTrace';
 import { createFakeWorkspaceRoots, fakePath } from '@test/support/FakePlatform';
@@ -37,6 +46,18 @@ const storagePath = (...segments: string[]) =>
   path.join(STORAGE_PATH, ...segments);
 const canonicalPath = (...segments: string[]) =>
   path.join(CANONICAL_PATH, ...segments);
+
+/** The claim acquisition's refusal when another live owner holds the run. */
+const claimHeldElsewhere = () =>
+  Effect.fail(
+    new DatabaseWriteFailed({
+      path: 'session.db',
+      cause: new DatabaseClaimRefused({
+        ownerId: JSON.stringify(['owner-2', 2, '1']),
+        verdict: 'alive',
+      }),
+    }),
+  );
 
 function createWorkflowScriptAgentRunner(
   ...args: Parameters<typeof createNativeWorkflowScriptAgentRunner>
@@ -230,10 +251,15 @@ const structuredResult: RunEnd = {
   },
 };
 
-// The in-process half of the fence, real: a case makes a run live here by
-// taking its lane, exactly as a launch or a resume of that run would. One
-// registry stub for every stub session, so sessions compare equal.
-let lanes = new RunRoster(createSessionApprovals());
+// The fence, real: a case makes a run live here by taking its lane, exactly
+// as a launch or a resume of that run would, and the hold carries the run's
+// claim, which the stub session answers. One registry stub for every stub
+// session, so sessions compare equal.
+const fenceRoster = () =>
+  new RunRoster(createSessionApprovals(), (runId) =>
+    mocks.acquireClaims(aggregateId('run', runId)),
+  );
+let lanes = fenceRoster();
 const runs = {
   holdInactiveRun: (runId: RunId) => lanes.holdInactive(runId),
 };
@@ -397,7 +423,7 @@ function useToolUseAgentEntries(): void {
 describe('createWorkflowScriptAgentRunner', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    lanes = new RunRoster(createSessionApprovals());
+    lanes = fenceRoster();
     mocks.preparedOptions.length = 0;
     mocks.probedRunIds.length = 0;
     launchedRows.clear();
@@ -1518,17 +1544,13 @@ describe('createWorkflowScriptAgentRunner', () => {
         // The claim is what the resume takes, so an acquire it refuses is the
         // fact that a new owner is starting this child right now.
         probeAnswers({ exists: true }, { exists: false });
-        mocks.acquireClaims.mockReturnValueOnce(
-          Effect.fail(new Error('held by owner-2 (alive)')),
-        );
+        mocks.acquireClaims.mockReturnValueOnce(claimHeldElsewhere());
 
         const error = yield* Effect.flip(defaultRunner()(invocation()));
 
         expect(error).toMatchObject({
           name: 'WorkflowRunAbortError',
-          message: expect.stringContaining(
-            'could not be claimed against a concurrent resume',
-          ),
+          message: expect.stringContaining('held by a concurrent resume'),
         });
         expect(mocks.executeSubagentInBand).not.toHaveBeenCalled();
       }),
@@ -1546,17 +1568,13 @@ describe('createWorkflowScriptAgentRunner', () => {
           { exists: true, runEnd: { ...result, outcome: 'failed' } },
           { exists: false },
         );
-        mocks.acquireClaims.mockReturnValueOnce(
-          Effect.fail(new Error('held by owner-2 (alive)')),
-        );
+        mocks.acquireClaims.mockReturnValueOnce(claimHeldElsewhere());
 
         const error = yield* Effect.flip(defaultRunner()(invocation()));
 
         expect(error).toMatchObject({
           name: 'WorkflowRunAbortError',
-          message: expect.stringContaining(
-            'could not be claimed against a concurrent resume',
-          ),
+          message: expect.stringContaining('held by a concurrent resume'),
         });
         expect(mocks.executeSubagentInBand).not.toHaveBeenCalled();
       }),
@@ -1576,17 +1594,13 @@ describe('createWorkflowScriptAgentRunner', () => {
           runEnd: result,
           resultMeta: { producer: 'subagent', output: result.output },
         });
-        mocks.acquireClaims.mockReturnValueOnce(
-          Effect.fail(new Error('held by owner-2 (alive)')),
-        );
+        mocks.acquireClaims.mockReturnValueOnce(claimHeldElsewhere());
 
         const error = yield* Effect.flip(defaultRunner()(invocation()));
 
         expect(error).toMatchObject({
           name: 'WorkflowRunAbortError',
-          message: expect.stringContaining(
-            'could not be claimed against a concurrent resume',
-          ),
+          message: expect.stringContaining('held by a concurrent resume'),
         });
         expect(mocks.executeSubagentInBand).not.toHaveBeenCalled();
       }),
@@ -1601,17 +1615,13 @@ describe('createWorkflowScriptAgentRunner', () => {
         // write belongs to whoever takes them next. The launched attempt is
         // fenced and re-read like every other: an acquire a resume refuses
         // stops the parent journaling a result from the lifecycle before it.
-        mocks.acquireClaims.mockReturnValueOnce(
-          Effect.fail(new Error('held by owner-2 (alive)')),
-        );
+        mocks.acquireClaims.mockReturnValueOnce(claimHeldElsewhere());
 
         const error = yield* Effect.flip(defaultRunner()(invocation()));
 
         expect(error).toMatchObject({
           name: 'WorkflowRunAbortError',
-          message: expect.stringContaining(
-            'could not be claimed against a concurrent resume',
-          ),
+          message: expect.stringContaining('held by a concurrent resume'),
         });
         expect(mocks.executeSubagentInBand).toHaveBeenCalledOnce();
       }),

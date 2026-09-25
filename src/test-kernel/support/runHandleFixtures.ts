@@ -1,4 +1,4 @@
-import { Effect } from 'effect';
+import { Effect, type Fiber } from 'effect';
 
 // Local imports
 import type { AgentTrace } from '@agent/trace';
@@ -43,4 +43,27 @@ export function testRunRegistry(): RunRegistry {
       Effect.succeed({ ok: true, outcome: input.outcome }),
     acquireRunClaim: () => Effect.succeed(Effect.void),
   });
+}
+
+/**
+ * A run whose generation is live on the roster, the way a real launch
+ * admits one: the fiber is the run's stop target, and a stop reaches the
+ * run by interrupting it. `onInterrupt` fires from the fiber's own
+ * unwinding, so it has observably landed once the stop's settlement (or an
+ * await of the returned fiber) resolves.
+ */
+export function admitInterruptibleRun(
+  registry: RunRegistry,
+  runId: RunId,
+  onInterrupt: () => void,
+): Fiber.Fiber<void> {
+  const interruptEffect = Effect.sync(onInterrupt);
+  return Effect.runFork(
+    registry
+      .launchRun(
+        runId,
+        Effect.never.pipe(Effect.onInterrupt(() => interruptEffect)),
+      )
+      .pipe(Effect.ignore),
+  );
 }

@@ -397,6 +397,11 @@ content: that per-call recovery record is deliberate. It does not
 justify copying complete message history into snapshots or installing the
 same assistant/tool turn twice in the provider conversation.
 
+(Superseded 2026-09-25: transcript redaction is deleted. Secrets never
+enter the event table, since #13176 closed the sources, so no row is
+redacted on the way in and no reader redacts on the way out. The
+paragraphs on C3 below are the record of the earlier design.)
+
 Redaction: `redactSecrets` runs at publish on every display row
 (C3, unchanged from today's recorder), and never on a ledger-private
 row. There is no projection table (C10): the transcript surfaces and

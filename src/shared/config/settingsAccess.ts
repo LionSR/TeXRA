@@ -1,5 +1,6 @@
 // Third-party imports
 import { Effect } from 'effect';
+import { z } from 'zod';
 
 // Local imports
 import { createLog } from '@logger/logUtils';
@@ -16,7 +17,6 @@ import type {
   StateSettingEntry,
 } from '@shared/state/stateSettings';
 import { settingByKey } from '@shared/state/stateSettings';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const log = createLog('settingsAccess');
 
@@ -146,7 +146,7 @@ function classifyStored(entry: StateSettingEntry, raw: unknown): StoredSetting {
   const result = entry.schema.safeParse(raw);
   return result.success
     ? { kind: 'value', value: result.data }
-    : { kind: 'invalid', cause: toErrorMessage(result.error) };
+    : { kind: 'invalid', cause: z.prettifyError(result.error) };
 }
 
 /**

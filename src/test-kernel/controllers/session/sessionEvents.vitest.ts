@@ -220,7 +220,7 @@ const graph = (history: readonly SessionEventDraft[]) => {
     ),
     Layer.provide(Layer.succeed(WorkspaceRoots)(roots)),
     Layer.provide(ProcessIdentity.layer(SELF)),
-    Layer.provide(nodeSpawnerLayer),
+    Layer.provide(nodePlatformLayer),
   );
 };
 
@@ -730,7 +730,7 @@ describe('Sessions owner', () => {
                 createFakeWorkspaceRoots().globalStorage,
               ).pipe(
                 Layer.provide(ProcessIdentity.layer(SELF)),
-                Layer.provide(nodeSpawnerLayer),
+                Layer.provide(nodePlatformLayer),
                 Layer.orDie,
               ),
             ),
@@ -926,7 +926,6 @@ describe('Sessions owner', () => {
           );
           for (const event of committed) {
             const foreign = { ...event, ownerId: OTHER };
-            yield* session.receiveCommittedEvent(foreign);
             yield* session.receiveFoldedEvent(foreign);
           }
           expect(handleStatus).toHaveBeenCalledTimes(2);
@@ -985,62 +984,6 @@ describe('Sessions owner', () => {
       }),
   );
 
-  // #12017's ownership fence: a committed row another process authored is
-  // accepted like any other, and only its local side effects are fenced.
-  // (That the fold itself keeps a foreign-owned run is stated over the
-  // recorded log in the fold suite.)
-  it.live(
-    "accepts another process's committed facts without firing local side effects",
-    () =>
-      Effect.gen(function* () {
-        const session = yield* open('/workspace/owner/foreign-fold');
-        const onResult = vi.fn((_event: ResultEvent) => Effect.void);
-        const detachResult = session.onResult(onResult);
-        const foreign = RunIdSchema.parse('cd34ef');
-        const aggregateId = qualifyAggregateId('run', foreign);
-        try {
-          yield* session.receiveCommittedEvent({
-            type: 'run.start',
-            aggregateId,
-            identity: { kind: 'agent', agent: 'chat' },
-            userFollowUpSupport: 'unsupported',
-            category: AgentCategory.ToolUse,
-            isRemote: false,
-            parent: null,
-            ownerId: OTHER,
-            at: 0,
-            seq: 1,
-            commit: 1,
-          });
-          yield* session.receiveCommittedEvent({
-            type: 'run.description',
-            aggregateId,
-            description: 'a run in another process',
-            ownerId: OTHER,
-            at: 0,
-            seq: 2,
-            commit: 2,
-          });
-          yield* session.receiveCommittedEvent({
-            type: 'run.end',
-            aggregateId,
-            outcome: 'completed',
-            output: emptyRunEndOutput(AgentCategory.ToolUse),
-            ownerId: OTHER,
-            at: 0,
-            seq: 3,
-            commit: 3,
-          });
-          // Host presentation of a terminal result stays with the process
-          // that authored it.
-          expect(onResult).not.toHaveBeenCalled();
-        } finally {
-          detachResult();
-          yield* session.dispose();
-        }
-      }),
-  );
-
   // The request opened below commits from this fiber, so the session's own
   // work must not wait on a test clock: `it.live`.
   it.live(
@@ -1089,6 +1032,7 @@ describe('Sessions owner', () => {
         releaseChild = session.runs.reserveChildActivation({
           runId: RunIdSchema.parse('aa0002'),
           parent: { current: null },
+          retainsTerminalParent: true,
           interrupt,
         });
 
@@ -1188,6 +1132,7 @@ describe('the C1 event table and the C6 publisher', () => {
       Layer.provide(Layer.succeed(WorkspaceRoots)({ storage })),
       Layer.provide(ProcessIdentity.layer(owner)),
       Layer.provide(spawner),
+      Layer.provide(nodePlatformLayer),
       Layer.fresh,
     );
 
@@ -1666,7 +1611,7 @@ describe('the C1 event table and the C6 publisher', () => {
             skills: [
               {
                 name: 'proof-review',
-                description: 'Use API_KEY=skills-snapshot-secret\n  carefully',
+                description: 'Review proofs\n  carefully',
                 source: 'project',
               },
             ],
@@ -1680,7 +1625,7 @@ describe('the C1 event table and the C6 publisher', () => {
           skills: [
             {
               name: 'proof-review',
-              description: 'Use API_KEY=[redacted] carefully',
+              description: 'Review proofs carefully',
               source: 'project',
             },
           ],
@@ -1845,14 +1790,13 @@ describe('the C1 event table and the C6 publisher', () => {
           {
             type: 'response.finalized',
             aggregateId: id,
-            text: 'API_KEY=publication-boundary-secret',
+            text: 'final answer',
           },
           { type: 'run.removed', aggregateId: other },
         ]);
         expect((yield* db.readListing()).map((row) => row.commit)).toEqual([
           1, 2, 4, 7, 9,
         ]);
-        expect(rows[7]).toMatchObject({ text: 'API_KEY=[redacted]' });
         const withoutTranscript = yield* db.readInputBatch([], 0);
         expect(withoutTranscript.cursor).toBe(9);
         expect(withoutTranscript.events).toEqual(
@@ -2274,7 +2218,7 @@ describe('RunLedger', () => {
         ),
       ),
       Layer.provide(ProcessIdentity.layer(SELF)),
-      Layer.provide(nodeSpawnerLayer),
+      Layer.provide(nodePlatformLayer),
     );
   const AGGREGATE = qualifyAggregateId('run', RUN);
   const SECRET = 'sk-abcdefghijklmnopqrstuvwxyz0123';
@@ -2537,41 +2481,6 @@ describe('RunLedger', () => {
       expect(state.usage.totalCost).toBe(0.25);
       expect(yield* run.load(RUN)).toEqual(state);
     }).pipe(Effect.provide(ledger())),
-  );
-
-  it.effect(
-    'stores ledger rows byte-exact while the same secret in a log row is redacted',
-    () =>
-      Effect.gen(function* () {
-        const events = yield* SessionEvents;
-        const run = yield* RunLedger;
-        const log = yield* Database;
-        yield* events.publish([runStart]);
-        yield* openTurn(run);
-        yield* events.publish([
-          {
-            type: 'log',
-            aggregateId: AGGREGATE,
-            level: 'info',
-            message: `the key is ${SECRET}`,
-          },
-        ]);
-        const rows = yield* log.readAggregate(AGGREGATE, 1);
-        const response = rows.find(
-          (row) =>
-            row.type === 'model.message' && row.payload.kind === 'response',
-        );
-        expect(
-          response?.type === 'model.message' &&
-            response.payload.kind === 'response'
-            ? response.payload.turn
-            : null,
-        ).toEqual(TURN);
-        const logged = rows.find((row) => row.type === 'log');
-        expect(logged?.type === 'log' ? logged.message : null).not.toContain(
-          SECRET,
-        );
-      }).pipe(Effect.provide(ledger())),
   );
 
   it.effect(

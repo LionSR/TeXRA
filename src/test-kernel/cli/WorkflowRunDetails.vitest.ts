@@ -5,24 +5,18 @@ import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { ConversationPane } from '@cli/chat/tui/panes/ConversationPane';
 import { selectWorkflowRunDetailLines } from '@cli/chat/tui/panes/WorkflowRunDetails';
 import {
-  activeRunId,
   resetCliState,
   rootRunId,
+  focusRun,
 } from '@cli/chat/tui/state/cliState';
 import {
   AgentCategory,
   type CompileFailure,
-  LOG_LEVELS,
-  MESSAGE_TYPES,
-  STREAM_LOG_ENTRY_TYPES,
   RUN_PHASE,
   type RunId,
 } from '@shared/schemas';
 import { loadInk } from '@test/support/inkTestHarness.ts';
-import {
-  projectTaskGroupsFromStreamLog,
-  textRowFixture,
-} from '@test/support/transcriptRowFixtures';
+import { textRowFixture } from '@test/support/transcriptRowFixtures';
 import {
   bindTestSessionView,
   makeRunView,
@@ -71,18 +65,16 @@ describe('selectWorkflowRunDetailLines', () => {
   it('renders a typed round and sanitizes terminal controls', () => {
     const lines = selectWorkflowRunDetailLines(
       {
-        taskGroups: projectTaskGroupsFromStreamLog([
+        taskGroups: [
           {
-            seqNo: 1,
             id: 'round-3',
-            type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
-            level: LOG_LEVELS.INFO,
-            timestamp: 0,
-            text: 'r3',
-            messageType: MESSAGE_TYPES.DEFAULT,
-            data: { status: RUN_PHASE.RUNNING, kind: 'round', index: 3 },
+            name: 'r3',
+            startTime: 0,
+            status: RUN_PHASE.RUNNING,
+            kind: 'round',
+            index: 3,
           },
-        ]),
+        ],
         outputFilesByRound: {},
         missingOutputsByRound: { 3: ['bad\u001b[31m.tex'] },
         compileFailuresByRound: {},
@@ -151,7 +143,7 @@ describe('selectWorkflowRunDetailLines', () => {
       ]),
     );
     rootRunId.set(STREAM_ID);
-    activeRunId.set(STREAM_ID);
+    focusRun(STREAM_ID);
     const { ink, React } = await loadInk();
     const output = ink.renderToString(
       React.createElement(ConversationPane, {

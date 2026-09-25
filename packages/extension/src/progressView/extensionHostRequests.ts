@@ -110,7 +110,6 @@ import {
   setOnboardingDeclined,
 } from '@shared/state/onboardingState';
 
-import { getProviderKeyUrl } from '@utils/config/providerConfig';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { pathToLocationIn } from '@utils/files/fileLocation';
 import {
@@ -651,26 +650,20 @@ export function createExtensionHostRequests(
         section === 'models' ? 'texra.showModels' : 'texra.showMultiAgent',
       );
     },
-    setApiKey: (provider) =>
-      Effect.gen(function* () {
-        yield* commandVerb('texra.setApiKey', provider);
-        // SecretManager has no key-changed event, so the set-key flow's
-        // completion is the explicit refresh point for the funnel.
-        yield* refreshOnboardingFunnel;
-      }),
-    openApiKeyGuide: (provider) =>
-      Effect.gen(function* () {
-        const url = provider
-          ? yield* getProviderKeyUrl(session.roots, provider)
-          : undefined;
-        yield* fromHost('env.openExternal', () =>
-          vscode.env.openExternal(
-            vscode.Uri.parse(
-              url || 'https://texra.ai/guide/installation#setting-up-api-keys',
-            ),
+    // SecretManager has no key-changed event, so the set-key flow's
+    // completion is the explicit refresh point for the funnel.
+    setApiKey: commandVerb('texra.setApiKey').pipe(
+      Effect.andThen(refreshOnboardingFunnel),
+    ),
+    openApiKeyGuide: Effect.asVoid(
+      fromHost('env.openExternal', () =>
+        vscode.env.openExternal(
+          vscode.Uri.parse(
+            'https://texra.ai/guide/installation#setting-up-api-keys',
           ),
-        );
-      }),
+        ),
+      ),
+    ),
     openAgentSettings: (sessionType) =>
       commandVerb(
         'texra.showAgents',

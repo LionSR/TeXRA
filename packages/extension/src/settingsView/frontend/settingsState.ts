@@ -54,6 +54,7 @@ import {
   type ModelSelectionItem,
   type ProviderKeyStatus,
   type PRSubscriptionEntry,
+  type SettingsSectionName,
   type SettingsTabPanelName,
   type SubscriptionAuthStatuses,
   type ToolDashboardItem,
@@ -126,6 +127,15 @@ export function applySettingsSnapshot(
 export const selectedPanel = trackedSignal<SettingsTabPanelName>(
   () => 'models',
 );
+
+/**
+ * The sub-tab last shown on each page, kept while the view lives so returning
+ * to a page lands where the user left it. A page with no entry shows its
+ * first section.
+ */
+export const selectedSections = trackedSignal<{
+  readonly [P in SettingsTabPanelName]?: SettingsSectionName<P>;
+}>(() => ({}));
 
 // ---------------------------------------------------------------------------
 // Memory state

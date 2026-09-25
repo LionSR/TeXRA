@@ -96,8 +96,6 @@ import { createChatSessionController } from '@cli/chat/chatSessionController';
 import { makeFollowUpDeliveryQueue } from '@cli/chat/followUpDeliveryQueue';
 import {
   patchSessionMeta,
-  rootRunPending,
-  claimedRunId,
   draftRestoreRequest,
   rootRunId,
   sessionMeta,
@@ -106,6 +104,7 @@ import {
 import { currentView } from '@cli/chat/tui/state/sessionView';
 import {
   chatTuiCanStartRootRun,
+  runStopFacts,
   TuiSession,
   type RootRunSettled,
 } from '@cli/chat/tui/state/sessionRunState';
@@ -127,7 +126,10 @@ import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { FakeSecrets } from '@test/support/FakePlatform';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
-import { testRunHandle } from '@test/support/runHandleFixtures';
+import {
+  admitInterruptibleRun,
+  testRunHandle,
+} from '@test/support/runHandleFixtures';
 import {
   createTestSession,
   publishTestRunStart,
@@ -278,7 +280,8 @@ function makeInit(
   const scope = Scope.makeUnsafe();
   onTestFinished(() => Effect.runPromise(Scope.close(scope, Exit.void)));
   return {
-    session: makeSession(),
+    // Only when the test brings none: a new session resets the one claim.
+    session: overrides.session ?? makeSession(),
     runtimeSession: mocks.sessionStub(),
     getSessionContext: () => makeSessionContext(),
     disposables: new DisposableStore(),
@@ -383,7 +386,6 @@ function installSession(overrides: Record<string, unknown> = {}): void {
     },
     approvals: { registerRunParent: vi.fn() },
     runs,
-    transcripts: { ensureLoaded: vi.fn(() => Effect.void) },
     // The parent edge the resume path reads cold, off the same seeded view
     // the TUI renders.
     readView: () => Effect.succeed(currentView()),
@@ -630,8 +632,6 @@ describe('createChatSessionController', () => {
     installResumeRunStore();
     seedView(viewWith([]));
     rootRunId.set(undefined);
-    rootRunPending.set(false);
-    claimedRunId.set(undefined);
   });
 
   it('does not surface an intentional stop as an error', async () => {
@@ -694,16 +694,6 @@ describe('createChatSessionController', () => {
               parent: runId,
               agent: 'child',
             });
-            rootHandle.attachInterruptHandler({
-              interrupt: () => {
-                runs.untrack(runId);
-                rootRunResult.resolve({
-                  category: 'toolUse',
-                  runId,
-                  outcome: RUN_OUTCOME.CANCELLED,
-                });
-              },
-            });
             // A launch states both runs in the plane before it tracks them: the
             // stop publishes `run.detach` on the child's own aggregate, and a run
             // aggregate opens with its `run.start` and nothing else.
@@ -711,6 +701,17 @@ describe('createChatSessionController', () => {
             publishTestRunStart(runtimeSession, childRun, { parent: runId });
             runs.track(rootHandle);
             runs.track(childHandle);
+            // The root run's stop is its roster fiber's interruption: the
+            // stop lands there, untracks the root, and the run resolves
+            // cancelled through its own result.
+            admitInterruptibleRun(runs, runId, () => {
+              runs.untrack(runId);
+              rootRunResult.resolve({
+                category: 'toolUse',
+                runId,
+                outcome: RUN_OUTCOME.CANCELLED,
+              });
+            });
             options.onRunResolved?.(runId);
             return rootRunResult.promise;
           },
@@ -1123,13 +1124,7 @@ describe('createChatSessionController', () => {
     // rehydration window, resume() must notice `session.stopRequested` and bail
     // out instead of silently starting the resumed run once the
     // awaits finish.
-    const ensureLoaded = createDeferred<void>();
-    installSession({
-      transcripts: {
-        ensureLoaded: () => Effect.promise(() => ensureLoaded.promise),
-      },
-    });
-
+    const rehydrated = createDeferred<void>();
     const session = makeSession({
       interruptedRunId: 'e11111' as RunId,
       runCompleted: true,
@@ -1138,6 +1133,7 @@ describe('createChatSessionController', () => {
       (_id: RunId, options: ResumeRunOptions) =>
         Effect.gen(function* () {
           if (options.onResumeResolved) yield* options.onResumeResolved();
+          yield* Effect.promise(() => rehydrated.promise);
           return options.isCancellationRequested?.()
             ? { failed: 'not_resumable' as const }
             : STARTED;
@@ -1148,15 +1144,15 @@ describe('createChatSessionController', () => {
     holdRun('aaaaaa' as RunId);
     const resumed = runResume(ctrl, 'aaaaaa' as RunId);
     // resume() has claimed the slot synchronously; once the durable record
-    // resolves it suspends inside session.transcripts.ensureLoaded()
-    // with session.runId already set to the resumed run.
+    // resolves it suspends inside the resume, after adoption, with
+    // session.runId already set to the resumed run.
     expect(session.runSettled).toBeDefined();
     await vi.waitFor(() => expect(session.runId).toBe('aaaaaa'));
     // #8273 regression: the controller must publish the run facts so status
     // rendering can derive the Ctrl-C hint from signals instead of calling
     // impure session closures that memoized renders cache stale.
-    expect(rootRunPending.get()).toBe(true);
-    expect(claimedRunId.get()).toBe('aaaaaa');
+    expect(runStopFacts.get().runPending).toBe(true);
+    expect(runStopFacts.get().runId).toBe('aaaaaa');
 
     // No live tool-use flow yet, so a Ctrl-C now is a clean exit, never a
     // resumable-idle one.
@@ -1166,7 +1162,7 @@ describe('createChatSessionController', () => {
     ctrl.stop();
     expect(session.stopRequested).toBe(true);
 
-    ensureLoaded.resolve();
+    rehydrated.resolve();
     await resumed;
     await awaitRunSettled(session);
 

@@ -1,33 +1,34 @@
 import { describe, expect, it } from 'vitest';
 
+import { MESSAGE_TYPES, type RunId, type ToolUseLog } from '@shared/schemas';
+import { createTestRunTrace } from '@test/support/sessionTestUtils';
 import {
-  MESSAGE_TYPES,
-  RUN_PHASE,
-  STREAM_LOG_ENTRY_TYPES,
-} from '@shared/schemas';
-import { isSettledRow, projectTranscriptRow } from '@ui/transcript';
+  isSettledRow,
+  logPayloadRow,
+  toolRow,
+  type TranscriptRowBase,
+} from '@ui/transcript';
 
-const base = {
-  type: STREAM_LOG_ENTRY_TYPES.LOG,
+const base: TranscriptRowBase = {
   id: 'a',
   seqNo: 1,
   level: 'info',
   timestamp: 0,
-} as const;
+};
 
-describe('projectTranscriptRow', () => {
+const tool = (log: ToolUseLog) => toolRow(base, log, undefined, undefined);
+
+describe('transcript row builders', () => {
   it('carries the full typed error field set in display order', () => {
-    const row = projectTranscriptRow({
-      ...base,
+    const row = logPayloadRow(base, 'Request failed', {
       messageType: MESSAGE_TYPES.ERROR,
-      text: 'Request failed',
       data: {
         message: 'HTTP 429',
         userRetryable: true,
         statusCode: 429,
         classification: { kind: 'chatgpt-subscription' },
         provider: 'anthropic',
-        rawErrorBody: { type: 'error' },
+        requestId: 'req_1',
       },
     });
     expect(row?.kind).toBe('error');
@@ -37,19 +38,16 @@ describe('projectTranscriptRow', () => {
       'message',
       'provider',
       'statusCode',
-      'userRetryable',
       'classification',
-      'rawErrorBody',
+      'requestId',
     ]);
     expect(row.detailText.lineCount).toBeGreaterThan(5);
     expect(isSettledRow(row, false)).toBe(true);
   });
 
   it('keeps failed and non-media attachments with a counted summary', () => {
-    const row = projectTranscriptRow({
-      ...base,
+    const row = logPayloadRow(base, 'all', {
       messageType: MESSAGE_TYPES.FILE_LIST,
-      text: 'all',
       data: [
         {
           path: 'a.png',
@@ -66,20 +64,15 @@ describe('projectTranscriptRow', () => {
   });
 
   it('gives a delegation call typed sections instead of a JSON blob', () => {
-    const row = projectTranscriptRow({
-      ...base,
-      messageType: MESSAGE_TYPES.TOOL_USE,
-      text: '',
-      data: {
-        toolName: 'delegate_agent',
-        status: 'in_progress',
-        input: {
-          agent: 'proof',
-          model: 'claude-opus',
-          instruction: 'Check lemma 3',
-          inputFiles: ['a.tex'],
-          extractTikz: true,
-        },
+    const row = tool({
+      toolName: 'delegate_agent',
+      status: 'in_progress',
+      input: {
+        agent: 'proof',
+        model: 'claude-opus',
+        instruction: 'Check lemma 3',
+        inputFiles: ['a.tex'],
+        extractTikz: true,
       },
     });
     if (row?.kind !== 'tool') throw new Error('bad');
@@ -96,16 +89,11 @@ describe('projectTranscriptRow', () => {
   });
 
   it('shows MCP output through the section builder', () => {
-    const row = projectTranscriptRow({
-      ...base,
-      messageType: MESSAGE_TYPES.TOOL_USE,
-      text: '',
-      data: {
-        toolName: 'mcp:fs/read',
-        status: 'completed',
-        input: { path: '/x' },
-        output: { output: 'line1\nline2\nline3' },
-      },
+    const row = tool({
+      toolName: 'mcp:fs/read',
+      status: 'completed',
+      input: { path: '/x' },
+      output: { output: 'line1\nline2\nline3' },
     });
     if (row?.kind !== 'tool') throw new Error('bad');
     expect(row.model.headerLabel).toBe('MCP fs/read');
@@ -115,16 +103,11 @@ describe('projectTranscriptRow', () => {
     // A structured output with a field the schema does not know keeps its
     // raw form beside the structured sections, so claiming the sections
     // carry the output stays true and the provider's `result` is shown.
-    const partial = projectTranscriptRow({
-      ...base,
-      messageType: MESSAGE_TYPES.TOOL_USE,
-      text: '',
-      data: {
-        toolName: 'mcp:calc/eval',
-        status: 'completed',
-        input: { expr: '6*7' },
-        output: { status: 'completed', result: '42' },
-      },
+    const partial = tool({
+      toolName: 'mcp:calc/eval',
+      status: 'completed',
+      input: { expr: '6*7' },
+      output: { status: 'completed', result: '42' },
     });
     if (partial?.kind !== 'tool') throw new Error('bad');
     expect(partial.model.sections.map((section) => section.label)).toEqual([
@@ -139,16 +122,11 @@ describe('projectTranscriptRow', () => {
 
     // The normalized output text is the `output` field alone when one exists,
     // so the section must render the dropped fields, not that text.
-    const withOutput = projectTranscriptRow({
-      ...base,
-      messageType: MESSAGE_TYPES.TOOL_USE,
-      text: '',
-      data: {
-        toolName: 'mcp:calc/eval',
-        status: 'completed',
-        input: { expr: '6*7' },
-        output: { status: 'completed', output: 'stdout', result: '42' },
-      },
+    const withOutput = tool({
+      toolName: 'mcp:calc/eval',
+      status: 'completed',
+      input: { expr: '6*7' },
+      output: { status: 'completed', output: 'stdout', result: '42' },
     });
     if (withOutput?.kind !== 'tool') throw new Error('bad');
     const result = withOutput.model.sections.at(-1);
@@ -163,16 +141,11 @@ describe('projectTranscriptRow', () => {
     });
 
     // Result metadata is the row's to show on its own, never a raw field.
-    const failed = projectTranscriptRow({
-      ...base,
-      messageType: MESSAGE_TYPES.TOOL_USE,
-      text: '',
-      data: {
-        toolName: 'mcp:calc/eval',
-        status: 'failed',
-        input: { expr: '6*7' },
-        output: { status: 'error', error: 'boom', diagnostics: { code: 7 } },
-      },
+    const failed = tool({
+      toolName: 'mcp:calc/eval',
+      status: 'failed',
+      input: { expr: '6*7' },
+      output: { status: 'error', error: 'boom', diagnostics: { code: 7 } },
     });
     if (failed?.kind !== 'tool') throw new Error('bad');
     expect(failed.model.sections.map((section) => section.label)).toEqual([
@@ -183,36 +156,25 @@ describe('projectTranscriptRow', () => {
 
   it('drops the state-only and marker message types', () => {
     expect(
-      projectTranscriptRow({
-        ...base,
+      logPayloadRow(base, '', {
         messageType: MESSAGE_TYPES.INTERNAL,
-        text: '',
         data: { kind: 'workflowPlan', attemptId: 'x', phases: [], tasks: [] },
       }),
     ).toBeUndefined();
   });
 
-  it('inherits phase counts when a phase closes', () => {
-    const start = projectTranscriptRow({
-      ...base,
-      type: STREAM_LOG_ENTRY_TYPES.GROUP_START,
-      text: 'Reduce',
-      messageType: MESSAGE_TYPES.DEFAULT,
-      data: { status: RUN_PHASE.RUNNING, kind: 'phase', index: 1, total: 3 },
+  it('keeps phase counts when a phase closes', () => {
+    const runTrace = createTestRunTrace('phase' as RunId);
+    const phase = runTrace.trace.openStage('Reduce', {
+      kind: 'phase',
+      index: 1,
+      total: 3,
     });
-    if (start?.kind !== 'phase') throw new Error('bad');
-    expect(start.heading).toBe('Reduce (2/3)');
-    const end = projectTranscriptRow(
-      {
-        ...base,
-        type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
-        text: 'Reduce',
-        messageType: MESSAGE_TYPES.DEFAULT,
-        data: { status: RUN_PHASE.COMPLETED, kind: 'phase' },
-      },
-      { previousRow: start },
-    );
-    if (end?.kind !== 'phase') throw new Error('bad');
-    expect(end.heading).toBe('Reduce (2/3)');
+    const heading = () =>
+      runTrace.rows().flatMap((row) => (row.kind === 'phase' ? [row] : []))[0]
+        ?.heading;
+    expect(heading()).toBe('Reduce (2/3)');
+    phase.end();
+    expect(heading()).toBe('Reduce (2/3)');
   });
 });

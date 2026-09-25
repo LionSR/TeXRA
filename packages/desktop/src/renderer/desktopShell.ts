@@ -7,6 +7,7 @@
 
 import '@awesome.me/webawesome/dist/components/badge/badge.js';
 import '@awesome.me/webawesome/dist/components/button/button.js';
+import '@awesome.me/webawesome/dist/components/divider/divider.js';
 import '@awesome.me/webawesome/dist/components/dropdown/dropdown.js';
 import '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
 import { html, nothing, type TemplateResult } from 'lit';
@@ -14,7 +15,8 @@ import { html, nothing, type TemplateResult } from 'lit';
 import type { ProjectDisplay } from '@shared/session/hostSnapshot';
 import type { SessionView } from '@shared/session/sessionView';
 import type { Shell } from '@shared/session/shell';
-import { resolveSelected, type Surface } from '@shared/session/surface';
+import type { RunId } from '@shared/schemas';
+import type { Surface } from '@shared/session/surface';
 import { SessionUiEvents } from '@shared/session/uiEvents';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
 import type { TeXRAIconName } from '@ui/wa/iconNames';
@@ -32,38 +34,31 @@ export interface RailProject {
   readonly display: ProjectDisplay;
   readonly view: SessionView;
   readonly surface: Surface;
+  /** Its runs that finished since the user last had them on screen. */
+  readonly unseen: ReadonlySet<RunId>;
 }
 
 interface ShellSidebarModel {
-  readonly files: Node;
-  readonly filesExpanded: boolean;
   /** Every open project, in `shell.open` order. */
   readonly projects: readonly RailProject[];
   readonly shell: Shell;
-  /** The shown workbench (the active project's) has its Subagents tab open:
-   *  that project's tree lives there and its section lists top-level runs
-   *  only. Other projects' workbenches are not shown, so their sections keep
-   *  their trees. */
-  readonly subagentsOpen: boolean;
   /** Canonical name of the command palette action, from the command catalog. */
   readonly commandsLabel: string;
   /** The same name with its shortcut, for the tooltip. */
   readonly commandsTitle: string;
 }
 
+/** What a project row's `⋯` menu and `+` do; each names the project. */
+type ProjectAction = 'new-task' | 'close';
+
 interface ShellSidebarCallbacks {
   onNewTask(): void;
   onOpenCommands(): void;
-  onToggleFiles(): void;
   onOpenFolder(): void;
   onSelectProject(key: string): void;
-  onCloseProject(key: string): void;
+  onProjectAction(key: string, action: ProjectAction): void;
   onToggleProjectCollapsed(key: string): void;
-  onOpenTerminal(): void;
-  onOpenBrowser(): void;
   onOpenSettings(): void;
-  /** Opens the Subagents tab on the active project's selected family. */
-  onOpenSubagents(): void;
 }
 
 function sidebarAction(options: {
@@ -71,7 +66,6 @@ function sidebarAction(options: {
   label: string;
   title?: string;
   onClick: () => void;
-  primary?: boolean;
 }): TemplateResult {
   return html`
     <wa-button
@@ -79,7 +73,6 @@ function sidebarAction(options: {
       class="shell-sidebar-action btn-ghost"
       appearance="plain"
       size="s"
-      data-primary=${options.primary ? 'true' : 'false'}
       title=${options.title ?? nothing}
       @click=${options.onClick}
     >
@@ -93,114 +86,57 @@ function sidebarAction(options: {
 }
 
 /**
- * A collapsed project's badge: the one count that needs the user first
- * (waiting, then interrupted, then running), read from the view's rollup.
+ * A project's one status, read from its view's rollup and its surface: what
+ * needs the user first (waiting, then interrupted), then work in progress,
+ * then runs that finished while the user was elsewhere.
  */
-function projectBadge(view: SessionView): TemplateResult | typeof nothing {
-  const { waiting, interrupted, running } = view.rollup;
-  const badge = (
-    [
-      ['warning', waiting],
-      ['danger', interrupted],
-      ['success', running],
-    ] as const
-  ).find(([, count]) => count > 0);
-  if (!badge) return nothing;
-  const [variant, count] = badge;
-  return html`<wa-badge class="shell-project-badge" variant=${variant} pill
-    >${count}</wa-badge
-  >`;
-}
-
-function runTabsTemplate(
+function projectStatus(
   project: RailProject,
-  options: { topLevelOnly: boolean },
-): TemplateResult {
-  return html`<div data-session=${project.display.key}>
-    <run-tabs
-      .view=${project.view}
-      .surface=${project.surface}
-      .topLevelOnly=${options.topLevelOnly}
-    ></run-tabs>
-  </div>`;
+): { readonly tone: string; readonly label: string } | undefined {
+  const { waiting, interrupted, running } = project.view.rollup;
+  if (waiting > 0)
+    return { tone: 'waiting', label: `${waiting} waiting for you` };
+  if (interrupted > 0)
+    return { tone: 'interrupted', label: `${interrupted} interrupted` };
+  if (running > 0) return { tone: 'running', label: `${running} running` };
+  const unseen = project.unseen.size;
+  if (unseen > 0) return { tone: 'unseen', label: `${unseen} finished` };
+  return undefined;
 }
 
 /**
- * Where the selected run's children are. The whole tree is the Subagents
- * tab's, and this control is what opens that tab; it belongs to the shown
- * project alone, since the workbench beside the rail is that project's. While the
- * tab holds the tree the section is flat, and under a workflow run the note
- * then says where its calls went (W2). Nothing when the selection has no
- * children, since there would be no tree to reach.
- */
-function childRunsAccess(
-  project: RailProject,
-  options: { active: boolean; flattened: boolean },
-  callbacks: ShellSidebarCallbacks,
-): TemplateResult | typeof nothing {
-  const { view, surface } = project;
-  const selected = resolveSelected(view, surface);
-  const run = selected === null ? undefined : view.runs.get(selected);
-  const rootId = run?.ancestors[0]?.id ?? run?.id;
-  const root = rootId === undefined ? undefined : view.runs.get(rootId);
-  if (root === undefined || root.rollup.total === 0) return nothing;
-  const { total } = root.rollup;
-  const { icon, label } = WORKBENCH_KIND_META.subagents;
-  return html`
-    ${
-      options.flattened && root.category === 'workflow'
-        ? html`<div class="shell-workflow-calls-note">
-            ${total === 1 ? 'The 1 call is a child run' : `The ${total} calls are child runs`},
-            reachable from the board. They never appear here.
-          </div>`
-        : nothing
-    }
-    ${
-      options.active
-        ? html`<wa-button
-            type="button"
-            class="shell-subagents-open btn-ghost"
-            appearance="plain"
-            size="s"
-            title="Open the ${label} tab on this task's tree"
-            @click=${callbacks.onOpenSubagents}
-          >
-            ${waIcon(icon, { slot: 'start' })}
-            <span>${label}</span>
-            <span class="shell-subagents-open-count" slot="end">${total}</span>
-          </wa-button>`
-        : nothing
-    }
-  `;
-}
-
-/**
- * One section per open project: the row, then that project's own run tree
- * beneath it unless the user folded the section shut (`Shell.collapsed`).
- * The row chooses the project; the chevron folds the section; the close
- * control beside them is the one place a project is closed from. The file
- * tree is the shown project's workbench tree, so only its section carries the
- * Files disclosure.
+ * One section per open project: the row, then that project's conversations
+ * (its top-level runs; a run's subagents live in the Subagents tab) unless
+ * the user folded the section shut. Every row has the same controls, so the
+ * shown project differs only by its highlight: the row chooses the project,
+ * `+` starts a task in it, and `×` closes it.
  */
 function projectSection(
   project: RailProject,
   model: ShellSidebarModel,
   callbacks: ShellSidebarCallbacks,
 ): TemplateResult {
-  const { key, name, initials, subtitle } = project.display;
+  const { key, name, initials } = project.display;
   const active = key === model.shell.active;
   const collapsed = model.shell.collapsed.includes(key);
   const foldLabel = `${collapsed ? 'Expand' : 'Collapse'} ${name}`;
   // Tooltip anchors: the key is a path, so it is encoded into the DOM id.
   const idBase = `shell-project-${encodeURIComponent(key)}`;
-  // The tree has one home at a time: the Subagents tab holds the shown
-  // project's, and this section then lists its top-level runs only.
-  const flattened = active && model.subagentsOpen;
+  const status = projectStatus(project);
   return html`
-    <div class="shell-project-item">
+    <div class="shell-project-item ${active ? 'is-active' : ''}">
+      ${renderIconActionButton({
+        id: `${idBase}-fold`,
+        icon: collapsed ? 'chevron-right' : 'chevron-down',
+        label: foldLabel,
+        tooltip: foldLabel,
+        expanded: !collapsed,
+        className: 'shell-project-fold icon-button is-size-s',
+        onClick: () => callbacks.onToggleProjectCollapsed(key),
+      })}
       <wa-button
         type="button"
-        class="shell-project-row btn-ghost ${active ? 'is-active' : ''}"
+        class="shell-project-row btn-ghost"
         appearance="plain"
         size="s"
         title=${key}
@@ -212,18 +148,26 @@ function projectSection(
         >
         <span class="shell-project-copy">
           <strong>${name}</strong>
-          <small>${subtitle}</small>
+          ${status ? html`<small>${status.label}</small>` : nothing}
         </span>
       </wa-button>
-      ${collapsed ? projectBadge(project.view) : nothing}
+      ${
+        status
+          ? html`<span
+              class="shell-project-status"
+              data-tone=${status.tone}
+              role="img"
+              aria-label=${status.label}
+            ></span>`
+          : nothing
+      }
       ${renderIconActionButton({
-        id: `${idBase}-fold`,
-        icon: collapsed ? 'chevron-right' : 'chevron-down',
-        label: foldLabel,
-        tooltip: foldLabel,
-        expanded: !collapsed,
-        className: 'shell-project-fold icon-button is-size-s',
-        onClick: () => callbacks.onToggleProjectCollapsed(key),
+        id: `${idBase}-new`,
+        icon: 'plus',
+        label: `New task in ${name}`,
+        tooltip: `New task in ${name}`,
+        className: 'shell-project-new icon-button is-size-s',
+        onClick: () => callbacks.onProjectAction(key, 'new-task'),
       })}
       ${renderIconActionButton({
         id: `${idBase}-close`,
@@ -231,67 +175,25 @@ function projectSection(
         label: `Close ${name}`,
         tooltip: `Close ${name}`,
         className: 'shell-project-close icon-button is-size-s',
-        onClick: () => callbacks.onCloseProject(key),
+        onClick: () => callbacks.onProjectAction(key, 'close'),
       })}
     </div>
     ${
-      collapsed
+      // An empty project lists nothing: its `+` is the way to start.
+      collapsed || project.view.order.length === 0
         ? nothing
-        : html`
-            <div class="shell-sidebar-sessions shell-project-runs">
-              ${runTabsTemplate(project, { topLevelOnly: flattened })}
-              ${childRunsAccess(project, { active, flattened }, callbacks)}
-            </div>
-          `
+        : html`<div
+            class="shell-sidebar-sessions shell-project-runs"
+            data-session=${key}
+          >
+            <run-tabs
+              .view=${project.view}
+              .surface=${project.surface}
+              .unseen=${project.unseen}
+              .topLevelOnly=${true}
+            ></run-tabs>
+          </div>`
     }
-    ${
-      active && !collapsed
-        ? html`
-            <wa-button
-              type="button"
-              class="shell-project-files-toggle btn-ghost"
-              appearance="plain"
-              size="s"
-              aria-expanded=${model.filesExpanded ? 'true' : 'false'}
-              @click=${callbacks.onToggleFiles}
-            >
-              ${waIcon(model.filesExpanded ? 'chevron-down' : 'chevron-right', {
-                slot: 'start',
-              })}
-              <span>Files</span>
-            </wa-button>
-            <div class="shell-project-files" ?hidden=${!model.filesExpanded}>
-              ${model.files}
-            </div>
-          `
-        : nothing
-    }
-  `;
-}
-
-function projectsSectionsTemplate(
-  model: ShellSidebarModel,
-  callbacks: ShellSidebarCallbacks,
-): TemplateResult {
-  return html`
-    <section class="shell-sidebar-section shell-project-section">
-      <div class="shell-sidebar-section-heading">
-        <span class="shell-sidebar-section-label">
-          ${model.projects.length > 1 ? 'Projects' : 'Project'}
-        </span>
-      </div>
-      ${model.projects.map((project) => projectSection(project, model, callbacks))}
-      <wa-button
-        type="button"
-        class="shell-project-add"
-        appearance="outlined"
-        size="s"
-        @click=${callbacks.onOpenFolder}
-      >
-        ${waIcon('folder-open', { slot: 'start' })}
-        <span>Add project</span>
-      </wa-button>
-    </section>
   `;
 }
 
@@ -299,33 +201,6 @@ export function shellSidebarTemplate(
   model: ShellSidebarModel,
   callbacks: ShellSidebarCallbacks,
 ): TemplateResult {
-  let projectsBody: TemplateResult;
-  if (model.projects.length === 0) {
-    projectsBody = html`
-      <section class="shell-sidebar-section shell-project-section">
-        <wa-button
-          type="button"
-          class="shell-project-row btn-ghost"
-          appearance="plain"
-          size="s"
-          title="Open a project folder"
-          @click=${callbacks.onOpenFolder}
-        >
-          <span class="shell-project-mark icon-surface is-size-m">TX</span>
-          <span class="shell-project-copy">
-            <strong>No project open</strong>
-            <small>Get started</small>
-          </span>
-          ${waIcon('arrow-up-right-from-square', {
-            className: 'shell-project-chevron',
-            slot: 'end',
-          })}
-        </wa-button>
-      </section>
-    `;
-  } else {
-    projectsBody = projectsSectionsTemplate(model, callbacks);
-  }
   return html`
     <aside class="shell-sidebar" aria-label="Projects and tasks">
       <header class="shell-sidebar-brand">
@@ -338,7 +213,6 @@ export function shellSidebarTemplate(
           icon: 'pencil',
           label: 'New task',
           onClick: callbacks.onNewTask,
-          primary: true,
         })}
         ${sidebarAction({
           icon: 'magnifying-glass',
@@ -348,19 +222,39 @@ export function shellSidebarTemplate(
         })}
       </nav>
 
-      <div class="shell-sidebar-scroll">${projectsBody}</div>
+      <div class="shell-sidebar-scroll">
+        <section class="shell-sidebar-section shell-project-section">
+          <div class="shell-sidebar-section-heading">
+            <span class="shell-sidebar-section-label">Projects</span>
+            ${renderIconActionButton({
+              id: 'shellProjectAdd',
+              icon: 'folder-open',
+              label: 'Open project folder',
+              tooltip: 'Open project folder',
+              className: 'shell-project-add icon-button is-size-s',
+              onClick: callbacks.onOpenFolder,
+            })}
+          </div>
+          ${
+            model.projects.length === 0
+              ? html`<wa-button
+                  type="button"
+                  class="shell-project-empty btn-ghost"
+                  appearance="plain"
+                  size="s"
+                  @click=${callbacks.onOpenFolder}
+                >
+                  ${waIcon('folder-open', { slot: 'start' })}
+                  <span>Open a project folder</span>
+                </wa-button>`
+              : model.projects.map((project) =>
+                  projectSection(project, model, callbacks),
+                )
+          }
+        </section>
+      </div>
 
       <footer class="shell-sidebar-footer">
-        ${sidebarAction({
-          icon: 'terminal',
-          label: 'Terminal',
-          onClick: callbacks.onOpenTerminal,
-        })}
-        ${sidebarAction({
-          icon: 'globe',
-          label: 'Browser',
-          onClick: callbacks.onOpenBrowser,
-        })}
         ${sidebarAction({
           icon: 'gear',
           label: 'Settings',
@@ -372,49 +266,36 @@ export function shellSidebarTemplate(
 }
 
 /**
- * The project chip at the head of the conversation pane: names the project the
- * conversation belongs to and switches project from its menu, the same choice
- * a rail row makes.
+ * The way into the selected conversation's subagents: the Subagents tab
+ * holds the tree, so this only opens it. Nothing when the conversation has
+ * no children.
  */
-export function projectChipTemplate(
-  projects: readonly RailProject[],
-  active: RailProject | undefined,
-  onSelectProject: (key: string) => void,
-): TemplateResult {
+export function subagentsButtonTemplate(
+  project: RailProject | undefined,
+  onOpen: () => void,
+): TemplateResult | typeof nothing {
+  if (!project) return nothing;
+  const { selected } = project.surface;
+  const run = selected === null ? undefined : project.view.runs.get(selected);
+  const rootId = run?.ancestors[0]?.id ?? run?.id;
+  const root = rootId === undefined ? undefined : project.view.runs.get(rootId);
+  if (root === undefined || root.rollup.total === 0) return nothing;
+  const { icon, label } = WORKBENCH_KIND_META.subagents;
   return html`
-    <wa-dropdown
-      class="shell-project-chip"
-      placement="bottom-start"
-      @wa-select=${(
-        event: CustomEvent<{ item: HTMLElement & { value?: string } }>,
-      ) => {
-        if (event.detail.item.value) onSelectProject(event.detail.item.value);
-      }}
+    <wa-button
+      type="button"
+      class="shell-subagents-open btn-secondary"
+      appearance="outlined"
+      size="s"
+      title="Open the ${label} tab on this conversation's tree"
+      @click=${onOpen}
     >
-      <wa-button
-        slot="trigger"
-        type="button"
-        appearance="outlined"
-        size="s"
-        with-caret
-        title=${active?.display.key ?? 'No project open'}
+      ${waIcon(icon, { slot: 'start' })}
+      <span>${label}</span>
+      <span class="shell-subagents-open-count" slot="end"
+        >${root.rollup.total}</span
       >
-        <span class="shell-project-mark icon-surface is-size-s" slot="start"
-          >${active?.display.initials ?? 'TX'}</span
-        >
-        ${active?.display.name ?? 'No project open'}
-      </wa-button>
-      ${projects.map(
-        (project) => html`
-          <wa-dropdown-item
-            value=${project.display.key}
-            type="checkbox"
-            ?checked=${project === active}
-            >${project.display.name}</wa-dropdown-item
-          >
-        `,
-      )}
-    </wa-dropdown>
+    </wa-button>
   `;
 }
 
@@ -447,6 +328,8 @@ export function conversationDockTemplate(): TemplateResult {
 }
 
 interface WorkbenchTabsCallbacks {
+  /** The strip's `+`: open a tool surface in this pane. */
+  onOpenKind(kind: 'files' | 'terminal' | 'browser' | 'logs'): void;
   onActivate(tabId: string): void;
   onClose(tabId: string): void;
   onHide(): void;
@@ -668,6 +551,40 @@ export function workbenchTabsTemplate(
           `;
         })}
       </div>
+      <wa-dropdown
+        class="shell-workbench-add"
+        placement="bottom-end"
+        @wa-select=${(
+          event: CustomEvent<{ item: HTMLElement & { value?: string } }>,
+        ) => {
+          const kind = event.detail.item.value;
+          if (
+            kind === 'files' ||
+            kind === 'terminal' ||
+            kind === 'browser' ||
+            kind === 'logs'
+          )
+            callbacks.onOpenKind(kind);
+        }}
+      >
+        <wa-button
+          slot="trigger"
+          type="button"
+          class="shell-workbench-close icon-button focus-ring-inset"
+          appearance="plain"
+          size="m"
+          aria-label="Open a tool"
+        >
+          ${waIcon('plus')}
+        </wa-button>
+        ${(['files', 'terminal', 'browser', 'logs'] as const).map(
+          (kind) =>
+            html`<wa-dropdown-item value=${kind}>
+              ${waIcon(WORKBENCH_KIND_META[kind].icon, { slot: 'icon' })}
+              ${WORKBENCH_KIND_META[kind].label}
+            </wa-dropdown-item>`,
+        )}
+      </wa-dropdown>
       ${renderIconActionButton({
         id: `${workbenchPanelDomId(placement, session)}-hide`,
         icon: hideDirection,

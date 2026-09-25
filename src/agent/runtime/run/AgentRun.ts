@@ -103,7 +103,12 @@ export interface AgentRunShape {
   readonly toolPolicy: ToolPolicy;
   readonly workingDirectory?: string;
   readonly delegationAgentScope?: AgentDelegationScope | null;
-  readonly onApprovalPolicyDenial?: () => void;
+  /**
+   * Record that this run met an approval-policy denial: a request settled as
+   * denied, or (with `withheldTools`) approval-gated tools were withheld from
+   * the model when the run resolved its tools.
+   */
+  readonly onApprovalPolicyDenial?: (withheldTools?: readonly string[]) => void;
   /** The process stores the launch read; every route and credential read
    *  below the loop takes them from here. */
   readonly stores: ModelOptionStores;
@@ -155,12 +160,6 @@ export interface AgentRunShape {
   readonly pendingModelSwitch: { value: string | null };
   readonly usageMonitor: UsageMonitor;
   readonly callbacks: RunCallbacks;
-  /**
-   * The run's one stop: completes the launch context's stop latch, so the
-   * boundary that owns the run's program interrupts it. The run's
-   * `AbortSignal` is aborted from that interruption, not from here.
-   */
-  readonly interrupt: () => void;
 }
 
 export class AgentRun extends Context.Service<AgentRun, AgentRunShape>()(
@@ -171,7 +170,7 @@ interface AgentRunLayerInput {
   /** Caller-supplied tools available only to this run. */
   readonly tools?: readonly ITool[];
   readonly callbacks: RunCallbacks;
-  readonly onApprovalPolicyDenial?: () => void;
+  readonly onApprovalPolicyDenial?: AgentRunShape['onApprovalPolicyDenial'];
 }
 
 /**
@@ -230,6 +229,7 @@ export const agentRunLayer = (
         tools: setting.tools,
         logger,
         approvalPromptsUnavailable: ctx.toolPolicy.approvalPromptsUnavailable,
+        onApprovalPolicyDenial: input.onApprovalPolicyDenial,
         host: processToolHost(),
         runTools: terminalTool
           ? [...(input.tools ?? []), terminalTool]
@@ -364,7 +364,6 @@ export const agentRunLayer = (
         pendingModelSwitch,
         usageMonitor: ctx.usageMonitor,
         callbacks: input.callbacks,
-        interrupt: ctx.interrupt,
       };
     }),
   );

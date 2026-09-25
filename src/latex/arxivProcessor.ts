@@ -1,8 +1,7 @@
-import { createReadStream, createWriteStream } from 'node:fs';
 import * as path from 'node:path';
-import { pipeline } from 'node:stream/promises';
 import { createGunzip } from 'node:zlib';
 
+import * as NodeStream from '@effect/platform-node/NodeStream';
 import { parse as parseContentDisposition } from 'content-disposition';
 import {
   Cause,
@@ -80,17 +79,17 @@ type DownloadServices = FileSystem.FileSystem | HttpClient.HttpClient;
 /**
  * Classify a step outside the download attempt as a permanent failure: only
  * the attempt itself is retried, so nothing else has a retry loop to abort.
- * A failed read, write, rename or format run ends the run as it stands.
+ * A failed read, write, rename or format run ends the run, in errno words.
  */
+const permanentFsError = (error: PlatformError.PlatformError) =>
+  new ArxivSourcePermanentError({
+    message: toErrorMessage(error.reason.cause ?? error),
+  });
+
 const permanentFs = <T, R>(
   effect: Effect.Effect<T, PlatformError.PlatformError, R>,
 ): Effect.Effect<T, ArxivSourcePermanentError, R> =>
-  effect.pipe(
-    Effect.mapError(
-      (cause) =>
-        new ArxivSourcePermanentError({ message: toErrorMessage(cause) }),
-    ),
-  );
+  effect.pipe(Effect.mapError(permanentFsError));
 
 /**
  * Whether `target` names an entry, a dangling or circular symlink included.
@@ -695,18 +694,19 @@ class ArxivSourceProcessor {
       if (isGzipOnly) {
         progressCallback?.('Decompressing source file...', 60);
         const decompressedPath = downloadedPath.replace(/\.gz$/, '');
-        yield* joinedStream(
-          (signal) =>
-            pipeline(
-              createReadStream(downloadedPath),
-              createGunzip(),
-              createWriteStream(decompressedPath),
-              { signal },
-            ),
-          (cause) =>
-            Effect.fail(
-              new ArxivSourcePermanentError({ message: toErrorMessage(cause) }),
-            ),
+        // Chunk by chunk, never whole; interruption closes gunzip and both handles.
+        yield* fs.stream(downloadedPath).pipe(
+          NodeStream.pipeThroughDuplex({
+            evaluate: () => createGunzip(),
+            onError: (cause) =>
+              new ArxivSourcePermanentError({
+                message: toErrorMessage(cause),
+              }),
+          }),
+          Stream.run(fs.sink(decompressedPath)),
+          Effect.catchTag('PlatformError', (error) =>
+            Effect.fail(permanentFsError(error)),
+          ),
         );
         yield* permanentFs(fs.remove(downloadedPath, { force: true }));
         sourceFilePath = decompressedPath;

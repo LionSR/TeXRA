@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 // Local imports
 import { NO_PLATFORM_INSTALL } from '@cli/runtime/cliProcessRuntime';
 import { CliExitCode } from '@cli/runtime/exitCodes';
+import { overleafGitClone } from '@latex/overleafProject';
 import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
@@ -78,24 +79,31 @@ const spawn: {
 } = { gitVersion: {}, clone: () => ({}), calls: [], killed: [] };
 
 const isClone = (command: ChildProcess.StandardCommand) =>
-  command.command === 'git' && command.args[0] === 'clone';
+  command.command === 'git' && command.args.includes('clone');
 
 function cloneCalls(): ChildProcess.StandardCommand[] {
   return spawn.calls.filter(isClone);
 }
 
+/**
+ * The clone ran against the tokenless remote with the token only in the
+ * helper's environment, then offered it to the user's credential helper.
+ */
 function expectClonedInto(cwd: string): void {
+  const clone = overleafGitClone(
+    { host: 'git.overleaf.com', path: `/${PROJECT_ID}`, isOverleaf: true },
+    'olp_secret',
+  );
   const [command] = cloneCalls();
-  expect(command?.args).toEqual([
-    'clone',
-    'https://git:olp_secret@git.overleaf.com/0123456789abcdef01234567',
-    '.',
-  ]);
+  expect(command?.args).toEqual(clone.args);
   expect(command?.options).toMatchObject({
     cwd,
-    env: makeMachineGitEnv(),
+    env: { ...makeMachineGitEnv(), ...clone.env },
     extendEnv: false,
   });
+  const approve = spawn.calls.find((call) => call.args[0] === 'credential');
+  expect(approve?.args).toEqual(['credential', 'approve']);
+  expect(approve?.options).toMatchObject({ cwd, extendEnv: false });
 }
 
 async function withProcessCwd<T>(
@@ -143,11 +151,11 @@ describe('CLI Overleaf clone command', () => {
     spawn.calls = scripted.calls;
     spawn.killed = scripted.killed;
     const runtime = testRuntime();
-    const runPromise = runtime.runPromise.bind(runtime);
+    const runPromiseExit = runtime.runPromiseExit.bind(runtime);
     runtimeSpy = vi
-      .spyOn(runtime, 'runPromise')
+      .spyOn(runtime, 'runPromiseExit')
       .mockImplementation((program, options) =>
-        runPromise(program.pipe(Effect.provide(scripted.layer)), {
+        runPromiseExit(program.pipe(Effect.provide(scripted.layer)), {
           ...options,
           signal: options?.signal ?? hostAbort?.signal,
         }),
@@ -230,17 +238,17 @@ describe('CLI Overleaf clone command', () => {
       return 'hang';
     };
 
-    await expect(
-      runCli([
-        'clone',
-        PROJECT_ID,
-        '--cwd',
-        workspacePath,
-        '--output-format',
-        'json',
-        '--no-input',
-      ]),
-    ).rejects.toBeInstanceOf(Error);
+    const result = await runCli([
+      'clone',
+      PROJECT_ID,
+      '--cwd',
+      workspacePath,
+      '--output-format',
+      'json',
+      '--no-input',
+    ]);
+
+    expect(result.exitCode).toBe(CliExitCode.Interrupted);
 
     expect(cloneCalls()).toHaveLength(1);
     expect(spawn.killed.filter(isClone)).toHaveLength(1);
@@ -349,7 +357,7 @@ describe('CLI Overleaf clone command', () => {
   it('clears rejected credentials without printing them', async () => {
     spawn.clone = () => ({
       stderr:
-        'fatal: authentication failed for https://git:olp_secret@git.overleaf.com',
+        "fatal: Authentication failed for 'https://git.overleaf.com/0123456789abcdef01234567/'",
       exitCode: 128,
     });
 

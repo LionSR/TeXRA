@@ -738,7 +738,7 @@ describe('CLI conversation transcript', () => {
       'e18',
       'e19',
     ]);
-    expect(built.rowCount).toBeLessThanOrEqual(budgets.rowLowWater);
+    expect(built.totals.rows).toBeLessThanOrEqual(budgets.rowLowWater);
   });
 
   it('bounds the static transcript ring by bytes and drops oldest non-header items', () => {

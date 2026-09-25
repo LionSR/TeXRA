@@ -63,6 +63,8 @@ const createRegisteredChildRun = Effect.fn('createRegisteredChildRun')(
       Effect.provideService(Runs, session.runs),
       Effect.onError(() => session.releaseRunLease(runId).pipe(Effect.orDie)),
     );
+    // What the child loop does once its stop target is reserved.
+    child.track();
     return {
       ...child,
       finalize: (
@@ -129,7 +131,6 @@ describe('child run progress events', () => {
 
         yield* childRun.finalize({
           outcome: RUN_OUTCOME.COMPLETED,
-          autoClose: true,
         });
 
         expect(
@@ -261,8 +262,8 @@ describe('child run progress events', () => {
     'rolls back a failed rehydrated setup so the same run can retry',
     () => {
       const recorded = recordSessionEvents(testDefaultSession());
-      const trackRun = vi
-        .spyOn(testDefaultSession().runs, 'track')
+      const attachTrace = vi
+        .spyOn(testDefaultSession(), 'attachRunTrace')
         .mockImplementationOnce(() => {
           throw new Error('run setup failed');
         });
@@ -329,7 +330,7 @@ describe('child run progress events', () => {
           ),
         ).toHaveLength(2);
         yield* retried.finalize({ outcome: RUN_OUTCOME.COMPLETED });
-      }).pipe(Effect.ensuring(Effect.sync(() => trackRun.mockRestore())));
+      }).pipe(Effect.ensuring(Effect.sync(() => attachTrace.mockRestore())));
     },
   );
 
@@ -408,34 +409,6 @@ describe('child run progress events', () => {
         ]);
 
         yield* childRun.finalize({ outcome: RUN_OUTCOME.COMPLETED });
-      }),
-  );
-
-  it.effect(
-    'retains completed command history after automatic presentation release',
-    () =>
-      Effect.gen(function* () {
-        const recorded = recordSessionEvents(testDefaultSession());
-
-        const childRun = yield* Effect.promise(() => startBashChild(runId));
-        childRun.logger.info('retained command output');
-
-        yield* childRun.finalize({
-          outcome: RUN_OUTCOME.COMPLETED,
-          autoClose: true,
-        });
-
-        expect(
-          eventsOfType(
-            yield* Effect.promise(() => recorded.read()),
-            'run.removed',
-          ),
-        ).toEqual([]);
-        const entries =
-          yield* testDefaultSession().transcripts.readEntries(runId);
-        expect(
-          entries.some((entry) => entry.text === 'retained command output'),
-        ).toBe(true);
       }),
   );
 
@@ -521,6 +494,7 @@ describe('child run progress events', () => {
         const session = testDefaultSession();
         let childRun: ChildRun | undefined;
         let childRunId: RunId | undefined;
+        let visibleBeforeLoop = true;
 
         // `reraiseAgentCliCallFailure` re-raises the loop's throw as a
         // defect, so flip the defect back into the error channel.
@@ -536,6 +510,10 @@ describe('child run progress events', () => {
               buildLaunch: (context) => {
                 childRun = context.childRun;
                 childRunId = context.runId;
+                // Before the loop reserves its stop target, no stop can find
+                // the handle: a stop never reaches a run it cannot interrupt.
+                visibleBeforeLoop =
+                  session.runs.getHandle(context.runId) !== undefined;
                 throw setupError;
               },
               summary: 'unreachable',
@@ -545,6 +523,7 @@ describe('child run progress events', () => {
           ).pipe(Effect.catchDefect((cause) => Effect.fail(cause))),
         );
         expect(defect).toBe(setupError);
+        expect(visibleBeforeLoop).toBe(false);
 
         expect(childRun).toBeDefined();
         expect(childRunId).toBeDefined();
@@ -561,10 +540,13 @@ describe('child run progress events', () => {
       }).pipe(Effect.provideService(AgentResume, fakeHostAgentResume)),
   );
 
-  // The child reports its own exit and nothing else: a stop that already
-  // reached the handle outranks it, and `finalizeRunTerminal` resolves the
-  // run's terminal outcome from that stop rather than from the failure the
-  // child reports.
+  // A stopped child ends cancelled: the loop observes its own stop (its
+  // signal, or the run fiber's interruption for a native child) and derives
+  // the verdict BEFORE this port is called, so a stop outranks the failure
+  // the child's process reported first. That precedence race is covered in
+  // ChildRunLoop.vitest ('lets a stop landing after a turn failure win the
+  // terminal outcome'); what lands here is the loop's derived verdict,
+  // through the hub.
   it.effect(
     'settles a stopped child loop as cancelled from the stop that landed',
     () =>
@@ -572,11 +554,9 @@ describe('child run progress events', () => {
         const childRun = yield* Effect.promise(() =>
           startCodexChild(stoppedRunId, 'Run a stopped Codex child loop'),
         );
-        const handle = testDefaultSession().runs.getHandle(stoppedRunId);
-        expect(handle).toBeDefined();
-        handle?.interrupt();
+        expect(testDefaultSession().runs.getHandle(stoppedRunId)).toBeDefined();
 
-        yield* childRun.finalize({ outcome: RUN_OUTCOME.FAILED });
+        yield* childRun.finalize({ outcome: RUN_OUTCOME.CANCELLED });
 
         expect(testDefaultSession().runView(stoppedRunId)?.status).toBe(
           RUN_PHASE.CANCELLED,

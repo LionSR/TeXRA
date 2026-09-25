@@ -14,14 +14,6 @@ import {
 } from '@agent/runtime';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
-import { rootRunId as rootRunIdSignal } from '@cli/chat/tui/state/cliState';
-import { currentView } from '@cli/chat/tui/state/sessionView';
-import {
-  aggregateId as qualifyAggregateId,
-  AgentCategory,
-  USER_FOLLOW_UP_SUPPORT,
-  type RunId,
-} from '@shared/schemas';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { createDeferred } from '@test/support/asyncTestUtils';
@@ -31,7 +23,6 @@ import {
   createTempDirPlatform,
   useTempDirs,
 } from '@test/support/tempDirPlatform';
-import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 
 const cliRequire = createRequire(
   new URL('../../../packages/cli/package.json', import.meta.url),
@@ -495,63 +486,6 @@ describe('runChat signal ownership wiring', () => {
       restoreAgentRegistry();
       kill.mockRestore();
       exit.mockRestore();
-    }
-  }, 20_000);
-
-  it('releases only the current conversation on /clear and preserves history', async () => {
-    const exitTui = createDeferred();
-    mocks.waitUntilExit.mockReturnValue(exitTui.promise);
-    const controllerCreated = createDeferred();
-    const baseCreateController =
-      mocks.createChatSessionController.getMockImplementation();
-    mocks.createChatSessionController.mockImplementationOnce(
-      (...args: unknown[]) => {
-        controllerCreated.resolve();
-        return baseCreateController?.(...args);
-      },
-    );
-    const restoreAgentRegistry = await stubAgentRegistry();
-    const { runChat } = await import('@cli/chat/tui/runChatTui');
-    const runPromise = runChat(INTERACTIVE_CONTEXT, {});
-
-    try {
-      await controllerCreated.promise;
-      const session = testDefaultSession();
-      const ownRoot = 'c1ea40007007' as RunId;
-      const history = 'c1ea4041570f' as RunId;
-      // Both land the way the transcript summary's runs hydrate: top-level
-      // runs in the view, only one of them this chat's root.
-      session.publish(
-        [history, ownRoot].map((runId) => ({
-          type: 'run.start' as const,
-          aggregateId: qualifyAggregateId('run', runId),
-          identity: { kind: 'agent' as const, agent: 'assistant' },
-          userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
-          category: AgentCategory.ToolUse,
-          isRemote: false,
-          worktree: null,
-          parent: null,
-          approvalPolicy: null,
-          checkpointId: null,
-        })),
-      );
-      await vi.waitFor(() =>
-        expect(currentView().runs.has(ownRoot)).toBe(true),
-      );
-      rootRunIdSignal.set(ownRoot);
-      const released = vi.spyOn(session.transcripts, 'requestEviction');
-
-      const { getSlashCommandContext } =
-        mocks.createChatSessionController.mock.calls[0]![0];
-      getSlashCommandContext().resetSession();
-
-      await vi.waitFor(() =>
-        expect(released.mock.calls.map(([runId]) => runId)).toEqual([ownRoot]),
-      );
-    } finally {
-      exitTui.resolve();
-      await runPromise;
-      restoreAgentRegistry();
     }
   }, 20_000);
 });

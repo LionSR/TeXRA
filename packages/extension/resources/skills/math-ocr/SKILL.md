@@ -1,6 +1,6 @@
 ---
 name: math-ocr
-description: Convert handwritten or image-based mathematical content into notation-consistent LaTeX. Use when Codex needs to transcribe equations from notes, screenshots, whiteboards, or scans, reconcile ambiguous symbols against an existing document, or clean up OCR output into compilable mathematical LaTeX.
+description: Convert handwritten or image-based mathematical content into notation-consistent LaTeX. Use when you need to transcribe equations from notes, screenshots, whiteboards, or scans, reconcile ambiguous symbols against an existing document, or clean up OCR output into compilable mathematical LaTeX.
 ---
 
 # Math OCR

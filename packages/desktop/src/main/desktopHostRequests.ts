@@ -204,7 +204,7 @@ export function createDesktopHostRequests(
       // The controller re-reads the secret store after this returns.
       promptForApiKey: () =>
         Effect.gen(function* () {
-          postDesktopSettingsView(options.postToRenderer, 'models');
+          postDesktopSettingsView(options.postToRenderer, 'models/keys');
           yield* host.showInfoMessage(
             'Add a provider API key in Models, then use "Retry" on the request.',
           );
@@ -603,21 +603,31 @@ export function createDesktopHostRequests(
       Effect.sync(() =>
         postDesktopSettingsView(
           options.postToRenderer,
-          section === 'teams' ? 'agents' : section,
+          (
+            {
+              agents: 'agents/library',
+              teams: 'agents/teams',
+              models: 'models/models',
+            } as const
+          )[section],
           sessionType === 'toolUse' ? 'toolUse' : undefined,
         ),
       ),
     // Only the "ask the user for a key" step is host-specific: on the
     // desktop that means opening the Models tab rather than a modal prompt.
-    setApiKey: () =>
-      Effect.sync(() =>
-        postDesktopSettingsView(options.postToRenderer, 'models'),
-      ),
-    openApiKeyGuide: () =>
+    setApiKey: Effect.sync(() =>
+      postDesktopSettingsView(options.postToRenderer, 'models/keys'),
+    ),
+    openApiKeyGuide: Effect.suspend(() =>
       options.openExternalUrl('https://texra.ai/guide/configuration.html'),
+    ),
     openAgentSettings: (sessionType) =>
       Effect.sync(() =>
-        postDesktopSettingsView(options.postToRenderer, 'agents', sessionType),
+        postDesktopSettingsView(
+          options.postToRenderer,
+          'agents/library',
+          sessionType,
+        ),
       ),
     openCustomAgentDirectory: Effect.gen(function* () {
       const directory = yield* options.getCustomAgentDirectory();
@@ -629,7 +639,7 @@ export function createDesktopHostRequests(
     recheckDependencies: Effect.suspend(() => options.recheckTools()),
     openInstallGuide: () =>
       Effect.sync(() =>
-        postDesktopSettingsView(options.postToRenderer, 'tools'),
+        postDesktopSettingsView(options.postToRenderer, 'tools/tools'),
       ),
     gettingStarted: (action) =>
       action === 'openWalkthrough'

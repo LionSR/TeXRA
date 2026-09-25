@@ -3,6 +3,7 @@ import { Effect } from 'effect';
 import { describe, expect } from 'vitest';
 
 import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
+import { TraceEmitter } from '@agent/trace';
 import { AgentResume } from '@platform/interfaces';
 import { MESSAGE_TYPES } from '@shared/schemas';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
@@ -11,7 +12,8 @@ import {
   createTestSession,
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
-import { createRunTrace } from '@transcript';
+import { readRunTranscript } from '@transcript/runTranscript';
+import type { TranscriptRow } from '@ui/transcript';
 import { generateRunId } from '@utils/core';
 
 describe('session-owned transcripts and follow-up queues', () => {
@@ -28,28 +30,23 @@ describe('session-owned transcripts and follow-up queues', () => {
 
         publishTestRunStart(launching, runId);
         yield* launching.settlePublications();
-        const lease = yield* launching.transcripts.acquireRunResidency(runId);
-        const handle = createRunTrace(lease);
-        const detach = launching.attachRunTrace(handle.trace, runId);
-        yield* Effect.addFinalizer(() =>
-          Effect.sync(() => {
-            detach();
-            handle.dispose();
-          }),
-        );
-        const output = handle.trace.openRun(MESSAGE_TYPES.MODEL_RESPONSE);
+        const trace = new TraceEmitter();
+        const detach = launching.attachRunTrace(trace, runId);
+        yield* Effect.addFinalizer(() => Effect.sync(detach));
+        const output = trace.openRun(MESSAGE_TYPES.MODEL_RESPONSE);
         output.append('owned by launching session');
         output.finalize();
         yield* launching.settlePublications();
 
+        const rowText = (row: TranscriptRow) =>
+          row.kind === 'assistant' ? row.text.full : row.kind;
         expect(
-          launching.transcripts
-            .get(runId)
-            ?.toJSON()
-            .map((entry) => entry.text),
+          (yield* readRunTranscript(launching, runId)).rows.map(rowText),
         ).toEqual(['owned by launching session']);
-        expect(sibling.transcripts.get(runId)).toBeUndefined();
-        expect(testDefaultSession().transcripts.get(runId)).toBeUndefined();
+        expect((yield* readRunTranscript(sibling, runId)).rows).toEqual([]);
+        expect(
+          (yield* readRunTranscript(testDefaultSession(), runId)).rows,
+        ).toEqual([]);
       }),
   );
 
@@ -60,28 +57,22 @@ describe('session-owned transcripts and follow-up queues', () => {
       const runId = generateRunId();
       publishTestRunStart(session, runId);
       yield* session.settlePublications();
-      const lease = yield* session.transcripts.acquireRunResidency(runId);
-      const handle = createRunTrace(lease);
-      const detach = session.attachRunTrace(handle.trace, runId);
-      yield* Effect.addFinalizer(() =>
-        Effect.sync(() => {
-          detach();
-          handle.dispose();
-        }),
-      );
-      const output = handle.trace.openRun(MESSAGE_TYPES.MODEL_RESPONSE);
+      const trace = new TraceEmitter();
+      const detach = session.attachRunTrace(trace, runId);
+      yield* Effect.addFinalizer(() => Effect.sync(detach));
+      const output = trace.openRun(MESSAGE_TYPES.MODEL_RESPONSE);
       output.append('partial text');
       yield* session.settlePublications();
       // The `waiting` step parks the run and the loop commits the closure
       // facts in that batch (`loop/toolUse.ts`), so the partial text becomes
       // the row's final text instead of streaming forever.
-      session.publish(session.streamClosureFacts(runId));
+      session.publish(yield* session.streamClosureFacts(runId));
       yield* session.settlePublications();
-      const entries = yield* session.transcripts.readEntries(runId);
+      const { rows } = yield* readRunTranscript(session, runId);
       expect(
-        entries
-          .filter((entry) => entry.messageType === MESSAGE_TYPES.MODEL_RESPONSE)
-          .map((entry) => entry.text),
+        rows.flatMap((row) =>
+          row.kind === 'assistant' ? [row.text.full] : [],
+        ),
       ).toEqual(['partial text']);
     }),
   );

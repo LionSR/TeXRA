@@ -47,12 +47,6 @@
       "file": "packages/cli/src/chat/tui/forms/ConfigForm.tsx",
       "category": "production-dead",
       "kind": "exports",
-      "name": "isConfigResetInput"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/forms/ConfigForm.tsx",
-      "category": "production-dead",
-      "kind": "exports",
       "name": "settingEditKind"
     },
     {
@@ -590,12 +584,6 @@
       "name": "ActiveSkillSummarySchema"
     },
     {
-      "file": "src/shared/schemas/streamLogEntry.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "StreamLogEntrySchema"
-    },
-    {
       "file": "src/shared/schemas/subscriptionUsage.ts",
       "category": "production-dead",
       "kind": "exports",
@@ -624,12 +612,6 @@
       "category": "production-dead",
       "kind": "exports",
       "name": "summarizeSubagentFollowup"
-    },
-    {
-      "file": "src/shared/toolUse.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "normalizeToolUseData"
     },
     {
       "file": "src/shared/utils/dispatcher.ts",

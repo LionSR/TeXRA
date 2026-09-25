@@ -7,26 +7,25 @@ import {
   closeInfoPane,
   infoPane,
   openInfoPane,
-  rootRunPending,
   rootRunId,
-  claimedRunId,
   resetCliState,
   setTransientNotice,
   transientNotice,
-  expandedRuns,
   sessionListRows,
   sessionListRunIds,
+  actOnSurface,
 } from '@cli/chat/tui/state/cliState';
 import { allocateMiddleRows } from '@cli/chat/tui/appLayout';
 import {
   chatTuiCanStartRootRun,
+  runStopFacts,
   TuiSession,
 } from '@cli/chat/tui/state/sessionRunState';
 import { CliExitCode } from '@cli/runtime/exitCodes';
-import { focusedChildAcceptsFollowUps } from '@cli/chat/tui/state/sessionView';
+import { CLI_FOLLOW_UP_HOST } from '@cli/chat/tui/state/sessionView';
 import { resolveChildListTarget } from '@cli/chat/tui/state/childControls';
 import { RUN_PHASE, type RunId } from '@shared/schemas';
-import type { RunView } from '@shared/session/sessionView';
+import { acceptsFollowUp, type RunView } from '@shared/session/sessionView';
 import {
   bindTestSessionView,
   makeRunView,
@@ -77,14 +76,9 @@ describe('focus over the session view', () => {
     seedView(familyView({ [child2]: { forceExpanded: true } }));
     rootRunId.set(root);
     expect(sessionListRunIds.get()).toEqual([root]);
-    expandedRuns.set(new Map([[root, true]]));
+    actOnSurface({ kind: 'expand', runId: root, expanded: true });
     expect(sessionListRunIds.get()).toEqual([root, child2, grandchild, child1]);
-    expandedRuns.set(
-      new Map([
-        [root, true],
-        [child2, false],
-      ]),
-    );
+    actOnSurface({ kind: 'expand', runId: child2, expanded: false });
     expect(sessionListRunIds.get()).toEqual([root, child2, grandchild, child1]);
     expect(
       sessionListRows
@@ -107,16 +101,19 @@ describe('focus over the session view', () => {
   it('routes composer follow-ups only to in-flight plain tool-use children', () => {
     const view = familyView({
       [child1]: { status: RUN_PHASE.COMPLETED },
-      [child2]: { identity: { kind: 'process', tool: 'bash' } },
+      [child2]: {
+        identity: { kind: 'process', tool: 'bash' },
+        followUpSupport: 'unsupported',
+      },
     });
     const stream = (id: RunId): RunView => {
       const found = view.runs.get(id);
       if (!found) throw new Error(`missing ${id}`);
       return found;
     };
-    expect(focusedChildAcceptsFollowUps(stream(grandchild))).toBe(true);
-    expect(focusedChildAcceptsFollowUps(stream(child1))).toBe(false);
-    expect(focusedChildAcceptsFollowUps(stream(child2))).toBe(false);
+    expect(acceptsFollowUp(stream(grandchild), CLI_FOLLOW_UP_HOST)).toBe(true);
+    expect(acceptsFollowUp(stream(child1), CLI_FOLLOW_UP_HOST)).toBe(false);
+    expect(acceptsFollowUp(stream(child2), CLI_FOLLOW_UP_HOST)).toBe(false);
   });
 });
 
@@ -151,6 +148,7 @@ describe('CLI TUI row allocation', () => {
     {
       name: 'keeps foreground approval and form surfaces inside the middle row budget',
       options: {
+        footerRows: 5,
         foregroundOpen: true,
         reverseSearchOpen: false,
         rows: 24,
@@ -162,8 +160,8 @@ describe('CLI TUI row allocation', () => {
     {
       name: 'returns disabled input rows to tiny foreground surfaces',
       options: {
+        footerRows: 2,
         foregroundOpen: true,
-        inputVisible: false,
         reverseSearchOpen: false,
         rows: 10,
         slashPaletteOpen: false,
@@ -174,6 +172,7 @@ describe('CLI TUI row allocation', () => {
     {
       name: 'can cap compact foreground surfaces on tall terminals',
       options: {
+        footerRows: 5,
         foregroundMaxRows: 12,
         foregroundOpen: true,
         reverseSearchOpen: false,
@@ -186,6 +185,7 @@ describe('CLI TUI row allocation', () => {
     {
       name: 'uses the whole middle region for the transcript without foreground UI',
       options: {
+        footerRows: 5,
         foregroundOpen: false,
         reverseSearchOpen: false,
         rows: 24,
@@ -197,6 +197,7 @@ describe('CLI TUI row allocation', () => {
     {
       name: 'reserves queued follow-up panel rows above the stable input chrome',
       options: {
+        footerRows: 5,
         foregroundOpen: false,
         queuedFollowUpPanelRows: 3,
         reverseSearchOpen: false,
@@ -209,6 +210,7 @@ describe('CLI TUI row allocation', () => {
     {
       name: 'accounts for capped static transcript rows above the stable input chrome',
       options: {
+        footerRows: 5,
         foregroundOpen: false,
         queuedFollowUpPanelRows: 3,
         reverseSearchOpen: false,
@@ -230,6 +232,7 @@ describe('CLI TUI row allocation', () => {
     {
       name: 'reserves rows for reverse-search input chrome',
       options: {
+        footerRows: 5,
         foregroundOpen: false,
         reverseSearchOpen: true,
         rows: 24,
@@ -241,6 +244,7 @@ describe('CLI TUI row allocation', () => {
     {
       name: 'returns former header rows to the transcript when slash palette is open',
       options: {
+        footerRows: 5,
         foregroundOpen: false,
         reverseSearchOpen: false,
         rows: 24,
@@ -313,26 +317,26 @@ describe('CLI TUI row allocation', () => {
     expect(session.runCompleted).toBe(false);
     expect(session.stopRequested).toBe(false);
     expect(chatTuiCanStartRootRun(session)).toBe(false);
-    expect(rootRunPending.get()).toBe(true);
-    expect(claimedRunId.get()).toBeUndefined();
+    expect(runStopFacts.get().runPending).toBe(true);
+    expect(runStopFacts.get().runId).toBeUndefined();
   });
 
   it('publishes the run-control run id from the session itself', () => {
     const session = new TuiSession(() => undefined);
     session.markRunPending(Effect.never);
-    expect(claimedRunId.get()).toBeUndefined();
+    expect(runStopFacts.get().runId).toBeUndefined();
 
-    // No publish call accompanies this write: the session owns the mirror,
-    // so a caller cannot leave the Ctrl-C hint reading a stale claim (#8273).
+    // The claim lives in the signal renders read, so no write can leave the
+    // Ctrl-C hint reading a stale claim (#8273).
     session.runId = root;
 
-    expect(claimedRunId.get()).toBe(root);
-    expect(rootRunPending.get()).toBe(true);
+    expect(runStopFacts.get().runId).toBe(root);
+    expect(runStopFacts.get().runPending).toBe(true);
 
     session.markRunCompleted();
 
-    expect(claimedRunId.get()).toBe(root);
-    expect(rootRunPending.get()).toBe(false);
+    expect(runStopFacts.get().runId).toBe(root);
+    expect(runStopFacts.get().runPending).toBe(false);
   });
 
   it('clears stale resume ids when clearing chat session run state', () => {

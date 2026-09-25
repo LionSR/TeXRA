@@ -7,18 +7,16 @@ import { Box, Text } from 'ink';
 
 import { TOOL_OUTPUT_CORNER } from '@cli/tui/ui/glyphs';
 import { clipToWidth } from '@cli/runtime/terminalText';
-import type { RunLabels } from '@shared/tools/executionsDisplay';
 import type { ToolRow } from '@ui/transcript';
 
 import { DiffView } from '../render/DiffView';
 import {
+  PATCH_PREVIEW_INDENT,
   toolUseMarginBottomRows,
   toolUseStyledLines,
   type ToolDisplayLine,
 } from './toolRenderers';
 
-/** Combined left padding of the two nested boxes wrapping the patch diff. */
-const PATCH_PREVIEW_INDENT = 4;
 const PATCH_PREVIEW_FALLBACK_WIDTH = 80;
 
 function PatchPreview({
@@ -118,19 +116,14 @@ function toolDisplayViewport(
 // re-rendering every settled tool row in the live region.
 export const ToolUseRow = memo(function ToolUseRow({
   maxRows,
-  subagentRunLabels,
   toolRow,
   width,
 }: {
   readonly maxRows?: number;
-  readonly subagentRunLabels?: RunLabels;
   readonly toolRow: ToolRow;
   readonly width?: number;
 }): React.JSX.Element {
-  const lines = toolUseStyledLines(toolRow, {
-    runLabels: subagentRunLabels,
-    width,
-  });
+  const lines = toolUseStyledLines(toolRow, { width });
   const viewport = toolDisplayViewport(lines, maxRows);
   return (
     <Box

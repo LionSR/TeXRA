@@ -4,118 +4,99 @@ import { TraceEmitter } from '@agent/trace';
 import {
   MESSAGE_TYPES,
   RUN_OUTCOME,
-  STREAM_LOG_ENTRY_TYPES,
   RUN_PHASE,
   TOOL_CALL_STATUS,
-  type StreamLogEntry,
   type RunId,
-  type TaskGroup,
 } from '@shared/schemas';
-import { upsertTaskGroupFromStreamLog } from '@shared/runs/taskGroupProjection';
-import { StreamLog } from '@shared/session/traceEntries';
-import { setupPlatform } from '@test/support/setupPlatform';
-import {
-  createTempDirPlatform,
-  useTempDirs,
-} from '@test/support/tempDirPlatform';
+import { openWork } from '@shared/session/transcriptReads';
 import { attachTestTranscriptFold } from '@test/support/sessionTestUtils';
-import { isObject } from '@utils/core';
+import type { TranscriptRow } from '@ui/transcript';
 
-/** A recorder attached to a fresh ephemeral store, plus its persisted rows. */
+/** A fold attached to a fresh trace, plus its rows, groups and open work. */
 function attachRecorder(runId: RunId = 'stream:test' as RunId) {
   const trace = new TraceEmitter();
-  const store = new StreamLog();
-
-  const recorder = attachTestTranscriptFold(trace, runId, store);
-  const rows = (): StreamLogEntry[] => store.toJSON();
+  const recorder = attachTestTranscriptFold(trace, runId);
+  const rows = recorder.rows;
   return {
     trace,
     settlePhase: recorder.settlePhase,
     rows,
-    row: (id: string | undefined): StreamLogEntry | undefined =>
-      rows().find((entry) => entry.id === id),
+    row: (id: string | undefined): TranscriptRow | undefined =>
+      rows().find((row) => row.id === id),
+    group: (id: string | undefined) =>
+      recorder.transcript().taskGroups.find((group) => group.id === id),
+    open: () => openWork(recorder.transcript()),
   };
 }
 
-/** A persisted row's `data` payload, or {} when the row carries none. */
-function dataOf(entry: StreamLogEntry | undefined): Record<string, unknown> {
-  return isObject(entry?.data) ? entry.data : {};
+/** The model-response rows' texts. */
+function assistantRows(rows: readonly TranscriptRow[]) {
+  return rows.flatMap((row) => (row.kind === 'assistant' ? [row] : []));
 }
 
 describe('attachTestTranscriptFold RunPhase-native group rows (issue #7993)', () => {
-  it("writes GROUP_START's data.status as RunPhase.RUNNING", () => {
-    const { trace, row } = attachRecorder();
+  it('opens a started stage as a RunPhase.RUNNING group', () => {
+    const { trace, group, open } = attachRecorder();
 
     const stage = trace.openStage('r0', { kind: 'round' });
 
-    const startEntry = row(stage.id);
-
-    expect(startEntry?.type).toBe(STREAM_LOG_ENTRY_TYPES.GROUP_START);
-    expect(dataOf(startEntry).status).toBe(RUN_PHASE.RUNNING);
+    expect(group(stage.id)?.status).toBe(RUN_PHASE.RUNNING);
+    expect(open()).toEqual([{ kind: 'stage', id: stage.id }]);
   });
 
-  it('defaults GROUP_END to the literal RunOutcome.COMPLETED', () => {
-    const { trace, row } = attachRecorder();
+  it('defaults a stage end to the literal RunOutcome.COMPLETED', () => {
+    const { trace, group, open } = attachRecorder();
 
     const stage = trace.openStage('r0', { kind: 'round' });
     stage.end();
 
-    const endEntry = row(stage.id);
-
-    expect(endEntry?.type).toBe(STREAM_LOG_ENTRY_TYPES.GROUP_END);
-    expect(dataOf(endEntry).status).toBe(RUN_OUTCOME.COMPLETED);
+    expect(group(stage.id)?.status).toBe(RUN_OUTCOME.COMPLETED);
+    expect(open()).toEqual([]);
   });
 
   it('records a failed stage end as RunOutcome.FAILED', () => {
-    const { trace, row } = attachRecorder();
+    const { trace, group } = attachRecorder();
 
     const stage = trace.openStage('r0', { kind: 'round' });
     stage.end(RUN_OUTCOME.FAILED);
 
-    const endEntry = row(stage.id);
-
-    expect(dataOf(endEntry).status).toBe(RUN_OUTCOME.FAILED);
+    expect(group(stage.id)?.status).toBe(RUN_OUTCOME.FAILED);
   });
 });
 
 describe('attachTestTranscriptFold stage kind (issue #7267)', () => {
-  it("preserves a round stage's kind onto its persisted GROUP_END row", () => {
-    const { trace, row } = attachRecorder();
+  it("preserves a round stage's kind onto its closed group", () => {
+    const { trace, group } = attachRecorder();
 
     const round = trace.openStage('r0', { kind: 'round', index: 0 });
     round.end();
 
-    const roundEntry = row(round.id);
-
-    expect(roundEntry?.type).toBe(STREAM_LOG_ENTRY_TYPES.GROUP_END);
-    expect(dataOf(roundEntry).kind).toBe('round');
+    expect(group(round.id)).toMatchObject({
+      kind: 'round',
+      status: RUN_OUTCOME.COMPLETED,
+    });
   });
+});
 
-  it('persists and projects phase attempt ownership through stage end', () => {
-    const { trace, row } = attachRecorder();
-    trace.emit({
-      type: 'workflow.plan',
-      attemptId: 'attempt-2',
-      phases: [{ title: 'Review' }],
-      tasks: [],
+describe('attachTestTranscriptFold undecodable compaction payload', () => {
+  it('writes an error row naming the diagnostic instead of dropping it', () => {
+    const { trace, rows } = attachRecorder();
+
+    trace.info('Compacting context', {
+      messageType: MESSAGE_TYPES.CONTEXT_COMPACTION_ACTIVITY,
+      data: { activity: 'context_compaction', state: 'started' },
     });
 
-    const phase = trace.openStage('Review', {
-      kind: 'phase',
-      index: 0,
-      total: 1,
-    });
-    phase.end();
-
-    const entry = row(phase.id)!;
-    expect(entry).toMatchObject({
-      type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
-      data: { attemptId: 'attempt-2' },
-    });
-    const groups: TaskGroup[] = [];
-    expect(upsertTaskGroupFromStreamLog(groups, new Map(), entry)).toBe(true);
-    expect(groups).toMatchObject([
-      { id: phase.id, attemptId: 'attempt-2', status: RUN_PHASE.COMPLETED },
+    expect(rows()).toMatchObject([
+      {
+        kind: 'error',
+        level: 'error',
+        messageType: MESSAGE_TYPES.ERROR,
+        summary: { full: 'Malformed contextCompactionActivity payload' },
+        details: [
+          { key: 'message', value: expect.stringContaining('operationId') },
+        ],
+      },
     ]);
   });
 });
@@ -133,12 +114,10 @@ describe('attachTestTranscriptFold response.finalized (issue #7086)', () => {
     const completedText = 'Done \\checkmark\n'.repeat(4000);
     trace.responseFinalized(completedText);
 
-    const modelResponseEntries = rows().filter(
-      (e) => e.messageType === MESSAGE_TYPES.MODEL_RESPONSE,
-    );
-    expect(modelResponseEntries).toHaveLength(1);
-    expect(modelResponseEntries[0]?.id).toBe(output.id);
-    expect(modelResponseEntries[0]?.text).toBe(completedText);
+    const responses = assistantRows(rows());
+    expect(responses).toHaveLength(1);
+    expect(responses[0]?.id).toBe(output.id);
+    expect(responses[0]?.text.full).toBe(completedText);
   });
 
   it('appends a fresh MODEL_RESPONSE entry when the round never streamed', () => {
@@ -146,11 +125,9 @@ describe('attachTestTranscriptFold response.finalized (issue #7086)', () => {
 
     trace.responseFinalized('The answer is 2.');
 
-    const modelResponseEntries = rows().filter(
-      (e) => e.messageType === MESSAGE_TYPES.MODEL_RESPONSE,
-    );
-    expect(modelResponseEntries).toHaveLength(1);
-    expect(modelResponseEntries[0]?.text).toBe('The answer is 2.');
+    const responses = assistantRows(rows());
+    expect(responses).toHaveLength(1);
+    expect(responses[0]?.text.full).toBe('The answer is 2.');
   });
 
   it('does not let an earlier round leak its stream id into a later round', () => {
@@ -169,15 +146,13 @@ describe('attachTestTranscriptFold response.finalized (issue #7086)', () => {
     trace.responseFinalized('Final answer.');
     round1.end();
 
-    const modelResponseEntries = rows().filter(
-      (e) => e.messageType === MESSAGE_TYPES.MODEL_RESPONSE,
-    );
-    expect(modelResponseEntries.map((e) => e.text)).toEqual([
+    const responses = assistantRows(rows());
+    expect(responses.map((row) => row.text.full)).toEqual([
       'Let me check that.',
       'Final answer.',
     ]);
-    expect(modelResponseEntries[0]?.id).toBe(output.id);
-    expect(modelResponseEntries[1]?.id).not.toBe(output.id);
+    expect(responses[0]?.id).toBe(output.id);
+    expect(responses[1]?.id).not.toBe(output.id);
   });
 
   it('does not let an earlier invocation in the same round stage overwrite a later finalized response', () => {
@@ -198,21 +173,19 @@ describe('attachTestTranscriptFold response.finalized (issue #7086)', () => {
     trace.responseFinalized('The file contains the theorem statement.');
     round.end();
 
-    const modelResponseEntries = rows().filter(
-      (e) => e.messageType === MESSAGE_TYPES.MODEL_RESPONSE,
-    );
-    expect(modelResponseEntries.map((e) => e.text)).toEqual([
+    const responses = assistantRows(rows());
+    expect(responses.map((row) => row.text.full)).toEqual([
       'I will inspect the file.',
       'The file contains the theorem statement.',
     ]);
-    expect(modelResponseEntries[1]?.id).not.toBe(modelResponseEntries[0]?.id);
+    expect(responses[1]?.id).not.toBe(responses[0]?.id);
   });
 });
 
 describe('attachTestTranscriptFold workflow task state', () => {
   it('assigns source settlement order before terminal status projection', () => {
     const runId = 'stream:terminal-settlement' as RunId;
-    const { trace, settlePhase, row, rows } = attachRecorder(runId);
+    const { trace, settlePhase, row, rows, open } = attachRecorder(runId);
 
     const phase = trace.openStage('Audit', { kind: 'phase' });
     const response = trace.openRun(MESSAGE_TYPES.MODEL_RESPONSE);
@@ -234,21 +207,27 @@ describe('attachTestTranscriptFold workflow task state', () => {
 
     settlePhase(RUN_PHASE.CANCELLED);
 
-    expect(row(phase.id)).toMatchObject({
-      settlementSeqNo: 1,
-    });
-    expect(row(response.id)).toMatchObject({
-      settlementSeqNo: 2,
-      data: { status: 'completed' },
-    });
+    // The phase row settled first (1); the response stream, whose text only
+    // ever streamed live, settles second (2) and has no row of its own.
+    expect(row(phase.id)).toMatchObject({ settlementSeqNo: 1 });
+    expect(row(response.id)).toBeUndefined();
     expect(row('tool:pending')).toMatchObject({
       settlementSeqNo: 3,
-      data: {
+      log: {
         status: 'failed',
         error: 'The run ended before this tool completed.',
       },
     });
     expect(row('task:planned')).not.toHaveProperty('settlementSeqNo');
+    expect(open()).toEqual([
+      { kind: 'stage', id: phase.id },
+      {
+        kind: 'call',
+        id: 'task:planned',
+        stageId: undefined,
+        call: { id: 'planned', label: 'Audit later', status: 'queued' },
+      },
+    ]);
 
     // The terminal status is the authoritative boundary for recorder-owned
     // runs/tools. Late provider cleanup cannot mutate a row already made
@@ -263,14 +242,10 @@ describe('attachTestTranscriptFold workflow task state', () => {
       status: TOOL_CALL_STATUS.COMPLETED,
       result: { toolName: 'read', output: 'late result' },
     });
-    expect(row(response.id)).toMatchObject({
-      settlementSeqNo: 2,
-      text: '',
-      data: { status: 'completed' },
-    });
+    expect(row(response.id)).toBeUndefined();
     expect(row('tool:pending')).toMatchObject({
       settlementSeqNo: 3,
-      data: {
+      log: {
         status: 'failed',
         error: 'The run ended before this tool completed.',
       },
@@ -288,31 +263,21 @@ describe('attachTestTranscriptFold workflow task state', () => {
     });
     expect(row('task:planned')).toMatchObject({
       settlementSeqNo: 4,
-      data: { status: 'skipped', reason: 'not-reached' },
+      call: { status: 'skipped', reason: 'not-reached' },
     });
 
     settlePhase(RUN_PHASE.RUNNING);
     trace.responseFinalized('Fresh turn response');
-    const responses = rows().filter(
-      (entry) => entry.messageType === MESSAGE_TYPES.MODEL_RESPONSE,
-    );
+    const responses = assistantRows(rows());
     expect(responses).toMatchObject([
-      {
-        id: response.id,
-        settlementSeqNo: 2,
-        text: '',
-      },
-      {
-        settlementSeqNo: 5,
-        text: 'Fresh turn response',
-      },
+      { settlementSeqNo: 5, text: { full: 'Fresh turn response' } },
     ]);
-    expect(responses[1]?.id).not.toBe(response.id);
+    expect(responses[0]?.id).not.toBe(response.id);
   });
 
   it('closes source rows at waiting and accepts fresh rows after resume', () => {
     const runId = 'stream:waiting-settlement' as RunId;
-    const { trace, settlePhase, rows } = attachRecorder(runId);
+    const { trace, settlePhase, rows, open } = attachRecorder(runId);
 
     const waitingResponse = trace.openRun(MESSAGE_TYPES.MODEL_RESPONSE);
     waitingResponse.append('Waiting response');
@@ -323,19 +288,15 @@ describe('attachTestTranscriptFold workflow task state', () => {
     });
     settlePhase(RUN_PHASE.WAITING);
 
+    // The live-only response settles (1) without a row; the card fails (2).
     expect(rows()).toMatchObject([
-      {
-        id: waitingResponse.id,
-        settlementSeqNo: 1,
-        text: '',
-        data: { status: 'completed' },
-      },
       {
         id: 'tool:waiting',
         settlementSeqNo: 2,
-        data: { status: 'failed' },
+        toolUse: { status: 'failed' },
       },
     ]);
+    expect(open()).toEqual([]);
 
     settlePhase(RUN_PHASE.RUNNING);
     const resumedResponse = trace.openRun(MESSAGE_TYPES.MODEL_RESPONSE);
@@ -354,28 +315,23 @@ describe('attachTestTranscriptFold workflow task state', () => {
 
     expect(rows()).toMatchObject([
       {
-        id: waitingResponse.id,
-        settlementSeqNo: 1,
-        text: '',
-        data: { status: 'completed' },
-      },
-      {
         id: 'tool:waiting',
         settlementSeqNo: 2,
-        data: { status: 'failed' },
+        toolUse: { status: 'failed' },
       },
       {
         id: resumedResponse.id,
         settlementSeqNo: 3,
-        text: 'Resumed response',
-        data: { status: 'completed' },
+        text: { full: 'Resumed response' },
+        streaming: false,
       },
       {
         id: 'tool:resumed',
         settlementSeqNo: 4,
-        data: { status: 'completed' },
+        toolUse: { status: 'completed' },
       },
     ]);
+    expect(waitingResponse.id).not.toBe(resumedResponse.id);
   });
 
   it('updates one typed task entry from planned to completed', () => {
@@ -409,130 +365,16 @@ describe('attachTestTranscriptFold workflow task state', () => {
     expect(rows()).toHaveLength(1);
     expect(rows()[0]).toMatchObject({
       id: 'task-card',
-      type: STREAM_LOG_ENTRY_TYPES.LOG,
+      kind: 'workflowTask',
       level: 'info',
       groupId: 'phase-audit',
       messageType: MESSAGE_TYPES.WORKFLOW_TASK,
-      text: 'Audit core',
-      data: {
+      call: {
+        label: 'Audit core',
         status: 'completed',
-        model: 'gpt56',
         durationMs: 12_000,
         costUsd: 0.03,
       },
-    });
-  });
-});
-
-describe('attachTestTranscriptFold active skills', () => {
-  const tempDirs = useTempDirs();
-  setupPlatform(() => createTempDirPlatform('texra-recorder-', tempDirs));
-
-  it('persists only sanitized summaries and lets the latest empty snapshot clear state', () => {
-    const { trace, rows } = attachRecorder();
-
-    trace.emit({
-      type: 'skills.snapshot',
-      skills: [
-        {
-          name: 'proof-audit',
-          description:
-            'Review   proofs from /Users/researcher/private/checklist.md with API_KEY=secret-value.',
-          source: 'project',
-        },
-      ],
-    });
-    trace.emit({ type: 'skills.snapshot', skills: [] });
-
-    const records = rows().filter(
-      (entry) => entry.messageType === MESSAGE_TYPES.ACTIVE_SKILLS,
-    );
-    expect(records).toHaveLength(2);
-    expect(records[0]?.data).toStrictEqual({
-      skills: [
-        {
-          name: 'proof-audit',
-          description: 'Details available on activation.',
-          source: 'project',
-        },
-      ],
-    });
-    expect(JSON.stringify(records[0]?.data)).not.toContain('/Users/researcher');
-    expect(JSON.stringify(records[0]?.data)).not.toContain('baseDir');
-    expect(JSON.stringify(records[0]?.data)).not.toContain('instructions');
-    expect(records.at(-1)?.data).toStrictEqual({ skills: [] });
-  });
-
-  it('redacts summaries before truncating the recorded projection', async () => {
-    const trace = new TraceEmitter();
-    const runId = 'stream:skill-redaction' as RunId;
-    const store = new StreamLog();
-
-    const recorder = attachTestTranscriptFold(trace, runId, store);
-    const descriptionPrefix = `${'Review credentials carefully. '.padEnd(168, 'a')} `;
-    const providerKey = 'sk-proj-redaction-example-1234567890abcdef';
-
-    trace.emit({
-      type: 'skills.snapshot',
-      skills: [
-        {
-          name: 'credential-check',
-          description: `${descriptionPrefix}${providerKey}`,
-          source: 'project',
-        },
-      ],
-    });
-    recorder.unsubscribe();
-    const persisted = store
-      .toJSON()
-      .find((entry) => entry.messageType === MESSAGE_TYPES.ACTIVE_SKILLS)?.data;
-    expect(persisted).toStrictEqual({
-      skills: [
-        {
-          name: 'credential-check',
-          description: `${descriptionPrefix}[redacted]`,
-          source: 'project',
-        },
-      ],
-    });
-    expect(JSON.stringify(persisted)).not.toContain('sk-proj-red');
-  });
-
-  it('records fallback summaries for ANSI-only and controls-only descriptions', () => {
-    const { trace, rows } = attachRecorder();
-
-    trace.emit({
-      type: 'skills.snapshot',
-      skills: [
-        {
-          name: 'ansi-only',
-          description: '\u001b[31m\u001b[0m',
-          source: 'project',
-        },
-        {
-          name: 'controls-only',
-          description: '\u0001\u0002\u007f\u009b',
-          source: 'project',
-        },
-      ],
-    });
-
-    expect(
-      rows().find((entry) => entry.messageType === MESSAGE_TYPES.ACTIVE_SKILLS)
-        ?.data,
-    ).toStrictEqual({
-      skills: [
-        {
-          name: 'ansi-only',
-          description: 'Details available on activation.',
-          source: 'project',
-        },
-        {
-          name: 'controls-only',
-          description: 'Details available on activation.',
-          source: 'project',
-        },
-      ],
     });
   });
 });

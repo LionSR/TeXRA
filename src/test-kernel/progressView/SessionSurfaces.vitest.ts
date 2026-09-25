@@ -169,11 +169,13 @@ describe('session Surface ownership', () => {
     );
     view.set(emptySessionView(KEY));
     await Promise.resolve();
-    expect(
-      storage.get<ReturnType<typeof PersistedSurfaceSchema.parse>>(
-        `surface:${KEY}`,
-      ).drafts,
-    ).toEqual([]);
+    const persisted = storage.get<
+      ReturnType<typeof PersistedSurfaceSchema.parse>
+    >(`surface:${KEY}`);
+    expect(persisted.drafts).toEqual([]);
+    // The selection is decided by the same prune, so a raw read of the
+    // field never names a run the view no longer holds.
+    expect(persisted.selected).toBeNull();
   });
 
   it('retains the complete draft on rejected admission and clears only an unchanged accepted draft', async () => {

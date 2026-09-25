@@ -34,14 +34,11 @@ const ActiveDraftContext = createContext<ActiveDraftRegistry | undefined>(
 );
 
 export function ActiveDraftScope(props: {
-  readonly active: boolean;
   readonly children: ReactNode;
   readonly registry: ActiveDraftRegistry;
 }): React.JSX.Element {
   return (
-    <ActiveDraftContext.Provider
-      value={props.active ? props.registry : undefined}
-    >
+    <ActiveDraftContext.Provider value={props.registry}>
       {props.children}
     </ActiveDraftContext.Provider>
   );

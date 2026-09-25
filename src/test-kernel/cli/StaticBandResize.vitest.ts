@@ -9,7 +9,6 @@ import stripAnsi from 'strip-ansi';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 // Local imports
-import type { TuiRepaintOptions } from '@cli/chat/tui/render/tuiViewportController';
 import type { SessionMeta } from '@cli/chat/tui/state/cliState';
 import type { RunId } from '@shared/schemas';
 import {
@@ -234,79 +233,6 @@ describe('Static band resize', () => {
       expect(bandWidths).not.toContain(38);
       expect(occurrences(visibleFrame, '{ T } TeXRA')).toBe(1);
       expect(occurrences(visibleFrame, `› ${prompt}`)).toBe(1);
-    } finally {
-      inst.unmount();
-      cliState.resetCliState();
-    }
-  });
-
-  it('replaces finalized run rows when subagent labels arrive', async () => {
-    const {
-      ink,
-      React,
-      cliState,
-      clearTerminal,
-      StaticConversationTranscript,
-    } = await loadTranscriptStack();
-    const { createElement } = React;
-    const runId = 'run-label-stream' as RunId;
-    const childRunId = 'late-subagent-id';
-    const runPath = `/executions/${childRunId}/report`;
-    const runEntry = completedToolEntry({
-      id: 'run-view',
-      toolName: 'executions',
-      input: { path: runPath },
-      outputText: 'report',
-      settlementSeqNo: 1,
-    });
-
-    seedTranscript(cliState, runId, '/tmp/run-label-proof', [runEntry]);
-
-    const inkRef: {
-      current?: { repaint(options: TuiRepaintOptions): void };
-    } = {};
-    function App({ labels }: { labels: ReadonlyMap<string, string> }): unknown {
-      // The render key is label-agnostic, as in ConversationRegion: the
-      // transcript state owns the label-change repaint through its epoch.
-      const renderKey = 'run-label-render';
-      return createElement(StaticConversationTranscript, {
-        onRenderKeyChange: () => {
-          inkRef.current?.repaint({
-            clearScrollback: true,
-            preserveStatic: false,
-          });
-        },
-        ownerKey: 'run-label-owner',
-        renderKey,
-        scrollbackRunId: runId,
-        subagentRunLabels: labels,
-        width: 80,
-      });
-    }
-
-    const { instance: inst, stdout: out } = renderWithTerminalSize(
-      ink,
-      createElement(App, { labels: new Map() }),
-      80,
-      12,
-    );
-    inkRef.current = inst;
-
-    try {
-      await expectEventually(() => out.output.includes(runPath));
-
-      out.output = '';
-      inst.rerender(
-        createElement(App, {
-          labels: new Map([[childRunId, 'reviewer']]),
-        }),
-      );
-
-      await expectEventually(() => out.output.includes(clearTerminal));
-      const frame = stripAnsi(latestRepaintFrame(out.output, clearTerminal));
-      expect(frame).toContain('executions (view: reviewer/report)');
-      expect(frame).not.toContain(runPath);
-      expect(occurrences(frame, 'executions (view: reviewer/report)')).toBe(1);
     } finally {
       inst.unmount();
       cliState.resetCliState();

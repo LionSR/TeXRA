@@ -27,6 +27,7 @@ import { it } from '@effect/vitest';
 import { MODEL_CONFIGS } from 'llm-zoo';
 import { TestClock } from 'effect/testing';
 import { describe, expect } from 'vitest';
+import { z } from 'zod';
 import {
   TurnResultSchema,
   type Model,
@@ -66,7 +67,9 @@ import { TraceEmitter, type AgentEvent, type AgentTrace } from '@agent/trace';
 import { DatabaseWriteFailed } from '@shared/session/database';
 import {
   AgentCategory,
+  DIAGNOSTIC_TYPE_VALIDATION_ERROR,
   EMPTY_RUN_USAGE_TOTALS,
+  formatZodIssuesForDiagnostics,
   type RunId,
   type ToolResult,
 } from '@shared/schemas';
@@ -187,7 +190,6 @@ function boundModel(): BoundModel {
     supportsForcedToolChoice: true,
     wireRouteKey: 'wire',
     modelRetryRouteKey: 'wire:gpt54',
-    routedOnKimiCode: false,
     backgroundCapable: false,
   };
 }
@@ -286,7 +288,6 @@ function agentRun(
       { agentName: config.agent, agentCategory: setting.agentCategory },
     ),
     callbacks: { onModelChanged: () => undefined },
-    interrupt: () => undefined,
   };
 }
 
@@ -508,6 +509,39 @@ describe('tool-use dispatch', () => {
       expect(delivered?.text).toMatch(
         /malformed_attachment: Tool returned an invalid result/i,
       );
+      yield* kit.session.dispose();
+    }),
+  );
+
+  it.live('settles a tool-input validation failure as a tool error', () =>
+    Effect.gen(function* () {
+      // An empty object against a required array: the issue names no
+      // `received` value, and the settled row must still be JSON.
+      const parsed = z.object({ files: z.array(z.string()) }).safeParse({});
+      const invalidInputTool: ITool = {
+        definition: { name: 'texcount', description: 'texcount' },
+        call: () =>
+          Effect.succeed<ToolResult>({
+            status: 'error',
+            error: 'Invalid input',
+            diagnostics: {
+              type: DIAGNOSTIC_TYPE_VALIDATION_ERROR,
+              formatted: formatZodIssuesForDiagnostics(
+                parsed.error?.issues ?? [],
+              ),
+            },
+          }),
+      };
+      const kit = yield* openDispatch({
+        tools: { texcount: invalidInputTool },
+        calls: [makeCall('c1', 'texcount', {})],
+      });
+
+      const { state } = yield* dispatch(kit);
+
+      const [delivered] = deliveredResults(state);
+      expect(delivered?.status).toBe('error');
+      expect(delivered?.text).toMatch(/Invalid input/);
       yield* kit.session.dispose();
     }),
   );

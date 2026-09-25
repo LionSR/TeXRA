@@ -24,6 +24,7 @@ import {
   OwnerIdSchema,
   PermissionPayloadSchema,
   PlanSchema,
+  requestParksItsCaller,
   RoundKeyedOutputSidecarValueSchemas,
   RunIdentitySchema,
   RunFlowSchema,
@@ -37,8 +38,10 @@ import {
   TokenUsageStatsSchema,
   UserFollowUpSupportSchema,
   WorktreeInfoSchema,
+  type PermissionPayload,
   type RunId,
 } from '@shared/schemas';
+import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import { RUN_STATUS_TONE } from '@shared/runs/runStatusDisplay';
 import type { WorkflowRunModel } from '@shared/runs/workflowRunModel';
 import type { TranscriptRow } from '@ui/transcript';
@@ -61,10 +64,10 @@ const SessionKeySchema = z.string().min(1);
  * element types are stated rather than re-declared here.
  */
 const TranscriptViewSchema = z.object({
-  /** `projectTranscriptRow` over every entry plus the compaction rows, in
-   *  wire append order. */
+  /** The transcript fold's rows (`transcriptFold.ts`) plus the compaction
+   *  rows, in first-appearance order. */
   rows: z.array(z.custom<TranscriptRow>()),
-  /** `upsertTaskGroupFromStreamLog` over the group entries. */
+  /** `taskGroupOnStage` over the stage events. */
   taskGroups: z.array(TaskGroupSchema),
   /** The contiguous leading prefix of rows whose finalizing event has
    *  folded: what an append-only scrollback may print. */
@@ -153,8 +156,9 @@ const RunViewCommonSchema = z.object({
   ancestors: z.array(z.object({ id: RunIdSchema, label: z.string() })),
   /** `runOrdering` rule. */
   childIds: z.array(RunIdSchema),
-  /** Descendants by status. No waiting or interrupted count: both force
-   *  expansion, so a collapsed parent never hides a row that needs the user. */
+  /** Descendants by status; `running` counts the live ones (`isLiveRun`).
+   *  No separate waiting or interrupted count: both force expansion, so a
+   *  collapsed parent never hides a row that needs the user. */
   rollup: z.object({
     total: z.int().nonnegative(),
     running: z.int().nonnegative(),
@@ -207,6 +211,62 @@ const RunViewSchema = z.discriminatedUnion('category', [
   WorkflowRunViewSchema,
 ]);
 export type RunView = z.infer<typeof RunViewSchema>;
+
+/**
+ * The one reading of "live" every host shares: a run somebody holds that has
+ * not ended. An interrupted run's durable phase may still say in flight, but
+ * nothing is working on it, so no roster, rollup, or status bar counts it.
+ * Not `group` alone: a spawned child that has not activated yet is `ready`
+ * and sorts under `recent`, yet it is live.
+ */
+export function isLiveRun(run: Pick<RunView, 'group' | 'status'>): boolean {
+  return run.group !== 'interrupted' && !isTerminalOutcomePhase(run.status);
+}
+
+/** What a host can do with a follow-up, the only input the host brings to
+ *  `acceptsFollowUp`: whether it delivers one to a terminal-backed run (an
+ *  external agent CLI such as codex). */
+export interface FollowUpHost {
+  readonly terminalBacked: boolean;
+}
+
+/**
+ * Whether a run takes a follow-up at all, the one rule every host reads: what
+ * decides the composer is shown for it, and therefore what a host action
+ * aimed at it may assume. A run that declares no follow-up support, a
+ * terminal-backed run on a host that cannot drive one, and a run this process
+ * may not act on take none; otherwise a run still going or waiting takes one,
+ * as does a conversation that has not started (`ready` with nothing written
+ * yet).
+ */
+export function acceptsFollowUp(run: RunView, host: FollowUpHost): boolean {
+  if (run.followUpSupport === 'unsupported' || run.readOnly) return false;
+  if (run.followUpSupport === 'terminalBacked' && !host.terminalBacked) {
+    return false;
+  }
+  if (run.group === 'running' || run.group === 'waiting') return true;
+  return run.status === 'ready' && run.lastTimestamp === null;
+}
+
+/**
+ * Whether this window can answer a pending request: the one rule the host's
+ * attention badge and the request card both read, matching what
+ * `SessionRequests.decide` accepts. A run this process may not act on
+ * (`readOnly`) takes no answer here. A request that parks its caller is
+ * answered by the fiber waiting on it, so only while its run waits here; an
+ * interrupted run has to be resumed first. An inquiry, at any other time.
+ */
+export type RequestAnswerability = 'answerable' | 'readOnly' | 'resume';
+export function requestAnswerability(
+  run: RunView,
+  payload: Pick<PermissionPayload, 'kind'>,
+): RequestAnswerability {
+  if (run.readOnly) return 'readOnly';
+  if (run.approval === 'own' || !requestParksItsCaller(payload)) {
+    return 'answerable';
+  }
+  return 'resume';
+}
 
 /** A pending request: which run is asking, the payload the UI shows (its
  *  `kind` is the request's kind), and the earlier request it continues (an

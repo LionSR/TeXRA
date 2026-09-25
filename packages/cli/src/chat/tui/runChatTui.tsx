@@ -48,7 +48,6 @@ import {
 import type { RunId } from '@shared/schemas';
 import { AgentCategory, RUN_PHASE } from '@shared/schemas';
 import { subscribeToSignalChanges } from '@shared/signals';
-import { descendantRuns } from '@shared/session/sessionView';
 import { getFirstRunDone } from '@shared/state/onboardingState';
 import {
   isActivePhase,
@@ -78,11 +77,10 @@ import { announceForegroundApprovals } from './state/subscribeApprovals';
 import { subscribeCliCredentialChanges } from './hosts/cliProviderKeys';
 import { createTuiViewportController } from './render/tuiViewportController';
 import {
-  activeRunId as activeRunIdSignal,
+  selectedRunId as selectedRunIdSignal,
   resetCliState,
   patchSessionMeta,
   sessionViewFailure as sessionViewFailureSignal,
-  rootRunId as rootRunIdSignal,
   sessionMeta as sessionMetaSignal,
 } from './state/cliState';
 import {
@@ -94,10 +92,7 @@ import {
 } from './state/sessionView';
 import { notifyStaticTranscriptErased } from './state/staticTranscriptRepaint';
 import { discoverTerminalCapabilities } from './state/terminalCapabilities';
-import {
-  appendLocalAssistantTranscript,
-  describeRequestError,
-} from './state/transcript';
+import { appendLocalAssistantTranscript } from './state/transcript';
 import { installTerminalTitleUpdates } from './terminalTitle';
 import {
   chatTuiCanStartRootRun,
@@ -407,7 +402,7 @@ export async function runChat(
   disposables.add(setCliAgentResumeHandler(chatController.tryResumeRun));
 
   const resetSessionForClear = (): void => {
-    const currentRunId = session.runId ?? activeRunIdSignal.get();
+    const currentRunId = session.runId ?? selectedRunIdSignal.get();
     const activeStatus = runPhaseOf(runViewOf(currentView(), currentRunId));
     const isRunPending = chatTuiRunPending(session);
 
@@ -427,14 +422,6 @@ export async function runChat(
     chatController.clearInterruptedRecovery();
     chatController.clearPendingSkills();
     session.clearRunState();
-    // Release this conversation's resident transcripts when their remaining
-    // readers and writers leave. Clearing the terminal does not delete history.
-    const store = runtimeSession.transcripts;
-    for (const runId of descendantRuns(currentView(), rootRunIdSignal.get(), {
-      includeRoot: true,
-    })) {
-      store.requestEviction(runId);
-    }
     resetCliState(meta);
     clearTerminalScrollback();
     // The erase above happened outside Ink, so everything the static
@@ -506,22 +493,6 @@ export async function runChat(
       onStaticTranscriptChange={viewportController.repaintTranscript}
       onCtrlC={() => exitController.handleSigint()}
       onSuspend={() => exitController.handleSigtstp()}
-      onKillRun={(runId) => {
-        runtime.runFork(
-          runtimeSession.requests
-            .request({ kind: 'run.stop', runId })
-            .pipe(
-              Effect.catch((error) =>
-                Effect.sync(() =>
-                  appendLocalAssistantTranscript(describeRequestError(error)),
-                ),
-              ),
-            ),
-        );
-      }}
-      onWorkflowControl={(runId, action) => {
-        runtimeSession.workflowControls.control(runId, action);
-      }}
       history={inputHistory}
     />,
     {

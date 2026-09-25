@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Box, Text, useWindowSize } from 'ink';
 
 import { COLOR_HINT } from '@cli/tui/ui/colors';
@@ -7,11 +7,8 @@ import type { SurfaceDecision } from '@shared/session/approvalDecision';
 import { buildDiffHunks } from '@utils/text/unifiedDiff';
 import { formatResultCount } from '@utils/text/stringUtils';
 
-import { ConfirmCard, CONFIRM_CARD_FEEDBACK_PLACEHOLDER } from './ConfirmCard';
-import {
-  confirmCardContentRowsBudget,
-  confirmCardFeedbackRows,
-} from './confirmCardRowsBudget';
+import { ConfirmCard, ConfirmCardFeedback } from './ConfirmCard';
+import { confirmCardContentRowsBudget } from './confirmCardRowsBudget';
 import { ScrollHints } from './ScrollableModalText';
 import {
   DiffView,
@@ -41,26 +38,15 @@ interface EditApprovalProps {
 export function editApprovalDiffRowsBudget({
   availableRows,
   columns,
-  feedbackPlaceholder = CONFIRM_CARD_FEEDBACK_PLACEHOLDER,
-  feedbackMode,
-  feedbackValue = '',
+  feedbackRows = 0,
   title,
 }: {
   readonly availableRows?: number;
   readonly columns: number;
-  readonly feedbackPlaceholder?: string;
-  readonly feedbackMode?: boolean;
-  readonly feedbackValue?: string;
+  /** Rows the card's open rejection note takes (`ConfirmCardFeedback`). */
+  readonly feedbackRows?: number;
   readonly title: string;
 }): number {
-  const feedbackRows =
-    feedbackMode === true
-      ? confirmCardFeedbackRows({
-          columns,
-          placeholder: feedbackPlaceholder,
-          value: feedbackValue,
-        })
-      : 0;
   return confirmCardContentRowsBudget({
     availableRows,
     columns,
@@ -74,21 +60,51 @@ export function editApprovalDiffRowsBudget({
 }
 
 export function EditApproval(props: EditApprovalProps): React.JSX.Element {
+  const title = `Apply edit to ${props.payload.data.path}?`;
+  return (
+    <ConfirmCard
+      borderStyle="double"
+      color={COLOR_HINT}
+      title={title}
+      rejectionMode="feedback"
+      alwaysAllowLabel="approve edits for session"
+      compact={isCompactRows(
+        props.availableRows,
+        COMPACT_EDIT_APPROVAL_MAX_ROWS,
+      )}
+      onDecide={props.onDecide}
+    >
+      <EditApprovalDiff
+        availableRows={props.availableRows}
+        payload={props.payload}
+        title={title}
+      />
+    </ConfirmCard>
+  );
+}
+
+function EditApprovalDiff({
+  availableRows,
+  payload,
+  title,
+}: {
+  readonly availableRows?: number;
+  readonly payload: ToolEditApprovalPayload;
+  readonly title: string;
+}): React.JSX.Element {
   const { columns } = useWindowSize();
-  const [feedbackMode, setFeedbackMode] = useState(false);
-  const [feedbackValue, setFeedbackValue] = useState('');
+  const feedback = useContext(ConfirmCardFeedback);
   const [feedbackExitCount, setFeedbackExitCount] = useState(0);
   const feedbackWasCompactRef = useRef(false);
-  const { data, tui } = props.payload;
-  const title = `Apply edit to ${data.path}?`;
+  const { data, tui } = payload;
   const diffWidth = clampModalWidth(columns - EDIT_DIFF_PADDING);
   const maxDiffLines = editApprovalDiffRowsBudget({
-    availableRows: props.availableRows,
+    availableRows,
     columns,
-    feedbackMode,
-    feedbackValue,
+    feedbackRows: feedback.rows,
     title,
   });
+  const compactDiffLayout = maxDiffLines <= COMPACT_SCROLLABLE_CONTENT_ROWS;
 
   // Single diff pass shared between the summary line and the inline view.
   const hunks = useMemo(
@@ -107,74 +123,31 @@ export function EditApproval(props: EditApprovalProps): React.JSX.Element {
     () => initialDiffScrollOffset(hunks, diffWidth, maxDiffLines),
     [diffWidth, hunks, maxDiffLines],
   );
-  const scrollResetKey = useMemo(
-    () => ({
-      availableRows: props.availableRows,
-      columns,
-      feedbackExitCount,
-      hunks,
-      payload: props.payload,
-    }),
-    [columns, feedbackExitCount, hunks, props.availableRows, props.payload],
-  );
-  const feedbackDiffIsCompact = useCallback(
-    (value: string) =>
-      editApprovalDiffRowsBudget({
-        availableRows: props.availableRows,
-        columns,
-        feedbackMode: true,
-        feedbackValue: value,
-        title,
-      }) <= COMPACT_SCROLLABLE_CONTENT_ROWS,
-    [columns, props.availableRows, title],
-  );
+  // A note that squeezed the diff into its compact layout moved the scroll
+  // window, so closing that note restores the initial offset.
   useEffect(() => {
-    if (feedbackMode && feedbackDiffIsCompact(feedbackValue)) {
-      feedbackWasCompactRef.current = true;
+    if (feedback.mode) {
+      if (compactDiffLayout) feedbackWasCompactRef.current = true;
+    } else if (feedbackWasCompactRef.current) {
+      feedbackWasCompactRef.current = false;
+      setFeedbackExitCount((count) => count + 1);
     }
-  }, [feedbackDiffIsCompact, feedbackMode, feedbackValue]);
-  const handleFeedbackModeChange = useCallback(
-    (active: boolean) => {
-      if (active && feedbackDiffIsCompact(feedbackValue)) {
-        feedbackWasCompactRef.current = true;
-      }
-      // `feedbackWasCompactRef` is only ever latched while feedback mode is
-      // open and cleared on the way out, so it already implies the transition.
-      if (!active) {
-        if (feedbackWasCompactRef.current) {
-          setFeedbackExitCount((count) => count + 1);
-        }
-        feedbackWasCompactRef.current = false;
-      }
-      setFeedbackMode(active);
-    },
-    [feedbackDiffIsCompact, feedbackValue],
+  }, [compactDiffLayout, feedback.mode]);
+  const scrollResetKey = useMemo(
+    () => ({ availableRows, columns, feedbackExitCount, hunks, payload }),
+    [availableRows, columns, feedbackExitCount, hunks, payload],
   );
   const { scrollOffset, scrollable: diffScrollable } = useScrollableOffset({
+    // The rejection note owns ↑/↓ while it is open.
+    active: !feedback.mode,
     initialOffset: initialScrollOffset,
     maxScrollOffset,
     pageRows: scrollPageRows({ maxDisplayLines: maxDiffLines }),
     resetKey: scrollResetKey,
   });
-  const compactDiffLayout = maxDiffLines <= COMPACT_SCROLLABLE_CONTENT_ROWS;
-  const compactCard = isCompactRows(
-    props.availableRows,
-    COMPACT_EDIT_APPROVAL_MAX_ROWS,
-  );
 
   return (
-    <ConfirmCard
-      borderStyle="double"
-      color={COLOR_HINT}
-      title={title}
-      rejectionMode="feedback"
-      alwaysAllowLabel="approve edits for session"
-      feedbackPlaceholder={CONFIRM_CARD_FEEDBACK_PLACEHOLDER}
-      compact={compactCard}
-      onFeedbackModeChange={handleFeedbackModeChange}
-      onFeedbackValueChange={setFeedbackValue}
-      onDecide={props.onDecide}
-    >
+    <>
       <Text dimColor>
         +{data.addedLines} / −{data.removedLines} ·{' '}
         {formatResultCount(hunks.length, 'hunk')} · source: {data.sourceTool}
@@ -187,9 +160,9 @@ export function EditApproval(props: EditApprovalProps): React.JSX.Element {
           width={diffWidth}
         />
       </Box>
-      {diffScrollable && !compactDiffLayout ? (
+      {diffScrollable && !compactDiffLayout && !feedback.mode ? (
         <ScrollHints action="scroll diff" />
       ) : null}
-    </ConfirmCard>
+    </>
   );
 }

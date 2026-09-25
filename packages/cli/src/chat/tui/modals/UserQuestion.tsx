@@ -1,12 +1,11 @@
 import { useMemo, useState } from 'react';
-import { Box, Text, useInput, useWindowSize } from 'ink';
+import { Box, Text, useWindowSize } from 'ink';
 
 import {
   parseUserQuestionAnswer,
   USER_QUESTION_SKIPPED_FEEDBACK,
 } from '@cli/runtime/userQuestionAnswer';
 import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
-import { isEscapeInput } from '@cli/tui/inputKeys';
 import {
   previousRowsText,
   selectVisibleInlineOverflowText,
@@ -63,11 +62,9 @@ function wrappedUserQuestionPromptLines({
   readonly text: string;
   readonly width: number;
 }): UserQuestionPromptLine[] {
-  return text.split('\n').flatMap((line) =>
-    wrapAnsiToWidth(line, width)
-      .split('\n')
-      .map((wrapped): UserQuestionPromptLine => ({ kind, text: wrapped })),
-  );
+  return wrapAnsiToWidth(text, width)
+    .split('\n')
+    .map((wrapped): UserQuestionPromptLine => ({ kind, text: wrapped }));
 }
 
 function userQuestionInlineClipIndicator({
@@ -379,13 +376,6 @@ function FreeTextQuestion(props: QuestionVariantProps): React.JSX.Element {
     showOverflow: false,
     visibleItemCount: visibleOptions.length,
   });
-  useInput((input, key) => {
-    // Esc cancels; App clears a non-empty answer before applying its usual
-    // Ctrl+C stop or exit behavior.
-    if (isEscapeInput(input, key)) {
-      props.onCancel();
-    }
-  });
 
   return (
     <QuestionShell
@@ -422,6 +412,9 @@ function FreeTextQuestion(props: QuestionVariantProps): React.JSX.Element {
             maxDisplayRows={1}
             value={answer}
             onChange={setAnswer}
+            // Esc cancels; App clears a non-empty answer before applying its
+            // usual Ctrl+C stop or exit behavior.
+            onEscape={props.onCancel}
             onSubmit={(value) =>
               props.onSubmit(parseUserQuestionAnswer(value, props.question))
             }

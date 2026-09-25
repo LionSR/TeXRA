@@ -5,13 +5,8 @@ import { describe, expect } from 'vitest';
 
 // Local imports
 import type { AgentTrace } from '@agent/trace';
-import {
-  MESSAGE_TYPES,
-  CODEX_THREAD_TOOL,
-  CODEX_TURN_TOOL,
-} from '@shared/schemas';
+import { CODEX_THREAD_TOOL, CODEX_TURN_TOOL } from '@shared/schemas';
 import type { RunId } from '@shared/schemas';
-import { StreamLog } from '@shared/session/traceEntries';
 import { createTestRunTrace } from '@test/support/sessionTestUtils';
 import { runStreamedTurn } from '@tools/codex';
 
@@ -31,13 +26,15 @@ async function* streamEvents(
   yield* events;
 }
 
+type TestTrace = ReturnType<typeof createTestRunTrace>;
+
 async function createLogger(): Promise<{
-  store: StreamLog;
+  store: TestTrace;
   logger: AgentTrace;
 }> {
-  const store = new StreamLog();
+  const store = createTestRunTrace(runId);
 
-  return { store, logger: createTestRunTrace(runId, store).trace };
+  return { store, logger: store.trace };
 }
 
 function turnCompleted(inputTokens: number, outputTokens: number): ThreadEvent {
@@ -59,11 +56,8 @@ function threadOf(events: ThreadEvent[]): Thread {
   } as unknown as Thread;
 }
 
-function toolLogs(store: StreamLog): Record<string, unknown>[] {
-  const entries = store.toJSON();
-  return entries
-    .filter((entry) => entry.messageType === MESSAGE_TYPES.TOOL_USE)
-    .map((entry) => entry.data as Record<string, unknown>);
+function toolLogs(store: TestTrace): Record<string, unknown>[] {
+  return store.rows().flatMap((row) => (row.kind === 'tool' ? [row.log] : []));
 }
 
 describe('codex progress events', () => {
@@ -248,6 +242,6 @@ describe('codex progress events', () => {
   );
 });
 
-function findTurnEntry(store: StreamLog): Record<string, unknown> | undefined {
+function findTurnEntry(store: TestTrace): Record<string, unknown> | undefined {
   return toolLogs(store).find((data) => data.toolName === CODEX_TURN_TOOL);
 }
