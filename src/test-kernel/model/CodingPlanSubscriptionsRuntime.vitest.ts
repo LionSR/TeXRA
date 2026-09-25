@@ -30,6 +30,7 @@ const boundEndpoint = (
       ...(yield* readRouteFacts(hostStores(), declinedRoutes)),
       validation: false,
       prefersCopilot: false,
+      copilotRoute: undefined,
     });
     if (route.kind !== 'api-key' && route.kind !== 'openrouter') {
       throw new Error(`unexpected ${route.kind} route`);

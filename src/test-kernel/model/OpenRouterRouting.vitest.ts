@@ -1,5 +1,5 @@
 import { it } from '@effect/vitest';
-import { Cause, Effect, Exit } from 'effect';
+import { Cause, Effect, Exit, Layer } from 'effect';
 import { MODEL_CONFIGS } from 'llm-zoo';
 import { describe, expect } from 'vitest';
 
@@ -9,6 +9,10 @@ import {
   isOpenRouterRoutingUnsupported,
   shouldRouteModelThroughOpenRouter,
 } from '@model/openRouterRouting';
+import {
+  LanguageModel,
+  UNAVAILABLE_LANGUAGE_MODEL_PORT,
+} from '@platform/languageModel';
 import { AgentCategory } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { hostStores, setupPlatform } from '@test/support/setupPlatform';
@@ -86,7 +90,12 @@ describe('bindModel', () => {
     Effect.runPromise(
       Effect.exit(
         Effect.scoped(
-          Effect.provide(testHttpClientLayer)(
+          Effect.provide(
+            Layer.merge(
+              testHttpClientLayer,
+              LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT),
+            ),
+          )(
             bindModel({
               config,
               stores: hostStores(),
