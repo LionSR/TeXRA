@@ -2,6 +2,7 @@ import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
 import { randomUUID } from 'node:crypto';
+import * as path from 'node:path';
 import { it } from '@effect/vitest';
 import * as NodeFileSystem from '@effect/platform-node/NodeFileSystem';
 import {
@@ -1182,7 +1183,7 @@ describe('the host wiring a run attaches', () => {
         const blockedFs = {
           ...processFs,
           exists: (target: string) =>
-            target.endsWith('/.texrarules')
+            path.basename(target) === '.texrarules'
               ? Deferred.succeed(entered, undefined).pipe(
                   Effect.andThen(Deferred.await(release)),
                   Effect.onInterrupt(() =>
