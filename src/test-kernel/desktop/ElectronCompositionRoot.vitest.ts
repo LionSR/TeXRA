@@ -9,7 +9,10 @@ import * as agentRuntime from '@agent/runtime';
 import { globalDatabaseLayer } from '@controllers/session/Database';
 import { projectDatabaseLayer } from '@controllers/session/projectDatabase';
 import { openDesktopProjectRegistry } from '@desktop/main/desktopProjects.js';
-import { openDesktopProjectRecords } from '@desktop/main/desktopProjectRecords.js';
+import {
+  DesktopProjectRecords,
+  openDesktopProjectRecords,
+} from '@desktop/main/desktopProjectRecords.js';
 import { JsonStore } from '@platform/defaults/jsonStore';
 import {
   nodeProcesses,
@@ -92,6 +95,11 @@ describe('desktop composition root and launch environment', () => {
           );
           const reopened = yield* projectRecordsOf(profile);
           expect(yield* reopened.read).toEqual(['/first']);
+          // A closed project is what File > Open Recent offers; reopening
+          // it takes it off that list.
+          expect(yield* reopened.readRecent).toEqual(['/second']);
+          yield* reopened.remember('/second');
+          expect(yield* reopened.readRecent).toEqual([]);
           expect(yield* fs.readFileString(oldState)).toBe(previous);
         }),
       ).pipe(
@@ -139,10 +147,8 @@ describe('desktop composition root and launch environment', () => {
             processRoots: host.roots,
             processScope: yield* Scope.make(),
             globalConfigStore: config,
-            records,
             stores: { ...host.roots, secrets: host.secrets },
-            warn: vi.fn(),
-          });
+          }).pipe(Effect.provideService(DesktopProjectRecords, records));
           yield* Effect.addFinalizer(() => registry.dispose());
           const successorRoot = join(profile, 'successor');
           yield* fs.makeDirectory(successorRoot);
@@ -228,10 +234,8 @@ describe('desktop composition root and launch environment', () => {
           processRoots: host.roots,
           processScope: yield* Scope.make(),
           globalConfigStore: config,
-          records,
           stores: { ...host.roots, secrets: host.secrets },
-          warn: vi.fn(),
-        });
+        }).pipe(Effect.provideService(DesktopProjectRecords, records));
         yield* Effect.addFinalizer(() =>
           registry.dispose().pipe(Effect.ignore),
         );

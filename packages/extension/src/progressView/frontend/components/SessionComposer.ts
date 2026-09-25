@@ -171,9 +171,9 @@ export class SessionComposer extends LitElement {
       }
 
       /* A plain native textarea (#11851): the card draws the one focus
-         ring, so the field carries no chrome of its own and grows with its
-         content between the two heights each state sets. */
-      textarea {
+         ring, so the field carries no chrome of its own (scoped, to out-rank
+         the shared :focus-visible ring) and grows between the two heights. */
+      .composer textarea {
         display: block;
         width: 100%;
         min-width: 0;
