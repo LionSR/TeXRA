@@ -100,15 +100,15 @@ jobs:
 
           # The desktop e2e suite runs unless every changed path is out of
           # the desktop's reach. The window bundles nearly all of src/ and
-          # packages/ (tools, utils, agent and llm included), so the reach is
-          # stated as its complement: the CLI, the trace viewer, docs, and
-          # markdown. Paths come from --name-status, as above, so a rename
+          # packages/ (tools, utils, agent and llm included, and the trace
+          # viewer, which ships as its transcript export page), so the reach
+          # is stated as its complement: the CLI, docs, and markdown. Paths come from --name-status, as above, so a rename
           # out of a reached path still counts.
           desktop_change_match() {
             awk -F '\t' '{
               for (i = 2; i <= NF; i++) {
-                if ($i !~ /^packages\/cli\// && $i !~ /^packages\/trace-viewer\// &&
-                    $i !~ /^docs\// && $i !~ /\.md$/) found = 1
+                if ($i !~ /^packages\/cli\// && $i !~ /^docs\// &&
+                    $i !~ /\.md$/) found = 1
               }
             }
             END { exit !found }'
@@ -126,6 +126,10 @@ jobs:
           fi
           if ! printf 'M\t.github/actions/setup-workspace/action.yml\n' | desktop_change_match; then
             echo 'desktop classifier self-test failed (setup action)' >&2
+            exit 1
+          fi
+          if ! printf 'M\tpackages/trace-viewer/src/main.ts\n' | desktop_change_match; then
+            echo 'desktop classifier self-test failed (trace viewer)' >&2
             exit 1
           fi
           if printf 'M\tpackages/cli/src/app.tsx\nM\tdocs/guide/cli.md\n' | desktop_change_match; then
@@ -408,8 +412,8 @@ jobs:
     # project seed, workbench tabs, Monaco, the pty. Nothing else exercises
     # the app end to end, and it broke twice unnoticed before it ran here.
     # macOS because its window-lifecycle specs are macOS behaviour and the
-    # runner needs no virtual display; skipped on PRs confined to the CLI,
-    # the trace viewer, or docs, since macOS bills at 10x Linux rates.
+    # runner needs no virtual display; skipped on PRs confined to the CLI
+    # or docs, since macOS bills at 10x Linux rates.
     if: needs.changes.outputs.code == 'true' && needs.changes.outputs.desktop == 'true' && github.event_name != 'schedule'
     runs-on: macos-latest
     timeout-minutes: 20
