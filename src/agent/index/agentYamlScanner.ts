@@ -51,20 +51,6 @@ interface ParsedAgentYaml {
 }
 
 /**
- * Extract tool names from declared tool configs. An entry is a registry name,
- * or — for definitions registered as values — a whole tool definition.
- */
-function extractToolNames(
-  rawTools: unknown[] | undefined,
-): string[] | undefined {
-  return rawTools?.flatMap((t) => {
-    if (typeof t === 'string') return t;
-    const name = (t as Record<string, unknown>)?.name;
-    return typeof name === 'string' ? name : [];
-  });
-}
-
-/**
  * Scan one agent source. A source can span several roots (the bundled
  * tool-use source is the core directory plus each tool plugin's), and they are
  * pooled into one scan, so names stay unique and `inherits` resolves across
@@ -301,7 +287,7 @@ function scanYaml(
       const rawPrompts = promptsBlock.value;
       const defaultOutputFiles = rawSettings.defaultOutputFiles;
 
-      const tools = extractToolNames(rawSettings.tools);
+      const tools = rawSettings.tools?.map((tool) => tool.name);
 
       const rawCategory = rawSettings.agentCategory;
       const category =
