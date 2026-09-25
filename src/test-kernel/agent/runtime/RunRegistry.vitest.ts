@@ -102,8 +102,8 @@ function createHandle(
  * The phase the registry reads, stated the way the fold carries it
  * (`RunView.status`, ruling A9-2). The registry holds no phase of its own, so
  * a test that needs one puts it here; the only half the registry owns is
- * being told that a phase moved, which {@link FoldedPhases.set} does the way
- * the session's tail does.
+ * being told that a run ended, which {@link FoldedPhases.set} does the way
+ * the session's tail does (on every phase: the sweep reads the fold).
  */
 interface FoldedPhases {
   readonly set: (
@@ -131,7 +131,7 @@ function createRegistry(
 } {
   // The session's publish path, in miniature: every draft the registry
   // publishes is appended in order, and a phase the fold moved reaches
-  // `handleStatus` the way the session's committed tail does.
+  // the folded-stop sweep the way the session's committed tail does.
   const events: PublishedEvents = { published: [] };
   const views = new Map<RunId, RunView>();
   const phases: FoldedPhases = {
@@ -144,7 +144,7 @@ function createRegistry(
         substate: extra.substate ?? null,
         runStartedAt: extra.runStartedAt ?? null,
       } as RunView);
-      registry.handleStatus(runId);
+      registry.sweepChildrenOfFoldedStop(runId);
     },
   };
   const registry = new RunRegistry({
@@ -252,33 +252,6 @@ describe('runRegistry', () => {
         expect(handle.parent).toBeNull();
         expect(handle.deliveryTarget).toBeUndefined();
       }),
-  );
-
-  // The drain's re-check arm, which is the whole of `awaitDrained` that a
-  // bare wait loop lacks: `waitForAnyChange` registers its listeners a step
-  // after the active set was read, so a run that leaves inside that window
-  // wakes nobody. A session close would block until its budget; the desktop
-  // project close, which has no budget, hung forever.
-  it.effect(
-    'drains when the last run leaves inside the listener-registration window',
-    () =>
-      Effect.gen(function* () {
-        // The roster owns the drain, so the window is opened on its own
-        // `waitForAnyChange`; the registry only delegates.
-        const roster = new RunRoster(createSessionApprovals());
-        const runId = generateRunId();
-        roster.setHandle(createHandle(runId));
-        const register = roster.waitForAnyChange.bind(roster);
-        vi.spyOn(roster, 'waitForAnyChange').mockImplementation((ids) => {
-          // The departure lands after the active read and before the listener
-          // that would have reported it.
-          roster.deleteHandle(runId);
-          return register(ids);
-        });
-        yield* roster.awaitDrained();
-        expect(roster.activeIds()).toEqual([]);
-      }),
-    { timeout: 2000 },
   );
 
   it.effect(

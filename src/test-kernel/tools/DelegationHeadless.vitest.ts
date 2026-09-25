@@ -189,25 +189,6 @@ function callDelegateReview(call = parentRunContext()) {
   );
 }
 
-const waitForChildrenEffect = Effect.fn('waitForTestChildren')(function* (
-  session: SessionHandle,
-) {
-  while (true) {
-    const active = session.runs.getActiveIds();
-    if (active.length === 0) return;
-    yield* session.runs.waitForAnyChange(active);
-  }
-});
-
-/** Await actual child activation release before disposing its test session. */
-async function waitForChildren(session: SessionHandle): Promise<void> {
-  while (true) {
-    const active = session.runs.getActiveIds();
-    if (active.length === 0) return;
-    await Effect.runPromise(session.runs.waitForAnyChange(active));
-  }
-}
-
 /**
  * Answer every request the session opens the way a surface's `request.decide`
  * does — one `request.decided` row on the same run — and record the kinds
@@ -264,7 +245,7 @@ function delegateWithProposalDecision(
       if (options.launchSignal) {
         yield* Deferred.await(options.launchSignal);
       }
-      yield* waitForChildrenEffect(session);
+      yield* session.runs.awaitDrained();
       return result;
     }),
   );
@@ -627,7 +608,7 @@ describe('headless delegation', () => {
     }
     session.followUps.terminalize(PARENT_RUN_ID);
     session.followUps.terminalize(CHILD_RUN_ID);
-    await waitForChildren(session);
+    await Effect.runPromise(session.runs.awaitDrained());
     await Effect.runPromise(inBandSession.dispose());
   });
 
@@ -989,7 +970,7 @@ describe('headless delegation', () => {
       // than hand the caller's instruction through verbatim. Deliberately
       // wording-free — the injected copy churns (#9568) without behavior changing.
       yield* callDelegateReview();
-      yield* waitForChildrenEffect(testDefaultSession());
+      yield* testDefaultSession().runs.awaitDrained();
 
       const instruction =
         mocks.executeAgent.mock.calls.at(-1)?.[0].config.instruction;
@@ -1007,7 +988,7 @@ describe('headless delegation', () => {
         yield* callDelegateReview(
           parentRunContext({ userInstruction: parentInstruction }),
         );
-        yield* waitForChildrenEffect(testDefaultSession());
+        yield* testDefaultSession().runs.awaitDrained();
 
         expect(mocks.executeAgent).toHaveBeenCalledWith(
           expect.objectContaining({
@@ -1085,7 +1066,7 @@ describe('headless delegation', () => {
         expect(result.output).toContain(
           "Subagent 'review' launched. Result will be delivered automatically",
         );
-        yield* waitForChildrenEffect(testDefaultSession());
+        yield* testDefaultSession().runs.awaitDrained();
         const executeOptions = mocks.executeAgent.mock.calls.at(-1)?.[2];
         expect(executeOptions).toEqual(
           expect.objectContaining({
@@ -1131,7 +1112,7 @@ describe('headless delegation', () => {
             parentRunContext({ session, approvalPromptsUnavailable: true }),
           );
 
-          yield* waitForChildrenEffect(session);
+          yield* session.runs.awaitDrained();
           expect(decider.openedKinds).toEqual([]);
           expect(result.status).toBe('executed');
           expect(result.summary).toBe("Launched 'review' (async)");
