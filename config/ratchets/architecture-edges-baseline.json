@@ -86,7 +86,6 @@
     { "from": "tools", "to": "ui", "kind": "value" },
     { "from": "tools", "to": "utils", "kind": "value" },
     { "from": "transcript", "to": "agent", "kind": "value" },
-    { "from": "transcript", "to": "logger", "kind": "value" },
     { "from": "transcript", "to": "shared", "kind": "value" },
     { "from": "transcript", "to": "utils", "kind": "value" },
     { "from": "ui", "to": "shared", "kind": "value" },

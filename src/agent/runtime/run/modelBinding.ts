@@ -36,10 +36,11 @@ import {
 } from '@texra-ai/llm/turn';
 
 import {
-  resolveModelCompatibilityKey,
+  resolveModelRoute,
   resolveRouteCredential,
   resolveSubscriptionCredential,
   routeBearer,
+  routeCompatibilityKey,
   withShortModelName,
   type RouteCredential,
 } from '@agent/runtime/modelRoutes';
@@ -48,13 +49,10 @@ import {
   reasoningEffortOverrides,
   supportsReasoningLevel,
 } from '@model/reasoningLevel';
-import { copilotRouteForModel } from '@model/runtimeModelRegistry';
-import {
-  kimiCodeEffectiveConfig,
-  resolveKimiCodeRoutingFacts,
-} from '@model/kimiCodeSubscriptionRouting';
-import { isOpenRouterRoutingUnsupported } from '@model/openRouterRouting';
+import type { CopilotModelRoute } from '@model/copilotRouting';
+import { routeConfig } from '@model/modelRoute';
 import type { StateStore } from '@platform/interfaces';
+import type { LanguageModel } from '@platform/languageModel';
 import { OPENAI_DEFAULT_ENDPOINT } from '@shared/constants/modelProviderPlugins';
 import {
   AgentCategory,
@@ -62,10 +60,6 @@ import {
   type ModelCompatibilityKey,
   type UsageRoute,
 } from '@shared/schemas';
-import {
-  isKimiCodeExclusiveModel,
-  isKimiSubscriptionEligible,
-} from '@shared/model/kimiCodeRetryGate';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { readSettingFrom } from '@utils/config/platformSettings';
@@ -146,8 +140,6 @@ export interface BoundModel {
   readonly wireRouteKey: string;
   /** The wire route narrowed to one model, for model-scoped limits. */
   readonly modelRetryRouteKey: string;
-  /** The failed binding sat on the Kimi Code coding endpoint. */
-  readonly routedOnKimiCode: boolean;
   /** The binding can run a turn as background work (submit + observe). */
   readonly backgroundCapable: boolean;
 }
@@ -604,6 +596,7 @@ const PROTOCOL_DESCRIPTORS: {
     configure: ({
       base,
       config,
+      credential,
       capabilities,
       controls,
       input,
@@ -616,7 +609,8 @@ const PROTOCOL_DESCRIPTORS: {
       // Moonshot's own endpoint counts tokens; a managed coding endpoint
       // opts in through the catalog.
       supportsInputTokenEstimation:
-        !isKimiCodeExclusiveModel(config) || capabilities.supportsTokenCounting,
+        credential.provider !== 'kimiCode' ||
+        capabilities.supportsTokenCounting,
       thinkingControl: kimiThinkingControl(config),
       supportedEfforts: [...supportedEfforts],
       supportsForcedToolChoice: true,
@@ -827,9 +821,12 @@ function backgroundCapable<P extends HttpProtocol>(
  * owned the choice.
  */
 const responsesWebSocketSelected = Effect.fn('responsesWebSocketSelected')(
-  function* (credential: RouteCredential, globalState: StateStore) {
+  function* (credential: RouteCredential, stores: SettingsStores) {
     if (
-      !(yield* globalState.get<boolean>(GlobalStateKey.WEBSOCKET_OPENAI, false))
+      !(yield* readSettingFrom<boolean>(
+        stores,
+        GlobalStateKey.WEBSOCKET_OPENAI,
+      ))
     ) {
       return false;
     }
@@ -874,28 +871,18 @@ export const backgroundDelivery = Effect.fn('backgroundDelivery')(function* (
   );
 });
 
-/**
- * Bind a model the editor serves. The route is the one the registry
- * discovered for the base model (exact id, vendor and version); the editor
- * model itself comes from the host's port, into the caller's scope.
- */
+/** Bind a model the editor serves over the route its decision discovered
+ *  (exact id, vendor and version), into the caller's scope. */
 const bindEditorModel = Effect.fn('bindEditorModel')(function* (
   config: ModelConfig,
   compatibilityKey: ModelCompatibilityKey,
+  route: CopilotModelRoute,
 ): Effect.fn.Return<BoundModel, Error, Scope.Scope> {
   const editor = yield* Effect.serviceOption(EditorModel);
   if (Option.isNone(editor)) {
     return yield* Effect.fail(
       new Error(
         `Model ${config.name} is served by the editor's language-model API, which this host does not expose.`,
-      ),
-    );
-  }
-  const route = copilotRouteForModel(config.name);
-  if (route === undefined) {
-    return yield* Effect.fail(
-      new Error(
-        `No editor route is discovered for model ${config.name}; refresh the model list.`,
       ),
     );
   }
@@ -945,7 +932,6 @@ const bindEditorModel = Effect.fn('bindEditorModel')(function* (
       deployment.version,
       requestedModel,
     ]),
-    routedOnKimiCode: false,
     backgroundCapable: false,
   };
 });
@@ -991,129 +977,79 @@ export function releaseBindingUploads(
 }
 
 /**
- * Bind one model for a run. The route is `resolveRouteCredential`'s
- * decision, read through the same resolver every other route reader uses;
- * the persisted compatibility key of a resumed conversation wins over
- * today's default.
+ * Bind one model for a run. The route is `resolveModelRoute`'s one decision,
+ * and only the credential that route names is fetched; the persisted
+ * compatibility key of a resumed conversation wins over today's default.
  */
 export const bindModel = Effect.fn('bindModel')(function* (
   input: BindModelInput,
-): Effect.fn.Return<BoundModel, Error, Scope.Scope | HttpClient.HttpClient> {
-  const useOpenRouter = yield* readSettingFrom<boolean>(
-    input.stores,
-    GlobalStateKey.USE_OPENROUTER,
-  );
-  // The wire identity the preference promises, applied to the bound config
-  // and not only to the route decision below (which re-applies it as
-  // identity), so the request carries the unpinned identifier.
-  const requested = yield* withShortModelName(
-    input.config,
-    input.stores.globalState,
-  );
+): Effect.fn.Return<
+  BoundModel,
+  Error,
+  Scope.Scope | HttpClient.HttpClient | LanguageModel
+> {
+  // The wire identity the preference promises, applied to the bound config.
+  const requested = yield* withShortModelName(input.config, input.stores);
+  const route = yield* resolveModelRoute(input.stores, requested, input);
   const compatibilityKey =
-    input.compatibilityKey ??
-    (yield* resolveModelCompatibilityKey(
-      requested,
-      input.stores.globalState,
-      useOpenRouter,
-      input.ownApiKeyFallback,
-    ));
+    input.compatibilityKey ?? (yield* routeCompatibilityKey(requested, route));
   if (compatibilityKey === undefined) {
     return yield* Effect.fail(
       new Error(`Unsupported model provider: ${input.config.provider}`),
     );
   }
-  // The OpenRouter choice this binding answers to: a resumed conversation
-  // keeps the route its persisted format names, a fresh one follows the live
-  // preference. Read before the editor branch so a mode-selected model is
-  // rejected on the route the picker already reports as unavailable.
-  const selectedOpenRouter =
-    input.compatibilityKey == null
-      ? useOpenRouter
-      : compatibilityKey === 'OpenRouterNative';
-  if (
-    compatibilityKey !== 'Validation' &&
-    isOpenRouterRoutingUnsupported(requested, selectedOpenRouter)
-  ) {
-    return yield* Effect.fail(
-      new Error(
-        `Model ${requested.name} requires reasoning mode ${requested.capabilities.reasoningMode}, which OpenRouter does not support. Disable OpenRouter and use the provider API directly.`,
-      ),
-    );
-  }
   const protocol = PROTOCOL_BY_KEY[compatibilityKey];
-  if (protocol === 'vscode-lm') {
-    return yield* bindEditorModel(requested, compatibilityKey);
-  }
-  const onOpenRouter = compatibilityKey === 'OpenRouterNative';
-  let config = requested;
-  if (compatibilityKey === 'Kimi' && isKimiSubscriptionEligible(config)) {
-    config = kimiCodeEffectiveConfig(
-      config,
-      yield* resolveKimiCodeRoutingFacts(
-        input.stores,
-        input.stores.secrets,
-        onOpenRouter,
-        input.declinedRoutes,
-      ),
-    );
+  if (protocol === 'vscode-lm' && route.kind === 'copilot') {
+    return yield* bindEditorModel(requested, compatibilityKey, route.route);
   }
   if (protocol === 'validation') {
-    const bound = validationModel(config);
+    const bound = validationModel(requested);
     return {
-      modelId: config.name,
-      config,
+      modelId: requested.name,
+      config: requested,
       compatibilityKey,
       model: bound.model,
       origin: bound.origin,
       usageRoute: 'api-key',
-      contextWindow: config.contextWindow,
+      contextWindow: requested.contextWindow,
       supportsVision: false,
       supportsNativePdf: false,
       supportsNativeAudio: false,
       supportsForcedToolChoice: true,
-      wireRouteKey: JSON.stringify([config.provider, 'validation']),
+      wireRouteKey: JSON.stringify([requested.provider, 'validation']),
       modelRetryRouteKey: JSON.stringify([
-        config.provider,
+        requested.provider,
         'validation',
-        config.fullName,
+        requested.fullName,
       ]),
-      routedOnKimiCode: false,
       backgroundCapable: false,
     };
   }
-  // The ChatGPT session serves the Responses protocol and the Grok session
-  // the xAI Chat protocol, so the subscription route is asked only there;
-  // `constructModel` can then hand a subscription token to no other
-  // protocol's constructor. Eligibility follows `selectedOpenRouter`: a fresh
-  // binding honors the live preference (a Responses model whose route stays
-  // direct must still not consume the subscription the picker reports as
-  // disabled), while a resumed conversation keeps the route its persisted
-  // format names instead of silently billing the provider key because the
-  // preference was turned on since.
-  const subscription =
-    protocol === 'openai-responses' || protocol === 'xai-chat'
-      ? yield* resolveSubscriptionCredential(
-          input.stores,
-          config,
-          selectedOpenRouter,
-          input.stores.secrets,
-          input.declinedRoutes,
-        )
-      : null;
-  let credential: RouteCredential;
-  if (subscription !== null) {
-    config = subscription.config;
-    credential = subscription.credential;
-  } else {
-    credential = yield* resolveRouteCredential(
-      input.stores,
-      config,
-      onOpenRouter,
-      input.stores.secrets,
-      input.declinedRoutes,
+  if (
+    protocol === 'vscode-lm' ||
+    route.kind === 'copilot' ||
+    route.kind === 'validation'
+  ) {
+    return yield* Effect.fail(
+      new Error(
+        `Model ${requested.name} routes through ${route.kind}, which the recorded ${compatibilityKey} format cannot bind.`,
+      ),
     );
   }
+  let config = yield* routeConfig(input.stores, requested, route);
+  const credential: RouteCredential =
+    route.kind === 'chatgpt-subscription' || route.kind === 'xai-subscription'
+      ? yield* resolveSubscriptionCredential(
+          config,
+          route,
+          input.stores.secrets,
+        )
+      : yield* resolveRouteCredential(
+          input.stores,
+          config,
+          route,
+          input.stores.secrets,
+        );
   config = yield* withReasoningLevelOverride(config, input.stores.globalState);
   const configuration = yield* configurationFor(
     protocol,
@@ -1134,7 +1070,7 @@ export const bindModel = Effect.fn('bindModel')(function* (
       },
       input.stores,
     )) &&
-    (yield* responsesWebSocketSelected(credential, input.stores.globalState));
+    (yield* responsesWebSocketSelected(credential, input.stores));
   const model =
     configuration.protocol === 'openai-responses' && onWebSocket
       ? yield* openaiResponsesWebSocketModel(
@@ -1182,7 +1118,6 @@ export const bindModel = Effect.fn('bindModel')(function* (
       config.capabilities.supportsFunctionCalling,
     wireRouteKey,
     modelRetryRouteKey: JSON.stringify([wireRouteKey, config.fullName]),
-    routedOnKimiCode: isKimiCodeExclusiveModel(config),
     // The socket carries one turn at a time and submits no background work.
     backgroundCapable: !onWebSocket && backgroundCapable(configuration),
   };

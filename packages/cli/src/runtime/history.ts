@@ -14,7 +14,6 @@ import {
 import type { AgentConfig, SessionHandle } from '@agent/runtime';
 import { loadChatExportInput, type ChatExportInput } from '@agent/export';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
-import { redactDisplayValue } from '@logger/redaction';
 import {
   RunIdSchema,
   aggregateTarget,
@@ -30,6 +29,7 @@ import {
   listRunGeneratedFiles,
   type RunGeneratedFile,
 } from '@tools/executions/runGeneratedFiles';
+import { serializeFilteredConfig } from '@tools/executions/configView';
 import {
   hasCompletedRunConversationEvidence,
   readCompletedRunConversation,
@@ -253,7 +253,7 @@ export const readCliHistoryDetails = Effect.fn('cli.readCliHistoryDetails')(
     ) {
       return null;
     }
-    return redactDisplayValue({
+    return {
       id,
       status: standing.status,
       run: run
@@ -273,7 +273,7 @@ export const readCliHistoryDetails = Effect.fn('cli.readCliHistoryDetails')(
       files,
       hasFlowRecord: checkpointPresent,
       currentModel,
-    }) satisfies CliHistoryDetails;
+    } satisfies CliHistoryDetails;
   },
 );
 
@@ -535,15 +535,14 @@ export function formatCliHistoryDetailsText(
   } else if (!details.report && details.conversationPreview) {
     lines.push('', formatConversationPreview(details.conversationPreview));
   }
-  lines.push('', 'Config:', JSON.stringify(config ?? {}, null, 2));
-  lines.push('', `Files (${details.files.length}):`);
-  lines.push(
-    ...(details.files.length
-      ? details.files.map(
-          (file) => `${file.isDirectory ? '<dir>' : file.size}\t${file.path}`,
-        )
-      : ['(none)']),
+  const shown = config
+    ? serializeFilteredConfig(config, config.agentCategory)
+    : '{}';
+  const files = details.files.map(
+    (file) => `${file.isDirectory ? '<dir>' : file.size}\t${file.path}`,
   );
+  lines.push('', 'Config:', shown, '', `Files (${files.length}):`);
+  lines.push(...(files.length ? files : ['(none)']));
   if (details.hasFlowRecord) lines.push('', 'Flow record: present');
   return lines.join('\n');
 }
@@ -564,7 +563,7 @@ const toCliHistoryEntry = Effect.fn('history.toCliHistoryEntry')(function* (
     },
     session,
   );
-  return redactDisplayValue({
+  return {
     id: entry.id,
     timestamp: entry.timestamp,
     agent: config.agent,
@@ -579,7 +578,7 @@ const toCliHistoryEntry = Effect.fn('history.toCliHistoryEntry')(function* (
     description: entry.description,
     teamPresetId: teamPresetId(config),
     parentRunId: entry.parentRunId,
-  });
+  };
 });
 
 function teamPresetId(config: AgentConfig | null): string | undefined {

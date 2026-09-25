@@ -61,6 +61,7 @@ import { acceptsFollowUp } from '@shared/session/sessionView';
 import { RUN_OUTCOME, type RunId, AgentCategory } from '@shared/schemas';
 import {
   DatabaseClaimRefused,
+  DatabaseNotOwner,
   DatabaseWriteFailed,
 } from '@shared/session/database';
 import type { RuntimeRequest } from '@shared/session/runtimeRequest';
@@ -529,9 +530,14 @@ export function createChatSessionController(
     if (!hasErrorPresentationClaimed(error)) {
       appendLocalErrorTranscript(toErrorMessage(error));
     }
+    // Another live process holds the run: it refused the claim, or took it
+    // after its owner was proved dead.
     if (
-      error instanceof DatabaseWriteFailed &&
-      error.cause instanceof DatabaseClaimRefused
+      (error instanceof DatabaseWriteFailed &&
+        error.cause instanceof DatabaseClaimRefused) ||
+      (error instanceof DatabaseNotOwner &&
+        !error.closed &&
+        error.ownerId !== null)
     ) {
       session.runExitCode = CliExitCode.Usage;
     } else {
@@ -775,7 +781,6 @@ export function createChatSessionController(
           // only decides which stream it marks recoverable.
           if (session.stopRequested) interruptActiveRun();
 
-          yield* runtimeSession.transcripts.ensureLoaded(id);
           // The transcript and the work plan are the fold's: the TUI
           // subscribes the run's aggregate and renders `transcript.rows`, and
           // an open `/plan` reader reads the same `RunView`.

@@ -22,15 +22,11 @@ import { WorkspaceFs } from '@platform/rootedFs';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { RootedFileSystem } from '@utils/files/rootedFileSystem';
-import { readSettingFrom } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { COMMIT_HASH_PATTERN } from '@utils/git/commitHashPattern';
 import { COMMIT_LABEL_FORMAT } from '@utils/git/commitLogFormat';
-import { readRecentCommitLabels } from '@utils/git/repositoryOverview';
 import { executeCommand } from '@utils/system/execUtils';
 import { whichOnExtendedPath } from '@utils/system/platformPaths';
-import { isGitRepository } from '@utils/git/isGitRepository';
-import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 const CHANNEL = 'gitCommands';
 
@@ -39,26 +35,10 @@ export function registerGitCommands(
   runtime: ProcessRuntime,
   session: SessionHandle,
 ): void {
-  // `isGitRepository`, `getRecentCommits`, and `findCommitInHistory`
-  // return values to `executeCommand` callers (`boolean`,
-  // `string[] | null`, `string | null` respectively) and accept
-  // optional positional arguments — they keep their per-command
-  // registration. `texra.cloneOverleafProject` migrated through the
-  // shared command registry in #3781 batch 3 (see
-  // `extensionCommandSurface.ts`).
+  // `findCommitInHistory` returns its `string | null` to `executeCommand`
+  // callers and accepts an optional positional argument, so it keeps its
+  // per-command registration.
   registerCommandEntries(context, [
-    {
-      id: 'texra.isGitRepository',
-      handler: (rootPath?: string) =>
-        runtime.runPromise(
-          isGitRepository(rootPath ?? session.roots.workspace, session.roots),
-        ),
-    },
-    {
-      id: 'texra.getRecentCommits',
-      handler: (rootPath?: string) =>
-        runtime.runPromise(getRecentCommits(session, rootPath)),
-    },
     {
       id: 'texra.findCommitInHistory',
       handler: (commitHash: string, rootPath?: string) =>
@@ -66,49 +46,6 @@ export function registerGitCommands(
     },
   ]);
 }
-
-const getRecentCommits = Effect.fn('gitCommands.getRecentCommits')(function* (
-  session: SessionHandle,
-  rootPath?: string,
-): Effect.fn.Return<string[] | null, Error, ChildProcessSpawner> {
-  const workspacePath = rootPath ?? session.roots.workspace;
-  if (
-    !workspacePath ||
-    !(yield* isGitRepository(workspacePath, session.roots))
-  ) {
-    return null;
-  }
-
-  // The catalog row owns the range and the default: a corrupt persisted value
-  // warns once through readSetting and resolves to 20 instead of throwing.
-  const numberOfCommits = yield* readSettingFrom<number>(
-    session.roots,
-    'texra.git.numberOfCommitsToShow',
-  );
-
-  let readFailure: string | undefined;
-  const commits = yield* readRecentCommitLabels(
-    workspacePath,
-    numberOfCommits,
-    {
-      // The session's own slots: the read answers for this project.
-      settings: session.roots,
-      // A failed `git log` comes back as undefined and is answered as an
-      // empty list; without this hook that failure would be invisible in this
-      // host (the desktop host passes its own onError to the same read). The
-      // hook is synchronous, so it records the failure for the log below.
-      onError: (error) => {
-        readFailure = toErrorMessage(error);
-      },
-    },
-  );
-  if (readFailure !== undefined) {
-    yield* Effect.logWarning(`recent commit read failed: ${readFailure}`).pipe(
-      withLogChannel(CHANNEL),
-    );
-  }
-  return commits ?? [];
-});
 
 function findCommitInHistory(
   session: SessionHandle,
@@ -243,12 +180,10 @@ function buildOverleafClonePorts(
   workspaceFs: RootedFileSystem,
 ): OverleafCloneWorkflowPorts {
   return {
-    // `getStored` (not `get`): the clone token is a persisted credential the
-    // user manages here, never an environment override.
     // `orDie` keeps what `Effect.promise` did with a rejected store call: a
     // credential store this host cannot reach is a defect here, not a clone
     // outcome the workflow reports.
-    getStoredToken: (key) => Effect.orDie(secrets.getStored(key)),
+    getStoredToken: (key) => Effect.orDie(secrets.get(key)),
     deleteStoredToken: (key) => Effect.orDie(secrets.delete(key)),
     storeToken: (key, token) => Effect.orDie(secrets.set(key, token)),
     promptToken: (spec) =>
@@ -294,7 +229,7 @@ function buildOverleafClonePorts(
         showLoggedMessage(CHANNEL, 'Workspace folder must be empty.'),
       ).pipe(Effect.asVoid),
 
-    runClone: (remoteUrl, workspacePath) =>
+    runClone: (clone, workspacePath) =>
       // The notification shows for exactly as long as the clone runs: its
       // task is a promise the release settles on every exit, and the acquire
       // that opens it cannot be interrupted before the release is installed.
@@ -314,7 +249,7 @@ function buildOverleafClonePorts(
           return resolve;
         }),
         () =>
-          gitClone(remoteUrl, workspacePath).pipe(
+          gitClone(clone, workspacePath).pipe(
             Effect.mapError((error) => new Error(error.message)),
           ),
         (resolve) => Effect.sync(resolve),

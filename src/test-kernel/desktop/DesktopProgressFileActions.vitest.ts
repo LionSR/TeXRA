@@ -8,9 +8,8 @@ import type { SessionHandle } from '@agent/runtime';
 import type { LaTeXdiffResult } from '@latex/latexdiff';
 import type { DiffRunOutcome, DiffRunResult } from '@latex/latexdiff/types';
 import type { ProcessRuntime } from '@platform/processRuntime';
-import type { OutputFileInfo } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import { Rejected } from '@shared/session/requestErrors';
-import { FakeStateStore } from '@test/support/FakePlatform';
 import { createModuleMocks } from '@test/support/moduleMocks';
 
 import { createStubDesktopAgentRunHost } from './desktopAgentRunTestHarness.ts';
@@ -49,21 +48,7 @@ function expectOpenedDiff(
   });
 }
 
-function outputInfo(filePath: string): OutputFileInfo {
-  return {
-    source: 'main.tex',
-    location: { kind: 'external', absolutePath: filePath },
-    round: 1,
-    lineage: {
-      original: {
-        kind: 'external',
-        absolutePath: absolutePath('workspace', 'main.tex'),
-      },
-      diffBase: null,
-    },
-    diff: null,
-  };
-}
+const RUN_ID = 'exec-1' as RunId;
 
 async function loadFileActions(options: {
   outcome?: DiffRunOutcome;
@@ -80,7 +65,7 @@ async function loadFileActions(options: {
 }> {
   vi.resetModules();
 
-  // The desktop adapter delegates the resolve + dispatch policy to the shared
+  // The desktop adapter delegates the read + dispatch to the shared
   // host-neutral `runLatexdiffForRun`; mock it at that boundary so these
   // tests cover the desktop param-building + outcome-handling, not the core
   // (which `RunLatexdiff.vitest.ts` exercises in isolation).
@@ -88,10 +73,7 @@ async function loadFileActions(options: {
     if (options.interrupts) return Effect.interrupt;
     if (options.throws)
       return Effect.fail(new Error('No workspace path found'));
-    return Effect.succeed({
-      outcome: options.outcome ?? { results: [] },
-      source: 'metadata' as const,
-    });
+    return Effect.succeed(options.outcome ?? { results: [] });
   });
 
   const runDiff = vi.fn((): Effect.Effect<LaTeXdiffResult> =>
@@ -148,7 +130,6 @@ async function loadFileActions(options: {
         snapshots: { read: vi.fn() },
         roots: { workspace: absolutePath('workspace') },
       } as unknown as SessionHandle,
-      globalState: new FakeStateStore(),
       // Every latexdiff program this suite reaches is mocked, so the services
       // the actions take from the window's runtime are never read.
       runtime: {
@@ -191,11 +172,7 @@ describe('DesktopProgressFileActions latexdiff', () => {
       actions.diffAcceptedFilePair(
         absolutePath('workspace', 'base.tex'),
         absolutePath('run', 'r1', 'main.tex'),
-        {
-          outputsByRound: {
-            1: [outputInfo(absolutePath('run', 'r1', 'main.tex'))],
-          },
-        },
+        RUN_ID,
       ),
     );
 
@@ -223,11 +200,7 @@ describe('DesktopProgressFileActions latexdiff', () => {
       actions.diffAcceptedFilePair(
         absolutePath('workspace', 'main.tex'),
         absolutePath('run', 'r2', 'main.tex'),
-        {
-          outputsByRound: {
-            1: [outputInfo(absolutePath('run', 'r1', 'main.tex'))],
-          },
-        },
+        RUN_ID,
       ),
     );
 
@@ -257,10 +230,7 @@ describe('DesktopProgressFileActions latexdiff', () => {
       actions.diffAcceptedFilePair(
         absolutePath('workspace', 'base.tex'),
         absolutePath('run', 'r1', 'main.tex'),
-        {
-          outputsByRound: {},
-          workspaceScan: { agent: 'a', model: 'm', inputFile: 'main.tex' },
-        },
+        RUN_ID,
       ),
     );
 
@@ -281,10 +251,7 @@ describe('DesktopProgressFileActions latexdiff', () => {
         actions.diffAcceptedFilePair(
           absolutePath('workspace', 'base.tex'),
           absolutePath('run', 'r1', 'main.tex'),
-          {
-            outputsByRound: {},
-            workspaceScan: { agent: 'a', model: 'm', inputFile: 'main.tex' },
-          },
+          RUN_ID,
         ),
       ),
     ).rejects.toThrow('All fibers interrupted without error');

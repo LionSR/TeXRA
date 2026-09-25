@@ -12,7 +12,7 @@ import { StageKindSchema } from './taskGroup';
 import { ExtendedTokenUsageStatsSchema } from './usage';
 import {
   WorkflowCallProgressSchema,
-  WorkflowPlanMarkerSchema,
+  WorkflowDeclaredPlanSchema,
 } from './workflowCallProgress';
 
 function trace<T extends string, S extends z.ZodRawShape>(type: T, shape: S) {
@@ -53,8 +53,8 @@ export const TranscriptEventSchemas = {
   }),
   workflowPlan: trace('workflow.plan', {
     attemptId: z.string(),
-    phases: WorkflowPlanMarkerSchema.shape.phases.readonly(),
-    tasks: WorkflowPlanMarkerSchema.shape.tasks.readonly(),
+    phases: WorkflowDeclaredPlanSchema.shape.phases.readonly(),
+    tasks: WorkflowDeclaredPlanSchema.shape.tasks.readonly(),
   }),
   workflowCall: trace('workflow.call', {
     logId: z.string(),

@@ -1,6 +1,6 @@
 ---
 created: 2026-09-25
-status: proposed
+status: implemented
 ---
 
 # Fold session events straight to rows
@@ -172,6 +172,35 @@ and `packages/cli/src/chat/chatSessionController.ts:794`. `readEvents` moves
 beside `Database.readAggregate`. The `StreamLogStore` list in
 `config/ratchets/store-public-surface-baseline.json` shrinks to nothing in the
 same PR (a shrink, never a widening). `StreamLogStoreLoad.vitest.ts` goes.
+Landed ahead of S3 (cache half): `StreamLogStore.ts` is deleted outright.
+`readEvents` is `SessionHandle.readRunEvents`, beside `readAggregate`; the
+cold entry fold is `readRunEntries` (`src/transcript/runEntries.ts`) until
+S3's `foldRunTranscript` replaces it. With the leases gone, `createRunTrace`
+wrapped nothing and went too, as did the child-run `autoClose` option, whose
+only effect was the eviction. The store-public-surface ratchet and its
+baseline are deleted with the class they budgeted.
+
+Landed (S3 with the S4 remainder): the reducer is
+`src/shared/session/transcriptFold.ts` (the arms and
+`foldRunTranscript(events, debug)`), over its working state in
+`transcriptState.ts` (per-id slots, positions, live text, `paint`), the
+`log`-shaped rows in `transcriptLogRows.ts` (decoded once through
+`decodeLogPayload`, the payload table now in `src/shared/schemas/logPayload.ts`)
+and the reads in `transcriptReads.ts` (`openWork`, live chunks, compaction
+settlement, run-model inputs). Four files, not one, because the file-size
+ratchet admits no new file over 500 lines. The row builders stay in
+`src/ui/transcript/projectTranscriptRow.ts` with no entry switch left. The
+session `inflight` index moved into the transcript's working state. Export,
+`streamClosureFacts` and host-exit settlement read `readRunTranscript`
+(`src/transcript/runTranscript.ts`), which replaced `readRunEntries`.
+`seqNo` and `settlementSeqNo` keep their old values exactly (every former
+append still takes a position), so the replay over the local databases
+(342 runs, view folds with and without debug, plus cold open work and
+export) matched with `seqNo` compared as is. Behavior notes: a tool payload
+that fails `ToolUseLogSchema` is decoded once into a failed card carrying the
+diagnostic as its error (export then shows the diagnostic, not the raw
+output); the dead entry texts of `usage` and `filesLoaded` rows are gone,
+since no row ever read them.
 
 S1 and S2 are independent. S3 needs S2 (the side projections must not still
 want entries). S4 needs S3 (`foldRunTranscript` and `openWork` exist). Net
@@ -200,6 +229,15 @@ production change about -940 lines across the four, before test deletions.
   view folds every run the loop parks. If a parked run's aggregate is not
   folded in the view, S1 reads it through `readEvents` and the cold fold
   instead (then it moves to S4).
+  Checked in S1: it does not. The view folds a run's transcript tier only
+  while some port subscribes it (`foldSubscriptions`), and a headless or
+  child run parks unsubscribed, so S1 took the alternative
+  (`readEntries`, the cold fold over the run's committed rows). The same
+  holds for `skills.snapshot`: it is no listing row, so a `RunView` field
+  would be filled only for subscribed runs, and making it one would add every
+  run's snapshot to each listing read. The CLI status line reads the newest
+  row through `readEvents` instead. After S1 the store's cache has no reader,
+  so S4's cache deletion no longer waits on S3.
 - **`sessionFold.ts` is 1 932 L**, over the file-size budget. S3 lands the
   reducer in its own file so `sessionFold.ts` shrinks; it must not grow.
 
@@ -230,18 +268,18 @@ production change about -940 lines across the four, before test deletions.
 
 ## Prior rulings
 
-- [One fold, three renderers](../../implemented/architecture/2026-09-03-prd-one-fold-three-renderers.md):
+- [One fold, three renderers](./2026-09-03-prd-one-fold-three-renderers.md):
   hosts render one `SessionView`; old entries were imported as events, with no
   `legacy.entry` kind. This proposal removes the last entry-shaped step inside
   that fold.
 - [Single-owner liveness and one fold](./2026-09-20-single-owner-liveness-and-one-fold.md),
   step 5: `StreamLogStore` becomes a cache of the view (landed, #12944). S4
   finishes it: a cache with no reader is deleted.
-- [Effect-native runtime system design](./2026-09-10-effect-native-runtime-system-design.md):
+- [Effect-native runtime system design](../../proposed/architecture/2026-09-10-effect-native-runtime-system-design.md):
   "the view replaces `StreamLogStore`" and one fold per question.
-- [Session systems survey](../simplification/2026-09-09-session-systems-survey.md):
+- [Session systems survey](../../proposed/simplification/2026-09-09-session-systems-survey.md):
   measured the two `createTranscriptFold` copies per resident run.
-- [Synchronous facades](./2026-09-21-effect-design-synchronous-facades.md):
+- [Synchronous facades](../../proposed/architecture/2026-09-21-effect-design-synchronous-facades.md):
   transcript verbosity is a fold input; preserved.
 - `config/ratchets/refuted-candidates.json` has no entry for `StreamLogEntry`,
   `traceFold` or `projectTranscriptRow`; nothing here reopens a refused refactor.

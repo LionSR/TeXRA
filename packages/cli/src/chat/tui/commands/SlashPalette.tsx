@@ -1,9 +1,12 @@
-// Slash command palette: pick with arrow keys + Enter or Tab; Esc dismisses it.
+// Slash command palette: pick with arrow keys + Enter or Tab. Esc reaches the
+// input bar's text input, whose escape edit clears the slash and closes it.
 
 import { Box, Text, useInput } from 'ink';
 import { useState, useEffect } from 'react';
 
-import { isEscapeInput, isPlainReturnInput } from '@cli/tui/inputKeys';
+import { isPlainReturnInput } from '@cli/tui/inputKeys';
+import { moreRowsText, previousRowsText } from '@cli/tui/overflowText';
+import { BorderedPanel } from '@cli/tui/ui/BorderedPanel';
 import { KeyHints } from '@cli/tui/ui/KeyHints';
 import { nextWrappingHighlightIndex } from '@cli/tui/ui/Select';
 import { COLOR_HINT } from '@cli/tui/ui/colors';
@@ -20,7 +23,6 @@ export interface SlashPaletteProps {
   readonly query: string;
   /** Accepted: caller should replace the input with the chosen command name. */
   readonly onPick: (command: SlashCommand, intent: SlashPickIntent) => void;
-  readonly onCancel: () => void;
 }
 
 const MAX_VISIBLE_COMMANDS = 8;
@@ -38,7 +40,7 @@ interface SlashPaletteWindow {
 // Wraparound highlight stepping is shared with `ui/Select.tsx`. The window
 // below stays local: scrolling through the middle of a long list shows one
 // fewer row than at the edges, on purpose, so both overflow markers ("… N
-// earlier" / "… N more") can be visible at once — unlike `Select`'s simple
+// previous rows" / "… N more rows") can be visible at once — unlike `Select`'s simple
 // centered `visibleSelectRange`.
 export function slashPaletteWindow({
   highlight,
@@ -134,10 +136,6 @@ export function SlashPalette(
 
   useInput(
     (input, key) => {
-      if (isEscapeInput(input, key)) {
-        props.onCancel();
-        return;
-      }
       if (key.upArrow || key.downArrow) {
         if (!slashPaletteOwnsArrows(matchCount)) return;
         setHighlight((h) =>
@@ -169,14 +167,30 @@ export function SlashPalette(
   const commandLabelWidth = slashPaletteCommandLabelWidth(visible);
 
   return (
-    <Box
+    <BorderedPanel
       borderStyle="single"
-      borderColor={COLOR_HINT}
-      flexDirection="column"
-      paddingX={1}
+      color={COLOR_HINT}
+      footer={
+        <KeyHints
+          hints={[
+            ...(slashPaletteOwnsArrows(matchCount)
+              ? [{ key: '↑/↓', action: 'navigate' }]
+              : []),
+            {
+              key: 'Enter',
+              action: slashPaletteEnterHintAction(highlightedCommand),
+            },
+            { key: 'Esc', action: 'close' },
+            { key: 'Tab', action: 'complete' },
+          ]}
+          confirmCancel={false}
+        />
+      }
     >
       {window.hiddenBefore > 0 ? (
-        <Text dimColor>{`  … ${window.hiddenBefore} earlier`}</Text>
+        <Text dimColor wrap="truncate-end">
+          {`  ${previousRowsText(window.hiddenBefore)}`}
+        </Text>
       ) : null}
       {visible.map((cmd, offset) => {
         const i = window.start + offset;
@@ -196,24 +210,10 @@ export function SlashPalette(
         );
       })}
       {window.hiddenAfter > 0 ? (
-        <Text dimColor>{`  … ${window.hiddenAfter} more`}</Text>
+        <Text dimColor wrap="truncate-end">
+          {`  ${moreRowsText(window.hiddenAfter)}`}
+        </Text>
       ) : null}
-      <Box marginTop={1}>
-        <KeyHints
-          hints={[
-            ...(slashPaletteOwnsArrows(matchCount)
-              ? [{ key: '↑/↓', action: 'navigate' }]
-              : []),
-            {
-              key: 'Enter',
-              action: slashPaletteEnterHintAction(highlightedCommand),
-            },
-            { key: 'Esc', action: 'close' },
-            { key: 'Tab', action: 'complete' },
-          ]}
-          confirmCancel={false}
-        />
-      </Box>
-    </Box>
+    </BorderedPanel>
   );
 }

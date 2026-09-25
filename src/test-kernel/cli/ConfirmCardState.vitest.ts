@@ -1,47 +1,40 @@
 import { describe, expect, it } from 'vitest';
 
-import { confirmCardKeyAction } from '@cli/chat/tui/modals/ConfirmCardState';
+import {
+  confirmCardKeyDecision,
+  confirmCardKeyRows,
+} from '@cli/chat/tui/modals/ConfirmCardState';
+import { APPROVE_SESSION_ACTION } from '@shared/session/approvalDecision';
 
 describe('CLI confirm-card key handling', () => {
-  const feedbackRejection = {
-    allowAlways: false,
-    rejectionMode: 'feedback',
-  } as const;
-  const immediateRejection = {
-    allowAlways: false,
-    rejectionMode: 'immediate',
-  } as const;
+  const feedbackRows = confirmCardKeyRows({ rejectionMode: 'feedback' });
+  const immediateRows = confirmCardKeyRows({ rejectionMode: 'immediate' });
+  const reject = { action: 'reject' };
 
   it('approves with y, collects rejection feedback with n, and rejects with escape', () => {
-    expect(confirmCardKeyAction('y', {}, feedbackRejection)).toBe('approve');
-    expect(confirmCardKeyAction('Y', {}, feedbackRejection)).toBe('approve');
-    expect(confirmCardKeyAction('n', {}, feedbackRejection)).toBe('feedback');
-    expect(confirmCardKeyAction('', { escape: true }, feedbackRejection)).toBe(
-      'reject',
+    expect(confirmCardKeyDecision('y', {}, feedbackRows)).toEqual({
+      action: 'approve',
+    });
+    expect(confirmCardKeyDecision('Y', {}, feedbackRows)).toEqual({
+      action: 'approve',
+    });
+    expect(confirmCardKeyDecision('n', {}, feedbackRows)).toBe('feedback');
+    expect(confirmCardKeyDecision('', { escape: true }, feedbackRows)).toEqual(
+      reject,
     );
-    expect(confirmCardKeyAction('\u001B', {}, feedbackRejection)).toBe(
-      'reject',
-    );
-    expect(confirmCardKeyAction('\u001Bn', {}, feedbackRejection)).toBe(
-      'ignore',
-    );
+    expect(confirmCardKeyDecision('\u001B', {}, feedbackRows)).toEqual(reject);
+    expect(confirmCardKeyDecision('\u001Bn', {}, feedbackRows)).toBeUndefined();
   });
 
   it('rejects immediately when feedback has no consumer', () => {
-    expect(confirmCardKeyAction('n', {}, immediateRejection)).toBe('reject');
+    expect(confirmCardKeyDecision('n', {}, immediateRows)).toEqual(reject);
   });
 
   it('only enables approve-always where the modal allows it', () => {
-    expect(
-      confirmCardKeyAction(
-        'a',
-        {},
-        {
-          allowAlways: true,
-          rejectionMode: 'feedback',
-        },
-      ),
-    ).toBe('approveAlways');
-    expect(confirmCardKeyAction('a', {}, feedbackRejection)).toBe('ignore');
+    const rows = confirmCardKeyRows({ alwaysAllowLabel: 'approve all' });
+    expect(confirmCardKeyDecision('a', {}, rows)).toEqual({
+      action: APPROVE_SESSION_ACTION,
+    });
+    expect(confirmCardKeyDecision('a', {}, feedbackRows)).toBeUndefined();
   });
 });

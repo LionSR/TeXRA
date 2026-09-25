@@ -5,6 +5,7 @@ import {
   AgentCategorySchema,
   AgentNameSchema,
   ToolDefinitionSchema,
+  type ToolDefinition,
 } from '@shared/schemas';
 
 /**
@@ -19,20 +20,26 @@ const temperatureField = z.number().min(0).max(1);
 /** Variable name to file path, resolved against the agent's YAML directory. */
 const requiredFilesField = z.record(z.string(), z.string());
 const defaultOutputFilesField = z.array(z.string());
+/**
+ * Tool reference: a YAML name, parsed here into the bare `{ name }` entry
+ * whose contract (description, parameters) the registry applies once per run
+ * in `resolveAgentTools`; or, for definitions registered as values rather
+ * than YAML, a whole tool definition, which may carry runtime-only fields no
+ * YAML can express.
+ */
+const toolsField = z.array(
+  z.union([
+    z.string().transform((name): ToolDefinition => ({ name })),
+    ToolDefinitionSchema,
+  ]),
+);
 
 const AgentSettingBaseSchema = z.strictObject({
   temperature: temperatureField.prefault(1.0),
   requiredFilesInternal: requiredFilesField.prefault({}),
   defaultOutputFiles: defaultOutputFilesField.prefault([]),
-  tools: z.array(ToolDefinitionSchema).prefault([]),
+  tools: toolsField.prefault([]),
 });
-
-/**
- * Tool reference: a name resolved from the registry, or — for definitions
- * registered as values rather than YAML — a whole tool definition, which may
- * carry runtime-only fields no YAML can express.
- */
-const AgentToolInputSchema = z.union([z.string(), ToolDefinitionSchema]);
 
 export const AgentWorkflowSettingSchema = AgentSettingBaseSchema.extend({
   agentCategory: z
@@ -64,15 +71,15 @@ export type AgentToolUseSetting = Extract<
 >;
 
 // ---------------------------------------------------------------------------
-// Input-friendly settings schemas — accept raw YAML values (string tool names)
-// before the tool-resolution step replaces them with full ToolDefinition objects.
+// Input-friendly settings schemas: raw YAML values before inheritance and
+// defaults. A string tool name is already parsed into its `{ name }` entry.
 // ---------------------------------------------------------------------------
 
 const rawAgentSettingBaseFields = {
   temperature: temperatureField.optional(),
   requiredFilesInternal: requiredFilesField.optional(),
   defaultOutputFiles: defaultOutputFilesField.optional(),
-  tools: z.array(AgentToolInputSchema).optional(),
+  tools: toolsField.optional(),
 };
 
 /** Workflow-only settings, shared by the partial and root raw input schemas. */

@@ -63,7 +63,7 @@ describe('CLI user question modal', () => {
     expect(lines).toHaveLength(2);
     expect(lines[0]).toMatchObject({
       kind: 'question',
-      text: expect.stringContaining('clipped rows'),
+      text: expect.stringContaining('rows hidden - '),
     });
     expect(lines[0]?.text).toContain('1/1 Explain');
   });
@@ -79,7 +79,7 @@ describe('CLI user question modal', () => {
     expect(lines).toHaveLength(1);
     expect(lines[0]).toMatchObject({
       kind: 'question',
-      text: expect.stringContaining('clipped rows'),
+      text: expect.stringContaining('rows hidden - '),
     });
     expect(lines[0]?.text).toContain('Continue?');
   });

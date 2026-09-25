@@ -7,9 +7,9 @@ import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, vi } from 'vitest';
 
 // Local imports
-import { apiKeyEnvName, invalidateApiKeyCache } from '@model/apiProviders';
 import * as apiProviders from '@model/apiProviders';
 import { SecretsFailed } from '@platform/secrets';
+import { apiKeyEnvName } from '@shared/constants/providers';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
 import { ProbeEnvironmentTool } from '@tools/setup/ProbeEnvironmentTool';
@@ -41,9 +41,6 @@ function outputOf(result: { output?: string }): string {
 setupPlatform({}, { setup: createFakeSetupPlatform() });
 
 beforeEach(() => {
-  // The `Secrets` service is one stable object over whichever fake host is
-  // installed, so the API-key lookup cache it keys on outlives a host swap.
-  invalidateApiKeyCache();
   // The default fake host has no credentials at all, so the aggregate probe
   // answers false without any stubbing; each test seeds what it needs.
   mocks.locateTool.mockReset().mockImplementation((name) =>

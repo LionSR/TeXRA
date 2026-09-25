@@ -55,14 +55,14 @@ type WorkspaceIpcOptions = Parameters<typeof createDesktopWorkspaceIpc>[1];
 function createIpc(
   postToRenderer: (message: unknown) => void,
   overrides: Partial<WorkspaceIpcOptions> = {},
+  onAsyncError: (error: unknown) => void = vi.fn(),
 ) {
+  const runtime = testRuntime();
   const options: WorkspaceIpcOptions = {
     ptyHost: createPtyHost(),
     browserViews: createBrowserViews(),
     toWindowBounds: (bounds) => bounds,
     getWorkspacePath: () => workspacePath,
-    onAsyncError: vi.fn(),
-    runtime: testRuntime(),
     ...overrides,
   };
   const ipc = createDesktopWorkspaceIpc({ postToRenderer }, options);
@@ -70,13 +70,22 @@ function createIpc(
   // open would keep reacting to later tests' emits.
   const scope = Scope.makeUnsafe();
   liveScopes.push(scope);
-  options.runtime.runSync(
+  runtime.runSync(
     Effect.forkIn(ipc.followFilesWritten, scope, { startImmediately: true }),
   );
   return {
     ...ipc,
+    // Runs the answered program the way the window's router does: forked,
+    // with its failure handed to the async-error reporter.
     handleMessage(message: Parameters<typeof ipc.handleMessage>[0]) {
-      return ipc.handleMessage({ ...message, session: workspacePath });
+      const program = ipc.handleMessage({ ...message, session: workspacePath });
+      if (!program) return false;
+      runtime.runFork(
+        program.pipe(
+          Effect.catch((error) => Effect.sync(() => onAsyncError(error))),
+        ),
+      );
+      return true;
     },
   };
 }
@@ -170,7 +179,7 @@ describe('desktop workspace IPC', () => {
   it('reads regular workspace files but rejects symlink targets outside the workspace', async () => {
     const postToRenderer = vi.fn();
     const onAsyncError = vi.fn();
-    const ipc = createIpc(postToRenderer, { onAsyncError });
+    const ipc = createIpc(postToRenderer, {}, onAsyncError);
 
     const fileRead = nextCall(
       postToRenderer,

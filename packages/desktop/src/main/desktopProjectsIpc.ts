@@ -1,3 +1,5 @@
+import { Effect } from 'effect';
+
 import {
   DESKTOP_PROJECT_COMMANDS,
   DesktopCloseProjectMessageSchema,
@@ -25,27 +27,28 @@ export function createDesktopProjectsIpc(
   actions: DesktopProjectsIpcActions,
 ): DesktopMessageHandler {
   return {
-    handleMessage(message: DesktopCommandMessage): boolean {
+    handleMessage(message: DesktopCommandMessage) {
       switch (message.command) {
         case DESKTOP_PROJECT_COMMANDS.REQUEST_PROJECTS:
-          actions.postProjects();
-          return true;
+          return Effect.sync(() => actions.postProjects());
         case DESKTOP_PROJECT_COMMANDS.SELECT_PROJECT: {
           const parsed = DesktopSelectProjectMessageSchema.safeParse(message);
-          if (parsed.success) actions.selectProject(parsed.data.key);
-          return true;
+          return Effect.sync(() => {
+            if (parsed.success) actions.selectProject(parsed.data.key);
+          });
         }
         case DESKTOP_PROJECT_COMMANDS.CLOSE_PROJECT: {
           const parsed = DesktopCloseProjectMessageSchema.safeParse(message);
-          if (parsed.success)
-            actions.closeProject(
-              parsed.data.key,
-              parsed.data.hasUnsavedChanges,
-            );
-          return true;
+          return Effect.sync(() => {
+            if (parsed.success)
+              actions.closeProject(
+                parsed.data.key,
+                parsed.data.hasUnsavedChanges,
+              );
+          });
         }
         default:
-          return false;
+          return undefined;
       }
     },
   };

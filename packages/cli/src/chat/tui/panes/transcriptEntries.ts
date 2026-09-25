@@ -76,7 +76,7 @@ function trimAssistantTranscriptLead(text: string): string {
  * Memoized on the row object, which the fold replaces (never mutates) when its
  * content changes, so a hit is always current and a dropped row takes its
  * cache slot with it. Without the memo the renderable/split/scan walks would
- * re-run the markdown normalize and redaction passes for every row on every
+ * re-run the markdown normalize and terminal-sanitize passes for every row on every
  * frame.
  */
 const HEADLINE_CACHE = new WeakMap<TranscriptRow, string>();

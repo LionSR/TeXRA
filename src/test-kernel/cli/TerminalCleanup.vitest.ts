@@ -12,14 +12,11 @@ import {
   vi,
 } from 'vitest';
 
+import { Effect } from 'effect';
 import { terminalCapabilities } from '@cli/chat/tui/state/terminalCapabilities';
 
-import {
-  claimedRunId,
-  resetCliState,
-  rootRunPending,
-  rootRunId,
-} from '@cli/chat/tui/state/cliState';
+import { resetCliState, rootRunId } from '@cli/chat/tui/state/cliState';
+import { TuiSession } from '@cli/chat/tui/state/sessionRunState';
 import { acquireTuiTerminal } from '@cli/tui/terminalCleanup';
 import {
   installTerminalTitleUpdates,
@@ -148,8 +145,9 @@ describe('installTerminalTitleUpdates', () => {
     vi.setSystemTime(0);
     enableOscTitles();
     const updates = installTerminalTitleUpdates('/work/coauthor');
-    rootRunPending.set(true);
-    claimedRunId.set('transition-root' as RunId);
+    const session = new TuiSession(() => undefined);
+    session.markRunPending(Effect.never);
+    session.runId = 'transition-root' as RunId;
     setPhase('transition-root', RUN_PHASE.WAITING);
     setPhase('transition-child', RUN_PHASE.RUNNING);
     await flushTitleUpdate();
@@ -192,7 +190,8 @@ describe('installTerminalTitleUpdates', () => {
     const updates = installTerminalTitleUpdates(
       '/tmp/evil\x07\x1b]0;pwned\x07',
     );
-    rootRunPending.set(true);
+    const session = new TuiSession(() => undefined);
+    session.markRunPending(Effect.never);
     await flushTitleUpdate();
     updates.dispose();
     expect(writeSync).not.toHaveBeenCalled();
@@ -201,7 +200,7 @@ describe('installTerminalTitleUpdates', () => {
     const capableUpdates = installTerminalTitleUpdates(
       '/tmp/evil\x07\x1b]0;pwned\x07',
     );
-    rootRunPending.set(false);
+    session.clearRunState();
     await flushTitleUpdate();
     expectLastTitle('{T}·evil]0;pwned');
     capableUpdates.dispose();

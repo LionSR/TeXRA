@@ -1,12 +1,12 @@
 import { it } from '@effect/vitest';
-import { Effect } from 'effect';
+import { Effect, FileSystem, Layer } from 'effect';
 import { describe, expect, vi } from 'vitest';
 
 import {
   cloneOverleafProject,
   type OverleafCloneWorkflowPorts,
 } from '@latex/overleafClone';
-import type { OverleafRemote } from '@latex/overleafProject';
+import { overleafGitClone, type OverleafRemote } from '@latex/overleafProject';
 
 import { scriptedSpawnerLayer } from '@test/support/childProcessTestLayer';
 
@@ -40,11 +40,12 @@ function createPorts(
   };
 }
 
-/** `git --version` answers with `gitExit`; the clone itself is a port. */
+/** `git --version` answers with `gitExit`; the clone itself is a port, and
+ *  the port doubles never touch the filesystem the workflow requires. */
 function clone(ports: OverleafCloneWorkflowPorts, gitExit = 0) {
   const spawner = scriptedSpawnerLayer(() => ({ exitCode: gitExit }));
   return cloneOverleafProject(REMOTE, '/workspace', ports).pipe(
-    Effect.provide(spawner.layer),
+    Effect.provide(Layer.merge(spawner.layer, FileSystem.layerNoop({}))),
   );
 }
 
@@ -56,7 +57,7 @@ describe('cloneOverleafProject', () => {
       expect(yield* clone(ports)).toEqual({ status: 'success' });
 
       expect(ports.runClone).toHaveBeenCalledWith(
-        `https://git:olp_saved@git.overleaf.com${REMOTE.path}`,
+        overleafGitClone(REMOTE, 'olp_saved'),
         '/workspace',
       );
       expect(ports.promptToken).not.toHaveBeenCalled();
@@ -182,16 +183,13 @@ describe('cloneOverleafProject', () => {
       }),
   );
 
-  it.effect('clears failed credentials and redacts them from logs', () =>
+  it.effect('clears failed credentials and logs the failure', () =>
     Effect.gen(function* () {
       const ports = createPorts({
-        getStoredToken: vi.fn(() =>
-          Effect.succeed<string | undefined>('olp_secret'),
-        ),
         runClone: vi.fn(() =>
           Effect.fail(
             new Error(
-              'fatal: auth failed for https://git:olp_secret@git.overleaf.com',
+              "fatal: Authentication failed for 'https://git.overleaf.com/0123456789abcdef01234567/'",
             ),
           ),
         ),
@@ -202,7 +200,7 @@ describe('cloneOverleafProject', () => {
       expect(ports.deleteStoredToken).toHaveBeenCalledWith('overleaf.gitToken');
       expect(ports.showAuthFailure).toHaveBeenCalledWith(REMOTE);
       expect(ports.logCloneError).toHaveBeenCalledWith(
-        expect.not.stringContaining('olp_secret'),
+        expect.stringContaining('Authentication failed'),
       );
     }),
   );

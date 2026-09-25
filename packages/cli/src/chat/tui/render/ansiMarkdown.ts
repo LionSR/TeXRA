@@ -17,6 +17,7 @@ import pico from 'picocolors';
 
 import { textDisplayWidth } from '@cli/runtime/terminalText';
 import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
+import { isTuiColorEnabled } from '@cli/tui/noColorOutput';
 import {
   createMarkdownProcessor,
   type MarkdownProcessorRenderEnv,
@@ -476,16 +477,13 @@ function configureAnsi(
 
 // Table layout needs the terminal width baked into the renderer (the shared
 // processor caches by content only), so each processor is bound to one
-// (width, colorEnabled) pair. Keep a small LRU of processors rather than a
-// single slot: callers are not guaranteed to agree on the pair (the row
-// estimator defaults color on while a NO_COLOR painter passes false), and
-// with a single slot any alternation would rebuild the processor and discard
-// its content LRU — re-parsing every visible markdown body per frame.
+// (width, colorEnabled) pair. A small LRU rather than one slot: panes differ
+// in width, and each rebuild would discard the processor's content LRU.
 const processorCache = new LRUCache<string, MarkdownProcessor>({ max: 4 });
 
 function processorFor(
   width: number | undefined,
-  colorEnabled: boolean,
+  colorEnabled = isTuiColorEnabled(),
 ): MarkdownProcessor {
   const key = `${width ?? 'auto'}:${colorEnabled ? 'color' : 'plain'}`;
   const cached = processorCache.get(key);
@@ -514,6 +512,7 @@ function processorFor(
 
 interface RenderAnsiMarkdownOptions {
   readonly width?: number;
+  /** Default: the TUI session mode, so measurers and painters agree. */
   readonly colorEnabled?: boolean;
 }
 
@@ -527,7 +526,7 @@ export function renderAnsiMarkdown(
   content: string,
   options: RenderAnsiMarkdownOptions = {},
 ): string {
-  const processor = processorFor(options.width, options.colorEnabled ?? true);
+  const processor = processorFor(options.width, options.colorEnabled);
   return wrapAnsiToWidth(processor(content), options.width, true).trimEnd();
 }
 

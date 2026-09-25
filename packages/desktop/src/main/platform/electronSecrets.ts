@@ -3,10 +3,8 @@ import { safeStorage } from 'electron';
 
 import { emitAppSignal } from '@eventBus/AppSignals';
 import type { MessageHost } from '@hosts/uiHosts';
-import { invalidateApiKeyCache } from '@model/apiProviders';
 import {
   SecretsFailed,
-  secretsGet,
   type PlatformSecrets,
   type SecretsOperation,
 } from '@platform/secrets';
@@ -34,8 +32,8 @@ const SAFE_STORAGE_UNAVAILABLE_MESSAGE =
 /**
  * Test-harness shim: when `TEXRA_DISABLE_KEYCHAIN` is set the secrets layer
  * skips every `safeStorage` call so headless Playwright runs do not block on
- * the macOS keychain prompt. Not exposed as a user-facing toggle — env-var
- * API keys still work via the existing override in `ElectronSecrets.get()`.
+ * the macOS keychain prompt. Not exposed as a user-facing toggle; env-var
+ * API keys still work through `resolveCredential`'s environment tier.
  * Re-read on every yield (the ambient ConfigProvider is live), never latched.
  */
 const keychainDisabled = envFlag('TEXRA_DISABLE_KEYCHAIN');
@@ -73,17 +71,12 @@ export class ElectronSecrets implements PlatformSecrets {
     private readonly options: ElectronSecretsOptions = {},
   ) {}
 
-  /** Environment variables override persisted Electron secrets. */
-  get(key: string) {
-    return secretsGet(this, key);
-  }
-
-  getStored(key: string): Effect.Effect<string | undefined, SecretsFailed> {
+  get(key: string): Effect.Effect<string | undefined, SecretsFailed> {
     return Effect.flatMap(keychainDisabled, (disabled) => {
       // Test-harness shim: skip safeStorage entirely when the env var is set
       // so headless Playwright runs do not block on the macOS keychain
-      // prompt. Env-var API key overrides already returned; here we just
-      // report "no saved secret" rather than touching safeStorage.
+      // prompt. Report "no saved secret" rather than touching safeStorage;
+      // an env-var API key still resolves through `resolveCredential`.
       if (disabled) {
         warnKeychainDisabledOnce();
         return Effect.succeed(undefined);
@@ -118,7 +111,7 @@ export class ElectronSecrets implements PlatformSecrets {
       catch: (cause) =>
         new SecretsFailed({
           reason: 'decrypt-failed',
-          operation: 'getStored',
+          operation: 'get',
           key,
           message: `The system keychain refused to decrypt the stored secret "${key}": ${toErrorMessage(cause)}`,
           cause,
@@ -264,10 +257,7 @@ export class ElectronSecrets implements PlatformSecrets {
         }),
     ).pipe(
       Effect.ensuring(
-        Effect.sync(() => {
-          invalidateApiKeyCache();
-          emitAppSignal('credentialChanged', { key });
-        }),
+        Effect.sync(() => emitAppSignal('credentialChanged', { key })),
       ),
     );
   }

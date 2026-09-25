@@ -7,7 +7,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 import { it } from '@effect/vitest';
 
-import { Effect } from 'effect';
+import { Effect, Fiber } from 'effect';
 
 import { beforeEach, describe, expect, vi } from 'vitest';
 import type { ToolServices } from '@agent/runtime/ToolServices';
@@ -256,6 +256,57 @@ describe('ExecutionsTool', () => {
           }),
         ),
       ),
+  );
+
+  // The blocking wait wakes on the fold's own phase move, read off the
+  // session's view stream, well inside its deadline.
+  it.live(
+    'wakes a blocking wait when a waited run changes phase',
+    () =>
+      withSession((session) =>
+        Effect.gen(function* () {
+          const parentRunId = RunIdSchema.parse('ba5e0000000c');
+          const childRunId = RunIdSchema.parse('c41d0000000c');
+          publishTestRunStart(session, parentRunId);
+          publishTestRunStart(session, childRunId, { parent: parentRunId });
+          session.runs.track(
+            testRunHandle({
+              runId: childRunId,
+              parent: parentRunId,
+              agent: 'review',
+            }),
+          );
+          yield* foldRunPhase(
+            session,
+            childRunId,
+            'turn.begin',
+            RUN_PHASE.RUNNING,
+          );
+          const wait = yield* Effect.forkChild(
+            ExecutionsTool.call({
+              path: `/executions/${childRunId}`,
+              action: 'wait',
+              timeout: 600,
+            }).pipe(
+              Effect.provide(
+                nativeToolTestLayer({
+                  run: { session, runId: parentRunId, toolPolicy: {} },
+                }),
+              ),
+            ),
+          );
+          yield* Effect.yieldNow;
+          yield* foldRunPhase(
+            session,
+            childRunId,
+            'waiting',
+            RUN_PHASE.WAITING,
+          );
+          const result = yield* Fiber.join(wait);
+          expect(result.status).not.toBe('error');
+        }),
+      ),
+    { timeout: 5000 },
   );
 
   it.live('reads running task lists from session snapshot state', () =>

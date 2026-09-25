@@ -16,6 +16,7 @@
  * billed attempt implicitly.
  */
 import { randomUUID } from 'node:crypto';
+import { MODEL_CONFIGS } from 'llm-zoo';
 
 import {
   Cause,
@@ -48,7 +49,6 @@ import {
 } from '@agent/trace';
 import { hasMissingApiKeyErrorMarker } from '@common/errors/sdkError/errorMetadata';
 import { isUserAbort } from '@common/errors/sdkError/errorPatterns';
-import { resolveRuntimeModelConfig } from '@model/runtimeModelRegistry';
 import type { StateReadFailed } from '@platform/interfaces';
 import type { LanguageModel } from '@platform/languageModel';
 import { roundedUtilizationPercent } from '@shared/runs/contextUtilization';
@@ -145,7 +145,6 @@ export interface InvokeRequest {
   /** The tools this turn advertises; a reflection turn advertises none. */
   readonly tools: TurnRequest['tools'];
   readonly toolChoice: TurnRequest['toolChoice'];
-  readonly stopSequences?: TurnRequest['stopSequences'];
   /** The turn's round ordinal, for debug file naming. */
   readonly round: number;
   /** The debug file base name of the family issuing the turn. */
@@ -309,9 +308,6 @@ export const modelInvokerLayer = (): Layer.Layer<
         ...(request.tools !== undefined ? { tools: request.tools } : {}),
         ...(request.toolChoice !== undefined
           ? { toolChoice: request.toolChoice }
-          : {}),
-        ...(request.stopSequences !== undefined
-          ? { stopSequences: request.stopSequences }
           : {}),
         ...(state.continuation !== null &&
         state.continuation.origin.protocol === bound.origin.protocol &&
@@ -910,8 +906,7 @@ export const modelInvokerLayer = (): Layer.Layer<
             // endpoint) and binds the catalog model.
             const config =
               selection === 'personal'
-                ? ((yield* resolveRuntimeModelConfig(failed.modelId)) ??
-                  failed.config)
+                ? (MODEL_CONFIGS[failed.modelId] ?? failed.config)
                 : failed.config;
             const next = yield* bindModel({
               config,
@@ -984,9 +979,8 @@ export const modelInvokerLayer = (): Layer.Layer<
               aggregateId,
               requestId,
               // The row is committed here rather than at the session's door
-              // (`openRequest`), so the scrub that door applies happens here:
-              // a provider message echoing an `Authorization` header never
-              // reaches a durable row.
+              // (`openRequest`), so the door's `rawErrorBody` drop happens
+              // here too: the raw response body never reaches a durable row.
               payload: redactedForFact({ kind: 'retry', data: request }),
               thread: null,
             },

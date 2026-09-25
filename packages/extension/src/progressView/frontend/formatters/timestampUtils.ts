@@ -2,6 +2,8 @@
  * Timestamp formatting utilities for progress view formatters.
  */
 
+import { cachedDateTimeFormat } from '@ui/formatting/dateTimeFormat';
+
 const DATETIME_FORMAT_OPTIONS: Intl.DateTimeFormatOptions = {
   year: 'numeric',
   month: '2-digit',
@@ -17,14 +19,9 @@ const TIME_FORMAT_OPTIONS: Intl.DateTimeFormatOptions = {
   second: '2-digit',
 };
 
-// Shared formatters (lazily initialized for browser environments)
-let TIME_FORMATTER: Intl.DateTimeFormat | null = null;
-let DATE_TIME_FORMATTER: Intl.DateTimeFormat | null = null;
-
 /** Get the time-only formatter. */
 export function getTimeFormatter(): Intl.DateTimeFormat {
-  TIME_FORMATTER ??= new Intl.DateTimeFormat(undefined, TIME_FORMAT_OPTIONS);
-  return TIME_FORMATTER;
+  return cachedDateTimeFormat(TIME_FORMAT_OPTIONS);
 }
 
 /** Format a timestamp for display. */
@@ -32,12 +29,10 @@ export function formatDisplayTimestamp(date: Date): {
   timeDisplay: string;
   tooltipTimestamp: string;
 } {
-  DATE_TIME_FORMATTER ??= new Intl.DateTimeFormat(
-    undefined,
-    DATETIME_FORMAT_OPTIONS,
-  );
   return {
     timeDisplay: getTimeFormatter().format(date),
-    tooltipTimestamp: DATE_TIME_FORMATTER.format(date),
+    tooltipTimestamp: cachedDateTimeFormat(DATETIME_FORMAT_OPTIONS).format(
+      date,
+    ),
   };
 }

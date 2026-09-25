@@ -6,10 +6,10 @@
 // `../` traversal would otherwise reach anything the user can.
 //
 // Every disk operation below is a program over the standard library's
-// `FileSystem`, settled on the runtime the window handed this handler. The
-// paths are the canonical ones the containment check vouched for, which a
-// workspace symlink can place outside the lexical root, so they go to the
-// process filesystem, not a root-confined view that would refuse them.
+// `FileSystem`, which the window's router runs and reports. The paths are the
+// canonical ones the containment check vouched for, which a workspace symlink
+// can place outside the lexical root, so they go to the process filesystem,
+// not a root-confined view that would refuse them.
 
 import { basename, dirname, join } from 'node:path';
 
@@ -23,7 +23,6 @@ import {
 import { FILE_HANDLING_RULES } from '@common/files/fileHandlingRules';
 import { getIncludedExtensions } from '@common/files/fileTypeUtils';
 import { onAppSignal } from '@eventBus/AppSignals';
-import type { ProcessRuntime } from '@platform/processRuntime';
 import { normalizeFilePath } from '@utils/core';
 import { locateInWorkspace } from '@utils/files/workspaceFS';
 import { isPathWithin } from '@utils/core/pathCore';
@@ -66,9 +65,6 @@ interface DesktopWorkspaceIpcOptions {
    * compares to.
    */
   getWorkspacePath(): string | undefined;
-  onAsyncError(error: unknown): void;
-  /** The process runtime the window was handed; every program settles on it. */
-  runtime: ProcessRuntime;
 }
 
 interface DesktopWorkspaceIpc extends DesktopMessageHandler {
@@ -272,24 +268,26 @@ export function createDesktopWorkspaceIpc(
   );
 
   /**
-   * Report the failure and tell the renderer its request failed. Loud by
-   * construction: the window's own async-error reporter sees the cause and the
-   * request never settles in silence.
+   * Tell the renderer its request failed, then fail with the cause. Loud by
+   * construction: the window's router reports the cause and the request never
+   * settles in silence.
    */
-  function reportRequestFailure(
-    error: unknown,
+  function reportRequestFailure<E extends Error>(
+    error: E,
     message: DesktopCommandMessage,
-  ): Effect.Effect<void> {
-    return Effect.sync(() => {
-      options.onAsyncError(error);
-      renderer.postToRenderer(message);
-    });
+  ): Effect.Effect<never, E> {
+    return Effect.andThen(
+      Effect.sync(() => renderer.postToRenderer(message)),
+      Effect.fail(error),
+    );
   }
 
   function reportFileFailure(
     requestId: string,
     path: string,
-  ): (error: WorkspaceFileFailure) => Effect.Effect<void> {
+  ): (
+    error: WorkspaceFileFailure,
+  ) => Effect.Effect<never, WorkspaceFileFailure> {
     return (error) =>
       reportRequestFailure(error, {
         command: DESKTOP_WORKSPACE_COMMANDS.FILE_ERROR,
@@ -474,57 +472,56 @@ export function createDesktopWorkspaceIpc(
 
     handleMessage(message: DesktopCommandMessage) {
       const parsed = DesktopWorkspaceInboundMessageSchema.safeParse(message);
-      if (!parsed.success) return false;
+      if (!parsed.success) return undefined;
       const data = parsed.data;
 
       switch (data.command) {
         case DESKTOP_WORKSPACE_COMMANDS.LIST_FILES:
-          options.runtime.runFork(listFiles(data.requestId, data.directory));
-          return true;
+          return listFiles(data.requestId, data.directory);
         case DESKTOP_WORKSPACE_COMMANDS.READ_FILE:
-          options.runtime.runFork(readFile(data.requestId, data.path));
-          return true;
+          return readFile(data.requestId, data.path);
         case DESKTOP_WORKSPACE_COMMANDS.WRITE_FILE:
-          options.runtime.runFork(
-            writeFile(data.requestId, data.path, data.contents),
-          );
-          return true;
+          return writeFile(data.requestId, data.path, data.contents);
 
         case DESKTOP_WORKSPACE_COMMANDS.TERMINAL_START:
-          options.runtime.runFork(
-            startTerminal(
-              data.sessionId,
-              data.cols,
-              data.rows,
-              data.initialCommand,
-            ),
+          return startTerminal(
+            data.sessionId,
+            data.cols,
+            data.rows,
+            data.initialCommand,
           );
-          return true;
         case DESKTOP_WORKSPACE_COMMANDS.TERMINAL_INPUT:
-          options.ptyHost.get(data.sessionId)?.write(data.data);
-          return true;
+          return Effect.sync(() => {
+            options.ptyHost.get(data.sessionId)?.write(data.data);
+          });
         case DESKTOP_WORKSPACE_COMMANDS.TERMINAL_RESIZE:
-          options.ptyHost.get(data.sessionId)?.resize(data.cols, data.rows);
-          return true;
+          return Effect.sync(() => {
+            options.ptyHost.get(data.sessionId)?.resize(data.cols, data.rows);
+          });
         case DESKTOP_WORKSPACE_COMMANDS.TERMINAL_CLOSE:
-          options.ptyHost.get(data.sessionId)?.dispose();
-          return true;
+          return Effect.sync(() => {
+            options.ptyHost.get(data.sessionId)?.dispose();
+          });
 
         case DESKTOP_WORKSPACE_COMMANDS.BROWSER_OPEN:
-          options.browserViews.open(data.tabId, data.url);
-          return true;
+          return Effect.sync(() => {
+            options.browserViews.open(data.tabId, data.url);
+          });
         case DESKTOP_WORKSPACE_COMMANDS.BROWSER_BOUNDS:
-          options.browserViews.show(
-            data.tabId,
-            options.toWindowBounds(data.bounds),
-          );
-          return true;
+          return Effect.sync(() => {
+            options.browserViews.show(
+              data.tabId,
+              options.toWindowBounds(data.bounds),
+            );
+          });
         case DESKTOP_WORKSPACE_COMMANDS.BROWSER_HIDE:
-          options.browserViews.hideAll();
-          return true;
+          return Effect.sync(() => {
+            options.browserViews.hideAll();
+          });
         case DESKTOP_WORKSPACE_COMMANDS.BROWSER_CLOSE:
-          options.browserViews.close(data.tabId);
-          return true;
+          return Effect.sync(() => {
+            options.browserViews.close(data.tabId);
+          });
       }
     },
   };

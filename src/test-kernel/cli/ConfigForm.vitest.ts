@@ -9,7 +9,6 @@ import { z } from 'zod';
 import {
   buildConfigListItems,
   coerceSettingInput,
-  isConfigResetInput,
   settingEditKind,
   validateSettingInput,
 } from '@cli/chat/tui/forms/ConfigForm';
@@ -241,17 +240,6 @@ describe('ConfigForm helpers', () => {
     if (!invalid.ok) expect(invalid.message).not.toBe('');
   });
 
-  it.each<[string, Parameters<typeof isConfigResetInput>[1], boolean]>([
-    ['r', { ctrl: true }, true],
-    ['\u0012', {}, true],
-    ['r', { meta: true }, false],
-  ])(
-    'recognizes parsed and raw Ctrl-R reset input (%j, %j)',
-    (input, key, expected) => {
-      expect(isConfigResetInput(input, key)).toBe(expected);
-    },
-  );
-
   it('marks an unsupported schema kind read-only', () => {
     expect(settingEditKind(RECORD_ENTRY)).toBe('readonly');
     const [item] = buildConfigListItems([RECORD_ENTRY], () => ({}));
@@ -419,7 +407,7 @@ describe('CliConfigForm API-key status lifecycle', () => {
         yield* Effect.promise(() =>
           waitFor(() => rendered.stdout.output.includes('Token set')),
         );
-        expect(yield* formSecrets.getStored(GITHUB_TOKEN_STORAGE_KEY)).toBe(
+        expect(yield* formSecrets.get(GITHUB_TOKEN_STORAGE_KEY)).toBe(
           'ghp_private-test-token',
         );
         expect(rendered.stdout.output).not.toContain('ghp_private-test-token');

@@ -5,32 +5,33 @@ import { useInput, useWindowSize } from 'ink';
 // Local imports - TUI layout, input, and markdown rendering
 import { wrappedRowCount } from '@cli/tui/ansiWrap';
 import { isEscapeInput } from '@cli/tui/inputKeys';
-import { FormFrame, formFrameWidth } from '../forms/_shared/FormFrame';
+import { borderedPanelChromeRows } from '@cli/tui/ui/BorderedPanel';
+import { CLOSE_HINTS } from '@cli/tui/ui/KeyHints';
+import { FormFrame, formFrameContentWidth } from '../forms/_shared/FormFrame';
 import { renderAnsiMarkdown } from '../render/ansiMarkdown';
 import { Markdown } from '../render/Markdown';
-
-const INFO_PANE_FIXED_CHROME_ROWS = 4;
-const INFO_PANE_HORIZONTAL_CHROME_COLUMNS = 4;
 
 function infoPaneRequiredRows(
   title: string,
   lines: readonly string[],
-  textWidth: number,
+  width: number,
 ): number {
-  const width = Math.max(1, textWidth);
   const titleRows = wrappedRowCount(title, width);
   const rendered = renderAnsiMarkdown(lines.join('\n'), {
     colorEnabled: false,
     width,
   });
-  return INFO_PANE_FIXED_CHROME_ROWS + titleRows + rendered.split('\n').length;
+  return (
+    borderedPanelChromeRows(CLOSE_HINTS, width) +
+    titleRows +
+    rendered.split('\n').length
+  );
 }
 
 interface InfoPaneProps {
   readonly title: string;
   readonly lines: readonly string[];
   readonly availableRows: number;
-  readonly colorEnabled?: boolean;
   readonly onClose: () => void;
   readonly onOverflow: (lines: readonly string[]) => void;
 }
@@ -38,8 +39,7 @@ interface InfoPaneProps {
 /** Stateless, Esc-only reference text surface with a strict row budget. */
 export function InfoPane(props: InfoPaneProps): React.JSX.Element | null {
   const { columns } = useWindowSize();
-  const textWidth =
-    formFrameWidth(columns) - INFO_PANE_HORIZONTAL_CHROME_COLUMNS;
+  const textWidth = formFrameContentWidth(columns);
   const fits =
     infoPaneRequiredRows(props.title, props.lines, textWidth) <=
     props.availableRows;
@@ -57,11 +57,7 @@ export function InfoPane(props: InfoPaneProps): React.JSX.Element | null {
   if (!fits) return null;
   return (
     <FormFrame title={props.title}>
-      <Markdown
-        colorEnabled={props.colorEnabled}
-        content={props.lines.join('\n')}
-        width={textWidth}
-      />
+      <Markdown content={props.lines.join('\n')} width={textWidth} />
     </FormFrame>
   );
 }

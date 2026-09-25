@@ -244,9 +244,6 @@ export class ProgressApp extends LitElement {
     view: SessionView,
   ): TemplateResult | typeof nothing {
     const onDesktop = this.placement === 'desktop';
-    // The desktop shell has its own header over this column; a run keeps
-    // only its own row there, and the New-task state none.
-    if (onDesktop && !run) return nothing;
     const sessions = renderIconActionButtonParts({
       id: 'shell-sessions',
       icon: 'list-ul',
@@ -283,6 +280,7 @@ export class ProgressApp extends LitElement {
           })}
         </div>
         <div class="header-main">
+          <slot name="header-start"></slot>
           ${
             run
               ? html`<run-header
@@ -295,8 +293,10 @@ export class ProgressApp extends LitElement {
               : html`${sessions.button}${sessions.tooltip}
                   <span class="shell-title header-main-title">New task</span>
                   <span class="spacer"></span>
-                  ${newTask.button}${newTask.tooltip} ${this.renderOverflow()}`
+                  ${onDesktop ? nothing : [newTask.button, newTask.tooltip]}
+                  ${this.renderOverflow()}`
           }
+          <slot name="header-end"></slot>
         </div>
       </header>
     `;

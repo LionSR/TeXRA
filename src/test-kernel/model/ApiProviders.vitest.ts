@@ -1,24 +1,22 @@
 import * as path from 'node:path';
 
 import { it } from '@effect/vitest';
-import { Deferred, Effect, Fiber, Redacted } from 'effect';
-import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
+import { Deferred, Effect, Fiber } from 'effect';
+import { afterEach, describe, expect, vi } from 'vitest';
 
 import { CliSecrets } from '@cli/runtime/cliSecrets';
 import { onAppSignal } from '@eventBus/AppSignals';
 
 import {
-  apiKeyEnvName,
   apiKeySecretName,
   configuredApiKeyProviders,
   getApiKey,
   hasUsableApiKey,
-  invalidateApiKeyCache,
   loadApiKeyStatusMap,
   lookupApiKeyOrigin,
 } from '@model/apiProviders';
 import { SecretsFailed, type PlatformSecrets } from '@platform/secrets';
-import { createDeferred } from '@test/support/asyncTestUtils';
+import { apiKeyEnvName } from '@shared/constants/providers';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { installPlatform } from '@test/support/setupPlatform';
 import { withTempDirEffect } from '@test/support/tempDirPlatform';
@@ -34,9 +32,6 @@ function createSecrets(initial: Record<string, string> = {}): {
     store,
     secrets: {
       get(key) {
-        return Effect.sync(() => store.get(key));
-      },
-      getStored(key) {
         return Effect.sync(() => store.get(key));
       },
       set(key, value) {
@@ -79,39 +74,31 @@ async function setupApiKeyToolPlatform(
   );
 }
 
-describe('API provider key caches', () => {
-  beforeEach(() => {
-    invalidateApiKeyCache();
-  });
-
+describe('API provider key resolution', () => {
   afterEach(() => {
-    invalidateApiKeyCache();
     vi.restoreAllMocks();
   });
 
-  it.effect(
-    'derives provider status from the canonical API-key origin cache',
-    () =>
-      Effect.gen(function* () {
-        const { secrets } = createSecrets({
-          [apiKeySecretName('openai')]: 'sk-test',
-        });
+  it.effect('derives provider status from the resolved API-key origin', () =>
+    Effect.gen(function* () {
+      const { secrets } = createSecrets({
+        [apiKeySecretName('openai')]: 'sk-test',
+      });
 
-        expect(yield* loadApiKeyStatusMap(secrets, ['openai'])).toEqual({
-          openai: 'set',
-        });
+      expect(yield* loadApiKeyStatusMap(secrets, ['openai'])).toEqual({
+        openai: 'set',
+      });
 
-        invalidateApiKeyCache();
-        const empty = createSecrets({});
+      const empty = createSecrets({});
 
-        expect(
-          yield* loadApiKeyStatusMap(empty.secrets, ['openai']).pipe(
-            withEnv({ OPENAI_API_KEY: 'from-env' }),
-          ),
-        ).toEqual({
-          openai: 'env',
-        });
-      }).pipe(withEnv({})),
+      expect(
+        yield* loadApiKeyStatusMap(empty.secrets, ['openai']).pipe(
+          withEnv({ OPENAI_API_KEY: 'from-env' }),
+        ),
+      ).toEqual({
+        openai: 'env',
+      });
+    }).pipe(withEnv({})),
   );
 
   it.effect('lists only providers with a configured key (secret or env)', () =>
@@ -172,83 +159,11 @@ describe('API provider key caches', () => {
       }).pipe(withEnv({})),
   );
 
+  // Regression: the repaint signal belongs to the store's commit, so a writer
+  // outside the settings controllers (here the setup agent's tool, on the
+  // CLI's file store) still reaches it.
   it.effect(
-    'keeps concurrent and cached API keys bound to their credential stores',
-    () =>
-      Effect.gen(function* () {
-        const firstRead = createDeferred<string | undefined>();
-        const { secrets: backing } = createSecrets();
-        const first: PlatformSecrets = {
-          ...backing,
-          get: vi.fn(() => Effect.promise(() => firstRead.promise)),
-        };
-        const { secrets: second } = createSecrets({
-          [apiKeySecretName('openai')]: 'second-store-key',
-        });
-        const secondRead = vi.spyOn(second, 'get');
-
-        const firstKey = yield* Effect.forkChild(getApiKey(first, 'openai'));
-        const secondKey = yield* Effect.forkChild(getApiKey(second, 'openai'));
-        firstRead.resolve('first-store-key');
-
-        const firstResolved = yield* Fiber.join(firstKey);
-        const secondResolved = yield* Fiber.join(secondKey);
-        // Keys leave the boundary sealed; unwrapping is explicit at every use.
-        expect(String(firstResolved)).toBe('<redacted:openai>');
-        expect(Redacted.value(firstResolved)).toBe('first-store-key');
-        expect(Redacted.value(secondResolved)).toBe('second-store-key');
-        expect(Redacted.value(yield* getApiKey(first, 'openai'))).toBe(
-          'first-store-key',
-        );
-        expect(Redacted.value(yield* getApiKey(second, 'openai'))).toBe(
-          'second-store-key',
-        );
-        expect(first.get).toHaveBeenCalledTimes(1);
-        expect(secondRead).toHaveBeenCalledTimes(1);
-      }).pipe(withEnv({})),
-  );
-
-  it.effect(
-    'does not let in-flight stale lookups repopulate the cache after invalidation',
-    () =>
-      Effect.gen(function* () {
-        const firstLookup = createDeferred<string | undefined>();
-        const firstLookupStarted = createDeferred();
-        const { secrets: backing, store } = createSecrets();
-        let reads = 0;
-        const secrets: PlatformSecrets = {
-          ...backing,
-          get(key) {
-            return Effect.suspend(() => {
-              reads += 1;
-              if (reads === 1) {
-                firstLookupStarted.resolve();
-                return Effect.promise(() => firstLookup.promise);
-              }
-              return Effect.succeed(store.get(key));
-            });
-          },
-        };
-
-        const staleLookup = yield* Effect.forkChild(
-          lookupApiKeyOrigin(secrets, 'openai'),
-        );
-        // The invalidation below must race a read that has actually started.
-        yield* Effect.promise(() => firstLookupStarted.promise);
-        yield* secrets.set(apiKeySecretName('openai'), 'sk-after-invalidate');
-        invalidateApiKeyCache();
-        firstLookup.resolve(undefined);
-
-        expect(yield* Fiber.join(staleLookup)).toBe('none');
-        expect(yield* lookupApiKeyOrigin(secrets, 'openai')).toBe('secret');
-      }).pipe(withEnv({})),
-  );
-
-  // Regression: the key cache drop and the repaint signal belong to the
-  // store's commit, so a writer outside the settings controllers (here the
-  // setup agent's tool, on the CLI's file store) still reaches both.
-  it.effect(
-    'unset_api_key on a file-backed store drops the key cache and emits credentialChanged',
+    'unset_api_key on a file-backed store emits credentialChanged',
     () =>
       withTempDirEffect('texra-unset-key-', (root) =>
         Effect.gen(function* () {
@@ -286,7 +201,6 @@ describe('API provider key caches', () => {
       // The persisted entry is listed but unreadable: the removal path keys off
       // the stored key *names*, so it still has something to delete.
       vi.spyOn(secrets, 'get').mockReturnValue(Effect.succeed(undefined));
-      vi.spyOn(secrets, 'getStored').mockReturnValue(Effect.succeed(undefined));
       yield* Effect.promise(() => setupApiKeyToolPlatform(secrets));
 
       const result = yield* UnsetApiKeyTool.call({ provider: 'openai' }).pipe(

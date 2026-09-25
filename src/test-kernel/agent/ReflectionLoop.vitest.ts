@@ -55,7 +55,6 @@ import {
 import {
   AgentCategory,
   RUN_OUTCOME,
-  STREAM_LOG_ENTRY_TYPES,
   type CompileResult,
   type RetryErrorInfo,
   type RunId,
@@ -66,7 +65,6 @@ import {
 } from '@shared/constants/workflowOutput';
 import { RunLedger } from '@shared/session/runLedger';
 import type { RunState } from '@shared/session/runStateFold';
-import { StreamLog } from '@shared/session/traceEntries';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { emptyPinnedComposition } from '@test/support/nativeToolTestLayer';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
@@ -86,7 +84,7 @@ import {
 } from '@test/support/setupPlatform';
 import { FakeStateStore, fakePath } from '@test/support/FakePlatform';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
-import { generateRunId, isObject } from '@utils/core';
+import { generateRunId } from '@utils/core';
 import { createRunStorageLocation } from '@utils/files/fileLocation';
 import { RunFileService } from '@utils/files/runStorage';
 
@@ -275,7 +273,6 @@ function testBoundModel(): BoundModel {
     supportsForcedToolChoice: true,
     wireRouteKey: 'test-route',
     modelRetryRouteKey: 'test-route/test-model',
-    routedOnKimiCode: false,
     backgroundCapable: false,
   };
 }
@@ -472,7 +469,6 @@ function agentRunTestLayer(init: LoopInit) {
           { agentName: 'correct', agentCategory: AgentCategory.Workflow },
         ),
         callbacks: { onModelChanged: vi.fn() },
-        interrupt: vi.fn(),
       } satisfies AgentRunShape;
     }),
   );
@@ -564,14 +560,14 @@ const setRejectOnCompileFailure = (enabled: boolean) =>
     .pipe(Effect.orDie);
 
 /** The verdict each round stage closed with, in transcript order. */
-function roundStageOutcomes(store: StreamLog): unknown[] {
-  return store
-    .toJSON()
-    .flatMap((entry) =>
-      entry.type === STREAM_LOG_ENTRY_TYPES.GROUP_END &&
-      isObject(entry.data) &&
-      entry.data.kind === 'round'
-        ? [entry.data.status]
+function roundStageOutcomes(
+  recorder: ReturnType<typeof attachTestTranscriptFold>,
+): unknown[] {
+  return recorder
+    .transcript()
+    .taskGroups.flatMap((group) =>
+      group.kind === 'round' && group.endTime !== undefined
+        ? [group.status]
         : [],
     );
 }
@@ -837,8 +833,7 @@ describe('the reflection round loop', () => {
       const session = yield* createProcessSession();
       const runId = startedRun(session);
       const logger = new TraceEmitter();
-      const store = new StreamLog();
-      const recorder = attachTestTranscriptFold(logger, runId, store);
+      const recorder = attachTestTranscriptFold(logger, runId);
       yield* Effect.addFinalizer(() =>
         Effect.sync(() => recorder.unsubscribe()),
       );
@@ -852,7 +847,7 @@ describe('the reflection round loop', () => {
       });
 
       expect(result.outcome).toBe(scenario.outcomes.at(-1));
-      expect(roundStageOutcomes(store)).toEqual(scenario.outcomes);
+      expect(roundStageOutcomes(recorder)).toEqual(scenario.outcomes);
     }),
   );
 });
@@ -1230,8 +1225,7 @@ describe('an interrupted reflection run', () => {
         const session = yield* createProcessSession();
         const runId = startedRun(session);
         const logger = new TraceEmitter();
-        const store = new StreamLog();
-        const recorder = attachTestTranscriptFold(logger, runId, store);
+        const recorder = attachTestTranscriptFold(logger, runId);
         yield* Effect.addFinalizer(() =>
           Effect.sync(() => recorder.unsubscribe()),
         );
@@ -1244,7 +1238,7 @@ describe('an interrupted reflection run', () => {
         // The first round's stage closed with its own verdict; only the
         // interrupted one is cancelled, and its outputs stay in the
         // ledger a resume continues from.
-        expect(roundStageOutcomes(store)).toEqual([
+        expect(roundStageOutcomes(recorder)).toEqual([
           RUN_OUTCOME.COMPLETED,
           RUN_OUTCOME.CANCELLED,
         ]);

@@ -11,13 +11,12 @@ import type { ToolRow } from '@ui/transcript';
 
 import { DiffView } from '../render/DiffView';
 import {
+  PATCH_PREVIEW_INDENT,
   toolUseMarginBottomRows,
   toolUseStyledLines,
   type ToolDisplayLine,
 } from './toolRenderers';
 
-/** Combined left padding of the two nested boxes wrapping the patch diff. */
-const PATCH_PREVIEW_INDENT = 4;
 const PATCH_PREVIEW_FALLBACK_WIDTH = 80;
 
 function PatchPreview({

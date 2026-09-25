@@ -4,9 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import type { AgentTrace } from '@agent/trace';
-import { MESSAGE_TYPES } from '@shared/schemas';
 import type { RunId } from '@shared/schemas';
-import { StreamLog } from '@shared/session/traceEntries';
 import { createTestRunTrace } from '@test/support/sessionTestUtils';
 import { runStreamedTurn } from '@tools/claudeAgent';
 
@@ -26,19 +24,18 @@ async function* runMessages(messages: unknown[]): AsyncGenerator<unknown> {
   yield* messages;
 }
 
-async function runWithLoggerStore<T>(
-  fn: (store: StreamLog, logger: AgentTrace) => Promise<T>,
-): Promise<T> {
-  const store = new StreamLog();
+type TestTrace = ReturnType<typeof createTestRunTrace>;
 
-  return await fn(store, createTestRunTrace(runId, store).trace);
+async function runWithLoggerStore<T>(
+  fn: (store: TestTrace, logger: AgentTrace) => Promise<T>,
+): Promise<T> {
+  const store = createTestRunTrace(runId);
+
+  return await fn(store, store.trace);
 }
 
-function collectToolLogs(store: StreamLog): unknown[] {
-  const entries = store.toJSON();
-  return entries
-    .filter((entry) => entry.messageType === MESSAGE_TYPES.TOOL_USE)
-    .map((entry) => entry.data);
+function collectToolLogs(store: TestTrace): unknown[] {
+  return store.rows().flatMap((row) => (row.kind === 'tool' ? [row.log] : []));
 }
 
 function runTurn(logger: AgentTrace) {
@@ -123,7 +120,7 @@ describe('claude agent progress events', () => {
       expect(result).toMatchObject({
         finalResponse: 'I will run lint.\n\nLint passed.',
         sessionId: 'sess-2',
-        usage: { input_tokens: 12, output_tokens: 4 },
+        usage: { inputTokens: 12, outputTokens: 4 },
         totalCostUsd: 0.01,
         isError: false,
       });

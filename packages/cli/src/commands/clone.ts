@@ -1,11 +1,9 @@
 // Node imports
-import { mkdir, readdir, realpath } from 'node:fs/promises';
 import { resolve } from 'node:path';
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, FileSystem } from 'effect';
 
 // Internal imports
-import { isFileNotFoundError } from '@common/errors';
 import {
   cloneOverleafProject,
   gitClone,
@@ -79,10 +77,14 @@ function buildOverleafClonePorts(
         );
       }),
     listWorkspaceEntries: (dir) =>
-      Effect.tryPromise({ try: () => readdir(dir), catch: ensureError }).pipe(
+      FileSystem.FileSystem.use((fs) => fs.readDirectory(dir)).pipe(
         // A destination that does not exist yet is an empty destination, not
         // an unreadable one: `runClone` creates it.
-        Effect.catchIf(isFileNotFoundError, () => Effect.succeed<string[]>([])),
+        Effect.catchIf(
+          (error) => error.reason._tag === 'NotFound',
+          () => Effect.succeed<string[]>([]),
+        ),
+        Effect.mapError((error) => ensureError(error.reason.cause ?? error)),
       ),
     showWorkspaceUnreadable: (error) =>
       Effect.sync(() => {
@@ -97,17 +99,16 @@ function buildOverleafClonePorts(
         );
       }),
 
-    runClone: (remoteUrl, cloneInto) =>
-      Effect.tryPromise({
-        try: async () => {
-          await mkdir(cloneInto, { recursive: true });
-          return realpath(cloneInto);
-        },
-        catch: ensureError,
-      }).pipe(
+    runClone: (clone, cloneInto) =>
+      FileSystem.FileSystem.use((fs) =>
+        fs
+          .makeDirectory(cloneInto, { recursive: true })
+          .pipe(Effect.andThen(fs.realPath(cloneInto))),
+      ).pipe(
+        Effect.mapError((error) => ensureError(error.reason.cause ?? error)),
         Effect.flatMap((canonical) => {
           canonicalWorkspacePath = canonical;
-          return gitClone(remoteUrl, canonical).pipe(
+          return gitClone(clone, canonical).pipe(
             Effect.mapError((error) => new Error(error.message)),
           );
         }),

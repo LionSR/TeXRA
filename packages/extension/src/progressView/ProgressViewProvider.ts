@@ -21,7 +21,6 @@ import {
   PdfOpenFailed,
   type SessionHandle,
 } from '@agent/runtime';
-import { hasAnyUsableSetupCredential } from '@commands/setup/setupAssistantCommand';
 import {
   BundledViewContentProvider,
   getCombinedLocalResourceRoots,
@@ -77,7 +76,10 @@ import {
   type SessionType,
   type RunId,
 } from '@shared/schemas';
-import { projectDisplayOf } from '@shared/session/hostSnapshot';
+import {
+  projectDisplayOf,
+  type HostSnapshot,
+} from '@shared/session/hostSnapshot';
 import type {
   DownMessage,
   SurfaceActionMessage,
@@ -89,8 +91,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { checkCoreDependencies } from '@utils/system/checkCoreDependencies';
 
 import { createExtensionHostRequests } from './extensionHostRequests';
-
-const RECENT_COMMIT_LIMIT = 20;
+import { RequestAttention } from './requestAttention';
 
 const CHANNEL = 'ProgressViewProvider';
 const log = createLog(CHANNEL);
@@ -136,6 +137,27 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   private sidebarPort: Port | undefined;
   /** The popped-out tab and its port, attached and released together. */
   private editor: { panel: vscode.WebviewPanel; port: Port } | undefined;
+  /** The last API-key banner the snapshot published. */
+  private apiKeyBanner: HostSnapshot['banners']['apiKey'] = { visible: false };
+
+  /**
+   * A credential changed: re-read the API-key banner, which repaints the
+   * setup pill, then the funnel that reads it.
+   */
+  public readonly refreshApiKeyStatus = Effect.suspend(() =>
+    this.snapshot.refreshHostBanners.pipe(
+      Effect.andThen(this.refreshOnboardingFunnel()),
+    ),
+  );
+
+  private readonly attention = new RequestAttention({
+    sidebar: () => this.sidebarView,
+    panel: () => this.editor?.panel,
+    isViewVisible: () => this.isViewVisible(),
+    showInSidebar: () => this.showInSidebar(),
+    showSessions: (runId) =>
+      this.surfaceAction({ kind: 'showSessions', runId }),
+  });
 
   /**
    * This host's half of the shared funnel loop (PRD: agent-native
@@ -158,11 +180,11 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     private readonly runtime: ProcessRuntime,
     /** Session created by the extension entry. */
     session: SessionHandle,
-    public readonly refreshApiKeyStatus: Effect.Effect<
-      void,
-      Error,
-      ProcessServices
-    >,
+    /** The setup pill: painted from the snapshot's API-key banner on every
+     *  publish, so the pill and the welcome card read one credential answer. */
+    private readonly paintSetupPill: (
+      banner: HostSnapshot['banners']['apiKey'],
+    ) => void,
   ) {
     this.session = session;
     this.contentProvider = new BundledViewContentProvider(
@@ -171,7 +193,10 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       'progressView',
     );
     this.onboardingFunnel = new OnboardingFunnelRefresher({
-      hasCredential: () => hasAnyUsableSetupCredential(session.roots, secrets),
+      // The snapshot's API-key banner is the one credential answer: every
+      // credential change re-reads it (`refreshApiKeyStatus`) before this
+      // refresher runs.
+      hasCredential: () => Effect.sync(() => !this.apiKeyBanner.visible),
       flags: globalState,
       apply: (transition) =>
         Effect.gen({ self: this }, function* () {
@@ -201,6 +226,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     const roots = session.roots;
     this.snapshot = createHostSnapshotSource({
       project: projectDisplayOf(session.roots.storage, roots.workspace),
+      root: roots.workspace,
       stores: roots,
       secrets,
       fileOptions: () =>
@@ -214,28 +240,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
               }),
           ),
         ),
-      readRecentCommits: () =>
-        Effect.tryPromise({
-          try: async () => {
-            const isGitRepo =
-              (await vscode.commands.executeCommand<boolean>(
-                'texra.isGitRepository',
-              )) ?? false;
-            const commits = isGitRepo
-              ? ((await vscode.commands.executeCommand<string[]>(
-                  'texra.getRecentCommits',
-                  RECENT_COMMIT_LIMIT,
-                )) ?? [])
-              : [];
-            return { commits, isGitRepo };
-          },
-          catch: (cause) =>
-            new HostSnapshotReadFailed({
-              member: 'readRecentCommits',
-              message: 'The recent commits could not be read.',
-              cause,
-            }),
-        }),
       workspaceRoots: () =>
         vscode.workspace.workspaceFolders?.map((folder) => ({
           label: folder.name,
@@ -269,7 +273,15 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       onError: (error) => {
         log.error('Host snapshot refresh failed', { data: error });
       },
-      publish: (snapshot) => this.bridge.setHost(snapshot),
+      publish: (snapshot) =>
+        this.bridge.setHost(snapshot).pipe(
+          Effect.andThen(
+            Effect.sync(() => {
+              this.apiKeyBanner = snapshot.banners.apiKey;
+              this.paintSetupPill(snapshot.banners.apiKey);
+            }),
+          ),
+        ),
     });
     const storageRoot = context.storageUri ?? context.globalStorageUri;
     // The tool-edit preview: staged copies of the original and proposed
@@ -313,9 +325,10 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
         ),
       ),
     );
+    const attention = this.runtime.runFork(this.attention.follow(session));
     this.disposables.push({
       dispose: () => {
-        this.runtime.runFork(Fiber.interrupt(sessionEvents));
+        this.runtime.runFork(Fiber.interruptAll([sessionEvents, attention]));
       },
     });
 
@@ -482,7 +495,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       if (isAgentCatalogAuthRefreshDeferred()) {
         runAfterAgentCatalogAuthRefresh(this.runtime, [
           this.snapshot.refreshCatalogs,
-          this.refreshOnboardingFunnel(),
+          this.refreshApiKeyStatus,
         ]);
         return;
       }
@@ -498,11 +511,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       yield* allSettledVoid<
         StateReadFailed | StateWriteFailed,
         ProcessServices
-      >([
-        this.snapshot.refreshCatalogs,
-        this.snapshot.refreshHostBanners,
-        this.refreshOnboardingFunnel(),
-      ]);
+      >([this.snapshot.refreshCatalogs, this.refreshApiKeyStatus]);
     });
   }
 
@@ -530,7 +539,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     );
   }
 
-  /** A run loaded an agent from the custom directory. */
+  /** A launch could not find its agent. */
   public showAgentConfigBanner(
     agentName: string,
     sessionType: SessionType,
@@ -560,6 +569,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     };
     this.closeSidebarPort();
     this.sidebarView = webviewView;
+    this.attention.paint(webviewView);
     // The slot is VS Code's own synchronous entry: it hands back a resolved
     // view, so the attachment settles here.
     this.sidebarPort = this.runtime.runSync(
@@ -736,9 +746,11 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   }
 
   /** Select a stream this window just launched (the launch's
-   *  `onRunResolved` callback): the launching surface selects it. */
+   *  `onRunResolved` callback): the launching surface selects it, and a
+   *  resolved agent retires the missing-agent warning. */
   public presentLaunchedRun(runId: RunId): void {
     this.surfaceAction({ kind: 'select', runId });
+    this.runtime.runFork(this.snapshot.clearAgentConfigBanner);
   }
 
   public revealRun(

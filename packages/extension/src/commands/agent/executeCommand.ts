@@ -1,6 +1,5 @@
 // Third-party imports
-import * as vscode from 'vscode';
-import { Effect, Result } from 'effect';
+import { Effect } from 'effect';
 import { z, ZodError } from 'zod';
 
 // Local imports
@@ -49,35 +48,28 @@ export const runExecuteCommand = Effect.fn('runExecuteCommand')(function* (
   input: unknown,
   session: SessionHandle,
 ): Effect.fn.Return<void, Error, ProcessServices> {
-  const parsed = yield* Effect.result(
-    Effect.try({
-      try: () => {
-        const wrapped =
-          input !== null && typeof input === 'object' && 'config' in input
-            ? WrappedExecuteInputSchema.parse(input)
-            : null;
-        const config = AgentConfigSchema.parse(
-          wrapped ? wrapped.config : input,
-        );
-        return { wrapped, config };
-      },
-      catch: ensureError,
-    }),
+  // A configuration that does not parse fails the command, so its caller
+  // hears the refusal instead of a settled launch that never started.
+  const { wrapped, config } = yield* Effect.try({
+    try: () => {
+      const wrapped =
+        input !== null && typeof input === 'object' && 'config' in input
+          ? WrappedExecuteInputSchema.parse(input)
+          : null;
+      const config = AgentConfigSchema.parse(wrapped ? wrapped.config : input);
+      return { wrapped, config };
+    },
+    catch: (error) =>
+      error instanceof ZodError
+        ? new Error(`Invalid agent configuration. ${z.prettifyError(error)}`, {
+            cause: error,
+          })
+        : ensureError(error),
+  }).pipe(
+    Effect.tapError((error) =>
+      Effect.logWarning(error.message).pipe(withLogChannel(CHANNEL)),
+    ),
   );
-  if (Result.isFailure(parsed)) {
-    const error = parsed.failure;
-    if (error instanceof ZodError) {
-      const message = `Invalid agent configuration. ${z.prettifyError(error)}`;
-      yield* Effect.logWarning(message).pipe(
-        Effect.annotateLogs({ data: error }),
-        withLogChannel(CHANNEL),
-      );
-      void vscode.window.showErrorMessage(message);
-      return;
-    }
-    return yield* Effect.fail(error);
-  }
-  const { wrapped, config } = parsed.success;
 
   const request = wrapped?.runId
     ? ({ kind: 'resume', config, runId: wrapped.runId } as const)

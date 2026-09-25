@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { normalizeToolUseData } from '@shared/toolUse';
+import { normalizeToolUse } from '@shared/toolUse';
 
-describe('normalizeToolUseData (src/shared/toolUse.ts)', () => {
+describe('normalizeToolUse (src/shared/toolUse.ts)', () => {
   it('extracts toolName, input, and output text from a flat payload', () => {
-    const normalized = normalizeToolUseData({
+    const normalized = normalizeToolUse({
       toolName: 'Bash',
       input: { command: 'ls' },
       output: 'foo\nbar',
@@ -23,7 +23,7 @@ describe('normalizeToolUseData (src/shared/toolUse.ts)', () => {
   // the literal text "null" in the rendered output section. Verify both
   // the top-level and nested cases stay empty.
   it('renders null output as empty text, not the string "null"', () => {
-    const topLevel = normalizeToolUseData({
+    const topLevel = normalizeToolUse({
       toolName: 'Bash',
       input: { command: 'true' },
       output: null,
@@ -31,7 +31,7 @@ describe('normalizeToolUseData (src/shared/toolUse.ts)', () => {
     });
     expect(topLevel?.outputText).toBe('');
 
-    const nested = normalizeToolUseData({
+    const nested = normalizeToolUse({
       toolName: 'Bash',
       input: { command: 'true' },
       output: { output: null, summary: 'ran ok' },
@@ -42,7 +42,7 @@ describe('normalizeToolUseData (src/shared/toolUse.ts)', () => {
   });
 
   it('unwraps nested `output` and metadata fields', () => {
-    const normalized = normalizeToolUseData({
+    const normalized = normalizeToolUse({
       toolName: 'Bash',
       output: {
         output: 'stdout content',
@@ -55,7 +55,7 @@ describe('normalizeToolUseData (src/shared/toolUse.ts)', () => {
   });
 
   it('reports errors via status and errorText', () => {
-    const normalized = normalizeToolUseData({
+    const normalized = normalizeToolUse({
       toolName: 'Bash',
       output: { error: 'no such file' },
       status: 'failed',
@@ -67,7 +67,7 @@ describe('normalizeToolUseData (src/shared/toolUse.ts)', () => {
   });
 
   it('keeps a status-only runtime failure failed', () => {
-    const normalized = normalizeToolUseData({
+    const normalized = normalizeToolUse({
       toolName: 'Bash',
       status: 'failed',
     });
@@ -76,7 +76,7 @@ describe('normalizeToolUseData (src/shared/toolUse.ts)', () => {
   });
 
   it('treats userInstruction as a feedback marker', () => {
-    const normalized = normalizeToolUseData({
+    const normalized = normalizeToolUse({
       toolName: 'AskUserQuestion',
       output: { userInstruction: 'pick option A' },
       status: 'completed',

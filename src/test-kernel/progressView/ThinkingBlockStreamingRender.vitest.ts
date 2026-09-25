@@ -1,13 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  LOG_LEVELS,
-  MESSAGE_TYPES,
-  STREAM_LOG_ENTRY_TYPES,
-  StreamLogEntrySchema,
-  type StreamLogEntry,
-} from '@shared/schemas';
-import { projectTranscriptRow, type TranscriptRow } from '@ui/transcript';
+import { LOG_LEVELS, MESSAGE_TYPES } from '@shared/schemas';
+import { streamingTextRow, type TranscriptRow } from '@ui/transcript';
 
 import { useLitComponentTestDom } from '../settings/litComponentTestUtils';
 
@@ -22,24 +16,24 @@ function renderRow(row: TranscriptRow | undefined): Element {
   return container;
 }
 
-/** A streaming thinking entry, overridable per test. */
-function logEntry(overrides: Partial<StreamLogEntry>): StreamLogEntry {
-  return StreamLogEntrySchema.parse({
-    type: STREAM_LOG_ENTRY_TYPES.LOG,
-    seqNo: 1,
-    id: 'msg-1',
-    text: 'text',
-    level: LOG_LEVELS.INFO,
-    timestamp: 100,
-    messageType: MESSAGE_TYPES.THINKING,
-    data: { status: 'running' },
-    ...overrides,
-  });
-}
-
-/** The projected row for a streaming thinking entry. */
-function thinkingRow(overrides: Partial<StreamLogEntry>): TranscriptRow {
-  return projectTranscriptRow(logEntry(overrides))!;
+/** A thinking row, streaming unless the test says otherwise. */
+function thinkingRow(
+  id: string,
+  text: string,
+  streaming = true,
+): TranscriptRow {
+  return streamingTextRow(
+    {
+      id,
+      seqNo: 1,
+      level: LOG_LEVELS.INFO,
+      timestamp: 100,
+      messageType: MESSAGE_TYPES.THINKING,
+    },
+    'thinking',
+    text,
+    streaming,
+  )!;
 }
 
 /**
@@ -57,7 +51,7 @@ describe('progress view live activity rendering', () => {
 
   it('renders a banner-details shell, not a plain log line, while the stream is running', () => {
     const container = renderRow(
-      thinkingRow({ id: 'think-1', text: '**bold** reasoning in progress' }),
+      thinkingRow('think-1', '**bold** reasoning in progress'),
     );
 
     const details = container.querySelector('wa-details.banner-details');
@@ -77,11 +71,7 @@ describe('progress view live activity rendering', () => {
 
   it('upgrades to rendered markdown once the stream finalizes, inside the same banner shell', () => {
     const container = renderRow(
-      thinkingRow({
-        id: 'think-1',
-        text: '**bold** reasoning done',
-        data: { status: 'completed' },
-      }),
+      thinkingRow('think-1', '**bold** reasoning done', false),
     );
 
     const details = container.querySelector('wa-details.banner-details');

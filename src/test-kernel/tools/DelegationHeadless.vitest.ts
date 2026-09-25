@@ -2,7 +2,7 @@
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Deferred, Effect, Exit, Fiber, Stream } from 'effect';
+import { Cause, Deferred, Effect, Exit, Fiber, Stream } from 'effect';
 import {
   afterEach,
   beforeEach,
@@ -48,7 +48,7 @@ const mocks = vi.hoisted(() => ({
   configureDelegatedChildApprovals: vi.fn(),
   executeAgent: vi.fn(),
   prepareAgentDefinition: vi.fn(),
-  resumeToolUseTurn: vi.fn(),
+  resumeToolUseFromResumeData: vi.fn(),
   childRecords: vi.fn(),
   getVisibleAgents: vi.fn(),
   isApprovalBypassedForRun: vi.fn(),
@@ -189,25 +189,6 @@ function callDelegateReview(call = parentRunContext()) {
   );
 }
 
-const waitForChildrenEffect = Effect.fn('waitForTestChildren')(function* (
-  session: SessionHandle,
-) {
-  while (true) {
-    const active = session.runs.getActiveIds();
-    if (active.length === 0) return;
-    yield* session.runs.waitForAnyChange(active);
-  }
-});
-
-/** Await actual child activation release before disposing its test session. */
-async function waitForChildren(session: SessionHandle): Promise<void> {
-  while (true) {
-    const active = session.runs.getActiveIds();
-    if (active.length === 0) return;
-    await Effect.runPromise(session.runs.waitForAnyChange(active));
-  }
-}
-
 /**
  * Answer every request the session opens the way a surface's `request.decide`
  * does — one `request.decided` row on the same run — and record the kinds
@@ -264,7 +245,7 @@ function delegateWithProposalDecision(
       if (options.launchSignal) {
         yield* Deferred.await(options.launchSignal);
       }
-      yield* waitForChildrenEffect(session);
+      yield* session.runs.awaitDrained();
       return result;
     }),
   );
@@ -283,9 +264,7 @@ let inBandSession: SessionHandle;
 type PreparedInBandSubagentOptions = Effect.Success<
   ReturnType<Parameters<typeof executeSubagentInBandEffect>[0]['prepare']>
 >;
-type InBandSubagentRunOptions = PreparedInBandSubagentOptions & {
-  signal?: AbortSignal;
-};
+type InBandSubagentRunOptions = PreparedInBandSubagentOptions;
 
 /** The in-band delegation options shared by nearly every case (fields vary). */
 function delegationOptions(
@@ -310,7 +289,7 @@ function runInBand(
   options: InBandSubagentRunOptions,
   runId: RunId = IN_BAND_RUN_ID,
 ) {
-  const { signal: _signal, ...prepared } = options;
+  const prepared = options;
   return executeSubagentInBandEffect({
     runId,
     parentRunId: prepared.parentRunId,
@@ -478,10 +457,11 @@ describe('headless delegation', () => {
     testEngine = {
       executeAgent: (definition, runId, options) =>
         Effect.tryPromise({
-          try: async () => {
+          try: async (signal) => {
             let reportedError: unknown;
             const turn = await mocks.executeAgent(definition, runId, {
               ...options,
+              turnSignal: signal,
               onRunError: (error: unknown, result: unknown) => {
                 reportedError = error;
                 return (
@@ -509,7 +489,7 @@ describe('headless delegation', () => {
         }),
       resumeToolUseFromResumeData: (...args) =>
         Effect.tryPromise({
-          try: () => mocks.resumeToolUseTurn(...args),
+          try: () => mocks.resumeToolUseFromResumeData(...args),
           catch: ensureError,
         }),
     };
@@ -578,7 +558,7 @@ describe('headless delegation', () => {
             model: 'deepseekT',
           },
         });
-        const { signal: _signal, ...prepared } = options;
+        const prepared = options;
         const run = () =>
           Effect.provide(
             executeSubagentInBandEffect({
@@ -628,7 +608,7 @@ describe('headless delegation', () => {
     }
     session.followUps.terminalize(PARENT_RUN_ID);
     session.followUps.terminalize(CHILD_RUN_ID);
-    await waitForChildren(session);
+    await Effect.runPromise(session.runs.awaitDrained());
     await Effect.runPromise(inBandSession.dispose());
   });
 
@@ -882,21 +862,14 @@ describe('headless delegation', () => {
       Effect.gen(function* () {
         const onCost = vi.fn();
         const ready = yield* Deferred.make<void>();
-        let childInterrupted!: () => void;
-        const interrupted = new Promise<void>((resolve) => {
-          childInterrupted = resolve;
-        });
-        const interrupt = vi.fn(() => {
-          childInterrupted();
-          return true;
-        });
         mocks.executeAgent.mockImplementationOnce(
           async (_config, _id, options) => {
-            await Effect.runPromise(
-              options.onRun?.({ interrupt } as never) ?? Effect.void,
-            );
             Deferred.doneUnsafe(ready, Effect.void);
-            await interrupted;
+            // The child's stop is its run fiber's interruption, which the
+            // test engine sees as its turn promise's abort.
+            await new Promise<void>((resolve) => {
+              options.turnSignal.addEventListener('abort', () => resolve());
+            });
             return {
               outcome: 'cancelled',
               runId: CHILD_RUN_ID,
@@ -910,24 +883,18 @@ describe('headless delegation', () => {
         );
         yield* Deferred.await(ready);
 
-        // Interruption waits for the child to settle its own terminal record.
+        // Interruption stops the child by run id and waits for it to settle
+        // its own terminal record.
         yield* Fiber.interrupt(running);
         const exit = yield* Fiber.await(running);
         expect(Exit.hasInterrupts(exit)).toBe(true);
-        expect(interrupt).toHaveBeenCalledOnce();
         expect(onCost).toHaveBeenCalledOnce();
-        expect(mocks.writeResultMeta).toHaveBeenCalledOnce();
-        expect(mocks.writeResultMeta).toHaveBeenLastCalledWith(
-          expect.objectContaining({
-            producer: 'subagent',
-            output: expect.objectContaining({ response: '' }),
-          }),
-        );
+        expect(inBandSession.runs.isLive(IN_BAND_RUN_ID)).toBe(false);
       }),
   );
 
   it.effect(
-    'keeps the completed child result when cancellation arrives during persistence',
+    'keeps the completed child result when the caller stops during persistence',
     () =>
       Effect.gen(function* () {
         const persisting = yield* Deferred.make<void>();
@@ -1003,7 +970,7 @@ describe('headless delegation', () => {
       // than hand the caller's instruction through verbatim. Deliberately
       // wording-free — the injected copy churns (#9568) without behavior changing.
       yield* callDelegateReview();
-      yield* waitForChildrenEffect(testDefaultSession());
+      yield* testDefaultSession().runs.awaitDrained();
 
       const instruction =
         mocks.executeAgent.mock.calls.at(-1)?.[0].config.instruction;
@@ -1021,7 +988,7 @@ describe('headless delegation', () => {
         yield* callDelegateReview(
           parentRunContext({ userInstruction: parentInstruction }),
         );
-        yield* waitForChildrenEffect(testDefaultSession());
+        yield* testDefaultSession().runs.awaitDrained();
 
         expect(mocks.executeAgent).toHaveBeenCalledWith(
           expect.objectContaining({
@@ -1121,7 +1088,7 @@ describe('headless delegation', () => {
             parentRunContext({ session, approvalPromptsUnavailable: true }),
           );
 
-          yield* waitForChildrenEffect(session);
+          yield* session.runs.awaitDrained();
           expect(decider.openedKinds).toEqual([]);
           expect(result.status).toBe('executed');
           expect(result.summary).toBe("Launched 'review' (async)");

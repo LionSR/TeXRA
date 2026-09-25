@@ -1,10 +1,20 @@
+import type { ProcessServices } from '@platform/processRuntime';
+import type { Effect } from 'effect';
+
 export type DesktopCommandMessage = { command: string } & Record<
   string,
   unknown
 >;
 
+/**
+ * One inbound command namespace. It answers the program for a command it
+ * owns, or `undefined` when the command is not its own; the window's one
+ * router runs that program and reports whatever it fails with.
+ */
 export interface DesktopMessageHandler {
-  handleMessage(message: DesktopCommandMessage): boolean;
+  handleMessage(
+    message: DesktopCommandMessage,
+  ): Effect.Effect<void, Error, ProcessServices> | undefined;
 }
 
 export interface DesktopRenderer {

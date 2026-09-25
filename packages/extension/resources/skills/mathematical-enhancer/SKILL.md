@@ -1,6 +1,6 @@
 ---
 name: mathematical-enhancer
-description: Strengthen the mathematical substance of research papers by proposing or implementing better proofs, sharper results, cleaner derivations, and stronger formulations. Use when Codex needs to improve the mathematics itself rather than only the writing, especially by replacing brute-force arguments with better structure or identifying tractable generalizations.
+description: Strengthen the mathematical substance of research papers by proposing or implementing better proofs, sharper results, cleaner derivations, and stronger formulations. Use when you need to improve the mathematics itself rather than only the writing, especially by replacing brute-force arguments with better structure or identifying tractable generalizations.
 ---
 
 # Mathematical Enhancer

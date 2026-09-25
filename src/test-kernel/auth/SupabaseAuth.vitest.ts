@@ -142,7 +142,7 @@ describe('SupabaseAuth PKCE flow state', () => {
         // GoTrue JSON-encodes every stored value; the slot holds the verifier
         // alone, or `verifier/redirectType` for a recovery link.
         const stored: unknown = JSON.parse(
-          (yield* secrets.getStored(VERIFIER_KEY)) ?? '',
+          (yield* secrets.get(VERIFIER_KEY)) ?? '',
         );
         const verifier = String(stored).split('/')[0];
         assert.ok(verifier);

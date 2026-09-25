@@ -6,6 +6,7 @@ import { Text } from 'ink';
 import { Effect } from 'effect';
 
 import type { SelectItem } from '@cli/tui/ui/Select';
+import { readCliSkillsOffNotice } from '@cli/runtime/skills';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { escapeText } from '@shared/utils/xmlEscape';
@@ -75,13 +76,24 @@ export function skillSelectItemsForTui(
 }
 
 function skillIssueSummaryDetail(
-  result: DiscoverSkillSourcesResult,
+  result: DiscoverSkillSourcesResult & { offHint: string | undefined },
 ): React.JSX.Element | undefined {
-  if (result.errors.length === 0) return undefined;
+  if (result.errors.length === 0 && result.offHint === undefined) {
+    return undefined;
+  }
   return (
-    <Text dimColor>
-      {formatResultCount(result.errors.length, 'import issue')}
-    </Text>
+    <>
+      {result.offHint === undefined ? null : (
+        <Text dimColor wrap="truncate-end">
+          {result.offHint}
+        </Text>
+      )}
+      {result.errors.length === 0 ? null : (
+        <Text dimColor>
+          {formatResultCount(result.errors.length, 'import issue')}
+        </Text>
+      )}
+    </>
   );
 }
 
@@ -90,6 +102,7 @@ export function SkillsListForm(props: SkillsListFormProps): React.JSX.Element {
     <AsyncListForm<
       DiscoverSkillSourcesResult & {
         disabled: Effect.Success<ReturnType<typeof readDisabledSkills>>;
+        offHint: string | undefined;
       },
       SkillActivation
     >
@@ -104,6 +117,7 @@ export function SkillsListForm(props: SkillsListFormProps): React.JSX.Element {
           return {
             ...result,
             disabled: yield* readDisabledSkills(props.stores),
+            offHint: yield* readCliSkillsOffNotice(props.stores, '/config'),
           };
         })
       }
@@ -113,7 +127,10 @@ export function SkillsListForm(props: SkillsListFormProps): React.JSX.Element {
       availableRows={props.availableRows}
       description={<Text dimColor>Select a skill to activate it.</Text>}
       detailFor={skillIssueSummaryDetail}
-      detailRowsFor={(result) => (result.errors.length > 0 ? 1 : 0)}
+      detailRowsFor={(result) =>
+        (result.errors.length > 0 ? 1 : 0) +
+        (result.offHint === undefined ? 0 : 1)
+      }
       compactDetailFor={(result) => (
         <>
           <Text dimColor wrap="truncate-end">

@@ -8,10 +8,22 @@ import { join } from 'node:path';
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Effect, Exit, Fiber } from 'effect';
+import {
+  Effect,
+  Exit,
+  Fiber,
+  Layer,
+  Logger,
+  Option,
+  References,
+  Scope,
+  Stream,
+} from 'effect';
+import * as ChildProcess from 'effect/unstable/process/ChildProcess';
 import { describe, expect, expectTypeOf } from 'vitest';
 
 // Local imports
+import { nodePlatformServices } from '@platform/defaults/nodePlatform';
 import type { ExecResult } from '@shared/schemas';
 import { waitForCondition } from '@test/support/asyncTestUtils';
 import { createFakeHost, setupPlatform } from '@test/support/setupPlatform';
@@ -136,6 +148,38 @@ describe('executeCommand', () => {
         assert.equal(result.stdout, 'failure details');
         assert.equal(result.stderr, '');
         assert.equal(result.outputLimitExceeded, undefined);
+      }).pipe(Effect.provide(nodeSpawnerLayer)),
+  );
+
+  it.live(
+    "withholds TeXRA's provider key variables from the child and keeps the rest",
+    () =>
+      Effect.gen(function* () {
+        const saved = {
+          OPENAI_API_KEY: process.env.OPENAI_API_KEY,
+          TEXRA_TEST_UNRELATED: process.env.TEXRA_TEST_UNRELATED,
+        };
+        yield* Effect.addFinalizer(() =>
+          Effect.sync(() => {
+            for (const [name, value] of Object.entries(saved)) {
+              if (value === undefined) delete process.env[name];
+              else process.env[name] = value;
+            }
+          }),
+        );
+        process.env.OPENAI_API_KEY = 'sk-owned-by-texra';
+        process.env.TEXRA_TEST_UNRELATED = 'kept';
+
+        const result = yield* executeCommand(
+          [
+            process.execPath,
+            '-e',
+            `process.stdout.write(JSON.stringify([process.env.OPENAI_API_KEY ?? null, process.env.TEXRA_TEST_UNRELATED ?? null]))`,
+          ],
+          { cwd: WORKSPACE, settings: undefined },
+        );
+
+        expect(JSON.parse(result.stdout)).toStrictEqual([null, 'kept']);
       }).pipe(Effect.provide(nodeSpawnerLayer)),
   );
 
@@ -444,5 +488,78 @@ describe('resolveOptionalCommand', () => {
         { command: resolvedPath, args: [], resolvedPath },
       );
     }).pipe(Effect.provide(nodeSpawnerLayer)),
+  );
+});
+
+// ---------------------------------------------------------------------------
+// supervised Node spawner
+// ---------------------------------------------------------------------------
+
+describe('supervised node spawner', () => {
+  it.live(
+    'bounds the teardown of a child that ignores SIGTERM and SIGKILLs it',
+    () => {
+      const warnings: Array<Record<string, unknown>> = [];
+      const capture = Logger.make((options) => {
+        if (options.logLevel !== 'Warn') return;
+        warnings.push({
+          ...options.fiber.getRef(References.CurrentLogAnnotations),
+        });
+      });
+      return Effect.gen(function* () {
+        if (process.platform === 'win32') return;
+        // No `forceKillAfter`: upstream sends SIGTERM once, waits its grace,
+        // then awaits an exit that never comes.
+        const closed = yield* Effect.scoped(
+          Effect.gen(function* () {
+            const handle = yield* ChildProcess.make(process.execPath, [
+              '-e',
+              "process.on('SIGTERM', () => {}); process.stdout.write('ready'); setInterval(() => {}, 1000);",
+            ]);
+            yield* handle.stdout.pipe(Stream.take(1), Stream.runDrain);
+            return handle.pid;
+          }),
+        ).pipe(Effect.timeoutOption('8 seconds'));
+        expect(Option.isSome(closed)).toBe(true);
+        const pid = Option.getOrThrow(closed);
+        yield* Effect.promise(() => waitForProcessExit(pid));
+        expect(warnings).toEqual([
+          expect.objectContaining({ pid, via: 'scope close' }),
+        ]);
+      }).pipe(Effect.provide(nodeSpawnerLayer), Effect.withLogger(capture));
+    },
+    PROCESS_EXIT_TEST_TIMEOUT_MS,
+  );
+
+  it.live(
+    'kills live children from one exit listener the layer scope owns',
+    () =>
+      Effect.gen(function* () {
+        if (process.platform === 'win32') return;
+        const before = new Set(process.listeners('exit'));
+        const layerScope = yield* Scope.make();
+        const context = yield* Layer.buildWithScope(
+          nodePlatformServices,
+          layerScope,
+        );
+        const added = process
+          .listeners('exit')
+          .filter((listener) => !before.has(listener));
+        expect(added).toHaveLength(1);
+
+        yield* Effect.scoped(
+          Effect.gen(function* () {
+            const handle = yield* ChildProcess.make('sleep', ['60']);
+            for (const listener of added) listener(0);
+            expect(Exit.isFailure(yield* Effect.exit(handle.exitCode))).toBe(
+              true,
+            );
+          }),
+        ).pipe(Effect.provideContext(context));
+
+        yield* Scope.close(layerScope, Exit.void);
+        expect(process.listeners('exit')).not.toContain(added[0]);
+      }),
+    PROCESS_EXIT_TEST_TIMEOUT_MS,
   );
 });

@@ -2,84 +2,88 @@ import { describe, expect, it } from 'vitest';
 
 import {
   MESSAGE_TYPES,
-  STREAM_LOG_ENTRY_TYPES,
-  StreamLogEntrySchema,
   type CompactionActivityData,
-  type StreamLogEntry,
+  type MessageType,
+  type TranscriptEvent,
 } from '@shared/schemas';
 import {
-  applyCompactionActivityEntry,
+  applyCompactionActivityEvent,
   createCompactionActivityProjection,
   settleCompactionActivities,
   type CompactionActivityProjection,
 } from '@shared/runs/compactionActivityProjection';
 
-/** Feed entries to the production reducer in source order, as the fold does. */
+/** One event at the row position it wrote, on a clock of ten per position. */
+interface Positioned {
+  readonly event: TranscriptEvent;
+  readonly position: number;
+}
+
+/** Feed events to the production reducer in source order, as the fold does. */
 function apply(
   projection: CompactionActivityProjection,
-  entries: readonly StreamLogEntry[],
+  events: readonly Positioned[],
 ): CompactionActivityProjection {
-  for (const entry of entries) applyCompactionActivityEntry(projection, entry);
+  for (const { event, position } of events) {
+    applyCompactionActivityEvent(projection, event, position, position * 10);
+  }
   return projection;
 }
 
 /** Test-local full replay through the production reducer (the resync path). */
 function projectCompactionActivities(
-  entries: readonly StreamLogEntry[],
+  events: readonly Positioned[],
 ): CompactionActivityProjection {
-  return apply(createCompactionActivityProjection(), entries);
+  return apply(createCompactionActivityProjection(), events);
+}
+
+function logAt(
+  position: number,
+  messageType: MessageType,
+  data?: unknown,
+): Positioned {
+  return {
+    position,
+    event: {
+      type: 'log',
+      level: 'info',
+      message: 'advanced',
+      messageType,
+      data,
+    },
+  };
 }
 
 function activityEntry(
   seqNo: number,
   operationId: string,
   state: CompactionActivityData['state'],
-): StreamLogEntry {
-  return StreamLogEntrySchema.parse({
-    seqNo,
-    id: `event-${seqNo}`,
-    type: STREAM_LOG_ENTRY_TYPES.LOG,
-    level: 'info',
-    timestamp: seqNo * 10,
-    messageType: MESSAGE_TYPES.CONTEXT_COMPACTION_ACTIVITY,
-    data: { activity: 'context_compaction', operationId, state },
+): Positioned {
+  return logAt(seqNo, MESSAGE_TYPES.CONTEXT_COMPACTION_ACTIVITY, {
+    activity: 'context_compaction',
+    operationId,
+    state,
   });
 }
 
 function advancingEntry(
   seqNo: number,
-  messageType: StreamLogEntry['messageType'] = MESSAGE_TYPES.MODEL_RESPONSE,
-): StreamLogEntry {
-  return StreamLogEntrySchema.parse({
-    seqNo,
-    id: `event-${seqNo}`,
-    type: STREAM_LOG_ENTRY_TYPES.LOG,
-    level: 'info',
-    timestamp: seqNo * 10,
-    messageType,
-    text: 'advanced',
-  });
+  messageType: MessageType = MESSAGE_TYPES.MODEL_RESPONSE,
+): Positioned {
+  return logAt(seqNo, messageType);
 }
 
 describe('compaction activity projection', () => {
   it('carries the freed figures on the running block', () => {
     const projection = projectCompactionActivities([
       activityEntry(2, 'a', 'started'),
-      StreamLogEntrySchema.parse({
-        seqNo: 3,
-        id: 'event-3',
-        type: STREAM_LOG_ENTRY_TYPES.LOG,
-        level: 'info',
-        timestamp: 30,
-        messageType: MESSAGE_TYPES.CONTEXT_MANAGEMENT,
-        data: {
-          action: 'compaction',
-          tokensBefore: 50_000,
-          tokensAfter: 9_000,
-          contextWindow: 64_000,
-          utilizationBefore: 78.1,
-          utilizationAfter: 14.1,
-        },
+      logAt(3, MESSAGE_TYPES.CONTEXT_MANAGEMENT, {
+        action: 'compaction',
+        tokensBefore: 50_000,
+        tokensAfter: 9_000,
+        contextWindow: 64_000,
+        utilizationBefore: 78.1,
+        utilizationAfter: 14.1,
       }),
       activityEntry(4, 'a', 'completed'),
     ]);
@@ -154,6 +158,23 @@ describe('compaction activity projection', () => {
       finalized: true,
       finishedAt: 50,
     });
+  });
+
+  it("compares a tool event at its row's first-seen position", () => {
+    const tool = (type: 'tool.start' | 'tool.end'): TranscriptEvent =>
+      type === 'tool.start'
+        ? { type, logId: 't', toolName: 'bash', input: {} }
+        : { type, logId: 't', status: 'completed' };
+    // Started before the compaction and ended after it: not an interruption.
+    const projection = projectCompactionActivities([
+      { event: tool('tool.start'), position: 1 },
+      activityEntry(2, 'live', 'started'),
+      { event: tool('tool.end'), position: 1 },
+    ]);
+    expect(projection.blocks[0]?.status).toBe('running');
+
+    apply(projection, [{ event: tool('tool.start'), position: 3 }]);
+    expect(projection.blocks[0]?.status).toBe('interrupted');
   });
 
   it('finalizes unmatched activity for terminal hydration', () => {

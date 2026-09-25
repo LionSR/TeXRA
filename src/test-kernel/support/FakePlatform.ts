@@ -377,10 +377,6 @@ export class FakeSecrets implements PlatformSecrets {
     return Effect.sync(() => this.values.get(key));
   }
 
-  getStored(key: string): Effect.Effect<string | undefined, SecretsFailed> {
-    return Effect.sync(() => this.values.get(key));
-  }
-
   set(key: string, value: string): Effect.Effect<void, SecretsFailed> {
     return Effect.sync(() => {
       this.values.set(key, value);

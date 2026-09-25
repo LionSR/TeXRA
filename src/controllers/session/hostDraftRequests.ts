@@ -274,7 +274,7 @@ export class HostDraftRequests {
       const credential = yield* resolveRouteCredential(
         take.session.roots,
         MODEL_CONFIGS['gpt4o'],
-        false,
+        { kind: 'api-key', provider: 'openai', usageRoute: 'api-key' },
         secrets,
       ).pipe(
         Effect.mapError((error) => new Rejected({ reason: error.message })),

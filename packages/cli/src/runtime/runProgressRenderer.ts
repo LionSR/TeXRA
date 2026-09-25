@@ -209,15 +209,19 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   private render(force = false): void {
     const now = this.nowMs();
     if (!force && now - this.lastRenderAt < this.minIntervalMs) return;
-    const line = this.formatLine(now);
-    if (!line || line === this.lastLine) return;
+    const { line, state } = this.formatLine(now);
+    if (!line) return;
     if (this.ansi) {
+      if (line === this.lastLine) return;
       this.write(`${CLEAR_LINE}${line}`);
       this.liveLine = true;
     } else {
+      // Off a TTY every line is permanent, so one is written per change of
+      // state; the elapsed clock alone ticking over is not a change.
+      if (state === this.lastLine) return;
       this.write(`${line}\n`);
     }
-    this.lastLine = line;
+    this.lastLine = this.ansi ? line : state;
     this.lastRenderAt = now;
   }
 
@@ -239,9 +243,13 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     this.heartbeatTimer = undefined;
   }
 
-  private formatLine(now: number): string {
+  /** The status line, and the same line without its elapsed clock. */
+  private formatLine(now: number): {
+    readonly line: string;
+    readonly state: string;
+  } {
     const root = this.root();
-    if (!root) return '';
+    if (!root) return { line: '', state: '' };
     // The loop's own coordinate off the fold's `flow`, in the one its family
     // counts; a run that has not stepped yet carries none.
     const position = flowPosition(root.flow);
@@ -285,8 +293,8 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     if (toolCallCount && !nameOnlySubagents) {
       parts.push(`tools: ${toolCallCount}`);
     }
-    parts.push(elapsed);
-    return parts.join(' · ');
+    const state = parts.join(' · ');
+    return { line: `${state} · ${elapsed}`, state };
   }
 
   private descriptionColumnBudget(

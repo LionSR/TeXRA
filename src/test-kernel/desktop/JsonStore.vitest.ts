@@ -225,7 +225,7 @@ describe('shared JsonStore', () => {
         // The second set claims the lane and then waits for the first's flush.
         // Cancelling it there writes nothing, so the instance must not be left
         // serving the key either: this store outlives the fiber that wrote
-        // through it (`ElectronSecrets` answers `getStored` from one), and a
+        // through it (`ElectronSecrets` answers `get` from one), and a
         // mutation applied ahead of the wait would read as committed until the
         // process restarts.
         const committing = yield* Effect.forkChild(store.set('committed', 'a'));

@@ -2,8 +2,8 @@
  * Entry point for progress-view formatters: one painter per transcript-row
  * kind.
  *
- * Membership — which rows exist at all — is decided once by
- * `projectTranscriptRow` (`@ui/transcript`). This map is exhaustive over
+ * Membership (which rows exist at all) is decided once by the transcript
+ * fold's row builders (`@ui/transcript`). This map is exhaustive over
  * `TranscriptRowKind`, so a new row kind is a compile error here rather than a
  * row that silently never paints.
  */

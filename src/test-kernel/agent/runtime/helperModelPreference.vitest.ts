@@ -16,7 +16,6 @@ const readModelAvailabilityInputs = vi.hoisted(() =>
   vi.fn(() => Effect.succeed({})),
 );
 const modelUnavailableReasonFrom = vi.hoisted(() => vi.fn());
-const getRuntimeModelConfig = vi.hoisted(() => vi.fn());
 
 vi.mock('@agent/runtime/helperModelName', () => ({ getHelperModelName }));
 vi.mock('@model/computeModelOptions', () => ({
@@ -24,7 +23,10 @@ vi.mock('@model/computeModelOptions', () => ({
   readModelAvailabilityInputs,
   modelUnavailableReasonFrom,
 }));
-vi.mock('@model/runtimeModelRegistry', () => ({ getRuntimeModelConfig }));
+vi.mock('llm-zoo', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('llm-zoo')>()),
+  MODEL_CONFIGS,
+}));
 
 /**
  * The launching run's stores. Both readers that would touch them
@@ -33,13 +35,13 @@ vi.mock('@model/runtimeModelRegistry', () => ({ getRuntimeModelConfig }));
  */
 const STORES = fakeStores();
 
-const MODEL_CONFIGS = {
+const MODEL_CONFIGS = vi.hoisted(() => ({
   deepseek: { capabilities: { supportsFunctionCalling: true } },
   chatonly: { capabilities: { supportsFunctionCalling: false } },
-  // Known model whose capabilities omit supportsFunctionCalling — the provider
+  // Known model whose capabilities omit supportsFunctionCalling: the provider
   // adapters treat this as "no function calling".
   undeclared: { capabilities: {} },
-};
+}));
 
 function configFor(model: string, agentCategory = 'toolUse'): AgentConfig {
   return {
@@ -55,11 +57,6 @@ describe('applyHelperModelPreference', () => {
     getHelperModelName.mockReset();
     readModelAvailabilityInputs.mockClear();
     modelUnavailableReasonFrom.mockReset();
-    getRuntimeModelConfig.mockImplementation((model: string) =>
-      Object.hasOwn(MODEL_CONFIGS, model)
-        ? MODEL_CONFIGS[model as keyof typeof MODEL_CONFIGS]
-        : undefined,
-    );
   });
 
   function resolve(config: AgentConfig) {

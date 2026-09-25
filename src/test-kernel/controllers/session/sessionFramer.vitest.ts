@@ -57,7 +57,7 @@ import {
 } from '@test/support/FakePlatform';
 import { fakeProcessServices } from '@test/support/setupPlatform';
 import { createTestSession } from '@test/support/sessionTestUtils';
-import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
+import { nodePlatformLayer } from '@test/support/fsTestUtils';
 
 function textTail(
   text: string,
@@ -145,7 +145,7 @@ const runtimeGraph = (
     ),
     Layer.provide(Layer.succeed(WorkspaceRoots)(roots)),
     Layer.provide(ProcessIdentity.layer(SELF)),
-    Layer.provide(nodeSpawnerLayer),
+    Layer.provide(nodePlatformLayer),
   );
 };
 

@@ -1,7 +1,7 @@
 /**
- * The Tools page: approval policy, then every tool and integration with its
- * status and setup guide, plus the inline settings rows each card's plugin
- * declares (Codex and Claude Code today).
+ * The Tools page, one section at a time: approval policy, then every tool, then
+ * the integrations, each card with its status and setup guide, plus the inline
+ * settings rows its plugin declares (Codex and Claude Code today).
  */
 
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
@@ -24,6 +24,7 @@ import {
 } from '@shared/schemas';
 import { settingsViewSettingByKey } from '@shared/state/stateSettings';
 import {
+  type SettingsSectionName,
   type ToolCategory,
   type ToolDashboardItem,
 } from '@shared/settingsView/settingsViewMessages';
@@ -171,6 +172,8 @@ export class ToolsTab extends LitElement {
     `,
   ];
 
+  @property({ attribute: false }) section: SettingsSectionName<'tools'> =
+    'approval';
   @property({ attribute: false }) items: ToolDashboardItem[] = [];
   @property({ type: Boolean }) loaded = false;
   @property({ type: String }) approvalPolicy: TexraApprovalPolicy = 'ask';
@@ -348,6 +351,13 @@ export class ToolsTab extends LitElement {
   }
 
   override render(): TemplateResult {
+    if (this.section === 'approval') {
+      return html`
+        <div class="tools-container tab-content-container">
+          ${this.renderApprovalSettings()}
+        </div>
+      `;
+    }
     if (!this.loaded) {
       return html`
         <div class="tools-container tab-content-container">
@@ -356,7 +366,11 @@ export class ToolsTab extends LitElement {
       `;
     }
 
-    const items = this.items;
+    // Integrations is the one category with a sub-tab of its own.
+    const integrations = this.section === 'integrations';
+    const items = this.items.filter(
+      (item) => (item.category === 'ai-agents') === integrations,
+    );
     const groups = groupBy(items, (i) => i.category);
 
     return html`
@@ -372,7 +386,6 @@ export class ToolsTab extends LitElement {
               postMessage(SETTINGS_VIEW_COMMANDS.RECHECK_TOOL_STATUS),
           })}
         </div>
-        ${this.renderApprovalSettings()}
         ${CATEGORY_ORDER.flatMap((cat) => {
           const catItems = groups.get(cat);
           return catItems ? [this.renderCategory(cat, catItems)] : [];

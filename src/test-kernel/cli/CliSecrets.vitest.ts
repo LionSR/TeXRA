@@ -132,15 +132,15 @@ describe('CLI secrets', () => {
               ),
             );
 
-            expect(yield* secrets.getStored('GOOD_KEY')).toBe('good-value');
-            expect(yield* secrets.getStored('BAD_KEY')).toBeUndefined();
+            expect(yield* secrets.get('GOOD_KEY')).toBe('good-value');
+            expect(yield* secrets.get('BAD_KEY')).toBeUndefined();
           }),
         );
       }),
   );
 
   itPosix(
-    'serves env-provided secrets when the storage directory cannot be created',
+    'reads nothing stored when the storage directory cannot be created',
     () =>
       Effect.gen(function* () {
         yield* withSecretsRootEffect(({ root, secretsPath }) =>
@@ -151,7 +151,7 @@ describe('CLI secrets', () => {
             Effect.gen(function* () {
               // `storage/` does not exist and its parent is unwritable, so any
               // open-time `mkdir`/`chmod` on the read path throws (#8220). Reads must
-              // degrade to "nothing stored" and let env vars keep working.
+              // degrade to "nothing stored" so env-var credentials keep working.
               yield* Effect.promise(() => fs.chmod(root, 0o500));
               yield* Effect.addFinalizer(() =>
                 Effect.promise(() => fs.chmod(root, 0o700)),
@@ -159,12 +159,6 @@ describe('CLI secrets', () => {
 
               const secrets = new CliSecrets(secretsPath);
 
-              expect(yield* secrets.get('TEXRA_CLI_SECRETS_ENV_ONLY_KEY')).toBe(
-                'env-value',
-              );
-              expect(
-                yield* secrets.getStored('TEXRA_CLI_SECRETS_ENV_ONLY_KEY'),
-              ).toBeUndefined();
               expect(
                 yield* secrets.get('TEXRA_CLI_SECRETS_MISSING_KEY'),
               ).toBeUndefined();
@@ -172,7 +166,7 @@ describe('CLI secrets', () => {
             }),
           ),
         );
-      }).pipe(withEnv({ TEXRA_CLI_SECRETS_ENV_ONLY_KEY: 'env-value' })),
+      }),
   );
 
   itPosix('restricts the secrets file and its directory to the owner', () =>
@@ -199,11 +193,9 @@ describe('CLI secrets', () => {
 
     await withSecretsRoot(async ({ root, storageRoot }) => {
       const first = getCliSecrets(storageRoot);
-      const second = getCliSecrets();
-      const third = getCliSecrets(path.join(root, 'other-storage'));
+      const second = getCliSecrets(path.join(root, 'other-storage'));
 
       expect(second).toBe(first);
-      expect(third).toBe(first);
     });
   });
 });

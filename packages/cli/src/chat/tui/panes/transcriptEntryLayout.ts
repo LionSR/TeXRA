@@ -272,7 +272,6 @@ function entryLines(
   row: TranscriptRow,
   mode: TranscriptEntryLayoutMode,
   columns: number,
-  colorEnabled: boolean | undefined,
 ): readonly string[] {
   const body = entryBodyLines(row, mode, columns);
   const headline = transcriptRowHeadline(row);
@@ -296,10 +295,7 @@ function entryLines(
           width: columns,
         });
       }
-      return renderAnsiMarkdown(headline, {
-        width: columns,
-        colorEnabled,
-      }).split('\n');
+      return renderAnsiMarkdown(headline, { width: columns }).split('\n');
     }
     case 'tool': {
       const useRichDisplay = mode === 'live' || mode === 'scrollback-budget';
@@ -315,7 +311,7 @@ function entryLines(
       return [
         ...wrapWithPrefix(
           // `row.heading` is `formatWorkflowPhaseHeading` over the same three
-          // fields, computed once by `projectTranscriptRow`.
+          // fields, computed once by `phaseRow`.
           `${STATUS_DIAMOND} ${headline}`,
           columns,
           ROW_GEOMETRY.phase.firstPrefix,
@@ -366,12 +362,10 @@ export function transcriptEntryMarginBottomRows(row: TranscriptRow): number {
 export function transcriptEntryLayout(
   row: TranscriptRow,
   {
-    colorEnabled,
     mode = 'scrollback',
     previousEntry,
     width,
   }: {
-    readonly colorEnabled?: boolean;
     readonly mode?: TranscriptEntryLayoutMode;
     /** The row rendered directly above this one, when the caller knows it.
      *  Yoga does not collapse adjacent margins, so without this a boundary
@@ -397,7 +391,7 @@ export function transcriptEntryLayout(
   const columns = transcriptColumns(width, inset);
   return {
     columns,
-    lines: entryLines(row, mode, columns, colorEnabled),
+    lines: entryLines(row, mode, columns),
     inset,
     marginBottomRows,
     marginTopRows,

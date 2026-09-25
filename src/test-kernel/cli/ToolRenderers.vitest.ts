@@ -55,6 +55,21 @@ async function renderBoundedTool(
 }
 
 describe('CLI tool display lines', () => {
+  it('paints producer text terminal-safe: no escapes, tabs expanded', () => {
+    const entry = bashOutput(
+      `echo \u001b]0;title\u0007done`,
+      `\u001b[2Jcleared\tcol\rsplit\nkey`,
+    );
+
+    const lines = toolUseDisplayLines(entry, { width: 80 });
+    const painted = lines.join('\n');
+    expect(painted).not.toContain('\u001b');
+    expect(painted).not.toContain('\u0007');
+    expect(painted).not.toContain('\t');
+    // `\r` is a line break counted before the elision budget, not after.
+    expect(lines).toContain('  split');
+  });
+
   it('registers edit patch rendering before the universal fallback', () => {
     const entry = toolUse('Edit', {
       path: 'paper.tex',
@@ -85,7 +100,7 @@ describe('CLI tool display lines', () => {
         "  line 4",
         "  line 5",
         "  line 6",
-        "  … +11 lines (Ctrl-T to view full output)",
+        "  … 11 lines hidden (Ctrl-T to view full output)",
         "  line 18",
         "  line 19",
         "  line 20",

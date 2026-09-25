@@ -46,16 +46,26 @@ export interface RunStopOptions {
 }
 
 /**
- * A native child loop's lineage for the loop's whole life: from the
+ * A child loop's stop target and lineage for the loop's whole life: from the
  * synchronous launch until its final result has reached the parent, including
- * preparation before the engine tracks its handle and terminal delivery after it. The parent counts
- * it as an active child throughout, so its continuation stays recoverable
- * until the last delivery landed. Child-run loops use their run handle.
+ * preparation before the engine tracks its handle and terminal delivery after
+ * it. Every child loop carries one so the run's stop
+ * (`RunRegistry.interrupt`) always finds a live target, including the
+ * inter-turn gap when no flow context is attached.
  */
 export interface ChildRunActivation {
   readonly runId: RunId;
   parent: RunParent;
   readonly interrupt: () => void;
+  /**
+   * A native child (true) counts as its parent's active child until the last
+   * delivery landed, so a terminal parent's continuation stays recoverable
+   * (`RunRegistry.getToolUseFollowUpTarget` queues a follow-up into it). A
+   * process child (false) must not: its reservation would make a terminal
+   * parent look recoverable after it can no longer accept either user input
+   * or the child's result.
+   */
+  readonly retainsTerminalParent: boolean;
 }
 
 /**
@@ -89,9 +99,9 @@ export type ManualCompactionRequestResult =
  * The registry, and the stopper it hands this reader to, read a run's phase
  * from the session's fold (`RunView.status`,
  * one run model, 3.3) and keep no phase of their own; the session routes each
- * phase-moving row it committed through `handleStatus` once the view has
- * folded it, so the registry's waiters and child rosters follow the one rail
- * every renderer reads and never read it a row behind.
+ * `run.end` it committed through `sweepChildrenOfFoldedStop` once the view
+ * has folded it, so the child sweep follows the one rail every renderer
+ * reads and never reads it a row behind.
  */
 export interface RunRegistryInit {
   readonly runView: (runId: RunId) => RunView | undefined;

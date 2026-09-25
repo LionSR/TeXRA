@@ -1,5 +1,7 @@
 import { setTimeout as sleep } from 'node:timers/promises';
 
+import { Effect } from 'effect';
+
 import stripAnsi from 'strip-ansi';
 import {
   afterEach,
@@ -18,6 +20,7 @@ import {
   type ApprovalPayload,
 } from '@cli/chat/tui/state/approvalQueue';
 import { takeActiveForm } from '@cli/chat/tui/state/formSlot';
+import { TuiSession } from '@cli/chat/tui/state/sessionRunState';
 import {
   selectedRunId,
   closeForegroundReader,
@@ -27,7 +30,6 @@ import {
   openInfoPane,
   openWorkflowPopup,
   resetCliState,
-  rootRunPending,
   rootRunId,
   updateWorkflowPopupView,
   workflowPopupView,
@@ -242,7 +244,7 @@ function seedParentEdge(runId: RunId, parentRunId: RunId | null): void {
 }
 function seedRootRun(): void {
   rootRunId.set(ROOT);
-  rootRunPending.set(true);
+  new TuiSession(() => undefined).markRunPending(Effect.never);
   setRunning(ROOT);
   focusRun(ROOT);
 }
@@ -275,8 +277,6 @@ function appProps(): AppProps {
     runtime: testRuntime(),
     session: testDefaultSession(),
     onSubmit: vi.fn(),
-    onKillRun: vi.fn(),
-    onWorkflowControl: vi.fn(),
     onCtrlC: vi.fn(),
   };
 }

@@ -147,7 +147,6 @@ const LANE_SESSION = {
   acquireClaims: () => Effect.succeed(Effect.void),
   graph: { releaseClaims: mocks.releaseClaims },
   releaseClaims: SessionHandle.prototype.releaseClaims,
-  transcripts: { ensureLoaded: vi.fn(() => Effect.void) },
   // The resumed run reads its parent edge off the session's cold fold, so the
   // lineage fixture is that read.
   readView: (...args: unknown[]) =>
@@ -172,7 +171,6 @@ function resumeToolUseFromResumeData(
 
 /** Minimal launch context for a resumed tool-use run that reaches the flow. */
 function buildResumeContext(runId: RunId): AgentLaunchContext {
-  const abortController = new AbortController();
   return {
     setting: { agentCategory: AgentCategory.ToolUse },
     runId,
@@ -181,7 +179,6 @@ function buildResumeContext(runId: RunId): AgentLaunchContext {
     userVarChannels: { MODEL: 'test-model' },
     attachedMemoryMisses: [],
     usageMonitor: { recordUsage: vi.fn() },
-    interrupt: () => abortController.abort(),
   } as unknown as AgentLaunchContext;
 }
 

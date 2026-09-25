@@ -41,8 +41,6 @@ interface WorkbenchControllerDeps {
   settingsView: HTMLElement;
   logsPane: HTMLElement;
   getState(): DesktopShellState;
-  /** Root of the project this window shows; new terminals start there. */
-  getWorkspacePath(): string | undefined;
   updateShell(next: DesktopShellState): void;
   postMessage(command: string, payload?: Record<string, unknown>): void;
 }
@@ -72,7 +70,6 @@ export function createWorkbenchController({
   settingsView,
   logsPane,
   getState,
-  getWorkspacePath,
   updateShell,
   postMessage,
 }: WorkbenchControllerDeps): WorkbenchController {
@@ -162,10 +159,8 @@ export function createWorkbenchController({
   function openKind(kind: WorkbenchKind): void {
     if (kind === 'terminal') {
       updateShell(
-        openWorkbenchTab(getState(), {
-          kind,
-          target: getWorkspacePath() ?? '',
-        }),
+        // The main process starts it in the project's folder.
+        openWorkbenchTab(getState(), { kind }),
       );
       return;
     }
@@ -179,7 +174,7 @@ export function createWorkbenchController({
       );
       return;
     }
-    if (kind === 'editor') {
+    if (kind === 'editor' || kind === 'files') {
       updateShell(openWorkbenchTab(getState(), { kind }));
       void editorPane.refresh();
       return;
@@ -192,7 +187,6 @@ export function createWorkbenchController({
     const next = openWorkbenchTab(getState(), {
       kind: 'terminal',
       placement: 'bottom',
-      target: getWorkspacePath() ?? '',
     });
     const terminal = activeWorkbenchTab(next, 'bottom');
     if (terminal?.kind !== 'terminal') return;
@@ -234,7 +228,7 @@ export function createWorkbenchController({
     return renderEmptyState({
       icon: 'file-code',
       title: 'Choose a file',
-      body: 'Open a file from the project list to inspect or edit it beside this task.',
+      body: 'Open a file from Files to inspect or edit it beside this task.',
       headingTag: 'h2',
       className: 'shell-workbench-placeholder',
       iconSurfaceSize: 'l',
@@ -249,6 +243,13 @@ export function createWorkbenchController({
     tab: WorkbenchTab,
   ): TemplateResult | typeof nothing {
     switch (tab.kind) {
+      case 'files':
+        return html`<div
+          class="shell-workbench-surface shell-files"
+          data-scroll="true"
+        >
+          ${editorPane.treeElement}
+        </div>`;
       case 'editor':
         return tab.target
           ? workbenchSurfaceTemplate(editorPane.element)
@@ -322,6 +323,7 @@ export function createWorkbenchController({
           getState().activeWorkbenchTabIds[placement],
           placement,
           {
+            onOpenKind: openKind,
             onActivate: (tabId) =>
               updateShell(focusWorkbenchTab(getState(), tabId)),
             onClose: disposeWorkbenchTab,

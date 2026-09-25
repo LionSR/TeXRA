@@ -25,7 +25,6 @@ import { getRunRecords } from '@agent/storage';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { ChatExportInput, ExportNode } from '@agent/export/schemas';
-import { redactDisplayValue } from '@logger/redaction';
 import type { RunId } from '@shared/schemas';
 import type { RunView } from '@shared/session/sessionView';
 import {
@@ -136,7 +135,7 @@ export const loadChatExportInput = Effect.fn('loadChatExportInput')(function* (
     config,
     conversation,
     hasTranscriptEvidence,
-    exportInput: redactDisplayValue({
+    exportInput: {
       timestamp: run
         ? new Date(run.launchedAt).toISOString()
         : new Date().toISOString(),
@@ -151,6 +150,6 @@ export const loadChatExportInput = Effect.fn('loadChatExportInput')(function* (
         outputFiles: config.outputFiles,
       },
       nodes: conversation,
-    }),
+    },
   };
 });

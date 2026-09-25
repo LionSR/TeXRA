@@ -3,7 +3,7 @@
 // A `dispatch_multi_agent` run is the same set of facts on the terminal and on
 // the progress board: the phases the run opened (`TaskGroup`s of kind
 // `phase`), the call cards the projection emitted (`workflowTask` transcript
-// rows), the plan the script declared (`workflowPlan` marker), and whether the
+// rows), the plan the script declared (`workflow.plan`), and whether the
 // run has settled. This module folds those facts once — phase order, attempt
 // scoping, the declared-plan union, tallies, the per-call status cells, which
 // card may open which child stream, and the attention-first row order of a
@@ -11,22 +11,17 @@
 
 // Local imports - shared schemas and copy
 import {
-  MESSAGE_TYPES,
-  STREAM_LOG_ENTRY_TYPES,
   WORKFLOW_CALL_STATUS,
   WORKFLOW_TASK_STATUS_LABEL,
-  WorkflowPlanMarkerSchema,
   interruptedWorkflowCall,
   isTerminalWorkflowCallProgress,
   isTerminalWorkflowCallStatus,
   type RunLifecycleStatus,
-  type StreamLogEntry,
   type RunId,
   type TaskGroup,
   type WorkflowCallIdentity,
   type WorkflowCallProgress,
   type WorkflowDeclaredPlan,
-  type WorkflowPlanMarker,
 } from '@shared/schemas';
 import { compareBySeqNo } from '@shared/runs/runOrdering';
 import { isInFlightPhase } from '@shared/runs/runStatus';
@@ -47,67 +42,6 @@ import {
   formatCostUsd,
   pluralize,
 } from '@utils/text/stringUtils';
-
-// ---------------------------------------------------------------------------
-// Markers on the transcript
-// ---------------------------------------------------------------------------
-
-/** What an `INTERNAL` transcript entry says about the workflow run. */
-type WorkflowMarker =
-  | {
-      readonly kind: 'plan';
-      readonly attemptId: string;
-      readonly plan: WorkflowPlanMarker;
-    }
-  | {
-      readonly kind: 'malformedPlan';
-      readonly attemptId?: string;
-      readonly error: string;
-    };
-
-function internalMarkerKind(data: unknown): unknown {
-  return typeof data === 'object' && data !== null
-    ? (data as { readonly kind?: unknown }).kind
-    : undefined;
-}
-
-/**
- * Read the workflow marker one transcript entry carries, if any. Every host
- * folds these the same way: the newest plan marker is the live plan (a
- * relaunch under the same `meta.name` appends its own after the one it
- * supersedes, and every attempt that reaches the engine records exactly one),
- * and a malformed plan is an unknown plan, not the previous attempt's.
- */
-export function workflowMarkerOf(
-  entry: StreamLogEntry,
-): WorkflowMarker | undefined {
-  if (
-    entry.type !== STREAM_LOG_ENTRY_TYPES.LOG ||
-    entry.messageType !== MESSAGE_TYPES.INTERNAL
-  ) {
-    return undefined;
-  }
-  if (internalMarkerKind(entry.data) !== 'workflowPlan') return undefined;
-  const parsed = WorkflowPlanMarkerSchema.safeParse(entry.data);
-  if (parsed.success) {
-    return {
-      kind: 'plan',
-      attemptId: parsed.data.attemptId,
-      plan: parsed.data,
-    };
-  }
-  // Recover only the attempt boundary. The plan body remains unknown unless
-  // the full strict marker schema succeeds, so malformed phases/tasks never
-  // enter declared-plan rendering while a valid id still scopes stale rows.
-  const attemptId = WorkflowPlanMarkerSchema.shape.attemptId.safeParse(
-    (entry.data as { readonly attemptId?: unknown }).attemptId,
-  );
-  return {
-    kind: 'malformedPlan',
-    ...(attemptId.success ? { attemptId: attemptId.data } : {}),
-    error: parsed.error.message,
-  };
-}
 
 // ---------------------------------------------------------------------------
 // The run model
@@ -166,11 +100,10 @@ interface WorkflowRunModelInput {
   readonly taskGroups: readonly TaskGroup[];
   /** The stream's rows; the model picks the `workflowTask` ones. */
   readonly rows: readonly TranscriptRow[];
-  /** The newest attempt boundary recovered from its transcript marker, even
-   *  when that marker's declared-plan body is malformed. */
+  /** The attempt the newest `workflow.plan` declared. */
   readonly workflowAttemptId?: string;
-  /** The newest attempt's declared plan, if the transcript recorded a valid one. */
-  readonly plan: WorkflowDeclaredPlan | WorkflowPlanMarker | undefined;
+  /** The newest attempt's declared plan, if the run declared one. */
+  readonly plan: WorkflowDeclaredPlan | undefined;
   /** The stream's resolved lifecycle phase. The run has ended once it is a
    *  known phase neither running nor waiting (an absent one has not: plan-only
    *  phases must not vanish before the first status), and plan-only phases it
@@ -201,9 +134,9 @@ interface MutablePhase {
 
 /**
  * Cards in deterministic transcript order, even when a caller collected a
- * group tree pre-order. Every `workflowTask` row carries a wire sequence —
- * `StreamLogEntrySchema` requires `seqNo`, and the one live producer of
- * seqNo-less rows (the CLI local-notice path) cannot emit this kind — so the
+ * group tree pre-order. Every `workflowTask` row carries a sequence (the
+ * transcript fold stamps each row's first appearance, and the one producer of
+ * seqNo-less rows, the CLI local-notice path, cannot emit this kind), so the
  * ordering is causal, with timestamp only as a tie-break.
  */
 function workflowCardsInTranscriptOrder(
@@ -363,13 +296,9 @@ export function workflowRunModel(
   // so a resume's live rows and totals never fold a superseded attempt's
   // cards in with the one actually running.
   const cards = workflowCardsInTranscriptOrder(input.rows);
-  // The latest plan marker is the attempt authority; a run without one is
-  // not scoped, so every phase and card stays open.
-  const latestAttemptId =
-    input.workflowAttemptId ??
-    (input.plan && 'attemptId' in input.plan
-      ? input.plan.attemptId
-      : undefined);
+  // The latest plan is the attempt authority; a run without one is not
+  // scoped, so every phase and card stays open.
+  const latestAttemptId = input.workflowAttemptId;
   const tasks: WorkflowTaskRow[] = [];
   // A card issued outside any open phase has no group to sit under; it joins
   // one trailing "Unphased" phase rather than vanishing.
@@ -502,18 +431,21 @@ export function formatWorkflowCallLiveParts(
  *  has run, and the two kinds that have not started. */
 export type WorkflowRowGroup = 'finished' | 'queued' | 'declared';
 
-/** `12 queued`, `5 finished · 1 saved result`: the one spelling of a
- *  counted group's row. A finished group names its replayed results, since
- *  nothing ran for those this time. */
+/** `12 queued`, `5 finished · 1 saved result`: the one spelling of a counted
+ *  group's row, naming a finished group's replayed results. */
 export function formatWorkflowRowGroup(row: {
   readonly count: number;
   readonly group: WorkflowRowGroup;
   readonly cached?: number;
 }): string {
-  const cached = row.cached ?? 0;
+  const { count, group, cached = 0 } = row;
+  const noun =
+    group === 'declared'
+      ? WORKFLOW_TASK_STATUS_LABEL.declared.toLowerCase()
+      : group;
   return cached > 0
-    ? `${row.count} ${row.group} · ${cached} ${pluralize(cached, 'saved result')}`
-    : `${row.count} ${row.group}`;
+    ? `${count} ${noun} · ${cached} ${pluralize(cached, 'saved result')}`
+    : `${count} ${noun}`;
 }
 
 export type WorkflowPhaseRow =

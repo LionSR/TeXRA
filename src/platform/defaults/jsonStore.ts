@@ -223,7 +223,7 @@ export class JsonStore {
    * completion rather than leaving the file holding a record it read before
    * another writer's mutation, or leaving this instance serving a value that
    * never reached disk — the store outlives the fiber that wrote through it
-   * (`ElectronSecrets` answers `getStored`/`listStoredKeys` from here), so a
+   * (`ElectronSecrets` answers `get`/`listStoredKeys` from here), so a
    * mutation applied ahead of the wait would survive a cancellation that
    * wrote nothing and read as committed until the process restarts. There is
    * one mutator: removal uses `set(key, undefined)` in this same region.

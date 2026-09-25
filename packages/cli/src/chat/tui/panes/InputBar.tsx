@@ -451,10 +451,6 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
           onPick={(cmd, intent) => {
             acceptSlashCommand(cmd, intent, parsed.name, parsed.remainder);
           }}
-          onCancel={() => {
-            /* Esc clears the slash — caller can re-open by typing again. */
-            clearDraft();
-          }}
         />
       ) : null}
       {reverseSearchOpen && historyRef.current ? (
@@ -508,6 +504,7 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
               shouldDropInputChunk={
                 showPalette ? dropSlashPaletteControlTail : undefined
               }
+              // Esc clears the slash, closing the palette; typing reopens it.
               escapeEdit={showPalette ? clearDraftEdit : undefined}
               transformPaste={transformPaste}
               onImagePaste={onImagePaste}

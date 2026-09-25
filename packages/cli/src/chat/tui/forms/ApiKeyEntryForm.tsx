@@ -2,9 +2,10 @@
 
 import { Text } from 'ink';
 
-import { apiKeyEnvName, type ApiProvider } from '@model/apiProviders';
+import type { ApiProvider } from '@model/apiProviders';
 import {
   PROVIDER_URLS,
+  apiKeyEnvName,
   providerDisplayName,
 } from '@shared/constants/providers';
 

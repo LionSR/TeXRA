@@ -1,7 +1,7 @@
 // Host-neutral normalization for tool-use log payloads.
 //
 // Both the VS Code progress view and the CLI TUI read the same
-// `ToolUseLog` payload off `StreamLogStore.data` and need a flat,
+// `ToolUseLog` payload off a transcript entry's `data` and need a flat,
 // renderer-friendly view: tool name, derived output text, error/summary
 // strings, and the runtime tool status. This module is the
 // single entry point for that derivation so hosts don't drift.
@@ -12,10 +12,11 @@ import {
   TOOL_CALL_STATUS,
   ToolUseLogSchema,
   type NormalizedToolUse,
-  type ToolCallStatus,
+  type ToolUseLog,
 } from '@shared/schemas';
 import { clamp, isObject } from '@utils/core';
 import { truncateSummary } from '@utils/text/stringUtils';
+import type { z } from 'zod';
 
 function trimmedOrNull(value: unknown): string | null {
   if (typeof value !== 'string') return null;
@@ -66,24 +67,21 @@ function formatOutputText(content: unknown): string {
   return serialized.trimEnd();
 }
 
-export function normalizeToolUseData(data: unknown): NormalizedToolUse | null {
-  const parseResult = ToolUseLogSchema.safeParse(data);
-  if (!parseResult.success) return null;
+/** The flat, renderer-friendly view of a decoded tool-use payload. */
+export function normalizeToolUse(log: ToolUseLog): NormalizedToolUse {
+  const nested = isObject(log.output) ? log.output : {};
 
-  const validated = parseResult.data;
-  const nested = isObject(validated.output) ? validated.output : {};
-
-  const summaryText = firstTrimmed(validated.summary, nested.summary);
-  const errorText = firstTrimmed(validated.error, nested.error);
+  const summaryText = firstTrimmed(log.summary, nested.summary);
+  const errorText = firstTrimmed(log.error, nested.error);
   const userInstructionText = firstTrimmed(
-    validated.userInstruction,
+    log.userInstruction,
     nested.userInstruction,
   );
 
-  const outputContent = extractOutputContent(validated.output);
+  const outputContent = extractOutputContent(log.output);
   const outputText = formatOutputText(outputContent);
 
-  const toolName = trimmedOrNull(validated.toolName) ?? '';
+  const toolName = trimmedOrNull(log.toolName) ?? '';
   const isUserFeedback = userInstructionText.length > 0;
 
   const headerSummary = summaryText || (isUserFeedback ? '' : errorText);
@@ -92,112 +90,61 @@ export function normalizeToolUseData(data: unknown): NormalizedToolUse | null {
     toolName,
     errorText,
     outputText,
-    ...(validated.exitCode !== undefined
-      ? { exitCode: validated.exitCode }
-      : {}),
+    ...(log.exitCode !== undefined ? { exitCode: log.exitCode } : {}),
     userInstructionText,
-    input: validated.input,
+    input: log.input,
     isUserFeedback,
     headerSummary,
-    status: validated.status,
+    status: log.status,
   };
 }
 
 /**
  * Visible failure text both hosts render when a `toolUse` payload cannot be
- * parsed. Kept beside {@link normalizeToolUseData} so the CLI and progress
- * view can't drift on the wording of the shared malformed-payload policy.
+ * parsed. Kept beside {@link decodeToolUseLog} so the CLI and progress view
+ * can't drift on the wording of the shared malformed-payload policy.
  */
 const MALFORMED_TOOL_USE_TEXT = 'Malformed tool payload';
 
-const TOOL_CALL_STATUS_VALUES = new Set<string>(
-  Object.values(TOOL_CALL_STATUS),
-);
-
-/** Recover a source-owned status without accepting an invalid enum member. */
-function validSourceToolCallStatus(data: unknown): ToolCallStatus | undefined {
-  if (!isObject(data)) return undefined;
-  const status = data.status;
-  return typeof status === 'string' && TOOL_CALL_STATUS_VALUES.has(status)
-    ? (status as ToolCallStatus)
-    : undefined;
-}
-
 /**
- * Bounded, value-safe reason for a failed `toolUse` parse. Primitive payloads
- * get a short type/preview; object payloads report only the invalid field
- * *paths*, never field values, so a partially valid `read`/`bash` row cannot
- * leak its full output into the diagnostic.
+ * Bounded, value-safe reason for a failed `toolUse` parse. Object payloads
+ * report only the invalid field *paths*, never field values, so a partially
+ * valid `read`/`bash` row cannot leak its full output into the diagnostic.
  */
-function malformedToolUseDiagnostic(data: unknown): string {
-  const reason = isObject(data)
-    ? malformedObjectReason(data)
-    : malformedPrimitiveReason(data);
-  return truncateSummary(`${MALFORMED_TOOL_USE_TEXT} (${reason})`, 160);
-}
-
-function malformedObjectReason(data: Record<string, unknown>): string {
-  const parsed = ToolUseLogSchema.safeParse(data);
-  if (parsed.success) return 'unparseable payload';
+function malformedToolUseDiagnostic(
+  issues: readonly z.core.$ZodIssue[],
+): string {
   const fields = [
     ...new Set(
-      parsed.error.issues
+      issues
         .map((issue) => issue.path.join('.'))
         .filter((path) => path.length > 0),
     ),
   ];
-  return fields.length > 0
-    ? `invalid ${fields.join(', ')}`
-    : 'unparseable payload';
-}
-
-function malformedPrimitiveReason(data: unknown): string {
-  if (data === null) return 'received null';
-  if (typeof data === 'string') {
-    return `received string ${JSON.stringify(truncateSummary(data, 40))}`;
-  }
-  if (typeof data === 'number') return `received number ${data}`;
-  if (typeof data === 'boolean') return `received boolean ${data}`;
-  if (Array.isArray(data)) return `received array of length ${data.length}`;
-  return `received ${typeof data}`;
+  const reason =
+    fields.length > 0 ? `invalid ${fields.join(', ')}` : 'unparseable payload';
+  return truncateSummary(`${MALFORMED_TOOL_USE_TEXT} (${reason})`, 160);
 }
 
 /**
- * Single render-boundary normalization shared by both hosts. A parse failure
- * becomes a visible failed tool row instead of being dropped (CLI) or falling
- * through to the default log template (webview).
- *
- * The fallback keeps the row live only while the source itself says the call
- * is still in progress, so a temporarily malformed in-progress row can still
- * be replaced by a later corrected payload in the append-only transcript;
- * anything else renders as failed rather than as a quiet success. It
- * preserves only independently usable fields (`toolName` when a string,
- * `input` from `data.input`) and keeps the bounded diagnostic out of the
- * normal tool input/output sections. Unknown tool names and unstructured
- * object outputs never reach the fallback because they still parse through
- * {@link ToolUseLogSchema}.
+ * Decode a tool card's payload once, at the transcript fold. Fields outside
+ * {@link ToolUseLogSchema} (e.g. `toolUseDispatch.ts`'s `files`) are kept. A
+ * payload the schema rejects becomes a visible failed card rather than being
+ * dropped: it keeps only the independently usable fields (`toolName` when a
+ * string, `input`) and carries the bounded diagnostic as its error. It stays
+ * live only while the source itself says the call is in progress, so a later
+ * corrected payload can still replace it; anything else reads as failed
+ * rather than as a quiet success.
  */
-export function normalizeToolUseForRender(data: unknown): NormalizedToolUse {
-  return normalizeToolUseData(data) ?? malformedToolUseFallback(data);
-}
-
-function malformedToolUseFallback(data: unknown): NormalizedToolUse {
-  const diagnostic = malformedToolUseDiagnostic(data);
-  const sourceStatus = validSourceToolCallStatus(data);
+export function decodeToolUseLog(data: Record<string, unknown>): ToolUseLog {
+  const parsed = ToolUseLogSchema.loose().safeParse(data);
+  if (parsed.success) return parsed.data;
   return {
-    toolName:
-      isObject(data) && typeof data.toolName === 'string' ? data.toolName : '',
-    errorText: diagnostic,
-    outputText: '',
-    userInstructionText: '',
-    input: isObject(data) && 'input' in data ? data.input : undefined,
-    isUserFeedback: false,
-    headerSummary: diagnostic,
-    // A payload that failed to parse is a failure, said in the one status
-    // vocabulary the row model reads: only an in-flight source status
-    // survives, so a corrected payload can still replace the row.
+    ...(typeof data.toolName === 'string' ? { toolName: data.toolName } : {}),
+    ...('input' in data ? { input: data.input } : {}),
+    error: malformedToolUseDiagnostic(parsed.error.issues),
     status:
-      sourceStatus === TOOL_CALL_STATUS.IN_PROGRESS
+      data.status === TOOL_CALL_STATUS.IN_PROGRESS
         ? TOOL_CALL_STATUS.IN_PROGRESS
         : TOOL_CALL_STATUS.FAILED,
   };

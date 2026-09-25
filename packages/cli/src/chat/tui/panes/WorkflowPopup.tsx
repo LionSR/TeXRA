@@ -13,15 +13,17 @@ import { Box, Text, useInput, useWindowSize } from 'ink';
 import { useMemo } from 'react';
 
 // Local imports - TUI primitives
-import { isEscapeInput } from '@cli/tui/inputKeys';
-import { BorderedPanel } from '@cli/tui/ui/BorderedPanel';
-import { KeyHints, keyHintsText, type KeyHint } from '@cli/tui/ui/KeyHints';
+import { isCtrlInput, isEscapeInput } from '@cli/tui/inputKeys';
+import { ReaderPanel, readerLayout } from '@cli/tui/ui/BorderedPanel';
+import { KeyHints, type KeyHint } from '@cli/tui/ui/KeyHints';
 import { Select, type SelectItem } from '@cli/tui/ui/Select';
 import { COLOR_HINT } from '@cli/tui/ui/colors';
-import { CONFIRM_CARD_HORIZONTAL_DECORATION } from '@cli/tui/ui/theme';
 import { useLiveNowMsSince } from '@cli/tui/useLiveNowMs';
-import { fillRows, textDisplayWidth } from '@cli/runtime/terminalText';
-import { wrappedRowCount } from '@cli/tui/ansiWrap';
+import {
+  fillRows,
+  safeTerminalText,
+  textDisplayWidth,
+} from '@cli/runtime/terminalText';
 
 // Local imports - shared schemas, model, and copy
 import {
@@ -30,8 +32,8 @@ import {
   type RunId,
   type WorkflowCallIdentity,
   type WorkflowCallProgress,
-  type WorkflowControlAction,
 } from '@shared/schemas';
+import type { RuntimeRequest } from '@shared/session/runtimeRequest';
 import {
   formatWorkflowCallLiveParts,
   formatWorkflowRowGroup,
@@ -54,7 +56,7 @@ import { formatCompactDuration, formatCostUsd } from '@utils/text/stringUtils';
 
 // Local imports - TUI state and policy
 import { formFrameWidth } from '../forms/_shared/FormFrame';
-import { scrollableModalTextRowsBudget } from '../modals/ScrollableModalText';
+import { BaseTextInput } from '../input/BaseTextInput';
 import { type WorkflowPopupView } from '../state/cliState';
 import { killableRunId, sessionView, runViewOf } from '../state/sessionView';
 import { useSignal } from '../state/useSignal';
@@ -68,10 +70,9 @@ import {
   type PendingApprovalKind,
 } from '../state/approvalQueue';
 
-/** Rows of chrome inside the panel beyond what the shared budget already
- *  counts: the tab strip and the per-call status strip. The filter line adds
- *  one while it shows, and the wrapped key hints add their measured rows. */
-const POPUP_CHROME_ROWS = 2;
+/** Rows the popup paints above its list: the tab strip and the per-call
+ *  status strip. The filter line adds one while it shows. */
+const POPUP_HEADER_ROWS = 2;
 const TAB_SEPARATOR = '    ';
 const TAB_SCROLL_MARK = '‹ ';
 
@@ -149,7 +150,7 @@ function TaskRow({
           {markerCell(WORKFLOW_CALL_STATUS_GLYPH[row.call.status])}
         </Text>
       </Box>
-      <RowSegment flexShrink={1}>{row.call.label}</RowSegment>
+      <RowSegment flexShrink={1}>{safeTerminalText(row.call.label)}</RowSegment>
       {/* The status word outranks the metadata column: it is its own segment
           at the label's shrink weight, so a wide row sheds metadata (weight 2)
           long before it clips `· Running`. */}
@@ -177,7 +178,7 @@ function DeclaredTaskRow({
         </Text>
       </Box>
       <RowSegment dimColor flexShrink={1}>
-        {task.label}
+        {safeTerminalText(task.label)}
       </RowSegment>
       <RowSegment dimColor flexShrink={1}>
         {` · ${WORKFLOW_TASK_STATUS_LABEL.declared}`}
@@ -216,11 +217,8 @@ interface WorkflowPopupProps {
   readonly view: WorkflowPopupView;
   readonly onClose: () => void;
   readonly onFocusRun: (runId: RunId) => void;
-  readonly onKillRun: (runId: RunId) => void;
-  readonly onWorkflowControl: (
-    runId: RunId,
-    action: WorkflowControlAction,
-  ) => void;
+  /** Issue a kill (`run.stop`) or a skip/retry (`workflow.control`). */
+  readonly onRequest: (request: RuntimeRequest) => void;
   readonly onOpenTranscript: (runId: RunId) => void;
   readonly onViewChange: (patch: Partial<WorkflowPopupView>) => void;
 }
@@ -230,10 +228,9 @@ export function WorkflowPopup({
   model,
   onClose,
   onFocusRun,
-  onKillRun,
   onOpenTranscript,
+  onRequest,
   onViewChange,
-  onWorkflowControl,
   runId,
   view,
 }: WorkflowPopupProps): React.JSX.Element {
@@ -241,9 +238,6 @@ export function WorkflowPopup({
   const sessionState = useSignal(sessionView());
   const pendingApprovals = useSignal(pendingApprovalKindsByRun);
   const stream = runViewOf(sessionState, runId);
-  const frameWidth = formFrameWidth(columns);
-  const width = frameWidth - CONFIRM_CARD_HORIZONTAL_DECORATION;
-
   const { phases } = model;
   const phaseIndex = clampIndex(view.phaseIndex, phases.length);
   const phase = phases[phaseIndex];
@@ -349,20 +343,15 @@ export function WorkflowPopup({
     { key: 'Ctrl-T', action: 'log' },
     { key: 'Esc', action: view.filter.length > 0 ? 'clear filter' : 'close' },
   ];
-  // The shared budget assumes a one-row footer; the wrapped hints take what
-  // they measure at this width.
-  const hintRows = wrappedRowCount(keyHintsText(hints), width);
   const filterShown = view.filterEditing || view.filter.length > 0;
-  const listRows = Math.max(
-    1,
-    scrollableModalTextRowsBudget({
-      availableRows,
-      columns,
-      title,
-      extraFixedRows:
-        POPUP_CHROME_ROWS + (hintRows - 1) + (filterShown ? 1 : 0),
-    }),
-  );
+  const layout = readerLayout({
+    availableRows,
+    extraRows: POPUP_HEADER_ROWS + (filterShown ? 1 : 0),
+    frameWidth: formFrameWidth(columns),
+    hints,
+    title,
+  });
+  const width = layout.contentWidth;
   const tabTexts = phases.map(phaseTabText);
   const tabStart = tabWindowStart(tabTexts, phaseIndex, width);
 
@@ -371,86 +360,75 @@ export function WorkflowPopup({
     else onClose();
   };
 
-  useInput((input, key) => {
-    if (view.filterEditing) {
-      if (isEscapeInput(input, key)) {
-        onViewChange({ filter: '', filterEditing: false });
-      } else if (key.return) {
-        onViewChange({ filterEditing: false });
-      } else if (key.backspace || key.delete) {
-        onViewChange({ filter: view.filter.slice(0, -1) });
-      } else if (
-        input &&
-        !key.ctrl &&
-        !key.meta &&
-        !key.upArrow &&
-        !key.downArrow &&
-        !key.leftArrow &&
-        !key.rightArrow &&
-        !key.tab
-      ) {
-        onViewChange({ filter: view.filter + input, selectedKey: undefined });
+  useInput(
+    (input, key) => {
+      if (isCtrlInput(input, key, 't')) {
+        onOpenTranscript(runId);
+        return;
       }
-      return;
-    }
-    if (key.ctrl && input.toLowerCase() === 't') {
-      onOpenTranscript(runId);
-      return;
-    }
-    if (key.ctrl || key.meta) return;
-    if (rows.length === 0 && isEscapeInput(input, key)) {
-      // The list owns Escape while it has rows; with none, this does.
-      clearFilterOrClose();
-      return;
-    }
-    if (key.leftArrow || key.rightArrow) {
-      const next = clampIndex(
-        phaseIndex + (key.rightArrow ? 1 : -1),
-        phases.length,
-      );
-      if (next !== phaseIndex) {
-        onViewChange({ phaseIndex: next, selectedKey: undefined });
+      if (key.ctrl || key.meta) return;
+      if (rows.length === 0 && isEscapeInput(input, key)) {
+        // The list owns Escape while it has rows; with none, this does.
+        clearFilterOrClose();
+        return;
       }
-      return;
-    }
-    if (input === '/') {
-      onViewChange({ filterEditing: true });
-      return;
-    }
-    if (input === 'f') {
-      const allRows = phases.flatMap((candidate, candidatePhaseIndex) =>
-        workflowPhaseRows(candidate, {
-          expanded: view.expanded,
-          filter: view.filter,
-          waiting: waitingOf(candidate),
-        }).map((row) => ({ phaseIndex: candidatePhaseIndex, row })),
-      );
-      const current = allRows.findIndex(
-        (item) =>
-          item.phaseIndex === phaseIndex && item.row.key === selectedKey,
-      );
-      const failed = allRows
-        .map((item, index) => ({ ...item, index }))
-        .filter(
-          ({ row }) => row.kind === 'task' && row.row.call.status === 'failed',
+      if (key.leftArrow || key.rightArrow) {
+        const next = clampIndex(
+          phaseIndex + (key.rightArrow ? 1 : -1),
+          phases.length,
         );
-      const next = failed.find(({ index }) => index > current) ?? failed[0];
-      if (next) {
-        onViewChange({
-          phaseIndex: next.phaseIndex,
-          selectedKey: next.row.key,
-        });
+        if (next !== phaseIndex) {
+          onViewChange({ phaseIndex: next, selectedKey: undefined });
+        }
+        return;
       }
-      return;
-    }
-    if ((input === 's' || input === 'r') && controllable && selectedRunId) {
-      onWorkflowControl(selectedRunId, input === 's' ? 'skip' : 'retry');
-      return;
-    }
-    if ((input === 'x' || input === 'k') && selectedRunId) {
-      onKillRun(selectedRunId);
-    }
-  });
+      if (input === '/') {
+        onViewChange({ filterEditing: true });
+        return;
+      }
+      if (input === 'f') {
+        const allRows = phases.flatMap((candidate, candidatePhaseIndex) =>
+          workflowPhaseRows(candidate, {
+            expanded: view.expanded,
+            filter: view.filter,
+            waiting: waitingOf(candidate),
+          }).map((row) => ({ phaseIndex: candidatePhaseIndex, row })),
+        );
+        const current = allRows.findIndex(
+          (item) =>
+            item.phaseIndex === phaseIndex && item.row.key === selectedKey,
+        );
+        const failed = allRows
+          .map((item, index) => ({ ...item, index }))
+          .filter(
+            ({ row }) =>
+              row.kind === 'task' && row.row.call.status === 'failed',
+          );
+        const next = failed.find(({ index }) => index > current) ?? failed[0];
+        if (next) {
+          onViewChange({
+            phaseIndex: next.phaseIndex,
+            selectedKey: next.row.key,
+          });
+        }
+        return;
+      }
+      if ((input === 's' || input === 'r') && controllable && selectedRunId) {
+        onRequest({
+          kind: 'workflow.control',
+          runId,
+          childRunId: selectedRunId,
+          action: input === 's' ? 'skip' : 'retry',
+        });
+        return;
+      }
+      if (input === 'x' && selectedRunId) {
+        onRequest({ kind: 'run.stop', runId: selectedRunId });
+      }
+    },
+    // The filter input owns every key while it edits.
+    { isActive: !view.filterEditing },
+  );
 
   const items: SelectItem<string>[] = rows.map((row) => ({
     label: row.key,
@@ -508,11 +486,10 @@ export function WorkflowPopup({
   })();
 
   return (
-    <BorderedPanel
-      color={COLOR_HINT}
-      title={title}
-      width={frameWidth}
+    <ReaderPanel
       footer={<KeyHints hints={hints} confirmCancel={false} wrap />}
+      layout={layout}
+      title={title}
     >
       <Box flexDirection="column" width={width}>
         <Box height={1} overflowY="hidden">
@@ -545,8 +522,19 @@ export function WorkflowPopup({
           <Box height={1} overflowY="hidden">
             <Text wrap="truncate-end">
               <Text color={COLOR_HINT}>{'/ '}</Text>
-              <Text bold>{view.filter}</Text>
-              {view.filterEditing ? <Text color={COLOR_HINT}>▏</Text> : null}
+              <Text bold>
+                <BaseTextInput
+                  focus={view.filterEditing}
+                  value={view.filter}
+                  onChange={(filter) =>
+                    onViewChange({ filter, selectedKey: undefined })
+                  }
+                  onEscape={() =>
+                    onViewChange({ filter: '', filterEditing: false })
+                  }
+                  onSubmit={() => onViewChange({ filterEditing: false })}
+                />
+              </Text>
               <Text dimColor>
                 {`  ${rows.length} of ${phase ? phase.tasks.length + phase.declaredTasks.length : 0}`}
                 {view.filterEditing ? ' · Enter keep · Esc clear' : ''}
@@ -562,7 +550,7 @@ export function WorkflowPopup({
             highlightedValue={selectedKey ?? null}
             isActive={!view.filterEditing}
             items={items}
-            maxVisibleItems={listRows}
+            maxVisibleItems={Math.max(1, layout.bodyRows)}
             onCancel={clearFilterOrClose}
             onHighlightChange={(key) => onViewChange({ selectedKey: key })}
             onSelect={activate}
@@ -572,6 +560,6 @@ export function WorkflowPopup({
           />
         )}
       </Box>
-    </BorderedPanel>
+    </ReaderPanel>
   );
 }

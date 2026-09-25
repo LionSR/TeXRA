@@ -19,7 +19,7 @@ import {
   reorderNestedGlobalFlags,
   setUsageColorOverrideFromRawArgs,
   showUsage,
-  showUsageStderr,
+  formatCliArgumentError,
   withUsageSections,
   detectUnknownCliCommand,
   formatUnknownCliCommand,
@@ -120,7 +120,10 @@ export const rootCommand = withUsageSections(
         ],
         ['texra run <agent> --input file.tex', 'run an agent headless'],
         ['texra agents list', 'list the available agents'],
-        ['texra config agents --all', 'show all agents in this workspace'],
+        [
+          'texra config agents --all',
+          'make every agent visible in this workspace',
+        ],
         [
           'texra plugin install github.com/<owner>/<repo>',
           'install a Claude Code or Codex plugin for its skills',
@@ -184,13 +187,16 @@ export async function runCli(
       return { exitCode: CliExitCode.Usage };
     }
     if (isCliError(error)) {
-      const resolved = await resolveDeepestSubCommand(rootCommand, rawArgs);
-      // Usage shown on an ERROR goes to STDERR so STDOUT stays clean and
-      // machine-parseable under `--output-format json|ndjson`. The explicit
-      // `--help` path above keeps using STDOUT (`showUsage`) per Unix
-      // convention.
-      await showUsageStderr(resolved.command, resolved.parent, resolved);
-      writeTextStderr(error.message);
+      // The error and its usage pointer go to STDERR so STDOUT stays clean
+      // and machine-parseable under `--output-format json|ndjson`. The
+      // explicit `--help` path above keeps using STDOUT (`showUsage`) per
+      // Unix convention.
+      writeTextStderr(
+        formatCliArgumentError(
+          error.message,
+          await resolveDeepestSubCommand(rootCommand, rawArgs),
+        ),
+      );
       return { exitCode: CliExitCode.Usage };
     }
     throw error;

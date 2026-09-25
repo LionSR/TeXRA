@@ -63,7 +63,7 @@ function secretPendingOAuthSlots(secrets: PlatformSecrets): PendingOAuthSlots {
   const key = (nonce: string): string =>
     `${PENDING_OAUTH_STATE_PREFIX}${nonce}`;
   return {
-    read: (nonce) => secrets.getStored(key(nonce)),
+    read: (nonce) => secrets.get(key(nonce)),
     write: (nonce, value) => secrets.set(key(nonce), value),
     erase: (nonce) => secrets.delete(key(nonce)),
     nonces: () =>

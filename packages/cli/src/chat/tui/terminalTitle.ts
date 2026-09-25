@@ -1,5 +1,7 @@
 import { basename } from 'node:path';
 
+import { computed } from '@lit-labs/signals';
+
 import { osc } from '@cli/runtime/ansiEscapes';
 import { loadingFrameAt } from '@cli/tui/ui/LoadingIndicator';
 import { subscribeToPolling } from '@cli/tui/usePollingInterval';
@@ -9,18 +11,14 @@ import {
   type SessionTitleState,
 } from '@shared/sessionTitle';
 import { subscribeToSignalChanges } from '@shared/signals';
+import { isWorkingRun } from '@shared/session/sessionView';
 import { sanitizePathSegment } from '@utils/text/sanitizePathSegment';
 
-import { claimedRunId, rootRunId, rootRunPending } from './state/cliState';
+import { rootRunIds } from './state/cliState';
 import { attentionRequests } from './state/approvalQueue';
-import {
-  anyRunRunning,
-  sessionView,
-  runPhaseOf,
-  runViewOf,
-} from './state/sessionView';
+import { sessionView } from './state/sessionView';
 import { writeOsc } from './notifications/terminalNotifier';
-import { chatTuiCanStopActiveRun } from './state/sessionRunState';
+import { chatTuiCanStopActiveRun, runStopFacts } from './state/sessionRunState';
 
 // Directory names can contain characters that would prematurely terminate
 // the OSC string (a stray BEL/ESC) or that some terminals in 8-bit mode
@@ -52,22 +50,20 @@ export function terminalTitleText(
   });
 }
 
-function currentTerminalTitleState(): SessionTitleState {
-  const view = sessionView().get();
-  if (attentionRequests(view).length > 0) return 'approval';
-  const runId = claimedRunId.get();
+const terminalTitleState = computed((): SessionTitleState => {
+  if (attentionRequests.get().length > 0) return 'approval';
+  const { runs } = sessionView().get();
   if (
-    chatTuiCanStopActiveRun({
-      runPending: rootRunPending.get(),
-      runId,
-      status: runPhaseOf(runViewOf(view, runId)),
-    }) ||
-    anyRunRunning(view, rootRunId.get())
+    chatTuiCanStopActiveRun(runStopFacts.get()) ||
+    rootRunIds.get().some((id) => {
+      const run = runs.get(id);
+      return run !== undefined && isWorkingRun(run);
+    })
   ) {
     return 'running';
   }
   return 'idle';
-}
+});
 
 interface TerminalTitleController {
   readonly suspend: () => void;
@@ -107,7 +103,7 @@ export function installTerminalTitleUpdates(
   };
   const synchronize = (): void => {
     if (suspended) return;
-    const state = currentTerminalTitleState();
+    const state = terminalTitleState.get();
     if (state === 'running') {
       startRunningAnimation();
       return;
@@ -120,7 +116,7 @@ export function installTerminalTitleUpdates(
     updateTitle(terminalTitleText(cwd));
   };
   const unsubscribe = subscribeToSignalChanges(
-    [sessionView(), claimedRunId, rootRunPending, rootRunId],
+    [terminalTitleState],
     synchronize,
   );
   synchronize();

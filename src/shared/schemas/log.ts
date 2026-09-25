@@ -33,27 +33,9 @@ export const MESSAGE_TYPES = {
   DEFAULT: 'default',
 } as const;
 
-export const MessageTypeSchema = z.enum(MESSAGE_TYPES);
+const MessageTypeSchema = z.enum(MESSAGE_TYPES);
 
 export type MessageType = z.infer<typeof MessageTypeSchema>;
-
-/**
- * Message types whose text runs in incrementally (`data.status: 'running'`)
- * before finalizing. Single source of truth for both the frontend banner
- * formatters (skip markdown parsing while running) and the backend orphan
- * sweep (finalize entries stuck at `running` after cancel/crash/reload).
- */
-export const STREAMING_TEXT_MESSAGE_TYPES: ReadonlySet<string> = new Set([
-  MESSAGE_TYPES.THINKING,
-  MESSAGE_TYPES.SCRATCHPAD,
-  MESSAGE_TYPES.MODEL_RESPONSE,
-]);
-
-export const STREAM_LOG_ENTRY_TYPES = {
-  LOG: 'log',
-  GROUP_START: 'group-start',
-  GROUP_END: 'group-end',
-} as const;
 
 const LoadedMediaMetadataSchema = z.discriminatedUnion('kind', [
   z.object({

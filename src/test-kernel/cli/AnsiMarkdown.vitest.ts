@@ -14,6 +14,7 @@ import {
   renderAnsiMarkdown,
 } from '@cli/chat/tui/render/ansiMarkdown';
 import { normalizeKnownHtmlForCliMarkdown } from '@cli/chat/tui/render/htmlMarkdownNormalize';
+import { tuiOutputStreamForColor } from '@cli/tui/noColorOutput';
 
 const ESC = String.fromCharCode(27);
 const ANSI_SGR_PATTERN = new RegExp(`${ESC}\\[[0-9;]*m`, 'u');
@@ -748,6 +749,14 @@ describe('renderAnsiMarkdown', () => {
     expect(renderAnsiMarkdown('## Section', { colorEnabled: false })).toContain(
       '## Section',
     );
+    // Without an explicit option, the TUI session color mode decides, so the
+    // scrollback budget measures the same `## ` rows the NO_COLOR painter prints.
+    tuiOutputStreamForColor(process.stdout, false);
+    try {
+      expect(renderAnsiMarkdown('## Section')).toContain('## Section');
+    } finally {
+      tuiOutputStreamForColor(process.stdout, true);
+    }
   });
 
   it('indents nested list items deeper than their parents', () => {

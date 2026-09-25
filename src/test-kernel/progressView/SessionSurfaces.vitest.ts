@@ -77,10 +77,7 @@ beforeEach(() => {
     host$: host,
     generation: 1,
   });
-  surfaces = createSessionSurfaces({
-    storage,
-    hostRequestFailureOwner: 'surface',
-  });
+  surfaces = createSessionSurfaces({ storage });
   surfaces.sync([KEY]);
 });
 
@@ -97,38 +94,28 @@ function response(): (result: Response['result']) => void {
 }
 
 describe('session Surface ownership', () => {
-  it.each(['host', 'surface'] as const)(
-    'routes host refusals to the %s owner and leaves cancellation quiet',
-    async (hostRequestFailureOwner) => {
-      surfaces.dispose();
-      surfaces = createSessionSurfaces({ storage, hostRequestFailureOwner });
-      surfaces.sync([KEY]);
-      const cancel = response();
-      surfaces.hostRequest(KEY, { kind: 'pickFiles', fileType: 'input' });
-      cancel({ ok: false, error: { _tag: 'Cancelled' } });
-      await Promise.resolve();
-      expect(surfaces.get(KEY)?.surface$.get().requestError).toBeNull();
+  it('shows host refusals on the surface and leaves cancellation quiet', async () => {
+    const cancel = response();
+    surfaces.hostRequest(KEY, { kind: 'pickFiles', fileType: 'input' });
+    cancel({ ok: false, error: { _tag: 'Cancelled' } });
+    await Promise.resolve();
+    expect(surfaces.get(KEY)?.surface$.get().requestError).toBeNull();
 
-      const refuse = response();
-      surfaces.hostRequest(KEY, { kind: 'extractFigures' });
-      // Open another paper while the first paper's request remains pending.
-      surfaces.sync([KEY, 'other-paper']);
-      const error = {
-        _tag: 'Rejected',
-        reason: 'Figure extraction is unavailable.',
-      } as const;
-      refuse({ ok: false, error });
-      await Promise.resolve();
-      expect(surfaces.get(KEY)?.surface$.get().requestError).toBe(
-        hostRequestFailureOwner === 'surface' ? error : null,
-      );
-      expect(
-        surfaces.get('other-paper')?.surface$.get().requestError,
-      ).toBeNull();
-      surfaces.act(KEY, { kind: 'dismissRequestError' });
-      expect(surfaces.get(KEY)?.surface$.get().requestError).toBeNull();
-    },
-  );
+    const refuse = response();
+    surfaces.hostRequest(KEY, { kind: 'extractFigures' });
+    // Open another paper while the first paper's request remains pending.
+    surfaces.sync([KEY, 'other-paper']);
+    const error = {
+      _tag: 'Rejected',
+      reason: 'Figure extraction is unavailable.',
+    } as const;
+    refuse({ ok: false, error });
+    await Promise.resolve();
+    expect(surfaces.get(KEY)?.surface$.get().requestError).toBe(error);
+    expect(surfaces.get('other-paper')?.surface$.get().requestError).toBeNull();
+    surfaces.act(KEY, { kind: 'dismissRequestError' });
+    expect(surfaces.get(KEY)?.surface$.get().requestError).toBeNull();
+  });
 
   it('parses a host launch patch without defaulting the fields it omits', () => {
     // A host naming one field must not reset the agent, draft or files.

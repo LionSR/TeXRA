@@ -1,7 +1,6 @@
 import { createHash } from 'node:crypto';
 
 import { it } from '@effect/vitest';
-import { Effect } from 'effect';
 import { describe, expect } from 'vitest';
 import {
   DEFAULT_MODEL_CAPABILITIES,
@@ -16,8 +15,7 @@ import {
   generateOAuthState,
   generatePkcePair,
 } from '@auth/oauth/pkce';
-import { resolveCodexSubscriptionCapabilities } from '@model/providerCapabilities';
-import { hostStores, setupPlatform } from '@test/support/setupPlatform';
+import { decideModelRoute, OWN_KEY_ROUTE_FACTS } from '@model/modelRoute';
 
 /** A minimal OpenAI `ModelConfig` fixture, overridable per test. */
 function openAIModel(overrides: Partial<ModelConfig> = {}): ModelConfig {
@@ -50,9 +48,6 @@ describe('codex PKCE', () => {
 });
 
 describe('codex model eligibility', () => {
-  // The profile reads the Codex context-window setting once a model is eligible.
-  setupPlatform({ config: { 'texra.chatgptCodex.preferSubscription': true } });
-
   // Serving status is registry data: llm-zoo's `codexSubscription` flag,
   // sourced from the Codex CLI's embedded model manifest cross-checked
   // against https://developers.openai.com/codex/models. The registry-derived
@@ -60,7 +55,7 @@ describe('codex model eligibility', () => {
   // deprecation exceptions) inferred serving status from proxies and broke
   // when they diverged: GPT-5.6 ships with a `medium` default effort, failed
   // the tier gate, and silently fell back to the user's API key.
-  it.effect.each<{
+  it.each<{
     name: string;
     overrides: Partial<ModelConfig>;
     eligible: boolean;
@@ -107,15 +102,12 @@ describe('codex model eligibility', () => {
       },
       eligible: false,
     },
-  ])('$name', ({ overrides, eligible }) =>
-    Effect.gen(function* () {
-      expect(
-        (yield* resolveCodexSubscriptionCapabilities(
-          hostStores(),
-          openAIModel(overrides),
-          false,
-        )) !== null,
-      ).toBe(eligible);
-    }),
-  );
+  ])('$name', ({ overrides, eligible }) => {
+    expect(
+      decideModelRoute(openAIModel(overrides), {
+        ...OWN_KEY_ROUTE_FACTS,
+        chatgptSubscription: true,
+      }).kind === 'chatgpt-subscription',
+    ).toBe(eligible);
+  });
 });

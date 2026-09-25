@@ -10,10 +10,7 @@ import type { RunId } from '@shared/schemas';
 import type { HostRequest } from '@shared/session/hostRequest';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { createModuleMocks } from '@test/support/moduleMocks';
-import {
-  createFakeWorkspaceRoots,
-  FakeStateStore,
-} from '@test/support/FakePlatform';
+import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import {
   makeTempDir as makeSharedTempDir,
@@ -102,7 +99,7 @@ describe('desktop preview host', () => {
     { kind: 'exportTranscript', runId: 'missing:stream' as RunId },
     { kind: 'polish', text: 'A conserved quantity.' },
   ] satisfies HostRequest[])(
-    'presents $kind failure once through the request dispatcher',
+    'answers a $kind failure without a host dialog',
     (request) =>
       Effect.gen(function* () {
         const { createDesktopPreviewHost } = yield* Effect.promise(() =>
@@ -117,7 +114,6 @@ describe('desktop preview host', () => {
         const fakeHost = createFakeHost();
         yield* Effect.promise(() => installFakeHost(fakeHost));
         const secrets = fakeHost.secrets;
-        const globalState = new FakeStateStore();
         const { createTestSession } = yield* Effect.promise(
           () => import('@test/support/sessionTestUtils'),
         );
@@ -167,7 +163,6 @@ describe('desktop preview host', () => {
           run: {} as Parameters<typeof createDesktopHostRequests>[0]['run'],
           files,
           secrets,
-          globalState,
           snapshot: createHostSnapshotSource({
             project: {
               key: 'paper',
@@ -175,11 +170,10 @@ describe('desktop preview host', () => {
               initials: 'P',
               subtitle: '/paper',
             },
+            root: undefined,
             secrets,
             stores: session.roots,
             fileOptions: () => files.fileOptions().pipe(Effect.orDie),
-            readRecentCommits: () =>
-              Effect.succeed({ commits: [], isGitRepo: false }),
             publish: () => Effect.void,
             onError: () => {},
           }),
@@ -208,13 +202,10 @@ describe('desktop preview host', () => {
             handler.handleHostRequest(request, 'window'),
           ),
         );
+        // The surface shows the answer; the host adds no dialog of its own.
         expect(error).toBeDefined();
-        expect(present).toHaveBeenCalledOnce();
-        expect(present).toHaveBeenCalledWith('requestShowError', {
-          message: expect.stringMatching(/\S/),
-        });
+        expect(present).not.toHaveBeenCalled();
         expect(showErrorMessage).not.toHaveBeenCalled();
-        present.mockClear();
         const cancelled = yield* Effect.flip(
           withProcessServices(
             testRuntime(),

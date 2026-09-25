@@ -62,8 +62,8 @@ import { installDesktopUnsavedCloseWiring } from './desktopUnsavedClose';
 import './desktopShell.css';
 import {
   conversationDockTemplate,
-  projectChipTemplate,
   shellSidebarTemplate,
+  subagentsButtonTemplate,
   type RailProject,
 } from './desktopShell';
 import { subagentsPaneTemplate } from './subagentsPane';
@@ -75,7 +75,6 @@ import {
   setBottomPanelHeight,
   setSidebarWidth,
   setWorkbenchWidth,
-  toggleFiles,
   toggleSidebar,
   type DesktopShellState,
   type WorkbenchTab,
@@ -88,6 +87,7 @@ import { createDesktopPromptOverlay } from './promptOverlay';
 import { createLogsPane } from './logsPane';
 import { disposePendingFileRequests } from './fileRequests';
 import { createProjectWorkbench } from './projectWorkbench';
+import { createProjectRail } from './projectRail';
 import { createMessageRoutes } from './messageRoutes';
 
 const appRoot = document.querySelector<HTMLElement>('#app')!;
@@ -118,7 +118,7 @@ const startupTeamPanel = createStartupTeamPanel({
   dismiss: () => postMessage(DESKTOP_ONBOARDING_COMMANDS.DISMISS),
   onVisibilityChanged: rerenderShell,
   showLauncher: returnToLauncher,
-  openMultiAgent: () => openSettingsTab('agents'),
+  openMultiAgent: () => openSettingsTab('agents/teams'),
   // Lazy by necessity: the panel is constructed above the accelerator map's
   // declaration (which lands much later at module scope), so an eager or
   // captured read is a TDZ throw. Reading at render time is also what lets a
@@ -170,11 +170,9 @@ let shell: Shell = {
 };
 let projectsKnown = false;
 let applyingProjectList = false;
-// The folder of every open project, by session key; the no-workspace session
-// is never among them. How a project is named is its host snapshot's.
-let projectRoots: ReadonlyMap<string, string> = new Map();
-const activeProjectRoot = () => projectRoots.get(shell.active);
-const hasWorkspace = () => !projectsKnown || activeProjectRoot() !== undefined;
+// The no-workspace session is never among the open projects; how a project
+// is named is its host snapshot's.
+const hasWorkspace = () => !projectsKnown || shell.open.includes(shell.active);
 function setShell(next: Shell): void {
   shell = next;
   persistedShell.setState({ collapsed: [...next.collapsed] });
@@ -185,7 +183,6 @@ function setShell(next: Shell): void {
 // chrome read those three records and nothing else.
 const projectSessions = createSessionSurfaces({
   storage: rendererState,
-  hostRequestFailureOwner: 'host',
 });
 projectSessions.onChange(rerenderShell);
 // A project whose session has not framed its host snapshot yet is not listed:
@@ -195,13 +192,8 @@ const railProjects = (): RailProject[] =>
     const session = projectSessions.get(key);
     const display = session?.host$.get()?.project;
     if (!session || !display) return [];
-    return [
-      {
-        display,
-        view: session.view$.get(),
-        surface: session.surface$.get(),
-      },
-    ];
+    const view = session.view$.get();
+    return [{ display, view, surface: session.surface$.get() }];
   });
 const activeRailProject = (projects: readonly RailProject[]) =>
   projects.find((project) => project.display.key === shell.active);
@@ -252,6 +244,23 @@ const projectWorkbenches = new Map<
   string,
   ReturnType<typeof createProjectWorkbench>
 >();
+// The rail's actions and records, over every open project.
+const projectRail = createProjectRail({
+  shell: () => shell,
+  projects: () => railProjects(),
+  sessions: projectSessions,
+  workbenches: projectWorkbenches,
+});
+// Seen only while the window has focus: a run finishing behind another app is
+// news when the user comes back.
+const markShownRunSeen = () => {
+  const view = projectSessions.get(shell.active)?.view$.get();
+  if (view && document.hasFocus())
+    projectSessions.act(shell.active, { kind: 'seen', view });
+};
+projectSessions.onChange(markShownRunSeen);
+window.addEventListener('focus', markShownRunSeen);
+const selectProject = projectRail.selectProject;
 
 function currentWorkbench() {
   const project = projectWorkbenches.get(shell.active);
@@ -298,7 +307,7 @@ function toggleBottomBarVisibility(): void {
 }
 
 function toggleSidePanelVisibility(): void {
-  currentWorkbench().workbench.togglePlacementVisibility('right', 'settings');
+  currentWorkbench().workbench.togglePlacementVisibility('right', 'files');
 }
 
 // `<settings-app>` and `<progress-app>` are instantiated once and slotted into
@@ -347,6 +356,8 @@ const noWorkspacePlaceholder: HTMLElement = document.createElement('section');
 // hands it the active project's session.
 const conversationView = document.createElement('progress-app') as ProgressApp;
 conversationView.placement = 'desktop';
+// The attribute is what the element's desktop styles select on.
+conversationView.setAttribute('placement', 'desktop');
 conversationView.setAttribute('data-desktop-view', 'progress');
 
 const settingsView: HTMLElement = document.createElement('settings-app');
@@ -368,9 +379,12 @@ function shellConversationTemplate(): TemplateResult {
   // The sidebar is the only home for the rail's per-run pending-approval
   // badge (RunTabs.ts). Collapsing it removes that cue entirely, so a
   // call held at the approval gate — often on a workflow's child run, not
-  // the one on screen — can stall with zero visible affordance (#11511).
-  // Surface the same signal on the toggle that reopens the rail.
-  const hasPendingApproval = (activeProject?.view.rollup.waiting ?? 0) > 0;
+  // the one on screen, or in a project not shown — can stall with zero
+  // visible affordance (#11511). Surface the same signal on the toggle that
+  // reopens the rail.
+  const hasPendingApproval = projects.some(
+    (project) => project.view.rollup.waiting > 0,
+  );
   const sidebarCollapsedWithPendingApproval =
     shellState().sidebarCollapsed && hasPendingApproval;
   let sidebarToggleLabel = shellState().sidebarCollapsed
@@ -384,63 +398,50 @@ function shellConversationTemplate(): TemplateResult {
   const noWorkspaceContent = startupPanelVisible
     ? startupTeamPanel.template()
     : noWorkspacePlaceholder;
+  const sidebarToggle = html`<span class="shell-header-button-slot">
+    ${renderIconActionButton({
+      id: 'shellSidebarToggle',
+      icon: shellState().sidebarCollapsed ? 'chevron-right' : 'chevron-left',
+      label: sidebarToggleLabel,
+      tooltip: sidebarToggleLabel,
+      className: 'shell-header-button icon-button',
+      size: 'l',
+      onClick: () => updateShell(toggleSidebar(shellState())),
+    })}
+    ${
+      sidebarCollapsedWithPendingApproval
+        ? html`<span
+            class="status-dot shell-header-pending-approval-badge"
+            aria-hidden="true"
+          ></span>`
+        : nothing
+    }
+  </span>`;
+  // One header row: the conversation's own. The desktop's controls ride in
+  // its slots; only the no-folder screen, which has no conversation, keeps
+  // a row of its own to drag the window by.
+  render(
+    html`<span slot="header-start" class="shell-header-start"
+        >${sidebarToggle}</span
+      ><span slot="header-end" class="shell-header-end"
+        >${subagentsButtonTemplate(activeProject, () =>
+          currentWorkbench().workbench.openKind('subagents'),
+        )}${renderIconActionButton({
+          id: 'shellToggleSidePanel',
+          icon: 'picture-in-picture',
+          label: commandLabel(DESKTOP_LOCAL_COMMANDS.TOGGLE_SIDE_PANEL),
+          tooltip: commandTitle(DESKTOP_LOCAL_COMMANDS.TOGGLE_SIDE_PANEL),
+          className: 'shell-layout-toggle',
+          size: 'm',
+          pressed: activeWorkbenchTab(shellState(), 'right') != null,
+          onClick: toggleSidePanelVisibility,
+        })}</span
+      >`,
+    conversationView,
+  );
   return html`
     <main class="shell-conversation" aria-label="Task conversation">
-      <header class="shell-header">
-        <span class="shell-header-button-slot">
-          ${renderIconActionButton({
-            id: 'shellSidebarToggle',
-            icon: shellState().sidebarCollapsed
-              ? 'chevron-right'
-              : 'chevron-left',
-            label: sidebarToggleLabel,
-            tooltip: sidebarToggleLabel,
-            className: 'shell-header-button icon-button',
-            size: 'l',
-            onClick: () => updateShell(toggleSidebar(shellState())),
-          })}
-          ${
-            sidebarCollapsedWithPendingApproval
-              ? html`<span
-                  class="status-dot shell-header-pending-approval-badge"
-                  aria-hidden="true"
-                ></span>`
-              : nothing
-          }
-        </span>
-        ${
-          projects.length > 0
-            ? projectChipTemplate(projects, activeProject, selectProject)
-            : nothing
-        }
-        <span class="shell-header-spacer"></span>
-        <div
-          class="shell-layout-controls"
-          role="group"
-          aria-label="Layout controls"
-        >
-          ${renderIconActionButton({
-            id: 'shellToggleBottomBar',
-            icon: 'window-maximize',
-            label: commandLabel(DESKTOP_LOCAL_COMMANDS.TOGGLE_BOTTOM_BAR),
-            tooltip: commandTitle(DESKTOP_LOCAL_COMMANDS.TOGGLE_BOTTOM_BAR),
-            className: 'shell-layout-toggle',
-            size: 'l',
-            pressed: activeWorkbenchTab(shellState(), 'bottom') != null,
-            onClick: toggleBottomBarVisibility,
-          })}
-          ${renderIconActionButton({
-            id: 'shellToggleSidePanel',
-            icon: 'picture-in-picture',
-            label: commandLabel(DESKTOP_LOCAL_COMMANDS.TOGGLE_SIDE_PANEL),
-            tooltip: commandTitle(DESKTOP_LOCAL_COMMANDS.TOGGLE_SIDE_PANEL),
-            className: 'shell-layout-toggle',
-            size: 'l',
-            pressed: activeWorkbenchTab(shellState(), 'right') != null,
-            onClick: toggleSidePanelVisibility,
-          })}
-        </div>
-      </header>
+      ${hasWorkspace() ? nothing : html`<header class="shell-header">${sidebarToggle}</header>`}
       <div class="shell-conversation-body" id="desktop-center">
         <section class="shell-conversation-pane" data-pane="conversation">
           ${
@@ -527,6 +528,13 @@ function projectWorkbenchesTemplate(
   )} `;
 }
 
+/**
+ * A closed pane's split: no divider, and no minimum. The split panel clamps
+ * its position to `--min`, so a closed pane left at its minimum kept an
+ * empty strip of that size beside the conversation.
+ */
+const CLOSED_SPLIT_STYLE = '--divider-width: 0px; --min: 0px';
+
 function shellRightLayoutTemplate(
   rightTab: WorkbenchTab | undefined,
 ): TemplateResult {
@@ -537,7 +545,7 @@ function shellRightLayoutTemplate(
       primary="end"
       position-in-pixels=${rightTab ? shellState().workbenchWidth : 0}
       ?disabled=${!rightTab}
-      style=${rightTab ? nothing : '--divider-width: 0px'}
+      style=${rightTab ? nothing : CLOSED_SPLIT_STYLE}
       @wa-reposition=${rememberWorkbenchWidth}
     >
       <span slot="divider" class="shell-split-handle">
@@ -565,7 +573,7 @@ function shellMainTemplate(
       primary="end"
       position-in-pixels=${bottomTab ? shellState().bottomPanelHeight : 0}
       ?disabled=${!bottomTab}
-      style=${bottomTab ? nothing : '--divider-width: 0px'}
+      style=${bottomTab ? nothing : CLOSED_SPLIT_STYLE}
       @wa-reposition=${rememberBottomPanelHeight}
     >
       <span slot="divider" class="shell-bottom-split-handle">
@@ -577,10 +585,6 @@ function shellMainTemplate(
       </div>
     </wa-split-panel>
   `;
-}
-
-function selectProject(key: string): void {
-  postMessage(DESKTOP_PROJECT_COMMANDS.SELECT_PROJECT, { key });
 }
 
 function shellTemplate(): TemplateResult {
@@ -596,7 +600,7 @@ function shellTemplate(): TemplateResult {
       primary="start"
       position-in-pixels=${shellState().sidebarCollapsed ? 0 : shellState().sidebarWidth}
       ?disabled=${shellState().sidebarCollapsed}
-      style=${shellState().sidebarCollapsed ? '--divider-width: 0px' : nothing}
+      style=${shellState().sidebarCollapsed ? CLOSED_SPLIT_STYLE : nothing}
       data-workbench-open=${String(workbenchOpen)}
       data-right-panel-open=${String(rightTab != null)}
       data-bottom-panel-open=${String(bottomTab != null)}
@@ -612,35 +616,18 @@ function shellTemplate(): TemplateResult {
       >
         ${shellSidebarTemplate(
           {
-            files: currentWorkbench().editorPane.treeElement,
-            filesExpanded: shellState().filesExpanded,
             projects: railProjects(),
             shell,
-            subagentsOpen: shellState().workbenchTabs.some(
-              (tab) => tab.kind === 'subagents',
-            ),
             commandsLabel: commandLabel(DESKTOP_COMMAND_PALETTE_ID),
             commandsTitle: commandTitle(DESKTOP_COMMAND_PALETTE_ID),
           },
           {
             onNewTask: returnToLauncher,
             onOpenCommands: openCommandPalette,
-            onToggleFiles: () => {
-              const next = toggleFiles(shellState());
-              updateShell(next);
-              if (next.filesExpanded)
-                void currentWorkbench().editorPane.refresh();
-            },
             onOpenFolder: () =>
               postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER),
             onSelectProject: selectProject,
-            onCloseProject: (key) =>
-              postMessage(DESKTOP_PROJECT_COMMANDS.CLOSE_PROJECT, {
-                key,
-                hasUnsavedChanges:
-                  projectWorkbenches.get(key)?.editorPane.hasUnsavedChanges() ??
-                  false,
-              }),
+            onProjectAction: projectRail.runProjectAction,
             onToggleProjectCollapsed: (key) =>
               setShell(
                 applyShellAction(shell, {
@@ -649,14 +636,8 @@ function shellTemplate(): TemplateResult {
                   collapsed: !shell.collapsed.includes(key),
                 }),
               ),
-            onOpenTerminal: () =>
-              currentWorkbench().workbench.openKind('terminal'),
-            onOpenBrowser: () =>
-              currentWorkbench().workbench.openKind('browser'),
             onOpenSettings: () =>
               currentWorkbench().workbench.openKind('settings'),
-            onOpenSubagents: () =>
-              currentWorkbench().workbench.openKind('subagents'),
           },
         )}
       </div>
@@ -683,47 +664,9 @@ function observeSurfaceResizes(): void {
   }
 }
 
-/**
- * The off-screen pending requests (by request id) that have already
- * reopened the sidebar once. A user who re-collapses it mid-run must not be
- * fought on every unrelated signal change; only a newly appearing off-screen
- * request (one not in this set) reopens it again, including a new request
- * on a run whose earlier one was answered.
- */
-let sidebarRevealedForRequestIds = new Set<string>();
-
-/**
- * Auto-reveals a collapsed sidebar when a pending request lands on a
- * run other than the one on screen. That is the dead-end case: the
- * request card lives on the pending run's own view (one home for the
- * decision), so a collapsed, non-viewed rail leaves nothing to click
- * (#11511 — per-call workflow review cards land on a child run, not the
- * one the user is watching). The preference belongs to the project's surface.
- */
-function revealSidebarForOffScreenRequest(): void {
-  const active = activeRailProject(railProjects());
-  const offScreen = (active?.view.requests ?? [])
-    .filter((request) => request.runId !== active?.surface.selected)
-    .map((request) => request.requestId);
-  if (offScreen.length === 0) {
-    sidebarRevealedForRequestIds = new Set();
-    return;
-  }
-  const isNewRequest = offScreen.some(
-    (id) => !sidebarRevealedForRequestIds.has(id),
-  );
-  sidebarRevealedForRequestIds = new Set(offScreen);
-  if (isNewRequest && shellState().sidebarCollapsed) {
-    projectSessions.act(shell.active, {
-      kind: 'workbench',
-      layout: toggleSidebar(shellState()),
-    });
-  }
-}
-
 function rerenderShell(): void {
   if (bootstrapFailed || applyingProjectList) return;
-  revealSidebarForOffScreenRequest();
+  projectRail.revealSidebarForOffScreenRequest();
   const active = activeRailProject(railProjects());
   const session = active ? projectSessions.get(active.display.key) : undefined;
   conversationView.view = active?.view ?? null;
@@ -920,7 +863,6 @@ const MESSAGE_ROUTES = createMessageRoutes({
     void projectWorkbenches.get(session)?.editorPane.refresh();
   },
   isBootstrapFailed: () => bootstrapFailed,
-  returnToLauncher,
   openKind: (kind) =>
     projectWorkbenches.get(shell.active)?.workbench.openKind(kind),
   toggleLayoutPanel: (panel) => {
@@ -990,11 +932,8 @@ const MESSAGE_ROUTES = createMessageRoutes({
     // notifications from painting an intermediate owner during this adoption.
     applyingProjectList = true;
     try {
-      projectRoots = new Map(
-        message.projects.map((project) => [project.key, project.root] as const),
-      );
       projectsKnown = true;
-      const open = message.projects.map((project) => project.key);
+      const { open } = message;
       const sessions = [...new Set([...open, message.activeKey])];
       for (const [key, project] of projectWorkbenches) {
         if (sessions.includes(key)) continue;
@@ -1006,7 +945,6 @@ const MESSAGE_ROUTES = createMessageRoutes({
         if (projectWorkbenches.has(key)) continue;
         const project = createProjectWorkbench({
           session: key,
-          root: projectRoots.get(key),
           surfaces: projectSessions,
           settingsView,
           logsPane,
@@ -1025,7 +963,7 @@ const MESSAGE_ROUTES = createMessageRoutes({
         });
         projectWorkbenches.set(key, project);
         project.setTheme(currentTheme());
-        if (projectRoots.has(key)) void project.editorPane.refresh();
+        if (open.includes(key)) void project.editorPane.refresh();
       }
       setShell({
         ...shell,

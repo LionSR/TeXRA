@@ -28,7 +28,6 @@ interface ConversationPaneProps {
   readonly width?: number;
   readonly availableWidth?: number;
   readonly maxRows?: number;
-  readonly colorEnabled?: boolean;
 }
 
 /**
@@ -42,11 +41,7 @@ export function ConversationPane(
   const view = useSignal(sessionView());
   const allNotices = useSignal(noticesSignal);
   const stream = runViewOf(view, activeRunId);
-  const merged = mergeLocalNotices(
-    stream?.transcript.rows ?? [],
-    stream?.transcript.settledRows ?? 0,
-    noticesFor(allNotices, activeRunId),
-  );
+  const merged = mergeLocalNotices(stream, noticesFor(allNotices, activeRunId));
   const displayEntries = pendingTranscriptEntries(
     merged.rows,
     merged.settledRows,
@@ -94,7 +89,6 @@ export function ConversationPane(
       {visibleEntries.entries.map((entry) => (
         <EntryErrorBoundary key={entry.id} label={entry.kind}>
           <LiveTranscriptEntry
-            colorEnabled={props.colorEnabled}
             entry={entry}
             maxRows={visibleEntries.rowLimits.get(entry.id)}
             width={props.width}

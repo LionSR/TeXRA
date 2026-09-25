@@ -18,6 +18,7 @@
  * pending response dispatches what is unsettled, and a halted run that is
  * launched again waits for the input that resumes it.
  */
+import { MODEL_CONFIGS } from 'llm-zoo';
 import { Effect, Exit, Scope, SynchronizedRef } from 'effect';
 
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
@@ -25,14 +26,13 @@ import type { FollowUpBatch } from '@agent/followUp/RunInput';
 import { maybeBuildGoalContinuation } from '@agent/goal/maybeBuildGoalContinuation';
 import { buildInitialToolUsePrompts } from '@agent/prompt/PromptBuilder';
 import { USER_VAR_INSTRUCTION, USER_VAR_MODEL } from '@agent/prompt/userVars';
-import { resolveModelCompatibilityKey } from '@agent/runtime/modelRoutes';
-import { logUserMessage } from '@agent/trace';
 import {
-  getRuntimeModelConfig,
-  resolveRuntimeModelConfig,
-} from '@model/runtimeModelRegistry';
+  resolveModelRoute,
+  routeCompatibilityKey,
+} from '@agent/runtime/modelRoutes';
+import { logUserMessage } from '@agent/trace';
 import type { ProcessServices } from '@platform/processRuntime';
-import type { LanguageModel } from '@platform/languageModel';
+import { LanguageModel } from '@platform/languageModel';
 import type { StorageFs, WorkspaceFs } from '@platform/rootedFs';
 import { hasDelegationTool } from '@shared/constants/delegationTools';
 import {
@@ -45,7 +45,6 @@ import {
 import { RunLedger } from '@shared/session/runLedger';
 import { type RunState } from '@shared/session/runStateFold';
 import { goalOf, pauseGoal, setGoalSessionAutoApproval } from '@tools/goal';
-import { getUseOpenRouter } from '@utils/config/providerConfig';
 
 import { AgentRun } from '../run/AgentRun';
 import { compactIfNeeded } from '../run/compaction';
@@ -102,8 +101,8 @@ export interface ToolUseFlowContext {
 export interface ToolUseStart {
   /** The caller launched this as a resume; the ledger decides what it is. */
   readonly resume: boolean;
-  /** Awaited child-turn accounting and delivery, within this run's scope. */
-  readonly turns?: ChildRunTurns<ToolUseResult, ProcessServices | Runs>;
+  /** A native child's turn permit, and the boundary its loop delivers at. */
+  readonly turns?: ChildRunTurns<ToolUseResult>;
   /** Host wiring that is live while the loop can accept an interrupt. */
   readonly attachment?: {
     attach(context: ToolUseFlowContext): void;
@@ -140,6 +139,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   const runs = yield* Runs;
   const invoker = yield* ModelInvoker;
   const followUps = yield* FollowUps;
+  const languageModel = yield* LanguageModel;
   const { runId, session, logger } = run;
   const isChild = () => runs.getHandle(runId)?.isChild === true;
 
@@ -185,7 +185,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   const flowContext: ToolUseFlowContext = {
     ownerSession: session,
     interrupt(): void {
-      run.interrupt();
+      runs.interrupt(runId);
     },
     requestImmediateCompaction(): void {
       compactionRequested = true;
@@ -199,13 +199,12 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       function* (model: string) {
         const current = SynchronizedRef.getUnsafe(run.model);
         if (current.modelId === model) return undefined;
-        const nextConfig = getRuntimeModelConfig(model);
+        const nextConfig = MODEL_CONFIGS[model];
         if (!nextConfig) return `Model ${model} is not registered`;
-        const nextKey = yield* resolveModelCompatibilityKey(
-          nextConfig,
-          run.stores.globalState,
-          yield* getUseOpenRouter(run.stores),
+        const route = yield* resolveModelRoute(run.stores, nextConfig).pipe(
+          Effect.provideService(LanguageModel, languageModel),
         );
+        const nextKey = yield* routeCompatibilityKey(nextConfig, route);
         if (!nextKey)
           return `Unsupported model provider: ${nextConfig.provider}`;
         return current.compatibilityKey === nextKey
@@ -257,7 +256,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       if (model === null) return state;
       const current = yield* SynchronizedRef.get(run.model);
       if (current.modelId === model) return state;
-      const nextConfig = yield* resolveRuntimeModelConfig(model);
+      const nextConfig = MODEL_CONFIGS[model];
       if (!nextConfig) {
         return yield* Effect.fail(
           new Error(`Model ${model} is not registered`),
@@ -655,8 +654,8 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         // recovers the run clears it, so the fold is the one place to read it.
         const afterError = state.lastError !== null;
         if (parked) {
-          // A native child waits in this same run scope, just like its root.
-          // Its delivery callback has already committed the preceding turn.
+          // A native child waits in this same run scope, just like its root:
+          // its loop has already delivered the turn offered at the boundary.
           if (isChild() && afterError && !followUps.hasQueued())
             return finish(state, RUN_OUTCOME.FAILED);
           // Activation clears the visible step. Restore an already idle cursor
@@ -687,7 +686,8 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
             }
           }
           if (batch === null) {
-            detach();
+            // The host port stays attached: `/model` and `/compact` land on
+            // a parked run.
             batch = yield* followUps.wait;
             if (batch === null) {
               // The queue was cancelled or disposed under the parked loop:
@@ -697,7 +697,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
                 afterError ? RUN_OUTCOME.FAILED : RUN_OUTCOME.CANCELLED,
               );
             }
-            attach();
           }
           const consumed: ConsumedFollowUps = yield* followUps.consume(
             state,
@@ -710,7 +709,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         }
         restoring = false;
         const turn: TurnExit = yield* start.turns
-          ? start.turns.run(runTurn(cell))
+          ? start.turns.turnPermit(runTurn(cell))
           : runTurn(cell);
         state = turn.state;
         if (turn.outcome === 'cancelled') {
@@ -740,7 +739,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         state = yield* cell.append([
           snapshot(state, { phase: 'waiting' }),
           stepRow(runId, state, 'turn.end'),
-          ...session.streamClosureFacts(runId),
+          ...(yield* session.streamClosureFacts(runId)),
           stepRow(runId, state, 'waiting'),
         ]);
         publishTouchedFiles();
@@ -758,7 +757,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           return finish(state, turn.outcome);
         if (turn.outcome === 'failed') continue;
         if (start.turns)
-          yield* start.turns.complete(result(turn.outcome, state));
+          yield* start.turns.onTurnBoundary(result(turn.outcome, state));
       }
     });
 

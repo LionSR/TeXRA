@@ -90,7 +90,7 @@ describe('tools-tab availability summary', () => {
   it('renders and updates working-directory path protection', async () => {
     await expectTogglableSwitch({
       items: [tool('file-ops', 'available')],
-      props: { toolPathProtectionEnabled: false },
+      props: { toolPathProtectionEnabled: false, section: 'tools' },
       id: 'settings-toggle-restrict-tool-paths-to-the-working-directory',
       label: 'Restrict tool paths to the working directory',
       initialChecked: false,

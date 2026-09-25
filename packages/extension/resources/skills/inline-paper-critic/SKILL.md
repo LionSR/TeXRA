@@ -1,6 +1,6 @@
 ---
 name: inline-paper-critic
-description: Critically annotate technical papers with inline comments about mathematical gaps, unjustified steps, risky assumptions, and verified results. Use when Codex needs to leave compile-safe review comments directly in a LaTeX manuscript, especially in a `\\criticize{comment}{severity}{confidence}` style for derivation-heavy papers where appendices and hidden calculations must be checked carefully.
+description: Critically annotate technical papers with inline comments about mathematical gaps, unjustified steps, risky assumptions, and verified results. Use when you need to leave compile-safe review comments directly in a LaTeX manuscript, especially in a `\\criticize{comment}{severity}{confidence}` style for derivation-heavy papers where appendices and hidden calculations must be checked carefully.
 ---
 
 # Inline Paper Critic

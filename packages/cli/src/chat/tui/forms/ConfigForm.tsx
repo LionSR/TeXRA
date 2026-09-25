@@ -10,7 +10,7 @@
 import { Text, useInput } from 'ink';
 import { useState } from 'react';
 
-import { isCtrlInput, type ReturnKeyInput } from '@cli/tui/inputKeys';
+import { isCtrlInput } from '@cli/tui/inputKeys';
 import type { SelectItem } from '@cli/tui/ui/Select';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import {
@@ -32,6 +32,8 @@ import { ListForm } from './_shared/ListForm';
 import { TextEntryForm } from './_shared/TextEntryForm';
 import { runFormWrite } from './_shared/useAsyncListForm';
 import type { Effect } from 'effect';
+
+const RESET_HINTS = [{ key: 'Ctrl-R', action: 'reset' }];
 
 type SettingEditKind =
   'form' | 'boolean' | 'enum' | 'string' | 'number' | 'readonly';
@@ -91,13 +93,6 @@ export function validateSettingInput(
     ok: false,
     message: parsed.error.issues.at(0)?.message ?? 'Invalid setting value.',
   };
-}
-
-export function isConfigResetInput(
-  input: string,
-  key: Pick<ReturnKeyInput, 'ctrl' | 'meta'>,
-): boolean {
-  return isCtrlInput(input, key, 'r');
 }
 
 function formatSettingValue(value: unknown): string {
@@ -233,9 +228,10 @@ export function ConfigForm(props: ConfigFormProps): React.JSX.Element {
     runWrite(entry, settingDefault(entry), () => props.resetValue(entry));
   };
 
+  // Ctrl-R resets the setting open in the enum picker or the text editor.
   useInput((input, key) => {
-    if (mode.kind !== 'enum') return;
-    if (isConfigResetInput(input, key)) {
+    if (mode.kind !== 'enum' && mode.kind !== 'text') return;
+    if (isCtrlInput(input, key, 'r')) {
       resetEntry(mode.entry);
       setMode({ kind: 'list', category: mode.category });
     }
@@ -263,7 +259,7 @@ export function ConfigForm(props: ConfigFormProps): React.JSX.Element {
         items={buildEnumItems(entry)}
         activeValue={typeof current === 'string' ? current : undefined}
         action="select"
-        extraHints={[{ key: 'Ctrl-R', action: 'reset' }]}
+        extraHints={RESET_HINTS}
         escapeAction="back"
         onSelect={(value) => {
           commit(entry, value);
@@ -285,13 +281,7 @@ export function ConfigForm(props: ConfigFormProps): React.JSX.Element {
         placeholder={isNumber ? 'enter a number' : 'enter a value'}
         masked={false}
         rawSubmit
-        extraHints={[{ key: 'Ctrl-R', action: 'reset' }]}
-        onKey={(input, key) => {
-          if (isConfigResetInput(input, key)) {
-            resetEntry(entry);
-            setMode({ kind: 'list', category: mode.category });
-          }
-        }}
+        extraHints={RESET_HINTS}
         onSubmit={(raw) => {
           if (!isNumber && raw.trim() === '') {
             resetEntry(entry);
