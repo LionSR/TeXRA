@@ -15,7 +15,6 @@ import { Effect } from 'effect';
 import type { RunRecord } from '@agent/core/definition/RunRecord';
 import { readPersistedRunRecord } from '@agent/storage/runLifecycle';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { redactDisplayValue } from '@logger/redaction';
 
 import {
   isDisplaySessionEvent,
@@ -76,10 +75,7 @@ export const assembleTrace = Effect.fn('assembleTrace')(function* (
   session: SessionHandle,
 ): Effect.fn.Return<AssembleTraceResult, Error> {
   const [record, events] = yield* Effect.all(
-    [
-      readPersistedRunRecord(runId, session),
-      session.transcripts.readEvents(runId),
-    ],
+    [readPersistedRunRecord(runId, session), session.readRunEvents(runId)],
     { concurrency: 2 },
   );
   if (!record) return { status: 'config_missing' };
@@ -92,7 +88,7 @@ export const assembleTrace = Effect.fn('assembleTrace')(function* (
   return {
     status: 'ok',
     record,
-    trace: redactDisplayValue<TraceDocument>({
+    trace: {
       runId,
       events: displayEvents.map((event) => {
         if (event.type === 'run.start')
@@ -111,6 +107,6 @@ export const assembleTrace = Effect.fn('assembleTrace')(function* (
           };
         return { ...event, ownerId: null };
       }),
-    }),
+    },
   };
 });

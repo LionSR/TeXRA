@@ -1,12 +1,13 @@
 import * as path from 'node:path';
 
-import { Cause, Deferred, Effect, Exit, FileSystem, Scope } from 'effect';
+import { Cause, Effect, Exit, FileSystem, Scope } from 'effect';
 import { ZodError } from 'zod';
 import { ModelProvider, type ModelConfig } from 'llm-zoo';
 
 import { refresh, resolveAgentForLaunch } from '@agent/index';
 import {
   logUserMessage,
+  TraceEmitter,
   type AgentTrace,
   type StageHandle,
 } from '@agent/trace';
@@ -47,7 +48,6 @@ import {
 } from '@shared/schemas';
 import { UsageLog } from '@shared/usageLog';
 import { parseWorkingDirectory } from '@tools/pathResolution';
-import { createRunTrace, type RunTrace } from '@transcript';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 import { mediaNeedsVisionWarning } from './mediaVisionWarning';
@@ -81,7 +81,6 @@ type LaunchResolvedRunFacts = Pick<
   | 'userVarChannels'
   | 'initialUserMessageForTranscript'
   | 'usageMonitor'
-  | 'interrupt'
 >;
 
 export interface AgentLaunchContext extends LaunchResolvedRunFacts {
@@ -106,16 +105,6 @@ export interface AgentLaunchContext extends LaunchResolvedRunFacts {
   /** Description from the exact registry entry selected for this launch. */
   readonly resolvedAgentDescription?: string;
   readonly attachedMemoryMisses: AttachedMemoryMiss[];
-  /**
-   * The run's one stop: {@link AgentRunShape.interrupt} completes it — a host
-   * kill through the run handle (the run stopper's `terminate` included,
-   * which wakes a run parked at WAITING on this same latch), the live
-   * tool-use flow context, or the launch handle's interrupt. No other route
-   * stops a run. The
-   * runner races it once, at the boundary that owns the run's program, so a
-   * stop reaches the loop as a fiber interruption recorded by its finalizers.
-   */
-  readonly stopped: Deferred.Deferred<void>;
 }
 
 interface AgentLaunchInput {
@@ -144,36 +133,9 @@ interface AgentLaunchInput {
   /** This launch is the user's own-API-key fallback for a quota-exhausted
    *  retry: it declines the Copilot route and every subscription route. */
   ownApiKeyFallback?: boolean;
-  /**
-   * The launch's stop latch, adopted as the run's own
-   * {@link AgentLaunchContext.stopped}: once completed, assembly fails at its
-   * next step and the run it has already assembled is stopped.
-   */
-  stopped?: Deferred.Deferred<void>;
   /** Immutable per-run tool policy carried on the launch context for cycle flows. */
   toolPolicy?: ToolPolicy;
 }
-
-/** Fail the effect with an `Error` when the launch signal has aborted. */
-const failIfAborted = (signal: AbortSignal | undefined) =>
-  Effect.try({
-    try: () => signal?.throwIfAborted(),
-    catch: ensureError,
-  });
-
-/**
- * Fail with an `AbortError` once a launch's stop latch has been completed.
- * A launch prepares uninterruptibly, so every acquisition settles before its
- * cleanup; these checks between its steps are where a stop ends it.
- */
-export const failIfLaunchStopped = (
-  stopped: Deferred.Deferred<void> | undefined,
-): Effect.Effect<void, Error> =>
-  Effect.suspend(() =>
-    stopped !== undefined && Deferred.isDoneUnsafe(stopped)
-      ? Effect.fail(new DOMException('The launch was stopped.', 'AbortError'))
-      : Effect.void,
-  );
 
 /**
  * Present a launch error through its targeted host notice (replayed if no
@@ -268,14 +230,9 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
     input: {
       config: AgentConfig;
       enforceCategory?: boolean;
-      signal?: AbortSignal;
-      /** The launch handle's stop latch; checked between async steps. */
-      stopped?: Deferred.Deferred<void>;
       suppressErrorNotification?: boolean;
     } & { session: SessionHandle },
   ) {
-    yield* failIfAborted(input.signal);
-    yield* failIfLaunchStopped(input.stopped);
     const fullConfig = input.config;
     const interactions = input.session.interactions;
     // Single launch resolution rule (see resolveAgentForLaunch): pinned
@@ -300,8 +257,6 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
           category: fullConfig.agentCategory,
         },
       ));
-    yield* failIfAborted(input.signal);
-    yield* failIfLaunchStopped(input.stopped);
     // `loadAgentSettingAndPrompts` already fills the built-in tool-use category
     // default before parsing, and `AgentSettingSchema` prefaults `agentCategory`
     // (to Workflow when absent), so `setting.agentCategory` is always populated
@@ -309,8 +264,6 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
     // nothing from the run's ALS frame (absolute paths, the registry cache, the
     // remote fetch), so it yields directly rather than entering `runInSession`.
     const [setting, prompt] = yield* loadAgentSettingAndPrompts(agentEntry);
-    yield* failIfAborted(input.signal);
-    yield* failIfLaunchStopped(input.stopped);
 
     // Block category mismatch. Resolution is already category-scoped; this
     // catches what the registry's pre-merge category can't see: an agent that
@@ -337,8 +290,6 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
       fullConfig.model,
       interactions,
     );
-    yield* failIfAborted(input.signal);
-    yield* failIfLaunchStopped(input.stopped);
 
     // Stamp the resolved source so the run record carries the decided identity;
     // `agent` stays as the caller spelled it (the resume-id contract).
@@ -385,7 +336,6 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
     Error,
     Secrets | AppState | UsageLog | FileSystem.FileSystem | Scope.Scope
   > {
-    yield* failIfLaunchStopped(input.stopped);
     const { config, setting, prompt, agentEntry, modelConfig } =
       input.definition;
     // The run's working directory is decided here, once: absolute or absent.
@@ -404,7 +354,6 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
       input.modelCompatibilityKey ??
       (yield* inferLaunchModelCompatibilityKey(runId, session)) ??
       null;
-    yield* failIfLaunchStopped(input.stopped);
     // The run's model is bound from the stores the launch already has: the
     // session's own setting slots, so routing and the provider switches
     // answer for this run's workspace, and the process secret store.
@@ -413,31 +362,14 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
       secrets: yield* Secrets,
     };
 
-    const residency = yield* session.transcripts.acquireRunResidency(runId);
-    const rawRunTrace = createRunTrace(residency);
-    // The composed trace enters the store BEFORE session attachment, so a
-    // failed attachment still disposes the raw trace through the store.
-    const attachment: { detach?: () => void } = {};
-    const runTrace: RunTrace = {
-      trace: rawRunTrace.trace,
-      dispose: () => {
-        try {
-          attachment.detach?.();
-        } finally {
-          rawRunTrace.dispose();
-        }
-      },
-    };
-    // The run's scope owns the trace: its subscribers (channel sink +
-    // transcript recorder) are dropped when the run ends, and when a launch
-    // that never became a run unwinds.
-    yield* Effect.addFinalizer(() => Effect.sync(() => runTrace.dispose()));
-    yield* failIfLaunchStopped(input.stopped);
-    attachment.detach = session.attachRunTrace(rawRunTrace.trace, runId);
+    const agentLogger = new TraceEmitter();
+    // The run's scope owns the trace's session attachment: it is dropped when
+    // the run ends, and when a launch that never became a run unwinds.
+    yield* Effect.acquireRelease(
+      Effect.sync(() => session.attachRunTrace(agentLogger, runId)),
+      (detach) => Effect.sync(detach),
+    );
 
-    const agentLogger = runTrace.trace;
-
-    yield* failIfLaunchStopped(input.stopped);
     const isRemote = agentEntry.source === 'remote';
     // Registration committed creation, configuration and initial activation,
     // each awaited; a resumed turn appends only its new activation, awaited
@@ -446,17 +378,21 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
     // the run's own fibers queued, and their loss is the terminal drain's to
     // report on the row it decides.
     if (input.resumed) {
-      yield* session.commit([
-        {
-          type: 'run.activate',
-          aggregateId: qualifyAggregateId('run', runId),
-          category: setting.agentCategory,
-          isRemote,
-        },
-      ]);
+      // A durable append: uninterruptible, like every row commit, so a stop
+      // lands either before this activation or after it, never inside it.
+      yield* Effect.uninterruptible(
+        session.commit([
+          {
+            type: 'run.activate',
+            aggregateId: qualifyAggregateId('run', runId),
+            category: setting.agentCategory,
+            isRemote,
+          },
+        ]),
+      );
     }
 
-    input.onRunResolved?.(runId, runTrace.trace);
+    input.onRunResolved?.(runId, agentLogger);
 
     // Log the initial instruction as a user message so both workflow and
     // tool-use tabs display it inline with the stream log (no separate panel).
@@ -471,18 +407,21 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
     const initialMediaMayBeInserted =
       config.mediaFiles.length > 0 && supportsMediaInMessage;
 
-    const parentStage = beginRunStage(
-      agentLogger,
-      `Run: ${config.agent}`,
-      initialMediaMayBeInserted ? undefined : initialInstruction,
-    );
-    // A scope that closes in failure before the run's terminal row closed
-    // this stage leaves it open in the transcript; `end` is idempotent, so a
-    // run that already published its verdict keeps it.
-    yield* Effect.addFinalizer((exit) =>
-      Exit.isSuccess(exit)
-        ? Effect.void
-        : Effect.sync(() => parentStage.end(RUN_OUTCOME.FAILED)),
+    const parentStage = yield* Effect.acquireRelease(
+      Effect.sync(() =>
+        beginRunStage(
+          agentLogger,
+          `Run: ${config.agent}`,
+          initialMediaMayBeInserted ? undefined : initialInstruction,
+        ),
+      ),
+      // A scope that closes in failure before the run's terminal row closed
+      // this stage leaves it open in the transcript; `end` is idempotent, so a
+      // run that already published its verdict keeps it.
+      (stage, exit) =>
+        Exit.isSuccess(exit)
+          ? Effect.void
+          : Effect.sync(() => stage.end(RUN_OUTCOME.FAILED)),
     );
 
     // Tell the user when attached images will be dropped because the chosen model
@@ -497,14 +436,6 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
     if (visionWarning) agentLogger.warn(visionWarning);
 
     const agentPath = path.dirname(agentEntry.path);
-    // The run's one stop. `interrupt()` completes it; the runner races it and
-    // the program is interrupted from it. A launch that already owns a stop
-    // hands it in, so a stop that landed while the launch prepared is this
-    // run's stop too.
-    const stopped = input.stopped ?? Deferred.makeUnsafe<void>();
-    const stopRun = () => {
-      Deferred.doneUnsafe(stopped, Effect.void);
-    };
     const buildVars = (stageId?: string) =>
       buildUserVars(
         config,
@@ -538,7 +469,6 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
         ),
       );
     });
-    yield* failIfLaunchStopped(input.stopped);
 
     const userVarChannels: UserVariableChannels = { ...baseVars };
     const attachedMemoryMisses = baseVars.ATTACHED_MEMORY_MISSES;
@@ -576,8 +506,6 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
       userVarChannels,
       attachedMemoryMisses,
       usageMonitor,
-      interrupt: stopRun,
-      stopped,
       initialUserMessageForTranscript: initialMediaMayBeInserted
         ? initialInstruction
         : undefined,
@@ -593,7 +521,6 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
 /** Resolve the context of a run already admitted and created by registration. */
 export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
   function* (input: AgentLaunchInput & { session: SessionHandle }) {
-    yield* failIfLaunchStopped(input.stopped);
     const { session: launchSession, runId } = input;
     const { config } = input.definition;
 
@@ -623,7 +550,8 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
       ),
     );
   },
-  // The launch's stop latch owns cancellation. Let each acquisition settle
-  // before cleanup so a late Promise cannot create an unowned resource.
-  Effect.uninterruptible,
+  // Interruptible: every acquisition above settles atomically inside its own
+  // `acquireRelease`, so an interruption lands between steps and the scope's
+  // finalizers release whatever was acquired — the guarantee the old region
+  // mask bought at the cost of suppressing every stop.
 );

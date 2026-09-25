@@ -472,7 +472,8 @@ function executeWorkflowScriptTool(
                 }
                 // A first launch of this id has no prior row to acquire, so
                 // its claim rides the birth append and a foreign winner
-                // refuses that append as `DatabaseNotOwner`. Only an open
+                // refuses that append as `DatabaseNotOwner` (as a relaunch's
+                // claim race does). Only an open
                 // aggregate is a live run to wait for: a closed one is a
                 // tombstone this id can never start over, and calling that
                 // "already in progress" would send the model to wait on a

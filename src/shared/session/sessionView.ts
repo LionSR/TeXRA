@@ -24,6 +24,7 @@ import {
   OwnerIdSchema,
   PermissionPayloadSchema,
   PlanSchema,
+  requestParksItsCaller,
   RoundKeyedOutputSidecarValueSchemas,
   RunIdentitySchema,
   RunFlowSchema,
@@ -37,6 +38,7 @@ import {
   TokenUsageStatsSchema,
   UserFollowUpSupportSchema,
   WorktreeInfoSchema,
+  type PermissionPayload,
   type RunId,
 } from '@shared/schemas';
 import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
@@ -62,8 +64,8 @@ const SessionKeySchema = z.string().min(1);
  * element types are stated rather than re-declared here.
  */
 const TranscriptViewSchema = z.object({
-  /** `projectTranscriptRow` over every entry plus the compaction rows, in
-   *  wire append order. */
+  /** The transcript fold's rows (`transcriptFold.ts`) plus the compaction
+   *  rows, in first-appearance order. */
   rows: z.array(z.custom<TranscriptRow>()),
   /** `taskGroupOnStage` over the stage events. */
   taskGroups: z.array(TaskGroupSchema),
@@ -244,6 +246,26 @@ export function acceptsFollowUp(run: RunView, host: FollowUpHost): boolean {
   }
   if (run.group === 'running' || run.group === 'waiting') return true;
   return run.status === 'ready' && run.lastTimestamp === null;
+}
+
+/**
+ * Whether this window can answer a pending request: the one rule the host's
+ * attention badge and the request card both read, matching what
+ * `SessionRequests.decide` accepts. A run this process may not act on
+ * (`readOnly`) takes no answer here. A request that parks its caller is
+ * answered by the fiber waiting on it, so only while its run waits here; an
+ * interrupted run has to be resumed first. An inquiry, at any other time.
+ */
+export type RequestAnswerability = 'answerable' | 'readOnly' | 'resume';
+export function requestAnswerability(
+  run: RunView,
+  payload: Pick<PermissionPayload, 'kind'>,
+): RequestAnswerability {
+  if (run.readOnly) return 'readOnly';
+  if (run.approval === 'own' || !requestParksItsCaller(payload)) {
+    return 'answerable';
+  }
+  return 'resume';
 }
 
 /** A pending request: which run is asking, the payload the UI shows (its

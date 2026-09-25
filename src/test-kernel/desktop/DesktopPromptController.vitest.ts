@@ -44,13 +44,13 @@ describe('DesktopPromptController', () => {
         prompt: 'Enter API key',
         password: true,
       });
-      expect(
-        controller.handleMessage({
-          command: 'desktop:settlePrompt',
-          requestId: request.requestId,
-          value: 'secret',
-        }),
-      ).toBe(true);
+      const settle = controller.handleMessage({
+        command: 'desktop:settlePrompt',
+        requestId: request.requestId,
+        value: 'secret',
+      });
+      expect(settle).toBeDefined();
+      if (settle) yield* settle;
       expect(yield* Fiber.join(fiber)).toBe('secret');
     }),
   );
@@ -78,8 +78,10 @@ describe('DesktopPromptController', () => {
         requestId,
         value: null,
       };
-      expect(controller.handleMessage(cancellation)).toBe(true);
-      expect(controller.handleMessage(cancellation)).toBe(false);
+      const settle = controller.handleMessage(cancellation);
+      expect(settle).toBeDefined();
+      if (settle) yield* settle;
+      expect(controller.handleMessage(cancellation)).toBeUndefined();
       // The asking fiber resumes on the Effect scheduler, not on a microtask.
       yield* Effect.promise(
         () => new Promise((resolve) => setTimeout(resolve, 0)),
@@ -141,7 +143,7 @@ describe('DesktopPromptController', () => {
           requestId,
           value: 'late',
         }),
-      ).toBe(false);
+      ).toBeUndefined();
     }),
   );
 });

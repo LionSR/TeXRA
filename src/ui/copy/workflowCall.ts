@@ -180,7 +180,7 @@ const WORKFLOW_TALLY_WORDS = [
   ['ok', 'ok'],
   ['running', 'running'],
   ['queued', 'queued'],
-  ['planned', 'planned'],
+  ['planned', 'not started'],
   ['failed', 'failed'],
   ['cancelled', 'cancelled'],
   ['skipped', 'skipped'],

@@ -1,19 +1,29 @@
 import '@test/support/sessionGraphTestSetup';
 
 import { Effect } from 'effect';
-import type { AgentTrace } from '@agent/trace';
+import { TraceEmitter, type AgentTrace } from '@agent/trace';
 import { heldSessions, openSessionEffect } from '@agent/runtime/sessionGraph';
 import type {
   SessionHandle,
   SessionHandleInit,
 } from '@agent/runtime/SessionHandle';
-import { aggregateId, type RunId, type RunPhase } from '@shared/schemas';
-import { isTranscriptEvent } from '@shared/schemas';
+import {
+  aggregateId,
+  isTranscriptEvent,
+  type AggregateId,
+  RUN_PHASE,
+  type RunId,
+  type RunPhase,
+  type SessionEvent,
+} from '@shared/schemas';
 import type { SessionOpenError } from '@shared/session/database';
-import { createTranscriptFold } from '@shared/session/traceFold';
-import { StreamLog } from '@shared/session/traceEntries';
+import type { TranscriptView } from '@shared/session/sessionView';
+import { foldTranscriptEvent } from '@shared/session/transcriptFold';
+import {
+  emptyTranscript,
+  resetTranscriptOwnership,
+} from '@shared/session/transcriptState';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
-import { createRunTrace } from '@transcript';
 import { generateRunId } from '@utils/core';
 
 /** What a test supplies: the isolated roots are this helper's job. */
@@ -114,44 +124,56 @@ export const queuedFollowUps = (session: SessionHandle, runId: RunId) =>
     return view.queuedFollowUps.get(runId) ?? [];
   });
 
-/** Exercise the pure transcript projection with deterministic source coordinates. */
+/**
+ * Fold a trace's events straight into a transcript with deterministic source
+ * coordinates, for tests that exercise the fold without a session. Each event
+ * is its own publication level, as a session frame of one.
+ */
 export function attachTestTranscriptFold(
   trace: AgentTrace,
   runId: RunId,
-  log: StreamLog,
+  debug = false,
 ) {
-  const fold = createTranscriptFold(log);
-  let seq = 0;
-  const unsubscribe = trace.subscribe((event) => {
-    if (!isTranscriptEvent(event)) return;
+  // Fixture run ids need not be well-formed; the fold only stamps them.
+  const aggregate = JSON.stringify(['run', runId]) as AggregateId;
+  const ctx = { debug, lifecycleToTaskGroups: true };
+  let transcript: TranscriptView = emptyTranscript();
+  let seq = 1;
+  const apply = (fact: object) => {
     seq += 1;
-    fold.record(event, {
-      at: seq,
-      id: JSON.stringify([runId, seq]),
-      debug: false,
-    });
+    resetTranscriptOwnership();
+    transcript = foldTranscriptEvent(
+      transcript,
+      { ...fact, aggregateId: aggregate, seq, at: seq } as SessionEvent,
+      ctx,
+    );
+  };
+  const unsubscribe = trace.subscribe((event) => {
+    if (isTranscriptEvent(event)) apply(event);
   });
   return {
     unsubscribe,
-    /** The phase the run's fold reached; the transcript projection settles
-     *  its open rows on it. */
-    settlePhase: (phase: RunPhase) => fold.status(phase),
+    /** The phase the run reached; the fold settles its open rows on it. */
+    settlePhase: (phase: RunPhase) => {
+      if (phase === RUN_PHASE.RUNNING) apply({ type: 'run.activate' });
+      else if (phase === RUN_PHASE.WAITING) {
+        apply({ type: 'flow.step', payload: { step: 'waiting' } });
+      } else apply({ type: 'run.end', outcome: phase });
+    },
+    transcript: () => transcript,
+    rows: () => transcript.rows,
   };
 }
 
 /** Standalone trace projection for tests that exercise formatting without a session. */
-export function createTestRunTrace(
-  runId: RunId,
-  log: StreamLog = new StreamLog(),
-) {
-  const run = createRunTrace();
-  const projection = attachTestTranscriptFold(run.trace, runId, log);
+export function createTestRunTrace(runId: RunId) {
+  const trace = new TraceEmitter();
+  const projection = attachTestTranscriptFold(trace, runId);
   return {
-    trace: run.trace,
+    trace,
     settlePhase: projection.settlePhase,
-    dispose: () => {
-      projection.unsubscribe();
-      run.dispose();
-    },
+    rows: projection.rows,
+    transcript: projection.transcript,
+    dispose: projection.unsubscribe,
   };
 }

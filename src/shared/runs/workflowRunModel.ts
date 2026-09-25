@@ -133,9 +133,9 @@ interface MutablePhase {
 
 /**
  * Cards in deterministic transcript order, even when a caller collected a
- * group tree pre-order. Every `workflowTask` row carries a wire sequence —
- * `StreamLogEntrySchema` requires `seqNo`, and the one live producer of
- * seqNo-less rows (the CLI local-notice path) cannot emit this kind — so the
+ * group tree pre-order. Every `workflowTask` row carries a sequence (the
+ * transcript fold stamps each row's first appearance, and the one producer of
+ * seqNo-less rows, the CLI local-notice path, cannot emit this kind), so the
  * ordering is causal, with timestamp only as a tie-break.
  */
 function workflowCardsInTranscriptOrder(
@@ -412,16 +412,21 @@ export function formatWorkflowCallLiveParts(
  *  entries are planned while the run lives and not run once it ends. */
 export type WorkflowRowGroup = 'finished' | 'queued' | 'planned' | 'not run';
 
-/** `12 queued`, `5 finished · 1 reused`: the one spelling of a counted
- *  group's row; nothing ran this time for a reused result. */
+/** `12 queued`, `5 finished · 1 saved result`: the one spelling of a counted
+ *  group's row, naming a finished group's replayed results. */
 export function formatWorkflowRowGroup(row: {
   readonly count: number;
   readonly group: WorkflowRowGroup;
   readonly cached?: number;
 }): string {
-  const cached = row.cached ?? 0;
-  const text = `${row.count} ${row.group}`;
-  return cached > 0 ? `${text} · ${cached} reused` : text;
+  const { count, group, cached = 0 } = row;
+  const noun =
+    group === 'planned'
+      ? WORKFLOW_TASK_STATUS_LABEL.declared.toLowerCase()
+      : group;
+  return cached > 0
+    ? `${count} ${noun} · ${cached} ${pluralize(cached, 'saved result')}`
+    : `${count} ${noun}`;
 }
 
 /** The status word of a plan entry with no card yet. */

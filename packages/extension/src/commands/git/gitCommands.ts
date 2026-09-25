@@ -294,7 +294,7 @@ function buildOverleafClonePorts(
         showLoggedMessage(CHANNEL, 'Workspace folder must be empty.'),
       ).pipe(Effect.asVoid),
 
-    runClone: (remoteUrl, workspacePath) =>
+    runClone: (clone, workspacePath) =>
       // The notification shows for exactly as long as the clone runs: its
       // task is a promise the release settles on every exit, and the acquire
       // that opens it cannot be interrupted before the release is installed.
@@ -314,7 +314,7 @@ function buildOverleafClonePorts(
           return resolve;
         }),
         () =>
-          gitClone(remoteUrl, workspacePath).pipe(
+          gitClone(clone, workspacePath).pipe(
             Effect.mapError((error) => new Error(error.message)),
           ),
         (resolve) => Effect.sync(resolve),

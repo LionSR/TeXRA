@@ -96,7 +96,7 @@ held as a value in the owning fiber's scope rather than looked up in maps.
    gated on the store having a live owner, which it does not today:
    `openAppStateStore` runs before the process runtime on the CLI and
    desktop and keeps operation-scoped database access (the companion
-   [global database note](../../proposed/simplification/2026-09-20-global-database-process-service.md),
+   [global database note](../../archived/simplification/2026-09-20-global-database-process-service.md),
    blocker 1), so the database layer whose poll advances `Database.level`
    is closed after each operation, and the synchronous `StateStore` it
    returns has no scope or close in which a subscriber could live. The

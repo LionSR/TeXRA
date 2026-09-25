@@ -80,7 +80,7 @@ export const ToolUseLogSchema = z.object({
 export type ToolUseLog = z.infer<typeof ToolUseLogSchema>;
 
 /**
- * The flat, renderer-friendly tool-use view `normalizeToolUseData`
+ * The flat, renderer-friendly tool-use view `normalizeToolUse`
  * (`@shared/toolUse`) derives from a parsed {@link ToolUseLog}. Declared as a
  * plain type, not a schema: the producer builds this shape field-by-field and
  * nothing ever parses it, so a Zod schema would own no boundary.

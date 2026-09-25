@@ -34,6 +34,7 @@ import {
   type SurfaceDecision,
 } from '@shared/session/approvalDecision';
 import type { RuntimeRequest } from '@shared/session/runtimeRequest';
+import type { RequestAnswerability } from '@shared/session/sessionView';
 import { SessionUiEvents } from '@shared/session/uiEvents';
 import {
   commonViewStyles,
@@ -58,6 +59,12 @@ const DECLINE_LABEL = {
 } as const;
 
 type Decline = keyof typeof DECLINE_LABEL;
+
+/** What a card this window cannot answer says in place of its actions. */
+const UNANSWERABLE_NOTE = {
+  resume: 'Resume the session to answer.',
+  readOnly: 'This window cannot answer this request.',
+} as const;
 
 /** A run-scoped grant the primary's ▾ menu offers: approve this request and
  *  stop asking about its kind for the rest of the run. */
@@ -92,12 +99,17 @@ export abstract class BaseRequestPanel<
   >;
 
   /**
-   * The stream's `readOnly` (PRD 5.2): another live owner holds it, it is
-   * unreadable, or the surface is an archived export with no backend for a
-   * decision to reach. The single chokepoint every action and keyboard
-   * shortcut calls through (`emitAction`) no-ops here.
+   * Whether this window can answer the request (`requestAnswerability`, the
+   * rule the host's attention badge reads too). Anything but `answerable`
+   * says why in place of the action row, and the single chokepoint every
+   * action and keyboard shortcut calls through (`emitAction`) no-ops.
    */
-  @property({ type: Boolean }) readOnly = false;
+  @property({ attribute: false })
+  answerability: RequestAnswerability = 'answerable';
+
+  protected get readOnly(): boolean {
+    return this.answerability !== 'answerable';
+  }
 
   /** Whether the optional note for the decline is open. */
   @state() protected noteOpen = false;
@@ -264,10 +276,16 @@ export abstract class BaseRequestPanel<
             ? nothing
             : html`<div class="request-card__details">${details}</div>`
         }
-        <div class="request-card__actions">
-          ${this.renderPrimary()} ${secondary} ${this.renderDecline()}
-        </div>
-        ${this.renderNote()}
+        ${
+          this.answerability === 'answerable'
+            ? html`<div class="request-card__actions">
+                  ${this.renderPrimary()} ${secondary} ${this.renderDecline()}
+                </div>
+                ${this.renderNote()}`
+            : html`<p class="request-card__meta">
+                ${UNANSWERABLE_NOTE[this.answerability]}
+              </p>`
+        }
       </div>
     `;
   }

@@ -9,8 +9,8 @@
  * schema and transactions in SQLite memory. A failed file open is an error and
  * never selects the ephemeral mode.
  *
- * Before its write transaction, this layer validates, redacts, and serializes
- * the complete batch (C3, C6). It also owns the envelope C1 gives its own
+ * Before its write transaction, this layer validates and serializes the
+ * complete batch (C6). It also owns the envelope C1 gives its own
  * columns: the writer (C5, from `ProcessIdentity`), the publish clock, and the
  * `seq` and `commit` ordinals, none of which a caller can supply.
  *
@@ -62,7 +62,6 @@ import {
   type StoredValue,
 } from '@shared/schemas';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
-import { redactTraceDraft } from '@shared/session/traceRedaction';
 import {
   InputHistoryRecordSchema,
   INPUT_HISTORY_LIMIT,
@@ -554,6 +553,24 @@ export const databaseLayer = (
             ),
           );
         });
+      /** C5: a row whose claim moved or closed refused this writer. Read it
+       *  in the refusing transaction so the typed refusal names the holder. */
+      const refuseWriter = (id: AggregateId, absent: string) =>
+        Effect.gen(function* () {
+          const held = (yield* readState([id]))[0];
+          if (held === undefined) throw new Error(`${absent}: ${id}`);
+          const { ownerId, closed } = held;
+          return yield* new DatabaseNotOwner({
+            aggregateId: id,
+            ownerId,
+            closed,
+          });
+        });
+      /** The refusal leaves typed (D6 b); the transaction wrapper carried it
+       *  as the write failure's cause. */
+      const typedRefusal = Effect.mapError((failure: DatabaseWriteFailed) =>
+        failure.cause instanceof DatabaseNotOwner ? failure.cause : failure,
+      );
       /** Claim every observed row in the caller's transaction, refusing the
        *  first whose claim moved since it was read. */
       const claimObserved = (rows: readonly AggregateState[], moved: string) =>
@@ -565,7 +582,7 @@ export const databaseLayer = (
               row.ownerId,
             ]);
             if (claimed.length !== 1) {
-              throw new Error(`${moved}: ${row.aggregateId}`);
+              return yield* refuseWriter(row.aggregateId, moved);
             }
           }
         });
@@ -634,20 +651,10 @@ export const databaseLayer = (
               identity.ownerId,
             ]))?.seq;
             if (typeof seq !== 'number') {
-              // C5: the sequence row exists and refused this writer, because
-              // its claim moved or it closed. Read that row in the refusing
-              // transaction so the typed refusal names the holder.
-              const held = (yield* readState([draft.aggregateId]))[0];
-              if (held === undefined) {
-                throw new Error(
-                  `Sequence refused for an absent aggregate: ${draft.aggregateId}`,
-                );
-              }
-              return yield* new DatabaseNotOwner({
-                aggregateId: draft.aggregateId,
-                ownerId: held.ownerId,
-                closed: held.closed,
-              });
+              return yield* refuseWriter(
+                draft.aggregateId,
+                'Sequence refused for an absent aggregate',
+              );
             }
             const target = aggregateTarget(draft.aggregateId);
             // The seq-1 rule (decision 9): a run aggregate begins with exactly
@@ -1004,7 +1011,7 @@ export const databaseLayer = (
                   .filter((row) => row.ownerId !== identity.ownerId)
                   .map((row) => row.aggregateId);
               }),
-            );
+            ).pipe(typedRefusal);
           }),
         removeRun: (id, mode, expectedStartCommit) =>
           Effect.gen(function* () {
@@ -1181,8 +1188,6 @@ export const databaseLayer = (
               catch: writeFailed,
             });
             const at = yield* Clock.currentTimeMillis;
-            // The ownership refusal leaves typed (D6 b); the transaction
-            // wrapper carried it as the write failure's cause.
             // A write from a process whose build no longer matches the store's
             // stamp (another build cleared and re-stamped it under this one)
             // fails here instead of appending rows of a vocabulary the store
@@ -1191,13 +1196,7 @@ export const databaseLayer = (
               assertStoreFormat(sql, path).pipe(
                 Effect.andThen(appendPrepared(prepared, at)),
               ),
-            ).pipe(
-              Effect.mapError((failure) =>
-                failure.cause instanceof DatabaseNotOwner
-                  ? failure.cause
-                  : failure,
-              ),
-            );
+            ).pipe(typedRefusal);
           }),
       };
     }),
@@ -1227,7 +1226,7 @@ export const globalDatabaseLayer = (
   );
 
 function prepareEventDraft(input: SessionEventDraft) {
-  const draft = redactTraceDraft(SessionEventDraftSchema.parse(input));
+  const draft = SessionEventDraftSchema.parse(input);
   return { draft, payload: payloadOf(draft) };
 }
 /** A stored-value write holds its aggregate's claim only for the transaction

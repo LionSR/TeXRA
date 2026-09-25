@@ -1,6 +1,6 @@
 import * as path from 'node:path';
 
-import { Cause, Deferred, Effect, Exit, Fiber, Layer } from 'effect';
+import { Cause, Effect, Exit, Fiber, Layer } from 'effect';
 
 import { logConversationProgress, type AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
@@ -20,16 +20,14 @@ import {
 } from '@shared/schemas';
 import {
   AgentCategory,
-  RUN_OUTCOME,
   roundOutputsToCompileFailureSummaries,
   roundOutputsToOutputSummaries,
 } from '@shared/schemas';
 import { RunLedger } from '@shared/session/runLedger';
-import { emptyRunEndOutput } from '@shared/schemas';
 import type { RunState } from '@shared/session/runStateFold';
 import type { CompositionKey } from '@tools/compositions';
-import { ensureRunDirUnder } from '@utils/files/runStorageFs';
 import { ensureError } from '@utils/errors/errorMessage';
+import { ensureRunDirUnder } from '@utils/files/runStorageFs';
 
 import {
   buildAgentLaunchContext,
@@ -136,40 +134,6 @@ function runLayerFor(
 }
 
 /**
- * The one boundary that races the run's stop. `ctx.stopped` is completed by
- * every stop entry (a host kill through the run handle, the live tool-use
- * flow context, the launch handle's interrupt before the run has a handle of
- * its own); winning it interrupts the program's fiber, whose masked exit
- * protocol records the halt before this returns, and reports the cancelled
- * shell result of the run's category.
- * The loop reads the fiber's own interruption (`Effect.abortSignal`) for the
- * provider request and the tool bodies that still need a signal, so no run
- * signal exists beside the stop.
- */
-function runUntilStopped<R>(
-  ctx: AgentLaunchContext,
-  program: Effect.Effect<AgentFlowResult, Error, R>,
-): Effect.Effect<AgentFlowResult, Error, R> {
-  const { runId } = ctx;
-  return Effect.raceFirst(
-    program.pipe(Effect.map((result) => ({ kind: 'result' as const, result }))),
-    Deferred.await(ctx.stopped).pipe(Effect.as({ kind: 'stopped' as const })),
-  ).pipe(
-    Effect.map((winner): AgentFlowResult => {
-      if (winner.kind === 'result') return winner.result;
-      return {
-        outcome: RUN_OUTCOME.CANCELLED,
-        output: emptyRunEndOutput(ctx.setting.agentCategory),
-        runId,
-        ...(ctx.attachedMemoryMisses?.length
-          ? { memoryMisses: ctx.attachedMemoryMisses }
-          : {}),
-      };
-    }),
-  );
-}
-
-/**
  * Run the tool-use loop for a single agent run, fresh or resumed.
  *
  * Owns all tool-use-specific wiring: progress counters, follow-up queuing, and
@@ -209,8 +173,9 @@ function launchToolUseRun(
     ...(shared.turns
       ? {
           turns: {
-            run: shared.turns.run,
-            complete: (result) => shared.turns!.complete(toResult(result)),
+            turnPermit: shared.turns.turnPermit,
+            onTurnBoundary: (result) =>
+              shared.turns!.onTurnBoundary(toResult(result)),
           },
         }
       : {}),
@@ -235,7 +200,7 @@ function launchToolUseRun(
     ),
     Effect.map(toResult),
   );
-  return runUntilStopped(ctx, program);
+  return program;
 }
 
 /**
@@ -280,10 +245,7 @@ function launchReflectionRun(
       }),
     ),
   );
-  return runUntilStopped(
-    ctx,
-    options.turns ? options.turns.run(program) : program,
-  );
+  return options.turns ? options.turns.turnPermit(program) : program;
 }
 
 /**
@@ -335,11 +297,8 @@ function buildFallbackNotification(config: AgentConfig): FallbackNotification {
  * under a different name.
  */
 export interface SubagentRunOptions {
-  /** Child accounting and delivery at each completed native turn. */
-  readonly turns?: import('./childRunLoop').ChildRunTurns<
-    AgentFlowResult,
-    AgentRunServices
-  >;
+  /** The child-run policy: each turn's permit, each completed turn's boundary. */
+  readonly turns?: import('./childRunLoop').ChildRunTurns<AgentFlowResult>;
   /** Run-scoped tools added to tool-use agents without mutating the default registry. */
   readonly tools?: readonly ITool[];
   /**
@@ -397,12 +356,6 @@ export interface ExecuteAgentOptions extends SubagentRunOptions {
     agentDefaultOutputFiles: readonly string[],
   ) => Effect.Effect<RunOutcome | void, Error>;
   /**
-   * The stop latch of a launch that owns a stop before the run has a handle
-   * of its own (`runAgent`'s launch handle): launch assembly fails at its
-   * next step once it is completed, and the run adopts it as its one stop.
-   */
-  launchStopped?: Deferred.Deferred<void>;
-  /**
    * The run's `run.start` was committed by an earlier activation (a resume).
    * That row is also where this run's parent edge comes from: `runAgent`
    * reads it onto the run's handle before this launch prepares, and a
@@ -440,27 +393,12 @@ export function executeAgent(
   options: ExecuteAgentOptions & { session: SessionHandle },
 ): Effect.Effect<AgentFlowResult, Error, ProcessServices> {
   return Effect.gen(function* () {
-    // A resumed run's parentage is its handle's, never the caller's word: no
-    // resume caller can name one (`RunAgentOptions` has no parent field), so
-    // reading the caller's option here would relaunch a resumed child as a
-    // root run, forcing the progress view open, toasting its failure, and
-    // shaping its result as a root's. `runAgent` put the persisted edge on
-    // that handle before this launch began preparing, which is what lets the
-    // parent's stop reach the child meanwhile: a stop that detaches severs
-    // this very handle. The edge is deliberately not copied out here: it is
-    // mutable for exactly as long as this preparation runs, so the run reads
-    // it off its own lifecycle handle below, after the registry has carried
-    // it across the replacement.
-    const resumedHandle = options.resumed
-      ? options.session.runs.getHandle(runId)
-      : undefined;
-    if (options.resumed && !resumedHandle) {
-      return yield* Effect.fail(
-        new Error(
-          `Cannot resume run ${runId}: no registered handle carries its lineage.`,
-        ),
-      );
-    }
+    // A resumed run's parentage is the persisted `run.start`, re-read by its
+    // launcher inside the owned launch and handed in as `parentRunId` —
+    // `runAgent` after its ownership re-read, `resumeToolUseWithOwnedLease`
+    // from the same persisted read — never a caller's own word about which
+    // run launched it. A detach another host committed while the launch
+    // prepared has folded by then, so the edge arrives already severed.
     const ctx = yield* buildAgentLaunchContext({
       definition,
       runId,
@@ -469,7 +407,6 @@ export function executeAgent(
       session: options.session,
       modelCompatibilityKey: options.modelCompatibilityKey,
       ownApiKeyFallback: options.ownApiKeyFallback,
-      stopped: options.launchStopped,
       toolPolicy: {
         approvalPromptsUnavailable: options.approvalPromptsUnavailable,
         stopAfterCycle: options.stopAfterCycle,
@@ -484,17 +421,15 @@ export function executeAgent(
       // Start description generation concurrently with the run, but join it
       // before the owner can release its run lease. This prevents the
       // metadata write from recreating a run deleted by another host.
-      // The run's stop interrupts it, as it interrupts the run.
+      // A child of the run's fiber, so the run's stop interrupts it, as it
+      // interrupts the run.
       const sessionDescription = yield* Effect.forkChild(
-        Effect.raceFirst(
-          generateSessionDescription(
-            runId,
-            config,
-            ctx.resolvedAgentDescription,
-            runSession,
-            ctx.stores,
-          ),
-          Deferred.await(ctx.stopped),
+        generateSessionDescription(
+          runId,
+          config,
+          ctx.resolvedAgentDescription,
+          runSession,
+          ctx.stores,
         ),
       );
       // The join is `ensuring`, not a generator `finally`: the driver skips
@@ -562,23 +497,20 @@ export function executeAgent(
                 parentRunId,
               });
             }),
-          // The edge the lifecycle's handle is born with, read as late
-          // as that handle is built. A detach landing even after this
-          // read still stands: `RunRegistry.track` carries the
-          // registration's sever onto the replacement.
-          buildLifecycleOptions(
-            options,
-            resumedHandle ? resumedHandle.deliveryTarget : options.parentRunId,
-          ),
+          // The edge the lifecycle's handle is born with: the caller's own
+          // parent for a fresh child, the persisted `run.start` edge for a
+          // resume, both carried in as `parentRunId`.
+          buildLifecycleOptions(options, options.parentRunId),
         );
         return result;
       }).pipe(Effect.ensuring(Fiber.join(sessionDescription)));
     });
   }).pipe(
     // The run's scope: the launch acquires the run trace into it and the
-    // finalizer drops its subscribers once the run has ended.
+    // finalizer drops its subscribers once the run has ended. No mask: the
+    // launch's acquisitions settle atomically (`acquireRelease`), so an
+    // interruption lands between steps and this scope's finalizers run.
     Effect.scoped,
-    Effect.uninterruptible,
     Effect.provideService(Runs, options.session.runs),
   );
 }
@@ -612,12 +544,11 @@ const resumeToolUseWithOwnedLease = Effect.fn('resumeToolUseWithOwnedLease')(
     options: ResumeToolUseFromResumeDataOptions & { session: SessionHandle },
   ) {
     const runSession = options.session;
-    // Every exit escapes this scope, and the release is outside it. Both
-    // orders matter: the launch's finalizers compensate through the run's
-    // own claim - the stage's FAILED close is an append - so a scope that
-    // unwound after `releaseRunLease` would have its compensation refused
-    // `DatabaseNotOwner`, and a failure captured inside the scope would
-    // close it successfully, so the exit-aware finalizer would never fire.
+    // Every exit escapes this scope before the claim's release runs (the
+    // scope `resumeToolUse` closes around this call): the launch's finalizers
+    // compensate through the run's own claim - the stage's FAILED close is an
+    // append - so a release that ran before them would have their
+    // compensation refused `DatabaseNotOwner`.
     const outcome = yield* Effect.exit(
       Effect.scoped(
         Effect.gen(function* () {
@@ -672,26 +603,11 @@ const resumeToolUseWithOwnedLease = Effect.fn('resumeToolUseWithOwnedLease')(
         }),
       ),
     );
-    // A recovered child driver owns delivery and releases the claim afterwards.
-    if (options.turns) return yield* outcome;
-    if (Exit.isFailure(outcome)) {
-      const released = yield* Effect.exit(
-        runSession.releaseRunLease(resume.runId),
-      );
-      if (Exit.isFailure(released)) {
-        return yield* Effect.fail(
-          new AggregateError(
-            [Cause.squash(outcome.cause), Cause.squash(released.cause)],
-            `Run ${resume.runId} failed and its final artifacts could not be persisted`,
-          ),
-        );
-      }
-      return yield* Effect.failCause(outcome.cause);
-    }
-    yield* runSession.releaseRunLease(resume.runId);
-    return outcome.value;
+    // The claim's release is no longer this function's: it rides the scope
+    // `resumeToolUse` closes around this call, and for a recovered child the
+    // driver owns delivery and releases afterwards.
+    return yield* outcome;
   },
-  Effect.uninterruptible,
 );
 
 /** Acquire a recovered run and reload its cursor before starting its live scope. */
@@ -700,36 +616,67 @@ const resumeToolUse = Effect.fn('resumeToolUse')(function* (
   options: ResumeToolUseFromResumeDataOptions & { session: SessionHandle },
 ) {
   const session = options.session;
-  const rollback = options.turns
-    ? Effect.void
-    : yield* acquireResumedRunOwnership(session, identity.runId);
-  const retrieval = yield* Effect.exit(
-    retrieveSessionResumeData(
-      identity.runId,
-      identity.agentConfig,
-      session,
-    ).pipe(
-      Effect.flatMap((retrieved) =>
-        retrieved?.type === 'toolUse'
-          ? Effect.succeed(retrieved)
-          : Effect.fail(new ResumeSessionUnavailableError(identity.runId)),
-      ),
+  // The claim's lifetime is the whole resume, as one `acquireRelease`:
+  // acquired before the cursor read so no concurrent owner mutates the run
+  // between the read and the launch, released when this scope closes — after
+  // the launch's own scope and its compensating finalizers, never before
+  // them, and on every exit the old rollback/release pair covered.
+  // A release finalizer cannot fail, and a failed claim release is no
+  // defect either — a drain that lost queued facts is the caller's typed
+  // error. The finalizer records it and the fold after the scope re-fails:
+  // alone after a successful turn, aggregated behind the run's own failure
+  // otherwise, the run's first — `Effect.onExit`-style combining would bury
+  // it instead.
+  let releaseFailure: Error | undefined;
+  const outcome = yield* Effect.exit(
+    Effect.scoped(
+      Effect.gen(function* () {
+        // A recovered child's continuous driver holds the claim already; a
+        // standalone resume takes it here.
+        if (!options.turns) {
+          yield* Effect.acquireRelease(
+            acquireResumedRunOwnership(session, identity.runId),
+            () =>
+              session.releaseRunLease(identity.runId).pipe(
+                Effect.catch((error) =>
+                  Effect.sync(() => {
+                    releaseFailure = error;
+                  }),
+                ),
+              ),
+          );
+        }
+        const retrieved = yield* retrieveSessionResumeData(
+          identity.runId,
+          identity.agentConfig,
+          session,
+        ).pipe(
+          Effect.flatMap((retrieved) =>
+            retrieved?.type === 'toolUse'
+              ? Effect.succeed(retrieved)
+              : Effect.fail(new ResumeSessionUnavailableError(identity.runId)),
+          ),
+        );
+        // The launched turn owns the run from here, including setup failures.
+        return yield* resumeToolUseWithOwnedLease(retrieved, options);
+      }),
     ),
   );
-  if (Exit.isFailure(retrieval)) {
-    const released = yield* Effect.exit(rollback);
-    return yield* Effect.fail(
-      Exit.isFailure(released)
-        ? new AggregateError(
-            [Cause.squash(retrieval.cause), Cause.squash(released.cause)],
-            `Resume retrieval and admission rollback failed for ${identity.runId}`,
-          )
-        : ensureError(Cause.squash(retrieval.cause)),
-    );
+  if (Exit.isSuccess(outcome)) {
+    if (releaseFailure !== undefined) return yield* Effect.fail(releaseFailure);
+    return outcome.value;
   }
-  // The launched turn owns release from here, including setup failures.
-  return yield* resumeToolUseWithOwnedLease(retrieval.value, options);
-}, Effect.uninterruptible);
+  // An interruption unwinds straight past the fold; nothing aggregates
+  // behind it.
+  if (releaseFailure === undefined || Cause.hasInterruptsOnly(outcome.cause))
+    return yield* Effect.failCause(outcome.cause);
+  return yield* Effect.fail(
+    new AggregateError(
+      [ensureError(Cause.squash(outcome.cause)), releaseFailure],
+      `Run ${identity.runId} failed and its final artifacts could not be persisted`,
+    ),
+  );
+});
 
 /** Resume after the previous generation and its teardown have settled, on
  *  the `Runs` of `options.session`. */

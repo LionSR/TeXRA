@@ -151,6 +151,38 @@ describe('executeCommand', () => {
       }).pipe(Effect.provide(nodeSpawnerLayer)),
   );
 
+  it.live(
+    "withholds TeXRA's provider key variables from the child and keeps the rest",
+    () =>
+      Effect.gen(function* () {
+        const saved = {
+          OPENAI_API_KEY: process.env.OPENAI_API_KEY,
+          TEXRA_TEST_UNRELATED: process.env.TEXRA_TEST_UNRELATED,
+        };
+        yield* Effect.addFinalizer(() =>
+          Effect.sync(() => {
+            for (const [name, value] of Object.entries(saved)) {
+              if (value === undefined) delete process.env[name];
+              else process.env[name] = value;
+            }
+          }),
+        );
+        process.env.OPENAI_API_KEY = 'sk-owned-by-texra';
+        process.env.TEXRA_TEST_UNRELATED = 'kept';
+
+        const result = yield* executeCommand(
+          [
+            process.execPath,
+            '-e',
+            `process.stdout.write(JSON.stringify([process.env.OPENAI_API_KEY ?? null, process.env.TEXRA_TEST_UNRELATED ?? null]))`,
+          ],
+          { cwd: WORKSPACE, settings: undefined },
+        );
+
+        expect(JSON.parse(result.stdout)).toStrictEqual([null, 'kept']);
+      }).pipe(Effect.provide(nodeSpawnerLayer)),
+  );
+
   it.live('decodes streamed Unicode split across byte chunks', () =>
     Effect.gen(function* () {
       let streamed = '';
