@@ -25,7 +25,6 @@ import {
 import {
   ModelError,
   RemoteOperationSchema,
-  admittedInputsChain,
   boundOperation,
   cancellationStatus,
   enrichModelError,
@@ -35,7 +34,7 @@ import { sameModelOrigin } from './protocol.js';
 import { ownedAbortSafeRequest } from './transport.js';
 import { filesApiUploads } from './uploadCache.js';
 import { openaiFailure } from './openaiError.js';
-import { admittedFingerprint } from './prefixFingerprint.js';
+import { admittedFingerprint, canChain } from './prefixFingerprint.js';
 import {
   RESPONSES_PREFIX_DOMAIN,
   openaiResponsesContinuation,
@@ -382,7 +381,7 @@ export function openaiResponsesModel(
             message: 'The admitted turn belongs to another model binding.',
           });
         const turn = parsedTurn.data;
-        const chains = yield* admittedInputsChain(
+        const chains = yield* canChain(
           RESPONSES_PREFIX_DOMAIN,
           turn,
           operation,

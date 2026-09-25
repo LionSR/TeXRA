@@ -1,5 +1,5 @@
 import '@awesome.me/webawesome/dist/components/button/button.js';
-import { html, css, type TemplateResult } from 'lit';
+import { html, css, LitElement, type TemplateResult } from 'lit';
 import { customElement } from 'lit/decorators.js';
 import { ifDefined } from 'lit/directives/if-defined.js';
 
@@ -13,11 +13,12 @@ import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 import { renderIconActionButton } from '@ui/wa/actionButtons';
 import { renderBannerFrame } from '@ui/wa/bannerFrame';
-import { VisibleBanner } from './StateVisibleBanner';
 
-/** Slim project-bootstrap row shown when the workspace has no LaTeX files. */
+/** The New-task hero while the folder has no LaTeX files: start a project.
+ *  Setup and the walkthrough have their own homes (the setup hero, the
+ *  command palette), so this card offers only the ways to get a paper in. */
 @customElement('getting-started-banner')
-export class GettingStartedBanner extends VisibleBanner {
+export class GettingStartedBanner extends LitElement {
   static override styles = [
     designTokens,
     commonViewStyles,
@@ -110,19 +111,16 @@ export class GettingStartedBanner extends VisibleBanner {
               <strong>No LaTeX files yet</strong>
             </p>
             <p class="getting-started-copy">
-              Create or import a project, then run setup to check LaTeX and
-              choose an agent team.
+              Start from a sample, or bring a paper in from Overleaf or arXiv.
             </p>
             <div
               class="getting-started-actions actions"
               role="group"
               aria-label="Getting started actions"
             >
-              ${this.renderAction('runSetup', 'filled', 'brand')}
-              ${this.renderAction('createSampleProject', 'outlined')}
+              ${this.renderAction('createSampleProject', 'filled', 'brand')}
               ${this.renderAction('cloneOverleaf', 'outlined')}
               ${this.renderAction('downloadArxiv', 'outlined')}
-              ${this.renderAction('openWalkthrough', 'outlined')}
             </div>
           </div>
           ${renderIconActionButton({

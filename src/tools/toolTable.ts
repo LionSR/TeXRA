@@ -7,8 +7,8 @@
  * a reader of the tag loads none of them.
  */
 import { Context, type Effect, type Layer, type Scope } from 'effect';
-
 import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 /**
  * The resources a plugin owns, as a layer: built when the first open
@@ -50,7 +50,11 @@ export interface LoadedPlugin {
    * Bring the resources up in the given scope and answer the tools. Never
    * fails: a plugin that cannot start answers its `failure` instead.
    */
-  readonly acquire: Effect.Effect<LoadedPluginTools, never, Scope.Scope>;
+  readonly acquire: Effect.Effect<
+    LoadedPluginTools,
+    never,
+    Scope.Scope | ChildProcessSpawner
+  >;
 }
 
 /**

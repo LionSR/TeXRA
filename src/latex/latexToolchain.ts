@@ -6,6 +6,7 @@ import {
   type DoctorLatexTool,
 } from '@shared/constants/latexToolchain';
 import { checkToolInstalled } from '@utils/system/toolUtils';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 type LatexToolStatus = DoctorLatexTool & { readonly installed: boolean };
 
@@ -16,7 +17,11 @@ export interface LatexToolchainProbe {
 
 /** Probe the LaTeX tools `texra doctor` reports on, in its row order. */
 export const probeLatexToolchain = Effect.fn('latex.probeLatexToolchain')(
-  function* (): Effect.fn.Return<LatexToolchainProbe> {
+  function* (): Effect.fn.Return<
+    LatexToolchainProbe,
+    never,
+    ChildProcessSpawner
+  > {
     const tools = yield* Effect.all(
       DOCTOR_LATEX_TOOLS.map((tool) =>
         Effect.map(
@@ -40,7 +45,7 @@ export const probeLatexToolchain = Effect.fn('latex.probeLatexToolchain')(
 
 /** Returns true when a compiler {@link compileLatex2Pdf} can drive is on PATH. */
 export const hasLatexCompiler = Effect.fn('latex.hasLatexCompiler')(
-  function* (): Effect.fn.Return<boolean> {
+  function* (): Effect.fn.Return<boolean, never, ChildProcessSpawner> {
     for (const tool of SUPPORTED_LATEX_COMPILERS) {
       if (yield* checkToolInstalled(tool, false)) return true;
     }

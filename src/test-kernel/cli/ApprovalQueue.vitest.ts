@@ -5,7 +5,6 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import {
-  approvalPayloadRunId,
   attentionRequests,
   currentApproval,
   promoteApprovalsForRun,
@@ -194,11 +193,5 @@ describe('CLI approval surface', () => {
     seedView(viewOfRequests(edit, bash));
 
     expect(currentApproval.get()?.payload).toEqual(bash);
-  });
-
-  it('extracts run ids from every approval payload used by the TUI', () => {
-    expect(approvalPayloadRunId(bashPayload(RUN_A))).toBe('run-a');
-    expect(approvalPayloadRunId(questionPayload(RUN_B))).toBe('run-b');
-    expect(approvalPayloadRunId(bashPayload(''))).toBeUndefined();
   });
 });

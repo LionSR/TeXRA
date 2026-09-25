@@ -1,5 +1,4 @@
 import { Text } from 'ink';
-import { Cause, Effect } from 'effect';
 import { useState } from 'react';
 
 import {
@@ -15,6 +14,8 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { ApiKeyEntryForm } from './ApiKeyEntryForm';
 import { formatStatusViewSummary } from './_shared/formatStatusViewSummary';
 import { ListForm } from './_shared/ListForm';
+import { runFormWrite } from './_shared/useAsyncListForm';
+import type { Effect } from 'effect';
 
 type ProviderApiKeyStatuses = Partial<
   Readonly<Record<ApiProvider, ApiKeyStatus>>
@@ -141,19 +142,14 @@ export function ProviderApiKeyForm(
       }}
       onSubmit={(key) => {
         setSaving(true);
-        void props.runtime.runPromise(
-          Effect.matchCause(
-            Effect.suspend(() => props.onSave(provider, key)),
-            {
-              onSuccess: (modelNotice) =>
-                props.onDone(provider, modelNotice || undefined),
-              onFailure: (cause) => {
-                setSaving(false);
-                setError(toErrorMessage(Cause.squash(cause)));
-              },
-            },
-          ),
-        );
+        runFormWrite(props.runtime, () => props.onSave(provider, key), {
+          onSuccess: (modelNotice) =>
+            props.onDone(provider, modelNotice || undefined),
+          onError: (cause) => {
+            setSaving(false);
+            setError(toErrorMessage(cause));
+          },
+        });
       }}
     />
   );

@@ -99,8 +99,4 @@ export class VscodeSecrets implements PlatformSecrets {
         }),
     });
   }
-
-  getEnv(name: string): string | undefined {
-    return process.env[name];
-  }
 }

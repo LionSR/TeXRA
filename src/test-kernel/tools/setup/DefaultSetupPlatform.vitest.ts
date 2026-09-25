@@ -22,7 +22,7 @@ setupPlatform(
   {
     config: { 'texra.bib.defaultPath': 'references.bib' },
     secrets: { 'apiKey.openai': 'sk-stored-key' },
-    secretsEnv: { GITHUB_TOKEN: 'github-env-token' },
+    env: { GITHUB_TOKEN: 'github-env-token' },
   },
   { setup: { host: 'extension', signIn: () => Effect.succeed(false) } },
 );

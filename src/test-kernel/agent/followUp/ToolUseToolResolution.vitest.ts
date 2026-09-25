@@ -9,7 +9,9 @@ import {
 } from '@platform/languageModel';
 import type { ToolDefinition } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { hostStores, installPlatform } from '@test/support/setupPlatform';
+import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 import type { CompositionKey } from '@tools/compositions';
 import { toolTableLayer } from '@tools/compositions';
 import { toolRegistryLayer } from '@tools/registry';
@@ -45,7 +47,8 @@ describe('tool-use tool resolution', () => {
       // The delegation-annotation availability read yields `LanguageModel`;
       // this host has no editor models.
       Effect.provide(LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT)),
-      Effect.provide(toolRegistryLayer),
+      Effect.provide(toolRegistryLayer.pipe(Layer.provide(nodePlatformLayer))),
+      Effect.provide(nodeSpawnerLayer),
     );
   }
 
@@ -170,6 +173,7 @@ describe('tool-use tool resolution', () => {
             Effect.provide(
               LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT),
             ),
+            Effect.provide(nodeSpawnerLayer),
           );
         const names = (resolved: Effect.Success<ReturnType<typeof resolve>>) =>
           resolved.definitions.map((tool) => tool.name);
@@ -199,6 +203,7 @@ describe('tool-use tool resolution', () => {
         yield* Scope.close(laterScope, Exit.void);
       }).pipe(
         Effect.provide(toolTableLayer(table)),
+        Effect.provide(nodeSpawnerLayer),
         Effect.ensuring(Effect.promise(() => installPlatform())),
       );
     },

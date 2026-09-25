@@ -14,14 +14,9 @@ import {
   withSettledRun,
   withWaitingCall,
 } from '@test/shared/session/fanOutScenario';
-import { waIcon } from '@ui/wa/webAwesomeIcons';
 
+import '@progressView/frontend/components/RunHeader';
 import '@progressView/frontend/components/WorkflowRunBoard';
-
-type IconButton = (
-  name: Parameters<typeof waIcon>[0],
-  label: string,
-) => TemplateResult;
 
 /** The fixture each board scene folds. */
 export const RUN_BOARD_FIXTURES: Record<string, () => SessionView> = {
@@ -31,34 +26,22 @@ export const RUN_BOARD_FIXTURES: Record<string, () => SessionView> = {
   'run-board-foreign': withForeignOwner,
 };
 
-/** The bar above the board (the stream's label and status, the run's stop)
- *  and the board itself, on one folded view. */
-export function runBoardScene(
-  fold: () => SessionView,
-  iconButton: IconButton,
-): TemplateResult {
+/** The run's own header (its one Stop and menu) over the board, on one
+ *  folded view. */
+export function runBoardScene(fold: () => SessionView): TemplateResult {
   const view = fold();
-  const stream = view.runs.get(ROOT);
-  if (stream?.category !== 'workflow') {
+  const run = view.runs.get(ROOT);
+  if (run?.category !== 'workflow') {
     throw new Error('a board fixture must fold a workflow root');
   }
   const surface = applySurfaceAction(emptySurface(view.key), {
     kind: 'select',
     runId: ROOT,
   });
-  return html`<div class="h-bar">
-      ${iconButton('list-ul', 'Sessions')}
-      <div class="h-title">
-        <span>${stream.label}</span>${waIcon('chevron-right')}<strong
-          >${stream.statusLabel}</strong
-        >
-      </div>
-      <span class="h-spacer"></span
-      >${iconButton('circle-stop', 'Kill run')}${iconButton('ellipsis', 'More')}
-    </div>
+  return html`<run-header .run=${run} .view=${view}></run-header>
     <workflow-run-board
       class="h-body"
-      .stream=${stream}
+      .run=${run}
       .view=${view}
       .surface=${surface}
     ></workflow-run-board>`;

@@ -34,7 +34,11 @@ import {
   resolveWorkspaceSourceDir,
 } from './compileCheck';
 import { recoverOutputFailure } from './outputOperations';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 import type { RoundFileEntry, RoundFileMapping } from './types';
+
+/** The services a diff pass checks, runs and records on. */
+type DiffServices = FileSystem.FileSystem | WorkspaceFs | ChildProcessSpawner;
 
 interface DiffOutputDirectory {
   absolutePath: string;
@@ -138,11 +142,7 @@ export class LatexDiffManager {
   handleLatexdiffOfOutput(
     currRound: number,
     mapping: RoundFileMapping,
-  ): Effect.Effect<
-    RunStorageFileLocation[],
-    never,
-    FileSystem.FileSystem | WorkspaceFs
-  > {
+  ): Effect.Effect<RunStorageFileLocation[], never, DiffServices> {
     const execute = Effect.gen({ self: this }, function* () {
       if (!(yield* checkToolInstalled('latexdiff'))) {
         this.logger.warn(
@@ -343,15 +343,15 @@ export class LatexDiffManager {
       base: FileLocation,
       revised: FileLocation,
       cwd: string,
-    ) => Effect.Effect<LaTeXdiffResult, never, FileSystem.FileSystem>;
+    ) => Effect.Effect<
+      LaTeXdiffResult,
+      never,
+      FileSystem.FileSystem | ChildProcessSpawner
+    >;
     label: string;
     pdfStemSuffix: string;
     diffDirectory: DiffOutputDirectory;
-  }): Effect.Effect<
-    SingleDiffOutcome | null,
-    Error,
-    FileSystem.FileSystem | WorkspaceFs
-  > {
+  }): Effect.Effect<SingleDiffOutcome | null, Error, DiffServices> {
     return Effect.gen({ self: this }, function* () {
       const revisedFile = outputByPath.get(outputPath);
       if (!revisedFile) {
@@ -413,7 +413,7 @@ export class LatexDiffManager {
       artifact: RunStorageFileLocation | null;
     } | null,
     Error,
-    FileSystem.FileSystem | WorkspaceFs
+    DiffServices
   > {
     return Effect.gen({ self: this }, function* () {
       if (!result.success) {
@@ -432,7 +432,7 @@ export class LatexDiffManager {
         'build',
       );
       // Reuse the workflow compile-check timeout so a hanging diff build
-      // gets killed by execa instead of orphaning latexmk/pdflatex.
+      // is torn down by its scope instead of orphaning latexmk/pdflatex.
       const timeoutMs = yield* getWorkflowAutoCompileTimeoutMs(this.roots);
       // The diff `.tex` is written to `diff/r{round}/`, away from both the
       // revised round output and the live workspace source. Search the revised

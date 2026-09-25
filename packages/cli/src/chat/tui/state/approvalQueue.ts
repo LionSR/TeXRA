@@ -175,11 +175,23 @@ export function useHostCapability(
   };
 }
 
-/** Whether `payload` presents; a stager keys its entry by the same id. */
-export function approvalPayloadRunId(
-  payload: Pick<ApprovalPayload, 'data'>,
-): RunId | undefined {
-  return payload.data.runId || undefined;
+/** Whether the promoted stream's requests lead `request`'s. */
+function leads(request: { readonly runId: RunId }): boolean {
+  const lead = promoted.get();
+  return (
+    lead !== undefined &&
+    (request.runId === lead.runId || lead.includeRunIds.has(request.runId))
+  );
+}
+
+/** Drop each request-keyed entry whose request is no longer in `live`. */
+export function pruneToLive(
+  live: ReadonlySet<string>,
+  ...keyed: ReadonlyArray<Set<string> | Map<string, unknown>>
+): void {
+  for (const entries of keyed) {
+    for (const id of entries.keys()) if (!live.has(id)) entries.delete(id);
+  }
 }
 
 /**
@@ -190,7 +202,6 @@ export function approvalPayloadRunId(
  */
 export function attentionRequests(
   view: SessionView,
-  lead = promoted.get(),
 ): readonly AttentionRequest[] {
   const requests = pendingApprovalFacts(view).map(
     (pending): AttentionRequest => ({
@@ -200,9 +211,6 @@ export function attentionRequests(
       payload: pending.payload,
     }),
   );
-  if (!lead) return requests;
-  const leads = (request: AttentionRequest): boolean =>
-    request.runId === lead.runId || lead.includeRunIds.has(request.runId);
   return [...requests.filter(leads), ...requests.filter((r) => !leads(r))];
 }
 
@@ -255,10 +263,6 @@ export const currentApproval = computed<PendingApproval | undefined>(() => {
     }
     candidates.push({ request, payload, rank });
   });
-  const lead = promoted.get();
-  const leads = (request: AttentionRequest): boolean =>
-    lead !== undefined &&
-    (request.runId === lead.runId || lead.includeRunIds.has(request.runId));
   candidates.sort((a, b) => {
     const leadDelta = Number(leads(b.request)) - Number(leads(a.request));
     if (leadDelta !== 0) return leadDelta;
@@ -313,13 +317,8 @@ export function forgetSettledRequests(live: ReadonlySet<string>): void {
   );
   if (remaining.length !== staged.size) {
     stagedPresentations.set(new Map(remaining));
-    for (const id of stagedSeenListed) {
-      if (!live.has(id)) stagedSeenListed.delete(id);
-    }
   }
-  for (const id of presentedOrder.keys()) {
-    if (!live.has(id)) presentedOrder.delete(id);
-  }
+  pruneToLive(live, stagedSeenListed, presentedOrder);
 }
 
 function markDecided(requestId: string): void {
@@ -378,16 +377,19 @@ function issue(
   onRefused: (() => void) | undefined,
   ...requests: RuntimeRequest[]
 ): void {
+  const reopen = (): void => {
+    const next = new Set(decided.get());
+    next.delete(requestId);
+    decided.set(next);
+    onRefused?.();
+  };
   void runtime.runPromise(
     Effect.forEach(requests, (request) => session.requests.request(request), {
       discard: true,
     }).pipe(
       Effect.match({
         onFailure: (error) => {
-          const next = new Set(decided.get());
-          next.delete(requestId);
-          decided.set(next);
-          onRefused?.();
+          reopen();
           appendLocalRequestRefusal(error, runId);
         },
         onSuccess: () => undefined,
@@ -400,10 +402,7 @@ function issue(
         // The durable request never recorded the decision; reopen it the
         // same way a typed refusal does, or `currentApproval` keeps
         // filtering it out and the run waits with no UI.
-        const next = new Set(decided.get());
-        next.delete(requestId);
-        decided.set(next);
-        onRefused?.();
+        reopen();
         return Effect.map(reportRequestDefect(cause), (message) =>
           appendLocalAssistantTranscript(message, runId),
         );

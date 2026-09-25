@@ -1,5 +1,6 @@
 import { it } from '@effect/vitest';
 import { Effect } from 'effect';
+import { FetchHttpClient, type HttpClient } from 'effect/unstable/http';
 import { afterEach, describe, expect, vi } from 'vitest';
 
 import { loadRemoteAgent } from '@agent/remote/RemoteAgentLoader';
@@ -8,12 +9,19 @@ import { SupabaseAuth } from '@auth/SupabaseAuth';
 import { SUPABASE_CONFIG } from '@auth/config';
 import { fakeSupabaseAuth } from '@test/support/fakeSupabaseAuth';
 
-/** Every program here runs against a signed-in fake account plane. */
-const signedIn = <A, E>(program: Effect.Effect<A, E>): Effect.Effect<A, E> =>
+/** Every program here runs against a signed-in fake account plane, with
+ *  `fetchMock` as the HTTP client's transport. */
+const signedIn = <A, E>(
+  fetchMock: typeof fetch,
+  program: Effect.Effect<A, E, HttpClient.HttpClient>,
+): Effect.Effect<A, E> =>
   Effect.provideService(
     program,
     SupabaseAuth,
     fakeSupabaseAuth({ accessToken: Effect.succeed('access-token') }),
+  ).pipe(
+    Effect.provideService(FetchHttpClient.Fetch, fetchMock),
+    Effect.provide(FetchHttpClient.layer),
   );
 
 function installRemoteAgentListClient(result: {
@@ -21,30 +29,27 @@ function installRemoteAgentListClient(result: {
   error: Partial<
     Record<'code' | 'message' | 'details' | 'hint', string | null>
   > | null;
-}): string[] {
+}): { fetchMock: typeof fetch; selectedColumns: string[] } {
   const selectedColumns: string[] = [];
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(async (input: RequestInfo | URL) => {
-      const urlString = input instanceof Request ? input.url : String(input);
-      const url = new URL(urlString);
-      selectedColumns.push(url.searchParams.get('select') ?? '');
+  const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+    const urlString = input instanceof Request ? input.url : String(input);
+    const url = new URL(urlString);
+    selectedColumns.push(url.searchParams.get('select') ?? '');
 
-      if (result.error) {
-        return new Response(JSON.stringify(result.error), {
-          status: 400,
-          statusText: 'Bad Request',
-        });
-      }
-
-      return new Response(JSON.stringify(result.data), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
+    if (result.error) {
+      return new Response(JSON.stringify(result.error), {
+        status: 400,
+        statusText: 'Bad Request',
       });
-    }),
-  );
+    }
 
-  return selectedColumns;
+    return new Response(JSON.stringify(result.data), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  });
+
+  return { fetchMock, selectedColumns };
 }
 
 const canonicalReviewRow = {
@@ -68,18 +73,17 @@ function invalidAgentRow(overrides: Record<string, unknown>) {
 
 afterEach(() => {
   vi.restoreAllMocks();
-  vi.unstubAllGlobals();
 });
 
 describe('remote agent listing', () => {
   it.effect('drops remote rows with non-identifier agent names', () =>
     Effect.gen(function* () {
-      installRemoteAgentListClient({
+      const { fetchMock } = installRemoteAgentListClient({
         data: [invalidAgentRow({}), canonicalReviewRow],
         error: null,
       });
 
-      const agents = yield* signedIn(listRemoteAgents());
+      const agents = yield* signedIn(fetchMock, listRemoteAgents());
 
       expect(agents.map((agent) => agent.name)).toEqual(['review']);
     }),
@@ -87,7 +91,7 @@ describe('remote agent listing', () => {
 
   it.effect('drops remote rows without an agent category', () =>
     Effect.gen(function* () {
-      installRemoteAgentListClient({
+      const { fetchMock } = installRemoteAgentListClient({
         data: [
           invalidAgentRow({ name: 'uncategorized', agent_category: null }),
           canonicalReviewRow,
@@ -95,7 +99,7 @@ describe('remote agent listing', () => {
         error: null,
       });
 
-      const agents = yield* signedIn(listRemoteAgents());
+      const agents = yield* signedIn(fetchMock, listRemoteAgents());
 
       expect(agents.map((agent) => agent.name)).toEqual(['review']);
     }),
@@ -103,7 +107,7 @@ describe('remote agent listing', () => {
 
   it.effect('returns no agents when the list query fails', () =>
     Effect.gen(function* () {
-      const selectedColumns = installRemoteAgentListClient({
+      const { fetchMock, selectedColumns } = installRemoteAgentListClient({
         data: null,
         error: {
           code: '42501',
@@ -111,7 +115,7 @@ describe('remote agent listing', () => {
         },
       });
 
-      const agents = yield* signedIn(listRemoteAgents());
+      const agents = yield* signedIn(fetchMock, listRemoteAgents());
 
       expect(agents).toEqual([]);
       expect(selectedColumns).toEqual([
@@ -126,26 +130,23 @@ describe('remote agent config parsing', () => {
     'rejects with a wrapped error for malformed remote config YAML',
     () =>
       Effect.gen(function* () {
-        vi.stubGlobal(
-          'fetch',
-          vi.fn(async (input: RequestInfo | URL) => {
-            const urlString =
-              input instanceof Request ? input.url : String(input);
-            if (urlString !== SUPABASE_CONFIG.edgeFunctionUrl) {
-              return new Response('not found', { status: 404 });
-            }
-            return new Response(
-              JSON.stringify({ config: 'name: "unterminated' }),
-              {
-                status: 200,
-                headers: { 'Content-Type': 'application/json' },
-              },
-            );
-          }),
-        );
+        const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+          const urlString =
+            input instanceof Request ? input.url : String(input);
+          if (urlString !== SUPABASE_CONFIG.edgeFunctionUrl) {
+            return new Response('not found', { status: 404 });
+          }
+          return new Response(
+            JSON.stringify({ config: 'name: "unterminated' }),
+            {
+              status: 200,
+              headers: { 'Content-Type': 'application/json' },
+            },
+          );
+        });
 
         const error = yield* Effect.flip(
-          signedIn(loadRemoteAgent('broken-agent')),
+          signedIn(fetchMock, loadRemoteAgent('broken-agent')),
         );
         expect(error.message).toContain(
           'Failed to parse YAML for remote agent "broken-agent"',

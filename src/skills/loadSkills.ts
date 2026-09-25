@@ -1,19 +1,17 @@
 // Standard library imports
-import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, FileSystem } from 'effect';
 
 // Local imports - common
-import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
+import { isNotADirectoryError } from '@common/errors';
 import type { ActiveSkillSourceScope } from '@shared/schemas';
-import { byName } from '@utils/core';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { byString } from '@utils/core';
+import { absentReason } from '@utils/files/fsEntryExists';
 
 // Local imports - skill parsing
 import { type SkillLoadIssue, issue, loadSkillDirectory } from './skillLoader';
-import type { Dirent } from 'node:fs';
 import type { Skill } from './SkillSchema';
 
 export { type SkillLoadIssue } from './skillLoader';
@@ -88,56 +86,51 @@ function dupRealpathIssue(
  *
  * Missing roots are treated as empty because user and project skill directories
  * are optional. Per-skill failures are reported and do not abort discovery.
+ * A non-directory entry, a symlink to a file included, is not a skill package
+ * and is skipped silently.
  */
 const scanSkillRoot = Effect.fn('skills.scanSkillRoot')(function* (
   root: string,
-): Effect.fn.Return<SkillRootScan> {
+): Effect.fn.Return<SkillRootScan, never, FileSystem.FileSystem> {
+  const fs = yield* FileSystem.FileSystem;
   const skills: DiscoveredSkill[] = [];
   const errors: SkillLoadIssue[] = [];
   const seenNames = new Set<string>();
   const seenRealPaths = new Set<string>();
 
-  const entries: Dirent[] | undefined = yield* Effect.tryPromise({
-    try: () => fs.readdir(root, { withFileTypes: true }),
-    catch: ensureError,
-  }).pipe(
-    Effect.catch((err) =>
+  const names: string[] | undefined = yield* fs.readDirectory(root).pipe(
+    Effect.catch((error) =>
       Effect.sync(() => {
-        if (!isFileNotFoundError(err)) {
+        if (error.reason._tag !== 'NotFound') {
           errors.push(
-            issue('error', 'read_error', toErrorMessage(err), {
-              path: root,
-            }),
+            issue('error', 'read_error', error.message, { path: root }),
           );
         }
         return undefined;
       }),
     ),
   );
-  if (entries === undefined) return { skills, errors };
+  if (names === undefined) return { skills, errors };
 
-  for (const entry of entries.sort(byName)) {
-    if (!entry.isDirectory() && !entry.isSymbolicLink()) continue;
-
-    const skillDir = path.join(root, entry.name);
+  for (const name of names.toSorted(byString)) {
+    const skillDir = path.join(root, name);
     const skillPath = path.join(skillDir, 'SKILL.md');
-    const realSkillPath: string | undefined = yield* Effect.tryPromise({
-      try: () => fs.realpath(skillPath),
-      catch: ensureError,
-    }).pipe(
-      Effect.catch((err) =>
-        Effect.sync(() => {
-          if (!isFileNotFoundError(err)) {
-            errors.push(
-              issue('warning', 'read_error', toErrorMessage(err), {
-                path: skillPath,
-              }),
-            );
-          }
-          return undefined;
-        }),
-      ),
-    );
+    const realSkillPath: string | undefined = yield* fs
+      .realPath(skillPath)
+      .pipe(
+        Effect.catch((error) =>
+          Effect.sync(() => {
+            if (!absentReason(error)) {
+              errors.push(
+                issue('warning', 'read_error', error.message, {
+                  path: skillPath,
+                }),
+              );
+            }
+            return undefined;
+          }),
+        ),
+      );
     if (realSkillPath === undefined) continue;
 
     if (seenRealPaths.has(realSkillPath)) {
@@ -146,7 +139,7 @@ const scanSkillRoot = Effect.fn('skills.scanSkillRoot')(function* (
     }
     seenRealPaths.add(realSkillPath);
 
-    const loaded = yield* loadSkillDirectory(skillDir, entry.name);
+    const loaded = yield* loadSkillDirectory(skillDir, name);
     errors.push(...loaded.errors);
     if (!loaded.skill) continue;
 
@@ -159,7 +152,7 @@ const scanSkillRoot = Effect.fn('skills.scanSkillRoot')(function* (
     skills.push({
       skill: loaded.skill,
       realPath: realSkillPath,
-      entryName: entry.name,
+      entryName: name,
     });
   }
 
@@ -172,34 +165,34 @@ const scanSkillRoot = Effect.fn('skills.scanSkillRoot')(function* (
  */
 function validateRequiredSource(
   source: SkillSource,
-): Effect.Effect<SkillLoadIssue | undefined> {
+): Effect.Effect<SkillLoadIssue | undefined, never, FileSystem.FileSystem> {
   const notADirectory = () =>
     issue('error', 'invalid_source', 'Skill source is not a directory', {
       path: source.path,
     });
-  return Effect.tryPromise({
-    try: () => fs.stat(source.path),
-    catch: ensureError,
-  }).pipe(
-    Effect.map((sourceStat) =>
-      sourceStat.isDirectory() ? undefined : notADirectory(),
+  return FileSystem.FileSystem.use((fs) => fs.stat(source.path)).pipe(
+    Effect.map((info) =>
+      info.type === 'Directory' ? undefined : notADirectory(),
     ),
-    Effect.catch((err) => {
-      if (isFileNotFoundError(err)) {
+    Effect.catch((error) => {
+      if (error.reason._tag === 'NotFound') {
         return Effect.succeed(
           issue('error', 'missing_source', 'Skill source does not exist', {
             path: source.path,
           }),
         );
       }
-      if (!isNotADirectoryError(err)) {
-        return Effect.succeed(
-          issue('error', 'source_read_error', toErrorMessage(err), {
-            path: source.path,
-          }),
-        );
+      if (
+        error.reason._tag === 'BadResource' &&
+        isNotADirectoryError(error.reason.cause)
+      ) {
+        return Effect.succeed(notADirectory());
       }
-      return Effect.succeed(notADirectory());
+      return Effect.succeed(
+        issue('error', 'source_read_error', error.message, {
+          path: source.path,
+        }),
+      );
     }),
   );
 }
@@ -214,7 +207,11 @@ function validateRequiredSource(
 export const discoverSkillSources = Effect.fn('skills.discoverSkillSources')(
   function* (
     tiers: readonly SkillSourceTier[],
-  ): Effect.fn.Return<DiscoverSkillSourcesResult> {
+  ): Effect.fn.Return<
+    DiscoverSkillSourcesResult,
+    never,
+    FileSystem.FileSystem
+  > {
     const skills: SourcedSkill[] = [];
     const errors: SkillLoadIssue[] = [];
     const seenNames = new Set<string>();

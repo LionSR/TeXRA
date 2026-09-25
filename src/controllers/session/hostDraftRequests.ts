@@ -32,6 +32,7 @@ import {
   type PastedImageSaveFailed,
 } from '@utils/files/pastedImageUtils';
 import type { HttpClient } from 'effect/unstable/http';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 const CHANNEL = 'HostDraftRequests';
 
@@ -150,6 +151,7 @@ export class HostDraftRequests {
     | LanguageModel
     | StorageFs
     | HttpClient.HttpClient
+    | ChildProcessSpawner
   > {
     switch (request.kind) {
       case 'polish': {
@@ -236,7 +238,7 @@ export class HostDraftRequests {
     const takeProgram: Effect.Effect<
       HostOutcome,
       Rejected,
-      Secrets | FileSystem.FileSystem
+      Secrets | FileSystem.FileSystem | ChildProcessSpawner
     > = Effect.gen(function* () {
       // Transcription binds its OpenAI credential against the process
       // secret store the host root provides.

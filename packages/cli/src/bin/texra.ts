@@ -3,12 +3,13 @@ import { installedProcessRuntime } from '@agent/runtime';
 import { setLogSink } from '@logger/logSink';
 import { Lifecycle } from '@platform/interfaces';
 import { withProcessServices } from '@platform/processRuntime';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError } from '@utils/errors/errorMessage';
 
 import { runCli } from '../commands/root';
 import { formatCrashReportLine, readCliBugsUrl } from '../runtime/cliContext';
 import { CliExitCode } from '../runtime/exitCodes';
 import {
+  cliErrorMessage,
   flushNdjsonStdout,
   installCliPipeErrorHandlers,
   prePlatformDiagnosticSink,
@@ -43,7 +44,7 @@ await Effect.runPromise(
   }).pipe(
     Effect.catch((error: unknown) =>
       Effect.promise(async () => {
-        writeTextStderr(`TeXRA CLI failed: ${toErrorMessage(error)}`);
+        writeTextStderr(`TeXRA CLI failed: ${cliErrorMessage(error)}`);
         // Usage errors are handled inside runCli (exit 2) and classified run
         // failures are consumed into an exit code at executeCliRequest (never
         // rethrown past it — see runtime/executeCli.ts), so this arm only

@@ -23,6 +23,12 @@ const ExecResultSchema = z.strictObject({
   exitCode: z.int(),
   /** True when subprocess output exceeded the configured retained-output limit. */
   outputLimitExceeded: z.boolean().optional(),
+  /**
+   * True when the command has no exit code of its own: it could not start,
+   * died by a signal, or its output could not be read. `exitCode` then holds
+   * the conventional code executeCommand reports for that outcome.
+   */
+  noExitCode: z.boolean().optional(),
 });
 
 export type ExecResult = z.infer<typeof ExecResultSchema>;

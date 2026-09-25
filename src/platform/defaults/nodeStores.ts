@@ -11,14 +11,10 @@
  */
 
 // Node imports
-import { access, constants } from 'node:fs/promises';
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect } from 'effect';
-
-// Local imports - common
-import { isFileNotFoundError } from '@common/errors';
+import { Effect, FileSystem } from 'effect';
 
 // Local imports - utilities
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -39,23 +35,26 @@ import type { JsonConfigProviderOptions } from './jsonConfigProvider';
  * Whether a write through a `JsonStore` at `filePath` could succeed:
  * `flush()` creates the containing directory on demand and then writes a temp
  * file into it, so the deepest existing ancestor of `filePath` must be
- * writable and traversable. Answers false for e.g. a read-only checkout
- * without ever creating the directory in the project tree.
+ * writable. Answers false for e.g. a read-only checkout without ever creating
+ * the directory in the project tree.
+ *
+ * The probe asks `writable` only, because `FileSystem.access` has no execute
+ * bit. A writable but non-searchable ancestor therefore opens the project
+ * store, which then fails loudly at the first `JsonStore` flush instead of
+ * falling back silently here at open.
  */
 const canCreateOrWrite = Effect.fn('nodeStores.canCreateOrWrite')(function* (
   filePath: string,
 ) {
+  const fs = yield* FileSystem.FileSystem;
   let dir = path.dirname(filePath);
   // Walk up to the deepest existing ancestor; the workspace root exists, so
   // this terminates after a step or two.
   for (;;) {
-    const reachable = yield* Effect.tryPromise({
-      try: () => access(dir, constants.W_OK | constants.X_OK),
-      catch: (cause) => cause as NodeJS.ErrnoException,
-    }).pipe(
+    const reachable = yield* fs.access(dir, { writable: true }).pipe(
       Effect.as(true),
       Effect.catch((error) =>
-        Effect.succeed(isFileNotFoundError(error) ? undefined : false),
+        Effect.succeed(error.reason._tag === 'NotFound' ? undefined : false),
       ),
     );
     if (reachable !== undefined) return reachable;

@@ -2,12 +2,13 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 
-import { Deferred, Effect, Fiber, Layer, ManagedRuntime } from 'effect';
+import { Deferred, Effect, Fiber, ManagedRuntime } from 'effect';
 import { it } from '@effect/vitest';
 import { beforeEach, describe, expect } from 'vitest';
 
 import { withExpandedRunInputs } from '@cli/runtime/workflowInputs';
 import { SHUTDOWN_PHASE } from '@platform/interfaces';
+import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { createFakeHost, installFakeHost } from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
@@ -32,7 +33,7 @@ describe('CLI workflow input lifecycle', () => {
   it.live('removes materialized stdin input on platform shutdown', () =>
     Effect.gen(function* () {
       const fakePlatform = yield* Effect.promise(installFakePlatform);
-      const runtime = ManagedRuntime.make(Layer.empty);
+      const runtime = ManagedRuntime.make(nodePlatformLayer);
       fakePlatform.lifecycle.onShutdown(
         SHUTDOWN_PHASE.ON,
         runtime.disposeEffect,
@@ -71,7 +72,7 @@ describe('CLI workflow input lifecycle', () => {
     () =>
       Effect.gen(function* () {
         const fakePlatform = yield* Effect.promise(installFakePlatform);
-        const runtime = ManagedRuntime.make(Layer.empty);
+        const runtime = ManagedRuntime.make(nodePlatformLayer);
         fakePlatform.lifecycle.onShutdown(
           SHUTDOWN_PHASE.ON,
           runtime.disposeEffect,
@@ -127,7 +128,7 @@ describe('CLI workflow input lifecycle', () => {
                 ).toBe('body from stdin');
                 return yield* Effect.fail(new Error('run failed'));
               }),
-          ),
+          ).pipe(Effect.provide(nodePlatformLayer)),
         );
         expect(failure.message).toBe('run failed');
         yield* Effect.promise(async () => {

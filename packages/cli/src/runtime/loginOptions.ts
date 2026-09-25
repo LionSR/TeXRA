@@ -55,23 +55,6 @@ export type LoginFormValue =
 const CHATGPT_LOGIN_TARGETS = new Set(['chatgpt', 'codex', 'subscription']);
 const GROK_LOGIN_TARGETS = new Set(['grok', 'xai', 'supergrok']);
 
-export function parseCliLogoutTarget(
-  input: string,
-): CliLogoutTarget | undefined {
-  const normalized = input.trim().toLowerCase();
-  if (CHATGPT_LOGIN_TARGETS.has(normalized)) return 'chatgpt';
-  if (GROK_LOGIN_TARGETS.has(normalized)) return 'grok';
-  switch (normalized) {
-    case 'texra':
-    case 'researcher':
-      return 'texra';
-    case 'all':
-      return 'all';
-    default:
-      return undefined;
-  }
-}
-
 export function unsupportedLoginProviderMessage(provider: string): string {
   return `Unsupported provider: ${provider}. Expected ${CLI_OAUTH_PROVIDER_INPUTS}.`;
 }

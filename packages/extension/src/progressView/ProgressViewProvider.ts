@@ -482,7 +482,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       if (isAgentCatalogAuthRefreshDeferred()) {
         runAfterAgentCatalogAuthRefresh(this.runtime, [
           this.snapshot.refreshCatalogs,
-          this.snapshot.refreshAuth,
           this.refreshOnboardingFunnel(),
         ]);
         return;
@@ -501,7 +500,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
         ProcessServices
       >([
         this.snapshot.refreshCatalogs,
-        this.snapshot.refreshAuth,
         this.snapshot.refreshHostBanners,
         this.refreshOnboardingFunnel(),
       ]);

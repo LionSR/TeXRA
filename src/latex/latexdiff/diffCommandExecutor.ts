@@ -12,6 +12,7 @@ import { readSettingFrom } from '@utils/config/platformSettings';
 
 // Local file imports
 import { LATEX_CITATION_COMMANDS } from '../latexParsingUtils';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 const LATEXDIFF_PICTURE_ENVIRONMENTS =
   '(?:picture|tikzpicture|scope|DIFnomarkup)[\\w\\d*@]*';
@@ -70,7 +71,7 @@ export class DiffCommandExecutor {
     inputFile: string,
     editedFile: string,
     options: DiffExecutionOptions,
-  ): Effect.Effect<ExecResult, Error> {
+  ): Effect.Effect<ExecResult, Error, ChildProcessSpawner> {
     return this.executeWithFallback(
       (useFlatten) =>
         this.buildLatexdiffCommand(inputFile, editedFile, useFlatten, options),
@@ -83,7 +84,7 @@ export class DiffCommandExecutor {
     inputFile: string,
     commitHash: string,
     options: DiffExecutionOptions,
-  ): Effect.Effect<ExecResult, Error> {
+  ): Effect.Effect<ExecResult, Error, ChildProcessSpawner> {
     return this.executeWithFallback(
       (useFlatten) =>
         this.buildLatexdiffVcCommand(
@@ -164,7 +165,7 @@ export class DiffCommandExecutor {
     commandBuilder: (useFlatten: boolean) => Effect.Effect<string[], Error>,
     commandType: string,
     cwd: string | undefined,
-  ): Effect.Effect<ExecResult, Error> {
+  ): Effect.Effect<ExecResult, Error, ChildProcessSpawner> {
     return Effect.gen({ self: this }, function* () {
       // Snapshot the timeout once per invocation so the value stays consistent
       // across the --flatten attempt and any retry, while still picking up any
@@ -219,7 +220,7 @@ export class DiffCommandExecutor {
   private exec(
     command: string[],
     execOptions: CommandExecOptions,
-  ): Effect.Effect<ExecResult> {
+  ): Effect.Effect<ExecResult, never, ChildProcessSpawner> {
     return executeCommand(command, {
       ...execOptions,
       // The roots of the workspace being diffed, held by this executor.
@@ -231,7 +232,7 @@ export class DiffCommandExecutor {
     commandBuilder: (useFlatten: boolean) => Effect.Effect<string[], Error>,
     commandType: string,
     execOptions: CommandExecOptions,
-  ): Effect.Effect<ExecResult, Error> {
+  ): Effect.Effect<ExecResult, Error, ChildProcessSpawner> {
     return Effect.gen({ self: this }, function* () {
       yield* Effect.logWarning(
         'Bibliography compilation failed with --flatten, retrying without --flatten',

@@ -20,13 +20,14 @@ import {
   checkToolInstalled,
   detectPackageManager,
 } from '@utils/system/toolUtils';
-import { findToolInCommonPaths } from '@utils/system/platformPaths';
+import { findToolInCommonPaths } from '@utils/system/binaryResolver';
 
 import {
   postToWebview,
   withHandlerErrorHandling,
   type SettingsHandlerContext,
 } from './SettingsHandlerContext';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 type LatexRecommendedSettingField = 'outDir' | 'autoRevealExclude';
 
@@ -250,7 +251,9 @@ export class LatexSettingsHandlers {
   /** Install a VS Code extension and optionally refresh the given view data. */
   installExtension(
     extensionId: string,
-    refresh?: (w: vscode.Webview) => Effect.Effect<void, Error>,
+    refresh?: (
+      w: vscode.Webview,
+    ) => Effect.Effect<void, Error, ChildProcessSpawner>,
   ) {
     return withHandlerErrorHandling(
       this.ctx,

@@ -147,39 +147,6 @@ export const runTabStyles = css`
     margin-inline-start: var(--wa-space-2xs);
   }
 
-  /* 24px literal, not --control-size-s: that step is bridged to 20px in the
-     extension (common.css) for editor-chrome density, which is under WCAG
-     2.5.8's floor. The row's own select target sits flush against this one, so
-     the spacing exception does not apply and it has to meet 24x24 outright —
-     and growing the hit area with a pseudo-element instead would overlap the
-     select target, making near-misses delete a session. 24px is also exactly
-     --wa-row-height, so the row does not get taller. */
-  .tab-delete {
-    flex-shrink: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 24px;
-    min-width: 24px;
-    height: 24px;
-    margin-block: 0;
-    margin-inline: var(--wa-space-2xs) 0;
-    color: var(--wa-color-text-quiet, var(--wa-color-text-normal));
-    opacity: 0;
-    transition: opacity var(--transition-fast);
-    position: relative;
-    z-index: 10;
-  }
-
-  /* Reveal the delete affordance only when the row is hovered,
-   * focused, or selected — keeps the tabs clean at rest. */
-  .tab-container:hover .tab-delete,
-  .tab-container.is-active .tab-delete,
-  .tab-delete:focus-visible,
-  .tab-delete:focus-within {
-    opacity: 1;
-  }
-
   .tab-container:hover {
     background-color: color-mix(
       in srgb,
@@ -188,33 +155,28 @@ export const runTabStyles = css`
     );
   }
 
-  /*
-   * The descendant wildcard rule below forces nested spans
-   * (.last-active, .model) and codicon glyphs to inherit the selection
-   * color even when intermediate elements define their own.
-   */
-  /* The selected row's background and foreground are one pair: a host that
-     overrides the foreground (the desktop's white-on-accent) overrides the
-     background with it, so light text never lands on the quiet brand fill. */
+  /* The selected row's background and foreground are one pair: VS Code's
+     list selection colors, or, where a host names neither (the desktop), the
+     quiet brand fill with the foreground authored for it. Mixing one pair's
+     background with the other's foreground is what drew dark-on-black. */
   .tab-container.is-active {
     background-color: var(
       --wa-color-list-active-bg,
       color-mix(in srgb, var(--wa-color-brand-fill-quiet) 85%, transparent)
     );
-    /* brand-on-quiet is the foreground paired with the quiet fill above in
-       both hosts. list-active-fg is not: it is authored to sit on the loud
-       --wa-color-list-active-bg accent (white in light themes), which made
-       the selected row white-on-near-white in light mode. */
-    color: var(--wa-color-brand-on-quiet, var(--wa-color-text-normal));
+    color: var(
+      --wa-color-list-active-fg,
+      var(--wa-color-brand-on-quiet, var(--wa-color-text-normal))
+    );
   }
 
   /*
    * Single descendant rule covers .tab, .tab-title, .tab-meta,
-   * .tab-delete, .tab-expand, and any nested spans
+   * .tab-expand, and any nested spans
    * (.last-active, .model) and codicon glyphs.
    */
   .tab-container.is-active * {
-    color: var(--wa-color-brand-on-quiet, var(--wa-color-text-normal));
+    color: inherit;
   }
 
   /* Selection is the primary row state. Keep the lifecycle rail present, but
@@ -226,25 +188,6 @@ export const runTabStyles = css`
       .has-pending-approval
     ) {
     --run-status-rail-color: currentColor;
-  }
-
-  /*
-   * Destructive-action cue on hover: a color flip only, no hover box — the
-   * row's own hover background already carries the affordance. The descendant
-   * selector reaches the slotted icon past the is-active wildcard above; the
-   * ::part rules strip the shared action-icon-button hover/active fill.
-   */
-  .tab-delete:hover,
-  .tab-delete:hover *,
-  .tab-delete:focus-within,
-  .tab-delete:focus-within * {
-    color: var(--wa-color-danger-on-quiet);
-  }
-
-  .tab-delete::part(base):hover,
-  .tab-delete::part(base):active {
-    border-color: transparent;
-    background: transparent;
   }
 
   /* Rollup pill on a collapsed parent: how many descendants it hides, and
@@ -290,19 +233,9 @@ export const runTabStyles = css`
     margin-inline-end: var(--wa-space-3xs);
   }
 
-  .tab-delete::part(base) {
-    padding: 0;
-    border-radius: var(--border-radius-small);
-    background-color: color-mix(
-      in srgb,
-      var(--wa-color-text-quiet, var(--wa-color-text-normal)) 10%,
-      transparent
-    );
-  }
-
   /* Expand/collapse chevron for parent tabs with children. This
    * component's shadow root doesn't load the shared commonViewStyles
-   * sheet, so (like .tab-delete above) the reset lives locally rather
+   * sheet, so the reset lives locally rather
    * than through .action-icon-button's cross-component rules. */
   .tab-expand {
     display: flex;

@@ -5,14 +5,12 @@ import * as path from 'node:path';
 
 // Third-party imports
 import { globSync } from 'glob';
-import { execaSync } from 'execa';
 import { LRUCache } from 'lru-cache';
 import which from 'which';
 
 // Local imports - log
 import { createLog } from '@logger/logUtils';
 import { normalizeFilePath, unique } from '@utils/core';
-import { hasExtension } from '@utils/core/pathCore';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 /**
@@ -22,7 +20,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
  * `MSYS2_HOME`, `LOCALAPPDATA`), so a probe that quietly answered "absent"
  * would drop those directories from PATH with nothing to show for it.
  */
-function existsAtAbsolute(target: string): boolean {
+export function existsAtAbsolute(target: string): boolean {
   if (!path.isAbsolute(target)) {
     throw new Error(`Path must be absolute: ${target}`);
   }
@@ -101,9 +99,9 @@ function pushHomeBinDirs(dirs: string[]): void {
 /**
  * Return common tool directories based on the current platform.
  * Results are cached for the session to improve performance.
- * Internal helper used by extendEnvPath and findToolInCommonPaths.
+ * Used by extendEnvPath and the tool lookup in binaryResolver.
  */
-function getExtraDirs(): string[] {
+export function getExtraDirs(): string[] {
   if (cachedExtraDirs !== null) {
     return cachedExtraDirs;
   }
@@ -313,7 +311,7 @@ const cachedExtendedPaths = new LRUCache<string, ExtendedPathEntry>({
  * machine PATH never reaches this already-running process — so the install is
  * invisible unless this recomputes. Re-checking only the previously absent
  * candidates keeps the steady state to a handful of `stat`s, the same
- * "cache hits, re-check misses" policy `findToolCache` states below.
+ * "cache hits, re-check misses" policy the binaryResolver tool cache states.
  */
 export function extendEnvPath(
   basePath: string = process.env.PATH || '',
@@ -366,91 +364,24 @@ export function withExtendedPath<T extends NodeJS.ProcessEnv>(env: T): T {
 }
 
 /**
+ * Resolve `name` on the extended PATH the way a shell would, or null on a
+ * miss. In-process (npm `which`), and PATHEXT-aware on Windows, so a bare
+ * `npm` resolves to its `npm.cmd` shim without spawning `where`/`which`.
+ */
+export function whichOnExtendedPath(name: string): string | null {
+  return which.sync(name, {
+    nothrow: true,
+    path: extendEnvPath(),
+    pathExt: process.env.PATHEXT,
+  });
+}
+
+/**
  * Check if a path is safe (doesn't contain dangerous sequences)
  */
-function isPathSafe(filepath: string): boolean {
+export function isPathSafe(filepath: string): boolean {
   // Normalize the path to resolve any .. sequences
   const normalized = path.normalize(filepath);
   // Check if the path tries to escape to parent directories
   return !normalized.includes('..');
-}
-
-// Resolved tool paths, bounded so a long-lived session that probes many
-// distinct tool names can't grow this unbounded. Only hits are cached; misses
-// are always re-checked (see below) so tools installed mid-session are picked
-// up without a reload.
-const findToolCache = new LRUCache<string, string>({ max: 64 });
-
-/**
- * Locate a tool in the common directories.
- * Performs basic security validation on tool names.
- * Found paths are cached for the session; misses are always re-checked
- * so that tools installed mid-session are picked up without a reload.
- */
-export function findToolInCommonPaths(tool: string): string | null {
-  const cached = findToolCache.get(tool);
-  if (cached !== undefined) return cached;
-
-  const result = findToolInCommonPathsUncached(tool);
-  if (result !== null) findToolCache.set(tool, result);
-  return result;
-}
-
-function findToolInCommonPathsUncached(tool: string): string | null {
-  // Basic security validation
-  if (!isPathSafe(tool)) {
-    log.warn(`Unsafe tool name rejected: ${tool}`);
-    return null;
-  }
-  const candidates = [tool];
-  if (!hasExtension(tool, '.pl')) {
-    candidates.push(`${tool}.pl`);
-  }
-  if (IS_WINDOWS) {
-    // Special handling for Ghostscript on Windows
-    if (tool === 'gs') {
-      candidates.push('gswin64c', 'gswin32c', 'gswin64c.exe', 'gswin32c.exe');
-    } else if (!hasExtension(tool, '.exe')) {
-      candidates.unshift(`${tool}.exe`);
-    }
-  }
-
-  for (const dir of getExtraDirs()) {
-    for (const name of candidates) {
-      const candidate = path.join(dir, name);
-      if (existsAtAbsolute(candidate)) {
-        return candidate;
-      }
-    }
-  }
-
-  const pathEnv = extendEnvPath();
-  const kpsewhichEnv = withExtendedPath(process.env);
-
-  // kpsewhich resolves files through the TeX database rather than PATH, so it
-  // stays a subprocess. npm `which` only searches PATH.
-  for (const name of candidates) {
-    const result = execaSync('kpsewhich', [name], {
-      env: kpsewhichEnv,
-      reject: false,
-    });
-    if (result.exitCode !== 0) {
-      continue;
-    }
-    const found = result.stdout.trim();
-    if (found) {
-      return found;
-    }
-  }
-
-  // PATH lookup via npm `which` (in-process; honors PATHEXT on Windows, so no
-  // `where`/`which` subprocess is needed). `nothrow` returns null on a miss.
-  for (const name of candidates) {
-    const found = which.sync(name, { nothrow: true, path: pathEnv });
-    if (found) {
-      return found;
-    }
-  }
-
-  return null;
 }

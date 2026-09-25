@@ -17,6 +17,7 @@ import {
 } from './latexdiff/diffFileNameManager';
 import { DiffFileProcessor } from './latexdiff/diffFileProcessor';
 import { DiffCommandExecutor } from './latexdiff/diffCommandExecutor';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 export type LaTeXdiffResult =
   | {
@@ -130,7 +131,11 @@ export class LaTeXdiffService {
       subtype?: string;
       outputDirectory?: string;
     },
-  ): Effect.Effect<LaTeXdiffResult, never, FileSystem.FileSystem> {
+  ): Effect.Effect<
+    LaTeXdiffResult,
+    never,
+    FileSystem.FileSystem | ChildProcessSpawner
+  > {
     return Effect.gen({ self: this }, function* () {
       const inputFile = inputLocation.absolutePath;
       const editedFile = editedLocation.absolutePath;
@@ -205,7 +210,11 @@ export class LaTeXdiffService {
     inputLocation: FileLocation,
     commitHash: string,
     mathMarkup?: LatexdiffMathMarkupValue,
-  ): Effect.Effect<LaTeXdiffResult, never, FileSystem.FileSystem> {
+  ): Effect.Effect<
+    LaTeXdiffResult,
+    never,
+    FileSystem.FileSystem | ChildProcessSpawner
+  > {
     return Effect.gen({ self: this }, function* () {
       const inputFile = inputLocation.absolutePath;
       if (!hasDocumentEnvironment(yield* this.read(inputFile))) {
@@ -264,7 +273,11 @@ export class LaTeXdiffService {
     round: number,
     mathMarkup: LatexdiffMathMarkupValue | undefined,
     options: { cwd: string | undefined; outputDirectory?: string },
-  ): Effect.Effect<LaTeXdiffResult, never, FileSystem.FileSystem> {
+  ): Effect.Effect<
+    LaTeXdiffResult,
+    never,
+    FileSystem.FileSystem | ChildProcessSpawner
+  > {
     return Effect.gen({ self: this }, function* () {
       if (!(yield* this.bothFilesExist(baseLocation, outputLocation))) {
         const message = `Could not generate latexdiff for round ${round}. Files not found: ${baseLocation.absolutePath} or ${outputLocation.absolutePath}`;
@@ -292,7 +305,11 @@ export class LaTeXdiffService {
     toRound: number,
     mathMarkup: LatexdiffMathMarkupValue | undefined,
     options: { cwd: string | undefined; outputDirectory?: string },
-  ): Effect.Effect<LaTeXdiffResult, never, FileSystem.FileSystem> {
+  ): Effect.Effect<
+    LaTeXdiffResult,
+    never,
+    FileSystem.FileSystem | ChildProcessSpawner
+  > {
     return Effect.gen({ self: this }, function* () {
       if (!(yield* this.bothFilesExist(firstLocation, secondLocation))) {
         const message = `Could not generate latexdiff between rounds. Files not found: ${firstLocation.absolutePath} or ${secondLocation.absolutePath}`;
@@ -334,7 +351,9 @@ export class LaTeXdiffService {
     });
   }
 
-  private getGitRoot(cwd: string): Effect.Effect<string | null> {
+  private getGitRoot(
+    cwd: string,
+  ): Effect.Effect<string | null, never, ChildProcessSpawner> {
     return executeCommand(['git', 'rev-parse', '--show-toplevel'], {
       channel: this.channel,
       cwd,

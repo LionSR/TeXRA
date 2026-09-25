@@ -18,17 +18,15 @@
  * read: a checked-in file that spawns processes needs a trust prompt first.
  */
 import { createHmac, randomBytes } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
-import { Effect } from 'effect';
+import { Effect, type FileSystem } from 'effect';
 import stableStringify from 'safe-stable-stringify';
 import { z } from 'zod';
 
-import { isFileNotFoundError } from '@common/errors';
 import { TEXRA_STORAGE_DIR_NAME } from '@platform/defaults/nodeStorage';
 import type { LoadedPlugin, PluginLoader } from '@tools/toolTable';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { safeHomedir } from '@utils/system/platformPaths';
 
 import {
@@ -81,18 +79,19 @@ export interface McpServerConfig {
 }
 
 /** The file's text, or `null` when it does not exist. */
-const readConfigText = (file: string) =>
-  Effect.tryPromise({
-    try: () => readFile(file, 'utf8'),
-    catch: ensureError,
-  }).pipe(
+const readConfigText = (
+  fs: FileSystem.FileSystem,
+  file: string,
+): Effect.Effect<string | null, Error> =>
+  fs.readFileString(file).pipe(
     Effect.map((text): string | null => text),
-    Effect.catch((error) =>
-      isFileNotFoundError(error)
-        ? Effect.succeed(null)
-        : Effect.fail(
-            new Error(`Could not read ${file}: ${toErrorMessage(error)}`),
-          ),
+    Effect.catchIf(
+      (error) => error.reason._tag === 'NotFound',
+      () => Effect.succeed(null),
+    ),
+    Effect.mapError(
+      (error) =>
+        new Error(`Could not read ${file}: ${error.message}`, { cause: error }),
     ),
   );
 
@@ -148,16 +147,16 @@ function mcpPlugin(config: McpServerConfig): LoadedPlugin {
   };
 }
 
-/** The loader over the MCP config file at `file`. */
+/** The loader over the MCP config file at `file`, read through `fs`. */
 export const mcpPluginLoader =
-  (file: string): PluginLoader =>
+  (fs: FileSystem.FileSystem, file: string): PluginLoader =>
   (declared) =>
     Effect.gen(function* () {
       const wanted = new Set(
         declared.flatMap((name) => mcpServerOfToolName(name) ?? []),
       );
       if (wanted.size === 0) return { plugins: [], warnings: [] };
-      const text = yield* readConfigText(file);
+      const text = yield* readConfigText(fs, file);
       if (text === null)
         return {
           plugins: [],

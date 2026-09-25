@@ -8,15 +8,15 @@
  */
 import { hostname } from 'node:os';
 
-import { execFile } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
-import { promisify } from 'node:util';
 
-import { Effect } from 'effect';
+import { Data, Effect } from 'effect';
+import * as ChildProcess from 'effect/unstable/process/ChildProcess';
+import { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 import { withLogChannel } from '@logger/effectLog';
 import type { OwnerId } from '@shared/schemas';
-import { ensureError } from '@utils/errors/errorMessage';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 /** This process's complete owner identity (contract C5). */
 export function processOwnerId(processStart: string | undefined): OwnerId {
@@ -28,25 +28,52 @@ export function processOwnerId(processStart: string | undefined): OwnerId {
 }
 
 const CHANNEL = 'NodeProcesses';
-const execFileAsync = promisify(execFile);
+
+/** A start identity that could not be read or parsed for `pid`. */
+class ProcessIdentityUnreadable extends Data.TaggedError(
+  'ProcessIdentityUnreadable',
+)<{ readonly pid: number; readonly detail: string }> {}
 
 /** The one wrap of this module's `node:fs` edge. */
-const readTextFile = (file: string): Effect.Effect<string, Error> =>
+const readTextFile = (
+  pid: number,
+  file: string,
+): Effect.Effect<string, ProcessIdentityUnreadable> =>
   Effect.tryPromise({
     try: () => readFile(file, 'utf8'),
-    catch: ensureError,
+    catch: (error) =>
+      new ProcessIdentityUnreadable({ pid, detail: toErrorMessage(error) }),
   });
 
-/** The one wrap of this module's `node:child_process` edge. */
+/**
+ * The one child-process edge of this module: `file args`, stdout as text.
+ * `string` does not inspect the exit code; a missing pid prints nothing, and
+ * empty or unparsable stdout already reads as unreadable below.
+ */
 const runCommand = (
+  pid: number,
   file: string,
   args: readonly string[],
-  env?: NodeJS.ProcessEnv,
-): Effect.Effect<string, Error> =>
-  Effect.tryPromise({
-    try: () => execFileAsync(file, [...args], env ? { env } : {}),
-    catch: ensureError,
-  }).pipe(Effect.map(({ stdout }) => stdout));
+  env?: Record<string, string>,
+): Effect.Effect<string, ProcessIdentityUnreadable, ChildProcessSpawner> =>
+  Effect.gen(function* () {
+    const spawner = yield* ChildProcessSpawner;
+    return yield* spawner.string(
+      ChildProcess.make(file, args, {
+        env,
+        extendEnv: true,
+        stdin: 'ignore',
+        stderr: 'ignore',
+        detached: false,
+        forceKillAfter: '5 seconds',
+      }),
+    );
+  }).pipe(
+    Effect.mapError(
+      (error) =>
+        new ProcessIdentityUnreadable({ pid, detail: error.reason._tag }),
+    ),
+  );
 
 /**
  * Linux: the boot id plus the raw start ticks from field 22 of
@@ -58,12 +85,15 @@ const runCommand = (
  */
 let linuxBootId: string | undefined;
 
-const readLinuxIdentity = (pid: number): Effect.Effect<string, Error> =>
+const readLinuxIdentity = (
+  pid: number,
+): Effect.Effect<string, ProcessIdentityUnreadable> =>
   Effect.gen(function* () {
     linuxBootId ??= (yield* readTextFile(
+      pid,
       '/proc/sys/kernel/random/boot_id',
     )).trim();
-    const stat = yield* readTextFile(`/proc/${pid}/stat`);
+    const stat = yield* readTextFile(pid, `/proc/${pid}/stat`);
     const afterComm = stat
       .slice(stat.lastIndexOf(')') + 1)
       .trim()
@@ -71,9 +101,10 @@ const readLinuxIdentity = (pid: number): Effect.Effect<string, Error> =>
     // `afterComm[0]` is field 3 (state); field 22 is therefore index 19.
     const startTicks = afterComm[19];
     if (startTicks === undefined || !/^\d+$/.test(startTicks)) {
-      return yield* Effect.fail(
-        new Error(`Unparseable /proc/${pid}/stat: ${stat.trim()}`),
-      );
+      return yield* new ProcessIdentityUnreadable({
+        pid,
+        detail: `Unparseable /proc/${pid}/stat: ${stat.trim()}`,
+      });
     }
     return `${linuxBootId}:${startTicks}`;
   });
@@ -85,18 +116,22 @@ const readLinuxIdentity = (pid: number): Effect.Effect<string, Error> =>
  * `LC_TIME`, so the call pins `LC_ALL=C` for one spelling. The string is
  * compared verbatim, never parsed.
  */
-const readPsIdentity = (pid: number): Effect.Effect<string, Error> =>
+const readPsIdentity = (
+  pid: number,
+): Effect.Effect<string, ProcessIdentityUnreadable, ChildProcessSpawner> =>
   Effect.gen(function* () {
     const stdout = yield* runCommand(
+      pid,
       'ps',
       ['-o', 'lstart=', '-p', String(pid)],
-      { ...process.env, LC_ALL: 'C' },
+      { LC_ALL: 'C' },
     );
     const identity = stdout.trim();
     if (identity === '') {
-      return yield* Effect.fail(
-        new Error(`ps printed no start time for ${pid}`),
-      );
+      return yield* new ProcessIdentityUnreadable({
+        pid,
+        detail: `ps printed no start time for ${pid}`,
+      });
     }
     return identity;
   });
@@ -106,9 +141,11 @@ const readPsIdentity = (pid: number): Effect.Effect<string, Error> =>
  * PowerShell. It costs a few hundred milliseconds, which only the lease
  * probes pay, and it is the one source that makes a Windows owner provable.
  */
-const readWindowsIdentity = (pid: number): Effect.Effect<string, Error> =>
+const readWindowsIdentity = (
+  pid: number,
+): Effect.Effect<string, ProcessIdentityUnreadable, ChildProcessSpawner> =>
   Effect.gen(function* () {
-    const stdout = yield* runCommand('powershell.exe', [
+    const stdout = yield* runCommand(pid, 'powershell.exe', [
       '-NoProfile',
       '-NonInteractive',
       '-Command',
@@ -116,14 +153,17 @@ const readWindowsIdentity = (pid: number): Effect.Effect<string, Error> =>
     ]);
     const identity = stdout.trim();
     if (identity === '') {
-      return yield* Effect.fail(
-        new Error(`PowerShell printed no start time for ${pid}`),
-      );
+      return yield* new ProcessIdentityUnreadable({
+        pid,
+        detail: `PowerShell printed no start time for ${pid}`,
+      });
     }
     return identity;
   });
 
-const readIdentity = (pid: number): Effect.Effect<string | undefined> =>
+const readIdentity = (
+  pid: number,
+): Effect.Effect<string | undefined, never, ChildProcessSpawner> =>
   Effect.suspend(() => {
     switch (process.platform) {
       case 'linux':
@@ -137,7 +177,7 @@ const readIdentity = (pid: number): Effect.Effect<string | undefined> =>
     // The source fails when the pid does not exist; callers probing a
     // foreign pid separate that case with `kill(pid, 0)`. Any failure to
     // read this process's own identity is worth seeing once.
-    Effect.catch((error) =>
+    Effect.catch((error: ProcessIdentityUnreadable) =>
       pid === process.pid
         ? Effect.logWarning('Could not read this process start identity').pipe(
             Effect.annotateLogs({ data: error }),
@@ -162,7 +202,11 @@ let selfIdentity: string | undefined;
  */
 export const nodeProcesses = {
   identity: readIdentity,
-  selfIdentity: (): Effect.Effect<string | undefined> =>
+  selfIdentity: (): Effect.Effect<
+    string | undefined,
+    never,
+    ChildProcessSpawner
+  > =>
     Effect.suspend(() =>
       selfIdentity === undefined
         ? Effect.map(readIdentity(process.pid), (identity) => {

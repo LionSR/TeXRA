@@ -1,11 +1,7 @@
-import { useState } from 'react';
 import { Text, useWindowSize } from 'ink';
 
 import { COLOR_WARNING } from '@cli/tui/ui/colors';
-import {
-  clampModalWidth,
-  CONFIRM_CARD_HORIZONTAL_DECORATION,
-} from '@cli/tui/ui/theme';
+import { confirmCardContentWidth } from '@cli/tui/ui/theme';
 import { truncateToWidth } from '@cli/runtime/terminalText';
 import type { BashPermission } from '@shared/schemas';
 
@@ -34,15 +30,12 @@ function bashCwdDisplayLine({
   const trimmedCwd = cwd?.trim();
   if (!trimmedCwd) return undefined;
 
-  return truncateToWidth(`Directory: ${trimmedCwd}`, clampModalWidth(width));
+  return truncateToWidth(`Directory: ${trimmedCwd}`, width);
 }
 
 export function BashApproval(props: BashApprovalProps): React.JSX.Element {
   const { columns } = useWindowSize();
-  const [feedbackMode, setFeedbackMode] = useState(false);
-  const commandWidth = clampModalWidth(
-    columns - CONFIRM_CARD_HORIZONTAL_DECORATION,
-  );
+  const commandWidth = confirmCardContentWidth(columns);
   const cwdLine = bashCwdDisplayLine({
     cwd: props.payload.cwd,
     width: commandWidth,
@@ -61,7 +54,6 @@ export function BashApproval(props: BashApprovalProps): React.JSX.Element {
       title={COMMAND_APPROVAL_TITLE}
       rejectionMode="feedback"
       alwaysAllowLabel="approve commands for session"
-      onFeedbackModeChange={setFeedbackMode}
       onDecide={props.onDecide}
     >
       {cwdLine && <Text dimColor>{cwdLine}</Text>}
@@ -70,7 +62,6 @@ export function BashApproval(props: BashApprovalProps): React.JSX.Element {
         continuationPrefix="  "
         marginWhenSpacious={!cwdLine}
         maxRows={maxCommandRows}
-        scrollActive={!feedbackMode}
         scrollHint="scroll command"
         text={props.payload.command}
         width={commandWidth}

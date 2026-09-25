@@ -311,7 +311,11 @@ function deleteAdmittedRun(
       )
       .pipe(
         Effect.mapError((error): RequestError => {
-          if (error instanceof RunLive) return new NotOwner({ runId });
+          if (error instanceof RunLive)
+            return new Unavailable({
+              runId,
+              reason: 'Stop the run before deleting it.',
+            });
           if (
             error instanceof DatabaseWriteFailed &&
             error.cause instanceof DatabaseClaimRefused
