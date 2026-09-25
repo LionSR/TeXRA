@@ -52,6 +52,7 @@ import { activeForm } from '@cli/chat/tui/state/formSlot';
 import * as apiStatus from '@cli/runtime/apiStatus';
 import * as subscriptionLogin from '@cli/runtime/subscriptionLogin';
 import type { CliContext } from '@cli/runtime/cliContext';
+import type { CliLogoutTarget } from '@cli/runtime/loginOptions';
 import * as modelAccessSelection from '@cli/runtime/modelAccessSelection';
 import * as cliProviderKeys from '@cli/chat/tui/hosts/cliProviderKeys';
 import * as supabaseAuth from '@cli/runtime/supabaseAuth';
@@ -269,7 +270,7 @@ function dispatchSlash(
 }
 
 /** The account form's sign-out action, as `/login` runs it. */
-function logout(target: string): Effect.Effect<void, unknown> {
+function logout(target: CliLogoutTarget): Effect.Effect<void, unknown> {
   return withProcessServices(
     services.runtime,
     logoutFromChat(target, services.stores, services.secrets),

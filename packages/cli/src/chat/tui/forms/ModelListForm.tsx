@@ -3,7 +3,7 @@
 // message it chooses the root model; once a tool-use chat is waiting, it can
 // switch the live conversation to a compatible model for future turns.
 
-import { Box, Text } from 'ink';
+import { Text } from 'ink';
 import { Effect } from 'effect';
 
 import {
@@ -14,17 +14,7 @@ import {
   type CliModelStores,
   type GetModelSwitchDisabledReason,
 } from '@cli/runtime/modelAccess';
-import { Select } from '@cli/tui/ui/Select';
-import {
-  computeSelectWindowSize,
-  isCompactFormRows,
-} from '@cli/tui/selectWindow';
-import {
-  CompactPickerKeyHints,
-  FormFrame,
-  PickerKeyHints,
-} from './_shared/FormFrame';
-import { useAsyncPickerForm } from './_shared/ListForm';
+import { ListForm, useAsyncPickerForm } from './_shared/ListForm';
 import { CHAT_API_MODE_MODEL_RECOVERY } from '../commands/handlers/slashContext';
 
 interface ModelListFormProps {
@@ -42,9 +32,6 @@ interface ModelListFormProps {
   readonly onSelect?: (value: string) => void;
   readonly onClose: () => void;
 }
-
-// Border, title, description, footer spacer, and key hints are the chrome.
-const MODEL_SELECT_CHROME_ROWS = 6;
 
 export function modelListDescription({
   itemCount,
@@ -77,61 +64,30 @@ export function ModelListForm(props: ModelListFormProps): React.JSX.Element {
     onSelect: (value) => props.onSelect?.(value),
     onClose: props.onClose,
   });
-  const items = picker.items;
-  const selectWindow = computeSelectWindowSize({
-    availableRows: props.availableRows,
-    itemCount: items.length,
-    chromeRows: MODEL_SELECT_CHROME_ROWS,
-  });
-  const description = modelListDescription({
-    itemCount: items.length,
-    selectable: props.selectable,
-  });
-
   if (picker.transient) return picker.transient;
 
-  if (isCompactFormRows(props.availableRows) && items.length > 0) {
-    return (
-      <FormFrame title="/model" showCloseHint={false}>
-        <Text dimColor>Available models</Text>
-        <Select
-          items={items}
-          activeValue={props.currentModel}
-          maxVisibleItems={1}
-          showOverflow={false}
-          onSelect={picker.select}
-          onCancel={props.onClose}
-        />
-        <CompactPickerKeyHints selectable={props.selectable} />
-      </FormFrame>
-    );
-  }
-
   return (
-    <FormFrame title="/model" showCloseHint={false}>
-      <Text dimColor>{description}</Text>
-      {items.length === 0 ? (
-        <Text>
-          {formatCliNoRunnableModelsMessage(CHAT_API_MODE_MODEL_RECOVERY)}
+    <ListForm
+      title="/model"
+      availableRows={props.availableRows}
+      items={picker.items}
+      activeValue={props.currentModel}
+      description={
+        <Text dimColor>
+          {modelListDescription({
+            itemCount: picker.items.length,
+            selectable: props.selectable,
+          })}
         </Text>
-      ) : (
-        <Box flexDirection="column">
-          <Select
-            items={items}
-            activeValue={props.currentModel}
-            maxVisibleItems={selectWindow.maxVisibleItems}
-            showOverflow={selectWindow.showOverflow}
-            onSelect={picker.select}
-            onCancel={props.onClose}
-          />
-        </Box>
+      }
+      compactDetail={<Text dimColor>Available models</Text>}
+      emptyClosesOnEnter
+      emptyMessage={formatCliNoRunnableModelsMessage(
+        CHAT_API_MODE_MODEL_RECOVERY,
       )}
-      <Box marginTop={1}>
-        <PickerKeyHints
-          selectable={props.selectable}
-          hasItems={items.length > 0}
-        />
-      </Box>
-    </FormFrame>
+      action={props.selectable ? 'select' : 'close'}
+      onSelect={picker.select}
+      onCancel={props.onClose}
+    />
   );
 }

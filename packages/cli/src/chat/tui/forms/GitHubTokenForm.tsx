@@ -1,5 +1,4 @@
 import { Text } from 'ink';
-import { Cause, Effect } from 'effect';
 import { useState } from 'react';
 
 import { tryOpenBrowser } from '@cli/runtime/browser';
@@ -9,15 +8,17 @@ import type { ProcessRuntime } from '@platform/processRuntime';
 import { GITHUB_TOKEN_CREATE_URL } from '@tools/github/githubAuth';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-import { CredentialEntryForm } from './ApiKeyEntryForm';
 import { formatStatusViewSummary } from './_shared/formatStatusViewSummary';
 import { ListForm } from './_shared/ListForm';
+import { TextEntryForm } from './_shared/TextEntryForm';
+import { runFormWrite } from './_shared/useAsyncListForm';
+import type { Effect } from 'effect';
 
 /**
  * Which source backs the GitHub token, as `resolveGitHubTokenSource` reports
  * it. The vocabulary lives beside the view that labels it.
  */
-export type GitHubTokenStatus = 'secret' | 'env' | 'none';
+type GitHubTokenStatus = 'secret' | 'env' | 'none';
 
 export interface GitHubTokenStatusView {
   readonly status?: GitHubTokenStatus;
@@ -97,24 +98,22 @@ export function GitHubTokenForm(
 
   const runAction = (action: () => Effect.Effect<void, Error>): void => {
     setSaving(true);
-    void props.runtime.runPromise(
-      Effect.matchCause(Effect.suspend(action), {
-        onSuccess: () => props.onDone(),
-        onFailure: (cause) => {
-          setSaving(false);
-          setError(toErrorMessage(Cause.squash(cause)));
-        },
-      }),
-    );
+    runFormWrite(props.runtime, action, {
+      onSuccess: props.onDone,
+      onError: (cause) => {
+        setSaving(false);
+        setError(toErrorMessage(cause));
+      },
+    });
   };
 
   if (entering) {
     return (
-      <CredentialEntryForm
+      <TextEntryForm
         title="Set GitHub token"
         helper={<Text dimColor>Get a token: {GITHUB_TOKEN_CREATE_URL}</Text>}
         placeholder="enter your GitHub token (hidden)"
-        savedHint="Stored in TeXRA secrets on Enter — or set GH_TOKEN / GITHUB_TOKEN."
+        hint="Stored in TeXRA secrets on Enter — or set GH_TOKEN / GITHUB_TOKEN."
         error={error}
         saving={saving}
         onCancel={() => {

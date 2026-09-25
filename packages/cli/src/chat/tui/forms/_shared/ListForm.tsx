@@ -2,7 +2,7 @@ import { Box, Text } from 'ink';
 import { useEffect, useRef, type ReactNode } from 'react';
 
 import { COLOR_WARNING } from '@cli/tui/ui/colors';
-import { KeyHints } from '@cli/tui/ui/KeyHints';
+import { KeyHints, type KeyHint } from '@cli/tui/ui/KeyHints';
 import {
   Select,
   selectIndexForHotkeyInput,
@@ -58,8 +58,12 @@ interface ListFormProps<T> {
   readonly compactVisibleItems?: number;
   readonly emptyMessage?: string;
   readonly emptyShowCloseHint?: boolean;
+  /** The empty picker also closes on Enter; its footer says so. */
+  readonly emptyClosesOnEnter?: boolean;
   readonly selectMarginTop?: number;
   readonly action: string;
+  /** Form-specific keys shown between the select and `Esc` hints. */
+  readonly extraHints?: readonly KeyHint[];
   readonly escapeAction?: string;
   readonly onSelect: (value: T) => void;
   readonly onCancel: () => void;
@@ -72,10 +76,21 @@ export function ListForm<T>(props: ListFormProps<T>): React.JSX.Element {
       <FormFrame
         color={COLOR_WARNING}
         title={props.title}
-        showCloseHint={props.emptyShowCloseHint}
+        showCloseHint={!props.emptyClosesOnEnter && props.emptyShowCloseHint}
       >
         <Text>{props.emptyMessage}</Text>
         {props.detail}
+        {props.emptyClosesOnEnter ? (
+          <Box marginTop={1}>
+            <KeyHints
+              hints={[
+                { key: 'Enter', action: 'close' },
+                { key: 'Esc', action: 'close' },
+              ]}
+              confirmCancel={false}
+            />
+          </Box>
+        ) : null}
       </FormFrame>
     );
   }
@@ -137,6 +152,7 @@ export function ListForm<T>(props: ListFormProps<T>): React.JSX.Element {
           hints={[
             { key: '↑/↓', action: 'navigate' },
             { key: shortcut, action: props.action },
+            ...(props.extraHints ?? []),
             { key: 'Esc', action: props.escapeAction ?? 'close' },
           ]}
           confirmCancel={false}
