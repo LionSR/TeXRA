@@ -29,7 +29,7 @@ import { JsonObjectSchema, sameModelOrigin } from './protocol.js';
 import {
   ModelError,
   RemoteOperationSchema,
-  authOrRejectionKind,
+  sdkModelError,
   boundOperation,
   cancellationStatus,
   enrichModelError,
@@ -312,19 +312,11 @@ const HttpFailureSchema = z.object({ status: z.int().min(400).max(599) });
 function sdkFailure(cause: unknown): ModelError {
   // The pinned Interactions SDK does not export its HTTP error constructors.
   const decoded = HttpFailureSchema.safeParse(cause);
-  const status = decoded.success ? decoded.data.status : undefined;
-  let kind: ModelError['kind'] = 'transport';
-  if (cause instanceof SyntaxError) kind = 'malformed-output';
-  else if (status !== undefined) {
-    kind = authOrRejectionKind(status);
-  }
-  return new ModelError({
-    kind,
-    message:
-      cause instanceof Error ? cause.message : 'The Google transport failed.',
-    ...(status === undefined ? {} : { status }),
+  return sdkModelError(
     cause,
-  });
+    decoded.success ? { status: decoded.data.status } : undefined,
+    'The Google transport failed.',
+  );
 }
 
 /** Google's abort signature: the SDK surfaces cancellation as a bare DOMException. */
