@@ -27,7 +27,6 @@ import {
   isPlainReturnInput,
   isTextInputNewlineInput,
   metaChordInput,
-  normalizedCtrlInput,
   rewriteKittyEnterInput,
   SYNTHETIC_SHIFT_RETURN_INPUT,
 } from '@cli/tui/inputKeys';
@@ -153,11 +152,9 @@ describe('CLI TUI text input editing', () => {
   });
 
   it('normalizes raw terminal control bytes for readline-style shortcuts', () => {
-    expect(normalizedCtrlInput('\u0015', {})).toBe('u');
     expect(isCtrlInput('\u0015', {}, 'u')).toBe(true);
     expect(isCtrlInput('u', { ctrl: true }, 'u')).toBe(true);
     expect(isCtrlInput('\u0015', { meta: true }, 'u')).toBe(false);
-    expect(normalizedCtrlInput('\u0016', {})).toBe('v');
     expect(isCtrlInput('\u0016', {}, 'v')).toBe(true);
     expect(isCtrlInput('\u0016', { meta: true }, 'v')).toBe(false);
     expect(isEscapeInput('\u001B', {})).toBe(true);
