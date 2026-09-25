@@ -5,6 +5,7 @@ import { Box, Text, useInput } from 'ink';
 import { useState, useEffect } from 'react';
 
 import { isPlainReturnInput } from '@cli/tui/inputKeys';
+import { moreRowsText, previousRowsText } from '@cli/tui/overflowText';
 import { BorderedPanel } from '@cli/tui/ui/BorderedPanel';
 import { KeyHints } from '@cli/tui/ui/KeyHints';
 import { nextWrappingHighlightIndex } from '@cli/tui/ui/Select';
@@ -187,7 +188,9 @@ export function SlashPalette(
       }
     >
       {window.hiddenBefore > 0 ? (
-        <Text dimColor>{`  … ${window.hiddenBefore} earlier`}</Text>
+        <Text dimColor wrap="truncate-end">
+          {`  ${previousRowsText(window.hiddenBefore)}`}
+        </Text>
       ) : null}
       {visible.map((cmd, offset) => {
         const i = window.start + offset;
@@ -207,7 +210,9 @@ export function SlashPalette(
         );
       })}
       {window.hiddenAfter > 0 ? (
-        <Text dimColor>{`  … ${window.hiddenAfter} more`}</Text>
+        <Text dimColor wrap="truncate-end">
+          {`  ${moreRowsText(window.hiddenAfter)}`}
+        </Text>
       ) : null}
     </BorderedPanel>
   );

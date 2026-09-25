@@ -13,11 +13,7 @@ import { Box, Text, useInput, useWindowSize } from 'ink';
 import { useMemo } from 'react';
 
 // Local imports - TUI primitives
-import {
-  isCtrlInput,
-  isEscapeInput,
-  isPlainReturnInput,
-} from '@cli/tui/inputKeys';
+import { isCtrlInput, isEscapeInput } from '@cli/tui/inputKeys';
 import { ReaderPanel, readerLayout } from '@cli/tui/ui/BorderedPanel';
 import { KeyHints, type KeyHint } from '@cli/tui/ui/KeyHints';
 import { Select, type SelectItem } from '@cli/tui/ui/Select';
@@ -60,6 +56,7 @@ import { formatCompactDuration, formatCostUsd } from '@utils/text/stringUtils';
 
 // Local imports - TUI state and policy
 import { formFrameWidth } from '../forms/_shared/FormFrame';
+import { BaseTextInput } from '../input/BaseTextInput';
 import { type WorkflowPopupView } from '../state/cliState';
 import { killableRunId, sessionView, runViewOf } from '../state/sessionView';
 import { useSignal } from '../state/useSignal';
@@ -363,91 +360,75 @@ export function WorkflowPopup({
     else onClose();
   };
 
-  useInput((input, key) => {
-    if (view.filterEditing) {
-      if (isEscapeInput(input, key)) {
-        onViewChange({ filter: '', filterEditing: false });
-      } else if (isPlainReturnInput(input, key)) {
-        onViewChange({ filterEditing: false });
-      } else if (key.backspace || key.delete) {
-        onViewChange({ filter: view.filter.slice(0, -1) });
-      } else if (
-        input &&
-        !key.ctrl &&
-        !key.meta &&
-        !key.upArrow &&
-        !key.downArrow &&
-        !key.leftArrow &&
-        !key.rightArrow &&
-        !key.tab
-      ) {
-        onViewChange({ filter: view.filter + input, selectedKey: undefined });
+  useInput(
+    (input, key) => {
+      if (isCtrlInput(input, key, 't')) {
+        onOpenTranscript(runId);
+        return;
       }
-      return;
-    }
-    if (isCtrlInput(input, key, 't')) {
-      onOpenTranscript(runId);
-      return;
-    }
-    if (key.ctrl || key.meta) return;
-    if (rows.length === 0 && isEscapeInput(input, key)) {
-      // The list owns Escape while it has rows; with none, this does.
-      clearFilterOrClose();
-      return;
-    }
-    if (key.leftArrow || key.rightArrow) {
-      const next = clampIndex(
-        phaseIndex + (key.rightArrow ? 1 : -1),
-        phases.length,
-      );
-      if (next !== phaseIndex) {
-        onViewChange({ phaseIndex: next, selectedKey: undefined });
+      if (key.ctrl || key.meta) return;
+      if (rows.length === 0 && isEscapeInput(input, key)) {
+        // The list owns Escape while it has rows; with none, this does.
+        clearFilterOrClose();
+        return;
       }
-      return;
-    }
-    if (input === '/') {
-      onViewChange({ filterEditing: true });
-      return;
-    }
-    if (input === 'f') {
-      const allRows = phases.flatMap((candidate, candidatePhaseIndex) =>
-        workflowPhaseRows(candidate, {
-          expanded: view.expanded,
-          filter: view.filter,
-          waiting: waitingOf(candidate),
-        }).map((row) => ({ phaseIndex: candidatePhaseIndex, row })),
-      );
-      const current = allRows.findIndex(
-        (item) =>
-          item.phaseIndex === phaseIndex && item.row.key === selectedKey,
-      );
-      const failed = allRows
-        .map((item, index) => ({ ...item, index }))
-        .filter(
-          ({ row }) => row.kind === 'task' && row.row.call.status === 'failed',
+      if (key.leftArrow || key.rightArrow) {
+        const next = clampIndex(
+          phaseIndex + (key.rightArrow ? 1 : -1),
+          phases.length,
         );
-      const next = failed.find(({ index }) => index > current) ?? failed[0];
-      if (next) {
-        onViewChange({
-          phaseIndex: next.phaseIndex,
-          selectedKey: next.row.key,
-        });
+        if (next !== phaseIndex) {
+          onViewChange({ phaseIndex: next, selectedKey: undefined });
+        }
+        return;
       }
-      return;
-    }
-    if ((input === 's' || input === 'r') && controllable && selectedRunId) {
-      onRequest({
-        kind: 'workflow.control',
-        runId,
-        childRunId: selectedRunId,
-        action: input === 's' ? 'skip' : 'retry',
-      });
-      return;
-    }
-    if ((input === 'x' || input === 'k') && selectedRunId) {
-      onRequest({ kind: 'run.stop', runId: selectedRunId });
-    }
-  });
+      if (input === '/') {
+        onViewChange({ filterEditing: true });
+        return;
+      }
+      if (input === 'f') {
+        const allRows = phases.flatMap((candidate, candidatePhaseIndex) =>
+          workflowPhaseRows(candidate, {
+            expanded: view.expanded,
+            filter: view.filter,
+            waiting: waitingOf(candidate),
+          }).map((row) => ({ phaseIndex: candidatePhaseIndex, row })),
+        );
+        const current = allRows.findIndex(
+          (item) =>
+            item.phaseIndex === phaseIndex && item.row.key === selectedKey,
+        );
+        const failed = allRows
+          .map((item, index) => ({ ...item, index }))
+          .filter(
+            ({ row }) =>
+              row.kind === 'task' && row.row.call.status === 'failed',
+          );
+        const next = failed.find(({ index }) => index > current) ?? failed[0];
+        if (next) {
+          onViewChange({
+            phaseIndex: next.phaseIndex,
+            selectedKey: next.row.key,
+          });
+        }
+        return;
+      }
+      if ((input === 's' || input === 'r') && controllable && selectedRunId) {
+        onRequest({
+          kind: 'workflow.control',
+          runId,
+          childRunId: selectedRunId,
+          action: input === 's' ? 'skip' : 'retry',
+        });
+        return;
+      }
+      if (input === 'x' && selectedRunId) {
+        onRequest({ kind: 'run.stop', runId: selectedRunId });
+      }
+    },
+    // The filter input owns every key while it edits.
+    { isActive: !view.filterEditing },
+  );
 
   const items: SelectItem<string>[] = rows.map((row) => ({
     label: row.key,
@@ -541,8 +522,19 @@ export function WorkflowPopup({
           <Box height={1} overflowY="hidden">
             <Text wrap="truncate-end">
               <Text color={COLOR_HINT}>{'/ '}</Text>
-              <Text bold>{view.filter}</Text>
-              {view.filterEditing ? <Text color={COLOR_HINT}>▏</Text> : null}
+              <Text bold>
+                <BaseTextInput
+                  focus={view.filterEditing}
+                  value={view.filter}
+                  onChange={(filter) =>
+                    onViewChange({ filter, selectedKey: undefined })
+                  }
+                  onEscape={() =>
+                    onViewChange({ filter: '', filterEditing: false })
+                  }
+                  onSubmit={() => onViewChange({ filterEditing: false })}
+                />
+              </Text>
               <Text dimColor>
                 {`  ${rows.length} of ${phase ? phase.tasks.length + phase.declaredTasks.length : 0}`}
                 {view.filterEditing ? ' · Enter keep · Esc clear' : ''}

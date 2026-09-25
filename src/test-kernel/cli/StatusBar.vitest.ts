@@ -355,7 +355,7 @@ describe('CLI StatusBar display model', () => {
     expect(display.bindings).toContain('↑/↓ select');
     expect(display.bindings).toContain('Enter focus');
     expect(display.bindings).not.toContain('i details');
-    expect(display.bindings).toContain('k kill');
+    expect(display.bindings).toContain('x kill');
     expect(display.bindings).toContain('Tab input');
     expect(display.bindings).toContain('Esc input');
     expect(display.bindings).not.toContain('Esc parent');
@@ -374,14 +374,14 @@ describe('CLI StatusBar display model', () => {
     const display = renderBar(input);
 
     expect(display.bindings).toBe(
-      '↑/↓ select · k kill · Tab input · Esc input · Ctrl-C stop',
+      '↑/↓ select · x kill · Tab input · Esc input · Ctrl-C stop',
     );
     expect(
       renderBar({
         ...input,
         childList: { focused: true, selectionKillable: false },
       }).bindings,
-    ).not.toContain('k kill');
+    ).not.toContain('x kill');
   });
 
   it('does not drop focus controls for a non-killable narrow selection', () => {

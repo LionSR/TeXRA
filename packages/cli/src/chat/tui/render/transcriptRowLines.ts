@@ -2,10 +2,11 @@
 //
 // `@ui/transcript` carries every text untruncated plus the measurements
 // needed to elide it; this module is where the terminal spends its own budget
-// — a head/tail line slice with a `+N lines` marker, and a terminal-safe pass
+// — a head/tail line slice with a `N lines hidden` marker, and a terminal-safe pass
 // over text a producer wrote. Nothing here truncates the model.
 
 import { safeTerminalText } from '@cli/runtime/terminalText';
+import { hiddenRowsText } from '@cli/tui/overflowText';
 import { CROSS, TICK, TOOL_OUTPUT_CORNER } from '@cli/tui/ui/glyphs';
 import {
   elideText,
@@ -57,7 +58,7 @@ export function elidedTextLines(
     ? [...head, ...tail]
     : [
         ...head,
-        `… +${hiddenLines} lines (Ctrl-T to view full output)`,
+        `${hiddenRowsText(hiddenLines, 'lines')} (Ctrl-T to view full output)`,
         ...tail,
       ];
 }
