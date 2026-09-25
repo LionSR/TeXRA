@@ -85,15 +85,13 @@ export class SettingsViewProvider {
           runAfterAgentCatalogAuthRefresh(this.runtime, [
             Effect.suspend(() =>
               this._view
-                ? this.messageHandler.sendAllData(this._view.webview)
+                ? this.messageHandler.refreshAfterAuthChange()
                 : Effect.void,
             ),
           ]);
           return;
         }
-        this.runtime.runFork(
-          this.messageHandler.sendAllData(this._view.webview),
-        );
+        this.runtime.runFork(this.messageHandler.refreshAfterAuthChange());
       }
     });
   }
@@ -127,7 +125,7 @@ export class SettingsViewProvider {
       if (this._view) {
         const panel = this._view;
         panel.reveal(vscode.ViewColumn.One);
-        yield* this.messageHandler.sendAllData(panel.webview);
+        yield* this.messageHandler.sendAllData();
       } else {
         const panel = vscode.window.createWebviewPanel(
           SettingsViewProvider.viewType,
