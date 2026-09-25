@@ -78,6 +78,19 @@ export const progressAppStyles = css`
     width: min(760px, 100%);
     margin: 0 auto;
   }
+  /* The desktop's new task is one centred group: hero, attachments and
+     composer together, not the hero at the top and the composer across an
+     empty page at the bottom. Its rail already lists the running tasks, so
+     the Active now strip would be a second copy there. */
+  :host([placement='desktop']) .empty {
+    justify-content: center;
+  }
+  :host([placement='desktop']) .launch-banners {
+    margin-top: 0;
+  }
+  :host([placement='desktop']) .active-now {
+    display: none;
+  }
 
   /* The dock cell of the header exists only docked wide (see the container
      query); until then the header is one cell. */
