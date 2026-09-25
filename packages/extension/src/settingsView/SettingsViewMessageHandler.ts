@@ -3,10 +3,8 @@
  *
  * This class owns the inbound registry, the memory/profile/model/tool commands,
  * and the refresh fan-out after a mutation. Tab-shaped groups are delegated to
- * focused handler classes in `./handlers/`: `AgentHandlers`,
- * `LatexSettingsHandlers`, `MemoryHandlers`,
- * `GitHubSubscriptionHandlers`, and `SubscriptionHandlers` (one instance per
- * subscription provider).
+ * `./handlers/`: `AgentHandlers`, `LatexSettingsHandlers`, `MemoryHandlers`,
+ * `GitHubSubscriptionHandlers` and `SubscriptionHandlers` (one per provider).
  */
 import * as vscode from 'vscode';
 import { Cause, Effect, Exit, Fiber } from 'effect';
@@ -225,12 +223,10 @@ export class SettingsViewMessageHandler {
           ),
         );
       }),
-      // `apply_team` writes the roster straight from the setup agent, so the
-      // open view is showing agents and a team it just replaced. The catalog
-      // is already fresh: a team change moves no agent files, and the
-      // agent-creator reloads before it emits. Without that flag this listener
-      // would rescan the YAML and re-fetch the remote catalog on every roster
-      // write.
+      // `apply_team` writes the roster from the setup agent, so the open view
+      // shows a team it just replaced. The catalog is already fresh (a team
+      // change moves no agent files; the agent-creator reloads before it
+      // emits), so the flag skips a YAML rescan and remote re-fetch per write.
       subscribeAppSignal(this.runtime, 'agentRosterChanged', () => {
         this.runtime.runFork(this.refreshAfterAgentMutation(undefined, true));
       }),
