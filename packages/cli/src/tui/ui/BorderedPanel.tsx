@@ -93,7 +93,9 @@ export function readerLayout({
   readonly title: string;
 }) {
   const rows = Math.max(1, Math.floor(availableRows));
-  if (rows < 4) {
+  // A border earns its rows only with a title or footer row and one body row
+  // beside the caller's own fixed rows; below that the panel goes bare.
+  if (rows < BORDER_ROWS + extraRows + 2) {
     return {
       availableRows: rows,
       bodyRows: Math.max(0, rows - 1 - extraRows),
