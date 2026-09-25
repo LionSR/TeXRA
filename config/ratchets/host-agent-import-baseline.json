@@ -12,7 +12,6 @@
     "extension": [
       "@agent/implementations/agentCreator/agentCreatorFlow",
       "@agent/index",
-      "@agent/review",
       "@agent/runtime",
       "@agent/storage",
       "@agent/templates"
