@@ -5,13 +5,13 @@
  * the plugins still on (the user's dashboard switches and the dependency
  * probes applied), the host and approval gates, the agent's declared tools
  * and the tools the manifest injects while their setting is on (none for
- * reflection). The run pins its composition in the process's `Compositions`
- * for the scope it resolves in (the run's), or joins the one its parent
- * pinned: a delegated child's plugins are its parent's, whatever the
- * switches say now. A child only narrows its parent: it is offered its own
- * declared tools from its parent's pinned table, under its own host and
- * approval gates and its parent's, and a child that declares a loaded plugin
- * its parent's composition does not record fails to open
+ * reflection; none of a plugin that is off). The run pins its composition
+ * in the process's `Compositions` for the scope it resolves in (the run's),
+ * or joins the one its parent pinned: a delegated child's plugins are its
+ * parent's, whatever the switches say now. A child only narrows its parent:
+ * it is offered its own declared tools from its parent's pinned table, under
+ * its own host and approval gates and its parent's, and a child that declares
+ * a loaded plugin its parent's composition does not record fails to open
  * (`childCompositionRefusal`). A resumed tool-use child resolves afresh but
  * is held to the toolset it recorded at open (`AgentRun`), which was already
  * narrowed. The offered registry is rebuilt from the pinned composition's
@@ -202,7 +202,10 @@ export const resolveAgentTools = Effect.fn('resolveAgentTools')(function* ({
     for (const id of table.plugins.keys()) {
       const injections = findToolPlugin(id)?.injectedWhen ?? {};
       for (const [name, setting] of Object.entries(injections)) {
-        if (yield* readSettingFrom<boolean>(stores, setting)) {
+        if (
+          setting === true ||
+          (yield* readSettingFrom<boolean>(stores, setting))
+        ) {
           injected.push(name);
         }
       }
@@ -351,7 +354,8 @@ export const resolveAgentTools = Effect.fn('resolveAgentTools')(function* ({
     if (tool) {
       resolved.push(tool.definition);
       resolvedNames.add(name);
-    } else {
+    } else if (!table.get(name)) {
+      // One whose plugin is off is withheld quietly, as a declared one is.
       logger.warn(`Injected tool not found in registry: ${name}`);
     }
   }

@@ -12,7 +12,7 @@ export const THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000;
 export const DEBOUNCE_OPTIONS_MS = 300; // Dropdown options refresh
 
 // Tool plugins marked `toggleable: true` in TOOL_PLUGINS are treated
-// as opt-in: they're disabled on first install, and the Tools dashboard shows
+// as opt-in unless `onByDefault`: they're disabled on first install, and the Tools dashboard shows
 // a toggle so the user can turn them on. Seeding happens in
 // `seedDisabledToolDefaults()` during host startup and is keyed on the
 // DISABLED_TOOLS entry itself: a profile that has the key is never re-seeded,

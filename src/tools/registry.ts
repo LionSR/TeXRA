@@ -132,12 +132,12 @@ const PLUGIN_TOOLS = {
   'memory-workflow': {
     memory: MemoryTool,
     todo_write: TodoWriteTool,
-    plan: PlanTool,
     delegate_workflow: WorkflowAgentTool,
     delegate_agent: DelegateAgentTool,
     executions: ExecutionsTool,
     accept_run_files: AcceptRunFilesTool,
   },
+  goal: { plan: PlanTool },
   texcount: { texcount: TexcountTool },
   wolfram: { wolfram: WolframTool },
   zotero: {
