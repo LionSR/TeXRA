@@ -5,12 +5,12 @@ import { z } from 'zod';
 // Local imports
 import {
   API_PROVIDERS,
-  apiKeyEnvName,
   apiKeySecretName,
   hasUsableApiKey,
   isApiProvider,
 } from '@model/apiProviders';
 import { Secrets } from '@platform/secrets';
+import { apiKeyEnvName } from '@shared/constants/providers';
 import { ToolError } from '@shared/schemas';
 
 // Local file imports

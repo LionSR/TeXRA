@@ -31,7 +31,6 @@ import { warn as logWarning } from '@logger/logUtils';
 import { withLogChannel } from '@logger/effectLog';
 import {
   API_PROVIDERS,
-  apiKeyEnvName,
   apiKeySecretName,
   type ApiProvider,
 } from '@model/apiProviders';
@@ -46,7 +45,10 @@ import {
   readOnboardingFlags,
   setOnboardingDeclined,
 } from '@shared/state/onboardingState';
-import { providerDisplayName } from '@shared/constants/providers';
+import {
+  apiKeyEnvName,
+  providerDisplayName,
+} from '@shared/constants/providers';
 
 import {
   ONBOARDING_CARD_TITLE,

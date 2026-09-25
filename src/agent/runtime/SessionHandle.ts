@@ -40,7 +40,6 @@ import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManage
 import { finalizeRun } from '@agent/storage/runLifecycle';
 import type { ResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { withLogChannel } from '@logger/effectLog';
-import { redactSecrets } from '@logger/redaction';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
   TEXRA_APPROVAL_POLICY_DEFAULT,
@@ -82,10 +81,7 @@ import {
   isRunningStreamingTextEntry,
   nonterminalWorkflowCall,
 } from '@shared/session/traceEntries';
-import type {
-  StreamLogStore,
-  StreamLogStoreMode,
-} from '@transcript/StreamLogStore';
+import { readRunEntries } from '@transcript/runEntries';
 import { aggregateError, throwAggregated } from '@utils/core';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import {
@@ -183,7 +179,11 @@ export type SessionHandleInit = Partial<
    */
   readonly roots: WorkspaceRoots;
   readonly interactions?: HostInteractions;
-  readonly transcriptMode?: StreamLogStoreMode;
+  /** An ephemeral session opens a throwaway database instead of the
+   *  project's. */
+  readonly transcriptMode?:
+    | { readonly kind: 'persistent' }
+    | { readonly kind: 'ephemeral'; readonly reason: string };
 };
 
 export class SessionHandle {
@@ -256,8 +256,6 @@ export class SessionHandle {
    * qualification and disposal guard applied.
    */
   readonly subscriptions: SessionGraph['subscriptions'];
-  /** Session-owned transcript store for run traces launched in this session. */
-  readonly transcripts: StreamLogStore;
   /**
    * The workspace this session works on: the four per-workspace host roots.
    * Every run, tool call and host command this session serves takes them from
@@ -312,13 +310,12 @@ export class SessionHandle {
    */
   constructor(
     init: SessionHandleInit &
-      Pick<SessionHandle, 'transcripts' | 'modelRetries'> & {
+      Pick<SessionHandle, 'modelRetries'> & {
         readonly graph: (session: SessionHandle) => SessionGraph;
       },
   ) {
     // Forced dependency order, every cross-reference explicit — never let a
     // member fall back to a neighboring module singleton (silent-state-split).
-    this.transcripts = init.transcripts;
     this.roots = init.roots;
     // Built before the graph: the session's approvals are built over it, and
     // announce every effective bypass change through it.
@@ -584,7 +581,7 @@ export class SessionHandle {
   publishRunEvent(runId: RunId, event: AgentEvent): void {
     if (this.disposed) return;
     if (event.type === 'stream.chunk') {
-      const text = redactSecrets(event.text);
+      const { text } = event;
       this.detachPublication(runId, () =>
         this.graph.publishText(runId, event.id, text),
       );
@@ -650,7 +647,7 @@ export class SessionHandle {
     Extract<RunLedgerDraft, { type: 'stream.end' }>[],
     DatabaseReadFailed
   > {
-    return this.transcripts.readEntries(runId).pipe(
+    return readRunEntries(this, runId).pipe(
       Effect.map((entries) =>
         entries.filter(isRunningStreamingTextEntry).map((entry) => ({
           type: 'stream.end' as const,
@@ -960,6 +957,20 @@ export class SessionHandle {
     return this.graph.aggregateRows(id);
   }
 
+  /** The run aggregate's committed rows; empty when the run never existed
+   *  or is tombstoned. */
+  readRunEvents(
+    runId: RunId,
+  ): Effect.Effect<readonly SessionEvent[], DatabaseReadFailed> {
+    return this.graph
+      .aggregateRows(qualifyAggregateId('run', runId))
+      .pipe(
+        Effect.map((events) =>
+          events.at(-1)?.type === 'run.removed' ? [] : events,
+        ),
+      );
+  }
+
   readRecordListing(): Effect.Effect<
     readonly SessionEvent[],
     DatabaseReadFailed
@@ -1095,11 +1106,6 @@ export class SessionHandle {
         ),
       ),
     );
-  }
-
-  /** Apply a durable fact delivered by the root's ordered table tail. */
-  receiveCommittedEvent(event: SessionEvent): Effect.Effect<void> {
-    return Effect.sync(() => this.transcripts.acceptCommitted(event));
   }
 
   /**
@@ -1289,11 +1295,10 @@ export const settleLiveSessionRuns: Effect.Effect<void> = Effect.gen(
         if (!(yield* session.ownsRun(runId))) return;
         const tracked = session.runs.getHandle(runId) !== undefined;
         // Read the committed transcript once after queued publications settle.
-        // Host exit needs no presentation residency or mutable writer handle.
         const transcript = yield* Effect.exit(
           Effect.gen(function* () {
             yield* session.settlePublications();
-            return tracked ? yield* session.transcripts.readEntries(runId) : [];
+            return tracked ? yield* readRunEntries(session, runId) : [];
           }),
         );
         // The run's closure facts, queued and settled under the same lease

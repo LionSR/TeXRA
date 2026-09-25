@@ -9,8 +9,8 @@
  * schema and transactions in SQLite memory. A failed file open is an error and
  * never selects the ephemeral mode.
  *
- * Before its write transaction, this layer validates, redacts, and serializes
- * the complete batch (C3, C6). It also owns the envelope C1 gives its own
+ * Before its write transaction, this layer validates and serializes the
+ * complete batch (C6). It also owns the envelope C1 gives its own
  * columns: the writer (C5, from `ProcessIdentity`), the publish clock, and the
  * `seq` and `commit` ordinals, none of which a caller can supply.
  *
@@ -62,7 +62,6 @@ import {
   type StoredValue,
 } from '@shared/schemas';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
-import { redactTraceDraft } from '@shared/session/traceRedaction';
 import {
   InputHistoryRecordSchema,
   INPUT_HISTORY_LIMIT,
@@ -1227,7 +1226,7 @@ export const globalDatabaseLayer = (
   );
 
 function prepareEventDraft(input: SessionEventDraft) {
-  const draft = redactTraceDraft(SessionEventDraftSchema.parse(input));
+  const draft = SessionEventDraftSchema.parse(input);
   return { draft, payload: payloadOf(draft) };
 }
 /** A stored-value write holds its aggregate's claim only for the transaction

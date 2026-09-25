@@ -26,13 +26,11 @@ import {
   type FoldInput,
   type OutputFileInfo,
   type SessionEvent,
-  type SessionEventDraft,
   type RunId,
 } from '@shared/schemas';
 
 import { foldRunState, unboundRequests } from '@shared/session/runStateFold';
 import { fold } from '@shared/session/sessionFold';
-import { redactTraceDraft } from '@shared/session/traceRedaction';
 import {
   emptySessionView,
   type SessionView,
@@ -1923,17 +1921,6 @@ describe('foldRunState', () => {
     for (const row of TURN_ROWS) {
       expect(isDisplaySessionEvent(row)).toBe(row.type === 'flow.step');
     }
-    // `redactTraceDraft` is applied to every draft before storage; a ledger
-    // row passes through its `default` arm untouched.
-    const {
-      seq: _seq,
-      commit: _commit,
-      ownerId: _owner,
-      at: _at,
-      ...draft
-    } = TURN_ROWS[4];
-    const ledgerDraft: SessionEventDraft = draft;
-    expect(redactTraceDraft(ledgerDraft)).toBe(ledgerDraft);
     // D7: the day a codec version 2 exists, persisted origins must accept a
     // union of version literals while execution admits only the current one.
     expect(ModelOriginSchema.safeParse(ORIGIN).success).toBe(true);

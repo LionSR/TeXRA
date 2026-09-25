@@ -271,11 +271,10 @@ function stubHangingRun(published: Deferred.Deferred<LeaseOptions>): {
 
 /** Observe the session's terminal artifact drain. */
 async function spyOnArtifactFlush() {
-  const store = testDefaultSession().transcripts;
   const flushSpy = vi
     .spyOn(testDefaultSession(), 'settlePublications')
     .mockReturnValue(Effect.void);
-  return { store, flushSpy };
+  return { flushSpy };
 }
 
 /**
@@ -588,33 +587,30 @@ describe('executeCliRequest', () => {
       }),
   );
 
-  it.effect(
-    'uses a persistent session and drains its artifacts after the run',
-    () =>
-      Effect.gen(function* () {
-        const { executeCliRequest } = yield* Effect.promise(loadExecuteCli);
-        const request = baseRequest();
-        const { store, flushSpy } = yield* Effect.promise(spyOnArtifactFlush);
-        const callOrder: string[] = [];
-        flushSpy.mockImplementation(() =>
-          Effect.sync(() => {
-            callOrder.push('flush');
-          }),
-        );
-        mocks.runAgent.mockImplementationOnce(async () => {
-          callOrder.push('runAgent');
-          return {
-            outcome: 'completed',
-            output: { category: 'toolUse', response: '', files: [] },
-            runId: 'exec-1',
-          };
-        });
+  it.effect('drains the session artifacts after the run', () =>
+    Effect.gen(function* () {
+      const { executeCliRequest } = yield* Effect.promise(loadExecuteCli);
+      const request = baseRequest();
+      const { flushSpy } = yield* Effect.promise(spyOnArtifactFlush);
+      const callOrder: string[] = [];
+      flushSpy.mockImplementation(() =>
+        Effect.sync(() => {
+          callOrder.push('flush');
+        }),
+      );
+      mocks.runAgent.mockImplementationOnce(async () => {
+        callOrder.push('runAgent');
+        return {
+          outcome: 'completed',
+          output: { category: 'toolUse', response: '', files: [] },
+          runId: 'exec-1',
+        };
+      });
 
-        yield* executeCliRequest(request, cliContext());
+      yield* executeCliRequest(request, cliContext());
 
-        expect(store.mode).toEqual({ kind: 'persistent' });
-        expect(callOrder).toEqual(['runAgent', 'flush']);
-      }),
+      expect(callOrder).toEqual(['runAgent', 'flush']);
+    }),
   );
 
   it.effect('drains session artifacts even when the run throws', () =>

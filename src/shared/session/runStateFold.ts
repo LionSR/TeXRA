@@ -2,7 +2,6 @@
  * Pure run-state replay for ledger load, appendBatch, and the trace stepper:
  * state at a commit is exactly the state resume continues from, without IO,
  * clocks, platform reads, synthetic ids, or output-order dependence on Maps.
- * Rows remain unredacted for provider history; display redaction is separate.
  * sessionFold produces the view; this fold produces the loop's continuation.
  */
 import { Data, Result } from 'effect';

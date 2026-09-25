@@ -60,8 +60,7 @@ Things the tree won't tell you:
   frontends excluded) or a named webview runtime entry in the script's
   `BOUNDARY_RUNTIME_ENTRIES`, and ESLint's
   `no-warning-comments` fails on any `@adapter-until` marker, since the owner
-  ruled there are no temporary adapters), and `store-public-surface` (the
-  frozen public method set of the run log store). Two more budget the code
+  ruled there are no temporary adapters). Two more budget the code
   itself rather than an import edge — `file-size-baseline` (a per-file line
   budget over 500 lines) and `refuted-candidates` (the costed-and-refused
   refactors, with their ruling anchors); AGENTS.md "Directory organization"

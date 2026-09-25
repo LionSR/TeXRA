@@ -13,7 +13,10 @@
  *    priority order), then return the path for `codexPathOverride`. Results
  *    are cached for the session.
  *
- * 3. `getCodexConfig()` — the same lazy access for `codexConfig`, which the
+ * 3. `openCodexClient()` — a client over that binary, with the environment
+ *    the CLI may see.
+ *
+ * 4. `getCodexConfig()` — the same lazy access for `codexConfig`, which the
  *    tool-registration path must not pull in eagerly, plus the one reading of
  *    the call's effective sandbox mode.
  */
@@ -27,6 +30,7 @@ import type { StateReadFailed } from '@platform/interfaces';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { CodexSandboxMode } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { inheritedEnv } from '@utils/system/envFlags';
 import { readSettingUnlessOverridden } from '@utils/config/platformSettings';
 import { IS_WINDOWS } from '@utils/system/platformPaths';
 
@@ -173,6 +177,23 @@ export const findCodexBinaryPath = createCachedBinaryResolver(() => {
     ],
     pathCommand: 'codex',
   };
+});
+
+/**
+ * A Codex client over the native binary, and the binary's path. The CLI gets
+ * an explicit environment: the SDK would otherwise hand it all of
+ * `process.env`, other providers' keys included, and what its commands print
+ * comes back as a tool result. OPENAI_API_KEY stays: it is one of the CLI's
+ * own sign-in routes.
+ */
+export const openCodexClient = Effect.fn('codex.openClient')(function* () {
+  const CodexClass = yield* importCodexClass();
+  const codexPath = yield* findCodexBinaryPath();
+  const codex = new CodexClass({
+    codexPathOverride: codexPath,
+    env: inheritedEnv('openai'),
+  });
+  return { codex, codexPath };
 });
 
 /** Lazy accessor for codexConfig.ts exports (loaded once, cached). */

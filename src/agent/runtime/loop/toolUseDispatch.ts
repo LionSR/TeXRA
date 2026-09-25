@@ -667,8 +667,8 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
           type: 'request.opened',
           aggregateId,
           requestId,
-          // The one redaction door every durable request payload passes,
-          // whether the session opens the request or the loop commits it.
+          // The one door every durable request payload passes, whether the
+          // session opens the request or the loop commits it.
           payload: redactedForFact({ kind: 'userQuestion', data: request }),
           thread: null,
         },
