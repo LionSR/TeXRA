@@ -2,7 +2,7 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { Data, Effect, FileSystem } from 'effect';
+import { Data, Effect, FileSystem, type PlatformError } from 'effect';
 
 // Local imports
 import { withLogChannel } from '@logger/effectLog';
@@ -90,10 +90,11 @@ export function generateTimestamp(): string {
  * `WorkspaceFs`, passed in rather than read from an ambient store, so a
  * listing and the deletions it feeds name the same workspace.
  *
- * Each directory is listed once and its names compared as plain strings, so
- * a path holding glob metacharacters (`[`, `{`, `?`, a Windows backslash)
- * names itself. An extension ending in `*` matches by prefix; any other must
- * equal the name's tail. Names compare case-insensitively where the platform
+ * Paths are built and compared as plain strings, never globbed, so a path
+ * holding glob metacharacters (`[`, `{`, `?`, a Windows backslash) names
+ * itself. An exact extension stats `pattern + extension` directly, so it
+ * follows the filesystem's own case rules. An extension ending in `*` matches
+ * by prefix over a directory listing, case-insensitively where the platform
  * filesystem usually is (macOS, Windows).
  */
 export const collectFilesFromPatterns = Effect.fn(
@@ -122,65 +123,68 @@ export const collectFilesFromPatterns = Effect.fn(
     searchDirs.push(path.resolve(workspaceRoot, inputDir, 'build'));
   }
 
-  // `build/` is usually absent: a missing directory lists as empty.
+  // A path that does not exist, or runs through something that is not a
+  // directory (a regular file named `build`: ENOTDIR maps to BadResource),
+  // holds no artifacts. Any other failure is real.
+  const absentAs =
+    <A>(value: A) =>
+    <R>(effect: Effect.Effect<A, PlatformError.PlatformError, R>) =>
+      effect.pipe(
+        Effect.catch((error) =>
+          error.reason._tag === 'NotFound' ||
+          error.reason._tag === 'BadResource'
+            ? Effect.succeed(value)
+            : Effect.fail(error),
+        ),
+      );
+
+  const files = new Set<string>();
   const listings = new Map<string, ReadonlyArray<string>>();
   const namesIn = Effect.fnUntraced(function* (dir: string) {
     const cached = listings.get(dir);
     if (cached !== undefined) return cached;
     const names = yield* fs
       .readDirectory(dir)
-      .pipe(
-        Effect.catch((error) =>
-          error.reason._tag === 'NotFound'
-            ? Effect.succeed<ReadonlyArray<string>>([])
-            : Effect.fail(error),
-        ),
-      );
+      .pipe(absentAs<ReadonlyArray<string>>([]));
     listings.set(dir, names);
     return names;
   });
+  // A name removed between the listing and this stat is gone, not an error.
+  const isFile = (match: string) =>
+    fs.stat(match).pipe(
+      Effect.map((info) => info.type !== 'Directory'),
+      absentAs(false),
+    );
+  const record = Effect.fnUntraced(function* (match: string) {
+    const relativePath = normalizeFilePath(
+      relativeToRoot(workspaceRoot, match) ?? match,
+    );
+    yield* Effect.logDebug(`Found file: ${relativePath}`).pipe(
+      withLogChannel(CHANNEL),
+    );
+    files.add(relativePath);
+  });
 
-  const files = new Set<string>();
   for (const pattern of patterns) {
     for (const ext of extensions) {
-      const isPrefix = ext.endsWith('*');
-      const wanted = foldCase(pattern + (isPrefix ? ext.slice(0, -1) : ext));
-      for (const dir of searchDirs) {
-        const candidates = (yield* namesIn(dir)).filter((name) =>
-          isPrefix
-            ? foldCase(name).startsWith(wanted)
-            : foldCase(name) === wanted,
-        );
-        let foundExactMatch = false;
-        for (const name of candidates) {
-          const match = path.join(dir, name);
-          // A name removed between the listing and this stat is gone, not
-          // an error: the listing only reports what is still there.
-          const type = yield* fs.stat(match).pipe(
-            Effect.map((info) => info.type),
-            Effect.catch((error) =>
-              error.reason._tag === 'NotFound'
-                ? Effect.succeed(undefined)
-                : Effect.fail(error),
-            ),
-          );
-          if (type === undefined || type === 'Directory') continue;
-          const relativePath = normalizeFilePath(
-            relativeToRoot(workspaceRoot, match) ?? match,
-          );
-          yield* Effect.logDebug(`Found file: ${relativePath}`).pipe(
-            withLogChannel(CHANNEL),
-          );
-          files.add(relativePath);
-          if (!isPrefix) {
-            foundExactMatch = true;
+      if (!ext.endsWith('*')) {
+        // Exact extensions prefer the input directory; `build/` is only the
+        // fallback when the corresponding root-level artifact is absent.
+        for (const dir of searchDirs) {
+          const match = path.join(dir, pattern + ext);
+          if (yield* isFile(match)) {
+            yield* record(match);
             break;
           }
         }
-        if (foundExactMatch) {
-          // Exact extensions prefer the input directory; `build/` is only the
-          // fallback when the corresponding root-level artifact is absent.
-          break;
+        continue;
+      }
+      const wanted = foldCase(pattern + ext.slice(0, -1));
+      for (const dir of searchDirs) {
+        for (const name of yield* namesIn(dir)) {
+          if (!foldCase(name).startsWith(wanted)) continue;
+          const match = path.join(dir, name);
+          if (yield* isFile(match)) yield* record(match);
         }
       }
     }
