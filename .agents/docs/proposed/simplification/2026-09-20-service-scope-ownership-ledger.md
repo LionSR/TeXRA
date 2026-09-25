@@ -69,7 +69,7 @@ as the one composition):
 - `GlobalStorageFs` ← `globalStorageFsLayer(globalStorage)`.
 - **`GlobalDatabase` (new)** ← `databaseLayer('persistent')` at the global
   root, beside `GlobalStorageFs`; replaces `withScopedDatabase`. Design in
-  [its own note](./2026-09-20-global-database-process-service.md).
+  [its own note](../../archived/simplification/2026-09-20-global-database-process-service.md).
 - `ProcessIdentity` ← `Layer.effect` over `processStart`, provided **outside**
   `Layer.fresh` so it builds once.
 - `Secrets`, `AppState` (required, not optional), `SupabaseAuth`,

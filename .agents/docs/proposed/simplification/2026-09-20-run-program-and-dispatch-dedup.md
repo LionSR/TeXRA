@@ -1,7 +1,7 @@
 # Run-program and dispatch dedup: one mechanism, three copied skins
 
 Date: 2026-09-20
-Status: proposed
+Status: proposed — step 4 only. Steps 1–3, 5 and 6 are on main (#12995, #13017, #13029, #12936, #12894, #13027, #12912); step 4, deleting `bindAbortSignals` in `nativeSubagentStrategy.ts`, waits on the turn becoming one interruptible fiber (#13117).
 Baseline: `main` at `3378a967`. Parent survey:
 [post-refactor architecture survey](../architecture/2026-09-20-post-refactor-architecture-survey.md).
 
