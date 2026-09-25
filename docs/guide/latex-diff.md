@@ -49,11 +49,11 @@ This section provides:
 
 1. **Base file selection**: Choose an original/base document
 2. **Edited file selection**: Select a modified version
-3. **Diff button**: Run `latexdiff` on the base and edited files and open the marked-up result
+3. **Diff vs. edited button**: Run `latexdiff` on the base and edited files and open the marked-up result
 4. **Compare button**: Open the base and edited files side by side in VS Code's diff editor
 5. **Merge button**: Merge changes from the edited file into the base file. Read the [Intelligent Merge workflow](./intelligent-merge.md) guide for details.
 6. **Accept button**: Accept the changes from the edited file and overwrite the base file with them
-7. **Git integration**: Pick a commit and use its Diff, Pack, and Clean buttons to compare with previous versions using Git history
+7. **Git integration**: Pick a commit and use its Diff vs. commit, Move to Diffs folder, and Delete diff files buttons to compare with previous versions using Git history
 
 ## Basic file comparison
 
@@ -70,7 +70,7 @@ The "Current" button (<wa-icon library="texra" name="file-code"></wa-icon>) sele
 
 ### Step 2: generate the diff
 
-Select the **Diff** button (<wa-icon library="texra" name="diff-single"></wa-icon>) beneath the Edited dropdown. TeXRA then runs the same five-stage pipeline for every diff route; only the tool and output name change:
+Select the **Diff vs. edited** button (<wa-icon library="texra" name="diff-single"></wa-icon>) beneath the Edited dropdown. TeXRA then runs the same five-stage pipeline for every diff route; only the tool and output name change:
 
 <FlowSteps :steps="[
   { n: 1, icon: 'diff-single', title: 'Run latexdiff', desc: 'Invokes the latexdiff tool on your selected base and edited files.' },
@@ -105,19 +105,19 @@ The commit dropdown shows recent commits. Select the refresh icon (<wa-icon libr
 
 ### Step 2: generate the diff
 
-Select the **Diff** button (<wa-icon library="texra" name="diff-single"></wa-icon>) beneath the Commit dropdown to compare your file with its version at the selected commit.
+Select the **Diff vs. commit** button (<wa-icon library="texra" name="diff-single"></wa-icon>) beneath the Commit dropdown to compare your file with its version at the selected commit.
 
 TeXRA runs the same five-stage pipeline shown above. This route uses the `latexdiff-vc` tool and names its output with the commit hash (for example `original-diff<commit_hash>.tex`).
 
 ### Step 3: manage diff outputs
 
-After generating a Git-based diff with the **Diff** button beneath the Commit dropdown, you can manage the resulting files from the Commit section's **Pack** (<wa-icon library="texra" name="archive"></wa-icon>) and **Clean** (<wa-icon library="texra" name="trash"></wa-icon>) buttons. Pack archives the diff files; Clean removes them.
+After generating a Git-based diff with **Diff vs. commit**, you can manage the resulting files from the Commit section's **Move to Diffs folder** (<wa-icon library="texra" name="archive"></wa-icon>) and **Delete diff files** (<wa-icon library="texra" name="trash"></wa-icon>) buttons. Move to Diffs folder moves the diff `.tex` and `.pdf` into a dated folder under `Diffs/` and deletes their build files; Delete diff files removes them all.
 
-Each diff route writes its own predictably named artifacts. `latexdiff` produces `_diff.tex` and `latexdiff-vc` appends the commit hash (`-diff<hash>.tex`), both alongside the base file. Agent runs write round (`_diff.tex`) and between-round (`_diffr<newer>r<older>.tex`) diffs into the run folder. Every `.tex` compiles to a matching `.pdf`. Pack and Clean act on the selected commit's diff files:
+Each diff route writes its own predictably named artifacts. `latexdiff` produces `_diff.tex` and `latexdiff-vc` appends the commit hash (`-diff<hash>.tex`), both alongside the base file. Agent runs write round (`_diff.tex`) and between-round (`_diffr<newer>r<older>.tex`) diffs into the run folder. Every `.tex` compiles to a matching `.pdf`. Both buttons act on the selected commit's diff files:
 
 <DiffArtifactsHero />
 
-<p class="hero-caption">The diff file-naming scheme as one set: the base/edited source pair, then each generated diff (<code>latexdiff</code>, <code>latexdiff-vc</code> with its commit hash, and between-round) paired with its compiled PDF. The Pack and Clean buttons archive or remove the selected commit's diff files.</p>
+<p class="hero-caption">The diff file-naming scheme as one set: the base/edited source pair, then each generated diff (<code>latexdiff</code>, <code>latexdiff-vc</code> with its commit hash, and between-round) paired with its compiled PDF. Move to Diffs folder and Delete diff files file away or remove the selected commit's diff files.</p>
 
 ## Understanding diff output
 

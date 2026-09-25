@@ -156,7 +156,7 @@ export const HostRequestSchema = z.discriminatedUnion('kind', [
     base: z.string().nullish(),
     prev: z.string().nullish(),
   }),
-  /** The "Restore setup" link on a settled proposal row. */
+  /** The "Copy to new task" link on a settled delegation row. */
   z.object({
     kind: z.literal('restoreProposalConfig'),
     proposal: AgentProposalSchema,

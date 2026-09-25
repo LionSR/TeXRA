@@ -158,7 +158,7 @@ export const toolUseStyles = css`
   }
 
   .proposal-banner-setup {
-    margin-inline-start: auto;
+    margin-inline-start: var(--wa-space-s);
   }
 
   /* Diff styles */
