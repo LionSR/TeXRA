@@ -28,7 +28,7 @@ import {
 
 import { type CliContext } from '../cliContext';
 
-import { policyDenialOf, warnApprovalDenied } from './approvalPrompts';
+import { warnApprovalDenied } from './approvalPrompts';
 
 function canPresent(context: CliContext): boolean {
   return context.mode === 'interactive';
@@ -73,7 +73,9 @@ export function cliToolUseApprovalOptions(
       warnApprovalDenied(
         session,
         context,
-        policyDenialOf(withheldTools),
+        withheldTools
+          ? { kind: 'withheldTools', tools: withheldTools }
+          : { kind: 'executable' },
         runId,
       ),
   };

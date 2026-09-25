@@ -28,7 +28,10 @@ import {
   type SurfaceDecision,
 } from '@shared/session/approvalDecision';
 import type { HostRequest } from '@shared/session/hostRequest';
-import type { RunGroup, SessionView } from '@shared/session/sessionView';
+import {
+  requestAnswerability,
+  type SessionView,
+} from '@shared/session/sessionView';
 import type { RuntimeRequest } from '@shared/session/runtimeRequest';
 import { assertNever, groupBy } from '@utils/core';
 
@@ -178,9 +181,6 @@ export function pruneToLive(
   }
 }
 
-/** Run groups whose requests can still be answered here. */
-const LIVE_GROUPS: ReadonlySet<RunGroup> = new Set(['running', 'waiting']);
-
 /**
  * Every request awaiting the user, from the fold: the outstanding requests
  * in commit order, from the runs this chat owns. The promoted stream's requests lead; nothing is decided
@@ -192,16 +192,20 @@ export const attentionRequests = computed((): readonly AttentionRequest[] => {
   const view = sessionView().get();
   // The fold lists every kind, including an `externalInquiry` a persisted
   // session carries from another host; this surface renders none of those,
-  // so the narrowing is a filter rather than an assertion. Nor does it render
-  // one a stopped run left for its resume to ask again: that modal would trap
-  // the keys `/resume` needs.
+  // so the narrowing is a filter rather than an assertion. It renders only
+  // what this window can answer (`requestAnswerability`): not a stopped run's
+  // leftover (its modal would trap the keys `/resume` needs), nor a request
+  // on a run another process holds (its answer is refused, then reopens).
   const requests = view.requests
-    .filter(
-      (request): request is PendingApprovalFact =>
+    .filter((request): request is PendingApprovalFact => {
+      const run = view.runs.get(request.runId);
+      return (
         included.has(request.runId) &&
         request.payload.kind !== 'externalInquiry' &&
-        LIVE_GROUPS.has(view.runs.get(request.runId)?.group ?? 'recent'),
-    )
+        run !== undefined &&
+        requestAnswerability(run, request.payload) === 'answerable'
+      );
+    })
     .map((pending): AttentionRequest => ({
       requestId: pending.requestId,
       runId: pending.runId,
