@@ -905,7 +905,11 @@ function createWindow(options: {
       session: project.session,
       showAgentConfigBanner: ({ agentName, category }) =>
         snapshot.showAgentConfigBanner(agentName, category),
-      onLaunched: (runId) => bridge.surfaceAction({ kind: 'select', runId }),
+      // A resolved agent also retires the missing-agent warning.
+      onLaunched: (runId) => {
+        bridge.surfaceAction({ kind: 'select', runId });
+        runtime.runFork(snapshot.clearAgentConfigBanner);
+      },
       // Recompute the onboarding funnel when a launch settles so a first
       // successful run leaves the setup card without a restart. The settled
       // launch includes AgentRunLifecycle's firstRunDone write.

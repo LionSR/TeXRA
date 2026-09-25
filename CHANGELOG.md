@@ -113,6 +113,8 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
 - **Clearer tool and error cards.** An edit refused because the file was not
   read first is no longer labeled like a read, and error details no longer
   list the internal `userRetryable` flag or an empty provider body.
+- **The "agent file is missing" warning clears once a launch succeeds.**
+  It used to stay above the launcher until the window reloaded.
 - **Workflow agents no longer fail when an intermediate round hits the
   output length limit.** A multi-round (reflection) agent whose response in
   any round but the last was cut off and continued stopped at the next round
