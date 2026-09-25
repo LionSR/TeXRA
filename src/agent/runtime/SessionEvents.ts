@@ -24,6 +24,7 @@ import { withLogChannel } from '@logger/effectLog';
 import { writeLogLine } from '@logger/logSink';
 import {
   aggregateId as qualifyAggregateId,
+  aggregateTarget,
   isDisplaySessionEvent,
   isTerminalWorkflowCallProgress,
   type AggregateId,
@@ -39,7 +40,14 @@ import {
   type DatabaseReadFailed,
   type DatabaseWriteFailed,
 } from '@shared/session/database';
-import { closesRunWindow } from '@shared/session/runRows';
+import {
+  applyRunRow,
+  closesRunWindow,
+  foldRunRows,
+  freshRunRows,
+  isFollowUpRow,
+  type RunRows,
+} from '@shared/session/runRows';
 import {
   SessionEvents,
   type Append,
@@ -164,10 +172,25 @@ export const sessionEventsLayer = Layer.effect(
     // open reads as its run's settled outcome once the run is durably final
     // (`taskGroupDisplayStatus`, `workflowRunModel`'s interrupted card).
     const open = new Map<AggregateId, Map<string, OpenWork>>();
+    // Each run's follow-ups, kept the same way by the one reducer
+    // (`applyRunRow`). Rows an earlier owner committed enter where a claim
+    // moves here (`hydrateFollowUps`); while this process holds the claim,
+    // no other process commits to the run, so what it tracks stays whole.
+    const followUps = new Map<AggregateId, RunRows>();
+    const hydrated = new Set<AggregateId>();
     const track = (rows: readonly SessionEvent[]) => {
       for (const row of rows) {
         if (row.type === 'run.removed') {
           open.delete(row.aggregateId);
+          followUps.delete(row.aggregateId);
+          hydrated.delete(row.aggregateId);
+          continue;
+        }
+        if (isFollowUpRow(row)) {
+          const slice = followUps.get(row.aggregateId) ?? freshRunRows();
+          const verdict = applyRunRow(slice, row);
+          if (verdict.kind === 'applied')
+            followUps.set(row.aggregateId, { ...slice, ...verdict.rows });
           continue;
         }
         const work = open.get(row.aggregateId) ?? new Map<string, OpenWork>();
@@ -332,6 +355,37 @@ export const sessionEventsLayer = Layer.effect(
       detach,
       settle,
       openWork: (aggregateId) => [...(open.get(aggregateId)?.values() ?? [])],
+      pendingFollowUps: (aggregateId) =>
+        followUps.get(aggregateId)?.followUps ?? [],
+      hydrateFollowUps: (aggregateId, claimMoved, rows) =>
+        Effect.gen(function* () {
+          if (aggregateTarget(aggregateId).kind !== 'run') return;
+          if (!claimMoved && hydrated.has(aggregateId)) return;
+          const read = foldRunRows(
+            (rows ?? (yield* log.readAggregate(aggregateId, 1))).filter(
+              isFollowUpRow,
+            ),
+          );
+          const live = followUps.get(aggregateId) ?? freshRunRows();
+          const livePending = new Set(live.followUps.map((f) => f.followUpId));
+          // A row the read holds keeps its place unless this publisher
+          // consumed it since; one it tracked that the read does not name
+          // committed after the read, and follows it.
+          followUps.set(aggregateId, {
+            ...read,
+            followUps: [
+              ...read.followUps.filter(
+                ({ followUpId: id }) =>
+                  !live.followUpIds.has(id) || livePending.has(id),
+              ),
+              ...live.followUps.filter(
+                ({ followUpId }) => !read.followUpIds.has(followUpId),
+              ),
+            ],
+            followUpIds: new Set([...read.followUpIds, ...live.followUpIds]),
+          });
+          hydrated.add(aggregateId);
+        }),
       listing: () =>
         Stream.fromIterableEffect(log.readListing()).pipe(
           Stream.filter(isDisplaySessionEvent),

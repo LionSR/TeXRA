@@ -2,7 +2,6 @@ import { Deferred, Effect, Fiber } from 'effect';
 import { it } from '@effect/vitest';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
-import { RunInput } from '@agent/followUp/RunInput';
 import type { ToolUseFlowResult } from '@agent/runtime/AgentFlowResult';
 import type { ResumeToolUseFromResumeDataOptions } from '@agent/runtime/executeAgent';
 import { resumeRun, resumeClaimedRun } from '@agent/runtime/resumeRun';
@@ -91,16 +90,11 @@ const taken: string[] = [];
 
 /**
  * The resumed flow's side of the queue: attach to the recovery owner's
- * queue, seed it from the rows, and take what is queued.
+ * input and take what the rows still queue.
  */
 const resumedFlowTakes = (session: ReturnType<typeof createTestSession>) =>
   Effect.gen(function* () {
-    const pending = (yield* queuedFollowUps(session, RUN)).map((followUp) => ({
-      followUpId: followUp.followUpId,
-      content: { text: followUp.text, origin: 'user' as const },
-    }));
-    const input = session.followUps.attachInput(RUN, yield* RunInput.make)!;
-    input.seed(pending);
+    const input = session.followUps.attachInput(RUN)!;
     const batch = input.hasQueued() ? yield* input.take : null;
     if (batch !== null && !batch.synthetic) {
       taken.push(...batch.followUps.map((followUp) => followUp.content.text));

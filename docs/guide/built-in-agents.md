@@ -507,7 +507,7 @@ Additional remote workflow agents may be available depending on your access leve
 ## Built-in teams
 
 Teams are predefined collections of agents for a discipline. Pick one from the
-**Teams** tab in the Dashboard, or run one from the CLI with
+**Teams** tab in Settings, or run one from the CLI with
 `texra multi-agent run <team>`:
 
 | Team               | For                                                                                                                   | Lead agent         |

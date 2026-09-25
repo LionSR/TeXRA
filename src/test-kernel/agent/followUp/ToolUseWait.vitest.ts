@@ -464,8 +464,6 @@ const seedCommittedResponse = Effect.fn('test.seedCommittedResponse')(
       pendingResponse: null,
       pendingIntents: {},
       requests: {},
-      followUps: [],
-      followUpIds: new Set(),
       usage: EMPTY_RUN_USAGE_TOTALS,
       flow: null,
       roundOutputs: [],
@@ -602,7 +600,7 @@ describe('a parked child run', () => {
         yield* resumed.park(1);
         const resumedState = yield* session.ledger.load(runId);
         expect(userTexts(resumedState)).toContain(asked);
-        expect(resumedState?.followUps).toEqual([]);
+        expect(session.pendingFollowUps(runId)).toEqual([]);
         yield* Fiber.interrupt(resumed.fiber);
 
         // A producer that replays the delivery after a restart writes the
@@ -1010,10 +1008,9 @@ describe('the batch a parked run consumes', () => {
           'use this diagram',
           expect.objectContaining({ messageType: expect.any(String) }),
         );
-        const state = yield* session.ledger.load(runId).pipe(Effect.orDie);
-        expect(state?.followUps.map((f) => f.content.text)).toEqual([
-          'use this diagram',
-        ]);
+        expect(
+          session.pendingFollowUps(runId).map((f) => f.content.text),
+        ).toEqual(['use this diagram']);
       }),
   );
 });

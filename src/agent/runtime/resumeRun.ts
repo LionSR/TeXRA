@@ -36,7 +36,7 @@ import {
   DatabaseWriteFailed,
 } from '@shared/session/database';
 import { RunLedgerRefused } from '@shared/session/runLedger';
-import { foldRunState, type RunState } from '@shared/session/runStateFold';
+import { foldRunRows } from '@shared/session/runRows';
 import { createNativeSubagentStrategy } from '@tools/delegation/nativeSubagentStrategy';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -280,14 +280,9 @@ const resumeRunWithRecoveryProvenance = Effect.fn(
 
 /** The follow-ups still queued on the run, folded from its durable rows. */
 const queuedFollowUps = (session: SessionHandle, runId: RunId) =>
-  Effect.gen(function* () {
-    const folded = foldRunState(
-      null,
-      yield* session.readAggregate(aggregateId('run', runId)),
-    );
-    if (Result.isFailure(folded)) return yield* Effect.fail(folded.failure);
-    return folded.success?.followUps ?? [];
-  });
+  Effect.flatMap(session.readAggregate(aggregateId('run', runId)), (rows) =>
+    Effect.try({ try: () => foldRunRows(rows).followUps, catch: ensureError }),
+  );
 
 const warnUnreadable = (runId: RunId, failure: unknown): Effect.Effect<void> =>
   Effect.logWarning(
@@ -426,8 +421,8 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
           cancelledAtFlowAttachment = true;
         },
       };
-      const onIdle = (state: RunState): void => {
-        if (!state.followUps.some(isAdmitted))
+      const onIdle = (): void => {
+        if (!session.pendingFollowUps(runId).some(isAdmitted))
           Deferred.doneUnsafe(idle, Effect.void);
       };
       const parentRunId = yield* persistedParentRunId(session, runId);

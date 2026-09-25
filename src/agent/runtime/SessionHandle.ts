@@ -74,7 +74,7 @@ import {
   type SessionView,
 } from '@shared/session/sessionView';
 import type { RunLedgerDraft } from '@shared/session/runStateFold';
-import { foldRunRows } from '@shared/session/runRows';
+import { foldRunRows, type QueuedFollowUp } from '@shared/session/runRows';
 import type {
   Append,
   OpenWork,
@@ -334,6 +334,7 @@ export class SessionHandle {
     this.followUps = new ToolUseFollowUpQueue({
       exclusive: (job) => graph.exclusive(job),
       detach: (job) => graph.detach(() => job),
+      pending: (runId) => this.pendingFollowUps(runId),
       rows: (runId) => graph.aggregateRows(qualifyAggregateId('run', runId)),
       acquireClaim: (runId) =>
         this.acquireClaims(qualifyAggregateId('run', runId)),
@@ -643,7 +644,7 @@ export class SessionHandle {
   streamClosureFacts(
     runId: RunId,
   ): Extract<RunLedgerDraft, { type: 'stream.end' }>[] {
-    return this.graph.openWork(runId).flatMap(({ kind, id }) =>
+    return this.openWork(runId).flatMap(({ kind, id }) =>
       kind === 'stream'
         ? [
             {
@@ -660,7 +661,13 @@ export class SessionHandle {
   /** What the publisher holds open on `runId` (`SessionEvents.openWork`):
    *  what the host exit closes. Read after this run's publications settled. */
   openWork(runId: RunId): readonly OpenWork[] {
-    return this.graph.openWork(runId);
+    return this.events.openWork(qualifyAggregateId('run', runId));
+  }
+
+  /** The run's pending follow-ups, in commit order
+   *  (`SessionEvents.pendingFollowUps`). */
+  pendingFollowUps(runId: RunId): readonly QueuedFollowUp[] {
+    return this.events.pendingFollowUps(qualifyAggregateId('run', runId));
   }
 
   /**

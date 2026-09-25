@@ -463,13 +463,6 @@
           "group": "navigation"
         }
       ],
-      "view/title": [
-        {
-          "command": "texra.showDashboard",
-          "when": "texra.activated && view == texra.mainView",
-          "group": "navigation@0"
-        }
-      ],
       "commandPalette": [
         {
           "command": "texra.createSampleProject",

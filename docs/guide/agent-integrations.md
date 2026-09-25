@@ -14,14 +14,14 @@ When a theoretical investigation requires external software execution—such as 
   (or an Anthropic API key). TeXRA agents reach it through the `claude_code`
   tool.
 
-Each one is set up from its own card on **Dashboard → Tools → Integrations**. When a
+Each one is set up from its own card on **Settings → Tools → Integrations**. When a
 TeXRA agent uses the tool, the work runs in a side panel on the ProgressBoard
 that you can watch live and reply to. TeXRA carries on while the side agent
 works.
 
 ## Quick start
 
-Both integrations follow the same setup flow from the TeXRA Dashboard.
+Both integrations follow the same setup flow from the TeXRA Settings.
 
 1. Open **TeXRA: Open Settings** (`Ctrl+Shift+P`) → **Integrations** tab (<wa-icon library="texra" name="link"></wa-icon>).
 2. Find the **OpenAI Codex CLI** or **Claude Code CLI** card. When it shows **Needs setup**, the setup actions expand automatically.
@@ -38,7 +38,7 @@ recheck.
 
 <p class="hero-caption"><code>texra tools</code> drives the full lifecycle: <code>status</code> reports the registered install and auth commands, <code>install --run</code> executes the installer after printing it, and <code>auth</code> hands off to the tool's own sign-in.</p>
 
-Each integration's options live on its card and are scoped to the current workspace. Per-call approval prompts are governed by **Dashboard → Tools → Approval**: an **Approval policy** select (Ask, Never, or Auto-approve; default Ask) plus two toggles, **Under Ask: require approval for file edits** and **Under Ask: require approval for shell commands** (both on by default). To let agents call Codex or Claude Code without confirming each time, set the policy to Auto-approve, or keep Ask and turn off the shell-command toggle.
+Each integration's options live on its card and are scoped to the current workspace. Per-call approval prompts are governed by **Settings → Tools → Approval**: an **Approval policy** select (Ask, Never, or Auto-approve; default Ask) plus two toggles, **Under Ask: require approval for file edits** and **Under Ask: require approval for shell commands** (both on by default). To let agents call Codex or Claude Code without confirming each time, set the policy to Auto-approve, or keep Ask and turn off the shell-command toggle.
 
 Both CLIs are installed once per machine and shared by every TeXRA surface: the VS Code extension, the desktop app, and the terminal client all detect the same installation. Neither ships inside TeXRA. Each one is a 250-410 MB native binary that Anthropic and OpenAI update on their own schedule, so TeXRA looks for whichever version you have rather than freezing a copy into every release.
 
@@ -77,7 +77,7 @@ delivery. The new prompt joins that Codex session as the next turn.
 ### Install and authenticate
 
 - **Install** with `npm install -g @anthropic-ai/claude-code`, or `brew install --cask claude-code` (macOS), `winget install Anthropic.ClaudeCode` (Windows), or the native installer at [claude.com/code](https://claude.com/code).
-- **Sign in** with `claude login` to use Claude Pro / Max, or set `ANTHROPIC_API_KEY` (Dashboard → Models → Anthropic, or the environment), or run `claude setup-token` to set `CLAUDE_CODE_OAUTH_TOKEN`. With none of these set, the CLI falls back to any existing `claude login` session.
+- **Sign in** with `claude login` to use Claude Pro / Max, or set `ANTHROPIC_API_KEY` (Settings → Models → Anthropic, or the environment), or run `claude setup-token` to set `CLAUDE_CODE_OAUTH_TOKEN`. With none of these set, the CLI falls back to any existing `claude login` session.
 
 ### Settings
 
@@ -150,7 +150,7 @@ tools:
 ```
 
 - **Every call goes through shell-command approval.** The prompt shows the
-  server, the tool and its arguments. It follows **Dashboard → Tools →
+  server, the tool and its arguments. It follows **Settings → Tools →
   Approval** like a shell command does: no prompt under
   Auto-approve, or under Ask with **require approval for shell commands**
   turned off, and every call refused under Never. A session where approval
@@ -203,6 +203,6 @@ The exact error message is shown inline on the card, below its description. Read
 
 ## Next steps
 
-- [Configuration](./configuration.md): full Dashboard and settings reference
+- [Configuration](./configuration.md): full Settings reference
 - [LaTeX tools](./latex-tools.md): other local tools TeXRA plugs into
 - [Research tools](./research-tools.md): arXiv, Crossref, Zotero, and web search

@@ -271,7 +271,7 @@ describe('tool-use formatter', () => {
 
 /**
  * Regression coverage for PR #8165 review findings: controls slotted into a
- * `<wa-details>` summary (the "Setup" proposal-restore-link and the copy
+ * `<wa-details>` summary (the "Copy to new task" proposal-restore-link and the copy
  * button) must not toggle the panel when activated, via mouse or keyboard.
  *
  * `<wa-details>`'s own summary click handler already excludes real
@@ -350,7 +350,7 @@ const SUMMARY_CONTROL_CASES = [
 ];
 
 describe('wa-details summary controls: activation does not toggle the panel', () => {
-  it('clicking the proposal-restore-link ("Setup") button does not toggle the panel, and the click still bubbles to an outer delegated handler', async () => {
+  it('clicking the proposal-restore-link ("Copy to new task") button does not toggle the panel, and the click still bubbles to an outer delegated handler', async () => {
     const row = toolUseRow('proposal-1', {
       toolName: 'delegate_agent',
       input: { agent: 'assistant', instruction: 'do the thing' },
