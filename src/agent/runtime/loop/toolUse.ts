@@ -739,7 +739,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         state = yield* cell.append([
           snapshot(state, { phase: 'waiting' }),
           stepRow(runId, state, 'turn.end'),
-          ...(yield* session.streamClosureFacts(runId)),
+          ...session.streamClosureFacts(runId),
           stepRow(runId, state, 'waiting'),
         ]);
         publishTouchedFiles();

@@ -66,7 +66,7 @@ describe('session-owned transcripts and follow-up queues', () => {
       // The `waiting` step parks the run and the loop commits the closure
       // facts in that batch (`loop/toolUse.ts`), so the partial text becomes
       // the row's final text instead of streaming forever.
-      session.publish(yield* session.streamClosureFacts(runId));
+      session.publish(session.streamClosureFacts(runId));
       yield* session.settlePublications();
       const { rows } = yield* readRunTranscript(session, runId);
       expect(
