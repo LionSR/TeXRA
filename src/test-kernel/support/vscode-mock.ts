@@ -41,10 +41,6 @@ export const env = {
   openExternal: async (_target: unknown) => true,
 };
 
-export const FileSystemError = {
-  FileNotFound: class extends Error {},
-};
-
 export const Uri = {
   file: (p: string) => ({ fsPath: p, toString: () => p, path: p }),
   parse: (s: string) => ({ fsPath: s, toString: () => s, path: s }),
@@ -62,13 +58,6 @@ export const DiagnosticSeverity = {
   Warning: 1,
   Information: 2,
   Hint: 3,
-};
-
-export const FileType = {
-  Unknown: 0,
-  File: 1,
-  Directory: 2,
-  SymbolicLink: 64,
 };
 
 export class EventEmitter<T> {

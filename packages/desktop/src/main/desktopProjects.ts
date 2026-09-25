@@ -26,6 +26,7 @@ import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { ConfigStore } from '@platform/defaults/jsonConfigProvider';
 import { createNodeWorkspaceRoots } from '@platform/defaults/nodeHost';
 import { openTexraWorkspaceConfigStore } from '@platform/defaults/nodeStores';
+import { openWorktreeStateStore } from '@platform/defaults/worktreeStateStore';
 import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
 import {
   resolveGlobalStoragePath,
@@ -40,6 +41,7 @@ import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import { absentReason } from '@utils/files/fsEntryExists';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 import type { DesktopProjectRecords } from './desktopProjectRecords.js';
 
 import type { DesktopProjectsMessage } from '../shared/desktopProjectMessages.js';
@@ -91,7 +93,7 @@ export interface DesktopProjectRegistry {
   ): Effect.Effect<
     DesktopProject,
     Error,
-    FileSystem.FileSystem | Path.Path | ProjectDatabases
+    FileSystem.FileSystem | Path.Path | ProjectDatabases | ChildProcessSpawner
   >;
   /** Open projects in the order they were opened; the no-workspace session is not one. */
   list(): readonly DesktopProject[];
@@ -287,7 +289,15 @@ export function openDesktopProjectRegistry(
           return yield* Effect.gen(function* () {
             const [workspaceState, workspaceConfig] = yield* Effect.all(
               [
-                openProjectStateStore(storage),
+                openProjectStateStore(storage).pipe(
+                  Effect.flatMap((projectState) =>
+                    openWorktreeStateStore(
+                      projectState,
+                      options.stores.globalState,
+                      root,
+                    ),
+                  ),
+                ),
                 openTexraWorkspaceConfigStore(storage, root, options.warn),
               ],
               { concurrency: 'unbounded' },
