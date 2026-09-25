@@ -17,6 +17,7 @@ import {
 import { type SessionHandle } from '@agent/runtime';
 import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
 import {
+  isCtrlInput,
   isEscapeInput,
   isUnhandledControlInput,
   metaChordInput,
@@ -589,7 +590,7 @@ export function App(props: AppProps): React.JSX.Element {
     // keyboard.
     if (!focusShortcutsActive) return;
 
-    if (key.ctrl && input.toLowerCase() === 't') {
+    if (isCtrlInput(input, key, 't')) {
       if (activeRunId) openTranscriptReader(activeRunId);
       return;
     }
