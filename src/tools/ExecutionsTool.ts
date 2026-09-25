@@ -90,10 +90,7 @@ import {
   type ExecutionsToolInput,
 } from './executions/toolInput';
 import { turnAttributionNote } from './executions/turnAttribution';
-import {
-  listenForFollowUp,
-  shouldSkipWait,
-} from './executions/waitCoordination';
+import { shouldSkipWait } from './executions/waitCoordination';
 import { workflowBoardView } from './executions/workflowSummaryView';
 
 interface RunToolContext {
@@ -125,14 +122,19 @@ const awaitStatusChange = Effect.fn('ExecutionsTool.awaitStatusChange')(
       runIds.map((id) => view.runs.get(id)?.status ?? '').join(',');
     const started = phases(SubscriptionRef.getUnsafe(context.session.view));
     const followUp = yield* Deferred.make<void>();
-    yield* Effect.acquireRelease(
-      Effect.sync(() =>
-        listenForFollowUp(context.session, context.runId, () => {
-          Deferred.doneUnsafe(followUp, Effect.void);
-        }),
-      ),
-      (stop) => Effect.sync(stop),
-    );
+    // The session's follow-up queue is the one in-process channel a sent
+    // follow-up fires (`notifyFollowUpSent`); no plane row carries it.
+    const { runId } = context;
+    if (runId) {
+      yield* Effect.acquireRelease(
+        Effect.sync(() =>
+          context.session.followUps.onSent((sentRunId) => {
+            if (sentRunId === runId) Deferred.doneUnsafe(followUp, Effect.void);
+          }),
+        ),
+        (stop) => Effect.sync(stop),
+      );
+    }
     const statusChange = context.session.viewChanges.pipe(
       Stream.filter((view) => phases(view) !== started),
       Stream.runHead,
