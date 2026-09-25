@@ -11,6 +11,7 @@ import { WorkspaceFs } from '@platform/rootedFs';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { ExecResult, FileLocation } from '@shared/schemas';
 import { SUPPORTED_LATEX_COMPILERS } from '@shared/constants/latexToolchain';
+import { envVar } from '@utils/system/envFlags';
 import { runToolWithCheck } from '@utils/system/toolUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { readSettingFrom } from '@utils/config/platformSettings';
@@ -91,25 +92,29 @@ function buildKpathseaSearchPath(
  * for a LaTeX compile, prepending the workspace and TikZ input directories onto
  * any inherited values.
  *
- * The `process.env` read here is the lone environment touch in this VS Code-free
- * module. The subprocess still inherits the rest of `process.env` via
- * `executeCommand`'s `commandEnv`, so these keys only override the three search
- * paths that need prepending.
+ * The three inherited values come from the ambient Effect `ConfigProvider`
+ * (the live process environment in production). The subprocess still inherits
+ * the rest of `process.env` via `executeCommand`'s `commandEnv`, so these keys
+ * only override the three search paths that need prepending.
  */
-function buildLatexInputEnv(
+const latexInputEnv = Effect.fn('texTools.latexInputEnv')(function* (
   texInputParts: readonly string[],
   bibSearchParts: readonly string[],
-): Record<string, string> {
-  const env = process.env;
-  const texInputs = buildKpathseaSearchPath(texInputParts, env.TEXINPUTS);
-  const bibInputs = buildKpathseaSearchPath(bibSearchParts, env.BIBINPUTS);
-  const bstInputs = buildKpathseaSearchPath(bibSearchParts, env.BSTINPUTS);
+): Effect.fn.Return<Record<string, string>> {
+  const [tex, bib, bst] = yield* Effect.all([
+    envVar('TEXINPUTS'),
+    envVar('BIBINPUTS'),
+    envVar('BSTINPUTS'),
+  ]);
+  const texInputs = buildKpathseaSearchPath(texInputParts, tex);
+  const bibInputs = buildKpathseaSearchPath(bibSearchParts, bib);
+  const bstInputs = buildKpathseaSearchPath(bibSearchParts, bst);
   return {
     ...(texInputs && { TEXINPUTS: texInputs }),
     ...(bibInputs && { BIBINPUTS: bibInputs }),
     ...(bstInputs && { BSTINPUTS: bstInputs }),
   };
-}
+});
 
 /**
  * Compose the kpathsea search-path parts for a compile. The document's own
@@ -220,7 +225,7 @@ export const compileLatex2Pdf = Effect.fn('compileLatex2Pdf')(function* (
 
     // Build kpathsea search-path overrides, prepending workspace/TikZ dirs onto
     // any inherited values. `path.delimiter` keeps it cross-platform.
-    const env = buildLatexInputEnv(texInputParts, bibSearchParts);
+    const env = yield* latexInputEnv(texInputParts, bibSearchParts);
     for (const [key, value] of Object.entries(env)) {
       yield* Effect.logDebug(`Setting ${key} to: ${value}`).pipe(
         withLogChannel(channel),

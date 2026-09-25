@@ -36,6 +36,7 @@ import {
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { usageLogLayer } from '@telemetry/UsageLogService';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import { processEnvConfigLayer } from '@utils/system/envFlags';
 
 // Local file imports
 import {
@@ -134,7 +135,9 @@ export const initializeElectronPlatform = Effect.fn(
       });
       const supabaseAuth = yield* createSupabaseAuth({ secrets });
       return { processStart, configStores, secrets, supabaseAuth };
-    }).pipe(Effect.provide(nodeFileServices));
+    }).pipe(
+      Effect.provide(Layer.merge(nodeFileServices, processEnvConfigLayer)),
+    );
   // The one Effect runtime of this process (PRD 7.7), over the stores it
   // serves: every project's session graph and Promise-facing fiber runs on
   // it, and the entry disposes it last (`disposeProcessRuntime`), after run

@@ -37,7 +37,6 @@ const secretsLayer = Secrets.layer({
   set: unreadSecret,
   delete: unreadSecret,
   listStoredKeys: unreadSecret,
-  getEnv: unreadSecret,
 } satisfies PlatformSecrets);
 
 /** The services a plugin's availability callbacks may read. */

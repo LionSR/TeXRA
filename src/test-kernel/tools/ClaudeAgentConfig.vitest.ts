@@ -49,7 +49,6 @@ const fakeSecrets: PlatformSecrets = {
       secretStore.delete(key);
     }),
   listStoredKeys: () => Effect.sync(() => [...secretStore.keys()]),
-  getEnv: (name) => process.env[name],
 };
 
 type BuildEnvOptions = Parameters<
@@ -62,9 +61,13 @@ async function buildEnv(options?: BuildEnvOptions): Promise<NodeJS.ProcessEnv> {
   // Imported after the reload so the tag is the instance the freshly
   // imported module under test yields.
   const { Secrets } = await import('@platform/secrets');
+  // The live env provider, so the suite's `vi.stubEnv` still governs the
+  // API-key fallback read through `envVar`.
+  const { processEnvConfigLayer } = await import('@utils/system/envFlags');
   return Effect.runPromise(
     buildClaudeAgentEnv(options).pipe(
       Effect.provide(Secrets.layer(fakeSecrets)),
+      Effect.provide(processEnvConfigLayer),
     ),
   );
 }

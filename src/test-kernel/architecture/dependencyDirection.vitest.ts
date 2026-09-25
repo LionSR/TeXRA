@@ -126,7 +126,8 @@ const BARE_EFFECT_RUN_SITES: Readonly<Record<string, number>> = {
   // runs builds the whole `CliContext`, which opens the project and user
   // `config.json` stores BEFORE `initCliPlatform` (and with it
   // `installCliProcessRuntime`), so no process runtime exists to borrow; the
-  // program needs the filesystem and nothing else. `initCliPlatform` installs
+  // program needs the filesystem and the process environment (as a
+  // ConfigProvider). `initCliPlatform` installs
   // that same provider as the workspace roots' config, so every post-init
   // reader resolves its rows through the roots rather than coming through
   // here. Its four citty callers take the resolved context as a value.

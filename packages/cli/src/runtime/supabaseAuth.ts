@@ -22,6 +22,7 @@ import type { ProcessRuntime } from '@platform/processRuntime';
 import type { GlobalStorageFs } from '@platform/rootedFs';
 import type { PlatformSecrets } from '@platform/secrets';
 import { ensureError } from '@utils/errors/errorMessage';
+import { processEnvConfigLayer } from '@utils/system/envFlags';
 
 // Local file imports
 import { openBrowser } from './browser';
@@ -79,9 +80,12 @@ export function ensureCliSupabaseAuth(
   secrets: PlatformSecrets,
 ): SupabaseAuthShape {
   // The plane is built before the process runtime it is served on, so it is
-  // built here on a bootstrap fiber: construction reads no service, and the
-  // GoTrue storage callbacks it captures need none either.
-  auth ??= Effect.runSync(createSupabaseAuth({ secrets }));
+  // built here on a bootstrap fiber. Construction reads no service; the GoTrue
+  // storage callbacks it captures read secrets, which consult the process
+  // environment, so the fiber carries the env ConfigProvider the runtime serves.
+  auth ??= Effect.runSync(
+    createSupabaseAuth({ secrets }).pipe(Effect.provide(processEnvConfigLayer)),
+  );
   return auth;
 }
 

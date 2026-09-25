@@ -22,6 +22,7 @@ import {
 import type { SkillSourceOptions } from '@skills/skillSources';
 import { readConfigSettingFrom } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import { envVar } from '@utils/system/envFlags';
 import { isNonEmptyString } from '@utils/text/stringUtils';
 
 import { isCliSupportedModelId, loadCliStartupConfig } from './cliConfig';
@@ -306,7 +307,6 @@ function cliMode(globalArgs: CliGlobalArgs, ambient: CliAmbientState): CliMode {
 export interface BuildCliContextInit {
   readonly globalArgs: CliGlobalArgs;
   readonly ambient?: CliAmbientState;
-  readonly env?: Record<string, string | undefined>;
   /**
    * Root of the shared TeXRA storage directory. Production leaves this unset
    * (`~/.texra`); tests point it at a scratch directory so the developer's own
@@ -315,29 +315,27 @@ export interface BuildCliContextInit {
   readonly storageRoot?: string;
 }
 
-function envValue(
-  env: Record<string, string | undefined>,
-  key: string,
-): string | undefined {
-  const value = env[key]?.trim();
-  return isNonEmptyString(value) ? value : undefined;
-}
+/** One env-tier value from the ambient ConfigProvider, trimmed; blank reads as unset. */
+const envTier = (key: string): Effect.Effect<string | undefined> =>
+  Effect.map(envVar(key), (raw) => {
+    const value = raw?.trim();
+    return isNonEmptyString(value) ? value : undefined;
+  });
 
 /** An env-tier value through its own parse; an invalid one warns and yields nothing. */
-function pickEnv<T extends string>(
-  env: Record<string, string | undefined>,
+const pickEnv = <T extends string>(
   key: string,
   parse: (candidate: string) => T | undefined,
   warnings: string[],
-): T | undefined {
-  const candidate = envValue(env, key);
-  if (!candidate) return undefined;
-  const parsed = parse(candidate);
-  if (parsed === undefined) {
-    warnings.push(`Ignoring invalid ${key} "${candidate}".`);
-  }
-  return parsed;
-}
+): Effect.Effect<T | undefined> =>
+  Effect.map(envTier(key), (candidate) => {
+    if (!candidate) return undefined;
+    const parsed = parse(candidate);
+    if (parsed === undefined) {
+      warnings.push(`Ignoring invalid ${key} "${candidate}".`);
+    }
+    return parsed;
+  });
 
 export const resolveCliCwd = Effect.fn('cliContext.resolveCliCwd')(function* (
   cwdFlag: string | undefined,
@@ -373,7 +371,6 @@ export const buildCliContext = Effect.fn('cliContext.buildCliContext')(
     init: BuildCliContextInit,
   ): Effect.fn.Return<CliContext, CliUsageError | Error> {
     const ambient = init.ambient ?? readCliAmbientState();
-    const env = init.env ?? process.env;
     const cwd = yield* resolveCliCwd(init.globalArgs.cwd);
     // The project file over the user file, resolved by the same
     // `JsonConfigProvider` that `roots.config` gives the extension and desktop
@@ -385,8 +382,7 @@ export const buildCliContext = Effect.fn('cliContext.buildCliContext')(
       init.storageRoot,
     );
     const configWarnings = [...warnings];
-    const envModel = pickEnv(
-      env,
+    const envModel = yield* pickEnv(
       'TEXRA_MODEL',
       (model) => (isCliSupportedModelId(model) ? model : undefined),
       configWarnings,
@@ -403,31 +399,29 @@ export const buildCliContext = Effect.fn('cliContext.buildCliContext')(
     // set one — the environment is the only tier that can still carry an
     // unvalidated string. `--no-input` skips the env and config tiers
     // entirely, so it also skips their warnings.
-    const approvalPolicy =
+    const approvalPolicy: TexraApprovalPolicy =
       init.globalArgs.approvalPolicy ??
       (noInput
         ? TEXRA_APPROVAL_POLICY_NO_INPUT_DEFAULT
-        : (pickEnv(
-            env,
+        : ((yield* pickEnv(
             'TEXRA_APPROVAL_POLICY',
             parseTexraApprovalPolicy,
             configWarnings,
-          ) ??
+          )) ??
           readConfigSettingFrom<TexraApprovalPolicy>(
             config,
             TEXRA_APPROVAL_POLICY_CONFIG_KEY,
           )));
     const outputFormat: CliOutputFormat =
       init.globalArgs.outputFormat ??
-      pickEnv(
-        env,
+      (yield* pickEnv(
         'TEXRA_OUTPUT_FORMAT',
         (format): CliOutputFormat | undefined =>
           (CLI_OUTPUT_FORMATS as readonly string[]).includes(format)
             ? (format as CliOutputFormat)
             : undefined,
         configWarnings,
-      ) ??
+      )) ??
       readConfigSettingFrom<CliOutputFormat>(
         config,
         CLI_OUTPUT_FORMAT_CONFIG_KEY,
@@ -456,7 +450,7 @@ export const buildCliContext = Effect.fn('cliContext.buildCliContext')(
       resourcesPath: resolveCliResourcesPath(),
       config,
       configWarnings,
-      envAgent: envValue(env, 'TEXRA_AGENT'),
+      envAgent: yield* envTier('TEXRA_AGENT'),
       envModel,
       skillSourceOptions: {
         includeInterop: init.globalArgs.includeInteropSkills === true,
