@@ -1,5 +1,6 @@
 // Third-party imports
 import {
+  Cause,
   Effect,
   FileSystem,
   type PlatformError,
@@ -36,6 +37,9 @@ const CHANNEL = 'AgentLoad';
  * can fail mid-life, reported as `Unknown`), with bounded backoff; a missing
  * or unreadable directory fails fast. The budget resets once an event passes.
  */
+const EXTERNAL_WATCH_RECOVERY =
+  'agent edits there reload after the directory setting changes or the window reloads';
+
 const EXTERNAL_WATCH_RETRY = Schedule.exponential('1 second').pipe(
   Schedule.upTo({ times: 5 }),
   Schedule.while(
@@ -262,10 +266,27 @@ class AgentDirectoryManager {
           ),
         ),
         Stream.runForEach(() => Effect.sync(() => this.onAgentChange?.())),
+        // A stream that ends without an interrupt means the native watcher
+        // closed itself; watching has stopped either way.
+        Effect.andThen(() =>
+          Effect.logWarning(
+            `Stopped watching agent directory ${directory}; the native watcher closed. ${EXTERNAL_WATCH_RECOVERY}`,
+          ),
+        ),
         Effect.catch((error: PlatformError.PlatformError) =>
           Effect.logWarning(
-            `Stopped watching agent directory ${directory}; agent edits there reload after the directory setting changes or the window reloads: ${toErrorMessage(error.reason.cause ?? error)}`,
+            `Stopped watching agent directory ${directory}; ${EXTERNAL_WATCH_RECOVERY}: ${toErrorMessage(error.reason.cause ?? error)}`,
           ),
+        ),
+        // fs.watch can throw synchronously (ENOENT after a race, EMFILE,
+        // ENOSPC), which surfaces as a defect; this fiber is detached, so
+        // nothing else would report it.
+        Effect.catchCause((cause) =>
+          Cause.hasInterruptsOnly(cause)
+            ? Effect.void
+            : Effect.logWarning(
+                `Stopped watching agent directory ${directory}; ${EXTERNAL_WATCH_RECOVERY}: ${Cause.pretty(cause)}`,
+              ),
         ),
         withLogChannel(CHANNEL),
         Effect.forkDetach,

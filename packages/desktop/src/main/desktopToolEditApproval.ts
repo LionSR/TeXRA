@@ -23,6 +23,8 @@ import type { BuildDisplayFn } from '@tools/approval/latexPreview';
 import { writeApprovalTempFiles } from '@tools/approval/tempFileManager';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 
+import { toErrorMessage } from '@utils/errors/errorMessage';
+
 import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';
 
 export type DesktopToolEditApprovalUi = Pick<
@@ -90,6 +92,19 @@ export class DesktopToolEditApprovalHost implements ToolEditApprovalHost {
                 originalPath,
                 proposedPath,
               }),
+          ),
+          // A failed write leaves the directory it made; nothing else would
+          // remove it, since the preview that owns it was never built.
+          Effect.onError(() =>
+            FileSystem.FileSystem.use((fs) =>
+              fs.remove(tempDir, { recursive: true, force: true }),
+            ).pipe(
+              Effect.catch((error) =>
+                Effect.logWarning(
+                  `Could not remove the tool-edit preview directory ${tempDir}: ${toErrorMessage(error.reason.cause ?? error)}`,
+                ),
+              ),
+            ),
           ),
         ),
       ),
@@ -185,13 +200,18 @@ class DesktopToolEditPreview implements ToolEditPreview {
    * another diff takes only its own off the Review workbench.
    */
   dispose(): Effect.Effect<void, HostRequestFailure, FileSystem.FileSystem> {
-    return this.ui.closeDiff(this.context.requestId).pipe(
-      Effect.andThen(
-        FileSystem.FileSystem.use((fs) =>
-          fs.remove(this.staged.tempDir, { recursive: true, force: true }),
+    return this.ui
+      .closeDiff(this.context.requestId)
+      .pipe(
+        Effect.andThen(
+          FileSystem.FileSystem.use((fs) =>
+            fs.remove(this.staged.tempDir, { recursive: true, force: true }),
+          ).pipe(
+            Effect.mapError((cause) =>
+              hostFailure('approval.removeTempDir', cause),
+            ),
+          ),
         ),
-      ),
-      Effect.mapError((cause) => hostFailure('approval.removeTempDir', cause)),
-    );
+      );
   }
 }
