@@ -63,7 +63,7 @@
     "src/agent/prompt/userVars.ts": 635,
     "src/agent/runtime/AgentLaunchContext.ts": 632,
     "src/agent/runtime/AgentRunLifecycle.ts": 701,
-    "src/agent/runtime/childRunLoop.ts": 1411,
+    "src/agent/runtime/childRunLoop.ts": 1402,
     "src/agent/runtime/executeAgent.ts": 781,
     "src/agent/runtime/loop/reflection.ts": 1177,
     "src/agent/runtime/loop/toolUse.ts": 797,

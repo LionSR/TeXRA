@@ -333,7 +333,11 @@ export class RunRoster {
         // An inactive-run step is not a generation: it holds the lane, and
         // the run's next generation queues behind it rather than refusing.
         if (!refuseWhenLive) this.setFiber(runId, fiber);
-        return yield* Fiber.join(fiber);
+        // The lane is held until the fiber settles, finalizers included: an
+        // interrupted join interrupts the fiber and awaits its cleanup.
+        return yield* Fiber.join(fiber).pipe(
+          Effect.onInterrupt(() => Fiber.interrupt(fiber)),
+        );
       });
       return Effect.raceFirst(
         Deferred.await(refusal),
