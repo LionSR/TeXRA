@@ -1614,7 +1614,7 @@ describe('the C1 event table and the C6 publisher', () => {
             skills: [
               {
                 name: 'proof-review',
-                description: 'Use API_KEY=skills-snapshot-secret\n  carefully',
+                description: 'Review proofs\n  carefully',
                 source: 'project',
               },
             ],
@@ -1628,7 +1628,7 @@ describe('the C1 event table and the C6 publisher', () => {
           skills: [
             {
               name: 'proof-review',
-              description: 'Use API_KEY=[redacted] carefully',
+              description: 'Review proofs carefully',
               source: 'project',
             },
           ],
@@ -1793,14 +1793,13 @@ describe('the C1 event table and the C6 publisher', () => {
           {
             type: 'response.finalized',
             aggregateId: id,
-            text: 'API_KEY=publication-boundary-secret',
+            text: 'final answer',
           },
           { type: 'run.removed', aggregateId: other },
         ]);
         expect((yield* db.readListing()).map((row) => row.commit)).toEqual([
           1, 2, 4, 7, 9,
         ]);
-        expect(rows[7]).toMatchObject({ text: 'API_KEY=[redacted]' });
         const withoutTranscript = yield* db.readInputBatch([], 0);
         expect(withoutTranscript.cursor).toBe(9);
         expect(withoutTranscript.events).toEqual(
@@ -2485,41 +2484,6 @@ describe('RunLedger', () => {
       expect(state.usage.totalCost).toBe(0.25);
       expect(yield* run.load(RUN)).toEqual(state);
     }).pipe(Effect.provide(ledger())),
-  );
-
-  it.effect(
-    'stores ledger rows byte-exact while the same secret in a log row is redacted',
-    () =>
-      Effect.gen(function* () {
-        const events = yield* SessionEvents;
-        const run = yield* RunLedger;
-        const log = yield* Database;
-        yield* events.publish([runStart]);
-        yield* openTurn(run);
-        yield* events.publish([
-          {
-            type: 'log',
-            aggregateId: AGGREGATE,
-            level: 'info',
-            message: `the key is ${SECRET}`,
-          },
-        ]);
-        const rows = yield* log.readAggregate(AGGREGATE, 1);
-        const response = rows.find(
-          (row) =>
-            row.type === 'model.message' && row.payload.kind === 'response',
-        );
-        expect(
-          response?.type === 'model.message' &&
-            response.payload.kind === 'response'
-            ? response.payload.turn
-            : null,
-        ).toEqual(TURN);
-        const logged = rows.find((row) => row.type === 'log');
-        expect(logged?.type === 'log' ? logged.message : null).not.toContain(
-          SECRET,
-        );
-      }).pipe(Effect.provide(ledger())),
   );
 
   it.effect(

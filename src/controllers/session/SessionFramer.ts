@@ -19,13 +19,8 @@
  * decoder drops the superseded one's; `SessionBridge` owns the fiber per
  * port and forks the next `Subscribe`'s stream after interrupting it.
  *
- * Display redaction (contract C3): every framer to a renderer process
- * applies display redaction and truncation. The rows this plane carries
- * today are listing facts and approval payloads scrubbed at publish
- * (`redactedForFact`); the byte-exact flow rows of the run
- * aggregate arrive with the persistence cutover, and that cutover lands the
- * redaction map here, in `cutFrame`, as the obligation it makes
- * load-bearing. Nothing is framed that is not already display-safe.
+ * Rows are framed as committed: secrets never enter the event table, so no
+ * framer redacts.
  */
 import { Effect, Stream, SubscriptionRef, type Context } from 'effect';
 

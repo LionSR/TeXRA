@@ -135,8 +135,7 @@ export function transcriptRowBodyLines(
     }
   })();
   // One place for the terminal's defensive pass over producer text: control
-  // sequences a terminal would execute. Redaction is not a painter's job; the
-  // recorder (`redactTraceDraft`) already redacted every committed row.
+  // sequences a terminal would execute.
   // Elided texts arrive sanitized; the list kinds carry producer text too
   // (paths, messages), so every line takes the (idempotent) pass here.
   return lines.length === 0

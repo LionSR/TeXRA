@@ -93,8 +93,8 @@ export type ErrorContext = z.infer<typeof ErrorContextSchema>;
  * row that reads as an ordinary provider failure.
  */
 export const ErrorLogDataSchema = ProviderErrorObjectSchema.omit({
-  // The raw provider response body can echo the request, credentials
-  // included; it goes to the process log, never into a stream-log row.
+  // The raw provider response body is bulky diagnostic data; it goes to the
+  // process log only, never into a stream-log row.
   rawErrorBody: true,
 })
   .extend({
