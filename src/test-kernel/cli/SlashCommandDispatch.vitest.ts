@@ -163,7 +163,7 @@ const services = {
 };
 
 function createSession(): TuiSession {
-  return new TuiSession();
+  return new TuiSession(() => undefined);
 }
 
 function mockModelAccessOverview(): void {
@@ -219,7 +219,6 @@ function createContext(
     setApprovalPolicy: (policy) => {
       approvalPolicy = policy;
     },
-    canSelectModel: () => true,
     resetSession: vi.fn(),
     resumeRun: (_id: RunId) => Effect.void,
     ...overrides,

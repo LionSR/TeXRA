@@ -100,16 +100,14 @@ export const applyCliModelSelection = Effect.fn('applyCliModelSelection')(
       return;
     }
 
-    if (!context.canSelectModel()) {
+    if (!context.session.canSelectModel()) {
       appendLocalAssistantTranscript(
         'Finish the active response before switching models.',
       );
       return;
     }
 
-    const activeFlow = context.session.runId
-      ? context.runtimeSession.runs.getToolUseFlowContext(context.session.runId)
-      : undefined;
+    const activeFlow = context.session.activeToolUseFlow();
     if (!activeFlow) {
       appendLocalAssistantTranscript(
         'Model switching is only available for an active tool-use chat. Start a new chat with texra chat --model=<name> to choose a different root model.',

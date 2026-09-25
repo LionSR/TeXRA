@@ -298,7 +298,7 @@ describe('CLI agent validation with a shadowed name', () => {
             }),
           update: stores.globalState.update.bind(stores.globalState),
         };
-        const session = new TuiSession();
+        const session = new TuiSession(() => undefined);
         patchSessionMeta({ agent: 'launched-agent', teamName: 'Physicist' });
         const context = {
           stores: { ...stores, globalState: delayedState },
