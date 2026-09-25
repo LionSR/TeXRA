@@ -53,7 +53,6 @@ export class RunStopper {
     const handle = this.roster.handle(runId);
     if (!handle) {
       const reached = this.interruptActivation(runId);
-      this.roster.notifyWaiters(runId);
       return {
         accepted: () => reached,
         settlement: this.roster.throughStop(runId, stopToken, Effect.void),
@@ -67,9 +66,6 @@ export class RunStopper {
         visited,
         options.detachActiveChildren !== true,
       );
-      // Always notify waiters — even if terminate() returned false (e.g. PID
-      // not yet assigned), callers blocking on this run should be unblocked.
-      this.roster.notifyWaiters(runId);
       return Effect.void;
     };
     return {
