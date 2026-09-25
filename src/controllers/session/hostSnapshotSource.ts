@@ -185,20 +185,20 @@ export function createHostSnapshotSource(
     }),
   );
 
+  // The three catalog loads run concurrently, so each reads its value first
+  // and only then spreads `catalogs`. Spreading before a `yield*` captures
+  // the record as it was when the load started and writes that copy back on
+  // resume, erasing whatever a sibling load stored in between.
   const loadAgents = Effect.gen(function* () {
-    catalogs = {
-      ...catalogs,
-      agentOptions: yield* computeAgentOptionsData(options.stores),
-    };
+    const agentOptions = yield* computeAgentOptionsData(options.stores);
+    catalogs = { ...catalogs, agentOptions };
   });
 
   const loadTeams = Effect.gen(function* () {
-    catalogs = {
-      ...catalogs,
-      teamOptions: yield* loadTeamOptions(
-        yield* createTeamCatalogPorts(options.stores.workspaceState),
-      ),
-    };
+    const teamOptions = yield* loadTeamOptions(
+      yield* createTeamCatalogPorts(options.stores.workspaceState),
+    );
+    catalogs = { ...catalogs, teamOptions };
   });
 
   const loadModels = Effect.gen(function* () {
