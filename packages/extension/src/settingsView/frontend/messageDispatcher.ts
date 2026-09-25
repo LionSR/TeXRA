@@ -9,7 +9,11 @@
  * module-level signals in `settingsState.ts` directly.
  */
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import { type SettingsViewOutboundHandlerRegistry } from '@shared/settingsView/settingsViewMessages';
+import {
+  type SettingsSectionName,
+  type SettingsTabPanelName,
+  type SettingsViewOutboundHandlerRegistry,
+} from '@shared/settingsView/settingsViewMessages';
 
 import {
   activePresetId,
@@ -35,6 +39,7 @@ import {
   prSubscriptions,
   providerKeyStatuses,
   selectedPanel,
+  selectedSections,
   sessionProblem,
   skillLoadIssues,
   skillsList,
@@ -48,7 +53,14 @@ import {
 export const settingsViewHandlers: SettingsViewOutboundHandlerRegistry = {
   // View chrome: active tab and the derived capability gating across tabs.
   [SETTINGS_VIEW_COMMANDS.SET_TAB]: (data) => {
-    selectedPanel.set(data.tab);
+    // The schema admits only `page` or a `page/section` pair it declares.
+    const [page, section] = data.tab.split('/') as [
+      SettingsTabPanelName,
+      SettingsSectionName?,
+    ];
+    selectedPanel.set(page);
+    if (section)
+      selectedSections.set({ ...selectedSections.get(), [page]: section });
     agentSubTab.set(data.agentSubTab);
   },
 

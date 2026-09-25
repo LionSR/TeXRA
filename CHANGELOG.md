@@ -61,6 +61,17 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
   manage them, and the Skills settings tab lists them. Only skills are loaded
   for now; a plugin's MCP servers, hooks, commands and agents are listed as
   ignored and never run.
+- **Desktop: clearer multiple projects** — each open project in the sidebar
+  has one row with a status dot (waiting on you, running, or finished while
+  you were elsewhere), a `+` that starts a task in that project, and a `×`
+  that closes it; tasks are listed under their project and nowhere else.
+  The conversation header
+  is one row: the task, its stop control and `⋯`. Files, Terminal, Browser
+  and Logs open as tabs from the workbench's `+`. A run that needs you or finishes in a project
+  you are not looking at raises a system notification that leads back to it,
+  and the dock icon counts decisions waiting across projects. Dialogs a
+  background run opens name its project, and File > Open Recent reopens
+  projects you closed.
 - **The orchestrator and the Lean agents ship with TeXRA** — `orchestrator`,
   `search`, `simplifier`, `presenter`, `progressCheck`, and the Lean Project
   agents (`lean`, `leanSearch`, `leanSimplifier`, `leanBlueprint`,
@@ -92,12 +103,55 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
   stop could cut off sending the last usage records. Every host now sends
   them as the final shutdown step, after runs and sessions have closed.
 
+- **A run another TeXRA window takes over at the same moment is reported as
+  running elsewhere.** When two windows or processes resume or relaunch the
+  same run at once, the one that loses now says the run is held elsewhere,
+  instead of failing with a generic database write error.
+- **A hidden TeXRA view now comes forward for every request, not only file
+  edits (VS Code).** A command approval, workflow proposal, plan, question,
+  outside-model inquiry or retry could wait unseen while you were in the
+  editor, and the run stalled. Now the TeXRA icon shows how many requests are
+  waiting, and a new one brings the view forward. It no longer moves keyboard
+  focus there, so you can keep typing in your document.
+- **File tools no longer follow a symlink out of the workspace.** A symlink
+  inside the workspace (for example `up -> ..`) let `write_file`, `edit_file`
+  and `read_file` reach files outside it, and the approval prompt showed the
+  in-workspace path rather than the real target. Paths are now checked where
+  they physically land; one that leaves the workspace through a symlink is
+  refused like any outside path, and the error names the real target.
+- **Skills outside the workspace are readable.** With skills enabled, the
+  agent was told to read each skill's `SKILL.md` but could not open bundled,
+  home-directory, plugin or `--source` skills ("Path must stay within the
+  working directory"). Enabled skills outside the workspace are now readable,
+  and read-only, in every host. `texra skills list` and `/skills` also say
+  when skills are turned off.
+- **Clearer tool and error cards.** An edit refused because the file was not
+  read first is no longer labeled like a read, and error details no longer
+  list the internal `userRetryable` flag or an empty provider body.
+- **The "agent file is missing" warning clears once a launch succeeds.**
+  It used to stay above the launcher until the window reloaded.
 - **Workflow agents no longer fail when an intermediate round hits the
   output length limit.** A multi-round (reflection) agent whose response in
   any round but the last was cut off and continued stopped at the next round
   with `continuationIndex 0 is below 1`. The continuation count now restarts
   with each round, as the agent always wrote it.
-
+- **`texra` reports config settings it cannot use.** A setting in
+  `.texra/config.json` or the user config whose value has the wrong type
+  (`"texra.model.retry.maxAttempts": "five"`) now prints a warning that names
+  the key, the value and the default used in its place, and `texra doctor`
+  reports it as WARN; before, only `texra.approvalPolicy` warned and every
+  other setting fell back silently.
+- **Clearer `texra` errors.** An invalid or missing argument prints the error
+  and a pointer to `--help` instead of the full help screen followed by the
+  error, and honors `--no-color` and `FORCE_COLOR=0`. An `--output` or
+  `--output-dir` the CLI may not create is a usage error that names the path,
+  not a crash report. `texra memory show` for a missing memory says so plainly.
+  Mistyped subcommands with swapped letters (`texra agents lsit`) now get a
+  "did you mean" suggestion.
+- **zsh completion completes model and agent names.** The completion
+  function no longer shadows `$PATH`, which hid the `texra` and `awk` it calls.
+- **Bundled skill descriptions no longer name Codex** — they read "Use when
+  you need…" in every host.
 - **The desktop app shuts down cleanly when startup fails early.** If
   startup failed before the project list opened (for example, when the
   project records could not be read), shutdown reported two errors and left a
@@ -234,6 +288,14 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
   a run's goal shows in its header. OpenAI background responses, parallel
   tool calls, the GPT-5 reasoning summary and Google background responses
   keep their defaults and are set in `.texra/config.json`.
+- **Settings pages show one section at a time** (extension and desktop): a
+  page with several sections gets a second row of sub-tabs (Models: API keys,
+  Subscriptions, Models; Agents: Library, Teams, Skills, Advanced; Tools:
+  Approval, Tools, Integrations; LaTeX: Dependencies, Compile & diff,
+  Formatting, and VS Code settings in VS Code; General: Account, Git), so a
+  long page like Agents no longer scrolls through everything. Each page
+  remembers its sub-tab while Settings stays open, and commands such as
+  **Agent Team Settings** or **Git Settings** open the matching sub-tab.
 
 #### Changes
 
@@ -252,6 +314,12 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
   the conversation in one click, is gone. Delete now lives at the end of
   the run's ⋯ menu, asks for confirmation, and is not offered while the run
   is still going.
+- **A finished session says what to do next.** Where the message box
+  stood, an ended session now shows "This session has ended." with an
+  **Edit as new task** button (it opens New task with the same agent and
+  instruction), plus **Resume** when the session was interrupted. Workflow
+  runs get the same line. Edit as new task left the ⋯ menu. The run board
+  calls steps it has not reached "Not started" instead of "Declared".
 
 #### Bug Fixes
 
@@ -300,6 +368,16 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
   `installActions`). Each skill record renames `sourceLabel` to `label` and
   `source` to `sourcePath`, and gains `enabled`. The text output of both
   commands is unchanged.
+- **`texra run --output-format json` result changed shape** — the result
+  (and the NDJSON `result` / `agent-result` record) now carries the run's
+  output under `output`: `output.category`, and `output.outputs`,
+  `output.compileFailures` and `output.diffs` for a workflow run, or
+  `output.response` and `output.files` for a tool-use run. `executionId` and
+  `streamId` are replaced by `runId`, and `totalCostUsd` by `usage.totalCost`,
+  beside the run's other token totals in `usage`. `outcome`, `workingDirectory`,
+  `runDirectory`, `copiedOutput` and `copiedOutputs` are unchanged. A
+  workflow run's `output.diffs` lists the text diff of each output against its
+  original, written under `diffs/` in the run directory.
 - Node.js 22.19.0 or later in 22.x, or Node.js 24 or later is required.
 - **`texra orchestrate` is gone, and bare `texra` now opens chat** — the
   launcher menu that sat in front of every interactive command is retired.

@@ -36,7 +36,7 @@ export class SessionBanners extends LitElement {
     const { apiKey, agentConfig, dependency } = this.banners;
     let warning: TemplateResult;
     if (apiKey.visible) {
-      warning = html`<api-key-banner .state=${apiKey}></api-key-banner>`;
+      warning = html`<api-key-banner></api-key-banner>`;
     } else if (agentConfig.visible) {
       // The agent the banner names owns its actions: a workflow agent's
       // missing file opens the workflow catalog. The launcher's mode stands

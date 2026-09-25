@@ -3,7 +3,6 @@
  * Channel traces publish through their owning session; transcript history is
  * read from the committed event prefix.
  */
-export { createRunTrace, type RunTrace } from './runTrace';
 export { assembleTrace, type AssembleTraceResult } from './traceAssembler';
 export type { TraceDocument } from './traceDocumentSchema';
 export {

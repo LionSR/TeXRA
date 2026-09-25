@@ -1,5 +1,5 @@
 import { it } from '@effect/vitest';
-import { Deferred, Effect, Fiber } from 'effect';
+import { Cause, Deferred, Effect, Exit, Fiber } from 'effect';
 
 import { afterEach, beforeEach, describe, expect, vi, type Mock } from 'vitest';
 
@@ -576,6 +576,25 @@ describe('runFlowWithLifecycle', () => {
         },
       );
       expect(stageEnd).toHaveBeenCalledWith(RUN_OUTCOME.FAILED);
+    }),
+  );
+
+  // A runner that interrupts itself (a prompt closed under it) is a stop:
+  // squashed, the cause read "All fibers interrupted without error" and the
+  // run ended FAILED over the loop's own cancelled halt.
+  it.effect('finalizes a self-interrupted runner as cancelled', () =>
+    Effect.gen(function* () {
+      const { runId, ctx } = lifecycleFixture();
+
+      const exit = yield* Effect.exit(runFlow(ctx, () => Effect.interrupt));
+
+      expect(Exit.isFailure(exit) && Cause.hasInterruptsOnly(exit.cause)).toBe(
+        true,
+      );
+      expect(storageMocks.finalizeRun).toHaveBeenCalledWith(
+        testDefaultSession(),
+        expect.objectContaining({ runId, outcome: RUN_OUTCOME.CANCELLED }),
+      );
     }),
   );
 

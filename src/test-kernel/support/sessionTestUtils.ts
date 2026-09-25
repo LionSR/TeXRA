@@ -1,7 +1,7 @@
 import '@test/support/sessionGraphTestSetup';
 
 import { Effect } from 'effect';
-import type { AgentTrace } from '@agent/trace';
+import { TraceEmitter, type AgentTrace } from '@agent/trace';
 import { heldSessions, openSessionEffect } from '@agent/runtime/sessionGraph';
 import type {
   SessionHandle,
@@ -13,7 +13,6 @@ import type { SessionOpenError } from '@shared/session/database';
 import { createTranscriptFold } from '@shared/session/traceFold';
 import { StreamLog } from '@shared/session/traceEntries';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
-import { createRunTrace } from '@transcript';
 import { generateRunId } from '@utils/core';
 
 /** What a test supplies: the isolated roots are this helper's job. */
@@ -144,14 +143,11 @@ export function createTestRunTrace(
   runId: RunId,
   log: StreamLog = new StreamLog(),
 ) {
-  const run = createRunTrace();
-  const projection = attachTestTranscriptFold(run.trace, runId, log);
+  const trace = new TraceEmitter();
+  const projection = attachTestTranscriptFold(trace, runId, log);
   return {
-    trace: run.trace,
+    trace,
     settlePhase: projection.settlePhase,
-    dispose: () => {
-      projection.unsubscribe();
-      run.dispose();
-    },
+    dispose: projection.unsubscribe,
   };
 }

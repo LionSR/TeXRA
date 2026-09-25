@@ -65,12 +65,6 @@
       "file": "packages/cli/src/chat/tui/forms/ConfigForm.tsx",
       "category": "production-dead",
       "kind": "exports",
-      "name": "isConfigResetInput"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/forms/ConfigForm.tsx",
-      "category": "production-dead",
-      "kind": "exports",
       "name": "settingEditKind"
     },
     {
@@ -144,12 +138,6 @@
       "category": "production-dead",
       "kind": "exports",
       "name": "textInputDisplayRowCount"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/modals/ConfirmCardState.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "confirmCardKeyHints"
     },
     {
       "file": "packages/cli/src/chat/tui/modals/EditApproval.tsx",

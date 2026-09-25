@@ -9,9 +9,9 @@ import { Box, Text } from 'ink';
 
 import { clampModalWidth, MIN_MODAL_CONTENT_WIDTH } from '@cli/tui/ui/theme';
 import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
-import { KeyHints } from '@cli/tui/ui/KeyHints';
+import { KeyHints, scrollKeyHints, type KeyHint } from '@cli/tui/ui/KeyHints';
 import { fillRows } from '@cli/runtime/terminalText';
-import { ConfirmCardFeedbackMode } from './ConfirmCard';
+import { ConfirmCardFeedback } from './ConfirmCard';
 import { confirmCardContentRowsBudget } from './confirmCardRowsBudget';
 import {
   boundedScrollableLines,
@@ -104,6 +104,9 @@ export function modalTextDisplayLines({
 interface ScrollableModalTextProps {
   readonly continuationPrefix?: string;
   readonly firstLinePrefix?: string;
+  /** Paint a reader's footer below the body: the scroll keys while there is
+   *  anything to scroll, then these. Replaces the scroll-only hint row. */
+  readonly footerHints?: readonly KeyHint[];
   /** Qualifies single-row overflow markers (e.g. `prompt rows`). */
   readonly hiddenNoun?: string;
   /** Rows granted to the text body — see scrollableModalTextRowsBudget. */
@@ -140,6 +143,7 @@ export function ScrollableModalText(
   const {
     continuationPrefix,
     firstLinePrefix,
+    footerHints,
     hiddenNoun,
     marginWhenSpacious,
     maxRows,
@@ -179,7 +183,7 @@ export function ScrollableModalText(
     totalLines: lines.length,
   });
   // Release ↑/↓ while the enclosing card's feedback input owns them.
-  const scrollActive = !useContext(ConfirmCardFeedbackMode);
+  const scrollActive = !useContext(ConfirmCardFeedback).mode;
   const { scrollOffset, scrollable } = useScrollableOffset({
     active: scrollActive,
     initialOffset: startAtEnd ? maxScrollOffset : 0,
@@ -213,10 +217,23 @@ export function ScrollableModalText(
           </Text>
         ))}
       </Box>
-      {scrollable &&
+      {footerHints ? (
+        <Box marginTop={1}>
+          <KeyHints
+            confirmCancel={false}
+            hints={[
+              ...(scrollable ? scrollKeyHints(scrollHint) : []),
+              ...footerHints,
+            ]}
+            wrap
+          />
+        </Box>
+      ) : (
+        scrollable &&
         maxRows > 1 &&
         scrollActive &&
-        showScrollHints !== false && <ScrollHints action={scrollHint} />}
+        showScrollHints !== false && <ScrollHints action={scrollHint} />
+      )}
     </>
   );
 }
@@ -227,13 +244,5 @@ export function ScrollHints({
 }: {
   readonly action: string;
 }): React.JSX.Element {
-  return (
-    <KeyHints
-      confirmCancel={false}
-      hints={[
-        { key: '↑/↓', action },
-        { key: 'PgUp/PgDn', action: 'page' },
-      ]}
-    />
-  );
+  return <KeyHints confirmCancel={false} hints={scrollKeyHints(action)} />;
 }

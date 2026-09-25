@@ -12,21 +12,17 @@ import { signal, type Signal } from '@lit-labs/signals';
 import { Cause, Stream, SubscriptionRef } from 'effect';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import {
-  AgentCategory,
-  isPlainAgentIdentity,
   RUN_LIFECYCLE_READY,
   RUN_PHASE,
-  USER_FOLLOW_UP_SUPPORT,
   type RunPhase,
   type RunId,
 } from '@shared/schemas';
 import { toSignal, type StreamSignal } from '@shared/signals';
-import {
-  descendantRuns,
-  type SessionView,
-  type RunView,
+import type {
+  FollowUpHost,
+  SessionView,
+  RunView,
 } from '@shared/session/sessionView';
-import { isInFlightPhase } from '@shared/runs/runStatus';
 import {
   flowPosition,
   formatFlowPositionLabel,
@@ -113,15 +109,17 @@ export function killableRunId(run: RunView | undefined): RunId | undefined {
     : undefined;
 }
 
-/** Whether a focused child run takes the composer's follow-ups (PRD 10.1). */
-export function focusedChildAcceptsFollowUps(run: RunView): boolean {
-  return (
-    run.followUpSupport === USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE &&
-    isPlainAgentIdentity(run.identity) &&
-    run.category === AgentCategory.ToolUse &&
-    isInFlightPhase(run.status)
-  );
+/** The run to resume when it was interrupted and can pick up again. */
+export function resumableRunId(run: RunView | undefined): RunId | undefined {
+  return run?.group === 'interrupted' && run.resumeEligible
+    ? run.id
+    : undefined;
 }
+
+/** This composer's capability for `acceptsFollowUp`: it does not address a
+ *  terminal-backed run (an external agent CLI's session). Every other
+ *  follow-up decision is the shared rule's. */
+export const CLI_FOLLOW_UP_HOST: FollowUpHost = { terminalBacked: false };
 
 /** The name a run goes by on this surface: `main` for a root, the
  *  fold's label below it. */
@@ -149,16 +147,6 @@ export function runningChildCount(
   return (run?.childIds ?? []).filter(
     (id) => view.runs.get(id)?.status === RUN_PHASE.RUNNING,
   ).length;
-}
-
-/** Whether the root or any run under it is in the RUNNING phase. */
-export function anyRunRunning(
-  view: SessionView,
-  rootRunId: RunId | undefined,
-): boolean {
-  return descendantRuns(view, rootRunId, { includeRoot: true }).some(
-    (id) => view.runs.get(id)?.status === RUN_PHASE.RUNNING,
-  );
 }
 
 /**

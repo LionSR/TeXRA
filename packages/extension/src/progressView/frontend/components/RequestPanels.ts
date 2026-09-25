@@ -17,6 +17,10 @@ import { html as staticHtml, literal } from 'lit/static-html.js';
 
 // Local imports - shared schemas
 import type { PermissionPayload } from '@shared/schemas';
+import {
+  requestAnswerability,
+  type RunView,
+} from '@shared/session/sessionView';
 import type { Surface } from '@shared/session/surface';
 
 // Local imports - progress view component types
@@ -85,8 +89,8 @@ export class RequestPanels extends LitElement {
 
   @property({ attribute: false }) permissions: PermissionPayload[] = [];
 
-  /** The selected stream's `readOnly`; every card's actions no-op. */
-  @property({ type: Boolean }) readOnly = false;
+  /** The run asking: each card reads whether this window can answer it. */
+  @property({ attribute: false }) run: RunView | null = null;
 
   /** For the inquiry cards' drafts (`Surface.inquiryDrafts`). */
   @property({ attribute: false }) surface: Surface | null = null;
@@ -109,7 +113,9 @@ export class RequestPanels extends LitElement {
       (permission) => staticHtml`<${CARD_TAG[permission.kind]}
         data-request-panel
         .permission=${permission}
-        .readOnly=${this.readOnly}
+        .answerability=${
+          this.run ? requestAnswerability(this.run, permission) : 'readOnly'
+        }
         .surface=${this.surface}
       ></${CARD_TAG[permission.kind]}>`,
     )}`;
@@ -145,7 +151,8 @@ export class RequestPanels extends LitElement {
     const card = [
       ...this.renderRoot.querySelectorAll<BaseRequestPanel>(`[${CARD_MARKER}]`),
     ].find((element) => element.permission === firstNew);
-    if (!card) return;
+    // A card this window cannot answer has nothing to put focus on.
+    if (!card || card.answerability !== 'answerable') return;
     // The card was just connected in this render pass; its first Lit update
     // is a microtask that cannot run until this `updated()` returns.
     void card.updateComplete.then(() => {

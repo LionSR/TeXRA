@@ -1,6 +1,7 @@
 // Node imports
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
+import { gzipSync } from 'node:zlib';
 
 // Third-party imports
 import * as NodePath from '@effect/platform-node/NodePath';
@@ -178,6 +179,40 @@ describe('arXiv source download filenames', () => {
           autoIndent: false,
         });
         expect(result).toEqual({ path: sourceDirectory, alreadyExisted: true });
+      }).pipe(Effect.provide(httpPlatformLayer)),
+  );
+
+  it.live(
+    'streams a gzip-only source through gunzip into main.tex and drops the archive',
+    () =>
+      Effect.gen(function* () {
+        const workspaceRoot = yield* Effect.promise(() =>
+          makeTempDir('texra-arxiv-gzip-', tempDirs),
+        );
+        const tex = '\\documentclass{article}\n'.repeat(4096);
+        const fetchMock = vi.fn(
+          async () =>
+            new Response(gzipSync(tex), {
+              headers: {
+                'content-disposition': 'attachment; filename="source.gz"',
+              },
+            }),
+        );
+        const result = yield* ArxivProcessor.downloadSource('2404.12175', {
+          workspaceRoot,
+          formatter: null,
+          autoIndent: false,
+        }).pipe(onFetch(fetchMock));
+        const paperDir = path.join(workspaceRoot, 'References/2404.12175');
+        expect(result).toEqual({ path: paperDir, alreadyExisted: false });
+        expect(yield* Effect.promise(() => fs.readdir(paperDir))).toStrictEqual(
+          ['main.tex'],
+        );
+        expect(
+          yield* Effect.promise(() =>
+            fs.readFile(path.join(paperDir, 'main.tex'), 'utf8'),
+          ),
+        ).toBe(tex);
       }).pipe(Effect.provide(httpPlatformLayer)),
   );
 

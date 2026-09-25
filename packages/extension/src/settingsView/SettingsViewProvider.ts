@@ -21,7 +21,7 @@ import type { PlatformSecrets } from '@platform/secrets';
 import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { AgentCategory } from '@shared/schemas';
-import type { SettingsTabPanelName } from '@shared/settingsView/settingsViewMessages';
+import type { SettingsTarget } from '@shared/settingsView/settingsViewMessages';
 import { ensureError } from '@utils/errors/errorMessage';
 
 // Local file imports
@@ -46,7 +46,7 @@ export class SettingsViewProvider {
   private viewReady = false;
   /** The latest tab asked for before the panel was ready, posted on ready. */
   private pendingTab?: {
-    tab: SettingsTabPanelName;
+    tab: SettingsTarget;
     agentSubTab?: AgentCategory;
   };
   private readonly contentProvider: BundledViewContentProvider;
@@ -116,11 +116,11 @@ export class SettingsViewProvider {
 
   /**
    * Create and show the webview panel (for command palette activation)
-   * @param tab Optional panel name to switch to after showing
+   * @param tab Optional page, or `page/section`, to switch to after showing
    * @param agentSubTab Optional sub-tab for the agents tab ('workflow' | 'toolUse')
    */
   public showSettingsView(
-    tab?: SettingsTabPanelName,
+    tab?: SettingsTarget,
     agentSubTab?: AgentCategory,
   ): Effect.Effect<void, Error, ProcessServices> {
     return Effect.gen({ self: this }, function* () {

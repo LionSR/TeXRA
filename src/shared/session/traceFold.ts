@@ -5,7 +5,8 @@
  */
 // Shared contracts and utilities
 import {
-  ActiveSkillsSnapshotSchema,
+  CompactionActivityDataSchema,
+  ContextManagementDataSchema,
   MESSAGE_TYPES,
   RUN_OUTCOME,
   STREAM_LOG_ENTRY_TYPES,
@@ -17,13 +18,11 @@ import {
   type LogLevel,
   type MessageType,
   type ToolUseLog,
-  type WorkflowPlanMarker,
   type WorkflowCallProgress,
   type TranscriptEvent,
   type RunPhase,
   type SessionEvent,
 } from '@shared/schemas';
-import { roundedUtilizationPercent } from '@shared/runs/contextUtilization';
 import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import type {
   StreamLog,
@@ -31,6 +30,7 @@ import type {
   StreamLogUpdatePatch,
 } from '@shared/session/traceEntries';
 import { isObject } from '@utils/core';
+import type { z } from 'zod';
 
 const KNOWN_MESSAGE_TYPES = new Set<string>(Object.values(MESSAGE_TYPES));
 
@@ -46,6 +46,12 @@ function asMessageType(candidate: string | undefined): MessageType {
     : MESSAGE_TYPES.DEFAULT;
 }
 
+/** The compaction payloads the fold decodes (`compactionActivityProjection`). */
+const DECODED_PAYLOADS: Partial<Record<MessageType, z.ZodType>> = {
+  [MESSAGE_TYPES.CONTEXT_COMPACTION_ACTIVITY]: CompactionActivityDataSchema,
+  [MESSAGE_TYPES.CONTEXT_MANAGEMENT]: ContextManagementDataSchema,
+};
+
 /** The source event's stable coordinates and the surface's display policy. */
 interface TraceStamp {
   readonly at: number;
@@ -56,7 +62,7 @@ interface TraceStamp {
 type StageMetadata = Pick<
   Extract<TranscriptEvent, { type: 'stage.start' }>,
   'kind' | 'index' | 'total'
-> & { readonly attemptId?: string };
+>;
 
 /** Build the transcript projection for one subscribed aggregate. */
 export function createTranscriptFold(
@@ -70,7 +76,6 @@ export function createTranscriptFold(
   const activeToolEntries = new Map<string, ToolUseLog>();
   const stageMetadata = new Map<string, StageMetadata>();
   const workflowCallEntries = new Set<string>();
-  let workflowAttemptId: string | undefined;
   let pendingModelResponseId: string | undefined;
   let transcriptBoundaryClosed = false;
   const record = (event: TranscriptEvent, stamp: TraceStamp): void => {
@@ -82,15 +87,20 @@ export function createTranscriptFold(
       data?: unknown;
       verbose?: boolean;
     }): void => {
+      // A payload its schema rejects is written as an error row naming the
+      // diagnostic, never dropped: the compaction reducer skips it.
+      const issue = DECODED_PAYLOADS[params.messageType]?.safeParse(
+        params.data,
+      ).error;
       writer.appendSettled({
         id: stamp.id,
         type: STREAM_LOG_ENTRY_TYPES.LOG,
-        level: params.level ?? 'info',
+        level: issue ? 'error' : (params.level ?? 'info'),
         timestamp: stamp.at,
         groupId: params.groupId,
-        messageType: params.messageType,
-        text: params.text,
-        data: params.data,
+        messageType: issue ? MESSAGE_TYPES.ERROR : params.messageType,
+        text: issue ? `Malformed ${params.messageType} payload` : params.text,
+        data: issue ? { message: issue.message } : params.data,
         verbose: params.verbose ?? stamp.debug,
       });
     };
@@ -117,9 +127,6 @@ export function createTranscriptFold(
       case 'stage.start': {
         const metadata = {
           ...(event.kind !== undefined ? { kind: event.kind } : {}),
-          ...(event.kind === 'phase' && workflowAttemptId !== undefined
-            ? { attemptId: workflowAttemptId }
-            : {}),
           ...(event.index !== undefined ? { index: event.index } : {}),
           ...(event.total !== undefined ? { total: event.total } : {}),
         } satisfies StageMetadata;
@@ -239,27 +246,6 @@ export function createTranscriptFold(
         return;
       }
 
-      case 'workflow.plan': {
-        workflowAttemptId = event.attemptId;
-        const marker = {
-          kind: 'workflowPlan',
-          attemptId: event.attemptId,
-          phases: [...event.phases],
-          tasks: [...event.tasks],
-        } satisfies WorkflowPlanMarker;
-        writer.appendSettled({
-          id: `workflow-plan-${event.attemptId}`,
-          type: STREAM_LOG_ENTRY_TYPES.LOG,
-          level: 'info',
-          timestamp: stamp.at,
-          groupId: event.stageId,
-          messageType: MESSAGE_TYPES.INTERNAL,
-          data: marker,
-          verbose: false,
-        });
-        return;
-      }
-
       case 'workflow.call': {
         const level: LogLevel =
           event.call.status === 'failed' ? 'error' : 'info';
@@ -290,24 +276,6 @@ export function createTranscriptFold(
         return;
       }
 
-      case 'skills.snapshot': {
-        // Schema owns redaction + sanitize + truncate for descriptions.
-        const snapshot = ActiveSkillsSnapshotSchema.parse({
-          skills: event.skills,
-        });
-        writer.appendSettled({
-          id: stamp.id,
-          type: STREAM_LOG_ENTRY_TYPES.LOG,
-          level: 'info',
-          timestamp: stamp.at,
-          groupId: event.stageId,
-          messageType: MESSAGE_TYPES.ACTIVE_SKILLS,
-          data: snapshot,
-          verbose: false,
-        });
-        return;
-      }
-
       case 'usage':
         if (event.recordTranscript === false) return;
         appendLog({
@@ -318,23 +286,12 @@ export function createTranscriptFold(
         });
         return;
 
-      case 'context.state': {
-        const utilizationPercent = roundedUtilizationPercent(
-          event.inputTokens,
-          event.contextWindow,
-        );
-        appendLog({
-          groupId: event.stageId,
-          messageType: MESSAGE_TYPES.CONTEXT_STATE,
-          text: `Context: ${event.inputTokens}/${event.contextWindow} tokens (${utilizationPercent.toFixed(1)}%)`,
-          data: {
-            inputTokens: event.inputTokens,
-            contextWindow: event.contextWindow,
-            utilizationPercent,
-          },
-        });
+      // The run's facts, not transcript rows: `context.state` folds into
+      // `RunView.context`, and the newest `skills.snapshot` is read from the
+      // run's committed rows by the one surface that shows it.
+      case 'skills.snapshot':
+      case 'context.state':
         return;
-      }
 
       case 'stream.start': {
         if (transcriptBoundaryClosed) return;

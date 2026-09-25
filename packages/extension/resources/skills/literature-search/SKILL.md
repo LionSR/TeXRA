@@ -1,6 +1,6 @@
 ---
 name: literature-search
-description: Discover, verify, and synthesize academic literature and web sources for research tasks. Use when Codex needs to find recent papers, trace citations, compare preprints with published versions, verify attributed claims, or build a source-backed literature summary with primary references.
+description: Discover, verify, and synthesize academic literature and web sources for research tasks. Use when you need to find recent papers, trace citations, compare preprints with published versions, verify attributed claims, or build a source-backed literature summary with primary references.
 ---
 
 # Literature Search

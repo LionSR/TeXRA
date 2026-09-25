@@ -32,6 +32,7 @@ import { runHeldMessage } from '@shared/runs/runStatusDisplay';
 import {
   claimStanding,
   DatabaseClaimRefused,
+  DatabaseNotOwner,
   DatabaseWriteFailed,
 } from '@shared/session/database';
 import { RunLedgerRefused } from '@shared/session/runLedger';
@@ -329,12 +330,16 @@ function refusalFor(
   runId: RunId,
 ): Effect.Effect<ResumeRunResult | undefined> {
   if (error instanceof RunLive) return Effect.succeed(REFUSED);
-  if (
-    error instanceof DatabaseWriteFailed &&
-    error.cause instanceof DatabaseClaimRefused
-  ) {
+  // A live owner refused the claim, or took it after its owner was proved dead.
+  const refusal = error instanceof DatabaseWriteFailed ? error.cause : error;
+  const holder =
+    refusal instanceof DatabaseClaimRefused ||
+    (refusal instanceof DatabaseNotOwner && !refusal.closed)
+      ? refusal.ownerId
+      : null;
+  if (holder !== null) {
     return session
-      .markUnreadable(runId, runHeldMessage(ownerPid(error.cause.ownerId)))
+      .markUnreadable(runId, runHeldMessage(ownerPid(holder)))
       .pipe(Effect.as({ failed: 'owned_elsewhere' } as const));
   }
   if (error instanceof ResumeSessionUnavailableError) {

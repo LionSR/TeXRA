@@ -39,8 +39,35 @@ interface DesktopMenuTemplateItem extends Omit<
   submenu?: DesktopMenuTemplateItem[];
 }
 
+/** File > Open Recent: the closed projects the registry remembers. */
+interface DesktopRecentProjects {
+  readonly roots: readonly string[];
+  open(root: string): void;
+  clear(): void;
+}
+
+function openRecentMenu(
+  recent: DesktopRecentProjects,
+): DesktopMenuTemplateItem {
+  return {
+    label: 'Open Recent',
+    submenu:
+      recent.roots.length === 0
+        ? [{ label: 'No Recent Projects', enabled: false }]
+        : [
+            ...recent.roots.map((root) => ({
+              label: root,
+              click: () => recent.open(root),
+            })),
+            { type: 'separator' },
+            { label: 'Clear Recent', click: () => recent.clear() },
+          ],
+  };
+}
+
 export function buildDesktopMenuTemplate(
   actions: DesktopCommandActions,
+  recent: DesktopRecentProjects,
   platform: DesktopPlatform = HOST_PLATFORM,
 ): DesktopMenuTemplateItem[] {
   const entriesById = new Map(
@@ -66,6 +93,7 @@ export function buildDesktopMenuTemplate(
     label: 'File',
     submenu: [
       ...DESKTOP_FILE_COMMANDS.map(commandItem),
+      openRecentMenu(recent),
       { type: 'separator' },
       platform === 'darwin' ? { role: 'close' } : { role: 'quit' },
     ],

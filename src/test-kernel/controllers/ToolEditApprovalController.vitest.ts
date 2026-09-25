@@ -130,7 +130,6 @@ function createTestHost() {
         Deferred.doneUnsafe(contextReady, Effect.void);
         return Deferred.await(staging).pipe(Effect.as(preview));
       },
-      revealApprovalSurface: () => Effect.void,
       openBuildDisplay: (() => Effect.void) as BuildDisplayFn,
       reportError: vi.fn(),
       decide: vi.fn(() => {

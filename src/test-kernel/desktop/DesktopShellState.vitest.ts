@@ -15,7 +15,6 @@ import {
   setSidebarWidth,
   setWorkbenchTabDirty,
   setWorkbenchWidth,
-  toggleFiles,
   toggleSidebar,
   toggleWorkbench,
   type DesktopShellState,

@@ -166,7 +166,6 @@ export const HostRequestSchema = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('apiKeyBanner'),
     action: z.enum(['set', 'guide']),
-    provider: z.string().nullish(),
   }),
   z.object({
     kind: z.literal('agentConfigBanner'),

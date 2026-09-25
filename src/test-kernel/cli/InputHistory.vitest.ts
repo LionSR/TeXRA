@@ -10,7 +10,7 @@ import { processOwnerId } from '@platform/defaults/nodeProcesses';
 import { GlobalDatabase } from '@shared/session/database';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
-import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
+import { nodePlatformLayer } from '@test/support/fsTestUtils';
 
 const tempDirs = useTempDirs();
 
@@ -23,7 +23,7 @@ const onGlobalDatabase = <A, E>(
     Effect.provide(
       globalDatabaseLayer(storage).pipe(
         Layer.provide(ProcessIdentity.layer(processOwnerId('vitest'))),
-        Layer.provide(nodeSpawnerLayer),
+        Layer.provide(nodePlatformLayer),
         Layer.orDie,
       ),
     ),

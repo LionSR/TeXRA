@@ -20,7 +20,10 @@ import {
   type AgentCategory,
   type FileLocation,
 } from '@shared/schemas';
-import { type SettingsTabPanelName } from '@shared/settingsView/settingsViewMessages';
+import {
+  SettingsTargetSchema,
+  type SettingsTarget,
+} from '@shared/settingsView/settingsViewMessages';
 import {
   commandCatalog,
   settingsTabByCommand,
@@ -93,7 +96,7 @@ type CommandProgram<A = void> = Effect.Effect<
  */
 export interface ExtensionCommandActions {
   showSettings(
-    tab?: SettingsTabPanelName,
+    tab?: SettingsTarget,
     agentSubTab?: AgentCategory,
   ): CommandProgram;
   newTask(): CommandProgram;
@@ -141,7 +144,7 @@ const SETTINGS_TAB_COMMAND_HANDLERS = Object.fromEntries(
   (
     Object.entries(settingsTabByCommand) as [
       SettingsTabCommandId,
-      SettingsTabPanelName,
+      SettingsTarget,
     ][]
   ).map(([id, tab]) => [
     id,
@@ -154,7 +157,12 @@ const SETTINGS_TAB_COMMAND_HANDLERS = Object.fromEntries(
 
 export const EXTENSION_COMMAND_HANDLERS = {
   ...SETTINGS_TAB_COMMAND_HANDLERS,
-  'texra.showDashboard': (actions) => actions.showSettings(),
+  // An optional target (`'models/keys'`) lets a caller land on one section.
+  'texra.showDashboard': definedHandler(
+    z.tuple([SettingsTargetSchema.optional()]),
+    (actions: ExtensionCommandActions, target?: SettingsTarget) =>
+      actions.showSettings(target),
+  ),
   'texra.showMainView': (actions) => actions.newTask(),
   'texra.cleanBuild': (actions) => actions.cleanBuild(),
   'texra.pack': definedHandler(
@@ -186,7 +194,6 @@ export const EXTENSION_COMMAND_HANDLERS = {
   'texra.auth.signIn': (actions) => actions.signIn(),
   'texra.auth.chatgpt.signIn': (actions) => actions.signInChatGpt(),
   'texra.auth.signOut': (actions) => actions.signOut(),
-  'texra.auth.viewProfile': (actions) => actions.showSettings('general'),
   [EXTENSION_COMMANDS.RUN_SETUP_ASSISTANT]: (actions) =>
     actions.runSetupAssistant(),
   [EXTENSION_COMMANDS.OPEN_GETTING_STARTED]: (actions) =>

@@ -7,9 +7,9 @@
 
 import { safeTerminalText } from '@cli/runtime/terminalText';
 import { CROSS, TICK, TOOL_OUTPUT_CORNER } from '@cli/tui/ui/glyphs';
-import { redactSecrets } from '@logger/redaction';
 import {
   elideText,
+  transcriptText,
   type StatItem,
   type TranscriptRow,
   type TranscriptText,
@@ -28,13 +28,27 @@ const UNBOUNDED_BUDGET = {
   tailLines: 0,
 } as const;
 
-/** Head/tail slice of one text, with the hidden-line marker in between. */
+// Sanitized once per text, and before the line split: the pass turns `\r`
+// into a line break, so the elision budget must count the lines that paint.
+const SAFE_TEXT_CACHE = new WeakMap<TranscriptText, TranscriptText>();
+
+function safeTranscriptText(text: TranscriptText): TranscriptText {
+  let safe = SAFE_TEXT_CACHE.get(text);
+  if (safe === undefined) {
+    safe = transcriptText(safeTerminalText(text.full));
+    SAFE_TEXT_CACHE.set(text, safe);
+  }
+  return safe;
+}
+
+/** Terminal-safe head/tail slice of one text, with the hidden-line marker in
+ *  between. */
 export function elidedTextLines(
   text: TranscriptText,
   elide: boolean,
 ): string[] {
   const { head, tail, hiddenLines } = elideText(
-    text,
+    safeTranscriptText(text),
     elide
       ? { headLines: ROW_BODY_HEAD_LINES, tailLines: ROW_BODY_TAIL_LINES }
       : UNBOUNDED_BUDGET,
@@ -120,11 +134,12 @@ export function transcriptRowBodyLines(
         return [];
     }
   })();
-  // One place for the terminal's two defensive passes over producer text:
-  // control sequences a terminal would execute, and credential shapes the
-  // recorder's redaction did not already cover (a raw provider error body
-  // reaches this row verbatim).
+  // One place for the terminal's defensive pass over producer text: control
+  // sequences a terminal would execute. Redaction is not a painter's job; the
+  // recorder (`redactTraceDraft`) already redacted every committed row.
+  // Elided texts arrive sanitized; the list kinds carry producer text too
+  // (paths, messages), so every line takes the (idempotent) pass here.
   return lines.length === 0
     ? lines
-    : cornerBlock(lines.map((line) => redactSecrets(safeTerminalText(line))));
+    : cornerBlock(lines.map((line) => safeTerminalText(line)));
 }

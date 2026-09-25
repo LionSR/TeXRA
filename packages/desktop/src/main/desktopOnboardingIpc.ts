@@ -1,6 +1,6 @@
 import { Data, Effect } from 'effect';
 import { OnboardingFunnelRefresher } from '@controllers/onboarding/onboardingFunnel';
-import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
+import type { ProcessServices } from '@platform/processRuntime';
 import type {
   StateStore,
   StateWriteFailed,
@@ -31,13 +31,18 @@ import type {
 /**
  * The welcome card's dismissal did not land: either the flag write rejected or
  * the renderer refused the follow-up state message. Both are reported the same
- * way, through the host's asynchronous-error reporter, so they share one tag.
+ * way, through the window's router, so they share one tag; `message` is the
+ * cause's own text, which the report shows.
  */
 class OnboardingDismissFailed extends Data.TaggedError(
   'OnboardingDismissFailed',
 )<{
+  readonly message: string;
   readonly cause: unknown;
 }> {}
+
+const dismissFailed = (cause: unknown) =>
+  new OnboardingDismissFailed({ message: toErrorMessage(cause), cause });
 
 /**
  * A capability behind a card action that still answers with a promise
@@ -75,10 +80,6 @@ interface DesktopOnboardingIpcOptions {
   kickoffSetup: () => Effect.Effect<void>;
   /** Run ChatGPT sign-in flow from the welcome card. */
   signInWithChatGpt: () => Effect.Effect<void, Error, ProcessServices>;
-  onAsyncError: (error: unknown) => void;
-  /** The process runtime the composition root built; the funnel refresh runs
-   *  on it rather than on a looked-up one. */
-  runtime: ProcessRuntime;
 }
 
 /**
@@ -145,11 +146,11 @@ export function createDesktopOnboardingIpc(
   const dismiss = Effect.gen(function* () {
     yield* state
       .update(DESKTOP_ONBOARDING_DISMISSED_STATE_KEY, true)
-      .pipe(Effect.mapError((cause) => new OnboardingDismissFailed({ cause })));
+      .pipe(Effect.mapError(dismissFailed));
     yield* Effect.try({
       try: () =>
         renderer.postToRenderer(buildDesktopOnboardingSetStateMessage(false)),
-      catch: (cause) => new OnboardingDismissFailed({ cause }),
+      catch: dismissFailed,
     });
   });
 
@@ -163,28 +164,28 @@ export function createDesktopOnboardingIpc(
   // concurrent run — the host's `handleExecute`/`runAgent` has no in-flight
   // dedup of its own.
   const runSetup = (): OnboardingAction =>
-    Effect.suspend(() => {
+    Effect.gen(function* () {
       if (!setupKickoffStarted) {
         setupKickoffStarted = true;
         // Fire-and-forget: the host kickoff runs the setup conversation to
         // completion, which must NOT block the serialized funnel-refresh
         // chain — otherwise a later "skip setup" / sign-out /
         // credential-removal refresh would queue behind the entire setup run,
-        // leaving the card stuck on 'setup'.
-        options.runtime.runFork(
-          options.kickoffSetup().pipe(
-            // Clear the guard once the run settles (success or failure): while
-            // it's in flight the guard blocks a concurrent second run, but
-            // afterwards another manual "Run Setup" click must launch again.
-            Effect.ensuring(
-              Effect.sync(() => {
-                setupKickoffStarted = false;
-              }),
-            ),
+        // leaving the card stuck on 'setup'. Detached, so the run outlives
+        // the card action that started it.
+        yield* options.kickoffSetup().pipe(
+          // Clear the guard once the run settles (success or failure): while
+          // it's in flight the guard blocks a concurrent second run, but
+          // afterwards another manual "Run Setup" click must launch again.
+          Effect.ensuring(
+            Effect.sync(() => {
+              setupKickoffStarted = false;
+            }),
           ),
+          Effect.forkDetach,
         );
       }
-      return funnel.run();
+      return yield* funnel.run();
     });
 
   const signInWithChatGpt = (): OnboardingAction<
@@ -205,32 +206,14 @@ export function createDesktopOnboardingIpc(
     );
 
   return {
-    handleMessage(message: DesktopCommandMessage): boolean {
+    handleMessage(message: DesktopCommandMessage) {
       switch (message.command) {
         case DESKTOP_ONBOARDING_COMMANDS.REQUEST_STATE:
-          options.runtime.runFork(
-            postCurrentState.pipe(
-              Effect.catch((failure) =>
-                Effect.sync(() => options.onAsyncError(failure)),
-              ),
-            ),
-          );
-          return true;
+          return postCurrentState;
         case DESKTOP_ONBOARDING_COMMANDS.DISMISS:
-          options.runtime.runFork(
-            dismiss.pipe(
-              // The reporter receives the rejection itself, exactly as the
-              // promise-side handler on this call used to hand it over. The
-              // handler's parameter names the channel's whole error type, so a
-              // second tag added to `dismiss` fails to compile here.
-              Effect.catch((failure: OnboardingDismissFailed) =>
-                Effect.sync(() => options.onAsyncError(failure.cause)),
-              ),
-            ),
-          );
-          return true;
+          return dismiss;
         default:
-          return false;
+          return undefined;
       }
     },
     refreshOnboardingFunnel: () => funnel.run(),

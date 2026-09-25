@@ -3,7 +3,6 @@ import { MODEL_CONFIGS } from 'llm-zoo';
 
 // Local imports
 import type { ApiProvider } from '@model/apiProviders';
-import { resolveDirectModelApiKeyProvider } from '@model/openRouterRouting';
 import type { SecretsFailed } from '@platform/secrets';
 import type { ExhaustionReason, RunId } from '@shared/schemas';
 import {
@@ -71,9 +70,7 @@ export class ProgressApiKeyRetryController {
     // the open-platform Moonshot provider, so prompt for and verify the key
     // the retry will actually use; every other model keeps the forwarded
     // provider (or the default provider sweep) unchanged.
-    return isKimiCodeExclusiveModel(config)
-      ? resolveDirectModelApiKeyProvider(config)
-      : request.provider;
+    return isKimiCodeExclusiveModel(config) ? 'kimiCode' : request.provider;
   }
 
   /** Switch this retry onto the user's own key and relaunch it. The host

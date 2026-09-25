@@ -1,10 +1,9 @@
 /**
- * The Agents page: the agent library, with the team cards (slot `teams`) and
- * skills (slot `skills`) the settings app composes in, and one collapsed
- * Advanced section for session and team-coordination knobs.
+ * The Agents page, one section at a time: the agent library, the team cards
+ * (slot `teams`) and skills (slot `skills`) the settings app composes in, and
+ * Advanced, the session and team-coordination knobs.
  */
 
-import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
 import {
   LitElement,
@@ -33,6 +32,7 @@ import {
 import {
   type AgentScanIssue,
   type AgentSelectionItem,
+  type SettingsSectionName,
 } from '@shared/settingsView/settingsViewMessages';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
@@ -107,10 +107,8 @@ export class AgentsTab extends LitElement {
       }
 
       ::slotted([slot='teams']),
-      ::slotted([slot='skills']),
-      .agents-advanced {
+      ::slotted([slot='skills']) {
         display: block;
-        margin-top: var(--wa-space-l);
       }
     `,
   ];
@@ -120,6 +118,8 @@ export class AgentsTab extends LitElement {
   @property({ attribute: false }) customAgentDir = '';
   @property({ attribute: false }) customAgentDirIsDefault = true;
   @property({ attribute: false }) customAgentScanIssues: AgentScanIssue[] = [];
+  @property({ attribute: false }) section: SettingsSectionName<'agents'> =
+    'library';
   @property({ attribute: false }) initialSubTab?: AgentCategory;
   @property({ attribute: false }) compactionThresholdPercent =
     MODEL_COMPACTION_THRESHOLD_SETTING.defaultValue;
@@ -232,143 +232,154 @@ export class AgentsTab extends LitElement {
     `;
   }
 
+  private renderSection(): TemplateResult {
+    switch (this.section) {
+      case 'library':
+        return this.renderLibrary();
+      case 'teams':
+        return html`<slot name="teams"></slot>`;
+      case 'skills':
+        return html`<slot name="skills"></slot>`;
+      case 'advanced':
+        return this.renderAdvanced();
+    }
+  }
+
   override render(): TemplateResult {
     return html`
       <div
         class="agents-container tab-content-container"
         data-ack-generation=${this.ackGeneration}
       >
-        ${renderSettingsSectionHeading({
-          title: 'Agent library',
-          description:
-            'Choose which agents appear in the agent selector, or create your own.',
-          icon: 'robot',
-        })}
-        <div class="settings-section">
-          <div class="settings-row">
-            <div class="settings-row-text">
-              <span class="settings-row-label">
-                ${waIcon('folder')} Custom agents
-                ${
-                  this.customAgentDirIsDefault
-                    ? html`<wa-tag variant="neutral" size="s">Default</wa-tag>`
-                    : nothing
-                }
-              </span>
-              <span
-                class="settings-row-help agents-dir-path"
-                title=${this.customAgentDir}
-              >
-                <bdi dir="auto">${this.customAgentDir}</bdi>
-              </span>
-            </div>
-            <div class="settings-row-control action-button-group">
-              ${renderIconActionButton({
-                icon: 'folder-open',
-                label: 'Open custom agents folder',
-                onClick: () => this.handleOpenFolder(),
-              })}
-              ${renderLabeledActionButton({
-                text: 'Change folder',
-                label: 'Change custom agents folder',
-                kind: 'secondary',
-                appearance: 'outlined',
-                onClick: () => this.handleChangeCustomDir(),
-              })}
+        ${this.renderSection()}
+      </div>
+    `;
+  }
+
+  private renderLibrary(): TemplateResult {
+    return html`
+      ${renderSettingsSectionHeading({
+        title: 'Agent library',
+        description:
+          'Choose which agents appear in the agent selector, or create your own.',
+        icon: 'robot',
+      })}
+      <div class="settings-section">
+        <div class="settings-row">
+          <div class="settings-row-text">
+            <span class="settings-row-label">
+              ${waIcon('folder')} Custom agents
               ${
                 this.customAgentDirIsDefault
-                  ? nothing
-                  : renderLabeledActionButton({
-                      icon: 'arrow-rotate-left',
-                      text: 'Use default folder',
-                      label: 'Reset custom agents folder',
-                      kind: 'secondary',
-                      appearance: 'outlined',
-                      onClick: () => this.handleResetCustomDir(),
-                    })
+                  ? html`<wa-tag variant="neutral" size="s">Default</wa-tag>`
+                  : nothing
               }
-            </div>
+            </span>
+            <span
+              class="settings-row-help agents-dir-path"
+              title=${this.customAgentDir}
+            >
+              <bdi dir="auto">${this.customAgentDir}</bdi>
+            </span>
           </div>
-          ${this.renderCustomAgentIssues()}
+          <div class="settings-row-control action-button-group">
+            ${renderIconActionButton({
+              icon: 'folder-open',
+              label: 'Open custom agents folder',
+              onClick: () => this.handleOpenFolder(),
+            })}
+            ${renderLabeledActionButton({
+              text: 'Change folder',
+              label: 'Change custom agents folder',
+              kind: 'secondary',
+              appearance: 'outlined',
+              onClick: () => this.handleChangeCustomDir(),
+            })}
+            ${
+              this.customAgentDirIsDefault
+                ? nothing
+                : renderLabeledActionButton({
+                    icon: 'arrow-rotate-left',
+                    text: 'Use default folder',
+                    label: 'Reset custom agents folder',
+                    kind: 'secondary',
+                    appearance: 'outlined',
+                    onClick: () => this.handleResetCustomDir(),
+                  })
+            }
+          </div>
         </div>
-        ${this.renderAgentCategory(
-          'toolUse',
-          this.agents.toolUse,
-          'Tool-use agents',
-          'Interactive agents that can inspect files, run tools, and edit the workspace.',
-          'screwdriver-wrench',
-        )}
-        ${this.renderAgentCategory(
-          'workflow',
-          this.agents.workflow,
-          'Workflow agents',
-          'Focused specialists for writing, review, research, and structured paper workflows.',
-          'wand-magic-sparkles',
-        )}
-        <slot name="teams"></slot>
-        <slot name="skills"></slot>
-        <wa-details
-          class="panel-collapsible agents-advanced"
-          summary="Advanced"
-        >
-          <div class="settings-section">
-            ${renderSettingsNumberRow({
-              label: 'Compaction threshold',
-              description: MODEL_COMPACTION_THRESHOLD_SETTING.description,
-              value: this.compactionThresholdPercent,
-              min: MODEL_COMPACTION_THRESHOLD_SETTING.min,
-              max: MODEL_COMPACTION_THRESHOLD_SETTING.max,
-              unit: '%',
-              // Clearing the field commits 0, which is the documented way to
-              // disable compaction — not a no-op edit to be reverted.
-              revertOnEmpty: false,
-              onChange: (value) =>
-                postStateSetting(
-                  MODEL_COMPACTION_THRESHOLD_SETTING.configKey,
-                  value,
-                ),
-            })}
-            ${renderSettingsNumberRow({
-              label: 'Automatic retries',
-              description: MODEL_RETRY_MAX_ATTEMPTS_SETTING.description,
-              value: this.modelRetryMaxAttempts,
-              min: MODEL_RETRY_MAX_ATTEMPTS_SETTING.min,
-              max: MODEL_RETRY_MAX_ATTEMPTS_SETTING.max,
-              step: 1,
-              revertOnEmpty: false,
-              onChange: (value) =>
-                postStateSetting(
-                  MODEL_RETRY_MAX_ATTEMPTS_SETTING.configKey,
-                  value,
-                ),
-            })}
-            ${renderStateSettingToggleRow({
-              key: GlobalStateKey.ALLOW_ORCHESTRATOR_KILL,
-              checked: this.allowOrchestratorKill,
-            })}
-            ${renderStateSettingToggleRow({
-              key: GlobalStateKey.DETACH_SUBAGENTS_ON_STOP,
-              checked: this.detachSubagentsOnStop,
-            })}
-            ${renderStateSettingToggleRow({
-              key: WorkspaceStateKey.GIT_WORKTREE_SUPPORT,
-              checked: this.worktreeSupport,
-            })}
-            ${renderSettingsNumberRow({
-              label: 'Child-run concurrency budget',
-              description: CHILD_RUN_CONCURRENCY_BUDGET_SETTING.description,
-              value: this.childRunConcurrencyBudget,
-              min: CHILD_RUN_CONCURRENCY_BUDGET_SETTING.min,
-              max: CHILD_RUN_CONCURRENCY_BUDGET_SETTING.max,
-              step: 1,
-              onChange: (value) =>
-                postStateSetting(
-                  CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
-                  value,
-                ),
-            })}
-          </div>
-        </wa-details>
+        ${this.renderCustomAgentIssues()}
+      </div>
+      ${this.renderAgentCategory(
+        'toolUse',
+        this.agents.toolUse,
+        'Tool-use agents',
+        'Interactive agents that can inspect files, run tools, and edit the workspace.',
+        'screwdriver-wrench',
+      )}
+      ${this.renderAgentCategory(
+        'workflow',
+        this.agents.workflow,
+        'Workflow agents',
+        'Focused specialists for writing, review, research, and structured paper workflows.',
+        'wand-magic-sparkles',
+      )}
+    `;
+  }
+
+  private renderAdvanced(): TemplateResult {
+    return html`
+      <div class="settings-section">
+        ${renderSettingsNumberRow({
+          label: 'Compaction threshold',
+          description: MODEL_COMPACTION_THRESHOLD_SETTING.description,
+          value: this.compactionThresholdPercent,
+          min: MODEL_COMPACTION_THRESHOLD_SETTING.min,
+          max: MODEL_COMPACTION_THRESHOLD_SETTING.max,
+          unit: '%',
+          // Clearing the field commits 0, which is the documented way to
+          // disable compaction — not a no-op edit to be reverted.
+          revertOnEmpty: false,
+          onChange: (value) =>
+            postStateSetting(
+              MODEL_COMPACTION_THRESHOLD_SETTING.configKey,
+              value,
+            ),
+        })}
+        ${renderSettingsNumberRow({
+          label: 'Automatic retries',
+          description: MODEL_RETRY_MAX_ATTEMPTS_SETTING.description,
+          value: this.modelRetryMaxAttempts,
+          min: MODEL_RETRY_MAX_ATTEMPTS_SETTING.min,
+          max: MODEL_RETRY_MAX_ATTEMPTS_SETTING.max,
+          step: 1,
+          revertOnEmpty: false,
+          onChange: (value) =>
+            postStateSetting(MODEL_RETRY_MAX_ATTEMPTS_SETTING.configKey, value),
+        })}
+        ${renderStateSettingToggleRow({
+          key: GlobalStateKey.ALLOW_ORCHESTRATOR_KILL,
+          checked: this.allowOrchestratorKill,
+        })}
+        ${renderStateSettingToggleRow({
+          key: GlobalStateKey.DETACH_SUBAGENTS_ON_STOP,
+          checked: this.detachSubagentsOnStop,
+        })}
+        ${renderStateSettingToggleRow({
+          key: WorkspaceStateKey.GIT_WORKTREE_SUPPORT,
+          checked: this.worktreeSupport,
+        })}
+        ${renderSettingsNumberRow({
+          label: 'Child-run concurrency budget',
+          description: CHILD_RUN_CONCURRENCY_BUDGET_SETTING.description,
+          value: this.childRunConcurrencyBudget,
+          min: CHILD_RUN_CONCURRENCY_BUDGET_SETTING.min,
+          max: CHILD_RUN_CONCURRENCY_BUDGET_SETTING.max,
+          step: 1,
+          onChange: (value) =>
+            postStateSetting(CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY, value),
+        })}
       </div>
     `;
   }
