@@ -61,6 +61,17 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
   manage them, and the Skills settings tab lists them. Only skills are loaded
   for now; a plugin's MCP servers, hooks, commands and agents are listed as
   ignored and never run.
+- **Desktop: clearer multiple projects** — each open project in the sidebar
+  has one row with a status dot (waiting on you, running, or finished while
+  you were elsewhere), a `+` that starts a task in that project, and a `×`
+  that closes it; tasks are listed under their project and nowhere else.
+  The conversation header
+  is one row: the task, its stop control and `⋯`. Files, Terminal, Browser
+  and Logs open as tabs from the workbench's `+`. A run that needs you or finishes in a project
+  you are not looking at raises a system notification that leads back to it,
+  and the dock icon counts decisions waiting across projects. Dialogs a
+  background run opens name its project, and File > Open Recent reopens
+  projects you closed.
 - **The orchestrator and the Lean agents ship with TeXRA** — `orchestrator`,
   `search`, `simplifier`, `presenter`, `progressCheck`, and the Lean Project
   agents (`lean`, `leanSearch`, `leanSimplifier`, `leanBlueprint`,

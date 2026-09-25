@@ -4,7 +4,7 @@
 // require numeric options, so resolve the inherited desktop chrome size once
 // from the same computed style instead of maintaining separate magic numbers.
 
-const FALLBACK_CHROME_FONT_SIZE = 13;
+const FALLBACK_CHROME_FONT_SIZE = 14;
 
 /** Returns the resolved desktop chrome font size in CSS pixels. */
 export function getDesktopChromeFontSize(): number {

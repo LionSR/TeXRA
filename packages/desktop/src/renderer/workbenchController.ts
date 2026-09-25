@@ -179,7 +179,7 @@ export function createWorkbenchController({
       );
       return;
     }
-    if (kind === 'editor') {
+    if (kind === 'editor' || kind === 'files') {
       updateShell(openWorkbenchTab(getState(), { kind }));
       void editorPane.refresh();
       return;
@@ -234,7 +234,7 @@ export function createWorkbenchController({
     return renderEmptyState({
       icon: 'file-code',
       title: 'Choose a file',
-      body: 'Open a file from the project list to inspect or edit it beside this task.',
+      body: 'Open a file from Files to inspect or edit it beside this task.',
       headingTag: 'h2',
       className: 'shell-workbench-placeholder',
       iconSurfaceSize: 'l',
@@ -249,6 +249,13 @@ export function createWorkbenchController({
     tab: WorkbenchTab,
   ): TemplateResult | typeof nothing {
     switch (tab.kind) {
+      case 'files':
+        return html`<div
+          class="shell-workbench-surface shell-files"
+          data-scroll="true"
+        >
+          ${editorPane.treeElement}
+        </div>`;
       case 'editor':
         return tab.target
           ? workbenchSurfaceTemplate(editorPane.element)
@@ -322,6 +329,7 @@ export function createWorkbenchController({
           getState().activeWorkbenchTabIds[placement],
           placement,
           {
+            onOpenKind: openKind,
             onActivate: (tabId) =>
               updateShell(focusWorkbenchTab(getState(), tabId)),
             onClose: disposeWorkbenchTab,
