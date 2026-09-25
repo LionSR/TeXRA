@@ -11,6 +11,7 @@ import {
   existsAtAbsolute,
   getExtraDirs,
   isPathSafe,
+  reportExtraDirWarnings,
   whichOnExtendedPath,
 } from './platformPaths';
 import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
@@ -63,7 +64,9 @@ const findToolUncached = Effect.fnUntraced(function* (tool: string) {
     return null;
   }
   const candidates = toolCandidates(tool);
-  for (const dir of getExtraDirs()) {
+  const extraDirs = getExtraDirs();
+  yield* reportExtraDirWarnings;
+  for (const dir of extraDirs) {
     for (const name of candidates) {
       const candidate = path.join(dir, name);
       if (existsAtAbsolute(candidate)) return candidate;

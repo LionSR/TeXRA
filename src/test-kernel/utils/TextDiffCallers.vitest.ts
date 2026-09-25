@@ -121,7 +121,7 @@ describe('shared text-diff caller fixtures', () => {
             'alpha\ninsert\nbeta\nomega\n',
           ),
         ).toBe(1);
-        const patch = unifiedDiffText(original, final);
+        const patch = unifiedDiffText(original, final).text;
         expect(patch).toContain('-beta');
         expect(patch).toContain('+BETA');
 

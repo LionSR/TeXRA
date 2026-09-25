@@ -4,12 +4,13 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 
 // Third-party imports
+import { Effect } from 'effect';
 import { globSync } from 'glob';
 import { LRUCache } from 'lru-cache';
 import which from 'which';
 
-// Local imports - log
-import { createLog } from '@logger/logUtils';
+// Local imports
+import { withLogChannel } from '@logger/effectLog';
 import { normalizeFilePath, unique } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -33,10 +34,27 @@ export const IS_WINDOWS = process.platform === 'win32';
 // Common LaTeX tool names used across the system
 const TEX_TOOLS = ['latexdiff', 'latexindent', 'latexmk'] as const;
 
-const log = createLog('platformPaths');
-
 // Cache for extra directories to avoid repeated glob operations
 let cachedExtraDirs: string[] | null = null;
+
+/**
+ * What building {@link getExtraDirs} skipped, held until an Effect caller
+ * reports it: the directories are computed on the synchronous PATH path of
+ * every spawn, which has no fiber to log from. {@link reportExtraDirWarnings}
+ * drains it.
+ */
+const unreportedWarnings: string[] = [];
+
+/**
+ * Log, once, each directory {@link getExtraDirs} had to skip. Run by the
+ * Effect programs that consume the extended PATH (the command spawn and the
+ * tool lookup), so the first of them to run after the computation reports it.
+ */
+export const reportExtraDirWarnings: Effect.Effect<void> = Effect.suspend(() =>
+  Effect.forEach(unreportedWarnings.splice(0), (m) => Effect.logWarning(m), {
+    discard: true,
+  }),
+).pipe(withLogChannel('platformPaths'));
 
 const DEFAULT_MSYS_ROOTS = ['C:\\msys64', 'C:\\msys32'];
 const MSYS_SUBDIRS = ['usr\\bin', 'mingw64\\bin', 'mingw32\\bin'];
@@ -63,23 +81,27 @@ export function safeHomedir(): string | null {
  * of *every* subprocess TeXRA spawns. A throw there is not a loud failure for
  * one directory, it is every command in the session failing with
  * `Path must be absolute`, which reads to the user as the tool being missing.
- * So a relative value is skipped and reported, never thrown.
+ * So a relative value is skipped and recorded for
+ * {@link reportExtraDirWarnings}, never thrown.
  */
 function absoluteEnvRoot(value: string, variable: string): string | null {
   if (path.isAbsolute(value)) return value;
-  log.warn(
+  unreportedWarnings.push(
     `Ignoring ${variable}=${value}: it must be an absolute path to be searched for tools.`,
   );
   return null;
 }
 
 /** Glob matches sorted in descending order. A failed glob drops a whole tool
- *  directory from PATH, so it is named rather than silently empty. */
+ *  directory from PATH, so it is recorded for {@link reportExtraDirWarnings}
+ *  rather than silently empty. */
 function globDescending(pattern: string): string[] {
   try {
     return globSync(pattern).sort().reverse();
   } catch (err) {
-    log.warn(`Glob failed for ${pattern}: ${toErrorMessage(err)}`);
+    unreportedWarnings.push(
+      `Glob failed for ${pattern}: ${toErrorMessage(err)}`,
+    );
     return [];
   }
 }

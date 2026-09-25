@@ -1351,7 +1351,7 @@ if (SHOW_TODOS) {
 if (SHOW_EDIT_APPROVAL) {
   const showApproval = () => {
     const request = makeEditApprovalRequest();
-    const permission = prepareToolEditApprovalPrompt(session(), {
+    const { permission } = prepareToolEditApprovalPrompt(session(), {
       requestId: 'harness-edit-approval',
       request,
       relativePath: request.path,

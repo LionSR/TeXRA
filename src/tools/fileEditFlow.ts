@@ -289,7 +289,7 @@ export const applyApprovedFileEdit = Effect.fn('applyApprovedFileEdit')(
       approval.appliedContent,
     );
     const presentation = present({ approval, ...written });
-    const output = appendApprovalDiffNote(
+    const output = yield* appendApprovalDiffNote(
       presentation.output,
       displayPath,
       proposedContent,

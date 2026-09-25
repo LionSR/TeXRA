@@ -16,7 +16,7 @@ import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { monacoLanguageForPath } from '@shared/monaco/monacoLanguage';
 import { computeLineChangeSummary } from '@tools/approval/toolEditApproval';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { unifiedDiffText } from '@utils/text/unifiedDiff';
+import { reportDiffTimeout, unifiedDiffText } from '@utils/text/unifiedDiff';
 
 import {
   DESKTOP_DIFF_COMMANDS,
@@ -174,7 +174,11 @@ export function createDesktopDiffHost(
         if (shownInRenderer) return;
 
         // External-editor fallback: write a unified patch file and open it.
-        const diffBody = unifiedDiffText(originalContent, proposedContent);
+        const { text: diffBody, timeout } = unifiedDiffText(
+          originalContent,
+          proposedContent,
+        );
+        yield* reportDiffTimeout(timeout);
         const patch = diffBody
           ? `--- ${original.filePath}\n+++ ${proposed.filePath}\n${diffBody}\n`
           : `No textual changes for ${path.basename(proposed.filePath)}.\n`;

@@ -27,7 +27,6 @@ const mocks = vi.hoisted(() => ({
   getSourceDirectory: vi.fn(
     async (_source: AgentSource) => undefined as string | undefined,
   ),
-  logWarn: vi.fn(),
   refreshAfterAgentMutation: vi.fn(() => Effect.void),
   showLoggedMessage: vi.fn(() => Effect.succeed('')),
   showInformationMessage: vi.fn(),
@@ -89,12 +88,6 @@ function createHandlers(): AgentHandlers {
     {
       channel: 'test',
       extensionContext: {} as import('vscode').ExtensionContext,
-      log: {
-        debug: vi.fn(),
-        error: vi.fn(),
-        info: vi.fn(),
-        warn: mocks.logWarn,
-      },
       withActiveWebview: vi.fn(() => Effect.void),
       postMessageToActiveWebview: vi.fn(() => Effect.void),
     },

@@ -1,5 +1,5 @@
 import { Cause, Clock, Deferred, Effect, Option } from 'effect';
-import { createLog } from '@logger/logUtils';
+import { LOG_CHANNEL, LOG_DATA, writeLogEntry } from '@logger/logSink';
 import {
   SHUTDOWN_PHASE,
   type LifecycleHost,
@@ -7,7 +7,7 @@ import {
   type ShutdownPhase,
 } from '../interfaces';
 
-const log = createLog('LifecycleHost');
+const CHANNEL = 'LifecycleHost';
 
 /** One `onShutdown` call. Registrations are compared by entry identity, not by
  *  handler identity, so registering the same program twice yields two
@@ -47,7 +47,18 @@ export function createLifecycleHost(
   const onError =
     options.onError ??
     ((phase, error) => {
-      log.error(`[lifecycle] ${phase} handler failed`, { data: error });
+      // Direct sink write: the hosts run the drain on a bare runtime (it is
+      // the path that disposes the process runtime), whose logger is not the
+      // host sink.
+      writeLogEntry({
+        level: 'ERROR',
+        fiberId: '',
+        timestamp: new Date().toISOString(),
+        message: `[lifecycle] ${phase} handler failed`,
+        cause: undefined,
+        annotations: { [LOG_CHANNEL]: CHANNEL, [LOG_DATA]: error },
+        spans: {},
+      });
     });
 
   // Sequential — handlers within a phase run in registration order. Parallel

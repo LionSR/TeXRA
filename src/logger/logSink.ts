@@ -2,10 +2,10 @@
  * The host diagnostic port: one structured entry in, one host surface out.
  *
  * Hosts install a sink here (VS Code output channels, the desktop log file,
- * the CLI's console). Both diagnostic producers write the same entry through
- * it — `Effect.log*` via the logger layer in `@logger/effectDiagnostics`, and
- * the channel-keyed writers in `@logger/logUtils` that pre-Effect subsystems
- * still call. Neither producer decides presentation: severity, timestamp,
+ * the CLI's console). Producers write the same entry through it: `Effect.log*`
+ * via the logger layer in `@logger/effectDiagnostics`, and a few synchronous
+ * publication points (the trace emitter, pre-runtime and shutdown paths) that
+ * call `writeLogEntry` directly. No producer decides presentation: severity, timestamp,
  * identity, and payload stay separate fields the whole way, and the write
  * path below renders the one field that is not already a string — the `data`
  * payload — once, before redaction, then bounds the redacted value, so a host renders its entries

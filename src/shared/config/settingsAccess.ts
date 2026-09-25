@@ -3,7 +3,8 @@ import { Effect } from 'effect';
 import { z } from 'zod';
 
 // Local imports
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
+import { LOG_CHANNEL, writeLogEntry } from '@logger/logSink';
 import type {
   ConfigProvider,
   ConfigTarget,
@@ -18,7 +19,7 @@ import type {
 } from '@shared/state/stateSettings';
 import { settingByKey } from '@shared/state/stateSettings';
 
-const log = createLog('settingsAccess');
+const CHANNEL = 'settingsAccess';
 
 /**
  * Host-aware read/write for {@link StateSettingEntry} rows.
@@ -79,8 +80,13 @@ export function readSetting(
   stores: SettingsStores,
   host: SettingHost = 'vscode',
 ): Effect.Effect<unknown, StateReadFailed> {
-  return Effect.map(inspectSetting(entry, stores, host), (stored) =>
-    resolveStored(entry, stored),
+  return Effect.flatMap(inspectSetting(entry, stores, host), (stored) =>
+    stored.kind === 'value'
+      ? Effect.succeed(stored.value)
+      : Effect.logWarning(invalidStoredMessage(entry, stored.cause)).pipe(
+          withLogChannel(CHANNEL),
+          Effect.map(() => settingDefault(entry)),
+        ),
   );
 }
 
@@ -118,10 +124,20 @@ export function readConfigSetting(
   entry: StateSettingEntry,
   config: ConfigProvider,
 ): unknown {
-  return resolveStored(
-    entry,
-    classifyStored(entry, rawConfigValue(entry, config)),
-  );
+  const stored = classifyStored(entry, rawConfigValue(entry, config));
+  if (stored.kind === 'value') return stored.value;
+  // Direct sink write: config reads are synchronous by ruling and this one
+  // also serves the CLI's pre-runtime startup rows, so no fiber exists here.
+  writeLogEntry({
+    level: 'WARN',
+    fiberId: '',
+    timestamp: new Date().toISOString(),
+    message: invalidStoredMessage(entry, stored.cause),
+    cause: undefined,
+    annotations: { [LOG_CHANNEL]: CHANNEL },
+    spans: {},
+  });
+  return settingDefault(entry);
 }
 
 /**
@@ -152,19 +168,11 @@ function classifyStored(entry: StateSettingEntry, raw: unknown): StoredSetting {
 /**
  * A stored value that no longer validates resolves to the schema default —
  * but only after warning, as #7470 established for the reader this replaced:
- * an invalid *persisted* value must not vanish without a trace.
+ * an invalid *persisted* value must not vanish without a trace. Both readers
+ * warn with this text before they substitute the default.
  */
-function resolveStored(
-  entry: StateSettingEntry,
-  stored: StoredSetting,
-): unknown {
-  if (stored.kind === 'value') {
-    return stored.value;
-  }
-  log.warn(
-    `Ignoring invalid persisted value for setting "${entry.key}": ${stored.cause}`,
-  );
-  return settingDefault(entry);
+function invalidStoredMessage(entry: StateSettingEntry, cause: string): string {
+  return `Ignoring invalid persisted value for setting "${entry.key}": ${cause}`;
 }
 
 /**

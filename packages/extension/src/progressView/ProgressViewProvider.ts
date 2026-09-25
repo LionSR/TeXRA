@@ -58,7 +58,6 @@ import { pushManualCriticism } from '@frontend/latex/inlineCriticism';
 import { getLinterMessages } from '@frontend/latex/linter';
 import { AgentReviewService } from '@frontend/review/AgentReviewService';
 import { withLogChannel } from '@logger/effectLog';
-import { createLog } from '@logger/logUtils';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import { Lifecycle, SHUTDOWN_PHASE } from '@platform/interfaces';
 import type {
@@ -94,7 +93,6 @@ import { createExtensionHostRequests } from './extensionHostRequests';
 import { RequestAttention } from './requestAttention';
 
 const CHANNEL = 'ProgressViewProvider';
-const log = createLog(CHANNEL);
 
 export type ProgressRunRevealResult = 'revealed' | 'missing';
 
@@ -270,8 +268,14 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
             missingTools: [...missingTools],
           })),
         ),
+      // A synchronous port callback: the entry runs on the view's runtime.
       onError: (error) => {
-        log.error('Host snapshot refresh failed', { data: error });
+        this.runtime.runFork(
+          Effect.logError('Host snapshot refresh failed').pipe(
+            Effect.annotateLogs({ data: error }),
+            withLogChannel(CHANNEL),
+          ),
+        );
       },
       publish: (snapshot) =>
         this.bridge.setHost(snapshot).pipe(
@@ -588,15 +592,20 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     view: vscode.WebviewView | vscode.WebviewPanel,
   ): Effect.Effect<Port, SurfacePlacementFailed, FileSystem.FileSystem> {
     return Effect.gen({ self: this }, function* () {
+      // The post settles off any fiber; its outcome logs on the runtime.
+      const warn = (text: string) =>
+        this.runtime.runFork(
+          Effect.logWarning(text).pipe(withLogChannel(CHANNEL)),
+        );
       const send = (message: DownMessage): void => {
         void Promise.resolve(view.webview.postMessage(message)).then(
           (delivered) => {
             if (!delivered) {
-              log.warn(`A ${message.kind} message was not delivered to ${id}`);
+              warn(`A ${message.kind} message was not delivered to ${id}`);
             }
           },
           (error: unknown) => {
-            log.warn(
+            warn(
               `Posting a ${message.kind} message to ${id} failed: ${toErrorMessage(error)}`,
             );
           },

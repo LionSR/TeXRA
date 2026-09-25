@@ -42,6 +42,7 @@ import { bootstrapHost } from '@controllers/hostBootstrap';
 import { fromHost } from '@controllers/session/hostCallFailure';
 import { emitAppSignal } from '@eventBus/AppSignals';
 import { vscodeToolMissingReporter } from '@frontend/system/commandUtils';
+import { installUnhandledRejectionSurface } from '@frontend/system/unhandledRejectionSurface';
 import { subscribeAppSignal } from '@frontend/events/appSignalSubscriptions';
 import { acquireVscodeLanguageModel } from '@frontend/lm/acquireVscodeLanguageModel';
 import {
@@ -75,9 +76,7 @@ import { VscodeSecrets } from '@frontend/vscode/vscodeSecrets';
 import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
 import { withLogChannel } from '@logger/effectLog';
-import { createLog } from '@logger/logUtils';
 import { setLogSink } from '@logger/logSink';
-import { formatFatalErrorDetail } from '@logger/redaction';
 import { AppState, AgentDirectories } from '@platform/interfaces';
 import type {
   AgentResumePort,
@@ -127,7 +126,6 @@ import { ProgressViewProvider } from './progressView/ProgressViewProvider';
 import { registerCommands } from './commands';
 
 const EXTENSION_CHANNEL = 'extension';
-const log = createLog(EXTENSION_CHANNEL);
 
 /** The TeXRA account provider and its URI handler could not be registered. */
 class SupabaseAuthRegistrationFailed extends Data.TaggedError(
@@ -302,7 +300,10 @@ async function initVscodePlatform(
       openTexraConfigStores(
         DEFAULT_NODE_STORAGE_ROOT,
         workspaceRoot,
-        (message) => log.warn(message),
+        (message) =>
+          runtime.runFork(
+            Effect.logWarning(message).pipe(withLogChannel(EXTENSION_CHANNEL)),
+          ),
       ),
     ),
   );
@@ -367,32 +368,6 @@ function shutdownExtension(): Promise<void> {
   };
   void shutdownPromise.then(clearShutdownPromise, clearShutdownPromise);
   return shutdownPromise;
-}
-
-function installUnhandledRejectionSurface(
-  subscriptions: vscode.Disposable[],
-): void {
-  const report = (error: unknown) => {
-    log.error('Unhandled extension-host rejection', { data: error });
-    void vscode.window
-      .showErrorMessage(
-        `The extension host encountered an unrecoverable error: ${formatFatalErrorDetail(error)}`,
-      )
-      .then(undefined, (notificationError: unknown) => {
-        log.error('Failed to display unhandled rejection error', {
-          data: notificationError,
-        });
-      });
-    // Installing an unhandled-rejection listener otherwise suppresses Node's
-    // default fatal path. The host must not continue after an unowned failure.
-    setImmediate(() => {
-      throw ensureError(error);
-    });
-  };
-  process.on('unhandledRejection', report);
-  subscriptions.push({
-    dispose: () => process.off('unhandledRejection', report),
-  });
 }
 
 /**

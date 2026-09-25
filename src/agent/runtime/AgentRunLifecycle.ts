@@ -398,7 +398,7 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
       // A throw in this fallible prologue must not strand the tracked handle
       // without its terminal: it falls back to an unexpected failure.
       const prologue = yield* Effect.exit(
-        Effect.sync(() => {
+        Effect.gen(function* () {
           const kind = classifyAgentError(err);
           // toRetryErrorInfo strips rawErrorBody, which the `run.end` error
           // type omits and a bare object spread would smuggle past the check.
@@ -409,7 +409,7 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
           // Root failures are logged here; a subagent's is delivered to its
           // orchestrator, so a second wrapper error would blame the parent.
           if (kind !== 'abort' && !handle.isChild) {
-            logSdkError(ctx.logger, errorMsg, err, {
+            yield* logSdkError(ctx.logger, errorMsg, err, {
               operation: `execute ${agentIdentifier}`,
             });
           }

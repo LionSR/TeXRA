@@ -19,7 +19,6 @@ import {
 import { SupabaseAuth } from '@auth/SupabaseAuth';
 import { SUPABASE_CUSTOM_DOMAIN } from '@auth/config';
 import { withLogChannel } from '@logger/effectLog';
-import { createLog } from '@logger/logUtils';
 import type { ConfigProvider } from '@platform/interfaces';
 import type { UsageRoute } from '@shared/schemas';
 import {
@@ -41,7 +40,6 @@ import { isEnvFlagEnabled } from '@utils/system/envFlags';
 import { unrefSleepClock } from '@utils/system/unrefSleepClock';
 
 const CHANNEL = 'UsageLogService';
-const log = createLog(CHANNEL);
 
 const USAGE_LOG_ENDPOINT = `https://${SUPABASE_CUSTOM_DOMAIN}/functions/v1/log-usage`;
 const MAX_QUEUE_SIZE = 1000;
@@ -62,7 +60,6 @@ const DEFAULT_CONFIG: UsageLogConfig = {
 
 /**
  * Environment variables that switch usage logging off without editing config.
- *
  * `TEXRA_NO_TELEMETRY` is ours; `DO_NOT_TRACK` is the cross-tool console
  * convention, honoured so a user who exports it once opts out of every tool
  * that respects it. Either one overrides {@link TELEMETRY_ENABLED_KEY} — an
@@ -74,13 +71,16 @@ const TELEMETRY_OPT_OUT_ENV_VARS = [
   'DO_NOT_TRACK',
 ] as const;
 
-function isTelemetryDisabledByEnv(): boolean {
-  return TELEMETRY_OPT_OUT_ENV_VARS.some((name) => isEnvFlagEnabled(name));
-}
+const telemetryOptOutEnvVar = (): string | undefined =>
+  TELEMETRY_OPT_OUT_ENV_VARS.find((name) => isEnvFlagEnabled(name));
+
+// Raised off-fiber (the sync consent read, `log`); the next drain logs them.
+const notes: Effect.Effect<void>[] = [];
+const logNotes = () =>
+  Effect.all(notes.splice(0), { discard: true }).pipe(withLogChannel(CHANNEL));
 
 /**
  * Routes whose records meter what the user consumed against their plan.
- *
  * Subscription routes are accounted against a database aggregate populated by
  * `log-usage`. A record on one of these routes is therefore not telemetry —
  * dropping it lets hosted calls continue against a stale total, past the cap.
@@ -116,7 +116,7 @@ function isPlanAccounting(entry: Pick<UsageLogEntry, 'usageRoute'>): boolean {
 function isTelemetryEnabledBySetting(config: ConfigProvider): boolean {
   // Checked before the config read so the kill switch also holds on a host that
   // has not initialized its platform yet.
-  if (isTelemetryDisabledByEnv()) return false;
+  if (telemetryOptOutEnvVar()) return false;
 
   const inspection = config.inspect<unknown>(TELEMETRY_ENABLED_KEY);
   const configuredValues = [
@@ -131,9 +131,8 @@ function isTelemetryEnabledBySetting(config: ConfigProvider): boolean {
     (value) => typeof value !== 'boolean',
   );
   if (malformed !== undefined) {
-    log.warn(
-      `Ignoring non-boolean ${TELEMETRY_ENABLED_KEY} (got ${typeof malformed}); treating optional usage logging as disabled`,
-    );
+    const warning = `Ignoring non-boolean ${TELEMETRY_ENABLED_KEY} (got ${typeof malformed}); treating optional usage logging as disabled`;
+    notes.push(Effect.logWarning(warning));
     return false;
   }
   // Either scope may opt out. In particular, a checked-in project `true` must
@@ -155,9 +154,7 @@ export type UsageLoggingOptOut =
  * report of "off" cannot drift from the behaviour.
  */
 export function usageLoggingOptOut(config: ConfigProvider): UsageLoggingOptOut {
-  const envVar = TELEMETRY_OPT_OUT_ENV_VARS.find((name) =>
-    isEnvFlagEnabled(name),
-  );
+  const envVar = telemetryOptOutEnvVar();
   if (envVar) return { source: 'environment', envVar };
   return isTelemetryEnabledBySetting(config) ? null : { source: 'setting' };
 }
@@ -241,7 +238,7 @@ class UsageLogServiceImpl {
     // and account plane come from.
     yield* Effect.addFinalizer(() => this.drainAndStop());
 
-    if (isTelemetryDisabledByEnv()) {
+    if (telemetryOptOutEnvVar()) {
       yield* Effect.logInfo(
         `Optional usage logging is disabled by the environment (${TELEMETRY_OPT_OUT_ENV_VARS.join(' / ')}); only plan-accounting rounds are reported`,
       ).pipe(withLogChannel(CHANNEL));
@@ -265,7 +262,7 @@ class UsageLogServiceImpl {
     }
 
     if (this.queue.length >= MAX_QUEUE_SIZE) {
-      log.warn('Queue full, dropping oldest entry');
+      notes.push(Effect.logWarning('Queue full, dropping oldest entry'));
       this.queue.shift();
     }
 
@@ -278,7 +275,8 @@ class UsageLogServiceImpl {
       },
       config,
     });
-    log.debug(`Queued usage entry (queue size: ${this.queue.length})`);
+    const queued = `Queued usage entry (queue size: ${this.queue.length})`;
+    notes.push(Effect.logDebug(queued));
 
     if (this.queue.length >= this.config.batchSize) {
       this.requestFlush();
@@ -297,6 +295,7 @@ class UsageLogServiceImpl {
   private readonly drain = Effect.fn('UsageLogService.drain')(function* (
     this: UsageLogServiceImpl,
   ) {
+    yield* logNotes();
     while (this.retryBatch || this.queue.length > 0) {
       const batchSettled = yield* this.sendNextBatch().pipe(
         Effect.catchTag('UsageBatchUndelivered', (error) =>
@@ -311,6 +310,7 @@ class UsageLogServiceImpl {
           }),
         ),
       );
+      yield* logNotes();
       if (!batchSettled) return;
     }
   });
