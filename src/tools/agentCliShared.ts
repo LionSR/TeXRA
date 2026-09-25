@@ -2,7 +2,7 @@
 // Host-agnostic, VS Code-free.
 
 // Third-party imports
-import { Data, Effect } from 'effect';
+import { Effect } from 'effect';
 
 // Local imports
 import { registerRun } from '@agent/storage';
@@ -59,42 +59,6 @@ type AgentCliSessionStoreAccessor = (
   runs: RunRegistry,
 ) => AgentCliSessionRegistry;
 
-/**
- * A collaborator of the dispatch/launch chain (bash approval, follow-up
- * submission, thread/session setup, the owned-run launch guard) failed.
- * `cause` is what it raised. The tools' `execute()` edges re-raise the cause
- * itself, so the tool runner surfaces the same error instance the
- * collaborator raised, exactly as the previous `await` chain did.
- */
-class AgentCliCallFailed extends Data.TaggedError('AgentCliCallFailed')<{
-  readonly cause: unknown;
-}> {}
-
-/**
- * The one re-tagging of the agent-CLI chain's collaborators onto this
- * chain's error channel — the shared dispatch/launch steps and each provider
- * tool's own setup (SDK import, binary lookup, thread creation).
- */
-export const agentCliCall = <A, E, R>(
-  call: Effect.Effect<A, E, R>,
-): Effect.Effect<A, AgentCliCallFailed, R> =>
-  Effect.mapError(call, (cause) => new AgentCliCallFailed({ cause }));
-
-/** The failures the agent-CLI dispatch/launch chain can raise. */
-export type AgentCliToolFailure = ToolError | AgentCliCallFailed;
-
-/**
- * Re-raise a collaborator's rejection as its own cause: pipe this at the
- * tool's native `execute()` edge so defineTool normalizes the original error
- * without hiding the collaborator's diagnostics.
- */
-export const reraiseAgentCliCallFailure = <A, R>(
-  effect: Effect.Effect<A, AgentCliToolFailure, R>,
-): Effect.Effect<A, ToolError, R> =>
-  effect.pipe(
-    Effect.catchTag('AgentCliCallFailed', (error) => Effect.die(error.cause)),
-  );
-
 interface AgentCliResumeLabels {
   notActiveLabel: string;
   idParamName: string;
@@ -129,7 +93,7 @@ const queueAgentCliFollowUp = Effect.fn('agentCliShared.queueAgentCliFollowUp')(
       callerRunId: RunId | undefined;
       labels: AgentCliResumeLabels;
     },
-  ): Effect.fn.Return<ToolResult, AgentCliToolFailure, AgentResume> {
+  ): Effect.fn.Return<ToolResult, ToolError, AgentResume> {
     const { id, prompt, callerRunId, labels } = params;
     // Ownership is a live-handle fact: a detached or re-parented child must not
     // accept follow-ups from its former orchestrator. A missing handle falls
@@ -187,13 +151,9 @@ const resumeOrLaunchAgentCliSession = Effect.fn(
     labels: AgentCliResumeLabels;
     launch: (
       releaseClaim?: () => void,
-    ) => Effect.Effect<ToolResult, AgentCliToolFailure, R>;
+    ) => Effect.Effect<ToolResult, ToolError, R>;
   },
-): Effect.fn.Return<
-  ToolResult,
-  AgentCliToolFailure,
-  R | ToolCall | AgentResume
-> {
+): Effect.fn.Return<ToolResult, ToolError, R | ToolCall | AgentResume> {
   const { id } = params;
   if (!id) return yield* params.launch();
 
@@ -250,9 +210,9 @@ interface AgentCliLaunchParams<TTurn> {
  * agent-CLI run stamps `identity.tool`, TERMINAL_BACKED follow-up support and
  * a run description that the native registration does not.
  *
- * Failure channel: a setup failure propagates as the choreography raised it.
- * A typed failure is re-tagged onto this chain's `AgentCliCallFailed`; a
- * cause carrying an interrupt re-raises as an interrupt into the calling tool
+ * Failure channel: a setup failure dies with the error the choreography
+ * raised (`Effect.orDie`), so the tool runner surfaces it as is; a cause
+ * carrying an interrupt re-raises as an interrupt into the calling tool
  * fiber rather than being squashed into a failure. Under today's topology the
  * only reachable interrupt is the `restore` checkpoint below, before the child
  * stream exists (everything after it is uninterruptible), so this states the
@@ -262,7 +222,7 @@ export const launchAgentCliSession = Effect.fn(
   'agentCliShared.launchAgentCliSession',
 )(function* <TTurn>(
   params: AgentCliLaunchParams<TTurn>,
-): Effect.fn.Return<ToolResult, AgentCliToolFailure, Runs | AgentResume> {
+): Effect.fn.Return<ToolResult, ToolError, Runs | AgentResume> {
   return yield* Effect.uninterruptibleMask((restore) =>
     Effect.gen(function* () {
       const runId = generateRunId();
@@ -318,7 +278,7 @@ export const launchAgentCliSession = Effect.fn(
             ),
           ),
         buildLaunch: (childRun) => params.buildLaunch({ childRun, runId }),
-      }).pipe(Effect.mapError((cause) => new AgentCliCallFailed({ cause })));
+      }).pipe(Effect.orDie);
 
       return executed(
         [
@@ -354,8 +314,8 @@ const withAgentCliRun = Effect.fn('agentCliShared.withAgentCliRun')(function* <
 >(
   toolName: string,
   toolCall: ToolCallShape,
-  run: (run: ToolRun) => Effect.Effect<ToolResult, AgentCliToolFailure, R>,
-): Effect.fn.Return<ToolResult, AgentCliToolFailure, R | ToolCall> {
+  run: (run: ToolRun) => Effect.Effect<ToolResult, ToolError, R>,
+): Effect.fn.Return<ToolResult, ToolError, R | ToolCall> {
   const activeRun = yield* requireToolRun(toolName, toolCall);
   if (activeRun.toolPolicy.stopAfterCycle) {
     return yield* Effect.fail(
@@ -410,7 +370,7 @@ interface AgentCliLaunchContext {
  * approved is the loop-side guard each declares, not a step in here.
  *
  * The returned Effect is the tool's whole dispatch: the tool's `execute()`
- * runs it at its own edge with {@link reraiseAgentCliCallFailure} piped in.
+ * runs it as is.
  */
 export function dispatchAgentCliTool<R = never>(params: {
   toolCall: ToolCallShape;
@@ -423,12 +383,8 @@ export function dispatchAgentCliTool<R = never>(params: {
   labels: AgentCliResumeLabels;
   launch: (
     context: AgentCliLaunchContext,
-  ) => Effect.Effect<ToolResult, AgentCliToolFailure, R>;
-}): Effect.Effect<
-  ToolResult,
-  AgentCliToolFailure,
-  R | ToolCall | Runs | AgentResume
-> {
+  ) => Effect.Effect<ToolResult, ToolError, R>;
+}): Effect.Effect<ToolResult, ToolError, R | ToolCall | Runs | AgentResume> {
   const { agentName, store, resumeId, sourceId, prompt, labels, launch } =
     params;
   return withAgentCliRun(agentName, params.toolCall, (run) =>
