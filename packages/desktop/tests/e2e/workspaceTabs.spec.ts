@@ -436,9 +436,11 @@ test('loads a workspace file into the Monaco editor workbench', async () => {
   await expect(latexRow).toBeVisible({ timeout: 15_000 });
   await expect(typescriptRow).toBeVisible();
 
-  // Hit the cold Monaco path with two immediate selections. Both requests
-  // share one editor load, and the last click must remain the visible model
-  // even if the first file read resolves later.
+  // Hit the cold Monaco path with two selections in quick succession. The
+  // Files tab is brought back between them (the tree and the editor share
+  // the right pane), but Monaco's cold load outlasts that click, so both
+  // requests still share one editor load and the last one must remain the
+  // visible model even if the first file read resolves later.
   await clickTreeRow('sample.tex');
   await clickTreeRow('sample.ts');
   await expect(page.locator(activeWorkbenchTab('editor'))).toBeVisible();
