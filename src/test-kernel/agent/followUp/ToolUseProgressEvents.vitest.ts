@@ -51,7 +51,6 @@ import {
   attachTestTranscriptFold,
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
-
 import { generateRunId, generateShortId } from '@utils/core';
 import { RunFileService } from '@utils/files/runStorage';
 
