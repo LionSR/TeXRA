@@ -169,7 +169,9 @@ describe('proposal-request-panel file-name keyboard activation', () => {
 
     expect(
       element.shadowRoot?.querySelector('.request-card__ask')?.textContent,
-    ).toMatch(/^Start a multi-agent run:\s+review-team$/);
+    ).toMatch(
+      /^Start a multi-agent run:\s+review-team with writer on\s+GPT-5.6 Sol$/,
+    );
     expect(element.shadowRoot?.textContent).toContain('2 phases · 2 steps');
     expect(element.shadowRoot?.textContent).not.toContain('Skip proposals');
     expect(

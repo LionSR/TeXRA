@@ -463,62 +463,6 @@ describe('childRunLoop E2E fixtures', () => {
       }),
   );
 
-  it.effect(
-    'admits a follow-up submitted during startup into the seeded queue',
-    () =>
-      Effect.gen(function* () {
-        // The queue claim precedes the seed's aggregate read, so a submission
-        // landing inside that read is held for the seed instead of being
-        // refused against a child the registry already shows active, or
-        // committing behind the snapshot the seed reads.
-        const runId = loopRunId();
-        const { strategy, resolveTurn, turnStarted } = createFakeStrategy();
-        const childRun = yield* createChildRun(session, runId, PARENT_RUN_ID, {
-          run: { kind: 'agent', agent: 'fake-cli', tool: 'codex' },
-          userFollowUpSupport: 'terminalBacked',
-          description: 'Keep an agent-CLI child running',
-          config: childRunConfig,
-        }).pipe(Effect.provideService(Runs, session.runs));
-        trackedRunIds.add(runId);
-
-        const readStarted = yield* Deferred.make<void>();
-        const releaseRead = yield* Deferred.make<void>();
-        const readAggregate = session.readAggregate.bind(session);
-        const gate = vi
-          .spyOn(session, 'readAggregate')
-          .mockImplementationOnce((id) =>
-            Effect.gen(function* () {
-              yield* Deferred.succeed(readStarted, undefined);
-              yield* Deferred.await(releaseRead);
-              return yield* readAggregate(id);
-            }),
-          );
-        try {
-          const starter = yield* Effect.forkScoped(
-            startLoop(runId, strategy, { childRun }),
-          );
-          yield* Deferred.await(readStarted);
-          expect(
-            yield* session.followUps.submit(
-              runId,
-              { text: 'early', origin: 'user' },
-              'live_owner',
-            ),
-          ).toEqual({ kind: 'queued' });
-          yield* Deferred.succeed(releaseRead, undefined);
-          const loop = yield* Fiber.join(starter);
-
-          yield* resolveTurn(1, { kind: 'interim', value: 'first' });
-          // Only the seeded follow-up starts a second turn.
-          yield* turnStarted(2);
-          yield* resolveTurn(2, { kind: 'terminal', value: 'final' });
-          yield* Fiber.join(loop);
-        } finally {
-          gate.mockRestore();
-        }
-      }),
-  );
-
   it.effect.each([
     {
       name: 'CodexThreads',

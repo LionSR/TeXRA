@@ -99,7 +99,7 @@ export function settingsGitCommands(ports: {
             revealed: Effect.void,
             missing: notice('The agent run is no longer available.'),
             unavailable: alert(
-              'The run view is not available. Please try again.',
+              'The Sessions view is not available. Please try again.',
             ),
           })[result],
       ),
