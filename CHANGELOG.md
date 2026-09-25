@@ -98,6 +98,10 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
 
 ### Bug Fixes
 
+- **Parallel workflow agents no longer fail when the first one finishes.**
+  In a workflow script, the first `agent()` call in a `parallel()` group to
+  finish could fail with "All fibers interrupted without error", which ended
+  the workflow and cancelled every sibling still running.
 - **A stopped subagent records one final outcome.** Stopping a subagent
   while it waited for input, or while its failure was being recorded, could
   leave the run without a final record. Every run now ends through a single

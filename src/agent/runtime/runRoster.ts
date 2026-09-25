@@ -364,9 +364,9 @@ export class RunRoster {
               yield* Latch.await(latch);
             }),
           ).pipe(Effect.catch((error) => Deferred.fail(ready, error)));
-          // Registered as its first step, synchronous with the test, as in
-          // `launch`: a launch during the claim below already sees the hold.
-          const fiber = yield* Effect.forkChild(
+          // Registered as its first step, as in `launch`; scoped, not a child,
+          // so the hold outlives the fiber that took it until the scope closes.
+          const fiber = yield* Effect.forkScoped(
             Effect.withFiber((self) => {
               if (
                 this.isLive(runId) ||
