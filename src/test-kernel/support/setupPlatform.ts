@@ -337,6 +337,8 @@ export const fakeHostAgentResume: AgentResumePort = {
  *  runtime does not. */
 export const fakeHostAgentDirectories: AgentDirectoriesPort = {
   custom: () => installedHost().platform.agentDirectories.custom(),
+  customConfigured: () =>
+    installedHost().platform.agentDirectories.customConfigured(),
   builtIn: () => installedHost().platform.agentDirectories.builtIn(),
   builtInToolUse: () =>
     installedHost().platform.agentDirectories.builtInToolUse(),

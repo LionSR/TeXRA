@@ -1,6 +1,6 @@
 import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { beforeEach, describe, expect } from 'vitest';
+import { beforeEach, describe, expect, vi } from 'vitest';
 import { finalizeRun, getRunRecords } from '@agent/storage';
 import { aggregateId, type RunId } from '@shared/schemas';
 import {
@@ -51,11 +51,16 @@ describe('run metadata updates', () => {
         runId: id,
         outcome: 'completed',
       });
-      yield* finalizeRun(session, {
-        runId: id,
-        outcome: 'cancelled',
-        keepExistingOutcome: true,
-      });
+      // #13200: the already-ended no-op never reads the transcript.
+      const closure = vi.spyOn(session, 'streamClosureFacts');
+      expect(
+        yield* finalizeRun(session, {
+          runId: id,
+          outcome: 'cancelled',
+          keepExistingOutcome: true,
+        }),
+      ).toEqual({ ok: true, outcome: 'completed' });
+      expect(closure).not.toHaveBeenCalled();
       expect(yield* getRunRecords(session, id).readRunEnd()).toMatchObject({
         outcome: 'completed',
       });

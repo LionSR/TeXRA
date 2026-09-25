@@ -548,7 +548,10 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     agentName: string,
     sessionType: SessionType,
   ): Effect.Effect<void> {
-    return this.snapshot.showAgentConfigBanner(agentName, sessionType);
+    return withProcessServices(
+      this.runtime,
+      this.snapshot.showAgentConfigBanner(agentName, sessionType),
+    );
   }
 
   /** Recompute the user-scoped funnel; the shared refresher owns the loop. */

@@ -886,7 +886,10 @@ function createWindow(options: {
       },
       session: project.session,
       showAgentConfigBanner: ({ agentName, category }) =>
-        snapshot.showAgentConfigBanner(agentName, category),
+        withProcessServices(
+          runtime,
+          snapshot.showAgentConfigBanner(agentName, category),
+        ),
       // A resolved agent also retires the missing-agent warning.
       onLaunched: (runId) => {
         bridge.surfaceAction({ kind: 'select', runId });

@@ -56,6 +56,14 @@ interface SkillSourceCall {
   readonly options: SkillSourceOptions;
   /** The plugins `texra plugin install` recorded, read from settings. */
   readonly plugins: readonly InstalledPlugin[];
+  /**
+   * The tool plugins the user switched off (`texra.tools.disabled`). A plugin
+   * is one on/off unit, so a switched-off plugin's skills are not scanned.
+   * Only the switch hides them, not a failed dependency probe: the probe
+   * answers per workspace and can be stale, and a plugin's skills are often
+   * what tells the user how to install the dependency it probes for.
+   */
+  readonly disabledPlugins: ReadonlySet<string>;
 }
 
 interface SkillRoot {
@@ -117,10 +125,11 @@ const CORE_SKILL_CONTRIBUTIONS: readonly SkillSourceContribution[] = [
     id: 'core:plugins',
     tier: 'plugin',
     // Required: a recorded root that has gone missing is reported, not
-    // skipped, until `texra plugin update` or `remove` resolves it.
+    // skipped, until `texra plugin update` or `remove` resolves it. A
+    // disabled plugin (`texra plugin disable`) contributes nothing.
     roots: ({ plugins }) =>
       plugins.flatMap((plugin) =>
-        plugin.skills.map((skillsPath) => ({
+        (plugin.enabled ? plugin.skills : []).map((skillsPath) => ({
           path: skillsPath,
           label: `plugin ${plugin.name}`,
           required: true as const,
@@ -142,17 +151,23 @@ const CORE_SKILL_CONTRIBUTIONS: readonly SkillSourceContribution[] = [
   },
 ];
 
-/** A tool plugin's bundled skills, shipped at `resources/plugins/<id>/skills`. */
+/**
+ * A tool plugin's bundled skills, shipped at `resources/plugins/<id>/skills`,
+ * while the plugin is not switched off.
+ */
 function pluginSkillContribution(pluginId: string): SkillSourceContribution {
   return {
     id: pluginId,
     tier: 'bundled',
-    roots: ({ resourcesPath }) => [
-      {
-        path: path.join(resourcesPath, 'plugins', pluginId, 'skills'),
-        label: 'bundled',
-      },
-    ],
+    roots: ({ resourcesPath, disabledPlugins }) =>
+      disabledPlugins.has(pluginId)
+        ? []
+        : [
+            {
+              path: path.join(resourcesPath, 'plugins', pluginId, 'skills'),
+              label: 'bundled',
+            },
+          ],
   };
 }
 

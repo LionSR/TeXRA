@@ -73,16 +73,19 @@ export function logErrorData(
   });
 }
 
-/** Emit a user-visible progress/status note. */
+/**
+ * Emit a user-visible progress/status note. A status note is its message
+ * alone and takes no payload: the transcript stringifies a `progressStatus`
+ * row's `data` verbatim into its detail, and an arbitrary payload (a request,
+ * headers, config) could write a secret there.
+ */
 export function logProgressStatus(
   trace: AgentTrace,
   message: string,
-  data?: unknown,
   stageId?: string,
 ): void {
   trace.info(message, {
     messageType: MESSAGE_TYPES.PROGRESS_STATUS,
-    data,
     stageId,
   });
 }
@@ -177,6 +180,12 @@ export function debugInternal(
 
 // ─── Domain events ──────────────────────────────────────────────────────
 
+/**
+ * Emit a context-management event. Its producers (the output-budget clamp in
+ * `ModelInvoker`, compaction in `run/compaction.ts`) build `text` and
+ * `data.details` from token counts and their own labels, never from provider
+ * or tool text, so no secret can reach this row; keep it that way.
+ */
 export function logContextManagementEvent(
   trace: AgentTrace,
   text: string,
