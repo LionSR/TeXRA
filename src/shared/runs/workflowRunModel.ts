@@ -431,18 +431,21 @@ export function formatWorkflowCallLiveParts(
  *  has run, and the two kinds that have not started. */
 export type WorkflowRowGroup = 'finished' | 'queued' | 'declared';
 
-/** `12 queued`, `5 finished · 1 saved result`: the one spelling of a
- *  counted group's row. A finished group names its replayed results, since
- *  nothing ran for those this time. */
+/** `12 queued`, `5 finished · 1 saved result`: the one spelling of a counted
+ *  group's row, naming a finished group's replayed results. */
 export function formatWorkflowRowGroup(row: {
   readonly count: number;
   readonly group: WorkflowRowGroup;
   readonly cached?: number;
 }): string {
-  const cached = row.cached ?? 0;
+  const { count, group, cached = 0 } = row;
+  const noun =
+    group === 'declared'
+      ? WORKFLOW_TASK_STATUS_LABEL.declared.toLowerCase()
+      : group;
   return cached > 0
-    ? `${row.count} ${row.group} · ${cached} ${pluralize(cached, 'saved result')}`
-    : `${row.count} ${row.group}`;
+    ? `${count} ${noun} · ${cached} ${pluralize(cached, 'saved result')}`
+    : `${count} ${noun}`;
 }
 
 export type WorkflowPhaseRow =
