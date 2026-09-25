@@ -119,8 +119,9 @@ export interface ChildRunStrategy<TTurn, R = never> {
   readonly stageLabel: string;
 
   /**
-   * This child's turns drive a live OS process: shutdown drain reaches it
-   * through `RunHandle.backgroundProcess` (#8155) without disturbing agent
+   * This child's turns drive a live OS process (a background bash command,
+   * an agent-CLI provider): shutdown drain reaches it through
+   * `RunHandle.backgroundProcess` (#8155) without disturbing native agent
    * children left running for restart recovery.
    */
   readonly ownsBackgroundProcess?: boolean;
@@ -171,9 +172,6 @@ export interface ChildRunStrategy<TTurn, R = never> {
 
   /** The error message to log for a non-throwing failure, if it has one. */
   turnErrorMessage?(turn: TTurn): string | undefined;
-
-  /** After loop setup, before the initial turn starts. */
-  onLoopStart?(session: SessionHandle): void;
 
   /** After a successful turn: register the session/thread id, etc. */
   onTurnSuccess?(turn: TTurn, session: SessionHandle): void;
@@ -861,7 +859,6 @@ export function startChildRunLoop<TTurn, R = never>(
     }
     const setup = yield* Effect.exit(
       Effect.sync(() => {
-        strategy.onLoopStart?.(runSession);
         if (strategy.ownsBackgroundProcess === true) {
           // The one handle slot shutdown drain reads (#8155): kill the
           // leaked OS process without touching the loop that reports it.
