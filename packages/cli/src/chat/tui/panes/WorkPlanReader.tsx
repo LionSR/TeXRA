@@ -3,7 +3,7 @@
 import { Box, Text, useInput, useWindowSize } from 'ink';
 
 import { type SessionHandle } from '@agent/runtime';
-import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
+import { wrappedRowCount } from '@cli/tui/ansiWrap';
 import { isEscapeInput } from '@cli/tui/inputKeys';
 import { BorderedPanel } from '@cli/tui/ui/BorderedPanel';
 import {
@@ -32,10 +32,6 @@ const WORK_PLAN_LOADING_TEXT = 'Loading work plan…';
 const BORDER_ROWS = 2;
 const FOOTER_MARGIN_ROWS = 1;
 
-function wrappedRows(text: string, width: number): number {
-  return wrapAnsiToWidth(text, Math.max(1, width)).split('\n').length;
-}
-
 /** Compute a frame that fits the terminal. `bodyRows` may be zero. */
 function workPlanReaderLayout({
   availableRows,
@@ -63,9 +59,9 @@ function workPlanReaderLayout({
       showTitle: true,
     };
   }
-  const footerRows = wrappedRows(keyHintsText(hints), width);
+  const footerRows = wrappedRowCount(keyHintsText(hints), width);
   const showFooter = rows >= BORDER_ROWS + 1 + FOOTER_MARGIN_ROWS + footerRows;
-  const titleRows = wrappedRows(title, width);
+  const titleRows = wrappedRowCount(title, width);
   const footerFixedRows = showFooter ? FOOTER_MARGIN_ROWS + footerRows : 0;
   const showTitle = rows >= BORDER_ROWS + 1 + footerFixedRows + titleRows;
   return {

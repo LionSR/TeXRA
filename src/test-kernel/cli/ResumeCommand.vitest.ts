@@ -47,7 +47,8 @@ vi.mock('@cli/runtime/cliProcessRuntime', () => ({
   disposeCliProcessRuntime: Effect.void,
 }));
 
-vi.mock('@cli/runtime/logSinks', () => ({
+vi.mock('@cli/runtime/logSinks', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@cli/runtime/logSinks')>()),
   writeTextStderr: mocks.writeTextStderr,
 }));
 

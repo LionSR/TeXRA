@@ -9,19 +9,21 @@
  * reaching a live model API. The provider boundary is the only deterministic
  * piece; the CLI and `executeAgent` path stays real.
  *
- * All env reads use direct `process.env.<NAME>` property access (never
- * computed keys) so esbuild's `define` (`packages/cli/scripts/build-bundle.mjs`)
- * inlines them at bundle time. In the default CLI build the include flag is
- * defined to `''`, so {@link shouldUseInternalValidationModel} constant-folds
- * to `return false`, and the build aliases this whole module to a stub so no
- * canned output ships. The reads stay lazy (evaluated at call time, not module
- * load) so they happen after the host is composed and can be overridden between
- * test cases.
+ * The four `TEXRA_CLI_*` reads are build constants: direct `process.env.<NAME>`
+ * property access (never computed keys) so esbuild's `define`
+ * (`packages/cli/scripts/build-bundle.mjs`) inlines them at bundle time. In the
+ * default CLI build the include flag is defined to `''`, so
+ * {@link shouldUseInternalValidationModel} constant-folds to `false`, and the
+ * build aliases this whole module to a stub so no canned output ships. The
+ * runtime keys (the per-run switch, the flag-file path, `CI`, and the per-turn
+ * workflow-script switch) go through the ambient Effect `ConfigProvider`
+ * (`envVar`), read when the program runs, never at module load.
  */
 import { readFileSync } from 'node:fs';
 import * as path from 'node:path';
 
 import { Effect, Stream } from 'effect';
+import { envVar } from '@utils/system/envFlags';
 import type {
   Model,
   ModelOrigin,
@@ -99,10 +101,12 @@ function mathematicalValidationOutput(prompt: string): {
 /**
  * True only inside a guarded package-validation run: the include flag is set,
  * the per-run env var is `1`, `CI=1`, and an absolute flag file holds the
- * expected sentinel. Any partial/forged activation throws rather than
- * silently falling through to real models.
+ * expected sentinel. Any partial/forged activation dies rather than silently
+ * falling through to real models.
  */
-export function shouldUseInternalValidationModel(): boolean {
+export const shouldUseInternalValidationModel = Effect.fn(
+  'shouldUseInternalValidationModel',
+)(function* (): Effect.fn.Return<boolean> {
   if (process.env.TEXRA_CLI_INCLUDE_INTERNAL_VALIDATION_MODEL !== '1')
     return false;
 
@@ -112,22 +116,28 @@ export function shouldUseInternalValidationModel(): boolean {
   const expectedFlagContent =
     process.env.TEXRA_CLI_INTERNAL_VALIDATION_MODEL_FLAG_CONTENT ?? '';
 
-  if (process.env[envKey] !== '1') return false;
+  if ((yield* envVar(envKey)) !== '1') return false;
 
-  const flagPath = process.env[flagEnvKey];
-  if (process.env.CI !== '1' || !flagPath || !path.isAbsolute(flagPath)) {
-    throw new Error(
-      `${envKey}=1 is restricted to package validation with CI=1 and an absolute ${flagEnvKey} path.`,
+  const flagPath = yield* envVar(flagEnvKey);
+  const ci = yield* envVar('CI');
+  if (ci !== '1' || !flagPath || !path.isAbsolute(flagPath)) {
+    return yield* Effect.die(
+      new Error(
+        `${envKey}=1 is restricted to package validation with CI=1 and an absolute ${flagEnvKey} path.`,
+      ),
     );
   }
 
-  // An unreadable flag file fails with the filesystem error, which names it.
-  if (readFileSync(flagPath, 'utf8').trim() !== expectedFlagContent) {
-    throw new Error(`${envKey}=1 received an invalid validation flag file.`);
+  // An unreadable flag file dies with the filesystem error, which names it.
+  const flagContent = yield* Effect.sync(() => readFileSync(flagPath, 'utf8'));
+  if (flagContent.trim() !== expectedFlagContent) {
+    return yield* Effect.die(
+      new Error(`${envKey}=1 received an invalid validation flag file.`),
+    );
   }
 
   return true;
-}
+});
 
 const VALIDATION_ENDPOINT = 'https://validation.invalid/v1';
 
@@ -146,7 +156,10 @@ export function validationModel(config: ModelConfig): {
     },
   } as const satisfies ModelOrigin;
   let responses = 0;
-  const complete = (turn: ResolvedTurn): TurnResult => {
+  const complete = (
+    turn: ResolvedTurn,
+    workflowScript: boolean,
+  ): TurnResult => {
     responses += 1;
     const toolNames = new Set(turn.tools.map((tool) => tool.name));
     const hasToolResult = turn.messages.some(
@@ -160,10 +173,7 @@ export function validationModel(config: ModelConfig): {
         argumentsText: JSON.stringify(input),
       }) as const;
     let content: TurnResult['content'];
-    if (
-      process.env.TEXRA_INTERNAL_VALIDATE_WORKFLOW_SCRIPT === '1' &&
-      toolNames.has('submit_output')
-    ) {
+    if (workflowScript && toolNames.has('submit_output')) {
       content = [
         call(
           'submit_output',
@@ -171,7 +181,7 @@ export function validationModel(config: ModelConfig): {
         ),
       ];
     } else if (
-      process.env.TEXRA_INTERNAL_VALIDATE_WORKFLOW_SCRIPT === '1' &&
+      workflowScript &&
       !hasToolResult &&
       toolNames.has('delegate_multi_agents')
     ) {
@@ -227,16 +237,22 @@ export function validationModel(config: ModelConfig): {
         effort: null,
       },
     });
-  const streamTurn: Model['streamTurn'] = (turn) => {
-    const event: TurnEvent = { kind: 'completed', result: complete(turn) };
-    return Stream.make(event);
-  };
+  // The workflow-script switch is read per turn, so a validation run can flip
+  // it between turns.
+  const generateTurn: Model['generateTurn'] = (turn) =>
+    Effect.map(envVar('TEXRA_INTERNAL_VALIDATE_WORKFLOW_SCRIPT'), (flag) =>
+      complete(turn, flag === '1'),
+    );
+  const streamTurn: Model['streamTurn'] = (turn) =>
+    Stream.fromEffect(generateTurn(turn)).pipe(
+      Stream.map((result): TurnEvent => ({ kind: 'completed', result })),
+    );
   return {
     origin,
     model: {
       prepareTurn,
       streamTurn,
-      generateTurn: (turn) => Effect.sync(() => complete(turn)),
+      generateTurn,
     },
   };
 }

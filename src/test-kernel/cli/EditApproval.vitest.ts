@@ -26,7 +26,7 @@ describe('CLI edit approval layout', () => {
       input: {
         availableRows: 16,
         columns: 80,
-        feedbackMode: true,
+        feedbackRows: 2,
         title: 'Apply edit to proof.tex?',
       },
       expected: 5,
@@ -63,20 +63,18 @@ describe('CLI edit approval layout', () => {
   });
 
   it('accounts for wrapped feedback placeholders on narrow terminals', () => {
-    expect(
-      confirmCardFeedbackRows({
-        columns: 16,
-        placeholder: 'Needs a smaller proof step',
-        value: '',
-      }),
-    ).toBe(4);
+    const feedbackRows = confirmCardFeedbackRows({
+      columns: 16,
+      placeholder: 'Needs a smaller proof step',
+      value: '',
+    });
+    expect(feedbackRows).toBe(4);
 
     expect(
       editApprovalDiffRowsBudget({
         availableRows: 16,
         columns: 16,
-        feedbackMode: true,
-        feedbackPlaceholder: 'Needs a smaller proof step',
+        feedbackRows,
         title: 'Edit?',
       }),
     ).toBe(3);

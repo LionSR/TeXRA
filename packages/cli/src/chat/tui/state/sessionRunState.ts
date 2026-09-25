@@ -1,9 +1,13 @@
+import type { SessionHandle } from '@agent/runtime';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { RUN_PHASE, type RunPhase, type RunId } from '@shared/schemas';
 import { isActivePhase } from '@shared/runs/runStatus';
 
 import { claimedRunId, rootRunPending } from './cliState';
+import { currentView, runPhaseOf, runViewOf } from './sessionView';
 import type { Effect } from 'effect';
+
+type ToolUseFlowOf = SessionHandle['runs']['getToolUseFlowContext'];
 
 /**
  * The claimed root run's settlement, as the slot holds it: the program that
@@ -28,12 +32,16 @@ export type RootRunSettled = Effect.Effect<void, Error>;
  * methods so each publishes once, at its end, rather than through a
  * half-applied intermediate state.
  *
- * The remaining fields carry no signal mirror and stay plain.
+ * The remaining fields carry no signal mirror and stay plain. The run-control
+ * questions the exit paths and slash commands ask are methods, read live from
+ * the session view and the session's tool-use flows.
  */
 export class TuiSession {
   private _runId: RunId | undefined;
   private _runSettled: RootRunSettled | undefined;
   private _runCompleted = false;
+
+  constructor(private readonly toolUseFlowOf: ToolUseFlowOf) {}
 
   /** Root conversation that remains recoverable after an interrupted turn. */
   interruptedRunId: RunId | undefined;
@@ -99,6 +107,53 @@ export class TuiSession {
     return true;
   }
 
+  /** The claimed run's phase, as the session view folds it. */
+  status(): RunPhase | undefined {
+    return runPhaseOf(runViewOf(currentView(), this._runId));
+  }
+
+  /** The claimed run's live tool-use flow, if it has one. */
+  activeToolUseFlow(): ReturnType<ToolUseFlowOf> {
+    return this._runId ? this.toolUseFlowOf(this._runId) : undefined;
+  }
+
+  /** Model selection is open with no pending run, or at a tool-use wait. */
+  canSelectModel(): boolean {
+    return (
+      chatTuiCanStartRootRun(this) ||
+      (this.status() === RUN_PHASE.WAITING &&
+        this.activeToolUseFlow() !== undefined)
+    );
+  }
+
+  /** Whether an actively-running turn can be stopped (vs idle/WAITING). */
+  canStopVisibleRun(): boolean {
+    return chatTuiCanStopVisibleRun({
+      runPending: chatTuiRunPending(this),
+      runId: this._runId,
+      status: this.status(),
+    });
+  }
+
+  /**
+   * On exit, a tool-use session suspended at a wait (idle/WAITING) with an
+   * active tool-use run is left uninterrupted. Resumability survives either
+   * way: a run's rows and its latest `flow.snapshot` stay until the run is
+   * explicitly deleted, so even a CANCELLED run remains resumable. What this
+   * preserves is the run's persisted status and its side effects: an idle exit
+   * leaves the run WAITING instead of recording a CANCELLED the user never
+   * asked for, and does not clear approvals or sweep active children through
+   * `detachSubagentsOnStop`.
+   */
+  isResumableIdle(): boolean {
+    return (
+      this._runId !== undefined &&
+      chatTuiRunPending(this) &&
+      !this.canStopVisibleRun() &&
+      this.activeToolUseFlow() !== undefined
+    );
+  }
+
   /**
    * Mirror the run-claim triple into the cliState signals. Renders read only
    * the published signals, so this is the sole bridge between the two.
@@ -109,25 +164,14 @@ export class TuiSession {
   }
 }
 
-type InterruptibleTuiSessionState = Pick<
-  TuiSession,
-  'runId' | 'runSettled' | 'runCompleted'
->;
-
 type PendingTuiRunSessionState = Pick<
   TuiSession,
   'runSettled' | 'runCompleted'
 >;
 
-export function chatTuiCanInterruptActiveRun(
-  session: InterruptibleTuiSessionState,
-): boolean {
-  return Boolean(session.runId && session.runSettled && !session.runCompleted);
-}
-
 /**
  * Run facts the stop predicates consume. Two producers share this shape:
- * `runChatTui` derives it from the mutable session (signal-handler paths),
+ * `TuiSession.canStopVisibleRun` derives it from the session itself,
  * and the StatusBar derives it from the `rootRunPending`/`claimedRunId`
  * signals so the Ctrl-C hint recomputes reactively during renders.
  */
@@ -162,55 +206,4 @@ export function chatTuiCanStartRootRun(
   session: PendingTuiRunSessionState,
 ): boolean {
   return !chatTuiRunPending(session);
-}
-
-export function chatTuiCanSelectModel(input: {
-  readonly canStartRootRun: boolean;
-  readonly runId: RunId | undefined;
-  readonly status: RunPhase | undefined;
-  readonly hasActiveToolUseFlow: boolean;
-}): boolean {
-  return (
-    input.canStartRootRun ||
-    Boolean(
-      input.runId &&
-      input.status === RUN_PHASE.WAITING &&
-      input.hasActiveToolUseFlow,
-    )
-  );
-}
-
-type ChatTuiSigintAction =
-  'clean-exit' | 'force-exit' | 'preserve-exit' | 'interrupt-and-arm-exit';
-
-export function chatTuiSigintAction(input: {
-  readonly exitArmed: boolean;
-  readonly canStopActiveRun: boolean;
-  readonly resumableIdle: boolean;
-}): ChatTuiSigintAction {
-  if (input.exitArmed) return 'force-exit';
-  if (input.canStopActiveRun) return 'interrupt-and-arm-exit';
-  if (input.resumableIdle) return 'preserve-exit';
-  return 'clean-exit';
-}
-
-/**
- * On exit, a tool-use session suspended at a wait (idle/WAITING) with an active
- * tool-use run is left uninterrupted. Resumability survives either way: a run's
- * rows and its latest `flow.snapshot` stay until the run is explicitly deleted,
- * so even a CANCELLED run remains resumable. What this preserves is the run's
- * persisted status and its side effects: an idle exit leaves the run WAITING
- * instead of recording a CANCELLED the user never asked for, and does not clear
- * approvals or sweep active children through `detachSubagentsOnStop`.
- */
-export function chatTuiIsResumableIdleOnExit(input: {
-  readonly canInterruptActiveRun: boolean;
-  readonly canStopActiveRun: boolean;
-  readonly hasActiveToolUseFlow: boolean;
-}): boolean {
-  return (
-    input.canInterruptActiveRun &&
-    !input.canStopActiveRun &&
-    input.hasActiveToolUseFlow
-  );
 }

@@ -17,6 +17,7 @@ import type { OutputFileInfo, ReadonlyRoundIndexed } from '@shared/schemas';
 import { pathExists } from '@utils/files/fsDurability';
 import { getSafeDocumentRelativePath } from '@utils/files/outputFileUtils';
 import { ensureError } from '@utils/errors/errorMessage';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 // Local file imports
 import type {
@@ -34,7 +35,11 @@ const executeDiffOperations = Effect.fn('latexdiff.executeDiffOperations')(
     latexdiff: LatexdiffRuntime,
     progress: DiffProgressReporter,
     immediateResults: DiffRunResult[] = [],
-  ): Effect.fn.Return<DiffRunOutcome, Error, FileSystem.FileSystem> {
+  ): Effect.fn.Return<
+    DiffRunOutcome,
+    Error,
+    FileSystem.FileSystem | ChildProcessSpawner
+  > {
     const results: DiffRunResult[] = [...immediateResults];
     // Zero operations never enter the loop, so the bare division is safe.
     const incrementPct = 100 / operations.length;
@@ -117,7 +122,11 @@ export const runLatexdiffFromMetadata = Effect.fn('latexdiff.runFromMetadata')(
     generateBetweenRoundDiffs: boolean;
     latexdiff: LatexdiffRuntime;
     progress: DiffProgressReporter;
-  }): Effect.fn.Return<DiffRunOutcome, Error, FileSystem.FileSystem> {
+  }): Effect.fn.Return<
+    DiffRunOutcome,
+    Error,
+    FileSystem.FileSystem | ChildProcessSpawner
+  > {
     const {
       rounds,
       workspaceRoot,

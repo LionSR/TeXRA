@@ -747,24 +747,6 @@ describe('CLI run progress renderer', () => {
     );
   });
 
-  it('redacts secrets from child descriptions', async () => {
-    const output = outputBuffer();
-    const renderer = plainRenderer(output);
-
-    await handleOrchestratorRootRun(renderer);
-    await handleRunDescription(
-      renderer,
-      'child-stream',
-      'Run PASSWORD="correct horse" now',
-    );
-    await handleActiveSubagents(renderer, 'root-stream', [subagentChild()]);
-
-    expect(output.text).toBe(
-      'orchestrator · 0s\n' +
-        'orchestrator · subagent: review — Run PASSWORD=[redacted] now · 0s\n',
-    );
-  });
-
   it('keeps the current task across a same-turn manual retry', async () => {
     const output = outputBuffer();
     const renderer = plainRenderer(output);

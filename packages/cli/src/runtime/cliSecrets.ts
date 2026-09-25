@@ -22,9 +22,6 @@ import {
   withPerKeyLane,
 } from '@utils/core/perKeyQueue';
 
-// Local file imports
-import { cliEnvValue } from './cliContext';
-
 /** Secrets file is owner-only: `0o600` (containing dir gets `0o700`). */
 const SECRETS_FILE_MODE = 0o600;
 
@@ -103,10 +100,6 @@ export class CliSecrets implements PlatformSecrets {
           }),
       ),
     );
-  }
-
-  getEnv(name: string): string | undefined {
-    return cliEnvValue(name);
   }
 
   /**

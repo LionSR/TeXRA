@@ -5,7 +5,7 @@ import { isEscapeInput } from '@cli/tui/inputKeys';
 import { KeyHints } from '@cli/tui/ui/KeyHints';
 import { LoadingIndicator } from '@cli/tui/ui/LoadingIndicator';
 import { COLOR_ERROR } from '@cli/tui/ui/colors';
-import { textDisplayWidth } from '@cli/runtime/terminalText';
+import { wrappedRowCount } from '@cli/tui/ansiWrap';
 import { FormFrame, formFrameWidth } from '../forms/_shared/FormFrame';
 import { formProgress, type FormProgress } from '../state/cliState';
 import { takeActiveForm } from '../state/formSlot';
@@ -43,11 +43,10 @@ function FormBusyFrame(props: {
   if (progress.status === 'failed') titleSuffix = ' · error';
   const title = `${progress.title}${titleSuffix}`;
   const innerWidth = Math.max(1, formFrameWidth(columns) - 4);
+  // Count rows the way Ink word-wraps them; character-wrap math undercounts
+  // and can leave a copyable message on screen that does not fit.
   const wrappedRows = (text: string): number =>
-    text.split('\n').reduce((rows, line) => {
-      const width = textDisplayWidth(line.replaceAll('\t', '    '));
-      return rows + Math.max(1, Math.ceil(width / innerWidth));
-    }, 0);
+    wrappedRowCount(text.replaceAll('\t', '    '), innerWidth);
   // Border rows plus the title, message, copyable block, and key hints.
   const requiredRows = (copyableMessage: string): number =>
     3 +

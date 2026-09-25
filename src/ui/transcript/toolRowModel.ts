@@ -23,6 +23,7 @@ import {
 } from '@shared/tools/executionsDisplay';
 import {
   displayToolName,
+  isMcpToolName,
   normalizeToolName,
 } from '@shared/tools/toolDisplayName';
 import { deriveToolInputPreview } from '@shared/tools/toolInputPreview';
@@ -170,6 +171,9 @@ export interface ToolRowModel {
   readonly userInstruction?: TranscriptText;
   readonly showOutput: boolean;
   readonly outputSuppression?: ToolOutputSuppression;
+  /** A completed shell or MCP call that printed nothing: "it ran and printed
+   *  nothing" is a result for a call whose output is the point. */
+  readonly showsNoOutputMarker: boolean;
   readonly status?: ToolCallStatus;
   readonly isError: boolean;
   readonly isUserFeedback: boolean;
@@ -178,7 +182,7 @@ export interface ToolRowModel {
 }
 
 export interface ToolRowModelContext {
-  /** Subagent run id -> label, for the `executions` header summary. */
+  /** The session's runs by id, for the `executions` header summary. */
   readonly runLabels?: RunLabels;
   /** The raw `data.output` of the tool-use payload. Structured sections read
    *  it directly (MCP content blocks, edit start lines, per-file line
@@ -206,14 +210,11 @@ function headerSummaryText(summary: string): string {
  * The header preview both hosts show, and the only statement of its
  * precedence: a shell call is described by its command, so `bash`-kind tools
  * prefer the input preview; every other tool reports its own summary first and
- * falls back to the input preview while it is still in flight.
- *
- * Exported because subagent run labels exist only at paint time in the
- * terminal (they name live executions), so the CLI re-derives the preview once
- * the labels are known rather than restating the precedence over the model's
- * already-computed value.
+ * falls back to the input preview while it is still in flight. An
+ * `executions` call names its child runs by label: the session fold passes
+ * its runs as `runLabels`, so the label lands in the row once, for every host.
  */
-export function toolHeaderPreview(
+function toolHeaderPreview(
   normalized: NormalizedToolUse,
   ctx: ToolRowModelContext,
 ): string {
@@ -327,6 +328,11 @@ export function toolRowModel(
     ...(userInstruction ? { userInstruction } : {}),
     showOutput: suppression === undefined,
     ...(suppression ? { outputSuppression: suppression } : {}),
+    showsNoOutputMarker:
+      suppression === 'empty' &&
+      normalized.status === TOOL_CALL_STATUS.COMPLETED &&
+      (toolDisplayKind(normalized.toolName) === 'bash' ||
+        isMcpToolName(normalized.toolName)),
     ...(normalized.status ? { status: normalized.status } : {}),
     isError: normalized.status === TOOL_CALL_STATUS.FAILED,
     isUserFeedback: normalized.isUserFeedback,

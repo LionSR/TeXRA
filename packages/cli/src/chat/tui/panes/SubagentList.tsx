@@ -3,7 +3,7 @@ import { useMemo } from 'react';
 
 import { Select, type SelectItem } from '@cli/tui/ui/Select';
 import { COLOR_HINT } from '@cli/tui/ui/colors';
-import { POINTER, TICK } from '@cli/tui/ui/glyphs';
+import { TICK } from '@cli/tui/ui/glyphs';
 import { useLiveNowMsSince } from '@cli/tui/useLiveNowMs';
 import { truncateSummaryToWidth } from '@cli/runtime/terminalText';
 import { AgentCategory, type RunId } from '@shared/schemas';
@@ -15,7 +15,11 @@ import {
 import { formatResultCount } from '@utils/text/stringUtils';
 
 import { childElapsed } from '../state/childControls';
-import { killableRunId, runPhaseOf } from '../state/sessionView';
+import {
+  killableRunId,
+  resumableRunId,
+  runPhaseOf,
+} from '../state/sessionView';
 import {
   CHILD_ROW_METADATA_MIN_COLUMNS,
   CHILD_STATUS_MARKER,
@@ -23,7 +27,7 @@ import {
   CHILD_TONE_COLOR,
   pendingApprovalRowDisplay,
 } from './SubagentListDisplay';
-import { expandedRuns, type SessionListRow } from '../state/cliState';
+import { actOnSurface, type SessionListRow } from '../state/cliState';
 import {
   pendingApprovalKindsByRun,
   type PendingApprovalKind,
@@ -127,9 +131,6 @@ function SessionRow({
       minWidth={0}
       overflowY="hidden"
     >
-      <Text aria-hidden color={focused ? COLOR_HINT : undefined}>
-        {focused ? POINTER : ' '}
-      </Text>
       <Text aria-hidden color={active ? COLOR_HINT : undefined}>
         {active ? ` ${TICK} ` : '   '}
       </Text>
@@ -152,7 +153,7 @@ function SessionRow({
           {` [${run.rollup.total} total · ${run.rollup.running} running · ${run.rollup.finished} finished]`}
         </RowSegment>
       ) : null}
-      {run.group === 'interrupted' && run.resumeEligible ? (
+      {resumableRunId(run) ? (
         <RowSegment color={color} flexShrink={0}>
           {' '}
           · Resume
@@ -228,12 +229,8 @@ export function SubagentList(
       const { run, expanded } = selectedRow;
       if (key.leftArrow || key.rightArrow || input === ' ') {
         const next = key.rightArrow || (!key.leftArrow && !expanded);
-        expandedRuns.set(new Map(expandedRuns.get()).set(run.id, next));
-      } else if (
-        input.toLowerCase() === 'r' &&
-        run.group === 'interrupted' &&
-        run.resumeEligible
-      ) {
+        actOnSurface({ kind: 'expand', runId: run.id, expanded: next });
+      } else if (input.toLowerCase() === 'r' && resumableRunId(run)) {
         props.onFocusRun?.(run.id);
       } else if (input.toLowerCase() === 'k') {
         const runId = killableRunId(run);

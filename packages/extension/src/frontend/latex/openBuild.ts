@@ -20,6 +20,7 @@ import {
 import { getFileStem } from '@utils/core';
 import { pathToLocationIn } from '@utils/files/fileLocation';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 const CHANNEL = 'OpenBuildUtils';
 
@@ -168,7 +169,8 @@ export const prepareBuildDisplay = (
   });
 
 /** What the file-open/build phase takes from the runtime it is run on. */
-type PreparedFileServices = FileSystem.FileSystem | Path.Path;
+type PreparedFileServices =
+  FileSystem.FileSystem | Path.Path | ChildProcessSpawner;
 
 /** How it fails: the editor's own rejections, and the existence probe's. */
 type DisplayFailure = Error | PlatformError.PlatformError;

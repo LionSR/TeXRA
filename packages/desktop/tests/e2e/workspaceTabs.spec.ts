@@ -153,7 +153,9 @@ test('aligns titlebar content and keeps the collapsed toggle clear of macOS cont
   const { app, page } = launched;
   const brand = await page.locator('.shell-sidebar-brand').boundingBox();
   const brandLogo = await page.locator('.shell-sidebar-logo').boundingBox();
-  const shellHeader = await page.locator('.shell-header').boundingBox();
+  const shellHeader = await page
+    .locator('.shell-conversation > .shell-header')
+    .boundingBox();
   expect(brand).not.toBeNull();
   expect(brandLogo).not.toBeNull();
   expect(shellHeader).not.toBeNull();

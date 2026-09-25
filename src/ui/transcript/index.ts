@@ -12,6 +12,7 @@ export { projectTranscriptRow } from './projectTranscriptRow';
 export {
   compactionActivityRow,
   isSettledRow,
+  rowHeadline,
   type CompactionActivityRow,
   type ContextManagementRow,
   type ErrorRow,
@@ -33,7 +34,6 @@ export {
   type WorkflowTaskRow,
 } from './transcriptRow';
 export {
-  toolHeaderPreview,
   type ToolChecklistSection,
   type ToolFileGroupsSection,
   type ToolFileListSection,

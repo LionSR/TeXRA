@@ -18,7 +18,6 @@ import { COLOR_HINT } from '@cli/tui/ui/colors';
 import { CONFIRM_CARD_HORIZONTAL_DECORATION } from '@cli/tui/ui/theme';
 import type { RunId } from '@shared/schemas';
 import type { TranscriptView } from '@shared/session/sessionView';
-import type { RunLabels } from '@shared/tools/executionsDisplay';
 
 import { formFrameWidth } from '../forms/_shared/FormFrame';
 import {
@@ -33,13 +32,11 @@ const EMPTY_TRANSCRIPT: Pick<TranscriptView, 'rows'> = { rows: [] };
 
 export function TranscriptReader({
   availableRows,
-  runLabels,
   onClose,
   runId,
   title,
 }: {
   readonly availableRows: number;
-  readonly runLabels?: RunLabels;
   readonly onClose: () => void;
   readonly runId: RunId;
   readonly title: string;
@@ -57,11 +54,9 @@ export function TranscriptReader({
   // Recomputed as the run appends rows, so the reader stays live rather than
   // freezing at the content present when it opened.
   const text = useMemo(() => {
-    const body = transcriptToLines(transcript.rows, width, runLabels)
-      .join('\n')
-      .trimEnd();
+    const body = transcriptToLines(transcript.rows, width).join('\n').trimEnd();
     return body || EMPTY_TRANSCRIPT_TEXT;
-  }, [runLabels, transcript, width]);
+  }, [transcript, width]);
 
   useInput((input, key) => {
     if (isEscapeInput(input, key)) {

@@ -1,9 +1,8 @@
 // Standard library imports
-import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, FileSystem } from 'effect';
 import { ZodError } from 'zod';
 
 // Local imports - common
@@ -62,7 +61,7 @@ function firstZodMessage(error: ZodError): string {
 
 /**
  * `extractFrontmatter` throws a typed {@link SkillFrontmatterError} for every
- * malformed-frontmatter case; anything else (e.g. a failed `readFile`) is a
+ * malformed-frontmatter case; anything else (a failed read included) is a
  * read error.
  */
 function skillReadErrorCode(err: unknown): SkillIssueCode {
@@ -172,15 +171,10 @@ function normalizeSkillDescription(
 export function loadSkillDirectory(
   skillDir: string,
   directoryName: string,
-): Effect.Effect<LoadedSkill> {
+): Effect.Effect<LoadedSkill, never, FileSystem.FileSystem> {
   const skillPath = path.join(skillDir, 'SKILL.md');
 
-  return Effect.tryPromise({
-    try: () => fs.readFile(skillPath, 'utf8'),
-    // The raw failure decides the issue code, so it is carried through
-    // unwrapped rather than classified twice.
-    catch: ensureError,
-  }).pipe(
+  return FileSystem.FileSystem.use((fs) => fs.readFileString(skillPath)).pipe(
     Effect.flatMap((content) =>
       Effect.try({
         try: (): LoadedSkill => {

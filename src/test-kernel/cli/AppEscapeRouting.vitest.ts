@@ -19,14 +19,13 @@ import {
   currentApproval,
   type ApprovalPayload,
 } from '@cli/chat/tui/state/approvalQueue';
+import { takeActiveForm } from '@cli/chat/tui/state/formSlot';
 import { POINTER } from '@cli/tui/ui/glyphs';
 import type { InputHistory } from '@cli/chat/tui/history/inputHistory';
 import {
-  activeRunId,
   selectedRunId,
   closeForegroundReader,
   focusRun,
-  expandedRuns,
   foregroundReader,
   infoPane,
   openInfoPane,
@@ -36,6 +35,7 @@ import {
   rootRunId,
   updateWorkflowPopupView,
   workflowPopupView,
+  actOnSurface,
 } from '@cli/chat/tui/state/cliState';
 import {
   AgentCategory,
@@ -367,6 +367,29 @@ describe('App foreground Escape ownership', () => {
       instance.unmount();
     }
   });
+  it('mounts a form that takes the slot with its own state', async () => {
+    seedRootRun();
+    const { ink, React } = await loadInk();
+    function Probe({ label }: { readonly label: string }) {
+      const [shown] = React.useState(label);
+      return React.createElement(ink.Text, null, `form:${shown}`);
+    }
+    const openProbe = (label: string): void =>
+      takeActiveForm({
+        commandName: 'probe',
+        render: () => React.createElement(Probe, { label }),
+      });
+    const { instance, stdout } = await renderRoutingApp();
+    try {
+      openProbe('first');
+      await waitFor(() => stdout.output.includes('form:first'));
+      openProbe('second');
+      await waitFor(() => stdout.output.includes('form:second'));
+    } finally {
+      instance.unmount();
+    }
+  });
+
   it('lets a foreground information pane own Escape before child back', async () => {
     seedChildHierarchy();
     focusRun(CHILD);
@@ -378,7 +401,7 @@ describe('App foreground Escape ownership', () => {
       await waitFor(() => infoPane.get() === undefined);
       await sleep(CHORD_WINDOW_EXPIRED_MS);
 
-      expect(activeRunId.get()).toBe(CHILD);
+      expect(selectedRunId.get()).toBe(CHILD);
     } finally {
       instance.unmount();
     }
@@ -416,7 +439,7 @@ describe('App foreground Escape ownership', () => {
     const emit = vi.spyOn(testDefaultSession(), 'publish');
 
     try {
-      expandedRuns.set(new Map([[ROOT, true]]));
+      actOnSurface({ kind: 'expand', runId: ROOT, expanded: true });
       stdin.write('\t');
       await waitFor(() => stdout.output.includes('workflow Running'));
       stdin.write(ARROW_KEYS.Down);
@@ -452,7 +475,7 @@ describe('App foreground Escape ownership', () => {
       clearSeededRequests();
       await waitFor(() => currentApproval.get() === undefined);
       await waitFor(() => stdout.output.includes('Inspect · Running'));
-      expect(activeRunId.get()).toBe(ROOT);
+      expect(selectedRunId.get()).toBe(ROOT);
       // View state the user set inside the popup survives the round trips
       // below; only opening a different workflow would start fresh.
       updateWorkflowPopupView({ expanded: new Set(['queued']) });
@@ -485,22 +508,22 @@ describe('App foreground Escape ownership', () => {
         },
       });
       await waitFor(() => stdout.output.includes('Verify the child result.'));
-      expect(activeRunId.get()).toBe(ROOT);
+      expect(selectedRunId.get()).toBe(ROOT);
       expect(emit).not.toHaveBeenCalled();
       clearSeededRequests();
       await waitFor(() => currentApproval.get() === undefined);
       expect(foregroundReader.get()?.kind).toBe('workflow');
       closeForegroundReader();
-      expect(activeRunId.get()).toBe(ROOT);
+      expect(selectedRunId.get()).toBe(ROOT);
       openWorkflowPopup(WORKFLOW);
 
       // Enter on the task focuses that agent; Esc returns to main with the
       // popup back where it was.
       stdin.write('\r');
-      await waitFor(() => activeRunId.get() === CHILD);
+      await waitFor(() => selectedRunId.get() === CHILD);
       expect(foregroundReader.get()).toBeUndefined();
       stdin.write(ESC);
-      await waitFor(() => activeRunId.get() === ROOT, {
+      await waitFor(() => selectedRunId.get() === ROOT, {
         timeoutMs: 1_000,
       });
       await waitFor(() => foregroundReader.get()?.kind === 'workflow');
@@ -518,9 +541,9 @@ describe('App foreground Escape ownership', () => {
 
     try {
       stdin.write(ESC);
-      await waitFor(() => activeRunId.get() === CHILD);
+      await waitFor(() => selectedRunId.get() === CHILD);
       stdin.write(ESC);
-      await waitFor(() => activeRunId.get() === ROOT);
+      await waitFor(() => selectedRunId.get() === ROOT);
     } finally {
       instance.unmount();
     }
@@ -538,7 +561,7 @@ describe('App foreground Escape ownership', () => {
       await waitFor(() => infoPane.get()?.title === 'Late reference');
       await sleep(CHORD_WINDOW_EXPIRED_MS);
 
-      expect(activeRunId.get()).toBe(CHILD);
+      expect(selectedRunId.get()).toBe(CHILD);
       expect(infoPane.get()?.title).toBe('Late reference');
     } finally {
       instance.unmount();
@@ -554,10 +577,10 @@ describe('App foreground Escape ownership', () => {
       stdin.write(ESC);
       await sleep(WITHIN_CHORD_WINDOW_MS);
       finishNestedHierarchyAndFocusRoot();
-      await waitFor(() => activeRunId.get() === ROOT);
+      await waitFor(() => selectedRunId.get() === ROOT);
       await sleep(CHORD_WINDOW_EXPIRED_MS);
 
-      expect(activeRunId.get()).toBe(ROOT);
+      expect(selectedRunId.get()).toBe(ROOT);
     } finally {
       instance.unmount();
     }
@@ -574,7 +597,7 @@ describe('App foreground Escape ownership', () => {
       seedParentEdge(CHILD, null);
       await sleep(CHORD_WINDOW_EXPIRED_MS);
 
-      expect(activeRunId.get()).toBe(CHILD);
+      expect(selectedRunId.get()).toBe(CHILD);
     } finally {
       instance.unmount();
     }
@@ -606,7 +629,7 @@ describe('App foreground Escape ownership', () => {
       stdin.write(ESC);
       await sleep(WITHIN_CHORD_WINDOW_MS);
       stdin.write('q');
-      await waitFor(() => activeRunId.get() === ROOT);
+      await waitFor(() => selectedRunId.get() === ROOT);
       stdin.write('\r');
       await waitFor(() => onSubmit.mock.calls.length === 1);
 
@@ -629,7 +652,7 @@ describe('App foreground Escape ownership', () => {
       stdin.write('1');
       await sleep(CHORD_WINDOW_EXPIRED_MS);
 
-      expect(activeRunId.get()).toBe(CHILD);
+      expect(selectedRunId.get()).toBe(CHILD);
       expect(infoPane.get()?.title).toBe('Late chord reference');
     } finally {
       instance.unmount();
@@ -645,8 +668,8 @@ describe('App foreground Escape ownership', () => {
       stdin.write(ESC);
       await sleep(WITHIN_CHORD_WINDOW_MS);
       stdin.write(ESC);
-      await waitFor(() => activeRunId.get() === CHILD);
-      await waitFor(() => activeRunId.get() === ROOT);
+      await waitFor(() => selectedRunId.get() === CHILD);
+      await waitFor(() => selectedRunId.get() === ROOT);
     } finally {
       instance.unmount();
     }
@@ -655,22 +678,18 @@ describe('App foreground Escape ownership', () => {
   it('keeps an Esc-digit focus target after the bare-Escape window expires', async () => {
     seedChildHierarchy();
     focusRun(CHILD);
-    expandedRuns.set(
-      new Map([
-        [ROOT, true],
-        [CHILD, true],
-      ]),
-    );
+    actOnSurface({ kind: 'expand', runId: ROOT, expanded: true });
+    actOnSurface({ kind: 'expand', runId: CHILD, expanded: true });
     const { instance, stdin } = await renderRoutingApp();
 
     try {
       stdin.write(ESC);
       await sleep(WITHIN_CHORD_WINDOW_MS);
       stdin.write('3');
-      await waitFor(() => activeRunId.get() === GRANDCHILD);
+      await waitFor(() => selectedRunId.get() === GRANDCHILD);
       await sleep(CHORD_WINDOW_EXPIRED_MS);
 
-      expect(activeRunId.get()).toBe(GRANDCHILD);
+      expect(selectedRunId.get()).toBe(GRANDCHILD);
     } finally {
       instance.unmount();
     }
@@ -699,7 +718,7 @@ describe('App foreground Escape ownership', () => {
         agentCategory: AgentCategory.ToolUse,
       });
       focusRun(CHILD);
-      await waitFor(() => activeRunId.get() === CHILD);
+      await waitFor(() => selectedRunId.get() === CHILD);
       await waitFor(
         () => !currentFrame(stdout).includes('preserved root draft'),
       );
@@ -726,7 +745,7 @@ describe('App foreground Escape ownership', () => {
       stdin.write(ESC);
       await waitFor(() => foregroundReader.get() === undefined);
       stdin.write(ESC);
-      await waitFor(() => activeRunId.get() === ROOT);
+      await waitFor(() => selectedRunId.get() === ROOT);
       await waitFor(() =>
         currentFrame(stdout).includes('preserved root draft'),
       );
@@ -873,7 +892,7 @@ describe('App foreground Escape ownership', () => {
         stdout.output.slice(beforeListCancel).includes('Esc parent'),
       );
 
-      expect(activeRunId.get()).toBe(CHILD);
+      expect(selectedRunId.get()).toBe(CHILD);
 
       const beforeListFocus = stdout.output.length;
       stdin.write('\t');
@@ -902,7 +921,7 @@ describe('App foreground Escape ownership', () => {
       await sleep(30);
 
       expect(stdout.output).not.toContain('Session list');
-      expect(activeRunId.get()).toBe(ROOT);
+      expect(selectedRunId.get()).toBe(ROOT);
     } finally {
       instance.unmount();
     }

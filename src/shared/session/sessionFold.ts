@@ -69,6 +69,7 @@ import {
   type LocalRuntimeState,
   type DisplaySessionEvent,
   type StreamLogEntry,
+  type RoundOutput,
   type RunId,
   type TaskGroup,
   type TextChunk,
@@ -116,6 +117,7 @@ import {
   compactionActivityRow,
   isSettledRow,
   projectTranscriptRow,
+  rowHeadline,
   type TranscriptRow,
   type TranscriptRowKind,
 } from '@ui/transcript';
@@ -123,13 +125,14 @@ import { isObject } from '@utils/core';
 import {
   applyRunRow,
   freshRunRows,
+  isSharedRunRow,
   type RunRows,
   type SharedRunRow,
 } from './runRows';
 import { applyTraceRow, createTranscriptFold } from './traceFold';
 import { isRunningStreamingTextEntry, StreamLog } from './traceEntries';
 
-import { emptySessionView } from './sessionView';
+import { emptySessionView, isLiveRun } from './sessionView';
 import type { SessionView, RunView, TranscriptView } from './sessionView';
 
 type RunStartEvent = Extract<DisplaySessionEvent, { type: 'run.start' }>;
@@ -269,7 +272,8 @@ interface SessionIndexes {
   /** Current sequence-row claims for the checked resident scope. */
   readonly claims: Map<AggregateId, string | null>;
   /** What the rows both folds read say about each run (`runRows.ts`);
-   *  `view.requests`, `view.queuedFollowUps` and `RunView.flow` project it. */
+   *  `view.requests`, `view.queuedFollowUps`, `RunView.flow` and the run's
+   *  output rounds project it. */
   readonly rows: Map<RunId, RunRows>;
   /** One entry per `${aggregate}/${listing type}`: the commit of the latest
    *  listing fact folded for it, so a replayed older one is ignored. The
@@ -725,8 +729,7 @@ function withAggregates(view: SessionView, run: RunView): RunView {
     const child = view.runs.get(childId);
     if (!child) continue;
     rollup.total += 1 + child.rollup.total;
-    rollup.running +=
-      (isInFlightPhase(child.status) ? 1 : 0) + child.rollup.running;
+    rollup.running += (isLiveRun(child) ? 1 : 0) + child.rollup.running;
     rollup.finished +=
       (isTerminalOutcomePhase(child.status) ? 1 : 0) + child.rollup.finished;
     if (child.approval !== 'none') descendantWaiting = true;
@@ -1006,14 +1009,19 @@ function lifecycleToTaskGroups(run: RunView): boolean {
   );
 }
 
+/** Project one entry into `transcript`, the run's next slice. The session's
+ *  runs are the label context, so an `executions` tool row names the child
+ *  runs it targets in the fold itself, for every host alike. */
 function projectRow(
+  view: SessionView,
+  run: RunView,
   transcript: TranscriptView,
   entry: StreamLogEntry,
-  projectLifecycleToTaskGroups: boolean,
 ): void {
   const row = projectTranscriptRow(entry, {
     previousRow: rowById(transcript, entry.id),
-    projectLifecycleToTaskGroups,
+    projectLifecycleToTaskGroups: lifecycleToTaskGroups(run),
+    runLabels: view.runs,
   });
   if (row) upsertRow(transcript, row);
 }
@@ -1070,7 +1078,7 @@ function applyEntry(
       ? { ...entry, text: live }
       : withToolOutput(entry, live);
   }
-  projectRow(next, projected, lifecycleToTaskGroups(run));
+  projectRow(view, run, next, projected);
   const row = rowById(next, entry.id);
   if (row?.kind === 'thinking') {
     const newest = indexes.thinkingRowId;
@@ -1113,40 +1121,6 @@ function withSettledTranscript(run: RunView, finishedAt: number): RunView {
 // ---------------------------------------------------------------------------
 // Transcript-derived run facts (G4: derived in the fold, never by a host)
 // ---------------------------------------------------------------------------
-
-/** The headline a status line shows for a row: its own text, untrimmed and
- *  unsanitized; a host sanitizes for its surface at paint. */
-function rowHeadline(row: TranscriptRow): string {
-  switch (row.kind) {
-    case 'assistant':
-    case 'log':
-      return row.text.full;
-    case 'user':
-    case 'error':
-    case 'progressStatus':
-      return row.summary.full;
-    case 'workflowTask':
-      return row.line;
-    case 'phase':
-      return row.heading;
-    case 'thinking':
-      return 'Thinking';
-    case 'scratchpad':
-      return 'Scratchpad';
-    case 'webSearch':
-    case 'statistics':
-    case 'contextManagement':
-    case 'compactionActivity':
-      return row.label;
-    case 'fileList':
-    case 'missingOutputs':
-      return row.summary;
-    case 'latexdiff':
-      return `Latexdiff results (${row.entries.length})`;
-    case 'tool':
-      return '';
-  }
-}
 
 function nonEmpty(text: string | undefined): string | undefined {
   return text !== undefined && text.trim().length > 0 ? text : undefined;
@@ -1316,11 +1290,7 @@ function foldTextChunk(view: SessionView, chunk: TextChunk): boolean {
   if (!cursor) return true;
   if (isRunningToolEntry(cursor.entry)) {
     const transcript = replaceTranscript(run.transcript, {});
-    projectRow(
-      transcript,
-      withToolOutput(cursor.entry, text),
-      lifecycleToTaskGroups(run),
-    );
+    projectRow(view, run, transcript, withToolOutput(cursor.entry, text));
     setRun(view, { ...run, transcript });
     return true;
   }
@@ -1345,11 +1315,10 @@ function foldTextChunk(view: SessionView, chunk: TextChunk): boolean {
   } else {
     // The entry's own text was blank and projected no row; the chunk that
     // gives it one projects it once.
-    projectRow(
-      transcript,
-      { ...cursor.entry, text: cursor.text.full },
-      lifecycleToTaskGroups(run),
-    );
+    projectRow(view, run, transcript, {
+      ...cursor.entry,
+      text: cursor.text.full,
+    });
   }
   setRun(view, { ...run, transcript });
   return true;
@@ -1367,9 +1336,12 @@ function wrongArm(run: RunView, name: string): never {
   );
 }
 
-/** The event's own arm applied to its run (topology, session slices, the
- *  transcript tier and the shared rows' own position are the caller's). */
-function applyOwnArm(run: RunView, event: DisplaySessionEvent): RunView {
+/** A durable event `runRows.ts` does not own. */
+type OwnEvent = Exclude<DisplaySessionEvent, SharedRunRow>;
+
+/** The event's own arm applied to its run (topology, session slices and the
+ *  transcript tier are the caller's). */
+function applyOwnArm(run: RunView, event: OwnEvent): RunView {
   switch (event.type) {
     case 'log':
     case 'stage.start':
@@ -1387,14 +1359,8 @@ function applyOwnArm(run: RunView, event: DisplaySessionEvent): RunView {
     case 'approval.policy':
     case 'inquiryThreadUpdated':
     case 'run.removed':
-    case 'flow.step':
-    case 'request.opened':
-    case 'request.decided':
-    case 'followup.queued':
-    case 'followup.consumed':
       // Existence cannot become more true (5.2, "Duplicates"): a second
-      // start is a no-op. The rest move session slices alone, or are the
-      // shared rows `runRows.ts` owns; the caller projects their position.
+      // start is a no-op. The rest move session slices alone.
       return run;
     case 'run.activate': {
       // Every activation, the launch and each resume, opens a running
@@ -1455,27 +1421,6 @@ function applyOwnArm(run: RunView, event: DisplaySessionEvent): RunView {
           ),
         },
       };
-    case 'output.produced': {
-      const files = nonEmptyRounds(
-        Object.fromEntries(
-          event.rounds.map((round) => [round.round, round.outputs]),
-        ),
-      );
-      return {
-        ...run,
-        ...(run.category === AgentCategory.Workflow
-          ? { files }
-          : { outputs: files }),
-        compileFailures: nonEmptyRounds(
-          Object.fromEntries(
-            event.rounds.map((round) => [round.round, round.compileFailures]),
-          ),
-        ),
-        missingOutputs: Object.fromEntries(
-          event.rounds.map((round) => [round.round, round.missingOutputs]),
-        ),
-      };
-    }
     case 'run.fact': {
       // Every family is a latest-only listing key of its own, so a cold
       // read delivers one row per family and each row carries the run's
@@ -1542,13 +1487,12 @@ function parked(run: RunView, atRest: boolean, at: number): RunView {
 }
 
 /** Session-level slices, applied before the run arm so the arm's aggregates
- *  see them. Returns the run's row slice when a shared row moved the loop's
- *  position, the only part of it the run arm projects. */
+ *  see them. */
 function applySessionSlices(
   view: SessionView,
   runId: RunId | null,
   event: DisplaySessionEvent,
-): RunRows | null {
+): void {
   switch (event.type) {
     case 'run.start':
       // The initial snapshot rides the existence fact (PRD 6, item 2).
@@ -1557,19 +1501,11 @@ function applySessionSlices(
       if (event.approvalPolicy && runId !== null) {
         writableMap(view, 'policy').set(runId, event.approvalPolicy);
       }
-      return null;
-    case 'flow.step':
-    case 'request.opened':
-    case 'request.decided':
-    case 'followup.queued':
-    case 'followup.consumed':
-      // One application, in `runRows.ts`; the containers are its
-      // projections. A replayed row is below the pair's `latest` entry.
-      return runId === null ? null : applyRowFacts(view, runId, event);
+      return;
     case 'approval.policy':
       if (runId !== null)
         writableMap(view, 'policy').set(runId, event.snapshot);
-      return null;
+      return;
     case 'inquiryThreadUpdated': {
       const {
         type: _type,
@@ -1587,35 +1523,50 @@ function applySessionSlices(
         at === -1
           ? [...view.inquiries, thread]
           : view.inquiries.with(at, thread);
-      return null;
+      return;
     }
     default:
-      return null;
+      return;
   }
 }
 
 /** One shared row, applied by `runRows.ts` and projected onto the session's
- *  containers. `unresolved` is the partial read, not a defect: a cold
- *  listing delivers one request row per run, so the opening a decision
- *  answers may never have reached this view. */
+ *  containers and the run. `unresolved` is the partial read, not a defect: a
+ *  cold listing delivers one request row per run, so the opening a decision
+ *  answers may never have reached this view. A replayed row is below the
+ *  pair's `latest` entry and never reaches here. */
 function applyRowFacts(
   view: SessionView,
-  runId: RunId,
+  run: RunView,
   event: SharedRunRow,
-): RunRows | null {
+): RunView {
   const { rows } = sessionIndexesOf(view);
-  const before = rows.get(runId) ?? freshRunRows();
+  const before = rows.get(run.id) ?? freshRunRows();
   const verdict = applyRunRow(before, event);
   if (verdict.kind === 'contradiction') {
-    throw new Error(`${event.type} on ${runId}: ${verdict.detail}`);
+    throw new Error(`${event.type} on ${run.id}: ${verdict.detail}`);
   }
-  if (verdict.kind !== 'applied') return null;
-  const after: RunRows = { ...before, ...verdict.rows };
-  rows.set(runId, after);
-  if (verdict.rows.requests !== undefined) projectRequests(view, runId, after);
-  if (verdict.rows.followUps !== undefined)
-    projectFollowUps(view, runId, after);
-  return verdict.rows.step === undefined ? null : after;
+  if (verdict.kind !== 'applied') return run;
+  const moved = verdict.rows;
+  const after: RunRows = { ...before, ...moved };
+  rows.set(run.id, after);
+  if (moved.requests !== undefined) projectRequests(view, run.id, after);
+  if (moved.followUps !== undefined) projectFollowUps(view, run.id, after);
+  const next =
+    moved.step === undefined ? run : withPosition(run, after, event.at);
+  const rounds = moved.roundOutputs;
+  if (rounds === undefined) return next;
+  const byRound = <T>(pick: (round: RoundOutput) => T) =>
+    Object.fromEntries(rounds.map((r) => [r.round, pick(r)]));
+  const files = nonEmptyRounds(byRound((r) => r.outputs));
+  return {
+    ...next,
+    ...(run.category === AgentCategory.Workflow
+      ? { files }
+      : { outputs: files }),
+    compileFailures: nonEmptyRounds(byRound((r) => r.compileFailures)),
+    missingOutputs: byRound((r) => r.missingOutputs),
+  };
 }
 
 /** `view.requests` is every run's open requests, in the order the rows
@@ -1745,11 +1696,15 @@ function foldDurable(
   const created = !known;
   const before = known ?? createRun(view, event as RunStartEvent, runId);
 
-  // The rows both folds read are applied once, in `runRows.ts`; the only
-  // part of that slice the run itself carries is the loop's position.
-  const moved = applySessionSlices(view, runId, event);
-  const arm = applyOwnArm(before, event);
-  const own = moved === null ? arm : withPosition(arm, moved, event.at);
+  // The rows both folds read are applied once, in `runRows.ts`; every other
+  // row is the session's own.
+  let own: RunView;
+  if (isSharedRunRow(event)) {
+    own = applyRowFacts(view, before, event);
+  } else {
+    applySessionSlices(view, runId, event);
+    own = applyOwnArm(before, event);
+  }
   if (event.type === 'run.end') {
     // The run ended; a terminal phase ends every live row (5.2, "In-flight
     // text": a run can end with a row unfinalized).

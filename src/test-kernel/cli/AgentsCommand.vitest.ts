@@ -92,12 +92,9 @@ interface EmittedAgentsPayload {
 }
 
 function expectEmittedAgents(payload: EmittedAgentsPayload): void {
-  expect(cliOutputMock.emitCliResult).toHaveBeenCalledWith(
+  expect(cliOutputMock.emitPagedCliResult).toHaveBeenCalledWith(
     expect.anything(),
     payload,
-    {
-      paged: true,
-    },
   );
 }
 

@@ -18,7 +18,6 @@
  * to a server by then.
  */
 
-import { NodeChildProcessSpawner } from '@effect/platform-node';
 import {
   Cause,
   Duration,
@@ -33,6 +32,7 @@ import {
   LeanLanguageServices,
   type LeanLanguageServicesShape,
 } from '../leanLanguageServices';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 import type {
   LspHover,
   LspResult,
@@ -54,14 +54,18 @@ export interface DirectLspLeanAdapterOptions {
  * The {@link LeanLanguageServices} port over `lake env lean --server`, for
  * hosts without a VS Code extension bridge (Electron desktop, CLI, the agent
  * package). A composition root hands this layer to `installProcessRuntime`,
- * which provides the `FileSystem`/`Path` the spawner validates and resolves a
- * command's `cwd` through; the pool it builds acquires no resource of its
+ * which provides the process's `ChildProcessSpawner` (and the `FileSystem`/
+ * `Path` it runs over); the pool it builds acquires no resource of its
  * own, so nothing happens at startup when no Lean tool is invoked, and its
  * servers stop when the process runtime that built it is disposed.
  */
 export function directLeanLanguageServices(
   options: DirectLspLeanAdapterOptions = {},
-): Layer.Layer<LeanLanguageServices, never, FileSystem.FileSystem | Path.Path> {
+): Layer.Layer<
+  LeanLanguageServices,
+  never,
+  FileSystem.FileSystem | Path.Path | ChildProcessSpawner
+> {
   const idleTimeoutMs = options.idleTimeoutMs ?? DEFAULT_LEAN_IDLE_TIMEOUT_MS;
   return Layer.effect(
     LeanLanguageServices,
@@ -74,13 +78,7 @@ export function directLeanLanguageServices(
           idleTimeoutMs > 0
             ? Duration.millis(idleTimeoutMs)
             : Duration.infinity,
-      }).pipe(
-        // The library's Node `ChildProcessSpawner`, over the `FileSystem`
-        // and `Path` it validates and resolves a command's `cwd` through:
-        // the process runtime provides that pair, so only the spawner is
-        // built here.
-        Layer.provide(NodeChildProcessSpawner.layer),
-      ),
+      }),
     ),
   );
 }

@@ -16,17 +16,14 @@
 import { html, nothing, type TemplateResult } from 'lit';
 
 // Local imports - shared utilities
-import { parseDelegationToolInput, TOOL_CALL_STATUS } from '@shared/schemas';
+import { parseDelegationToolInput } from '@shared/schemas';
 import { SessionUiEvents } from '@shared/session/uiEvents';
 import {
   DELEGATE_MULTI_AGENTS_TOOL_NAME,
   DELEGATION_TOOL_CATEGORY,
 } from '@shared/constants/delegationTools';
 import { toolDisplayKind } from '@shared/tools/toolKind';
-import {
-  isMcpToolName,
-  normalizeToolName,
-} from '@shared/tools/toolDisplayName';
+import { normalizeToolName } from '@shared/tools/toolDisplayName';
 import type { TeXRAIconName } from '@ui/wa/iconNames';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import type { ToolRow } from '@ui/transcript';
@@ -124,14 +121,7 @@ export function formatToolUseTemplate(row: ToolRow): FormatResult {
     );
   }
 
-  // "It ran and printed nothing" is a result, not an absence — but only for a
-  // call whose output is the point: a shell command or an MCP call.
-  if (
-    model.outputSuppression === 'empty' &&
-    !model.isError &&
-    model.status === TOOL_CALL_STATUS.COMPLETED &&
-    (displayKind === 'bash' || isMcpToolName(toolName))
-  ) {
+  if (model.showsNoOutputMarker) {
     // prettier-ignore
     sections.push(html`<div class="tool-use-section tool-no-output">(no output)</div>`);
   }

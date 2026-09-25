@@ -2,10 +2,13 @@ import stripAnsi from 'strip-ansi';
 
 import { ANSI_ESCAPE_START, ansiEscapeEnd } from '@cli/runtime/ansiEscapes';
 import { safeTerminalText } from '@cli/runtime/terminalText';
-import { redactSecrets } from '@logger/redaction';
 import { type RunPhase } from '@shared/schemas';
 import { isActivePhase } from '@shared/runs/runStatus';
-import { type TranscriptRow, type TranscriptRowKind } from '@ui/transcript';
+import {
+  rowHeadline,
+  type TranscriptRow,
+  type TranscriptRowKind,
+} from '@ui/transcript';
 
 import { normalizeKnownHtmlForCliMarkdown } from '../render/htmlMarkdownNormalize';
 
@@ -86,6 +89,9 @@ export function transcriptRowHeadline(row: TranscriptRow): string {
   return headline;
 }
 
+/** The shared {@link rowHeadline}, sanitized for the terminal where a row
+ *  carries model or process text. The one HTML normalize pass for transcript
+ *  markdown runs here; the renderer does not repeat it. */
 function deriveTranscriptRowHeadline(row: TranscriptRow): string {
   switch (row.kind) {
     case 'assistant':
@@ -93,42 +99,17 @@ function deriveTranscriptRowHeadline(row: TranscriptRow): string {
         trimAssistantTranscriptLead(row.text.full),
       );
     case 'log':
-      return redactSecrets(
-        safeTerminalText(
-          normalizeKnownHtmlForCliMarkdown(
-            trimAssistantTranscriptLead(row.text.full),
-          ),
+      return safeTerminalText(
+        normalizeKnownHtmlForCliMarkdown(
+          trimAssistantTranscriptLead(row.text.full),
         ),
       );
-    // Detail rows lead with a bare noun; their `●` marker is layout geometry
-    // (ROW_GEOMETRY), not part of the text.
-    case 'thinking':
-      return 'Thinking';
-    case 'scratchpad':
-      return 'Scratchpad';
-    case 'user':
-      return row.summary.full;
     case 'error':
-      return redactSecrets(safeTerminalText(row.summary.full));
-    case 'tool':
-      return '';
-    case 'webSearch':
-      return row.label;
-    case 'fileList':
-    case 'missingOutputs':
-      return row.summary;
-    case 'latexdiff':
-      return `Latexdiff results (${row.entries.length})`;
-    case 'statistics':
-    case 'contextManagement':
-    case 'compactionActivity':
-      return row.label;
+      return safeTerminalText(row.summary.full);
     case 'progressStatus':
       return safeTerminalText(row.summary.full);
-    case 'workflowTask':
-      return row.line;
-    case 'phase':
-      return row.heading;
+    default:
+      return rowHeadline(row);
   }
 }
 

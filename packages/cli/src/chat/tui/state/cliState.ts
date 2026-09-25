@@ -20,6 +20,14 @@ import {
   type RunView,
   type SessionView,
 } from '@shared/session/sessionView';
+import {
+  applySurfaceAction,
+  emptySurface,
+  pruneSurface,
+  type SelectionRule,
+  type Surface,
+  type SurfaceAction,
+} from '@shared/session/surface';
 import { RUN_GROUP_LABELS } from '@shared/runs/runStatusDisplay';
 import { compareByNewestCreationTime } from '@shared/runs/runOrdering';
 import type { WorkflowRowGroup } from '@shared/runs/workflowRunModel';
@@ -31,18 +39,9 @@ import type { PastedImageEntry } from '../input/draftAttachments';
 // ---------------------------------------------------------------------------
 
 // Data model for the CLI TUI's signal-backed state. Mirrors the webview's
-// `progressState` shape — same primitives (`@lit-labs/signals`), same shape
-// (one record per run + an `activeRunId`) so future feature parity is a
-// port, not a rewrite.
+// interaction record: the selection and expansion live in the shared
+// `Surface`, dispatched through `applySurfaceAction`.
 
-/**
- * One transcript-projection candidate: a rendered row plus the ordering key
- * that places it in the final merged transcript order (log rows by seqNo,
- * compaction rows by start position, CLI-synthetic rows by their insertion
- * anchor). `rank` preserves the relative order of equal keys across the three
- * sources. `rendered` is replaced in place when the source row changes or the
- * settled-prefix promotion reaches it; the item object itself is stable.
- */
 export interface SessionMeta {
   readonly agent: string;
   /** The source of the entry `agent` resolved to, pinned on every root run. */
@@ -90,10 +89,7 @@ function defaultSessionMeta(): SessionMeta {
 // focusSlice
 // ---------------------------------------------------------------------------
 
-// Which run is focused / rooted, and whether starting a new root run is
-// currently available. Focus moves only through `focusRun`;
-// run-lifecycle side effects that touch these signals alongside others
-// (e.g. `removeRun`) live in the `removeRun` section below.
+// Which run is focused / rooted. Focus moves only through `focusRun`.
 
 /**
  * Where notices land before the root run exists. A reserved 8-hex id: real
@@ -102,44 +98,50 @@ function defaultSessionMeta(): SessionMeta {
  */
 export const CLI_LOCAL_RUN_ID = RunIdSchema.parse('c1110ca1');
 
-/** The Surface's selection as written by `focusRun`; renders read
- *  `selectedRunId`, which resolves it against the view. */
-export const activeRunId = signal<RunId | undefined>(undefined);
+/** The chat's interaction record: the shared `Surface`, written only through
+ *  `actOnSurface`, the vocabulary the webview and desktop dispatch too. */
+const surfaceChoice = signal<Surface>(emptySurface('cli'));
 
-/**
- * Keep transcript focus on this conversation and runs this terminal owns.
- * Before launch, the local conversation remains visible without adopting
- * an older project run.
- */
-export const selectedRunId: Signal.Computed<RunId | undefined> = computed(
-  () => {
-    const selected = activeRunId.get();
-    if (selected === CLI_LOCAL_RUN_ID) return selected;
-    const included = currentSessionRunIds(sessionView().get());
-    if (selected !== undefined && included.has(selected)) return selected;
-    const root = rootRunId.get();
-    return root !== undefined && included.has(root) ? root : undefined;
-  },
-);
-
-/**
- * Move transcript/status focus onto a run. Sole focus writer: a run
- * identity tombstoned by `removeRun`, or retired by `resetCliState`, is
- * never focused, so a fact that arrives after the row is gone cannot pull the
- * view onto a run that no longer exists. `onlyIfUnset` is for the facts
- * that adopt focus only while nothing holds it (the first log sync, the first
- * local transcript row).
- */
-export function focusRun(
-  runId: RunId,
-  options: { readonly onlyIfUnset?: boolean } = {},
-): void {
-  if (options.onlyIfUnset && activeRunId.get() !== undefined) return;
-  activeRunId.set(runId);
+export function actOnSurface(action: SurfaceAction): void {
+  surfaceChoice.set(applySurfaceAction(surfaceChoice.get(), action));
 }
 
-/** Expansion is a Surface choice; the fold's forceExpanded takes precedence. */
-export const expandedRuns = signal<ReadonlyMap<RunId, boolean>>(new Map());
+/** The chat's selection rule, its tree scope: this conversation and the runs
+ *  this terminal owns. The pre-run placeholder stays; anything else outside
+ *  the scope, or nothing, lands on the root. */
+function chatSelection(view: SessionView): SelectionRule {
+  const included = currentSessionRunIds(view);
+  const root = rootRunId.get();
+  const fallback = root !== undefined && included.has(root) ? root : null;
+  return (selected) =>
+    selected === CLI_LOCAL_RUN_ID ||
+    (selected !== null && included.has(selected))
+      ? selected
+      : fallback;
+}
+
+/** The record the TUI renders, pruned once; no reader resolves it again. */
+const surface: Signal.Computed<Surface> = computed(() => {
+  const view = sessionView().get();
+  return pruneSurface(surfaceChoice.get(), view, chatSelection(view));
+});
+
+/** The Surface's selection in the TUI's `undefined`-for-none spelling. */
+export const selectedRunId: Signal.Computed<RunId | undefined> = computed(
+  () => surface.get().selected ?? undefined,
+);
+
+/** The one writer of `select`. `when` adopts a selection only from a prior
+ *  choice: `unset` (nothing holds it) or `local` (the pre-run placeholder). */
+export function focusRun(
+  runId: RunId | null,
+  options: { readonly when?: 'unset' | 'local' } = {},
+): void {
+  const chosen = surfaceChoice.get().selected;
+  if (options.when === 'unset' && chosen !== null) return;
+  if (options.when === 'local' && chosen !== CLI_LOCAL_RUN_ID) return;
+  actOnSurface({ kind: 'select', runId });
+}
 
 export type SessionListRow =
   | {
@@ -157,7 +159,7 @@ export type SessionListRow =
 export const sessionListRows = computed<readonly SessionListRow[]>(() => {
   const view = sessionView().get();
   const included = currentSessionRunIds(view);
-  const expanded = expandedRuns.get();
+  const { expanded } = surface.get();
   const rows: SessionListRow[] = [];
   const groups: Record<RunView['group'], RunView[]> = {
     running: [],
@@ -165,12 +167,24 @@ export const sessionListRows = computed<readonly SessionListRow[]>(() => {
     interrupted: [],
     recent: [],
   };
-  for (const run of view.runs.values()) {
-    if (
+  // Top-level runs come in the fold's order. A child this terminal owns
+  // under a parent outside the scope (detached from an earlier turn) is a
+  // root here but not in `view.order`: only these sort, after the fold's.
+  const tops = view.order.flatMap((id) => view.runs.get(id) ?? []);
+  const detached = [...view.runs.values()].filter(
+    (run) =>
+      run.parentId !== null &&
       included.has(run.id) &&
-      (run.parentId === null || !included.has(run.parentId))
-    )
-      groups[run.group].push(run);
+      !included.has(run.parentId),
+  );
+  detached.sort((a, b) =>
+    compareByNewestCreationTime(
+      { name: a.id, creationTimestamp: a.createdAt },
+      { name: b.id, creationTimestamp: b.createdAt },
+    ),
+  );
+  for (const run of [...tops, ...detached]) {
+    if (included.has(run.id)) groups[run.group].push(run);
   }
   const append = (run: RunView, depth: number): void => {
     const open =
@@ -185,12 +199,6 @@ export const sessionListRows = computed<readonly SessionListRow[]>(() => {
     }
   };
   for (const runs of Object.values(groups)) {
-    runs.sort((a, b) =>
-      compareByNewestCreationTime(
-        { name: a.id, creationTimestamp: a.createdAt },
-        { name: b.id, creationTimestamp: b.createdAt },
-      ),
-    );
     const first = runs.at(0);
     if (!first) continue;
     rows.push({ kind: 'group', label: RUN_GROUP_LABELS[first.group] });
@@ -570,9 +578,8 @@ export function resetCliState(
   nextSessionMeta: SessionMeta = defaultSessionMeta(),
 ): void {
   sessionMeta.set(nextSessionMeta);
-  activeRunId.set(undefined);
+  surfaceChoice.set(emptySurface('cli'));
   rootRunId.set(undefined);
-  expandedRuns.set(new Map());
   rootRunPending.set(false);
   claimedRunId.set(undefined);
   goalAutoApproveAll.set(false);

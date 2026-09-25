@@ -1,65 +1,93 @@
 // Thin wrappers over `git` and `gh` for the `install-github-action` command.
-// Every call captures output and never throws — callers branch on `success`.
+// Every call captures output and never fails — callers branch on `success`.
 //
-// These commands run before platform init and use the user's Git identity.
+// These commands carry no TeXRA settings, so they use the user's Git identity.
+import { Effect } from 'effect';
+
 import type { ExecResult } from '@shared/schemas';
-import { executeCommandSync } from '@utils/system/execCore';
+import { executeCommand } from '@utils/system/execUtils';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
-export function git(cwd: string, ...args: readonly string[]): ExecResult {
-  return executeCommandSync(['git', ...args], {
+type GitRead<A> = Effect.Effect<A, never, ChildProcessSpawner>;
+
+export function git(
+  cwd: string,
+  ...args: readonly string[]
+): GitRead<ExecResult> {
+  return executeCommand(['git', ...args], {
     cwd,
+    settings: undefined,
     quiet: true,
   });
 }
 
-export function gh(cwd: string, ...args: readonly string[]): ExecResult {
-  return executeCommandSync(['gh', ...args], {
+export function gh(
+  cwd: string,
+  ...args: readonly string[]
+): GitRead<ExecResult> {
+  return executeCommand(['gh', ...args], {
     cwd,
+    settings: undefined,
     quiet: true,
   });
 }
 
-export function isGitRepo(cwd: string): boolean {
-  return git(cwd, 'rev-parse', '--is-inside-work-tree').success;
+/** The trimmed stdout of a successful `git` read, or null. */
+function gitValue(
+  cwd: string,
+  ...args: readonly string[]
+): GitRead<string | null> {
+  return Effect.map(git(cwd, ...args), (result) =>
+    result.success && result.stdout ? result.stdout : null,
+  );
 }
 
-export function repoRoot(cwd: string): string | null {
-  const result = git(cwd, 'rev-parse', '--show-toplevel');
-  return result.success && result.stdout ? result.stdout : null;
+export function isGitRepo(cwd: string): GitRead<boolean> {
+  return Effect.map(
+    git(cwd, 'rev-parse', '--is-inside-work-tree'),
+    (result) => result.success,
+  );
 }
 
-export function remoteUrl(cwd: string, remote = 'origin'): string | null {
-  const result = git(cwd, 'remote', 'get-url', remote);
-  return result.success && result.stdout ? result.stdout : null;
+export function repoRoot(cwd: string): GitRead<string | null> {
+  return gitValue(cwd, 'rev-parse', '--show-toplevel');
 }
 
-export function currentBranch(cwd: string): string | null {
-  const result = git(cwd, 'rev-parse', '--abbrev-ref', 'HEAD');
-  if (!result.success || !result.stdout || result.stdout === 'HEAD') {
-    return null;
-  }
-  return result.stdout;
+export function remoteUrl(
+  cwd: string,
+  remote = 'origin',
+): GitRead<string | null> {
+  return gitValue(cwd, 'remote', 'get-url', remote);
+}
+
+export function currentBranch(cwd: string): GitRead<string | null> {
+  return Effect.map(
+    gitValue(cwd, 'rev-parse', '--abbrev-ref', 'HEAD'),
+    (branch) => (branch === 'HEAD' ? null : branch),
+  );
 }
 
 /** Default branch of `origin`, e.g. "main" — null if it can't be resolved. */
-export function defaultBranch(cwd: string): string | null {
-  const result = git(
-    cwd,
-    'symbolic-ref',
-    '--short',
-    'refs/remotes/origin/HEAD',
+export function defaultBranch(cwd: string): GitRead<string | null> {
+  return Effect.map(
+    gitValue(cwd, 'symbolic-ref', '--short', 'refs/remotes/origin/HEAD'),
+    (ref) =>
+      ref !== null && ref.startsWith('origin/')
+        ? ref.slice('origin/'.length)
+        : ref,
   );
-  if (!result.success || !result.stdout) return null;
-  return result.stdout.startsWith('origin/')
-    ? result.stdout.slice('origin/'.length)
-    : result.stdout;
 }
 
-export function localBranchExists(cwd: string, branch: string): boolean {
-  return git(cwd, 'rev-parse', '--verify', '--quiet', `refs/heads/${branch}`)
-    .success;
+export function localBranchExists(
+  cwd: string,
+  branch: string,
+): GitRead<boolean> {
+  return Effect.map(
+    git(cwd, 'rev-parse', '--verify', '--quiet', `refs/heads/${branch}`),
+    (result) => result.success,
+  );
 }
 
-export function ghAvailable(cwd: string): boolean {
-  return gh(cwd, '--version').success;
+export function ghAvailable(cwd: string): GitRead<boolean> {
+  return Effect.map(gh(cwd, '--version'), (result) => result.success);
 }

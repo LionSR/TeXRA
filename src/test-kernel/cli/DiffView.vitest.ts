@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  diffDisplayLines,
   initialDiffScrollOffset,
   scrollBoundedDiffDisplayLines,
   wrappedDiffDisplayLines,
 } from '@cli/chat/tui/render/DiffView';
-import { maxScrollableRowOffset } from '@cli/chat/tui/render/scrollBounds';
 import { fillRows } from '@cli/runtime/terminalText';
 import { buildDiffHunks } from '@utils/text/unifiedDiff';
 
@@ -32,7 +32,7 @@ describe('CLI diff display', () => {
   it('keeps the overflow marker inside the total display budget', () => {
     const hunks = alternatingHunks(SIX_LINE_HUNK_SOURCE);
 
-    const lines = scrollBoundedDiffDisplayLines(hunks, 4, 0);
+    const lines = scrollBoundedDiffDisplayLines(hunks, 4, 0, 80);
 
     expect(lines).toHaveLength(4);
     expect(lines.at(-1)).toMatchObject({
@@ -44,7 +44,7 @@ describe('CLI diff display', () => {
   it('renders scroll markers around the visible diff window', () => {
     const hunks = alternatingHunks(SIX_LINE_HUNK_SOURCE);
 
-    const lines = scrollBoundedDiffDisplayLines(hunks, 4, 2);
+    const lines = scrollBoundedDiffDisplayLines(hunks, 4, 2, 80);
 
     expect(lines).toHaveLength(4);
     expect(lines[0]).toMatchObject({
@@ -60,14 +60,14 @@ describe('CLI diff display', () => {
   it('prioritizes changed rows in a cramped diff window', () => {
     const hunks = alternatingHunks(FOUR_LINE_HUNK_SOURCE);
 
-    const lines = scrollBoundedDiffDisplayLines(hunks, 3, 0);
+    const lines = scrollBoundedDiffDisplayLines(hunks, 3, undefined, 80);
 
     expect(lines).toHaveLength(3);
     expect(lines[0]?.kind).toBe('removed');
     expect(lines[1]?.kind).toBe('added');
     expect(lines[2]).toMatchObject({
       kind: 'overflow',
-      text: expect.stringContaining('hidden'),
+      text: expect.stringContaining('more rows'),
     });
   });
 
@@ -192,9 +192,7 @@ describe('CLI diff display', () => {
 
     expect(rendered).toContain('after $2n-1$.');
     expect(rendered).not.toContain('…');
-    expect(lines.length).toBeGreaterThan(
-      scrollBoundedDiffDisplayLines(hunks, 0, 0).length,
-    );
+    expect(lines.length).toBeGreaterThan(diffDisplayLines(hunks).length);
   });
 
   it('keeps wrapped overflow markers to one visual row at narrow widths', () => {

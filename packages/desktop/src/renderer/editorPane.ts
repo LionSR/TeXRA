@@ -416,9 +416,9 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
    *
    * The repo's one per-key lane is `withPerKeyLane` (`@utils/core/perKeyQueue`),
    * but it is an Effect combinator and this renderer runs no Effect programs:
-   * importing `effect` here would put all six of the pane's promise boundaries
-   * under the `catch:effect-importer` ratchet, i.e. rewrite the pane's error
-   * handling in a change about lanes. So this is that same hand-off in promise
+   * importing `effect` here would make all six of the pane's promise
+   * boundaries Effect-file catch sites to convert to typed recovery, i.e.
+   * rewrite the pane's error handling in a change about lanes. So this is that same hand-off in promise
    * form — each entrant awaits the tail it found and installs its own.
    *
    * The tail waits for the settlement rather than the value, so a failed sync
