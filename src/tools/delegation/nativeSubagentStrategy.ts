@@ -11,7 +11,6 @@ import { AgentEngine } from '@agent/runtime/AgentEngine';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { ExecuteAgentOptions } from '@agent/runtime/executeAgent';
 import type { AgentRunServices } from '@agent/runtime/runRegistry';
-import type { AgentRunHandle } from '@agent/runtime/RunHandle';
 import type {
   ChildRunPorts,
   ChildRunStrategy,
@@ -110,15 +109,13 @@ export function createNativeSubagentStrategy(
 
   const runNative = Effect.fn('nativeSubagent.runTurn')(function* (
     ports: ChildRunPorts,
-    call: (
-      onRun: (handle: AgentRunHandle) => Effect.Effect<void>,
-    ) => Effect.Effect<AgentFlowResult, Error, AgentRunServices>,
+    call: Effect.Effect<AgentFlowResult, Error, AgentRunServices>,
   ) {
     lastErr = undefined;
     lastResult = undefined;
     cachedBuilt = undefined;
     cachedDelivery = undefined;
-    return yield* call(() => Effect.void).pipe(
+    return yield* call.pipe(
       Effect.tap((result) =>
         Effect.sync(() => {
           lastResult = result;
@@ -167,7 +164,8 @@ export function createNativeSubagentStrategy(
 
     continuous: true,
     launch: (ports, _signal, turns) =>
-      runNative(ports, (onRun) =>
+      runNative(
+        ports,
         Effect.gen(function* () {
           const engine = yield* AgentEngine;
           const executeOptions: ExecuteAgentOptions & {
@@ -184,7 +182,6 @@ export function createNativeSubagentStrategy(
             onRunError: (err: unknown) => {
               lastErr = err;
             },
-            onRun,
             turns: {
               run: (operation) =>
                 Effect.suspend(() => {

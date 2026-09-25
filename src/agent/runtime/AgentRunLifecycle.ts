@@ -181,8 +181,6 @@ const finalizeRunTerminalBody = Effect.fn('finalizeRunTerminal.body')(
             error: stageErr,
           }),
         ),
-        Effect.as(undefined),
-        Effect.catch((failure) => Effect.succeed(failure)),
       );
     }
     // The `run.end` row is the run's post-drain fact, and this is the drain:

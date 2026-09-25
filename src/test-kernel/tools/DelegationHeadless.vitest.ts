@@ -1090,7 +1090,6 @@ describe('headless delegation', () => {
         expect(executeOptions).toEqual(
           expect.objectContaining({
             parentRunId: PARENT_RUN_ID,
-            onRun: expect.any(Function),
             session: expect.any(Object),
           }),
         );
