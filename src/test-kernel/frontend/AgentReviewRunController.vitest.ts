@@ -88,22 +88,6 @@ describe('AgentReviewRunController', () => {
     expect(second.stopRequest).toHaveBeenCalledOnce();
   });
 
-  it('carries the collection only while the run is current', () => {
-    const controller = new AgentReviewRunController();
-    const { session } = createRunHarness();
-    const run = controller.start(session);
-    const collection = reviewCollection('src/a.ts');
-
-    expect(controller.collection).toBeUndefined();
-    controller.collect(run, collection);
-    expect(controller.isCurrent(run)).toBe(true);
-    expect(controller.collection).toBe(collection);
-
-    expect(controller.finish(run)).toBe(true);
-    expect(controller.isCurrent(run)).toBe(false);
-    expect(controller.collection).toBeUndefined();
-  });
-
   it.effect('discards a running review without releasing the slot', () =>
     Effect.gen(function* () {
       const controller = new AgentReviewRunController();

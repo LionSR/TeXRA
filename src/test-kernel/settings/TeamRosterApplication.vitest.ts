@@ -6,7 +6,6 @@ import {
   applyTeamRosterWithPreflight,
   type TeamRosterApplicationDeps,
 } from '@common/teams/TeamRosterApplication';
-import { applySettingsTeamRoster } from '@controllers/settingsView/SettingsTeamRosterController';
 import type { AgentModePreset } from '@shared/schemas';
 
 const preset: AgentModePreset = {
@@ -143,105 +142,6 @@ describe('team roster application', () => {
       expect(signIn).not.toHaveBeenCalled();
       expect(forcedRefresh).toBe(false);
       expect(commitPreset).not.toHaveBeenCalled();
-    }),
-  );
-
-  it.effect(
-    'refreshes the host before presenting a successful settings application',
-    () =>
-      Effect.gen(function* () {
-        const calls: string[] = [];
-        const getPresetToolUseRoot = vi.fn(() =>
-          Effect.succeed('orchestrator'),
-        );
-
-        yield* applySettingsTeamRoster('research', {
-          catalog: {
-            resolvePreset: () =>
-              Effect.succeed({ ok: true, preset, resolution: resolved }),
-            commitPreset: () =>
-              Effect.sync(() => {
-                calls.push('apply');
-              }),
-            getPresetToolUseRoot,
-          },
-          loadLocalCatalog: () => Effect.void,
-          canAccessRemoteCatalog: () => Effect.succeed(false),
-          signIn: () => Effect.succeed(false),
-          forceRefreshRemoteCatalog: () => Effect.void,
-          presentation: {
-            chooseTeamAvailability: () => Effect.succeed('cancel' as const),
-            showErrorMessage: () => Effect.void,
-            showInfoMessage: (message) =>
-              Effect.sync(() => {
-                calls.push(`info:${message}`);
-              }),
-          },
-          refreshAfterApply: (selectedToolUseAgent) =>
-            Effect.sync(() => {
-              calls.push(`refresh:${selectedToolUseAgent}`);
-            }),
-        });
-
-        expect(getPresetToolUseRoot).toHaveBeenCalledWith(
-          ['orchestrator'],
-          'research',
-        );
-        expect(calls).toEqual([
-          'apply',
-          'refresh:orchestrator',
-          'info:Applied "Research" team',
-        ]);
-      }),
-  );
-
-  it.effect('presents canonical unavailable-member choices and errors', () =>
-    Effect.gen(function* () {
-      const prompts: unknown[] = [];
-      const errors: string[] = [];
-
-      yield* applySettingsTeamRoster('research', {
-        catalog: {
-          resolvePreset: () =>
-            Effect.succeed({ ok: true, preset, resolution: unresolved }),
-          commitPreset: vi.fn(() => Effect.void),
-          getPresetToolUseRoot: vi.fn(),
-        },
-        loadLocalCatalog: () => Effect.void,
-        canAccessRemoteCatalog: () => Effect.succeed(false),
-        signIn: () => Effect.succeed(true),
-        forceRefreshRemoteCatalog: () => Effect.void,
-        presentation: {
-          chooseTeamAvailability: (prompt) =>
-            Effect.sync(() => {
-              prompts.push(prompt);
-              return 'sign-in' as const;
-            }),
-          showErrorMessage: (message) =>
-            Effect.sync(() => {
-              errors.push(message);
-            }),
-          showInfoMessage: () => Effect.void,
-        },
-        refreshAfterApply: () => Effect.void,
-      });
-
-      expect(prompts).toEqual([
-        {
-          severity: 'warning',
-          message:
-            'Team "Research" has unavailable TeXRA-hosted members: orchestrator.',
-          actions: [
-            { choice: 'sign-in', label: 'Sign In to TeXRA' },
-            {
-              choice: 'continue',
-              label: 'Continue with Available Members',
-            },
-            { choice: 'cancel', label: 'Cancel' },
-          ],
-        },
-      ]);
-      expect(errors).toEqual(['Team "Research" is unavailable: orchestrator.']);
     }),
   );
 

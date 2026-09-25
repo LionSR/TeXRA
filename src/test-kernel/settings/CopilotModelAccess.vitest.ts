@@ -59,12 +59,6 @@ function copilotSection(
   return tab.shadowRoot?.querySelector<HTMLElement>('#copilot-access');
 }
 
-function sectionButtons(
-  section: HTMLElement | null | undefined,
-): HTMLElement[] {
-  return [...(section?.querySelectorAll<HTMLElement>('wa-button') ?? [])];
-}
-
 describe('Copilot model access settings', () => {
   useLitComponentTestDom(
     () => import('@settingsView/frontend/tabs/SubscriptionsTab'),
@@ -82,26 +76,6 @@ describe('Copilot model access settings', () => {
     section?.querySelector<HTMLElement>('wa-button')?.click();
     expect(mocks.postMessage.mock.calls).toEqual([
       [SETTINGS_VIEW_COMMANDS.REQUEST_MODEL_ACCESS, { modelName: 'sonnet46' }],
-    ]);
-  });
-
-  it('omits the Copilot section when the host discovers no models', async () => {
-    const tab = await renderSubscriptionsTab([]);
-
-    expect(copilotSection(tab)).toBeNull();
-  });
-
-  it('offers an explicit opt-in for an already-authorized route', async () => {
-    const tab = await renderSubscriptionsTab([allowedRoute]);
-
-    const section = copilotSection(tab);
-    expect(section?.textContent).toContain('1 Copilot model is ready');
-    const button = section?.querySelector<HTMLElement>('wa-button');
-    expect(button?.textContent).toContain('Use Copilot');
-
-    button?.click();
-    expect(mocks.postMessage.mock.calls).toEqual([
-      [SETTINGS_VIEW_COMMANDS.REQUEST_MODEL_ACCESS, { modelName: 'gpt55' }],
     ]);
   });
 

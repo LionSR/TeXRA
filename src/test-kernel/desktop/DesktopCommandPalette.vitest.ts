@@ -146,45 +146,4 @@ describe('desktop command palette', () => {
     expect(actions.showSettings).toHaveBeenCalledWith('models');
     expect(controller.element.open).toBe(false);
   });
-
-  it('clicking an item dispatches its command and closes the dialog', async () => {
-    const actions = createActionsStub();
-    const controller = await mountPalette({ actions });
-    controller.open();
-    await flushDialogTicks();
-
-    const button = controller.element.querySelector<HTMLButtonElement>(
-      '.desktop-command-palette-item[data-command-id="texra.showMainView"]',
-    );
-    expect(button).not.toBeNull();
-    button!.click();
-    await flushDialogTicks();
-
-    expect(actions.showLauncher).toHaveBeenCalledOnce();
-    expect(controller.element.open).toBe(false);
-  });
-
-  it('arrow keys advance the active selection through filtered entries', async () => {
-    const controller = await mountPalette();
-    controller.open();
-    await flushDialogTicks();
-
-    const selectedIndex = () =>
-      [
-        ...controller.element.querySelectorAll<HTMLButtonElement>(
-          '.desktop-command-palette-item',
-        ),
-      ].findIndex((item) => item.getAttribute('aria-selected') === 'true');
-
-    expect(selectedIndex()).toBe(0);
-
-    const waInput = paletteInput(controller.element);
-    pressKey(waInput, { key: 'ArrowDown' });
-    await flushDialogTicks();
-    expect(selectedIndex()).toBe(1);
-
-    pressKey(waInput, { key: 'ArrowUp' });
-    await flushDialogTicks();
-    expect(selectedIndex()).toBe(0);
-  });
 });

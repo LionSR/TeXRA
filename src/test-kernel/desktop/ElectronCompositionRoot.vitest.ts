@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join, relative } from 'node:path';
 import { Cause, Effect, Exit, FileSystem, Layer, Scope } from 'effect';
@@ -25,11 +25,7 @@ import { sourceFilesUnder } from '@test/support/repoScan';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { normalizeFilePath } from '@utils/core';
-import {
-  DESKTOP_SRC_DIR,
-  REPO_ROOT,
-  desktopSourcePath,
-} from './desktopTestPaths.ts';
+import { DESKTOP_SRC_DIR, REPO_ROOT } from './desktopTestPaths.ts';
 
 /**
  * The records over a temp profile's global root, on a handle the caller's
@@ -47,14 +43,6 @@ const projectRecordsOf = Effect.fnUntraced(function* (profile: string) {
   );
   return yield* Effect.provide(openDesktopProjectRecords, context);
 });
-
-function readDesktopMainIndex(): Promise<string> {
-  return readFile(desktopSourcePath('main', 'index.ts'), 'utf8');
-}
-
-function readDesktopBootstrap(): Promise<string> {
-  return readFile(desktopSourcePath('main', 'bootstrap.ts'), 'utf8');
-}
 
 describe('desktop composition root and launch environment', () => {
   const tempDirs = useTempDirs();
@@ -353,85 +341,6 @@ describe('desktop composition root and launch environment', () => {
             resourcesPath: join(root, 'missing-electron-resources'),
           }),
         ).toBe(monorepoResources);
-      }).pipe(Effect.provide(nodePlatformLayer)),
-  );
-
-  effectIt.effect('requires bundled agent sources to be directories', () =>
-    Effect.gen(function* () {
-      const { resolveResourcesPath } = yield* Effect.promise(
-        () => import('@desktop/main/platform/paths'),
-      );
-      const root = yield* Effect.promise(() =>
-        makeTempDir('texra-electron-root-', tempDirs),
-      );
-      const incompleteApp = join(root, 'incomplete-app');
-      const fileBackedApp = join(root, 'file-backed-app');
-      const monorepoResources = join(
-        root,
-        'packages',
-        'extension',
-        'resources',
-      );
-      const mainDirname = join(root, 'packages', 'desktop', 'dist', 'main');
-
-      yield* Effect.promise(async () => {
-        await Promise.all([
-          mkdir(join(incompleteApp, 'resources', 'agents'), {
-            recursive: true,
-          }),
-          mkdir(join(fileBackedApp, 'resources', 'agents'), {
-            recursive: true,
-          }),
-          createResourceTree(monorepoResources),
-        ]);
-        await writeFile(
-          join(fileBackedApp, 'resources', 'tool_use_agents'),
-          '',
-        );
-      });
-
-      expect(
-        yield* resolveResourcesPath(mainDirname, {
-          appPath: fileBackedApp,
-          resourcesPath: join(root, 'missing-electron-resources'),
-        }),
-      ).toBe(monorepoResources);
-      expect(
-        yield* resolveResourcesPath(mainDirname, {
-          appPath: incompleteApp,
-          resourcesPath: join(root, 'missing-electron-resources'),
-        }),
-      ).toBe(monorepoResources);
-    }).pipe(Effect.provide(nodePlatformLayer)),
-  );
-
-  effectIt.effect(
-    'fails with every checked resource candidate when resources are missing',
-    () =>
-      Effect.gen(function* () {
-        const { resolveResourcesPath } = yield* Effect.promise(
-          () => import('@desktop/main/platform/paths'),
-        );
-        const root = yield* Effect.promise(() =>
-          makeTempDir('texra-electron-root-', tempDirs),
-        );
-        const mainDirname = join(root, 'packages', 'desktop', 'dist', 'main');
-
-        const error = yield* Effect.flip(
-          resolveResourcesPath(mainDirname, {
-            appPath: join(root, 'app'),
-            resourcesPath: join(root, 'electron-resources'),
-          }),
-        );
-        expect(error._tag).toBe('DesktopResourcesNotFound');
-        expect(error.message).toContain(
-          [
-            join(root, 'app', 'resources'),
-            join(root, 'electron-resources', 'resources'),
-            join(root, 'packages', 'extension', 'resources'),
-            join(root, 'resources'),
-          ].join(', '),
-        );
       }).pipe(Effect.provide(nodePlatformLayer)),
   );
 

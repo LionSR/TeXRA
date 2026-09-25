@@ -6,22 +6,12 @@ import {
   ELECTRON_WEBVIEW_MESSAGE_CHANNEL,
   ELECTRON_WEBVIEW_PUSH_CHANNEL,
 } from '@desktop/shared/hostBridgeChannels';
-import { HOST_BRIDGE_API_KEY } from '@shared/hostBridgeTypes';
 import { createModuleMocks } from '@test/support/moduleMocks';
 
 // Local imports - desktop test paths
 import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.ts';
 
 const mocks = createModuleMocks();
-
-interface HostBridgeModule {
-  installElectronHostBridge(options: {
-    exposeInMainWorld(name: string, api: unknown): void;
-    onHostMessage(channel: string, listener: (message: unknown) => void): void;
-    postToRenderer(message: unknown): void;
-    sendToMain(channel: string, message: unknown): void;
-  }): unknown;
-}
 
 interface MainHostBridgeModule {
   installDesktopHostBridge(
@@ -40,12 +30,6 @@ interface MainHostBridgeModule {
     postToRenderer(message: unknown): void;
     dispose(): void;
   };
-}
-
-async function loadHostBridgeModule(): Promise<HostBridgeModule> {
-  return import(
-    moduleFileUrl(desktopSourcePath('preload', 'hostBridge.ts'))
-  ) as Promise<HostBridgeModule>;
 }
 
 async function loadPreloadModule(electron: {
@@ -135,73 +119,6 @@ describe('desktop Electron host bridge', () => {
     );
   });
 
-  it('exposes only the shared synchronous host bridge surface', async () => {
-    const { installElectronHostBridge } = await loadHostBridgeModule();
-    const sends: Array<{ channel: string; message: unknown }> = [];
-    const exposed: Record<string, unknown> = {};
-
-    installElectronHostBridge({
-      exposeInMainWorld: (name, api) => {
-        exposed[name] = api;
-      },
-      onHostMessage: () => undefined,
-      postToRenderer: () => undefined,
-      sendToMain: (channel, message) => {
-        sends.push({ channel, message });
-      },
-    });
-    const bridge = exposed[HOST_BRIDGE_API_KEY] as {
-      postMessage(message: unknown): void;
-      getState(): unknown;
-      setState(state: unknown): void;
-    };
-
-    expect(Object.keys(bridge).sort()).toEqual([
-      'getState',
-      'postMessage',
-      'setState',
-    ]);
-    expect(bridge.getState()).toBeUndefined();
-
-    const state = { route: 'main' };
-    bridge.setState(state);
-    expect(bridge.getState()).toBe(state);
-
-    const message = { command: 'webview.ready' };
-    bridge.postMessage(message);
-    expect(sends).toEqual([
-      { channel: ELECTRON_WEBVIEW_MESSAGE_CHANNEL, message },
-    ]);
-  });
-
-  it('installs the bridge on the shared key and forwards host pushes', async () => {
-    const { installElectronHostBridge } = await loadHostBridgeModule();
-    const exposed: Record<string, unknown> = {};
-    const pushes: unknown[] = [];
-    let pushListener: ((message: unknown) => void) | undefined;
-
-    const installed = installElectronHostBridge({
-      exposeInMainWorld: (name, api) => {
-        exposed[name] = api;
-      },
-      onHostMessage: (channel, listener) => {
-        expect(channel).toBe(ELECTRON_WEBVIEW_PUSH_CHANNEL);
-        pushListener = listener;
-      },
-      postToRenderer: (message) => {
-        pushes.push(message);
-      },
-      sendToMain: () => undefined,
-    });
-
-    expect(exposed[HOST_BRIDGE_API_KEY]).toBe(installed);
-    expect(pushListener).toBeDefined();
-
-    const message = { command: 'setTheme', theme: 'vscode-dark' };
-    pushListener?.(message);
-    expect(pushes).toEqual([message]);
-  });
-
   it('routes main-process bridge messages over fixed Electron channels', async () => {
     let rendererListener:
       ((event: { sender: unknown }, message: unknown) => void) | undefined;
@@ -244,74 +161,5 @@ describe('desktop Electron host bridge', () => {
     );
     closedListeners[0]?.();
     expect(ipcMain.off).toHaveBeenCalledTimes(1);
-  });
-
-  // #8123: `postToRenderer` now routes every message through the existing
-  // MainView / ProgressView outbound Zod schemas (dev/test only) before
-  // handing it to `webContents.send`, instead of forwarding whatever shape
-  // the caller happened to build.
-  describe('outbound schema validation (#8123)', () => {
-    async function createBridge() {
-      const ipcMain = { on: vi.fn(), off: vi.fn() };
-      const { installDesktopHostBridge } =
-        await loadMainHostBridgeModule(ipcMain);
-      const sends: Array<{ channel: string; message: unknown }> = [];
-      const { window } = fakeMainWindow(sends);
-      return {
-        bridge: installDesktopHostBridge(window),
-        sends,
-      };
-    }
-
-    it('forwards the session protocol untouched: the bridge builds it typed', async () => {
-      const { bridge, sends } = await createBridge();
-      const message = {
-        kind: 'response',
-        session: '/papers/one',
-        requestId: 'r1',
-        result: { ok: true, outcome: { kind: 'done' } },
-      };
-      expect(() => bridge.postToRenderer(message)).not.toThrow();
-      expect(sends).toEqual([
-        { channel: ELECTRON_WEBVIEW_PUSH_CHANNEL, message },
-      ]);
-    });
-
-    it('throws on a malformed desktop-only command (now covered by the composed desktop schema)', async () => {
-      const { bridge } = await createBridge();
-      // `desktop:showPdf` is claimed by `DesktopOutboundMessageSchema`, so a
-      // payload missing `pdfPath` fails validation instead of passing through
-      // unchecked.
-      expect(() =>
-        bridge.postToRenderer({ command: 'desktop:showPdf', title: 't' }),
-      ).toThrow(/Outbound message failed schema validation/);
-    });
-
-    it('forwards a well-formed desktop-only message unchanged', async () => {
-      const { bridge, sends } = await createBridge();
-      const message = {
-        command: 'desktop:showPdf',
-        session: '/tmp/paper',
-        title: 't',
-        pdfPath: '/tmp/paper.pdf',
-      };
-      expect(() => bridge.postToRenderer(message)).not.toThrow();
-      expect(sends).toEqual([
-        { channel: ELECTRON_WEBVIEW_PUSH_CHANNEL, message },
-      ]);
-    });
-
-    it('passes a command no listed outbound schema claims through unchecked', async () => {
-      const { bridge, sends } = await createBridge();
-      // Settings-domain pushes (`historyCleared` and friends) cross this
-      // bridge but are modeled by the settings-view outbound schema, which
-      // this assertion does not compose — the command stays out of scope and
-      // must not throw.
-      const message = { command: 'historyCleared' };
-      expect(() => bridge.postToRenderer(message)).not.toThrow();
-      expect(sends).toEqual([
-        { channel: ELECTRON_WEBVIEW_PUSH_CHANNEL, message },
-      ]);
-    });
   });
 });

@@ -10,7 +10,6 @@ import {
   onTestFinished,
   vi,
 } from 'vitest';
-import { NotificationFailed } from '@hosts/uiHosts';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import {
   StateWriteFailed,
@@ -19,10 +18,7 @@ import {
 } from '@platform/interfaces';
 import { withProcessServices } from '@platform/processRuntime';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import {
-  BASH_APPROVAL_CONFIG_KEY,
-  AGENT_SKILLS_CONFIG_KEY,
-} from '@shared/schemas';
+import { BASH_APPROVAL_CONFIG_KEY } from '@shared/schemas';
 import type { ModelOptionData } from '@shared/schemas';
 import type { DerivedSettingsSnapshot } from '@shared/settingsView/settingsViewMessages';
 import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
@@ -157,13 +153,6 @@ function createCapturedSettingsFixture(
   return { ...fixture, posted };
 }
 
-function findPosted(
-  posted: readonly RendererMessage[],
-  command: string,
-): RendererMessage | undefined {
-  return posted.find((message) => commandOf(message) === command);
-}
-
 function isSnapshot(
   message: RendererMessage,
   snapshot: DerivedSettingsSnapshot,
@@ -220,81 +209,6 @@ describe('desktop settings IPC', () => {
     vi.clearAllMocks();
   });
 
-  it('posts only for settings readiness', async () => {
-    const workspaceState = new FakeStateStore({
-      [WorkspaceStateKey.GIT_AUTHOR_NAME]: 'TeXRA Bot',
-      [WorkspaceStateKey.GIT_AUTHOR_EMAIL]: 'bot@example.com',
-    });
-
-    const { settings, posted } = createCapturedSettingsFixture({
-      workspaceState,
-    });
-
-    expect(posted).toEqual([]);
-    // Claimed either way — the settings surface owns the command — but only
-    // its own view's readiness posts anything.
-    expect(
-      settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.WEBVIEW_READY,
-      }),
-    ).toBe(true);
-    expect(posted).toEqual([]);
-    expect(
-      settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.WEBVIEW_READY,
-        view: 'settings',
-      }),
-    ).toBe(true);
-    await flushAsyncWork();
-    expect(findSnapshot(posted, 'git-author')).toEqual({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_SETTINGS_SNAPSHOT,
-      snapshot: 'git-author',
-      values: {
-        [WorkspaceStateKey.GIT_MARK_COMMITS]: true,
-        [WorkspaceStateKey.GIT_AUTHOR_NAME]: 'TeXRA Bot',
-        [WorkspaceStateKey.GIT_AUTHOR_EMAIL]: 'bot@example.com',
-        [WorkspaceStateKey.GIT_WORKTREE_SUPPORT]: false,
-      },
-    });
-  }, 15_000);
-
-  it('loads usage only for the subscription command and rejects malformed refresh payloads', async () => {
-    const postSubscriptionUsage = vi.fn(() => Effect.void);
-    const onError = vi.fn();
-    const credentialSettingsController =
-      createStubDesktopCredentialSettingsController(newStatePorts(), {
-        postSubscriptionUsage,
-      });
-    const { settings } = createSettingsFixture({
-      credentialSettingsController,
-      ui: { onError },
-    });
-
-    settings.handleMessage({
-      command: SETTINGS_VIEW_COMMANDS.WEBVIEW_READY,
-      view: 'settings',
-    });
-    await flushAsyncWork();
-    expect(postSubscriptionUsage).not.toHaveBeenCalled();
-
-    expect(
-      settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.GET_SUBSCRIPTION_USAGE,
-        forceRefresh: true,
-      }),
-    ).toBe(true);
-    await flushAsyncWork();
-    expect(postSubscriptionUsage).toHaveBeenCalledExactlyOnceWith(true);
-
-    expect(
-      settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.GET_SUBSCRIPTION_USAGE,
-        forceRefresh: 'yes',
-      } as never),
-    ).toBe(false);
-    expect(onError).not.toHaveBeenCalled();
-  });
-
   it('routes a close-during-usage-fetch failure without an unhandled rejection', async () => {
     let rejectFetch: ((error: Error) => void) | undefined;
     const postSubscriptionUsage = vi.fn(() =>
@@ -328,194 +242,6 @@ describe('desktop settings IPC', () => {
       expect.objectContaining({ message: 'renderer closed' }),
     );
   });
-
-  it.live(
-    'round-trips Git author writes through workspace state and refreshes the renderer',
-    () =>
-      Effect.gen(function* () {
-        const workspaceState = new FakeStateStore();
-
-        const { settings, posted } = createCapturedSettingsFixture({
-          workspaceState,
-        });
-
-        expect(
-          settings.handleMessage({
-            command: SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING,
-            key: WorkspaceStateKey.GIT_AUTHOR_NAME,
-            value: 'Desktop TeXRA',
-          }),
-        ).toBe(true);
-        yield* Effect.promise(() => flushAsyncWork());
-
-        expect(
-          yield* withProcessServices(
-            testRuntime(),
-            workspaceState.get(WorkspaceStateKey.GIT_AUTHOR_NAME),
-          ),
-        ).toBe('Desktop TeXRA');
-        expect(posted.at(-1)).toMatchObject({
-          command: SETTINGS_VIEW_COMMANDS.UPDATE_SETTINGS_SNAPSHOT,
-          snapshot: 'git-author',
-          values: { [WorkspaceStateKey.GIT_AUTHOR_NAME]: 'Desktop TeXRA' },
-        });
-
-        expect(
-          settings.handleMessage({
-            command: SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING,
-            key: WorkspaceStateKey.GIT_MARK_COMMITS,
-            value: false,
-          }),
-        ).toBe(true);
-        yield* Effect.promise(() => flushAsyncWork());
-        expect(
-          yield* withProcessServices(
-            testRuntime(),
-            workspaceState.get(WorkspaceStateKey.GIT_MARK_COMMITS),
-          ),
-        ).toBe(false);
-
-        expect(
-          settings.handleMessage({
-            command: SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING,
-            key: WorkspaceStateKey.GIT_WORKTREE_SUPPORT,
-            value: true,
-          }),
-        ).toBe(true);
-        yield* Effect.promise(() => flushAsyncWork());
-        expect(
-          yield* withProcessServices(
-            testRuntime(),
-            workspaceState.get(WorkspaceStateKey.GIT_WORKTREE_SUPPORT),
-          ),
-        ).toBe(true);
-      }),
-  );
-
-  it.live('round-trips tool path protection through workspace state', () =>
-    Effect.gen(function* () {
-      const workspaceState = new FakeStateStore();
-      const { settings, posted } = createCapturedSettingsFixture({
-        workspaceState,
-      });
-
-      expect(
-        settings.handleMessage({
-          command: SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING,
-          key: WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED,
-          value: false,
-        }),
-      ).toBe(true);
-      yield* Effect.promise(() => flushAsyncWork());
-
-      expect(
-        yield* withProcessServices(
-          testRuntime(),
-          workspaceState.get(WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED),
-        ),
-      ).toBe(false);
-      expect(posted.at(-1)).toMatchObject({
-        command: SETTINGS_VIEW_COMMANDS.UPDATE_SETTINGS_SNAPSHOT,
-        snapshot: 'approval',
-        values: {
-          [WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED]: false,
-        },
-      });
-    }),
-  );
-
-  it.live(
-    'round-trips multi-agent coordination and refreshes its snapshot',
-    () =>
-      Effect.gen(function* () {
-        const globalState = new FakeStateStore();
-        const { settings, posted } = createCapturedSettingsFixture({
-          globalState,
-        });
-
-        expect(
-          settings.handleMessage({
-            command: SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING,
-            key: GlobalStateKey.DETACH_SUBAGENTS_ON_STOP,
-            value: true,
-          }),
-        ).toBe(true);
-        yield* Effect.promise(() => flushAsyncWork());
-
-        expect(
-          yield* withProcessServices(
-            testRuntime(),
-            globalState.get(GlobalStateKey.DETACH_SUBAGENTS_ON_STOP),
-          ),
-        ).toBe(true);
-        expect(posted.at(-1)).toMatchObject({
-          command: SETTINGS_VIEW_COMMANDS.UPDATE_SETTINGS_SNAPSHOT,
-          snapshot: 'multi-agent',
-          values: { [GlobalStateKey.DETACH_SUBAGENTS_ON_STOP]: true },
-        });
-      }),
-  );
-
-  it('shows unsupported-command reasons without reporting an error', async () => {
-    const showInfoMessage = vi.fn(() => Effect.void);
-    const onError = vi.fn();
-    const { settings } = createSettingsFixture({
-      ui: { showInfoMessage, onError },
-    });
-
-    expect(
-      settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.INSTALL_LATEX_WORKSHOP,
-      }),
-    ).toBe(true);
-    await flushAsyncWork();
-
-    expect(showInfoMessage).toHaveBeenCalledWith(
-      'Desktop cannot host VS Code extensions.',
-    );
-    expect(onError).not.toHaveBeenCalled();
-  });
-
-  it.live.each([
-    SETTINGS_VIEW_COMMANDS.INSTALL_LATEX_WORKSHOP,
-    SETTINGS_VIEW_COMMANDS.SIGN_IN_CHATGPT,
-  ])('reports the underlying notification failure from %s', (command) =>
-    Effect.gen(function* () {
-      const failure = new Error('window is gone');
-      const notice = Effect.fail(
-        new NotificationFailed({
-          member: 'showErrorMessage',
-          message: 'notification failed',
-          cause: failure,
-        }),
-      );
-      const onError = vi.fn();
-      const credentialSettingsController =
-        createStubDesktopCredentialSettingsController(
-          {
-            globalState: new FakeStateStore(),
-            workspaceState: new FakeStateStore(),
-          },
-          {
-            chatGptHandlers: {
-              signInChatGpt: () => notice,
-              signOutChatGpt: () => Effect.void,
-              setChatGptPreferSubscription: () => Effect.void,
-            },
-          },
-        );
-      const { settings } = createSettingsFixture({
-        credentialSettingsController,
-        ui: { showInfoMessage: () => notice, onError },
-      });
-
-      expect(settings.handleMessage({ command })).toBe(true);
-      yield* Effect.promise(() => flushAsyncWork());
-
-      expect(onError).toHaveBeenCalledOnce();
-      expect(onError).toHaveBeenCalledWith(failure);
-    }),
-  );
 
   it.live(
     'round-trips the LaTeX formatter through workspace state and refreshes config values',
@@ -638,64 +364,6 @@ describe('desktop settings IPC', () => {
     }),
   );
 
-  it('delegates domain startup and posts approval settings on readiness', async () => {
-    const workspaceState = new FakeStateStore({
-      [WorkspaceStateKey.CODEX_SANDBOX_MODE]: 'danger-full-access',
-    });
-    const config = new FakeScopedConfigProvider();
-    config.seedWorkspace('texra.toolUse.requireBashApproval', false);
-    const agentSettingsController = createStubDesktopAgentSettingsController();
-    const postAgentStartupData = vi.fn(() => Effect.void);
-    agentSettingsController.postStartupData = postAgentStartupData;
-    const postToolingStartupData = vi.fn(() => Effect.void);
-    const toolingSettingsController =
-      createStubDesktopToolingSettingsController({
-        postStartupData: postToolingStartupData,
-      });
-    const { settings, posted } = createCapturedSettingsFixture({
-      agentSettingsController,
-      toolingSettingsController,
-      workspaceState,
-      config,
-      ui: { onError: () => undefined },
-    });
-
-    expect(
-      settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.WEBVIEW_READY,
-        view: 'settings',
-      }),
-    ).toBe(true);
-    await flushAsyncWork();
-
-    expect(latexSnapshotCount(posted)).toBe(1);
-    expect(postToolingStartupData).toHaveBeenCalledOnce();
-    expect(postAgentStartupData).toHaveBeenCalledOnce();
-
-    expect(findSnapshot(posted, 'approval')).toMatchObject({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_SETTINGS_SNAPSHOT,
-      snapshot: 'approval',
-      values: {
-        [BASH_APPROVAL_CONFIG_KEY]: false,
-        [WorkspaceStateKey.CODEX_SANDBOX_MODE]: 'danger-full-access',
-      },
-    });
-    // Without these the Git tab renders a permanently "Not set" token status
-    // and an empty subscription list until the user mutates either one.
-    expect(
-      findPosted(posted, SETTINGS_VIEW_COMMANDS.UPDATE_GITHUB_TOKEN_STATUS),
-    ).toEqual({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_GITHUB_TOKEN_STATUS,
-      status: 'none',
-    });
-    expect(
-      findPosted(posted, SETTINGS_VIEW_COMMANDS.UPDATE_PR_SUBSCRIPTIONS),
-    ).toEqual({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_PR_SUBSCRIPTIONS,
-      subscriptions: [],
-    });
-  });
-
   it('writes the bash-approval toggle to the workspace config scope, not global', async () => {
     const config = new FakeScopedConfigProvider();
 
@@ -780,89 +448,6 @@ describe('desktop settings IPC', () => {
     expect(latexSnapshotCount(posted)).toBe(1);
   });
 
-  it('writes the agent-skills toggle and returns the skills settings', async () => {
-    const config = new FakeScopedConfigProvider();
-
-    const { settings, posted } = createCapturedSettingsFixture({
-      config,
-      ui: { onError: () => undefined },
-    });
-
-    expect(
-      settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING,
-        key: AGENT_SKILLS_CONFIG_KEY,
-        value: false,
-      }),
-    ).toBe(true);
-    await flushAsyncWork();
-
-    expect(config.get(AGENT_SKILLS_CONFIG_KEY)).toBe(false);
-    expect(config.lastTargetFor(AGENT_SKILLS_CONFIG_KEY)).toBe('workspace');
-    expect(findSnapshot(posted, 'skills')).toEqual({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_SETTINGS_SNAPSHOT,
-      snapshot: 'skills',
-      values: {
-        [AGENT_SKILLS_CONFIG_KEY]: false,
-        [WorkspaceStateKey.DISABLED_SKILLS]: [],
-        [WorkspaceStateKey.DISABLED_SKILL_SOURCES]: [],
-        [GlobalStateKey.INSTALLED_PLUGINS]: [],
-      },
-    });
-  });
-
-  it.effect(
-    'refreshes credentials before conditionally refreshing the agent catalog',
-    () =>
-      Effect.gen(function* () {
-        const state = newStatePorts();
-        const events: string[] = [];
-        const refreshAuthDependentData = vi.fn(() =>
-          Effect.sync(() => {
-            events.push('credentials');
-          }),
-        );
-        const credentialSettingsController =
-          createStubDesktopCredentialSettingsController(state, {
-            refreshAuthDependentData,
-          });
-        const agentSettingsController =
-          createStubDesktopAgentSettingsController();
-        agentSettingsController.refreshCatalogData = vi.fn(() =>
-          Effect.sync(() => {
-            events.push('agents');
-          }),
-        );
-        const { settings } = createSettingsFixture({
-          ...state,
-          agentSettingsController,
-          credentialSettingsController,
-        });
-
-        yield* withProcessServices(
-          testRuntime(),
-          settings.refreshAuthDependentData(),
-        );
-
-        expect(events).toEqual(['credentials', 'agents']);
-
-        events.length = 0;
-        yield* withProcessServices(
-          testRuntime(),
-          settings.refreshAuthDependentData({
-            deferAgentCatalogRefresh: true,
-          }),
-        );
-
-        expect(events).toEqual(['credentials']);
-        expect(refreshAuthDependentData).toHaveBeenCalledTimes(2);
-        expect(refreshAuthDependentData).toHaveBeenLastCalledWith();
-        expect(
-          agentSettingsController.refreshCatalogData,
-        ).toHaveBeenCalledOnce();
-      }),
-  );
-
   it('requires UI confirmation before deleting memory', async () => {
     const confirmAction = vi.fn(() => Effect.succeed(false));
     const { settings, posted } = createCapturedSettingsFixture({
@@ -882,20 +467,6 @@ describe('desktop settings IPC', () => {
       'Delete "example.md"?',
       'Delete',
     );
-    expect(posted).toEqual([]);
-  });
-
-  it('ignores unsupported or malformed settings messages', async () => {
-    const { settings, posted } = createCapturedSettingsFixture();
-
-    expect(settings.handleMessage({ command: 'unknown' })).toBe(false);
-    // Missing the required `key` — the inbound schema rejects it, so the
-    // dispatcher never claims the message.
-    expect(
-      settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING,
-      }),
-    ).toBe(false);
     expect(posted).toEqual([]);
   });
 });

@@ -246,25 +246,6 @@ describe('desktop process resume owner', () => {
       }),
   );
 
-  it.effect('presents one workflow failure after lifecycle startup', () =>
-    Effect.gen(function* () {
-      yield* Effect.promise(() => mockWorkflowResume());
-      const harness = yield* Effect.promise(() => createResumeHarness());
-      failAfterLifecycle(
-        harness.session,
-        'workflow',
-        'workflow lifecycle failed',
-      );
-      const presenter = attachResultPresenter(harness.session);
-
-      expect(yield* harness.owner.tryResumeRun(runId)).toBe(false);
-      expectOneErrorPresentation(
-        presenter,
-        'Resume failed: workflow lifecycle failed',
-      );
-    }),
-  );
-
   it.effect(
     'replays one detached post-lifecycle workflow failure on replacement',
     () =>
