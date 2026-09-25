@@ -11,7 +11,9 @@ import { Deferred, Effect } from 'effect';
  * every joiner is waiting on, and an interrupt landing mid-work (after a
  * provider rotated a single-use refresh token, before it was stored) would
  * drop the result nobody else can recreate. A detached attempt with no caller
- * left still completes; its bound is the work's own timeouts.
+ * left still completes, and no caller's interrupt can end it, so the work
+ * must carry its own deadline: a stalled attempt holds the slot, and every
+ * caller joining it, until the work gives up by itself.
  *
  * The check, the claim and the fork run under one uninterruptible mask and
  * share one synchronous segment, so a second caller can never mint a second

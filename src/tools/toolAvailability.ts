@@ -20,7 +20,7 @@
  */
 
 // Third-party imports
-import { Effect } from 'effect';
+import { Cause, Duration, Effect } from 'effect';
 
 // Local imports
 import { emitAppSignal } from '@eventBus/AppSignals';
@@ -38,6 +38,15 @@ import { SharedAttempt } from '@utils/core/sharedAttempt';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'toolAvailability';
+
+/**
+ * Deadline on one group's probe and check. The probe runs detached from its
+ * callers ({@link SharedAttempt}), so no caller's interrupt can end a stalled
+ * child-process lookup or SDK import: without this bound one hung group would
+ * hold the shared slot, and every caller joining it, indefinitely. A group
+ * that misses it reports `unknown`, like any other probe failure.
+ */
+const GROUP_PROBE_TIMEOUT_MS = 20_000;
 
 // ============================================================
 // Result type
@@ -214,6 +223,15 @@ const probeToolGroup = Effect.fn('probeToolGroup')(function* (
     const available = yield* check(probeResult);
     return { failure: undefined, probeResult, available };
   }).pipe(
+    Effect.timeoutOrElse({
+      duration: Duration.millis(GROUP_PROBE_TIMEOUT_MS),
+      orElse: () =>
+        Effect.fail(
+          new Cause.TimeoutError(
+            `timed out after ${GROUP_PROBE_TIMEOUT_MS / 1000}s`,
+          ),
+        ),
+    }),
     Effect.catch((error) =>
       Effect.logWarning(`Availability probe failed for ${name}`).pipe(
         Effect.annotateLogs({ data: error }),

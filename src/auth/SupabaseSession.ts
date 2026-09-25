@@ -1,4 +1,4 @@
-import { Clock, Effect } from 'effect';
+import { Clock, Duration, Effect } from 'effect';
 
 import { withLogChannel } from '@logger/effectLog';
 import { SharedAttempt } from '@utils/core/sharedAttempt';
@@ -33,6 +33,16 @@ export {
 } from './supabaseSessionTypes';
 
 const CHANNEL = 'SupabaseSession';
+
+/**
+ * Deadline on the GoTrue refresh call. The refresh runs detached from its
+ * callers ({@link SharedAttempt}), so no caller's interrupt can end a stalled
+ * request, and supabase-js puts no timeout on its fetch: without this bound a
+ * connection that went quiet (sleep/wake, a network change) would hold the
+ * shared slot, and every token read joining it, until the fetch stack gave up
+ * on its own, if ever.
+ */
+const REFRESH_TIMEOUT_MS = 30_000;
 
 export interface SupabaseSessionCoordinatorOptions {
   storage: SupabaseSessionStorage;
@@ -290,6 +300,18 @@ export class SupabaseSessionCoordinator {
     const { data, error } = yield* callPort(() =>
       this.options.getClient().auth.refreshSession({
         refresh_token: session.refreshToken,
+      }),
+    ).pipe(
+      Effect.timeoutOrElse({
+        duration: Duration.millis(REFRESH_TIMEOUT_MS),
+        orElse: () =>
+          Effect.fail(
+            new AuthPortError({
+              cause: new Error(
+                `session refresh timed out after ${REFRESH_TIMEOUT_MS / 1000}s`,
+              ),
+            }),
+          ),
       }),
     );
 
