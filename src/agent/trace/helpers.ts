@@ -11,7 +11,11 @@
  * `MessageType`, and renders `level=error` with `messageType: ERROR` as an
  * error row.
  */
-import { buildErrorLogData } from '@common/errors/sdkError/providerErrorFormat';
+import {
+  buildErrorLogData,
+  normalizeProviderError,
+} from '@common/errors/sdkError/providerErrorFormat';
+import { createLog } from '@logger/logUtils';
 import {
   MESSAGE_TYPES,
   type CompactionActivityData,
@@ -38,6 +42,14 @@ export function logSdkError(
   stageId?: string,
 ): void {
   logErrorData(trace, message, buildErrorLogData(err, context), stageId);
+  // The provider's raw response body stays out of the stream log, since it
+  // can echo the request; it is a diagnostic for the process log.
+  const body = normalizeProviderError(err).rawErrorBody;
+  if (body !== undefined) {
+    createLog('agentTrace').warn(`${message} (provider response body)`, {
+      data: body,
+    });
+  }
 }
 
 /** Emit an error log with a pre-serialized data payload. */

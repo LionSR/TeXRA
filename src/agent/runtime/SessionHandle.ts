@@ -40,7 +40,6 @@ import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManage
 import { finalizeRun } from '@agent/storage/runLifecycle';
 import type { ResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { withLogChannel } from '@logger/effectLog';
-import { redactSecrets } from '@logger/redaction';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
   TEXRA_APPROVAL_POLICY_DEFAULT,
@@ -578,7 +577,7 @@ export class SessionHandle {
   publishRunEvent(runId: RunId, event: AgentEvent): void {
     if (this.disposed) return;
     if (event.type === 'stream.chunk') {
-      const text = redactSecrets(event.text);
+      const { text } = event;
       this.detachPublication(runId, () =>
         this.graph.publishText(runId, event.id, text),
       );

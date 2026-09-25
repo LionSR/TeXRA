@@ -20,7 +20,6 @@ const mocks = vi.hoisted(() => ({
   createChildRun: vi.fn(),
   startChildRunLoop: vi.fn(),
   importCodexClass: vi.fn(),
-  findCodexBinaryPath: vi.fn(),
   resumeThread: vi.fn(),
   submitFollowUp: vi.fn(),
 }));
@@ -65,11 +64,20 @@ vi.mock('@tools/codexConfig', () => ({
   CODEX_CLI_MODEL: 'gpt-5.2-codex',
 }));
 
-vi.mock('@tools/codexImport', async (importActual) => ({
-  ...(await importActual<typeof import('@tools/codexImport')>()),
-  importCodexClass: mocks.importCodexClass,
-  findCodexBinaryPath: mocks.findCodexBinaryPath,
-}));
+vi.mock('@tools/codexImport', async (importActual) => {
+  const { Effect: EffectModule } = await import('effect');
+  return {
+    ...(await importActual<typeof import('@tools/codexImport')>()),
+    // The client over whatever class the case's SDK import yields.
+    openCodexClient: () =>
+      mocks.importCodexClass().pipe(
+        EffectModule.map((Codex: new () => unknown) => ({
+          codex: new Codex(),
+          codexPath: undefined,
+        })),
+      ),
+  };
+});
 
 import { CodexTool } from '@tools/codex';
 import { createFakeAgentCliChildRun } from '../support/agentCliResumeTestUtils';
@@ -106,10 +114,8 @@ describe('codex tool - atomic resume fallback', () => {
     mocks.startChildRunLoop.mockReset();
     mocks.startChildRunLoop.mockReturnValue(completedChildRunLoop());
     mocks.importCodexClass.mockReset();
-    mocks.findCodexBinaryPath.mockReset();
 
     mocks.registerRun.mockReturnValue(Effect.void);
-    mocks.findCodexBinaryPath.mockReturnValue(Effect.succeed(undefined));
     mocks.createChildRun.mockReturnValue(
       Effect.succeed(createFakeAgentCliChildRun(childRunId)),
     );

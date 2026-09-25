@@ -187,7 +187,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   const flowContext: ToolUseFlowContext = {
     ownerSession: session,
     interrupt(): void {
-      run.interrupt();
+      runs.interrupt(runId);
     },
     requestImmediateCompaction(): void {
       compactionRequested = true;

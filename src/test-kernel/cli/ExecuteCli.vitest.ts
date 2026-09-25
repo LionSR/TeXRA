@@ -25,6 +25,7 @@ import {
   useTempDirs,
 } from '@test/support/tempDirPlatform';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
+import { admitInterruptibleRun } from '@test/support/runHandleFixtures';
 
 const mocks = vi.hoisted(() => ({
   close: vi.fn(),
@@ -250,16 +251,24 @@ function stubHangingRun(published: Deferred.Deferred<LeaseOptions>): {
       },
       null,
     );
-    launchHandle.attachInterruptHandler({ interrupt: () => undefined });
-    options.session?.runs.track(launchHandle);
+    const runs = options.session?.runs;
+    // The launch's stop target is its run's roster fiber; the hanging
+    // promise is the test's to resolve, as the run's own result is, and the
+    // generation ends with it.
+    let generation: { interruptUnsafe(): void } | undefined;
+    if (runs) {
+      runs.track(launchHandle);
+      generation = admitInterruptibleRun(runs, runId, () => undefined);
+    }
     try {
       return await new Promise((resolve, reject) => {
         resolveRun = resolve;
         rejectRun = reject;
       });
     } finally {
-      if (options.session?.runs.getHandle(runId) === launchHandle) {
-        options.session.runs.untrack(runId);
+      generation?.interruptUnsafe();
+      if (runs && runs.getHandle(runId) === launchHandle) {
+        runs.untrack(runId);
       }
     }
   });
@@ -912,33 +921,28 @@ describe('executeCliRequest', () => {
         const { platform, executeCliRequest } = yield* Effect.promise(
           loadExecuteCliOnInstalledHost,
         );
-        const launch = yield* Deferred.make<RunHandle>();
+        const launch = yield* Deferred.make<void>();
         mocks.runAgent.mockImplementationOnce(
           async (request: { runId: RunId }, options: LeaseOptions) => {
-            // `runAgent` tracks its launch handle before preparation; its
-            // interrupt is the launch's stop, which fails preparation.
-            const launchHandle = new RunHandle(
-              {
-                runId: request.runId,
-                identity: { kind: 'agent', agent: 'chat' },
-                category: 'toolUse',
-              },
-              null,
-            );
-            try {
-              await new Promise<void>((_resolve, reject) => {
-                launchHandle.attachInterruptHandler({
-                  interrupt: () =>
-                    reject(new DOMException('Launch stopped.', 'AbortError')),
-                });
-                options.session?.runs.track(launchHandle);
-                // Published once the handle is tracked: the gate resumes the
-                // test fiber synchronously and its shutdown stops the launch.
-                Deferred.doneUnsafe(launch, Effect.succeed(launchHandle));
+            const runId = request.runId;
+            // The launch's fiber is its stop: shutdown interrupts the run by
+            // id, which fails the launch the way a real preparation unwinds.
+            let rejectRun!: (error: unknown) => void;
+            const runs = options.session?.runs;
+            if (runs)
+              admitInterruptibleRun(runs, runId, () => {
+                rejectRun(new DOMException('Launch stopped.', 'AbortError'));
               });
-              return COMPLETED_RUN;
+            try {
+              return await new Promise((_resolve, reject) => {
+                rejectRun = reject;
+                // Published once the stop target is live: the gate resumes
+                // the test fiber synchronously and its shutdown stops the
+                // launch.
+                Deferred.doneUnsafe(launch, Effect.void);
+              });
             } finally {
-              options.session?.runs.untrack(request.runId);
+              runs?.untrack(runId);
             }
           },
         );
@@ -946,7 +950,7 @@ describe('executeCliRequest', () => {
         const run = yield* Effect.forkChild(
           executeCliRequest(baseRequest(), cliContext(), {}),
         );
-        const launchHandle = yield* Deferred.await(launch);
+        yield* Deferred.await(launch);
         yield* settle;
 
         yield* platform.lifecycle.runShutdown;
@@ -954,7 +958,6 @@ describe('executeCliRequest', () => {
           ok: false,
           exitCode: CliExitCode.Interrupted,
         });
-        expect(launchHandle.stopRequested).toBe(true);
         expect(mocks.finalizeRun).not.toHaveBeenCalled();
       }),
   );

@@ -6,11 +6,8 @@
  * (`@shared/session/transcriptFold`), so this is a plain type, not a schema:
  * nothing parses it, and a schema would own no boundary.
  *
- * Three rules the shape encodes:
- *  - Text is untruncated. Elision is measurement ({@link TranscriptText}),
- *    applied by the painter at its own width.
- *  - Redaction happens once, at the Database write boundary
- *    (`redactTraceDraft`). Nothing here or in the fold redacts.
+ * Text is untruncated. Elision is measurement ({@link TranscriptText}),
+ * applied by the painter at its own width.
  */
 import {
   TOOL_CALL_STATUS,

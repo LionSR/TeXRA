@@ -98,6 +98,10 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
 
 ### Bug Fixes
 
+- **Stopping a run or subagent as it starts now takes effect.** A stop
+  issued in the instant a run or in-band subagent was starting could miss it,
+  and a caller waiting on that subagent could hang. A stop now interrupts the
+  run itself, from its first step.
 - **A run another TeXRA window takes over at the same moment is reported as
   running elsewhere.** When two windows or processes resume or relaunch the
   same run at once, the one that loses now says the run is held elsewhere,
@@ -147,6 +151,22 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
   function no longer shadows `$PATH`, which hid the `texra` and `awk` it calls.
 - **Bundled skill descriptions no longer name Codex** — they read "Use when
   you need…" in every host.
+- **Credentials stay out of command output and the transcript.** Shell
+  commands the agent runs, and the Claude Code and Codex agents, no longer
+  inherit the provider API-key environment variables TeXRA reads (such as
+  `OPENAI_API_KEY` or `DEEPSEEK_API_KEY`). Claude Code still receives its
+  Anthropic key and Codex its OpenAI key. Your other environment variables
+  are passed through unchanged. An Overleaf or ShareLaTeX clone no longer
+  stores your Git token in the project's remote URL, so `git remote -v` and
+  `.git/config` cannot show it. After cloning, TeXRA offers the token to
+  your Git credential helper (the macOS keychain or Git Credential Manager,
+  for example), so later pulls and pushes still sign in. Without a helper,
+  Git asks for the token. For a project cloned by an earlier version, run
+  `git remote set-url origin https://git@git.overleaf.com/<project-id>` to
+  remove the stored token. An error about a malformed MCP config file no
+  longer quotes the file's contents, and an MCP server's error output goes
+  to the TeXRA log instead of the transcript. Raw provider error responses
+  are written to the log, not the transcript.
 - **The desktop app shuts down cleanly when startup fails early.** If
   startup failed before the project list opened (for example, when the
   project records could not be read), shutdown reported two errors and left a

@@ -1,7 +1,7 @@
 # Effect facility adoption: the four families with zero uses
 
 Date: 2026-09-20
-Status: proposed
+Status: proposed — step 2 only. Step 1 was refused (`EFF-ADOPT-config-provider`) and steps 3, 4 and 5 are on main; step 2, converting the `createLog` sites and deleting `logUtils.ts` with its last synchronous caller, is in flight.
 Baseline: `main` at `3378a967`. Parent survey:
 [post-refactor architecture survey](../architecture/2026-09-20-post-refactor-architecture-survey.md).
 

@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 import type {
   ConfigProvider,
   ConfigTarget,
@@ -13,7 +14,6 @@ import {
   type SettingsStores,
   type StoredSetting,
 } from '@shared/config/settingsAccess';
-import type { Effect } from 'effect';
 
 function requireEntry(key: string) {
   const entry = settingByKey(key);
@@ -65,6 +65,21 @@ export function readSettingFrom<T>(
     stores,
     processSettingHost(),
   ) as Effect.Effect<T, StateReadFailed>;
+}
+
+/**
+ * A tool call's own override of a per-call setting, else the workspace
+ * default read via {@link readSettingFrom} — the shape a call-scoped knob
+ * (sandbox mode, permission mode, …) shares with the launch that follows it.
+ */
+export function readSettingUnlessOverridden<T>(
+  override: T | null | undefined,
+  stores: SettingsStores,
+  key: string,
+): Effect.Effect<T, StateReadFailed> {
+  return override == null
+    ? readSettingFrom<T>(stores, key)
+    : Effect.succeed(override);
 }
 
 /**
