@@ -22,6 +22,7 @@ import {
   prepareAgentDefinition,
   type PreparedAgentDefinition,
 } from '@agent/runtime/AgentLaunchContext';
+import { childCompositionRefusal } from '@agent/runtime/agentToolResolution';
 import {
   AgentConfigSchema,
   type AgentConfigPayload,
@@ -171,6 +172,14 @@ const executeInBand = Effect.fn('executeInBand')(
     const { config } = definition;
     const startedAt = Date.now();
     const workingDirectory = config.workingDirectory ?? undefined;
+    // A child that needs a plugin its parent's composition lacks is an
+    // ordinary failed call, refused before any row records it.
+    const refusal = childCompositionRefusal(
+      options.composition.composition,
+      definition.setting.tools,
+      options.agentName,
+    );
+    if (refusal !== undefined) return yield* Effect.fail(new Error(refusal));
 
     yield* registerChildRun(options.session, {
       runId,

@@ -14,6 +14,7 @@ import { ModelError } from '@texra-ai/llm/turn';
 
 // Shared schemas and dispatchers
 import type { SessionHandle } from '@agent/runtime';
+import { refresh as refreshAgentCatalog } from '@agent/index';
 import { AUTH_COMMANDS } from '@auth/constants';
 import {
   settingsViewProgram,
@@ -364,6 +365,8 @@ export class SettingsViewMessageHandler {
         this.latexHandlers.installExtension(message.extensionId),
       toggleTool: (message) =>
         setToolEnabled(message.toolId, message.enabled, this.globalState).pipe(
+          // A plugin's bundled agents follow its switch.
+          Effect.andThen(refreshAgentCatalog()),
           Effect.andThen(
             this.withActiveWebview((w) =>
               this.sendToolDashboardData(w, { skipChecks: true }),

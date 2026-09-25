@@ -24,6 +24,7 @@ import { setLogSink } from '@logger/logSink';
 import {
   AgentDirectories,
   AgentDirectoriesFailed,
+  AppState,
   type AgentDirectoriesPort,
 } from '@platform/interfaces';
 import type { AgentCatalogServices } from '@platform/processRuntime';
@@ -55,6 +56,7 @@ function onGlobalStorage<A, E>(
       nodePlatformLayer,
       testHttpClientLayer,
       AgentDirectories.layer(mutableAgentDirectories),
+      AppState.layer(new FakeStateStore()),
     ),
   );
 }

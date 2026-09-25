@@ -27,7 +27,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@agent/runtime/AgentLaunchContext', () => ({
   prepareAgentDefinition: ({ config }: { config: unknown }) =>
-    Effect.succeed({ config }),
+    Effect.succeed({ config, setting: { tools: [] } }),
 }));
 
 vi.mock('@agent/runtime/childRunLoop', () => ({
