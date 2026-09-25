@@ -83,7 +83,8 @@ function readPngFileWithinLimit(
     const fs = yield* FileSystem.FileSystem;
     const { size } = yield* fs.stat(outFile);
     if (Number(size) > MAX_IMAGE_BYTES) return 'too-large' as const;
-    return Buffer.from(yield* fs.readFile(outFile));
+    const bytes = yield* fs.readFile(outFile);
+    return Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   }).pipe(Effect.mapError((error) => probeFailed(error.reason.cause ?? error)));
 }
 
