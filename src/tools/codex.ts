@@ -38,6 +38,7 @@ import type {
   CodexApprovalPolicy,
   RunId,
   TodoItem,
+  TokenUsageStats,
   ToolResult,
   ToolUseLog,
   ToolCallStatus,
@@ -74,7 +75,7 @@ import {
   launchAgentCliSession,
   reraiseAgentCliCallFailure,
 } from './agentCliShared';
-import { formatDelivery, toDeliveryUsage } from './delegation/deliveryEnvelope';
+import { formatDelivery } from './delegation/deliveryEnvelope';
 import {
   CODEX_AGENT_NAME,
   buildCodexCommandToolLog,
@@ -235,6 +236,21 @@ function publishCodexItemProgress(params: {
 // Streaming helpers
 // ============================================================================
 
+/** A Codex turn's spend in the one usage shape. The SDK reports no cost. */
+function codexTurnUsage(turn: RunResult): TokenUsageStats | null {
+  const { usage } = turn;
+  return usage
+    ? {
+        inputTokens: usage.input_tokens,
+        outputTokens: usage.output_tokens,
+        cost: 0,
+        ...(usage.cached_input_tokens > 0 && {
+          cacheReadInputTokens: usage.cached_input_tokens,
+        }),
+      }
+    : null;
+}
+
 /** Run a single streamed turn, logging events to the child stream. The
  * `@openai/codex-sdk` stream is this module's foreign edge, so the async drain
  * below is the one place it is wrapped. */
@@ -378,18 +394,7 @@ function buildCodexLaunch(params: {
     runProviderTurn: (prompt, _ports, signal) =>
       runStreamedTurn(thread, prompt, logger, signal),
     resolveSessionIds: () => [fallbackThreadId, thread.id],
-    getUsage: (turn) => turn.usage,
-    buildUsageStats: (turn) =>
-      turn.usage
-        ? {
-            inputTokens: turn.usage.input_tokens,
-            outputTokens: turn.usage.output_tokens,
-            cost: 0,
-            ...(turn.usage.cached_input_tokens > 0 && {
-              cacheReadInputTokens: turn.usage.cached_input_tokens,
-            }),
-          }
-        : undefined,
+    getUsage: codexTurnUsage,
     formatDelivery: (turn, wallTimeMs, lastPrompt) =>
       formatDelivery({
         tag: DELIVERY_TAG.codexResult,
@@ -398,7 +403,7 @@ function buildCodexLaunch(params: {
         attributes: [{ name: 'thread-id', value: thread.id || null }],
         wallTime: formatWallTimeSeconds(wallTimeMs),
         response: turn.finalResponse,
-        usage: toDeliveryUsage(turn.usage),
+        usage: codexTurnUsage(turn),
       }),
     formatError: (_turn, err, lastPrompt) =>
       formatDelivery({
