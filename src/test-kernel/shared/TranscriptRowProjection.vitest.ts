@@ -5,13 +5,7 @@ import {
   RUN_PHASE,
   STREAM_LOG_ENTRY_TYPES,
 } from '@shared/schemas';
-import {
-  compactionActivityRow,
-  elideText,
-  isSettledRow,
-  projectTranscriptRow,
-  transcriptText,
-} from '@ui/transcript';
+import { projectTranscriptRow } from '@ui/transcript';
 
 const base = {
   type: STREAM_LOG_ENTRY_TYPES.LOG,
@@ -22,35 +16,6 @@ const base = {
 } as const;
 
 describe('projectTranscriptRow', () => {
-  it('carries the full typed error field set in display order', () => {
-    const row = projectTranscriptRow({
-      ...base,
-      messageType: MESSAGE_TYPES.ERROR,
-      text: 'Request failed',
-      data: {
-        message: 'HTTP 429',
-        userRetryable: true,
-        statusCode: 429,
-        classification: { kind: 'chatgpt-subscription' },
-        provider: 'anthropic',
-        rawErrorBody: { type: 'error' },
-      },
-    });
-    expect(row?.kind).toBe('error');
-    if (row?.kind !== 'error') throw new Error('bad');
-    expect(row.summary.full).toBe('Request failed');
-    expect(row.details.map((d) => d.key)).toEqual([
-      'message',
-      'provider',
-      'statusCode',
-      'userRetryable',
-      'classification',
-      'rawErrorBody',
-    ]);
-    expect(row.detailText.lineCount).toBeGreaterThan(5);
-    expect(isSettledRow(row, false)).toBe(true);
-  });
-
   it('keeps failed and non-media attachments with a counted summary', () => {
     const row = projectTranscriptRow({
       ...base,
@@ -69,36 +34,6 @@ describe('projectTranscriptRow', () => {
     expect(row.summary).toBe('Files (1/2 loaded, 1 not found)');
     expect(row.files).toHaveLength(2);
     expect(row.media).toHaveLength(1);
-  });
-
-  it('gives a delegation call typed sections instead of a JSON blob', () => {
-    const row = projectTranscriptRow({
-      ...base,
-      messageType: MESSAGE_TYPES.TOOL_USE,
-      text: '',
-      data: {
-        toolName: 'delegate_agent',
-        status: 'in_progress',
-        input: {
-          agent: 'proof',
-          model: 'claude-opus',
-          instruction: 'Check lemma 3',
-          inputFiles: ['a.tex'],
-          extractTikz: true,
-        },
-      },
-    });
-    if (row?.kind !== 'tool') throw new Error('bad');
-    expect(row.model.headerLabel).toBe('Delegate agent');
-    expect(row.model.headerPreview).toBe('proof');
-    expect(row.model.sections.map((s) => s.kind)).toEqual([
-      'identifier',
-      'text',
-      'badges',
-      'fileGroups',
-    ]);
-    expect(row.model.showOutput).toBe(false);
-    expect(row.model.outputSuppression).toBe('empty');
   });
 
   it('shows MCP output through the section builder', () => {

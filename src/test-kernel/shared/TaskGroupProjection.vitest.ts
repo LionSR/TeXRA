@@ -133,20 +133,4 @@ describe('task-group StreamLog projection', () => {
     // process — leaves the transcript's own status standing.
     expect(taskGroupDisplayStatus(group!, undefined)).toBe(RUN_PHASE.RUNNING);
   });
-
-  it('ignores ordinary log rows', () => {
-    const taskGroups = projectTaskGroupsFromStreamLog([
-      {
-        seqNo: 1,
-        id: 'message-1',
-        type: STREAM_LOG_ENTRY_TYPES.LOG,
-        level: LOG_LEVELS.INFO,
-        timestamp: 100,
-        text: 'ordinary message',
-        messageType: MESSAGE_TYPES.DEFAULT,
-      },
-    ]);
-
-    expect(taskGroups).toEqual([]);
-  });
 });

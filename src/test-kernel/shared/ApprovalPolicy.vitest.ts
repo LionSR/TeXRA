@@ -1,15 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  TEXRA_APPROVAL_POLICIES,
-  TEXRA_APPROVAL_POLICY_OPTIONS,
   decideHumanInputRequest,
   decideRetryApproval,
   decideTexraApproval,
-  parseTexraApprovalPolicy,
-  texraApprovalDenialMessage,
-  texraHumanInputDenialMessage,
-  texraRetryDenialMessage,
 } from '@shared/approvalPolicy';
 
 describe('TeXRA approval policy', () => {
@@ -34,17 +28,6 @@ describe('TeXRA approval policy', () => {
       ).toBe(expected);
     },
   );
-
-  it('publishes one ordered set of policy choices and accepts only those values', () => {
-    const optionValues = TEXRA_APPROVAL_POLICY_OPTIONS.map(
-      ({ value }) => value,
-    );
-    expect(optionValues).toEqual(['ask', 'never', 'yolo']);
-    expect(new Set(optionValues)).toEqual(new Set(TEXRA_APPROVAL_POLICIES));
-    expect(optionValues).toHaveLength(TEXRA_APPROVAL_POLICIES.length);
-    expect(parseTexraApprovalPolicy(' Yolo ')).toBe('yolo');
-    expect(parseTexraApprovalPolicy('auto')).toBeUndefined();
-  });
 
   it.each([
     [

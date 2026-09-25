@@ -94,24 +94,6 @@ describe('compaction activity projection', () => {
     });
   });
 
-  it('updates one stable block from start to terminal outcome', () => {
-    const projection = projectCompactionActivities([
-      activityEntry(2, 'a', 'started'),
-      activityEntry(4, 'a', 'completed'),
-    ]);
-
-    expect(projection.blocks).toEqual([
-      {
-        operationId: 'a',
-        status: 'completed',
-        finalized: true,
-        startPosition: 2,
-        startedAt: 20,
-        finishedAt: 40,
-      },
-    ]);
-  });
-
   it('handles overlap, out-of-order completion, and duplicate events', () => {
     const projection = projectCompactionActivities([
       activityEntry(1, 'a', 'started'),

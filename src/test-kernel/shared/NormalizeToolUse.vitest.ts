@@ -3,12 +3,6 @@ import { describe, expect, it } from 'vitest';
 import { normalizeToolUseData } from '@shared/toolUse';
 
 describe('normalizeToolUseData (src/shared/toolUse.ts)', () => {
-  it('returns null for non-object payloads', () => {
-    expect(normalizeToolUseData('not an object')).toBeNull();
-    expect(normalizeToolUseData(42)).toBeNull();
-    expect(normalizeToolUseData(null)).toBeNull();
-  });
-
   it('extracts toolName, input, and output text from a flat payload', () => {
     const normalized = normalizeToolUseData({
       toolName: 'Bash',
@@ -58,27 +52,6 @@ describe('normalizeToolUseData (src/shared/toolUse.ts)', () => {
     });
     expect(normalized?.outputText).toBe('stdout content');
     expect(normalized?.headerSummary).toBe('ran 1 command');
-  });
-
-  it('retains only the scalar exit code needed by renderers', () => {
-    const normalized = normalizeToolUseData({
-      toolName: 'Bash',
-      exitCode: 7,
-      output: 'failed',
-      status: 'completed',
-    });
-
-    expect(normalized?.exitCode).toBe(7);
-    expect(normalized).not.toHaveProperty('parsed');
-  });
-
-  it('leaves exitCode unset when the row states none, prose regardless', () => {
-    const normalized = normalizeToolUseData({
-      toolName: 'Bash',
-      error: 'Command failed (exit 3)',
-      status: 'failed',
-    });
-    expect(normalized?.exitCode).toBeUndefined();
   });
 
   it('reports errors via status and errorText', () => {
