@@ -10,8 +10,10 @@ import type { PlatformError } from 'effect/PlatformError';
  * `less` uses it to cancel a search, not to end the listing. So the platform's
  * SIGINT handler defers while any foreground command runs, as a shell or C's
  * `system()` does. When the child ends, the command interrupts its own fiber
- * if the child ended because of that Ctrl-C; the CLI's command boundary maps
- * an interruption to exit 130, so the outcome does not race process exit.
+ * if the child ended because of that Ctrl-C, so the outcome does not race
+ * process exit. Each caller's boundary maps the interruption to exit 130:
+ * `defineCliCommand` for the pager and `texra tools`, `notifyCliUpdate` for
+ * the self-update.
  */
 let foregroundHolders = 0;
 let interruptedWhileHeld = false;
