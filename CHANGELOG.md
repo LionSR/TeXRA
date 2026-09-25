@@ -405,6 +405,12 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
   instruction), plus **Resume** when the session was interrupted. Workflow
   runs get the same line. Edit as new task left the ⋯ menu. The run board
   calls steps it has not reached "Not started" instead of "Declared".
+- **Run and diff buttons say what they do.** A delegated agent's row reads
+  "Subagent: lint" with **Copy to new task** (was "Delegate agent" and
+  "Restore setup"); the multi-agent proposal names its model in the first
+  line; and the LaTeXDiffs buttons are **Diff vs. edited**, **Diff vs.
+  commit**, **Move to Diffs folder** (was "Pack") and **Delete diff files**,
+  with refresh icons on the two refresh buttons.
 
 #### Bug Fixes
 
