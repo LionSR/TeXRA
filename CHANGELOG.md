@@ -245,6 +245,14 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
   a run's goal shows in its header. OpenAI background responses, parallel
   tool calls, the GPT-5 reasoning summary and Google background responses
   keep their defaults and are set in `.texra/config.json`.
+- **Settings pages show one section at a time** (extension and desktop): a
+  page with several sections gets a second row of sub-tabs (Models: API keys,
+  Subscriptions, Models; Agents: Library, Teams, Skills, Advanced; Tools:
+  Approval, Tools, Integrations; LaTeX: Dependencies, Compile & diff,
+  Formatting, and VS Code settings in VS Code; General: Account, Git), so a
+  long page like Agents no longer scrolls through everything. Each page
+  remembers its sub-tab while Settings stays open, and commands such as
+  **Agent Team Settings** or **Git Settings** open the matching sub-tab.
 
 #### Changes
 

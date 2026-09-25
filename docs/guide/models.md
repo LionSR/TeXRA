@@ -62,7 +62,7 @@ GPT-6 Sol and Luna supersede GPT-5.6 Sol (`gpt56`) and Luna (`gpt56--`), which a
 deprecated. TeXRA pins the [Codex integration](./agent-integrations.md#openai-codex) to `gpt-5.5`.
 GPT-5.6 Pro (`gpt56pro`) runs GPT-5.6 Sol in the Responses API's pro reasoning mode, billed at standard token rates
 rather than a premium tier, for the hardest planning and long-horizon tasks. It is hidden by
-default; enable it from Settings → Models when you need it. For one-off hard questions you can
+default; enable it from Settings → Models → Models when you need it. For one-off hard questions you can
 also enable the `inquiry` tool and paste the answer from your own ChatGPT subscription instead of
 running a full agent turn against the API. `gpt56-` (Terra) remains a mid-priced option. Read the [OpenAI API reference](https://developers.openai.com/api/docs) for
 full capabilities.
@@ -160,7 +160,7 @@ developers.
 ### Subscription-backed models in VS Code
 
 The VS Code extension can also use compatible models from a GitHub Copilot
-subscription. Open **Settings → Models → Copilot in VS Code**, then select
+subscription. Open **Settings → Models → Subscriptions → Copilot in VS Code**, then select
 **Grant access**. VS Code shows its own consent prompt; TeXRA never asks for
 or stores a Copilot API key.
 
@@ -202,7 +202,7 @@ above what your plan allows fails and triggers compaction recovery.
 
 ## Customizing the model list
 
-Choose which models appear in the extension picker from the **Dashboard → Models** page: toggle them on or off per provider, no JSON required (the choice is saved in the extension).
+Choose which models appear in the extension picker from **Dashboard → Models → Models**: toggle them on or off per provider, no JSON required (the choice is saved in the extension).
 
 In the CLI TUI, run `/model` after a chat starts to see the models your current credentials can run. Mid-session switching is limited to models that share the active model's provider family; other entries are shown disabled with a reason, and switching waits until the current response finishes. To change family, start a new chat with `--model`. Before you send the first message, `/agent` chains straight into that same model picker, so choosing a root agent and its model stays one step.
 
@@ -218,7 +218,7 @@ To access additional models or alternative pricing:
 
 1. Get an [OpenRouter](https://openrouter.ai/) API key
 2. Add it with the `TeXRA: Set API Key` command
-3. In the Dashboard → Models page → API keys, expand the OpenRouter row and turn on **Use OpenRouter for all models**
+3. In Dashboard → Models → API keys, expand the OpenRouter row and turn on **Use OpenRouter for all models**
 
 Expanding any provider's row in **API Configuration** reveals its key field plus the per-provider toggles described here:
 

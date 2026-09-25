@@ -146,7 +146,7 @@ never leave your machine except to the provider endpoint.
 and GitHub Copilot in VS Code). Requests still go straight from your
 machine to that provider: ChatGPT and Grok via OAuth sign-in, Kimi Code
 and the GLM Coding Plan via a plan-specific key. In the VS Code extension
-the **Dashboard → Subscriptions** tab can also route models through a
+the **Dashboard → Models → Subscriptions** tab can also route models through a
 GitHub Copilot subscription, with no provider API key needed. Connect one
 from that tab, or with `texra auth chatgpt login` / `/login` in the CLI.
 
