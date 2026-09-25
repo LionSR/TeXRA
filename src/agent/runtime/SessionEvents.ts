@@ -164,6 +164,11 @@ export const sessionEventsLayer = Layer.effect(
     // streams close at that same phase move, and a stage or call it left
     // open reads as its run's settled outcome once the run is durably final
     // (`taskGroupDisplayStatus`, `workflowRunModel`'s interrupted card).
+    // Unlike the transcript fold, this ignores `response.finalized` and does
+    // not refuse a `stream.start` while the run is parked or ended. Both are
+    // safe only because producers keep two rules: `ModelInvoker` ends the
+    // output stream before the response is finalized, and nothing streams
+    // while a run is parked or ended.
     const open = new Map<AggregateId, Map<string, OpenWork>>();
     const track = (rows: readonly SessionEvent[]) => {
       for (const row of rows) {
