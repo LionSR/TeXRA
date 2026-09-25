@@ -56,7 +56,7 @@ The whole loop is a round trip: pull your project down from Overleaf, edit it lo
 
 <p class="hero-caption">Three quick-input prompts: pick the command, paste the project URL or 24-character ID, then enter your <code>olp_</code> token, which is cached to VS Code secret storage for next time.</p>
 
-> **Token storage:** Reset the cached token at any time with the VS Code command **Developer: Clear Secret Storage**.
+> **Token storage:** Reset the cached token at any time with the VS Code command **Developer: Clear Secret Storage**. The token is never written into the clone's remote URL: after cloning, TeXRA offers it to your Git credential helper (the macOS keychain or Git Credential Manager, for example) so later pulls and pushes sign in. Without a helper, Git asks for it; enter the token as the password.
 
 #### Option B: use the TeXRA CLI
 

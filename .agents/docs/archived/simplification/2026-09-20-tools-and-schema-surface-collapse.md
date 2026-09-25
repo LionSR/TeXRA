@@ -1,11 +1,12 @@
 # Tools and schema-surface collapse
 
 Date: 2026-09-20
-Status: proposed
+Status: implemented — every step landed (#12891, #12994, #13022; §5 records each), and the §3 setup-tools and GitHub-polling scope items are owner product questions, not refactors.
+Archived: 2026-09-25
 Baseline: `main` at `3378a967`. Parent survey:
-[post-refactor architecture survey](../architecture/2026-09-20-post-refactor-architecture-survey.md).
+[post-refactor architecture survey](../../proposed/architecture/2026-09-20-post-refactor-architecture-survey.md).
 Closes the still-open rows of the 2026-09-10
-[collapse duplicate concepts](../architecture/2026-09-10-collapse-duplicate-concepts.md)
+[collapse duplicate concepts](../../proposed/architecture/2026-09-10-collapse-duplicate-concepts.md)
 census that fall in this territory; families C, D and E of that note are
 already closed or owned elsewhere and are not restated.
 

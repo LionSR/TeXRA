@@ -675,7 +675,7 @@ export function buildErrorLogData(
   err: unknown,
   context?: ErrorContext,
 ): ErrorLogData {
-  const formatted = normalizeProviderError(err);
+  const { rawErrorBody: _body, ...formatted } = normalizeProviderError(err);
   const rawMessage = toErrorMessage(err);
 
   return {

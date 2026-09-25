@@ -7,11 +7,15 @@
  * `error(msg, { data: buildErrorLogData(...), messageType })` blocks so
  * call sites stay 1 line.
  *
- * `createTranscriptFold` maps every domain `key` here onto a TeXRA
+ * The transcript fold maps every domain `key` here onto a TeXRA
  * `MessageType`, and renders `level=error` with `messageType: ERROR` as an
  * error row.
  */
-import { buildErrorLogData } from '@common/errors/sdkError/providerErrorFormat';
+import {
+  buildErrorLogData,
+  normalizeProviderError,
+} from '@common/errors/sdkError/providerErrorFormat';
+import { createLog } from '@logger/logUtils';
 import {
   MESSAGE_TYPES,
   type CompactionActivityData,
@@ -38,6 +42,14 @@ export function logSdkError(
   stageId?: string,
 ): void {
   logErrorData(trace, message, buildErrorLogData(err, context), stageId);
+  // The provider's raw response body stays out of the stream log, since it
+  // can echo the request; it is a diagnostic for the process log.
+  const body = normalizeProviderError(err).rawErrorBody;
+  if (body !== undefined) {
+    createLog('agentTrace').warn(`${message} (provider response body)`, {
+      data: body,
+    });
+  }
 }
 
 /** Emit an error log with a pre-serialized data payload. */
@@ -215,7 +227,7 @@ export function logFileCategory(
  * The retained `updateConversationProgress` host event is projected from this
  * run fact by the session progress projector instead of flow code calling
  * `session.interactions.emit` directly.
- * Never rendered as a transcript row (suppressed in `createTranscriptFold`)
+ * Never rendered as a transcript row (suppressed in the transcript fold)
  * — it is a UI-only signal, not a log line. Round labels come from typed
  * `stage.start` metadata with `kind: "round"`.
  */

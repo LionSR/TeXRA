@@ -315,7 +315,7 @@ function entryLines(
       return [
         ...wrapWithPrefix(
           // `row.heading` is `formatWorkflowPhaseHeading` over the same three
-          // fields, computed once by `projectTranscriptRow`.
+          // fields, computed once by `phaseRow`.
           `${STATUS_DIAMOND} ${headline}`,
           columns,
           ROW_GEOMETRY.phase.firstPrefix,

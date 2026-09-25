@@ -100,34 +100,54 @@ export function overleafTokenSpec(remote: OverleafRemote): OverleafTokenSpec {
   };
 }
 
-/** A git credential ready to embed in a remote URL, plus its redaction forms. */
-export interface GitCredential {
-  /** Embedded in the remote URL as the userinfo component. */
-  remote: string;
-  /** Raw and encoded token forms to redact from logs and error messages. */
-  sensitive: string[];
+/**
+ * Environment variable the per-invocation credential helper reads the token
+ * from. Set only on the `git` process that needs it.
+ */
+const GIT_TOKEN_ENV = 'TEXRA_GIT_TOKEN';
+
+/**
+ * A credential helper that answers git's `get` with the token in
+ * {@link GIT_TOKEN_ENV}. `printf`, not `echo`: some shells' `echo` rewrites
+ * backslashes, and a ShareLaTeX password may hold one.
+ */
+const TOKEN_HELPER = `!f() { test "$1" = get && printf 'password=%s\\n' "$${GIT_TOKEN_ENV}"; }; f`;
+
+/** A `git clone` of an Overleaf/ShareLaTeX project that authenticates with a token. */
+export interface OverleafGitClone {
+  /**
+   * `git` arguments. The remote URL carries no credential, so the clone's
+   * `.git/config` holds none; the configured credential helpers are cleared
+   * for this one invocation and replaced by {@link TOKEN_HELPER}.
+   */
+  readonly args: readonly string[];
+  /** Environment additions for that `git` process: the token for the helper. */
+  readonly env: Readonly<Record<string, string>>;
+  /**
+   * Input for `git credential approve` once the clone succeeds, which hands
+   * the token to the user's own credential helper (a keychain, the Git
+   * credential manager) so a later pull or push authenticates. With no
+   * helper configured git asks for the token instead.
+   */
+  readonly approval: string;
 }
 
-/** Build the `git:<encoded>` userinfo credential for a raw token. */
-export function buildGitCredential(token: string): GitCredential {
-  const encoded = encodeURIComponent(token);
-  return { remote: `git:${encoded}`, sensitive: [token, encoded] };
-}
-
-/** Construct the authenticated HTTPS clone URL for a remote + credential. */
-export function buildAuthenticatedRemoteUrl(
+/** The clone of `remote` into the current directory, authenticated with `token`. */
+export function overleafGitClone(
   remote: OverleafRemote,
-  credential: GitCredential,
-): string {
-  return `https://${credential.remote}@${remote.host}${remote.path}`;
-}
-
-/** Replace every sensitive token form in `message` with `***`. */
-export function redactSensitive(
-  message: string,
-  sensitive: readonly string[],
-): string {
-  let redacted = message;
-  for (const s of sensitive) redacted = redacted.replaceAll(s, '***');
-  return redacted;
+  token: string,
+): OverleafGitClone {
+  return {
+    args: [
+      '-c',
+      'credential.helper=',
+      '-c',
+      `credential.helper=${TOKEN_HELPER}`,
+      'clone',
+      `https://git@${remote.host}${remote.path}`,
+      '.',
+    ],
+    env: { [GIT_TOKEN_ENV]: token },
+    approval: `protocol=https\nhost=${remote.host}\nusername=git\npassword=${token}\n\n`,
+  };
 }

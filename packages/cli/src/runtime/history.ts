@@ -14,7 +14,6 @@ import {
 import type { AgentConfig, SessionHandle } from '@agent/runtime';
 import { loadChatExportInput, type ChatExportInput } from '@agent/export';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
-import { redactDisplayValue } from '@logger/redaction';
 import {
   RunIdSchema,
   aggregateTarget,
@@ -254,7 +253,7 @@ export const readCliHistoryDetails = Effect.fn('cli.readCliHistoryDetails')(
     ) {
       return null;
     }
-    return redactDisplayValue({
+    return {
       id,
       status: standing.status,
       run: run
@@ -274,7 +273,7 @@ export const readCliHistoryDetails = Effect.fn('cli.readCliHistoryDetails')(
       files,
       hasFlowRecord: checkpointPresent,
       currentModel,
-    }) satisfies CliHistoryDetails;
+    } satisfies CliHistoryDetails;
   },
 );
 
@@ -564,7 +563,7 @@ const toCliHistoryEntry = Effect.fn('history.toCliHistoryEntry')(function* (
     },
     session,
   );
-  return redactDisplayValue({
+  return {
     id: entry.id,
     timestamp: entry.timestamp,
     agent: config.agent,
@@ -579,7 +578,7 @@ const toCliHistoryEntry = Effect.fn('history.toCliHistoryEntry')(function* (
     description: entry.description,
     teamPresetId: teamPresetId(config),
     parentRunId: entry.parentRunId,
-  });
+  };
 });
 
 function teamPresetId(config: AgentConfig | null): string | undefined {

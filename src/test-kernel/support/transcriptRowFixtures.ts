@@ -1,8 +1,8 @@
-// Test-only builders for stream-log projections the suites replay.
+// Test-only builders for the transcript rows the suites replay.
 //
 // The CLI paints `@ui/transcript` rows directly, so a tool row is a
-// normalized payload plus the shared fold over it — exactly what
-// `projectTranscriptRow` hands the painter. Suites that hand-build rows
+// normalized payload plus the shared fold over it, as `toolRow` hands the
+// painter. Suites that hand-build rows
 // (ToolRenderers, ConversationTranscript, SubagentListDisplay,
 // StaticBandResize, TuiStateAndFocus) construct them here so the payload and
 // its model can never drift apart in a fixture.
@@ -59,6 +59,11 @@ export function toolRowFixture(
     ...(settlementSeqNo !== undefined ? { settlementSeqNo } : {}),
     toolUse: normalized,
     model: toolRowModel(normalized),
+    log: {
+      toolName: normalized.toolName,
+      input: normalized.input,
+      status: normalized.status,
+    },
   };
 }
 

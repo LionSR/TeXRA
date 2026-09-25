@@ -127,7 +127,10 @@ import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
-import { testRunHandle } from '@test/support/runHandleFixtures';
+import {
+  admitInterruptibleRun,
+  testRunHandle,
+} from '@test/support/runHandleFixtures';
 import {
   createTestSession,
   publishTestRunStart,
@@ -692,16 +695,6 @@ describe('createChatSessionController', () => {
               parent: runId,
               agent: 'child',
             });
-            rootHandle.attachInterruptHandler({
-              interrupt: () => {
-                runs.untrack(runId);
-                rootRunResult.resolve({
-                  category: 'toolUse',
-                  runId,
-                  outcome: RUN_OUTCOME.CANCELLED,
-                });
-              },
-            });
             // A launch states both runs in the plane before it tracks them: the
             // stop publishes `run.detach` on the child's own aggregate, and a run
             // aggregate opens with its `run.start` and nothing else.
@@ -709,6 +702,17 @@ describe('createChatSessionController', () => {
             publishTestRunStart(runtimeSession, childRun, { parent: runId });
             runs.track(rootHandle);
             runs.track(childHandle);
+            // The root run's stop is its roster fiber's interruption: the
+            // stop lands there, untracks the root, and the run resolves
+            // cancelled through its own result.
+            admitInterruptibleRun(runs, runId, () => {
+              runs.untrack(runId);
+              rootRunResult.resolve({
+                category: 'toolUse',
+                runId,
+                outcome: RUN_OUTCOME.CANCELLED,
+              });
+            });
             options.onRunResolved?.(runId);
             return rootRunResult.promise;
           },
