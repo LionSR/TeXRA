@@ -37,7 +37,10 @@ import {
 } from '@shared/constants/delegationTools';
 import { deriveRunId } from '@utils/core/idHash';
 import { convertToolSchema } from '@agent/runtime/run/toolSchema';
-import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
+import {
+  nativeToolTestLayer,
+  testModelCell,
+} from '@test/support/nativeToolTestLayer';
 
 setupPlatform({
   storagePath: fakePath('storage'),
@@ -162,6 +165,7 @@ function toolLayer(stopAfterCycle = false) {
         agent: 'chat',
         model: 'parent-model',
       }),
+      model: testModelCell('parent-model'),
       logger: new TraceEmitter(),
       toolPolicy: { stopAfterCycle },
     },

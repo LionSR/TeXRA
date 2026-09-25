@@ -918,10 +918,10 @@ function applyOwnArm(run: RunView, event: OwnEvent): RunView {
       // start is a no-op. The rest move session slices alone.
       return run;
     case 'run.activate': {
-      // Every activation, the launch and each resume, opens a running
-      // window (one run model, 3.3): the phase, the run window and a fresh
-      // incarnation's progress fold from it. A first activation is starting
-      // and a later one resuming (A9-1); the first `flow.step` clears it.
+      // Every activation, the launch and each resume, opens a running window
+      // (one run model, 3.3); the tool-call count is the run's and carries
+      // over. A first activation is starting and a later one resuming (A9-1);
+      // the first `flow.step` clears it.
       let substate: RunView['substate'] = null;
       if (isPlainAgentIdentity(run.identity)) {
         substate =
@@ -935,7 +935,6 @@ function applyOwnArm(run: RunView, event: OwnEvent): RunView {
         substate,
         runStartedAt: event.at,
         flow: null,
-        conversationProgress: { toolCallCount: 0 },
       };
     }
     case 'run.config': {

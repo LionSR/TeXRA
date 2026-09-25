@@ -264,7 +264,7 @@ function agentRunTestLayer(init: HarnessInit) {
           },
           { agentName: 'chat', agentCategory: AgentCategory.ToolUse },
         ),
-        callbacks: { onModelChanged: vi.fn() },
+        callbacks: {},
       } satisfies AgentRunShape;
     }),
   );

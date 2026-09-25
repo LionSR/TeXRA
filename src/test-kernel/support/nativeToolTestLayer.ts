@@ -1,9 +1,10 @@
 /** Explicit call capabilities over the test host's existing process services. */
-import { Context, Layer, Scope } from 'effect';
+import { Context, Layer, Scope, SynchronizedRef } from 'effect';
 
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { FileInteractionState } from '@agent/core/state/AgentWorkspaceState';
 import { Runs } from '@agent/runtime/runRegistry';
+import type { BoundModel } from '@agent/runtime/run/modelBinding';
 import { ToolCall, type ToolCallShape } from '@agent/runtime/ToolCall';
 import { sessionFsLayer } from '@platform/rootedFs';
 import { noopTrace } from '@test/support/noopTrace';
@@ -19,6 +20,10 @@ type CallRun = NonNullable<ToolCallShape['run']>;
  *  else of the run the case under test actually reads. */
 type TestCallRun = Pick<CallRun, 'session' | 'runId' | 'toolPolicy'> &
   Partial<CallRun>;
+
+/** A run's live model cell holding only the id a tool reads off it. */
+export const testModelCell = (modelId: string) =>
+  SynchronizedRef.makeUnsafe({ modelId } as BoundModel);
 
 /** A pinned composition with no plugins, for a run fixture offered none. */
 export const emptyPinnedComposition: PinnedComposition = {
@@ -57,6 +62,7 @@ export function nativeToolTestLayer(
       // care about either gets the inert pair.
       run: run && {
         config: AgentConfigSchema.parse({ agent: 'test', model: 'test-model' }),
+        model: testModelCell('test-model'),
         logger: noopTrace,
         composition: emptyPinnedComposition,
         scope: Scope.makeUnsafe(),
