@@ -12,6 +12,8 @@
  */
 import { z } from 'zod';
 
+import type { SessionTitleState } from '@shared/sessionTitle';
+
 import {
   AgentCategory,
   AggregateIdSchema,
@@ -41,7 +43,7 @@ import {
   type PermissionPayload,
   type RunId,
 } from '@shared/schemas';
-import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
+import { isActivePhase, isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import { RUN_STATUS_TONE } from '@shared/runs/runStatusDisplay';
 import type { WorkflowRunModel } from '@shared/runs/workflowRunModel';
 import type { TranscriptRow } from '@ui/transcript';
@@ -320,6 +322,67 @@ const SessionViewSchema = z.object({
   queuedFollowUps: z.map(RunIdSchema, z.array(QueuedFollowUpViewSchema)),
 });
 export type SessionView = z.infer<typeof SessionViewSchema>;
+
+type PendingRequest = SessionView['requests'][number];
+
+/** What in one session wants the user of this window. */
+export interface Attention {
+  /** The requests this window can answer (`requestAnswerability`), in fold
+   *  order: what every badge counts. */
+  readonly requests: readonly PendingRequest[];
+  /** Those `previous` could not answer: what brings a run forward or raises
+   *  a notification. Empty without a `previous`, since the first view a
+   *  host reads is history, not news. */
+  readonly arrived: readonly PendingRequest[];
+}
+
+function answerableRequests(view: SessionView): PendingRequest[] {
+  return view.requests.filter((request) => {
+    const run = view.runs.get(request.runId);
+    return (
+      run !== undefined &&
+      requestAnswerability(run, request.payload) === 'answerable'
+    );
+  });
+}
+
+/**
+ * The one attention rule every host reads (the extension's sidebar badge and
+ * reveal, the desktop's dock badge, notifications, and rail): a request
+ * wants the user exactly when this window can answer it, whatever its kind.
+ * A request on a run another process holds, or one waiting for its run's
+ * resume, is shown on its card but asks nothing of this window.
+ */
+export function attentionOf(
+  view: SessionView,
+  previous?: SessionView,
+): Attention {
+  const requests = answerableRequests(view);
+  if (previous === undefined) return { requests, arrived: [] };
+  const known = new Set(
+    answerableRequests(previous).map((request) => request.requestId),
+  );
+  return {
+    requests,
+    arrived: requests.filter((request) => !known.has(request.requestId)),
+  };
+}
+
+/** A live run working right now: not a conversation parked on its user. */
+export function isWorkingRun(run: RunView): boolean {
+  return isLiveRun(run) && isActivePhase(run.status);
+}
+
+/**
+ * The paper-level activity every title and status pill shows, read from the
+ * fold and nothing else: a request this window can answer outranks a run
+ * working right now; a conversation parked on its user is idle.
+ */
+export function sessionActivity(view: SessionView): SessionTitleState {
+  if (answerableRequests(view).length > 0) return 'approval';
+  for (const run of view.runs.values()) if (isWorkingRun(run)) return 'running';
+  return 'idle';
+}
 
 /**
  * The empty view a fold starts from: keyed by its session, its cursor at the

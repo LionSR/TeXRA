@@ -50,9 +50,7 @@ const dismissFailed = (cause: unknown) =>
  * rejected with, which the request's dialog classifies and presents as it
  * presented the bare rejection.
  */
-export class OnboardingCallFailed extends Data.TaggedError(
-  'OnboardingCallFailed',
-)<{
+class OnboardingCallFailed extends Data.TaggedError('OnboardingCallFailed')<{
   readonly member: string;
   readonly message: string;
   readonly cause: unknown;

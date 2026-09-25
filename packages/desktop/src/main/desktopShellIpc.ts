@@ -63,6 +63,8 @@ interface DesktopShellActionFactoryOptions extends Pick<
     FileSystem.FileSystem | Path.Path | ProjectDatabases | ChildProcessSpawner
   >;
   signIn(): Effect.Effect<void, Error>;
+  /** The shown project's surfaces take the New-task state. */
+  showLauncher(): void;
   onAsyncError: (error: unknown) => void;
   /** The process runtime the composition root built; every shell action's
    *  program is forked on it rather than on a bare `Effect.run*`. */
@@ -141,14 +143,6 @@ export function createDesktopShellActions(
     runShellAction(openCustomAgentDirectory);
   }
 
-  // New Task, the header's "+" (PRD 12.4): the New-task state with the
-  // launcher's selections as they are.
-  function showLauncher() {
-    renderer.postToRenderer({
-      command: DESKTOP_SHELL_COMMANDS.SHOW_LAUNCHER,
-    });
-  }
-
   function toggleLayout(panel: DesktopLayoutPanel) {
     renderer.postToRenderer({
       command: DESKTOP_SHELL_COMMANDS.TOGGLE_LAYOUT,
@@ -170,7 +164,10 @@ export function createDesktopShellActions(
         command: DESKTOP_SHELL_COMMANDS.SAVE_FILE,
       });
     },
-    showLauncher,
+    // New Task, the header's "+" (PRD 12.4): the New-task state with the
+    // launcher's selections as they are, a surface action as the extension
+    // sends it.
+    showLauncher: options.showLauncher,
     openWorkbench,
     showSettings,
     toggleBottomBar: () => toggleLayout('bottomBar'),
