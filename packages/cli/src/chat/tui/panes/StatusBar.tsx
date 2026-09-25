@@ -232,7 +232,6 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
       : undefined;
   const now = useLiveNowMsSince([runStartedAt]);
 
-  const subagentCount = displayRun?.rollup.total ?? 0;
   // Every request awaiting the user: the fold's pending approvals, the
   // same list the modal and the title read.
   const attention = attentionRequests(view);
@@ -249,30 +248,14 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
       ? undefined
       : ancestorPositionLabel(view, focusedRunId);
 
-  const display = buildStatusBarDisplay({
-    status: displayStatus,
-    statusLabel: displayRun?.statusLabel,
+  const display = buildStatusBarDisplay(displayRun, view, {
     turn: {
       elapsedMs: runStartedAt !== undefined ? now - runStartedAt : undefined,
       runningFrame:
         runStartedAt !== undefined ? loadingFrameAt(now) : undefined,
-      thinkingActive: displayRun?.thinkingActive ?? false,
-      compactingActive: displayRun?.compactingActive ?? false,
     },
     transientNotice,
     commandName: props.commandName,
-    bypass:
-      displayRunId === undefined
-        ? undefined
-        : view.policy.get(displayRunId)?.bypasses,
-    queuedFollowUpMessages: (displayRunId === undefined
-      ? []
-      : (view.queuedFollowUps.get(displayRunId) ?? [])
-    ).map((followUp) => followUp.text),
-    usage: displayUsage,
-    contextState: displayRun?.context ?? undefined,
-    flow: displayRun?.flow ?? undefined,
-    subagents: subagentCount,
     runningSessions: props.runningSessions ?? 0,
     approvalDepth: attention.length,
     approvalKind: approvalQueueStatusKind(
@@ -284,7 +267,6 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     approvalPolicy: sessionMeta.approvalPolicy,
     width: columns,
     ctrlCAction: target.ctrlCAction,
-    isChildRun: target.isChildRun,
     location:
       focusedLabel === undefined
         ? undefined

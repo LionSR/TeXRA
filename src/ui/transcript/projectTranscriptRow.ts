@@ -65,7 +65,7 @@ interface TranscriptRowContext {
    *  opening it. Phase headers are unaffected — they stay transcript rows
    *  everywhere. */
   readonly projectLifecycleToTaskGroups?: boolean;
-  /** Subagent run id -> label, for the `executions` tool header. */
+  /** The session's runs by id, for the `executions` tool header. */
   readonly runLabels?: ToolRowModelContext['runLabels'];
 }
 

@@ -4,7 +4,7 @@
 
 import { Box, Text } from 'ink';
 
-import { fillRows } from '@cli/runtime/terminalText';
+import { fillRows, safeTerminalText } from '@cli/runtime/terminalText';
 import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
 import { clampModalWidth } from '@cli/tui/ui/theme';
 import { clamp } from '@utils/core';
@@ -37,7 +37,10 @@ export function diffDisplayLines(hunks: readonly Hunk[]): DiffDisplayLine[] {
     { kind: 'header' as const, text: formatHunkHeader(hunk) },
     ...hunk.lines
       .filter((line) => !line.startsWith(NO_NEWLINE_MARKER))
-      .map((line): DiffDisplayLine => {
+      .map((raw): DiffDisplayLine => {
+        // File text is producer text: strip what a terminal would execute.
+        // A patch line is one row, so a CR (a CRLF file) opens no new one.
+        const line = safeTerminalText(raw).replaceAll('\n', '');
         const marker = line.at(0);
         if (marker === '+') return { kind: 'added', text: line };
         if (marker === '-') return { kind: 'removed', text: line };
@@ -116,7 +119,8 @@ function representativeDiffLineIndex(
 }
 
 /** Wrapped diff lines bounded to `maxDisplayLines`; 0 = no truncation. An
- *  omitted `scrollOffset` anchors compact windows on the first change. */
+ *  omitted `scrollOffset` anchors compact windows on the first change.
+ *  `width` is already clamped by the `DiffView` entry point. */
 export function scrollBoundedDiffDisplayLines(
   hunks: readonly Hunk[],
   maxDisplayLines: number,
@@ -132,7 +136,7 @@ export function scrollBoundedDiffDisplayLines(
       (maxDisplayLines <= COMPACT_SCROLLABLE_CONTENT_ROWS
         ? representativeDiffLineIndex(lines)
         : 0),
-    width: clampModalWidth(width),
+    width,
   });
 }
 
@@ -207,9 +211,6 @@ function DiffLine({
   readonly line: DiffDisplayLine;
   readonly width: number;
 }): React.JSX.Element {
-  // Every line reaching here already came through `wrappedDiffDisplayLines`
-  // (or the width-clipped overflow marker), and `clampModalWidth` is
-  // idempotent, so a second wrap could not split anything.
   const style = DIFF_LINE_STYLE[line.kind];
   if (style) {
     return (

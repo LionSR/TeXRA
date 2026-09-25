@@ -64,7 +64,7 @@ import {
   isInFlightPhase,
   isTerminalOutcomePhase,
 } from '@shared/runs/runStatus';
-import { descendantRuns } from '@shared/session/sessionView';
+import { acceptsFollowUp, descendantRuns } from '@shared/session/sessionView';
 import type { StreamLogAppendInput } from '@shared/session/traceEntries';
 import {
   buildScenario,
@@ -97,18 +97,19 @@ import {
   openRegisteredCliSlashForm,
 } from '../src/chat/tui/commands/slashForms';
 import {
-  activeRunId as activeRunIdSignal,
   claimedRunId,
+  focusRun,
   rootRunPending,
   rootRunId,
   resetCliState,
+  selectedRunId,
   sessionMeta,
   setCliSessionModelOverride,
 } from '../src/chat/tui/state/cliState';
 import {
   bindSessionView,
   currentView,
-  focusedChildAcceptsFollowUps,
+  CLI_FOLLOW_UP_HOST,
   runningChildCount,
   sessionView,
   runViewOf,
@@ -1126,7 +1127,7 @@ sessionMeta.set({
 });
 // The harness root: minted before any fixture, like a real run's start.
 seedRun(HARNESS_RUN_ID);
-activeRunIdSignal.set(HARNESS_RUN_ID);
+focusRun(HARNESS_RUN_ID);
 rootRunId.set(HARNESS_RUN_ID);
 seedRows(HARNESS_RUN_ID, harnessInitialEntries());
 publish(
@@ -1233,7 +1234,7 @@ function seedRunningProcessChild(): void {
   });
   seedDescription(childRunId, 'sleep 30');
   seedPhase(childRunId, RUN_PHASE.RUNNING);
-  activeRunIdSignal.set(childRunId);
+  focusRun(childRunId);
 }
 
 if (SHOW_CHILDREN) {
@@ -1417,7 +1418,7 @@ if (SHOW_BASH_APPROVAL) {
     let pollCount = 0;
     const timer = setInterval(() => {
       pollCount += 1;
-      const activeRunId = activeRunIdSignal.get();
+      const activeRunId = selectedRunId.get();
       if (activeRunId === undefined || activeRunId === HARNESS_RUN_ID) {
         if (pollCount >= 200) clearInterval(timer);
         return;
@@ -1566,9 +1567,9 @@ function markHarnessRunStopped(runId: RunId): void {
 function handleHarnessSubmit(line: string): void {
   if (handleHarnessSlashCommand(line)) return;
   const view = currentView();
-  const focused = runViewOf(view, activeRunIdSignal.get());
+  const focused = runViewOf(view, selectedRunId.get());
   if (focused && focused.parentId !== null) {
-    if (!focusedChildAcceptsFollowUps(focused)) {
+    if (!acceptsFollowUp(focused, CLI_FOLLOW_UP_HOST)) {
       appendHarnessAssistantTranscript(
         FOCUSED_BACKGROUND_TASK.selectedNoLongerAccepting,
         focused.id,
@@ -1584,7 +1585,7 @@ function handleHarnessSubmit(line: string): void {
 function appendHarnessStatus(): void {
   const meta = sessionMeta.get();
   const view = currentView();
-  const runId = activeRunIdSignal.get() ?? HARNESS_RUN_ID;
+  const runId = selectedRunId.get() ?? HARNESS_RUN_ID;
   const run = runViewOf(view, runId);
   appendHarnessAssistantTranscript(
     formatCliSessionStatus({
@@ -1850,7 +1851,7 @@ if (process.env.HARNESS_SESSION_TREE === '1') {
   const ref = await harnessRuntime.runPromise(SubscriptionRef.make(view));
   HARNESS_DISPOSERS.push(bindSessionView(harnessRuntime, ref));
   rootRunId.set(interrupted);
-  activeRunIdSignal.set(PROCESS);
+  focusRun(PROCESS);
 }
 
 const ink = render(renderHarnessApp(), {

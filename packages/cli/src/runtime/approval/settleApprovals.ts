@@ -28,7 +28,7 @@ import {
 
 import { type CliContext } from '../cliContext';
 
-import { warnApprovalDenied } from './approvalPrompts';
+import { policyDenialOf, warnApprovalDenied } from './approvalPrompts';
 
 function canPresent(context: CliContext): boolean {
   return context.mode === 'interactive';
@@ -52,15 +52,31 @@ function executableDecision(
 }
 
 /**
- * Whether this run can never present an approval prompt, so the runtime should
- * withhold approval-gated tools up front rather than let each request settle as
- * denied. Callers pass the launch-time policy the run is pinned to.
+ * The approval options of every CLI tool-use launch. When this run can never
+ * present an approval prompt, the runtime withholds approval-gated tools up
+ * front rather than let each request settle as denied; a policy denial warns
+ * once. The policy is the session's at launch, the one the run is pinned to.
  */
-export function cliApprovalPromptsUnavailable(
+export function cliToolUseApprovalOptions(
+  session: SessionHandle,
   context: CliContext,
-  policy: TexraApprovalPolicy,
-): boolean {
-  return isTexraApprovalDenied(executableDecision(context, policy));
+  runId?: RunId,
+): {
+  readonly approvalPromptsUnavailable: boolean;
+  readonly onApprovalPolicyDenial: (withheldTools?: readonly string[]) => void;
+} {
+  return {
+    approvalPromptsUnavailable: isTexraApprovalDenied(
+      executableDecision(context, session.approvalPolicy),
+    ),
+    onApprovalPolicyDenial: (withheldTools) =>
+      warnApprovalDenied(
+        session,
+        context,
+        policyDenialOf(withheldTools),
+        runId,
+      ),
+  };
 }
 
 /** The policy's answer for a gated executable request, or `undefined` to

@@ -32,8 +32,7 @@ import {
 import { aggregateError, generateRunId } from '@utils/core';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
-import { policyDenialOf, warnApprovalDenied } from './approval/approvalPrompts';
-import { cliApprovalPromptsUnavailable } from './approval/settleApprovals';
+import { cliToolUseApprovalOptions } from './approval/settleApprovals';
 import { createHeadlessCliHostInteractions } from './approvalAdapter';
 import {
   advertisesInterruptedRun,
@@ -552,12 +551,7 @@ export function executeCliRequest(
           ownedRunId = runId;
         },
         stopAfterCycle: options.stopAfterCycle,
-        approvalPromptsUnavailable: cliApprovalPromptsUnavailable(
-          runContext,
-          runContext.approvalPolicy,
-        ),
-        onApprovalPolicyDenial: (withheld) =>
-          warnApprovalDenied(session, runContext, policyDenialOf(withheld)),
+        ...cliToolUseApprovalOptions(session, runContext),
       });
 
     let runResult:

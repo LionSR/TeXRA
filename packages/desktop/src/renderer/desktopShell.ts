@@ -14,7 +14,7 @@ import { html, nothing, type TemplateResult } from 'lit';
 import type { ProjectDisplay } from '@shared/session/hostSnapshot';
 import type { SessionView } from '@shared/session/sessionView';
 import type { Shell } from '@shared/session/shell';
-import { resolveSelected, type Surface } from '@shared/session/surface';
+import type { Surface } from '@shared/session/surface';
 import { SessionUiEvents } from '@shared/session/uiEvents';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
 import type { TeXRAIconName } from '@ui/wa/iconNames';
@@ -139,8 +139,8 @@ function childRunsAccess(
   callbacks: ShellSidebarCallbacks,
 ): TemplateResult | typeof nothing {
   const { view, surface } = project;
-  const selected = resolveSelected(view, surface);
-  const run = selected === null ? undefined : view.runs.get(selected);
+  const run =
+    surface.selected === null ? undefined : view.runs.get(surface.selected);
   const rootId = run?.ancestors[0]?.id ?? run?.id;
   const root = rootId === undefined ? undefined : view.runs.get(rootId);
   if (root === undefined || root.rollup.total === 0) return nothing;

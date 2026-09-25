@@ -78,7 +78,7 @@ import { announceForegroundApprovals } from './state/subscribeApprovals';
 import { subscribeCliCredentialChanges } from './hosts/cliProviderKeys';
 import { createTuiViewportController } from './render/tuiViewportController';
 import {
-  activeRunId as activeRunIdSignal,
+  selectedRunId as selectedRunIdSignal,
   resetCliState,
   patchSessionMeta,
   sessionViewFailure as sessionViewFailureSignal,
@@ -407,7 +407,7 @@ export async function runChat(
   disposables.add(setCliAgentResumeHandler(chatController.tryResumeRun));
 
   const resetSessionForClear = (): void => {
-    const currentRunId = session.runId ?? activeRunIdSignal.get();
+    const currentRunId = session.runId ?? selectedRunIdSignal.get();
     const activeStatus = runPhaseOf(runViewOf(currentView(), currentRunId));
     const isRunPending = chatTuiRunPending(session);
 

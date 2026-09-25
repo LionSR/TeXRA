@@ -70,7 +70,7 @@ function openDialog<T>(
       // latched: a second keypress landing between the answer and the
       // unmount must not resume this fiber twice.
       let settled = false;
-      const form = {
+      const form = openActiveForm({
         commandName,
         render: (onDone: () => void, availableRows: number) =>
           render((value) => {
@@ -79,8 +79,7 @@ function openDialog<T>(
             onDone();
             resume(Effect.succeed(value));
           }, availableRows),
-      };
-      openActiveForm(form);
+      });
       return Effect.sync(() => closeActiveForm(form));
     }),
   );

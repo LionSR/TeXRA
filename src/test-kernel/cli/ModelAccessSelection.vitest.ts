@@ -10,7 +10,6 @@ import {
   buildCliModelAccessItems,
   formatCliModelAccessRoute,
   formatCliModelAccessRouteInline,
-  shortCliModelAccessRoute,
 } from '@cli/runtime/modelAccessRoute';
 import { AppState, type StateWriteFailed } from '@platform/interfaces';
 import { Secrets } from '@platform/secrets';

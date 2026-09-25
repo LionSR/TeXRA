@@ -182,7 +182,7 @@ export interface ToolRowModel {
 }
 
 export interface ToolRowModelContext {
-  /** Subagent run id -> label, for the `executions` header summary. */
+  /** The session's runs by id, for the `executions` header summary. */
   readonly runLabels?: RunLabels;
   /** The raw `data.output` of the tool-use payload. Structured sections read
    *  it directly (MCP content blocks, edit start lines, per-file line
@@ -210,14 +210,11 @@ function headerSummaryText(summary: string): string {
  * The header preview both hosts show, and the only statement of its
  * precedence: a shell call is described by its command, so `bash`-kind tools
  * prefer the input preview; every other tool reports its own summary first and
- * falls back to the input preview while it is still in flight.
- *
- * Exported because subagent run labels exist only at paint time in the
- * terminal (they name live executions), so the CLI re-derives the preview once
- * the labels are known rather than restating the precedence over the model's
- * already-computed value.
+ * falls back to the input preview while it is still in flight. An
+ * `executions` call names its child runs by label: the session fold passes
+ * its runs as `runLabels`, so the label lands in the row once, for every host.
  */
-export function toolHeaderPreview(
+function toolHeaderPreview(
   normalized: NormalizedToolUse,
   ctx: ToolRowModelContext,
 ): string {

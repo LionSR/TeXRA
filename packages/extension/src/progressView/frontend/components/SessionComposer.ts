@@ -680,10 +680,10 @@ export class SessionComposer extends LitElement {
     ).map((followUp) => followUp.text);
     const text = this.text;
     const hasText = text.trim() !== '';
-    // A follow-up's Send and the Cmd+Alt+E accelerator read one rule
-    // (`canSendFollowUp`); the launcher has no run and no draft images,
-    // so its own Run turns on the instruction alone.
-    const canSend = run ? canSendFollowUp(run, this.draft) : hasText;
+    // Send and Cmd+Alt+E share `canSendFollowUp`; the launcher needs text.
+    const canSend = run
+      ? canSendFollowUp(run, this.draft, { terminalBacked: true })
+      : hasText;
     const sendLabel = compact ? 'Send follow-up' : 'Run';
 
     return html`
