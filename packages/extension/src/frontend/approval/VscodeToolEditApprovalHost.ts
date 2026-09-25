@@ -7,9 +7,7 @@
  * it leaves the request pending on its card, where Open diff reopens it.
  */
 
-import { mkdir } from 'node:fs/promises';
-
-import { Effect } from 'effect';
+import { Effect, FileSystem } from 'effect';
 import * as vscode from 'vscode';
 
 import type { SessionHandle } from '@agent/runtime';
@@ -18,7 +16,7 @@ import type {
   ToolEditPreview,
   ToolEditPreviewContext,
 } from '@controllers/approval/ToolEditApprovalController';
-import { fromHost } from '@controllers/session/hostCallFailure';
+import { fromHost, hostFailure } from '@controllers/session/hostCallFailure';
 import {
   VscodeDiffViewHost,
   type DiffSession,
@@ -55,10 +53,11 @@ export class VscodeToolEditApprovalHost implements ToolEditApprovalHost {
   stagePreview(
     request: ToolEditApprovalRequest,
     context: ToolEditPreviewContext,
-  ): Effect.Effect<ToolEditPreview, HostRequestFailure> {
-    return fromHost('stagePreview.mkdir', () =>
-      mkdir(this.storageDirectory, { recursive: true }),
+  ): Effect.Effect<ToolEditPreview, HostRequestFailure, FileSystem.FileSystem> {
+    return FileSystem.FileSystem.use((fs) =>
+      fs.makeDirectory(this.storageDirectory, { recursive: true }),
     ).pipe(
+      Effect.mapError((cause) => hostFailure('stagePreview.mkdir', cause)),
       Effect.andThen(
         writeApprovalTempFiles({
           directory: this.storageDirectory,
@@ -144,7 +143,11 @@ class VscodeToolEditPreview implements ToolEditPreview {
     ).pipe(Effect.asVoid);
   }
 
-  readProposedContent(): Effect.Effect<string, HostRequestFailure> {
+  readProposedContent(): Effect.Effect<
+    string,
+    HostRequestFailure,
+    FileSystem.FileSystem
+  > {
     return this.diffViewHost.readProposedContent(this.diffSession);
   }
 

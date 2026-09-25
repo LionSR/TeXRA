@@ -1,13 +1,10 @@
-// Standard library imports
-import { watch } from 'node:fs';
-
 // Third-party imports
 import {
-  type Cause,
+  Cause,
   Effect,
   FileSystem,
   type PlatformError,
-  Queue,
+  Schedule,
   Stream,
 } from 'effect';
 import * as vscode from 'vscode';
@@ -31,9 +28,25 @@ import type { GlobalStorageFs } from '@platform/rootedFs';
 import { AGENT_SOURCE } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'AgentLoad';
+
+/**
+ * Retry only a runtime watcher error (Node's JS recursive watcher on Linux
+ * can fail mid-life, reported as `Unknown`), with bounded backoff; a missing
+ * or unreadable directory fails fast. The budget resets once an event passes.
+ */
+const EXTERNAL_WATCH_RECOVERY =
+  'agent edits there reload after the directory setting changes or the window reloads';
+
+const EXTERNAL_WATCH_RETRY = Schedule.exponential('1 second').pipe(
+  Schedule.upTo({ times: 5 }),
+  Schedule.while(
+    ({ input }: { readonly input: PlatformError.PlatformError }) =>
+      input.reason._tag === 'Unknown',
+  ),
+);
 
 /** The two host services `initialize()` hands the manager, kept together so
  *  one guard covers both. */
@@ -226,45 +239,65 @@ class AgentDirectoryManager {
     this.watcherDisposables.push(watcher);
   }
 
-  private watchExternalDirectory(directory: string) {
-    return Effect.try({
-      try: () =>
-        watch(directory, { recursive: true }, (event, name) => {
-          if (event === 'rename' || !name || name.endsWith('.yaml')) {
-            this.onAgentChange?.();
-          }
-        }),
-      catch: ensureError,
-    }).pipe(
-      Effect.flatMap((watcher) => {
-        this.watcherDisposables.push({ dispose: () => watcher.close() });
-        return Effect.gen(function* () {
-          // The 'error' listener is attached before this program yields and
-          // stays until close: Node's JS recursive watcher (Linux) can emit
-          // 'error' more than once without closing, and an emit with no
-          // listener throws out of the fs callback. A fiber that lives as
-          // long as the watcher logs each failure.
-          const errors = yield* Queue.unbounded<unknown, Cause.Done>();
-          watcher.on('error', (error) => Queue.offerUnsafe(errors, error));
-          watcher.once('close', () => Queue.endUnsafe(errors));
-          yield* Effect.forkDetach(
-            Stream.fromQueue(errors).pipe(
-              Stream.runForEach((error) =>
-                Effect.logWarning(
-                  `Agent directory watcher failed for ${directory}: ${toErrorMessage(error)}`,
-                ),
+  /**
+   * Node's recursive watcher over an external directory, as a stream fiber
+   * that lives until the watchers are disposed. A create or remove always
+   * rescans (a deleted folder reports only itself); an update rescans only
+   * for a `.yaml`. Interrupting the fiber closes the native watcher.
+   */
+  private watchExternalDirectory(
+    directory: string,
+  ): Effect.Effect<void, never, FileSystem.FileSystem> {
+    return Effect.gen({ self: this }, function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const fiber = yield* fs.watch(directory, { recursive: true }).pipe(
+        Stream.filter(
+          (event) => event._tag !== 'Update' || event.path.endsWith('.yaml'),
+        ),
+        // The tap sees only decisions that retry; a failure the schedule
+        // gives up on logs once, in the catch below.
+        Stream.retry(
+          EXTERNAL_WATCH_RETRY.pipe(
+            Schedule.tap(({ input }) =>
+              Effect.logWarning(
+                `Agent directory watcher failed for ${directory}; retrying: ${toErrorMessage(input.reason.cause ?? input)}`,
               ),
-              withLogChannel(CHANNEL),
             ),
-          );
-        });
-      }),
-      Effect.catch((error) =>
-        Effect.logWarning(
-          `Unable to watch agent directory ${directory}: ${toErrorMessage(error)}`,
-        ).pipe(withLogChannel(CHANNEL)),
-      ),
-    );
+          ),
+        ),
+        Stream.runForEach(() => Effect.sync(() => this.onAgentChange?.())),
+        // A stream that ends without an interrupt means the native watcher
+        // closed itself; watching has stopped either way.
+        Effect.andThen(() =>
+          Effect.logWarning(
+            `Stopped watching agent directory ${directory}; the native watcher closed. ${EXTERNAL_WATCH_RECOVERY}`,
+          ),
+        ),
+        Effect.catch((error: PlatformError.PlatformError) =>
+          Effect.logWarning(
+            `Stopped watching agent directory ${directory}; ${EXTERNAL_WATCH_RECOVERY}: ${toErrorMessage(error.reason.cause ?? error)}`,
+          ),
+        ),
+        // fs.watch can throw synchronously (ENOENT after a race, EMFILE,
+        // ENOSPC), which surfaces as a defect; this fiber is detached, so
+        // nothing else would report it.
+        Effect.catchCause((cause) =>
+          Cause.hasInterruptsOnly(cause)
+            ? Effect.void
+            : Effect.logWarning(
+                `Stopped watching agent directory ${directory}; ${EXTERNAL_WATCH_RECOVERY}: ${Cause.pretty(cause)}`,
+              ),
+        ),
+        withLogChannel(CHANNEL),
+        Effect.forkDetach,
+      );
+      // A VS Code disposable is synchronous and can run after deactivate
+      // has disposed the process runtime, so it interrupts through the
+      // fiber's own hook rather than forking onto that runtime.
+      this.watcherDisposables.push({
+        dispose: () => fiber.interruptUnsafe(),
+      });
+    });
   }
 
   private disposeAgentWatchers(): void {

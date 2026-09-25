@@ -1,21 +1,29 @@
-import { access } from 'node:fs/promises';
 import path from 'node:path';
 
-import { Data, Effect, type FileSystem, type Path } from 'effect';
+import {
+  Data,
+  Effect,
+  FileSystem,
+  type Path,
+  type PlatformError,
+} from 'effect';
 
-import { isFileNotFoundError } from '@common/errors';
 import { isLatexFile } from '@common/files/fileTypeUtils';
 import {
   ExternalOpenFailed,
   type ExternalOpener,
   type MessageHost,
 } from '@hosts/uiHosts';
+import {
+  type ProcessRuntime,
+  withProcessServices,
+} from '@platform/processRuntime';
 import { withSessionFs } from '@platform/rootedFs';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { FileLocation } from '@shared/schemas';
 import type { BuildDisplayFn } from '@tools/approval/latexPreview';
 import { createExternalLocation } from '@utils/files/fileLocation';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
   DESKTOP_PDF_COMMANDS,
@@ -68,6 +76,9 @@ interface DesktopPreviewHost {
 
 interface DesktopPreviewHostOptions extends DesktopOverlayPostOptions {
   shell: DesktopShellAdapter;
+  /** The process runtime the window was handed. It only supplies the
+   *  filesystem `openPath` probes through; nothing settles on it. */
+  runtime: ProcessRuntime;
   showErrorMessage?: MessageHost['showErrorMessage'];
 }
 
@@ -105,19 +116,21 @@ export function createDesktopPreviewHost(
 
   function ensurePathExists(
     filePath: string,
-  ): Effect.Effect<void, PreviewUnavailable> {
-    return Effect.tryPromise({
-      try: () => access(filePath),
-      catch: (error) =>
-        isFileNotFoundError(error)
-          ? `File not found: ${filePath}`
-          : `Cannot access file ${filePath}: ${toErrorMessage(error)}`,
-    }).pipe(Effect.catch(fail));
+  ): Effect.Effect<void, PreviewUnavailable, FileSystem.FileSystem> {
+    return FileSystem.FileSystem.use((fs) => fs.access(filePath)).pipe(
+      Effect.catch((error: PlatformError.PlatformError) =>
+        fail(
+          error.reason._tag === 'NotFound'
+            ? `File not found: ${filePath}`
+            : `Cannot access file ${filePath}: ${toErrorMessage(error.reason.cause ?? error)}`,
+        ),
+      ),
+    );
   }
 
   function openPathProgram(
     filePath: string,
-  ): Effect.Effect<void, PreviewUnavailable> {
+  ): Effect.Effect<void, PreviewUnavailable, FileSystem.FileSystem> {
     return Effect.gen(function* () {
       yield* ensurePathExists(filePath);
 
@@ -256,6 +269,7 @@ export function createDesktopPreviewHost(
     openBuildDisplayIn: (roots) => (location) =>
       buildDisplayProgram(roots, location),
     openExternal,
-    openPath: openPathProgram,
+    openPath: (filePath) =>
+      withProcessServices(options.runtime, openPathProgram(filePath)),
   };
 }
