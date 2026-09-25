@@ -24,17 +24,15 @@ import * as path from 'node:path';
 
 import { Effect } from 'effect';
 
-import { isModuleNotFoundError } from '@common/errors';
 import type { StateReadFailed } from '@platform/interfaces';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { ClaudeAgentPermissionMode } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import { readSettingFrom } from '@utils/config/platformSettings';
-import { ensureError } from '@utils/errors/errorMessage';
+import { readSettingUnlessOverridden } from '@utils/config/platformSettings';
 import { IS_WINDOWS } from '@utils/system/platformPaths';
 import {
   createCachedBinaryResolver,
-  resolveSdkExport,
+  importForeignSdk,
 } from './support/externalBinaryUtils';
 // Mirror the native `query` signature exactly (no hand-rolled structural copy).
 type QueryFn = typeof import('@anthropic-ai/claude-agent-sdk').query;
@@ -48,39 +46,24 @@ type QueryFn = typeof import('@anthropic-ai/claude-agent-sdk').query;
  *
  * The SDK is ESM-only ("type": "module"). esbuild converts the dynamic import
  * to a CJS require at build time — keep the package OUT of esbuild's
- * `external` array. The dynamic import is this module's one foreign edge and
- * is wrapped exactly once, here; a missing package is re-stated as install
- * guidance with the original attached as `cause`, so callers classify it off
- * the cause chain rather than the message text.
+ * `external` array. The dynamic import is this module's one foreign edge,
+ * kept inline as a literal for esbuild's benefit; {@link importForeignSdk}
+ * wraps everything downstream of it (the shape shared with `importCodexClass`).
  *
  * No memo of its own: `import()` resolves an already-loaded module from Node's
  * module cache, so a repeat call is a cache hit — the same shape
  * `importCodexClass` has.
  */
 export function importClaudeAgentSdk(): Effect.Effect<QueryFn, Error> {
-  return Effect.tryPromise({
-    try: (): Promise<Record<string, unknown>> =>
+  return importForeignSdk<QueryFn>({
+    load: (): Promise<Record<string, unknown>> =>
       import('@anthropic-ai/claude-agent-sdk'),
-    catch: (err) =>
-      isModuleNotFoundError(err)
-        ? new Error(
-            '@anthropic-ai/claude-agent-sdk package not found. Reinstall TeXRA or run corepack pnpm install in the TeXRA workspace.',
-            { cause: err },
-          )
-        : ensureError(err),
-  }).pipe(
-    Effect.flatMap((mod) =>
-      Effect.try({
-        try: () =>
-          resolveSdkExport<QueryFn>(mod, {
-            exportName: 'query',
-            specifier: '@anthropic-ai/claude-agent-sdk',
-            errorLabel: 'query()',
-          }),
-        catch: ensureError,
-      }),
-    ),
-  );
+    notFoundMessage:
+      '@anthropic-ai/claude-agent-sdk package not found. Reinstall TeXRA or run corepack pnpm install in the TeXRA workspace.',
+    exportName: 'query',
+    specifier: '@anthropic-ai/claude-agent-sdk',
+    errorLabel: 'query()',
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -175,9 +158,8 @@ export const claudeAgentPermissionMode = (
   input: { readonly permission_mode?: ClaudeAgentPermissionMode | null },
   stores: SettingsStores,
 ): Effect.Effect<ClaudeAgentPermissionMode, StateReadFailed> =>
-  input.permission_mode == null
-    ? readSettingFrom<ClaudeAgentPermissionMode>(
-        stores,
-        WorkspaceStateKey.CLAUDE_AGENT_PERMISSION_MODE,
-      )
-    : Effect.succeed(input.permission_mode);
+  readSettingUnlessOverridden(
+    input.permission_mode,
+    stores,
+    WorkspaceStateKey.CLAUDE_AGENT_PERMISSION_MODE,
+  );

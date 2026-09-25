@@ -4,6 +4,8 @@
  * (e.g. @anthropic-ai/claude-agent-sdk-*, @openai/codex-*).
  *
  * Both tools follow the same shapes and would otherwise drift:
+ * - `importForeignSdk()` — wrap the one dynamic `import()` each tool makes:
+ *   classify a missing package into install guidance, then resolve its export.
  * - `resolveSdkExport()` — resolve and validate the SDK's main export across
  *   the ESM/CJS interop shapes esbuild can produce.
  * - `resolveBinary()` — the 4-strategy native-binary probe, plus the identical
@@ -34,6 +36,51 @@ import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSp
 const CHANNEL = 'ExternalBinaryUtils';
 
 // ---------------------------------------------------------------------------
+// SDK import
+// ---------------------------------------------------------------------------
+
+/**
+ * Import a vendor SDK's main export, classifying a missing package into
+ * install guidance instead of a raw module-resolution error.
+ *
+ * `load` must be a thunk wrapping a literal `import('<specifier>')` written
+ * in the caller's own file — esbuild only rewrites a dynamic `import()` to
+ * `require()` when the specifier is a static string literal in that file, so
+ * the import call itself cannot be hoisted here (see the file header). This
+ * wraps everything downstream of that one foreign edge: a missing package is
+ * re-stated as `notFoundMessage` with the original attached as `cause`, so
+ * callers classify it off the cause chain rather than the message text; a
+ * present package resolves its export via {@link resolveSdkExport}.
+ */
+export function importForeignSdk<T>(opts: {
+  readonly load: () => Promise<Record<string, unknown>>;
+  readonly notFoundMessage: string;
+  readonly exportName: string;
+  readonly specifier: string;
+  readonly errorLabel: string;
+}): Effect.Effect<T, Error> {
+  return Effect.tryPromise({
+    try: opts.load,
+    catch: (err) =>
+      isModuleNotFoundError(err)
+        ? new Error(opts.notFoundMessage, { cause: err })
+        : ensureError(err),
+  }).pipe(
+    Effect.flatMap((mod) =>
+      Effect.try({
+        try: () =>
+          resolveSdkExport<T>(mod, {
+            exportName: opts.exportName,
+            specifier: opts.specifier,
+            errorLabel: opts.errorLabel,
+          }),
+        catch: ensureError,
+      }),
+    ),
+  );
+}
+
+// ---------------------------------------------------------------------------
 // SDK export resolution
 // ---------------------------------------------------------------------------
 
@@ -49,7 +96,7 @@ const CHANNEL = 'ExternalBinaryUtils';
  * @throws if the export is missing or not a function — a build-configuration
  * error (the package landed in esbuild's `external` array).
  */
-export function resolveSdkExport<T>(
+function resolveSdkExport<T>(
   mod: Record<string, unknown>,
   opts: {
     /** Property name of the export inside the module (e.g. `query`, `Codex`). */

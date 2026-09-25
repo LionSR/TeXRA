@@ -28,15 +28,16 @@ import { designTokens, commonViewStyles } from '@ui/styles';
 import { renderIconActionButtonParts } from '@ui/wa/actionButtons';
 import type { TeXRAIconName } from '@ui/wa/iconNames';
 import { metaStripStyles, renderDotMeta } from '@ui/wa/metaStrip';
+import { cachedDateTimeFormat } from '@ui/formatting/dateTimeFormat';
 import { formatBytes, formatResultCount } from '@utils/text/stringUtils';
 
-const shortDateTimeFormatter = new Intl.DateTimeFormat(undefined, {
+const SHORT_DATE_TIME_OPTIONS: Intl.DateTimeFormatOptions = {
   year: 'numeric',
   month: 'short',
   day: 'numeric',
   hour: '2-digit',
   minute: '2-digit',
-});
+};
 
 /**
  * Compact, locale-aware absolute timestamp (short month, no seconds) for the
@@ -49,7 +50,7 @@ function formatShortDateTime(
   if (!value) return null;
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return null;
-  return shortDateTimeFormatter.format(date);
+  return cachedDateTimeFormat(SHORT_DATE_TIME_OPTIONS).format(date);
 }
 
 @customElement('memory-item')
