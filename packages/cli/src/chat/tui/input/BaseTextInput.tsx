@@ -341,6 +341,7 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
               }),
             ),
           ),
+          imagePaste.runtime,
         );
         return;
       }
