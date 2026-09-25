@@ -29,12 +29,7 @@ import {
   staticTranscriptRowBudget,
 } from '@cli/chat/tui/appLayout';
 import {
-  chatTuiCanInterruptActiveRun,
-  chatTuiCanStopActiveRun,
-  chatTuiCanStopVisibleRun,
   chatTuiCanStartRootRun,
-  chatTuiCanSelectModel,
-  chatTuiSigintAction,
   TuiSession,
 } from '@cli/chat/tui/state/sessionRunState';
 import { CliExitCode } from '@cli/runtime/exitCodes';
@@ -321,17 +316,20 @@ describe('CLI TUI row allocation', () => {
       expected: true,
     },
   ])(
-    'only reports a chat run interruptible $name',
+    'only reports a waiting tool-use run resumable-idle $name',
     ({ runCompleted, runSettled, runId, expected }) => {
-      expect(
-        chatTuiCanInterruptActiveRun({ runCompleted, runSettled, runId }),
-      ).toBe(expected);
+      seedView(familyView({ [root]: { status: RUN_PHASE.WAITING } }));
+      const session = new TuiSession(() => ({}) as never);
+      if (runSettled) session.markRunPending(runSettled);
+      if (runCompleted) session.markRunCompleted();
+      session.runId = runId;
+      expect(session.isResumableIdle()).toBe(expected);
     },
   );
 
   it('marks a chat root run pending before async startup work resolves', () => {
     const startupSettled = Effect.never;
-    const session = new TuiSession();
+    const session = new TuiSession(() => undefined);
     session.runId = root;
     session.runExitCode = CliExitCode.AgentError;
     session.markRunCompleted();
@@ -350,7 +348,7 @@ describe('CLI TUI row allocation', () => {
   });
 
   it('publishes the run-control run id from the session itself', () => {
-    const session = new TuiSession();
+    const session = new TuiSession(() => undefined);
     session.markRunPending(Effect.never);
     expect(claimedRunId.get()).toBeUndefined();
 
@@ -368,7 +366,7 @@ describe('CLI TUI row allocation', () => {
   });
 
   it('clears stale resume ids when clearing chat session run state', () => {
-    const session = new TuiSession();
+    const session = new TuiSession(() => undefined);
     session.markRunPending(Effect.void);
     session.markRunCompleted();
     session.runId = root;
