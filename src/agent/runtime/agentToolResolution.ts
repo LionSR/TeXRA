@@ -255,10 +255,11 @@ export const resolveAgentTools = Effect.fn('resolveAgentTools')(function* ({
   // child passes its parent's gates as well as its own, so a tool its parent
   // was withheld (no approval channel, another host) never reaches it.
   const gates = [
-    { host, approvalPromptsUnavailable },
+    { owner: 'this run', host, approvalPromptsUnavailable },
     ...(inherited
       ? [
           {
+            owner: 'its parent run',
             host: inherited.composition.host ?? undefined,
             approvalPromptsUnavailable:
               inherited.composition.approvalPromptsUnavailable,
@@ -266,25 +267,26 @@ export const resolveAgentTools = Effect.fn('resolveAgentTools')(function* ({
         ]
       : []),
   ];
-  /** Tools the approval gate withheld, reported once below. */
-  const withheldForApproval = new Set<string>();
+  /** Tools the approval gate withheld, by the run whose gate withheld
+   *  them, reported once below. */
+  const withheldForApproval = new Map<string, string>();
   const passesRuntimeGates = (name: string): boolean => {
     const tool = enabled.get(name) ?? table.get(name);
     const excluded = tool?.unavailableHosts ?? [];
     for (const gate of gates) {
       if (excluded.length > 0 && gate.host === undefined) {
         logger.warn(
-          `Tool "${name}" is not offered: it depends on the product host, and this process named none.`,
+          `Tool "${name}" is not offered: it depends on the product host, and ${gate.owner} named none.`,
         );
         return false;
       }
       if (gate.host !== undefined && excluded.includes(gate.host)) return false;
     }
-    if (
-      tool?.requiresApproval &&
-      gates.some((gate) => gate.approvalPromptsUnavailable)
-    ) {
-      withheldForApproval.add(name);
+    const approvalGate = tool?.requiresApproval
+      ? gates.find((gate) => gate.approvalPromptsUnavailable)
+      : undefined;
+    if (approvalGate) {
+      withheldForApproval.set(name, approvalGate.owner);
       return false;
     }
     return true;
@@ -367,14 +369,15 @@ export const resolveAgentTools = Effect.fn('resolveAgentTools')(function* ({
       ])
     : new Set<string>();
   const withheld = [...withheldForApproval].filter(
-    (name) => !parentWithheld.has(name),
+    ([name]) => !parentWithheld.has(name),
   );
-  if (withheld.length > 0) {
+  for (const owner of new Set(withheld.map(([, by]) => by))) {
+    const names = withheld.filter(([, by]) => by === owner).map(([n]) => n);
     logger.warn(
-      `Not offering ${withheld.join(', ')}: these tools need approval, and this run can neither show an approval prompt nor auto-approve under its approval policy. Use the yolo approval policy to allow them.`,
+      `Not offering ${names.join(', ')}: these tools need approval, and ${owner} can neither show an approval prompt nor auto-approve under its approval policy. Use the yolo approval policy to allow them.`,
     );
-    onApprovalPolicyDenial?.(withheld);
   }
+  if (withheld.length > 0) onApprovalPolicyDenial?.(withheld.map(([n]) => n));
 
   const availableModelNames = yield* availableDelegationModelNamesForTools(
     resolved,
