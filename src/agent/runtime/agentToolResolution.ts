@@ -285,10 +285,19 @@ export const resolveAgentTools = Effect.fn('resolveAgentTools')(function* ({
 
   // Withholding changes what the run can do, so it is never silent: the
   // model would otherwise spend its rounds looking for an edit tool it was
-  // never offered. A delegated child joins its parent's composition, whose
-  // own resolution already reported the gate.
-  if (withheldForApproval.size > 0 && !inherited) {
-    const withheld = [...withheldForApproval];
+  // never offered. A delegated child reports through its parent's callback,
+  // so it names only the tools its parent's resolution did not already
+  // withhold: those its own declarations or injections add.
+  const parentWithheld = inherited?.composition.approvalPromptsUnavailable
+    ? new Set([
+        ...inherited.composition.tools,
+        ...inherited.composition.injected,
+      ])
+    : new Set<string>();
+  const withheld = [...withheldForApproval].filter(
+    (name) => !parentWithheld.has(name),
+  );
+  if (withheld.length > 0) {
     logger.warn(
       `Not offering ${withheld.join(', ')}: these tools need approval, and this run can neither show an approval prompt nor auto-approve under its approval policy. Use the yolo approval policy to allow them.`,
     );

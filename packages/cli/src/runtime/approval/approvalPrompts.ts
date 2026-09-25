@@ -116,8 +116,9 @@ function approvalDenialMessage(
 }
 
 /**
- * Tell the operator, once per run and denial kind, that the policy closed a
- * gate, what it closed, and why. Keyed by `runId` within one context, so
+ * Tell the operator, once per run and denial kind (for withheld tools, once
+ * per distinct tool list), that the policy closed a gate, what it closed, and
+ * why. Keyed by `runId` within one context, so
  * concurrent runs sharing the chat TUI's session context each warn once; a
  * runless caller warns once per context. The model already receives the
  * denial as tool feedback and routes around it, so this is diagnostics only —
@@ -136,7 +137,10 @@ export function warnApprovalDenied(
 ): void {
   let warned = warnedApprovalRuns.get(context);
   if (!warned) warnedApprovalRuns.set(context, (warned = new Set()));
-  const key = `${runId ?? ''}\0${denial.kind}`;
+  // Withheld tools key by their names too: a delegated child reports through
+  // its parent's callback, and the tools it adds are a new denial.
+  const detail = denial.kind === 'withheldTools' ? denial.tools.join(',') : '';
+  const key = `${runId ?? ''}\0${denial.kind}\0${detail}`;
   if (warned.has(key)) return;
   warned.add(key);
   writeTextStderr(
