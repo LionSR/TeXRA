@@ -48,7 +48,7 @@ const mocks = vi.hoisted(() => ({
   configureDelegatedChildApprovals: vi.fn(),
   executeAgent: vi.fn(),
   prepareAgentDefinition: vi.fn(),
-  resumeToolUseTurn: vi.fn(),
+  resumeToolUseFromResumeData: vi.fn(),
   childRecords: vi.fn(),
   getVisibleAgents: vi.fn(),
   isApprovalBypassedForRun: vi.fn(),
@@ -508,7 +508,7 @@ describe('headless delegation', () => {
         }),
       resumeToolUseFromResumeData: (...args) =>
         Effect.tryPromise({
-          try: () => mocks.resumeToolUseTurn(...args),
+          try: () => mocks.resumeToolUseFromResumeData(...args),
           catch: ensureError,
         }),
     };

@@ -183,18 +183,18 @@ export function createNativeSubagentStrategy(
               lastErr = err;
             },
             turns: {
-              run: (operation) =>
+              turnPermit: (turn) =>
                 Effect.suspend(() => {
                   lastErr = undefined;
-                  return turns.run(operation);
+                  return turns.turnPermit(turn);
                 }),
-              complete: (turn: AgentFlowResult) =>
-                Effect.gen(function* () {
+              onTurnBoundary: (turn: AgentFlowResult) =>
+                Effect.suspend(() => {
                   lastResult = turn;
                   cachedBuilt = undefined;
                   cachedDelivery = undefined;
                   ports.recordCost(turn.usage?.totalCost);
-                  yield* turns.complete(turn);
+                  return turns.onTurnBoundary(turn);
                 }),
             },
           };

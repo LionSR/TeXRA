@@ -134,8 +134,8 @@ function launchStrategy(
 ) {
   return strategy
     .launch(ports, signal, {
-      run: (operation) => operation,
-      complete: () => Effect.void,
+      turnPermit: (turn) => turn,
+      onTurnBoundary: () => Effect.void,
     })
     .pipe(Effect.provide(nativeToolTestLayer()));
 }

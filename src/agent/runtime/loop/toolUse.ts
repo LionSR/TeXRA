@@ -104,8 +104,8 @@ export interface ToolUseFlowContext {
 export interface ToolUseStart {
   /** The caller launched this as a resume; the ledger decides what it is. */
   readonly resume: boolean;
-  /** Awaited child-turn accounting and delivery, within this run's scope. */
-  readonly turns?: ChildRunTurns<ToolUseResult, ProcessServices | Runs>;
+  /** A native child's turn permit, and the boundary its loop delivers at. */
+  readonly turns?: ChildRunTurns<ToolUseResult>;
   /** Host wiring that is live while the loop can accept an interrupt. */
   readonly attachment?: {
     attach(context: ToolUseFlowContext): void;
@@ -654,8 +654,8 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         // recovers the run clears it, so the fold is the one place to read it.
         const afterError = state.lastError !== null;
         if (parked) {
-          // A native child waits in this same run scope, just like its root.
-          // Its delivery callback has already committed the preceding turn.
+          // A native child waits in this same run scope, just like its root:
+          // its loop has already delivered the turn offered at the boundary.
           if (isChild() && afterError && !followUps.hasQueued())
             return finish(state, RUN_OUTCOME.FAILED);
           // Activation clears the visible step. Restore an already idle cursor
@@ -709,7 +709,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         }
         restoring = false;
         const turn: TurnExit = yield* start.turns
-          ? start.turns.run(runTurn(cell))
+          ? start.turns.turnPermit(runTurn(cell))
           : runTurn(cell);
         state = turn.state;
         if (turn.outcome === 'cancelled') {
@@ -757,7 +757,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           return finish(state, turn.outcome);
         if (turn.outcome === 'failed') continue;
         if (start.turns)
-          yield* start.turns.complete(result(turn.outcome, state));
+          yield* start.turns.onTurnBoundary(result(turn.outcome, state));
       }
     });
 

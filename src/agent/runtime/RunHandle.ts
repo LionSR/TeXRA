@@ -81,8 +81,6 @@ export class RunHandle<
   parentState: RunParent;
   private toolUseFlowContext?: LiveToolUseFlowContext;
 
-  /** Whether a caller has claimed the run's exactly-once terminal outcome. */
-  private terminalClaimed = false;
   /**
    * The background OS process this run owns, when a strategy declared one
    * (a background bash child): the narrow survivor of the interrupt-handler
@@ -122,21 +120,6 @@ export class RunHandle<
 
   get category(): AgentCategory {
     return this.run.category;
-  }
-
-  /**
-   * Atomically claim the exactly-once terminal finalization of this handle.
-   * Returns true for exactly one caller — the flag flips synchronously in the
-   * same tick as the check, so two `finalizeRunTerminal` calls racing across
-   * await points (e.g. a lifecycle arm vs a concurrent finalize of the same
-   * handle) cannot both win. A stop of a run parked at WAITING ends the run
-   * through this same gate, since its parked fiber finalizes the run itself,
-   * so the lifecycle and a stop cannot both publish a terminal outcome.
-   */
-  claimTerminalFinalize(): boolean {
-    if (this.terminalClaimed) return false;
-    this.terminalClaimed = true;
-    return true;
   }
 
   /** The launching run, or null for a root and for a detached child. */

@@ -173,8 +173,9 @@ function launchToolUseRun(
     ...(shared.turns
       ? {
           turns: {
-            run: shared.turns.run,
-            complete: (result) => shared.turns!.complete(toResult(result)),
+            turnPermit: shared.turns.turnPermit,
+            onTurnBoundary: (result) =>
+              shared.turns!.onTurnBoundary(toResult(result)),
           },
         }
       : {}),
@@ -244,7 +245,7 @@ function launchReflectionRun(
       }),
     ),
   );
-  return options.turns ? options.turns.run(program) : program;
+  return options.turns ? options.turns.turnPermit(program) : program;
 }
 
 /**
@@ -296,11 +297,8 @@ function buildFallbackNotification(config: AgentConfig): FallbackNotification {
  * under a different name.
  */
 export interface SubagentRunOptions {
-  /** Child accounting and delivery at each completed native turn. */
-  readonly turns?: import('./childRunLoop').ChildRunTurns<
-    AgentFlowResult,
-    AgentRunServices
-  >;
+  /** The child-run policy: each turn's permit, each completed turn's boundary. */
+  readonly turns?: import('./childRunLoop').ChildRunTurns<AgentFlowResult>;
   /** Run-scoped tools added to tool-use agents without mutating the default registry. */
   readonly tools?: readonly ITool[];
   /**
