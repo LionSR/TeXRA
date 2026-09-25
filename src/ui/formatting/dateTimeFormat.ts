@@ -11,7 +11,12 @@ const formatters = new Map<string, Intl.DateTimeFormat>();
 export function cachedDateTimeFormat(
   options: Intl.DateTimeFormatOptions,
 ): Intl.DateTimeFormat {
-  const key = JSON.stringify(options);
+  // Sorted so the same options produce the same key regardless of property
+  // order (plain `JSON.stringify` would key on insertion order instead).
+  const key = Object.entries(options)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([k, v]) => `${k}:${v}`)
+    .join(',');
   let formatter = formatters.get(key);
   if (!formatter) {
     formatter = new Intl.DateTimeFormat(undefined, options);

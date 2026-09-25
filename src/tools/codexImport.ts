@@ -25,6 +25,7 @@ import { Effect } from 'effect';
 
 import type { StateReadFailed } from '@platform/interfaces';
 import type { SettingsStores } from '@shared/config/settingsAccess';
+import type { CodexSandboxMode } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { readSettingUnlessOverridden } from '@utils/config/platformSettings';
 import { IS_WINDOWS } from '@utils/system/platformPaths';
@@ -40,6 +41,20 @@ import {
 type CodexConstructor = typeof import('@openai/codex-sdk').Codex;
 type SandboxMode = import('@openai/codex-sdk').SandboxMode;
 type PlatformInfo = { pkg: string; triple: string };
+
+/**
+ * Every `CodexSandboxMode` catalog value must be one the SDK's `SandboxMode`
+ * union accepts, so a persisted value the SDK doesn't support fails to
+ * compile here. `codexSandboxMode` below reads through the shared
+ * override-or-setting helper typed to the SDK's own `SandboxMode`, not this
+ * narrower catalog type, so this stand-alone assert is what used to live in
+ * that read's declared return type (mirrors `_EffortLevelsAligned` in
+ * `claudeAgentShared.ts`).
+ */
+type _AssertExtends<T extends true> = T;
+type _CodexSandboxModeAligned = _AssertExtends<
+  CodexSandboxMode extends SandboxMode ? true : false
+>;
 
 // ---------------------------------------------------------------------------
 // SDK import
@@ -169,9 +184,8 @@ export const getCodexConfig = Effect.promise(
 /**
  * The sandbox mode a codex call runs under: its own override, else the
  * user-configured default. The approval prompt the loop opens and the launch
- * that follows it read the same one from here. The SDK-typed return is the
- * alignment guard between the persisted schema values and the Codex sandbox
- * union: a schema value the SDK doesn't accept fails to compile here.
+ * that follows it read the same one from here. The schema↔SDK alignment
+ * guard lives in {@link _CodexSandboxModeAligned} above, not in this read.
  */
 export const codexSandboxMode = (
   input: { readonly sandbox_mode?: SandboxMode | null },
