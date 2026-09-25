@@ -184,9 +184,7 @@ function leads(request: { readonly runId: RunId }): boolean {
   );
 }
 
-/** Drop every entry of each request-keyed collection whose request is not in
- *  `live`: the local state a surface holds beside the fold leaves with the
- *  request it names. */
+/** Drop each request-keyed entry whose request is no longer in `live`. */
 export function pruneToLive(
   live: ReadonlySet<string>,
   ...keyed: ReadonlyArray<Set<string> | Map<string, unknown>>
