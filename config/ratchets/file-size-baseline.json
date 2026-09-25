@@ -69,7 +69,7 @@
     "src/agent/runtime/loop/toolUseDispatch.ts": 974,
     "src/agent/runtime/ModelInvoker.ts": 1272,
     "src/agent/runtime/run/modelBinding.ts": 1125,
-    "src/agent/runtime/SessionHandle.ts": 1425,
+    "src/agent/runtime/SessionHandle.ts": 1423,
     "src/agent/workflowScript/runWorkflowScript.ts": 870,
     "src/agent/workflowScript/sandbox.ts": 700,
     "src/common/errors/sdkError/providerErrorFormat.ts": 687,
@@ -88,7 +88,7 @@
     "src/shared/schemas/runLedgerEvent.ts": 556,
     "src/shared/schemas/sessionEvent.ts": 808,
     "src/shared/session/runStateFold.ts": 819,
-    "src/shared/session/sessionFold.ts": 1953,
+    "src/shared/session/sessionFold.ts": 1486,
     "src/shared/session/surface.ts": 511,
     "src/shared/settingsView/settingsViewMessages.ts": 940,
     "src/shared/state/stateSettings.ts": 1565,
@@ -109,7 +109,6 @@
     "src/tools/memory/MemoryTool.ts": 638,
     "src/ui/styles/commonViewStyles.ts": 547,
     "src/ui/styles/controlStyles.ts": 581,
-    "src/ui/transcript/projectTranscriptRow.ts": 528,
     "src/ui/transcript/toolRowSections.ts": 723
   }
 }

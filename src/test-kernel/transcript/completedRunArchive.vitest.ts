@@ -43,13 +43,11 @@ import { Secrets } from '@platform/secrets';
 import {
   LOG_LEVELS,
   MESSAGE_TYPES,
-  STREAM_LOG_ENTRY_TYPES,
   AgentCategory,
   aggregateId,
   FlowSnapshotPayloadSchema,
 } from '@shared/schemas';
-import type { RunId, TodoItem } from '@shared/schemas';
-import type { StreamLogAppendInput } from '@shared/session/traceEntries';
+import type { LogLevel, RunId, TodoItem } from '@shared/schemas';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { testRuntime } from '@test/support/testProcessRuntime';
@@ -139,23 +137,19 @@ async function seedTasks(runId: RunId, todos: TodoItem[]): Promise<void> {
   await settleSessionEvents();
 }
 
-type LogRow = StreamLogAppendInput;
-
-let entryCounter = 0;
+/** One `log` fact a fixture publishes. */
+interface LogRow {
+  readonly level: LogLevel;
+  readonly messageType: string;
+  readonly text?: string;
+  readonly data?: unknown;
+}
 
 function logRow(
   messageType: string,
   fields: { text?: string; data?: unknown },
 ): LogRow {
-  entryCounter += 1;
-  return {
-    id: `entry-${entryCounter}`,
-    type: STREAM_LOG_ENTRY_TYPES.LOG,
-    level: LOG_LEVELS.INFO,
-    timestamp: 1000 + entryCounter,
-    messageType: messageType as never,
-    ...fields,
-  };
+  return { level: LOG_LEVELS.INFO, messageType, ...fields };
 }
 
 /** Seed recorded transcript rows through the durable log fact. */

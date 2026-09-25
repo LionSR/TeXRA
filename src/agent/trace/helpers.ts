@@ -7,7 +7,7 @@
  * `error(msg, { data: buildErrorLogData(...), messageType })` blocks so
  * call sites stay 1 line.
  *
- * `createTranscriptFold` maps every domain `key` here onto a TeXRA
+ * The transcript fold maps every domain `key` here onto a TeXRA
  * `MessageType`, and renders `level=error` with `messageType: ERROR` as an
  * error row.
  */
@@ -215,7 +215,7 @@ export function logFileCategory(
  * The retained `updateConversationProgress` host event is projected from this
  * run fact by the session progress projector instead of flow code calling
  * `session.interactions.emit` directly.
- * Never rendered as a transcript row (suppressed in `createTranscriptFold`)
+ * Never rendered as a transcript row (suppressed in the transcript fold)
  * — it is a UI-only signal, not a log line. Round labels come from typed
  * `stage.start` metadata with `kind: "round"`.
  */
