@@ -47,6 +47,7 @@ async function createShellHarness(
       openWorkspaceFolder: vi.fn(() => Effect.void),
       signIn: vi.fn(() => Effect.void),
       showInfoMessage: vi.fn(),
+      showLauncher: vi.fn(),
       onAsyncError: vi.fn(),
       runtime: testRuntime(),
       ...overrides,

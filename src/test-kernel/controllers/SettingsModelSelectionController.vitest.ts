@@ -9,8 +9,7 @@ import {
   type ModelOptionStores,
 } from '@model/computeModelOptions';
 import { buildBaseModelOption, DEFAULT_MODELS } from '@model/modelOptionsBasic';
-import { getRuntimeModelConfig } from '@model/runtimeModelRegistry';
-import type { CopilotModelRoute } from '@model/runtimeModelRegistry';
+import type { CopilotModelRoute } from '@model/copilotRouting';
 import type { ModelOptionData } from '@shared/schemas';
 import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -27,7 +26,7 @@ type SettingsModelSelectionControllerDeps = ConstructorParameters<
 const modelOptions = (models: readonly string[]): ModelOptionData[] =>
   models
     .map((model) => {
-      const config = getRuntimeModelConfig(model);
+      const config = MODEL_CONFIGS[model];
       return config
         ? buildBaseModelOption(model, config)
         : { value: model, label: model };

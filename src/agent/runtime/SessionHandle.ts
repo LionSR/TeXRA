@@ -204,11 +204,11 @@ export class SessionHandle {
   readonly storeCleared: SessionGraph['storeCleared'];
   /**
    * The session's `Runs` service, as the session layer built it in the
-   * session's scope (`SessionGraph.runs`): registration, lookup, change
-   * listeners, and subagent lineage. The record carries it for a host that
+   * session's scope (`SessionGraph.runs`): registration, lookup and
+   * subagent lineage. The record carries it for a host that
    * holds the session; Effect code below a launch takes it from context,
    * where the run and request entries provide this same value.
-   * Hears every phase-moving row this process committed
+   * Hears every `run.end` this process committed
    * ({@link receiveFoldedEvent}), in commit order and only once the view has
    * folded it; the phase itself is the fold's (`RunView.status`), never a
    * second map here.
@@ -1106,45 +1106,34 @@ export class SessionHandle {
   }
 
   /**
-   * One row of the fold-gated tail ({@link folded}, PRD 7.2): the registry's
-   * phase notification and the result listeners, which is why neither is on
-   * the raw tail above. A woken waiter, a refreshed child roster, and a
-   * result listener all read the run's view synchronously, so a notification
-   * ahead of the fold would hand them the state the row just replaced.
+   * One row of the fold-gated tail ({@link folded}, PRD 7.2): the result
+   * listeners and the registry's folded-stop child sweep, which is why
+   * neither is on the raw tail above. Both read the run's view
+   * synchronously, so a notification ahead of the fold would hand them the
+   * state the row just replaced.
    */
   receiveFoldedEvent(event: SessionEvent): Effect.Effect<void> {
     return Effect.gen({ self: this }, function* () {
-      // Runtime waiters and host notifications belong to the authoring process.
+      // The sweep and host notifications belong to the authoring process.
       const { self } = yield* SubscriptionRef.get(this.graph.local);
       if (event.ownerId == null || !self.includes(event.ownerId)) return;
       const target = aggregateTarget(event.aggregateId);
-      if (target.kind !== 'run') return;
-      if (event.type === 'run.end') {
-        // A throwing listener is logged and never stops the ones after it.
-        yield* Effect.forEach(
-          [...this.resultListeners],
-          (listener) =>
-            Effect.suspend(() => listener({ ...event, runId: target.id })).pipe(
-              Effect.catchCause((cause) =>
-                Effect.logWarning('Session result listener threw').pipe(
-                  Effect.annotateLogs({ data: Cause.squash(cause) }),
-                  withLogChannel(CHANNEL),
-                ),
+      if (target.kind !== 'run' || event.type !== 'run.end') return;
+      // A throwing listener is logged and never stops the ones after it.
+      yield* Effect.forEach(
+        [...this.resultListeners],
+        (listener) =>
+          Effect.suspend(() => listener({ ...event, runId: target.id })).pipe(
+            Effect.catchCause((cause) =>
+              Effect.logWarning('Session result listener threw').pipe(
+                Effect.annotateLogs({ data: Cause.squash(cause) }),
+                withLogChannel(CHANNEL),
               ),
             ),
-          { discard: true },
-        );
-      }
-      // Every row that moves a run's phase (3.3): activation, park, wake, end.
-      const phaseMoved =
-        event.type === 'run.activate' ||
-        event.type === 'run.end' ||
-        event.type === 'child.park' ||
-        (event.type === 'flow.step' &&
-          (event.payload.step === 'waiting' ||
-            event.payload.step === 'turn.begin'));
-      if (!phaseMoved) return;
-      this.runs.handleStatus(target.id);
+          ),
+        { discard: true },
+      );
+      this.runs.sweepChildrenOfFoldedStop(target.id);
     });
   }
 

@@ -17,7 +17,6 @@ import {
   resolveWorkspaceStoragePath,
 } from '@platform/defaults/workspaceStorage';
 import { UNAVAILABLE_LANGUAGE_MODEL_PORT } from '@platform/languageModel';
-import { envVar } from '@utils/system/envFlags';
 
 import type { AgentPlatform } from './index.js';
 
@@ -41,9 +40,9 @@ const unpersisted = (operation: 'set' | 'delete', key: string) =>
     }),
   );
 
-const environmentSecrets: PlatformSecrets = {
-  get: (key) => envVar(key),
-  getStored: () => Effect.succeed(undefined),
+/** Holds nothing; an API key comes from its env var via `resolveCredential`. */
+const unpersistedSecrets: PlatformSecrets = {
+  get: () => Effect.succeed(undefined),
   set: (key) => unpersisted('set', key),
   delete: (key) => unpersisted('delete', key),
   listStoredKeys: () => Effect.succeed([]),
@@ -65,7 +64,7 @@ export function nodePlatform(options: NodePlatformOptions): AgentPlatform {
   const storageRoot = options.storageDir ?? DEFAULT_NODE_STORAGE_ROOT;
   const globalState = new MemoryStateStore();
   return {
-    secrets: environmentSecrets,
+    secrets: unpersistedSecrets,
     // The two process ports `composeProcess` serves: this platform resumes
     // nothing and has no editor behind it.
     agentResume: {

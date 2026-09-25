@@ -114,9 +114,6 @@ export const DesktopShellStateSchema = z.object({
   workbenchWidth: z.number(),
   workbenchTabs: z.array(WorkbenchTabSchema),
   nextTerminalSerial: z.int().positive(),
-  /** Per top-level run, its `lastTimestamp` when the user last had it on
-   *  screen: what the rail's `unseenRuns` compares a finished run against. */
-  seen: z.record(z.string(), z.number()).prefault({}),
 });
 
 export type DesktopShellState = z.infer<typeof DesktopShellStateSchema>;
@@ -137,7 +134,6 @@ export function initialDesktopShellState(): DesktopShellState {
     workbenchWidth: 640,
     workbenchTabs: [],
     nextTerminalSerial: 1,
-    seen: {},
   };
 }
 

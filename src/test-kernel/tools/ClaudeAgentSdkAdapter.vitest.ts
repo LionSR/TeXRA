@@ -7,7 +7,7 @@ import { describe, expect, it, vi } from 'vitest';
 // Local imports
 import type { AgentTrace } from '@agent/trace';
 import { ClaudeBackgroundTaskTracker } from '@tools/claudeAgentBackgroundTasks';
-import { aggregateClaudeModelUsage } from '@tools/claudeAgentShared';
+import { claudeResultUsage } from '@tools/claudeAgentShared';
 
 function fakeTrace(): {
   trace: AgentTrace;
@@ -28,41 +28,42 @@ function fakeTrace(): {
 
 describe('Claude Agent SDK adapter', () => {
   it('folds authoritative modelUsage across main and nested model calls', () => {
-    const usage = aggregateClaudeModelUsage({
-      main: {
-        inputTokens: 100,
-        outputTokens: 20,
-        cacheReadInputTokens: 40,
-        cacheCreationInputTokens: 5,
-        webSearchRequests: 0,
-        costUSD: 0.01,
-        contextWindow: 200_000,
-        maxOutputTokens: 32_000,
+    const usage = claudeResultUsage({
+      modelUsage: {
+        main: {
+          inputTokens: 100,
+          outputTokens: 20,
+          cacheReadInputTokens: 40,
+          cacheCreationInputTokens: 5,
+          webSearchRequests: 0,
+          costUSD: 0.01,
+          contextWindow: 200_000,
+          maxOutputTokens: 32_000,
+        },
+        subagent: {
+          inputTokens: 70,
+          outputTokens: 30,
+          cacheReadInputTokens: 10,
+          cacheCreationInputTokens: 2,
+          webSearchRequests: 1,
+          costUSD: 0.02,
+          contextWindow: 200_000,
+          maxOutputTokens: 32_000,
+        },
       },
-      subagent: {
-        inputTokens: 70,
-        outputTokens: 30,
-        cacheReadInputTokens: 10,
-        cacheCreationInputTokens: 2,
-        webSearchRequests: 1,
-        costUSD: 0.02,
-        contextWindow: 200_000,
-        maxOutputTokens: 32_000,
-      },
-    });
+    } as never);
 
     expect(usage).toEqual({
-      input_tokens: 170,
-      output_tokens: 50,
-      cache_read_input_tokens: 50,
-      cache_creation_input_tokens: 7,
-      cost_usd: 0.03,
+      inputTokens: 170,
+      outputTokens: 50,
+      cacheReadInputTokens: 50,
+      cacheCreationInputTokens: 7,
+      cost: 0.03,
     });
   });
 
-  it('keeps absent and empty model usage out of progress accounting', () => {
-    expect(aggregateClaudeModelUsage(undefined)).toBeNull();
-    expect(aggregateClaudeModelUsage({})).toBeNull();
+  it('keeps empty model usage out of progress accounting', () => {
+    expect(claudeResultUsage({ modelUsage: {} } as never)).toBeNull();
   });
 
   it('replaces the complete background-task level without pairing task edges', () => {

@@ -2,10 +2,10 @@
 import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { MODEL_CONFIGS, type ModelConfig } from 'llm-zoo';
-import { afterEach, beforeEach, describe, expect } from 'vitest';
+import { afterEach, describe, expect } from 'vitest';
 
 // Local imports
-import { apiKeySecretName, invalidateApiKeyCache } from '@model/apiProviders';
+import { apiKeySecretName } from '@model/apiProviders';
 import { readProspectiveUsageRoute } from '@model/computeModelOptions';
 import { decideModelRoute, readRouteFacts } from '@model/modelRoute';
 import { resolveRouteEndpoint } from '@model/routeEndpoint';
@@ -29,6 +29,7 @@ const boundEndpoint = (
       ...(yield* readRouteFacts(hostStores(), declinedRoutes)),
       validation: false,
       prefersCopilot: false,
+      copilotRoute: undefined,
     });
     if (route.kind !== 'api-key' && route.kind !== 'openrouter') {
       throw new Error(`unexpected ${route.kind} route`);
@@ -47,10 +48,6 @@ describe('coding-plan subscription runtime', () => {
       [GlobalStateKey.USE_OPENROUTER]: true,
     },
     secrets: { [apiKeySecretName('glm')]: 'glm-key' },
-  });
-
-  beforeEach(() => {
-    invalidateApiKeyCache();
   });
 
   afterEach(async () => {

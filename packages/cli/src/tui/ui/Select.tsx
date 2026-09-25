@@ -14,7 +14,11 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 // Local imports - shared utilities
 import { isEscapeInput, isPlainReturnInput } from '@cli/tui/inputKeys';
-import { selectVisibleInlineOverflowText } from '@cli/tui/overflowText';
+import {
+  moreRowsText,
+  previousRowsText,
+  selectVisibleInlineOverflowText,
+} from '@cli/tui/overflowText';
 import { clamp, clampIndex } from '@utils/core';
 
 // Local imports - TUI input and presentation
@@ -396,7 +400,9 @@ export function Select<T>(props: SelectProps<T>): React.JSX.Element {
   return (
     <Box flexDirection="column" aria-role="listbox">
       {props.showOverflow && hiddenBefore > 0 ? (
-        <Text dimColor>{`… ${hiddenBefore} earlier`}</Text>
+        <Text dimColor wrap="truncate-end">
+          {previousRowsText(hiddenBefore)}
+        </Text>
       ) : null}
       {visibleItems.map((item, offset) => {
         const i = visibleRange.start + offset;
@@ -481,7 +487,9 @@ export function Select<T>(props: SelectProps<T>): React.JSX.Element {
         );
       })}
       {props.showOverflow && hiddenAfter > 0 ? (
-        <Text dimColor>{`… ${hiddenAfter} more`}</Text>
+        <Text dimColor wrap="truncate-end">
+          {moreRowsText(hiddenAfter)}
+        </Text>
       ) : null}
     </Box>
   );

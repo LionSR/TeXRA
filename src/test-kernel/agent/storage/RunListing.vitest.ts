@@ -2,12 +2,7 @@ import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { beforeEach, describe, expect, vi } from 'vitest';
 
-import {
-  createLatexRunDiscovery,
-  getRunRecords,
-  isUserVisibleRun,
-  listRuns,
-} from '@agent/storage';
+import { getRunRecords, isUserVisibleRun, listRuns } from '@agent/storage';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   AgentConfigSchema,
@@ -327,62 +322,6 @@ describe('run listing normalization', () => {
       expect(entries.map(({ id }) => id)).toEqual([childId, rootId]);
       expect(entries.filter(isUserVisibleRun).map(({ id }) => id)).toEqual([
         rootId,
-      ]);
-    }),
-  );
-
-  it.effect('projects agent runs for latexdiff run discovery', () =>
-    Effect.gen(function* () {
-      const rootId = 'ab1001' as RunId;
-      const childId = 'ab1002' as RunId;
-      const processId = 'ab1003' as RunId;
-      const rootStore = getRunRecords(session, rootId);
-      yield* Effect.promise(() =>
-        writeMetadata(rootId, {
-          timestamp: '2026-07-15T10:00:00.000Z',
-          identity: { kind: 'agent', agent: 'assistant' },
-        }),
-      );
-      yield* rootStore.writeRunRecord(config('assistant', ['main.tex']));
-      yield* Effect.promise(() =>
-        writeRun(
-          childId,
-          '2026-07-15T09:00:00.000Z',
-          config('delegated', ['child.tex']),
-          rootId,
-        ),
-      );
-      const processStore = getRunRecords(session, processId);
-      yield* Effect.promise(() =>
-        writeMetadata(processId, {
-          timestamp: '2026-07-15T08:00:00.000Z',
-          identity: { kind: 'process', tool: 'bash' },
-        }),
-      );
-      yield* processStore.writeRunRecord({
-        name: 'bash',
-        instruction: 'ls -la',
-      });
-
-      const discovery = createLatexRunDiscovery(session);
-
-      // Unlike a history listing, latexdiff discovery keeps delegated children
-      // and drops non-agent rows.
-      expect(yield* discovery.listAgentRuns()).toEqual([
-        {
-          id: rootId,
-          timestamp: '2026-07-15T10:00:00.000Z',
-          agent: 'assistant',
-          model: 'deepseekT',
-          inputFiles: ['main.tex'],
-        },
-        {
-          id: childId,
-          timestamp: '2026-07-15T09:00:00.000Z',
-          agent: 'delegated',
-          model: 'deepseekT',
-          inputFiles: ['child.tex'],
-        },
       ]);
     }),
   );

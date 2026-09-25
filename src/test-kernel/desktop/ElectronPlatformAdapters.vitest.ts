@@ -99,37 +99,28 @@ describe('desktop platform adapters', () => {
       }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
-  it.effect(
-    'stores encrypted secrets, supports env overrides, and deletes persisted values',
-    () =>
-      Effect.gen(function* () {
-        const {
-          module: { getSecretStorageMode },
-          store,
-          secrets,
-        } = yield* loadSecrets();
+  it.effect('stores encrypted secrets and deletes persisted values', () =>
+    Effect.gen(function* () {
+      const {
+        module: { getSecretStorageMode },
+        store,
+        secrets,
+      } = yield* loadSecrets();
 
-        expect(yield* getSecretStorageMode()).toBe('encrypted');
-        yield* secrets.set(testSecretKey, 'persisted');
+      expect(yield* getSecretStorageMode()).toBe('encrypted');
+      yield* secrets.set(testSecretKey, 'persisted');
 
-        expect(yield* secrets.get(testSecretKey)).toBe('persisted');
-        expect(store.snapshot()[testSecretKey]).toMatchObject({
-          encrypted: true,
-          value: expect.any(String),
-        });
+      expect(yield* secrets.get(testSecretKey)).toBe('persisted');
+      expect(store.snapshot()[testSecretKey]).toMatchObject({
+        encrypted: true,
+        value: expect.any(String),
+      });
 
-        // The inner provider wins for this one read only.
-        expect(
-          yield* secrets
-            .get(testSecretKey)
-            .pipe(withEnv({ [testSecretKey]: 'from-env' })),
-        ).toBe('from-env');
+      yield* secrets.delete(testSecretKey);
 
-        yield* secrets.delete(testSecretKey);
-
-        expect(yield* secrets.get(testSecretKey)).toBeUndefined();
-        expect(store.snapshot()).toEqual({});
-      }).pipe(withEnv({}), Effect.provide(nodePlatformLayer)),
+      expect(yield* secrets.get(testSecretKey)).toBeUndefined();
+      expect(store.snapshot()).toEqual({});
+    }).pipe(withEnv({}), Effect.provide(nodePlatformLayer)),
   );
 
   it.effect(

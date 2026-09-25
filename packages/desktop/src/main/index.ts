@@ -63,13 +63,11 @@ import {
   type InstructionAction,
 } from '@shared/schemas';
 import { normalizePlatform } from '@shared/constants/latexToolchain';
-import { projectDisplayOf } from '@shared/session/hostSnapshot';
 import { Cancelled, Rejected } from '@shared/session/requestErrors';
 import { registerRuntimeShutdownHandlers } from '@tools/agentCliSessionStores';
 import { refreshToolAvailability } from '@tools/toolAvailability';
 import { killActiveRecording } from '@tools/media/audio';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
-import { readRecentCommits } from '@utils/git/repositoryOverview';
 import { findToolInCommonPaths } from '@utils/system/binaryResolver';
 import {
   checkToolInstalled,
@@ -176,12 +174,6 @@ import type { DesktopSetupAuth } from './desktopSetupAuth.js';
 import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';
 
 const moduleDirname = import.meta.dirname;
-/**
- * Maximum number of commits the renderer displays in the launcher banner.
- * Mirrors the extension's `texra.git.numberOfCommitsToShow` default (20). The
- * desktop has no per-user override.
- */
-const DESKTOP_RECENT_COMMIT_LIMIT = 20;
 let mainWindow: BrowserWindow | null = null;
 let reopenMainWindow: (() => void) | undefined;
 /** Window-owned post-launch funnel refresh. The process resume owner reads
@@ -291,7 +283,7 @@ function createWindow(options: {
   const initialProject = activeProject();
   const initialWindowTitle = getDesktopWindowTitle(
     initialProject.session,
-    initialProject.root,
+    initialProject.root && initialProject.display.name,
   );
   const window = new BrowserWindow({
     // The task canvas remains useful with a project sidebar and an optional
@@ -795,14 +787,6 @@ function createWindow(options: {
     });
     return result.canceled ? undefined : result.filePaths;
   };
-  const recentCommitsOf = (project: DesktopProject) =>
-    project.root
-      ? readRecentCommits(project.root, DESKTOP_RECENT_COMMIT_LIMIT, {
-          // This project's own slots: the read runs for the paper it belongs to.
-          settings: project.roots,
-          onError: reportBackgroundError,
-        })
-      : Effect.succeed({ commits: [] as string[], isGitRepo: false });
   /**
    * One binding per open project for this window (PRD 8.1, 12.2): the
    * session bridge the renderer subscribes to, the project's `host` snapshot,
@@ -823,9 +807,7 @@ function createWindow(options: {
   const projectBindings = new Map<string, ProjectBinding>();
   const bindProject = (project: DesktopProject): ProjectBinding => {
     const { workspace, browserViews } = createProjectWorkspace(project);
-    const agentRunHost = agentRunHostFor(
-      projectDisplayOf(project.key, project.root).name,
-    );
+    const agentRunHost = agentRunHostFor(project.display.name);
     const files = createDesktopFileSelection({
       workspacePath: project.root,
       showOpenFileDialog: openFileDialog,
@@ -855,7 +837,8 @@ function createWindow(options: {
       ),
     );
     const snapshot = createHostSnapshotSource({
-      project: projectDisplayOf(project.key, project.root),
+      project: project.display,
+      root: project.root,
       stores: project.session.roots,
       secrets: options.secrets,
       fileOptions: () =>
@@ -869,7 +852,6 @@ function createWindow(options: {
               }),
           ),
         ),
-      readRecentCommits: () => recentCommitsOf(project),
       onError: reportBackgroundError,
       publish: (next) => bridge.setHost(next),
     });
@@ -909,7 +891,6 @@ function createWindow(options: {
       runtime,
       session: project.session,
       secrets: options.secrets,
-      globalState: options.globalState,
       draftRequests: hostDraftRequests,
       host: {
         ...agentRunHost,
@@ -1052,8 +1033,8 @@ function createWindow(options: {
     );
     postToRendererIfAlive({
       command: DESKTOP_PROJECT_COMMANDS.PROJECTS,
-      projects: projects.flatMap(({ key, root }) =>
-        root === undefined ? [] : [{ key, root }],
+      open: projects.flatMap(({ key, root }) =>
+        root === undefined ? [] : [key],
       ),
       activeKey,
     });
@@ -1249,7 +1230,7 @@ function createWindow(options: {
           installDesktopWindowTitle(
             window,
             project.session,
-            project.root,
+            project.root && project.display.name,
             () => projectScope === owner,
           ),
         ),
@@ -1427,6 +1408,12 @@ function createWindow(options: {
       openWorkspaceFolder,
       signIn,
       showInfoMessage,
+      showLauncher: () => {
+        if (!attachedProject) return;
+        projectBindings
+          .get(attachedProject.key)
+          ?.bridge.surfaceAction({ kind: 'selectNew' });
+      },
       onAsyncError: reportAsyncError,
       runtime,
     },

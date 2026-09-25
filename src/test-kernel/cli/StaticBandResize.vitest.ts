@@ -193,7 +193,6 @@ describe('Static band resize', () => {
     function App(): unknown {
       const { columns } = ink.useWindowSize();
       return createElement(StaticConversationTranscript, {
-        colorEnabled: true,
         ownerKey: 'resize-owner',
         scrollbackRunId: runId,
         width: columns,
