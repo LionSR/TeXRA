@@ -371,9 +371,7 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
       options?.parentRunId ?? null,
       ctx.logger,
     );
-    // Shared parameterization of the terminal finalizer for every exit of the
-    // one terminal below; outcome, error facts, and the delivery hook are the
-    // only per-exit inputs.
+    // The terminal finalizer; outcome, error facts and delivery vary per exit.
     const finalizeTerminal = (arm: {
       outcome: RunOutcome;
       error?: ResultEvent['error'];
@@ -389,60 +387,65 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
         ...arm,
       });
     /**
-     * The single owner of provider/runtime failure exits, entered from two
-     * exits of the terminal below: a flow carrying structured error metadata
-     * and an exception that escaped the runner. Outcome-only domain failures bypass classification and
-     * finalize through the ordinary terminal-result path without a fabricated
-     * RetryErrorInfo.
+     * The single owner of provider/runtime failure exits: a flow carrying
+     * structured error metadata, or an exception that escaped the runner.
      */
     const finalizeFailedRun = Effect.fn(function* (
       err: unknown,
       carried: AgentFlowResult | undefined,
       stopped = false,
     ) {
-      const kind = classifyAgentError(err);
+      // A throw in this fallible prologue must not strand the tracked handle
+      // without its terminal: it falls back to an unexpected failure.
+      const prologue = yield* Effect.exit(
+        Effect.sync(() => {
+          const kind = classifyAgentError(err);
+          // toRetryErrorInfo strips rawErrorBody, which the `run.end` error
+          // type omits and a bare object spread would smuggle past the check.
+          const { message: sdkMsg, ...providerErrorInfo } = toRetryErrorInfo(
+            normalizeProviderError(err),
+          );
+          const errorMsg = `Error executing agent ${agentIdentifier}: ${sdkMsg}`;
+          // Root failures are logged here; a subagent's is delivered to its
+          // orchestrator, so a second wrapper error would blame the parent.
+          if (kind !== 'abort' && !handle.isChild) {
+            logSdkError(ctx.logger, errorMsg, err, {
+              operation: `execute ${agentIdentifier}`,
+            });
+          }
+          const message = kind === 'unexpected' ? errorMsg : sdkMsg;
+          // `abort`/`disk-full` never carry provider or credential fields
+          // (`terminalError()`): narrow them so runRecords' union stays honest.
+          const error: NonNullable<ResultEvent['error']> =
+            kind === 'abort' || kind === 'disk-full'
+              ? {
+                  kind,
+                  message,
+                  userRetryable: providerErrorInfo.userRetryable,
+                  partialText: providerErrorInfo.partialText,
+                }
+              : { kind, message, ...providerErrorInfo };
+          return { kind, errorMsg, error };
+        }),
+      );
+      const fallbackMsg = `Error executing agent ${agentIdentifier}: ${toErrorMessage(err)}`;
+      const { kind, errorMsg, error } = Exit.isSuccess(prologue)
+        ? prologue.value
+        : yield* logLifecycleWarning('Run failure prologue failed', {
+            runId,
+            error: Cause.squash(prologue.cause),
+          }).pipe(
+            Effect.as({
+              kind: 'unexpected' as const,
+              errorMsg: fallbackMsg,
+              error: { kind: 'unexpected' as const, message: fallbackMsg },
+            }),
+          );
       // A stop that reached the run outranks the failure beside it; the
       // failure still rides the cancelled row as its error detail.
       const outcome = stopped
         ? RUN_OUTCOME.CANCELLED
         : AGENT_ERROR_OUTCOME[kind];
-      // normalizeProviderError recovers the structured shape the flow attached
-      // (T2-2) when there was one, or formats a fresh one otherwise.
-      // toRetryErrorInfo strips rawErrorBody, which the `run.end` error type
-      // omits and a bare object spread would smuggle past the type check.
-      const { message: sdkMsg, ...providerErrorInfo } = toRetryErrorInfo(
-        normalizeProviderError(err),
-      );
-      const errorMsg = `Error executing agent ${agentIdentifier}: ${sdkMsg}`;
-
-      // Root-agent failures are surfaced in the stream log. Subagent failures
-      // are delivered to the orchestrator below, so avoid adding a second
-      // wrapper error that makes a child failure look like the parent failed.
-      if (kind !== 'abort' && !handle.isChild) {
-        logSdkError(ctx.logger, errorMsg, err, {
-          operation: `execute ${agentIdentifier}`,
-        });
-      }
-
-      const message = kind === 'unexpected' ? errorMsg : sdkMsg;
-      // `abort`/`disk-full` route through `formatProviderHttpError`'s
-      // `terminalError()` branch, which never populates the provider or
-      // credential fields: narrow to the fields it sets so the `run.end`
-      // error's per-kind union stays honest (see runRecords.ts). Abort still
-      // carries the SDK message for event consumers.
-      const error: NonNullable<ResultEvent['error']> =
-        kind === 'abort' || kind === 'disk-full'
-          ? {
-              kind,
-              message,
-              userRetryable: providerErrorInfo.userRetryable,
-              partialText: providerErrorInfo.partialText,
-            }
-          : {
-              kind,
-              message,
-              ...providerErrorInfo,
-            };
       const subagentResult = handle.isChild
         ? (carried ??
           buildTerminalFlowResult(
@@ -452,9 +455,8 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
             ctx.attachedMemoryMisses,
           ))
         : undefined;
-      // One finalize covers all three exits below (subagent / abort / throw).
-      // Terminal-error toasts are the hosts', from the `run.end` row via
-      // `session.onResult` + `terminalResultToast`.
+      // One finalize covers all three exits below (subagent / abort / throw);
+      // hosts toast from the `run.end` row (`terminalResultToast`).
       const finalized = yield* finalizeTerminal({
         outcome,
         error,
@@ -469,10 +471,8 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
                 )
             : undefined,
       });
-      // The finalizer resolved this run's terminal fact, and the exits below
-      // report the one it published.
+      // The exits below report the terminal fact the finalizer published.
       const resolvedOutcome = finalized.event.outcome;
-
       if (subagentResult) {
         return withResolvedOutcome(subagentResult, resolvedOutcome);
       }

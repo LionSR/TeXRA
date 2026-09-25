@@ -17,6 +17,7 @@ import {
   type WorkflowFlowResult,
 } from '@agent/runtime/AgentFlowResult';
 import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
+import { attachProviderError } from '@common/errors/sdkError/errorMetadata';
 import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
 import { setLogSink } from '@logger/logSink';
 import {
@@ -510,6 +511,34 @@ describe('runFlowWithLifecycle', () => {
         },
       );
       expect(stageEnd).toHaveBeenCalledWith(RUN_OUTCOME.FAILED);
+    }),
+  );
+
+  // The failure prologue is fallible (here: caching recovered provider
+  // metadata onto a frozen wrapper throws); it must still reach the terminal.
+  it.effect('finalizes a failure whose classification threw', () =>
+    Effect.gen(function* () {
+      const { runId, ctx } = lifecycleFixture();
+      const cause = new Error('overloaded');
+      attachProviderError(cause, {
+        message: 'overloaded',
+        userRetryable: true,
+      });
+      const frozen = Object.freeze(new Error('flow failed', { cause }));
+
+      const error = yield* Effect.flip(runFlow(ctx, () => Effect.fail(frozen)));
+      expect(error.message).toContain('flow failed');
+      expect(storageMocks.finalizeRun).toHaveBeenCalledWith(
+        testDefaultSession(),
+        expect.objectContaining({
+          runId,
+          outcome: RUN_OUTCOME.FAILED,
+          error: {
+            kind: 'unexpected',
+            message: 'Error executing agent test-agent: flow failed',
+          },
+        }),
+      );
     }),
   );
 
