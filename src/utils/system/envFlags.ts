@@ -23,6 +23,10 @@
  */
 import { Config, ConfigProvider, Effect, Layer, Option } from 'effect';
 
+import type { ApiKeyProviderId } from '@shared/constants/modelProviderPlugins';
+import { API_KEY_ENV_NAMES, apiKeyEnvName } from '@shared/constants/providers';
+import { IS_WINDOWS } from '@utils/system/platformPaths';
+
 const ENV_FLAG_OFF_VALUES = new Set(['', '0', 'false', 'no', 'off']);
 
 /**
@@ -55,4 +59,26 @@ export const envFlag = (name: string): Effect.Effect<boolean> =>
 /** Sync face of `envFlag` for non-Effect callers (telemetry gate, `texra doctor`, CLI update notice). */
 export function isEnvFlagEnabled(name: string): boolean {
   return isEnvFlagValueOn(process.env[name]);
+}
+
+/**
+ * The environment a child process TeXRA spawns starts from: this process's,
+ * minus every provider API-key variable TeXRA reads as its own credential
+ * ({@link API_KEY_ENV_NAMES}). What a child prints lands in tool results and
+ * the transcript, so the key is never there to print. `keep` names the one
+ * provider whose key a child agent CLI authenticates with itself. Windows
+ * matches variable names case-insensitively, as its environment does.
+ */
+export function inheritedEnv(keep?: ApiKeyProviderId): Record<string, string> {
+  const fold = (name: string) => (IS_WINDOWS ? name.toUpperCase() : name);
+  const kept = keep === undefined ? undefined : apiKeyEnvName(keep);
+  const withheld = new Set(
+    API_KEY_ENV_NAMES.filter((name) => name !== kept).map(fold),
+  );
+  return Object.fromEntries(
+    Object.entries(process.env).filter(
+      (entry): entry is [string, string] =>
+        entry[1] !== undefined && !withheld.has(fold(entry[0])),
+    ),
+  );
 }

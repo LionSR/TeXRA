@@ -493,8 +493,6 @@ describe('completedRunArchive facade', () => {
           },
         ]);
         yield* session.settlePublications();
-        const logs = session.transcripts;
-        logs.requestEviction(runId);
 
         const launchFailure = new Error(
           'stop after resumed writer acquisition',
@@ -536,30 +534,27 @@ describe('completedRunArchive facade', () => {
           },
         ]);
 
-        const acquireRunResidency = logs.acquireRunResidency.bind(logs);
+        const attachRunTrace = session.attachRunTrace.bind(session);
         const resumedWriter = vi
-          .spyOn(logs, 'acquireRunResidency')
-          .mockImplementationOnce((requestedRunId) =>
-            Effect.gen(function* () {
-              const writer = yield* acquireRunResidency(requestedRunId);
-              session.publish([
-                {
-                  type: 'log',
-                  aggregateId: aggregateId('run', runId),
-                  level: 'info',
-                  messageType: MESSAGE_TYPES.USER_MESSAGE,
-                  message: 'Now prove the second lemma.',
-                },
-                {
-                  type: 'response.finalized',
-                  aggregateId: aggregateId('run', runId),
-                  text: 'Second proof.',
-                },
-              ]);
-              yield* session.settlePublications().pipe(Effect.orDie);
-              return writer;
-            }),
-          );
+          .spyOn(session, 'attachRunTrace')
+          .mockImplementationOnce((trace, requestedRunId) => {
+            const detach = attachRunTrace(trace, requestedRunId);
+            session.publish([
+              {
+                type: 'log',
+                aggregateId: aggregateId('run', runId),
+                level: 'info',
+                messageType: MESSAGE_TYPES.USER_MESSAGE,
+                message: 'Now prove the second lemma.',
+              },
+              {
+                type: 'response.finalized',
+                aggregateId: aggregateId('run', runId),
+                text: 'Second proof.',
+              },
+            ]);
+            return detach;
+          });
 
         expect(
           yield* Effect.flip(
@@ -570,7 +565,7 @@ describe('completedRunArchive facade', () => {
           ),
         ).toBe(launchFailure);
 
-        expect(resumedWriter).toHaveBeenCalledWith(runId);
+        expect(resumedWriter).toHaveBeenCalledWith(expect.anything(), runId);
         const released = yield* Effect.result(
           getRunRecords(session, runId).writeReport('late write'),
         );

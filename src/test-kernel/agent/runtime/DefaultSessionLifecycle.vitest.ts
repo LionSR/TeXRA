@@ -54,7 +54,6 @@ describe('default session lifecycle', () => {
       });
       yield* Effect.gen(function* () {
         expect(tryDefaultSession()).toBe(session);
-        expect(session.transcripts.mode).toEqual(transcriptMode);
         // `initializeDefaultSession` carries no error channel and a second
         // initialization dies (SessionHandle.ts:1403-1415), so the assertion
         // reads the exit and its die reason rather than `Effect.flip`.

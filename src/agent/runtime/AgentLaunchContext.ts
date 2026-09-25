@@ -7,6 +7,7 @@ import { ModelProvider, type ModelConfig } from 'llm-zoo';
 import { refresh, resolveAgentForLaunch } from '@agent/index';
 import {
   logUserMessage,
+  TraceEmitter,
   type AgentTrace,
   type StageHandle,
 } from '@agent/trace';
@@ -47,7 +48,6 @@ import {
 } from '@shared/schemas';
 import { UsageLog } from '@shared/usageLog';
 import { parseWorkingDirectory } from '@tools/pathResolution';
-import { createRunTrace, type RunTrace } from '@transcript';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 import { mediaNeedsVisionWarning } from './mediaVisionWarning';
@@ -362,36 +362,13 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
       secrets: yield* Secrets,
     };
 
-    // The residency, the trace store and its disposal are one atomic
-    // acquisition: an interruption cannot slip between them and strand an
-    // unowned trace, which is what the launch's old region mask stood in for.
-    // The run's scope owns the trace: its subscribers (channel sink +
-    // transcript recorder) are dropped when the run ends, and when a launch
-    // that never became a run unwinds.
-    const { runTrace, rawRunTrace, attachment } = yield* Effect.acquireRelease(
-      Effect.gen(function* () {
-        const residency = yield* session.transcripts.acquireRunResidency(runId);
-        const rawRunTrace = createRunTrace(residency);
-        // The composed trace enters the store BEFORE session attachment, so a
-        // failed attachment still disposes the raw trace through the store.
-        const attachment: { detach?: () => void } = {};
-        const runTrace: RunTrace = {
-          trace: rawRunTrace.trace,
-          dispose: () => {
-            try {
-              attachment.detach?.();
-            } finally {
-              rawRunTrace.dispose();
-            }
-          },
-        };
-        return { runTrace, rawRunTrace, attachment };
-      }),
-      ({ runTrace }) => Effect.sync(() => runTrace.dispose()),
+    const agentLogger = new TraceEmitter();
+    // The run's scope owns the trace's session attachment: it is dropped when
+    // the run ends, and when a launch that never became a run unwinds.
+    yield* Effect.acquireRelease(
+      Effect.sync(() => session.attachRunTrace(agentLogger, runId)),
+      (detach) => Effect.sync(detach),
     );
-    attachment.detach = session.attachRunTrace(rawRunTrace.trace, runId);
-
-    const agentLogger = runTrace.trace;
 
     const isRemote = agentEntry.source === 'remote';
     // Registration committed creation, configuration and initial activation,
@@ -415,7 +392,7 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
       );
     }
 
-    input.onRunResolved?.(runId, runTrace.trace);
+    input.onRunResolved?.(runId, agentLogger);
 
     // Log the initial instruction as a user message so both workflow and
     // tool-use tabs display it inline with the stream log (no separate panel).

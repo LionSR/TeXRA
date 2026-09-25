@@ -130,7 +130,6 @@ export function startDetachedChildRunLoop<TTurn, R = never>(
     input.runId,
     Effect.gen(function* () {
       let childRun: ChildRun | undefined;
-      let autoCloseOnLaunchFailure = false;
       const setup = yield* Effect.exit(
         Effect.gen(function* () {
           let launch: DetachedChildRunLaunch<TTurn, R>;
@@ -140,7 +139,6 @@ export function startDetachedChildRunLoop<TTurn, R = never>(
           } else {
             launch = yield* input.buildLaunch();
           }
-          autoCloseOnLaunchFailure = launch.strategy.autoCloseChildRun === true;
           const {
             createChildRun: _createChildRun,
             buildLaunch: _buildLaunch,
@@ -164,7 +162,6 @@ export function startDetachedChildRunLoop<TTurn, R = never>(
             childRun.finalize({
               outcome: RUN_OUTCOME.FAILED,
               error,
-              autoClose: autoCloseOnLaunchFailure,
             }),
           );
           if (Exit.isFailure(finalized)) {

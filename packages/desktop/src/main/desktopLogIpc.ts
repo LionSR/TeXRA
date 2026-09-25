@@ -1,6 +1,5 @@
 import { Data, Effect, FileSystem } from 'effect';
 
-import type { ProcessRuntime } from '@platform/processRuntime';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
@@ -28,10 +27,6 @@ export interface DesktopLogIpcOptions {
   readLog(): DesktopLogSnapshot;
   copyLog(text: string): void;
   showSaveDialog(options: SaveDialogOptions): Promise<SaveDialogReturnValue>;
-  onAsyncError: (error: unknown) => void;
-  /** Runs the copy and export actions and supplies the filesystem the export
-   *  writes through. */
-  runtime: ProcessRuntime;
 }
 
 export function createDesktopLogIpc(
@@ -92,31 +87,17 @@ export function createDesktopLogIpc(
       ),
     );
 
-  const runLogAction = (
-    program: Effect.Effect<void, DesktopLogActionFailed, FileSystem.FileSystem>,
-  ) =>
-    options.runtime.runFork(
-      program.pipe(
-        Effect.catch((error: DesktopLogActionFailed) =>
-          Effect.sync(() => options.onAsyncError(error)),
-        ),
-      ),
-    );
-
   return {
-    handleMessage(message: DesktopCommandMessage): boolean {
+    handleMessage(message: DesktopCommandMessage) {
       switch (message.command) {
         case DESKTOP_LOG_COMMANDS.REQUEST_LOG:
-          postSnapshot();
-          return true;
+          return Effect.sync(postSnapshot);
         case DESKTOP_LOG_COMMANDS.COPY_LOG:
-          runLogAction(copyLog(postSnapshot().text));
-          return true;
+          return Effect.suspend(() => copyLog(postSnapshot().text));
         case DESKTOP_LOG_COMMANDS.EXPORT_LOG:
-          runLogAction(exportLog(postSnapshot().text));
-          return true;
+          return Effect.suspend(() => exportLog(postSnapshot().text));
         default:
-          return false;
+          return undefined;
       }
     },
   };

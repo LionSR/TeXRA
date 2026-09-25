@@ -2,7 +2,7 @@
 import { Cause, Effect, Exit } from 'effect';
 
 // Local imports
-import type { AgentTrace, StageHandle } from '@agent/trace';
+import { TraceEmitter, type AgentTrace, type StageHandle } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { finalizeRunTerminal } from '@agent/runtime/AgentRunLifecycle';
 import { finalizeRun } from '@agent/storage/runLifecycle';
@@ -17,7 +17,6 @@ import type {
   RunOutcome,
   UserFollowUpSupport,
 } from '@shared/schemas';
-import { createRunTrace } from '@transcript';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -51,8 +50,6 @@ interface FinalizeChildRunOptions {
   stopped?: boolean;
   /** Session stage closed with the derived outcome (agent-CLI loop's stage). */
   stage?: Pick<StageHandle, 'end'>;
-  /** Release completed transcript residency while preserving command history. */
-  autoClose?: boolean;
 }
 
 export interface ChildRun {
@@ -90,8 +87,7 @@ export const createChildRun = Effect.fn('createChildRun')(function* (
   // settle would instead report whatever session-scoped publication anyone
   // else queued and fail an otherwise sound launch over it.
   const runs = yield* Runs;
-  const residency = yield* session.transcripts.acquireRunResidency(runId);
-  const runTrace = createRunTrace(residency);
+  const trace = new TraceEmitter();
   const handle = new RunHandle(
     {
       runId,
@@ -99,23 +95,20 @@ export const createChildRun = Effect.fn('createChildRun')(function* (
       category: options.config.agentCategory,
     },
     parentRunId,
-    runTrace.trace,
+    trace,
   );
   let detachSessionTrace: (() => void) | undefined;
   let started = false;
   const setup = yield* Effect.exit(
     Effect.sync(() => {
       // Attach the run's canonical event publication before activation.
-      detachSessionTrace = session.attachRunTrace(runTrace.trace, runId);
-      const disposeTrace = () => {
-        detachSessionTrace?.();
-        runTrace.dispose();
-      };
+      detachSessionTrace = session.attachRunTrace(trace, runId);
+      const disposeTrace = () => detachSessionTrace?.();
 
       // Registration already committed the launch and activation together.
       started = true;
       runs.track(handle);
-      runTrace.trace.emit({
+      trace.emit({
         type: 'run.config',
         runId,
         config: options.config,
@@ -123,12 +116,12 @@ export const createChildRun = Effect.fn('createChildRun')(function* (
 
       return {
         childRunId: runId,
-        logger: runTrace.trace,
+        logger: trace,
         finalize: (finalizeOptions) =>
           finalizeChildRun({
             handle,
             session,
-            logger: runTrace.trace,
+            logger: trace,
             disposeTrace,
             options: finalizeOptions,
           }),
@@ -171,7 +164,6 @@ export const createChildRun = Effect.fn('createChildRun')(function* (
         runs.untrackIfCurrent(handle);
       }),
       Effect.sync(() => detachSessionTrace?.()),
-      Effect.sync(() => runTrace.dispose()),
     ];
     for (const cleanup of cleanups) {
       const cleaned = yield* Effect.exit(cleanup);
@@ -198,7 +190,7 @@ interface FinalizeChildRunArgs {
 /**
  * Finalize a child run: presentation logging plus the child's report of
  * its own exit, then the shared terminal finalizer (settle, untrack, terminal
- * run phase) and the autoClose residency release. Child runs never traverse
+ * run phase). Child runs never traverse
  * the run lifecycle, so this is their only settle point.
  *
  * No `output` is passed, by rule rather than by omission: a child loop's
@@ -262,9 +254,6 @@ const finalizeChildRun = Effect.fn('finalizeChildRun')(function* (
   });
   disposeTrace();
 
-  if (options.autoClose) {
-    session.transcripts.requestEviction(handle.runId);
-  }
   // The port's contract is "resolves once the terminal finalizer has
   // persisted": a `run.end` row that never wrote is this finalize's failure,
   // so the loop's cleanup aggregation fails the loop over it rather than

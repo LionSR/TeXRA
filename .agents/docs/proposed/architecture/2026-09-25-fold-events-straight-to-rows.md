@@ -172,6 +172,13 @@ and `packages/cli/src/chat/chatSessionController.ts:794`. `readEvents` moves
 beside `Database.readAggregate`. The `StreamLogStore` list in
 `config/ratchets/store-public-surface-baseline.json` shrinks to nothing in the
 same PR (a shrink, never a widening). `StreamLogStoreLoad.vitest.ts` goes.
+Landed ahead of S3 (cache half): `StreamLogStore.ts` is deleted outright.
+`readEvents` is `SessionHandle.readRunEvents`, beside `readAggregate`; the
+cold entry fold is `readRunEntries` (`src/transcript/runEntries.ts`) until
+S3's `foldRunTranscript` replaces it. With the leases gone, `createRunTrace`
+wrapped nothing and went too, as did the child-run `autoClose` option, whose
+only effect was the eviction. The store-public-surface ratchet and its
+baseline are deleted with the class they budgeted.
 
 S1 and S2 are independent. S3 needs S2 (the side projections must not still
 want entries). S4 needs S3 (`foldRunTranscript` and `openWork` exist). Net

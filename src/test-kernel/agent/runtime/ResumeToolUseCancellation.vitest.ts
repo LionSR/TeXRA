@@ -147,7 +147,6 @@ const LANE_SESSION = {
   acquireClaims: () => Effect.succeed(Effect.void),
   graph: { releaseClaims: mocks.releaseClaims },
   releaseClaims: SessionHandle.prototype.releaseClaims,
-  transcripts: { ensureLoaded: vi.fn(() => Effect.void) },
   // The resumed run reads its parent edge off the session's cold fold, so the
   // lineage fixture is that read.
   readView: (...args: unknown[]) =>

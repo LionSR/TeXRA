@@ -150,8 +150,8 @@ export interface SharedHostRequestBindings {
   ): HostVerb<void>;
   /** Ask for a provider API key: a prompt on one host, the Models tab on the
    *  other. The caller re-reads the secret store after this returns. */
-  setApiKey(provider: string | undefined): HostVerb<void>;
-  openApiKeyGuide(provider: string | undefined): HostVerb<void>;
+  readonly setApiKey: HostVerb<void>;
+  readonly openApiKeyGuide: HostVerb<void>;
   /** The agent settings, for the sub-tab a session type names or for none. */
   openAgentSettings(
     sessionType: AgentConfigBannerRequest['sessionType'] | undefined,
@@ -348,9 +348,7 @@ export function handleSharedHostRequest(
         yield* host.openSettings(request.section, request.sessionType);
         return done;
       case 'apiKeyBanner':
-        yield* request.action === 'set'
-          ? host.setApiKey(request.provider ?? undefined)
-          : host.openApiKeyGuide(request.provider ?? undefined);
+        yield* request.action === 'set' ? host.setApiKey : host.openApiKeyGuide;
         return done;
       case 'agentConfigBanner':
         switch (request.action) {
@@ -384,7 +382,7 @@ export function handleSharedHostRequest(
             yield* host.onboarding.signInChatGpt;
             return done;
           case 'setApiKey':
-            yield* host.setApiKey(undefined);
+            yield* host.setApiKey;
             return done;
           case 'skip':
             yield* host.onboarding.skip;

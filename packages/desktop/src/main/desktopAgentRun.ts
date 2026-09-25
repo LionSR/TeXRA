@@ -56,8 +56,8 @@ export interface DesktopAgentRunOptions {
   /** Preview operations reject; the approval controller presents failures. */
   toolEditPreview: Omit<DesktopToolEditApprovalUi, 'showErrorMessage'>;
   session: SessionHandle;
-  /** A run loaded an agent from the custom directory: the New-task
-   *  state's agent-config banner (`HostSnapshot.banners`). */
+  /** A launch could not find its agent: the New-task state's
+   *  agent-config banner (`HostSnapshot.banners`). */
   showAgentConfigBanner(data: {
     agentName: string;
     category: AgentCategory;

@@ -89,7 +89,6 @@ import { RunLedger } from '@shared/session/runLedger';
 import {
   aggregateId as qualifyAggregateId,
   aggregateTarget,
-  DEBUG_MODE_KEY,
   isDisplaySessionEvent,
   ownerIdentity,
   TOOL_CALL_STATUS,
@@ -121,8 +120,6 @@ import { directLeanLanguageServices } from '@tools/lean/direct/directLspAdapter'
 import type { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import { SetupPlatform, type SetupPlatformShape } from '@tools/setup/platform';
 import { toolRegistryLayer } from '@tools/registry';
-import { StreamLogStore } from '@transcript/StreamLogStore';
-import { readConfigSettingFrom } from '@utils/config/platformSettings';
 import { processEnvConfigLayer } from '@utils/system/envFlags';
 import { inquiryRecordsLayer } from './inquiryRecords';
 import { updateCheckRecordsLayer } from './updateCheckRecords';
@@ -520,11 +517,6 @@ const sessionHandleLayer = (
       );
       // Capture the startup cohort before callers can publish new launches.
       const initialListing = yield* eventLog.readListing();
-      const transcripts = StreamLogStore.open(
-        eventLog,
-        key.open.transcriptMode,
-        readConfigSettingFrom<boolean>(key.open.roots.config, DEBUG_MODE_KEY),
-      );
       // The gate's probe fibers and waiting calls end with this scope, after
       // the handle below has unwound its runs.
       const modelRetries = yield* ModelRetryGate.make;
@@ -532,7 +524,6 @@ const sessionHandleLayer = (
         Effect.gen(function* () {
           const handle = new SessionHandle({
             ...key.open,
-            transcripts,
             graph,
             modelRetries,
           });
@@ -571,19 +562,18 @@ const sessionHandleLayer = (
       yield* SubscriptionRef.set(delivered, anchor);
       yield* reads.all(anchor, delivered).pipe(
         Stream.runForEach((event) =>
-          session.receiveCommittedEvent(event).pipe(
-            Effect.andThen(() => {
-              const target = aggregateTarget(event.aggregateId);
-              // The local half of a committed removal. The run's goal needs
-              // nothing: `run.removed` drops the run from the view, and its
-              // `goalStateChanged` row goes with it.
-              return event.type === 'run.removed' && target.kind === 'run'
-                ? Effect.sync(() => {
-                    session.runs.detachChildren(target.id);
-                    releaseRunResources(target.id, session);
-                  })
-                : Effect.void;
-            }),
+          Effect.suspend(() => {
+            const target = aggregateTarget(event.aggregateId);
+            // The local half of a committed removal. The run's goal needs
+            // nothing: `run.removed` drops the run from the view, and its
+            // `goalStateChanged` row goes with it.
+            return event.type === 'run.removed' && target.kind === 'run'
+              ? Effect.sync(() => {
+                  session.runs.detachChildren(target.id);
+                  releaseRunResources(target.id, session);
+                })
+              : Effect.void;
+          }).pipe(
             Effect.andThen(() => {
               // A row that closes live text drops the held chunks: a
               // stream's final text or a card's terminal result drop their

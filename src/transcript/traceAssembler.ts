@@ -76,10 +76,7 @@ export const assembleTrace = Effect.fn('assembleTrace')(function* (
   session: SessionHandle,
 ): Effect.fn.Return<AssembleTraceResult, Error> {
   const [record, events] = yield* Effect.all(
-    [
-      readPersistedRunRecord(runId, session),
-      session.transcripts.readEvents(runId),
-    ],
+    [readPersistedRunRecord(runId, session), session.readRunEvents(runId)],
     { concurrency: 2 },
   );
   if (!record) return { status: 'config_missing' };

@@ -102,6 +102,16 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
   issued in the instant a run or in-band subagent was starting could miss it,
   and a caller waiting on that subagent could hang. A stop now interrupts the
   run itself, from its first step.
+- **A run another TeXRA window takes over at the same moment is reported as
+  running elsewhere.** When two windows or processes resume or relaunch the
+  same run at once, the one that loses now says the run is held elsewhere,
+  instead of failing with a generic database write error.
+- **A hidden TeXRA view now comes forward for every request, not only file
+  edits (VS Code).** A command approval, workflow proposal, plan, question,
+  outside-model inquiry or retry could wait unseen while you were in the
+  editor, and the run stalled. Now the TeXRA icon shows how many requests are
+  waiting, and a new one brings the view forward. It no longer moves keyboard
+  focus there, so you can keep typing in your document.
 - **File tools no longer follow a symlink out of the workspace.** A symlink
   inside the workspace (for example `up -> ..`) let `write_file`, `edit_file`
   and `read_file` reach files outside it, and the approval prompt showed the
@@ -117,6 +127,8 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
 - **Clearer tool and error cards.** An edit refused because the file was not
   read first is no longer labeled like a read, and error details no longer
   list the internal `userRetryable` flag or an empty provider body.
+- **The "agent file is missing" warning clears once a launch succeeds.**
+  It used to stay above the launcher until the window reloaded.
 - **Workflow agents no longer fail when an intermediate round hits the
   output length limit.** A multi-round (reflection) agent whose response in
   any round but the last was cut off and continued stopped at the next round
@@ -139,6 +151,22 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
   function no longer shadows `$PATH`, which hid the `texra` and `awk` it calls.
 - **Bundled skill descriptions no longer name Codex** — they read "Use when
   you need…" in every host.
+- **Credentials stay out of command output and the transcript.** Shell
+  commands the agent runs, and the Claude Code and Codex agents, no longer
+  inherit the provider API-key environment variables TeXRA reads (such as
+  `OPENAI_API_KEY` or `DEEPSEEK_API_KEY`). Claude Code still receives its
+  Anthropic key and Codex its OpenAI key. Your other environment variables
+  are passed through unchanged. An Overleaf or ShareLaTeX clone no longer
+  stores your Git token in the project's remote URL, so `git remote -v` and
+  `.git/config` cannot show it. After cloning, TeXRA offers the token to
+  your Git credential helper (the macOS keychain or Git Credential Manager,
+  for example), so later pulls and pushes still sign in. Without a helper,
+  Git asks for the token. For a project cloned by an earlier version, run
+  `git remote set-url origin https://git@git.overleaf.com/<project-id>` to
+  remove the stored token. An error about a malformed MCP config file no
+  longer quotes the file's contents, and an MCP server's error output goes
+  to the TeXRA log instead of the transcript. Raw provider error responses
+  are written to the log, not the transcript.
 - **The desktop app shuts down cleanly when startup fails early.** If
   startup failed before the project list opened (for example, when the
   project records could not be read), shutdown reported two errors and left a
@@ -301,6 +329,12 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
   the conversation in one click, is gone. Delete now lives at the end of
   the run's ⋯ menu, asks for confirmation, and is not offered while the run
   is still going.
+- **A finished session says what to do next.** Where the message box
+  stood, an ended session now shows "This session has ended." with an
+  **Edit as new task** button (it opens New task with the same agent and
+  instruction), plus **Resume** when the session was interrupted. Workflow
+  runs get the same line. Edit as new task left the ⋯ menu. The run board
+  calls steps it has not reached "Not started" instead of "Declared".
 
 #### Bug Fixes
 
