@@ -4,7 +4,7 @@
   "files": {
     "packages/cli/src/chat/chatSessionController.ts": 1401,
     "packages/cli/src/chat/tui/App.tsx": 711,
-    "packages/cli/src/chat/tui/commands/registerBuiltins.tsx": 663,
+    "packages/cli/src/chat/tui/commands/registerBuiltins.tsx": 560,
     "packages/cli/src/chat/tui/panes/InputBar.tsx": 539,
     "packages/cli/src/chat/tui/panes/staticTranscriptRing.ts": 794,
     "packages/cli/src/chat/tui/panes/statusBarDisplay.ts": 928,
@@ -15,7 +15,7 @@
     "packages/cli/src/chat/tui/state/cliState.ts": 553,
     "packages/cli/src/commands/_helpers/dispatch.ts": 670,
     "packages/cli/src/commands/workflow.ts": 516,
-    "packages/cli/src/onboarding/runOnboarding.tsx": 589,
+    "packages/cli/src/onboarding/runOnboarding.tsx": 501,
     "packages/cli/src/runtime/doctor.ts": 586,
     "packages/cli/src/runtime/executeCli.ts": 680,
     "packages/cli/src/runtime/history.ts": 587,

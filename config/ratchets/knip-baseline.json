@@ -680,6 +680,12 @@
       "name": "parseKimiCodeUsage"
     },
     {
+      "file": "src/controllers/onboarding/onboardingFunnel.ts",
+      "category": "production-dead",
+      "kind": "exports",
+      "name": "planOnboardingFunnelTransition"
+    },
+    {
       "file": "src/replacement/engine.ts",
       "category": "production-dead",
       "kind": "exports",

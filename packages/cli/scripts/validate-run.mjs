@@ -37,6 +37,7 @@ const validationFlagName = '.texra-internal-validation-model';
 const validationBundleMarker = validationFlagContent.trim();
 const VALIDATION_FAKE_API_KEY = 'texra-validation-fake-key';
 const ESC = String.fromCharCode(27);
+const ETX = String.fromCharCode(3); // Ctrl-C
 const validationProviderApiKeyEnv = [
   'OPENAI_API_KEY',
   'ANTHROPIC_API_KEY',
@@ -596,42 +597,47 @@ async function validateChatOnboardingPicker(options) {
   const root = mkdtempSync(path.join(tmpdir(), 'texra-cli-onboarding-'));
   try {
     const home = path.join(root, 'home');
-    let exitSent = false;
-    let welcomeExitTimer;
-    const sendEsc = (pty) => {
-      if (exitSent) return;
-      exitSent = true;
-      pty.write(ESC);
+    let exitScheduled = false;
+    // With no credential the chat still opens, the "Connect a model" panel on
+    // top: Esc closes the panel into the chat, and Ctrl-C then exits the idle
+    // chat. The second Ctrl-C covers a first one landing before the panel's
+    // close repaints.
+    const scheduleExit = (pty) => {
+      exitScheduled = true;
+      pty.setTimer(() => pty.write(ESC), 200);
+      pty.setTimer(() => pty.write(ETX), 1_200);
+      pty.setTimer(() => pty.write(ETX), 2_500);
     };
 
     const result = await runTexraPty(options.args, {
       label: options.label,
       cwd: repoRoot,
+      timeoutMs: 30_000,
       env: {
         ...isolatedCliHomeEnv(home),
         ...options.env,
       },
       onData: (_data, pty) => {
         if (
-          !exitSent &&
-          welcomeExitTimer == null &&
-          pty.output.includes('Welcome to TeXRA')
+          !exitScheduled &&
+          pty.output.includes('Connect a model') &&
+          pty.output.includes('No model connected')
         ) {
-          welcomeExitTimer = pty.setTimer(() => sendEsc(pty), 100);
+          scheduleExit(pty);
         }
       },
     });
 
     assert(
       result.exit.exitCode === 0 && !result.exit.signal,
-      `${options.label} should exit cleanly after Esc (exit ${result.exit.exitCode}, signal ${result.exit.signal || 'none'})\noutput:\n${result.output}`,
+      `${options.label} should exit cleanly after Esc and Ctrl-C (exit ${result.exit.exitCode}, signal ${result.exit.signal || 'none'})\noutput:\n${result.output}`,
     );
     assert(
-      result.output.includes('Welcome to TeXRA'),
-      `${options.label} should show onboarding`,
+      result.output.includes('Connect a model'),
+      `${options.label} should open the chat with the connect-a-model panel`,
     );
     assert(
-      !result.output.includes('Model "deepseekT" is not available'),
+      !result.output.includes('is not available (missing api key)'),
       `${options.label} should not fall through to model resolution`,
     );
     for (const text of options.expected) {
@@ -652,15 +658,12 @@ async function validateChatOnboardingPicker(options) {
 }
 
 async function validateChatOnboardingPickers() {
-  const oldTruncatedLabels = [
+  const truncatedOnboardingLabels = [
     'Sign in for included re…',
     'Use my own provider API…',
-  ];
-  const truncatedOnboardingLabels = [
-    ...oldTruncatedLabels,
     'Sign in — free for acad…',
     'Use ChatGPT subscription…',
-    'Use your own provider A…',
+    'Add a provider API key…',
   ];
 
   // Both the explicit subcommand and the bare command, because the bare form is
@@ -668,8 +671,8 @@ async function validateChatOnboardingPickers() {
   // dispatch. Only the process boundary can catch the route regressing to help,
   // to a removed subcommand, or to a model-resolution failure.
   const onboardingCases = [
-    { label: 'texra chat first-run onboarding', args: ['chat'] },
-    { label: 'bare texra first-run onboarding', args: [] },
+    { label: 'texra chat first-run connect panel', args: ['chat'] },
+    { label: 'bare texra first-run connect panel', args: [] },
   ];
 
   for (const { label, args } of onboardingCases) {
@@ -679,8 +682,8 @@ async function validateChatOnboardingPickers() {
       env: {},
       expected: [
         'Use ChatGPT subscription',
-        'Use your own API keys',
-        'Skip for now',
+        'Add a provider API key',
+        'No model connected',
       ],
       forbidden: truncatedOnboardingLabels,
     });

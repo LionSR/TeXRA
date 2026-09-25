@@ -588,8 +588,9 @@ const SCENARIOS = [
       'Prefer ChatGPT subscrip',
       'Prefer Grok subscription',
       'Otherwise: Your own API keys',
+      'Add a provider API key',
       '↑/↓ navigate',
-      '1-8/Enter select',
+      '1-9/Enter select',
       'Esc close',
     ],
     maxBlankLinesBetween: [
@@ -623,7 +624,7 @@ const SCENARIOS = [
       'Workflows',
       'correct',
       'polish',
-      'Choose the root agent for this chat.',
+      'Choose an agent, or a team it leads, for this chat.',
     ],
     unexpect: [
       '//agent',
@@ -691,7 +692,7 @@ const SCENARIOS = [
       'correct',
       'polish',
       'Current: chat (hidden from picker)',
-      'Choose the root agent for this chat.',
+      'Choose an agent, or a team it leads, for this chat.',
       'Esc close',
     ],
     unexpect: [
@@ -729,7 +730,7 @@ const SCENARIOS = [
       'correct',
       'polish',
       'Current: chat (hidden from picker)',
-      'Choose the root agent for this chat.',
+      'Choose an agent, or a team it leads, for this chat.',
       'Esc close',
     ],
     unexpect: [
@@ -1144,7 +1145,7 @@ const SCENARIOS = [
       'Account & access',
       'Prefer ChatGPT subscrip',
       '↑/↓ navigate',
-      '1-8/Enter select',
+      '1-9/Enter select',
       'Esc close',
     ],
   },
@@ -1287,7 +1288,7 @@ const SCENARIOS = [
     keys: ['/', DOWN, DOWN, DOWN, DOWN, DOWN, DOWN, DOWN, DOWN],
     frame: 'viewport',
     expect: [
-      '… 8 earlier',
+      '… 8 previous rows',
       '› /status   Show session details',
       '/config',
       'View and toggle settings',
