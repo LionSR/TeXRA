@@ -11,11 +11,15 @@
  * `MessageType`, and renders `level=error` with `messageType: ERROR` as an
  * error row.
  */
+// Third-party imports
+import { Effect } from 'effect';
+
+// Local imports
 import {
   buildErrorLogData,
   normalizeProviderError,
 } from '@common/errors/sdkError/providerErrorFormat';
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import {
   MESSAGE_TYPES,
   type CompactionActivityData,
@@ -40,16 +44,19 @@ export function logSdkError(
   err: unknown,
   context?: ErrorContext,
   stageId?: string,
-): void {
-  logErrorData(trace, message, buildErrorLogData(err, context), stageId);
-  // The provider's raw response body stays out of the stream log, since it
-  // can echo the request; it is a diagnostic for the process log.
-  const body = normalizeProviderError(err).rawErrorBody;
-  if (body !== undefined) {
-    createLog('agentTrace').warn(`${message} (provider response body)`, {
-      data: body,
-    });
-  }
+): Effect.Effect<void> {
+  return Effect.suspend(() => {
+    logErrorData(trace, message, buildErrorLogData(err, context), stageId);
+    // The provider's raw response body stays out of the stream log, since it
+    // can echo the request; it is a diagnostic for the process log.
+    const body = normalizeProviderError(err).rawErrorBody;
+    return body === undefined
+      ? Effect.void
+      : Effect.logWarning(`${message} (provider response body)`).pipe(
+          Effect.annotateLogs({ data: body }),
+          withLogChannel('agentTrace'),
+        );
+  });
 }
 
 /** Emit an error log with a pre-serialized data payload. */

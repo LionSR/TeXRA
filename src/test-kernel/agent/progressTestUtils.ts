@@ -355,6 +355,6 @@ export function toolEditApprovalRequest(
         session.roots.workspace,
         request.path,
       ),
-    }),
+    }).permission,
   };
 }

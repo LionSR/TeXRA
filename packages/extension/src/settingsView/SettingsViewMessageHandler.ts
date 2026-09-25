@@ -41,7 +41,6 @@ import {
 } from '@frontend/ui/errorHandlingUtils';
 import { subscribeAppSignal } from '@frontend/events/appSignalSubscriptions';
 import { withLogChannel } from '@logger/effectLog';
-import { createLog, type Log } from '@logger/logUtils';
 import {
   modelOptionsFrom,
   readModelAvailabilityInputs,
@@ -71,7 +70,6 @@ import type { SettingsViewSnapshot } from '@shared/state/stateSettings';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import type {
   DerivedSettingsSnapshot,
-  SettingsMessageFor,
   SettingsViewOutboundMessage,
 } from '@shared/settingsView/settingsViewMessages';
 import { SettingsViewInboundMessageSchema } from '@shared/settingsView/settingsViewMessages';
@@ -104,7 +102,6 @@ type SettingsWebview = vscode.WebviewView | vscode.WebviewPanel;
 export class SettingsViewMessageHandler {
   private readonly viewName = 'SettingsView';
   private readonly channel = `${this.viewName}MessageHandler`;
-  private readonly log: Log = createLog(this.channel);
 
   /** Active webview reference, tracked on every dispatch. */
   private activeView: SettingsWebview | undefined;
@@ -185,7 +182,7 @@ export class SettingsViewMessageHandler {
       session.roots,
       () => this.progressView.refreshCatalogs(),
     );
-    this.latexHandlers = new LatexSettingsHandlers(ctx);
+    this.latexHandlers = new LatexSettingsHandlers(ctx, runtime);
     this.memoryHandlers = new MemoryHandlers(
       ctx,
       this.memoryController,
@@ -369,30 +366,24 @@ export class SettingsViewMessageHandler {
             ),
           ),
         ),
-      runToolCommand: (message) =>
-        Effect.sync(() => this.handleRunToolCommand(message)),
+      runToolCommand: (data) => {
+        const action = planToolTerminalAction({
+          toolId: data.toolId,
+          commandKind: data.kind,
+        });
+        if (action.kind === 'none') {
+          return Effect.logDebug('No command for tool').pipe(
+            Effect.annotateLogs({ data: { ...data, reason: action.reason } }),
+          );
+        }
+        return Effect.sync(() => {
+          const terminal = vscode.window.createTerminal({ name: action.name });
+          terminal.show();
+          terminal.sendText(action.command);
+        });
+      },
       ...this.latexHandlers.handlers,
     };
-  }
-
-  private handleRunToolCommand(
-    data: SettingsMessageFor<typeof SETTINGS_VIEW_COMMANDS.RUN_TOOL_COMMAND>,
-  ): void {
-    const action = planToolTerminalAction({
-      toolId: data.toolId,
-      commandKind: data.kind,
-    });
-    if (action.kind === 'none') {
-      this.log.debug('No command for tool', {
-        data: { ...data, reason: action.reason },
-      });
-      return;
-    }
-    const terminal = vscode.window.createTerminal({
-      name: action.name,
-    });
-    terminal.show();
-    terminal.sendText(action.command);
   }
 
   // ============================================================
@@ -410,7 +401,6 @@ export class SettingsViewMessageHandler {
   private handlerContext(): SettingsHandlerContext {
     return {
       channel: this.channel,
-      log: this.log,
       extensionContext: this.context,
       withActiveWebview: (fn) => this.withActiveWebview(fn),
       postMessageToActiveWebview: (message) =>
@@ -448,15 +438,16 @@ export class SettingsViewMessageHandler {
   ): Promise<void> {
     this.activeView = webviewView;
     const parsed = SettingsViewInboundMessageSchema.safeParse(message);
-    if (!parsed.success) {
-      this.log.debug('Message validation failed', { data: parsed.error });
-      return Promise.resolve();
-    }
+    const program = parsed.success
+      ? withSessionFs(
+          this.session.roots,
+          settingsViewProgram(parsed.data, this.handlerRegistry),
+        )
+      : Effect.logDebug('Message validation failed').pipe(
+          Effect.annotateLogs({ data: parsed.error }),
+        );
     return this.runtime.runPromise(
-      withSessionFs(
-        this.session.roots,
-        settingsViewProgram(parsed.data, this.handlerRegistry),
-      ).pipe(
+      program.pipe(
         Effect.catchCause((cause) =>
           Effect.gen({ self: this }, function* () {
             if (Cause.hasInterruptsOnly(cause)) return;
@@ -465,15 +456,12 @@ export class SettingsViewMessageHandler {
               if (error instanceof UnsupportedCommandError) {
                 yield* vscodeUi.showInfoMessage(error.reason);
               } else {
-                yield* Effect.logError('Error handling message').pipe(
-                  withLogChannel(this.channel),
-                  Effect.annotateLogs({ data: error }),
-                );
+                yield* Effect.logError('Error handling message');
                 yield* vscodeUi.showErrorMessage(
                   `TeXRA could not handle a ${this.viewName} message. See the TeXRA output for details.`,
                 );
               }
-            });
+            }).pipe(Effect.annotateLogs({ data: error }));
             const reported = yield* Effect.exit(report);
             if (
               Exit.isFailure(reported) &&
@@ -482,13 +470,13 @@ export class SettingsViewMessageHandler {
               yield* Effect.logError(
                 'Failed to report settings message error',
               ).pipe(
-                withLogChannel(this.channel),
                 Effect.annotateLogs({ data: Cause.squash(reported.cause) }),
               );
             }
           }),
         ),
         Effect.asVoid,
+        withLogChannel(this.channel),
       ),
     );
   }

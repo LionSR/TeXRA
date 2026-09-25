@@ -119,12 +119,6 @@ async function createHandlerFixture(options: HandlerFixtureOptions = {}) {
   const handlers = new AgentHandlers(
     {
       channel: 'TeXRA',
-      log: {
-        debug: () => {},
-        info: () => {},
-        warn: () => {},
-        error: () => {},
-      },
       extensionContext: {} as never,
       withActiveWebview: () => Effect.void,
       postMessageToActiveWebview: () => Effect.void,
