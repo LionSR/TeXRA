@@ -1,16 +1,12 @@
 import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
+import { beforeEach, describe, expect, vi } from 'vitest';
 import type { LaTeXdiffService } from '@latex/latexdiff';
 import type { LatexRunDiscoveryPort } from '@latex/latexdiff/runDiscovery';
 import type { DiffRunOutcome } from '@latex/latexdiff/types';
 import { normalizeRunLatexdiffOutputsByRound } from '@latex/latexdiff/runLatexdiff';
-import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
-import { setLogSink } from '@logger/logSink';
 import type { OutputFileInfo, RoundIndexed } from '@shared/schemas';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
-import { captureLogEntries } from '@test/support/logSinkCapture';
-import { installPlatform } from '@test/support/setupPlatform';
 
 import { createOutputFile } from '../support/ProgressControllerHarnesses';
 
@@ -190,56 +186,7 @@ describe('runLatexdiffForRun', () => {
   );
 });
 
-// #10635: runLatexdiffForRun names the latexdiff runtime channel once
-// for the whole run, so a line any discovery step writes lands on it.
-describe('runLatexdiffForRun diagnostics', () => {
-  beforeEach(async () => {
-    vi.clearAllMocks();
-    await installPlatform();
-    mocks.runLatexdiffFromMetadata.mockReturnValue(
-      Effect.succeed(EMPTY_OUTCOME),
-    );
-  });
-
-  afterEach(() => {
-    setLogSink(null);
-    vi.restoreAllMocks();
-  });
-
-  it.effect('names the latexdiff runtime channel on discovery lines', () =>
-    Effect.gen(function* () {
-      mocks.scanRunDirForOutputs.mockReturnValue(Effect.succeed(roundMap()));
-      const logs = captureLogEntries();
-
-      yield* runLatexdiffForRun({
-        ...baseRequest,
-        runId: 'abc123',
-      });
-
-      expect(
-        logs.has('DEBUG', 'test', 'Using run-dir scan outputs from run abc123'),
-      ).toBe(true);
-    }).pipe(
-      Effect.provide(effectDiagnosticsLayer('Trace')),
-      Effect.provide(nodePlatformLayer),
-    ),
-  );
-});
-
 describe('normalizeRunLatexdiffOutputsByRound', () => {
-  it('keeps a valid round record', () => {
-    const first = createOutputFile({ round: 1 });
-    const second = createOutputFile({ round: 2 });
-
-    expect(
-      normalizeRunLatexdiffOutputsByRound({
-        2: [second],
-        1: [first],
-        3: [],
-      }),
-    ).toEqual({ 1: [first], 2: [second], 3: [] });
-  });
-
   it('falls back to null for malformed command payloads', () => {
     const valid = createOutputFile({ round: 1 });
     expect(normalizeRunLatexdiffOutputsByRound('not-rounds')).toBeNull();

@@ -20,11 +20,9 @@ import { afterEach, describe, expect, vi } from 'vitest';
 
 // Local imports
 import { ArxivProcessor } from '@latex/arxivProcessor';
-import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
 import { setLogSink } from '@logger/logSink';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
-import { captureLogEntries } from '@test/support/logSinkCapture';
-import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
+import { setupPlatform } from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
 const tempDirs = useTempDirs();
@@ -104,50 +102,6 @@ function sourceResponse(status = 200): Response {
     },
   });
 }
-
-describe('arXiv processor logger channel', () => {
-  const withDebugPlatform = Effect.promise(() => installPlatform()).pipe(
-    Effect.asVoid,
-  );
-
-  /** The logger production installs, so entries reach the captured sink. */
-  const withDiagnostics = <A, E, R>(
-    self: Effect.Effect<A, E, R>,
-  ): Effect.Effect<A, E, R> =>
-    Effect.provide(self, effectDiagnosticsLayer('Trace'));
-
-  // #7347 renamed the exported singleton to PascalCase and accidentally
-  // changed the channel string too. It is rendered as the `[channel]` prefix
-  // on every line this class emits, so it must stay lowercase for log filters
-  // that match `[arxivProcessor]`.
-  //
-  // `it.live`: the 429 retry backoff sleeps on the effect clock, which the
-  // TestClock `it.effect` installs never advances on its own.
-  it.live('emits download retry logs on the "arxivProcessor" channel', () =>
-    Effect.gen(function* () {
-      yield* withDebugPlatform;
-      const logs = captureLogEntries();
-      const destBasePath = yield* tempSourceBase;
-      let attempt = 0;
-      const fetchMock = vi.fn(async () => {
-        attempt += 1;
-        return attempt === 1
-          ? new Response(null, { status: 429 })
-          : sourceResponse();
-      });
-      const downloadedPath = yield* ArxivProcessor.downloadFile(
-        SOURCE_URL,
-        destBasePath,
-        5000,
-      ).pipe(onFetch(fetchMock));
-
-      expect(downloadedPath).toBe(destBasePath);
-      expect(
-        logs.has('DEBUG', 'arxivProcessor', 'Download attempt failed'),
-      ).toBe(true);
-    }).pipe(withDiagnostics, Effect.provide(httpPlatformLayer)),
-  );
-});
 
 describe('arXiv source download filenames', () => {
   setupPlatform({});

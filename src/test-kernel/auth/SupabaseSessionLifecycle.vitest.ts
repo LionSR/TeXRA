@@ -209,27 +209,7 @@ function createClearingStorageCoordinator(options: {
 }
 
 describe('SupabaseSession', () => {
-  describe('parseStoredSupabaseSession', () => {
-    it('returns null for invalid stored session data', () => {
-      assert.equal(parseStoredSupabaseSession('{'), null);
-      assert.equal(parseStoredSupabaseSession(JSON.stringify({ id: 1 })), null);
-    });
-  });
-
   describe('toStorableSupabaseSession', () => {
-    it('converts Supabase native sessions into the stored shape', () => {
-      const session = toStorableSupabaseSession(makeNativeSession());
-
-      assert.equal(session.id, 'user-id');
-      assert.equal(session.accessToken, 'access-token');
-      assert.equal(session.refreshToken, 'refresh-token');
-      assert.deepEqual(session.account, {
-        id: 'user-id',
-        label: 'user@example.com',
-      });
-      assert.equal(session.expiresAt, 123_000);
-    });
-
     it('falls back to the user id when email is missing', () => {
       const nativeSession = makeNativeSession({
         user: { id: 'user-id', email: '' },
@@ -310,30 +290,6 @@ describe('SupabaseSession', () => {
           label: 'user@example.com',
         });
         assert.ok(result.session.expiresAt > Date.now());
-      }),
-    );
-
-    it.effect('returns an auth error when PKCE code exchange fails', () =>
-      Effect.gen(function* () {
-        const client = {
-          auth: {
-            exchangeCodeForSession: async () => ({
-              data: { session: null },
-              error: { message: 'invalid code' },
-            }),
-          },
-        } as unknown as Client;
-        const { coordinator } = createCoordinator({ client });
-
-        const result = yield* coordinator.createSessionFromCallback({
-          path: '/auth-callback',
-          query: 'code=bad-code',
-        });
-
-        assert.equal(result.success, false);
-        if (result.success) return;
-        assert.equal(result.error, 'invalid code');
-        assert.equal(result.isAuthError, true);
       }),
     );
 

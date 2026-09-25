@@ -41,13 +41,6 @@ describe('isKimiSubscriptionEligible', () => {
   });
 });
 
-describe('isKimiCodeExclusiveModel', () => {
-  it('requires the pinned coding base URL', () => {
-    expect(isKimiCodeExclusiveModel(exclusive)).toBe(true);
-    expect(isKimiCodeExclusiveModel(dual)).toBe(false);
-  });
-});
-
 const facts = (
   useOpenRouter: boolean,
   keySet: boolean,

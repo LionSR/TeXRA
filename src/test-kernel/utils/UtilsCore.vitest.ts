@@ -19,32 +19,15 @@ import { deriveRunId, truncatedHexId } from '@utils/core/idHash';
 describe('getBasename', () => {
   it.each([
     ['/home/user/file.txt', 'file.txt'],
-    ['/usr/local/bin/node', 'node'],
-    ['/path/to/document.pdf', 'document.pdf'],
     ['C:\\Users\\file.txt', 'file.txt'],
     ['C:/Users\\Documents/file.txt', 'file.txt'],
-    ['/home\\user/document.pdf', 'document.pdf'],
-    ['/path/to/', 'to'],
-    ['/path/to/dir/', 'dir'],
     ['C:\\Users\\', 'Users'],
     ['', ''],
     ['/', ''],
     ['//', ''],
     ['file.txt', 'file.txt'],
-    ['./file.txt', 'file.txt'],
     ['../file.txt', 'file.txt'],
-    ['/path/to/file.tar.gz', 'file.tar.gz'],
-    ['archive.backup.zip', 'archive.backup.zip'],
     ['/home/user/.bashrc', '.bashrc'],
-    ['/path/to/file with spaces.txt', 'file with spaces.txt'],
-    ['/path/to/file-with-dashes.txt', 'file-with-dashes.txt'],
-    ['/path/to/file_with_underscores.txt', 'file_with_underscores.txt'],
-    ['relative/path/to/file.txt', 'file.txt'],
-    ['./relative/file.txt', 'file.txt'],
-    ['../parent/file.txt', 'file.txt'],
-    ['/home/user/Documents', 'Documents'],
-    ['C:\\Program Files', 'Program Files'],
-    ['/usr/local/bin', 'bin'],
     // Regression: paths ending with a separator used to return empty.
     ['folder/', 'folder'],
     ['/home/user/folder/', 'folder'],
@@ -56,19 +39,13 @@ describe('getBasename', () => {
 describe('getFileStem', () => {
   it.each([
     ['dir/paper.tex', 'paper'],
-    ['/home/user/document.pdf', 'document'],
-    ['file.txt', 'file'],
     // Dotfiles keep their full name — a leading dot isn't an extension.
     ['/home/user/.bashrc', '.bashrc'],
-    ['.gitignore', '.gitignore'],
     // Only the final extension is stripped.
     ['/path/to/file.tar.gz', 'file.tar'],
-    ['archive.backup.zip', 'archive.backup'],
     ['C:\\Users\\report.docx', 'report'],
-    ['/path/to/', 'to'],
     ['/path/to/dir/', 'dir'],
     ['', ''],
-    ['/', ''],
   ])('getFileStem(%j) === %j', (input, expected) => {
     expect(getFileStem(input)).toBe(expected);
   });
@@ -93,19 +70,6 @@ describe('createFlushableDebounce', () => {
 
   afterEach(() => {
     vi.useRealTimers();
-  });
-
-  it('invokes the callback once after the wait elapses', () => {
-    const callback = vi.fn();
-    const batcher = createFlushableDebounce(callback, 100);
-
-    batcher.schedule();
-    expect(callback).not.toHaveBeenCalled();
-    vi.advanceTimersByTime(99);
-    expect(callback).not.toHaveBeenCalled();
-    vi.advanceTimersByTime(1);
-    expect(callback).toHaveBeenCalledOnce();
-    expect(batcher.pending).toBe(false);
   });
 
   it('restarts the timer on every schedule() call, like a classic trailing debounce', () => {

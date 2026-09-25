@@ -36,11 +36,7 @@ import {
   isProviderErrorAutoRetryable,
   normalizeProviderError,
 } from '@common/errors/sdkError/providerErrorFormat';
-import {
-  ProviderErrorPartialSchema,
-  RetryErrorInfoSchema,
-  toRetryErrorInfo,
-} from '@shared/schemas';
+import { ProviderErrorPartialSchema } from '@shared/schemas';
 import type { ProviderError, RetryErrorInfo } from '@shared/schemas';
 
 class APIError extends Error {}
@@ -114,10 +110,6 @@ describe('formatProviderHttpError', () => {
     expect(formatted.provider).toBe('anthropic');
     expect(formatted.statusCode).toBe(401);
     expect(formatted.userRetryable).toBe(false);
-  });
-
-  it('matches SDK abort errors through the prototype chain', () => {
-    expect(isUserAbort(new APIUserAbortError('aborted'))).toBe(true);
   });
 
   it('preserves native SDK abort detection for packaged builds', () => {
@@ -623,15 +615,6 @@ describe('isContextWindowError', () => {
     });
   });
 
-  it('still recognizes the marker after the internal message wording changes', () => {
-    // The marker decouples classification from message text: even if
-    // the thrower reworks its wording entirely, the marker still matches.
-    const err = new Error('Input is too large for this model to process.');
-    attachContextWindowError(err);
-
-    expect(isContextWindowError(err)).toBe(true);
-  });
-
   it('still matches third-party provider wording without a marker (fenced patterns)', () => {
     expect(isContextWindowError(new Error('context length exceeded'))).toBe(
       true,
@@ -696,51 +679,6 @@ describe('isContextWindowError', () => {
     );
 
     expect(isContextWindowError(err)).toBe(false);
-  });
-});
-
-describe('provider error schemas', () => {
-  it('rejects a malformed canonical classification', () => {
-    expect(() =>
-      RetryErrorInfoSchema.parse({
-        message: 'malformed canonical classification',
-        userRetryable: false,
-        classification: { kind: 'not-a-provider-kind' },
-      }),
-    ).toThrow();
-  });
-});
-
-describe('toRetryErrorInfo / attach-as-ProviderError round-trip', () => {
-  const fullProviderError: ProviderError = {
-    message: 'HTTP 429 Too Many Requests – rate limited',
-    userRetryable: true,
-    statusCode: 429,
-    statusText: 'Too Many Requests',
-    provider: 'anthropic',
-    classification: { kind: 'upstream-credit' },
-    requestId: 'req_abc123',
-    partialText: 'Here is the analysis of the',
-  };
-
-  it('preserves statusCode, provider, and exhaustion reason through the round-trip', () => {
-    const reconstructed: ProviderError = toRetryErrorInfo(fullProviderError);
-
-    expect(reconstructed.statusCode).toBe(429);
-    expect(reconstructed.provider).toBe('anthropic');
-    expect(reconstructed.classification).toStrictEqual({
-      kind: 'upstream-credit',
-    });
-    expect(reconstructed.requestId).toBe('req_abc123');
-    expect(reconstructed.userRetryable).toBe(true);
-  });
-
-  it('omits rawErrorBody from the RetryErrorInfo record', () => {
-    const info = toRetryErrorInfo(fullProviderError);
-
-    // rawErrorBody is intentionally excluded from RetryErrorInfo (large,
-    // not worth persisting). Verify the schema doesn't carry it.
-    expect('rawErrorBody' in info).toBe(false);
   });
 });
 

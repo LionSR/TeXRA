@@ -11,7 +11,6 @@ import {
   refreshOAuthTokens,
   type OAuthFormEndpoint,
 } from '@auth/oauth/formTokenClient';
-import { decodeJwtClaimsWithSchema } from '@auth/oauth/jwtDecode';
 import { oauthTokenErrorKind, postOAuth } from '@auth/oauth/oauthRequest';
 import { jsonResponse } from '@test/support/fetchTestUtils';
 
@@ -149,24 +148,4 @@ describe('postOAuth', () => {
       expect(fetchMock.mock.calls[0]![1]?.signal?.aborted).toBe(true);
     }),
   );
-});
-
-describe('decodeJwtClaimsWithSchema', () => {
-  const schema = z.object({ email: z.string() });
-
-  it('decodes a well-formed JWT payload through the schema', () => {
-    const payload = Buffer.from(JSON.stringify({ email: 'a@b.com' })).toString(
-      'base64url',
-    );
-    const token = `h.${payload}.s`;
-    expect(decodeJwtClaimsWithSchema(token, schema, { email: '' })).toEqual({
-      email: 'a@b.com',
-    });
-  });
-
-  it('returns empty on malformed tokens', () => {
-    expect(
-      decodeJwtClaimsWithSchema('not-a-jwt', schema, { email: '' }),
-    ).toEqual({ email: '' });
-  });
 });

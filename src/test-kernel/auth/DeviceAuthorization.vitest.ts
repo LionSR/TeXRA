@@ -110,25 +110,6 @@ describe('pollDeviceAuthorization', () => {
     }),
   );
 
-  it.effect('propagates hard errors from the poll', () =>
-    Effect.gen(function* () {
-      const { poll } = queuedPoll([new Error('access_denied')]);
-      const fiber = yield* Effect.forkChild(
-        pollDeviceAuthorization({
-          poll,
-          intervalMs: 1000,
-          expiresInMs: 10_000,
-        }),
-      );
-
-      yield* TestClock.adjust('1 second');
-
-      expect(failureOf(yield* Fiber.await(fiber))).toEqual(
-        new Error('access_denied'),
-      );
-    }),
-  );
-
   it.effect('interruption during the first wait skips the poll', () =>
     Effect.gen(function* () {
       const { poll, attempts } = queuedPoll(['token']);

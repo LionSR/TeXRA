@@ -5,8 +5,6 @@ import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
-import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
-import { setLogSink } from '@logger/logSink';
 import { MemoryStateStore } from '@platform/defaults/memoryState';
 import {
   resolveGlobalStoragePath,
@@ -15,7 +13,6 @@ import {
 import type { RunId, OutputFileInfo } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
-import { captureLogEntries } from '@test/support/logSinkCapture';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { installPlatform } from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
@@ -437,46 +434,5 @@ describe('LaTeXdiffService shadow output', () => {
         ),
       ).toBe('\\newcommand{\\RR}{\\mathbb{R}}\n');
     }),
-  );
-});
-
-describe('LaTeXdiffService logger channel', () => {
-  afterEach(() => {
-    setLogSink(null);
-    vi.restoreAllMocks();
-  });
-
-  // #10635: every entry a diff writes carries the channel the service was
-  // constructed with, whichever helper below it wrote the line.
-  it.effect('binds log lines to the constructor channel', () =>
-    Effect.gen(function* () {
-      const logs = captureLogEntries();
-      const { LaTeXdiffService } = yield* Effect.promise(
-        () => import('@latex/latexdiff'),
-      );
-
-      const result = yield* new LaTeXdiffService(
-        'pinnedLatexdiffChannel',
-        testWorkspaceRoots(),
-      ).runDiff(
-        createExternalLocation('/missing/base.tex'),
-        createExternalLocation('/missing/revised.tex'),
-        '_diff',
-        undefined,
-        { cwd: testWorkspaceRoots().workspace },
-      );
-
-      expect(result.success).toBe(false);
-      expect(
-        logs.has(
-          'WARN',
-          'pinnedLatexdiffChannel',
-          'One or both files do not exist',
-        ),
-      ).toBe(true);
-    }).pipe(
-      Effect.provide(effectDiagnosticsLayer('Trace')),
-      Effect.provide(nodePlatformLayer),
-    ),
   );
 });

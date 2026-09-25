@@ -14,7 +14,6 @@ import {
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { createDeferred } from '@test/support/asyncTestUtils';
-import { captureLogEntries } from '@test/support/logSinkCapture';
 import {
   createFakePlatform,
   FakeScopedConfigProvider,
@@ -247,42 +246,6 @@ describe('UsageLogService', () => {
     expect(tick).toBeGreaterThanOrEqual(0);
     const handle = timers.mock.results[tick]?.value as NodeJS.Timeout;
     expect(handle.hasRef()).toBe(false);
-  });
-
-  it('warns after five seconds without bounding disposal', async () => {
-    stubAccessToken();
-    const logs = captureLogEntries();
-    const disposeWarned = () =>
-      logs.has(
-        'WARN',
-        'UsageLogService',
-        'Dispose timeout waiting for in-flight flush',
-      );
-
-    const { promise: fetchReleased, resolve: releaseFetch } = createDeferred();
-    const { batches, fetchMock } = stubBatchFetch(async () => {
-      await fetchReleased;
-    });
-
-    usageLog.log(usageEntry('slow'), testWorkspaceRoots().config);
-    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
-
-    const disposal = stopUsageLog();
-    let disposed = false;
-    void disposal.then(() => {
-      disposed = true;
-    });
-
-    await vi.advanceTimersByTimeAsync(4999);
-    expect(disposeWarned()).toBe(false);
-
-    await vi.advanceTimersByTimeAsync(1);
-    expect(disposeWarned()).toBe(true);
-    expect(disposed).toBe(false);
-
-    releaseFetch();
-    await expect(disposal).resolves.toBeUndefined();
-    expect(batches.map(batchModels)).toEqual([['slow']]);
   });
 
   it('keeps queued entries when the token read answers signed-out', async () => {

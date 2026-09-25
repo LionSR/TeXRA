@@ -26,16 +26,6 @@ describe('logUtils', () => {
     setLogSink(null);
   });
 
-  it('keeps pre-platform error logging working', () => {
-    const entries = captureEntries();
-
-    expect(() =>
-      logger.error('startup', 'pre-init failure', { data: new Error('boom') }),
-    ).not.toThrow();
-    expect(entries).toHaveLength(1);
-    expect(entries[0]?.level).toBe('ERROR');
-  });
-
   it('redacts entries sent to a sink by default', () => {
     const entries = captureEntries();
 

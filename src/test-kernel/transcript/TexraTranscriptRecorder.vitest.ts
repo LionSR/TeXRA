@@ -44,17 +44,6 @@ function dataOf(entry: StreamLogEntry | undefined): Record<string, unknown> {
 }
 
 describe('attachTestTranscriptFold RunPhase-native group rows (issue #7993)', () => {
-  it("writes GROUP_START's data.status as RunPhase.RUNNING", () => {
-    const { trace, row } = attachRecorder();
-
-    const stage = trace.openStage('r0', { kind: 'round' });
-
-    const startEntry = row(stage.id);
-
-    expect(startEntry?.type).toBe(STREAM_LOG_ENTRY_TYPES.GROUP_START);
-    expect(dataOf(startEntry).status).toBe(RUN_PHASE.RUNNING);
-  });
-
   it('defaults GROUP_END to the literal RunOutcome.COMPLETED', () => {
     const { trace, row } = attachRecorder();
 

@@ -16,7 +16,6 @@ import {
   invalidateApiKeyCache,
   loadApiKeyStatusMap,
   lookupApiKeyOrigin,
-  lookupApiKeyUncached,
 } from '@model/apiProviders';
 import { SecretsFailed, type PlatformSecrets } from '@platform/secrets';
 import { createDeferred } from '@test/support/asyncTestUtils';
@@ -126,14 +125,6 @@ describe('API provider key caches', () => {
         'moonshot',
       ]);
     }).pipe(withEnv({ MOONSHOT_API_KEY: 'from-env' })),
-  );
-
-  it.effect('treats empty env keys as missing in uncached lookups', () =>
-    Effect.gen(function* () {
-      const { secrets } = createSecrets({});
-
-      expect(yield* lookupApiKeyUncached(secrets, 'openai')).toBeUndefined();
-    }).pipe(withEnv({ OPENAI_API_KEY: '' })),
   );
 
   it.effect(

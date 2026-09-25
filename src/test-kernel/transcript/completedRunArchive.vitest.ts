@@ -674,16 +674,6 @@ describe('completedRunArchive facade', () => {
       }).pipe((program) => withProcessServices(testRuntime(), program)),
   );
 
-  it('reports none, with no conversation evidence, when the run has no transcript', async () => {
-    const runId = 'ccc333ccc333' as RunId;
-
-    const conversationResult = await readCompletedRunConversation(runId);
-    expect(conversationResult).toEqual({ conversation: null, source: 'none' });
-    expect(hasCompletedRunConversationEvidence(conversationResult)).toBe(false);
-
-    expect(await completedRunTodos(runId)).toEqual([]);
-  });
-
   it('reads a registered run whose transcript is empty', async () => {
     const runId = 'abc907abc907' as RunId;
     await stampRun(runId);

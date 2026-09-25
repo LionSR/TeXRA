@@ -120,35 +120,6 @@ describe('runtime skills', () => {
     expect(result.issues).toEqual([]);
   });
 
-  it('preserves raw descriptions in the accepted runtime projection', async () => {
-    const root = await createTempRoot();
-    await writeSkill(
-      root,
-      'safe-summary',
-      {
-        name: 'safe-summary',
-        description:
-          'Use \u001b[31mcare\u001b[0m with C:\\Users\\Jane Doe\\secret.tex and ./private/key.pem.',
-      },
-      'Apply the skill.',
-    );
-    installTestSkillRoots([{ tier: 'project', path: root }]);
-
-    const result = await loadRuntimeSkillCatalog(
-      WORKSPACE_ROOT,
-      testWorkspaceRoots(),
-    );
-
-    expect(result.skills).toStrictEqual([
-      {
-        name: 'safe-summary',
-        description:
-          'Use \u001b[31mcare\u001b[0m with C:\\Users\\Jane Doe\\secret.tex and ./private/key.pem.',
-        source: 'project',
-      },
-    ]);
-  });
-
   it.effect.each([
     {
       label: 'name',

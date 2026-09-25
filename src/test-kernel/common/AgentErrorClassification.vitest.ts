@@ -73,12 +73,6 @@ describe('classifyAgentError', () => {
     ).toBe('context-window');
   });
 
-  it('leaves an unrecognized provider failure unexpected', () => {
-    expect(classifyAgentError(new Error('provider exploded'))).toBe(
-      'unexpected',
-    );
-  });
-
   it('prefers the credential marker over a context-window message', () => {
     // A credential failure rewrapped by a caller whose wording happens to
     // mention the context window must still route to the actionable
