@@ -80,7 +80,6 @@ import { withLogChannel } from '@logger/effectLog';
 import { createLog } from '@logger/logUtils';
 import { setLogSink } from '@logger/logSink';
 import { formatFatalErrorDetail } from '@logger/redaction';
-import { invalidateRuntimeModelRegistry } from '@model/runtimeModelRegistry';
 import { AppState, AgentDirectories } from '@platform/interfaces';
 import type {
   AgentResumePort,
@@ -685,12 +684,10 @@ async function activateExtension(context: vscode.ExtensionContext) {
   // which reads the account plane's access token: with the provider in place
   // the refresh fetches the real catalog instead of short-circuiting on a null
   // token, so activation now performs that one background fetch.
-  const invalidateLanguageModels = () => {
-    invalidateRuntimeModelRegistry();
-    emitAppSignal('languageModelsChanged', undefined);
-  };
   context.subscriptions.push(
-    languageModel.onDidChange(invalidateLanguageModels),
+    languageModel.onDidChange(() =>
+      emitAppSignal('languageModelsChanged', undefined),
+    ),
   );
   // The host entry holds the process runtime in a local and threads it to the
   // surfaces registered below, so code under `activate` settles its Effects on

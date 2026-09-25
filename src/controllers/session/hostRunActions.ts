@@ -27,7 +27,7 @@ import {
   isApiProvider,
 } from '@model/apiProviders';
 import type { ModelHostFactUnreadable } from '@model/computeModelOptions';
-import { getRuntimeModelDirectFallback } from '@model/runtimeModelRegistry';
+import { getRuntimeModelDirectFallback } from '@model/copilotRouting';
 import type { StateReadFailed } from '@platform/interfaces';
 import {
   AgentResume,

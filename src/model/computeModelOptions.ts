@@ -3,7 +3,7 @@ import { MODEL_CONFIGS, type ModelConfig, type ReasoningEffort } from 'llm-zoo';
 import { z } from 'zod';
 
 import { StateWriteFailed } from '@platform/interfaces';
-import type { StateReadFailed, StateStore } from '@platform/interfaces';
+import type { StateStore } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import {
@@ -40,13 +40,10 @@ import {
 import { resolveModelSource } from './openRouterRouting';
 import {
   copilotRouteUnavailableReason,
+  discoverCopilotRoutes,
   prefersCopilotRoute,
+  type CopilotModelRoute,
 } from './copilotRouting';
-import {
-  discoveredCopilotRoutes,
-  getRuntimeModelConfig,
-  copilotRouteForModel,
-} from './runtimeModelRegistry';
 
 /**
  * Every store an availability answer here reads: the secret store behind the
@@ -223,34 +220,29 @@ type RoutedModels = ReadonlyMap<string, RoutedModel>;
  * Stage 1: what the decided route means for availability, free of any key
  * status. A route that comes down to a direct provider key answers with that
  * provider, so the batch read that follows consults exactly the providers the
- * routes reached. A Copilot route takes the route's config, or the sentence
- * an unavailable route is explained with, so no later step goes back to the
- * catalogue.
+ * routes reached. A Copilot route takes the carried route's config, or the
+ * sentence an unavailable route is explained with, so no later step goes back
+ * to the editor.
  */
-const routeGate = Effect.fn('routeGate')(function* (
-  stores: ModelOptionStores,
+function routeGate(
   model: string,
   route: ModelRoute,
   ctx: ModelRouteContext,
-): Effect.fn.Return<RouteGate, StateReadFailed> {
+): RouteGate {
   switch (route.kind) {
     case 'copilot': {
       // Consent and temporary unavailability are route states on the one
       // canonical row, never a reason to fall back to another transport.
-      const copilot = copilotRouteForModel(model);
-      const access = copilot?.access ?? 'unavailable';
+      const access = route.route?.access ?? 'unavailable';
       if (access === 'allowed') {
         return {
           ...availabilityStatus('copilot-allowed'),
-          copilotConfig: copilot?.effectiveConfig,
+          copilotConfig: route.route?.effectiveConfig,
         };
       }
       return {
         ...availabilityStatus(`copilot-${access}`),
-        copilotReason: yield* copilotRouteUnavailableReason(
-          model,
-          stores.globalState,
-        ),
+        copilotReason: copilotRouteUnavailableReason(model, route.route),
       };
     }
     case 'openrouter-unsupported':
@@ -272,7 +264,7 @@ const routeGate = Effect.fn('routeGate')(function* (
     case 'validation':
       return availabilityStatus('provider-key');
   }
-});
+}
 
 /**
  * Stage 3 — the per-model verdict, pure: stage 1's own answer, or the one the
@@ -315,7 +307,7 @@ export class ModelHostFactUnreadable extends Data.TaggedError(
 }> {}
 
 /** Give state-read failures the availability computation's public error. */
-const hostFact = <A, E>(fact: string, read: Effect.Effect<A, E>) =>
+const hostFact = <A, E, R>(fact: string, read: Effect.Effect<A, E, R>) =>
   read.pipe(
     Effect.mapError(
       (cause) =>
@@ -382,9 +374,14 @@ function buildAvailabilityContext(
   });
 }
 
+/** A failed discovery (the port warns) shows each Copilot row unavailable. */
+const presentedCopilotRoutes = discoverCopilotRoutes().pipe(
+  Effect.orElseSucceed((): ReadonlyMap<string, CopilotModelRoute> => new Map()),
+);
+
 /**
  * Stage 1: decide every model's route once, and keep the decision. Each live
- * input (the runtime registry, the Copilot preference, the stage-0 facts) is
+ * input (the editor's routes, the Copilot preference, the stage-0 facts) is
  * therefore read once per computation: stage 3 finishes these decisions
  * rather than re-deciding over inputs that may have moved while the key read
  * was in flight.
@@ -396,17 +393,23 @@ function routeModels(
 ) {
   return Effect.gen(function* () {
     const routed = new Map<string, RoutedModel>();
+    let copilotRoutes: ReadonlyMap<string, CopilotModelRoute> | undefined;
     for (const model of models) {
       if (routed.has(model)) continue;
-      const rawConfig = getRuntimeModelConfig(model);
+      const rawConfig = MODEL_CONFIGS[model];
       if (!rawConfig) continue;
+      // A retired row settles without its Copilot preference.
+      const prefersCopilot =
+        !rawConfig.retired &&
+        (yield* prefersCopilotRoute(model, stores.globalState));
+      const copilotRoute = prefersCopilot
+        ? (copilotRoutes ??= yield* presentedCopilotRoutes).get(model)
+        : undefined;
       const route = decideModelRoute(rawConfig, {
         ...ctx.facts,
         validation: false,
-        // A retired row settles without its Copilot preference.
-        prefersCopilot:
-          !rawConfig.retired &&
-          (yield* prefersCopilotRoute(model, stores.globalState)),
+        prefersCopilot,
+        copilotRoute,
       });
       routed.set(model, {
         rawConfig,
@@ -414,7 +417,7 @@ function routeModels(
         route,
         gate: rawConfig.retired
           ? availabilityStatus('retired')
-          : yield* routeGate(stores, model, route, ctx),
+          : routeGate(model, route, ctx),
       });
     }
     return routed;
@@ -677,16 +680,12 @@ export interface ModelAvailabilityInputs {
  * model shares, each model routed once, then one key-status read per provider
  * the routes consult. The module's only host call; every host read fails in
  * its typed channel ({@link ModelHostFactUnreadable}). `models`, when given,
- * is honored verbatim. Nothing is cached here beyond the caches its reads own
- * (`invalidateRuntimeModelRegistry`); the sign-in
- * probes are live by design.
+ * is honored verbatim. Nothing is cached here: the editor's routes and the
+ * sign-in probes are read live by design.
  */
 export const readModelAvailabilityInputs = Effect.fn(
   'readModelAvailabilityInputs',
 )(function* (stores: ModelOptionStores, models?: readonly string[]) {
-  // Presentation-only refresh: the catalogue keeps its last-known entries on
-  // a discovery failure, so this step cannot fail (see `discoveredCopilotRoutes`).
-  yield* discoveredCopilotRoutes();
   const routeCtx = yield* buildAvailabilityContext(stores);
   const visible =
     models ??
@@ -802,6 +801,7 @@ function visibleModelsForAccess(
         ...facts,
         validation: false,
         prefersCopilot: false,
+        copilotRoute: undefined,
       }).kind === 'chatgpt-subscription'
     ) {
       models.add(model);

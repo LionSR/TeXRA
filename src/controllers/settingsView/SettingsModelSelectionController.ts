@@ -13,9 +13,11 @@ import {
   reasoningEffortOverrides,
   supportsReasoningLevel,
 } from '@model/reasoningLevel';
-import { preferredCopilotRouteModels } from '@model/copilotRouting';
+import {
+  preferredCopilotRouteModels,
+  type CopilotModelRoute,
+} from '@model/copilotRouting';
 import { resolveModelSource } from '@model/openRouterRouting';
-import type { CopilotModelRoute } from '@model/runtimeModelRegistry';
 import {
   getEnabledModels,
   setModelEnabled,
@@ -51,13 +53,14 @@ interface SettingsModelSelectionControllerDeps<R> {
   /** Provider credentials behind the availability decoration on each option. */
   secrets: PlatformSecrets;
   /**
-   * The discovered Copilot routes: the host's own read, as the program it
-   * already was. This controller composes it and hands the result back as one
-   * program the host settles at its message boundary.
+   * The Copilot routes the editor offers now (`discoverCopilotRoutes` over
+   * the host's language-model port). This controller composes the read and
+   * hands the result back as one program the host settles at its message
+   * boundary.
    */
   copilotRoutes: Effect.Effect<
     ReadonlyMap<string, CopilotModelRoute>,
-    never,
+    Error,
     R
   >;
   getPreferredCopilotRouteModels?: () => Effect.Effect<
@@ -90,7 +93,13 @@ export class SettingsModelSelectionController<R = never> {
 
   buildSelectionData(): Effect.Effect<SettingsModelSelectionData, Error, R> {
     return Effect.gen({ self: this }, function* () {
-      const routes = yield* this.deps.copilotRoutes;
+      // A failed discovery shows every preferred route as unavailable; the
+      // port has already logged the failure at `warn`.
+      const routes = yield* this.deps.copilotRoutes.pipe(
+        Effect.orElseSucceed(
+          (): ReadonlyMap<string, CopilotModelRoute> => new Map(),
+        ),
+      );
       const preferredModels = new Set(
         yield* this.deps.getPreferredCopilotRouteModels?.() ??
           preferredCopilotRouteModels(this.deps.stores.globalState),
