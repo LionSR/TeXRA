@@ -21,10 +21,9 @@ type EditorCallFailed = HostCallFailed | RequestRefusal;
 
 /**
  * The file URI a tab input surfaces, or null when the tab shows no single
- * file. Shared by the diff-view and tool-edit-approval hosts, which both watch
- * and close tabs that reference files.
+ * file. `closeDiff` uses it to find the tabs showing a diff session's files.
  */
-export function tabInputFileUri(tab: vscode.Tab): vscode.Uri | null {
+function tabInputFileUri(tab: vscode.Tab): vscode.Uri | null {
   const input = tab.input;
   if (input instanceof vscode.TabInputText) return input.uri;
   if (input instanceof vscode.TabInputTextDiff) return input.modified;

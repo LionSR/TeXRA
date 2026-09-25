@@ -1,4 +1,4 @@
-/** Account identity, authentication, and account connections. */
+/** TeXRA account sign-in and telemetry: the top of the General page. */
 
 // Third-party imports
 import '@awesome.me/webawesome/dist/components/button/button.js';
@@ -11,7 +11,6 @@ import { postMessage } from '@shared/hostBridge';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { TELEMETRY_ENABLED_KEY } from '@shared/schemas';
 import { type SessionProblem } from '@shared/settingsView/settingsViewMessages';
-import { createEvent } from '@shared/utils/events';
 import {
   commonViewStyles,
   designTokens,
@@ -59,10 +58,6 @@ export class AccountTab extends LitElement {
 
   private readonly handleSignOut = (): void => {
     postMessage(SETTINGS_VIEW_COMMANDS.SIGN_OUT);
-  };
-
-  private readonly handleManageProviderKeys = (): void => {
-    this.dispatchEvent(createEvent('manage-provider-keys'));
   };
 
   private renderIdentityBanner(): TemplateResult {
@@ -135,34 +130,6 @@ export class AccountTab extends LitElement {
     return html`
       <div class="account-page tab-content-container">
         ${this.renderIdentityBanner()}
-
-        <section>
-          ${renderSettingsSectionHeading({
-            title: 'Credentials',
-            description:
-              'Manage provider API keys alongside the models that use them.',
-            icon: 'key',
-          })}
-          <div class="settings-section">
-            <div class="settings-row">
-              <div class="settings-row-text">
-                <span class="settings-row-label">Provider API keys</span>
-                <span class="settings-row-help">
-                  Configure OpenAI, Anthropic, Google, and other providers.
-                </span>
-              </div>
-              <div class="settings-row-control">
-                ${renderLabeledActionButton({
-                  icon: 'key',
-                  text: 'Manage keys',
-                  kind: 'secondary',
-                  appearance: 'outlined',
-                  onClick: this.handleManageProviderKeys,
-                })}
-              </div>
-            </div>
-          </div>
-        </section>
 
         <section>
           ${renderSettingsSectionHeading({

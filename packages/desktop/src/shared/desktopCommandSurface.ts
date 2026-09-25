@@ -74,12 +74,13 @@ export const DESKTOP_MENU_GROUPS = [
     DESKTOP_LOCAL_COMMANDS.TOGGLE_BOTTOM_BAR,
     DESKTOP_LOCAL_COMMANDS.TOGGLE_SIDE_PANEL,
   ],
+  // One row per settings page that has a command, in nav order. Teams are a
+  // section of Agents, so texra.showMultiAgent gets no row of its own.
   [
-    'texra.showMemory',
     'texra.showModels',
     'texra.showAgents',
     'texra.showTools',
-    'texra.showMultiAgent',
+    'texra.showMemory',
     'texra.showGitSettings',
   ],
 ] as const satisfies readonly (readonly CommandId[])[];
@@ -188,7 +189,6 @@ const DESKTOP_COMMAND_ICONS = {
   'texra.showModels': 'server',
   'texra.showAgents': 'robot',
   'texra.showTools': 'screwdriver-wrench',
-  'texra.showMultiAgent': 'diagram-project',
   'texra.showGitSettings': 'code-branch',
   [DESKTOP_LOCAL_COMMANDS.SHOW_FIRST_RUN_WALKTHROUGH]: 'users',
   [DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS]: 'book',

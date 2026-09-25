@@ -1,5 +1,10 @@
-/** Split panel browser for all agents (local + remote). */
+/**
+ * The Agents page: the agent library, with the team cards (slot `teams`) and
+ * skills (slot `skills`) the settings app composes in, and one collapsed
+ * Advanced section for session and team-coordination knobs.
+ */
 
+import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
 import {
   LitElement,
@@ -20,6 +25,8 @@ import {
   type AgentCategory,
   type ByCategory,
   byCategory,
+  CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
+  CHILD_RUN_CONCURRENCY_BUDGET_SETTING,
   MODEL_COMPACTION_THRESHOLD_SETTING,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
 } from '@shared/schemas';
@@ -27,6 +34,7 @@ import {
   type AgentScanIssue,
   type AgentSelectionItem,
 } from '@shared/settingsView/settingsViewMessages';
+import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
   commonViewStyles,
   designTokens,
@@ -44,7 +52,10 @@ import {
 import type { TeXRAIconName } from '@ui/wa/iconNames';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { pluralize } from '@utils/text/stringUtils';
-import { postStateSetting } from '../components/shared/stateSettingRows';
+import {
+  postStateSetting,
+  renderStateSettingToggleRow,
+} from '../components/shared/stateSettingRows';
 
 // Local imports - settings view components (side-effect: register)
 import '../components/profile/AgentSelectionPanel';
@@ -94,6 +105,13 @@ export class AgentsTab extends LitElement {
         display: block;
         min-height: 22rem;
       }
+
+      ::slotted([slot='teams']),
+      ::slotted([slot='skills']),
+      .agents-advanced {
+        display: block;
+        margin-top: var(--wa-space-l);
+      }
     `,
   ];
 
@@ -109,6 +127,11 @@ export class AgentsTab extends LitElement {
   @property({ attribute: false }) ackGeneration = 0;
   @property({ attribute: false }) modelRetryMaxAttempts =
     MODEL_RETRY_MAX_ATTEMPTS_SETTING.defaultValue;
+  @property({ attribute: false }) allowOrchestratorKill = true;
+  @property({ attribute: false }) detachSubagentsOnStop = false;
+  @property({ attribute: false }) worktreeSupport = false;
+  @property({ attribute: false }) childRunConcurrencyBudget =
+    CHILD_RUN_CONCURRENCY_BUDGET_SETTING.defaultValue;
 
   protected override updated(changed: PropertyValues): void {
     super.updated(changed);
@@ -138,10 +161,6 @@ export class AgentsTab extends LitElement {
 
   private handleResetCustomDir(): void {
     postMessage(SETTINGS_VIEW_COMMANDS.RESET_CUSTOM_AGENT_DIR);
-  }
-
-  private handleSaveTeam(): void {
-    postMessage(SETTINGS_VIEW_COMMANDS.SAVE_AGENT_MODE_PRESET);
   }
 
   private renderCustomAgentIssues(): TemplateResult | typeof nothing {
@@ -222,15 +241,8 @@ export class AgentsTab extends LitElement {
         ${renderSettingsSectionHeading({
           title: 'Agent library',
           description:
-            'Configure workflow and tool-use agents, then save the enabled set as a reusable team.',
+            'Choose which agents appear in the agent selector, or create your own.',
           icon: 'robot',
-          actions: renderLabeledActionButton({
-            icon: 'floppy-disk',
-            text: 'Save team',
-            kind: 'secondary',
-            appearance: 'outlined',
-            onClick: () => this.handleSaveTeam(),
-          }),
         })}
         <div class="settings-section">
           <div class="settings-row">
@@ -293,44 +305,70 @@ export class AgentsTab extends LitElement {
           'Focused specialists for writing, review, research, and structured paper workflows.',
           'wand-magic-sparkles',
         )}
-        ${renderSettingsSectionHeading({
-          title: 'Reliability',
-          description:
-            'Configure how model sessions handle retries and context limits.',
-          icon: 'rotate-right',
-        })}
-        <div class="settings-section">
-          ${renderSettingsNumberRow({
-            label: 'Compaction threshold',
-            description: MODEL_COMPACTION_THRESHOLD_SETTING.description,
-            value: this.compactionThresholdPercent,
-            min: MODEL_COMPACTION_THRESHOLD_SETTING.min,
-            max: MODEL_COMPACTION_THRESHOLD_SETTING.max,
-            unit: '%',
-            // Clearing the field commits 0, which is the documented way to
-            // disable compaction — not a no-op edit to be reverted.
-            revertOnEmpty: false,
-            onChange: (value) =>
-              postStateSetting(
-                MODEL_COMPACTION_THRESHOLD_SETTING.configKey,
-                value,
-              ),
-          })}
-          ${renderSettingsNumberRow({
-            label: 'Automatic retries',
-            description: MODEL_RETRY_MAX_ATTEMPTS_SETTING.description,
-            value: this.modelRetryMaxAttempts,
-            min: MODEL_RETRY_MAX_ATTEMPTS_SETTING.min,
-            max: MODEL_RETRY_MAX_ATTEMPTS_SETTING.max,
-            step: 1,
-            revertOnEmpty: false,
-            onChange: (value) =>
-              postStateSetting(
-                MODEL_RETRY_MAX_ATTEMPTS_SETTING.configKey,
-                value,
-              ),
-          })}
-        </div>
+        <slot name="teams"></slot>
+        <slot name="skills"></slot>
+        <wa-details
+          class="panel-collapsible agents-advanced"
+          summary="Advanced"
+        >
+          <div class="settings-section">
+            ${renderSettingsNumberRow({
+              label: 'Compaction threshold',
+              description: MODEL_COMPACTION_THRESHOLD_SETTING.description,
+              value: this.compactionThresholdPercent,
+              min: MODEL_COMPACTION_THRESHOLD_SETTING.min,
+              max: MODEL_COMPACTION_THRESHOLD_SETTING.max,
+              unit: '%',
+              // Clearing the field commits 0, which is the documented way to
+              // disable compaction — not a no-op edit to be reverted.
+              revertOnEmpty: false,
+              onChange: (value) =>
+                postStateSetting(
+                  MODEL_COMPACTION_THRESHOLD_SETTING.configKey,
+                  value,
+                ),
+            })}
+            ${renderSettingsNumberRow({
+              label: 'Automatic retries',
+              description: MODEL_RETRY_MAX_ATTEMPTS_SETTING.description,
+              value: this.modelRetryMaxAttempts,
+              min: MODEL_RETRY_MAX_ATTEMPTS_SETTING.min,
+              max: MODEL_RETRY_MAX_ATTEMPTS_SETTING.max,
+              step: 1,
+              revertOnEmpty: false,
+              onChange: (value) =>
+                postStateSetting(
+                  MODEL_RETRY_MAX_ATTEMPTS_SETTING.configKey,
+                  value,
+                ),
+            })}
+            ${renderStateSettingToggleRow({
+              key: GlobalStateKey.ALLOW_ORCHESTRATOR_KILL,
+              checked: this.allowOrchestratorKill,
+            })}
+            ${renderStateSettingToggleRow({
+              key: GlobalStateKey.DETACH_SUBAGENTS_ON_STOP,
+              checked: this.detachSubagentsOnStop,
+            })}
+            ${renderStateSettingToggleRow({
+              key: WorkspaceStateKey.GIT_WORKTREE_SUPPORT,
+              checked: this.worktreeSupport,
+            })}
+            ${renderSettingsNumberRow({
+              label: 'Child-run concurrency budget',
+              description: CHILD_RUN_CONCURRENCY_BUDGET_SETTING.description,
+              value: this.childRunConcurrencyBudget,
+              min: CHILD_RUN_CONCURRENCY_BUDGET_SETTING.min,
+              max: CHILD_RUN_CONCURRENCY_BUDGET_SETTING.max,
+              step: 1,
+              onChange: (value) =>
+                postStateSetting(
+                  CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
+                  value,
+                ),
+            })}
+          </div>
+        </wa-details>
       </div>
     `;
   }

@@ -13,7 +13,6 @@ import {
   getVisibleAgent,
   getVisibleAgents,
   invalidateRemoteAgentsAfterSignOut,
-  isRemoteAgent,
   loadAgents,
   refresh,
 } from '@agent/index/agentRegistry';
@@ -28,7 +27,6 @@ import {
   type AgentDirectoriesPort,
 } from '@platform/interfaces';
 import type { GlobalStorageFs } from '@platform/rootedFs';
-import { AgentCategory } from '@shared/schemas';
 import { FakeStateStore } from '@test/support/FakePlatform';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { createDeferred } from '@test/support/asyncTestUtils';
@@ -215,14 +213,14 @@ describe('agent registry', () => {
       Effect.gen(function* () {
         installPluginAgentDirectories(resourcesPath, ['lean4']);
         yield* onGlobalStorage(refresh({ includeRemote: false }));
-        const lean = getAgent('lean', AgentCategory.ToolUse);
+        const lean = getAgent('lean');
         expect(lean?.source).toBe('builtInToolUse');
         expect(lean?.path).toBe(
           resolve(resourcesPath, 'plugins/lean4/agents/lean.yaml'),
         );
         installPluginAgentDirectories(resourcesPath, []);
         yield* onGlobalStorage(refresh({ includeRemote: false }));
-        expect(getAgent('lean', AgentCategory.ToolUse)).toBeUndefined();
+        expect(getAgent('lean')).toBeUndefined();
       }).pipe(
         // The install is module state: a failed assertion must not leave the
         // plugin directory installed for the rest of the file.
@@ -231,12 +229,6 @@ describe('agent registry', () => {
         ),
       ),
   );
-
-  it('treats lookup category as priority, not a filter', () => {
-    const workflow = getAgent('builtInWorkflow:polish', AgentCategory.ToolUse);
-    expect(workflow?.name).toBe('polish');
-    expect(workflow?.category).toBe(AgentCategory.Workflow);
-  });
 
   it.effect(
     'keeps the current cache visible while a refresh is pending',
@@ -364,7 +356,7 @@ describe('agent registry', () => {
         yield* Fiber.join(remote);
         yield* Fiber.join(local);
 
-        expect(isRemoteAgent('remoteLead')).toBe(true);
+        expect(getAgent('remoteLead')?.source === 'remote').toBe(true);
         expect(listRemoteAgents).toHaveBeenCalledTimes(fetchesBefore + 1);
       }),
   );
@@ -373,12 +365,12 @@ describe('agent registry', () => {
     Effect.gen(function* () {
       useAgentDirectories();
       yield* onGlobalStorage(refresh({ includeRemote: true }));
-      expect(isRemoteAgent('remoteLead')).toBe(true);
+      expect(getAgent('remoteLead')?.source === 'remote').toBe(true);
       const remoteFetchCount = listRemoteAgents.mock.calls.length;
 
       yield* onGlobalStorage(invalidateRemoteAgentsAfterSignOut());
 
-      expect(isRemoteAgent('remoteLead')).toBe(false);
+      expect(getAgent('remoteLead')?.source === 'remote').toBe(false);
       expect(listRemoteAgents).toHaveBeenCalledTimes(remoteFetchCount);
     }),
   );
@@ -390,7 +382,7 @@ describe('agent registry', () => {
       return Effect.gen(function* () {
         useAgentDirectories();
         yield* onGlobalStorage(refresh({ includeRemote: true }));
-        expect(isRemoteAgent('remoteLead')).toBe(true);
+        expect(getAgent('remoteLead')?.source === 'remote').toBe(true);
         useAgentDirectories({
           builtIn: () =>
             Effect.fail(
@@ -408,9 +400,9 @@ describe('agent registry', () => {
           onGlobalStorage(invalidateRemoteAgentsAfterSignOut()),
           { startImmediately: true },
         );
-        expect(isRemoteAgent('remoteLead')).toBe(false);
+        expect(getAgent('remoteLead')?.source === 'remote').toBe(false);
         expect(yield* Fiber.join(invalidation)).toBeUndefined();
-        expect(isRemoteAgent('remoteLead')).toBe(false);
+        expect(getAgent('remoteLead')?.source === 'remote').toBe(false);
         expect(
           logs.has(
             'WARN',
@@ -480,7 +472,7 @@ describe('agent registry', () => {
       yield* Fiber.join(staleLoad);
 
       expect(getAgent('lateRemote')).toBeUndefined();
-      expect(isRemoteAgent('remoteLead')).toBe(false);
+      expect(getAgent('remoteLead')?.source === 'remote').toBe(false);
 
       localRebuild.resolve();
       yield* Fiber.join(invalidation);

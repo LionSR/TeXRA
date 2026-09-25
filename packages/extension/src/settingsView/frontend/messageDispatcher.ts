@@ -24,7 +24,6 @@ import {
   customPresets,
   githubTokenStatus,
   gitSettingsLoaded,
-  goalItems,
   helperModel,
   latexSettingsLoaded,
   latexSettingsStatus,
@@ -123,11 +122,6 @@ export const settingsViewHandlers: SettingsViewOutboundHandlerRegistry = {
     if (data.snapshot === 'multi-agent') {
       multiAgentSettingsRevision.set(multiAgentSettingsRevision.get() + 1);
     }
-  },
-
-  // Goals.
-  [SETTINGS_VIEW_COMMANDS.UPDATE_GOAL_LIST]: (data) => {
-    goalItems.set(data.items);
   },
 
   // Agent teams.

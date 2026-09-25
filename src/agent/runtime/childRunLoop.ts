@@ -7,7 +7,7 @@ import { finalizeRun } from '@agent/storage';
 import type { AgentTrace, StageHandle } from '@agent/trace';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { finalizeRunTerminal } from '@agent/runtime/AgentRunLifecycle';
-import { childRunBudgetFor } from '@agent/runtime/childRunBudget';
+import { resolveChildRunConcurrencyBudget } from '@agent/runtime/childRunBudget';
 import type { RunParent } from '@agent/runtime/RunHandle';
 import { Runs, type RunRegistry } from '@agent/runtime/runRegistry';
 import { RunInput, type QueuedFollowUp } from '@agent/followUp/RunInput';
@@ -245,11 +245,9 @@ export interface ChildRunLoopParams<TTurn, R = never> {
    *  by agent-CLI callers. Synchronous by contract (run inside `Effect.try`). */
   readonly recordCost?: (totalCost: number | undefined) => void;
   /**
-   * Gate every turn through the session's shared child-run budget
-   * (`childRunBudgetFor`). Set by the detached native/workflow launch path;
-   * agent-CLI callers omit it; their children are external processes on the
-   * user's own subscription, outside both the cost contract and the budget
-   * (see `.agents/docs/implemented/architecture/2026-08-15-child-run-concurrency-budget.md`).
+   * Gate every turn through the session's child-run budget semaphore
+   * (`RunRegistry.childRunBudget`); agent-CLI children, external processes,
+   * sit outside it (`.agents/docs/implemented/architecture/2026-08-15-child-run-concurrency-budget.md`).
    */
   readonly budgeted?: boolean;
   /**
@@ -842,7 +840,9 @@ export function startChildRunLoop<TTurn, R = never>(
   return Effect.gen(function* () {
     const runs = yield* Runs;
     const budget = params.budgeted
-      ? yield* childRunBudgetFor(runSession, runs)
+      ? yield* runs.childRunBudget(
+          yield* resolveChildRunConcurrencyBudget(runSession.roots),
+        )
       : undefined;
     const { childRun, parentRunId, agentName, strategy } = params;
     // An agent-CLI child presents on its own trace; `loopLog` sends every

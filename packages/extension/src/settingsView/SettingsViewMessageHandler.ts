@@ -41,7 +41,6 @@ import {
   showLoggedInfoMessage,
 } from '@frontend/ui/errorHandlingUtils';
 import { subscribeAppSignal } from '@frontend/events/appSignalSubscriptions';
-import { subscribeGoalStateChanges } from '@frontend/events/runFactSubscriptions';
 import { withLogChannel } from '@logger/effectLog';
 import { createLog, type Log } from '@logger/logUtils';
 import {
@@ -65,7 +64,6 @@ import type { StateStore } from '@platform/interfaces';
 import type { LanguageModel } from '@platform/languageModel';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
-import { revealProgressRun } from '@progressView/progressNavigation';
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
@@ -90,11 +88,9 @@ import { UnsupportedCommandError } from '@shared/utils/dispatcher';
 import { buildSettingsSnapshotMessage } from '@shared/settingsView/handlers/settingsSnapshot';
 import { loadRuntimeSkillDisplay } from '@skills/runtimeSkills';
 import { getLastCheckResults } from '@tools/toolAvailability';
-import { goalList } from '@tools/goal';
 import { getProviderKeyUrl } from '@utils/config/providerConfig';
 import { allSettledVoid } from '@utils/core/allSettledVoid';
 import { setToolEnabled } from '@utils/config/constants';
-import { ensureError } from '@utils/errors/errorMessage';
 import { AgentHandlers } from './handlers/agentHandlers';
 import { LatexSettingsHandlers } from './handlers/latexSettingsHandlers';
 import { MemoryHandlers } from './handlers/memoryHandlers';
@@ -256,21 +252,11 @@ export class SettingsViewMessageHandler {
         );
       }),
     );
-    const unsubscribeGoals = subscribeGoalStateChanges(
-      session,
-      () => {
-        this.runtime.runFork(
-          this.withActiveWebview((w) => this.sendGoalList(w)),
-        );
-      },
-      this.runtime,
-    );
-    context.subscriptions.push({ dispose: unsubscribeGoals });
   }
 
   /**
    * Sign in to a subscription provider from outside the settings webview.
-   * Routes to the same handler the Settings → Subscriptions button runs, so
+   * Routes to the same handler the Settings → Models sign-in button runs, so
    * the command palette gets the status round-trip and credential refresh
    * tail instead of a bespoke sign-in that leaves both stale.
    */
@@ -390,46 +376,7 @@ export class SettingsViewMessageHandler {
       runToolCommand: (message) =>
         Effect.sync(() => this.handleRunToolCommand(message)),
       ...this.latexHandlers.handlers,
-      getGoalList: () => this.withActiveWebview((w) => this.sendGoalList(w)),
-      revealGoalRun: (message) =>
-        revealProgressRun(message.runId).pipe(Effect.asVoid),
     };
-  }
-
-  public sendGoalList(webview: vscode.Webview): Effect.Effect<void> {
-    return Effect.gen({ self: this }, function* () {
-      const result = yield* Effect.exit(
-        Effect.tryPromise({
-          try: () =>
-            webview.postMessage({
-              command: SETTINGS_VIEW_COMMANDS.UPDATE_GOAL_LIST,
-              items: goalList(this.session),
-            }),
-          catch: ensureError,
-        }).pipe(
-          Effect.flatMap((delivered) =>
-            delivered
-              ? Effect.void
-              : Effect.fail(
-                  new Error('settings webview is no longer available'),
-                ),
-          ),
-        ),
-      );
-      if (Exit.isFailure(result)) {
-        const reason =
-          result.cause.reasons.length === 1
-            ? result.cause.reasons[0]
-            : undefined;
-        yield* showLoggedErrorMessage(
-          this.channel,
-          'Failed to load goals',
-          reason && Cause.isFailReason(reason)
-            ? reason.error
-            : new Error(Cause.pretty(result.cause), { cause: result.cause }),
-        );
-      }
-    });
   }
 
   private handleRunToolCommand(
@@ -605,7 +552,6 @@ export class SettingsViewMessageHandler {
         this.sendSettingsSnapshot(webview, 'telemetry'),
         this.latexHandlers.sendLatexSettingsStatus(webview),
         this.sendSettingsSnapshot(webview, 'latex'),
-        this.sendGoalList(webview),
       ]);
     });
   }

@@ -131,17 +131,6 @@ function agentProposalMetadataLines({
         segments: [{ text: WORKFLOW_SCRIPT_PROPOSAL_COPY.costWarning }],
         tone: 'warning',
       },
-      {
-        segments: [
-          {
-            text:
-              workflow.tasks.length > 0
-                ? WORKFLOW_SCRIPT_PROPOSAL_COPY.declaredItemsNote
-                : WORKFLOW_SCRIPT_PROPOSAL_COPY.dynamicCallsNote,
-          },
-        ],
-        tone: 'dim',
-      },
       ...fileGroupLines(fileGroups, WORKFLOW_SCRIPT_PROPOSAL_COPY.filesHeading),
       {
         segments: [{ text: `Script: ${workflow.scriptPath}` }],

@@ -8,7 +8,7 @@ import path from 'node:path';
 
 import { SubscriptionRef } from 'effect';
 
-import { getAgent } from '@agent/index';
+import { getCategoryAgent } from '@agent/index';
 import { redactSecrets } from '@logger/redaction';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import {
@@ -366,5 +366,5 @@ function isMultiRound(rounds: number | undefined): rounds is number {
 /** The process catalog's answer, which every production renderer renders
  *  against. */
 function workflowRoundsFromCatalog(agentName: string): number | undefined {
-  return getAgent(agentName, AgentCategory.Workflow)?.rounds;
+  return getCategoryAgent(AgentCategory.Workflow, agentName)?.rounds;
 }

@@ -247,8 +247,6 @@ function livenessClause(liveness: RunLiveness): string {
       return liveness.reason;
     case 'live':
       return 'still running in this process';
-    case 'settled':
-      return `recorded as ${liveness.outcome}`;
     case 'interrupted':
       return 'interrupted';
   }
@@ -576,7 +574,7 @@ const recoverOrLaunchWorkflowChild = Effect.fn('recoverOrLaunchWorkflowChild')(
         // unsettled, so this refuses rather than repeating the work. It is
         // asked before the fence, because the claim the fence takes reads back
         // as an owner of this run's own.
-        const liveness = yield* resolveRunLiveness(runId, session, null);
+        const liveness = yield* resolveRunLiveness(runId, session);
         if (liveness.kind !== 'interrupted') {
           return yield* Effect.fail(
             new WorkflowRunAbortError(

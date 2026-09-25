@@ -4,7 +4,6 @@ import { describe, expect, vi } from 'vitest';
 
 import {
   canLaunchTeam,
-  findTeamPreset,
   loadTeamOptions,
   planTeamRun,
   refreshRemoteCatalogForGaps,
@@ -13,12 +12,22 @@ import {
   teamLaunchBlockReason,
   teamPlanHasGaps,
   teamPlanStatus,
-  teamPresets,
   type TeamCatalogAgent,
-  type TeamPreset,
   type TeamRunPlan,
 } from '@common/teams/TeamPlan';
-import { AGENT_MODE_PRESETS, STARTER_AGENT_MODE_PRESET } from '@shared/schemas';
+import {
+  findTeamPreset,
+  launchableTeamPresets,
+  teamPresets,
+  type TeamPreset,
+} from '@common/teams/TeamPresets';
+import {
+  AGENT_MODE_PRESETS,
+  agentMatchesIdentifier,
+  STARTER_AGENT_MODE_PRESET,
+  type AgentCategory,
+  type ByCategory,
+} from '@shared/schemas';
 
 const delegateTools = ['delegate_agent'];
 
@@ -65,10 +74,30 @@ function manualPlan(overrides: Partial<TeamRunPlan> = {}): TeamRunPlan {
   };
 }
 
+/** The list-backed stand-in for the roster resolver the hosts pass. */
+function fromCatalog<T extends TeamCatalogAgent>(
+  getAgents: (category: AgentCategory) => readonly T[],
+) {
+  return (category: AgentCategory, identifier: string) =>
+    getAgents(category).find((entry) =>
+      agentMatchesIdentifier(entry, identifier),
+    );
+}
+
+function planOver<T extends TeamCatalogAgent>(
+  teamPreset: TeamPreset,
+  options: { agents: ByCategory<readonly T[]>; agentOverride?: string },
+) {
+  return planTeamRun(teamPreset, {
+    resolveAgent: fromCatalog((category) => options.agents[category]),
+    agentOverride: options.agentOverride,
+  });
+}
+
 describe('teamPresets', () => {
   it('tags built-ins and customs while preserving provenance and order', () => {
     const custom = preset({ id: 'zeta', name: 'Zeta' });
-    const presets = teamPresets([custom]);
+    const presets = launchableTeamPresets([custom]);
     const builtIn = presets.slice(0, AGENT_MODE_PRESETS.length);
 
     expect(builtIn.map((item) => item.id)).toEqual(
@@ -78,16 +107,21 @@ describe('teamPresets', () => {
     expect(presets.at(-1)).toMatchObject({ id: 'zeta', source: 'custom' });
   });
 
-  it('excludes the starter preset and drops custom built-in id collisions', () => {
+  it('tags the starter setup-only and drops custom built-in id collisions', () => {
     const collision = preset({
       id: AGENT_MODE_PRESETS[0].id,
       name: 'Shadow Built-in',
     });
     const presets = teamPresets([STARTER_AGENT_MODE_PRESET, collision]);
 
-    expect(presets).toHaveLength(AGENT_MODE_PRESETS.length);
+    expect(presets).toHaveLength(AGENT_MODE_PRESETS.length + 1);
     expect(
-      presets.some((item) => item.id === STARTER_AGENT_MODE_PRESET.id),
+      presets.filter((item) => item.id === STARTER_AGENT_MODE_PRESET.id),
+    ).toEqual([expect.objectContaining({ setupOnly: true })]);
+    expect(
+      launchableTeamPresets([STARTER_AGENT_MODE_PRESET]).some(
+        (item) => item.id === STARTER_AGENT_MODE_PRESET.id,
+      ),
     ).toBe(false);
     expect(presets.find((item) => item.id === collision.id)?.source).toBe(
       'built-in',
@@ -115,7 +149,7 @@ function builtInPreset(id: string): TeamPreset {
 
 describe('planTeamRun', () => {
   it('selects the orchestrator for the built-in physicist team', () => {
-    const plan = planTeamRun(builtInPreset('physicist'), {
+    const plan = planOver(builtInPreset('physicist'), {
       agents: {
         workflow: [],
         toolUse: [
@@ -129,7 +163,7 @@ describe('planTeamRun', () => {
   });
 
   it('does not fall back to an arbitrary delegating agent for a built-in', () => {
-    const plan = planTeamRun(builtInPreset('physicist'), {
+    const plan = planOver(builtInPreset('physicist'), {
       agents: {
         workflow: [],
         toolUse: [agent('research', { tools: delegateTools })],
@@ -140,7 +174,7 @@ describe('planTeamRun', () => {
   });
 
   it('selects the first delegation-capable custom member in preset order', () => {
-    const plan = planTeamRun(
+    const plan = planOver(
       preset({
         agents: { workflow: [], toolUse: ['second', 'first', 'plain'] },
       }),
@@ -171,11 +205,11 @@ describe('planTeamRun', () => {
       },
     };
 
-    const selected = planTeamRun(preset(), {
+    const selected = planOver(preset(), {
       ...options,
       agentOverride: 'custom:lead',
     });
-    const missing = planTeamRun(preset(), {
+    const missing = planOver(preset(), {
       ...options,
       agentOverride: 'remote:lead',
     });
@@ -192,14 +226,14 @@ describe('planTeamRun', () => {
       source: 'custom',
       tools: delegateTools,
     });
-    const included = planTeamRun(preset(), {
+    const included = planOver(preset(), {
       agents: {
         workflow: [],
         toolUse: [lead, agent('member')],
       },
       agentOverride: 'lead',
     });
-    const appended = planTeamRun(preset(), {
+    const appended = planOver(preset(), {
       agents: {
         workflow: [],
         toolUse: [lead, agent('member'), external],
@@ -317,12 +351,12 @@ describe('loadTeamOptions', () => {
             Effect.sync(() => {
               ensured = true;
             }),
-          getAgents: (category) => {
+          resolveAgent: fromCatalog((category) => {
             if (!refreshed) return [];
             return category === 'workflow'
               ? [agent('writer', { source: 'builtInWorkflow' })]
               : [agent('lead', { tools: delegateTools }), agent('member')];
-          },
+          }),
           canAccessRemoteCatalog: () => Effect.succeed(true),
           refreshRemote: () =>
             Effect.sync(() => {
@@ -348,7 +382,7 @@ describe('loadTeamOptions', () => {
       yield* loadTeamOptions({
         customPresetsRaw: [preset()],
         ensureCatalogLoaded: () => Effect.void,
-        getAgents: () => [],
+        resolveAgent: () => undefined,
         canAccessRemoteCatalog: () => Effect.succeed(false),
         refreshRemote: () =>
           Effect.sync(() => {
@@ -363,9 +397,9 @@ describe('loadTeamOptions', () => {
   it.effect('loads the catalog before planning team options', () =>
     Effect.gen(function* () {
       let loaded = false;
-      const getAgents = vi.fn(() => {
+      const resolveAgent = vi.fn(() => {
         expect(loaded).toBe(true);
-        return [];
+        return undefined;
       });
 
       yield* loadTeamOptions({
@@ -374,12 +408,12 @@ describe('loadTeamOptions', () => {
           Effect.sync(() => {
             loaded = true;
           }),
-        getAgents,
+        resolveAgent,
         canAccessRemoteCatalog: () => Effect.succeed(false),
         refreshRemote: () => Effect.void,
       });
 
-      expect(getAgents).toHaveBeenCalled();
+      expect(resolveAgent).toHaveBeenCalled();
     }),
   );
 
@@ -393,7 +427,7 @@ describe('loadTeamOptions', () => {
             preset({ id: 'ca', name: 'Alpha' }),
           ],
           ensureCatalogLoaded: () => Effect.void,
-          getAgents: () => [],
+          resolveAgent: () => undefined,
           canAccessRemoteCatalog: () => Effect.succeed(false),
           refreshRemote: () => Effect.void,
         });
@@ -420,8 +454,9 @@ describe('resolveTeamLaunch', () => {
       teamId: 'custom-team',
       customPresetsRaw: [preset()],
       ensureCatalogLoaded: () => Effect.void,
-      getAgents: (category: string) =>
+      resolveAgent: fromCatalog((category) =>
         category === 'workflow' ? workflowAgents : toolUseAgents,
+      ),
       canAccessRemoteCatalog: () => Effect.succeed(false),
       refreshRemote: () => Effect.void,
       choose: () => Effect.succeed('cancel' as const),
@@ -545,11 +580,13 @@ describe('resolveTeamLaunch', () => {
 
   it.effect('reports an unknown team without consulting catalog ports', () =>
     Effect.gen(function* () {
-      const getAgents = vi.fn(() => []);
+      const resolveAgent = vi.fn(() => undefined);
       expect(
-        yield* resolveTeamLaunch(launchArgs({ teamId: 'missing', getAgents })),
+        yield* resolveTeamLaunch(
+          launchArgs({ teamId: 'missing', resolveAgent }),
+        ),
       ).toEqual({ status: 'unknown-team' });
-      expect(getAgents).not.toHaveBeenCalled();
+      expect(resolveAgent).not.toHaveBeenCalled();
     }),
   );
 
@@ -561,10 +598,11 @@ describe('resolveTeamLaunch', () => {
             customPresetsRaw: [
               preset({ agents: { workflow: ['writer'], toolUse: ['plain'] } }),
             ],
-            getAgents: (category: string) =>
+            resolveAgent: fromCatalog((category) =>
               category === 'workflow'
                 ? [agent('writer', { source: 'builtInWorkflow' })]
                 : [agent('plain')],
+            ),
           }),
         ),
       ).toEqual({

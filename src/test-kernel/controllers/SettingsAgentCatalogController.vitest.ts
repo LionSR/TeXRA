@@ -6,15 +6,11 @@ import { Effect } from 'effect';
 import { describe, expect } from 'vitest';
 
 import { AgentRosterController } from '@agent/roster/AgentRosterController';
-import {
-  findTeamPreset,
-  planTeamRun,
-  teamPresets,
-} from '@common/teams/TeamPlan';
+import { planTeamRun } from '@common/teams/TeamPlan';
+import { findTeamPreset, teamPresets } from '@common/teams/TeamPresets';
 import { SettingsAgentCatalogController } from '@controllers/settingsView/SettingsAgentCatalogController';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
-  AGENT_MODE_PRESETS_BY_ID,
   agentKeyOf,
   agentMatchesIdentifier,
   byCategory,
@@ -212,6 +208,7 @@ describe('SettingsAgentCatalogController', () => {
         expect(resolved.preset).toStrictEqual({
           ...persistedPreset,
           icon: 'bookmark',
+          source: 'custom',
         });
         expect(resolved.resolution.unresolvedNames).toStrictEqual(['missing']);
         assert.deepEqual(resolved.resolution.keys.workflow, ['remote:writer']);
@@ -302,7 +299,7 @@ describe('SettingsAgentCatalogController', () => {
         const { controller } = createController({
           agents: { toolUse: [delegatingLean] },
         });
-        const mathematician = AGENT_MODE_PRESETS_BY_ID.get('mathematician');
+        const mathematician = findTeamPreset(teamPresets([]), 'mathematician');
         assert.ok(mathematician);
 
         const preview = yield* controller.getPresetToolUseRoot(
@@ -313,24 +310,20 @@ describe('SettingsAgentCatalogController', () => {
         // Built-in semantics search only the built-in root names, so the
         // delegating 'lean' member earlier in preset order must not win.
         assert.equal(preview, 'orchestrator');
-        const realPreset = findTeamPreset(teamPresets([]), mathematician.id);
-        assert.ok(realPreset);
         assert.equal(
           preview,
-          planTeamRun(realPreset, {
-            agents: {
-              workflow: [],
-              toolUse: [
+          planTeamRun(mathematician, {
+            resolveAgent: (_category, identifier) =>
+              [
                 delegatingLean,
                 // Stand-in for the controller's synthesized built-in root entry.
                 {
-                  source: 'builtInToolUse',
+                  source: 'builtInToolUse' as const,
                   name: 'orchestrator',
-                  category: 'toolUse',
+                  category: 'toolUse' as const,
                   tools: ['delegate_agent'],
                 },
-              ],
-            },
+              ].find((entry) => agentMatchesIdentifier(entry, identifier)),
           }).rootAgent?.name,
         );
         // The same member list previewed ad-hoc keeps custom semantics and

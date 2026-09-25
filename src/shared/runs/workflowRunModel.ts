@@ -29,7 +29,7 @@ import {
   type WorkflowPlanMarker,
 } from '@shared/schemas';
 import { compareBySeqNo } from '@shared/runs/runOrdering';
-import { workflowRunSettled } from '@shared/runs/runStatus';
+import { isInFlightPhase } from '@shared/runs/runStatus';
 import type { TranscriptRow, WorkflowTaskRow } from '@ui/transcript';
 import {
   TOKENS_GENERATED,
@@ -171,11 +171,11 @@ interface WorkflowRunModelInput {
   readonly workflowAttemptId?: string;
   /** The newest attempt's declared plan, if the transcript recorded a valid one. */
   readonly plan: WorkflowDeclaredPlan | WorkflowPlanMarker | undefined;
-  /** The stream's resolved lifecycle phase. The run has ended once it is
-   *  neither running nor waiting (`workflowRunSettled`), and plan-only phases
-   *  it never reached are then nothing to show — the projection's settle
-   *  sweep has housed every declared card under a stage, so an empty
-   *  plan-only phase is its own skipped-empty-phase suppression. */
+  /** The stream's resolved lifecycle phase. The run has ended once it is a
+   *  known phase neither running nor waiting (an absent one has not: plan-only
+   *  phases must not vanish before the first status), and plan-only phases it
+   *  never reached are then nothing to show: the settle sweep has housed every
+   *  declared card under a stage, so an empty one is its own suppression. */
   readonly runPhase: RunLifecycleStatus | undefined;
   /** Whether the run is durably final: a terminal outcome with no producer
    *  left anywhere (the fold's `runDurablyFinal`), the same fact
@@ -414,7 +414,7 @@ export function workflowRunModel(
           opened,
           input.plan,
           tasks,
-          workflowRunSettled(input.runPhase),
+          input.runPhase !== undefined && !isInFlightPhase(input.runPhase),
         )
       : opened),
   ];

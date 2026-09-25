@@ -398,7 +398,7 @@ export function createChatSessionController(
   const adoptRunConfig = (
     config: Pick<
       AgentConfig,
-      'agent' | 'model' | 'cli' | 'delegationAgentScope'
+      'agent' | 'agentSource' | 'model' | 'cli' | 'delegationAgentScope'
     >,
     modelSource?: 'history',
   ) =>
@@ -410,6 +410,7 @@ export function createChatSessionController(
       );
       patchSessionMeta({
         agent: config.agent,
+        agentSource: config.agentSource ?? undefined,
         model: config.model,
         ...(modelSource ? { modelSource } : {}),
         teamName,
@@ -1165,6 +1166,7 @@ export function createChatSessionController(
           }
           startRootRun({
             agent: meta.agent || initialAgent,
+            agentSource: meta.agentSource,
             model: selection.model,
             instruction,
             ...(displayInstruction !== undefined ? { displayInstruction } : {}),

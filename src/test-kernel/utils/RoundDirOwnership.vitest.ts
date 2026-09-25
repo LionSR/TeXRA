@@ -13,7 +13,10 @@ import { Effect, type FileSystem } from 'effect';
 import { describe, expect, it } from 'vitest';
 
 import { MemoryStateStore } from '@platform/defaults/memoryState';
-import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
+import {
+  resolveGlobalStoragePath,
+  resolveWorkspaceStoragePath,
+} from '@platform/defaults/workspaceStorage';
 import { RunIdSchema } from '@shared/schemas';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
@@ -45,13 +48,11 @@ async function installTempWorkspace(prefix: string): Promise<string> {
   const workspaceDir = path.join(tempDir, 'workspace');
   const storageRoot = path.join(tempDir, 'storage');
   await mkdir(workspaceDir, { recursive: true });
-
-  const storage = new WorkspaceStorageProvider(storageRoot, workspaceDir);
   await installFakePlatform(
     {
       workspacePath: workspaceDir,
-      storagePath: storage.getStoragePath(),
-      globalStoragePath: storage.getGlobalStoragePath(),
+      storagePath: resolveWorkspaceStoragePath(storageRoot, workspaceDir),
+      globalStoragePath: resolveGlobalStoragePath(storageRoot),
     },
     {
       globalState: new MemoryStateStore(),

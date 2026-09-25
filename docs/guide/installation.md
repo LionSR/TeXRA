@@ -289,11 +289,11 @@ TeXRA talks to model providers directly with an API key you supply. You need a k
 
 ### In the VS Code extension
 
-The shortest path: open the TeXRA Dashboard, go to the **Providers & Models** tab, and select the provider you want. Paste the key and it is saved in VS Code's secret storage. You can also run **TeXRA: Set API Key** from the Command Palette, or put the keys in a `.env` file in your project; the extension reads it on startup.
+The shortest path: open the TeXRA Dashboard, go to the **Models** page, and select the provider you want. Paste the key and it is saved in VS Code's secret storage. You can also run **TeXRA: Set API Key** from the Command Palette, or put the keys in a `.env` file in your project; the extension reads it on startup.
 
 <ApiKeysHero />
 
-<p class="hero-caption">The Dashboard's Providers & Models tab → API configuration: each provider shows its key status (Set · Env · Not set) with Set, Get, and Remove actions.</p>
+<p class="hero-caption">The Dashboard's Models page → API keys: each provider shows its key status (Set · Env · Not set) with Set, Get, and Remove actions.</p>
 
 ### In the CLI
 

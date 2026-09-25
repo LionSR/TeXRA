@@ -13,11 +13,7 @@ import {
   type FileLocation,
   type RunStorageFileLocation,
 } from '@shared/schemas';
-import {
-  resolveWorkspaceRelativePath,
-  workspacePathPorts,
-  type WorkspacePathPorts,
-} from '@tools/pathResolution';
+import { resolveToolPath, type ToolPathCall } from '@tools/pathResolution';
 import { nullishWithDefault } from '@tools/core/inputSchema';
 import { executed } from '@tools/core/result';
 import { pathToLocationIn } from '@utils/files/fileLocation';
@@ -40,7 +36,8 @@ export type OpenPdfInput = z.infer<typeof OpenPdfInputSchema>;
  * The host viewer and the run coordinates path resolution needs, read from
  * the session in the caller's run context before the program runs.
  */
-interface OpenPdfPorts extends WorkspacePathPorts {
+interface OpenPdfPorts {
+  readonly call: ToolPathCall;
   readonly openPdf: HostInteractions['openPdf'];
   /**
    * The requested path's run-storage identity, resolved in the caller's turn
@@ -117,7 +114,7 @@ export const OpenPdfTool = defineTool({
     const runId = call.run?.runId;
     const trimmedPath = input.path.trim();
     const ports: OpenPdfPorts = {
-      ...workspacePathPorts(call),
+      call,
       openPdf: call.run?.session.interactions.openPdf,
       runStorageLocation:
         runId && trimmedPath
@@ -142,12 +139,7 @@ const resolvePdfLocation = Effect.fn('OpenPdfTool.resolvePdfLocation')(
       return ports.runStorageLocation;
     }
 
-    const resolved = yield* resolveWorkspaceRelativePath(
-      ports.settings,
-      ports.workspaceRoot,
-      trimmed,
-      ports.toolRoot(),
-    );
-    return pathToLocationIn(ports.workspaceRoot, resolved.absolute);
+    const resolved = yield* resolveToolPath(ports.call, trimmed);
+    return pathToLocationIn(ports.call.roots.workspace, resolved.absolute);
   },
 );

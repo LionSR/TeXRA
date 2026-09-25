@@ -7,30 +7,21 @@
  * aggregate. There is no goal store — a second persisted copy would be a
  * second owner of the same fact.
  */
-import { Effect, Stream, SubscriptionRef } from 'effect';
+import { Effect } from 'effect';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   aggregateId as qualifyAggregateId,
-  aggregateTarget,
   AgentCategory,
-  type AggregateTarget,
   type Goal,
-  type GoalListItem,
   type GoalState,
   type RunId,
 } from '@shared/schemas';
-import type { DatabaseReadFailed } from '@shared/session/database';
 import type { RunView } from '@shared/session/sessionView';
 import { hexId12 } from '@utils/core';
 
-/** One goal mutation as observed on a session's event plane. */
-export interface GoalStateChange {
-  readonly runId: RunId;
-}
-
-/** What a goal reader takes: the fold's per-run and whole-session levels. */
-export type GoalReader = Pick<SessionHandle, 'runView' | 'view'>;
+/** What a goal reader takes: the fold's per-run level. */
+export type GoalReader = Pick<SessionHandle, 'runView'>;
 
 /**
  * What a goal mutation takes: the reader plus the awaited commit. A mutation
@@ -86,20 +77,6 @@ function requireNonEmpty(
 /** The run's in-flight goal, or null when none is. */
 export function goalOf(session: GoalReader, runId: RunId): Goal | null {
   return goalOfRunView(runId, session.runView(runId));
-}
-
-/**
- * Every in-flight goal in the session, for the cross-run goal list. Each row
- * carries the run's fold-owned display label beside the goal, so the list
- * renders a name rather than a hex id.
- */
-export function goalList(session: GoalReader): GoalListItem[] {
-  const goals: GoalListItem[] = [];
-  for (const [runId, run] of SubscriptionRef.getUnsafe(session.view).runs) {
-    const goal = goalOfRunView(runId, run);
-    if (goal) goals.push({ ...goal, runLabel: run.label });
-  }
-  return goals;
 }
 
 /**
@@ -183,29 +160,4 @@ export function clearGoal(
 ): Effect.Effect<void, Error> {
   if (!goalOf(session, runId)) return Effect.void;
   return commitGoalState(session, runId, { active: false });
-}
-
-/**
- * Goal mutations in one explicitly-owned session, from now on. Goal state is
- * session-scoped: consumers must pass the session they render, rather than
- * listening on a process-wide compatibility event. The stream is the whole
- * surface — the subscriber's host forks it at its own R1 boundary and
- * interrupts that fork when the view it renders closes, so this module owns
- * no fiber and no runtime.
- */
-export function goalStateChanges(
-  session: Pick<SessionHandle, 'folded' | 'now'>,
-): Stream.Stream<GoalStateChange, DatabaseReadFailed> {
-  return session.folded(session.now()).pipe(
-    Stream.filter(
-      (event) =>
-        event.type === 'goalStateChanged' || event.type === 'run.removed',
-    ),
-    Stream.map((event) => aggregateTarget(event.aggregateId)),
-    Stream.filter(
-      (target): target is Extract<AggregateTarget, { kind: 'run' }> =>
-        target.kind === 'run',
-    ),
-    Stream.map((target) => ({ runId: target.id })),
-  );
 }

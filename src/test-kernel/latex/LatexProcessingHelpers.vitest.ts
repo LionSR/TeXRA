@@ -13,7 +13,10 @@ import {
 } from '@latex/LatexMediaManager';
 import { DiffFileProcessor } from '@latex/latexdiff/diffFileProcessor';
 import { sessionFsLayer } from '@platform/rootedFs';
-import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
+import {
+  resolveGlobalStoragePath,
+  resolveWorkspaceStoragePath,
+} from '@platform/defaults/workspaceStorage';
 import type { FileLocation, RunId, ToolConfig } from '@shared/schemas';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { installPlatform } from '@test/support/setupPlatform';
@@ -205,12 +208,10 @@ describe('LatexMediaManager figure baseDir resolution (issue #7228)', () => {
       ].join('\n'),
     );
     await writeFile(figurePath, 'fake-png-bytes');
-
-    const storage = new WorkspaceStorageProvider(storageRoot, workspaceDir);
     await installPlatform({
       workspacePath: workspaceDir,
-      storagePath: storage.getStoragePath(),
-      globalStoragePath: storage.getGlobalStoragePath(),
+      storagePath: resolveWorkspaceStoragePath(storageRoot, workspaceDir),
+      globalStoragePath: resolveGlobalStoragePath(storageRoot),
     });
     return { texPath, figurePath };
   }

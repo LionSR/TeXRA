@@ -623,12 +623,6 @@
       "file": "src/agent/index/agentRegistry.ts",
       "category": "production-dead",
       "kind": "exports",
-      "name": "getCategoryAgent"
-    },
-    {
-      "file": "src/agent/index/agentRegistry.ts",
-      "category": "production-dead",
-      "kind": "exports",
       "name": "getVisibleAgent"
     },
     {

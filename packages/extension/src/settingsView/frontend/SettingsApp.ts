@@ -1,6 +1,6 @@
 /** Main container for the unified settings view. */
 
-import { LitElement, html, nothing, type TemplateResult } from 'lit';
+import { LitElement, html, type TemplateResult } from 'lit';
 import { customElement } from 'lit/decorators.js';
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
@@ -23,24 +23,18 @@ import { commonViewStyles, designTokens } from '@ui/styles';
 import { registerTeXRAWebAwesomeIcons, waIcon } from '@ui/wa/webAwesomeIcons';
 
 // Local imports - settings view
-import {
-  SETTINGS_NAV_GROUPS,
-  type SettingsNavEntry,
-  type SettingsNavGroup,
-} from './settingsNav';
+import { SETTINGS_NAV_ENTRIES, type SettingsNavEntry } from './settingsNav';
 import { settingsViewStyles } from './styles';
 
 // Side-effect: register tab components
 import './tabs/MemoryTab';
 import './tabs/AccountTab';
 import './tabs/SubscriptionsTab';
-import './tabs/GoalTab';
 import './tabs/ModelsTab';
 import './tabs/AgentsTab';
 import './tabs/MultiAgentTab';
 import './tabs/ToolsTab';
 import './tabs/SkillsTab';
-import './tabs/AIAgentsTab';
 import './tabs/GitTab';
 import './tabs/LaTeXTab';
 import './tabs/ShortcutsTab';
@@ -75,7 +69,6 @@ import {
   gitMarkCommits,
   gitSettingsLoaded,
   gitWorktreeSupport,
-  goalItems,
   helperModel,
   inlineCriticismEnabled,
   latexdiffBetweenRounds,
@@ -184,69 +177,33 @@ export class SettingsApp extends SignalWatcher(LitElement) {
     });
   }
 
-  private handleManageProviderKeys(): void {
-    selectedPanel.set('models');
-  }
-
-  private entriesForGroup(
-    group: SettingsNavGroup,
-  ): readonly SettingsNavEntry[] {
-    return group.entries.filter(
+  /** The pages this host shows: Shortcuts edits desktop key bindings only. */
+  private navEntries(): readonly SettingsNavEntry[] {
+    return SETTINGS_NAV_ENTRIES.filter(
       (entry) => entry.panel !== 'shortcuts' || this.isDesktopHost,
     );
   }
 
   private renderSettingsNavigation(
-    activeGroup: SettingsNavGroup,
+    entries: readonly SettingsNavEntry[],
     activePanel: SettingsTabPanelName,
   ): TemplateResult {
-    const activeEntries = this.entriesForGroup(activeGroup);
-
     return html`
       <nav class="settings-navigation" aria-label="Settings">
-        <div
-          class="settings-category-nav"
-          role="group"
-          aria-label="Settings categories"
-        >
-          ${SETTINGS_NAV_GROUPS.map((group) => {
-            const entries = this.entriesForGroup(group);
-            if (entries.length === 0) return nothing;
-            const active = group === activeGroup;
-            return html`
-              <wa-button
-                class="settings-category-button"
-                appearance="plain"
-                size="s"
-                aria-label=${group.label}
-                aria-pressed=${String(active)}
-                data-active=${String(active)}
-                data-group=${group.label}
-                @click=${() => this.selectSettingsEntry(entries[0])}
-              >
-                ${waIcon(group.icon, { slot: 'start' })} ${group.label}
-              </wa-button>
-            `;
-          })}
-        </div>
         <!-- Plain toggle-button strip, not tablist/tab: these buttons switch
              the whole page but implement none of the APG tabs keyboard
              contract (no arrow keys/roving tabindex), and role="tab" on a
              wa-button nests a native button role. aria-pressed matches the
-             actual behavior — same pattern as the category nav above. -->
-        <div
-          class="settings-page-nav"
-          role="group"
-          aria-label=${`${activeGroup.label} pages`}
-        >
-          ${activeEntries.map((entry) => {
+             actual behavior. -->
+        <div class="settings-page-nav" role="group" aria-label="Settings pages">
+          ${entries.map((entry) => {
             const active = entry.panel === activePanel;
             return html`
               <wa-button
                 class="settings-page-button"
                 appearance="plain"
                 size="s"
-                aria-label=${`${activeGroup.label}: ${entry.label}`}
+                aria-label=${entry.label}
                 aria-pressed=${String(active)}
                 data-active=${String(active)}
                 data-panel=${entry.panel}
@@ -271,26 +228,6 @@ export class SettingsApp extends SignalWatcher(LitElement) {
     desktopHost: boolean,
   ): TemplateResult {
     switch (activePanel) {
-      case 'account':
-        return html`
-          <account-tab
-            .authenticated=${authenticated.get()}
-            .userEmail=${userEmail.get()}
-            .sessionProblem=${sessionProblem.get()}
-            .telemetryEnabled=${telemetryEnabled.get()}
-            @manage-provider-keys=${this.handleManageProviderKeys}
-          ></account-tab>
-        `;
-      case 'subscriptions':
-        return html`
-          <subscriptions-tab
-            .ackGeneration=${multiAgentSettingsRevision.get()}
-            .chatgptCodexContextWindow=${chatgptCodexContextWindow.get()}
-            .subscriptionAuth=${subscriptionAuth.get()}
-            .usage=${subscriptionUsage.get()}
-            .copilotModels=${copilotRouteInfos.get()}
-          ></subscriptions-tab>
-        `;
       case 'models':
         return html`
           <models-tab
@@ -298,17 +235,28 @@ export class SettingsApp extends SignalWatcher(LitElement) {
             .modelSelectionItems=${modelSelectionItems.get()}
             .helperModel=${helperModel.get()}
             .preferShortModelNames=${preferShortModelNames.get()}
+            .usage=${subscriptionUsage.get()}
             @provider-key-set=${this.handleSetProviderKey}
-          ></models-tab>
+          >
+            <subscriptions-tab
+              slot="subscriptions"
+              .ackGeneration=${multiAgentSettingsRevision.get()}
+              .chatgptCodexContextWindow=${chatgptCodexContextWindow.get()}
+              .subscriptionAuth=${subscriptionAuth.get()}
+              .usage=${subscriptionUsage.get()}
+              .copilotModels=${copilotRouteInfos.get()}
+            ></subscriptions-tab>
+          </models-tab>
         `;
-      case 'agents':
-        // Touch the acknowledgement generation for the same reason the
-        // multi-agent branch does: the reliability rows below ride the
-        // multi-agent snapshot, so a same-value rebroadcast must still
-        // re-render and let live() restore the committed number-row value.
+      case 'agents': {
+        // Touch the acknowledgement generation so a same-value rebroadcast
+        // after a rejected/failed write still re-renders this branch and lets
+        // live() restore the committed number-row value: the Advanced rows
+        // ride the multi-agent snapshot.
+        const ackGeneration = multiAgentSettingsRevision.get();
         return html`
           <agents-tab
-            .ackGeneration=${multiAgentSettingsRevision.get()}
+            .ackGeneration=${ackGeneration}
             .agents=${agentSelectionItems.get()}
             .customAgentDir=${customAgentDir.get()}
             .customAgentDirIsDefault=${customAgentDirIsDefault.get()}
@@ -316,63 +264,48 @@ export class SettingsApp extends SignalWatcher(LitElement) {
             .initialSubTab=${agentSubTab.get()}
             .compactionThresholdPercent=${compactionThresholdPercent.get()}
             .modelRetryMaxAttempts=${modelRetryMaxAttempts.get()}
-          ></agents-tab>
-        `;
-      case 'multi-agent': {
-        // Touch the acknowledgement generation so a same-value rebroadcast
-        // after a rejected/failed write still re-renders this branch and lets
-        // live() restore the committed number-row value.
-        const ackGeneration = multiAgentSettingsRevision.get();
-        return html`
-          <multi-agent-tab
-            .activePresetId=${activePresetId.get()}
-            .customPresets=${customPresets.get()}
-            .orchestratorAgents=${orchestratorAgents.get()}
             .allowOrchestratorKill=${allowOrchestratorKill.get()}
             .detachSubagentsOnStop=${detachSubagentsOnStop.get()}
             .childRunConcurrencyBudget=${childRunConcurrencyBudget.get()}
             .worktreeSupport=${gitWorktreeSupport.get()}
-            .ackGeneration=${ackGeneration}
-          ></multi-agent-tab>
+          >
+            <multi-agent-tab
+              slot="teams"
+              .activePresetId=${activePresetId.get()}
+              .customPresets=${customPresets.get()}
+              .orchestratorAgents=${orchestratorAgents.get()}
+            ></multi-agent-tab>
+            <skills-tab
+              slot="skills"
+              .masterEnabled=${agentSkillsEnabled.get()}
+              .disabledSkills=${disabledSkills.get()}
+              .disabledSources=${disabledSkillSources.get()}
+              .plugins=${installedPlugins.get()}
+              .skills=${skillsList.get()}
+              .issues=${skillLoadIssues.get()}
+            ></skills-tab>
+          </agents-tab>
         `;
       }
-      case 'tools':
-        return html`
-          <tools-tab
-            .items=${toolDashboardItems.get()}
-            .loaded=${toolDashboardLoaded.get()}
-            .approvalPolicy=${approvalPolicy.get()}
-            .bashApprovalEnabled=${bashApprovalEnabled.get()}
-            .editApprovalEnabled=${editApprovalEnabled.get()}
-            .toolPathProtectionEnabled=${toolPathProtectionEnabled.get()}
-          ></tools-tab>
-        `;
-      case 'skills':
-        return html`
-          <skills-tab
-            .masterEnabled=${agentSkillsEnabled.get()}
-            .disabledSkills=${disabledSkills.get()}
-            .disabledSources=${disabledSkillSources.get()}
-            .plugins=${installedPlugins.get()}
-            .skills=${skillsList.get()}
-            .issues=${skillLoadIssues.get()}
-          ></skills-tab>
-        `;
-      case 'ai-agents': {
+      case 'tools': {
         const items = toolDashboardItems.get();
         // Read here, inside this watcher's render, so a snapshot that changes
-        // one of the cards' inline settings re-renders the tab.
+        // one of the cards' inline settings re-renders the page.
         const settingValues = Object.fromEntries(
           items
             .flatMap((item) => item.settings ?? [])
             .map(([key]) => [key, settingSignal<string>(key).get()]),
         );
         return html`
-          <ai-agents-tab
+          <tools-tab
             .items=${items}
             .loaded=${toolDashboardLoaded.get()}
+            .approvalPolicy=${approvalPolicy.get()}
+            .bashApprovalEnabled=${bashApprovalEnabled.get()}
+            .editApprovalEnabled=${editApprovalEnabled.get()}
+            .toolPathProtectionEnabled=${toolPathProtectionEnabled.get()}
             .settingValues=${settingValues}
-          ></ai-agents-tab>
+          ></tools-tab>
         `;
       }
       case 'latex':
@@ -391,8 +324,21 @@ export class SettingsApp extends SignalWatcher(LitElement) {
             .inlineCriticismEnabled=${inlineCriticismEnabled.get()}
           ></latex-tab>
         `;
-      case 'git':
+      case 'memory':
         return html`
+          <memory-tab
+            .items=${memoryItems.get()}
+            .enabled=${memoryEnabled.get()}
+          ></memory-tab>
+        `;
+      case 'general':
+        return html`
+          <account-tab
+            .authenticated=${authenticated.get()}
+            .userEmail=${userEmail.get()}
+            .sessionProblem=${sessionProblem.get()}
+            .telemetryEnabled=${telemetryEnabled.get()}
+          ></account-tab>
           <git-tab
             .markCommits=${gitMarkCommits.get()}
             .authorName=${gitAuthorName.get()}
@@ -404,15 +350,6 @@ export class SettingsApp extends SignalWatcher(LitElement) {
         `;
       case 'shortcuts':
         return html`<shortcuts-tab></shortcuts-tab>`;
-      case 'goal':
-        return html`<goal-tab .items=${goalItems.get()}></goal-tab>`;
-      case 'memory':
-        return html`
-          <memory-tab
-            .items=${memoryItems.get()}
-            .enabled=${memoryEnabled.get()}
-          ></memory-tab>
-        `;
     }
     // Exhaustiveness guard: `activePanel` is a `SettingsTabPanelName`, so every
     // entry in `SETTINGS_TAB_ORDER` must have a case above. A tab appended to
@@ -427,38 +364,22 @@ export class SettingsApp extends SignalWatcher(LitElement) {
 
   override render(): TemplateResult {
     const desktopHost = this.isDesktopHost;
-    const requestedPanel = selectedPanel.get();
-    const activePanel =
-      !desktopHost && requestedPanel === 'shortcuts'
-        ? 'account'
-        : requestedPanel;
-    const activeGroup =
-      SETTINGS_NAV_GROUPS.find((group) =>
-        group.entries.some((entry) => entry.panel === activePanel),
-      ) ?? SETTINGS_NAV_GROUPS[0];
-    const activeEntry = activeGroup.entries.find(
-      (entry) => entry.panel === activePanel,
-    );
+    const entries = this.navEntries();
+    const activeEntry =
+      entries.find((entry) => entry.panel === selectedPanel.get()) ??
+      entries[0];
+    const activePanel = activeEntry.panel;
 
     return html`
       <div class="settings-container">
-        ${this.renderSettingsNavigation(activeGroup, activePanel)}
-        <section
-          class="settings-panel"
-          aria-label=${activeEntry?.label ?? 'Settings'}
-        >
-          ${
-            activeEntry
-              ? html`
-                  <header class="settings-page-header tab-content-container">
-                    <div class="settings-page-header-copy">
-                      <h1>${activeEntry.label}</h1>
-                      <p>${activeEntry.description}</p>
-                    </div>
-                  </header>
-                `
-              : nothing
-          }
+        ${this.renderSettingsNavigation(entries, activePanel)}
+        <section class="settings-panel" aria-label=${activeEntry.label}>
+          <header class="settings-page-header tab-content-container">
+            <div class="settings-page-header-copy">
+              <h1>${activeEntry.label}</h1>
+              <p>${activeEntry.description}</p>
+            </div>
+          </header>
           ${this.renderActivePanel(activePanel, desktopHost)}
         </section>
       </div>

@@ -175,7 +175,7 @@ Opening VS Code from a configured terminal provides the most reliable environmen
 
 1. **OpenRouter configuration**:
    - Verify your OpenRouter API key is set correctly
-   - Check that "Use OpenRouter for all models" is enabled in the Dashboard → Providers & Models tab → OpenRouter settings
+   - Check that "Use OpenRouter for all models" is enabled in the Dashboard → Models page → OpenRouter row
 
 2. **Model availability**:
    - Make sure the requested model is available via OpenRouter

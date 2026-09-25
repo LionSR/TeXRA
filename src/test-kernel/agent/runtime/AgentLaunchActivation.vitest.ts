@@ -14,7 +14,6 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@agent/index', () => ({
-  isRemoteAgent: () => false,
   resolveAgentForLaunch: mocks.resolve,
 }));
 vi.mock('@agent/runtime/agentLoad', () => ({

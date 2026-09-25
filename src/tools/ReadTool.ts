@@ -8,8 +8,8 @@ import { ToolError, type ToolResult } from '@shared/schemas';
 import { buildBytesAttachment, buildFileAttachment } from '@tools/attachments';
 import { formatFileView } from '@tools/formatting';
 import {
-  resolveAndFormat,
-  type WorkspacePathResolution,
+  resolveToolPath,
+  type ToolPathResolution,
 } from '@tools/pathResolution';
 import { recordToolFileRead } from '@tools/fileInteractions';
 import { parseEml, type EmlImageAttachment } from '@tools/emlParser';
@@ -124,12 +124,8 @@ const read = Effect.fn('ReadFileTool.execute')(function* (
   if (signal.aborted) {
     return yield* Effect.fail(new ToolError('Cancelled before execution.'));
   }
-  const { path: resolved, display: displayPath } = yield* resolveAndFormat(
-    call.roots,
-    call.roots.workspace,
-    input.path,
-    call.workingDirectory,
-  );
+  const resolved = yield* resolveToolPath(call, input.path);
+  const displayPath = resolved.display;
   const filePath = resolved.fsPath;
 
   const attachmentKind = getAttachmentConfig(resolved.absolute);
@@ -244,7 +240,7 @@ const returnBinaryAttachment = Effect.fn('ReadFileTool.returnBinaryAttachment')(
   function* (
     input: ReadInput,
     kind: AttachmentKind,
-    resolved: WorkspacePathResolution,
+    resolved: ToolPathResolution,
   ): Effect.fn.Return<ToolResult, Error, ToolCall | FileSystem.FileSystem> {
     const copy = ATTACHMENT_COPY[kind];
     const attachment = yield* buildFileAttachment({

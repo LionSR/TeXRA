@@ -147,18 +147,6 @@ vi.mock('@platform/defaults/nodeWorkspace', () => ({
   canonicalizeWorkspacePath: vi.fn((workspacePath: string) => workspacePath),
 }));
 
-// The project storage directory the first init names, so no case creates it
-// under the real storage root.
-vi.mock('@platform/defaults/workspaceStorage', async (importOriginal) => ({
-  ...(await importOriginal<
-    typeof import('@platform/defaults/workspaceStorage')
-  >()),
-  WorkspaceStorageProvider: class {
-    getStoragePath = () => '/workspace/.texra/storage';
-    getGlobalStoragePath = () => '/tmp/texra-global';
-  },
-}));
-
 // The global state store the CLI's process-runtime install opens before it
 // installs the runtime that serves it, and the project store the first init
 // opens: this suite runs that real install, so the opens are what it stubs.

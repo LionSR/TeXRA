@@ -1,4 +1,8 @@
-/** Subscription-backed model access: ChatGPT, Grok, coding-plan providers, and Copilot in VS Code. */
+/**
+ * Subscription sign-in on the Models page: ChatGPT, Grok, and Copilot in VS
+ * Code. Kimi Code and GLM Coding Plan are API keys, so they live on their
+ * provider rows above, with their usage meters.
+ */
 
 import {
   LitElement,
@@ -11,7 +15,6 @@ import {
 import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared styles, schemas, and templates
-import { CODING_PLAN_SUBSCRIPTIONS } from '@shared/codingPlanSubscriptions';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
 import {
@@ -96,30 +99,23 @@ export class SubscriptionsTab extends LitElement {
 
   override render(): TemplateResult {
     return html`
-      <div class="subscriptions-container tab-content-container">
-        <div class="settings-section">
-          <div class="settings-row">
-            <div class="settings-row-text">
-              <span class="settings-row-label">Subscription usage</span>
-              <span class="settings-row-help">
-                Cached briefly and refreshed only when this tab opens or you
-                ask.
-              </span>
-            </div>
-            <div class="settings-row-control">
-              ${renderLabeledActionButton({
-                icon: 'arrows-rotate',
-                text: 'Refresh usage',
-                kind: 'secondary',
-                appearance: 'outlined',
-                onClick: () =>
-                  postMessage(SETTINGS_VIEW_COMMANDS.GET_SUBSCRIPTION_USAGE, {
-                    forceRefresh: true,
-                  }),
-              })}
-            </div>
-          </div>
-        </div>
+      <div class="subscriptions-container">
+        ${renderSettingsSectionHeading({
+          title: 'Subscriptions',
+          description:
+            'Use a ChatGPT or Grok plan, or Copilot in VS Code, instead of an API key. Usage refreshes when this page opens.',
+          icon: 'gem',
+          actions: renderLabeledActionButton({
+            icon: 'arrows-rotate',
+            text: 'Refresh usage',
+            kind: 'secondary',
+            appearance: 'outlined',
+            onClick: () =>
+              postMessage(SETTINGS_VIEW_COMMANDS.GET_SUBSCRIPTION_USAGE, {
+                forceRefresh: true,
+              }),
+          }),
+        })}
         <subscription-section
           .ackGeneration=${this.ackGeneration}
           .provider=${CHATGPT_SUBSCRIPTION_SECTION}
@@ -133,76 +129,8 @@ export class SubscriptionsTab extends LitElement {
           .auth=${this.subscriptionAuth.grok ?? null}
           .now=${this._ticker.now}
         ></subscription-section>
-        ${CODING_PLAN_SUBSCRIPTIONS.map((section) =>
-          this.renderCodingPlanSection(section),
-        )}
         ${this.renderCopilotSection()}
       </div>
-    `;
-  }
-
-  private renderCodingPlanSection(
-    section: (typeof CODING_PLAN_SUBSCRIPTIONS)[number],
-  ): TemplateResult {
-    return html`
-      <section id=${section.sectionId}>
-        ${renderSettingsSectionHeading({
-          title: section.displayName,
-          description: section.description,
-          icon: 'gem',
-        })}
-        <div class="settings-section">
-          <div class="settings-row">
-            <div class="settings-row-text">
-              <span class="settings-row-label">${section.keyLabel}</span>
-              <span class="settings-row-help">${section.keyHelp}</span>
-            </div>
-            <div class="settings-row-control">
-              ${renderLabeledActionButton({
-                icon: 'arrow-up-right-from-square',
-                text: 'Open console',
-                kind: 'secondary',
-                appearance: 'outlined',
-                onClick: () =>
-                  postMessage(SETTINGS_VIEW_COMMANDS.OPEN_EXTERNAL_URL, {
-                    url: section.consoleUrl,
-                  }),
-              })}
-            </div>
-          </div>
-          <div class="settings-row">
-            <div class="settings-row-text">
-              <span class="settings-row-label">2. Add the key</span>
-              <span class="settings-row-help">
-                Paste it on the ${section.displayName} row in Providers &amp;
-                Models, or set the provider API key environment variable.
-              </span>
-            </div>
-            <div class="settings-row-control">
-              ${renderLabeledActionButton({
-                icon: 'server',
-                text: 'Open Providers & Models',
-                kind: 'secondary',
-                appearance: 'outlined',
-                onClick: () =>
-                  postMessage(SETTINGS_VIEW_COMMANDS.SET_TAB, {
-                    tab: 'models',
-                  }),
-              })}
-            </div>
-          </div>
-          <div class="settings-row">
-            <div class="settings-row-text">
-              <span class="settings-row-label">${section.toggleLabel}</span>
-              <span class="settings-row-help">${section.toggleHelp}</span>
-            </div>
-          </div>
-          <subscription-usage-row
-            .snapshot=${this.usage?.[section.usageProvider] ?? null}
-            .now=${this._ticker.now}
-          ></subscription-usage-row>
-        </div>
-      </section>
     `;
   }
 

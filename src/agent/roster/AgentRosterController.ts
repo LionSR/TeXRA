@@ -1,5 +1,6 @@
 import { Effect } from 'effect';
 
+import { teamPresets } from '@common/teams/TeamPresets';
 import { withLogChannel } from '@logger/effectLog';
 import type {
   StateStore,
@@ -16,14 +17,12 @@ import type {
 } from '@shared/schemas';
 import {
   AGENT_CATEGORIES,
-  AGENT_MODE_PRESETS,
   agentKeyOf,
   agentMatchesIdentifier,
   agentName,
   AgentRosterSelectionSchema,
   byCategory,
   INHERITED_AGENT_ROSTER,
-  STARTER_AGENT_MODE_PRESET,
 } from '@shared/schemas';
 import {
   clearDefaultTeamId,
@@ -50,16 +49,14 @@ export interface AgentRosterControllerDeps<
   readonly workspaceState: StateStore;
   readonly globalState: StateStore;
   readonly getAgents: (category: AgentCategory) => Entry[];
-  readonly getPresets?: () => Effect.Effect<
-    readonly AgentModePreset[],
-    StateReadFailed
-  >;
+  /** The workspace's persisted custom presets, raw; `teamPresets` parses. */
+  readonly getPresets?: () => Effect.Effect<unknown, StateReadFailed>;
   /**
    * Resolve one stored identifier without collapsing exact source identity.
    * The controller applies no fallback around this, so an implementation owns
    * the whole contract: match a bare name against the category's agents, match
    * a source-qualified key exactly, and return nothing for an entry outside
-   * `category`. `getRosterAgent` is the production implementation.
+   * `category`. `getCategoryAgent` is the production implementation.
    */
   readonly resolveAgent: (
     category: AgentCategory,
@@ -92,12 +89,6 @@ interface AgentRosterSnapshot {
   /** Persisted team identity that could not be resolved; effective roster is all. */
   readonly missingTeamId?: string;
   readonly unresolvedNames: string[];
-}
-
-function allPresets(
-  extra: readonly AgentModePreset[] = [],
-): readonly AgentModePreset[] {
-  return [STARTER_AGENT_MODE_PRESET, ...AGENT_MODE_PRESETS, ...extra];
 }
 
 /**
@@ -135,9 +126,7 @@ function selectedIdentifiers(
     const categorySelection = selection.agentKeys[category];
     return categorySelection === 'all' ? undefined : categorySelection;
   }
-  const preset = allPresets(presets).find(
-    (candidate) => candidate.id === selection.teamId,
-  );
+  const preset = presets.find((candidate) => candidate.id === selection.teamId);
   if (!preset) return undefined;
   return preset.agents[category];
 }
@@ -147,22 +136,23 @@ export class AgentRosterController<
 > {
   constructor(private readonly deps: AgentRosterControllerDeps<Entry>) {}
 
-  /** Host-supplied presets, added to the built-ins by {@link allPresets}. */
-  private extraPresets() {
-    return Effect.gen({ self: this }, function* () {
-      return this.deps.getPresets ? yield* this.deps.getPresets() : [];
-    });
-  }
-
   /**
-   * Every selectable team preset: built-ins plus the host's custom presets.
-   * The one list roster pickers render — a form composing its own preset
-   * list can drift from what {@link setTeam} accepts.
+   * Every selectable team preset: the shared catalog (`teamPresets`) over the
+   * host's custom presets. The one list roster pickers render and every
+   * preset lookup reads — a form composing its own preset list can drift from
+   * what {@link setTeam} accepts.
    */
   allPresets() {
     return Effect.gen({ self: this }, function* () {
-      return allPresets(yield* this.extraPresets());
+      return teamPresets(
+        this.deps.getPresets ? yield* this.deps.getPresets() : undefined,
+      );
     });
+  }
+
+  /** Resolve one stored identifier by the roster's identity rule. */
+  resolveAgent(category: AgentCategory, identifier: string) {
+    return this.deps.resolveAgent(category, identifier);
   }
 
   private getSelection() {
@@ -194,7 +184,7 @@ export class AgentRosterController<
       const identifiers = selectedIdentifiers(
         effective,
         category,
-        yield* this.extraPresets(),
+        yield* this.allPresets(),
       );
       if (identifiers === undefined) return this.deps.getAgents(category);
 
@@ -224,7 +214,7 @@ export class AgentRosterController<
       const selection = yield* this.getSelection();
       const { effectiveSelection, missingTeamId } =
         yield* this.resolveEffectiveSelection(selection);
-      const presets = yield* this.extraPresets();
+      const presets = yield* this.allPresets();
       const unresolvedNames = AGENT_CATEGORIES.flatMap((category) => {
         const identifiers = selectedIdentifiers(
           effectiveSelection,
@@ -254,7 +244,7 @@ export class AgentRosterController<
       const identifiers = selectedIdentifiers(
         selection,
         category,
-        yield* this.extraPresets(),
+        yield* this.allPresets(),
       );
       if (identifiers === undefined) return undefined;
       // A custom selection already stores keys, so only an `all`/team selection
@@ -482,7 +472,7 @@ export class AgentRosterController<
   setDefaultTeam(
     teamId: string,
   ): Effect.Effect<void, StateWriteFailed | InvalidAgentTeamError> {
-    if (!allPresets().some((preset) => preset.id === teamId)) {
+    if (!teamPresets(undefined).some((preset) => preset.id === teamId)) {
       return Effect.fail(
         new InvalidAgentTeamError(
           `Only a built-in team can be the user default: ${teamId}`,

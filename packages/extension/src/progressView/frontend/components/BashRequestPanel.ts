@@ -1,18 +1,12 @@
-/** Bash command approval request panel. */
+/** Bash command request card: "Run a command in `paper/`" and the command. */
 
 // Third-party imports
-import { html, nothing, type TemplateResult } from 'lit';
+import { html, type TemplateResult } from 'lit';
 import { customElement } from 'lit/decorators.js';
 
-// Side-effect imports - register WA icon component
-import '@awesome.me/webawesome/dist/components/icon/icon.js';
-
-// Local imports - shared styles
-import {
-  commonViewStyles,
-  designTokens,
-  requestPanelSharedStyles,
-} from '@ui/styles';
+// Local imports - shared vocabulary
+import { APPROVE_SESSION_ACTION } from '@shared/session/approvalDecision';
+import { RUN_GRANT_LABEL } from '@ui/copy/delegationApproval';
 
 // Local imports - progress view styles
 import { codeBlockStyles } from '../styles/codeBlockStyles';
@@ -21,48 +15,50 @@ import { codeBlockStyles } from '../styles/codeBlockStyles';
 import { buildCodeBlock } from '../formatters/htmlBuilders';
 
 // Local imports - base class
-import { BaseBypassApprovalPanel } from './BaseBypassApprovalPanel';
+import { BaseRequestPanel, type RunGrant } from './BaseRequestPanel';
 
 // Local imports - styles
 import { bashRequestPanelStyles } from './BashRequestPanel.styles';
 
 @customElement('bash-request-panel')
-export class BashRequestPanel extends BaseBypassApprovalPanel<'bash'> {
+export class BashRequestPanel extends BaseRequestPanel<'bash'> {
   static override styles = [
-    designTokens,
-    commonViewStyles,
+    BaseRequestPanel.styles,
     codeBlockStyles,
-    requestPanelSharedStyles,
     bashRequestPanelStyles,
   ];
 
-  protected readonly approvalDecision = { action: 'approve' } as const;
+  protected override get grant(): RunGrant {
+    return {
+      label: RUN_GRANT_LABEL.bash,
+      decision: { action: APPROVE_SESSION_ACTION },
+    };
+  }
+
+  protected override submitPrimary(): void {
+    this.emitAction({ action: 'approve' });
+  }
+
+  // The directory a command runs in is the security-relevant field of this
+  // prompt, so it sits in the ask rather than in small print under it.
+  protected override renderAsk(): TemplateResult {
+    const { cwd } = this.permission.data;
+    return cwd
+      ? html`Run a command in <code><bdi dir="ltr">${cwd}</bdi></code>`
+      : html`Run a command`;
+  }
 
   override render(): TemplateResult {
-    const data = this.permission.data;
-
-    return this.renderRequestShell({
-      prefix: 'bash-approval-request',
-      details: html`
-        ${
-          data.cwd
-            ? html`<div class="bash-approval-request__cwd">
-                Runs in: <bdi dir="ltr">${data.cwd}</bdi>
-              </div>`
-            : nothing
-        }
-        <div class="bash-approval-request__command">
-          ${buildCodeBlock(data.command, {
-            language: 'bash',
-            className: 'tool-command-input',
-            showLanguage: true,
-            showCopy: true,
-          })}
-        </div>
-      `,
-      approveTitle: 'Run this command (y)',
-      rejectTitle: 'Do not run this command (n)',
-    });
+    return this.renderCard(html`
+      <div class="bash-request__command">
+        ${buildCodeBlock(this.permission.data.command, {
+          language: 'bash',
+          className: 'tool-command-input',
+          showLanguage: true,
+          showCopy: true,
+        })}
+      </div>
+    `);
   }
 }
 

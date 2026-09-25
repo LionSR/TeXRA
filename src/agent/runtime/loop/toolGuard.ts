@@ -17,11 +17,7 @@ import {
   buildBashApprovalRejectedResult,
   requestBashApproval,
 } from '@tools/approval/bashApproval';
-import {
-  assertWritable,
-  parseWorkingDirectory,
-  resolveAndFormat,
-} from '@tools/pathResolution';
+import { assertWritable, resolveToolPath } from '@tools/pathResolution';
 import { ensureError } from '@utils/errors/errorMessage';
 
 import { ToolCall } from '../ToolCall';
@@ -68,14 +64,9 @@ const guardRefusal = Effect.fn('toolUse.guard')(function* (
     catch: ensureError,
   });
   for (const target of targets) {
-    const { path, display } = yield* resolveAndFormat(
-      call.roots,
-      call.roots.workspace,
-      target,
-      call.workingDirectory,
-    );
+    const path = yield* resolveToolPath(call, target);
     yield* Effect.try({
-      try: () => assertWritable(path, display),
+      try: () => assertWritable(path, path.display),
       catch: ensureError,
     });
   }
@@ -92,7 +83,7 @@ const guardRefusal = Effect.fn('toolUse.guard')(function* (
   let cwd: string | undefined;
   if (guard.cwd === 'workspace') cwd = call.roots.workspace;
   else if (guard.cwd !== 'unknown')
-    cwd = parseWorkingDirectory(call.workingDirectory) ?? call.roots.workspace;
+    cwd = call.workingDirectory ?? call.roots.workspace;
 
   const decision = yield* requestBashApproval({ command, cwd });
   return decision.action === 'approve'

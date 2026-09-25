@@ -9,14 +9,14 @@ vi.mock('@shared/hostBridge', () => ({
   },
 }));
 
-import type { SettingsNavGroup } from '@settingsView/frontend/settingsNav';
+import type { SettingsNavEntry } from '@settingsView/frontend/settingsNav';
 import type { SettingsTabPanelName } from '@shared/settingsView/settingsViewMessages';
 
 import { useLitComponentTestDom } from './litComponentTestUtils';
 
 type LitElementLike = HTMLElement & { updateComplete: Promise<unknown> };
 
-let navGroups: readonly SettingsNavGroup[] = [];
+let navEntries: readonly SettingsNavEntry[] = [];
 let settingsState: typeof import('@settingsView/frontend/settingsState');
 
 function setSelectedPanel(panel: SettingsTabPanelName): void {
@@ -28,7 +28,7 @@ function getSelectedPanel(): SettingsTabPanelName {
 }
 
 async function mountSettingsApp(
-  initialTab: SettingsTabPanelName = 'account',
+  initialTab: SettingsTabPanelName = 'models',
 ): Promise<LitElementLike> {
   const app = document.createElement('settings-app') as LitElementLike;
   app.setAttribute('data-desktop-view', 'settings');
@@ -36,16 +36,6 @@ async function mountSettingsApp(
   document.body.append(app);
   await app.updateComplete;
   return app;
-}
-
-function categoryButton(app: LitElementLike, label: string): HTMLElement {
-  const button = [
-    ...(app.shadowRoot?.querySelectorAll<HTMLElement>(
-      '.settings-category-button',
-    ) ?? []),
-  ].find((candidate) => candidate.getAttribute('aria-label') === label);
-  expect(button, `missing settings category "${label}"`).not.toBeNull();
-  return button!;
 }
 
 function pageButton(app: LitElementLike, panel: string): HTMLElement {
@@ -62,37 +52,29 @@ function activePanelLabel(app: LitElementLike): string | null | undefined {
     ?.getAttribute('aria-label');
 }
 
-describe('hierarchical settings navigation', () => {
+describe('flat settings navigation', () => {
   useLitComponentTestDom(async () => {
     await import('@settingsView/frontend/SettingsApp');
     const nav = await import('@settingsView/frontend/settingsNav');
     settingsState = await import('@settingsView/frontend/settingsState');
-    navGroups = nav.SETTINGS_NAV_GROUPS;
+    navEntries = nav.SETTINGS_NAV_ENTRIES;
   });
 
   beforeEach(() => {
-    setSelectedPanel('account');
+    setSelectedPanel('models');
   });
 
-  it('selects the first page when changing category, then any page within it', async () => {
+  it('shows every page in one strip and switches to any of them', async () => {
     const app = await mountSettingsApp();
 
-    for (const group of navGroups) {
-      categoryButton(app, group.label).click();
+    expect(
+      app.shadowRoot?.querySelectorAll('.settings-page-button'),
+    ).toHaveLength(navEntries.length);
+    for (const entry of navEntries) {
+      pageButton(app, entry.panel).click();
       await app.updateComplete;
-
-      expect(getSelectedPanel()).toBe(group.entries[0]!.panel);
-      expect(activePanelLabel(app)).toBe(group.entries[0]!.label);
-      expect(
-        app.shadowRoot?.querySelectorAll('.settings-page-button'),
-      ).toHaveLength(group.entries.length);
-
-      for (const entry of group.entries) {
-        pageButton(app, entry.panel).click();
-        await app.updateComplete;
-        expect(getSelectedPanel()).toBe(entry.panel);
-        expect(activePanelLabel(app)).toBe(entry.label);
-      }
+      expect(getSelectedPanel()).toBe(entry.panel);
+      expect(activePanelLabel(app)).toBe(entry.label);
     }
   });
 
@@ -108,26 +90,6 @@ describe('hierarchical settings navigation', () => {
     expect(app.shadowRoot?.querySelector('latex-tab')).not.toBeNull();
   });
 
-  it('keeps account key management in the models page', async () => {
-    const app = await mountSettingsApp();
-
-    const account =
-      app.shadowRoot?.querySelector<LitElementLike>('account-tab');
-    await account?.updateComplete;
-    account?.dispatchEvent(
-      new CustomEvent('manage-provider-keys', {
-        bubbles: true,
-        composed: true,
-      }),
-    );
-    await app.updateComplete;
-
-    expect(getSelectedPanel()).toBe('models');
-    expect(activePanelLabel(app)).toBe('Providers & Models');
-    expect(app.shadowRoot?.querySelector('models-tab')).not.toBeNull();
-    expect(app.shadowRoot?.querySelector('account-tab')).toBeNull();
-  });
-
   it('keeps desktop-only shortcuts out of the extension navigation', async () => {
     const app = document.createElement('settings-app') as LitElementLike;
     setSelectedPanel('shortcuts');
@@ -139,7 +101,7 @@ describe('hierarchical settings navigation', () => {
         '.settings-page-button[data-panel="shortcuts"]',
       ),
     ).toBeNull();
-    expect(activePanelLabel(app)).toBe('Account & Usage');
+    expect(activePanelLabel(app)).toBe('Models');
     expect(app.shadowRoot?.querySelector('shortcuts-tab')).toBeNull();
   });
 });

@@ -2,7 +2,6 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports
-import type { ApproveSplitButton } from '@progressView/frontend/components/ApproveSplitButton';
 import type { ProposalRequestPanel } from '@progressView/frontend/components/ProposalRequestPanel';
 import { AgentCategory, DEFAULT_TOOL_CONFIG } from '@shared/schemas';
 import type { RunId } from '@shared/schemas';
@@ -60,13 +59,16 @@ describe('proposal-request-panel file-name keyboard activation', () => {
   it('maps the menu and a shortcut to approve-all while y stays one-off', async () => {
     const element = await mountPanel();
     const actions = recordPermissionActions(element);
-    const split = element.shadowRoot?.querySelector<
-      HTMLElement & { canApproveAllDelegatedWork?: boolean }
-    >('approve-split-button');
+    const grant = element.shadowRoot?.querySelector<HTMLElement>(
+      'wa-dropdown-item[value="grant"]',
+    );
 
-    expect(split?.canApproveAllDelegatedWork).toBe(true);
-    split?.dispatchEvent(
-      new CustomEvent('approve-all-delegated-work', {
+    expect(grant?.textContent?.trim()).toBe(
+      'Approve all agent work in this run',
+    );
+    element.shadowRoot?.querySelector('.request-grant-menu')?.dispatchEvent(
+      new CustomEvent('wa-select', {
+        detail: { item: grant },
         bubbles: true,
         composed: true,
       }),
@@ -134,8 +136,6 @@ describe('proposal-request-panel file-name keyboard activation', () => {
     expect(element.handleKeyboardShortcut('a')).toBe(true);
     expect(element.handleKeyboardShortcut('s')).toBe(true);
     expect(element.handleKeyboardShortcut('n')).toBe(true);
-    await element.updateComplete;
-    expect(element.handleKeyboardShortcut('n')).toBe(true);
 
     const decisionOf = (request: (typeof actions)[number]) =>
       'decision' in request ? request.decision : request.kind;
@@ -167,10 +167,11 @@ describe('proposal-request-panel file-name keyboard activation', () => {
 
     const element = await mountPanel(permission);
 
-    expect(element.shadowRoot?.textContent).toContain(
-      'Proposes a multi-agent run',
-    );
-    expect(element.shadowRoot?.textContent).toContain('review-team');
+    expect(
+      element.shadowRoot?.querySelector('.request-card__ask')?.textContent,
+    ).toMatch(/^Start a multi-agent run:\s+review-team$/);
+    expect(element.shadowRoot?.textContent).toContain('2 phases · 2 steps');
+    expect(element.shadowRoot?.textContent).not.toContain('Skip proposals');
     expect(
       element.shadowRoot?.querySelector('.proposal-agent-dropdown'),
     ).toBeNull();

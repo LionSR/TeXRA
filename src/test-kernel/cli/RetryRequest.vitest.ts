@@ -110,7 +110,7 @@ describe('CLI retry request', () => {
     );
 
     expect(output).toContain('y retry');
-    expect(output).toContain('n dismiss');
+    expect(output).toContain('n stop run');
     expect(output).toContain('more rows');
     expect(output.split('\n').length).toBeLessThanOrEqual(12);
   });
@@ -153,7 +153,7 @@ describe('CLI retry request', () => {
     );
 
     expect(output).toContain('No OpenAI API key is configured.');
-    expect(output).toContain('Press n to dismiss');
+    expect(output).toContain('Press n to stop the run');
     expect(output).toContain('/key');
     expect(output).not.toContain('k use API key and retry');
   });

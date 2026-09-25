@@ -215,7 +215,7 @@ export const commandCatalog = [
     title: 'Agent Team Settings',
     category: 'TeXRA',
     icon: '$(organization)',
-    settingsTab: 'multi-agent',
+    settingsTab: 'agents',
   },
   {
     id: 'texra.showGitSettings',
@@ -223,7 +223,7 @@ export const commandCatalog = [
     title: 'Git Settings',
     category: 'TeXRA',
     icon: '$(git-branch)',
-    settingsTab: 'git',
+    settingsTab: 'general',
   },
   {
     id: 'texra.showMainView',

@@ -12,7 +12,7 @@ import { getAgentsByCategory } from '@agent/index';
 import { refresh } from '@agent/index/agentRegistry';
 import {
   applyInitialCliAgentSelection,
-  chatToolUseAgentUsageError,
+  resolveChatToolUseAgent,
 } from '@cli/chat/tui/commands/handlers/agentModelCommands';
 import { patchSessionMeta, sessionMeta } from '@cli/chat/tui/state/cliState';
 import {
@@ -132,9 +132,9 @@ describe('CLI agent validation with a shadowed name', () => {
         expect(
           yield* checkCliAgentLaunch(hostStores(), 'assistant', entry, 'chat'),
         ).toBe(entry);
-        expect(
-          yield* chatToolUseAgentUsageError(hostStores(), 'assistant'),
-        ).toBeUndefined();
+        expect(yield* resolveChatToolUseAgent(hostStores(), 'assistant')).toBe(
+          entry,
+        );
       }),
   );
 
@@ -164,7 +164,7 @@ describe('CLI agent validation with a shadowed name', () => {
           ),
         ).toBeUndefined();
         expect(
-          yield* chatToolUseAgentUsageError(hostStores(), 'polish'),
+          String(yield* resolveChatToolUseAgent(hostStores(), 'polish')),
         ).toContain(
           'Agent "polish" is a workflow agent; `texra chat` only handles tool-use agents.',
         );
@@ -176,7 +176,7 @@ describe('CLI agent validation with a shadowed name', () => {
     () =>
       Effect.gen(function* () {
         expect(
-          yield* chatToolUseAgentUsageError(hostStores(), 'no-such-agent'),
+          String(yield* resolveChatToolUseAgent(hostStores(), 'no-such-agent')),
         ).toContain('Tool-use agent not found: no-such-agent.');
       }),
   );

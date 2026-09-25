@@ -339,3 +339,21 @@ export const ReflectionSnapshotStateSchema = z.object({
   /** Rejected compile result awaiting an explicit successful compile. */
   unresolvedCompileRejection: z.boolean().optional(),
 });
+
+/**
+ * Whether a reflection run holds a compile rejection it can no longer clear:
+ * the last round's compile was rejected and no round is left to fix it, so
+ * continuing only replays the same rejection. The loop fails its outcome on
+ * it and the CLI refuses to offer such a snapshot as continuable.
+ */
+export function isTerminalCompileRejection(
+  state: Pick<
+    z.output<typeof ReflectionSnapshotStateSchema>,
+    'unresolvedCompileRejection' | 'totalRounds'
+  >,
+  round: number,
+): boolean {
+  return (
+    state.unresolvedCompileRejection === true && round + 1 >= state.totalRounds
+  );
+}

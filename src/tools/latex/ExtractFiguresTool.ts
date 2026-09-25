@@ -7,7 +7,7 @@ import { ToolCall } from '@agent/runtime/ToolCall';
 import { extractFigurePathsFromLatex } from '@latex/extractFigure';
 import type { ToolResult } from '@shared/schemas';
 import { formatToolOutput } from '@tools/formatting';
-import { resolveAndFormat } from '@tools/pathResolution';
+import { resolveToolPath } from '@tools/pathResolution';
 import { defineTool } from '@tools/core/define';
 import { unique } from '@utils/core';
 import { pathToLocationIn } from '@utils/files/fileLocation';
@@ -54,11 +54,9 @@ const extractFigures = Effect.fn('ExtractLatexFiguresTool.execute')(function* ({
 
   const formattedList = yield* Effect.forEach(limitedPaths, (figurePath) =>
     Effect.gen(function* () {
-      const { display: figureDisplay } = yield* resolveAndFormat(
-        call.roots,
-        call.roots.workspace,
+      const { display: figureDisplay } = yield* resolveToolPath(
+        call,
         figurePath,
-        call.workingDirectory,
       );
       return `- ${figureDisplay}`;
     }),

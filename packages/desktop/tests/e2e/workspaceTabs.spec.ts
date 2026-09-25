@@ -308,35 +308,31 @@ test('loads tools, centers every compact nav icon, and customizes shortcuts', as
     timeout: 5_000,
   });
 
-  const alignments = await page.evaluate(() => {
+  // A narrow pane keeps each page's name and drops its icon.
+  const compactButtons = await page.evaluate(() => {
     const root = document.querySelector('settings-app')?.shadowRoot;
     const buttons =
       root?.querySelectorAll<HTMLElement>('.settings-page-button') ?? [];
     return [...buttons].map((button) => {
-      const base =
-        button.shadowRoot?.querySelector<HTMLElement>('[part~="base"]');
-      const icon = button.querySelector<HTMLElement>('.settings-tab-icon');
+      const start =
+        button.shadowRoot?.querySelector<HTMLElement>('[part~="start"]');
       const label =
         button.shadowRoot?.querySelector<HTMLElement>('[part~="label"]');
-      if (!base || !icon || !label) {
+      if (!start || !label) {
         throw new Error('Compact settings navigation was not mounted.');
       }
-      const baseRect = base.getBoundingClientRect();
-      const iconRect = icon.getBoundingClientRect();
       return {
+        iconDisplay: getComputedStyle(start).display,
         labelDisplay: getComputedStyle(label).display,
-        horizontalOffset:
-          (iconRect.left + iconRect.right - baseRect.left - baseRect.right) / 2,
-        verticalOffset:
-          (iconRect.top + iconRect.bottom - baseRect.top - baseRect.bottom) / 2,
+        ariaLabel: button.getAttribute('aria-label'),
       };
     });
   });
-  expect(alignments.length).toBeGreaterThan(0);
-  for (const alignment of alignments) {
-    expect(alignment.labelDisplay).toBe('none');
-    expect(Math.abs(alignment.horizontalOffset)).toBeLessThanOrEqual(1);
-    expect(Math.abs(alignment.verticalOffset)).toBeLessThanOrEqual(1);
+  expect(compactButtons.length).toBeGreaterThan(0);
+  for (const button of compactButtons) {
+    expect(button.iconDisplay).toBe('none');
+    expect(button.labelDisplay).not.toBe('none');
+    expect(button.ariaLabel).toBeTruthy();
   }
 
   // The active Settings page owns scrolling for every hierarchical page: with

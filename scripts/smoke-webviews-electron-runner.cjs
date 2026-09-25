@@ -412,17 +412,17 @@ async function assertToolEditApprovalLayout(window, view) {
 
         const panel = await waitForDeep('tool-edit-request-panel');
         if (panel?.updateComplete) await panel.updateComplete;
-        const section = findDeep('.approval-requests');
-        const card = findDeep('.approval-request');
-        const actions = findDeep('.approval-request__actions');
-        const approveButton = findDeep('wa-button[data-action="approve"]');
-        const rejectButton = findDeep('wa-button[data-action="reject"]');
+        const section = findDeep('request-panels');
+        const card = findDeep('.request-card');
+        const actions = findDeep('.request-card__actions');
+        const approveButton = findDeep('wa-button[data-action="primary"]');
+        const rejectButton = findDeep('wa-button[data-action="decline"]');
 
         const missing = [
           ['tool-edit-request-panel', panel],
-          ['.approval-requests', section],
-          ['.approval-request', card],
-          ['.approval-request__actions', actions],
+          ['request-panels', section],
+          ['.request-card', card],
+          ['.request-card__actions', actions],
           ['approve button', approveButton],
           ['reject button', rejectButton],
         ]

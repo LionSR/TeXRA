@@ -10,7 +10,7 @@ import { Effect, FileSystem, Path, Stream } from 'effect';
 import { afterEach, describe, expect } from 'vitest';
 
 // Local imports
-import { MEMORY_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
+import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { StorageFs } from '@platform/rootedFs';
 import {
   countPinnedMemories,
@@ -46,7 +46,9 @@ const roots: string[] = [];
 async function makeStorageRoot(): Promise<string> {
   const root = await mkdtemp(path.join(tmpdir(), 'texra-memory-'));
   roots.push(root);
-  await mkdir(path.join(root, MEMORY_STORAGE_DIR), { recursive: true });
+  await mkdir(path.join(root, WORKSPACE_STORAGE_LAYOUT.memory), {
+    recursive: true,
+  });
   return root;
 }
 
@@ -74,10 +76,17 @@ describe('memory filesystem listing', () => {
         const root = yield* Effect.promise(async () => {
           const created = await makeStorageRoot();
           for (const dir of ['alpha', 'beta']) {
-            await mkdir(path.join(created, MEMORY_STORAGE_DIR, dir));
+            await mkdir(
+              path.join(created, WORKSPACE_STORAGE_LAYOUT.memory, dir),
+            );
             for (let index = 0; index < FILE_COUNT_PER_DIRECTORY; index += 1) {
               await writeFile(
-                path.join(created, MEMORY_STORAGE_DIR, dir, `note-${index}.md`),
+                path.join(
+                  created,
+                  WORKSPACE_STORAGE_LAYOUT.memory,
+                  dir,
+                  `note-${index}.md`,
+                ),
                 TEST_FRONTMATTER,
               );
             }
@@ -104,7 +113,7 @@ describe('memory filesystem listing', () => {
         };
 
         const items = yield* Stream.runCollect(
-          walkMemoryDirectory(MEMORY_STORAGE_DIR),
+          walkMemoryDirectory(WORKSPACE_STORAGE_LAYOUT.memory),
         ).pipe(Effect.provideService(StorageFs, storageFs));
 
         expect(items).toHaveLength(FILE_COUNT_PER_DIRECTORY * 2);
@@ -121,7 +130,7 @@ describe('memory filesystem listing', () => {
       Effect.gen(function* () {
         const root = yield* Effect.promise(async () => {
           const created = await makeStorageRoot();
-          const memoryDir = path.join(created, MEMORY_STORAGE_DIR);
+          const memoryDir = path.join(created, WORKSPACE_STORAGE_LAYOUT.memory);
           // A symlink back onto the tree: the walk must never descend or stat
           // it, since nothing here keeps a realpath/visited set.
           await symlink(memoryDir, path.join(memoryDir, 'cycle'));
@@ -134,7 +143,7 @@ describe('memory filesystem listing', () => {
           return created;
         });
 
-        const cyclePath = path.join(MEMORY_STORAGE_DIR, 'cycle');
+        const cyclePath = path.join(WORKSPACE_STORAGE_LAYOUT.memory, 'cycle');
         let headReads = 0;
         const view = yield* storageViewOf(root);
         const storageFs: RootedFileSystem = {
@@ -165,7 +174,9 @@ describe('memory filesystem listing', () => {
 
       const failure = yield* Effect.flip(
         Stream.runDrain(
-          walkMemoryDirectory(path.join(MEMORY_STORAGE_DIR, 'absent')),
+          walkMemoryDirectory(
+            path.join(WORKSPACE_STORAGE_LAYOUT.memory, 'absent'),
+          ),
         ),
       ).pipe(Effect.provideService(StorageFs, storageFs));
 

@@ -100,7 +100,7 @@ describe('external-inquiry-panel answer/session-link inputs', () => {
 
     const answerInput = answerInputOf(element);
     const submitButton = element.shadowRoot!.querySelector(
-      'wa-button[data-action="submit"]',
+      'wa-button[data-action="primary"]',
     ) as HTMLElement & { disabled?: boolean };
 
     expect(submitButton.disabled).toBe(false);

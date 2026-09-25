@@ -23,8 +23,8 @@ import {
   Stream,
 } from 'effect';
 
+import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { withLogChannel } from '@logger/effectLog';
-import { MEMORY_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import { StorageFs } from '@platform/rootedFs';
 import type { MemoryViewItem } from '@shared/settingsView/settingsViewMessages';
 import {
@@ -327,11 +327,11 @@ export function walkMemoryDirectory(
  */
 export const loadMemoryItems = Effect.fn('memoryFileSystem.loadMemoryItems')(
   function* () {
-    const exists = yield* memoryPathExists(MEMORY_STORAGE_DIR);
+    const exists = yield* memoryPathExists(WORKSPACE_STORAGE_LAYOUT.memory);
     if (!exists) return [];
 
     const entries = yield* Stream.runCollect(
-      walkMemoryDirectory(MEMORY_STORAGE_DIR),
+      walkMemoryDirectory(WORKSPACE_STORAGE_LAYOUT.memory),
     );
     const items = entries.map((entry): MemoryViewItem => ({
       displayPath: relativeToDisplayPath(entry.relativePath),
@@ -350,7 +350,7 @@ export const loadMemoryItems = Effect.fn('memoryFileSystem.loadMemoryItems')(
 );
 
 /**
- * Count pinned memory files under MEMORY_STORAGE_DIR. `limit` bounds the
+ * Count pinned memory files under the memory directory. `limit` bounds the
  * walk — the stream is interrupted once that many pinned files are seen, so
  * the remaining metadata reads never happen. Returns 0 if the storage root
  * does not exist.
@@ -358,10 +358,10 @@ export const loadMemoryItems = Effect.fn('memoryFileSystem.loadMemoryItems')(
 export const countPinnedMemories = Effect.fn(
   'memoryFileSystem.countPinnedMemories',
 )(function* (limit?: number) {
-  const exists = yield* memoryPathExists(MEMORY_STORAGE_DIR);
+  const exists = yield* memoryPathExists(WORKSPACE_STORAGE_LAYOUT.memory);
   if (!exists) return 0;
 
-  const pinned = walkMemoryDirectory(MEMORY_STORAGE_DIR).pipe(
+  const pinned = walkMemoryDirectory(WORKSPACE_STORAGE_LAYOUT.memory).pipe(
     Stream.filter((entry) => entry.meta?.pinned === true),
   );
   return yield* Stream.runCount(

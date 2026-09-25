@@ -43,11 +43,9 @@ function selectedItemValue(event: WaSelectEvent): string {
 }
 
 /**
- * Shared styling for the caret trigger `renderSplitButtonMenuParts` emits —
- * the two call sites (ApproveSplitButton, ToolEditRequestPanel) rendered a
- * verbatim copy of these rules under their own class prefix; keyed on the
- * fixed `.split-trigger`/`.split-menu` classes the template below also
- * emits, so one definition covers both.
+ * Styling for the caret trigger `renderSplitButtonMenuParts` emits, keyed on
+ * the fixed `.split-trigger`/`.split-menu` classes the template below also
+ * emits. Its caller is the request card's run-grant menu (`BaseRequestPanel`).
  */
 export const splitButtonTriggerStyles: CSSResult = css`
   .split-trigger {

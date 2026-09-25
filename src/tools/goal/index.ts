@@ -10,13 +10,10 @@
 export { isGoalEnabled } from './goalFeatureFlag';
 export {
   clearGoal,
-  goalList,
   goalOf,
-  goalStateChanges,
   pauseGoal,
   retargetGoal,
   startGoal,
-  type GoalStateChange,
   type GoalReader,
 } from './goalRows';
 export {

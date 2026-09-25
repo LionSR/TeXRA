@@ -11,7 +11,11 @@ import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
 import { MemoryStateStore } from '@platform/defaults/memoryState';
 import { createNodeWorkspaceRoots } from '@platform/defaults/nodeHost';
 import { DEFAULT_NODE_STORAGE_ROOT } from '@platform/defaults/nodeStorage';
-import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
+import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
+import {
+  resolveGlobalStoragePath,
+  resolveWorkspaceStoragePath,
+} from '@platform/defaults/workspaceStorage';
 import { UNAVAILABLE_LANGUAGE_MODEL_PORT } from '@platform/languageModel';
 
 import type { AgentPlatform } from './index.js';
@@ -53,12 +57,13 @@ const environmentSecrets: PlatformSecrets = {
  * process-local, while run artifacts use TeXRA's ordinary Node storage layout.
  */
 export function nodePlatform(options: NodePlatformOptions): AgentPlatform {
-  const workspaceDir = options.workspaceDir ?? process.cwd();
-  const globalState = new MemoryStateStore();
-  const storage = new WorkspaceStorageProvider(
-    options.storageDir ?? DEFAULT_NODE_STORAGE_ROOT,
-    workspaceDir,
+  // Canonical once, here: the storage directory and `roots.workspace` both
+  // key on the physical root, as every other host's do.
+  const workspaceDir = canonicalizeWorkspacePath(
+    options.workspaceDir ?? process.cwd(),
   );
+  const storageRoot = options.storageDir ?? DEFAULT_NODE_STORAGE_ROOT;
+  const globalState = new MemoryStateStore();
   return {
     secrets: environmentSecrets,
     // The two process ports `composeProcess` serves: this platform resumes
@@ -75,8 +80,8 @@ export function nodePlatform(options: NodePlatformOptions): AgentPlatform {
     },
     roots: createNodeWorkspaceRoots({
       workspacePath: workspaceDir,
-      storage: storage.getStoragePath(),
-      globalStorage: storage.getGlobalStoragePath(),
+      storage: resolveWorkspaceStoragePath(storageRoot, workspaceDir),
+      globalStorage: resolveGlobalStoragePath(storageRoot),
       // Process-local configuration: an embedder's settings must not be read
       // from, or written to, the user's `.texra/config.json`.
       config: new MemoryConfigProvider(),

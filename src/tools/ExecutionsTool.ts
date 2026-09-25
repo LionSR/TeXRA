@@ -16,7 +16,6 @@ import { Data, Deferred, Duration, Effect, FileSystem } from 'effect';
 
 // Local imports
 import {
-  deriveResumability,
   getRunRecords,
   listRunWorkspaceFiles,
   unwrapResultMeta,
@@ -392,14 +391,11 @@ const showSummary = Effect.fn('ExecutionsTool.showSummary')(function* (
   const view = yield* session.readView([runId]);
   const run = view.runs.get(runId);
 
+  // Every open run is in the view: its `run.start` is seq 1 of its aggregate
+  // (the database refuses anything else there), so no checkpoint exists
+  // without the row that lists the run, and a closed run reads no snapshot.
   if (!run) {
-    const resumability = yield* deriveResumability(runId, session);
-    if (resumability.kind !== 'checkpoint') {
-      return yield* Effect.fail(new ToolError(`Run not found: ${runId}`));
-    }
-    return executed(
-      `Run: ${runId}\nStatus: resumable\n(No metadata available - use /executions/${runId}/conversation to view messages)`,
-    );
+    return yield* Effect.fail(new ToolError(`Run not found: ${runId}`));
   }
 
   // The report is a private record row, never part of the display fold.
@@ -633,12 +629,10 @@ const showConversation = Effect.fn('ExecutionsTool.showConversation')(
     const { conversation, source } = conversationResult;
 
     if (!conversation) {
-      // Match the top-level run lookup: a flow-only record is found only
-      // when the shared storage decision says it is resumable.
-      const resumability = yield* deriveResumability(runId, context.session);
+      // A checkpoint implies the `run.start` `exists` reads: it is seq 1 of
+      // the run's aggregate.
       const exists =
         (yield* records.exists()) ||
-        resumability.kind === 'checkpoint' ||
         hasCompletedRunConversationEvidence(conversationResult);
       if (!exists) {
         return yield* Effect.fail(new ToolError(`Run not found: ${runId}`));

@@ -360,18 +360,14 @@ export class ModelSelectionList extends LitElement {
 
     return html`
       <div class="helper-model-row">
-        <span class="helper-model-label" aria-hidden="true"
-          >Model for quick fixes</span
-        >
+        <span class="helper-model-label" aria-hidden="true">Helper model</span>
         <wa-select
           id="helper-model-select"
           class="helper-model-select form-control-fill"
           .value=${this.helperModel}
           @change=${this.handleHelperModelChange}
         >
-          <span slot="label" class="visually-hidden"
-            >Model for quick fixes</span
-          >
+          <span slot="label" class="visually-hidden">Helper model</span>
           <span slot="hint" class="visually-hidden"
             >Used for quick background tasks, such as intelligent merge.</span
           >

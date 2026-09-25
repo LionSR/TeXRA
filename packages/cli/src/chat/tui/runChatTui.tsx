@@ -10,7 +10,11 @@ import { render, type Instance as InkInstance } from 'ink';
 
 import { getVisibleAgents, loadAgents } from '@agent/index';
 import type { AgentConfig } from '@agent/runtime';
-import { type CliContext, readCliVersion } from '@cli/runtime/cliContext';
+import {
+  CliUsageError,
+  type CliContext,
+  readCliVersion,
+} from '@cli/runtime/cliContext';
 import {
   firstRunSetupAgentOverride,
   SETUP_AGENT_HANDOFF_NOTICE,
@@ -58,7 +62,7 @@ import { App } from './App';
 import {
   applyCliModelSelection,
   applyInitialCliAgentSelection,
-  chatToolUseAgentUsageError,
+  resolveChatToolUseAgent,
 } from './commands/handlers/agentModelCommands';
 import { applyCliModelAccessSelection } from './commands/handlers/modelAccessCommands';
 import { showCliMemoryPreview } from './commands/handlers/memoryCommands';
@@ -202,12 +206,12 @@ export async function runChat(
           AgentCategory.ToolUse,
         ),
       });
-      const agentUsageError = yield* chatToolUseAgentUsageError(
+      const agentEntry = yield* resolveChatToolUseAgent(
         services,
         defaults.agent,
       );
-      if (agentUsageError) {
-        writeTextStderr(agentUsageError);
+      if (agentEntry instanceof CliUsageError) {
+        writeTextStderr(agentEntry.message);
         return { exitCode: CliExitCode.Usage };
       }
       // One API mode for the whole session: an explicit --api-mode/env
@@ -239,6 +243,7 @@ export async function runChat(
         initialResume?.config.cli?.multiAgentPresetId ?? undefined;
       sessionMetaSignal.set({
         agent: defaults.agent,
+        agentSource: agentEntry.source,
         model: modelSelection.model,
         modelSource: defaults.modelSource,
         cwd: context.cwd,

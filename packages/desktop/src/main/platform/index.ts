@@ -30,8 +30,8 @@ import { createNodeWorkspaceRoots } from '@platform/defaults/nodeHost';
 import { UNAVAILABLE_LANGUAGE_MODEL_PORT } from '@platform/languageModel';
 import { openTexraConfigStores } from '@platform/defaults/nodeStores';
 import {
-  WorkspaceStorageProvider,
   resolveGlobalStoragePath,
+  resolveWorkspaceStoragePath,
 } from '@platform/defaults/workspaceStorage';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { usageLogLayer } from '@telemetry/UsageLogService';
@@ -104,7 +104,8 @@ export const initializeElectronPlatform = Effect.fn(
   // The process roots are the no-workspace roots. Each open project gets its
   // own roots (desktopProjects.ts); this pair only backs the window before a
   // folder is open.
-  const storage = new WorkspaceStorageProvider(dataRoot, undefined);
+  const storage = resolveWorkspaceStoragePath(dataRoot, undefined);
+  const globalStorage = resolveGlobalStoragePath(dataRoot);
   // Identity and secrets precede the runtime; application state is acquired
   // by its own runtime layer, whose scope owns the database.
   const { processStart, configStores, secrets, supabaseAuth } =
@@ -112,7 +113,7 @@ export const initializeElectronPlatform = Effect.fn(
       const processStart = yield* nodeProcesses.selfIdentity();
       const [configStores, secretsStore] = yield* Effect.all(
         [
-          openTexraConfigStores(storage, undefined, (message) =>
+          openTexraConfigStores(dataRoot, undefined, (message) =>
             console.warn(`[desktop] ${message}`),
           ),
           JsonStore.open(join(userDataPath, 'secrets.json')),
@@ -157,7 +158,7 @@ export const initializeElectronPlatform = Effect.fn(
   const setupAuth = createDesktopSetupAuth();
   const runtime = installProcessRuntime({
     processStart: Effect.succeed(processStart),
-    globalStorage: storage.getGlobalStoragePath(),
+    globalStorage,
     secrets,
     // Electron profile state intentionally differs from the shared global DB.
     appState: Layer.effect(
@@ -181,7 +182,7 @@ export const initializeElectronPlatform = Effect.fn(
     }),
     // The process's one handle on that same global root, which the desktop's
     // remembered projects and its update check read through.
-    globalDatabase: globalDatabaseLayer(storage.getGlobalStoragePath()),
+    globalDatabase: globalDatabaseLayer(globalStorage),
     // The rotated log file is the artefact attached to a bug report, so it
     // keeps debug entries; rotation already bounds its size.
     minimumLogLevel: 'Debug',
@@ -199,14 +200,14 @@ export const initializeElectronPlatform = Effect.fn(
   > = Effect.gen(function* () {
     const globalStateStore = yield* AppState;
     const agentDirectories = yield* AgentDirectories;
-    const workspaceStateStore = yield* openProjectStateStore(
-      storage.getStoragePath(),
-    ).pipe(Scope.provide(processScope));
+    const workspaceStateStore = yield* openProjectStateStore(storage).pipe(
+      Scope.provide(processScope),
+    );
     repairLaunchPath();
     const processRoots = createNodeWorkspaceRoots({
       workspacePath: undefined,
-      storage: storage.getStoragePath(),
-      globalStorage: storage.getGlobalStoragePath(),
+      storage,
+      globalStorage,
       config: configStores,
       workspaceState: workspaceStateStore,
       globalState: globalStateStore,

@@ -2,9 +2,9 @@
  * VS Code preview port for {@link ToolEditApprovalController}.
  *
  * Owns everything the approval flow needs from the editor: the temp files the
- * diff editor reads, the diff tabs themselves, the tab-close listener that
- * turns a closed diff into a rejection, and reading back what the user typed
- * into the proposed side.
+ * diff editor reads, the diff tabs themselves, and reading back what the
+ * user typed into the proposed side. The diff tab is evidence only: closing
+ * it leaves the request pending on its card, where Open diff reopens it.
  */
 
 import { mkdir } from 'node:fs/promises';
@@ -20,7 +20,6 @@ import type {
 } from '@controllers/approval/ToolEditApprovalController';
 import { fromHost } from '@controllers/session/hostCallFailure';
 import {
-  tabInputFileUri,
   VscodeDiffViewHost,
   type DiffSession,
 } from '@frontend/approval/VscodeDiffViewHost';
@@ -75,7 +74,6 @@ export class VscodeToolEditApprovalHost implements ToolEditApprovalHost {
             request,
             context,
             staged,
-            this.runtime,
           ),
       ),
     );
@@ -99,14 +97,12 @@ export class VscodeToolEditApprovalHost implements ToolEditApprovalHost {
 
 class VscodeToolEditPreview implements ToolEditPreview {
   private readonly diffSession: DiffSession;
-  private tabCloseListener: vscode.Disposable | undefined;
 
   constructor(
     private readonly diffViewHost: VscodeDiffViewHost,
     private readonly request: ToolEditApprovalRequest,
     private readonly context: ToolEditPreviewContext,
     private readonly staged: ApprovalTempFiles,
-    private readonly runtime: ProcessRuntime,
   ) {
     this.diffSession = {
       original: { filePath: staged.originalPath },
@@ -124,10 +120,7 @@ class VscodeToolEditPreview implements ToolEditPreview {
   }
 
   present(): Effect.Effect<void, HostRequestFailure> {
-    return this.openDiff().pipe(
-      Effect.andThen(Effect.sync(() => this.watchForTabClose())),
-      Effect.andThen(this.revealFirstChange()),
-    );
+    return this.openDiff().pipe(Effect.andThen(this.revealFirstChange()));
   }
 
   showDiff(): Effect.Effect<void, HostRequestFailure> {
@@ -156,11 +149,7 @@ class VscodeToolEditPreview implements ToolEditPreview {
   }
 
   dispose(): Effect.Effect<void, HostRequestFailure> {
-    return Effect.sync(() => {
-      // Stop listening for tab closes before closing the diff ourselves.
-      this.tabCloseListener?.dispose();
-    }).pipe(
-      Effect.andThen(this.diffViewHost.closeDiff(this.diffSession)),
+    return this.diffViewHost.closeDiff(this.diffSession).pipe(
       // The files go whether the tab close succeeds, fails, or is cut off:
       // at window teardown that RPC can reject or outlive the shutdown
       // phase's deadline, and the files would otherwise stay on disk.
@@ -185,31 +174,6 @@ class VscodeToolEditPreview implements ToolEditPreview {
       if (line === null) return Effect.void;
 
       return this.diffViewHost.revealFirstChange(this.diffSession, line);
-    });
-  }
-
-  /**
-   * Closing the proposed diff tab (Ctrl+W) rejects the approval. Without this
-   * the approval never settles and the agent hangs. The listener is
-   * self-cleaning: it disposes once the approval settles, including the
-   * programmatic close in {@link dispose}. VS Code hands the close over as a
-   * plain callback, so the rejection it raises starts on a fiber of this
-   * host's own.
-   */
-  private watchForTabClose(): void {
-    const proposedUri = vscode.Uri.file(this.staged.proposedPath).toString();
-    this.tabCloseListener = vscode.window.tabGroups.onDidChangeTabs((event) => {
-      if (this.context.isSettled()) {
-        this.tabCloseListener?.dispose();
-        return;
-      }
-      const wasClosed = event.closed.some((tab) => {
-        return tabInputFileUri(tab)?.toString() === proposedUri;
-      });
-      if (wasClosed) {
-        this.tabCloseListener?.dispose();
-        this.runtime.runFork(this.context.discard());
-      }
     });
   }
 

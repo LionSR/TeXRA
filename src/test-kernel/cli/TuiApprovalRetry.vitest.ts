@@ -680,7 +680,7 @@ describe('TUI request decisions', () => {
         {
           personalApiKeyAvailable: false,
           missingPersonalApiKeyMessage:
-            'TeXRA could not check whether the OpenAI API key is available. Press n to dismiss, then use `/key` to try again.',
+            'TeXRA could not check whether the OpenAI API key is available. Press n to stop the run, then use `/key` to try again.',
         },
       );
     }),

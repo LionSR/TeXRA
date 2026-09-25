@@ -213,8 +213,21 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
   Reset buttons are gone: set a switch back by flipping it. **Open the
   compiled PDF** and **Repair failed compiles** are greyed out while
   auto-compile is off, since they only act on its result.
+- **Settings has six pages instead of thirteen** (extension and desktop):
+  Models, Agents, Tools, LaTeX, Memory and General, in one row. Connecting a
+  model happens on Models, which now holds ChatGPT, Grok and Copilot sign-in
+  next to the API keys; Kimi Code and GLM Coding Plan usage shows on their
+  key rows. Teams and Skills are sections of Agents, with compaction, retries
+  and team coordination under Advanced. Integrations are a section of Tools.
+  Account sign-in, telemetry and Git are on General. The Goals page is gone;
+  a run's goal shows in its header. OpenAI background responses, parallel
+  tool calls, the GPT-5 reasoning summary and Google background responses
+  keep their defaults and are set in `.texra/config.json`.
 
 #### Bug Fixes
+
+- **Clearing the agent commit name or email in Settings resets it to the
+  default.** The field used to go blank while the old value stayed in use.
 
 - **Cancelling TeXRA sign-in no longer counts as signing in.** In a
   single-folder window, the sign-in prompt that setup, a team launch or the
@@ -323,6 +336,25 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
   and "Kill run" is gone from the board because the header's Stop does the
   same. The Tasks panel names the task in progress in its summary and stays
   open or closed as you left it when you switch runs.
+- **Every request the agent makes is one card with the same buttons.** Edits,
+  commands, proposals, plans, questions, outside-model inquiries and failed
+  model calls now open with one sentence saying what the agent wants, and end
+  with the same row: the main action on `y` (Approve, Submit or Retry), an
+  optional ▾ **Approve all edits / commands / agent work in this run** on
+  `a`, and **Reject**, **Skip** or **Stop run** on `n`, which answers in one
+  click. **Add a note…** attaches an optional note for the agent. Esc no
+  longer answers anything; on a failed model call it used to end the run.
+- **"Skip proposals this session" is removed.** Despite its name it approved
+  the workflow and switched on auto-approval for every later task, edit and
+  command in the run. The Approve ▾ menu's **Approve all agent work in this
+  run** is the one place that grant lives.
+- **Closing the VS Code diff tab no longer rejects the edit.** The diff tab
+  only shows the change; the request stays on its card, where **Open diff**
+  reopens it. This matches the desktop app.
+- **The outside-model inquiry card leads with the question and the answer
+  box.** Context, earlier turns and chat links move under **More**, and the
+  links now open ChatGPT and Gemini chats instead of their pricing pages.
+  Skipping an inquiry no longer offers a note the agent would never see.
 
 #### Bug Fixes
 

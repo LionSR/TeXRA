@@ -11,7 +11,8 @@ export interface AgentWorkspaceOptions {
 /**
  * Resolve the working directory and any extra workspace roots for external
  * agent SDKs that need access to the project at `workspacePath` (the calling
- * session's `roots.workspace`, passed as data).
+ * session's `roots.workspace`, passed as data). `workingDirectory` is the
+ * run's, already absolute or absent (decided where the run launched).
  *
  * When no directory is provided, the agent runs from the workspace root.
  * When a subdirectory inside the workspace is provided, we still add the
@@ -22,33 +23,16 @@ export interface AgentWorkspaceOptions {
  */
 export function buildAgentWorkspaceOptions(
   workspacePath: string | undefined,
-  workingDirectoryInput?: string | null,
+  workingDirectory?: string,
 ): AgentWorkspaceOptions {
-  const trimmed = workingDirectoryInput?.trim();
-
   if (!workspacePath) {
-    return trimmed ? { workingDirectory: trimmed } : {};
+    return workingDirectory ? { workingDirectory } : {};
   }
-
-  let workingDirectory: string;
-  if (!trimmed) {
-    workingDirectory = workspacePath;
-  } else if (path.isAbsolute(trimmed)) {
-    workingDirectory = trimmed;
-  } else {
-    workingDirectory = path.resolve(workspacePath, trimmed);
-  }
-
-  const resolvedWorkspacePath = path.resolve(workspacePath);
-  const resolvedWorkingDirectory = path.resolve(workingDirectory);
-
-  if (resolvedWorkingDirectory === resolvedWorkspacePath) {
-    return { workingDirectory };
-  }
+  if (!workingDirectory) return { workingDirectory: workspacePath };
 
   const relativeToWorkspace = path.relative(
-    resolvedWorkspacePath,
-    resolvedWorkingDirectory,
+    path.resolve(workspacePath),
+    path.resolve(workingDirectory),
   );
   const isInsideWorkspace =
     relativeToWorkspace.length > 0 &&
@@ -56,9 +40,6 @@ export function buildAgentWorkspaceOptions(
     !path.isAbsolute(relativeToWorkspace);
 
   return isInsideWorkspace
-    ? {
-        workingDirectory,
-        additionalDirectories: [workspacePath],
-      }
+    ? { workingDirectory, additionalDirectories: [workspacePath] }
     : { workingDirectory };
 }

@@ -2,38 +2,28 @@
  * Workspace identity helpers shared by every Node host: one canonical
  * physical root per workspace, and symlink-aware workspace-relative paths.
  */
-import { realpathSync } from 'node:fs';
 import * as path from 'node:path';
 
 import { normalizeFilePath } from '@utils/core';
 import { isPathWithin } from '@utils/core/pathCore';
+import { canonicalizePath } from '@utils/files/externalRoots';
 import { capitalize } from '@utils/text/stringUtils';
 
 /**
  * Resolve one physical workspace identity for storage and host adapters.
- * Missing or temporarily inaccessible paths retain their resolved spelling.
+ * Missing trailing segments keep their spelling (see `canonicalizePath`). A
+ * permission error is tolerated on purpose: a workspace under an unreadable
+ * ancestor still opens, keyed by its resolved spelling. Every other failure
+ * propagates.
  */
 export function canonicalizeWorkspacePath(workspacePath: string): string {
-  const resolved = path.resolve(workspacePath);
-  let existingAncestor = resolved;
-  const missingSegments: string[] = [];
-  let canonical = resolved;
-  while (true) {
-    try {
-      canonical = path.join(realpathSync(existingAncestor), ...missingSegments);
-      break;
-    } catch (error) {
-      const code = (error as NodeJS.ErrnoException).code;
-      const parent = path.dirname(existingAncestor);
-      if (
-        (code !== 'ENOENT' && code !== 'ENOTDIR') ||
-        parent === existingAncestor
-      ) {
-        break;
-      }
-      missingSegments.unshift(path.basename(existingAncestor));
-      existingAncestor = parent;
-    }
+  let canonical: string;
+  try {
+    canonical = canonicalizePath(workspacePath);
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code !== 'EACCES' && code !== 'EPERM') throw error;
+    canonical = path.resolve(workspacePath);
   }
   return /^[a-z]:[\\/]/.test(canonical) ? capitalize(canonical) : canonical;
 }
