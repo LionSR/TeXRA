@@ -252,7 +252,6 @@ function buildLifecycleOptions(
 ): RunFlowLifecycleOptions {
   return {
     parentRunId,
-    onError: options.onRunError,
     onRun: options.onRun,
   };
 }
@@ -313,14 +312,6 @@ export interface SubagentRunOptions {
   onApprovalPolicyDenial?: (withheldTools?: readonly string[]) => void;
   /** Session owning this run's coordination state; run entry points require it. */
   session?: SessionHandle;
-  /**
-   * Fires when a subagent fails with a provider/runtime error that the caller
-   * can report up the delegation chain. Outcome-only domain failures remain on
-   * the returned result and do not manufacture an error for this callback.
-   * Distinct from host-level resume-plumbing error surfaces. Synchronous by
-   * contract; it reaches the run's terminal `deliver` guard.
-   */
-  onRunError?: (error: unknown, result: AgentFlowResult) => void;
   /** Fires once with the live per-run handle right after it is tracked (F-2). */
   onRun?: (handle: AgentRunHandle) => Effect.Effect<void, Error>;
 }

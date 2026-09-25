@@ -24,6 +24,7 @@ import {
   type UserFollowUpSupport,
 } from '@shared/schemas';
 import type { CompositionKey } from '@tools/compositions';
+import { normalizeProviderError } from '@common/errors/sdkError/providerErrorFormat';
 import { ensureError } from '@utils/errors/errorMessage';
 import {
   buildSubagentResult,
@@ -93,12 +94,9 @@ export function createNativeSubagentStrategy(
   const config = params.definition
     ? params.definition.config
     : params.resume.identity.agentConfig;
-  // Captured for the turn currently in flight; read once the call resolves.
-  // `executeAgent` never rejects for a
-  // subagent's own application-level failure (runFlowWithLifecycle returns a
-  // terminal failed result instead) — the real underlying error is only
-  // observable through this callback.
-  let lastErr: unknown;
+  // A child's provider/runtime failure rides its turn's `error`
+  // (`runFlowWithLifecycle` returns a terminal failed result rather than
+  // rejecting); a thrown call reaches `formatError` as its `err`.
   let lastResult: AgentFlowResult | undefined;
   // Result construction computes and persists diffs, so every consumer of a
   // turn shares one result. Formatting remains separate: if it throws, the
@@ -110,7 +108,6 @@ export function createNativeSubagentStrategy(
     ports: ChildRunPorts,
     call: Effect.Effect<AgentFlowResult, Error, AgentRunServices>,
   ) {
-    lastErr = undefined;
     lastResult = undefined;
     cachedBuilt = undefined;
     cachedDelivery = undefined;
@@ -178,15 +175,8 @@ export function createNativeSubagentStrategy(
             onRunResolved: params.onRunResolved,
             onProgress: (update: Parameters<ChildRunPorts['notify']>[0]) =>
               ports.notify(update),
-            onRunError: (err: unknown) => {
-              lastErr = err;
-            },
             turns: {
-              turnPermit: (turn) =>
-                Effect.suspend(() => {
-                  lastErr = undefined;
-                  return turns.turnPermit(turn);
-                }),
+              turnPermit: turns.turnPermit,
               onTurnBoundary: (turn: AgentFlowResult) =>
                 Effect.suspend(() => {
                   lastResult = turn;
@@ -222,7 +212,7 @@ export function createNativeSubagentStrategy(
     isTurnInterrupted: (turn) =>
       params.runMode !== 'single-cycle' &&
       turn.outcome === RUN_OUTCOME.CANCELLED,
-    isTurnError: () => lastErr !== undefined,
+    isTurnError: (turn) => turn.error !== undefined,
 
     formatDelivery: Effect.fn('nativeSubagent.formatDelivery')(function* (
       turn: AgentFlowResult,
@@ -255,11 +245,16 @@ export function createNativeSubagentStrategy(
       if (params.resultOnly) return '';
       const wallTimeMs = Date.now() - params.startedAt;
       const result = turn ?? lastResult;
-      return formatSubagentError(params.runId, config.agent, lastErr ?? err, {
-        wallTimeMs,
-        workingDirectory: params.workingDirectory,
-        memoryMisses: result?.memoryMisses,
-      });
+      return formatSubagentError(
+        params.runId,
+        config.agent,
+        turn?.error ?? normalizeProviderError(err),
+        {
+          wallTimeMs,
+          workingDirectory: params.workingDirectory,
+          memoryMisses: result?.memoryMisses,
+        },
+      );
     },
 
     buildResultMeta: (turn, isError) =>

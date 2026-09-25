@@ -176,53 +176,26 @@ describe('runFlowWithLifecycle', () => {
     );
   }
 
-  it.effect('delivers subagent aborts through the terminal callback', () =>
+  it.effect('carries a subagent abort on its terminal result', () =>
     Effect.gen(function* () {
       const { ctx } = lifecycleFixture();
       ctx.attachedMemoryMisses.push({
         path: '/memories/missing.md',
         reason: 'not found',
       });
-      const onError = vi.fn();
 
       const result = yield* runFlow(
         ctx,
         () => Effect.fail(new DOMException('Request aborted', 'AbortError')),
-        { parentRunId: PARENT_RUN_ID, onError },
+        { parentRunId: PARENT_RUN_ID },
       );
 
       expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
       expect(result.memoryMisses).toEqual(ctx.attachedMemoryMisses);
-      expect(onError).toHaveBeenCalledOnce();
-      expect(onError.mock.calls[0][1]).toEqual(result);
+      expect(result.error).toMatchObject({
+        message: expect.stringContaining('aborted'),
+      });
     }),
-  );
-
-  it.effect(
-    'keeps subagent errors registered until terminal delivery runs',
-    () =>
-      Effect.gen(function* () {
-        const { runId, ctx } = lifecycleFixture();
-        yield* Effect.addFinalizer(() =>
-          Effect.sync(() => testDefaultSession().runs.untrack(runId)),
-        );
-        const onError = vi.fn(() => {
-          expect(testDefaultSession().runs.getHandle(runId)).toBeDefined();
-        });
-
-        const result = yield* runFlow(
-          ctx,
-          () => Effect.fail(new Error('subagent failed')),
-          {
-            parentRunId: PARENT_RUN_ID,
-            onError,
-          },
-        );
-
-        expect(result.outcome).toBe(RUN_OUTCOME.FAILED);
-        expect(onError).toHaveBeenCalledOnce();
-        expect(testDefaultSession().runs.getHandle(runId)).toBeUndefined();
-      }),
   );
 
   it.effect(
@@ -389,16 +362,12 @@ describe('runFlowWithLifecycle', () => {
           Effect.sync(() => testDefaultSession().runs.untrack(runId)),
         );
         const stageEnd = vi.spyOn(ctx.parentStage, 'end');
-        const onError = vi.fn();
 
         const carriedResult = toolUseResult(runId, RUN_OUTCOME.FAILED);
         const result = yield* runFlow(
           ctx,
           () => Effect.succeed(carriedResult),
-          {
-            parentRunId: PARENT_RUN_ID,
-            onError,
-          },
+          { parentRunId: PARENT_RUN_ID },
         );
 
         expect(result).toEqual(carriedResult);
@@ -414,7 +383,6 @@ describe('runFlowWithLifecycle', () => {
           },
         );
         expect(stageEnd).toHaveBeenCalledWith(RUN_OUTCOME.FAILED);
-        expect(onError).not.toHaveBeenCalled();
       }),
   );
 
@@ -548,37 +516,25 @@ describe('runFlowWithLifecycle', () => {
     }),
   );
 
-  it.effect(
-    'passes flow-carried terminal results to subagent error delivery',
-    () =>
-      Effect.gen(function* () {
-        const { runId, ctx } = lifecycleFixture();
-        yield* Effect.addFinalizer(() =>
-          Effect.sync(() => testDefaultSession().runs.untrack(runId)),
-        );
-        const carriedResult = {
-          outcome: RUN_OUTCOME.FAILED,
-          runId,
-          output: { category: 'toolUse' as const, response: '', files: [] },
-          error: { message: 'subagent failed', userRetryable: false },
-        };
-        const onError = vi.fn();
+  it.effect('returns a flow-carried subagent failure with its error', () =>
+    Effect.gen(function* () {
+      const { runId, ctx } = lifecycleFixture();
+      yield* Effect.addFinalizer(() =>
+        Effect.sync(() => testDefaultSession().runs.untrack(runId)),
+      );
+      const carriedResult = {
+        outcome: RUN_OUTCOME.FAILED,
+        runId,
+        output: { category: 'toolUse' as const, response: '', files: [] },
+        error: { message: 'subagent failed', userRetryable: false },
+      };
 
-        const result = yield* runFlow(
-          ctx,
-          () => Effect.succeed(carriedResult),
-          {
-            parentRunId: PARENT_RUN_ID,
-            onError,
-          },
-        );
+      const result = yield* runFlow(ctx, () => Effect.succeed(carriedResult), {
+        parentRunId: PARENT_RUN_ID,
+      });
 
-        expect(result).toEqual(carriedResult);
-        expect(onError).toHaveBeenCalledWith(
-          expect.objectContaining({ message: 'subagent failed' }),
-          carriedResult,
-        );
-      }),
+      expect(result).toEqual(carriedResult);
+    }),
   );
 
   it.effect(
