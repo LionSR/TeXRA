@@ -83,7 +83,7 @@ export function createExtensionCommandActions(
     signInChatGpt: () => settingsViewProvider.signInSubscription('chatgpt'),
     signOut: () => authSignOut,
     runSetupAssistant: () =>
-      Effect.asVoid(launchSetupAssistant(secrets, globalState, session)),
+      Effect.asVoid(launchSetupAssistant(secrets, session)),
     openGettingStarted: () =>
       fromPromise(() => sysOpenGettingStarted(context.extension.id)),
     createSampleProject: () =>

@@ -581,7 +581,7 @@ export function setModelEnabled(input: {
       );
     }
     // A helper model disabled here is not rewritten: the helper choice counts
-    // only while enabled, which `resolveEffectiveHelperModel` enforces at read.
+    // only while enabled, which `getHelperModelName` enforces at read.
     return yield* state
       .update(GlobalStateKey.MODEL_SELECTION, next)
       .pipe(Effect.as(nextEnabled));
@@ -678,7 +678,7 @@ export interface ModelAvailabilityInputs {
  * the routes consult. The module's only host call; every host read fails in
  * its typed channel ({@link ModelHostFactUnreadable}). `models`, when given,
  * is honored verbatim. Nothing is cached here beyond the caches its reads own
- * (`invalidateApiKeyCache`, `invalidateRuntimeModelRegistry`); the sign-in
+ * (`invalidateRuntimeModelRegistry`); the sign-in
  * probes are live by design.
  */
 export const readModelAvailabilityInputs = Effect.fn(

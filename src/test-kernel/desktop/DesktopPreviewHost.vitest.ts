@@ -10,10 +10,7 @@ import type { RunId } from '@shared/schemas';
 import type { HostRequest } from '@shared/session/hostRequest';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { createModuleMocks } from '@test/support/moduleMocks';
-import {
-  createFakeWorkspaceRoots,
-  FakeStateStore,
-} from '@test/support/FakePlatform';
+import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import {
   makeTempDir as makeSharedTempDir,
@@ -117,7 +114,6 @@ describe('desktop preview host', () => {
         const fakeHost = createFakeHost();
         yield* Effect.promise(() => installFakeHost(fakeHost));
         const secrets = fakeHost.secrets;
-        const globalState = new FakeStateStore();
         const { createTestSession } = yield* Effect.promise(
           () => import('@test/support/sessionTestUtils'),
         );
@@ -167,7 +163,6 @@ describe('desktop preview host', () => {
           run: {} as Parameters<typeof createDesktopHostRequests>[0]['run'],
           files,
           secrets,
-          globalState,
           snapshot: createHostSnapshotSource({
             project: {
               key: 'paper',

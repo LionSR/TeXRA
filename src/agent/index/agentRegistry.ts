@@ -224,26 +224,6 @@ export function getAgent(identifier: string): AgentEntry | undefined {
   return undefined;
 }
 
-/** Refresh the live catalog entry from a remote agent's validated YAML. */
-export function updateAgentMeta(
-  identifier: string,
-  meta: {
-    description?: string;
-    tools?: string[];
-    defaultOutputFiles?: string[];
-  },
-): void {
-  const entry = getAgent(identifier);
-  if (!entry) return;
-  if (meta.description) entry.description = meta.description;
-  if ('tools' in meta)
-    entry.tools = meta.tools?.length ? meta.tools : undefined;
-  if ('defaultOutputFiles' in meta)
-    entry.defaultOutputFiles = meta.defaultOutputFiles?.length
-      ? meta.defaultOutputFiles
-      : undefined;
-}
-
 /** Get agents for a category, deduplicated by name. */
 export function getAgentsByCategory(category: AgentCategory): AgentEntry[] {
   return deduplicateByName(

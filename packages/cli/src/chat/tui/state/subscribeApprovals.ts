@@ -39,7 +39,7 @@ import {
   type ApiProvider,
   hasUsableApiKey,
   isApiProvider,
-  lookupApiKeyUncached,
+  lookupApiKey,
 } from '@model/apiProviders';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
@@ -137,7 +137,7 @@ export function createTuiHostInteractions(
    */
   const apiKeyRetry = new ProgressApiKeyRetryController({
     providers: API_PROVIDERS,
-    readKey: (provider) => lookupApiKeyUncached(stores.secrets, provider),
+    readKey: (provider) => lookupApiKey(stores.secrets, provider),
     hasUsableKey: (provider) => hasUsableApiKey(stores.secrets, provider),
     promptForApiKey: (provider) =>
       provider

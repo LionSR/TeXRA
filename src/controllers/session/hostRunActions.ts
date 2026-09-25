@@ -22,7 +22,7 @@ import { withLogChannel } from '@logger/effectLog';
 import type { ApiProvider } from '@model/apiProviders';
 import {
   API_PROVIDERS,
-  lookupApiKeyUncached,
+  lookupApiKey,
   hasUsableApiKey,
   isApiProvider,
 } from '@model/apiProviders';
@@ -377,7 +377,7 @@ export const createHostRunActions = (
 
     const apiKeyRetry = new ProgressApiKeyRetryController({
       providers: API_PROVIDERS,
-      readKey: (provider) => lookupApiKeyUncached(secrets, provider),
+      readKey: (provider) => lookupApiKey(secrets, provider),
       hasUsableKey: (provider) => hasUsableApiKey(secrets, provider),
       // A host that could not ask returns the port's `ApiKeyPromptFailed`.
       promptForApiKey: (provider) => ports.promptForApiKey(provider),

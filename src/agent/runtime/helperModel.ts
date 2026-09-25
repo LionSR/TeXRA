@@ -48,7 +48,7 @@ export const helperModel = Effect.fn('helperModel')(function* (
   HelperModelUnavailable | Error,
   Scope.Scope | LanguageModel | HttpClient.HttpClient
 > {
-  const modelName = yield* getHelperModelName(stores.globalState);
+  const modelName = yield* getHelperModelName(stores);
   const inputs = yield* readModelAvailabilityInputs(stores, [modelName]);
   const reason = modelUnavailableReasonFrom(inputs, modelName);
   if (reason) return yield* new HelperModelUnavailable({ message: reason });

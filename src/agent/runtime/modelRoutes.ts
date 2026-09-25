@@ -38,6 +38,7 @@ import type {
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { findModelProviderPlugin } from '@shared/constants/modelProviderPlugins';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import { readSettingFrom } from '@utils/config/platformSettings';
 import type { HttpClient } from 'effect/unstable/http';
 
 const CHANNEL = 'modelRoutes';
@@ -341,14 +342,14 @@ export const resolveModelRoute = Effect.fn('resolveModelRoute')(function* (
  */
 export const withShortModelName = Effect.fn('withShortModelName')(function* (
   config: ModelConfig,
-  globalState: StateStore,
+  stores: SettingsStores,
 ) {
   const short = config.shortName;
   if (
     // Read live so a mid-session change is honored on the next binding.
-    !(yield* globalState.get<boolean>(
+    !(yield* readSettingFrom<boolean>(
+      stores,
       GlobalStateKey.PREFER_SHORT_MODEL_NAMES,
-      false,
     )) ||
     // Mode-selected registry entries share another entry's wire id. Their
     // display-oriented shortName is not an API model identifier.

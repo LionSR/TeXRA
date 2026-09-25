@@ -36,7 +36,7 @@ const CHANNEL = 'helperModelPreference';
 export const applyHelperModelPreference = Effect.fn(
   'applyHelperModelPreference',
 )(function* (config: AgentConfig, stores: ModelOptionStores) {
-  const helperModel = yield* getHelperModelName(stores.globalState);
+  const helperModel = yield* getHelperModelName(stores);
   if (helperModel === config.model) return config;
 
   const helperModelConfig = getRuntimeModelConfig(helperModel);

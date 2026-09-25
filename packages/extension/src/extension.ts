@@ -80,7 +80,6 @@ import { withLogChannel } from '@logger/effectLog';
 import { createLog } from '@logger/logUtils';
 import { setLogSink } from '@logger/logSink';
 import { formatFatalErrorDetail } from '@logger/redaction';
-import { invalidateApiKeyCache } from '@model/apiProviders';
 import { invalidateRuntimeModelRegistry } from '@model/runtimeModelRegistry';
 import { AppState, AgentDirectories } from '@platform/interfaces';
 import type {
@@ -812,10 +811,8 @@ async function activateExtension(context: vscode.ExtensionContext) {
 
   context.subscriptions.push(
     // The VS Code store's half of `credentialChanged`: SecretStorage reports
-    // every committed write, other windows' included, so the signal and the
-    // lookup-cache drop (another window never ran our finalizer) live here.
+    // every committed write, other windows' included, so the signal lives here.
     context.secrets.onDidChange(({ key }) => {
-      invalidateApiKeyCache();
       emitAppSignal('credentialChanged', { key });
     }),
     // Lean/LaTeX extension installed or removed → re-probe so the Tools tab

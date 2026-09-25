@@ -180,12 +180,10 @@ function buildOverleafClonePorts(
   workspaceFs: RootedFileSystem,
 ): OverleafCloneWorkflowPorts {
   return {
-    // `getStored` (not `get`): the clone token is a persisted credential the
-    // user manages here, never an environment override.
     // `orDie` keeps what `Effect.promise` did with a rejected store call: a
     // credential store this host cannot reach is a defect here, not a clone
     // outcome the workflow reports.
-    getStoredToken: (key) => Effect.orDie(secrets.getStored(key)),
+    getStoredToken: (key) => Effect.orDie(secrets.get(key)),
     deleteStoredToken: (key) => Effect.orDie(secrets.delete(key)),
     storeToken: (key, token) => Effect.orDie(secrets.set(key, token)),
     promptToken: (spec) =>

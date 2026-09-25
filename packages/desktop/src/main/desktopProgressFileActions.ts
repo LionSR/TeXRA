@@ -23,7 +23,7 @@ import type {
   DiffProgressReporter,
   DiffRunOutcome,
 } from '@latex/latexdiff/types';
-import type { StateStore, StateReadFailed } from '@platform/interfaces';
+import type { StateReadFailed } from '@platform/interfaces';
 import {
   type ProcessRuntime,
   type ProcessServices,
@@ -79,9 +79,6 @@ type DesktopProgressFileActionUi = Pick<
  */
 interface DesktopProgressFileActionHost {
   readonly session: SessionHandle;
-  /** The process global state the window root holds; the merge run reads the
-   *  helper model from it. */
-  readonly globalState: StateStore;
   /** The process runtime the window root holds; the latexdiff programs and
    *  the file reads and writes below take their services from it. Nothing
    *  settles here: every member of this class is a program its caller runs. */
@@ -126,7 +123,7 @@ export class DesktopProgressFileActions {
       const validation = validateRunRequest({
         config: {
           agent: 'merge',
-          model: yield* getHelperModelName(this.host.globalState),
+          model: yield* getHelperModelName(this.host.session.roots),
           inputFiles: [baseFile],
           editedFile,
         },

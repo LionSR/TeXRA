@@ -10,7 +10,7 @@ import {
   copilotRouteUnavailableReason,
   setCopilotRoutePreference,
 } from '@model/copilotRouting';
-import { apiKeySecretName, invalidateApiKeyCache } from '@model/apiProviders';
+import { apiKeySecretName } from '@model/apiProviders';
 import { DEFAULT_MODELS } from '@model/modelOptionsBasic';
 import {
   copilotRouteForModel,
@@ -102,7 +102,6 @@ function failingDiscoveryPort(): LanguageModelPort {
 
 function resetModelCaches(): void {
   invalidateRuntimeModelRegistry();
-  invalidateApiKeyCache();
 }
 
 function googleKeySecrets(): Record<string, string> {
