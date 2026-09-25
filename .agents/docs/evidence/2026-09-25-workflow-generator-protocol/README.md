@@ -48,6 +48,8 @@ about 1.3 s; the typecheck is clean.
   operation otherwise throws inside the script as an `Error` whose `name` is
   its tag (`AgentFailed`, `TimedOut`), so `try/catch` sees it.
 - `retry()` re-runs a call, or a whole multi-step branch from its start.
+- A script's own uncaught error (a `RangeError`, a `TypeError`) is a script
+  fault, not an operation failure: it ends the run even inside `attempt()`.
 - `timeout()` interrupts the call and throws `TimedOut` into the script.
 - Multi-step generator branches run concurrently, one fiber each.
 - Interrupting the run interrupts every in-flight agent call.

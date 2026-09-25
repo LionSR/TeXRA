@@ -127,8 +127,11 @@ inside the realm.
   `attempt` or `try`; there is no truthy sentinel to forget to filter.
 - Run-level faults are never catchable: the host abandons the script rather
   than resuming it. That covers `WorkflowRunAbortError` (contract faults,
-  the call cap, a journal-write failure) and the realm's own faults (a step
-  over its CPU budget, a malformed operation).
+  the call cap, a journal-write failure), the realm's own faults (a step
+  over its CPU budget, a malformed operation), and an uncaught script error
+  whose name is not one of those tags (a `TypeError`, the script's own
+  `Error`): `attempt()` does not turn it into a value and `retry()` does not
+  re-run it.
 
 ## 3. What stays
 

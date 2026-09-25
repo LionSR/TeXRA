@@ -337,13 +337,19 @@ return probes`,
     }),
   );
 
-  it.effect('an uncaught script error fails the run with its own name', () =>
-    Effect.gen(function* () {
-      const { host } = fakeHost();
-      const exit = yield* Effect.exit(
-        run(`throw new RangeError('bad input')`, host),
-      );
-      expect(JSON.stringify(exit)).toContain('RangeError');
-    }),
+  it.effect(
+    'a script error fails the run with its own name, even inside attempt()',
+    () =>
+      Effect.gen(function* () {
+        const { host } = fakeHost();
+        const exit = yield* Effect.exit(
+          run(
+            `return yield* attempt(function* () { throw new RangeError('bad input') })`,
+            host,
+          ),
+        );
+        expect(JSON.stringify(exit)).toContain('ScriptFault');
+        expect(JSON.stringify(exit)).toContain('RangeError');
+      }),
   );
 });
