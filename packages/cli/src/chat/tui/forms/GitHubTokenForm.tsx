@@ -159,13 +159,18 @@ export function GitHubTokenForm(
           runAction(() => props.onRemove());
           return;
         }
-        void props.runtime
-          .runPromise(tryOpenBrowser(GITHUB_TOKEN_CREATE_URL))
-          .then((opened) => {
-            if (!opened) {
-              setError(`Open ${GITHUB_TOKEN_CREATE_URL} to create a token.`);
-            }
-          });
+        runFormWrite(
+          props.runtime,
+          () => tryOpenBrowser(GITHUB_TOKEN_CREATE_URL),
+          {
+            onSuccess: (opened) => {
+              if (!opened) {
+                setError(`Open ${GITHUB_TOKEN_CREATE_URL} to create a token.`);
+              }
+            },
+            onError: (cause) => setError(toErrorMessage(cause)),
+          },
+        );
       }}
       onCancel={props.onCancel}
     />

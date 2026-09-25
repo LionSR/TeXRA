@@ -31,6 +31,7 @@ import {
   type RunId,
   type RunOutcome,
   type SubagentProgressUpdate,
+  type TokenUsageStats,
 } from '@shared/schemas';
 import type { AttemptKey } from '@shared/session/attemptFold';
 import {
@@ -43,9 +44,6 @@ import { deriveRunOutcome } from '@shared/runs/runStatus';
 import { aggregateError, onAbort } from '@utils/core';
 import { formatDuration } from '@utils/text/stringUtils';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
-
-/** Minimal token usage shape consumed by the loop's turn summary. */
-type TurnUsage = { input_tokens?: number; output_tokens?: number };
 
 /**
  * Capabilities the loop provides to a strategy for the duration of one child
@@ -161,7 +159,7 @@ export interface ChildRunStrategy<TTurn, R = never> {
   isTerminal(turn: TTurn): boolean;
 
   /** Token usage for the turn summary (null when none). */
-  getUsage?(turn: TTurn): TurnUsage | null;
+  getUsage?(turn: TTurn): TokenUsageStats | null;
 
   /**
    * Application-level error reported by a turn that did NOT throw (e.g. the SDK
@@ -364,8 +362,8 @@ function attemptTurn<TTurn, R, RTurn>(
         const usage = strategy.getUsage?.(turn);
         if (usage) {
           yield* loopLog(trace, 'info', 'Tokens', {
-            input: usage.input_tokens ?? 0,
-            output: usage.output_tokens ?? 0,
+            input: usage.inputTokens,
+            output: usage.outputTokens,
           });
         }
         const turnIsError = strategy.isTurnError?.(turn) === true;

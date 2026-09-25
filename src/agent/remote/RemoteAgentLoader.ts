@@ -4,14 +4,11 @@
  */
 import { Effect, Result } from 'effect';
 import {
-  type AgentSettingInput,
   AgentPromptSchema,
   AgentSettingSchema,
   AgentDefinitionSchema,
 } from '@agent/core/definition/AgentDataclass';
-import { updateAgentMeta } from '@agent/index/agentRegistry';
-import { extractToolNames } from '@agent/index/agentYamlScanner';
-import { normalizeAgentSettingTools } from '@agent/runtime/agentSettingTools';
+import { inertToolsWarning } from '@agent/runtime/agentSettingTools';
 import { SupabaseAuth } from '@auth/SupabaseAuth';
 import { parseYamlWith } from '@common/parsing/safeParseYaml';
 import { withLogChannel } from '@logger/effectLog';
@@ -62,34 +59,20 @@ export const loadRemoteAgent = Effect.fn('RemoteAgentLoader.loadRemoteAgent')(
       }
       const validated = parsedYaml.success;
 
-      const settings: AgentSettingInput = validated.settings;
-      const toolNames = extractToolNames(settings.tools);
-      const defaultOutputFiles = settings.defaultOutputFiles;
-
       // The stricter setting/prompt schemas throw: keep that on the typed
       // channel, where the tapError below logs it, as the old try/catch did —
       // a defect would skip the log.
-      const normalized = normalizeAgentSettingTools(settings);
-      if (normalized.inertToolsWarning !== undefined) {
-        yield* Effect.logWarning(normalized.inertToolsWarning).pipe(
-          withLogChannel(CHANNEL),
-        );
-      }
       const config = yield* Effect.try({
         try: (): RemoteAgentConfig => ({
-          settings: AgentSettingSchema.parse(normalized.settings),
+          settings: AgentSettingSchema.parse(validated.settings),
           prompts: AgentPromptSchema.parse(validated.prompts),
         }),
         catch: ensureError,
       });
-
-      updateAgentMeta(`remote:${agentName}`, {
-        description: validated.description,
-        tools: toolNames?.length ? toolNames : undefined,
-        defaultOutputFiles: defaultOutputFiles?.length
-          ? defaultOutputFiles
-          : undefined,
-      });
+      const inertTools = inertToolsWarning(config.settings);
+      if (inertTools !== undefined) {
+        yield* Effect.logWarning(inertTools).pipe(withLogChannel(CHANNEL));
+      }
 
       yield* Effect.logInfo(
         `Successfully loaded remote agent: ${agentName}`,

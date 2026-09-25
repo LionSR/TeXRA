@@ -5,6 +5,7 @@ import { Box, Text } from 'ink';
 import { Effect } from 'effect';
 
 import { computeAgentOptionsData, type AgentRosterStores } from '@agent/index';
+import { moreRowsText } from '@cli/tui/overflowText';
 import { Select } from '@cli/tui/ui/Select';
 import {
   computeSelectWindowSize,
@@ -249,9 +250,9 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
             </Text>
           ))}
           {selectWindow.showWorkflowOverflow ? (
-            <Text dimColor>{`… ${
-              workflowRows.length - visibleWorkflowRows.length
-            } more workflows`}</Text>
+            <Text dimColor>
+              {moreRowsText(workflowRows.length - visibleWorkflowRows.length)}
+            </Text>
           ) : null}
           <Text dimColor wrap="truncate-end">
             {'Run a workflow with texra run <name> --input=<file>.'}

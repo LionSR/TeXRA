@@ -571,16 +571,6 @@ body[data-desktop-platform='darwin'] .shell-sidebar-brand {
   pointer-events: none;
 }
 
-.shell-header-title {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: var(--font-size);
-  font-weight: var(--font-weight-medium);
-  letter-spacing: -0.01em;
-}
-
 .shell-header-spacer {
   flex: 1 1 auto;
 }
@@ -783,13 +773,6 @@ body[data-desktop-platform='darwin']
 }
 
 /* The desktop's controls slotted into the conversation's header row. */
-.shell-header-title {
-  overflow: hidden;
-  font-weight: var(--font-weight-semibold);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .shell-header-start,
 .shell-header-end {
   display: inline-flex;
@@ -860,10 +843,6 @@ body[data-desktop-platform='darwin']
   .shell-header {
     gap: 4px;
     padding-inline: 8px;
-  }
-
-  .shell-header-title {
-    display: none;
   }
 }
 

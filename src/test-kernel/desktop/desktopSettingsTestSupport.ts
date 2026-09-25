@@ -10,7 +10,7 @@ import {
   modelOptionsFrom,
   readModelAvailabilityInputs,
 } from '@model/computeModelOptions';
-import { discoveredCopilotRoutes } from '@model/runtimeModelRegistry';
+import { discoverCopilotRoutes } from '@model/copilotRouting';
 import { unsupported } from '@shared/utils/dispatcher';
 import type { SettingsStatePorts } from '@shared/settingsView/types';
 import { FakeSecrets } from '@test/support/FakePlatform';
@@ -91,7 +91,7 @@ export function createStubDesktopCredentialSettingsController(
           readModelAvailabilityInputs(stores, models),
           modelOptionsFrom,
         ),
-      copilotRoutes: discoveredCopilotRoutes(),
+      copilotRoutes: discoverCopilotRoutes(),
     }),
     profileKeyController: {
       setProviderKey: noOpEffect,

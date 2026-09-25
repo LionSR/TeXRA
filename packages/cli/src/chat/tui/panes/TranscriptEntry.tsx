@@ -25,12 +25,10 @@ import {
 } from './transcriptEntries';
 
 function PlainEntryRows({
-  colorEnabled,
   entry,
   fillWidth,
   layout,
 }: {
-  readonly colorEnabled?: boolean;
   readonly entry: TranscriptRow;
   readonly fillWidth?: boolean;
   readonly layout: TranscriptEntryLayout;
@@ -59,10 +57,8 @@ function PlainEntryRows({
         {lines.map((line, index) => (
           <Text
             key={index}
-            color={
-              colorEnabled !== false && index === 0 ? COLOR_HINT : undefined
-            }
-            dimColor={colorEnabled !== false && index > 0}
+            color={index === 0 ? COLOR_HINT : undefined}
+            dimColor={index > 0}
           >
             {line}
           </Text>
@@ -74,13 +70,13 @@ function PlainEntryRows({
   // Workflow-call rows carry the same status color as their layout marker, so
   // the six statuses stay distinguishable at a glance.
   let rowColor: string | undefined;
-  if (entry.kind === 'error' && colorEnabled !== false) {
+  if (entry.kind === 'error') {
     rowColor = COLOR_ERROR;
-  } else if (entry.kind === 'compactionActivity' && colorEnabled !== false) {
+  } else if (entry.kind === 'compactionActivity') {
     rowColor = COMPACTION_ACTIVITY_STATUS_STYLE[entry.block.status].color;
-  } else if (entry.kind === 'workflowTask' && colorEnabled !== false) {
+  } else if (entry.kind === 'workflowTask') {
     rowColor = WORKFLOW_TASK_STATUS_COLOR[entry.call.status];
-  } else if (entry.kind === 'phase' && colorEnabled !== false) {
+  } else if (entry.kind === 'phase') {
     rowColor = COLOR_HINT;
   }
 
@@ -89,7 +85,7 @@ function PlainEntryRows({
       <Text
         bold={entry.kind === 'phase'}
         color={rowColor}
-        inverse={entry.kind === 'user' && colorEnabled !== false}
+        inverse={entry.kind === 'user'}
       >
         {lines.join('\n')}
       </Text>
@@ -103,21 +99,18 @@ export const TranscriptEntry = memo(function TranscriptEntry({
   entry,
   previousEntry,
   width,
-  colorEnabled,
 }: {
   readonly entry: TranscriptRow;
   /** The row printed directly above this one, so its bottom separator can
    *  absorb this row's top one. Yoga does not collapse margins. */
   readonly previousEntry?: TranscriptRow;
   readonly width?: number;
-  readonly colorEnabled?: boolean;
 }): React.JSX.Element {
   if (entry.kind === 'tool') {
     return <ToolUseRow toolRow={entry} width={width} />;
   }
 
   const layout = transcriptEntryLayout(entry, {
-    colorEnabled,
     mode: 'scrollback',
     previousEntry,
     width,
@@ -134,28 +127,19 @@ export const TranscriptEntry = memo(function TranscriptEntry({
           <Markdown
             content={transcriptRowHeadline(entry)}
             width={layout.columns}
-            colorEnabled={colorEnabled}
           />
         </Box>
       );
     default:
-      return (
-        <PlainEntryRows
-          colorEnabled={colorEnabled}
-          entry={entry}
-          layout={layout}
-        />
-      );
+      return <PlainEntryRows entry={entry} layout={layout} />;
   }
 });
 
 export const LiveTranscriptEntry = memo(function LiveTranscriptEntry({
-  colorEnabled,
   entry,
   maxRows,
   width,
 }: {
-  readonly colorEnabled?: boolean;
   readonly entry: TranscriptRow;
   readonly maxRows?: number;
   readonly width?: number;
@@ -166,14 +150,9 @@ export const LiveTranscriptEntry = memo(function LiveTranscriptEntry({
 
   // Paint every live row from the same layout the viewport measures. A
   // separate kind switch in the pane can reserve space for rows it omits.
-  const layout = transcriptEntryLayout(entry, {
-    colorEnabled,
-    mode: 'live',
-    width,
-  });
+  const layout = transcriptEntryLayout(entry, { mode: 'live', width });
   return (
     <PlainEntryRows
-      colorEnabled={colorEnabled}
       entry={entry}
       fillWidth
       layout={

@@ -28,7 +28,6 @@ interface ConversationPaneProps {
   readonly width?: number;
   readonly availableWidth?: number;
   readonly maxRows?: number;
-  readonly colorEnabled?: boolean;
 }
 
 /**
@@ -90,7 +89,6 @@ export function ConversationPane(
       {visibleEntries.entries.map((entry) => (
         <EntryErrorBoundary key={entry.id} label={entry.kind}>
           <LiveTranscriptEntry
-            colorEnabled={props.colorEnabled}
             entry={entry}
             maxRows={visibleEntries.rowLimits.get(entry.id)}
             width={props.width}

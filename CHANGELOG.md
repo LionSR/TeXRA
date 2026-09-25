@@ -104,7 +104,10 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
   (compaction, retries, team coordination, approval, skills, memory, telemetry,
   LaTeX and commit attribution), because the extension sent those updates
   in a form the dashboard discarded.
-
+- **Workflow agent calls no longer fail after they finish.** In a workflow
+  script, an `agent()` call could fail with "All fibers interrupted without
+  error" just after it succeeded. In a `parallel()` group that ended the
+  workflow and cancelled every sibling still running.
 - **A stopped subagent records one final outcome.** Stopping a subagent
   while it waited for input, or while its failure was being recorded, could
   leave the run without a final record. Every run now ends through a single

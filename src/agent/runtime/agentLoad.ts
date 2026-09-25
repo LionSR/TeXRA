@@ -20,7 +20,7 @@ import { agentKey, AgentCategory } from '@shared/schemas';
 import { ensureError } from '@utils/errors/errorMessage';
 import { readNormalizedFile } from '@utils/files/fsDurability';
 
-import { normalizeAgentSettingTools } from './agentSettingTools';
+import { inertToolsWarning } from './agentSettingTools';
 import type { HttpClient } from 'effect/unstable/http';
 
 const CHANNEL = 'agentLoad';
@@ -44,19 +44,20 @@ export const validateAgentYamlContent = Effect.fn(
   const data = parsed.success;
   if (data.inherits) return;
 
-  const normalized = normalizeAgentSettingTools(data.settings);
-  yield* logInertTools(normalized.inertToolsWarning);
-  yield* Effect.try({
+  const settings = yield* Effect.try({
     try: () => {
-      AgentSettingSchema.parse(normalized.settings);
+      const settings = AgentSettingSchema.parse(data.settings);
       AgentPromptSchema.parse(data.prompts);
+      return settings;
     },
     catch: ensureError,
   });
+  yield* logInertTools(settings);
 });
 
-/** Report the load-time warning {@link normalizeAgentSettingTools} returns. */
-function logInertTools(warning: string | undefined): Effect.Effect<void> {
+/** Report the load-time warning {@link inertToolsWarning} returns. */
+function logInertTools(settings: AgentSetting): Effect.Effect<void> {
+  const warning = inertToolsWarning(settings);
   return warning === undefined
     ? Effect.void
     : Effect.logWarning(warning).pipe(withLogChannel(CHANNEL));
@@ -124,7 +125,6 @@ export const loadAgentSettingAndPrompts = Effect.fn(
   });
 
   // Initialize with own settings/prompts (spread creates a mutable copy).
-  // Tools may still be raw name strings at this point — they are resolved below.
   let settings: AgentSettingInput = { ...config.settings };
   let prompts: AgentPromptInput = { ...config.prompts };
 
@@ -157,16 +157,15 @@ export const loadAgentSettingAndPrompts = Effect.fn(
     settings = { ...settings, agentCategory: AgentCategory.ToolUse };
   }
 
-  const normalized = normalizeAgentSettingTools(settings);
-  yield* logInertTools(normalized.inertToolsWarning);
-
   // Apply defaults and validate the final settings and prompts
-  return yield* Effect.try({
+  const parsed = yield* Effect.try({
     try: () =>
       [
-        AgentSettingSchema.parse(normalized.settings),
+        AgentSettingSchema.parse(settings),
         AgentPromptSchema.parse(prompts),
       ] as [AgentSetting, AgentPrompt],
     catch: ensureError,
   });
+  yield* logInertTools(parsed[0]);
+  return parsed;
 });

@@ -7,7 +7,6 @@ import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, vi } from 'vitest';
 
 // Local imports
-import { invalidateApiKeyCache } from '@model/apiProviders';
 import * as apiProviders from '@model/apiProviders';
 import * as setupCredentialAccess from '@model/setupCredentialAccess';
 import { SecretsFailed } from '@platform/secrets';
@@ -58,9 +57,6 @@ function installChatGptOnlySetupPlatform(): void {
 setupPlatform({}, { setup: createFakeSetupPlatform() });
 
 beforeEach(() => {
-  // The `Secrets` service is one stable object over whichever fake host is
-  // installed, so the API-key lookup cache it keys on outlives a host swap.
-  invalidateApiKeyCache();
   // The default fake host has no credentials at all, so the aggregate probe
   // answers false without any stubbing; each test seeds what it needs.
   mocks.locateTool.mockReset().mockImplementation((name) =>

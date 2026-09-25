@@ -2,6 +2,7 @@ import type { CliContext } from '@cli/runtime/cliContext';
 import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
 
 const BASE_CLI_CONTEXT = {
+  storageRoot: '/tmp/texra-test-storage',
   cwd: '/tmp/project',
   mode: 'headless',
   outputFormat: 'text',

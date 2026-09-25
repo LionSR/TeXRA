@@ -1,5 +1,5 @@
 import { it } from '@effect/vitest';
-import { Effect } from 'effect';
+import { Effect, FileSystem, Layer } from 'effect';
 import { describe, expect, vi } from 'vitest';
 
 import {
@@ -40,11 +40,12 @@ function createPorts(
   };
 }
 
-/** `git --version` answers with `gitExit`; the clone itself is a port. */
+/** `git --version` answers with `gitExit`; the clone itself is a port, and
+ *  the port doubles never touch the filesystem the workflow requires. */
 function clone(ports: OverleafCloneWorkflowPorts, gitExit = 0) {
   const spawner = scriptedSpawnerLayer(() => ({ exitCode: gitExit }));
   return cloneOverleafProject(REMOTE, '/workspace', ports).pipe(
-    Effect.provide(spawner.layer),
+    Effect.provide(Layer.merge(spawner.layer, FileSystem.layerNoop({}))),
   );
 }
 

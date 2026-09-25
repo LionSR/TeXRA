@@ -7,6 +7,7 @@ import {
 } from '@cli/runtime/userQuestionAnswer';
 import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
 import {
+  hiddenRowsText,
   previousRowsText,
   selectVisibleInlineOverflowText,
 } from '@cli/tui/overflowText';
@@ -76,7 +77,7 @@ function userQuestionInlineClipIndicator({
   readonly line: UserQuestionPromptLine;
   readonly width: number;
 }): UserQuestionPromptLine {
-  const prefix = `… ${hiddenRows} clipped rows - `;
+  const prefix = `${hiddenRowsText(hiddenRows)} - `;
   const clippedPrefix = clipToWidth(prefix, width);
   const remainingWidth = width - textDisplayWidth(clippedPrefix);
   if (remainingWidth <= 0) return { kind: 'overflow', text: clippedPrefix };

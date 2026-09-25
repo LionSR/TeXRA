@@ -1,26 +1,28 @@
 import { Effect } from 'effect';
 import { getEnabledModels } from '@model/computeModelOptions';
-import { resolveEffectiveHelperModel } from '@model/helperModelSelection';
-import type { StateStore } from '@platform/interfaces';
+import type { SettingsStores } from '@shared/config/settingsAccess';
+import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import { readSettingFrom } from '@utils/config/platformSettings';
 
 /**
- * Resolve the configured helper model name from global state.
+ * The helper model a run, a merge, or the Models tab uses: the configured
+ * choice while it is enabled, else the built-in default. The built-in default
+ * is always accepted because it is used for internal auxiliary tasks, not
+ * user-facing generation; never fall back to the first picker model, which is
+ * a premium default. An empty enabled list falls through to the default too.
  *
- * The configured helper model counts only while it is enabled; otherwise the
- * built-in default applies. The built-in default is always accepted because it
- * is used for internal auxiliary tasks, not user-facing generation. The
- * Settings UI resolves the same chain over the same enabled list.
- *
- * `globalState` is the process global state the caller holds (the `AppState`
- * service, or the store a host root threaded down), so the preference and the
- * enabled list are read from one store.
+ * The one resolution of the chain: every surface that shows or uses the
+ * helper model reads it here, from the setting slots the caller holds.
  */
-export function getHelperModelName(globalState: StateStore) {
+export function getHelperModelName(stores: SettingsStores) {
   return Effect.gen(function* () {
-    return resolveEffectiveHelperModel(
-      yield* globalState.get<string>(GlobalStateKey.HELPER_MODEL),
-      yield* getEnabledModels(globalState),
-    );
+    const configured = (yield* readSettingFrom<string>(
+      stores,
+      GlobalStateKey.HELPER_MODEL,
+    )).trim();
+    if (configured === DEFAULT_HELPER_MODEL) return configured;
+    const enabled = yield* getEnabledModels(stores.globalState);
+    return enabled.includes(configured) ? configured : DEFAULT_HELPER_MODEL;
   });
 }

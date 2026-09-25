@@ -11,7 +11,6 @@ import { renderAnsiMarkdown } from './ansiMarkdown';
 interface MarkdownProps {
   readonly content: string;
   readonly width?: number;
-  readonly colorEnabled?: boolean;
 }
 
 // Memoized: props are scalars, so unchanged entries skip even the LRU lookup
@@ -23,11 +22,6 @@ export const Markdown = memo(function Markdown(
   // line at the bottom of each conversation entry; the parent
   // `<Box marginBottom={1}>` already provides separation between entries.
   return (
-    <Text>
-      {renderAnsiMarkdown(props.content, {
-        width: props.width,
-        colorEnabled: props.colorEnabled,
-      })}
-    </Text>
+    <Text>{renderAnsiMarkdown(props.content, { width: props.width })}</Text>
   );
 });

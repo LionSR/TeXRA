@@ -1,4 +1,4 @@
-import { hint, type ModelConfig } from 'llm-zoo';
+import { MODEL_CONFIGS, hint, type ModelConfig } from 'llm-zoo';
 
 import type { ModelOptionData } from '@shared/schemas';
 import {
@@ -8,17 +8,16 @@ import {
   isExpensiveModel,
   isFastFirstResponseModel,
 } from '@shared/constants/providers';
-import { getRuntimeModelConfig } from './runtimeModelRegistry';
 import { resolveModelSource } from './openRouterRouting';
 
 /** Return whether the registry marks a model as deprecated. */
 export function isDeprecatedModel(model: string): boolean {
-  return getRuntimeModelConfig(model)?.deprecated ?? false;
+  return MODEL_CONFIGS[model]?.deprecated ?? false;
 }
 
 /** Return whether the registry marks a model as no longer served. */
 export function isRetiredModel(model: string): boolean {
-  return getRuntimeModelConfig(model)?.retired ?? false;
+  return MODEL_CONFIGS[model]?.retired ?? false;
 }
 
 /**
