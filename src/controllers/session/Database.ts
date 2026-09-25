@@ -22,7 +22,6 @@ import { join } from 'node:path';
 import * as SqliteClient from '@effect/sql-sqlite-node/SqliteClient';
 import * as SqlClient from 'effect/unstable/sql/SqlClient';
 import * as Reactivity from 'effect/unstable/reactivity/Reactivity';
-import { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 import {
   Cause,
   Clock,
@@ -40,6 +39,7 @@ import { proveOwnerLiveness } from '@agent/storage/leaseOwnerLiveness';
 import { parseJsonWith } from '@common/parsing/safeParseJson';
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
 import { withLogChannel } from '@logger/effectLog';
+import type { ProcessProbe } from '@platform/defaults/nodeProcesses';
 import {
   AggregateIdSchema,
   RunIdSchema,
@@ -249,17 +249,17 @@ export const databaseLayer = (
 ): Layer.Layer<
   Database,
   DatabaseOpenFailed,
-  WorkspaceRoots | ProcessIdentity | ChildProcessSpawner
+  WorkspaceRoots | ProcessIdentity | ProcessProbe
 > =>
   Layer.effect(
     Database,
     Effect.gen(function* () {
       const roots = yield* WorkspaceRoots;
       const identity = yield* ProcessIdentity;
-      const spawner = yield* ChildProcessSpawner;
+      const probeServices = yield* Effect.context<ProcessProbe>();
       const liveness = (owner: string) =>
         proveOwnerLiveness(ownerIdentity(owner)).pipe(
-          Effect.provideService(ChildProcessSpawner, spawner),
+          Effect.provideContext(probeServices),
         );
       const path =
         mode === 'persistent'
@@ -1212,7 +1212,7 @@ export const globalDatabaseLayer = (
 ): Layer.Layer<
   GlobalDatabase,
   DatabaseOpenFailed,
-  ProcessIdentity | ChildProcessSpawner
+  ProcessIdentity | ProcessProbe
 > =>
   Layer.effect(GlobalDatabase, Database).pipe(
     Layer.provide(

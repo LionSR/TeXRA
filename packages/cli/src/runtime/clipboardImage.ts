@@ -15,7 +15,6 @@
 // runs it on the process runtime it already holds, so nothing here runs an
 // Effect of its own and the clipboard tools stay one wrapped foreign edge.
 
-import { readFile, stat } from 'node:fs/promises';
 import { platform as osPlatform } from 'node:os';
 import { dirname, join } from 'node:path';
 
@@ -71,18 +70,21 @@ type ClipboardAttachResult =
 type ClipboardRead = Buffer | 'none' | 'unsupported' | 'too-large';
 
 /** The PNG a platform reader wrote, or the size refusal. A failure here is
- *  the probe's failure, not "no image": it reaches the caller's error hook. */
+ *  the probe's failure, not "no image": it reaches the caller's error hook,
+ *  worded by the errno text. */
 function readPngFileWithinLimit(
   outFile: string,
-): Effect.Effect<ClipboardRead, ClipboardImageProbeFailed> {
-  return Effect.tryPromise({
-    try: async (): Promise<ClipboardRead> => {
-      const { size } = await stat(outFile);
-      if (size > MAX_IMAGE_BYTES) return 'too-large';
-      return readFile(outFile);
-    },
-    catch: probeFailed,
-  });
+): Effect.Effect<
+  ClipboardRead,
+  ClipboardImageProbeFailed,
+  FileSystem.FileSystem
+> {
+  return Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const { size } = yield* fs.stat(outFile);
+    if (Number(size) > MAX_IMAGE_BYTES) return 'too-large' as const;
+    return Buffer.from(yield* fs.readFile(outFile));
+  }).pipe(Effect.mapError((error) => probeFailed(error.reason.cause ?? error)));
 }
 
 /** Whether a platform reader ran to success and left no 'NO_IMAGE' mark. */
@@ -105,7 +107,7 @@ function readClipboardPngMac(
 ): Effect.Effect<
   ClipboardRead,
   ClipboardImageProbeFailed,
-  ChildProcessSpawner
+  FileSystem.FileSystem | ChildProcessSpawner
 > {
   // osascript ships with macOS — no external dependency. The first statement
   // fails when the clipboard holds no image, which is the 'none' outcome.
@@ -190,7 +192,7 @@ function readClipboardPngWindows(
 ): Effect.Effect<
   ClipboardRead,
   ClipboardImageProbeFailed,
-  ChildProcessSpawner
+  FileSystem.FileSystem | ChildProcessSpawner
 > {
   const quotedOutFile = outFile.replaceAll("'", "''");
   const script = `$img = Get-Clipboard -Format Image; if ($img) { Add-Type -AssemblyName System.Drawing; $img.Save('${quotedOutFile}', [System.Drawing.Imaging.ImageFormat]::Png) } else { Write-Output 'NO_IMAGE' }`;
@@ -239,7 +241,7 @@ export function attachClipboardImage(
     let reader: Effect.Effect<
       ClipboardRead,
       ClipboardImageProbeFailed,
-      ChildProcessSpawner
+      FileSystem.FileSystem | ChildProcessSpawner
     >;
     switch (plat) {
       case 'darwin':

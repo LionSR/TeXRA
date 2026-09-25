@@ -225,7 +225,7 @@ const graph = (history: readonly SessionEventDraft[]) => {
     ),
     Layer.provide(Layer.succeed(WorkspaceRoots)(roots)),
     Layer.provide(ProcessIdentity.layer(SELF)),
-    Layer.provide(nodeSpawnerLayer),
+    Layer.provide(nodePlatformLayer),
   );
 };
 
@@ -735,7 +735,7 @@ describe('Sessions owner', () => {
                 createFakeWorkspaceRoots().globalStorage,
               ).pipe(
                 Layer.provide(ProcessIdentity.layer(SELF)),
-                Layer.provide(nodeSpawnerLayer),
+                Layer.provide(nodePlatformLayer),
                 Layer.orDie,
               ),
             ),
@@ -1193,6 +1193,7 @@ describe('the C1 event table and the C6 publisher', () => {
       Layer.provide(Layer.succeed(WorkspaceRoots)({ storage })),
       Layer.provide(ProcessIdentity.layer(owner)),
       Layer.provide(spawner),
+      Layer.provide(nodePlatformLayer),
       Layer.fresh,
     );
 
@@ -2279,7 +2280,7 @@ describe('RunLedger', () => {
         ),
       ),
       Layer.provide(ProcessIdentity.layer(SELF)),
-      Layer.provide(nodeSpawnerLayer),
+      Layer.provide(nodePlatformLayer),
     );
   const AGGREGATE = qualifyAggregateId('run', RUN);
   const SECRET = 'sk-abcdefghijklmnopqrstuvwxyz0123';
