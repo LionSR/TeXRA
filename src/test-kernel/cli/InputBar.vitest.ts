@@ -20,7 +20,6 @@ import {
   ActiveDraftScope,
   createActiveDraftRegistry,
 } from '@cli/chat/tui/input/activeDraft';
-import { triggerAppCtrlC } from '@cli/chat/tui/appInteractionPolicy';
 import {
   InputBar,
   slashSubmitText,
@@ -287,9 +286,7 @@ describe('InputBar draft discard', () => {
     function Harness() {
       const [value, setValue] = React.useState(currentValue);
       ink.useInput((input: string, key: { readonly ctrl?: boolean }) => {
-        if (key.ctrl && input === 'c') {
-          triggerAppCtrlC({ discardDraft: registry.discard, onCtrlC });
-        }
+        if (key.ctrl && input === 'c' && !registry.discard()) onCtrlC();
       });
       return React.createElement(
         ActiveDraftScope,

@@ -455,23 +455,6 @@ function retainedStaticTranscriptTail(
   };
 }
 
-/** The run-label map is a `computed()` signal that can return a fresh
- *  `Map` for unrelated child-roster churn (elapsed timers, active/inactive
- *  flips). Only a content change affects transcript layout, so compare the
- *  label projection semantically instead of by reference. */
-function runLabelsEqual(
-  left: RunLabels | undefined,
-  right: RunLabels | undefined,
-): boolean {
-  if (left === right) return true;
-  if (left === undefined || right === undefined) return false;
-  if (left.size !== right.size) return false;
-  for (const [key, value] of left) {
-    if (right.get(key) !== value) return false;
-  }
-  return true;
-}
-
 /** Rendering-relevant item equality: entries compare by reference (they are
  *  immutable log rows), headers by the values `SessionHeaderBlock` draws —
  *  `identityLine` and `compact` directly, plus the `SessionMeta` fields the
@@ -755,7 +738,7 @@ export function advanceStaticTranscriptState(
     if (
       rebuilt.ownerKey === current.ownerKey &&
       rebuilt.layoutWidth === current.layoutWidth &&
-      runLabelsEqual(rebuilt.runLabels, current.runLabels) &&
+      rebuilt.runLabels === current.runLabels &&
       staticTranscriptItemsEquivalent(rebuilt.items, current.items)
     ) {
       return current;
@@ -774,10 +757,11 @@ export function advanceStaticTranscriptState(
     return current;
   }
 
-  // A label-content change (a child's human label arriving after its
-  // executions row printed) rewrites rows already in scrollback, so it repaints
-  // from a known origin; a bare width change is repainted by Ink's resize path.
-  const labelsChanged = !runLabelsEqual(runLabels, current.runLabels);
+  // A label change (a child's human label arriving after its executions row
+  // printed) rewrites rows already in scrollback, so it repaints from a known
+  // origin; a bare width change is repainted by Ink's resize path. The App keeps
+  // the label map identity-stable, so a new reference is a content change.
+  const labelsChanged = runLabels !== current.runLabels;
   const layoutChanged = width !== current.layoutWidth || labelsChanged;
   let nextItems = current.items;
   let nextRowCount = current.rowCount;
