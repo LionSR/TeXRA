@@ -67,7 +67,6 @@ import { createLanguageModelPort } from '@frontend/lm/createLanguageModelPort';
 import { registerLanguageModelTools } from '@frontend/lm/registerLanguageModelTools';
 import { onTexraAuthSessionsChanged } from '@frontend/events/onTexraAuthSessionsChanged';
 import { createVscodeLeanLanguageServices } from '@frontend/lean/VscodeIntegration';
-import { resolveGitCommonRoot } from '@frontend/git/resolveGitRoot';
 import { registerInlineCriticism } from '@frontend/latex/inlineCriticism';
 import {
   getInlineCommentProvider,
@@ -107,7 +106,7 @@ import {
 } from '@platform/defaults/workspaceStorage';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
-import { WorktreeStateStore } from '@platform/defaults/worktreeStateStore';
+import { openWorktreeStateStore } from '@platform/defaults/worktreeStateStore';
 import { StorageFs, withSessionFs } from '@platform/rootedFs';
 import {
   formatTexraApprovalPolicy,
@@ -213,25 +212,20 @@ async function initVscodePlatform(
   // A construction failure degrades to the unavailable plane instead of
   // failing activation: registration below records and reports the error, and
   // every probe answers signed-out.
-  // The account plane and the process identity both resolve before the
-  // runtime that serves them, on one pre-runtime run: an opener that uses the
-  // synchronous `open` would otherwise face an asynchronous identity layer
-  // build.
-  const { auth, processStart } = await Effect.runPromise(
-    Effect.gen(function* () {
-      const auth = yield* createSupabaseAuth({
-        secrets,
-        whenReady: () =>
-          Effect.suspend(() =>
-            authReadiness.uriHandlerInstalled
-              ? Effect.void
-              : Effect.fail(new Error(AUTH_URI_HANDLER_NOT_INITIALIZED)),
-          ),
-      }).pipe(
-        Effect.catch((error) => Effect.succeed(unavailableSupabaseAuth(error))),
-      );
-      return { auth, processStart: yield* nodeProcesses.selfIdentity() };
-    }),
+  // The account plane resolves before the runtime that serves it; the
+  // process identity is the runtime's own layer, built by its first run.
+  const auth = await Effect.runPromise(
+    createSupabaseAuth({
+      secrets,
+      whenReady: () =>
+        Effect.suspend(() =>
+          authReadiness.uriHandlerInstalled
+            ? Effect.void
+            : Effect.fail(new Error(AUTH_URI_HANDLER_NOT_INITIALIZED)),
+        ),
+    }).pipe(
+      Effect.catch((error) => Effect.succeed(unavailableSupabaseAuth(error))),
+    ),
   );
   // The resume port closes over the runtime installed just below: a resume
   // attempt runs on it, and the port is only invoked after activation has
@@ -249,7 +243,7 @@ async function initVscodePlatform(
       ? context.extension.packageJSON.version
       : undefined;
   const runtime = installProcessRuntime({
-    processStart: Effect.succeed(processStart),
+    processStart: nodeProcesses.selfIdentity(),
     globalStorage,
     secrets,
     appState,
@@ -295,13 +289,14 @@ async function initVscodePlatform(
     Effect.gen(function* () {
       const globalState = yield* AppState;
       const projectState = yield* openProjectStateStore(storage);
-      const gitRepoRoot = workspaceRoot
-        ? yield* resolveGitCommonRoot(workspaceRoot)
-        : undefined;
       return {
         globalState,
-        workspaceState: gitRepoRoot
-          ? new WorktreeStateStore(projectState, globalState, gitRepoRoot)
+        workspaceState: workspaceRoot
+          ? yield* openWorktreeStateStore(
+              projectState,
+              globalState,
+              workspaceRoot,
+            )
           : projectState,
       };
     }).pipe(Scope.provide(scope)),

@@ -1,7 +1,10 @@
-import { spawnSync } from 'node:child_process';
+import { Effect, type Result } from 'effect';
 
 import { readCliEnv } from './cliContext';
+import { runForegroundCommand } from './foregroundCommand';
 import { writeTextStdout } from './logSinks';
+import type { PlatformError } from 'effect/PlatformError';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 /**
  * Default pager command (clig.dev's suggestion). `less` flags:
@@ -34,17 +37,17 @@ export function resolvePagerCommand(
  * no-op wrapper around `writeTextStdout` — byte-identical to writing directly,
  * so headless parity is preserved.
  *
- * If spawning the pager fails for any reason (missing binary, spawn error), we
- * fall back to writing the text directly rather than swallowing the output.
+ * If the pager cannot start (missing binary, spawn error), the text is written
+ * directly, with the cause logged, rather than lost.
  */
-export function pageStdout(
+export const pageStdout = Effect.fn('pageStdout')(function* (
   text: string,
   options: {
     readonly stdoutIsTty?: boolean;
     readonly headless?: boolean;
     readonly env?: Record<string, string | undefined>;
   } = {},
-): void {
+): Effect.fn.Return<void, never, ChildProcessSpawner> {
   // Empty output never pages — mirrors `emitCliResult`'s skip-empty behavior.
   if (text === '') return;
 
@@ -60,22 +63,40 @@ export function pageStdout(
     return;
   }
 
-  // Run through the default shell so `$PAGER` strings with flags ("less -FIRX")
-  // and user customizations work without us re-implementing shell word-splitting.
-  // Uses raw spawnSync (not executeCommand) because the pager needs true
-  // stdio:['pipe','inherit','inherit'] — full-duplex TTY control for
-  // interactive paging that executeCommand's buffered/streamed output can't
-  // provide.
-  const result = spawnSync(command, {
-    input: `${text}\n`,
-    stdio: ['pipe', 'inherit', 'inherit'],
-    shell: true,
-    env: options.env ? env : undefined,
-  });
-
-  if (result.error || result.status === 126 || result.status === 127) {
+  // Through the shell so `$PAGER` strings with flags ("less -FIRX") and user
+  // customizations work without re-implementing shell word-splitting. The
+  // pager owns the terminal: stdout and stderr are inherited and the text
+  // arrives on its stdin.
+  const launched = yield* Effect.result(
+    runForegroundCommand(command, {
+      input: `${text}\n`,
+      env: options.env ? env : undefined,
+    }),
+  );
+  const failure = pagerLaunchFailure(launched);
+  if (failure !== undefined) {
     // The pager could not be launched (e.g. `less` not installed). Don't lose
     // the content: write it straight to stdout instead.
+    yield* Effect.logWarning(
+      `The pager could not run (${failure}); writing the output directly.`,
+    );
     writeTextStdout(text);
   }
+});
+
+/**
+ * Why the pager never showed the text, or undefined when it ran. A pager that
+ * ended by a signal did run; only a launch failure (a missing shell, or the
+ * shell's 126/127 for a missing pager) loses the output.
+ */
+function pagerLaunchFailure(
+  launched: Result.Result<number, PlatformError>,
+): string | undefined {
+  if (launched._tag === 'Failure') {
+    const { reason } = launched.failure;
+    return reason.method === 'exitCode' ? undefined : reason._tag;
+  }
+  return launched.success === 126 || launched.success === 127
+    ? `exit ${launched.success}`
+    : undefined;
 }

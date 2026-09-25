@@ -91,6 +91,7 @@ import {
   modelSupportsAdaptiveThinking,
   type ClaudeTurnUsage,
 } from './claudeAgentShared';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 import type { DetachedChildRunLaunch } from './delegation/detachedChildRun';
 
 // Third-party type imports (import/order places these after local imports)
@@ -540,7 +541,7 @@ const run = Effect.fn('ClaudeAgentTool.run')(function* (
 ): Effect.fn.Return<
   ToolResult,
   AgentCliToolFailure,
-  Secrets | ToolCall | Runs | AgentResume
+  Secrets | ToolCall | Runs | AgentResume | ChildProcessSpawner
 > {
   const { roots } = toolCall;
   const { CLAUDE_AGENT_MODEL, CLAUDE_AGENT_EFFORT } = WorkspaceStateKey;
@@ -618,16 +619,14 @@ const launchClaudeAgentSession = Effect.fn(
 ): Effect.fn.Return<
   ToolResult,
   AgentCliToolFailure,
-  Secrets | ToolCall | Runs | AgentResume
+  Secrets | ToolCall | Runs | AgentResume | ChildProcessSpawner
 > {
   const config = yield* getClaudeAgentConfig;
   const { roots } = yield* ToolCall;
-  // Mirrors codex behavior so subagents can see the project: when the call
-  // is made from inside the workspace, the agent runs in that directory but
-  // is also granted read access to the workspace root so it can inspect
-  // sibling files. Out-of-workspace cwds run isolated (matches codex). The
-  // claude-agent-sdk's `Options` type names these fields `cwd` /
-  // `additionalDirectories`, unlike codex's `workingDirectory`.
+  // Mirrors codex so subagents can see the project: a call from inside the
+  // workspace runs in that directory with read access to the workspace root
+  // for sibling files; an out-of-workspace cwd runs isolated. The SDK's
+  // `Options` names these `cwd` / `additionalDirectories`, unlike codex.
   const { workingDirectory, additionalDirectories } =
     buildAgentWorkspaceOptions(roots.workspace, parentWorkingDirectory);
   // The env block reads only the process environment and the `Secrets`

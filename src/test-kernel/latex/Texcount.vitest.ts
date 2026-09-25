@@ -11,6 +11,7 @@ import { captureLogEntries } from '@test/support/logSinkCapture';
 import { installPlatform } from '@test/support/setupPlatform';
 import { fakePath } from '@test/support/FakePlatform';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
+import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 
 const mocks = vi.hoisted(() => ({
   runToolWithCheck: vi.fn(),
@@ -165,6 +166,7 @@ describe('texcount diagnostics', () => {
       }).pipe(
         withDiagnostics,
         Effect.provide(failingReadLayer('disk flutter')),
+        Effect.provide(nodeSpawnerLayer),
       ),
   );
 

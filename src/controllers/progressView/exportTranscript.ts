@@ -23,6 +23,7 @@ import { withLogChannel } from '@logger/effectLog';
 import type { StorageFs, WorkspaceFs } from '@platform/rootedFs';
 import type { RunId } from '@shared/schemas';
 import type { Rejected } from '@shared/session/requestErrors';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 import type { TranscriptExportFailed } from './transcriptExportFailure';
 import type {
   ChatExportController,
@@ -161,7 +162,7 @@ export const exportRunTranscript = Effect.fn('exportRunTranscript')(function* (
 ): Effect.fn.Return<
   void,
   TranscriptExportFailure,
-  FileSystem.FileSystem | StorageFs | WorkspaceFs
+  FileSystem.FileSystem | StorageFs | WorkspaceFs | ChildProcessSpawner
 > {
   const format = yield* ports.pickFormat;
   if (!format) return;
@@ -205,7 +206,7 @@ const exportLatex = Effect.fn('exportLatex')(function* (
 ): Effect.fn.Return<
   void,
   ExternalOpenFailed | NotificationFailed | PlatformError.PlatformError,
-  FileSystem.FileSystem | StorageFs | WorkspaceFs
+  FileSystem.FileSystem | StorageFs | WorkspaceFs | ChildProcessSpawner
 > {
   const result = yield* controller.exportAsLatex(runId, input);
   if (result.pdfPath) {

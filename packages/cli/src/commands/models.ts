@@ -32,7 +32,7 @@ import {
   suppressCliFetchStackLogs,
 } from './_helpers/fetchSilencer';
 import { GLOBAL_ARGS } from './_helpers/globalArgs';
-import { emitCliResult } from './_helpers/output';
+import { emitCliResult, emitPagedCliResult } from './_helpers/output';
 import type { CliContext } from '../runtime/cliContext';
 
 /**
@@ -80,20 +80,15 @@ function listModels(context: CliContext, options: CliModelListOptions) {
         writeTextStderr(formatNoListableModelsMessage(options));
       }
       const records = listedModels.map(({ model }) => cliModelRecord(model));
-      emitCliResult(
-        context,
-        {
-          json: records,
-          ndjson: records.map((model) => ({ kind: 'model', model })),
-          text: listedModels
-            .map(
-              ({ model, status }) =>
-                `${model.value}\t${model.label}\t${status}`,
-            )
-            .join('\n'),
-        },
-        { paged: true },
-      );
+      yield* emitPagedCliResult(context, {
+        json: records,
+        ndjson: records.map((model) => ({ kind: 'model', model })),
+        text: listedModels
+          .map(
+            ({ model, status }) => `${model.value}\t${model.label}\t${status}`,
+          )
+          .join('\n'),
+      });
       return CliExitCode.Success;
     }),
   );
@@ -187,26 +182,22 @@ function listEnabledModels(context: CliContext) {
     if ('exitCode' in services) return services.exitCode;
     const catalog = yield* listCliEnabledModelCatalog(services.globalState);
     const enabled = yield* getEnabledModels(services.globalState);
-    emitCliResult(
-      context,
-      {
-        json: { enabled, catalog },
-        ndjson: [
-          { kind: 'models-enabled' as const, models: enabled },
-          ...catalog.map((model) => ({
-            kind: 'model-catalog' as const,
-            model,
-          })),
-        ],
-        text: catalog
-          .map(
-            (model) =>
-              `${model.enabled ? 'on' : 'off'}\t${model.id}\t${model.label}\t${model.provider}`,
-          )
-          .join('\n'),
-      },
-      { paged: true },
-    );
+    yield* emitPagedCliResult(context, {
+      json: { enabled, catalog },
+      ndjson: [
+        { kind: 'models-enabled' as const, models: enabled },
+        ...catalog.map((model) => ({
+          kind: 'model-catalog' as const,
+          model,
+        })),
+      ],
+      text: catalog
+        .map(
+          (model) =>
+            `${model.enabled ? 'on' : 'off'}\t${model.id}\t${model.label}\t${model.provider}`,
+        )
+        .join('\n'),
+    });
     return CliExitCode.Success;
   });
 }

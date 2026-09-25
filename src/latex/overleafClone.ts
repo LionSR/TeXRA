@@ -12,7 +12,9 @@
  * instead of running them out.
  */
 
-import { Effect } from 'effect';
+import { Data, Effect, Stream } from 'effect';
+import * as ChildProcess from 'effect/unstable/process/ChildProcess';
+import { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 import {
   buildAuthenticatedRemoteUrl,
@@ -23,6 +25,9 @@ import {
   type OverleafRemote,
   type OverleafTokenSpec,
 } from '@latex/overleafProject';
+import { executeCommand } from '@utils/system/execUtils';
+import { makeMachineGitEnv } from '@utils/system/gitEnv';
+import type { PlatformError } from 'effect/PlatformError';
 
 /** Files ignored when deciding whether a workspace is "empty enough" to clone into. */
 const IGNORED_CLONE_FILES = new Set(['.DS_Store', 'Thumbs.db']);
@@ -43,7 +48,6 @@ export interface OverleafCloneWorkflowPorts {
     message: string,
   ): Effect.Effect<void>;
 
-  isGitAvailable(): Effect.Effect<boolean>;
   /** `git` isn't on PATH — surface install guidance. */
   showGitMissing(): Effect.Effect<void>;
   /** Fails when the directory can't be read at all. */
@@ -57,7 +61,7 @@ export interface OverleafCloneWorkflowPorts {
   runClone(
     remoteUrl: string,
     workspacePath: string,
-  ): Effect.Effect<void, Error>;
+  ): Effect.Effect<void, Error, ChildProcessSpawner>;
   showCloneSucceeded(label: string): Effect.Effect<void>;
   /** The clone failed for what looks like an auth reason (bad/expired token). */
   showAuthFailure(remote: OverleafRemote): Effect.Effect<void>;
@@ -118,8 +122,18 @@ const checkOverleafClonePreconditions = Effect.fn(
 )(function* (
   workspacePath: string,
   ports: OverleafCloneWorkflowPorts,
-): Effect.fn.Return<ClonePreconditionFailure | null, never> {
-  if (!(yield* ports.isGitAvailable())) {
+): Effect.fn.Return<
+  ClonePreconditionFailure | null,
+  never,
+  ChildProcessSpawner
+> {
+  // Directory-independent: the clone target may not exist yet.
+  const gitVersion = yield* executeCommand(['git', '--version'], {
+    cwd: process.cwd(),
+    settings: undefined,
+    quiet: true,
+  });
+  if (!gitVersion.success) {
     yield* ports.showGitMissing();
     return { status: 'gitMissing' };
   }
@@ -143,6 +157,61 @@ const checkOverleafClonePreconditions = Effect.fn(
   return null;
 });
 
+/**
+ * `git clone` ended without a clone. `message` is git's own stderr (or the
+ * exit or start failure when it printed none), never the argv or a
+ * `PlatformError` message: the remote URL carries the token.
+ */
+class GitCloneFailed extends Data.TaggedError('GitCloneFailed')<{
+  readonly exitCode: number | undefined;
+  readonly message: string;
+}> {}
+
+/**
+ * Clone `remoteUrl` into the existing directory `into`, with the machine git
+ * environment only: `extendEnv: false`, because `makeMachineGitEnv` omits the
+ * credential-helper keys a merge with `process.env` would bring back.
+ */
+export const gitClone = Effect.fn('overleafClone.gitClone')(function* (
+  remoteUrl: string,
+  into: string,
+): Effect.fn.Return<void, GitCloneFailed, ChildProcessSpawner> {
+  const cloned = yield* Effect.gen(function* () {
+    const handle = yield* ChildProcess.make('git', ['clone', remoteUrl, '.'], {
+      cwd: into,
+      env: makeMachineGitEnv(),
+      extendEnv: false,
+      stdin: 'ignore',
+      stdout: 'ignore',
+      detached: false,
+      forceKillAfter: '5 seconds',
+    });
+    const [stderr, code] = yield* Effect.all(
+      [
+        handle.stderr.pipe(Stream.decodeText(), Stream.mkString),
+        handle.exitCode,
+      ],
+      { concurrency: 'unbounded' },
+    );
+    return { stderr: stderr.trim(), code };
+  }).pipe(
+    Effect.scoped,
+    Effect.mapError(
+      (error: PlatformError) =>
+        new GitCloneFailed({
+          exitCode: undefined,
+          message: `git clone did not complete: ${error.reason._tag}`,
+        }),
+    ),
+  );
+  if (cloned.code !== 0) {
+    return yield* new GitCloneFailed({
+      exitCode: cloned.code,
+      message: cloned.stderr || `git clone exited with code ${cloned.code}`,
+    });
+  }
+});
+
 function isCloneAuthError(e: unknown): boolean {
   return (
     e instanceof Error && /auth|401|403|fatal: could not read/i.test(e.message)
@@ -161,7 +230,7 @@ export const cloneOverleafProject = Effect.fn('overleaf.cloneProject')(
     remote: OverleafRemote,
     workspacePath: string,
     ports: OverleafCloneWorkflowPorts,
-  ): Effect.fn.Return<OverleafCloneOutcome, Error> {
+  ): Effect.fn.Return<OverleafCloneOutcome, Error, ChildProcessSpawner> {
     const preconditionFailure = yield* checkOverleafClonePreconditions(
       workspacePath,
       ports,

@@ -10,6 +10,7 @@ import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { executeCommand } from '@utils/system/execUtils';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 // Type-only imports
 import type { ModelReasoningEffort } from '@openai/codex-sdk';
@@ -103,7 +104,7 @@ const catalogSupportsXhigh = (
 
 const probeXhighSupport = Effect.fn('codexConfig.probeXhighSupport')(function* (
   binaryPath: string,
-): Effect.fn.Return<boolean> {
+): Effect.fn.Return<boolean, never, ChildProcessSpawner> {
   const cached = codexXhighSupportByBinary.get(binaryPath);
   if (cached != null) return cached;
 
@@ -158,7 +159,9 @@ const probeXhighSupport = Effect.fn('codexConfig.probeXhighSupport')(function* (
  */
 export const codexBinarySupportsXhigh = Effect.fn(
   'codexConfig.codexBinarySupportsXhigh',
-)(function* (binaryPath: string | undefined): Effect.fn.Return<boolean> {
+)(function* (
+  binaryPath: string | undefined,
+): Effect.fn.Return<boolean, never, ChildProcessSpawner> {
   if (!binaryPath) return false;
   return yield* probeXhighSupport(binaryPath).pipe(
     withPerKeyLane(codexXhighProbeLanes, binaryPath),

@@ -16,6 +16,7 @@ import { Database, DatabaseReadFailed } from '@shared/session/database';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
 import { StreamLog } from '@shared/session/traceEntries';
 import { createTranscriptFold } from '@shared/session/traceFold';
+import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { StreamLogStore } from '@transcript/StreamLogStore';
 
 const RUN = 'ab12cd' as RunId;
@@ -33,6 +34,7 @@ const substrate = databaseLayer('ephemeral').pipe(
     Layer.succeed(WorkspaceRoots)({ storage: '/transcript-read-test' }),
   ),
   Layer.provide(ProcessIdentity.layer('["test-host",4242,"self-start"]')),
+  Layer.provide(nodeSpawnerLayer),
 );
 
 const history: SessionEventDraft[] = [

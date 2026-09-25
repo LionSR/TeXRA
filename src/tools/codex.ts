@@ -85,6 +85,7 @@ import {
   buildCodexTodoToolLog,
   buildCodexTurnToolLog,
 } from './codexShared';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 import type { DetachedChildRunLaunch } from './delegation/detachedChildRun';
 
 // Third-party type imports (import/order places these after local imports)
@@ -469,7 +470,7 @@ const runCodex = Effect.fn('CodexTool.run')(function* (
 ): Effect.fn.Return<
   ToolResult,
   AgentCliToolFailure,
-  ToolCall | Runs | AgentResume
+  ToolCall | Runs | AgentResume | ChildProcessSpawner
 > {
   const toolCall = yield* ToolCall;
   const sandboxMode = yield* codexSandboxMode(input, toolCall.roots);
@@ -533,7 +534,7 @@ const launchCodexSession = Effect.fn('codex.launchCodexSession')(function* (
 ): Effect.fn.Return<
   ToolResult,
   AgentCliToolFailure,
-  ToolCall | Runs | AgentResume
+  ToolCall | Runs | AgentResume | ChildProcessSpawner
 > {
   const { roots } = yield* ToolCall;
   const thread = yield* agentCliCall(

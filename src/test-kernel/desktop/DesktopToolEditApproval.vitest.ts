@@ -32,6 +32,7 @@ import {
   createStubDesktopAgentRunHost,
   disposeAfterTest,
 } from './desktopAgentRunTestHarness.ts';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 const approvalTest = (
   name: string,
@@ -48,7 +49,11 @@ const mocks = createModuleMocks();
  * runtime, and so does this suite.
  */
 const onRuntime = <A, E>(
-  program: Effect.Effect<A, E, FileSystem.FileSystem | Path.Path>,
+  program: Effect.Effect<
+    A,
+    E,
+    FileSystem.FileSystem | Path.Path | ChildProcessSpawner
+  >,
 ): Effect.Effect<A, unknown> =>
   Effect.tryPromise({
     try: () => testRuntime().runPromise(program),

@@ -280,8 +280,8 @@ describe('CLI context config defaults', () => {
           globalArgs: { cwd: workspace },
         });
 
-        // Degraded to the internal workspace config store, never fatal; the
-        // degradation is one `contextFromArgs` prints even under `--quiet`.
+        // The unreadable file is ignored, loudly, never fatal; the degradation
+        // is one `contextFromArgs` prints even under `--quiet`.
         expect(context.approvalPolicy).toBe('ask');
         expect(context.configDegradations).toEqual([
           expect.stringContaining('.texra/config.json'),

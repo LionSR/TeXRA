@@ -12,34 +12,30 @@
 // Multiplexer-aware DCS wrapping for tmux/screen is deferred per
 // .agents/docs/archived/feature/2026-05-14-cli-tui-ink/2026-05-14-30-reference.md#16-risks (R9).
 
-import { writeRawStdout } from '@cli/runtime/logSinks';
+import { ANSI_BEL, osc } from '@cli/runtime/ansiEscapes';
+import { writeTerminalSequence } from '@cli/tui/terminalCleanup';
 import { terminalCapabilities } from '../state/terminalCapabilities';
 
 type NotificationKind =
   'agentFinished' | 'approvalNeeded' | 'credentialSwitched';
 
-const BEL = '';
-const ESC = '';
-
-function osc9(message: string): string {
-  return `${ESC}]9;${message}${BEL}`;
-}
-
-function osc99(message: string): string {
-  // OSC 99 ; <kv> ; <body> ST — Kitty's notification protocol.
-  return `${ESC}]99;;${message}${ESC}\\`;
+/**
+ * Write OSC sequences when capability discovery admitted OSC; the one gate
+ * for every OSC the TUI emits. Returns whether anything was written.
+ */
+export function writeOsc(...sequences: readonly string[]): boolean {
+  if (!terminalCapabilities.get().oscColorReports) return false;
+  writeTerminalSequence(sequences.join(''));
+  return true;
 }
 
 export function notify(kind: NotificationKind): void {
-  const caps = terminalCapabilities.get();
   const message = defaultMessageFor(kind);
-  if (caps.oscColorReports) {
-    // OSC-capable terminal — use the structured notification protocol.
-    writeRawStdout(osc99(message));
-    writeRawStdout(osc9(message));
-    return;
+  // OSC 99 is Kitty's notification protocol (ST-terminated); OSC 9 is the
+  // iTerm2-family one. A terminal without OSC gets the plain BEL.
+  if (!writeOsc(osc(`99;;${message}`, 'st'), osc(`9;${message}`))) {
+    writeTerminalSequence(ANSI_BEL);
   }
-  writeRawStdout(BEL);
 }
 
 function defaultMessageFor(kind: NotificationKind): string {

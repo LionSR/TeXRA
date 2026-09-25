@@ -26,9 +26,13 @@ import {
 } from './latexParsingUtils';
 import { TikzPictureManager } from './TikzPictureManager';
 import { compileLatex2Pdf } from './texTools';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 /** LaTeX project siblings that should always ride alongside the main file. */
 const PROJECT_SIBLING_EXTENSIONS = new Set(['.cls', '.sty', '.bst', '.cfg']);
+
+/** The services a media pass reads, writes and compiles on. */
+type MediaServices = FileSystem.FileSystem | WorkspaceFs | ChildProcessSpawner;
 const PROJECT_SIBLING_NAMES = new Set([
   'latexmkrc',
   '.latexmkrc',
@@ -161,11 +165,7 @@ export class LatexMediaManager {
    */
   private compileOnePdf(
     file: FileLocation,
-  ): Effect.Effect<
-    FileLocation | undefined,
-    Error,
-    FileSystem.FileSystem | WorkspaceFs
-  > {
+  ): Effect.Effect<FileLocation | undefined, Error, MediaServices> {
     return Effect.gen({ self: this }, function* () {
       const fs = yield* FileSystem.FileSystem;
       const buildDir = path.join(path.dirname(file.absolutePath), 'build');
@@ -241,7 +241,7 @@ export class LatexMediaManager {
   private compilePdfs(
     files: readonly FileLocation[],
     workspaceState: MediaWorkspaceState,
-  ): Effect.Effect<void, never, FileSystem.FileSystem | WorkspaceFs> {
+  ): Effect.Effect<void, never, MediaServices> {
     return Effect.gen({ self: this }, function* () {
       const texFiles = files.filter((file) =>
         hasExtension(file.absolutePath, '.tex'),
@@ -578,7 +578,7 @@ export class LatexMediaManager {
     files: readonly FileLocation[],
     workspaceState: MediaWorkspaceState,
     logSummary: boolean,
-  ): Effect.Effect<void, never, FileSystem.FileSystem | WorkspaceFs> {
+  ): Effect.Effect<void, never, MediaServices> {
     return Effect.gen({ self: this }, function* () {
       const tikzResults = yield* Effect.forEach(
         files,
@@ -628,7 +628,7 @@ export class LatexMediaManager {
       extraMediaFiles?: readonly FileLocation[];
       logTikzSummary?: boolean;
     },
-  ): Effect.Effect<void, Error, FileSystem.FileSystem | WorkspaceFs> {
+  ): Effect.Effect<void, Error, MediaServices> {
     return Effect.gen({ self: this }, function* () {
       if (files.length === 0) {
         return;
@@ -689,7 +689,7 @@ export class LatexMediaManager {
     workspaceState: MediaWorkspaceState,
     cfg: ToolConfig,
     extraMediaFiles: readonly FileLocation[] = [],
-  ): Effect.Effect<void, Error, FileSystem.FileSystem | WorkspaceFs> {
+  ): Effect.Effect<void, Error, MediaServices> {
     return this.processFiles(inputFiles, workspaceState, cfg, {
       figureMode: 'extract',
       extraMediaFiles,
@@ -708,7 +708,7 @@ export class LatexMediaManager {
     outputFiles: readonly FileLocation[],
     workspaceState: MediaWorkspaceState,
     cfg: ToolConfig,
-  ): Effect.Effect<void, Error, FileSystem.FileSystem | WorkspaceFs> {
+  ): Effect.Effect<void, Error, MediaServices> {
     return this.processFiles(outputFiles, workspaceState, cfg, {
       figureMode: 'mirror',
     });

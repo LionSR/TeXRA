@@ -7,6 +7,7 @@ import {
   fetchJsonStringField,
   runDailyUpdateCheck,
 } from '@utils/system/updateCheck';
+import type { HttpClient } from 'effect/unstable/http';
 
 /**
  * Lightweight desktop update check (issue #7682, decision: arm b).
@@ -56,7 +57,11 @@ interface CheckForDesktopUpdateOptions {
   /** Skip entirely for unpackaged/dev runs, whose version is not meaningful. */
   isPackaged: boolean;
   notify: (release: DesktopLatestRelease) => Promise<void> | void;
-  fetchRelease?: Effect.Effect<DesktopLatestRelease | undefined, Error>;
+  fetchRelease?: Effect.Effect<
+    DesktopLatestRelease | undefined,
+    Error,
+    HttpClient.HttpClient
+  >;
 }
 
 let desktopUpdateCheckNotify:

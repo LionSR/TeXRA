@@ -29,6 +29,7 @@ import { hostStores, setupPlatform } from '@test/support/setupPlatform';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
+import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { toolRegistryLayer } from '@tools/registry';
 import { toolTableLayer } from '@tools/compositions';
 import { toolTable } from '@tools/toolTable';
@@ -99,6 +100,7 @@ function runLayer(
     Layer.provideMerge(
       toolRegistryLayer.pipe(Layer.provide(nodePlatformLayer)),
     ),
+    Layer.provideMerge(nodeSpawnerLayer),
   );
 }
 
@@ -246,6 +248,7 @@ describe('run-scoped tool resolution', () => {
             }),
           ),
         ),
+        Effect.provide(nodeSpawnerLayer),
       );
 
       expect(resolved.definitions.map(({ name }) => name)).toEqual(['grep']);

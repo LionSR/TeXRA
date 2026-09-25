@@ -1,5 +1,5 @@
-import { Cause, Effect } from 'effect';
-import { Box, Text } from 'ink';
+import { Effect } from 'effect';
+import { Text } from 'ink';
 import { useState } from 'react';
 
 import {
@@ -15,9 +15,7 @@ import {
 import { setWorkspaceCliChatAgent } from '@cli/runtime/cliConfig';
 import { COLOR_ERROR, COLOR_WARNING } from '@cli/tui/ui/colors';
 import { CROSS, TICK, WARNING } from '@cli/tui/ui/glyphs';
-import { KeyHints } from '@cli/tui/ui/KeyHints';
-import { Select, type SelectItem } from '@cli/tui/ui/Select';
-import { computeSelectWindowSize } from '@cli/tui/selectWindow';
+import type { SelectItem } from '@cli/tui/ui/Select';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import {
@@ -31,8 +29,9 @@ import {
   type ByCategory,
 } from '@shared/schemas';
 
-import { FormFrame, renderAsyncListFormTransient } from './_shared/FormFrame';
-import { useAsyncListForm } from './_shared/useAsyncListForm';
+import { renderAsyncListFormTransient } from './_shared/FormFrame';
+import { ListForm } from './_shared/ListForm';
+import { runFormWrite, useAsyncListForm } from './_shared/useAsyncListForm';
 
 type AgentRosterFormMode =
   | 'overview'
@@ -101,9 +100,6 @@ function selectionSizeLabel(selection: AgentRosterCategorySelection): string {
   return selection === 'all' ? 'all' : String(selection.length);
 }
 
-// Border, title, footer spacer, and key hints are the chrome.
-const AGENT_ROSTER_SELECT_CHROME_ROWS = 5;
-
 export function AgentRosterForm(
   props: AgentRosterFormProps,
 ): React.JSX.Element | null {
@@ -131,28 +127,17 @@ export function AgentRosterForm(
       onError: props.onError,
     });
 
-  /** Every roster write is a program, and Ink owns no runtime: the form runs
-   *  the one it was handed. The continuation and the refusal are both part of
-   *  that program, so one `runPromise` settles the pair and no promise-level
-   *  catch has to stand in for the fold. */
   const write = (
     action: () => Effect.Effect<void, Error, ProcessServices>,
     nextMode = mode,
-  ): void => {
-    void props.runtime.runPromise(
-      action().pipe(
-        Effect.tap(() =>
-          Effect.sync(() => {
-            setMode(nextMode);
-            reload();
-          }),
-        ),
-        Effect.catchCause((cause) =>
-          Effect.sync(() => reportError(Cause.squash(cause))),
-        ),
-      ),
-    );
-  };
+  ): void =>
+    runFormWrite(props.runtime, action, {
+      onSuccess: () => {
+        setMode(nextMode);
+        reload();
+      },
+      onError: reportError,
+    });
 
   if (!data) {
     return renderAsyncListFormTransient({
@@ -163,45 +148,34 @@ export function AgentRosterForm(
     });
   }
 
+  const notices = [
+    error ? (
+      <Text key="error" color={COLOR_ERROR}>{`${CROSS} ${error}`}</Text>
+    ) : null,
+    data.record.missingTeamId ? (
+      <Text key="missing-team" color={COLOR_WARNING}>
+        {WARNING} Team "{data.record.missingTeamId}" is unavailable; showing all
+        agents.
+      </Text>
+    ) : null,
+  ].filter((notice) => notice !== null);
   const frame = (
     items: readonly SelectItem<string>[],
     onSelect: (value: string) => void,
     onCancel: () => void,
-  ) => {
-    const window = computeSelectWindowSize({
-      availableRows: props.availableRows,
-      itemCount: items.length,
-      chromeRows: AGENT_ROSTER_SELECT_CHROME_ROWS,
-    });
-    return (
-      <FormFrame title="/config · Agents" showCloseHint={false}>
-        {error ? <Text color={COLOR_ERROR}>{`${CROSS} ${error}`}</Text> : null}
-        {data.record.missingTeamId ? (
-          <Text color={COLOR_WARNING}>
-            {WARNING} Team "{data.record.missingTeamId}" is unavailable; showing
-            all agents.
-          </Text>
-        ) : null}
-        <Select
-          items={items}
-          maxVisibleItems={window.maxVisibleItems}
-          showOverflow={window.showOverflow}
-          onSelect={onSelect}
-          onCancel={onCancel}
-        />
-        <Box marginTop={1}>
-          <KeyHints
-            hints={[
-              { key: '↑/↓', action: 'navigate' },
-              { key: 'Enter', action: 'select' },
-              { key: 'Esc', action: 'back' },
-            ]}
-            confirmCancel={false}
-          />
-        </Box>
-      </FormFrame>
-    );
-  };
+  ) => (
+    <ListForm
+      title="/config · Agents"
+      availableRows={props.availableRows}
+      items={items}
+      detail={notices}
+      detailRows={notices.length}
+      action="select"
+      escapeAction="back"
+      onSelect={onSelect}
+      onCancel={onCancel}
+    />
+  );
 
   if (mode === 'overview') {
     return frame(

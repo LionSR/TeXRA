@@ -1,4 +1,5 @@
 import { Deferred, Effect, Exit } from 'effect';
+import { HttpClientError } from 'effect/unstable/http';
 import { LRUCache } from 'lru-cache';
 
 import { settleFailure } from '@auth/authProgram';
@@ -24,10 +25,7 @@ import {
   GLM_CODING_PLAN_USAGE_URL,
 } from './glmCodingPlanUsageAdapter';
 import { fetchKimiCodeUsage } from './kimiCodeUsageAdapter';
-import {
-  SubscriptionUsageHttpError,
-  type ParsedSubscriptionUsage,
-} from './subscriptionUsageParsing';
+import type { ParsedSubscriptionUsage } from './subscriptionUsageParsing';
 import type { HttpClient } from 'effect/unstable/http';
 
 const CHANNEL = 'SubscriptionUsage';
@@ -123,17 +121,15 @@ export class SubscriptionUsageService {
   private createAdapters(): Readonly<
     Record<SubscriptionUsageProvider, SubscriptionUsageAdapter>
   > {
-    // Each adapter fetch is already a program, and reaches the platform
-    // `fetch` through `FetchHttpClient.Fetch` inside the request that makes
-    // it, so the provider's own rejection reaches the fold below unchanged.
-    const signal = (): AbortSignal =>
-      AbortSignal.timeout(this.requestTimeoutMs);
+    // Each adapter fetch is already a program over the `HttpClient` service,
+    // so the client's own failure reaches the fold below unchanged.
+    // `requestTimeoutMs` is the one deadline over the request and body read.
     return Object.freeze({
       chatgpt: {
         fetch: () =>
           Effect.flatMap(this.loadChatGptCredential(), (credential) =>
             credential
-              ? fetchChatGptUsage(credential, signal())
+              ? fetchChatGptUsage(credential, this.requestTimeoutMs)
               : Effect.succeed(null),
           ),
       },
@@ -141,7 +137,7 @@ export class SubscriptionUsageService {
         fetch: () =>
           Effect.flatMap(this.loadApiKey('kimiCode'), (apiKey) =>
             apiKey
-              ? fetchKimiCodeUsage(apiKey, signal())
+              ? fetchKimiCodeUsage(apiKey, this.requestTimeoutMs)
               : Effect.succeed(null),
           ),
       },
@@ -152,7 +148,7 @@ export class SubscriptionUsageService {
             apiKey
               ? fetchGlmCodingPlanUsage(
                   apiKey,
-                  signal(),
+                  this.requestTimeoutMs,
                   (useChina ?? true)
                     ? GLM_CODING_PLAN_USAGE_URL
                     : GLM_CODING_PLAN_INTERNATIONAL_USAGE_URL,
@@ -356,17 +352,34 @@ export class SubscriptionUsageService {
           // holds. The reason alone cannot tell a routine refusal from an
           // unexpected fault, so the cause is named once here.
           const error = settleFailure(cause);
+          // An HttpClientError carries its request, headers included (the
+          // ChatGPT account id unredacted), so only its reason is logged.
+          const httpError = HttpClientError.isHttpClientError(error)
+            ? error.reason
+            : undefined;
+          const status =
+            httpError?._tag === 'StatusCodeError'
+              ? httpError.response.status
+              : undefined;
           yield* Effect.logWarning(
             `Subscription usage fetch failed for ${provider}: ${toErrorMessage(error)}`,
-          ).pipe(Effect.annotateLogs({ data: error }), withLogChannel(CHANNEL));
+          ).pipe(
+            Effect.annotateLogs({
+              data: httpError ? { reason: httpError._tag, status } : error,
+            }),
+            withLogChannel(CHANNEL),
+          );
           const invalidCredentials =
             (error instanceof CodexAuthError && error.needsReauth) ||
-            (error instanceof SubscriptionUsageHttpError &&
-              (error.status === 401 || error.status === 403));
+            status === 401 ||
+            status === 403;
           if (invalidCredentials) {
             return this.unavailable(provider, 'invalid_credentials');
           }
-          if (error instanceof SyntaxError) {
+          if (
+            httpError?._tag === 'DecodeError' &&
+            httpError.cause instanceof SyntaxError
+          ) {
             return this.unavailable(provider, 'malformed_response');
           }
           return this.unavailable(provider, 'request_failed');

@@ -23,6 +23,7 @@ import { TEXRA_CLI_SUPPORTED_NODE_RANGE } from '@cli/runtime/terminalRequirement
 import type { CliContext } from '@cli/runtime/cliContext';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
+import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 
 const context: CliContext = createTestCliContext({
   cwd: '/workspace',
@@ -112,14 +113,15 @@ function buildReport(
       usageLoggingOptOut: () => null,
       ...probes,
     }).pipe(
-      Effect.provide(
+      Effect.provide([
         FileSystem.layerNoop({
           stat: () =>
             Effect.succeed({ type: 'Directory' } as FileSystem.File.Info),
           access: () => Effect.void,
           ...fileSystem,
         }),
-      ),
+        nodeSpawnerLayer,
+      ]),
     ),
   );
 }

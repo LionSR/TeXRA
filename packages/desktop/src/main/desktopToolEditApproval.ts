@@ -6,8 +6,6 @@
  * read back from the proposed copy on disk.
  */
 
-import { readFile, rm } from 'node:fs/promises';
-
 // Third-party imports
 import { Effect, FileSystem } from 'effect';
 
@@ -17,14 +15,15 @@ import type {
   ToolEditPreview,
   ToolEditPreviewContext,
 } from '@controllers/approval/ToolEditApprovalController';
-import { fromHost, hostFailure } from '@controllers/session/hostCallFailure';
+import { hostFailure } from '@controllers/session/hostCallFailure';
 import { NotificationFailed, type DiffSource } from '@hosts/uiHosts';
 import type { ProcessRuntime } from '@platform/processRuntime';
-import { withProcessServices } from '@platform/processRuntime';
 import type { HostRequestFailure } from '@shared/session/requestErrors';
 import type { BuildDisplayFn } from '@tools/approval/latexPreview';
 import { writeApprovalTempFiles } from '@tools/approval/tempFileManager';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
+
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';
 
@@ -73,13 +72,10 @@ export class DesktopToolEditApprovalHost implements ToolEditApprovalHost {
   stagePreview(
     request: ToolEditApprovalRequest,
     context: ToolEditPreviewContext,
-  ): Effect.Effect<ToolEditPreview, HostRequestFailure> {
+  ): Effect.Effect<ToolEditPreview, HostRequestFailure, FileSystem.FileSystem> {
     const { ui } = this.options;
-    return withProcessServices(
-      this.options.runtime,
-      FileSystem.FileSystem.use((fs) =>
-        fs.makeTempDirectory({ prefix: 'texra-tool-edit-' }),
-      ),
+    return FileSystem.FileSystem.use((fs) =>
+      fs.makeTempDirectory({ prefix: 'texra-tool-edit-' }),
     ).pipe(
       Effect.mapError((cause) => hostFailure('approval.createTempDir', cause)),
       Effect.flatMap((tempDir) =>
@@ -96,6 +92,19 @@ export class DesktopToolEditApprovalHost implements ToolEditApprovalHost {
                 originalPath,
                 proposedPath,
               }),
+          ),
+          // A failed write leaves the directory it made; nothing else would
+          // remove it, since the preview that owns it was never built.
+          Effect.onError(() =>
+            FileSystem.FileSystem.use((fs) =>
+              fs.remove(tempDir, { recursive: true, force: true }),
+            ).pipe(
+              Effect.catch((error) =>
+                Effect.logWarning(
+                  `Could not remove the tool-edit preview directory ${tempDir}: ${toErrorMessage(error.reason.cause ?? error)}`,
+                ),
+              ),
+            ),
           ),
         ),
       ),
@@ -173,9 +182,15 @@ class DesktopToolEditPreview implements ToolEditPreview {
     return this.ui.openPath(this.staged.proposedPath);
   }
 
-  readProposedContent(): Effect.Effect<string, HostRequestFailure> {
-    return fromHost('approval.readProposed', () =>
-      readFile(this.staged.proposedPath, 'utf8'),
+  readProposedContent(): Effect.Effect<
+    string,
+    HostRequestFailure,
+    FileSystem.FileSystem
+  > {
+    return FileSystem.FileSystem.use((fs) =>
+      fs.readFileString(this.staged.proposedPath),
+    ).pipe(
+      Effect.mapError((cause) => hostFailure('approval.readProposed', cause)),
     );
   }
 
@@ -184,13 +199,17 @@ class DesktopToolEditPreview implements ToolEditPreview {
    * names this request's preview, so a request settling while the user reads
    * another diff takes only its own off the Review workbench.
    */
-  dispose(): Effect.Effect<void, HostRequestFailure> {
+  dispose(): Effect.Effect<void, HostRequestFailure, FileSystem.FileSystem> {
     return this.ui
       .closeDiff(this.context.requestId)
       .pipe(
         Effect.andThen(
-          fromHost('approval.removeTempDir', () =>
-            rm(this.staged.tempDir, { recursive: true, force: true }),
+          FileSystem.FileSystem.use((fs) =>
+            fs.remove(this.staged.tempDir, { recursive: true, force: true }),
+          ).pipe(
+            Effect.mapError((cause) =>
+              hostFailure('approval.removeTempDir', cause),
+            ),
           ),
         ),
       );

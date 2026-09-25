@@ -1,6 +1,6 @@
 import path from 'node:path';
 
-import { Cause, Effect, FileSystem } from 'effect';
+import { Cause, Effect, FileSystem, type PlatformError } from 'effect';
 import { nanoid } from 'nanoid';
 
 import {
@@ -28,20 +28,50 @@ import {
   type DesktopOverlayPostOptions,
 } from './desktopIpcTypes.js';
 
+/**
+ * The temp directories holding the external-editor patch files of every
+ * window's diff host. A directory cannot be removed as soon as `openPath`
+ * settles because the OS editor may still be reading the patch, so removal
+ * belongs to the process that outlives the window (on macOS the app outlives
+ * every window): {@link removeExternalDiffPatchDirs} runs once during quit.
+ */
+const externalPatchDirs = new Set<string>();
+
+/**
+ * Removes every recorded patch directory, reporting each failure instead of
+ * swallowing it: a directory that survives is left for OS temp cleanup, and
+ * quit must not stall on it.
+ */
+export const removeExternalDiffPatchDirs: Effect.Effect<
+  void,
+  never,
+  FileSystem.FileSystem
+> = Effect.gen(function* () {
+  const fs = yield* FileSystem.FileSystem;
+  const tempDirs = [...externalPatchDirs];
+  externalPatchDirs.clear();
+  yield* Effect.forEach(
+    tempDirs,
+    (tempDir) =>
+      fs.remove(tempDir, { recursive: true, force: true }).pipe(
+        Effect.catch((error: PlatformError.PlatformError) =>
+          Effect.sync(() => {
+            console.warn(
+              `[desktop] Failed to remove the temporary diff directory ${tempDir}; it is left for OS temp cleanup: ${toErrorMessage(error.reason.cause ?? error)}`,
+            );
+          }),
+        ),
+      ),
+    { concurrency: 'unbounded', discard: true },
+  );
+});
+
 interface DesktopDiffHostOptions extends DesktopOverlayPostOptions {
   /**
    * Falls back to the OS default editor (writes a `.diff` patch file and
    * calls `openPath`). Used when the renderer overlay is unavailable.
    */
   openPath(filePath: string): Effect.Effect<void, Error>;
-  /**
-   * Records the temp directory holding an external-editor patch file. The
-   * directory cannot be removed as soon as `openPath` settles because the OS
-   * editor may still be reading the patch, so removal belongs to the process
-   * that outlives the window (on macOS the app outlives every window), which
-   * removes the recorded directories once during quit.
-   */
-  recordPatchDir(tempDir: string): void;
   /** The process runtime the window was handed. The members below are
    *  programs the caller runs, so this only supplies the filesystem they
    *  read and write through — nothing settles here. */
@@ -151,7 +181,7 @@ export function createDesktopDiffHost(
         const tempDir = yield* fs.makeTempDirectory({
           prefix: 'texra-desktop-diff-',
         });
-        options.recordPatchDir(tempDir);
+        externalPatchDirs.add(tempDir);
         const diffPath = path.join(tempDir, `${nanoid()}.diff`);
 
         yield* Effect.gen(function* () {

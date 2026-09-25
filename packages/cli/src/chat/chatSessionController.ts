@@ -60,12 +60,7 @@ import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import {
-  RUN_OUTCOME,
-  RUN_PHASE,
-  type RunId,
-  AgentCategory,
-} from '@shared/schemas';
+import { RUN_OUTCOME, type RunId, AgentCategory } from '@shared/schemas';
 import {
   DatabaseClaimRefused,
   DatabaseWriteFailed,
@@ -100,7 +95,6 @@ import {
   focusedChildAcceptsFollowUps,
 } from './tui/state/sessionView';
 import { createTuiHostInteractions } from './tui/state/subscribeApprovals';
-import { notify } from './tui/notifications/terminalNotifier';
 import {
   appendLocalErrorTranscript,
   appendLocalAssistantTranscript,
@@ -679,7 +673,6 @@ export function createChatSessionController(
             },
           );
           session.runExitCode = runOutcomeExitCode(result.outcome);
-          notify('agentFinished');
         }),
         reportRunFailure,
       ).pipe(
@@ -862,7 +855,7 @@ export function createChatSessionController(
 
   /** Settle a resumed turn. A root acknowledges at idle, so its `completion`
    *  holds this chain, and the root-run slot it settles, until the run ends.
-   *  A subagent back at WAITING is a completed turn: no `agentFinished`. */
+   *  A subagent back at WAITING is a completed turn. */
   const settleResumedTurn = Effect.fn('settleResumedTurn')(function* (result: {
     readonly outcome?: TurnOutcome;
     readonly completion?: Effect.Effect<TurnOutcome, Error>;
@@ -871,7 +864,6 @@ export function createChatSessionController(
       (result.completion ? yield* result.completion : result.outcome) ??
       RUN_OUTCOME.COMPLETED;
     session.runExitCode = runOutcomeExitCode(outcome);
-    if (outcome !== RUN_PHASE.WAITING) notify('agentFinished');
   });
 
   /**

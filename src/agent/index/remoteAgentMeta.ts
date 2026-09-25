@@ -6,10 +6,15 @@ import { withLogChannel } from '@logger/effectLog';
 import { AgentCategory } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { AgentEntry } from './agentEntry';
+import type { HttpClient } from 'effect/unstable/http';
 
 const CHANNEL = 'agentRegistry';
 
-export function loadRemoteAgents(): Effect.Effect<AgentEntry[]> {
+export function loadRemoteAgents(): Effect.Effect<
+  AgentEntry[],
+  never,
+  HttpClient.HttpClient
+> {
   return Effect.gen(function* () {
     const { listRemoteAgents } = yield* Effect.tryPromise({
       try: () => import('@agent/remote/remoteAgentList'),

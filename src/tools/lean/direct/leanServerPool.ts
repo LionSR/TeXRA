@@ -31,6 +31,7 @@ import {
   Result,
 } from 'effect';
 
+import { ChildProcessSpawner } from 'effect/unstable/process';
 import { withLogChannel } from '@logger/effectLog';
 import type { RunId } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -40,7 +41,6 @@ import { runLakeCommand } from './lakeCommands';
 import { LeanServer, type LeanStartError } from './leanServer';
 import { createLeanServerRoster } from '../leanServerRegistry';
 import type { LeanServerInfo } from '../leanServerRegistry';
-import type { ChildProcessSpawner } from 'effect/unstable/process';
 import type { LeanLanguageServices } from '../leanLanguageServices';
 import type {
   LeanFileCommand,
@@ -147,6 +147,7 @@ const make = Effect.fn('LeanServerPool.make')(function* ({
   const fs = yield* FileSystem.FileSystem;
   // This pool's own roster, so the dashboard's list ends when the pool does.
   const roster = createLeanServerRoster();
+  const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
   const servers = yield* LayerMap.make(
     (root: string) =>
       LeanServer.layer({ workspaceRoot: root, lakeCommand, roster }),
@@ -380,24 +381,24 @@ const make = Effect.fn('LeanServerPool.make')(function* ({
         message: `No Lean project session active. Run a Lean tool against a file in your project first, then retry "${args.join(' ')}".`,
       });
     }
-    // Leased for the command's duration: a build is server activity. Lake
-    // commands serialize per workspace inside `runLakeCommand`, which
-    // succeeds with the exit code and never fails on it.
+    // Leased for the command's duration: a build is server activity.
     const results = yield* Effect.forEach(
       roots,
       (root) =>
         Effect.scoped(
           lease(root, runId).pipe(
             Effect.andThen(
-              // `runLakeCommand` reports a non-zero exit in its result and
-              // runs execa with `reject: false`, so it succeeds rather than
-              // fails, including when `lake` is missing.
               runLakeCommand({
                 workspaceRoot: root,
                 lakeCommand,
                 args,
                 serialize: true,
-              }),
+              }).pipe(
+                Effect.provideService(
+                  ChildProcessSpawner.ChildProcessSpawner,
+                  spawner,
+                ),
+              ),
             ),
           ),
         ),
@@ -525,8 +526,7 @@ const make = Effect.fn('LeanServerPool.make')(function* ({
       ).pipe(
         Effect.as(true),
         // Return false (LeanFileTool surfaces it as a failure result) and log
-        // the cause, honoring `Promise<boolean>` so a missing or broken `lake`
-        // does not throw out of the JSON-RPC path.
+        // the cause, so a missing or broken `lake` does not fail the call.
         Effect.catch((error) =>
           Effect.logWarning(
             `executeFileCommand(${command}) failed for ${filePath}: ${toErrorMessage(error)}`,

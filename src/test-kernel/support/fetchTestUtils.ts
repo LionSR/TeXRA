@@ -9,7 +9,7 @@ import { FetchHttpClient } from 'effect/unstable/http';
 
 /**
  * Builds a fetch-compatible `Response` from a JSON-serializable body, for
- * tests that stub `fetchImpl` against a queued/single mock fetch.
+ * tests that stub the fetch behind `FetchHttpClient.Fetch` or `globalThis.fetch`.
  */
 export function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {

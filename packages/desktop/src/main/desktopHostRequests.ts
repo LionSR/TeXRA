@@ -5,7 +5,6 @@
 // an outcome or a request error; an arm the desktop does not perform is
 // `Rejected` with its reason, never dropped.
 
-import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { Cause, Effect, Exit, FileSystem, SubscriptionRef } from 'effect';
@@ -69,6 +68,7 @@ import {
   type WorkspaceFs,
 } from '@platform/rootedFs';
 import type { PlatformSecrets } from '@platform/secrets';
+import latexPreamble from '@resources/templates/chatExport.tex';
 import {
   cloneRoundIndexed,
   type FileOpResult,
@@ -484,14 +484,7 @@ export function createDesktopHostRequests(
         try: async () => {
           const { ChatExportController: Controller } =
             await import('@controllers/progressView/ChatExportController');
-          const latexPreamble = await readFile(
-            path.join(options.resourcesPath, 'templates', 'chatExport.tex'),
-            'utf8',
-          );
-          return new Controller({
-            session,
-            latexPreamble,
-          });
+          return new Controller({ session, latexPreamble });
         },
         catch: (cause) =>
           new TranscriptExportFailed({

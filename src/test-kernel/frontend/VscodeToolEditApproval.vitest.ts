@@ -11,6 +11,7 @@ import type { RequestDecision, RunId } from '@shared/schemas';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { toolEditApprovalRequest } from '../agent/progressTestUtils';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 interface TestUri {
   readonly fsPath: string;
@@ -113,7 +114,11 @@ function createDecideSpy() {
 /** The host wiring point's run: `ProgressViewProvider` gives the controller's
  *  verbs the window's process runtime, and so does this suite. */
 function onRuntime<A, E>(
-  program: Effect.Effect<A, E, FileSystem.FileSystem | Path.Path>,
+  program: Effect.Effect<
+    A,
+    E,
+    FileSystem.FileSystem | Path.Path | ChildProcessSpawner
+  >,
 ): Promise<A> {
   return testRuntime().runPromise(program);
 }
