@@ -42,9 +42,6 @@ catalogs:
     '@openai/codex-sdk':
       specifier: ^0.155.1
       version: 0.155.1
-    '@openrouter/sdk':
-      specifier: ^1.3.11
-      version: 1.3.11
     '@supabase/supabase-js':
       specifier: 2.116.0
       version: 2.116.0
@@ -135,9 +132,6 @@ catalogs:
     pathe:
       specifier: ^2.0.3
       version: 2.0.3
-    pdf2pic:
-      specifier: ^3.2.0
-      version: 3.2.0
     postal-mime:
       specifier: ^3.0.0
       version: 3.0.0
@@ -234,9 +228,6 @@ importers:
       '@openai/codex-sdk':
         specifier: 'catalog:'
         version: 0.155.1
-      '@openrouter/sdk':
-        specifier: 'catalog:'
-        version: 1.3.11
       '@supabase/supabase-js':
         specifier: 'catalog:'
         version: 2.116.0(@opentelemetry/api@1.9.1)
@@ -348,9 +339,6 @@ importers:
       pathe:
         specifier: 'catalog:'
         version: 2.0.3
-      pdf2pic:
-        specifier: 'catalog:'
-        version: 3.2.0(supports-color@10.2.2)
       postal-mime:
         specifier: 'catalog:'
         version: 3.0.0
@@ -544,9 +532,6 @@ importers:
       '@openai/codex-sdk':
         specifier: 'catalog:'
         version: 0.155.1
-      '@openrouter/sdk':
-        specifier: 'catalog:'
-        version: 1.3.11
       '@supabase/supabase-js':
         specifier: 'catalog:'
         version: 2.116.0(@opentelemetry/api@1.9.1)
@@ -628,9 +613,6 @@ importers:
       pathe:
         specifier: 'catalog:'
         version: 2.0.3
-      pdf2pic:
-        specifier: 'catalog:'
-        version: 3.2.0(supports-color@10.2.2)
       postal-mime:
         specifier: 'catalog:'
         version: 3.0.0
@@ -1885,9 +1867,6 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@openrouter/sdk@1.3.11':
-    resolution: {integrity: sha512-6IM4kp/vSuA7a4Z62BzSSpFMinID4cfMjB+3VxRsaym5tURmNYKdZM/PWGimkZBigC1KdEjNvlaP1HOZ0EGYNA==}
-
   '@opentelemetry/api@1.9.1':
     resolution: {integrity: sha512-gLyJlPHPZYdAk1JENA9LeHejZe1Ti77/pTeFm/nMXmQH/HFZlcS/O2XJB+L8fkbrNSqhdtlvjBVjxwUYanNH5Q==}
     engines: {node: '>=8.0.0'}
@@ -2969,12 +2948,6 @@ packages:
   argparse@3.0.1:
     resolution: {integrity: sha512-nM4mHF/KM1v59ZNKX7zfusQz5wUAxR511YG8Vo6TyiV4aqhu++rbJW4v04xsWhpSsHFj66flT8P7znVpyO20xQ==}
 
-  array-parallel@0.1.3:
-    resolution: {integrity: sha512-TDPTwSWW5E4oiFiKmz6RGJ/a80Y91GuLgUYuLd49+XBS75tYo8PNgaT2K/OxuQYqkoI852MDGBorg9OcUSTQ8w==}
-
-  array-series@0.1.5:
-    resolution: {integrity: sha512-L0XlBwfx9QetHOsbLDrE/vh2t018w9462HM3iaFfxRiK83aJjAt/Ja3NMkOW7FICwWTlQBa3ZbL5FKhuQWkDrg==}
-
   arxiv-client@0.0.9:
     resolution: {integrity: sha512-zz8mAh9WRsSL7F1XnbBxQy8tdI9hVN7f3maA7ZetgS1OFkoAu4pzFzEi5vCGyVeZBqa5i1RP73tfe0RaajMNBg==}
 
@@ -3355,14 +3328,6 @@ packages:
 
   date-fns@4.4.0:
     resolution: {integrity: sha512-+1UMbeh68lH1SegH83CGWwpb6OHHbpSgr3+s5Eww5M4CAgswBpoWS0AjTOfEJ33HiYKz1hdj/KTFprzXHmq/6w==}
-
-  debug@3.2.7:
-    resolution: {integrity: sha512-CFjzYYAi4ThfiQvizrFQevTTXHtnCqWfe7x1AhgEscTz6ZbLbfoLRLPugTQyBth6f8ZERVUSyWHFD/7Wu4t1XQ==}
-    peerDependencies:
-      supports-color: '*'
-    peerDependenciesMeta:
-      supports-color:
-        optional: true
 
   debug@4.4.3:
     resolution: {integrity: sha512-RGwwWnwQvkVfavKVt22FGLw+xYSdzARwm0ru6DhTVA3umU5hZc28V3kO4stgYryrTlLpuvgI9GiijltAjNbcqA==}
@@ -3901,11 +3866,6 @@ packages:
   globalthis@1.0.4:
     resolution: {integrity: sha512-DpLKbNU4WylpxJykQujfCcwYWiV/Jhm50Goo0wrVILAv5jOr9d+H+UR3PhSCD2rCCEIg0uc+G+muBTwD54JhDQ==}
     engines: {node: '>= 0.4'}
-
-  gm@1.25.1:
-    resolution: {integrity: sha512-jgcs2vKir9hFogGhXIfs0ODhJTfIrbECCehg38tqFgHm8zqXx7kAJyCYAFK4jTjx71AxrkFtkJBawbAxYUPX9A==}
-    engines: {node: '>=14'}
-    deprecated: The gm module has been sunset. Please migrate to an alternative. https://github.com/aheckmann/gm?tab=readme-ov-file#2025-02-24-this-project-is-not-maintained
 
   google-auth-library@10.9.1:
     resolution: {integrity: sha512-i1ydyHrqcIxXkWh/uBmVkzCvIuq5yiK2ATndIe5XxKholrG/MTYP9xGYka4sQhrbIAgGjL2B6NOE7rFaiF3fXw==}
@@ -4802,10 +4762,6 @@ packages:
 
   pathe@2.0.3:
     resolution: {integrity: sha512-WUjGcAqP1gQacoQe+OBJsFA7Ld4DyXuUIjZ5cc75cLHvJ7dtNsTugphxIADwspS+AraAUePCKrSVtPLFj/F88w==}
-
-  pdf2pic@3.2.0:
-    resolution: {integrity: sha512-p0bp+Mp4iJy2hqSCLvJ521rDaZkzBvDFT9O9Y0BUID3I04/eDaebAFM5t8hoWeo2BCf42cDijLCGJWTOtkJVpA==}
-    engines: {node: '>=14'}
 
   pe-library@0.4.1:
     resolution: {integrity: sha512-eRWB5LBz7PpDu4PUlwT0PhnQfTQJlDDdPa35urV4Osrm0t0AqQFGn+UIkU3klZvwJ8KPO3VbBFsXquA6p6kqZw==}
@@ -6855,10 +6811,6 @@ snapshots:
   '@openai/codex@0.155.1-win32-x64':
     optional: true
 
-  '@openrouter/sdk@1.3.11':
-    dependencies:
-      zod: 4.4.3
-
   '@opentelemetry/api@1.9.1':
     optional: true
 
@@ -7733,10 +7685,6 @@ snapshots:
 
   argparse@3.0.1: {}
 
-  array-parallel@0.1.3: {}
-
-  array-series@0.1.5: {}
-
   arxiv-client@0.0.9(debug@4.4.3(supports-color@10.2.2))(supports-color@10.2.2):
     dependencies:
       axios: 1.17.0(debug@4.4.3(supports-color@10.2.2))(supports-color@10.2.2)
@@ -8131,12 +8079,6 @@ snapshots:
       - '@noble/hashes'
 
   date-fns@4.4.0: {}
-
-  debug@3.2.7(supports-color@10.2.2):
-    dependencies:
-      ms: 2.1.3
-    optionalDependencies:
-      supports-color: 10.2.2
 
   debug@4.4.3(supports-color@10.2.2):
     dependencies:
@@ -8817,15 +8759,6 @@ snapshots:
       define-properties: 1.2.1
       gopd: 1.2.0
     optional: true
-
-  gm@1.25.1(supports-color@10.2.2):
-    dependencies:
-      array-parallel: 0.1.3
-      array-series: 0.1.5
-      cross-spawn: 7.0.6
-      debug: 3.2.7(supports-color@10.2.2)
-    transitivePeerDependencies:
-      - supports-color
 
   google-auth-library@10.9.1(supports-color@10.2.2):
     dependencies:
@@ -9672,12 +9605,6 @@ snapshots:
   path-to-regexp@8.4.2: {}
 
   pathe@2.0.3: {}
-
-  pdf2pic@3.2.0(supports-color@10.2.2):
-    dependencies:
-      gm: 1.25.1(supports-color@10.2.2)
-    transitivePeerDependencies:
-      - supports-color
 
   pe-library@0.4.1: {}
 
