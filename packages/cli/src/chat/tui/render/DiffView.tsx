@@ -116,7 +116,8 @@ function representativeDiffLineIndex(
 }
 
 /** Wrapped diff lines bounded to `maxDisplayLines`; 0 = no truncation. An
- *  omitted `scrollOffset` anchors compact windows on the first change. */
+ *  omitted `scrollOffset` anchors compact windows on the first change.
+ *  `width` is already clamped by the `DiffView` entry point. */
 export function scrollBoundedDiffDisplayLines(
   hunks: readonly Hunk[],
   maxDisplayLines: number,
@@ -132,7 +133,7 @@ export function scrollBoundedDiffDisplayLines(
       (maxDisplayLines <= COMPACT_SCROLLABLE_CONTENT_ROWS
         ? representativeDiffLineIndex(lines)
         : 0),
-    width: clampModalWidth(width),
+    width,
   });
 }
 
@@ -207,9 +208,6 @@ function DiffLine({
   readonly line: DiffDisplayLine;
   readonly width: number;
 }): React.JSX.Element {
-  // Every line reaching here already came through `wrappedDiffDisplayLines`
-  // (or the width-clipped overflow marker), and `clampModalWidth` is
-  // idempotent, so a second wrap could not split anything.
   const style = DIFF_LINE_STYLE[line.kind];
   if (style) {
     return (
