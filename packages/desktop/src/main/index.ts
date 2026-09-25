@@ -606,7 +606,7 @@ function createWindow(options: {
   const dispatchInstructionAction = (action: InstructionAction): void => {
     switch (action) {
       case INSTRUCTION_ACTION.SET_API_KEY:
-        postDesktopSettingsView(postToRendererIfAlive, 'models');
+        postDesktopSettingsView(postToRendererIfAlive, 'models/keys');
         return;
       case INSTRUCTION_ACTION.OPEN_CONFIGURATION_GUIDE:
         openExternalInBackground('https://texra.ai/guide/configuration.html');
