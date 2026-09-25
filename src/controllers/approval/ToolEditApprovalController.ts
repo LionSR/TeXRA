@@ -103,14 +103,6 @@ export interface ToolEditApprovalHost {
     context: ToolEditPreviewContext,
   ): PreviewCall<ToolEditPreview>;
   /**
-   * Reopen the host surface containing the pending request's controls, for a
-   * host that has one to reopen: the VS Code progress view is a panel the
-   * user can have closed, while the desktop prompt shows in whichever view is
-   * open. Optional rather than a no-op on the hosts that reveal nothing,
-   * which is what the rest of this repo's host ports do (`HostInteractions`).
-   */
-  revealApprovalSurface?(): Effect.Effect<void, HostRequestFailure>;
-  /**
    * The host's build display: the program the LaTeX preview programs yield,
    * forked below so a release still holds a handle on it once a preview
    * program's settle race has interrupted the fiber that started it.
@@ -410,25 +402,7 @@ export class ToolEditApprovalController {
           };
           this.requests.set(requestId, staged);
 
-          return staged.preview.present().pipe(
-            Effect.andThen(
-              Effect.suspend(() =>
-                staged.isSettled()
-                  ? Effect.void
-                  : this.detach(
-                      // Admitted whether or not this host reveals
-                      // anything, so a release landing in that window joins
-                      // it either way.
-                      this.admit(
-                        staged,
-                        () =>
-                          this.options.host.revealApprovalSurface?.() ??
-                          Effect.void,
-                      ),
-                    ),
-              ),
-            ),
-          );
+          return staged.preview.present();
         }),
       );
   }

@@ -102,6 +102,12 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
   running elsewhere.** When two windows or processes resume or relaunch the
   same run at once, the one that loses now says the run is held elsewhere,
   instead of failing with a generic database write error.
+- **A hidden TeXRA view now comes forward for every request, not only file
+  edits (VS Code).** A command approval, workflow proposal, plan, question,
+  outside-model inquiry or retry could wait unseen while you were in the
+  editor, and the run stalled. Now the TeXRA icon shows how many requests are
+  waiting, and a new one brings the view forward. It no longer moves keyboard
+  focus there, so you can keep typing in your document.
 - **File tools no longer follow a symlink out of the workspace.** A symlink
   inside the workspace (for example `up -> ..`) let `write_file`, `edit_file`
   and `read_file` reach files outside it, and the approval prompt showed the

@@ -48,7 +48,7 @@ export abstract class BaseRunContent extends LitElement {
         <request-panels
           .permissions=${permissions}
           .surface=${this.surface}
-          .readOnly=${this.run?.readOnly === true}
+          .run=${this.run}
         ></request-panels>
       </div>
     `;
