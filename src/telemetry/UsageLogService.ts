@@ -21,12 +21,10 @@ import { SUPABASE_CUSTOM_DOMAIN } from '@auth/config';
 import { withLogChannel } from '@logger/effectLog';
 import { createLog } from '@logger/logUtils';
 import type { ConfigProvider } from '@platform/interfaces';
-import type { UsageRoute } from '@shared/schemas';
 import {
   TELEMETRY_ENABLED_DEFAULT,
   TELEMETRY_ENABLED_KEY,
 } from '@shared/schemas';
-import { CODING_PLAN_SUBSCRIPTIONS } from '@shared/codingPlanSubscriptions';
 import { UsageLog, UsageLogResponseSchema } from '@shared/usageLog';
 import type {
   UsageLogEntry,
@@ -79,34 +77,12 @@ function isTelemetryDisabledByEnv(): boolean {
 }
 
 /**
- * Routes whose records meter what the user consumed against their plan.
- *
- * Subscription routes are accounted against a database aggregate populated by
- * `log-usage`. A record on one of these routes is therefore not telemetry —
- * dropping it lets hosted calls continue against a stale total, past the cap.
- * They are sent regardless of {@link TELEMETRY_ENABLED_KEY}; the opt-out
- * governs the `api-key` (bring-your-own-key) rounds, which cost TeXRA nothing
- * and exist only as analytics.
- */
-const PLAN_ACCOUNTING_ROUTES = new Set<UsageRoute>([
-  'chatgpt-subscription',
-  'xai-subscription',
-  ...CODING_PLAN_SUBSCRIPTIONS.map((plan) => plan.usageRoute),
-]);
-
-function isPlanAccounting(entry: Pick<UsageLogEntry, 'usageRoute'>): boolean {
-  return (
-    entry.usageRoute != null && PLAN_ACCOUNTING_ROUTES.has(entry.usageRoute)
-  );
-}
-
-/**
  * The user's usage-logging opt-out, read live rather than snapshotted when
  * the service starts.
  *
  * Reading it on each queue and send is what makes turning the setting off take
  * effect immediately instead of at the next launch — and lets the flush path
- * drop optional rounds recorded before the opt-out rather than shipping one last
+ * drop rounds recorded before the opt-out rather than shipping one last
  * batch. `config.enabled` remains a separate, independent gate so a host (or a
  * test) can hold the service off regardless of user settings.
  *
@@ -132,7 +108,7 @@ function isTelemetryEnabledBySetting(config: ConfigProvider): boolean {
   );
   if (malformed !== undefined) {
     log.warn(
-      `Ignoring non-boolean ${TELEMETRY_ENABLED_KEY} (got ${typeof malformed}); treating optional usage logging as disabled`,
+      `Ignoring non-boolean ${TELEMETRY_ENABLED_KEY} (got ${typeof malformed}); treating usage logging as disabled`,
     );
     return false;
   }
@@ -143,7 +119,7 @@ function isTelemetryEnabledBySetting(config: ConfigProvider): boolean {
   return configuredValues.length > 0 ? true : TELEMETRY_ENABLED_DEFAULT;
 }
 
-/** Why optional usage logging is off, or `null` when it is on. */
+/** Why usage logging is off, or `null` when it is on. */
 export type UsageLoggingOptOut =
   | { readonly source: 'environment'; readonly envVar: string }
   | { readonly source: 'setting' }
@@ -243,7 +219,7 @@ class UsageLogServiceImpl {
 
     if (isTelemetryDisabledByEnv()) {
       yield* Effect.logInfo(
-        `Optional usage logging is disabled by the environment (${TELEMETRY_OPT_OUT_ENV_VARS.join(' / ')}); only plan-accounting rounds are reported`,
+        `Usage logging is disabled by the environment (${TELEMETRY_OPT_OUT_ENV_VARS.join(' / ')})`,
       ).pipe(withLogChannel(CHANNEL));
     }
 
@@ -260,9 +236,7 @@ class UsageLogServiceImpl {
     config: ConfigProvider,
   ): void {
     if (!this.config.enabled) return;
-    if (!isPlanAccounting(entry) && !isTelemetryEnabledBySetting(config)) {
-      return;
-    }
+    if (!isTelemetryEnabledBySetting(config)) return;
 
     if (this.queue.length >= MAX_QUEUE_SIZE) {
       log.warn('Queue full, dropping oldest entry');
@@ -370,18 +344,17 @@ class UsageLogServiceImpl {
       // Re-read each entry's consent here rather than on entry: the token
       // lookup above is asynchronous, so a user who opts out while it is in
       // flight would otherwise have this continuation ship the batch anyway.
-      // Applied after the batch is taken so it also drops optional rounds
+      // Applied after the batch is taken so it also drops rounds
       // queued before the opt-out instead of leaving the timer to send them,
       // and read from the workspace each entry was recorded in, since this
       // flush runs outside any run.
-      const kept = batch.entries.filter(
-        ({ entry, config }) =>
-          isPlanAccounting(entry) || isTelemetryEnabledBySetting(config),
+      const kept = batch.entries.filter(({ config }) =>
+        isTelemetryEnabledBySetting(config),
       );
       const dropped = batch.entries.length - kept.length;
       if (dropped > 0) {
         yield* Effect.logDebug(
-          `Usage logging is disabled; dropped ${dropped} optional ${dropped === 1 ? 'entry' : 'entries'} without sending`,
+          `Usage logging is disabled; dropped ${dropped} ${dropped === 1 ? 'entry' : 'entries'} without sending`,
         ).pipe(withLogChannel(CHANNEL));
       }
       if (kept.length === 0) {

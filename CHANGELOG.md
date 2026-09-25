@@ -127,6 +127,12 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
 
 ### Bug Fixes
 
+- **Turning telemetry off now stops all usage reporting** — rounds run on a
+  ChatGPT, Grok, Kimi, or GLM subscription were still sent after you opted
+  out, on the grounds that they metered a plan cap. Nothing has enforced
+  that cap since the relay was removed, so the setting, `TEXRA_NO_TELEMETRY`,
+  and `DO_NOT_TRACK` now cover every round, and `texra doctor` no longer says
+  subscription rounds are still recorded.
 - **Usage recorded just before quitting is no longer lost** — on the desktop
   app and the CLI, a quit while live runs took more than a few seconds to
   stop could cut off sending the last usage records. Every host now sends
