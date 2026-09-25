@@ -111,19 +111,6 @@
       ]
     },
     {
-      "id": "RT-run-resume-command",
-      "candidate": "runResumeCommand as a round trip",
-      "why": "Not a round trip: resume.ts's citty run(ctx) awaits the promise at an R1 entry.",
-      "ruling": ".agents/docs/proposed/simplification/2026-09-17-effect-round-trips-and-dual-systems.md#refuted-or-declined-at-implementation",
-      "symbols": [
-        {
-          "file": "packages/cli/src/commands/resumeRun.ts",
-          "symbol": "runResumeCommand",
-          "signature": "export async function runResumeCommand( context: CliContext, id: RunId, ): Promise<number> {…}"
-        }
-      ]
-    },
-    {
       "id": "RT-corrupt-record-tag",
       "candidate": "A corrupt-record tag on run-record reads",
       "why": "decodeEvent already folds a Zod fault into DatabaseReadFailed, so there is no second condition to name. A per-row tag, if ever wanted, belongs in decodeEvent and changes every read of the store.",
