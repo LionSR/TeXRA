@@ -439,7 +439,10 @@ export function formatWorkflowRowGroup(row: {
   readonly cached?: number;
 }): string {
   const { count, group, cached = 0 } = row;
-  const noun = group === 'declared' ? 'not started' : group;
+  const noun =
+    group === 'declared'
+      ? WORKFLOW_TASK_STATUS_LABEL.declared.toLowerCase()
+      : group;
   return cached > 0
     ? `${count} ${noun} · ${cached} ${pluralize(cached, 'saved result')}`
     : `${count} ${noun}`;
