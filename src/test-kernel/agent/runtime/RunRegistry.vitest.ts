@@ -936,6 +936,27 @@ describe('runRegistry', () => {
     }
   });
 
+  it('registers a child without publishing its parent edge', () => {
+    const { events, registry } = createRegistry();
+    const recorded = recordSessionEvents(events);
+    const parentRunId = generateRunId();
+    const runId = generateRunId();
+
+    try {
+      const handle = createHandle(runId, parentRunId);
+
+      registry.track(handle);
+      expect(registry.hasActiveChildren(parentRunId)).toBe(true);
+      registry.untrack(runId);
+
+      // The parent edge is a `run.start` fact, so tracking publishes none.
+      expect(recorded.events).toEqual([]);
+      expect(registry.hasActiveChildren(parentRunId)).toBe(false);
+    } finally {
+      registry.dispose();
+    }
+  });
+
   it('owns manual compaction admission for active tool-use flows', () => {
     const { registry } = createRegistry();
     const runId = generateRunId();
