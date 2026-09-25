@@ -1,7 +1,7 @@
 // Host-neutral normalization for tool-use log payloads.
 //
 // Both the VS Code progress view and the CLI TUI read the same
-// `ToolUseLog` payload off `StreamLogStore.data` and need a flat,
+// `ToolUseLog` payload off a transcript entry's `data` and need a flat,
 // renderer-friendly view: tool name, derived output text, error/summary
 // strings, and the runtime tool status. This module is the
 // single entry point for that derivation so hosts don't drift.

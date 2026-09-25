@@ -334,35 +334,39 @@ export function createDesktopSettingsIpc(
   }
 
   /**
-   * The window's own fork point for work nobody awaits: a settled cause is
-   * reported through `onError`, exactly as the rejection of the promise this
-   * replaces was.
+   * Work nobody awaits, settled: a failed cause is reported through
+   * `onError`, exactly as the rejection of the promise this replaces was.
    */
+  function settled<E>(
+    work: Effect.Effect<void, E, StorageFs | ProcessServices>,
+  ): Effect.Effect<void, never, ProcessServices> {
+    return withSessionFs(roots, work).pipe(
+      Effect.catchCause(
+        (cause): Effect.Effect<void, E | NotificationFailed> => {
+          if (Cause.hasInterruptsOnly(cause)) return Effect.void;
+          const error = Cause.squash(cause);
+          return error instanceof UnsupportedCommandError
+            ? options.ui.showInfoMessage(error.reason)
+            : Effect.failCause(cause);
+        },
+      ),
+      Effect.catchCause((cause) => {
+        if (Cause.hasInterruptsOnly(cause)) return Effect.void;
+        const error = Cause.squash(cause);
+        return Effect.sync(() =>
+          options.ui.onError(
+            error instanceof NotificationFailed ? error.cause : error,
+          ),
+        );
+      }),
+    );
+  }
+
+  /** The window's own fork point for a subscription's settled work. */
   function runAsync<E>(
     work: Effect.Effect<void, E, StorageFs | ProcessServices>,
   ): void {
-    runtime.runFork(
-      withSessionFs(roots, work).pipe(
-        Effect.catchCause(
-          (cause): Effect.Effect<void, E | NotificationFailed> => {
-            if (Cause.hasInterruptsOnly(cause)) return Effect.void;
-            const error = Cause.squash(cause);
-            return error instanceof UnsupportedCommandError
-              ? options.ui.showInfoMessage(error.reason)
-              : Effect.failCause(cause);
-          },
-        ),
-        Effect.catchCause((cause) => {
-          if (Cause.hasInterruptsOnly(cause)) return Effect.void;
-          const error = Cause.squash(cause);
-          return Effect.sync(() =>
-            options.ui.onError(
-              error instanceof NotificationFailed ? error.cause : error,
-            ),
-          );
-        }),
-      ),
-    );
+    runtime.runFork(settled(work));
   }
 
   // App signals deliver on their own fiber, not on the emitter's stack; each
@@ -558,11 +562,10 @@ export function createDesktopSettingsIpc(
 
     handleMessage(message: DesktopCommandMessage) {
       const parsed = SettingsViewInboundMessageSchema.safeParse(message);
-      if (!parsed.success) return false;
-      runAsync(
+      if (!parsed.success) return undefined;
+      return settled(
         settingsViewProgram(parsed.data, settingsHandlers).pipe(Effect.asVoid),
       );
-      return true;
     },
   };
   return Effect.as(

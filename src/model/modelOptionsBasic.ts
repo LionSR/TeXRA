@@ -92,11 +92,12 @@ export function buildBaseModelOption(
   model: string,
   config: ModelConfig,
   hintConfig: ModelConfig = config,
+  source: string = resolveModelSource(config),
 ): ModelOptionData {
   return {
     value: model,
     label: config.label,
-    provider: resolveModelSource(config),
+    provider: source,
     context: formatContext(config.contextWindow),
     cost: formatCost(config.inputPrice, config.outputPrice),
     hint: buildModelHint(hintConfig),

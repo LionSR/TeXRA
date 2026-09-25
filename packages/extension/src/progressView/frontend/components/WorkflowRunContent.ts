@@ -1,13 +1,16 @@
 /**
  * A workflow run's conversation: the header, its pending requests, the
  * inquiries it is waiting on, then the run board for a workflow-script run
- * or the transcript log for any other, and the files and usage it closes
- * with. Reads the view and the surface; every send is a child's event.
+ * or the transcript log for any other, the files and usage it closes
+ * with, and once it has ended, what the user can do next. Reads the view
+ * and the surface; every send is a child's event.
  */
 
 // Third-party imports
 import { html, nothing, type TemplateResult } from 'lit';
 import { customElement } from 'lit/decorators.js';
+
+import { isLiveRun } from '@shared/session/sessionView';
 
 // Local imports - progress view
 import { BaseRunContent } from './BaseRunContent';
@@ -62,6 +65,15 @@ export class WorkflowRunContent extends BaseRunContent {
           ${this.renderUsagePanel(run)}
         </div>
       </div>
+      ${
+        isLiveRun(run)
+          ? nothing
+          : html`<div class="conversation-composer-dock">
+              <div class="conversation-column">
+                ${this.renderEndedLine(run)}
+              </div>
+            </div>`
+      }
     `;
   }
 }

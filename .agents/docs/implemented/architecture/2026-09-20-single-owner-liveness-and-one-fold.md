@@ -1,15 +1,15 @@
 ---
 created: 2026-09-20
-status: proposed
+status: implemented — step 1 #12918, step 2 #12942 and #12969, step 3 #12970, step 4 #12970 and #13166, step 5 #12944. Step 6 was gated on the global database note and is owned there. Moved from proposed/ 2026-09-25.
 ---
 
 # Single-owner liveness and one fold
 
 Baseline: `main` at `3378a967`. Parent survey:
-[post-refactor architecture survey](./2026-09-20-post-refactor-architecture-survey.md).
+[post-refactor architecture survey](../../proposed/architecture/2026-09-20-post-refactor-architecture-survey.md).
 Extends, and does not replace, the 2026-09-10
-[execution ownership](./2026-09-10-execution-ownership-lane-and-lease.md) and
-[runtime system design](./2026-09-10-effect-native-runtime-system-design.md)
+[execution ownership](../../proposed/architecture/2026-09-10-execution-ownership-lane-and-lease.md) and
+[runtime system design](../../proposed/architecture/2026-09-10-effect-native-runtime-system-design.md)
 notes, whose D2 to D4 and section 2.1 `Runs` tag this proposal schedules.
 
 ## 1. Problem

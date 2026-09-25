@@ -92,6 +92,20 @@ export const runTabStyles = css`
     text-overflow: ellipsis;
   }
 
+  /* Finished while the user was elsewhere: a quiet cue that clears once the
+     run is on screen, the way an unread mark does. */
+  .tab-unseen {
+    flex-shrink: 0;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--wa-color-brand-fill-loud);
+  }
+
+  .tab-container.is-unseen .tab-title {
+    font-weight: var(--font-weight-semibold);
+  }
+
   /* Canonical states use only the glyph; defensive unknown states retain text.
      Selection overrides both below so row hierarchy remains stronger than
      lifecycle. */

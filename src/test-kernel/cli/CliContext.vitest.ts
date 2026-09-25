@@ -12,7 +12,6 @@ import {
   readCliBugsUrl,
   readCliEnv,
   readCliVersion,
-  resolveCliCwd,
   resolveCliCommandName,
   resolveStreamColor,
   type BuildCliContextInit,
@@ -23,6 +22,7 @@ import * as logSinks from '@cli/runtime/logSinks';
 import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
 import { resolveGlobalStoragePath } from '@platform/defaults/workspaceStorage';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
+import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { withEnv } from '@test/support/testEnv';
 
 const ambient = {
@@ -63,7 +63,7 @@ async function cliContext({
     buildCliContext({
       storageRoot: await makeTempDir('texra-cli-storage-', tempDirs),
       ...init,
-    }).pipe(withEnv(env ?? {})),
+    }).pipe(withEnv(env ?? {}), Effect.provide(nodePlatformLayer)),
   );
 }
 
@@ -280,11 +280,13 @@ describe('CLI context config defaults', () => {
           globalArgs: { cwd: workspace },
         });
 
-        // Degraded to the internal workspace config store, never fatal.
+        // The unreadable file is ignored, loudly, never fatal; the degradation
+        // is one `contextFromArgs` prints even under `--quiet`.
         expect(context.approvalPolicy).toBe('ask');
-        expect(warnSpy).toHaveBeenCalledWith(
+        expect(context.configDegradations).toEqual([
           expect.stringContaining('.texra/config.json'),
-        );
+        ]);
+        expect(context.configWarnings).toEqual(context.configDegradations);
       } finally {
         warnSpy.mockRestore();
       }
@@ -306,13 +308,26 @@ describe('CLI context config defaults', () => {
 describe('CLI --cwd validation', () => {
   // `it.live`, not `it.effect`: these probe the real filesystem, so a
   // TestContext clock starting at 0 would be a trap rather than a help.
+  const cwdOf = (cwd: string | undefined) =>
+    Effect.promise(
+      async () =>
+        (await cliContext({ ambient, env: {}, globalArgs: { cwd } })).cwd,
+    );
+  const cwdFailure = (cwd: string) =>
+    Effect.promise(() =>
+      cliContext({ ambient, env: {}, globalArgs: { cwd } }).then(
+        () => undefined,
+        (error: unknown) => error,
+      ),
+    );
+
   it.live('accepts an existing directory and returns its realpath', () =>
     Effect.gen(function* () {
       const workspace = yield* Effect.promise(() =>
         makeTempDir('texra-cli-cwd-', tempDirs),
       );
 
-      expect(yield* resolveCliCwd(workspace)).toBe(
+      expect(yield* cwdOf(workspace)).toBe(
         canonicalizeWorkspacePath(workspace),
       );
     }),
@@ -326,7 +341,7 @@ describe('CLI --cwd validation', () => {
       const workspace = join(root, 'workspace ');
       yield* Effect.promise(() => mkdir(workspace));
 
-      expect(yield* resolveCliCwd(workspace)).toBe(
+      expect(yield* cwdOf(workspace)).toBe(
         canonicalizeWorkspacePath(workspace),
       );
     }),
@@ -336,9 +351,9 @@ describe('CLI --cwd validation', () => {
     Effect.gen(function* () {
       const missing = join(tmpdir(), 'texra-cli-cwd-missing-' + Date.now());
 
-      const failure = yield* Effect.flip(resolveCliCwd(missing));
+      const failure = yield* cwdFailure(missing);
       expect(failure).toBeInstanceOf(CliUsageError);
-      expect(failure.message).toMatch(/does not exist/);
+      expect((failure as CliUsageError).message).toMatch(/does not exist/);
     }),
   );
 
@@ -350,9 +365,9 @@ describe('CLI --cwd validation', () => {
       const filePath = join(workspace, 'config.json');
       yield* Effect.promise(() => writeFile(filePath, '{}'));
 
-      const failure = yield* Effect.flip(resolveCliCwd(filePath));
+      const failure = yield* cwdFailure(filePath);
       expect(failure).toBeInstanceOf(CliUsageError);
-      expect(failure.message).toMatch(/not a directory/);
+      expect((failure as CliUsageError).message).toMatch(/not a directory/);
     }),
   );
 
@@ -361,18 +376,10 @@ describe('CLI --cwd validation', () => {
       // The shell can't put us in a missing directory, so the no-flag path
       // intentionally skips validation. Trim any platform realpath canonical-
       // ization for the comparison.
-      const result = yield* resolveCliCwd(undefined);
+      const result = yield* cwdOf(undefined);
       expect(result).toBe(yield* Effect.promise(() => realpath(process.cwd())));
     }),
   );
-
-  it('lets a buildCliContext caller surface the --cwd usage error', async () => {
-    const missing = join(tmpdir(), 'texra-cli-cwd-missing-' + Date.now());
-
-    await expect(
-      cliContext({ ambient, env: {}, globalArgs: { cwd: missing } }),
-    ).rejects.toBeInstanceOf(CliUsageError);
-  });
 });
 
 describe('CLI per-stream color resolution', () => {

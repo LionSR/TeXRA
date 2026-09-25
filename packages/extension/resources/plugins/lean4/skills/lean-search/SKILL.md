@@ -1,6 +1,6 @@
 ---
 name: lean-search
-description: Find existing Lean 4 and Mathlib lemmas, APIs, imports, and formalization patterns. Use when Codex needs to answer whether a result already exists, locate the right theorem or module, understand how Mathlib formalizes a concept, or avoid duplicate formalization work.
+description: Find existing Lean 4 and Mathlib lemmas, APIs, imports, and formalization patterns. Use when you need to answer whether a result already exists, locate the right theorem or module, understand how Mathlib formalizes a concept, or avoid duplicate formalization work.
 ---
 
 # Lean Search

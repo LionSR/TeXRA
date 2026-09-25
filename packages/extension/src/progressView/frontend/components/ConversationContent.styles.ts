@@ -108,10 +108,18 @@ export const conversationContentStyles: CSSResult = css`
     padding: 0 var(--wa-space-3xs);
   }
 
-  .conversation-composer-banner {
+  .conversation-ended {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--wa-space-xs) var(--wa-space-s);
     padding: var(--wa-space-xs) var(--wa-space-s);
     color: var(--color-text-muted);
     font-size: var(--wa-font-size-s);
+  }
+
+  .conversation-ended > span {
+    flex: 1 1 100%;
   }
 
   @container (max-width: 640px) {

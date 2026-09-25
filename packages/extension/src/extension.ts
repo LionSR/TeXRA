@@ -67,7 +67,6 @@ import { createLanguageModelPort } from '@frontend/lm/createLanguageModelPort';
 import { registerLanguageModelTools } from '@frontend/lm/registerLanguageModelTools';
 import { onTexraAuthSessionsChanged } from '@frontend/events/onTexraAuthSessionsChanged';
 import { createVscodeLeanLanguageServices } from '@frontend/lean/VscodeIntegration';
-import { resolveGitCommonRoot } from '@frontend/git/resolveGitRoot';
 import { registerInlineCriticism } from '@frontend/latex/inlineCriticism';
 import {
   getInlineCommentProvider,
@@ -107,7 +106,7 @@ import {
 } from '@platform/defaults/workspaceStorage';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
-import { WorktreeStateStore } from '@platform/defaults/worktreeStateStore';
+import { openWorktreeStateStore } from '@platform/defaults/worktreeStateStore';
 import { StorageFs, withSessionFs } from '@platform/rootedFs';
 import {
   formatTexraApprovalPolicy,
@@ -290,13 +289,14 @@ async function initVscodePlatform(
     Effect.gen(function* () {
       const globalState = yield* AppState;
       const projectState = yield* openProjectStateStore(storage);
-      const gitRepoRoot = workspaceRoot
-        ? yield* resolveGitCommonRoot(workspaceRoot)
-        : undefined;
       return {
         globalState,
-        workspaceState: gitRepoRoot
-          ? new WorktreeStateStore(projectState, globalState, gitRepoRoot)
+        workspaceState: workspaceRoot
+          ? yield* openWorktreeStateStore(
+              projectState,
+              globalState,
+              workspaceRoot,
+            )
           : projectState,
       };
     }).pipe(Scope.provide(scope)),

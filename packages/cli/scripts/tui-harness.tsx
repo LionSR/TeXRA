@@ -22,6 +22,7 @@ import React from 'react';
 
 import { loadAgents } from '@agent/index';
 import { tryDefaultSession } from '@agent/runtime';
+import { TraceEmitter } from '@agent/trace';
 import { tuiOutputStreamForColor } from '@cli/tui/noColorOutput';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { DEFAULT_MODELS } from '@model/modelOptionsBasic';
@@ -64,7 +65,7 @@ import {
   isInFlightPhase,
   isTerminalOutcomePhase,
 } from '@shared/runs/runStatus';
-import { descendantRuns } from '@shared/session/sessionView';
+import { acceptsFollowUp, descendantRuns } from '@shared/session/sessionView';
 import type { StreamLogAppendInput } from '@shared/session/traceEntries';
 import {
   buildScenario,
@@ -77,7 +78,6 @@ import {
 } from '@test/shared/session/fanOutScenario';
 import { clearGoal, setGoalSessionAutoApproval, startGoal } from '@tools/goal';
 import { prepareToolEditApprovalPrompt } from '@tools/approval/toolEditApproval';
-import { createRunTrace } from '@transcript';
 import { FOCUSED_BACKGROUND_TASK } from '@ui/copy/nestedRuns';
 import { generateRunId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -97,22 +97,25 @@ import {
   openRegisteredCliSlashForm,
 } from '../src/chat/tui/commands/slashForms';
 import {
-  activeRunId as activeRunIdSignal,
-  claimedRunId,
-  rootRunPending,
+  focusRun,
   rootRunId,
   resetCliState,
+  selectedRunId,
   sessionMeta,
   setCliSessionModelOverride,
 } from '../src/chat/tui/state/cliState';
 import {
   bindSessionView,
   currentView,
-  focusedChildAcceptsFollowUps,
+  CLI_FOLLOW_UP_HOST,
   runningChildCount,
   sessionView,
   runViewOf,
 } from '../src/chat/tui/state/sessionView';
+import {
+  chatTuiCanStartRootRun,
+  TuiSession,
+} from '../src/chat/tui/state/sessionRunState';
 import { formatCliSessionStatus } from '../src/chat/tui/sessionStatus';
 import { notify } from '../src/chat/tui/notifications/terminalNotifier';
 import { createTuiViewportController } from '../src/chat/tui/render/tuiViewportController';
@@ -236,6 +239,7 @@ const HARNESS_CLI_CONTEXT: CliContext = {
   config: new MemoryConfigProvider(),
   commandName: 'texra',
   configWarnings: [],
+  configDegradations: [],
   cwd: HARNESS_CWD,
   mode: 'interactive',
   outputFormat: 'text',
@@ -1126,7 +1130,7 @@ sessionMeta.set({
 });
 // The harness root: minted before any fixture, like a real run's start.
 seedRun(HARNESS_RUN_ID);
-activeRunIdSignal.set(HARNESS_RUN_ID);
+focusRun(HARNESS_RUN_ID);
 rootRunId.set(HARNESS_RUN_ID);
 seedRows(HARNESS_RUN_ID, harnessInitialEntries());
 publish(
@@ -1164,26 +1168,23 @@ async function seedRunningWorkflow(): Promise<void> {
     userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
   });
   seedPhase(childRunId, RUN_PHASE.RUNNING);
-  const residency = await harnessRuntime.runPromise(
-    session().transcripts.acquireRunResidency(childRunId),
-  );
-  const runTrace = createRunTrace(residency);
-  const detachRunTrace = session().attachRunTrace(runTrace.trace, childRunId);
-  const runStage = runTrace.trace.openStage(
+  const trace = new TraceEmitter();
+  const detachRunTrace = session().attachRunTrace(trace, childRunId);
+  const runStage = trace.openStage(
     "Workflow script 'live-workflow-validation'",
     {
       id: 'harness-workflow-running-run',
       kind: 'run',
     },
   );
-  const phaseStage = runTrace.trace.openStage('Proofread', {
+  const phaseStage = trace.openStage('Proofread', {
     id: 'harness-workflow-running-phase',
     index: 0,
     kind: 'phase',
     parent: runStage,
     total: 1,
   });
-  runTrace.trace.emit({
+  trace.emit({
     type: 'workflow.call',
     logId: 'harness-workflow-running-task-a',
     call: {
@@ -1195,7 +1196,7 @@ async function seedRunningWorkflow(): Promise<void> {
     },
     stageId: phaseStage.id,
   });
-  runTrace.trace.emit({
+  trace.emit({
     type: 'workflow.call',
     logId: 'harness-workflow-running-task-b',
     call: {
@@ -1220,7 +1221,6 @@ async function seedRunningWorkflow(): Promise<void> {
     phaseStage.end('cancelled');
     runStage.end('cancelled');
     detachRunTrace();
-    runTrace.dispose();
   });
 }
 
@@ -1233,7 +1233,7 @@ function seedRunningProcessChild(): void {
   });
   seedDescription(childRunId, 'sleep 30');
   seedPhase(childRunId, RUN_PHASE.RUNNING);
-  activeRunIdSignal.set(childRunId);
+  focusRun(childRunId);
 }
 
 if (SHOW_CHILDREN) {
@@ -1417,7 +1417,7 @@ if (SHOW_BASH_APPROVAL) {
     let pollCount = 0;
     const timer = setInterval(() => {
       pollCount += 1;
-      const activeRunId = activeRunIdSignal.get();
+      const activeRunId = selectedRunId.get();
       if (activeRunId === undefined || activeRunId === HARNESS_RUN_ID) {
         if (pollCount >= 200) clearInterval(timer);
         return;
@@ -1478,7 +1478,7 @@ if (SHOW_AGENT_PROPOSAL) {
 
 function markHarnessInterrupted(): void {
   canInterrupt = false;
-  rootRunPending.set(false);
+  harnessSession.markRunCompleted();
   cancelHarnessRequests('Session interrupted.');
   appendHarnessAssistantTranscript(
     'Harness interrupt requested.',
@@ -1549,26 +1549,12 @@ function applyHarnessApprovalPolicySelection(
   setHarnessApprovalPolicy(policy);
 }
 
-function markHarnessRunStopped(runId: RunId): void {
-  const child = currentView().runs.get(runId);
-  if (!child) return;
-  appendHarnessAssistantTranscript(
-    `Harness kill requested for ${runId}.`,
-    HARNESS_RUN_ID,
-  );
-  appendHarnessAssistantTranscript(
-    'Harness kill requested for this sub-workflow.',
-    child.id,
-  );
-  seedRunEnd(child.id, RUN_OUTCOME.CANCELLED);
-}
-
 function handleHarnessSubmit(line: string): void {
   if (handleHarnessSlashCommand(line)) return;
   const view = currentView();
-  const focused = runViewOf(view, activeRunIdSignal.get());
+  const focused = runViewOf(view, selectedRunId.get());
   if (focused && focused.parentId !== null) {
-    if (!focusedChildAcceptsFollowUps(focused)) {
+    if (!acceptsFollowUp(focused, CLI_FOLLOW_UP_HOST)) {
       appendHarnessAssistantTranscript(
         FOCUSED_BACKGROUND_TASK.selectedNoLongerAccepting,
         focused.id,
@@ -1584,7 +1570,7 @@ function handleHarnessSubmit(line: string): void {
 function appendHarnessStatus(): void {
   const meta = sessionMeta.get();
   const view = currentView();
-  const runId = activeRunIdSignal.get() ?? HARNESS_RUN_ID;
+  const runId = selectedRunId.get() ?? HARNESS_RUN_ID;
   const run = runViewOf(view, runId);
   appendHarnessAssistantTranscript(
     formatCliSessionStatus({
@@ -1600,7 +1586,7 @@ function appendHarnessStatus(): void {
         run?.category === AgentCategory.ToolUse && run.goal.active
           ? run.goal
           : undefined,
-      // The harness never emits an ACTIVE_SKILLS snapshot.
+      // The harness never commits a `skills.snapshot` row.
       activeSkills: [],
       queuedFollowUpMessages: (view.queuedFollowUps.get(runId) ?? []).map(
         (followUp) => followUp.text,
@@ -1678,6 +1664,9 @@ function handleHarnessSlashCommand(line: string): boolean {
   }
 }
 
+/** The harness's root-run claim, held the way `texra chat` holds its own. */
+const harnessSession = new TuiSession(() => undefined);
+
 registerBuiltinSlashCommands({
   secrets: HARNESS_PLATFORM_SERVICES.secrets,
   stores: HARNESS_PLATFORM_SERVICES,
@@ -1685,7 +1674,7 @@ registerBuiltinSlashCommands({
   runtimeSession: harnessRuntimeSession,
   // Mirror `texra chat`: agent selection is open exactly while no root run
   // is pending.
-  canSelectAgent: () => !rootRunPending.get(),
+  canSelectAgent: () => chatTuiCanStartRootRun(harnessSession),
   canSelectModel: () => CAN_SELECT_MODEL,
   getModelSwitchDisabledReason: (model) =>
     Effect.succeed(
@@ -1742,11 +1731,13 @@ registerBuiltinSlashCommands({
     );
   },
 });
-// Mirror the real publisher's run facts: an interruptible harness run is a
-// pending root-run claim on the harness run, so the status bar derives
-// the Ctrl-C stop hint from these signals exactly as `texra chat` does.
-rootRunPending.set(canInterrupt);
-claimedRunId.set(canInterrupt ? HARNESS_RUN_ID : undefined);
+// An interruptible harness run is a pending root-run claim on the harness
+// run, so the status bar derives the Ctrl-C stop hint exactly as `texra chat`
+// does.
+if (canInterrupt) {
+  harnessSession.markRunPending(Effect.never);
+  harnessSession.runId = HARNESS_RUN_ID;
+}
 
 const inkRef: { current?: ReturnType<typeof render> } = {};
 const viewportController = createTuiViewportController(inkRef);
@@ -1767,8 +1758,6 @@ function renderHarnessApp(): React.JSX.Element {
       runtime={harnessRuntime}
       session={session()}
       onSubmit={handleHarnessSubmit}
-      onKillRun={markHarnessRunStopped}
-      onWorkflowControl={() => undefined}
       colorEnabled={HARNESS_COLOR_ENABLED}
       history={HARNESS_INPUT_HISTORY}
       onStaticTranscriptChange={viewportController.repaintTranscript}
@@ -1850,7 +1839,7 @@ if (process.env.HARNESS_SESSION_TREE === '1') {
   const ref = await harnessRuntime.runPromise(SubscriptionRef.make(view));
   HARNESS_DISPOSERS.push(bindSessionView(harnessRuntime, ref));
   rootRunId.set(interrupted);
-  activeRunIdSignal.set(PROCESS);
+  focusRun(PROCESS);
 }
 
 const ink = render(renderHarnessApp(), {

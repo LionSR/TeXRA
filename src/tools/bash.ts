@@ -280,10 +280,9 @@ function createBackgroundBashStrategy(params: {
 
   return {
     stageLabel: 'Background command',
-    // A background shell is the one child type that owns a live OS process and
-    // whose tab is ephemeral, and the one whose result survives its own kill.
+    // A background shell is the one child type that owns a live OS process,
+    // and the one whose result survives its own kill.
     ownsBackgroundProcess: true,
-    autoCloseChildRun: true,
     deliverAfterInterrupt: true,
 
     launch: (_ports, signal) =>

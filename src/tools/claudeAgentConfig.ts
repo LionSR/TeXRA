@@ -8,8 +8,10 @@ import { Effect } from 'effect';
 
 // Local imports
 import { withLogChannel } from '@logger/effectLog';
-import { exposeApiKey, lookupApiKey, apiKeyEnvName } from '@model/apiProviders';
+import { exposeApiKey, lookupApiKey } from '@model/apiProviders';
 import { Secrets } from '@platform/secrets';
+import { apiKeyEnvName } from '@shared/constants/providers';
+import { inheritedEnv } from '@utils/system/envFlags';
 import { executeCommand } from '@utils/system/execUtils';
 import { safeHomedir } from '@utils/system/platformPaths';
 import { ensureError } from '@utils/errors/errorMessage';
@@ -157,7 +159,10 @@ function claudeKeychainCredentialProbes(configDir: string): string[][] {
 export const buildClaudeAgentEnv = Effect.fn('buildClaudeAgentEnv')(function* (
   options: { platform?: NodeJS.Platform } = {},
 ): Effect.fn.Return<NodeJS.ProcessEnv, never, Secrets | ChildProcessSpawner> {
-  const env: NodeJS.ProcessEnv = { ...process.env };
+  const apiKeyVar = apiKeyEnvName('anthropic');
+  // The other providers' keys stay out of the subprocess: what its tools
+  // print comes back as a tool result. Its own Anthropic key is resolved below.
+  const env: NodeJS.ProcessEnv = inheritedEnv('anthropic');
   env.CLAUDE_AGENT_SDK_CLIENT_APP = 'texra';
   env.CLAUDE_CODE_ENABLE_TODO_TOOLS = '1';
   const oauthToken = env.CLAUDE_CODE_OAUTH_TOKEN?.trim();
@@ -166,8 +171,6 @@ export const buildClaudeAgentEnv = Effect.fn('buildClaudeAgentEnv')(function* (
   } else {
     delete env.CLAUDE_CODE_OAUTH_TOKEN;
   }
-
-  const apiKeyVar = apiKeyEnvName('anthropic');
 
   // 1. OAuth wins: drop any inherited API key so it can't out-prioritize the
   //    OAuth credential, and skip injecting the managed secret entirely.

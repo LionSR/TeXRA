@@ -1,5 +1,5 @@
-/** LaTeX settings page: dependencies, recommended VS Code settings, and the
- *  catalog-backed compile, diff, formatting, and review switches. */
+/** LaTeX settings page, one section at a time: dependencies, compile and
+ *  diff, formatting and review, and recommended VS Code settings. */
 
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
 import '@awesome.me/webawesome/dist/components/copy-button/copy-button.js';
@@ -15,6 +15,7 @@ import { postMessage } from '@shared/hostBridge';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
   type LatexSettingsStatus,
+  type SettingsSectionName,
   DEFAULT_LATEX_SETTINGS_STATUS,
 } from '@shared/settingsView/settingsViewMessages';
 
@@ -57,14 +58,7 @@ import {
 import { latexTabStyles } from './LaTeXTab.styles';
 
 /** Path keys in LatexSettingsStatus for tool paths. */
-type ToolPathKey =
-  | 'pdflatexPath'
-  | 'latexmkPath'
-  | 'latexdiffPath'
-  | 'latexindentPath'
-  | 'texcountPath'
-  | 'ghostscriptPath'
-  | 'graphicsmagickPath';
+type ToolPathKey = Extract<keyof LatexSettingsStatus, `${string}Path`>;
 
 /** Metadata for a dependency shown in the Dependencies section. */
 interface DependencyInfo {
@@ -184,6 +178,8 @@ export class LaTeXTab extends LitElement {
   @property({ attribute: false })
   settings: LatexSettingsStatus = { ...DEFAULT_LATEX_SETTINGS_STATUS };
 
+  @property({ attribute: false }) section: SettingsSectionName<'latex'> =
+    'dependencies';
   @property({ type: Boolean }) loaded = false;
   @property({ type: Boolean, attribute: 'desktop-host' }) desktopHost = false;
 
@@ -456,12 +452,14 @@ export class LaTeXTab extends LitElement {
       `;
     }
 
+    const sections = {
+      dependencies: () => this.renderDependencies(),
+      compile: () => this.renderCompileDiffSettings(),
+      formatting: () => this.renderFormattingSettings(),
+      vscode: () => this.renderRecommendedSettings(),
+    };
     return html`
-      <div class="tab-content-container">
-        ${this.renderDependencies()}
-        ${this.desktopHost ? nothing : this.renderRecommendedSettings()}
-        ${this.renderCompileDiffSettings()} ${this.renderFormattingSettings()}
-      </div>
+      <div class="tab-content-container">${sections[this.section]()}</div>
     `;
   }
 

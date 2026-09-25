@@ -10,8 +10,9 @@ import { Effect } from 'effect';
 
 // Local imports
 import { withLogChannel } from '@logger/effectLog';
-import { apiKeyEnvName, lookupApiKeyOrigin } from '@model/apiProviders';
+import { lookupApiKeyOrigin } from '@model/apiProviders';
 import { Secrets } from '@platform/secrets';
+import { apiKeyEnvName } from '@shared/constants/providers';
 import { importCodexClass, findCodexBinaryPath } from '@tools/codexImport';
 import {
   importClaudeAgentSdk,

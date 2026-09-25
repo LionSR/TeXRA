@@ -97,7 +97,7 @@ function buildOverleafClonePorts(
         );
       }),
 
-    runClone: (remoteUrl, cloneInto) =>
+    runClone: (clone, cloneInto) =>
       Effect.tryPromise({
         try: async () => {
           await mkdir(cloneInto, { recursive: true });
@@ -107,7 +107,7 @@ function buildOverleafClonePorts(
       }).pipe(
         Effect.flatMap((canonical) => {
           canonicalWorkspacePath = canonical;
-          return gitClone(remoteUrl, canonical).pipe(
+          return gitClone(clone, canonical).pipe(
             Effect.mapError((error) => new Error(error.message)),
           );
         }),

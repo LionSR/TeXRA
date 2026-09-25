@@ -9,7 +9,6 @@ import path from 'node:path';
 import { SubscriptionRef } from 'effect';
 
 import { getCategoryAgent } from '@agent/index';
-import { redactSecrets } from '@logger/redaction';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import {
   AgentCategory,
@@ -17,7 +16,11 @@ import {
   type RunId,
   type RunPhase,
 } from '@shared/schemas';
-import type { SessionView, RunView } from '@shared/session/sessionView';
+import {
+  isLiveRun,
+  type SessionView,
+  type RunView,
+} from '@shared/session/sessionView';
 import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import {
   flowPosition,
@@ -199,22 +202,26 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     if (!root || this.rootRunTerminal) return [];
     return root.childIds.flatMap((childId) => {
       const child = this.view?.runs.get(childId);
-      return child && !isTerminalOutcomePhase(child.status) ? [child] : [];
+      return child && isLiveRun(child) ? [child] : [];
     });
   }
 
   private render(force = false): void {
     const now = this.nowMs();
     if (!force && now - this.lastRenderAt < this.minIntervalMs) return;
-    const line = this.formatLine(now);
-    if (!line || line === this.lastLine) return;
+    const { line, state } = this.formatLine(now);
+    if (!line) return;
     if (this.ansi) {
+      if (line === this.lastLine) return;
       this.write(`${CLEAR_LINE}${line}`);
       this.liveLine = true;
     } else {
+      // Off a TTY every line is permanent, so one is written per change of
+      // state; the elapsed clock alone ticking over is not a change.
+      if (state === this.lastLine) return;
       this.write(`${line}\n`);
     }
-    this.lastLine = line;
+    this.lastLine = this.ansi ? line : state;
     this.lastRenderAt = now;
   }
 
@@ -236,9 +243,13 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     this.heartbeatTimer = undefined;
   }
 
-  private formatLine(now: number): string {
+  /** The status line, and the same line without its elapsed clock. */
+  private formatLine(now: number): {
+    readonly line: string;
+    readonly state: string;
+  } {
     const root = this.root();
-    if (!root) return '';
+    if (!root) return { line: '', state: '' };
     // The loop's own coordinate off the fold's `flow`, in the one its family
     // counts; a run that has not stepped yet carries none.
     const position = flowPosition(root.flow);
@@ -282,8 +293,8 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     if (toolCallCount && !nameOnlySubagents) {
       parts.push(`tools: ${toolCallCount}`);
     }
-    parts.push(elapsed);
-    return parts.join(' · ');
+    const state = parts.join(' · ');
+    return { line: `${state} · ${elapsed}`, state };
   }
 
   private descriptionColumnBudget(
@@ -344,7 +355,7 @@ function formatActiveChildren(
   const safeDescription =
     description && descriptionColumns > 0
       ? truncateSummaryToWidth(
-          redactSecrets(safeTerminalText(description)),
+          safeTerminalText(description),
           descriptionColumns,
         )
       : '';

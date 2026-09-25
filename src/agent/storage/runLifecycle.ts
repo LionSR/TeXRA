@@ -257,37 +257,39 @@ export const finalizeRun = Effect.fn('finalizeRun')(function* (
 ): Effect.fn.Return<FinalizeRunResult> {
   const { runId, outcome, keepExistingOutcome } = input;
   const status = yield* Effect.exit(
-    session.updateRecordFacts(runId, (rows) => {
-      const target = aggregateId('run', runId);
-      const start = rows.find(
-        (row): row is Extract<SessionEvent, { type: 'run.start' }> =>
-          row.type === 'run.start' && row.aggregateId === target,
-      );
-      if (!start) throw new Error(`Run start not found for ${runId}`);
-      // "Already ended" is a fact about the run's current lifecycle, not about
-      // the aggregate (`runEndFromEvents` states the rule, and every reader
-      // shares it): a resumed run has to end again even when it ends the same
-      // way, or the fold, history and every `durableOutcome` reader keep it
-      // RUNNING for want of a terminal row.
-      const ended = runEndFromEvents(rows, runId)?.outcome;
-      const persisted =
-        keepExistingOutcome === true && ended !== undefined ? ended : outcome;
-      if (ended === persisted) return { events: [], value: persisted };
-      return {
-        events: [
-          ...session.streamClosureFacts(runId),
-          {
-            type: 'run.end' as const,
-            aggregateId: target,
-            outcome: persisted,
-            ...(input.error !== undefined ? { error: input.error } : {}),
-            ...(input.usage !== undefined ? { usage: input.usage } : {}),
-            output: input.output ?? emptyRunEndOutput(start.category),
-          },
-        ],
-        value: persisted,
-      };
-    }),
+    Effect.flatMap(session.streamClosureFacts(runId), (closure) =>
+      session.updateRecordFacts(runId, (rows) => {
+        const target = aggregateId('run', runId);
+        const start = rows.find(
+          (row): row is Extract<SessionEvent, { type: 'run.start' }> =>
+            row.type === 'run.start' && row.aggregateId === target,
+        );
+        if (!start) throw new Error(`Run start not found for ${runId}`);
+        // "Already ended" is a fact about the run's current lifecycle, not about
+        // the aggregate (`runEndFromEvents` states the rule, and every reader
+        // shares it): a resumed run has to end again even when it ends the same
+        // way, or the fold, history and every `durableOutcome` reader keep it
+        // RUNNING for want of a terminal row.
+        const ended = runEndFromEvents(rows, runId)?.outcome;
+        const persisted =
+          keepExistingOutcome === true && ended !== undefined ? ended : outcome;
+        if (ended === persisted) return { events: [], value: persisted };
+        return {
+          events: [
+            ...closure,
+            {
+              type: 'run.end' as const,
+              aggregateId: target,
+              outcome: persisted,
+              ...(input.error !== undefined ? { error: input.error } : {}),
+              ...(input.usage !== undefined ? { usage: input.usage } : {}),
+              output: input.output ?? emptyRunEndOutput(start.category),
+            },
+          ],
+          value: persisted,
+        };
+      }),
+    ),
   );
   if (Exit.isFailure(status)) {
     const error = Cause.squash(status.cause);

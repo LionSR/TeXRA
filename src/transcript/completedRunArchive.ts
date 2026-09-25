@@ -16,6 +16,7 @@ import {
   type ToolUseLog,
 } from '@shared/schemas';
 import { assertNever, isObject } from '@utils/core';
+import { readRunEntries } from './runEntries';
 
 // ============================================================================
 // Conversation
@@ -164,7 +165,7 @@ export const readCompletedRunConversation = Effect.fn(
   runId: RunId,
   session: SessionHandle,
 ): Effect.fn.Return<CompletedRunConversationReadResult, Error> {
-  const conversation = (yield* session.transcripts.readEntries(runId)).flatMap(
+  const conversation = (yield* readRunEntries(session, runId)).flatMap(
     (entry) =>
       entry.type === STREAM_LOG_ENTRY_TYPES.LOG
         ? conversationNodesForEntry(entry)

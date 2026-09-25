@@ -470,7 +470,7 @@ The corresponding non-interactive interface is `texra config agents`:
 
 ```bash
 texra config agents                         # inspect the effective roster
-texra config agents --all                   # show every agent in this folder
+texra config agents --all                   # make every agent visible in this folder
 texra config agents --team lean-project     # use a named team
 texra config agents --inherit               # follow the user default
 texra config agents --default-team physicist

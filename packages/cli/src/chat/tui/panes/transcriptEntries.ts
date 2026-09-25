@@ -2,7 +2,6 @@ import stripAnsi from 'strip-ansi';
 
 import { ANSI_ESCAPE_START, ansiEscapeEnd } from '@cli/runtime/ansiEscapes';
 import { safeTerminalText } from '@cli/runtime/terminalText';
-import { redactSecrets } from '@logger/redaction';
 import { type RunPhase } from '@shared/schemas';
 import { isActivePhase } from '@shared/runs/runStatus';
 import {
@@ -77,7 +76,7 @@ function trimAssistantTranscriptLead(text: string): string {
  * Memoized on the row object, which the fold replaces (never mutates) when its
  * content changes, so a hit is always current and a dropped row takes its
  * cache slot with it. Without the memo the renderable/split/scan walks would
- * re-run the markdown normalize and redaction passes for every row on every
+ * re-run the markdown normalize and terminal-sanitize passes for every row on every
  * frame.
  */
 const HEADLINE_CACHE = new WeakMap<TranscriptRow, string>();
@@ -100,15 +99,13 @@ function deriveTranscriptRowHeadline(row: TranscriptRow): string {
         trimAssistantTranscriptLead(row.text.full),
       );
     case 'log':
-      return redactSecrets(
-        safeTerminalText(
-          normalizeKnownHtmlForCliMarkdown(
-            trimAssistantTranscriptLead(row.text.full),
-          ),
+      return safeTerminalText(
+        normalizeKnownHtmlForCliMarkdown(
+          trimAssistantTranscriptLead(row.text.full),
         ),
       );
     case 'error':
-      return redactSecrets(safeTerminalText(row.summary.full));
+      return safeTerminalText(row.summary.full);
     case 'progressStatus':
       return safeTerminalText(row.summary.full);
     default:

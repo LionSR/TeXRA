@@ -1,9 +1,11 @@
-// Slash command palette: pick with arrow keys + Enter or Tab; Esc dismisses it.
+// Slash command palette: pick with arrow keys + Enter or Tab. Esc reaches the
+// input bar's text input, whose escape edit clears the slash and closes it.
 
 import { Box, Text, useInput } from 'ink';
 import { useState, useEffect } from 'react';
 
-import { isEscapeInput, isPlainReturnInput } from '@cli/tui/inputKeys';
+import { isPlainReturnInput } from '@cli/tui/inputKeys';
+import { BorderedPanel } from '@cli/tui/ui/BorderedPanel';
 import { KeyHints } from '@cli/tui/ui/KeyHints';
 import { nextWrappingHighlightIndex } from '@cli/tui/ui/Select';
 import { COLOR_HINT } from '@cli/tui/ui/colors';
@@ -20,7 +22,6 @@ export interface SlashPaletteProps {
   readonly query: string;
   /** Accepted: caller should replace the input with the chosen command name. */
   readonly onPick: (command: SlashCommand, intent: SlashPickIntent) => void;
-  readonly onCancel: () => void;
 }
 
 const MAX_VISIBLE_COMMANDS = 8;
@@ -134,10 +135,6 @@ export function SlashPalette(
 
   useInput(
     (input, key) => {
-      if (isEscapeInput(input, key)) {
-        props.onCancel();
-        return;
-      }
       if (key.upArrow || key.downArrow) {
         if (!slashPaletteOwnsArrows(matchCount)) return;
         setHighlight((h) =>
@@ -169,11 +166,25 @@ export function SlashPalette(
   const commandLabelWidth = slashPaletteCommandLabelWidth(visible);
 
   return (
-    <Box
+    <BorderedPanel
       borderStyle="single"
-      borderColor={COLOR_HINT}
-      flexDirection="column"
-      paddingX={1}
+      color={COLOR_HINT}
+      footer={
+        <KeyHints
+          hints={[
+            ...(slashPaletteOwnsArrows(matchCount)
+              ? [{ key: '↑/↓', action: 'navigate' }]
+              : []),
+            {
+              key: 'Enter',
+              action: slashPaletteEnterHintAction(highlightedCommand),
+            },
+            { key: 'Esc', action: 'close' },
+            { key: 'Tab', action: 'complete' },
+          ]}
+          confirmCancel={false}
+        />
+      }
     >
       {window.hiddenBefore > 0 ? (
         <Text dimColor>{`  … ${window.hiddenBefore} earlier`}</Text>
@@ -198,22 +209,6 @@ export function SlashPalette(
       {window.hiddenAfter > 0 ? (
         <Text dimColor>{`  … ${window.hiddenAfter} more`}</Text>
       ) : null}
-      <Box marginTop={1}>
-        <KeyHints
-          hints={[
-            ...(slashPaletteOwnsArrows(matchCount)
-              ? [{ key: '↑/↓', action: 'navigate' }]
-              : []),
-            {
-              key: 'Enter',
-              action: slashPaletteEnterHintAction(highlightedCommand),
-            },
-            { key: 'Esc', action: 'close' },
-            { key: 'Tab', action: 'complete' },
-          ]}
-          confirmCancel={false}
-        />
-      </Box>
-    </Box>
+    </BorderedPanel>
   );
 }

@@ -572,7 +572,7 @@ export class WorkflowRunBoard extends LitElement {
         return html`<div class="row status-declared" role="listitem">
           <span class="row-icon">${waIcon('circle')}</span>
           <bdi class="row-label" dir="auto">${row.task.label}</bdi>
-          <span class="row-last">Declared</span>
+          <span class="row-last">Not started</span>
         </div>`;
       case 'group':
         // A group row reaches the board only as a fold's header.

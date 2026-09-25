@@ -111,9 +111,6 @@ export class DesktopToolEditApprovalHost implements ToolEditApprovalHost {
     );
   }
 
-  // No `revealApprovalSurface`: active-stream selection surfaces the prompt
-  // in whichever view is open, so nothing has to open ahead of it.
-
   reportError(message: string): void {
     // Fire-and-forget, as the voided promise was; a dialog that cannot show
     // the report leaves a console trace instead of an unhandled rejection.

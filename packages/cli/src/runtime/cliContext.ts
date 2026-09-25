@@ -1,9 +1,8 @@
-import { readFile, stat } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
-import { Effect, Result } from 'effect';
+import { Effect, FileSystem, Result } from 'effect';
 
-import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
 import { safeParseJson } from '@common/parsing/safeParseJson';
 import type { MinimumLogLevel } from '@logger/effectDiagnostics';
 import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
@@ -21,13 +20,13 @@ import {
 } from '@shared/schemas';
 import type { SkillSourceOptions } from '@skills/skillSources';
 import { readConfigSettingFrom } from '@utils/config/platformSettings';
+import { absentReason } from '@utils/files/fsEntryExists';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { envVar } from '@utils/system/envFlags';
 import { isNonEmptyString } from '@utils/text/stringUtils';
 
 import { isCliSupportedModelId, loadCliStartupConfig } from './cliConfig';
 import { resolveCliResourcesPath } from './resourcesPath';
-import type { Stats } from 'node:fs';
 
 type CliMode = 'headless' | 'interactive';
 
@@ -71,6 +70,8 @@ export interface CliContext {
    */
   readonly config: ConfigProvider;
   readonly configWarnings: readonly string[];
+  /** The `configWarnings` that `--quiet` does not hide; see `CliStartupConfig`. */
+  readonly configDegradations: readonly string[];
   readonly envAgent?: string;
   readonly envModel?: string;
   readonly skillSourceOptions: SkillSourceOptions;
@@ -337,9 +338,9 @@ const pickEnv = <T extends string>(
     return parsed;
   });
 
-export const resolveCliCwd = Effect.fn('cliContext.resolveCliCwd')(function* (
+const resolveCliCwd = Effect.fn('cliContext.resolveCliCwd')(function* (
   cwdFlag: string | undefined,
-): Effect.fn.Return<string, CliUsageError> {
+): Effect.fn.Return<string, CliUsageError, FileSystem.FileSystem> {
   // When the user did not pass `--cwd`, `process.cwd()` is correct by
   // construction (the shell can't put us in a directory that doesn't exist).
   // When `--cwd` IS passed, validate it explicitly: a typo or stale path
@@ -349,16 +350,19 @@ export const resolveCliCwd = Effect.fn('cliContext.resolveCliCwd')(function* (
     return canonicalizeWorkspacePath(readCliCwd());
   }
   const requested = path.resolve(cwdFlag);
-  const info: Stats = yield* Effect.tryPromise({
-    try: () => stat(requested),
-    catch: (error: unknown) =>
-      isFileNotFoundError(error) || isNotADirectoryError(error)
-        ? new CliUsageError(`--cwd: path does not exist: ${requested}`)
-        : new CliUsageError(
-            `--cwd: cannot access ${requested}: ${toErrorMessage(error)}`,
-          ),
-  });
-  if (!info.isDirectory()) {
+  const fs = yield* FileSystem.FileSystem;
+  const info = yield* fs
+    .stat(requested)
+    .pipe(
+      Effect.mapError((error) =>
+        absentReason(error)
+          ? new CliUsageError(`--cwd: path does not exist: ${requested}`)
+          : new CliUsageError(
+              `--cwd: cannot access ${requested}: ${toErrorMessage(error.reason.cause ?? error)}`,
+            ),
+      ),
+    );
+  if (info.type !== 'Directory') {
     return yield* Effect.fail(
       new CliUsageError(`--cwd: not a directory: ${requested}`),
     );
@@ -369,7 +373,11 @@ export const resolveCliCwd = Effect.fn('cliContext.resolveCliCwd')(function* (
 export const buildCliContext = Effect.fn('cliContext.buildCliContext')(
   function* (
     init: BuildCliContextInit,
-  ): Effect.fn.Return<CliContext, CliUsageError | Error> {
+  ): Effect.fn.Return<
+    CliContext,
+    CliUsageError | Error,
+    FileSystem.FileSystem
+  > {
     const ambient = init.ambient ?? readCliAmbientState();
     const cwd = yield* resolveCliCwd(init.globalArgs.cwd);
     // The project file over the user file, resolved by the same
@@ -377,7 +385,7 @@ export const buildCliContext = Effect.fn('cliContext.buildCliContext')(
     // hosts — and, from `initCliPlatform` on, this host too. This is the
     // pre-runtime open, which is why it goes through `loadCliStartupConfig`
     // rather than the process runtime.
-    const { config, warnings } = yield* loadCliStartupConfig(
+    const { config, warnings, degradations } = yield* loadCliStartupConfig(
       cwd,
       init.storageRoot,
     );
@@ -450,6 +458,7 @@ export const buildCliContext = Effect.fn('cliContext.buildCliContext')(
       resourcesPath: resolveCliResourcesPath(),
       config,
       configWarnings,
+      configDegradations: degradations,
       envAgent: yield* envTier('TEXRA_AGENT'),
       envModel,
       skillSourceOptions: {

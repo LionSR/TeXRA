@@ -3,6 +3,7 @@ import { Effect } from 'effect';
 
 // Local imports - skills
 import type { SettingsStores } from '@shared/config/settingsAccess';
+import { AGENT_SKILLS_CONFIG_KEY } from '@shared/schemas';
 import {
   discoverSkillSources,
   type DiscoverSkillSourcesResult,
@@ -15,6 +16,7 @@ import {
   readDisabledSkills,
   runtimeSkillSources,
 } from '@skills/runtimeSkills';
+import { readSettingFrom } from '@utils/config/platformSettings';
 
 /**
  * Fold the contributions the command's platform init installed for `cwd`,
@@ -34,6 +36,25 @@ export function readCliSkills(
     );
     return filterDiscoveredSkills(result, yield* readDisabledSkills(stores));
   });
+}
+
+/**
+ * The notice a skill listing leads with while `texra.skills.enabled` is off:
+ * listed skills are then not offered to agents, and a listing must not read
+ * as if they were. `undefined` when skills are on; `enableWith` names the
+ * control the caller's surface has.
+ */
+export function readCliSkillsOffNotice(
+  stores: SettingsStores,
+  enableWith: string,
+) {
+  return Effect.map(
+    readSettingFrom<boolean>(stores, AGENT_SKILLS_CONFIG_KEY),
+    (enabled) =>
+      enabled
+        ? undefined
+        : `Skills are off (${AGENT_SKILLS_CONFIG_KEY}); ${enableWith} turns them on for agents.`,
+  );
 }
 
 export function formatCliSkillIssue(issue: SkillLoadIssue): string {

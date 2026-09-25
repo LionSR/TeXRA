@@ -16,7 +16,6 @@ export interface RunMenuAction {
         HostRequest['kind'],
         | 'resume'
         | 'runNew'
-        | 'restoreIntoLauncher'
         | 'openRunStorage'
         | 'exportTranscript'
         | 'latexdiff'
@@ -41,7 +40,6 @@ export const ELEMENT_IDS = {
   STOP_STREAM_BTN: 'stopStreamBtn',
   RUN_NEW_BTN: 'runNewBtn',
   RESUME_BTN: 'resumeBtn',
-  RESTORE_STATE_BTN: 'restoreStateBtn',
   EXPORT_TRANSCRIPT_BTN: 'exportTranscriptBtn',
   DIFF_STREAM_BTN: 'diffStreamBtn',
   CLEAN_STREAM_BTN: 'cleanStreamBtn',
@@ -56,13 +54,6 @@ export const GROUP_DOM_IDS = Object.freeze({
   HEADER_PREFIX: 'group-header-',
   CONTENT_PREFIX: 'group-content-',
 });
-
-const RESTORE_STATE_ACTION: RunMenuAction = {
-  id: ELEMENT_IDS.RESTORE_STATE_BTN,
-  arm: 'restoreIntoLauncher',
-  icon: 'reply',
-  label: 'Edit as new task',
-};
 
 const OPEN_RUN_STORAGE_ACTION: RunMenuAction = {
   id: ELEMENT_IDS.OPEN_RUN_STORAGE_BTN,
@@ -91,7 +82,6 @@ const WORKFLOW_ACTIONS: readonly RunMenuAction[] = [
     icon: 'forward-step',
     label: 'Resume from saved outputs',
   },
-  RESTORE_STATE_ACTION,
   OPEN_RUN_STORAGE_ACTION,
   EXPORT_TRANSCRIPT_ACTION,
   {
@@ -127,7 +117,6 @@ const TOOL_USE_ACTIONS: readonly RunMenuAction[] = [
     icon: 'compress',
     label: 'Compact conversation',
   },
-  RESTORE_STATE_ACTION,
   OPEN_RUN_STORAGE_ACTION,
   EXPORT_TRANSCRIPT_ACTION,
 ];

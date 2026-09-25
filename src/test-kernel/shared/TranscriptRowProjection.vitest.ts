@@ -33,7 +33,7 @@ describe('projectTranscriptRow', () => {
         statusCode: 429,
         classification: { kind: 'chatgpt-subscription' },
         provider: 'anthropic',
-        rawErrorBody: { type: 'error' },
+        requestId: 'req_1',
       },
     });
     expect(row?.kind).toBe('error');
@@ -43,9 +43,8 @@ describe('projectTranscriptRow', () => {
       'message',
       'provider',
       'statusCode',
-      'userRetryable',
       'classification',
-      'rawErrorBody',
+      'requestId',
     ]);
     expect(row.detailText.lineCount).toBeGreaterThan(5);
     expect(isSettledRow(row, false)).toBe(true);
