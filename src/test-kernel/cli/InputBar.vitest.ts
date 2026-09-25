@@ -1,4 +1,5 @@
-import { Effect } from 'effect';
+import { it as effectIt } from '@effect/vitest';
+import { Effect, Fiber } from 'effect';
 // Test composition imports
 import '@test/support/defaultSessionTestSetup';
 
@@ -247,33 +248,37 @@ describe('InputBar slash submit', () => {
     }
   });
 
-  it.each([
+  effectIt.live.each([
     ['submits the latest draft', ' [Image #1]'],
     ['keeps an image chip attached to the typed slash prefix', '[Image #1]'],
-  ])('waits for pending image pastes and %s', async (_caseName, chipSuffix) => {
-    const imagePasteQueue = new ImagePasteQueue();
-    const paste = createDeferred();
-    const submitted: string[] = [];
-    let draft = '/h';
+  ])('waits for pending image pastes and %s', ([, chipSuffix]) =>
+    Effect.gen(function* () {
+      const imagePasteQueue = new ImagePasteQueue();
+      const paste = createDeferred();
+      const submitted: string[] = [];
+      let draft = '/h';
 
-    imagePasteQueue.track(
-      paste.promise.then(() => {
-        draft = `/h${chipSuffix}`;
-      }),
-    );
+      const pasteFiber = yield* Effect.forkChild(
+        Effect.promise(() => paste.promise).pipe(
+          Effect.map(() => {
+            draft = `/h${chipSuffix}`;
+          }),
+        ),
+      );
+      imagePasteQueue.add(pasteFiber);
 
-    imagePasteQueue.runWhenIdle(() => {
-      submitted.push(slashSubmitText(draft, 'help', '', 'h'));
-    });
+      imagePasteQueue.runWhenIdle(() => {
+        submitted.push(slashSubmitText(draft, 'help', '', 'h'));
+      });
 
-    expect(submitted).toEqual([]);
+      expect(submitted).toEqual([]);
 
-    paste.resolve();
-    await paste.promise;
-    await flushPromiseQueue();
+      paste.resolve();
+      yield* Fiber.await(pasteFiber);
 
-    expect(submitted).toEqual(['/help [Image #1]']);
-  });
+      expect(submitted).toEqual(['/help [Image #1]']);
+    }),
+  );
 });
 
 describe('InputBar draft discard', () => {
@@ -318,42 +323,53 @@ describe('InputBar draft discard', () => {
     }
   });
 
-  it('invalidates an image paste that resolves after the draft is cleared', async () => {
-    const imagePasteQueue = new ImagePasteQueue();
-    const attempt = imagePasteQueue.beginAttempt();
-    const paste = createDeferred<string>();
-    const inserted: string[] = [];
+  effectIt.live(
+    'invalidates an image paste that resolves after the draft is cleared',
+    () =>
+      Effect.gen(function* () {
+        const imagePasteQueue = new ImagePasteQueue();
+        const paste = createDeferred<string>();
+        const inserted: string[] = [];
 
-    imagePasteQueue.track(
-      paste.promise.then((chip) => {
-        if (attempt.isCurrent()) inserted.push(chip);
+        imagePasteQueue.add(
+          yield* Effect.forkChild(
+            Effect.promise(() => paste.promise).pipe(
+              Effect.map((chip) => inserted.push(chip)),
+              Effect.asVoid,
+            ),
+          ),
+        );
+        imagePasteQueue.discardPending();
+        paste.resolve('[Image #1]');
+        yield* Effect.promise(() => paste.promise);
+        yield* Effect.promise(flushPromiseQueue);
+
+        expect(inserted).toEqual([]);
       }),
-    );
-    imagePasteQueue.discardPending();
-    paste.resolve('[Image #1]');
-    await paste.promise;
-    await flushPromiseQueue();
+  );
 
-    expect(attempt.isCurrent()).toBe(false);
-    expect(inserted).toEqual([]);
-  });
+  effectIt.live(
+    'cancels a deferred submit when its pending paste is discarded',
+    () =>
+      Effect.gen(function* () {
+        const imagePasteQueue = new ImagePasteQueue();
+        const paste = createDeferred();
+        const submitted: string[] = [];
 
-  it('cancels a deferred submit when its pending paste is discarded', async () => {
-    const imagePasteQueue = new ImagePasteQueue();
-    const paste = createDeferred();
-    const submitted: string[] = [];
+        imagePasteQueue.add(
+          yield* Effect.forkChild(Effect.promise(() => paste.promise)),
+        );
+        imagePasteQueue.deferUntilIdle(() => submitted.push('stale draft'));
+        imagePasteQueue.discardPending();
+        paste.resolve();
+        yield* Effect.promise(() => paste.promise);
+        yield* Effect.promise(flushPromiseQueue);
 
-    imagePasteQueue.track(paste.promise);
-    imagePasteQueue.deferUntilIdle(() => submitted.push('stale draft'));
-    imagePasteQueue.discardPending();
-    paste.resolve();
-    await paste.promise;
-    await flushPromiseQueue();
-
-    expect(submitted).toEqual([]);
-    expect(imagePasteQueue.hasPending).toBe(false);
-    expect(imagePasteQueue.hasDeferredAction).toBe(false);
-  });
+        expect(submitted).toEqual([]);
+        expect(imagePasteQueue.hasPending).toBe(false);
+        expect(imagePasteQueue.hasDeferredAction).toBe(false);
+      }),
+  );
 
   it('restores queued drafts with the image entries captured by each submission', async () => {
     clipboardMock.attachClipboardImage

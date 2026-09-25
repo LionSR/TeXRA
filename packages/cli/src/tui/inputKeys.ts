@@ -20,7 +20,7 @@ const RAW_CONTROL_INPUTS = new Map<number, string>([
   [23, 'w'],
 ]);
 
-export function normalizedCtrlInput(
+function normalizedCtrlInput(
   input: string,
   key: Pick<ReturnKeyInput, 'ctrl' | 'meta'>,
 ): string | undefined {
