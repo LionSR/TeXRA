@@ -2430,16 +2430,6 @@ describe('native OpenAI Responses protocol', () => {
                 summary: [],
                 evidence: { kind: 'openrouter-reasoning', details: [] },
               },
-              {
-                kind: 'file-annotation',
-                hash: 'provider-file',
-                evidence: { kind: 'openrouter-file-annotation' },
-              },
-              {
-                kind: 'url-citation',
-                url: 'https://example.org/source',
-                evidence: { kind: 'openrouter-url-citation' },
-              },
             ] as const
           ).map((part) => ({
             ...REQUEST,

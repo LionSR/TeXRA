@@ -654,7 +654,6 @@ const UsageSchema = z
                   .nonnegative()
                   .nullable()
                   .optional(),
-                imageTokens: z.int().nonnegative().nullable().optional(),
               })
               .readonly()
               .nullable()
@@ -700,12 +699,6 @@ const HttpTurnResultSchema = z
     stopSequence: z.string().optional(),
     finishEvidence: z
       .discriminatedUnion('kind', [
-        z
-          .strictObject({
-            kind: z.literal('openrouter'),
-            nativeFinishReason: z.string().nullable(),
-          })
-          .readonly(),
         MiniMaxDetectionSchema.extend({
           kind: z.literal('minimax'),
         }).readonly(),

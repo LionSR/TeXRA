@@ -62,6 +62,29 @@ All notable changes to this project will be documented in this file.
   setting. A plugin whose dependency is merely missing keeps its skills and
   agents listed, so the setup guidance they carry stays reachable.
 
+- **OpenRouter models now run through the official OpenRouter SDK, with
+  fewer response details.** Requests over the OpenRouter route
+  (`openrouter-chat`) now go through `@openrouter/sdk`. Streaming text,
+  reasoning, tool calls, usage and cost are unchanged. The SDK does not carry
+  some details the previous client read, so:
+  - OpenRouter replies no longer include file annotations (the parsed-PDF
+    cache OpenRouter returns) or URL citations, and earlier annotations are
+    no longer sent back on the next turn, so OpenRouter may parse a PDF again.
+  - The provider's own finish reason (`native_finish_reason`) is no longer
+    recorded.
+  - A stream that is cut off after the model has finished but before the
+    closing `[DONE]` marker is accepted as complete, and a usage chunk that
+    never arrived leaves the turn without usage or cost.
+  - An error that arrives mid-stream keeps its message only when its code is
+    a number; a string code or unexpected error details fail the turn as
+    malformed output instead.
+  - Unknown fields in a streamed chunk are ignored rather than rejected. A
+    chunk that breaks the SDK's schema, such as a `null` where it expects an
+    absent field, fails the turn as malformed output.
+
+  Saved session history from an earlier build is cleared once, since the
+  stored shape of a model reply changed.
+
 ### Features
 
 - **Plainer multi-agent workflow screens.** The workflow launch row shows its
