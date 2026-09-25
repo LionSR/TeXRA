@@ -113,50 +113,38 @@ export const initializeElectronPlatform = Effect.fn(
   // folder is open.
   const storage = resolveWorkspaceStoragePath(dataRoot, undefined);
   const globalStorage = resolveGlobalStoragePath(dataRoot);
-  // Identity and secrets precede the runtime; application state is acquired
-  // by its own runtime layer, whose scope owns the database.
-  const {
-    mainDir,
-    resourcesPath,
-    processStart,
-    configStores,
-    secrets,
-    supabaseAuth,
-  } = yield* Effect.gen(function* () {
-    const mainDir = yield* resolveDesktopMainDir(moduleDirname);
-    const resourcesPath = yield* resolveResourcesPath(mainDir);
-    const processStart = yield* nodeProcesses.selfIdentity();
-    const [configStores, secretsStore] = yield* Effect.all(
-      [
-        openTexraConfigStores(dataRoot, undefined, (message) =>
-          console.warn(`[desktop] ${message}`),
-        ),
-        JsonStore.open(join(userDataPath, 'secrets.json')),
-      ],
-      { concurrency: 'unbounded' },
+  // Secrets precede the runtime; the process identity and application state
+  // are acquired by its own layers, over the spawner and database it serves.
+  const { mainDir, resourcesPath, configStores, secrets, supabaseAuth } =
+    yield* Effect.gen(function* () {
+      const mainDir = yield* resolveDesktopMainDir(moduleDirname);
+      const resourcesPath = yield* resolveResourcesPath(mainDir);
+      const [configStores, secretsStore] = yield* Effect.all(
+        [
+          openTexraConfigStores(dataRoot, undefined, (message) =>
+            console.warn(`[desktop] ${message}`),
+          ),
+          JsonStore.open(join(userDataPath, 'secrets.json')),
+        ],
+        { concurrency: 'unbounded' },
+      );
+      const secrets = new ElectronSecrets(secretsStore, {
+        showWarningMessage: (message) =>
+          Effect.tryPromise({
+            try: () => showDesktopWarningDialog(message),
+            catch: (cause) =>
+              new NotificationFailed({
+                member: 'showWarningMessage',
+                message: toErrorMessage(cause),
+                cause,
+              }),
+          }),
+      });
+      const supabaseAuth = yield* createSupabaseAuth({ secrets });
+      return { mainDir, resourcesPath, configStores, secrets, supabaseAuth };
+    }).pipe(
+      Effect.provide(Layer.merge(nodeFileServices, processEnvConfigLayer)),
     );
-    const secrets = new ElectronSecrets(secretsStore, {
-      showWarningMessage: (message) =>
-        Effect.tryPromise({
-          try: () => showDesktopWarningDialog(message),
-          catch: (cause) =>
-            new NotificationFailed({
-              member: 'showWarningMessage',
-              message: toErrorMessage(cause),
-              cause,
-            }),
-        }),
-    });
-    const supabaseAuth = yield* createSupabaseAuth({ secrets });
-    return {
-      mainDir,
-      resourcesPath,
-      processStart,
-      configStores,
-      secrets,
-      supabaseAuth,
-    };
-  }).pipe(Effect.provide(Layer.merge(nodeFileServices, processEnvConfigLayer)));
   // The one Effect runtime of this process (PRD 7.7), over the stores it
   // serves: every project's session graph and Promise-facing fiber runs on
   // it, and the entry disposes it last (`disposeProcessRuntime`), after run
@@ -178,7 +166,7 @@ export const initializeElectronPlatform = Effect.fn(
   );
   const setupAuth = createDesktopSetupAuth();
   const runtime = installProcessRuntime({
-    processStart: Effect.succeed(processStart),
+    processStart: nodeProcesses.selfIdentity(),
     globalStorage,
     secrets,
     // Electron profile state intentionally differs from the shared global DB.

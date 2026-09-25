@@ -26,6 +26,7 @@ import {
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { GLOBAL_ARGS, optString } from './_helpers/globalArgs';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 import type { CliContext } from '../runtime/cliContext';
 
 const WORKFLOW_RELATIVE_PATH = '.github/workflows/texra-code-review.yml';
@@ -111,20 +112,34 @@ function compareUrl(slug: GitHubSlug, base: string, branch: string): string {
   return `https://github.com/${slug.owner}/${slug.repo}/compare/${range}?expand=1`;
 }
 
-function refExists(cwd: string, ref: string): boolean {
-  return git(cwd, 'rev-parse', '--verify', '--quiet', `${ref}^{commit}`)
-    .success;
-}
+const refExists = Effect.fn('installGithubAction.refExists')(function* (
+  cwd: string,
+  ref: string,
+) {
+  const result = yield* git(
+    cwd,
+    'rev-parse',
+    '--verify',
+    '--quiet',
+    `${ref}^{commit}`,
+  );
+  return result.success;
+});
 
-function resolveBaseRef(cwd: string, base: string): string | null {
-  if (refExists(cwd, base)) return base;
-  const originRef = `origin/${base}`;
-  return refExists(cwd, originRef) ? originRef : null;
-}
+const resolveBaseRef = Effect.fn('installGithubAction.resolveBaseRef')(
+  function* (cwd: string, base: string) {
+    if (yield* refExists(cwd, base)) return base;
+    const originRef = `origin/${base}`;
+    return (yield* refExists(cwd, originRef)) ? originRef : null;
+  },
+);
 
-function restoreBranch(cwd: string, branch: string | null): void {
-  if (branch) git(cwd, 'checkout', branch);
-}
+const restoreBranch = Effect.fn('installGithubAction.restoreBranch')(function* (
+  cwd: string,
+  branch: string | null,
+) {
+  if (branch) yield* git(cwd, 'checkout', branch);
+});
 
 function printSecretChecklist(slug: GitHubSlug | null): void {
   const repoFlag = slug ? ` -R ${slug.owner}/${slug.repo}` : '';
@@ -139,14 +154,14 @@ function printSecretChecklist(slug: GitHubSlug | null): void {
   );
 }
 
-function openGitHubAppInstaller(slug: GitHubSlug | null): Effect.Effect<void> {
+function openGitHubAppInstaller(
+  slug: GitHubSlug | null,
+): Effect.Effect<void, never, ChildProcessSpawner> {
   return Effect.gen(function* () {
     if (!slug) return;
 
-    // `tryOpenBrowser` reports a failed launch as `false`; it never rejects.
-    const opened = yield* Effect.promise(() =>
-      tryOpenBrowser(TEXRA_GITHUB_APP_INSTALL_URL),
-    );
+    // `tryOpenBrowser` reports a failed launch as `false`; it never fails.
+    const opened = yield* tryOpenBrowser(TEXRA_GITHUB_APP_INSTALL_URL);
     writeTextStdout('');
     if (opened) {
       writeTextStdout(
@@ -164,14 +179,14 @@ function runInstallGithubAction(context: CliContext, opts: InstallOptions) {
   return Effect.gen(function* () {
     const { cwd } = context;
 
-    if (!isGitRepo(cwd)) {
+    if (!(yield* isGitRepo(cwd))) {
       writeTextStderr(
         'Not inside a git repository. Run this from a cloned GitHub repo.',
       );
       return CliExitCode.Usage;
     }
 
-    const root = repoRoot(cwd) ?? cwd;
+    const root = (yield* repoRoot(cwd)) ?? cwd;
     const workflowAbsPath = path.join(root, WORKFLOW_RELATIVE_PATH);
 
     // An unreadable workflow path is the command's failure, reported by the
@@ -186,13 +201,13 @@ function runInstallGithubAction(context: CliContext, opts: InstallOptions) {
       return CliExitCode.Usage;
     }
 
-    const url = remoteUrl(root);
+    const url = yield* remoteUrl(root);
     const slug = url ? parseGitHubSlug(url) : null;
-    const base = opts.base ?? defaultBranch(root) ?? 'main';
+    const base = opts.base ?? (yield* defaultBranch(root)) ?? 'main';
     const branch = opts.branch ?? DEFAULT_BRANCH_NAME;
-    const startBranch = currentBranch(root);
+    const startBranch = yield* currentBranch(root);
 
-    const branchExists = localBranchExists(root, branch);
+    const branchExists = yield* localBranchExists(root, branch);
     if (branchExists && !opts.force) {
       writeTextStderr(
         `Branch "${branch}" already exists. Pass --branch <name> or --force.`,
@@ -200,7 +215,7 @@ function runInstallGithubAction(context: CliContext, opts: InstallOptions) {
       return CliExitCode.Usage;
     }
 
-    const baseRef = branchExists ? base : resolveBaseRef(root, base);
+    const baseRef = branchExists ? base : yield* resolveBaseRef(root, base);
     if (!baseRef) {
       writeTextStderr(
         `Could not resolve base branch "${base}". Fetch it or pass --base <branch>.`,
@@ -214,7 +229,7 @@ function runInstallGithubAction(context: CliContext, opts: InstallOptions) {
     // during the launch cannot strand the user on the target branch.
     yield* openGitHubAppInstaller(slug);
 
-    const checkout = branchExists
+    const checkout = yield* branchExists
       ? git(root, 'checkout', branch)
       : git(root, 'checkout', '-b', branch, baseRef);
     if (!checkout.success) {
@@ -226,11 +241,11 @@ function runInstallGithubAction(context: CliContext, opts: InstallOptions) {
 
     // Report the failure, put the user back on the branch they started from, and
     // hand back the error exit code.
-    const abort = (message: string): number => {
-      writeTextStderr(message);
-      restoreBranch(root, startBranch);
-      return CliExitCode.AgentError;
-    };
+    const abort = (message: string) =>
+      Effect.sync(() => writeTextStderr(message)).pipe(
+        Effect.andThen(restoreBranch(root, startBranch)),
+        Effect.as(CliExitCode.AgentError),
+      );
 
     // The write is the one fallible step with a recovery of its own: its
     // failure is the abort message below, not the command's error channel.
@@ -250,17 +265,17 @@ function runInstallGithubAction(context: CliContext, opts: InstallOptions) {
       ),
     );
     if (writeFailure !== null) {
-      return abort(
+      return yield* abort(
         `Failed to write ${WORKFLOW_RELATIVE_PATH}: ${writeFailure}`,
       );
     }
 
-    const add = git(root, 'add', '--', WORKFLOW_RELATIVE_PATH);
+    const add = yield* git(root, 'add', '--', WORKFLOW_RELATIVE_PATH);
     if (!add.success) {
-      return abort(`Failed to stage the workflow: ${add.stderr}`);
+      return yield* abort(`Failed to stage the workflow: ${add.stderr}`);
     }
 
-    const diff = git(
+    const diff = yield* git(
       root,
       'diff',
       '--cached',
@@ -269,12 +284,14 @@ function runInstallGithubAction(context: CliContext, opts: InstallOptions) {
       WORKFLOW_RELATIVE_PATH,
     );
     if (diff.exitCode !== 0 && diff.exitCode !== 1) {
-      return abort(`Failed to inspect staged workflow changes: ${diff.stderr}`);
+      return yield* abort(
+        `Failed to inspect staged workflow changes: ${diff.stderr}`,
+      );
     }
 
     const hasWorkflowChanges = diff.exitCode === 1;
     if (hasWorkflowChanges) {
-      const commit = git(
+      const commit = yield* git(
         root,
         'commit',
         '-m',
@@ -283,7 +300,7 @@ function runInstallGithubAction(context: CliContext, opts: InstallOptions) {
         WORKFLOW_RELATIVE_PATH,
       );
       if (!commit.success) {
-        return abort(`Failed to commit the workflow: ${commit.stderr}`);
+        return yield* abort(`Failed to commit the workflow: ${commit.stderr}`);
       }
       writeTextStdout(
         `Created ${WORKFLOW_RELATIVE_PATH} on branch "${branch}".`,
@@ -293,7 +310,7 @@ function runInstallGithubAction(context: CliContext, opts: InstallOptions) {
         `${WORKFLOW_RELATIVE_PATH} already matches the TeXRA template on branch "${branch}".`,
       );
       if (!branchExists) {
-        restoreBranch(root, startBranch);
+        yield* restoreBranch(root, startBranch);
         printSecretChecklist(slug);
         return CliExitCode.Success;
       }
@@ -318,7 +335,7 @@ function runInstallGithubAction(context: CliContext, opts: InstallOptions) {
       return CliExitCode.Success;
     }
 
-    const push = git(root, 'push', '-u', 'origin', branch);
+    const push = yield* git(root, 'push', '-u', 'origin', branch);
     if (!push.success) {
       writeTextStderr(`Failed to push "${branch}": ${push.stderr}`);
       writeTextStdout(
@@ -334,8 +351,8 @@ function runInstallGithubAction(context: CliContext, opts: InstallOptions) {
     // the compare URL directly when gh is unavailable or cannot open the page.
     const prPageUrl = compareUrl(slug, base, branch);
     let opened: boolean;
-    if (ghAvailable(root)) {
-      const pr = gh(
+    if (yield* ghAvailable(root)) {
+      const pr = yield* gh(
         root,
         'pr',
         'create',
@@ -357,13 +374,13 @@ function runInstallGithubAction(context: CliContext, opts: InstallOptions) {
             ? `gh pr create --web failed: ${diagnostic}`
             : 'gh pr create --web failed; opening the compare URL instead.',
         );
-        opened = yield* Effect.promise(() => tryOpenBrowser(prPageUrl));
+        opened = yield* tryOpenBrowser(prPageUrl);
       }
     } else {
-      opened = yield* Effect.promise(() => tryOpenBrowser(prPageUrl));
+      opened = yield* tryOpenBrowser(prPageUrl);
     }
 
-    restoreBranch(root, startBranch);
+    yield* restoreBranch(root, startBranch);
     if (opened) {
       writeTextStdout(
         'Opened the pull-request page in your browser — review the diff and click "Create pull request".',

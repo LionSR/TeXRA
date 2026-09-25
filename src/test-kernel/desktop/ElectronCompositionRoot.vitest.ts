@@ -23,6 +23,7 @@ import { createTestSession } from '@test/support/sessionTestUtils';
 
 import { sourceFilesUnder } from '@test/support/repoScan';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
+import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { normalizeFilePath } from '@utils/core';
 import {
   DESKTOP_SRC_DIR,
@@ -40,6 +41,7 @@ const projectRecordsOf = Effect.fnUntraced(function* (profile: string) {
   const context = yield* Layer.build(
     globalDatabaseLayer(resolveGlobalStoragePath(profile)).pipe(
       Layer.provide(ProcessIdentity.layer(owner)),
+      Layer.provide(nodeSpawnerLayer),
       Layer.orDie,
     ),
   );
@@ -97,6 +99,7 @@ describe('desktop composition root and launch environment', () => {
         Effect.provide(nodePlatformLayer),
         Effect.provide(projectDatabaseLayer),
         Effect.provide(ProcessIdentity.layer(processOwnerId(undefined))),
+        Effect.provide(nodeSpawnerLayer),
       ),
   );
 
@@ -183,6 +186,7 @@ describe('desktop composition root and launch environment', () => {
         Effect.provide(nodePlatformLayer),
         Effect.provide(projectDatabaseLayer),
         Effect.provide(ProcessIdentity.layer(processOwnerId(undefined))),
+        Effect.provide(nodeSpawnerLayer),
       ),
   );
 
@@ -268,6 +272,7 @@ describe('desktop composition root and launch environment', () => {
       Effect.provide(nodePlatformLayer),
       Effect.provide(projectDatabaseLayer),
       Effect.provide(ProcessIdentity.layer(processOwnerId(undefined))),
+      Effect.provide(nodeSpawnerLayer),
     ),
   );
 

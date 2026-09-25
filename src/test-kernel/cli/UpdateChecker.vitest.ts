@@ -13,6 +13,7 @@ import {
 } from '@cli/runtime/updateChecker';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { jsonResponse } from '@test/support/fetchTestUtils';
+import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 
 const mocks = vi.hoisted(() => ({ readCliAmbientState: vi.fn() }));
 
@@ -151,7 +152,7 @@ describe('fetchLatestHomebrewFormulaVersion', () => {
               ),
           }),
         ).toEqual({ version: '0.39.0', refreshed: true });
-      }),
+      }).pipe(Effect.provide(nodeSpawnerLayer)),
   );
 
   effectIt.effect(
@@ -168,7 +169,7 @@ describe('fetchLatestHomebrewFormulaVersion', () => {
             runCommand: () => Effect.succeed(JSON.stringify({ formulae: [] })),
           }),
         ).toEqual({ version: undefined, refreshed: true });
-      }),
+      }).pipe(Effect.provide(nodeSpawnerLayer)),
   );
 
   effectIt.effect(
@@ -193,7 +194,7 @@ describe('fetchLatestHomebrewFormulaVersion', () => {
           { command: 'brew', args: ['update', '--quiet'] },
           { command: 'brew', args: ['info', '--json=v2', 'texra'] },
         ]);
-      }),
+      }).pipe(Effect.provide(nodeSpawnerLayer)),
   );
 });
 

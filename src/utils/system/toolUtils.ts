@@ -3,7 +3,6 @@ import * as path from 'node:path';
 
 // Third-party imports
 import { Effect, Option } from 'effect';
-import { execa } from 'execa';
 import { parse as shellParse } from 'shell-quote';
 
 // Local imports
@@ -23,13 +22,17 @@ import {
   TEXFMT_INSTALL_GUIDE,
   getInstallGuide,
 } from '@shared/constants/latexToolchain';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
-import { IS_WINDOWS, extendEnvPath, withExtendedPath } from './platformPaths';
+import {
+  IS_WINDOWS,
+  extendEnvPath,
+  whichOnExtendedPath,
+} from './platformPaths';
 import { resolveOptionalCommand } from './binaryResolver';
-import { executeCommandSync } from './execCore';
 import { executeCommand, type ExecuteCommandBaseOptions } from './execUtils';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 const CHANNEL = 'toolUtils';
 
@@ -163,22 +166,16 @@ function parseCommand(cmd: string): { cmdName: string; args: string[] } | null {
 }
 
 /**
- * Spawn one `<tool> --version` probe. This is the module's execa edge, lifted
- * exactly once: `Effect.tryPromise` hands the thunk an `AbortSignal` that
- * aborts when the fiber is interrupted, and it is execa's `cancelSignal`, so
- * an interrupted probe kills the spawned process instead of leaving it to run
- * out its five-second timeout. No caller threads a signal in.
+ * Run one `<tool> --version` probe. A `--version` probe answers the same from
+ * any directory and for any project, so it names the process cwd and no
+ * setting slots. An interrupted probe's scope kills the child.
  */
-const spawnProbe = (cmd: string, args: string[], execEnv: NodeJS.ProcessEnv) =>
-  Effect.tryPromise({
-    try: (signal) =>
-      execa(cmd, args, {
-        env: execEnv,
-        reject: false,
-        timeout: 5000,
-        cancelSignal: signal,
-      }),
-    catch: ensureError,
+const runProbe = (cmd: string, args: string[]) =>
+  executeCommand([cmd, ...args], {
+    cwd: process.cwd(),
+    settings: undefined,
+    timeout: 5000,
+    quiet: true,
   });
 
 /**
@@ -189,13 +186,12 @@ const executeWithFallback = Effect.fn('toolUtils.executeWithFallback')(
   function* (
     cmd: string,
     args: string[],
-    execEnv: NodeJS.ProcessEnv,
-  ): Effect.fn.Return<boolean, Error> {
+  ): Effect.fn.Return<boolean, never, ChildProcessSpawner> {
     yield* Effect.logDebug(
       `Checking tool '${cmd}' with args [${args.join(', ')}]`,
     ).pipe(withLogChannel(CHANNEL));
 
-    let result = yield* spawnProbe(cmd, args, execEnv);
+    let result = yield* runProbe(cmd, args);
     yield* Effect.logDebug(
       `Initial check for '${cmd}': exitCode=${result.exitCode}, ` +
         `stdout=${result.stdout?.slice(0, 100) || '(empty)'}, ` +
@@ -211,7 +207,7 @@ const executeWithFallback = Effect.fn('toolUtils.executeWithFallback')(
       return true;
     }
 
-    const fallback = resolveOptionalCommand(cmd, args);
+    const fallback = yield* resolveOptionalCommand(cmd, args);
     yield* Effect.logDebug(
       `Fallback search for '${cmd}': ${fallback?.resolvedPath ?? 'not found'}`,
     ).pipe(withLogChannel(CHANNEL));
@@ -220,7 +216,7 @@ const executeWithFallback = Effect.fn('toolUtils.executeWithFallback')(
       yield* Effect.logDebug(
         `Running fallback '${fallback.command}' with args [${fallback.args.join(', ')}]`,
       ).pipe(withLogChannel(CHANNEL));
-      result = yield* spawnProbe(fallback.command, fallback.args, execEnv);
+      result = yield* runProbe(fallback.command, fallback.args);
       yield* Effect.logDebug(
         `Fallback result: exitCode=${result.exitCode}, ` +
           `stdout=${result.stdout?.slice(0, 100) || '(empty)'}, ` +
@@ -262,7 +258,7 @@ export const checkToolInstalled = Effect.fn('toolUtils.checkToolInstalled')(
   function* (
     toolName: string,
     showError: boolean = true,
-  ): Effect.fn.Return<boolean> {
+  ): Effect.fn.Return<boolean, never, ChildProcessSpawner> {
     const config = TOOL_CONFIGS[toolName];
 
     if (!config) {
@@ -276,7 +272,6 @@ export const checkToolInstalled = Effect.fn('toolUtils.checkToolInstalled')(
     const command = config.command || `${toolName} --version`;
 
     const probe = Effect.gen(function* () {
-      const execEnv = withExtendedPath(process.env);
       const extendedPath = extendEnvPath();
 
       // Log PATH info once (not per-command)
@@ -290,9 +285,7 @@ export const checkToolInstalled = Effect.fn('toolUtils.checkToolInstalled')(
         for (const cmd of command) {
           const parsed = parseCommand(cmd);
           if (!parsed) continue;
-          if (
-            yield* executeWithFallback(parsed.cmdName, parsed.args, execEnv)
-          ) {
+          if (yield* executeWithFallback(parsed.cmdName, parsed.args)) {
             return true;
           }
         }
@@ -306,7 +299,7 @@ export const checkToolInstalled = Effect.fn('toolUtils.checkToolInstalled')(
           new Error('Invalid command: no executable found'),
         );
       }
-      return yield* executeWithFallback(parsed.cmdName, parsed.args, execEnv);
+      return yield* executeWithFallback(parsed.cmdName, parsed.args);
     });
 
     // A probe failure and an absent tool differ only in what the report links
@@ -327,7 +320,7 @@ export const checkToolInstalled = Effect.fn('toolUtils.checkToolInstalled')(
     // reporting a missing tool.
     const outcome = yield* probe.pipe(
       Effect.map((installed) => ({ installed, probeFailed: false })),
-      Effect.catch(answerAsAbsent),
+      Effect.catch((error: Error) => answerAsAbsent(error)),
       Effect.catchDefect(answerAsAbsent),
     );
 
@@ -366,7 +359,7 @@ export const runToolWithCheck = Effect.fn('toolUtils.runToolWithCheck')(
     toolName: string,
     args: string[],
     options: RunToolOptions,
-  ): Effect.fn.Return<ExecResult | false, Error> {
+  ): Effect.fn.Return<ExecResult | false, never, ChildProcessSpawner> {
     const { showError = true, ...execOptions } = options;
     if (!(yield* checkToolInstalled(toolName, showError))) {
       return false;
@@ -382,7 +375,11 @@ export const runToolWithCheck = Effect.fn('toolUtils.runToolWithCheck')(
  * core-dependency check all decide on.
  */
 export const detectImageTool = Effect.fn('toolUtils.detectImageTool')(
-  function* (): Effect.fn.Return<'magick' | 'gm' | null> {
+  function* (): Effect.fn.Return<
+    'magick' | 'gm' | null,
+    never,
+    ChildProcessSpawner
+  > {
     const [hasMagick, hasGm] = yield* Effect.all(
       ['magick', 'gm'].map((tool) => checkToolInstalled(tool, false)),
       { concurrency: 'unbounded' },
@@ -456,20 +453,17 @@ const packageManagerAvailability = new Map<SystemPackageManager, boolean>();
  * than {@link detectPackageManager}: that one answers "which manager does this
  * platform use", so on a Linux box with both apt and Linuxbrew it returns
  * `apt` and a brew-only command map would never match. Each answer is probed
- * once and cached, including misses. The answer is the whole report: the
- * probe's own run and stderr are logged by `executeCommandSync`, and each
- * caller surfaces the boolean (or `detectPackageManager`'s null) itself.
+ * once and cached, including misses. The answer is a PATH lookup, not a
+ * spawn, so it stays synchronous for the install-command getters; a present
+ * but broken binary counts as installed, and the install command it picks
+ * then fails visibly. Each caller surfaces the boolean (or
+ * `detectPackageManager`'s null) itself.
  */
 export function hasPackageManager(name: SystemPackageManager): boolean {
   const cached = packageManagerAvailability.get(name);
   if (cached !== undefined) return cached;
 
-  // A `--version` probe answers the same from any directory and for any
-  // project, so it names the process cwd and no setting slots instead of
-  // reaching for a workspace it does not need.
-  const available = executeCommandSync([name, '--version'], {
-    cwd: process.cwd(),
-  }).success;
+  const available = whichOnExtendedPath(name) !== null;
   packageManagerAvailability.set(name, available);
   return available;
 }

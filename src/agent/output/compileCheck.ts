@@ -36,6 +36,7 @@ import {
   publishCompiledPdfArtifactBestEffort,
 } from './compiledPdfArtifacts';
 import { getOutputFilesByRound, type OutputState } from './outputState';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 interface CompileCheckContext {
   /** The run's session roots: its workspace, storage, and setting stores. */
@@ -335,12 +336,9 @@ const compileOne = Effect.fn('reflection.compileOne')(function* (
     runId,
   };
 
-  // A stale log from a previous attempt at this round is only ever cleared
-  // once this file's outcome is known — clearing it up front would leave a
-  // crash mid-check masquerading as success. A log that is not there is
-  // already clear (`force`, as the provider behind the facade already was),
-  // which is the only failure this passes over silently; any other one leaves
-  // last round's log in place, so it is named.
+  // A stale log from an earlier attempt is cleared only once this file's
+  // outcome is known, so a crash mid-check never masquerades as success. A
+  // missing log is already clear (`force`); any other failure is named.
   const clearStaleLogs = fs.remove(logAbsolutePath, { force: true }).pipe(
     Effect.catch((error) =>
       Effect.sync(() => {
@@ -352,7 +350,11 @@ const compileOne = Effect.fn('reflection.compileOne')(function* (
   );
 
   const attempt = Effect.gen(function* (): Generator<
-    Effect.Effect<unknown, Error, FileSystem.FileSystem | WorkspaceFs>,
+    Effect.Effect<
+      unknown,
+      Error,
+      FileSystem.FileSystem | WorkspaceFs | ChildProcessSpawner
+    >,
     CompileAttempt
   > {
     const content = yield* readNormalizedFile(
@@ -380,8 +382,8 @@ const compileOne = Effect.fn('reflection.compileOne')(function* (
     const sourceDir = resolveWorkspaceSourceDir(ctx.roots, sourceLocation);
     const extraInputDirs = sourceDir ? [sourceDir] : [];
 
-    // execa's timeout option kills the child process on expiry, so we don't
-    // orphan hanging latexmk/pdflatex runs.
+    // On the timeout the command's scope kills the child, so we don't orphan
+    // hanging latexmk/pdflatex runs.
     const result = yield* compileLatex2Pdf(outputFile.location, ctx.roots, {
       channel: ctx.runId,
       outputDirectory: buildDir,

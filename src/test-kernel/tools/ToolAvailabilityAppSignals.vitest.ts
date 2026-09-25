@@ -6,6 +6,7 @@ import { afterEach, describe, expect, vi } from 'vitest';
 import type { ConfigProvider } from '@platform/interfaces';
 import { Secrets, type PlatformSecrets } from '@platform/secrets';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
+import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 import type { ToolProbeInputs } from '@tools/toolProbes';
 import { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import { SetupPlatform } from '@tools/setup/platform';
@@ -47,6 +48,7 @@ const probeServices = Layer.mergeAll(
   // The mocked plugins declare no Lean plugin, so nothing here reads the port.
   Layer.mock(LeanLanguageServices, { listServers: () => [] }),
   testHttpClientLayer,
+  nodeSpawnerLayer,
 );
 
 afterEach(() => {

@@ -8,23 +8,20 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 // Local imports - model
 import { apiKeySecretName, invalidateApiKeyCache } from '@model/apiProviders';
 import type { PlatformSecrets } from '@platform/secrets';
+import { scriptedSpawnerLayer } from '@test/support/childProcessTestLayer';
+import type * as ChildProcess from 'effect/unstable/process/ChildProcess';
 
 let secretStore: Map<string, string>;
 let cleanupDirs: string[];
-let execaMock: ReturnType<typeof vi.fn>;
+/** The one keychain account whose probe finds a credential, if any. */
+let keychainAccount: string | undefined;
+/** Every command the env build asked the spawner for. */
+let spawnCalls: ChildProcess.StandardCommand[];
 let homedirMock: string;
 
 async function loadBuildClaudeAgentEnv(): Promise<
   typeof import('@tools/claudeAgentConfig').buildClaudeAgentEnv
 > {
-  vi.doMock('execa', async (importOriginal) => {
-    const actual = await importOriginal<typeof import('execa')>();
-    return {
-      ...actual,
-      execa: execaMock,
-    };
-  });
-
   vi.doMock('node:os', async (importOriginal) => {
     const actual = await importOriginal<typeof import('node:os')>();
     return {
@@ -64,10 +61,18 @@ async function buildEnv(options?: BuildEnvOptions): Promise<NodeJS.ProcessEnv> {
   // The live env provider, so the suite's `vi.stubEnv` still governs the
   // API-key fallback read through `envVar`.
   const { processEnvConfigLayer } = await import('@utils/system/envFlags');
+  const spawner = scriptedSpawnerLayer((command) => ({
+    exitCode:
+      keychainAccount !== undefined && command.args.includes(keychainAccount)
+        ? 0
+        : 1,
+  }));
+  spawnCalls = spawner.calls;
   return Effect.runPromise(
     buildClaudeAgentEnv(options).pipe(
       Effect.provide(Secrets.layer(fakeSecrets)),
       Effect.provide(processEnvConfigLayer),
+      Effect.provide(spawner.layer),
     ),
   );
 }
@@ -78,9 +83,7 @@ function seedManagedSecret(): void {
 
 /** Keychain probe succeeds only for the named account; everything else misses. */
 function mockKeychainAccount(account: string): void {
-  execaMock.mockImplementation(async (_command: string, args: string[]) => ({
-    exitCode: Array.isArray(args) && args.includes(account) ? 0 : 1,
-  }));
+  keychainAccount = account;
 }
 
 describe('Claude Code CLI configuration', () => {
@@ -88,7 +91,8 @@ describe('Claude Code CLI configuration', () => {
     secretStore = new Map();
     cleanupDirs = [];
     homedirMock = os.homedir();
-    execaMock = vi.fn().mockResolvedValue({ exitCode: 1 });
+    keychainAccount = undefined;
+    spawnCalls = [];
     vi.resetModules();
     invalidateApiKeyCache();
     // Deterministic baseline: no OAuth credential present. Point the config dir
@@ -104,7 +108,6 @@ describe('Claude Code CLI configuration', () => {
   });
 
   afterEach(() => {
-    vi.doUnmock('execa');
     vi.doUnmock('node:os');
     invalidateApiKeyCache();
     vi.unstubAllEnvs();
@@ -203,10 +206,12 @@ describe('Claude Code CLI configuration', () => {
 
     const env = await buildEnv({ platform: 'darwin' });
     expect(env.ANTHROPIC_API_KEY).toBe('from-env');
+    expect(spawnCalls.length).toBeGreaterThan(0);
     expect(
-      execaMock.mock.calls.some(
-        ([, args]) =>
-          Array.isArray(args) && args.includes('Claude Code-credentials'),
+      spawnCalls.some(
+        (command) =>
+          command.command === 'security' &&
+          command.args.includes('Claude Code-credentials'),
       ),
     ).toBe(false);
   });

@@ -27,6 +27,10 @@ export type DatabaseFixture = Pick<
   Pick<
     typeof import('@platform/defaults/nodeProcesses'),
     'nodeProcesses' | 'processOwnerId'
+  > &
+  Pick<
+    typeof import('@platform/defaults/nodePlatform'),
+    'nodePlatformServices'
   >;
 
 export function loadDatabaseFixture(

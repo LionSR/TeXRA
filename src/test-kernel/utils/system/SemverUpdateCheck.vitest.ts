@@ -9,6 +9,7 @@ import { updateCheckRecordsLayer } from '@controllers/session/updateCheckRecords
 import { processOwnerId } from '@platform/defaults/nodeProcesses';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
 import { UpdateCheckRecords } from '@shared/session/updateCheckRecords';
+import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { isNewerSemverVersion } from '@utils/system/semverUpdateCheck';
 import { runDailyUpdateCheck } from '@utils/system/updateCheck';
 
@@ -48,6 +49,7 @@ describe('runDailyUpdateCheck', () => {
                   Layer.provide(
                     ProcessIdentity.layer(processOwnerId(undefined)),
                   ),
+                  Layer.provide(nodeSpawnerLayer),
                   Layer.orDie,
                 ),
               ),

@@ -1,6 +1,5 @@
 import { fileURLToPath } from 'node:url';
 
-import { execa } from 'execa';
 import { z } from 'zod';
 
 import { Effect, Result } from 'effect';
@@ -22,9 +21,12 @@ import {
 } from './cliContext';
 import { installCliProcessRuntime } from './cliProcessRuntime';
 import { CliExitCode } from './exitCodes';
+import { runForegroundCommand } from './foregroundCommand';
 import { askCliQuestion, writeTextStderr } from './logSinks';
 import { createCliStyle } from './style';
 import type { HttpClient } from 'effect/unstable/http';
+import type { PlatformError } from 'effect/PlatformError';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 /** Published package name on npm; the `texra` bin lives here. */
 const CLI_PACKAGE_NAME = '@texra-ai/cli';
@@ -134,7 +136,7 @@ type CommandRunner = (
   args: readonly string[],
   timeoutMs: number,
   cwd?: string,
-) => Effect.Effect<string | undefined, Error>;
+) => Effect.Effect<string | undefined, Error, ChildProcessSpawner>;
 
 const readCommandStdout: CommandRunner = (command, args, timeoutMs, cwd) =>
   Effect.gen(function* () {
@@ -197,7 +199,7 @@ export function fetchLatestHomebrewFormulaVersion(options?: {
   timeoutMs?: number;
   cwd?: string;
   runCommand?: CommandRunner;
-}): Effect.Effect<UpdateCheckFetchResult, Error> {
+}): Effect.Effect<UpdateCheckFetchResult, Error, ChildProcessSpawner> {
   return Effect.gen(function* () {
     const formula = options?.formula ?? CLI_HOMEBREW_FORMULA;
     const runCommand = options?.runCommand ?? readCommandStdout;
@@ -224,18 +226,21 @@ export function fetchLatestHomebrewFormulaVersion(options?: {
   });
 }
 
-async function runCliUpdate(method: InstallMethod): Promise<boolean> {
+function runCliUpdate(
+  method: InstallMethod,
+): Effect.Effect<boolean, never, ChildProcessSpawner> {
   const { command, args } = buildUpdateCommand(method);
-  // Needs true stdio:'inherit' — the package manager may print an
-  // interactive prompt or password request, which executeCommand's
-  // buffered/streamed output cannot forward. `shell: true` with an args array
-  // concatenates unquoted, which the brew case relies on for its `&&` chain.
-  const result = await execa(command, args, {
-    stdio: 'inherit',
-    shell: true,
-    reject: false,
-  });
-  return !result.failed;
+  // On the terminal: the package manager may print an interactive prompt or
+  // password request, which executeCommand's buffered output cannot forward.
+  // One unquoted shell line, which the brew case relies on for its `&&` chain.
+  return runForegroundCommand([command, ...args].join(' ')).pipe(
+    Effect.map((code) => code === 0),
+    Effect.catch((error: PlatformError) =>
+      Effect.logWarning(
+        `The self-update command could not run: ${error.reason._tag}`,
+      ).pipe(Effect.as(false)),
+    ),
+  );
 }
 
 /** Once-per-process latch for {@link notifyCliUpdate}. */
@@ -299,7 +304,9 @@ export async function notifyCliUpdate(context: CliContext): Promise<void> {
     minimumLogLevel: context.minimumLogLevel,
   });
   const check = Effect.gen(function* () {
-    latest = yield* runDailyUpdateCheck({
+    latest = yield* runDailyUpdateCheck<
+      ChildProcessSpawner | HttpClient.HttpClient
+    >({
       currentVersion: context.version,
       host: 'cli',
       fetchLatest:
@@ -339,7 +346,7 @@ export async function notifyCliUpdate(context: CliContext): Promise<void> {
   }
 
   writeTextStderr(style.muted(`Updating via ${method}…`));
-  const ok = await runCliUpdate(method);
+  const ok = await runtime.runPromise(runCliUpdate(method));
   if (!ok) {
     writeTextStderr(
       `${style.error('Update failed.')} Run manually: ${style.command(updateCmd)}`,

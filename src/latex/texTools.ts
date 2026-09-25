@@ -17,6 +17,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import { splitContentLines } from '@utils/text/stringUtils';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from './latexLogging';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 // Raw tail, no TeX-log parsing -- a deliberate choice (see compileCheck.ts):
 // tex compile logs are noisy and heuristic parsing is a losing game, so every
@@ -179,7 +180,7 @@ export const compileLatex2Pdf = Effect.fn('compileLatex2Pdf')(function* (
 ): Effect.fn.Return<
   CompileLatex2PdfResult,
   never,
-  FileSystem.FileSystem | WorkspaceFs
+  FileSystem.FileSystem | WorkspaceFs | ChildProcessSpawner
 > {
   // Schema provides compiler default; channel defaults to module constant
   const parsed = LaTeXCompileOptionsSchema.parse(options);
@@ -253,8 +254,9 @@ export const compileLatex2Pdf = Effect.fn('compileLatex2Pdf')(function* (
     // hands each pass to a pdflatex/bibtex/biber child, so its stop (and
     // timeout) signals the whole tree: a tracked-pid kill would stop latexmk
     // and leave its engine writing into the build directory. A lone pdflatex
-    // has no children to reach, and the tree kill's detached spawn would cost
-    // it execa's kill-on-parent-exit, so it keeps the tracked-pid form.
+    // has no children to reach, and the tree kill's detached spawn would move
+    // it out of our process group, where a hard host kill no longer reaches
+    // it, so it keeps the single-process form.
     const runTool = (tool: string, args: string[], showError: boolean) =>
       runToolWithCheck(tool, args, {
         channel,

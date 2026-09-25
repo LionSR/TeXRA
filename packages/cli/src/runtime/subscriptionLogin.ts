@@ -5,6 +5,7 @@
  * `SUBSCRIPTION_PROVIDERS` catalog.
  */
 import { Effect } from 'effect';
+import { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 import {
   subscriptionProvider,
@@ -61,7 +62,7 @@ function writeCliLoopbackSignInProgress(options: {
   readonly displayName: string;
   readonly url: string;
   readonly noBrowser: boolean;
-}): Effect.Effect<void> {
+}): Effect.Effect<void, never, ChildProcessSpawner> {
   const { writeProgress, displayName, url, noBrowser } = options;
   return Effect.gen(function* () {
     writeProgress(`${displayName} sign-in URL:\n${url}`);
@@ -69,8 +70,8 @@ function writeCliLoopbackSignInProgress(options: {
 
     writeProgress('Browser launch in progress...');
     // Infallible by construction: `tryOpenBrowser` answers false rather than
-    // rejecting, so the launch outcome is a value, not a failure.
-    if (yield* Effect.promise(() => tryOpenBrowser(url))) {
+    // failing, so the launch outcome is a value, not a failure.
+    if (yield* tryOpenBrowser(url)) {
       writeProgress('Browser opened; the same URL works in another browser.');
       return;
     }
@@ -101,6 +102,9 @@ export const signInCliSubscription = Effect.fn(
 ) {
   const provider = subscriptionProvider(providerId);
   const { displayName } = provider;
+  // The presenter port runs with nothing in context, so the spawner this
+  // program holds is handed to the browser launch.
+  const spawner = yield* ChildProcessSpawner;
   const present: SubscriptionSignInPresenter = {
     presentDeviceCode: ({
       userCode,
@@ -118,7 +122,7 @@ export const signInCliSubscription = Effect.fn(
         displayName,
         url,
         noBrowser: init.noBrowser,
-      }),
+      }).pipe(Effect.provideService(ChildProcessSpawner, spawner)),
   };
 
   return yield* provider.signIn({

@@ -56,16 +56,16 @@ import {
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 const CHANNEL = 'ToolEditApproval';
 
 /**
- * The runtime services this controller's programs take: the LaTeX preview
- * programs read and write the temp files they stage, and the host build they
- * call compiles against the session's roots. Every method carries them, so a
- * host provides them once, at its run.
+ * Runtime services this controller's programs take: preview programs stage
+ * temp files and the host build spawns the compiler. Every method carries
+ * them, so a host provides them once, at its run.
  */
-type PreviewServices = FileSystem.FileSystem | Path.Path;
+type PreviewServices = FileSystem.FileSystem | Path.Path | ChildProcessSpawner;
 type PreviewCall<A> = Effect.Effect<A, HostRequestFailure, PreviewServices>;
 
 /** The host view of one staged request, live until the request is decided. */

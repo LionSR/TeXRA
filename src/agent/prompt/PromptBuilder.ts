@@ -12,6 +12,7 @@ import { ensureArray } from '@utils/core';
 import { renderPrompt } from '@utils/prompt';
 import { loadTexraRules } from '@utils/files/rulesUtils';
 import { buildWorkspaceInfoBlock } from '@utils/system/workspaceInfo';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 /**
  * Instructions appended to tool-use agent prompts.
@@ -216,7 +217,7 @@ export const buildInitialToolUsePrompts = Effect.fn('prompt.initialToolUse')(
   ): Effect.fn.Return<
     InitialPrompts & { instructionSuffix: string },
     Error,
-    FileSystem.FileSystem
+    FileSystem.FileSystem | ChildProcessSpawner
   > {
     const builder = new PromptBuilder(
       agentPrompt,

@@ -35,6 +35,7 @@ import type { SetupPlatform } from '@tools/setup/platform';
 import type { Compositions } from '@tools/compositions';
 import type { ToolRegistry } from '@tools/toolTable';
 import type { HttpClient } from 'effect/unstable/http';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 import type {
   AgentDirectories,
@@ -51,9 +52,10 @@ import type { Secrets } from './secrets';
  * cohort-A tags beside the records, the account plane, the resume port, the
  * language-model bridge, the Lean port and the HTTP client, merged once in
  * `installProcessRuntime`'s `services` layer, plus the standard library's
- * `FileSystem` and `Path`, which the same install provides from
- * `@effect/platform-node` so a program that reads or resolves a file takes
- * them from context instead of building a Node layer of its own, and
+ * `FileSystem`, `Path` and `ChildProcessSpawner`, which the same install
+ * provides from `@effect/platform-node` so a program that reads a file or
+ * starts a child process takes them from context instead of building a Node
+ * layer of its own, and
  * `GlobalStorageFs`, the cross-workspace storage view every session of the
  * process shares, `GlobalDatabase`, that same root's one database handle,
  * which the records above and the CLI's input history read through,
@@ -68,6 +70,7 @@ export type ProcessServices =
   | ProcessIdentity
   | FileSystem.FileSystem
   | Path.Path
+  | ChildProcessSpawner
   | GlobalStorageFs
   | GlobalDatabase
   | ProjectDatabases

@@ -24,6 +24,7 @@ import {
 } from './logSinks';
 import { createCliStyle } from './style';
 import { TEXRA_CLI_SUPPORTED_NODE_RANGE } from './terminalRequirements';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 import type { CliAuthProfile } from './supabaseAuth';
 import type { CliContext } from './cliContext';
 import type { CliStyle } from './style';
@@ -46,10 +47,10 @@ export interface DoctorReport {
 
 /**
  * The failure of a probe this module drives itself: the LaTeX toolchain probe
- * and the telemetry consent read. It carries the
- * value the foreign edge threw, so the check that recovers from it renders the
- * same hint it rendered when it caught the rejection. The two probes the CLI
- * root supplies are programs already and keep their own `Error` failure.
+ * and the telemetry consent read. It carries the value the foreign edge threw,
+ * so the check that recovers from it renders the same hint it rendered when it
+ * caught the rejection. The two probes the CLI root supplies are programs
+ * already and keep their own `Error` failure.
  */
 class DoctorProbeFailed extends Data.TaggedError('DoctorProbeFailed')<{
   readonly cause: unknown;
@@ -61,21 +62,20 @@ const probeFailure = (cause: unknown): DoctorProbeFailed =>
 interface DoctorDependencies {
   readonly nodeVersion?: string;
   /**
-   * The account read the CLI root hands over: the program itself, yielded by
-   * the auth check below rather than settled into a Promise first — the same
-   * contract as `modelAccessList`.
+   * The account read the CLI root hands over, yielded by the auth check below
+   * rather than settled into a Promise first, as `modelAccessList` is.
    */
   readonly authProfile?: Effect.Effect<CliAuthProfile, Error>;
   /**
-   * Model availability needs the process stores, which only the CLI root
-   * holds, so this is the one probe the caller supplies rather than one this
-   * module defaults to. It is absent exactly when platform init failed, and
-   * `initError` then skips the model check that would read it.
+   * Model availability needs the process stores only the CLI root holds, so
+   * the caller supplies this probe. It is absent exactly when platform init
+   * failed, and `initError` then skips the model check that would read it.
    */
   readonly modelAccessList?: Effect.Effect<readonly CliModelAccess[], Error>;
   readonly latexToolchain?: Effect.Effect<
     LatexToolchainProbe,
-    DoctorProbeFailed
+    DoctorProbeFailed,
+    ChildProcessSpawner
   >;
   readonly usageLoggingOptOut?: () => UsageLoggingOptOut;
 }
@@ -179,10 +179,9 @@ function checkNode(version: string): DoctorCheck {
 }
 
 /**
- * `read` is for directories the CLI only ever loads from — the packaged
- * resources root is root-owned whenever the global install went through
- * `sudo npm install -g`, which is the norm on Linux and WSL with a
- * system-wide Node prefix, and demanding write access there fails a healthy
+ * `read` is for directories the CLI only loads from: the packaged resources
+ * root is root-owned after `sudo npm install -g`, the norm on Linux and WSL
+ * with a system-wide Node prefix, so demanding write access fails a healthy
  * install.
  */
 type DirectoryAccess = 'read' | 'readwrite';
@@ -296,7 +295,7 @@ function checkModels(
 
 function checkLatex(
   deps: ResolvedDoctorDependencies,
-): Effect.Effect<DoctorCheck[]> {
+): Effect.Effect<DoctorCheck[], never, ChildProcessSpawner> {
   return deps.latexToolchain.pipe(
     Effect.map((probe) => {
       const checks: DoctorCheck[] = [];
@@ -466,11 +465,13 @@ const missingUsageLoggingOptOut = (): never => {
   );
 };
 
+type DoctorServices = FileSystem.FileSystem | ChildProcessSpawner;
+
 export function buildDoctorReport(
   context: CliContext,
   deps: DoctorDependencies = {},
   initError?: Error,
-): Effect.Effect<DoctorReport, never, FileSystem.FileSystem> {
+): Effect.Effect<DoctorReport, never, DoctorServices> {
   const resolved = {
     nodeVersion: deps.nodeVersion ?? process.versions.node,
     authProfile: deps.authProfile ?? missingAuthProfileProbe,
@@ -570,10 +571,9 @@ export function writeDoctorReport(
     }
     return;
   }
-  // Gate color on the stream the report is actually written to: a passing
-  // report goes to stdout, a failing one to stderr (clig.dev). Using a single
-  // stderr-keyed gate leaked ANSI into `doctor | cat` and stripped color from
-  // `doctor 2>/dev/null` on a TTY.
+  // Gate color on the stream the report is written to: a passing report goes
+  // to stdout, a failing one to stderr (clig.dev). One stderr-keyed gate leaked
+  // ANSI into `doctor | cat` and stripped color from `doctor 2>/dev/null`.
   const colorEnabled = report.ok
     ? context.stdoutColorEnabled
     : context.stderrColorEnabled;

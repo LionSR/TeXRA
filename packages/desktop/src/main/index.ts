@@ -80,7 +80,7 @@ import { refreshToolAvailability } from '@tools/toolAvailability';
 import { killActiveRecording } from '@tools/media/audio';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { readRecentCommits } from '@utils/git/repositoryOverview';
-import { findToolInCommonPaths } from '@utils/system/platformPaths';
+import { findToolInCommonPaths } from '@utils/system/binaryResolver';
 import {
   checkToolInstalled,
   detectPackageManager,

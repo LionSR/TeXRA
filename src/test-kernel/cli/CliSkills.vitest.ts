@@ -23,6 +23,7 @@ import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { installTestSkillRoots } from '@test/support/skillFixtures';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
+import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { TOOL_PLUGINS } from '@tools/plugins';
 
@@ -383,6 +384,6 @@ it.layer(nodePlatformLayer)('CLI skills runtime', (it) => {
         yield* Effect.promise(() =>
           fs.access(path.join(plugin, 'skills', 'load-paper', 'SKILL.md')),
         );
-      }),
+      }).pipe(Effect.provide(nodeSpawnerLayer)),
   );
 });

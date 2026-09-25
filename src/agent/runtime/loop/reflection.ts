@@ -120,7 +120,11 @@ import {
   stoppedBy,
   type RunCell,
 } from './runProgram';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 import type { HttpClient } from 'effect/unstable/http';
+
+/** The services a round prepares, compiles and diffs on. */
+type RoundServices = FileSystem.FileSystem | WorkspaceFs | ChildProcessSpawner;
 
 // Reflection owns conversation limits and document completion, not the provider.
 /** Length for preview slices of tool output and responses. */
@@ -183,6 +187,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
   | WorkspaceFs
   | LanguageModel
   | HttpClient.HttpClient
+  | ChildProcessSpawner
   | Runs
 > {
   const run = yield* AgentRun;
@@ -401,7 +406,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
   const prepareRound = Effect.fn('reflection.prepareRound')(function* (
     initial: RunState,
     cell: RunCell,
-  ): Effect.fn.Return<RunState, Error, FileSystem.FileSystem | WorkspaceFs> {
+  ): Effect.fn.Return<RunState, Error, RoundServices> {
     const round = initial.round;
     const bound = yield* SynchronizedRef.get(run.model);
     workspace = AgentWorkspaceState.create();
@@ -742,11 +747,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     round: number,
     outputLocation: AgentFileLocation,
     endTurn: boolean,
-  ): Effect.fn.Return<
-    OutputExecResult,
-    Error,
-    FileSystem.FileSystem | WorkspaceFs
-  > {
+  ): Effect.fn.Return<OutputExecResult, Error, RoundServices> {
     const diffBaseFiles = yield* resolveBaseFilesForDiff(
       baseFiles,
       runId,
@@ -898,7 +899,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
   const produceOutput = Effect.fn('reflection.produceOutput')(function* (
     state: RunState,
     cell: RunCell,
-  ): Effect.fn.Return<RunState, Error, FileSystem.FileSystem | WorkspaceFs> {
+  ): Effect.fn.Return<RunState, Error, RoundServices> {
     const round = state.round;
     const location = outputLocationFor(round);
     if (state.lastTurn === null) {
@@ -963,7 +964,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
   ): Effect.fn.Return<
     RoundExit,
     Error,
-    FileSystem.FileSystem | WorkspaceFs | LanguageModel | HttpClient.HttpClient
+    RoundServices | LanguageModel | HttpClient.HttpClient
   > {
     const round = (yield* cell.current).round;
     const body = Effect.gen(function* () {
@@ -1082,7 +1083,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
       const finish = Effect.fn('reflection.finish')(function* (
         current: RunState,
         roundEnded: boolean,
-      ): Effect.fn.Return<LoopExit, Error> {
+      ): Effect.fn.Return<LoopExit, Error, ChildProcessSpawner> {
         yield* normalizeCompileRejectionPolicy();
         const outcome = resolveOutcome(current);
         const state = yield* cell.append([
