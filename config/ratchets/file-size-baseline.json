@@ -5,7 +5,6 @@
     "packages/cli/src/chat/chatSessionController.ts": 1447,
     "packages/cli/src/chat/tui/App.tsx": 711,
     "packages/cli/src/chat/tui/commands/registerBuiltins.tsx": 820,
-    "packages/cli/src/chat/tui/forms/ConfigForm.tsx": 514,
     "packages/cli/src/chat/tui/panes/InputBar.tsx": 539,
     "packages/cli/src/chat/tui/panes/staticTranscriptRing.ts": 881,
     "packages/cli/src/chat/tui/panes/statusBarDisplay.ts": 1033,
