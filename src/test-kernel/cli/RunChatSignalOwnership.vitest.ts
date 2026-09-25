@@ -12,7 +12,6 @@ import {
   initializeDefaultSession,
   teardownDefaultSession,
 } from '@agent/runtime';
-import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { rootRunId as rootRunIdSignal } from '@cli/chat/tui/state/cliState';

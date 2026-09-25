@@ -57,7 +57,7 @@ export function formatSkillActivationPrompt(skill: SourcedSkill): string {
   ].join('\n');
 }
 
-export function skillSelectItemsForTui(
+function skillSelectItemsForTui(
   skills: readonly SourcedSkill[],
   disabled: Effect.Success<ReturnType<typeof readDisabledSkills>>,
 ): SelectItem<SkillActivation>[] {

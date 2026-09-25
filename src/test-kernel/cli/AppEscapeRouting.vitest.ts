@@ -1,7 +1,5 @@
 import { setTimeout as sleep } from 'node:timers/promises';
 
-import { Effect } from 'effect';
-
 import stripAnsi from 'strip-ansi';
 import {
   afterEach,
@@ -19,11 +17,8 @@ import {
   currentApproval,
   type ApprovalPayload,
 } from '@cli/chat/tui/state/approvalQueue';
-import { POINTER } from '@cli/tui/ui/glyphs';
-import type { InputHistory } from '@cli/chat/tui/history/inputHistory';
 import {
   activeRunId,
-  selectedRunId,
   closeForegroundReader,
   focusRun,
   expandedRuns,
@@ -314,15 +309,6 @@ async function renderDebugApp(
 
 function currentFrame(stdout: InkRenderHandles['stdout']): string {
   return stripAnsi(stdout.writes.findLast((write) => write.length > 0) ?? '');
-}
-
-function fakeHistory(entries: readonly string[]): InputHistory {
-  return {
-    push: () => Effect.void,
-    reverseFind: () => undefined,
-    at: (index) => entries[index],
-    length: () => entries.length,
-  };
 }
 
 beforeAll(bindTestSessionView);

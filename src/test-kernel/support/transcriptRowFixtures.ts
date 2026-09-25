@@ -14,11 +14,7 @@ import {
   pendingTranscriptEntries,
 } from '@cli/chat/tui/panes/transcriptEntries';
 import {
-  MESSAGE_TYPES,
-  STREAM_LOG_ENTRY_TYPES,
-  RUN_PHASE,
   TOOL_CALL_STATUS,
-  type FileListEntry,
   type NormalizedToolUse,
   type StreamLogEntry,
   type RunPhase,
@@ -29,13 +25,10 @@ import type { CompactionActivityStatus } from '@shared/runs/compactionActivityPr
 import { COMPACTION_ACTIVITY_LABEL } from '@shared/runs/compactionActivityProjection';
 import { toolRowModel } from '@ui/transcript/toolRowModel';
 import {
-  projectTranscriptRow,
   transcriptText,
   type ToolRow,
   type TranscriptRow,
   type CompactionActivityRow,
-  type FileListRow,
-  type PhaseRow,
 } from '@ui/transcript';
 
 /** A normalized tool-use payload with every field a caller did not name

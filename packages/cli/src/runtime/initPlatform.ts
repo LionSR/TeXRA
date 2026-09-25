@@ -38,7 +38,7 @@ import type { SessionOpenError } from '@shared/session/database';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { registerRuntimeShutdownHandlers } from '@tools/agentCliSessionStores';
 import { sessionStoreClearedMessage } from '@ui/copy/sessionStore';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError } from '@utils/errors/errorMessage';
 
 // Local file imports
 import {

@@ -16,7 +16,7 @@ import type {
   StateSettingEntry,
 } from '@shared/state/stateSettings';
 import { settingByKey } from '@shared/state/stateSettings';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const log = createLog('settingsAccess');
 

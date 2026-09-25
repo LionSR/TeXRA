@@ -61,7 +61,7 @@ type ExtensionRegistryCatalogCommandId = ExtensionRegistryCatalogEntry['id'];
  * keep resolving for extension callers. Each takes an argument no palette
  * invocation could supply.
  */
-export const EXTENSION_INTERNAL_COMMAND_IDS = [
+const EXTENSION_INTERNAL_COMMAND_IDS = [
   'texra.compare',
   'texra.acceptEdited',
   'texra.pack',

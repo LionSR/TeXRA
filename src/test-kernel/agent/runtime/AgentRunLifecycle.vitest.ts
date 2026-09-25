@@ -3,7 +3,6 @@ import { Deferred, Effect, Fiber } from 'effect';
 
 import { afterEach, beforeEach, describe, expect, vi, type Mock } from 'vitest';
 
-import { TraceEmitter } from '@agent/trace';
 import type { FinalizeRunResult } from '@agent/storage/runLifecycle';
 import { RunHandle } from '@agent/runtime/RunHandle';
 import { Runs } from '@agent/runtime/runRegistry';
@@ -12,22 +11,17 @@ import {
   finalizeRunTerminal,
   runFlowWithLifecycle,
 } from '@agent/runtime/AgentRunLifecycle';
-import {
-  type ToolUseFlowResult,
-  type WorkflowFlowResult,
-} from '@agent/runtime/AgentFlowResult';
+import { type ToolUseFlowResult } from '@agent/runtime/AgentFlowResult';
 import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
 import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
 import { setLogSink } from '@logger/logSink';
 import {
   aggregateId as qualifyAggregateId,
   RUN_OUTCOME,
-  RUN_PHASE,
   agentKey,
   AgentCategory,
 } from '@shared/schemas';
 import type { RunId, RunOutcome } from '@shared/schemas';
-import { DatabaseWriteFailed } from '@shared/session/database';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 import { noopTrace } from '@test/support/noopTrace';
@@ -40,7 +34,6 @@ import {
   installPlatform,
   installedHost,
 } from '@test/support/setupPlatform';
-import { generateRunId } from '@utils/core';
 
 import { eventsOfType, recordSessionEvents } from '../progressTestUtils';
 import { createTestLaunchContext } from './launchContextTestUtils';
@@ -121,19 +114,6 @@ function toolUseResult(runId: RunId, outcome: RunOutcome): ToolUseFlowResult {
   return { outcome, runId, output: { ...EMPTY_TOOL_USE_OUTPUT, files: [] } };
 }
 
-function workflowResult(runId: RunId, outcome: RunOutcome): WorkflowFlowResult {
-  return {
-    outcome,
-    runId,
-    output: {
-      category: 'workflow',
-      outputs: [],
-      compileFailures: [],
-      diffs: [],
-    },
-  };
-}
-
 /** Gate the next finalizeRun call on an explicit release. */
 const parkNextFinalize = Effect.gen(function* () {
   const started = yield* Deferred.make<void>();
@@ -146,22 +126,6 @@ const parkNextFinalize = Effect.gen(function* () {
   );
   return { started, release };
 });
-
-/** Publish the run and open stage that a suspended teardown must close. */
-function seedOpenRunGroup(ctx: AgentLaunchContext, runId: RunId): string {
-  const parentStageId = ctx.parentStage.id;
-  if (!parentStageId)
-    throw new Error('The fixture parent stage must carry an id.');
-  const session = ctx.session;
-  publishTestRunStart(session, runId);
-  session.publishRunEvent(runId, {
-    type: 'stage.start',
-    id: parentStageId,
-    label: 'run',
-    kind: 'run',
-  });
-  return parentStageId;
-}
 
 /**
  * The lifecycle program over the fake host's process services. The suite runs
@@ -213,7 +177,7 @@ describe('runFlowWithLifecycle', () => {
 
   it.effect('delivers subagent aborts through the terminal callback', () =>
     Effect.gen(function* () {
-      const { runId, ctx } = lifecycleFixture();
+      const { ctx } = lifecycleFixture();
       ctx.attachedMemoryMisses.push({
         path: '/memories/missing.md',
         reason: 'not found',

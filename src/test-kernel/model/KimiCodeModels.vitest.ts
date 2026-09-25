@@ -1,22 +1,18 @@
 import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { describe, expect } from 'vitest';
-import { MODEL_CONFIGS, ModelProvider } from 'llm-zoo';
+import { MODEL_CONFIGS } from 'llm-zoo';
 
 import { resolveModelCompatibilityKey } from '@agent/runtime/modelRoutes';
 
 import {
   resolveDirectModelApiKeyProvider,
-  resolveModelSource,
   shouldRouteModelThroughOpenRouter,
 } from '@model/openRouterRouting';
-import { getRuntimeModelConfig } from '@model/runtimeModelRegistry';
-import { SETUP_MODEL_BY_PROVIDER } from '@model/setupModelDefaults';
 import {
   isKimiCodeExclusiveModel,
   isKimiCodeExclusiveRetryModel,
   isKimiCodeSubscriptionRetryBlocked,
-  isKimiSubscriptionEligible,
 } from '@shared/model/kimiCodeRetryGate';
 import { FakeStateStore } from '@test/support/FakePlatform';
 

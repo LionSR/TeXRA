@@ -68,7 +68,6 @@ import type { PlatformSecrets } from '@platform/secrets';
 import {
   INSTRUCTION_ACTION,
   RunIdSchema,
-  type AgentCategory,
   type AgentSource,
   type InstructionAction,
 } from '@shared/schemas';

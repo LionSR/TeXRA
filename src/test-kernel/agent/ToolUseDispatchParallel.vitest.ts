@@ -84,7 +84,6 @@ import { hostStores, setupPlatform } from '@test/support/setupPlatform';
 import { RunFileService } from '@utils/files/runStorage';
 
 import { recordSessionEvents } from './progressTestUtils';
-import { testModelInfo } from './runtime/launchContextTestUtils';
 
 setupPlatform({ workspacePath: '/workspace' });
 

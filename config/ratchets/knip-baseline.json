@@ -11,19 +11,7 @@
       "file": "packages/cli/src/chat/tui/commands/SlashPalette.tsx",
       "category": "production-dead",
       "kind": "exports",
-      "name": "slashPaletteEnterHintAction"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/commands/SlashPalette.tsx",
-      "category": "production-dead",
-      "kind": "exports",
       "name": "slashPaletteWindow"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/forms/AgentListForm.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "agentPickerPrimarySectionTitle"
     },
     {
       "file": "packages/cli/src/chat/tui/forms/AgentListForm.tsx",
@@ -42,12 +30,6 @@
       "category": "production-dead",
       "kind": "exports",
       "name": "hiddenCurrentAgentHint"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/forms/AgentRosterForm.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "buildChatDefaultAgentItems"
     },
     {
       "file": "packages/cli/src/chat/tui/forms/ConfigForm.tsx",
@@ -80,40 +62,16 @@
       "name": "validateSettingInput"
     },
     {
-      "file": "packages/cli/src/chat/tui/forms/ModelListForm.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "modelListDescription"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/forms/ProviderApiKeyForm.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "buildProviderApiKeyItems"
-    },
-    {
       "file": "packages/cli/src/chat/tui/forms/SkillsListForm.tsx",
       "category": "production-dead",
       "kind": "exports",
       "name": "formatSkillActivationPrompt"
     },
     {
-      "file": "packages/cli/src/chat/tui/forms/SkillsListForm.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "skillSelectItemsForTui"
-    },
-    {
       "file": "packages/cli/src/chat/tui/forms/_shared/ListForm.tsx",
       "category": "production-dead",
       "kind": "exports",
       "name": "listFormSelectWindow"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/forms/_shared/ListForm.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "listFormShortcutLabel"
     },
     {
       "file": "packages/cli/src/chat/tui/forms/_shared/ListForm.tsx",
@@ -144,12 +102,6 @@
       "category": "production-dead",
       "kind": "exports",
       "name": "textInputDisplayRowCount"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/modals/ConfirmCardState.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "confirmCardKeyHints"
     },
     {
       "file": "packages/cli/src/chat/tui/modals/EditApproval.tsx",
@@ -203,37 +155,7 @@
       "file": "packages/cli/src/chat/tui/modals/UserQuestion.tsx",
       "category": "production-dead",
       "kind": "exports",
-      "name": "isCompactUserQuestionRows"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/modals/UserQuestion.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "userQuestionChoiceRowsBudget"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/modals/UserQuestion.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "userQuestionFreeTextControlRows"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/modals/UserQuestion.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "userQuestionFreeTextOptionRowsBudget"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/modals/UserQuestion.tsx",
-      "category": "production-dead",
-      "kind": "exports",
       "name": "userQuestionFreeTextSuggestionLine"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/modals/UserQuestion.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "userQuestionPromptRowsBudget"
     },
     {
       "file": "packages/cli/src/chat/tui/panes/InputBar.tsx",
@@ -258,18 +180,6 @@
       "category": "production-dead",
       "kind": "types",
       "name": "CompactTodosPlanRow"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/panes/ToolUseRow.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "toolDisplaySpanTextProps"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/panes/staticTranscriptRing.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "DEFAULT_STATIC_TRANSCRIPT_RING_BUDGETS"
     },
     {
       "file": "packages/cli/src/chat/tui/panes/staticTranscriptRing.ts",
@@ -464,24 +374,6 @@
       "name": "resolvePagerCommand"
     },
     {
-      "file": "packages/cli/src/runtime/supabaseAuthDeviceCode.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "CLI_DEVICE_AUTH_URL_PROMPT"
-    },
-    {
-      "file": "packages/cli/src/runtime/supabaseAuthDeviceCode.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "DeviceAuthorizationSchema"
-    },
-    {
-      "file": "packages/cli/src/runtime/updateChecker.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "buildUpdateCommand"
-    },
-    {
       "file": "packages/cli/src/runtime/updateChecker.ts",
       "category": "production-dead",
       "kind": "exports",
@@ -572,12 +464,6 @@
       "name": "selectInitialHighlightIndex"
     },
     {
-      "file": "packages/cli/src/tui/ui/Select.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "selectItemRenderKey"
-    },
-    {
       "file": "packages/desktop/src/main/desktopProtocolCallbacks.ts",
       "category": "production-dead",
       "kind": "exports",
@@ -600,12 +486,6 @@
       "category": "production-dead",
       "kind": "types",
       "name": "DesktopProtocolApp"
-    },
-    {
-      "file": "packages/extension/src/commands/extensionCommandHandlers.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "EXTENSION_INTERNAL_COMMAND_IDS"
     },
     {
       "file": "packages/extension/src/frontend/auth/agentCatalogRefreshScope.ts",
@@ -648,12 +528,6 @@
       "category": "production-dead",
       "kind": "exports",
       "name": "computeCodeChallenge"
-    },
-    {
-      "file": "src/auth/oauth/pkce.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "generateCodeVerifier"
     },
     {
       "file": "src/auth/supabaseSessionTypes.ts",
@@ -705,7 +579,7 @@
     },
     {
       "file": "src/shared/commands/catalog.ts",
-      "category": "production-dead",
+      "category": "unused",
       "kind": "exports",
       "name": "packageCommandContributions"
     },
@@ -732,12 +606,6 @@
       "category": "production-dead",
       "kind": "exports",
       "name": "ALL_SETTINGS"
-    },
-    {
-      "file": "src/shared/state/stateSettings.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "DEFAULT_TOOL_PATH_PROTECTION_ENABLED"
     },
     {
       "file": "src/shared/state/stateSettings.ts",

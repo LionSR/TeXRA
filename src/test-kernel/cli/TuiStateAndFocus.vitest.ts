@@ -4,12 +4,7 @@ import { Effect } from 'effect';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import {
-  activeRunId,
-  beginWorkPlanReaderRequest,
   closeInfoPane,
-  finishWorkPlanReaderRequest,
-  focusRun,
-  foregroundReader,
   infoPane,
   openInfoPane,
   rootRunPending,
@@ -22,12 +17,7 @@ import {
   sessionListRows,
   sessionListRunIds,
 } from '@cli/chat/tui/state/cliState';
-import {
-  allocateConversationPanelRows,
-  allocateMiddleRows,
-  shouldShowTodosPlanPanel,
-  staticTranscriptRowBudget,
-} from '@cli/chat/tui/appLayout';
+import { allocateMiddleRows } from '@cli/chat/tui/appLayout';
 import {
   chatTuiCanStartRootRun,
   TuiSession,
@@ -35,21 +25,7 @@ import {
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { focusedChildAcceptsFollowUps } from '@cli/chat/tui/state/sessionView';
 import { resolveChildListTarget } from '@cli/chat/tui/state/childControls';
-import {
-  AgentCategory,
-  DEFAULT_TOOL_CONFIG,
-  MESSAGE_TYPES,
-  RUN_PHASE,
-  USER_FOLLOW_UP_SUPPORT,
-  TODO_STATUS,
-  type RunId,
-  type ExtendedTokenUsageStats,
-  type Plan,
-  type RunIdentity,
-  type RunPhase,
-  type TodoItem,
-  type UserFollowUpSupport,
-} from '@shared/schemas';
+import { RUN_PHASE, type RunId } from '@shared/schemas';
 import type { RunView } from '@shared/session/sessionView';
 import {
   bindTestSessionView,
@@ -279,12 +255,6 @@ describe('CLI TUI row allocation', () => {
     expect(layout.transcriptRows).toBe(transcriptRows);
     expect(layout.foregroundRows).toBe(foregroundRows);
   });
-
-  const openTodo = {
-    content: 'Check the live proof',
-    activeForm: 'Checking the live proof',
-    status: TODO_STATUS.IN_PROGRESS,
-  } satisfies TodoItem;
 
   it.each([
     {

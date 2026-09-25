@@ -5,26 +5,14 @@ import { describe, expect, it, vi } from 'vitest';
 // Local imports
 import {
   EXTENSION_COMMAND_HANDLERS,
-  EXTENSION_INTERNAL_COMMAND_IDS,
   type ExtensionCommandActions,
 } from '@commands/extensionCommandHandlers';
-import {
-  commandCatalog,
-  type CommandCatalogEntry,
-} from '@shared/commands/catalog';
 import { dispatchCommandFromRegistry } from '@shared/commands/registry';
 
 // `extensionCommandHandlers.ts` is deliberately free of `vscode` imports, so
 // the production handler map is exercised directly here. Only
 // `extensionCommandSurface.ts`, which wires the real actions against VS Code
 // APIs, needs the extension host.
-
-// Catalog ids tagged `extensionRegistry: true`, derived here rather than
-// mirrored in production: `EXTENSION_COMMAND_HANDLERS` already `satisfies`
-// `Record<ExtensionRegistryCommandId, ...>` at compile time.
-const catalogRegistryIds = (commandCatalog as readonly CommandCatalogEntry[])
-  .filter((entry) => entry.extensionRegistry === true)
-  .map((entry) => entry.id);
 
 function asyncNoop() {
   return vi.fn(() => Effect.void);

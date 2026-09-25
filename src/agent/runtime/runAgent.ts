@@ -9,7 +9,6 @@ import {
 import { persistedParentRunId } from '@agent/storage/runRecords';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import { AppState } from '@platform/interfaces';
 import type { ProcessServices } from '@platform/processRuntime';
 import { Secrets } from '@platform/secrets';
 import {

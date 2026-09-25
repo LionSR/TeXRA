@@ -6,12 +6,7 @@ import {
   readCliModelAccessStatus,
   updateCliModelAccess,
 } from '@cli/runtime/modelAccessSelection';
-import {
-  buildCliModelAccessItems,
-  formatCliModelAccessRoute,
-  formatCliModelAccessRouteInline,
-  shortCliModelAccessRoute,
-} from '@cli/runtime/modelAccessRoute';
+import { buildCliModelAccessItems } from '@cli/runtime/modelAccessRoute';
 import { AppState, type StateWriteFailed } from '@platform/interfaces';
 import { Secrets } from '@platform/secrets';
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -39,9 +34,6 @@ const mocks = vi.hoisted(() => ({
   setGLMCodingPlan: vi.fn(),
   writeSettingTo: vi.fn(),
 }));
-
-/** The global-state writes this suite asserts on. */
-const updateGlobalState = vi.fn();
 
 /** A global state store whose writes the suite observes. */
 class ObservedStateStore extends FakeStateStore {
@@ -146,8 +138,6 @@ vi.mock('@cli/runtime/subscriptionLogin', async (importOriginal) => {
 });
 
 const context = createTestCliContext();
-
-type AccessRoute = Parameters<typeof formatCliModelAccessRoute>[0];
 
 function subscriptionPreference(
   provider: 'chatgpt' | 'grok' | 'kimi-code' | 'glm-code',

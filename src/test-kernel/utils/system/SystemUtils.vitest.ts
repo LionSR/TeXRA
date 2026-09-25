@@ -9,12 +9,12 @@ import { join } from 'node:path';
 // Third-party imports
 import { it } from '@effect/vitest';
 import { Effect, Exit, Fiber } from 'effect';
-import { describe, expect, expectTypeOf } from 'vitest';
+import { describe, expect } from 'vitest';
 
 // Local imports
 import type { ExecResult } from '@shared/schemas';
 import { waitForCondition } from '@test/support/asyncTestUtils';
-import { createFakeHost, setupPlatform } from '@test/support/setupPlatform';
+import { setupPlatform } from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { executeCommand } from '@utils/system/execUtils';

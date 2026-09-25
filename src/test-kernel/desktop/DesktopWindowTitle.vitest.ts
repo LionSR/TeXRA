@@ -7,7 +7,6 @@ import {
   getDesktopWindowTitle,
   installDesktopWindowTitle,
 } from '@desktop/main/desktopWindowTitle';
-import { formatSessionTitle, NATIVE_WINDOW_TITLE } from '@shared/sessionTitle';
 import {
   emptySessionView,
   type SessionView,

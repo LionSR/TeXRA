@@ -54,7 +54,6 @@ import {
   StateWriteFailed,
   type AgentResumePort,
   type RecoveryContinuation,
-  type StateStore,
 } from '@platform/interfaces';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';

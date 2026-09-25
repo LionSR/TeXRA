@@ -8,11 +8,7 @@ import type { AgentTrace, StageHandle } from '@agent/trace';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { finalizeRunTerminal } from '@agent/runtime/AgentRunLifecycle';
 import { resolveChildRunConcurrencyBudget } from '@agent/runtime/childRunBudget';
-import type {
-  RunHandle,
-  RunInterruptHandler,
-  RunParent,
-} from '@agent/runtime/RunHandle';
+import type { RunInterruptHandler, RunParent } from '@agent/runtime/RunHandle';
 import { Runs } from '@agent/runtime/runRegistry';
 import { RunInput, type QueuedFollowUp } from '@agent/followUp/RunInput';
 import type {

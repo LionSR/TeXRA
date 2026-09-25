@@ -25,11 +25,7 @@ import { sourceFilesUnder } from '@test/support/repoScan';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { normalizeFilePath } from '@utils/core';
-import {
-  DESKTOP_SRC_DIR,
-  REPO_ROOT,
-  desktopSourcePath,
-} from './desktopTestPaths.ts';
+import { DESKTOP_SRC_DIR, REPO_ROOT } from './desktopTestPaths.ts';
 
 /**
  * The records over a temp profile's global root, on a handle the caller's
@@ -47,14 +43,6 @@ const projectRecordsOf = Effect.fnUntraced(function* (profile: string) {
   );
   return yield* Effect.provide(openDesktopProjectRecords, context);
 });
-
-function readDesktopMainIndex(): Promise<string> {
-  return readFile(desktopSourcePath('main', 'index.ts'), 'utf8');
-}
-
-function readDesktopBootstrap(): Promise<string> {
-  return readFile(desktopSourcePath('main', 'bootstrap.ts'), 'utf8');
-}
 
 describe('desktop composition root and launch environment', () => {
   const tempDirs = useTempDirs();

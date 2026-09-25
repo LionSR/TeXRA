@@ -8,7 +8,7 @@ import writeFileAtomic from 'write-file-atomic';
 
 // Local imports
 import { isFileNotFoundError } from '@common/errors';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError } from '@utils/errors/errorMessage';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
 
 type JsonRecord = Record<string, unknown>;

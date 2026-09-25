@@ -79,7 +79,6 @@ import { clearGoal, setGoalSessionAutoApproval, startGoal } from '@tools/goal';
 import { prepareToolEditApprovalPrompt } from '@tools/approval/toolEditApproval';
 import { createRunTrace } from '@transcript';
 import { FOCUSED_BACKGROUND_TASK } from '@ui/copy/nestedRuns';
-import { generateRunId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { App } from '../src/chat/tui/App';
@@ -114,7 +113,6 @@ import {
   runViewOf,
 } from '../src/chat/tui/state/sessionView';
 import { formatCliSessionStatus } from '../src/chat/tui/sessionStatus';
-import { notify } from '../src/chat/tui/notifications/terminalNotifier';
 import { createTuiViewportController } from '../src/chat/tui/render/tuiViewportController';
 import { notifyStaticTranscriptErased } from '../src/chat/tui/state/staticTranscriptRepaint';
 import {
@@ -138,7 +136,6 @@ import {
 } from '../src/runtime/cliPresentationHost';
 import { setCliToolEnabled } from '../src/runtime/tools';
 import type { CliContext } from '../src/runtime/cliContext';
-import type { CliModelAccess } from '../src/runtime/modelAccess';
 import type { InputHistory } from '../src/chat/tui/history/inputHistory';
 
 const HARNESS_RUN_ID = RunIdSchema.parse('aaaa0001f10e');

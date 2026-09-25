@@ -73,7 +73,7 @@ type ToolDisplaySpan = Extract<
 >['spans'][number];
 
 /** Translate semantic span styles to Ink's Text properties. */
-export function toolDisplaySpanTextProps(span: ToolDisplaySpan): {
+function toolDisplaySpanTextProps(span: ToolDisplaySpan): {
   readonly bold: boolean | undefined;
   readonly color: string | undefined;
   readonly dimColor: boolean;

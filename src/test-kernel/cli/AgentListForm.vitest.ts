@@ -1,12 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  agentPickerPrimarySectionTitle,
   agentSelectWindow,
   currentVisibleAgent,
   hiddenCurrentAgentHint,
 } from '@cli/chat/tui/forms/AgentListForm';
-import { formFrameWidth } from '@cli/chat/tui/forms/_shared/FormFrame';
 
 describe('CLI AgentListForm row budget', () => {
   const visibleAgents = [

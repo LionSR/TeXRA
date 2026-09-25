@@ -1,7 +1,7 @@
 import { writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
-import { Deferred, Effect, Fiber, Layer, Scope, Stream } from 'effect';
+import { Effect, Fiber, Layer, Scope, Stream } from 'effect';
 
 /**
  * Production-shaped regression for #9531. Agent registration, launch, child

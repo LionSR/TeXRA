@@ -13,15 +13,11 @@
  */
 // Node imports
 import {
-  chmodSync,
   existsSync,
   mkdtempSync,
   mkdirSync,
-  readFileSync,
   realpathSync,
-  renameSync,
   rmSync,
-  statSync,
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
@@ -55,7 +51,7 @@ vi.mock('@effect/sql-sqlite-node/SqliteClient', async (importOriginal) => ({
   >()),
 }));
 
-import { TraceEmitter, type ResultEvent } from '@agent/trace';
+import { type ResultEvent } from '@agent/trace';
 import { runLedgerLayer } from '@agent/runtime/RunLedger';
 import { sessionEventsLayer } from '@agent/runtime/SessionEvents';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
@@ -115,7 +111,6 @@ import { testRunHandle } from '@test/support/runHandleFixtures';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import { identityReads } from '@test/support/sessionGraphTestSetup';
 import type { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
-import { StreamLogStore } from '@transcript/StreamLogStore';
 import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 vi.mock('node:os', async (importOriginal) => ({

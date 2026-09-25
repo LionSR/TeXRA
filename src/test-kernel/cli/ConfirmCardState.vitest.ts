@@ -1,14 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  confirmCardCompactChromeRows,
-  confirmCardFeedbackHints,
-  confirmCardKeyAction,
-  confirmCardKeyHints,
-  confirmCardKeyHintsForWidth,
-  confirmCardPulsedTitle,
-} from '@cli/chat/tui/modals/ConfirmCardState';
-import { DELEGATION_APPROVAL_COPY } from '@ui/copy/delegationApproval';
+import { confirmCardKeyAction } from '@cli/chat/tui/modals/ConfirmCardState';
 
 describe('CLI confirm-card key handling', () => {
   const feedbackRejection = {
@@ -19,27 +11,6 @@ describe('CLI confirm-card key handling', () => {
     allowAlways: false,
     rejectionMode: 'immediate',
   } as const;
-
-  const sessionCommandsLabel = 'approve commands for session';
-  const compactCommandHints = [
-    { key: 'y', action: 'approve' },
-    { key: 'n', action: 'reject' },
-    { key: 'a', action: 'all commands' },
-    { key: 'Esc', action: 'reject' },
-  ];
-
-  function hintsForWidth(
-    alwaysAllowLabel: string,
-    maxColumns: number,
-  ): ReturnType<typeof confirmCardKeyHintsForWidth> {
-    return confirmCardKeyHintsForWidth({ alwaysAllowLabel, maxColumns });
-  }
-
-  function renderHints(
-    hints: ReturnType<typeof confirmCardKeyHintsForWidth>,
-  ): string {
-    return hints.map((hint) => `${hint.key} ${hint.action}`).join(' · ');
-  }
 
   it('approves with y, collects rejection feedback with n, and rejects with escape', () => {
     expect(confirmCardKeyAction('y', {}, feedbackRejection)).toBe('approve');

@@ -5,7 +5,6 @@ import { Effect } from 'effect';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import {
   discoverSkillSources,
-  type DiscoverSkillSourcesResult,
   type SkillLoadIssue,
   type SourcedSkill,
 } from '@skills/loadSkills';

@@ -14,11 +14,9 @@ import {
   type CompileFailure,
   LOG_LEVELS,
   MESSAGE_TYPES,
-  type OutputFileInfo,
   STREAM_LOG_ENTRY_TYPES,
   RUN_PHASE,
   type RunId,
-  type TaskGroup,
 } from '@shared/schemas';
 import { loadInk } from '@test/support/inkTestHarness.ts';
 import {
@@ -49,41 +47,6 @@ const COMPILE_FAILURE: CompileFailure = {
 };
 
 const COMPILE_FAILURES_BY_ROUND = { 0: [COMPILE_FAILURE] };
-
-function completedRound(
-  index: number,
-  total: number,
-  startTime: number,
-  endTime: number,
-): TaskGroup {
-  return {
-    id: `r${index}`,
-    name: `r${index}`,
-    kind: 'round' as const,
-    index,
-    total,
-    startTime,
-    endTime,
-    status: RUN_PHASE.COMPLETED,
-  };
-}
-
-function generatedFile(
-  relativePath: string,
-  diff: { added: number; removed: number } | null,
-): OutputFileInfo {
-  return {
-    source: 'paper.tex',
-    round: 0,
-    location: {
-      kind: 'workspace' as const,
-      absolutePath: `/workspace/${relativePath}`,
-      relativePath,
-    },
-    lineage: null,
-    diff,
-  };
-}
 
 beforeAll(bindTestSessionView);
 afterEach(() => {

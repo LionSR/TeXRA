@@ -7,10 +7,7 @@ import { describe, expect, it, vi } from 'vitest';
 // Local imports
 import type { AgentTrace } from '@agent/trace';
 import { ClaudeBackgroundTaskTracker } from '@tools/claudeAgentBackgroundTasks';
-import {
-  aggregateClaudeModelUsage,
-  buildClaudeToolUseLog,
-} from '@tools/claudeAgentShared';
+import { aggregateClaudeModelUsage } from '@tools/claudeAgentShared';
 
 function fakeTrace(): {
   trace: AgentTrace;

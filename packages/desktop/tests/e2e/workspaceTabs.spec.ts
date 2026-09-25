@@ -71,22 +71,6 @@ const BOTTOM_PANE = 'xpath=ancestor::aside[@data-placement="bottom"]';
 const BOTTOM_WORKBENCH_TABS =
   '.shell-workbench[data-placement="bottom"] .shell-workbench-tab';
 
-/** Resize the native window and report the resulting content bounds. */
-async function setContentSize(
-  width: number,
-  height: number,
-): Promise<{ width: number; height: number }> {
-  return launched.app.evaluate(
-    ({ BrowserWindow }, size) => {
-      const window = BrowserWindow.getAllWindows().at(0);
-      if (!window) throw new Error('TeXRA window was not found.');
-      window.setContentSize(size.width, size.height);
-      return window.getContentBounds();
-    },
-    { width, height },
-  );
-}
-
 test('opens with a permanent task conversation and no workbench', async () => {
   const { page } = launched;
 

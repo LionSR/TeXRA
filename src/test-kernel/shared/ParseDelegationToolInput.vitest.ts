@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
 import { AgentCategory, parseDelegationToolInput } from '@shared/schemas';
-import { DEFAULT_AGENT_MODEL } from '@shared/constants/providers';
 
 describe('parseDelegationToolInput', () => {
   it('returns null for non-delegation tools', () => {

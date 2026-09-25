@@ -10,7 +10,6 @@ import {
   buildCliContext,
   CliUsageError,
   readCliBugsUrl,
-  readCliEnv,
   readCliVersion,
   resolveCliCwd,
   resolveCliCommandName,

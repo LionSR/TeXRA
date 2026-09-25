@@ -69,7 +69,6 @@ import { RunLedgerRefused } from '@shared/session/runLedger';
 import type { RunState } from '@shared/session/runStateFold';
 import { generateShortId } from '@utils/core';
 import { readSettingFrom } from '@utils/config/platformSettings';
-import { ensureError } from '@utils/errors/errorMessage';
 
 import { AgentRun } from './run/AgentRun';
 import { estimateInputTokensOrNull } from './run/estimateInputTokens';

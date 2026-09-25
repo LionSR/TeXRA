@@ -44,7 +44,6 @@ import type {
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { findModelProviderPlugin } from '@shared/constants/modelProviderPlugins';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { getUseOpenRouter } from '@utils/config/providerConfig';
 import type { HttpClient } from 'effect/unstable/http';
 
 const CHANNEL = 'modelRoutes';

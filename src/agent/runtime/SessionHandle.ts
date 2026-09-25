@@ -67,7 +67,6 @@ import {
   type AggregateClaim,
   type DatabaseReadFailed,
   type DatabaseWriteFailed,
-  type SessionOpenError,
 } from '@shared/session/database';
 import { fold } from '@shared/session/sessionFold';
 import {

@@ -5,18 +5,11 @@ import { strict as assert } from 'node:assert';
 import { describe, it } from 'vitest';
 
 // Local imports
-import {
-  CODEX_FILE_CHANGE_TOOL,
-  CODEX_TODO_TOOL,
-  CODEX_TURN_TOOL,
-} from '@shared/schemas';
+import { CODEX_FILE_CHANGE_TOOL } from '@shared/schemas';
 import { toCodexCliReasoningEffort } from '@tools/codexConfig';
 import {
   buildCodexCommandToolLog,
   buildCodexFileChangeToolLog,
-  buildCodexMcpToolLog,
-  buildCodexTodoToolLog,
-  buildCodexTurnToolLog,
 } from '@tools/codexShared';
 
 describe('toCodexCliReasoningEffort', () => {

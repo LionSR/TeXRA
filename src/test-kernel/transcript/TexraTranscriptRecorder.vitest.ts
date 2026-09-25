@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { TraceEmitter } from '@agent/trace';
 import {
@@ -7,7 +7,6 @@ import {
   STREAM_LOG_ENTRY_TYPES,
   RUN_PHASE,
   TOOL_CALL_STATUS,
-  ToolUseLogSchema,
   type StreamLogEntry,
   type RunId,
   type TaskGroup,

@@ -5,13 +5,7 @@ import {
   RUN_PHASE,
   STREAM_LOG_ENTRY_TYPES,
 } from '@shared/schemas';
-import {
-  compactionActivityRow,
-  elideText,
-  isSettledRow,
-  projectTranscriptRow,
-  transcriptText,
-} from '@ui/transcript';
+import { isSettledRow, projectTranscriptRow } from '@ui/transcript';
 
 const base = {
   type: STREAM_LOG_ENTRY_TYPES.LOG,

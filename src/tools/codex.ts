@@ -55,7 +55,6 @@ import { formatWallTimeSeconds, previewLabel } from '@utils/text/stringUtils';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
-import { CODEX_CLI_MODEL } from './codexConfig';
 import { defineTool } from './core/define';
 import { buildAgentWorkspaceOptions } from './agentWorkspaceOptions';
 import {

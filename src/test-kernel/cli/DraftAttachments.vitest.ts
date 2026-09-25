@@ -2,10 +2,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
 // Local imports
-import {
-  DraftAttachmentStore,
-  shouldCollapsePaste,
-} from '@cli/chat/tui/input/draftAttachments';
+import { DraftAttachmentStore } from '@cli/chat/tui/input/draftAttachments';
 
 const img = (name: string) => ({
   path: `/p/${name}`,

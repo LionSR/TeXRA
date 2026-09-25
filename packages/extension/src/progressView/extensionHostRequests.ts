@@ -19,7 +19,6 @@ import {
   validateRunRequest,
   type SessionHandle,
 } from '@agent/runtime';
-import { AUTH_COMMANDS } from '@auth/constants';
 import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
 import {
   createFileSelectionPickers,

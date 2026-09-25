@@ -1,15 +1,6 @@
 import * as path from 'node:path';
 
-import {
-  Data,
-  Duration,
-  Effect,
-  Fiber,
-  Option,
-  Result,
-  type Scope,
-  Stream,
-} from 'effect';
+import { Data, Duration, Effect, Fiber, Option, Result, Stream } from 'effect';
 import * as ChildProcess from 'effect/unstable/process/ChildProcess';
 import { quote as shellQuote } from 'shell-quote';
 

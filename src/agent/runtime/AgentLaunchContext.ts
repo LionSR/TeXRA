@@ -11,12 +11,7 @@ import {
   type StageHandle,
 } from '@agent/trace';
 import { finalizeRun } from '@agent/storage/runLifecycle';
-import type { AgentEntry } from '@agent/index/agentEntry';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import type {
-  AgentPrompt,
-  AgentSetting,
-} from '@agent/core/definition/AgentDataclass';
 import { loadAgentSettingAndPrompts } from '@agent/runtime/agentLoad';
 import { getDisplayedInstruction } from '@agent/runtime/sessionDescription';
 import { buildUserVars } from '@agent/prompt/userVars';
@@ -34,7 +29,6 @@ import { AppState } from '@platform/interfaces';
 import { Secrets } from '@platform/secrets';
 import {
   aggregateId as qualifyAggregateId,
-  type AgentSource,
   type AttachedMemoryMiss,
   type ModelCompatibilityKey,
   type RunId,
