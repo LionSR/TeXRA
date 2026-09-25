@@ -9,8 +9,9 @@ import type { PlatformError } from 'effect/PlatformError';
  * terminal sends SIGINT to the whole process group, and a pager such as
  * `less` uses it to cancel a search, not to end the listing. So the platform's
  * SIGINT handler defers while any foreground command runs, as a shell or C's
- * `system()` does, and the interrupt is acted on only if the child itself
- * died by a signal: then it is re-raised once the terminal is ours again.
+ * `system()` does. When the child ends, the command interrupts its own fiber
+ * if the child ended because of that Ctrl-C; the CLI's command boundary maps
+ * an interruption to exit 130, so the outcome does not race process exit.
  */
 let foregroundHolders = 0;
 let interruptedWhileHeld = false;
@@ -40,27 +41,21 @@ const holdTerminal = Effect.sync(() => {
   }
 });
 
-/** The child stopped because of the interrupt: killed by a signal (the
- *  spawner fails the exit-code read), or exited 130, the shell's code for a
- *  process that handled SIGINT by quitting. */
+/** The child stopped after the Ctrl-C: killed by a signal, or exited 130, the
+ *  shell's code for a process that handled SIGINT by quitting. The spawner
+ *  keeps only a message naming the signal, so any signal death after a
+ *  Ctrl-C counts: a pager that survived the Ctrl-C and later died of SIGHUP
+ *  would read as interrupted too. */
 const endedByInterrupt = (exit: Exit.Exit<number, PlatformError>): boolean => {
   if (Exit.isSuccess(exit)) return exit.value === CliExitCode.Interrupted;
   const error = Exit.findErrorOption(exit);
   return error._tag === 'Some' && error.value.reason.method === 'exitCode';
 };
 
-const releaseTerminal = (exit: Exit.Exit<number, PlatformError>) =>
-  Effect.sync(() => {
-    if (--foregroundHolders > 0) return;
-    process.removeListener('SIGINT', holdInterrupt);
-    // The child died by a signal after a Ctrl-C: the user meant to stop, so
-    // the parent takes the interrupt it deferred. A child that handled the
-    // Ctrl-C itself and exited on its own (a pager) keeps us running.
-    if (interruptedWhileHeld && endedByInterrupt(exit)) {
-      interruptedWhileHeld = false;
-      process.kill(process.pid, 'SIGINT');
-    }
-  });
+const releaseTerminal = Effect.sync(() => {
+  if (--foregroundHolders > 0) return;
+  process.removeListener('SIGINT', holdInterrupt);
+});
 
 /**
  * Run an interactive command on the terminal and answer its exit code: stdout
@@ -71,7 +66,8 @@ const releaseTerminal = (exit: Exit.Exit<number, PlatformError>) =>
  * background group that reads or writes the TTY is stopped by SIGTTIN or
  * SIGTTOU, which would freeze a pager or an installer prompt. The string form
  * runs through the shell, for `$PAGER` flags and `&&` chains. A child that
- * dies by a signal (Ctrl-C) fails with the `PlatformError`; callers map it.
+ * dies by a signal fails with the `PlatformError`; callers map it. After a
+ * Ctrl-C the command is interrupted instead (see above).
  */
 export const runForegroundCommand = Effect.fn('runForegroundCommand')(
   function* (
@@ -98,10 +94,17 @@ export const runForegroundCommand = Effect.fn('runForegroundCommand')(
       typeof command === 'string'
         ? ChildProcess.make(command, { ...common, shell: true })
         : ChildProcess.make(command[0], command.slice(1), common);
-    return yield* Effect.acquireUseRelease(
+    const { exit, interrupted } = yield* Effect.acquireUseRelease(
       holdTerminal,
-      () => spawner.exitCode(built),
-      (_, exit) => releaseTerminal(exit),
+      () =>
+        Effect.exit(spawner.exitCode(built)).pipe(
+          Effect.map((exit) => ({ exit, interrupted: interruptedWhileHeld })),
+        ),
+      () => releaseTerminal,
     );
+    // The user meant to stop: the child died of the Ctrl-C. A child that
+    // handled it and exited on its own (a pager) keeps the command running.
+    if (interrupted && endedByInterrupt(exit)) return yield* Effect.interrupt;
+    return yield* exit;
   },
 );
