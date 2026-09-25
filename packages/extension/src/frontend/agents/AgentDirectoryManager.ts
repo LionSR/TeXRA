@@ -138,7 +138,11 @@ class AgentDirectoryManager {
     return Effect.suspend(() => this.getHost().directories.custom());
   }
 
-  customConfigured(): Effect.Effect<boolean, AgentDirectoriesFailed> {
+  customConfigured(): Effect.Effect<
+    boolean,
+    AgentDirectoriesFailed,
+    FileSystem.FileSystem
+  > {
     return Effect.suspend(() => this.getHost().directories.customConfigured());
   }
 

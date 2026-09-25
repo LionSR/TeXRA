@@ -77,10 +77,19 @@ export class AgentDirectoryService {
     });
   }
 
-  customConfigured(): Effect.Effect<boolean, AgentDirectoriesFailed> {
-    return Effect.map(
-      this.configuredCustomPath(),
-      (configured) => configured !== '',
+  /** Whether `custom` resolves to the configured directory: the same
+   *  validation, so a configured path it would reject (relative, or with a
+   *  missing parent) reports its issue here and answers `false`. */
+  customConfigured(): Effect.Effect<
+    boolean,
+    AgentDirectoriesFailed,
+    FileSystem.FileSystem
+  > {
+    return this.configuredCustomPath().pipe(
+      Effect.flatMap((configured) =>
+        this.resolveConfiguredCustomDir(configured),
+      ),
+      Effect.map((resolved) => resolved != null),
     );
   }
 

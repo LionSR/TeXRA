@@ -25,7 +25,7 @@ import {
 } from '@shared/state/stateSettings';
 
 // Local imports - tools
-import { MCP_CONFIG_FILE_NAME, mcpConfigWarnings } from '@tools/mcp/mcpConfig';
+import { mcpConfigWarnings, USER_MCP_CONFIG_PATH } from '@tools/mcp/mcpConfig';
 
 // Local imports - utilities
 import {
@@ -275,7 +275,7 @@ export function loadCliStartupConfig(
       // otherwise reads: a broken file warns here, not first mid-run.
       const mcpWarnings = yield* mcpConfigWarnings(
         yield* FileSystem.FileSystem,
-        path.join(storageRoot, MCP_CONFIG_FILE_NAME),
+        USER_MCP_CONFIG_PATH,
       );
       return {
         config: new JsonConfigProvider(stores),

@@ -218,7 +218,7 @@ export class AgentDirectoriesFailed extends Data.TaggedError(
 /**
  * Host-provided agent directory paths. All are `Effect`s (not Promises)
  * so the readers that can fault — `custom`, which creates the directory it
- * resolves, and `customConfigured`, which reads the setting — carry their
+ * resolves, and `customConfigured`, which validates the setting — carry their
  * failure into the program that asked instead of rejecting an await that
  * cannot name it.
  *
@@ -234,9 +234,13 @@ export interface AgentDirectoriesPort {
     AgentDirectoriesFailed,
     GlobalStorageFs | FileSystem.FileSystem
   >;
-  /** Whether the user configured a custom directory, rather than `custom`
-   *  falling back to the default one under global storage. */
-  customConfigured(): Effect.Effect<boolean, AgentDirectoriesFailed>;
+  /** Whether `custom` resolves to a directory the user configured, rather
+   *  than falling back to the default one under global storage. */
+  customConfigured(): Effect.Effect<
+    boolean,
+    AgentDirectoriesFailed,
+    FileSystem.FileSystem
+  >;
   builtIn(): Effect.Effect<string, AgentDirectoriesFailed>;
   builtInToolUse(): Effect.Effect<string, AgentDirectoriesFailed>;
 }

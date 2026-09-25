@@ -36,7 +36,7 @@ import {
 } from './mcpServer';
 
 /** The config file's name inside the user's `~/.texra` directory. */
-export const MCP_CONFIG_FILE_NAME = 'mcp.json';
+const MCP_CONFIG_FILE_NAME = 'mcp.json';
 
 /** The user-level config file: `~/.texra/mcp.json`. */
 export const USER_MCP_CONFIG_PATH = path.join(

@@ -127,7 +127,7 @@ export interface HostSnapshotSource {
   showAgentConfigBanner(
     agentName: string,
     sessionType: SessionType,
-  ): Effect.Effect<void, never, AgentDirectories>;
+  ): Effect.Effect<void, never, AgentDirectories | FileSystem.FileSystem>;
   /** A launch resolved its agent and started a run, so the missing-agent
    *  warning no longer describes the launcher. */
   readonly clearAgentConfigBanner: Effect.Effect<void>;

@@ -109,7 +109,7 @@ describe('AgentDirectoryService', () => {
       await pathExists(path.join(storageBase(), 'custom_agents')),
       true,
     );
-    assert.equal(await Effect.runPromise(service.customConfigured()), false);
+    assert.equal(await runDirectories(service.customConfigured()), false);
   });
 
   it('uses a configured absolute custom directory with an existing parent', async () => {
@@ -124,7 +124,7 @@ describe('AgentDirectoryService', () => {
       false,
     );
     assert.deepEqual(reporter.reports, []);
-    assert.equal(await Effect.runPromise(service.customConfigured()), true);
+    assert.equal(await runDirectories(service.customConfigured()), true);
   });
 
   it.each([
@@ -154,6 +154,8 @@ describe('AgentDirectoryService', () => {
       assert.deepEqual(reporter.reports, [
         { message, docsId: 'custom-agents' },
       ]);
+      // The banner asks the same question: a rejected path is not "set".
+      assert.equal(await runDirectories(service.customConfigured()), false);
     },
   );
 
