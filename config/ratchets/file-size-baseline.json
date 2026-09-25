@@ -64,7 +64,7 @@
     "src/agent/runtime/childRunLoop.ts": 1398,
     "src/agent/runtime/executeAgent.ts": 694,
     "src/agent/runtime/loop/reflection.ts": 1167,
-    "src/agent/runtime/loop/toolUse.ts": 789,
+    "src/agent/runtime/loop/toolUse.ts": 787,
     "src/agent/runtime/loop/toolUseDispatch.ts": 974,
     "src/agent/runtime/ModelInvoker.ts": 1272,
     "src/agent/runtime/run/modelBinding.ts": 1125,
