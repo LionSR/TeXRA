@@ -151,6 +151,30 @@ describe('probeOutputPath', () => {
       }),
   );
 
+  it.effect('reports a mkdir permission denial as a usage error', () =>
+    Effect.gen(function* () {
+      const error = yield* Effect.flip(
+        probeOutputPathForTests('/missing/output.tex', '--output').pipe(
+          Effect.provide(
+            probeLayer((candidate) =>
+              Effect.fail(
+                sysError(
+                  'PermissionDenied',
+                  'makeDirectory',
+                  candidate,
+                  'EACCES',
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      expect(error.message).toBe(
+        '--output is not writable (permission denied): /missing/output.tex',
+      );
+    }),
+  );
+
   it.effect('preserves unexpected mkdir failures', () =>
     Effect.gen(function* () {
       const denied = sysError('Unknown', 'makeDirectory', '/missing', 'EIO');

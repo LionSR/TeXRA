@@ -469,10 +469,11 @@ export const buildSubagentResult = Effect.fn(
     readonly storageRoot: string;
   },
 ): Effect.fn.Return<SubagentResultMeta, never, FileSystem.FileSystem> {
+  // The run's wall time, not the diff computation that follows it.
+  const wallTimeMs = Date.now() - options.startedAt;
   const enriched: RunEndOutput =
     output.category === 'workflow'
       ? yield* withWorkflowDiffs(options.storageRoot, runId, output)
       : output;
-  const wallTimeMs = Date.now() - options.startedAt;
   return buildSubagentResultMeta(agentName, enriched, wallTimeMs);
 });
