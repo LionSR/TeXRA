@@ -75,7 +75,7 @@ typecheck on current main (two TS2322 errors in `documentRounds.ts`).
 - The `round.ready` and `output.pending` loop phases (`runLedgerEvent.ts:474`,
   `:478`). The pipeline's re-entry is derived from folded state instead (see
   "Resume").
-- The per-cycle raw files (`raw/r<n>/output.c<i>.txt`) and the
+- The per-cycle raw files (`raw/r<n>/output.c<i>.xml`) and the
   `readRawOutput` concatenation. The round's text is folded from the
   assistant messages, which are already rows.
 - The `RESUME_BY_CATEGORY` family split in `SessionResumeRetrieval.ts:43`.
@@ -302,8 +302,9 @@ Everything `reflection.ts` does, and where it lands:
 
 ## PR sequence
 
-Each PR is green and shippable alone. Nothing changes user-visible behavior
-until PR 4.
+Each PR is green and shippable alone. PRs 1 and 3 are behavior-preserving.
+PR 2 changes tool-use behavior deliberately; workflow-agent behavior changes
+only from PR 4, and PR 5 clears stored sessions.
 
 1. **Continuation-at-idle seam, goal mode as its first user**, in a sibling
    module of `toolUse.ts`. Behavior-preserving; about +20 lines.
