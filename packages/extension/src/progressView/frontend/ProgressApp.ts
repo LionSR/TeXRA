@@ -1,7 +1,7 @@
 /**
  * `<progress-app>`: the one conversation shell of the extension (PRD 12.1).
  * It is the root, the only element that holds the three records, and it
- * renders exactly one of two states from `resolveSelected`: the New task
+ * renders exactly one of two states from `surface.selected`: the New task
  * empty state (hero, the context disclosure, the Active now strip, the
  * expanded composer) or the selected run's conversation, under one header
  * row: the run's own header when a run is selected. The Sessions drawer,
@@ -42,7 +42,7 @@ import {
 import { installToolbarTooltips } from '@shared/litControllers/TooltipController';
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
 import type { SessionView, RunView } from '@shared/session/sessionView';
-import { resolveSelected, type Surface } from '@shared/session/surface';
+import type { Surface } from '@shared/session/surface';
 import { SessionUiEvents } from '@shared/session/uiEvents';
 import { designTokens } from '@ui/styles';
 import {
@@ -142,7 +142,7 @@ export class ProgressApp extends LitElement {
   override render(): TemplateResult | typeof nothing {
     const { view, surface, host } = this;
     if (!view || !surface || !host) return nothing;
-    const selected = resolveSelected(view, surface);
+    const { selected } = surface;
     const run = selected === null ? null : (view.runs.get(selected) ?? null);
     const docked = this.placement === 'editor';
 

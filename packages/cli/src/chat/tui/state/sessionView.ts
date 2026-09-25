@@ -113,6 +113,13 @@ export function killableRunId(run: RunView | undefined): RunId | undefined {
     : undefined;
 }
 
+/** The run to resume when it was interrupted and can pick up again. */
+export function resumableRunId(run: RunView | undefined): RunId | undefined {
+  return run?.group === 'interrupted' && run.resumeEligible
+    ? run.id
+    : undefined;
+}
+
 /** Whether a focused child run takes the composer's follow-ups (PRD 10.1). */
 export function focusedChildAcceptsFollowUps(run: RunView): boolean {
   return (

@@ -1,4 +1,4 @@
-import { shortCliModelAccessRoute } from '@cli/runtime/modelAccessRoute';
+import { isSubscriptionRoute } from '@cli/runtime/modelAccessRoute';
 import {
   firstFittingCandidate,
   textDisplayWidth,
@@ -143,7 +143,7 @@ export interface StatusBarDisplayInput {
   readonly subscriptionProbeFailed?: boolean;
   /** Latest quota snapshot for the subscription serving this model. */
   readonly subscriptionQuota?: SubscriptionUsageSnapshot;
-  /** Ephemeral transcripts cannot be resumed and require a persistent warning. */
+  /** Session approval policy; a non-default policy earns a segment. */
   readonly approvalPolicy?: TexraApprovalPolicy;
   /** Terminal width in columns. */
   readonly width?: number;
@@ -208,13 +208,14 @@ interface StatusBarDisplay {
 }
 
 // Own API keys are the default route, so only a subscription earns a segment.
+// The bar names how the call is paid for, not which provider; the /login form
+// and /status name the subscription itself.
 function accessModeSegment(
   access: UsageRoute | undefined,
 ): StatusBarSegment | undefined {
-  const label = shortCliModelAccessRoute(access);
-  return label === 'subscription'
+  return isSubscriptionRoute(access)
     ? {
-        text: label,
+        text: 'subscription',
         color: COLOR_HINT,
         compactText: 'sub',
         compactPriority: STATUS_BAR_COMPACT_PRIORITY.accessMode,

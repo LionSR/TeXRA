@@ -21,11 +21,7 @@ import {
   ActiveDraftScope,
   createActiveDraftRegistry,
 } from '@cli/chat/tui/input/activeDraft';
-import {
-  InputBar,
-  slashSubmitText,
-  type InputBarHandle,
-} from '@cli/chat/tui/panes/InputBar';
+import { InputBar, slashSubmitText } from '@cli/chat/tui/panes/InputBar';
 import { transcriptRowHeadline } from '@cli/chat/tui/panes/transcriptEntries';
 import type { InputHistory } from '@cli/chat/tui/history/inputHistory';
 import {
@@ -295,7 +291,7 @@ describe('InputBar draft discard', () => {
       });
       return React.createElement(
         ActiveDraftScope,
-        { active: true, registry },
+        { registry },
         React.createElement(BaseTextInput, {
           value,
           onChange: (next: string) => {
@@ -501,31 +497,29 @@ describe('InputBar draft discard', () => {
       );
     const submitted: Array<readonly [string, readonly string[] | undefined]> =
       [];
-    const controlRef = React.createRef() as {
-      current: InputBarHandle | null;
-    };
+    const registry = createActiveDraftRegistry();
     const { instance, stdin, stdout } = renderInteractive(
       ink,
-      React.createElement(InputBar, {
-        runtime: testRuntime(),
-        controlRef,
-        onSubmit: (value: string, mediaFiles?: readonly string[]) =>
-          submitted.push([value, mediaFiles]),
-      }),
+      React.createElement(
+        ActiveDraftScope,
+        { registry },
+        React.createElement(InputBar, {
+          runtime: testRuntime(),
+          onSubmit: (value: string, mediaFiles?: readonly string[]) =>
+            submitted.push([value, mediaFiles]),
+        }),
+      ),
     );
 
     try {
-      await waitFor(
-        () =>
-          controlRef.current !== null && stdin.listenerCount('readable') > 0,
-      );
+      await waitFor(() => stdin.listenerCount('readable') > 0);
       stdin.write('\u0016');
       await waitFor(
         () => clipboardMock.attachClipboardImage.mock.calls.length === 1,
       );
       stdin.write('\r');
 
-      expect(controlRef.current?.discardDraft()).toBe(true);
+      expect(registry.discard()).toBe(true);
       firstPaste.resolve({
         ok: true,
         path: '/tmp/stale.png',

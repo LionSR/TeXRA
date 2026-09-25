@@ -3,8 +3,7 @@ import { Deferred, Effect, Fiber, Stream, SubscriptionRef } from 'effect';
 import type { SessionHandle } from '@agent/runtime';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import { runIdentityName, type RunId } from '@shared/schemas';
-import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
-import type { RunView } from '@shared/session/sessionView';
+import { isLiveRun, type RunView } from '@shared/session/sessionView';
 import { writeNdjsonStdout } from './logSinks';
 
 export type CliNdjsonProgressRecordWriter = (record: CliNdjsonRecord) => void;
@@ -104,9 +103,7 @@ export const attachCliSessionProgressProjection = Effect.fn(
         const child = view.runs.get(childId);
         // A live child only: the roster reports who is still going, and a
         // child that ended carries its outcome on its own `run.end` line.
-        return child === undefined || isTerminalOutcomePhase(child.status)
-          ? []
-          : [childRow(child)];
+        return child !== undefined && isLiveRun(child) ? [childRow(child)] : [];
       });
       const wire = JSON.stringify(children);
       if (writtenRosters.get(parentRunId) === wire) continue;

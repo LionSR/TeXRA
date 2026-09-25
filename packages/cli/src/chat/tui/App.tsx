@@ -3,6 +3,7 @@
 // Third-party imports
 import { useInput, useStdin, useWindowSize } from 'ink';
 import {
+  Fragment,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -24,8 +25,6 @@ import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { type RunId, type WorkflowControlAction } from '@shared/schemas';
-import type { SessionView } from '@shared/session/sessionView';
-import type { RunLabels } from '@shared/tools/executionsDisplay';
 import { SESSION_LIST } from '@ui/copy/nestedRuns';
 import {
   APPROVAL_FOREGROUND_MAX_ROWS,
@@ -79,6 +78,7 @@ import {
 import {
   currentView,
   killableRunId,
+  resumableRunId,
   sessionView,
   runLabelOf,
   runViewOf,
@@ -106,19 +106,6 @@ function focusRunAndPromoteApprovals(runId: RunId): void {
     return;
   }
   promoteApprovalsForRun(runId);
-}
-
-/** Labels for child executions whose label differs from the id, as a content
- *  key: App memoizes the map on it, so layout caches keyed on the map's
- *  identity survive the fold ticks that do not touch a label. */
-function runLabelsKey(view: SessionView): string {
-  const labels: Array<[string, string]> = [];
-  for (const run of view.runs.values()) {
-    if (run.parentId !== null && run.label !== run.id) {
-      labels.push([run.id, run.label]);
-    }
-  }
-  return JSON.stringify(labels);
 }
 
 export interface AppProps {
@@ -186,11 +173,6 @@ export function App(props: AppProps): React.JSX.Element {
   const { columns, rows } = useWindowSize();
   const activeDraftRegistry = useMemo(() => createActiveDraftRegistry(), []);
   const activeRun = runViewOf(view, activeRunId);
-  const labelsKey = runLabelsKey(view);
-  const subagentRunLabels = useMemo<RunLabels>(
-    () => new Map(JSON.parse(labelsKey) as Array<[string, string]>),
-    [labelsKey],
-  );
   const activeApprovalVisible = approvalVisibleForSelection({
     pending,
     selectedRunId: activeRunId,
@@ -311,9 +293,8 @@ export function App(props: AppProps): React.JSX.Element {
   }, [childListValues]);
   const focusSession = (runId: RunId): void => {
     dispatchChildListSelection({ kind: 'focusRun', runId });
-    const run = view.runs.get(runId)!;
-    if (run.group === 'interrupted' && run.resumeEligible) {
-      props.onSubmit(`/resume ${run.id}`);
+    if (resumableRunId(view.runs.get(runId))) {
+      props.onSubmit(`/resume ${runId}`);
     } else {
       focusRunAndPromoteApprovals(runId);
     }
@@ -334,7 +315,6 @@ export function App(props: AppProps): React.JSX.Element {
         return (
           <TranscriptReader
             availableRows={availableRows}
-            runLabels={subagentRunLabels}
             onClose={() => {
               // A workflow's log is only ever opened from its popup (a
               // workflow is never a viewport), so closing it goes back there.
@@ -395,16 +375,22 @@ export function App(props: AppProps): React.JSX.Element {
     form: {
       maxRows: FORM_FOREGROUND_MAX_ROWS,
       render: (availableRows) =>
-        foregroundForm?.render(() => {
-          formProgressSignal.set(undefined);
-          // Through the slot owner, which hands the slot to whichever form
-          // queued behind this one. A form that already lost the slot can
-          // still run this from an in-flight operation, and the owner ignores
-          // that close rather than unmounting whatever took its place, which
-          // would leave a host dialog's fiber with no form to answer it and
-          // its lane permit held for the session.
-          closeActiveForm(foregroundForm);
-        }, availableRows),
+        foregroundForm && (
+          // Keyed on the slot entry, so a form that takes or regains the slot
+          // mounts its own state instead of inheriting the last occupant's.
+          <Fragment key={foregroundForm.id}>
+            {foregroundForm.render(() => {
+              formProgressSignal.set(undefined);
+              // Through the slot owner, which hands the slot to whichever form
+              // queued behind this one. A form that already lost the slot can
+              // still run this from an in-flight operation, and the owner ignores
+              // that close rather than unmounting whatever took its place, which
+              // would leave a host dialog's fiber with no form to answer it and
+              // its lane permit held for the session.
+              closeActiveForm(foregroundForm);
+            }, availableRows)}
+          </Fragment>
+        ),
     },
     infoPane: {
       maxRows: undefined,
@@ -568,18 +554,12 @@ export function App(props: AppProps): React.JSX.Element {
     // exitOnCtrlC: false (see runChatTui), so Ink neither auto-exits nor filters
     // Ctrl+C out of useInput. Draft discard is the App's half; everything past
     // it is the mount's SIGINT policy, wired through the required `onCtrlC`.
-    // A background draft never consumes Ctrl+C: only the composer the keyboard
-    // is on discards.
+    // A background draft never consumes Ctrl+C: only the focused input, the
+    // one registered with the draft registry, discards.
     if (key.ctrl && input === 'c') {
       if (formBusy) {
         formProgress?.cancel();
-      } else if (
-        !activeDraftRegistry.discard() &&
-        (inputDisabled ||
-          reverseSearchOpen ||
-          childListFocused ||
-          !(inputBarRef.current?.discardDraft() ?? false))
-      ) {
+      } else if (!activeDraftRegistry.discard()) {
         props.onCtrlC();
       }
       return;
@@ -633,10 +613,7 @@ export function App(props: AppProps): React.JSX.Element {
   });
 
   return (
-    <ActiveDraftScope
-      active={foregroundOpen || reverseSearchOpen}
-      registry={activeDraftRegistry}
-    >
+    <ActiveDraftScope registry={activeDraftRegistry}>
       <ConversationRegion
         colorEnabled={props.colorEnabled}
         columns={columns}
@@ -669,8 +646,7 @@ export function App(props: AppProps): React.JSX.Element {
               childListFocused={childListFocused}
               childListSelectionKillable={selectedChildKillable}
               childListSelectionResumable={
-                selectedChild?.group === 'interrupted' &&
-                selectedChild.resumeEligible
+                resumableRunId(selectedChild) !== undefined
               }
               childNavigationAvailable={childListAvailable}
               runningSessions={childRunningCount}
@@ -687,7 +663,6 @@ export function App(props: AppProps): React.JSX.Element {
           foregroundKind,
           childListFocused,
           selectedChildValue,
-          subagentRunLabels,
         }}
         onCancelChildList={cancelChildList}
         onFocusSession={focusSession}

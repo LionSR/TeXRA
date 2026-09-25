@@ -10,7 +10,6 @@ import { useLayoutEffect, type ReactNode } from 'react';
 import { clampModalWidth } from '@cli/tui/ui/theme';
 import type { RunId } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
-import type { RunLabels } from '@shared/tools/executionsDisplay';
 import { clamp } from '@utils/core';
 
 // Local imports - conversation panes and layout
@@ -53,7 +52,6 @@ interface ConversationRegionSnapshot {
   readonly foregroundKind: ForegroundSurfaceKind | undefined;
   readonly selectedChildValue: RunId | undefined;
   readonly childListFocused: boolean;
-  readonly subagentRunLabels: RunLabels;
 }
 
 interface ConversationRegionProps {
@@ -116,11 +114,10 @@ export function ConversationRegion({
   ).map((followUp) => followUp.text);
   const queuedFollowUpPanelWanted =
     !foregroundOpen && queuedFollowUpMessages.length > 0;
-  // Round-border chrome is the default input height minus its single content
-  // row; InputBar publishes the live content height so multi-line drafts shrink
+  // InputBar publishes the live content height so multi-line drafts shrink
   // the transcript instead of pushing pinned chrome off-screen.
-  const inputBorderRows = PINNED_CHROME_ROWS.input - 1;
-  const inputRows = inputBorderRows + useSignal(inputBarContentRows);
+  const inputRows =
+    PINNED_CHROME_ROWS.inputBorder + useSignal(inputBarContentRows);
   const footerRows =
     PINNED_CHROME_ROWS.status + (inputBarVisible ? inputRows : 0);
   const requestedQueuedFollowUpPanelRows = queuedFollowUpPanelWanted
@@ -146,10 +143,9 @@ export function ConversationRegion({
   });
   const transcriptWidth = clampModalWidth(columns);
   const { foregroundRows, transcriptRows } = allocateMiddleRows({
+    footerRows,
     foregroundMaxRows: snapshot.foregroundMaxRows,
     foregroundOpen,
-    inputVisible: inputBarVisible,
-    inputRows,
     queuedFollowUpPanelRows,
     reverseSearchOpen,
     rows,
@@ -163,8 +159,6 @@ export function ConversationRegion({
     hasTodosPlanPanel && activeRun
       ? todosPlanPanelRowCount(activeTodos, activePlan)
       : 0;
-  const sessionPanelItemCount = sessionRows.length;
-  const minimumSessionPanelRows = 2;
   const {
     bottomPanelRows: bottomPanelBudget,
     conversationRows,
@@ -172,15 +166,12 @@ export function ConversationRegion({
     todosPlanRows,
   } = allocateConversationPanelRows({
     maxRows: BOTTOM_PANEL_MAX_ROWS,
-    sessionCount: foregroundOpen ? 0 : sessionPanelItemCount,
+    sessionCount: foregroundOpen ? 0 : sessionRows.length,
     childListFocused: snapshot.childListFocused,
-    minimumSessionPanelRows,
     todosPlanContentRows,
     transcriptRows,
   });
-  const childListHasRows = sessionPanelItemCount > 0;
-  const childListVisible =
-    childListHasRows && subagentRows >= minimumSessionPanelRows;
+  const childListVisible = subagentRows > 0;
   useLayoutEffect(() => {
     if (snapshot.childListFocused && !foregroundOpen && !childListVisible) {
       onCancelChildList();
@@ -202,7 +193,6 @@ export function ConversationRegion({
         onRenderKeyChange={onStaticTranscriptChange}
         renderKey={staticTranscriptKey}
         scrollbackRunId={scrollbackTarget.runId}
-        subagentRunLabels={snapshot.subagentRunLabels}
         width={transcriptWidth}
       />
       <Box flexDirection="column">
@@ -213,7 +203,6 @@ export function ConversationRegion({
               colorEnabled={colorEnabled}
               width={transcriptWidth}
               maxRows={conversationRows}
-              subagentRunLabels={snapshot.subagentRunLabels}
             />
           ) : null}
           {foregroundSurface ? (

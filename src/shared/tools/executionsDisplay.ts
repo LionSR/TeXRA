@@ -8,7 +8,14 @@ export function executionsAction(input: Record<string, unknown>): string {
   return action || EXECUTIONS_DEFAULT_ACTION;
 }
 
-export type RunLabels = ReadonlyMap<string, string>;
+/** The runs an `executions` call may name, by id: the session's `view.runs`.
+ *  A run whose label is its id adds nothing, so it counts as unlabeled. */
+export type RunLabels = ReadonlyMap<string, { readonly label: string }>;
+
+function labelOf(labels: RunLabels, id: string): string | undefined {
+  const label = labels.get(id)?.label.trim();
+  return label && label !== id ? label : undefined;
+}
 
 interface RunPathTarget {
   id: string;
@@ -52,13 +59,12 @@ export function executionsSubagentSummary(
   if (targets.length === 0 && pathTarget) targets.push(pathTarget);
   if (targets.length === 0) return undefined;
 
-  const hasKnownTarget = targets.some(({ id }) => labels.get(id)?.trim());
+  const hasKnownTarget = targets.some(({ id }) => labelOf(labels, id));
   if (!hasKnownTarget) return undefined;
 
-  const displayTargets = targets.map(({ id, resourceSuffix }) => {
-    const label = labels.get(id)?.trim();
-    return `${label || id}${resourceSuffix}`;
-  });
+  const displayTargets = targets.map(
+    ({ id, resourceSuffix }) => `${labelOf(labels, id) ?? id}${resourceSuffix}`,
+  );
 
   return `${executionsAction(input)}: ${displayTargets.join(', ')}`;
 }

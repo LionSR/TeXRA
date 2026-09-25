@@ -107,8 +107,9 @@ export interface Surface {
   /** The last failed request from this surface. Never persisted. */
   readonly requestError: SurfaceRefusal | null;
   /**
-   * A preference, not a pointer: read it through `resolveSelected`. `null`
-   * is the New-task state and resolves to itself.
+   * The shown run, decided once: `pruneSurface` moves an id the view no
+   * longer holds to the first top-level run (else `null`), so every reader
+   * takes the field as is. `null` is the New-task state and stays itself.
    */
   readonly selected: RunId | null;
   readonly drafts: ReadonlyMap<RunId, Draft>;
@@ -129,7 +130,7 @@ export interface Surface {
   readonly groups: ReadonlyMap<RunId, ReadonlyMap<string, boolean>>;
   /** Never persisted. */
   readonly focusedRow: string | null;
-  /** Run-board tab strip; resolved at read like `selected`. */
+  /** Run-board tab strip; resolved at read through `resolvePhase`. */
   readonly phase: ReadonlyMap<RunId, string>;
   readonly drawerOpen: boolean;
   readonly toolsSheetOpen: boolean;
@@ -267,8 +268,11 @@ const PER_STREAM_MAPS = Object.keys(
  * Every per-stream map drops its entry when that stream leaves the view
  * (PRD 9): an id is never reused, so the entry can never become valid
  * again, and without the prune the maps and the persisted form grow without
- * bound and keep a deleted conversation's draft. Returns the same record
- * when nothing left.
+ * bound and keep a deleted conversation's draft. The selection follows the
+ * same rule once, here: a selected run that left the view moves to the
+ * first top-level run, else `null`; an explicit `null` stays itself. This
+ * surface browses the whole project; a chat's selection is confined to its
+ * own run tree instead. Returns the same record when nothing left.
  */
 export function pruneSurface(surface: Surface, view: SessionView): Surface {
   // `retain` only ever drops entries, never changes a value, so each pruned
@@ -276,11 +280,14 @@ export function pruneSurface(surface: Surface, view: SessionView): Surface {
   // read-only supertype and the once-narrowed patch is cast back at the end.
   const patch: Partial<
     Record<(typeof PER_STREAM_MAPS)[number], ReadonlyMap<RunId, unknown>>
-  > = {};
+  > & { selected?: RunId | null } = {};
   for (const key of PER_STREAM_MAPS) {
     const current: ReadonlyMap<RunId, unknown> = surface[key];
     const next = retain(current, view);
     if (next !== current) patch[key] = next;
+  }
+  if (surface.selected !== null && !view.runs.has(surface.selected)) {
+    patch.selected = view.order.at(0) ?? null;
   }
   if (Object.keys(patch).length === 0) return surface;
   return { ...surface, ...patch } as Surface;
@@ -316,23 +323,6 @@ export function reconcileLaunch(surface: Surface, host: HostSnapshot): Surface {
   }
   if (Object.keys(patch).length === 0) return surface;
   return { ...surface, launch: { ...launch, ...patch } };
-}
-
-/**
- * The PRD 9 selection rule: `selected` if the view still has that run,
- * else the first top-level run, else `null`. The fallback applies only to
- * a non-null id that has disappeared; an explicit `null` resolves to
- * itself. This surface browses the whole project; a chat's selection is
- * confined to its own run tree instead.
- */
-export function resolveSelected(
-  view: SessionView,
-  surface: Surface,
-): RunId | null {
-  const selected = surface.selected;
-  if (selected === null) return null;
-  if (view.runs.has(selected)) return selected;
-  return view.order.at(0) ?? null;
 }
 
 /**

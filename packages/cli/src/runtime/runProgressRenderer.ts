@@ -9,7 +9,6 @@ import path from 'node:path';
 import { SubscriptionRef } from 'effect';
 
 import { getCategoryAgent } from '@agent/index';
-import { redactSecrets } from '@logger/redaction';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import {
   AgentCategory,
@@ -17,7 +16,11 @@ import {
   type RunId,
   type RunPhase,
 } from '@shared/schemas';
-import type { SessionView, RunView } from '@shared/session/sessionView';
+import {
+  isLiveRun,
+  type SessionView,
+  type RunView,
+} from '@shared/session/sessionView';
 import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import {
   flowPosition,
@@ -199,7 +202,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     if (!root || this.rootRunTerminal) return [];
     return root.childIds.flatMap((childId) => {
       const child = this.view?.runs.get(childId);
-      return child && !isTerminalOutcomePhase(child.status) ? [child] : [];
+      return child && isLiveRun(child) ? [child] : [];
     });
   }
 
@@ -344,7 +347,7 @@ function formatActiveChildren(
   const safeDescription =
     description && descriptionColumns > 0
       ? truncateSummaryToWidth(
-          redactSecrets(safeTerminalText(description)),
+          safeTerminalText(description),
           descriptionColumns,
         )
       : '';
