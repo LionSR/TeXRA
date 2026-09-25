@@ -139,10 +139,10 @@ describe('workspace storage defaults', () => {
   );
 
   // Regression pin (#C4): a malformed project config used to fail CLI startup
-  // outright — `JsonStore.open` throws and only the GUI hosts caught it. Every
-  // host now degrades to the internal workspace store, loudly.
+  // outright. Every host now opens it as an empty view, loudly, and never
+  // moves the workspace config to a second home.
   it.effect(
-    'degrades to the internal workspace config store when the project config is malformed',
+    'warns and refuses writes when the project config is malformed',
     () =>
       Effect.gen(function* () {
         const root = yield* Effect.promise(() => makeStorageRoot());
@@ -160,10 +160,13 @@ describe('workspace storage defaults', () => {
         const stores = yield* openTexraConfigStores(root, workspacePath, (m) =>
           warnings.push(m),
         );
-        yield* stores.workspace.set('texra.files.exclude', ['dist']);
+        const write = yield* Effect.exit(
+          stores.workspace.set('texra.files.exclude', ['dist']),
+        );
 
         expect(warnings).toHaveLength(1);
-        expect(warnings[0]).toContain('Cannot open project .texra/config.json');
+        expect(warnings[0]).toContain('Cannot read');
+        expect(write._tag).toBe('Failure');
         expect(
           yield* Effect.promise(() =>
             pathExists(
@@ -173,7 +176,7 @@ describe('workspace storage defaults', () => {
               ),
             ),
           ),
-        ).toBe(true);
+        ).toBe(false);
       }).pipe(Effect.provide(nodePlatformLayer)),
   );
 });

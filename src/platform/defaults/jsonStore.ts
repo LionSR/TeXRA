@@ -40,6 +40,13 @@ export interface JsonStoreOptions {
    * `JsonStore` behavior.
    */
   mode?: number;
+  /**
+   * When set, a file that exists but cannot be read as a JSON object opens as
+   * an empty view and reports the cause here instead of failing the open.
+   * Writes still re-read the file in {@link flush}, so they fail rather than
+   * overwrite what the reader could not parse.
+   */
+  onUnreadable?: (error: Error) => void;
 }
 
 /** `0o600` -> `0o700`: adds owner-execute wherever owner-read is set. */
@@ -183,7 +190,18 @@ export class JsonStore {
   ) {
     const path = yield* Path.Path;
     const storePath = path.resolve(filePath);
-    return new JsonStore(storePath, yield* readJsonRecord(storePath), options);
+    const { onUnreadable } = options;
+    const data = yield* onUnreadable
+      ? readJsonRecord(storePath).pipe(
+          Effect.catch((error) =>
+            Effect.sync(() => {
+              onUnreadable(ensureError(error));
+              return {};
+            }),
+          ),
+        )
+      : readJsonRecord(storePath);
+    return new JsonStore(storePath, data, options);
   });
 
   get<T>(key: string, defaultValue?: T): T {
