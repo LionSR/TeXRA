@@ -6,8 +6,8 @@
  *
  * These live beside `execUtils.ts` rather than inside it because they are the
  * pieces that must stay `try`/`catch`-shaped: a synchronous spawn has no Effect
- * to fail into, and `execUtils.ts` — which imports `effect` at runtime — is held
- * to zero raw catch clauses by the `catch:effect-importer` ratchet row.
+ * to fail into, and `execUtils.ts` — which imports `effect` at runtime —
+ * keeps no raw catch clause.
  */
 
 // Standard library imports

@@ -53,9 +53,9 @@ Things the tree won't tell you:
   (no NEW distinct `@agent/*` deep-import specifier from a host, type-only
   included), `host-agent-mock`,
   `architecture-edges`, and `effect-migration` (per-file allowlists of
-  shrink-only counts: `new AbortController(`,
-  superseded package imports, `Effect.run*` boundary calls, raw catches in
-  `effect`-importing files; it admits a new `Effect.run*`
+  shrink-only counts: `new AbortController(` and `Effect.run*` boundary
+  calls; a category that reaches zero retires with its counting code, except
+  the `Effect.run*` check, which stays at zero; it admits a new `Effect.run*`
   file only under `packages/{extension,desktop,cli,agent}/src/` (webview
   frontends excluded) or a named webview runtime entry in the script's
   `BOUNDARY_RUNTIME_ENTRIES`, and ESLint's

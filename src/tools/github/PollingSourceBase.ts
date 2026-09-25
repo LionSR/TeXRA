@@ -13,6 +13,7 @@ import {
   Effect,
   Exit,
   FiberSet,
+  Result,
   Schedule,
   Scope,
 } from 'effect';
@@ -29,6 +30,7 @@ import {
 } from '@platform/interfaces';
 import type { Secrets } from '@platform/secrets';
 import { jitteredExponentialBackoffMs } from '@utils/core';
+import { ensureError } from '@utils/errors/errorMessage';
 import { unrefSleepClock } from '@utils/system/unrefSleepClock';
 import {
   type ConditionalResponse,
@@ -405,10 +407,14 @@ export abstract class PollingSourceBase<
       // Disposable contract, invoked outside any fiber. A throwing listener is
       // logged and the remaining listeners still hear the change: it must not
       // leak into the subscribe path that called it.
-      try {
-        listener(keys);
-      } catch (err) {
-        this.syncLog.warn('Keys-changed listener threw', { data: err });
+      const notified = Result.try({
+        try: () => listener(keys),
+        catch: ensureError,
+      });
+      if (Result.isFailure(notified)) {
+        this.syncLog.warn('Keys-changed listener threw', {
+          data: notified.failure,
+        });
       }
     }
   }

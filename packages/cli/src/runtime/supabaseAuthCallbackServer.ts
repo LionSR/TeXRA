@@ -217,8 +217,8 @@ function readRequestBody(
 /**
  * The loopback callback body we accept. A non-object body is rejected; a
  * present-but-non-string field degrades to `undefined` (the `z.preprocess`
- * per-field policy), written without `.catch` so this file stays at zero raw
- * catches (catch:effect-importer ratchet row).
+ * per-field policy), written without `.catch` so this `effect`-importing
+ * file keeps no raw catch.
  */
 const CallbackBodySchema = z.object({
   query: z.preprocess(
