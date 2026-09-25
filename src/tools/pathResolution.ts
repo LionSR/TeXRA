@@ -10,11 +10,16 @@ import { ensureError } from '@utils/errors/errorMessage';
 import { normalizeFilePath } from '@utils/core';
 import { locateInWorkspace } from '@utils/files/workspaceFS';
 import {
+  canonicalizePath,
   findExternalRoot,
   type MatchedExternalRoot,
 } from '@utils/files/externalRoots';
 import { readSettingFrom } from '@utils/config/platformSettings';
-import { getPathSegments, toPosixPath } from '@utils/core/pathCore';
+import {
+  getPathSegments,
+  isPathWithin,
+  toPosixPath,
+} from '@utils/core/pathCore';
 
 export interface WorkspacePathResolution {
   relative: string;
@@ -128,6 +133,21 @@ export function resolveToolPath(call: ToolPathCall, targetPath?: string) {
           };
         }
         const relative = resolved.relativePath || '.';
+        // Lexical containment is not physical containment: a symlink inside
+        // the root (`ln -s .. up`) makes `up/x` name a file outside it. The
+        // realpath of the path's deepest existing ancestor must stay inside
+        // the root's; one that leaves is an outside-root path at its real
+        // location, so the allowlist, the protection setting and the
+        // approval UI all see where the read or write actually lands.
+        const physical = canonicalizePath(resolved.absolutePath);
+        if (!isPathWithin(canonicalizePath(root), physical)) {
+          return {
+            kind: 'outside-root',
+            absolutePath: physical,
+            match: findExternalRoot(physical),
+            outsideMessage: `Path must stay within the ${scope}. ${toPosixPath(relative)} resolves through a symlink to ${normalizeFilePath(physical)}.`,
+          };
+        }
         return annotateExternalPermission({
           relative,
           absolute: resolved.absolutePath,

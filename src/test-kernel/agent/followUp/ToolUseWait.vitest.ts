@@ -72,7 +72,12 @@ import {
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
 import { releaseRunResources } from '@tools/approval';
-import { clearGoal, goalOf, startGoal } from '@tools/goal';
+import {
+  clearGoal,
+  goalOf,
+  setGoalSessionAutoApproval,
+  startGoal,
+} from '@tools/goal';
 import { generateRunId, generateShortId } from '@utils/core';
 import { RunFileService } from '@utils/files/runStorage';
 
@@ -129,7 +134,6 @@ function testBoundModel(supportsVision: boolean): BoundModel {
     supportsForcedToolChoice: true,
     wireRouteKey: 'test-route',
     modelRetryRouteKey: 'test-route/test-model',
-    routedOnKimiCode: false,
     backgroundCapable: false,
   };
 }
@@ -1087,6 +1091,8 @@ describe('an active goal at the wait', () => {
         const session = yield* goalSession();
         const runId = startedRun(session);
         yield* startGoal(session, runId, 'finish the refactor');
+        // The grant an approved plan makes; pausing revokes what it granted.
+        setGoalSessionAutoApproval(session, runId, 'commands');
         const recorded = recordSessionEvents(session);
 
         try {

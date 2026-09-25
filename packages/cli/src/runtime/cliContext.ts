@@ -71,6 +71,8 @@ export interface CliContext {
    */
   readonly config: ConfigProvider;
   readonly configWarnings: readonly string[];
+  /** The `configWarnings` that `--quiet` does not hide; see `CliStartupConfig`. */
+  readonly configDegradations: readonly string[];
   readonly envAgent?: string;
   readonly envModel?: string;
   readonly skillSourceOptions: SkillSourceOptions;
@@ -377,7 +379,7 @@ export const buildCliContext = Effect.fn('cliContext.buildCliContext')(
     // hosts — and, from `initCliPlatform` on, this host too. This is the
     // pre-runtime open, which is why it goes through `loadCliStartupConfig`
     // rather than the process runtime.
-    const { config, warnings } = yield* loadCliStartupConfig(
+    const { config, warnings, degradations } = yield* loadCliStartupConfig(
       cwd,
       init.storageRoot,
     );
@@ -450,6 +452,7 @@ export const buildCliContext = Effect.fn('cliContext.buildCliContext')(
       resourcesPath: resolveCliResourcesPath(),
       config,
       configWarnings,
+      configDegradations: degradations,
       envAgent: yield* envTier('TEXRA_AGENT'),
       envModel,
       skillSourceOptions: {

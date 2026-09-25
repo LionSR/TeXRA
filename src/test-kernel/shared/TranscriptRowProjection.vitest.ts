@@ -43,7 +43,6 @@ describe('projectTranscriptRow', () => {
       'message',
       'provider',
       'statusCode',
-      'userRetryable',
       'classification',
       'rawErrorBody',
     ]);

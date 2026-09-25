@@ -1,6 +1,6 @@
 ---
 name: scientific-presenter
-description: Build or revise scientific talks, posters, and Beamer slide decks from papers, codebases, figures, or LaTeX templates. Use when Codex needs to turn technical research into a clear presentation, preserve an existing slide theme, generate or improve figures, or iteratively compile and visually check presentation output.
+description: Build or revise scientific talks, posters, and Beamer slide decks from papers, codebases, figures, or LaTeX templates. Use when you need to turn technical research into a clear presentation, preserve an existing slide theme, generate or improve figures, or iteratively compile and visually check presentation output.
 ---
 
 # Scientific Presenter

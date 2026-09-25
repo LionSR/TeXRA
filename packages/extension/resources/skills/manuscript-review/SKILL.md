@@ -1,6 +1,6 @@
 ---
 name: manuscript-review
-description: Audit technical manuscripts for mathematical correctness, logical soundness, notation consistency, evidence quality, and figure or code alignment. Use when Codex needs to review a paper, verify derivations, prioritize findings, or produce a rigorous findings-first assessment instead of rewriting prose blindly.
+description: Audit technical manuscripts for mathematical correctness, logical soundness, notation consistency, evidence quality, and figure or code alignment. Use when you need to review a paper, verify derivations, prioritize findings, or produce a rigorous findings-first assessment instead of rewriting prose blindly.
 ---
 
 # Manuscript Review

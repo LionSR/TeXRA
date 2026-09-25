@@ -3,7 +3,7 @@
 
 import { Box, Text } from 'ink';
 
-import { fillRows } from '@cli/runtime/terminalText';
+import { fillRows, safeTerminalText } from '@cli/runtime/terminalText';
 import type { WorkflowCallIdentity } from '@shared/schemas';
 import {
   formatWorkflowRowGroup,
@@ -47,7 +47,7 @@ export function TaskRow({
         </Text>
       </Box>
       <RowSegment flexShrink={0}>
-        {`${row.call.label} · ${row.statusLabel}`}
+        {`${safeTerminalText(row.call.label)} · ${row.statusLabel}`}
       </RowSegment>
       <ApprovalSegments approval={approval} />
       {detail ? (
@@ -59,7 +59,7 @@ export function TaskRow({
           }
           dimColor={row.detail?.kind !== 'error'}
           flexShrink={1}
-        >{`  ${detail}`}</RowSegment>
+        >{`  ${safeTerminalText(detail)}`}</RowSegment>
       ) : null}
     </Box>
   );
@@ -82,7 +82,7 @@ export function DeclaredTaskRow({
         </Text>
       </Box>
       <RowSegment dimColor flexShrink={0}>
-        {`${task.label} · ${workflowPlanEntryLabel(settled)}`}
+        {`${safeTerminalText(task.label)} · ${workflowPlanEntryLabel(settled)}`}
       </RowSegment>
     </Box>
   );

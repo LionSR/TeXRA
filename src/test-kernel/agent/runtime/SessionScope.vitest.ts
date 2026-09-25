@@ -43,13 +43,14 @@ describe('session-owned transcripts and follow-up queues', () => {
         yield* launching.settlePublications();
 
         expect(
-          launching.transcripts
-            .get(runId)
-            ?.toJSON()
-            .map((entry) => entry.text),
+          (yield* launching.transcripts.readEntries(runId)).map(
+            (entry) => entry.text,
+          ),
         ).toEqual(['owned by launching session']);
-        expect(sibling.transcripts.get(runId)).toBeUndefined();
-        expect(testDefaultSession().transcripts.get(runId)).toBeUndefined();
+        expect(yield* sibling.transcripts.readEntries(runId)).toEqual([]);
+        expect(
+          yield* testDefaultSession().transcripts.readEntries(runId),
+        ).toEqual([]);
       }),
   );
 
@@ -75,7 +76,7 @@ describe('session-owned transcripts and follow-up queues', () => {
       // The `waiting` step parks the run and the loop commits the closure
       // facts in that batch (`loop/toolUse.ts`), so the partial text becomes
       // the row's final text instead of streaming forever.
-      session.publish(session.streamClosureFacts(runId));
+      session.publish(yield* session.streamClosureFacts(runId));
       yield* session.settlePublications();
       const entries = yield* session.transcripts.readEntries(runId);
       expect(

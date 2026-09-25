@@ -53,7 +53,7 @@ export interface ChildRunLaunchOptions {
    * resolves its own.
    */
   readonly composition?: CompositionKey;
-  readonly onApprovalPolicyDenial?: () => void;
+  readonly onApprovalPolicyDenial?: (withheldTools?: readonly string[]) => void;
   /** Caller cancellation for a durable in-band launch. */
   readonly signal?: AbortSignal;
   /** Fires with the resolved child run id — the caller inherits approvals onto it. */

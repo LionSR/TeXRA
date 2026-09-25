@@ -7,6 +7,7 @@ import {
   STREAM_LOG_ENTRY_TYPES,
   StreamLogEntrySchema,
 } from '@shared/schemas';
+import type { RunLabels } from '@shared/tools/executionsDisplay';
 import {
   projectTranscriptRow,
   type ErrorRow,
@@ -67,11 +68,7 @@ function renderTemplateInDocument(template: FormatterTemplate): HTMLElement {
 }
 
 /** The projected tool row for an INFO-level tool-use log entry. */
-function toolUseRow(
-  id: string,
-  data: unknown,
-  runLabels?: Map<string, string>,
-): ToolRow {
+function toolUseRow(id: string, data: unknown, runLabels?: RunLabels): ToolRow {
   const entry = StreamLogEntrySchema.parse({
     type: STREAM_LOG_ENTRY_TYPES.LOG,
     seqNo: 1,
@@ -95,7 +92,7 @@ function executionsTitle(
       toolUseRow(
         'executions-title',
         { toolName: 'executions', input },
-        new Map(labels),
+        new Map(labels.map(([id, label]) => [id, { label }])),
       ),
     ),
   );

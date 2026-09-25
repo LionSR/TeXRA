@@ -1,4 +1,4 @@
-import type { SettingsTabPanelName } from '@shared/settingsView/settingsViewMessages';
+import type { SettingsTarget } from '@shared/settingsView/settingsViewMessages';
 
 export interface CommandKeybinding {
   key: string;
@@ -15,12 +15,12 @@ export interface CommandCatalogEntry {
   enablement?: string;
   keybinding?: CommandKeybinding;
   /**
-   * Settings panel this command opens. Single source of truth for the
-   * command → settings-tab mapping: both hosts derive their `showSettings`
+   * Settings page, or `page/section`, this command opens. Single source of
+   * truth for the command → settings-tab mapping: both hosts derive their `showSettings`
    * handler rows from {@link settingsTabByCommand} instead of hand-mirroring
    * the tab per host.
    */
-  settingsTab?: SettingsTabPanelName;
+  settingsTab?: SettingsTarget;
   /**
    * Set on entries whose VS Code extension registration goes through the
    * shared `dispatchCommandFromRegistry` handler map (see
@@ -176,6 +176,7 @@ export const commandCatalog = [
     title: 'Account Settings',
     category: 'TeXRA',
     icon: '$(account)',
+    settingsTab: 'general/account',
   },
   {
     id: 'texra.showMemory',
@@ -191,7 +192,7 @@ export const commandCatalog = [
     title: 'Model Settings',
     category: 'TeXRA',
     icon: '$(hubot)',
-    settingsTab: 'models',
+    settingsTab: 'models/models',
   },
   {
     id: 'texra.showAgents',
@@ -199,7 +200,7 @@ export const commandCatalog = [
     title: 'Agent Settings',
     category: 'TeXRA',
     icon: '$(symbol-method)',
-    settingsTab: 'agents',
+    settingsTab: 'agents/library',
   },
   {
     id: 'texra.showTools',
@@ -207,7 +208,7 @@ export const commandCatalog = [
     title: 'Tool Settings',
     category: 'TeXRA',
     icon: '$(tools)',
-    settingsTab: 'tools',
+    settingsTab: 'tools/tools',
   },
   {
     id: 'texra.showMultiAgent',
@@ -215,7 +216,7 @@ export const commandCatalog = [
     title: 'Agent Team Settings',
     category: 'TeXRA',
     icon: '$(organization)',
-    settingsTab: 'agents',
+    settingsTab: 'agents/teams',
   },
   {
     id: 'texra.showGitSettings',
@@ -223,7 +224,7 @@ export const commandCatalog = [
     title: 'Git Settings',
     category: 'TeXRA',
     icon: '$(git-branch)',
-    settingsTab: 'general',
+    settingsTab: 'general/git',
   },
   {
     id: 'texra.showMainView',
@@ -439,7 +440,7 @@ export const commandCatalogById = new Map<CommandId, CommandCatalogEntry>(
 /** Ids of the catalog entries that open the settings view on a specific tab. */
 export type SettingsTabCommandId = Extract<
   (typeof commandCatalog)[number],
-  { settingsTab: SettingsTabPanelName }
+  { settingsTab: SettingsTarget }
 >['id'];
 
 /**
@@ -450,7 +451,7 @@ export const settingsTabByCommand = Object.fromEntries(
   commandCatalog.flatMap((entry) =>
     'settingsTab' in entry ? [[entry.id, entry.settingsTab]] : [],
   ),
-) as Record<SettingsTabCommandId, SettingsTabPanelName>;
+) as Record<SettingsTabCommandId, SettingsTarget>;
 
 const commandKeybindingOrder = [
   'texra.showMainView',

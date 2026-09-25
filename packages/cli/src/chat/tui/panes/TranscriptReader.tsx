@@ -12,19 +12,13 @@ import { useMemo } from 'react';
 import { useInput, useWindowSize } from 'ink';
 
 import { isEscapeInput } from '@cli/tui/inputKeys';
-import { BorderedPanel } from '@cli/tui/ui/BorderedPanel';
-import { KeyHints, READER_SCROLL_HINTS } from '@cli/tui/ui/KeyHints';
-import { COLOR_HINT } from '@cli/tui/ui/colors';
-import { CONFIRM_CARD_HORIZONTAL_DECORATION } from '@cli/tui/ui/theme';
+import { ReaderPanel, readerLayout } from '@cli/tui/ui/BorderedPanel';
+import { CLOSE_HINTS, READER_SCROLL_HINTS } from '@cli/tui/ui/KeyHints';
 import type { RunId } from '@shared/schemas';
 import type { TranscriptView } from '@shared/session/sessionView';
-import type { RunLabels } from '@shared/tools/executionsDisplay';
 
 import { formFrameWidth } from '../forms/_shared/FormFrame';
-import {
-  ScrollableModalText,
-  scrollableModalTextRowsBudget,
-} from '../modals/ScrollableModalText';
+import { ScrollableModalText } from '../modals/ScrollableModalText';
 import { sessionView, runViewOf } from '../state/sessionView';
 import { transcriptToLines } from '../state/transcriptLines';
 import { useSignal } from '../state/useSignal';
@@ -33,13 +27,11 @@ const EMPTY_TRANSCRIPT: Pick<TranscriptView, 'rows'> = { rows: [] };
 
 export function TranscriptReader({
   availableRows,
-  runLabels,
   onClose,
   runId,
   title,
 }: {
   readonly availableRows: number;
-  readonly runLabels?: RunLabels;
   readonly onClose: () => void;
   readonly runId: RunId;
   readonly title: string;
@@ -52,16 +44,19 @@ export function TranscriptReader({
   // identity the effect and memos below key on to stay live while the
   // reader is open.
   const transcript = runViewOf(view, runId)?.transcript ?? EMPTY_TRANSCRIPT;
-  const frameWidth = formFrameWidth(columns);
-  const width = frameWidth - CONFIRM_CARD_HORIZONTAL_DECORATION;
+  const layout = readerLayout({
+    availableRows,
+    frameWidth: formFrameWidth(columns),
+    hints: READER_SCROLL_HINTS,
+    title,
+  });
+  const width = layout.contentWidth;
   // Recomputed as the run appends rows, so the reader stays live rather than
   // freezing at the content present when it opened.
   const text = useMemo(() => {
-    const body = transcriptToLines(transcript.rows, width, runLabels)
-      .join('\n')
-      .trimEnd();
+    const body = transcriptToLines(transcript.rows, width).join('\n').trimEnd();
     return body || EMPTY_TRANSCRIPT_TEXT;
-  }, [runLabels, transcript, width]);
+  }, [transcript, width]);
 
   useInput((input, key) => {
     if (isEscapeInput(input, key)) {
@@ -70,27 +65,23 @@ export function TranscriptReader({
   });
 
   return (
-    <BorderedPanel
-      color={COLOR_HINT}
-      title={title}
-      width={frameWidth}
-      footer={<KeyHints hints={READER_SCROLL_HINTS} confirmCancel={false} />}
-    >
-      <ScrollableModalText
-        hiddenNoun="transcript rows"
-        maxRows={scrollableModalTextRowsBudget({
-          availableRows,
-          columns,
-          title,
-        })}
-        preWrapped
-        resetKey={runId}
-        scrollHint="scroll transcript"
-        showScrollHints={false}
-        startAtEnd
-        text={text}
-        width={width}
-      />
-    </BorderedPanel>
+    <ReaderPanel layout={layout} title={title}>
+      {layout.bodyRows > 0 ? (
+        <ScrollableModalText
+          footerHints={layout.showFooter ? CLOSE_HINTS : undefined}
+          hiddenNoun="transcript rows"
+          marginWhenSpacious={false}
+          maxRows={layout.bodyRows}
+          minContentWidth={1}
+          preWrapped
+          resetKey={runId}
+          scrollHint="scroll"
+          showScrollHints={false}
+          startAtEnd
+          text={text}
+          width={width}
+        />
+      ) : null}
+    </ReaderPanel>
   );
 }

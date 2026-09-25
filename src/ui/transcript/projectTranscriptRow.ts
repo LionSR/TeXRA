@@ -65,7 +65,7 @@ interface TranscriptRowContext {
    *  opening it. Phase headers are unaffected — they stay transcript rows
    *  everywhere. */
   readonly projectLifecycleToTaskGroups?: boolean;
-  /** Subagent run id -> label, for the `executions` tool header. */
+  /** The session's runs by id, for the `executions` tool header. */
   readonly runLabels?: ToolRowModelContext['runLabels'];
 }
 
@@ -121,7 +121,9 @@ const STREAMING_TEXT_ROW_KIND = {
  *
  * `partialText` is deliberately absent: it is a retry surface's material,
  * not a transcript row's. `RetryRequestPanel` reads it from the approval
- * request's own payload, never from a projected row.
+ * request's own payload, never from a projected row. So is `userRetryable`:
+ * the runtime's retry routing flag, which the row's own retry affordance
+ * already expresses to a reader.
  */
 const ERROR_DETAIL_FIELDS = [
   'message',
@@ -130,7 +132,6 @@ const ERROR_DETAIL_FIELDS = [
   'provider',
   'statusCode',
   'statusText',
-  'userRetryable',
   'classification',
   'requestId',
   'rawMessage',
@@ -145,17 +146,14 @@ function errorDetails(
   return ERROR_DETAIL_FIELDS.flatMap((key) => {
     const value = data[key];
     // The message is the summary on most failures; repeating it under the
-    // summary says nothing.
+    // summary says nothing. Neither does an empty provider body.
     if (value == null || (key === 'message' && value === summary)) return [];
-    return [
-      {
-        key,
-        value:
-          typeof value === 'object'
-            ? JSON.stringify(value, null, 2)
-            : String(value),
-      },
-    ];
+    const text =
+      typeof value === 'object'
+        ? JSON.stringify(value, null, 2)
+        : String(value);
+    if (text.trim() === '' || text === '{}') return [];
+    return [{ key, value: text }];
   });
 }
 

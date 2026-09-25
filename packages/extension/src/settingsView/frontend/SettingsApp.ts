@@ -1,6 +1,6 @@
 /** Main container for the unified settings view. */
 
-import { LitElement, html, type TemplateResult } from 'lit';
+import { LitElement, html, nothing, type TemplateResult } from 'lit';
 import { customElement } from 'lit/decorators.js';
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
@@ -16,6 +16,7 @@ import { installToolbarTooltips } from '@shared/litControllers/TooltipController
 // Local imports - shared schemas and constants
 import {
   dispatchSettingsViewOutbound,
+  type SettingsSectionName,
   type SettingsTabPanelName,
 } from '@shared/settingsView/settingsViewMessages';
 import { isUnrecognizedCommand } from '@shared/utils/dispatcher';
@@ -87,6 +88,7 @@ import {
   providerKeyStatuses,
   resetSettingsState,
   selectedPanel,
+  selectedSections,
   settingSignal,
   sessionProblem,
   skillLoadIssues,
@@ -162,13 +164,45 @@ export class SettingsApp extends SignalWatcher(LitElement) {
     );
   }
 
-  private selectSettingsEntry(entry: SettingsNavEntry): void {
+  private selectSettingsEntry(
+    entry: SettingsNavEntry,
+    section?: SettingsSectionName,
+  ): void {
     selectedPanel.set(entry.panel);
+    if (section) {
+      selectedSections.set({
+        ...selectedSections.get(),
+        [entry.panel]: section,
+      });
+    }
     requestAnimationFrame(() => {
       const panel =
         this.shadowRoot?.querySelector<HTMLElement>('.settings-panel');
       if (panel) panel.scrollTop = 0;
     });
+  }
+
+  /**
+   * APG tabs keyboard contract for both nav rows: ArrowLeft/ArrowRight move
+   * (wrapping), Home/End jump to the ends, and moving selects the tab.
+   */
+  private async handleTablistKeydown(event: KeyboardEvent): Promise<void> {
+    const tablist = event.currentTarget as HTMLElement;
+    const tabs = [...tablist.querySelectorAll<HTMLElement>('[role="tab"]')];
+    const current = tabs.indexOf(event.target as HTMLElement);
+    if (current < 0) return;
+    const last = tabs.length - 1;
+    const next = {
+      ArrowRight: current === last ? 0 : current + 1,
+      ArrowLeft: current === 0 ? last : current - 1,
+      Home: 0,
+      End: last,
+    }[event.key];
+    if (next === undefined) return;
+    event.preventDefault();
+    tabs[next].click();
+    await this.updateComplete;
+    tabs[next].focus();
   }
 
   private handleSetProviderKey(event: CustomEvent<{ provider: string }>): void {
@@ -177,34 +211,51 @@ export class SettingsApp extends SignalWatcher(LitElement) {
     });
   }
 
-  /** The pages this host shows: Shortcuts edits desktop key bindings only. */
+  /**
+   * The pages and sections this host shows: Shortcuts edits desktop key
+   * bindings only, and the recommended VS Code settings exist only in VS Code.
+   */
   private navEntries(): readonly SettingsNavEntry[] {
-    return SETTINGS_NAV_ENTRIES.filter(
-      (entry) => entry.panel !== 'shortcuts' || this.isDesktopHost,
-    );
+    const desktop = this.isDesktopHost;
+    return SETTINGS_NAV_ENTRIES.flatMap((entry) => {
+      if (entry.panel === 'shortcuts' && !desktop) return [];
+      if (!desktop) return [entry];
+      return [
+        {
+          ...entry,
+          sections: entry.sections.filter(
+            ({ section }) => section !== 'vscode',
+          ),
+        },
+      ];
+    });
   }
 
   private renderSettingsNavigation(
     entries: readonly SettingsNavEntry[],
-    activePanel: SettingsTabPanelName,
+    activeEntry: SettingsNavEntry,
+    activeSection: SettingsSectionName | undefined,
   ): TemplateResult {
     return html`
       <nav class="settings-navigation" aria-label="Settings">
-        <!-- Plain toggle-button strip, not tablist/tab: these buttons switch
-             the whole page but implement none of the APG tabs keyboard
-             contract (no arrow keys/roving tabindex), and role="tab" on a
-             wa-button nests a native button role. aria-pressed matches the
-             actual behavior. -->
-        <div class="settings-page-nav" role="group" aria-label="Settings pages">
+        <div
+          class="settings-page-nav"
+          role="tablist"
+          aria-label="Settings pages"
+          @keydown=${this.handleTablistKeydown}
+        >
           ${entries.map((entry) => {
-            const active = entry.panel === activePanel;
+            const active = entry === activeEntry;
             return html`
               <wa-button
                 class="settings-page-button"
                 appearance="plain"
                 size="s"
+                role="tab"
                 aria-label=${entry.label}
-                aria-pressed=${String(active)}
+                aria-selected=${String(active)}
+                aria-controls="settings-panel"
+                tabindex=${active ? '0' : '-1'}
                 data-active=${String(active)}
                 data-panel=${entry.panel}
                 title=${entry.label}
@@ -219,18 +270,52 @@ export class SettingsApp extends SignalWatcher(LitElement) {
             `;
           })}
         </div>
+        ${
+          activeEntry.sections.length < 2
+            ? nothing
+            : html`
+                <div
+                  class="settings-page-nav settings-section-nav"
+                  role="tablist"
+                  aria-label=${`${activeEntry.label} sections`}
+                  @keydown=${this.handleTablistKeydown}
+                >
+                  ${activeEntry.sections.map(({ section, label }) => {
+                    const active = section === activeSection;
+                    return html`
+                      <wa-button
+                        class="settings-page-button settings-section-button"
+                        appearance="plain"
+                        size="s"
+                        role="tab"
+                        aria-selected=${String(active)}
+                        aria-controls="settings-panel"
+                        tabindex=${active ? '0' : '-1'}
+                        data-active=${String(active)}
+                        data-section=${section}
+                        @click=${() =>
+                          this.selectSettingsEntry(activeEntry, section)}
+                        >${label}</wa-button
+                      >
+                    `;
+                  })}
+                </div>
+              `
+        }
       </nav>
     `;
   }
 
   private renderActivePanel(
     activePanel: SettingsTabPanelName,
+    section: SettingsSectionName | undefined,
     desktopHost: boolean,
   ): TemplateResult {
     switch (activePanel) {
       case 'models':
         return html`
           <models-tab
+            .section=${section}
             .providerKeyStatuses=${providerKeyStatuses.get()}
             .modelSelectionItems=${modelSelectionItems.get()}
             .helperModel=${helperModel.get()}
@@ -256,6 +341,7 @@ export class SettingsApp extends SignalWatcher(LitElement) {
         const ackGeneration = multiAgentSettingsRevision.get();
         return html`
           <agents-tab
+            .section=${section}
             .ackGeneration=${ackGeneration}
             .agents=${agentSelectionItems.get()}
             .customAgentDir=${customAgentDir.get()}
@@ -298,6 +384,7 @@ export class SettingsApp extends SignalWatcher(LitElement) {
         );
         return html`
           <tools-tab
+            .section=${section}
             .items=${items}
             .loaded=${toolDashboardLoaded.get()}
             .approvalPolicy=${approvalPolicy.get()}
@@ -311,6 +398,7 @@ export class SettingsApp extends SignalWatcher(LitElement) {
       case 'latex':
         return html`
           <latex-tab
+            .section=${section}
             .settings=${latexSettingsStatus.get()}
             .loaded=${latexSettingsLoaded.get()}
             .desktopHost=${desktopHost}
@@ -332,22 +420,25 @@ export class SettingsApp extends SignalWatcher(LitElement) {
           ></memory-tab>
         `;
       case 'general':
-        return html`
-          <account-tab
-            .authenticated=${authenticated.get()}
-            .userEmail=${userEmail.get()}
-            .sessionProblem=${sessionProblem.get()}
-            .telemetryEnabled=${telemetryEnabled.get()}
-          ></account-tab>
-          <git-tab
-            .markCommits=${gitMarkCommits.get()}
-            .authorName=${gitAuthorName.get()}
-            .authorEmail=${gitAuthorEmail.get()}
-            .toggleDisabled=${!gitSettingsLoaded.get()}
-            .githubTokenStatus=${githubTokenStatus.get()}
-            .prSubscriptions=${prSubscriptions.get()}
-          ></git-tab>
-        `;
+        return section === 'git'
+          ? html`
+              <git-tab
+                .markCommits=${gitMarkCommits.get()}
+                .authorName=${gitAuthorName.get()}
+                .authorEmail=${gitAuthorEmail.get()}
+                .toggleDisabled=${!gitSettingsLoaded.get()}
+                .githubTokenStatus=${githubTokenStatus.get()}
+                .prSubscriptions=${prSubscriptions.get()}
+              ></git-tab>
+            `
+          : html`
+              <account-tab
+                .authenticated=${authenticated.get()}
+                .userEmail=${userEmail.get()}
+                .sessionProblem=${sessionProblem.get()}
+                .telemetryEnabled=${telemetryEnabled.get()}
+              ></account-tab>
+            `;
       case 'shortcuts':
         return html`<shortcuts-tab></shortcuts-tab>`;
     }
@@ -369,18 +460,28 @@ export class SettingsApp extends SignalWatcher(LitElement) {
       entries.find((entry) => entry.panel === selectedPanel.get()) ??
       entries[0];
     const activePanel = activeEntry.panel;
+    const remembered = selectedSections.get()[activePanel];
+    const activeSection = (
+      activeEntry.sections.find(({ section }) => section === remembered) ??
+      activeEntry.sections[0]
+    )?.section;
 
     return html`
       <div class="settings-container">
-        ${this.renderSettingsNavigation(entries, activePanel)}
-        <section class="settings-panel" aria-label=${activeEntry.label}>
+        ${this.renderSettingsNavigation(entries, activeEntry, activeSection)}
+        <section
+          id="settings-panel"
+          class="settings-panel"
+          role="tabpanel"
+          aria-label=${activeEntry.label}
+        >
           <header class="settings-page-header tab-content-container">
             <div class="settings-page-header-copy">
               <h1>${activeEntry.label}</h1>
               <p>${activeEntry.description}</p>
             </div>
           </header>
-          ${this.renderActivePanel(activePanel, desktopHost)}
+          ${this.renderActivePanel(activePanel, activeSection, desktopHost)}
         </section>
       </div>
     `;

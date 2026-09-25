@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 // Local imports - run state
 import { StatusBarUsageTracker } from '@frontend/statusBar/StatusBarUsageTracker';
+import { isInFlightPhase } from '@shared/runs/runStatus';
 import {
   RUN_PHASE,
   type RunId,
@@ -27,7 +28,8 @@ const NO_USAGE: TokenUsageStats = {
 };
 
 /** A folded run, borrowed from the recorded fan-out so the stub states a
- *  real `RunView`; only its phase and metered total matter to the tracker. */
+ *  real `RunView`; only its phase, group, and metered total matter to the
+ *  tracker. The stub's runs are held, so an in-flight phase reads as live. */
 function runViewWith(
   runId: RunId,
   status: RunPhase,
@@ -35,7 +37,8 @@ function runViewWith(
 ): RunView {
   const folded = FAN_OUT_VIEW.runs.get(CHILD);
   if (!folded) throw new Error('fan-out fixture has no child run');
-  return { ...folded, id: runId, status, usage };
+  const group = isInFlightPhase(status) ? 'running' : 'recent';
+  return { ...folded, id: runId, status, group, usage };
 }
 
 /**
