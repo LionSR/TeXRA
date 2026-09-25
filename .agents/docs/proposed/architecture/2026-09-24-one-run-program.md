@@ -386,9 +386,10 @@ did not ask for. That costs three ways:
 The proposed mode splits each later round into a critique and a revision:
 
 1. **Critique turn.** The model reviews round _n_ against the instruction, the
-   original and evidence rather than questions: the latexdiff of the round,
-   compile output and chktex warnings. It writes a specific list of problems
-   with locations, or "nothing to fix".
+   original and evidence rather than questions: the latexdiff of the round
+   and its compile output, which the pipeline produces today (chktex joins
+   them once it exists as a plugin check, below). It writes a specific list
+   of problems with locations, or "nothing to fix".
 2. **Stop or revise.** "Nothing to fix" finishes the run and saves the
    regeneration. Otherwise the critique is the next round's user message.
 3. **The checklist becomes a rubric.** Today's `userRequest[1]` text stays in
@@ -408,11 +409,12 @@ may declare read and verify tools, the revision can patch the flagged spots
 instead of reprinting the document.
 
 **Not breaking what exists.** The mode is opt-in through an agent YAML field,
-for example `reflection: critique`. Bundled agents keep `userRequest[1]` until
+for example `roundPolicy: critique`. Bundled agents keep `userRequest[1]` until
 an evaluation on a fixed set of papers with the cheap test models shows the
-new mode is better on diff size, compile and chktex failures, cost and a
-blind judge's preference. The comparison is itself the harness improving
-under measurement: the change stays only if the numbers say so.
+new mode is better on diff size, compile failures, cost and a blind judge's
+preference (chktex failures too, once that check exists). The comparison is
+itself the harness improving under measurement: the change stays only if the
+numbers say so.
 
 ## Not in scope
 
