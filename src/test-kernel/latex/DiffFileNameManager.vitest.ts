@@ -5,7 +5,6 @@ import { it as effectIt } from '@effect/vitest';
 import { Effect, FileSystem } from 'effect';
 
 import {
-  buildBetweenRoundDiffSuffix,
   buildLatexdiffAwareFixInstruction,
   detectGeneratedLatexdiffArtifact,
   parseVersionControlDiffFilename,

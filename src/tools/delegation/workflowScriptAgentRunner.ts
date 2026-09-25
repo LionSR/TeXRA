@@ -769,7 +769,7 @@ export function createWorkflowScriptAgentRunner(
    * here: a detached workflow builds this runner on the forked child-loop
    * fiber, after its tool call settled and after the child-run permit
    * wait, by which point a pending parent model switch may have applied
-   * to the live `run.config.model` cell.
+   * to the live `run.model` cell.
    */
   parentModel: string,
   defaultAgent: AgentEntry,

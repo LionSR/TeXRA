@@ -13,15 +13,11 @@
  */
 // Node imports
 import {
-  chmodSync,
   existsSync,
   mkdtempSync,
   mkdirSync,
-  readFileSync,
   realpathSync,
-  renameSync,
   rmSync,
-  statSync,
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
@@ -55,7 +51,7 @@ vi.mock('@effect/sql-sqlite-node/SqliteClient', async (importOriginal) => ({
   >()),
 }));
 
-import { TraceEmitter, type ResultEvent } from '@agent/trace';
+import { type ResultEvent } from '@agent/trace';
 import { runLedgerLayer } from '@agent/runtime/RunLedger';
 import { sessionEventsLayer } from '@agent/runtime/SessionEvents';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';

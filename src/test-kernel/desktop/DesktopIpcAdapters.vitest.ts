@@ -3,13 +3,9 @@ import { Effect, Fiber } from 'effect';
 import { describe, expect, vi } from 'vitest';
 
 import { withProcessServices } from '@platform/processRuntime';
-import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { FakeStateStore } from '@test/support/FakePlatform';
-import { createModuleMocks } from '@test/support/moduleMocks';
-
-const mocks = createModuleMocks();
 
 type DesktopShellIpcModule = typeof import('@desktop/main/desktopShellIpc');
 type DesktopShellActionFactoryOptions = Parameters<
@@ -33,11 +29,6 @@ async function flushAsync(): Promise<void> {
   for (let i = 0; i < 3; i++) {
     await new Promise((resolve) => setTimeout(resolve, 0));
   }
-}
-
-async function flushMicrotasks(): Promise<void> {
-  await Promise.resolve();
-  await Promise.resolve();
 }
 
 async function createShellHarness(

@@ -3,12 +3,9 @@ import { describe, expect, it } from 'vitest';
 import { MESSAGE_TYPES, type RunId, type ToolUseLog } from '@shared/schemas';
 import { createTestRunTrace } from '@test/support/sessionTestUtils';
 import {
-  compactionActivityRow,
-  elideText,
   isSettledRow,
   logPayloadRow,
   toolRow,
-  transcriptText,
   type TranscriptRowBase,
 } from '@ui/transcript';
 

@@ -1,9 +1,8 @@
 // Local imports
-import { Effect, FileSystem } from 'effect';
+import { Effect } from 'effect';
 import { getCategoryAgent, loadAgents, refresh } from '@agent/index';
 import { supabaseAuthenticated } from '@auth/SupabaseAuth';
-import type { AgentDirectories, StateStore } from '@platform/interfaces';
-import type { GlobalStorageFs } from '@platform/rootedFs';
+import type { StateStore } from '@platform/interfaces';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 
 /**

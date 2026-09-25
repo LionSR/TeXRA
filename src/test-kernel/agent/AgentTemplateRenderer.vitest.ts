@@ -5,11 +5,8 @@ import { describe, expect, it } from 'vitest';
 
 import {
   AGENT_TEMPLATE_FILES,
-  DEFAULT_AGENT_TEMPLATE_TOOLS_YAML,
   renderAgentTemplateString,
 } from '@agent/templates/agentTemplateRenderer';
-import { USER_VAR_RUNTIME_TOKENS } from '@agent/core/definition/AgentCycleOptions';
-import { buildUserVarPassthrough } from '@agent/prompt/userVars';
 
 describe('renderAgentTemplateString', () => {
   it('preserves agent runtime variables for the generated agent', () => {

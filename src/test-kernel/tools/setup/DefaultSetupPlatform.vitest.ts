@@ -7,7 +7,6 @@ import { afterEach, describe, expect, vi } from 'vitest';
 import * as codexAuth from '@auth/codex';
 import * as computeModelOptions from '@model/computeModelOptions';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
-import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import {
   fakeProcessServices,
   hostStores,

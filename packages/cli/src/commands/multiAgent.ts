@@ -3,7 +3,6 @@ import { defineCommand } from 'citty';
 
 import type { AgentConfigPayload } from '@agent/runtime';
 import { canLaunchTeam, teamPlanHasGaps } from '@common/teams/TeamPlan';
-import type { StateStore } from '@platform/interfaces';
 import { byCategory, AgentCategory } from '@shared/schemas';
 import { filterNotNullish } from '@utils/core';
 

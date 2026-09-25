@@ -104,7 +104,7 @@ export function slashPaletteOwnsArrows(matchCount: number): boolean {
   return matchCount > 1;
 }
 
-export function slashPaletteEnterHintAction(
+function slashPaletteEnterHintAction(
   command: SlashCommand | undefined,
 ): string {
   return command?.formComponent ? 'open' : 'run';

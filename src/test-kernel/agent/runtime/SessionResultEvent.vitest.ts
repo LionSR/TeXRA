@@ -13,7 +13,6 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   EMPTY_RUN_USAGE_TOTALS,
   RUN_OUTCOME,
-  RUN_PHASE,
   type RunId,
 } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';

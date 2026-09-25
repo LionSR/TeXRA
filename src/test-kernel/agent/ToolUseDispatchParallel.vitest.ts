@@ -87,7 +87,6 @@ import { hostStores, setupPlatform } from '@test/support/setupPlatform';
 import { RunFileService } from '@utils/files/runStorage';
 
 import { recordSessionEvents } from './progressTestUtils';
-import { testModelInfo } from './runtime/launchContextTestUtils';
 
 setupPlatform({ workspacePath: '/workspace' });
 
@@ -288,7 +287,7 @@ function agentRun(
       },
       { agentName: config.agent, agentCategory: setting.agentCategory },
     ),
-    callbacks: { onModelChanged: () => undefined },
+    callbacks: {},
   };
 }
 

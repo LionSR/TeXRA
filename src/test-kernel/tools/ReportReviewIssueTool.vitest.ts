@@ -3,7 +3,7 @@ import { it } from '@effect/vitest';
 // Test composition imports
 
 // Third-party imports
-import { afterEach, describe, expect, vi, type Mock } from 'vitest';
+import { afterEach, describe, expect, vi } from 'vitest';
 
 // Local imports
 import type { HostInteractions } from '@agent/runtime/HostInteractions';

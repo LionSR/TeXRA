@@ -32,7 +32,7 @@ const MAX_TRANSIENT_POLL_FAILURES = 3;
 
 const JSON_HEADERS = { 'Content-Type': 'application/json' } as const;
 
-export const DeviceAuthorizationSchema = z.object({
+const DeviceAuthorizationSchema = z.object({
   device_code: z.string().min(1),
   user_code: z.string().min(1),
   verification_uri: z.string().min(1),
@@ -58,8 +58,7 @@ class DeviceSignInError extends Data.TaggedError('DeviceSignInError')<{
   readonly cause?: unknown;
 }> {}
 
-export const CLI_DEVICE_AUTH_URL_PROMPT =
-  'On any device, open this URL in a browser:';
+const CLI_DEVICE_AUTH_URL_PROMPT = 'On any device, open this URL in a browser:';
 
 export function formatCliDeviceAuthMessage(
   authorization: Pick<DeviceAuthorization, 'user_code' | 'verification_uri'>,

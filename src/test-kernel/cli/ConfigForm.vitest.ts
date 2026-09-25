@@ -13,10 +13,7 @@ import {
   validateSettingInput,
 } from '@cli/chat/tui/forms/ConfigForm';
 import { CliConfigForm } from '@cli/chat/tui/forms/CliConfigForm';
-import {
-  buildProviderApiKeyItems,
-  formatProviderApiKeySummary,
-} from '@cli/chat/tui/forms/ProviderApiKeyForm';
+import { formatProviderApiKeySummary } from '@cli/chat/tui/forms/ProviderApiKeyForm';
 import { installSlashCommands } from '@cli/chat/tui/commands/slashRegistry';
 import { registerBuiltinSlashCommands } from '@cli/chat/tui/commands/registerBuiltins';
 import { openCliSlashCommandForm } from '@cli/chat/tui/commands/slashForms';

@@ -1,6 +1,3 @@
-// Node imports
-import { readFileSync } from 'node:fs';
-
 // Third-party imports
 import { it } from '@effect/vitest';
 import { Effect } from 'effect';
@@ -12,7 +9,6 @@ import type { JsonStore } from '@platform/defaults/jsonStore';
 
 // Local imports - test support
 import { withEnv } from '@test/support/testEnv';
-import { repoPath } from './desktopTestPaths.ts';
 import { loadSourceModule } from './loadSourceModule.ts';
 
 interface SafeStorageMethods {
@@ -74,13 +70,6 @@ async function secretsWithWarningLog(): Promise<{
       }),
   });
   return { secrets, warnings };
-}
-
-function loadRendererMain(): string {
-  return readFileSync(
-    repoPath('packages/desktop/src/renderer/main.ts'),
-    'utf8',
-  );
 }
 
 describe('ElectronSecrets keychain-denial bootstrap recovery', () => {

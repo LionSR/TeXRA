@@ -10,7 +10,7 @@ import {
   ToolUseAgentConfigSchema,
   WorkflowAgentConfigSchema,
 } from '@agent/core/definition/AgentConfig';
-import { AGENT_SOURCE, AgentCategory, ToolConfigSchema } from '@shared/schemas';
+import { AGENT_SOURCE, AgentCategory } from '@shared/schemas';
 
 describe('AgentConfigSchema', () => {
   it('keeps category-specific parsers aligned with the discriminated union', () => {

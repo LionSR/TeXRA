@@ -278,12 +278,9 @@ export const finalizeRun = Effect.fn('finalizeRun')(function* (
         const persisted =
           keepExistingOutcome === true && ended !== undefined ? ended : outcome;
         if (ended === persisted) return { events: [], value: persisted };
-        // Only a write reads the transcript, inside the same job: the
-        // already-ended no-op stays a records-only read.
-        const closure = yield* session.streamClosureFacts(runId);
         return {
           events: [
-            ...closure,
+            ...session.streamClosureFacts(runId),
             {
               type: 'run.end' as const,
               aggregateId: target,
