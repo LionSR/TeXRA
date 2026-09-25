@@ -95,10 +95,12 @@ let customAgentsDir: string;
 
 const bundledAgentDirectories = (): {
   readonly custom: () => Effect.Effect<string, never>;
+  readonly customConfigured: () => Effect.Effect<boolean, never>;
   readonly builtIn: () => Effect.Effect<string, never>;
   readonly builtInToolUse: () => Effect.Effect<string, never>;
 } => ({
   custom: () => Effect.succeed(customAgentsDir),
+  customConfigured: () => Effect.succeed(false),
   builtIn: () =>
     Effect.succeed(path.join(REPO_ROOT, 'packages/extension/resources/agents')),
   builtInToolUse: () =>
@@ -368,6 +370,7 @@ describe('CLI Supabase auth', () => {
       // directory port dying mid-rebuild must not fail sign-out.
       const rebuildDies = {
         custom: () => Effect.die(new Error('local rebuild failed')),
+        customConfigured: () => Effect.succeed(false),
         builtIn: () => Effect.die(new Error('local rebuild failed')),
         builtInToolUse: () => Effect.die(new Error('local rebuild failed')),
       };

@@ -334,6 +334,7 @@ async function integrationPlatform(): Promise<FakeHost> {
       ...host.platform,
       agentDirectories: {
         custom: () => Effect.sync(() => agentsDir),
+        customConfigured: () => Effect.succeed(false),
         builtIn: () => Effect.sync(() => agentsDir),
         builtInToolUse: () => Effect.sync(() => agentsDir),
       },

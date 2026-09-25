@@ -201,7 +201,7 @@ export class Lifecycle extends Context.Service<Lifecycle, LifecycleHost>()(
  * custom directory is not an absolute path, its parent is gone, it cannot be
  * created, or the platform refused the filesystem call behind either.
  *
- * {@link AgentDirectoriesPort}'s three readers raise it as the failure of the
+ * {@link AgentDirectoriesPort}'s readers raise it as the failure of the
  * read itself, for the same reason {@link StateWriteFailed} exists: the reads
  * travel with the agent-catalog load beside them, so a caller inside a program
  * composes the read rather than adopting a rejection it cannot type.
@@ -216,10 +216,11 @@ export class AgentDirectoriesFailed extends Data.TaggedError(
 }> {}
 
 /**
- * Host-provided agent directory paths. All three are `Effect`s (not Promises)
- * so the one reader that can fault — `custom`, which creates the directory it
- * resolves — carries its failure into the catalog load that asked for it
- * instead of rejecting an await that cannot name it.
+ * Host-provided agent directory paths. All are `Effect`s (not Promises)
+ * so the readers that can fault — `custom`, which creates the directory it
+ * resolves, and `customConfigured`, which reads the setting — carry their
+ * failure into the program that asked instead of rejecting an await that
+ * cannot name it.
  *
  * `custom` takes the process's {@link GlobalStorageFs} and the process
  * `FileSystem` from context: the default custom-agents directory lives under
@@ -233,6 +234,9 @@ export interface AgentDirectoriesPort {
     AgentDirectoriesFailed,
     GlobalStorageFs | FileSystem.FileSystem
   >;
+  /** Whether the user configured a custom directory, rather than `custom`
+   *  falling back to the default one under global storage. */
+  customConfigured(): Effect.Effect<boolean, AgentDirectoriesFailed>;
   builtIn(): Effect.Effect<string, AgentDirectoriesFailed>;
   builtInToolUse(): Effect.Effect<string, AgentDirectoriesFailed>;
 }

@@ -87,6 +87,7 @@ beforeAll(async () => {
       setup: createFakeSetupPlatform({ signIn }),
       agentDirectories: {
         custom: () => Effect.sync(() => ''),
+        customConfigured: () => Effect.succeed(false),
         builtIn: () =>
           Effect.sync(() =>
             resolve(REPO_ROOT, 'packages/extension/resources/agents'),

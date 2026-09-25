@@ -260,6 +260,7 @@ describe('agent registry load state', () => {
           counter.scans += 1;
           return agentDir;
         }),
+      customConfigured: () => Effect.succeed(false),
       builtIn: () => Effect.sync(() => agentDir),
       builtInToolUse: () => Effect.sync(() => agentDir),
     };
@@ -324,6 +325,7 @@ describe('agent registry load state', () => {
                 cause: scanFailure,
               }),
             ),
+          customConfigured: () => Effect.succeed(false),
           builtIn: () => Effect.sync(() => agentDir),
           builtInToolUse: () => Effect.sync(() => agentDir),
         }),

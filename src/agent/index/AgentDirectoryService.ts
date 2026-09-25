@@ -69,24 +69,19 @@ export class AgentDirectoryService {
     GlobalStorageFs | FileSystem.FileSystem
   > {
     return Effect.gen({ self: this }, function* () {
-      const configuredPath = (
-        (yield* this.options.customDirectoryStore.get().pipe(
-          Effect.mapError(
-            (cause) =>
-              new AgentDirectoriesFailed({
-                source: 'custom',
-                message: cause.message,
-                cause,
-              }),
-          ),
-        )) ?? ''
-      ).trim();
-
+      const configuredPath = yield* this.configuredCustomPath();
       const resolvedPath =
         yield* this.resolveConfiguredCustomDir(configuredPath);
       if (resolvedPath != null) return resolvedPath;
       return yield* this.ensureDefaultCustomDir();
     });
+  }
+
+  customConfigured(): Effect.Effect<boolean, AgentDirectoriesFailed> {
+    return Effect.map(
+      this.configuredCustomPath(),
+      (configured) => configured !== '',
+    );
   }
 
   getAllLocal(): Effect.Effect<
@@ -110,6 +105,24 @@ export class AgentDirectoryService {
       ];
       return entries;
     });
+  }
+
+  /** The custom directory setting, trimmed; empty when none is configured. */
+  private configuredCustomPath(): Effect.Effect<
+    string,
+    AgentDirectoriesFailed
+  > {
+    return this.options.customDirectoryStore.get().pipe(
+      Effect.map((configured) => (configured ?? '').trim()),
+      Effect.mapError(
+        (cause) =>
+          new AgentDirectoriesFailed({
+            source: 'custom',
+            message: cause.message,
+            cause,
+          }),
+      ),
+    );
   }
 
   /**

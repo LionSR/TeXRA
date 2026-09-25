@@ -109,6 +109,7 @@ describe('AgentDirectoryService', () => {
       await pathExists(path.join(storageBase(), 'custom_agents')),
       true,
     );
+    assert.equal(await Effect.runPromise(service.customConfigured()), false);
   });
 
   it('uses a configured absolute custom directory with an existing parent', async () => {
@@ -123,6 +124,7 @@ describe('AgentDirectoryService', () => {
       false,
     );
     assert.deepEqual(reporter.reports, []);
+    assert.equal(await Effect.runPromise(service.customConfigured()), true);
   });
 
   it.each([
