@@ -136,19 +136,17 @@ describe('run-tabs over the fold', () => {
     expect(surfaceActions).toEqual([{ kind: 'select', runId: CHILD }]);
   });
 
-  it('dispatches the delete arm and the expansion toggle from a row', async () => {
+  it('dispatches the expansion toggle from a row, which offers no delete', async () => {
     const view = fanOutView();
     const child = view.runs.get(CHILD);
-    const { element, surfaceActions, requests } = await mountTabs(
+    const { element, surfaceActions } = await mountTabs(
       view,
       emptySurface(view.key),
       { root: CHILD },
     );
     const row = rowOf(element, CHILD);
 
-    control(row, 'delete').click();
-    expect(requests).toEqual([{ kind: 'run.delete', runId: CHILD }]);
-
+    expect(row.shadowRoot?.querySelector('[data-action="delete"]')).toBeNull();
     control(row, 'toggle-children').click();
     expect(surfaceActions).toEqual([
       {

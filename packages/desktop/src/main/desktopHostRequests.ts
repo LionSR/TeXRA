@@ -128,9 +128,6 @@ interface DesktopHostRequestsOptions {
   postToRenderer(message: unknown): boolean | void;
   /** A host-initiated change to the surface (PRD 8.5). */
   postSurfaceAction(action: SurfaceActionMessage['action']): void;
-  /** Start the browser sign-in. The failure is the sign-in's own; the arm
-   *  below names it for the request dialog. */
-  signIn(): Effect.Effect<void, Error>;
   getCustomAgentDirectory(): Effect.Effect<
     string,
     AgentDirectoriesFailed,
@@ -609,9 +606,6 @@ export function createDesktopHostRequests(
       fileActions.runMergeFile(baseFile, editedFile),
     latexdiffFiles: (baseFile, editedFile) =>
       runLatexdiffFile(baseFile, editedFile),
-    openDashboard: Effect.sync(() =>
-      postDesktopSettingsView(options.postToRenderer),
-    ),
     openSettings: (section, sessionType) =>
       Effect.sync(() =>
         postDesktopSettingsView(
@@ -644,11 +638,6 @@ export function createDesktopHostRequests(
       Effect.sync(() =>
         postDesktopSettingsView(options.postToRenderer, 'tools'),
       ),
-    signIn: Effect.suspend(() =>
-      options
-        .signIn()
-        .pipe(Effect.mapError((cause) => hostFailure('signIn', cause))),
-    ),
     gettingStarted: (action) =>
       action === 'openWalkthrough'
         ? Effect.sync(() => options.showFirstRunWalkthrough())

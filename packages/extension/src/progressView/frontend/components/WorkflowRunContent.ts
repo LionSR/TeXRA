@@ -16,7 +16,6 @@ import { conversationContentStyles } from './ConversationContent.styles';
 // Side-effect imports - register the elements rendered below
 import './BackgroundTasksPanel';
 import './FileList';
-import './RunHeader';
 import './WorkflowRunBoard';
 
 @customElement('workflow-run-content')
@@ -30,8 +29,6 @@ export class WorkflowRunContent extends BaseRunContent {
     }
     const { transcript } = run;
     return html`
-      <run-header .run=${run} .view=${view}></run-header>
-
       <div class="conversation-content">
         ${this.renderApprovalDock()}
 

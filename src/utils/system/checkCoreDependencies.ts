@@ -5,6 +5,7 @@ import { Effect } from 'effect';
 import type { MissingTool } from '@shared/schemas';
 import {
   CORE_DEPENDENCY_TOOLS,
+  DEPENDENCY_USE,
   IMAGE_LATEX_TOOLS,
 } from '@shared/constants/latexToolchain';
 
@@ -16,8 +17,12 @@ import {
   toolLabel,
 } from './toolUtils';
 
-function missingTool(id: string, interchangeable: boolean): MissingTool {
-  return { id, label: toolLabel(id), interchangeable };
+function missingTool(
+  id: keyof typeof DEPENDENCY_USE,
+  interchangeable: boolean,
+): MissingTool {
+  const usedFor = DEPENDENCY_USE[id];
+  return { id, label: toolLabel(id), interchangeable, usedFor };
 }
 
 /**

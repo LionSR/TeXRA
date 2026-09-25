@@ -82,7 +82,6 @@ export const HostRequestSchema = z.discriminatedUnion('kind', [
   }),
   z.object({ kind: z.literal('popOut') }),
   z.object({ kind: z.literal('popBack') }),
-  z.object({ kind: z.literal('openDashboard') }),
   z.object({ kind: z.literal('refreshCommits') }),
   z.object({ kind: z.literal('refreshFiles') }),
   z.object({
@@ -177,10 +176,9 @@ export const HostRequestSchema = z.discriminatedUnion('kind', [
   }),
   z.object({ kind: z.literal('recheckDependencies') }),
   z.object({ kind: z.literal('openInstallGuide'), tool: z.string() }),
-  z.object({ kind: z.literal('signIn') }),
   z.object({
     kind: z.literal('dismissBanner'),
-    banner: z.enum(['login', 'gettingStarted', 'dependency']),
+    banner: z.enum(['gettingStarted', 'dependency']),
   }),
   z.object({
     kind: z.literal('gettingStarted'),

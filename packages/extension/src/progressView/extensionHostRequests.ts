@@ -611,7 +611,6 @@ export function createExtensionHostRequests(
         Effect.mapError((cause) => hostFailure('refreshApiKeyStatus', cause)),
       ),
       snapshot.refreshCatalogs,
-      snapshot.refreshAuth,
       refreshOnboardingFunnel,
     ],
     { concurrency: 'unbounded', discard: true },
@@ -648,7 +647,6 @@ export function createExtensionHostRequests(
       commandVerb('texra.merge', baseFile, editedFile),
     latexdiffFiles: (baseFile, editedFile) =>
       commandVerb('texra.latexdiff', undefined, baseFile, editedFile),
-    openDashboard: commandVerb('texra.showDashboard'),
     openSettings: (section, sessionType) => {
       if (section === 'agents')
         return commandVerb(
@@ -713,12 +711,6 @@ export function createExtensionHostRequests(
         const [command, ...args] = docsCommand.split(',');
         yield* runCommand(command, ...args);
       }),
-    signIn: Effect.gen(function* () {
-      const authenticated = yield* fromHost(AUTH_COMMANDS.SIGN_IN, () =>
-        vscode.commands.executeCommand<boolean>(AUTH_COMMANDS.SIGN_IN),
-      );
-      if (authenticated) yield* refreshAfterCredentialChange;
-    }),
     gettingStarted: (action) =>
       Effect.gen(function* () {
         yield* commandVerb(GETTING_STARTED_COMMANDS[action]);

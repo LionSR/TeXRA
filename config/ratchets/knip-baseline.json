@@ -734,12 +734,6 @@
       "name": "SubscriptionUsageSnapshotSchema"
     },
     {
-      "file": "src/shared/settingsView/settingsViewMessages.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "SETTINGS_TAB_ORDER"
-    },
-    {
       "file": "src/shared/state/stateSettings.ts",
       "category": "production-dead",
       "kind": "exports",
