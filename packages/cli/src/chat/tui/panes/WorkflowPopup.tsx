@@ -18,11 +18,10 @@ import { BorderedPanel } from '@cli/tui/ui/BorderedPanel';
 import { KeyHints, keyHintsText, type KeyHint } from '@cli/tui/ui/KeyHints';
 import { Select, type SelectItem } from '@cli/tui/ui/Select';
 import { COLOR_HINT } from '@cli/tui/ui/colors';
-import { POINTER } from '@cli/tui/ui/glyphs';
 import { CONFIRM_CARD_HORIZONTAL_DECORATION } from '@cli/tui/ui/theme';
 import { useLiveNowMsSince } from '@cli/tui/useLiveNowMs';
 import { fillRows, textDisplayWidth } from '@cli/runtime/terminalText';
-import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
+import { wrappedRowCount } from '@cli/tui/ansiWrap';
 
 // Local imports - shared schemas, model, and copy
 import {
@@ -125,13 +124,11 @@ function statusStrip(
 }
 
 function TaskRow({
-  focused,
   live,
   nowMs,
   pendingKinds,
   row,
 }: {
-  readonly focused: boolean;
   readonly live: ChildRunProgress | undefined;
   readonly nowMs: number;
   readonly pendingKinds: readonly PendingApprovalKind[] | undefined;
@@ -148,9 +145,6 @@ function TaskRow({
   return (
     <Box flexDirection="row" height={1} minWidth={0} overflowY="hidden">
       <Box flexShrink={0}>
-        <Text aria-hidden color={focused ? COLOR_HINT : undefined}>
-          {focused ? POINTER : ' '}
-        </Text>
         <Text aria-hidden color={WORKFLOW_TASK_STATUS_COLOR[row.call.status]}>
           {markerCell(WORKFLOW_CALL_STATUS_GLYPH[row.call.status])}
         </Text>
@@ -178,7 +172,6 @@ function DeclaredTaskRow({
   return (
     <Box flexDirection="row" height={1} minWidth={0} overflowY="hidden">
       <Box flexShrink={0}>
-        <Text aria-hidden> </Text>
         <Text aria-hidden color={WORKFLOW_TASK_STATUS_COLOR.declared}>
           {markerCell(WORKFLOW_CALL_STATUS_GLYPH.declared)}
         </Text>
@@ -204,9 +197,6 @@ function GroupRow({
   return (
     <Box flexDirection="row" height={1} minWidth={0} overflowY="hidden">
       <Box flexShrink={0}>
-        <Text aria-hidden color={focused ? COLOR_HINT : undefined}>
-          {focused ? POINTER : ' '}
-        </Text>
         <Text aria-hidden dimColor>
           {markerCell(row.expanded ? '▾' : '▸')}
         </Text>
@@ -361,10 +351,7 @@ export function WorkflowPopup({
   ];
   // The shared budget assumes a one-row footer; the wrapped hints take what
   // they measure at this width.
-  const hintRows = Math.max(
-    1,
-    wrapAnsiToWidth(keyHintsText(hints), Math.max(1, width)).split('\n').length,
-  );
+  const hintRows = wrappedRowCount(keyHintsText(hints), width);
   const filterShown = view.filterEditing || view.filter.length > 0;
   const listRows = Math.max(
     1,
@@ -481,7 +468,6 @@ export function WorkflowPopup({
         const childRunId = childRunOf(row.row);
         return (
           <TaskRow
-            focused={state.focused}
             live={model.liveOf.get(row.row.id)}
             nowMs={nowMs}
             row={row.row}

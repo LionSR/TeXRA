@@ -2,12 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Box, Text, useWindowSize } from 'ink';
 
 import { COLOR_HINT } from '@cli/tui/ui/colors';
-import {
-  clampModalWidth,
-  isCompactRows,
-  MIN_MODAL_CONTENT_WIDTH,
-} from '@cli/tui/ui/theme';
-import { KeyHints } from '@cli/tui/ui/KeyHints';
+import { clampModalWidth, isCompactRows } from '@cli/tui/ui/theme';
 import type { SurfaceDecision } from '@shared/session/approvalDecision';
 import { buildDiffHunks } from '@utils/text/unifiedDiff';
 import { formatResultCount } from '@utils/text/stringUtils';
@@ -17,6 +12,7 @@ import {
   confirmCardContentRowsBudget,
   confirmCardFeedbackRows,
 } from './confirmCardRowsBudget';
+import { ScrollHints } from './ScrollableModalText';
 import {
   DiffView,
   initialDiffScrollOffset,
@@ -24,7 +20,8 @@ import {
 } from '../render/DiffView';
 import {
   COMPACT_SCROLLABLE_CONTENT_ROWS,
-  maxScrollableRowOffset,
+  compactAwareMaxScrollOffset,
+  scrollPageRows,
 } from '../render/scrollBounds';
 import { useScrollableOffset } from '../state/useScrollableOffset';
 import type { ToolEditApprovalPayload } from '../state/approvalQueue';
@@ -68,7 +65,6 @@ export function editApprovalDiffRowsBudget({
     availableRows,
     columns,
     title,
-    minContentWidth: MIN_MODAL_CONTENT_WIDTH,
     defaultRows: DEFAULT_EDIT_DIFF_ROWS,
     compactMaxRows: COMPACT_SCROLLABLE_CONTENT_ROWS,
     spaciousFixedRows: EDIT_APPROVAL_SPACIOUS_FIXED_ROWS_EXCLUDING_TITLE,
@@ -103,7 +99,7 @@ export function EditApproval(props: EditApprovalProps): React.JSX.Element {
     () => wrappedDiffDisplayLines(hunks, diffWidth).length,
     [diffWidth, hunks],
   );
-  const maxScrollOffset = maxScrollableRowOffset({
+  const maxScrollOffset = compactAwareMaxScrollOffset({
     maxDisplayLines: maxDiffLines,
     totalLines: diffRows,
   });
@@ -157,7 +153,7 @@ export function EditApproval(props: EditApprovalProps): React.JSX.Element {
   const { scrollOffset, scrollable: diffScrollable } = useScrollableOffset({
     initialOffset: initialScrollOffset,
     maxScrollOffset,
-    pageRows: Math.max(1, maxDiffLines - 2),
+    pageRows: scrollPageRows({ maxDisplayLines: maxDiffLines }),
     resetKey: scrollResetKey,
   });
   const compactDiffLayout = maxDiffLines <= COMPACT_SCROLLABLE_CONTENT_ROWS;
@@ -191,14 +187,8 @@ export function EditApproval(props: EditApprovalProps): React.JSX.Element {
           width={diffWidth}
         />
       </Box>
-      {diffScrollable ? (
-        <KeyHints
-          confirmCancel={false}
-          hints={[
-            { key: '↑/↓', action: 'scroll diff' },
-            { key: 'PgUp/PgDn', action: 'page' },
-          ]}
-        />
+      {diffScrollable && !compactDiffLayout ? (
+        <ScrollHints action="scroll diff" />
       ) : null}
     </ConfirmCard>
   );
