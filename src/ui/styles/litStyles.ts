@@ -180,8 +180,9 @@ export const designTokens: CSSResult = css`
     --opacity-normal: 0.85;
     --opacity-full: 1;
 
-    /* Motion. One easing, two durations; only background-color, opacity,
-       and box-shadow are ever transitioned. */
+    /* Motion. One easing, two durations; only paint and compositing
+       properties are transitioned: background-color, border-color, color,
+       box-shadow, opacity, filter and transform. */
     --transition-ease: cubic-bezier(0.2, 0, 0, 1);
     --transition-fast: 120ms var(--transition-ease);
     --transition-normal: 180ms var(--transition-ease);

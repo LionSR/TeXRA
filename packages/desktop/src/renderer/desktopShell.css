@@ -426,6 +426,8 @@ body[data-desktop-platform='darwin'] .shell-sidebar-brand {
   display: flex;
   min-width: 0;
   min-height: 0;
+  --background-color: transparent;
+  --color-border: transparent;
 }
 
 .shell-sidebar-footer {
@@ -877,6 +879,8 @@ body[data-desktop-platform='darwin']
 .shell-subagents > run-tabs {
   display: flex;
   min-width: 0;
+  --background-color: transparent;
+  --color-border: transparent;
 }
 
 .shell-subagents-note,
