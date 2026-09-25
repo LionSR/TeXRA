@@ -280,7 +280,7 @@ describe('CLI context config defaults', () => {
           globalArgs: { cwd: workspace },
         });
 
-        // Degraded to the internal workspace config store, never fatal.
+        // The unreadable file is ignored, loudly, never fatal.
         expect(context.approvalPolicy).toBe('ask');
         expect(warnSpy).toHaveBeenCalledWith(
           expect.stringContaining('.texra/config.json'),
