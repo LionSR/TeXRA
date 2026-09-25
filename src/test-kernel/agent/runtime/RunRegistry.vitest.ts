@@ -1249,19 +1249,32 @@ it.effect(
 
 it.effect('holds a run against launches without making it a stop target', () =>
   Effect.gen(function* () {
-    const { registry } = createRegistry();
-    const runId = 'abcd13' as RunId;
-    yield* Effect.scoped(
-      Effect.gen(function* () {
-        yield* registry.holdInactiveRun(runId);
-        expect(registry.isLive(runId)).toBe(true);
-        // A run only held is not running: a stop by run id reaches nothing.
-        expect(registry.interruptActive(runId)).toBe(false);
-        const launch = registry.launchRun(runId, Effect.void);
-        expect(yield* Effect.flip(launch)).toBeInstanceOf(RunLive);
-      }),
+    const claimed = yield* Deferred.make<void>();
+    const released = vi.fn();
+    const roster = new RunRoster(createSessionApprovals(), () =>
+      Deferred.await(claimed).pipe(Effect.as(Effect.sync(released))),
     );
-    expect(registry.isLive(runId)).toBe(false);
-    registry.dispose();
+    const runId = 'abcd13' as RunId;
+    const hold = yield* Effect.forkChild(
+      Effect.scoped(
+        Effect.gen(function* () {
+          yield* roster.holdInactive(runId);
+          yield* Effect.never;
+        }),
+      ),
+      { startImmediately: true },
+    );
+    // The hold is registered before its claim lands: a launch while the
+    // claim is still in flight is refused, not started beside it.
+    expect(roster.isLive(runId)).toBe(true);
+    expect(
+      yield* Effect.flip(roster.launch(runId, Effect.void)),
+    ).toBeInstanceOf(RunLive);
+    // A run only held is not running: a stop by run id reaches nothing.
+    expect(roster.interrupt(runId)).toBe(false);
+    yield* Deferred.succeed(claimed, undefined);
+    yield* Fiber.interrupt(hold);
+    expect(released).toHaveBeenCalledOnce();
+    expect(roster.isLive(runId)).toBe(false);
   }),
 );

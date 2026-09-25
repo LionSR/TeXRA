@@ -346,41 +346,41 @@ export class RunRoster {
 
   /** Hold `runId` against local ownership for the caller's scope, refusing
    *  as an inactive-run step does ({@link launch}). The hold is an idle fiber
-   *  on the entry, which {@link isLive} reports and no stop reaches, and the
-   *  run's DB claim rides its lifetime: one construct fences owner and claim. */
+   *  on the entry, which {@link isLive} reports and no stop reaches, carrying
+   *  the run's DB claim in its own scope: one construct fences both. */
   holdInactive(
     runId: RunId,
   ): Effect.Effect<void, RunLive | Error, Scope.Scope> {
+    const claim = this.claimRun ?? (() => Effect.succeed(Effect.void));
     return Effect.asVoid(
       Effect.acquireRelease(
-        Effect.suspend(() => {
-          // The test and the registration are one synchronous step, as the
-          // conditional lane claim is: nothing can take the run in between.
-          if (
-            this.isLive(runId) ||
-            this.isRetained(runId) ||
-            this.isLaneOccupied(runId)
-          )
-            return Effect.fail(new RunLive({ runId }));
-          return Effect.gen({ self: this }, function* () {
-            const releaseClaim = this.claimRun
-              ? yield* this.claimRun(runId)
-              : undefined;
-            const latch = yield* Latch.make(false);
-            // Started at once, as `launch`'s is, so it always runs its release.
-            const fiber = yield* Effect.forkChild(
-              Latch.await(latch).pipe(
-                Effect.ensuring(
-                  releaseClaim === undefined
-                    ? Effect.void
-                    : releaseClaim.pipe(Effect.orDie),
-                ),
-              ),
-              { startImmediately: true },
-            );
-            this.setFiber(runId, fiber, 'hold');
-            return { latch, fiber };
-          });
+        Effect.gen({ self: this }, function* () {
+          const ready = Deferred.makeUnsafe<void, Error>();
+          const latch = yield* Latch.make(false);
+          const hold = Effect.scoped(
+            Effect.gen(function* () {
+              yield* Effect.acquireRelease(claim(runId), Effect.orDie);
+              yield* Deferred.succeed(ready, undefined);
+              yield* Latch.await(latch);
+            }),
+          ).pipe(Effect.catch((error) => Deferred.fail(ready, error)));
+          // Registered as its first step, synchronous with the test, as in
+          // `launch`: a launch during the claim below already sees the hold.
+          const fiber = yield* Effect.forkChild(
+            Effect.withFiber((self) => {
+              if (
+                this.isLive(runId) ||
+                this.isRetained(runId) ||
+                this.isLaneOccupied(runId)
+              )
+                return Deferred.fail(ready, new RunLive({ runId }));
+              this.setFiber(runId, self, 'hold');
+              return hold;
+            }),
+            { startImmediately: true },
+          );
+          yield* Deferred.await(ready);
+          return { latch, fiber };
         }),
         // The join awaits the claim release before the caller's scope closes.
         ({ latch, fiber }) =>
