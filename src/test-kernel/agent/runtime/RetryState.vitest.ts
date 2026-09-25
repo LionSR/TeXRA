@@ -225,6 +225,7 @@ function boundModel(
     compatibilityKey: 'OpenAI',
     model,
     origin: ORIGIN,
+    route: { kind: 'api-key', provider: 'openai', usageRoute: 'api-key' },
     usageRoute: 'api-key',
     contextWindow: MODEL_CONFIGS.gpt54.contextWindow,
     supportsVision: false,
@@ -879,11 +880,16 @@ describe('ModelInvoker retry', () => {
           credentials: 'personal',
         }));
         const stub = stubModel([
-          { fail: httpError('subscription quota exhausted', 429) },
+          {
+            fail: httpError('subscription quota exhausted', 429, {
+              error: { type: 'usage_limit_reached' },
+            }),
+          },
           { ok: completedTurn('recovered') },
         ]);
 
         const kit = yield* openRun(session, stub.model, {
+          route: { kind: 'chatgpt-subscription' },
           usageRoute: 'chatgpt-subscription',
         });
         yield* Effect.promise(() => seedActiveRun(session, kit.runId));

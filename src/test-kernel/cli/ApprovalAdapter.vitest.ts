@@ -23,8 +23,6 @@ import { CliExitCode } from '@cli/runtime/exitCodes';
 import { runOutcomeExitCode } from '@cli/runtime/terminalStatus';
 import {
   askApproval,
-  cliRetryQuotaRoute,
-  isCliApiSwitchableRetry,
   type CliApprovalPromptHooks,
 } from '@cli/runtime/approval/approvalPrompts';
 import {
@@ -858,33 +856,27 @@ describe('buildAgentProposalApprovalContent', () => {
 });
 
 describe('formatRetryRequestMessage', () => {
-  it('shows the Moonshot API-key switch for a Kimi Code subscription limit', () => {
+  it("names the carried quota route's switch", () => {
     const retry: RetryPermission = {
       ...credentialExhaustedRetry,
       errorDetails: {
         classification: { kind: 'kimi-code-subscription' },
         statusCode: 429,
       },
+      credentialSwitch: {
+        kind: 'decline-route',
+        route: 'kimi-code-subscription',
+        provider: 'moonshot',
+        automatic: false,
+      },
     };
 
-    expect(isCliApiSwitchableRetry(retry)).toBe(true);
     expect(formatRetryRequestMessage(retry)).toContain(
       'Kimi Code subscription',
     );
     expect(formatRetryRequestMessage(retry)).toContain('Moonshot API keys');
-    expect(cliRetryQuotaRoute(retry)?.id).toBe('kimiCode');
-  });
-
-  it('uses the same coding-plan decision for a GLM quota limit', () => {
-    const retry: RetryPermission = {
-      ...credentialExhaustedRetry,
-      errorDetails: {
-        classification: { kind: 'glm-coding-plan' },
-        statusCode: 429,
-      },
-    };
-
-    expect(cliRetryQuotaRoute(retry)?.id).toBe('glmCodingPlan');
-    expect(formatRetryRequestMessage(retry)).toContain('regular GLM endpoint');
+    expect(
+      formatRetryRequestMessage({ ...retry, credentialSwitch: null }),
+    ).not.toContain('Press `k`');
   });
 });

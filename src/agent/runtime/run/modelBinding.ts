@@ -50,7 +50,7 @@ import {
   supportsReasoningLevel,
 } from '@model/reasoningLevel';
 import { copilotRouteForModel } from '@model/runtimeModelRegistry';
-import { routeConfig } from '@model/modelRoute';
+import { routeConfig, type ModelRoute } from '@model/modelRoute';
 import type { StateStore } from '@platform/interfaces';
 import { OPENAI_DEFAULT_ENDPOINT } from '@shared/constants/modelProviderPlugins';
 import {
@@ -124,20 +124,20 @@ export interface BoundModel {
   readonly compatibilityKey: ModelCompatibilityKey;
   readonly model: Model;
   readonly origin: ModelOrigin;
+  /** The route decision this binding carries out (the retry offer reads it). */
+  readonly route: ModelRoute;
   readonly usageRoute: UsageRoute;
-  /** The route's subscription plan, when it names one; display-only. Absent
-   *  on every route that is not a subscription, which is most of them. */
+  /** The route's subscription plan, when it names one; display-only. */
   readonly usagePlan?: string;
   readonly contextWindow: number;
   readonly supportsVision: boolean;
-  /** The media-input pipeline takes a bound model structurally, so these two
-   *  mirror `config.capabilities`. */
+  /** Mirror `config.capabilities`: the media pipeline reads these two. */
   readonly supportsNativePdf: boolean;
   readonly supportsNativeAudio: boolean;
   readonly supportsForcedToolChoice: boolean;
-  /** One wire route: provider, credential route, endpoint, key fingerprint. */
+  /** The retry gate's keys: one wire route (provider, credential route,
+   *  endpoint, key fingerprint), and that route narrowed to one model. */
   readonly wireRouteKey: string;
-  /** The wire route narrowed to one model, for model-scoped limits. */
   readonly modelRetryRouteKey: string;
   /** The binding can run a turn as background work (submit + observe). */
   readonly backgroundCapable: boolean;
@@ -185,6 +185,15 @@ const PROTOCOL_BY_KEY: Record<ModelCompatibilityKey, Protocol | 'validation'> =
     GLM: 'glm-chat',
     Meta: 'openai-responses',
   };
+
+/** A binding's {@link BoundModel.wireRouteKey} and model-scoped key. */
+function routeKeys(wire: readonly string[], model: string) {
+  const wireRouteKey = JSON.stringify(wire);
+  return {
+    wireRouteKey,
+    modelRetryRouteKey: JSON.stringify([wireRouteKey, model]),
+  };
+}
 
 function credentialFingerprint(route: string, secret: string): string {
   return createHash('sha256')
@@ -871,9 +880,8 @@ export const backgroundDelivery = Effect.fn('backgroundDelivery')(function* (
 });
 
 /**
- * Bind a model the editor serves. The route is the one the registry
- * discovered for the base model (exact id, vendor and version); the editor
- * model itself comes from the host's port, into the caller's scope.
+ * Bind a model the editor serves, on the route the registry discovered for
+ * the base model (exact id, vendor, version), from the host's port.
  */
 const bindEditorModel = Effect.fn('bindEditorModel')(function* (
   config: ModelConfig,
@@ -924,23 +932,17 @@ const bindEditorModel = Effect.fn('bindEditorModel')(function* (
       requestedModel,
       deployment,
     },
+    route: { kind: 'copilot' },
     usageRoute: 'api-key',
     contextWindow: routed.contextWindow,
     supportsVision: routed.capabilities.supportsVision,
     supportsNativePdf: false,
     supportsNativeAudio: false,
     supportsForcedToolChoice: false,
-    wireRouteKey: JSON.stringify([
-      'vscode-lm',
-      deployment.vendor,
-      deployment.version,
-    ]),
-    modelRetryRouteKey: JSON.stringify([
-      'vscode-lm',
-      deployment.vendor,
-      deployment.version,
+    ...routeKeys(
+      ['vscode-lm', deployment.vendor, deployment.version],
       requestedModel,
-    ]),
+    ),
     backgroundCapable: false,
   };
 });
@@ -1015,18 +1017,14 @@ export const bindModel = Effect.fn('bindModel')(function* (
       compatibilityKey,
       model: bound.model,
       origin: bound.origin,
+      route: { kind: 'validation' },
       usageRoute: 'api-key',
       contextWindow: requested.contextWindow,
       supportsVision: false,
       supportsNativePdf: false,
       supportsNativeAudio: false,
       supportsForcedToolChoice: true,
-      wireRouteKey: JSON.stringify([requested.provider, 'validation']),
-      modelRetryRouteKey: JSON.stringify([
-        requested.provider,
-        'validation',
-        requested.fullName,
-      ]),
+      ...routeKeys([requested.provider, 'validation'], requested.fullName),
       backgroundCapable: false,
     };
   }
@@ -1094,18 +1092,13 @@ export const bindModel = Effect.fn('bindModel')(function* (
     requestedModel: configuration.requestedModel,
     deployment: configuration.deployment,
   } as ModelOrigin;
-  const wireRouteKey = JSON.stringify([
-    config.provider,
-    credential.route,
-    credential.endpoint,
-    credentialFingerprint(credential.route, routeBearer(credential)),
-  ]);
   return {
     modelId: config.name,
     config,
     compatibilityKey,
     model,
     origin,
+    route,
     usageRoute: credential.usageRoute,
     ...(credential.route === 'chatgpt-subscription' && credential.plan
       ? { usagePlan: credential.plan }
@@ -1117,8 +1110,15 @@ export const bindModel = Effect.fn('bindModel')(function* (
     supportsForcedToolChoice:
       protocol !== 'google-interactions' ||
       config.capabilities.supportsFunctionCalling,
-    wireRouteKey,
-    modelRetryRouteKey: JSON.stringify([wireRouteKey, config.fullName]),
+    ...routeKeys(
+      [
+        config.provider,
+        credential.route,
+        credential.endpoint,
+        credentialFingerprint(credential.route, routeBearer(credential)),
+      ],
+      config.fullName,
+    ),
     // The socket carries one turn at a time and submits no background work.
     backgroundCapable: !onWebSocket && backgroundCapable(configuration),
   };

@@ -15,7 +15,6 @@ import type {
   RequestDecision,
   RequestRefusal,
 } from '@shared/schemas';
-import { getExhaustionReason } from '@shared/schemas';
 import type { ApprovalBypassKind } from '@shared/approvalBypassKind';
 
 import type { HostRequest } from './hostRequest';
@@ -139,6 +138,11 @@ export function approvalDecisionArms(
         return [decide(decision)];
       }
       const { data } = permission;
+      if (data.credentialSwitch == null) {
+        throw new Error(
+          `Retry ${requestId} offers no move onto the user's own credential.`,
+        );
+      }
       return [
         {
           host: {
@@ -146,8 +150,7 @@ export function approvalDecisionArms(
             runId,
             requestId,
             model: data.model,
-            provider: data.errorDetails?.provider ?? null,
-            exhaustionReason: getExhaustionReason(data.errorDetails),
+            credentialSwitch: data.credentialSwitch,
           },
         },
       ];

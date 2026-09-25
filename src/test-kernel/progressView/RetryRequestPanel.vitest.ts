@@ -89,25 +89,27 @@ function actionButtonIds(element: RetryRequestPanel): (string | null)[] {
 }
 
 describe('retry-request-panel', () => {
-  it('does not offer the API-key switch for a Kimi Code-exclusive model', async () => {
+  it('does not offer the API-key switch when the run carried no offer', async () => {
     const element = await mountPanel({
       model: 'kimiCoding',
       errorDetails: {
         classification: { kind: 'kimi-code-subscription' },
         userRetryable: true,
       },
+      credentialSwitch: null,
     });
 
     expect(actionButtonIds(element)).toEqual(['primary', 'decline']);
   });
 
-  it('does not map the k shortcut to the API-key switch for exclusive models', async () => {
+  it('does not map the k shortcut to the API-key switch without an offer', async () => {
     const element = await mountPanel({
       model: 'kimiCoding',
       errorDetails: {
         classification: { kind: 'kimi-code-subscription' },
         userRetryable: true,
       },
+      credentialSwitch: null,
     });
     const actions = recordPermissionActions(element);
 
@@ -125,13 +127,14 @@ describe('retry-request-panel', () => {
     ]);
   });
 
-  it('offers the API-key switch for an exclusive model on upstream-credit depletion', async () => {
+  it('offers the API-key switch the run carried', async () => {
     const element = await mountPanel({
       model: 'kimiCoding',
       errorDetails: {
         classification: { kind: 'upstream-credit' },
         userRetryable: true,
       },
+      credentialSwitch: { kind: 'new-key', provider: 'kimiCode' },
     });
 
     expect(actionButtonIds(element)).toEqual([

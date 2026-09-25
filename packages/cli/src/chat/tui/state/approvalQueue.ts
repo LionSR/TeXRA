@@ -45,10 +45,6 @@ interface TuiApprovalAdornments {
     readonly originalContent: string;
     readonly proposedContent: string;
   };
-  readonly retry: {
-    readonly personalApiKeyAvailable?: boolean;
-    readonly missingPersonalApiKeyMessage?: string;
-  };
 }
 
 /**
@@ -77,7 +73,7 @@ export type ApprovalPayload = {
       : { readonly tui?: never });
 }[PendingApprovalKind];
 
-/** The two arms modals read adornments from. */
+/** The two arms their modals read by name. */
 export type ToolEditApprovalPayload = Extract<
   ApprovalPayload,
   { kind: 'toolEdit' }
@@ -228,14 +224,15 @@ function presentedPayload(
       return payload;
     case 'toolEdit':
     case 'retry':
-      // Presentable only once the host stages its adornments.
+      // Presentable only once the host stages it: a tool edit with its
+      // preview, a retry once the CLI policy has not settled it.
       return undefined;
   }
   assertNever(payload, 'Unhandled approval payload kind');
 }
 
 /** The order requests became presentable: a request that only became
- *  showable now (a retry after its key lookup) joins behind the modal the
+ *  showable now (a staged tool edit or retry) joins behind the modal the
  *  user is already answering rather than displacing it. The stamp is a
  *  monotonic counter, not the map's size: settled entries are pruned, and a
  *  size-based stamp would hand a later request the index of one on screen. */
