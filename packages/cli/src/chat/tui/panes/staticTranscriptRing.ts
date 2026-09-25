@@ -115,7 +115,7 @@ export interface StaticScrollbackSource {
   readonly hardReset: boolean;
 }
 
-export function sessionHeaderIdentityLine(
+function sessionHeaderIdentityLine(
   meta: SessionMeta,
   child?: ChildHeader,
 ): string {

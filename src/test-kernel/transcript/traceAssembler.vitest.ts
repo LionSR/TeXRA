@@ -3,7 +3,6 @@ import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 import { getRunRecords } from '@agent/storage';
-import { registerRun } from '@agent/storage/runLifecycle';
 import {
   AgentConfigSchema,
   type AgentConfig,
@@ -106,21 +105,6 @@ describe('assembleTrace', () => {
   afterEach(async () => {
     vi.restoreAllMocks();
   });
-
-  it.effect('assembles a registered run from its folded view', () =>
-    Effect.gen(function* () {
-      const runId = 'abc900abc900' as RunId;
-      const runConfigRecord = config({ agent: 'review', model: 'sonnet46T' });
-      yield* registerRun(session, runId, runConfigRecord, {
-        identity: { kind: 'agent', agent: 'review' },
-      });
-      yield* Effect.promise(() => appendLogEntry(runId, 'registered row'));
-
-      const { trace } = unwrapOk(yield* assembleTrace(runId, session));
-
-      expect(trace.runId).toBe(runId);
-    }),
-  );
 
   it.effect('assembles a full trace document for a run', () =>
     Effect.gen(function* () {

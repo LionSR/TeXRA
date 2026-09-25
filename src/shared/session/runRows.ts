@@ -62,17 +62,17 @@ type RequestState = {
 };
 
 /** A follow-up queued for the run and not yet consumed, as its row holds it. */
-type PendingFollowUp = Pick<
+export type QueuedFollowUp = Pick<
   Extract<SessionEvent, { type: 'followup.queued' }>,
   'followUpId' | 'content'
 >;
 
 /**
- * What these rows say about one run. `RunState` is a superset of it, so the
- * loop's fold applies the patch to itself; `sessionFold` keeps one per run
- * beside its view and projects the view's containers from it.
+ * What these rows say about one run's position: everything but its pending
+ * input. `RunState` is a superset of it, so the loop's fold applies the
+ * patch to itself.
  */
-export type RunRows = {
+export type RunPosition = {
   readonly family: RunFamily | null;
   readonly step: FlowStep | null;
   readonly outcome: RunOutcome | null;
@@ -81,16 +81,27 @@ export type RunRows = {
   readonly continuationIndex: number;
   /** By request id, in the order the rows opened them. */
   readonly requests: Readonly<Record<string, RequestState>>;
+  /** Complete output collection from the newest `output.produced` row. */
+  readonly roundOutputs: RoundOutput[];
+};
+
+/**
+ * What these rows say about one run: its position and the input it has not
+ * taken. `sessionFold` keeps one per run beside its view and projects the
+ * view's containers from it; the admission's replay check reads it whole.
+ * The loop's pending input is the publisher's
+ * (`SessionEvents.pendingFollowUps`), so `RunState` carries only the
+ * position.
+ */
+export type RunRows = RunPosition & {
   /** Queued without consumed, in commit order. */
-  readonly followUps: readonly PendingFollowUp[];
+  readonly followUps: readonly QueuedFollowUp[];
   /**
    * Every follow-up id a row named, queued or consumed: the unique key. A
    * delivery its producer replays after a restart (#9531) is a second row
    * under an id already here, and it is queued once, never twice.
    */
   readonly followUpIds: ReadonlySet<string>;
-  /** Complete output collection from the newest `output.produced` row. */
-  readonly roundOutputs: RoundOutput[];
 };
 
 /**
@@ -109,8 +120,8 @@ export function byId<T>(
   return record;
 }
 
-/** The slice before any of these rows folded. */
-export const freshRunRows = (): RunRows => ({
+/** The position before any of these rows folded. */
+export const freshRunPosition = (): RunPosition => ({
   family: null,
   step: null,
   outcome: null,
@@ -118,9 +129,14 @@ export const freshRunRows = (): RunRows => ({
   turn: 0,
   continuationIndex: 0,
   requests: byId([]),
+  roundOutputs: [],
+});
+
+/** The slice before any of these rows folded. */
+export const freshRunRows = (): RunRows => ({
+  ...freshRunPosition(),
   followUps: [],
   followUpIds: new Set(),
-  roundOutputs: [],
 });
 
 export type RunRowVerdict =
@@ -138,15 +154,36 @@ const applied = (rows: Partial<RunRows>): RunRowVerdict => ({
   rows,
 });
 
+/** The shared rows that move a run's pending input, not its position. */
+type FollowUpRow = Extract<
+  SharedRunRow,
+  { type: 'followup.queued' | 'followup.consumed' }
+>;
+
+export const isFollowUpRow = (row: SessionEvent): row is FollowUpRow =>
+  row.type === 'followup.queued' || row.type === 'followup.consumed';
+
 /**
  * Apply one shared row. `current` is `null` for a reader that holds no slice
  * for the run yet: queued input and the loop's own position open one, a
- * request, a consumption or an output presupposes it and moves nothing.
+ * request, a consumption or an output presupposes it and moves nothing. A
+ * reader that folds only the position (`RunState`) applies only the rows
+ * that move it.
  */
+export function applyRunRow(
+  current: RunPosition | null,
+  row: Exclude<SharedRunRow, FollowUpRow>,
+): RunRowVerdict;
 export function applyRunRow(
   current: RunRows | null,
   row: SharedRunRow,
+): RunRowVerdict;
+export function applyRunRow(
+  current: RunPosition | null,
+  row: SharedRunRow,
 ): RunRowVerdict {
+  // A follow-up row enters only through the `RunRows` overload.
+  const slice = current as RunRows | null;
   switch (row.type) {
     case 'flow.step': {
       const p = row.payload;
@@ -225,7 +262,7 @@ export function applyRunRow(
       // Queued input may precede everything else a run writes, so it opens
       // the slice the way the loop's own first step does. A replayed
       // delivery id is the same follow-up, already queued once.
-      const rows = current ?? freshRunRows();
+      const rows = slice ?? freshRunRows();
       if (rows.followUpIds.has(row.followUpId)) return { kind: 'unchanged' };
       return applied({
         followUps: [
@@ -240,17 +277,17 @@ export function applyRunRow(
       // id this slice never queued (another writer queued it while the loop
       // ran, or the read that delivered this row did not carry the queuing)
       // consumes nothing, and is recorded so the queuing cannot land twice.
-      if (current === null) return { kind: 'unchanged' };
-      const followUps = current.followUps.filter(
+      if (slice === null) return { kind: 'unchanged' };
+      const followUps = slice.followUps.filter(
         (f) => f.followUpId !== row.followUpId,
       );
-      const removed = followUps.length !== current.followUps.length;
-      if (!removed && current.followUpIds.has(row.followUpId)) {
+      const removed = followUps.length !== slice.followUps.length;
+      if (!removed && slice.followUpIds.has(row.followUpId)) {
         return { kind: 'unchanged' };
       }
       return applied({
         ...(removed ? { followUps } : {}),
-        followUpIds: new Set([...current.followUpIds, row.followUpId]),
+        followUpIds: new Set([...slice.followUpIds, row.followUpId]),
       });
     }
     case 'output.produced':

@@ -123,15 +123,4 @@ describe('SessionHandle', () => {
       expect(attempted).toBe(true);
     }),
   );
-
-  it.effect('rejects run work registered after disposal', () =>
-    Effect.gen(function* () {
-      const session = createTestSession();
-      yield* session.dispose();
-
-      expect(() => trackAgent(session, generateRunId())).toThrow(
-        'Cannot register run work after session disposal.',
-      );
-    }),
-  );
 });

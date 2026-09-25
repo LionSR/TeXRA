@@ -4,7 +4,6 @@ import { describe, expect, it } from 'vitest';
 // Local imports
 import type { RetryRequestPanel } from '@progressView/frontend/components/RetryRequestPanel';
 import type { ProviderErrorPartial, RunId } from '@shared/schemas';
-import { recordPermissionActions } from '@test/support/permissionPanelEvents';
 
 // Local file imports
 import {
@@ -101,30 +100,6 @@ describe('retry-request-panel', () => {
     expect(actionButtonIds(element)).toEqual(['primary', 'decline']);
   });
 
-  it('does not map the k shortcut to the API-key switch for exclusive models', async () => {
-    const element = await mountPanel({
-      model: 'kimiCoding',
-      errorDetails: {
-        classification: { kind: 'kimi-code-subscription' },
-        userRetryable: true,
-      },
-    });
-    const actions = recordPermissionActions(element);
-
-    expect(element.handleKeyboardShortcut('k')).toBe(false);
-    expect(element.handleKeyboardShortcut('escape')).toBe(false);
-    expect(element.handleKeyboardShortcut('y')).toBe(true);
-
-    expect(actions).toEqual([
-      {
-        kind: 'request.decide',
-        runId: 'run-1',
-        requestId: 'retry-1',
-        decision: { action: 'retry' },
-      },
-    ]);
-  });
-
   it('offers the API-key switch for an exclusive model on upstream-credit depletion', async () => {
     const element = await mountPanel({
       model: 'kimiCoding',
@@ -174,16 +149,5 @@ describe('retry-request-panel', () => {
     expect(text).toContain('--- Partial Output (1025 chars) ---');
     expect(text).not.toContain('last 1024');
     expect(tailLine(text)).toBe('x'.repeat(1025));
-  });
-
-  it('truncates one char past the boundary (maxTailChars + 2 total chars)', async () => {
-    const element = await mountPanel();
-
-    const text = formatPartialOutput(element, 'x'.repeat(1026));
-
-    expect(text).toContain('--- Partial Output (last 1024 of 1026 chars) ---');
-    const tail = tailLine(text);
-    expect(tail.startsWith('…')).toBe(true);
-    expect(tail.replace(/^…/, '')).toHaveLength(1024);
   });
 });

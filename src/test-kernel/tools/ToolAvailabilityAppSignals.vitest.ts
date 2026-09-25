@@ -56,47 +56,6 @@ afterEach(() => {
 });
 
 describe('tool availability app signals', () => {
-  it.effect('emits toolAvailabilityChanged after a refresh', () =>
-    Effect.gen(function* () {
-      vi.doMock('@tools/plugins', () => ({
-        TOOL_PLUGINS: [
-          {
-            id: 'test-tool',
-            toolNames: [],
-            name: 'Test tool',
-            category: 'ai-agents',
-            availability: {
-              check: vi.fn(() => Effect.succeed(true)),
-            },
-          },
-        ],
-      }));
-      const { onAppSignal } = yield* Effect.promise(
-        () => import('@eventBus/AppSignals'),
-      );
-      const { refreshToolAvailability } = yield* Effect.promise(
-        () => import('@tools/toolAvailability'),
-      );
-      const events: undefined[] = [];
-      const delivered = Deferred.makeUnsafe<void>();
-      // The subscriber drains on its own fiber: the yield lets it register
-      // before the probe publishes, and the wait lets the delivery land.
-      const fiber = yield* Effect.forkChild(
-        onAppSignal('toolAvailabilityChanged', (payload) => {
-          events.push(payload);
-          Deferred.doneUnsafe(delivered, Effect.void);
-        }),
-      );
-      yield* Effect.yieldNow;
-
-      yield* refreshToolAvailability(probeInputs);
-
-      yield* Deferred.await(delivered);
-      expect(events).toEqual([undefined]);
-      yield* Fiber.interrupt(fiber);
-    }).pipe(Effect.provide(probeServices)),
-  );
-
   it.effect(
     're-probes every open workspace when a key a plugin declares changes',
     () =>

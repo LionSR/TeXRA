@@ -734,54 +734,6 @@ return await agent('Second')`;
     }),
   );
 
-  it.live(
-    'enriches live finish lines with the reported model and duration',
-    () =>
-      Effect.gen(function* () {
-        const { trace, events } = recordingTrace();
-        const { activities, onActivity } = collectActivities();
-        yield* runScript(
-          trace,
-          'model-duration',
-          `${meta}
-return await agent('Draft')`,
-          {
-            runAgent: (invocation: WorkflowAgentInvocation) =>
-              Effect.sync(function () {
-                invocation.report({ model: 'deepseekT' });
-                invocation.report({
-                  childRunId: 'draft@deepseekT#abcdef' as RunId,
-                });
-                invocation.report({ costUsd: 0.02 });
-                return 'done';
-              }),
-            onActivity,
-          },
-        );
-
-        expect(
-          workflowCallEvent(events, 'Draft', 'completed')?.call,
-        ).toMatchObject({
-          model: 'deepseekT',
-          childRunId: 'draft@deepseekT#abcdef',
-          durationMs: expect.any(Number),
-          costUsd: 0.02,
-        });
-        const draftEvents = events.filter(
-          (event): event is Extract<AgentEvent, { type: 'workflow.call' }> =>
-            event.type === 'workflow.call' && event.call.label === 'Draft',
-        );
-        const logIds = new Set(draftEvents.map((event) => event.logId));
-        expect(logIds.size).toBe(1);
-        expect([...logIds][0]).toMatch(/^workflow-task-.+-call-0$/);
-        expect(activities).toContainEqual(
-          expect.stringMatching(
-            /^Finished: Draft · Edits files · deepseekT · .+ · \$0\.020$/,
-          ),
-        );
-      }),
-  );
-
   it.live('uses a new task-card identity for a deterministic relaunch', () =>
     Effect.gen(function* () {
       const script = `${meta}

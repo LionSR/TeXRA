@@ -131,7 +131,7 @@ export class SettingsViewProvider {
       } else {
         const panel = vscode.window.createWebviewPanel(
           SettingsViewProvider.viewType,
-          'TeXRA Dashboard',
+          'TeXRA Settings',
           vscode.ViewColumn.One,
           {
             enableScripts: true,

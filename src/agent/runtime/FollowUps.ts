@@ -1,11 +1,11 @@
 /**
- * The run's follow-up input: one Effect `Queue` per run, seeded from the
- * folded `followup.queued` rows that have no `followup.consumed`, the
- * blocking wait and the non-blocking drain, and `consume`, which commits one
- * batch's `followup.consumed` rows with the user message they become and
+ * The run's follow-up input: the `followup.queued` rows that have no
+ * `followup.consumed` (the session publisher's pending set), the blocking
+ * wait and the non-blocking probe, and `consume`, which commits one batch's
+ * `followup.consumed` rows with the user message they become and
  * `flow.step turn.ready`, in one ledger transaction (C3). A crash before
- * that commit leaves the rows queued, so the next consumer's seed delivers
- * them again; after it, nothing re-delivers them.
+ * that commit leaves the rows queued, so the next consumer delivers them
+ * again; after it, nothing re-delivers them.
  *
  * One batch enters the conversation as **one** user message carrying every
  * queued item as its own text part, not one message per item. The retired
@@ -31,14 +31,13 @@ import {
 } from '@agent/followUp/followUpMessages';
 import {
   FollowUpContinuationOwned,
-  RunInput,
   type FollowUpBatch,
-  type QueuedFollowUp,
 } from '@agent/followUp/RunInput';
 import { logUserMessage } from '@agent/trace';
 import { mediaNeedsVisionWarning } from '@agent/runtime/mediaVisionWarning';
 import type { MediaAttachmentKind } from '@shared/schemas';
 import { RunLedger } from '@shared/session/runLedger';
+import type { QueuedFollowUp } from '@shared/session/runRows';
 import type { RunState } from '@shared/session/runStateFold';
 
 import { AgentRun } from './run/AgentRun';
@@ -62,11 +61,6 @@ export interface ConsumedFollowUps {
 export class FollowUps extends Context.Service<
   FollowUps,
   {
-    /**
-     * Seed the run's queue from its folded state, once the loop has loaded
-     * it: the follow-ups a crash or an unowned wait left queued.
-     */
-    readonly seed: (state: RunState | null) => void;
     readonly hasQueued: () => boolean;
     /** Queue one maintenance turn; a pending one is not duplicated. */
     readonly appendSynthetic: (text: string) => void;
@@ -108,7 +102,6 @@ export const followUpsLayer: Layer.Layer<
     // under acquireUseRelease semantics, and the lease must not outlive the
     // scope that claimed it (the run-loop design,
     // .agents/docs/implemented/architecture/2026-09-21-effect-design-run-loop-programs.md).
-    const created = yield* RunInput.make;
     let released = false;
     const lease = yield* Effect.acquireRelease(
       Effect.sync(() => manager.claimLive(runId, 'flow')),
@@ -120,7 +113,7 @@ export const followUpsLayer: Layer.Layer<
           }
         }),
     );
-    const input = manager.attachInput(runId, created, lease);
+    const input = manager.attachInput(runId, lease);
     if (!input) {
       return yield* new FollowUpContinuationOwned({
         message: `Follow-up continuation already has an owner for run ${runId}.`,
@@ -226,7 +219,6 @@ export const followUpsLayer: Layer.Layer<
     });
 
     return {
-      seed: (state) => input.seed(state?.followUps ?? [], state?.followUpIds),
       hasQueued: () => input.hasQueued(),
       appendSynthetic: (text) => {
         if (syntheticPending) return;

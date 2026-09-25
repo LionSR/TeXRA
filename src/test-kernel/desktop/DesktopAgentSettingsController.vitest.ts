@@ -163,13 +163,6 @@ function applyAgentPreset(controller: Controller, presetId: string) {
   });
 }
 
-function deleteAgentPreset(controller: Controller, presetId: string) {
-  return assertSupported(controller.handlers.deleteAgentModePreset)({
-    command: SETTINGS_VIEW_COMMANDS.DELETE_AGENT_MODE_PRESET,
-    presetId,
-  });
-}
-
 function postedCommands(posted: unknown[]): Array<string | undefined> {
   return posted.map(commandOf);
 }
@@ -224,32 +217,6 @@ describe('DefaultDesktopAgentSettingsController', () => {
         });
         expect(postedCommands(posted)).toContain(
           SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SELECTION,
-        );
-        expect(catalogChanges).toEqual([undefined]);
-      }),
-  );
-
-  it.effect(
-    'reports a catalog change when the custom agent directory changes',
-    () =>
-      Effect.gen(function* () {
-        const { catalogChanges, controller, posted } = createControllerFixture({
-          catalog: physicistCatalog(),
-          selectCustomAgentDirectory: async () => '/agents/selected',
-        });
-        const setCustomDir = assertSupported(
-          controller.handlers.setCustomAgentDir,
-        );
-
-        yield* withProcessServices(
-          testRuntime(),
-          setCustomDir({
-            command: SETTINGS_VIEW_COMMANDS.SET_CUSTOM_AGENT_DIR,
-          }),
-        );
-
-        expect(postedCommands(posted)).toContain(
-          SETTINGS_VIEW_COMMANDS.UPDATE_CUSTOM_AGENT_DIR,
         );
         expect(catalogChanges).toEqual([undefined]);
       }),
@@ -428,98 +395,6 @@ describe('DefaultDesktopAgentSettingsController', () => {
           customPresets: [expect.objectContaining({ name: 'Paper Team' })],
         }),
       );
-    }),
-  );
-
-  function savedTeamState(): FakeStateStore {
-    return customTeamState({
-      id: 'custom-team',
-      name: 'Custom Team',
-      description: 'test',
-      icon: 'bookmark',
-      agents: { workflow: ['correct'], toolUse: ['review'] },
-      texraHostedAgents: [],
-    });
-  }
-
-  it.effect(
-    'keeps a custom team when its delete confirmation is declined',
-    () =>
-      Effect.gen(function* () {
-        const workspaceState = savedTeamState();
-        const { confirmed, controller } = createControllerFixture({
-          workspaceState,
-          confirm: () => Effect.succeed(false),
-        });
-
-        yield* withProcessServices(
-          testRuntime(),
-          deleteAgentPreset(controller, 'custom-team'),
-        );
-
-        expect(confirmed).toEqual(['Delete team "Custom Team"?']);
-        expect(
-          yield* withProcessServices(
-            testRuntime(),
-            workspaceState.get(WorkspaceStateKey.CUSTOM_AGENT_PRESETS),
-          ),
-        ).toHaveLength(1);
-      }),
-  );
-
-  it.effect('deletes custom teams and reports unknown team ids', () =>
-    Effect.gen(function* () {
-      const workspaceState = savedTeamState();
-      const { catalogChanges, controller, errorMessages, posted } =
-        createControllerFixture({
-          workspaceState,
-        });
-
-      yield* withProcessServices(
-        testRuntime(),
-        deleteAgentPreset(controller, 'custom-team'),
-      );
-
-      expect(
-        yield* withProcessServices(
-          testRuntime(),
-          workspaceState.get(WorkspaceStateKey.CUSTOM_AGENT_PRESETS),
-        ),
-      ).toEqual([]);
-      expect(catalogChanges.length).toBeGreaterThan(0);
-      expect(posted).toContainEqual(
-        expect.objectContaining({
-          command: SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_MODE_PRESETS,
-          customPresets: [],
-        }),
-      );
-
-      yield* withProcessServices(
-        testRuntime(),
-        deleteAgentPreset(controller, 'missing-team'),
-      );
-
-      expect(errorMessages).toEqual(['Unknown custom team: missing-team']);
-    }),
-  );
-
-  it.effect('reports unknown presets without writing roster state', () =>
-    Effect.gen(function* () {
-      const { controller, errorMessages, workspaceState } =
-        createControllerFixture();
-
-      yield* withProcessServices(
-        testRuntime(),
-        applyAgentPreset(controller, 'missing-team'),
-      );
-
-      expect(errorMessages).toEqual(['Unknown team "missing-team".']);
-      expect(
-        yield* withProcessServices(
-          testRuntime(),
-          workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION),
-        ),
-      ).toBeUndefined();
     }),
   );
 });

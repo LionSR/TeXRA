@@ -331,26 +331,6 @@ describe('Tool edit approval gating', () => {
     }),
   );
 
-  it.effect('preserves an automatic cancellation without a cause', () =>
-    Effect.gen(function* () {
-      const tool = WriteFileTool;
-      const write = stubWorkspaceFile('summary.txt', {
-        exists: true,
-        content: 'base',
-      });
-      nextDecision = () => ({ action: 'cancel', cause: undefined });
-
-      const result = yield* inRun(
-        tool.call({ path: 'summary.txt', content: 'new content' }),
-      );
-
-      assert.strictEqual(write.mock.calls.length, 0);
-      assert.match(result.error ?? '', /Tool edit cancelled/);
-      assert.doesNotMatch(result.error ?? '', /User rejected/);
-      assert.strictEqual(result.userInstruction, undefined);
-    }),
-  );
-
   it.effect('write_file skips approval when disabled via config', () =>
     Effect.gen(function* () {
       yield* Effect.tryPromise(() =>

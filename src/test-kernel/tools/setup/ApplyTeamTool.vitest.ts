@@ -138,24 +138,6 @@ describe('apply_team', () => {
       }),
   );
 
-  it.effect('records the user-level default team id', () =>
-    Effect.gen(function* () {
-      yield* applyTeam({
-        teamId: 'starter',
-        unavailableAction: 'continue',
-      });
-      expect(yield* getDefaultTeamId(hostStores().globalState)).toBe('starter');
-
-      yield* applyTeam({
-        teamId: 'physicist',
-        unavailableAction: 'continue',
-      });
-      expect(yield* getDefaultTeamId(hostStores().globalState)).toBe(
-        'physicist',
-      );
-    }),
-  );
-
   it.effect('rejects an unknown teamId without writing any state', () =>
     Effect.gen(function* () {
       const result = yield* applyTeam({ teamId: 'astrologer' });

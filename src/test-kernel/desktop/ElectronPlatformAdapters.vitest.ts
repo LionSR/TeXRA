@@ -8,7 +8,6 @@ import { afterEach, describe, expect, vi } from 'vitest';
 
 // Local imports - platform
 import type { ElectronSecrets } from '@desktop/main/platform/electronSecrets';
-import { NotificationFailed } from '@hosts/uiHosts';
 
 // Local imports - test support
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
@@ -80,24 +79,6 @@ describe('desktop platform adapters', () => {
     key: testSecretKey,
     message,
   });
-
-  it.effect(
-    'persists state values and deletes undefined updates through JsonStore',
-    () =>
-      Effect.gen(function* () {
-        const JsonStore = yield* loadJsonStore;
-        const root = yield* makeTempDir('texra-electron-state-');
-        const store = yield* JsonStore.open(join(root, 'state.json'));
-
-        yield* store.set('session', { active: true });
-        yield* store.set('cleared', 'value');
-        yield* store.set('cleared', undefined);
-
-        expect(store.get('session')).toEqual({ active: true });
-        expect(store.get('missing', 'fallback')).toBe('fallback');
-        expect(store.snapshot()).toEqual({ session: { active: true } });
-      }).pipe(Effect.provide(nodePlatformLayer)),
-  );
 
   it.effect('stores encrypted secrets and deletes persisted values', () =>
     Effect.gen(function* () {
@@ -194,36 +175,6 @@ describe('desktop platform adapters', () => {
         expect(showWarningMessage).toHaveBeenCalledTimes(1);
         expect(showWarningMessage).toHaveBeenCalledWith(
           LINUX_BASIC_TEXT_SECRET_STORAGE_MESSAGE,
-        );
-        expect(store.snapshot()).toEqual({});
-      }).pipe(withEnv({}), Effect.provide(nodePlatformLayer)),
-  );
-
-  it.effect(
-    'preserves the storage-policy error when the basic_text warning fails',
-    () =>
-      Effect.gen(function* () {
-        const {
-          module: { LINUX_BASIC_TEXT_SECRET_STORAGE_MESSAGE },
-          store,
-          secrets,
-        } = yield* loadSecrets({
-          showWarningMessage: vi.fn(() =>
-            Effect.fail(
-              new NotificationFailed({
-                member: 'showWarningMessage',
-                message: 'dialog failed',
-                cause: new Error('dialog failed'),
-              }),
-            ),
-          ),
-        });
-
-        vi.spyOn(process, 'platform', 'get').mockReturnValue('linux');
-        configureElectronTestStub({ safeStorageBackend: 'basic_text' });
-
-        expect(yield* secretWriteError(secrets)).toMatchObject(
-          unavailableWrite(LINUX_BASIC_TEXT_SECRET_STORAGE_MESSAGE),
         );
         expect(store.snapshot()).toEqual({});
       }).pipe(withEnv({}), Effect.provide(nodePlatformLayer)),

@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { Cause, Deferred, Effect, Exit, Fiber, Queue, Result } from 'effect';
+import { Cause, Deferred, Effect, Exit, Fiber, Queue } from 'effect';
 
 // Shared child accounting and durable delivery for native runs and processes.
 
@@ -11,9 +11,7 @@ import type { RunParent } from '@agent/runtime/RunHandle';
 import { Runs, type RunRegistry } from '@agent/runtime/runRegistry';
 import {
   FollowUpContinuationOwned,
-  FollowUpsUnseedable,
-  RunInput,
-  type QueuedFollowUp,
+  type RunInput,
 } from '@agent/followUp/RunInput';
 import type {
   FollowUpConsumerLease,
@@ -43,7 +41,7 @@ import {
   DatabaseNotOwner,
   type DatabaseWriteFailed,
 } from '@shared/session/database';
-import { foldRunState } from '@shared/session/runStateFold';
+import type { QueuedFollowUp } from '@shared/session/runRows';
 import { formatSubagentProgress } from '@shared/subagentFollowup';
 import { deriveRunOutcome } from '@shared/runs/runStatus';
 import { aggregateError, onAbort } from '@utils/core';
@@ -842,7 +840,6 @@ export function startChildRunLoop<TTurn, R = never>(
 
     let input!: RunInput;
 
-    const created = yield* RunInput.make;
     // Fresh children already own their DB claim. Recovery retains its pending
     // queue until the run lane acquires the claim and transfers it below.
     const claimed = yield* Effect.exit(
@@ -857,7 +854,7 @@ export function startChildRunLoop<TTurn, R = never>(
           });
         }
         if (!params.queueLease)
-          input = runSession.followUps.attachInput(runId, created, queueLease)!;
+          input = runSession.followUps.attachInput(runId, queueLease)!;
       }),
     );
     if (Exit.isFailure(claimed)) {
@@ -866,29 +863,8 @@ export function startChildRunLoop<TTurn, R = never>(
       );
     }
     const setup = yield* Effect.exit(
-      Effect.gen(function* () {
-        // An agent-CLI child has no flow to fold: its loop seeds the queue
-        // from the run's rows itself, so follow-ups a crash left queued (or a
-        // turn it never settled) reach the relaunched loop. A native child's
-        // resumed flow seeds the same queue from its own load.
-        const folded = !strategy.continuous
-          ? foldRunState(
-              null,
-              yield* runSession.readAggregate(aggregateId('run', runId)),
-            )
-          : null;
+      Effect.sync(() => {
         strategy.onLoopStart?.(runSession);
-        if (folded !== null && Result.isFailure(folded)) {
-          return yield* new FollowUpsUnseedable({
-            message: `Child run ${runId} has rows its follow-up queue cannot be seeded from: ${folded.failure.detail}`,
-            cause: folded.failure,
-          });
-        }
-        if (folded !== null)
-          input.seed(
-            folded.success?.followUps ?? [],
-            folded.success?.followUpIds,
-          );
         if (strategy.ownsBackgroundProcess === true) {
           // The one handle slot shutdown drain reads (#8155): kill the
           // leaked OS process without touching the loop that reports it.
@@ -998,11 +974,7 @@ export function startChildRunLoop<TTurn, R = never>(
               return yield* Effect.fail(
                 new Error(`Child recovery ownership was lost for ${runId}.`),
               );
-            input = runSession.followUps.attachInput(
-              runId,
-              created,
-              queueLease,
-            )!;
+            input = runSession.followUps.attachInput(runId, queueLease)!;
           }
           const runNotice = (notice: Effect.Effect<void, Error>) =>
             notice.pipe(

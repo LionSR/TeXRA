@@ -520,18 +520,15 @@ export function createDesktopHostRequests(
       fileActions.runMergeFile(baseFile, editedFile),
     latexdiffFiles: (baseFile, editedFile) =>
       runLatexdiffFile(baseFile, editedFile),
-    openSettings: (section, sessionType) =>
+    openSettings: (section) =>
       Effect.sync(() =>
         postDesktopSettingsView(
           options.postToRenderer,
-          (
-            {
-              agents: 'agents/library',
-              teams: 'agents/teams',
-              models: 'models/models',
-            } as const
-          )[section],
-          sessionType === 'toolUse' ? 'toolUse' : undefined,
+          section
+            ? ({ teams: 'agents/teams', models: 'models/models' } as const)[
+                section
+              ]
+            : undefined,
         ),
       ),
     // Only the "ask the user for a key" step is host-specific: on the

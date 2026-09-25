@@ -144,9 +144,10 @@ export interface SharedHostRequestBindings {
   ): HostVerb<void>;
   mergeFiles(baseFile: string, editedFile: string): HostVerb<void>;
   latexdiffFiles(baseFile: string, editedFile: string): HostVerb<void>;
+  /** Settings at a section, or where it was last left without one. The
+   *  agents section goes through {@link openAgentSettings}. */
   openSettings(
-    section: OpenSettingsRequest['section'],
-    sessionType: OpenSettingsRequest['sessionType'],
+    section: Exclude<OpenSettingsRequest['section'], 'agents'>,
   ): HostVerb<void>;
   /** Ask for a provider API key: a prompt on one host, the Models tab on the
    *  other. The caller re-reads the secret store after this returns. */
@@ -345,7 +346,9 @@ export function handleSharedHostRequest(
         yield* latexdiffs(request);
         return done;
       case 'openSettings':
-        yield* host.openSettings(request.section, request.sessionType);
+        yield* request.section === 'agents'
+          ? host.openAgentSettings(request.sessionType ?? undefined)
+          : host.openSettings(request.section);
         return done;
       case 'apiKeyBanner':
         yield* request.action === 'set' ? host.setApiKey : host.openApiKeyGuide;

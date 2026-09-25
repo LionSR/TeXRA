@@ -24,6 +24,7 @@ import {
   DatabaseClaimRefused,
   DatabaseWriteFailed,
 } from '@shared/session/database';
+import { foldRunRows, type QueuedFollowUp } from '@shared/session/runRows';
 import type { Append } from '@shared/session/sessionEvents';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { generateRunId } from '@utils/core';
@@ -52,8 +53,9 @@ const withResumePort =
  * The admission boundary over a recorded session plane: one serializer (a
  * one-permit semaphore standing in for the publisher), the rows it appended,
  * and the runs it claimed. `queued(runId)` is the text of every
- * `followup.queued` row written for the run, in order, which is what the
- * run's next consumer seeds from. `claimRefused` answers each claim the way
+ * `followup.queued` row written for the run, in order; what a consumer
+ * takes is what the rows still queue, as the publisher's pending set holds
+ * it. `claimRefused` answers each claim the way
  * a live foreign owner does; `failWrites` refuses that many appends.
  */
 function recordedFollowUps(
@@ -97,15 +99,15 @@ function recordedFollowUps(
       rows.push(...committed);
       return Effect.succeed(committed);
     });
+  const runRows = (runId: RunId) =>
+    rows.filter((row) => row.aggregateId === aggregateId('run', runId));
   const followUps = new ToolUseFollowUpQueue({
     exclusive: (job) => publisher.withPermits(1)(job(append)),
     detach: (job) => {
       Effect.runFork(publisher.withPermits(1)(job));
     },
-    rows: (runId) =>
-      Effect.sync(() =>
-        rows.filter((row) => row.aggregateId === aggregateId('run', runId)),
-      ),
+    pending: (runId) => foldRunRows(runRows(runId)).followUps,
+    rows: (runId) => Effect.sync(() => runRows(runId)),
     acquireClaim: (runId) =>
       Effect.suspend(() => {
         claims.push(runId);
@@ -137,19 +139,10 @@ function recordedFollowUps(
   };
 }
 
-/** What a consumer attaching its queue to `lease` takes without blocking. */
-const taken = (
-  followUps: ToolUseFollowUpQueue,
-  lease: FollowUpConsumerLease,
-  seed: Parameters<RunInput['seed']>[0] = [],
-) =>
+/** What a consumer attaching its input to `lease` takes without blocking. */
+const taken = (followUps: ToolUseFollowUpQueue, lease: FollowUpConsumerLease) =>
   Effect.gen(function* () {
-    const input = followUps.attachInput(
-      lease.runId,
-      yield* RunInput.make,
-      lease,
-    )!;
-    input.seed(seed);
+    const input = followUps.attachInput(lease.runId, lease)!;
     const batch = input.hasQueued() ? yield* input.take : null;
     return batch === null || batch.synthetic
       ? []
@@ -530,10 +523,10 @@ describe('ToolUseFollowUpQueue ownership', () => {
   });
 
   it.effect(
-    'seeds a successor generation from the rows, ahead of what it admitted, and ignores a stale release',
+    'delivers a successor generation every row still queued, in commit order, and ignores a stale release',
     () =>
       Effect.gen(function* () {
-        const { followUps, queued, queuedRows } = recordedFollowUps();
+        const { followUps, queued } = recordedFollowUps();
         const id = generateRunId();
         const child = followUps.claimLive(id, 'child')!;
         yield* followUps.submit(id, { text: 'before handoff' }, 'live_owner');
@@ -549,9 +542,9 @@ describe('ToolUseFollowUpQueue ownership', () => {
 
         expect(followUps.release(child, 'terminal')).toBe(false);
         expect(queued(id)).toEqual(['before handoff', 'during recovery']);
-        // The successor's fold holds both rows; the one it was also handed
-        // is taken once, behind the row the fold alone holds.
-        expect(yield* taken(followUps, recovery, queuedRows(id))).toEqual([
+        // The row the earlier generation never took and the one admitted
+        // under recovery arrive the same way, in commit order.
+        expect(yield* taken(followUps, recovery)).toEqual([
           'before handoff',
           'during recovery',
         ]);
@@ -683,15 +676,15 @@ describe('ToolUseFollowUpQueue ownership', () => {
 
   it.effect('never lets a maintenance wake share a batch with follow-ups', () =>
     Effect.gen(function* () {
-      const input = yield* RunInput.make;
-      input.seed([]);
+      const pending: QueuedFollowUp[] = [];
+      const input = new RunInput(() => pending);
       input.wake('compact');
       const followUp = (text: string) => ({
         followUpId: text,
         content: { text, origin: 'user' as const },
       });
-      input.offer(followUp('first'));
-      input.offer(followUp('second'));
+      pending.push(followUp('first'), followUp('second'));
+      input.notify();
 
       expect(yield* input.take).toEqual({ synthetic: true, text: 'compact' });
       expect(yield* input.take).toEqual({
@@ -871,8 +864,7 @@ describe('ToolUseFollowUpQueue delivery identity (#9531)', () => {
         }
         if (consumer !== 'recovered-root')
           expect(followUps.hasLiveOwner(id)).toBe(true);
-        const input = followUps.attachInput(id, yield* RunInput.make, lease)!;
-        input.seed([]);
+        const input = followUps.attachInput(id, lease)!;
         const delivery = childResult('d1');
 
         expect(
@@ -882,12 +874,21 @@ describe('ToolUseFollowUpQueue delivery identity (#9531)', () => {
         ).toEqual({ kind: 'queued' });
         expect(queued(id)).toEqual(['child result']);
         expect(input.hasQueued()).toBe(false);
+        // A wake for another reason does not carry the deferred row with it:
+        // the parent must not take the result before the child's run.end.
+        yield* followUps.submit(id, { text: 'user input' }, 'recoverable');
+        expect(yield* taken(followUps, lease)).toEqual(['user input']);
 
         expect(yield* followUps.submit(id, delivery, 'recoverable')).toEqual({
           kind: 'duplicate',
         });
-        expect(queued(id)).toEqual(['child result']);
-        expect(yield* taken(followUps, lease)).toEqual(['child result']);
+        expect(queued(id)).toEqual(['child result', 'user input']);
+        // Nothing consumed the first batch here, so the take after the
+        // resubmit reads both rows, in commit order.
+        expect(yield* taken(followUps, lease)).toEqual([
+          'child result',
+          'user input',
+        ]);
       }),
   );
 });

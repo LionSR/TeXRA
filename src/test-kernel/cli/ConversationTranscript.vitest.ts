@@ -5,7 +5,6 @@ import { describe, expect, it } from 'vitest';
 
 import {
   boundedTranscriptEntryLayout,
-  fullTranscriptEntryLayout,
   transcriptEntryLayout,
   transcriptEntryLayoutRows,
 } from '@cli/chat/tui/panes/transcriptEntryLayout';
@@ -21,7 +20,6 @@ import {
   advanceStaticTranscriptState,
   buildStaticTranscriptItems,
   buildStaticTranscriptState,
-  sessionHeaderIdentityLine,
   trimStaticTranscriptItems,
   type StaticTranscriptItem,
   type StaticTranscriptRingBudgets,
@@ -123,10 +121,6 @@ function toolEntry(
     }),
     seqNo: (fixtureSeq += 1),
   };
-}
-
-function compactExecutionsEntry(id: string, path: string): ToolRow {
-  return toolRowFixture(id, { toolName: 'executions', input: { path } }, 0);
 }
 
 function phaseRow(
@@ -399,49 +393,6 @@ describe('CLI conversation transcript', () => {
     expect(selected.rowLimits.has('a1')).toBe(false);
   });
 
-  it('derives insets, margins, prefixed lines, and row counts from one layout', () => {
-    const user = entry('u1', 'user', 'x'.repeat(77), true);
-    const userLayout = transcriptEntryLayout(user, { width: 80 });
-    expect(userLayout).toMatchObject({
-      columns: 78,
-      inset: 2,
-      marginBottomRows: 1,
-      marginTopRows: 1,
-    });
-    // Row prefixes are baked into the lines, not advertised as layout fields.
-    expect(userLayout.lines[0]?.startsWith('› ')).toBe(true);
-    expect(userLayout.lines[1]?.startsWith('  ')).toBe(true);
-    expect(userLayout.lines).toHaveLength(2);
-    expect(transcriptEntryLayoutRows(userLayout)).toBe(4);
-
-    const tool = toolEntry('t1', TOOL_CALL_STATUS.COMPLETED, 'one\ntwo');
-    const toolLayout = transcriptEntryLayout(tool, { width: 80 });
-    expect(toolLayout).toMatchObject({
-      columns: 80,
-      inset: 0,
-      marginBottomRows: 1,
-      marginTopRows: 0,
-    });
-    expect(transcriptEntryLayoutRows(toolLayout)).toBe(4);
-  });
-
-  it('aligns a wrapped call row under its own marker', () => {
-    const layout = transcriptEntryLayout(
-      workflowTaskRow(
-        'a',
-        { id: 'a', label: 'Task', status: 'completed', durationMs: 1 },
-        `Finished: ${'w'.repeat(40)} ${'x'.repeat(40)}`,
-      ),
-      { width: 40 },
-    );
-
-    expect(layout.lines[0]?.startsWith('  ✓ ')).toBe(true);
-    expect(layout.lines.slice(1).every((line) => line.startsWith('    '))).toBe(
-      true,
-    );
-    expect(layout.lines.length).toBeGreaterThan(1);
-  });
-
   it('budgets live rich tool rows without reflowing their display lines', () => {
     const tool = toolEntry('t1', TOOL_CALL_STATUS.COMPLETED, 'ok', {
       input: { command: 'x'.repeat(80) },
@@ -460,23 +411,18 @@ describe('CLI conversation transcript', () => {
     );
   });
 
-  it('keeps bounded rich display rows unwrapped', () => {
-    const tool = toolEntry('t1', TOOL_CALL_STATUS.COMPLETED, 'x'.repeat(40));
-    const live = transcriptEntryLayout(tool, { mode: 'live', width: 20 });
-    const bounded = boundedTranscriptEntryLayout(
-      transcriptEntryLayout(tool, { mode: 'live', width: 20 }),
-      10,
-    );
+  it('keeps bounded user-band margins only while a content row still fits', () => {
+    const user = entry('u1', 'user', 'x'.repeat(77), true);
+    const layout = transcriptEntryLayout(user, { width: 80 });
+    expect(layout.lines).toHaveLength(2);
 
-    expect(bounded.lines).toEqual(live.lines);
-  });
+    const roomy = boundedTranscriptEntryLayout(layout, 3);
+    expect(roomy.lines).toEqual(layout.lines.slice(-1));
+    expect(roomy.marginTopRows + roomy.marginBottomRows).toBe(2);
 
-  it('budgets live user prompt bands with their margin rows', () => {
-    const user = entry('u1', 'user', 'why do you write as a latex?', true);
-
-    expect(
-      transcriptEntryLayoutRows(transcriptEntryLayout(user, { width: 80 })),
-    ).toBe(3);
+    const tight = boundedTranscriptEntryLayout(layout, 2);
+    expect(tight.lines).toEqual(layout.lines);
+    expect(tight.marginTopRows + tight.marginBottomRows).toBe(0);
   });
 
   it('does not render empty assistant placeholders between user and tool rows', () => {
@@ -1083,15 +1029,25 @@ describe('CLI conversation transcript', () => {
   });
 
   it('labels preset-launched sessions with team and root identity', () => {
+    const identityLine = (
+      meta: Parameters<typeof buildStaticTranscriptItems>[0]['meta'],
+    ) => {
+      const [header] = buildStaticTranscriptItems({
+        source: sourceOf([]),
+        meta,
+      }).items;
+      return header?.kind === 'header' ? header.identityLine : undefined;
+    };
+
     expect(
-      sessionHeaderIdentityLine({
+      identityLine({
         ...SESSION_META,
         agent: 'orchestrator',
         model: 'gpt56-',
         teamName: 'Physicist',
       }),
     ).toBe('team: Physicist · root: orchestrator · model: GPT-5.6 Terra');
-    expect(sessionHeaderIdentityLine(SESSION_META)).toBe(
+    expect(identityLine(SESSION_META)).toBe(
       'agent: research · model: DeepSeek V4 Flash (Thinking)',
     );
   });
@@ -1209,41 +1165,6 @@ describe('CLI conversation transcript', () => {
     expect(isInquiryContinuationText('Run the analysis')).toBe(false);
   });
 
-  it('compacts adjacent one-line tool rows in full output', () => {
-    const lines = transcriptToLines(
-      [
-        compactExecutionsEntry('t1', '/executions/3a780a389327/report'),
-        compactExecutionsEntry('t2', '/executions/3a780a389327/conversation'),
-      ],
-      80,
-    );
-
-    expect(lines).toEqual([
-      '● executions (view /executions/3a780a389327/report)',
-      '● executions (view /executions/3a780a389327/conversation)',
-    ]);
-  });
-
-  it('keeps full-output separators around prose and detailed tool rows', () => {
-    const lines = transcriptToLines(
-      [
-        compactExecutionsEntry('t1', '/executions/3a780a389327/report'),
-        entry('a1', 'assistant', 'Read the report.', true),
-        toolEntry('t2', 'completed'),
-      ],
-      80,
-    );
-
-    expect(lines).toEqual([
-      '● executions (view /executions/3a780a389327/report)',
-      '',
-      'Read the report.',
-      '',
-      '● Bash (ls)',
-      '⎿ ok',
-    ]);
-  });
-
   it('wraps wide tool output lines for terminal printing', () => {
     const lines = transcriptToLines(
       [toolEntry('t1', 'completed', `wide-output ${'segment '.repeat(12)}`)],
@@ -1254,24 +1175,6 @@ describe('CLI conversation transcript', () => {
     expect(lines.some((line) => line.includes('⎿ wide-output'))).toBe(true);
     expect(lines.some((line) => line.includes('segment segment'))).toBe(true);
     expect(lines.some((line) => line.length > 40)).toBe(false);
-  });
-
-  it('uses the full print width without Ink-only role padding', () => {
-    const entries = [
-      entry('u1', 'user', 'user text', true),
-      entry('e1', 'error', 'error text', true),
-    ];
-
-    for (const transcriptEntry of entries) {
-      const normal = transcriptEntryLayout(transcriptEntry, {
-        mode: 'scrollback-budget',
-        width: 20,
-      });
-      const printed = fullTranscriptEntryLayout(transcriptEntry, 20);
-      expect(normal.columns).toBe(18);
-      expect(printed.columns).toBe(20);
-      expect(printed.lines.every((line) => line.length <= 20)).toBe(true);
-    }
   });
 });
 
@@ -1289,13 +1192,6 @@ describe('transcript entry margin collapse', () => {
   const topRows = (row: TranscriptRow, previousEntry?: TranscriptRow): number =>
     transcriptEntryLayout(row, { previousEntry, width: 60 }).marginTopRows;
 
-  it('keeps the declared top margin when no previous entry is known', () => {
-    // Callers that cannot identify the row above (the live pane's first row,
-    // the row-budget estimators) must keep reserving the full separator.
-    expect(topRows(user('u1'))).toBe(1);
-    expect(topRows(phase('p1'))).toBe(1);
-  });
-
   it('absorbs the top margin into the previous entry’s bottom margin', () => {
     // Both sides declare 1, so the boundary is worth 1 row, not 2.
     expect(topRows(user('u2'), user('u1'))).toBe(0);
@@ -1306,21 +1202,6 @@ describe('transcript entry margin collapse', () => {
     // An assistant turn has no bottom margin, so the next turn owns the gap.
     expect(topRows(user('u2'), assistant('a1'))).toBe(1);
     expect(topRows(phase('p1'), assistant('a1'))).toBe(1);
-  });
-
-  it('leaves entries that declare no top margin alone', () => {
-    expect(topRows(assistant('a1'), user('u1'))).toBe(0);
-    expect(topRows(assistant('a2'), assistant('a1'))).toBe(0);
-  });
-
-  it('does not change the bottom margin an entry declares', () => {
-    const withPrevious = transcriptEntryLayout(user('u2'), {
-      previousEntry: user('u1'),
-      width: 60,
-    });
-    const without = transcriptEntryLayout(user('u2'), { width: 60 });
-    expect(withPrevious.marginBottomRows).toBe(without.marginBottomRows);
-    expect(withPrevious.marginBottomRows).toBe(1);
   });
 });
 

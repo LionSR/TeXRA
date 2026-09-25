@@ -22,7 +22,7 @@ The `settings.agentCategory` key decides which of these two modes an agent runs 
 
 ## Agent definition files (`.yaml`)
 
-Each agent is defined in a `.yaml` file that tells TeXRA what to say to the AI model and how to handle the response. Browse and manage these files from the **Agents** tab in the TeXRA Dashboard, or create your own (see [Custom agents](./custom-agents.md)).
+Each agent is defined in a `.yaml` file that tells TeXRA what to say to the AI model and how to handle the response. Browse and manage these files from the **Agents** tab in the TeXRA Settings, or create your own (see [Custom agents](./custom-agents.md)).
 
 ## Understanding the YAML structure
 
