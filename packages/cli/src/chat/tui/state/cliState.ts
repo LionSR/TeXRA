@@ -299,12 +299,12 @@ export function openTranscriptReader(runId: RunId): void {
   FOREGROUND_READER.set({ kind: 'transcript', runId });
 }
 
-/** View state of the workflow popup — which phase tab is open, which row is
- *  highlighted, which counted groups are unfolded, and the live filter. Held
- *  here rather than in the component so a repaint or a foreground surface
+/** View state of the workflow popup — the phase tab (unset follows the run's
+ *  active phase), the highlighted row, the unfolded groups and the filter.
+ *  Held here, not in the component, so a repaint or a foreground surface
  *  taking over (an approval) hands the popup back exactly as it was. */
 export interface WorkflowPopupView {
-  readonly phaseIndex: number;
+  readonly phaseKey: string | undefined;
   readonly selectedKey: string | undefined;
   readonly expanded: ReadonlySet<WorkflowRowGroup>;
   /** Live filter text; empty means none. */
@@ -314,7 +314,7 @@ export interface WorkflowPopupView {
 }
 
 const INITIAL_WORKFLOW_POPUP_VIEW: WorkflowPopupView = {
-  phaseIndex: 0,
+  phaseKey: undefined,
   selectedKey: undefined,
   expanded: new Set(),
   filter: '',

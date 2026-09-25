@@ -22,6 +22,7 @@ import type {
 import { withLogChannel } from '@logger/effectLog';
 import type { ProcessServices } from '@platform/processRuntime';
 import type { RunId } from '@shared/schemas';
+import type { SettingsViewOutboundMessage } from '@shared/settingsView/settingsViewMessages';
 
 type HostEffect<A = void> = Effect.Effect<A, Error, ProcessServices>;
 
@@ -30,9 +31,10 @@ export const SETTINGS_LOG_CHANNEL = 'SettingsView';
 /** What a host performs its own way behind the settings body. */
 export interface SettingsHostBindings {
   /** Build and post one message to the open settings view; neither when
-   *  none is open, so a closed view costs no reads. */
+   *  none is open, so a closed view costs no reads. Typed as the union the
+   *  view validates, so a builder's Effect cannot be posted unrun. */
   post<E, R>(
-    message: Effect.Effect<unknown, E, R>,
+    message: Effect.Effect<SettingsViewOutboundMessage, E, R>,
   ): Effect.Effect<void, E | Error, R>;
   readonly notify: Pick<MessageHost, 'showInfoMessage' | 'showErrorMessage'>;
   readonly prompt: Pick<PromptHost, 'input' | 'confirm' | 'info' | 'warning'>;

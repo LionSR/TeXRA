@@ -66,6 +66,7 @@ import {
   SettingsViewInboundMessageSchema,
   SUBSCRIPTION_AUTH_PROVIDERS,
   type DerivedSettingsSnapshot,
+  type SettingsViewOutboundMessage,
 } from '@shared/settingsView/settingsViewMessages';
 import { UnsupportedCommandError } from '@shared/utils/dispatcher';
 import { GITHUB_TOKEN_CREATE_URL } from '@tools/github/githubAuth';
@@ -96,10 +97,12 @@ interface SettingsViewBodyPorts {
   readonly bindings: SettingsHostBindings;
   /** The skills the Skills page lists, from the skills subsystem, which
    *  controllers take from their host rather than import. */
-  readonly skillDisplay: HostEffect<{
-    readonly skills: readonly unknown[];
-    readonly issues: readonly unknown[];
-  }>;
+  readonly skillDisplay: HostEffect<
+    Omit<
+      Extract<SettingsViewOutboundMessage, { command: 'updateSkillsList' }>,
+      'command'
+    >
+  >;
   /** The account copy (`src/ui`), which controllers likewise take from
    *  their host. */
   readonly accountCopy: {

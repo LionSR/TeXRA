@@ -260,13 +260,14 @@ export function recordWorkflowCallAttempt(
 }
 
 /**
- * Journal a user's retry of a live child: the mark for the attempt that
- * replaces it, naming the child it supersedes. The mark the retried child's
- * own launch wrote is the attempt it ran as, so the replacement is the next
- * one. Written before the engine asks for that replacement, so the recovery
- * probe advances past a child that had already accepted a turn — the one
- * thing no other fact may do — and a host that dies in between resumes on the
- * same authorization rather than stranding the call.
+ * Journal a user's retry of a live child: a mark at the retried child's own
+ * attempt, naming it. The mark stays where that child's launch left it, so
+ * the replacement's probe reads the next id as the free launch slot it is;
+ * raising it here would make that id read as a launched attempt whose child
+ * is gone, which the probe refuses. Written before the engine asks for the
+ * replacement, so the probe advances past a child that had already accepted
+ * a turn — the one thing no other fact may do — and a host that dies in
+ * between resumes on the same authorization rather than stranding the call.
  */
 function recordWorkflowCallSupersession(
   session: SessionHandle,
@@ -280,7 +281,7 @@ function recordWorkflowCallSupersession(
         session,
         checkpointId,
         key,
-        (mark.attempt ?? 0) + 1,
+        mark.attempt ?? 0,
         supersededRunId,
       ),
     ),

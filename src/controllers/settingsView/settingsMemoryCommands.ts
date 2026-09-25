@@ -9,6 +9,7 @@ import type { SettingsViewInboundHandlerRegistry } from '@controllers/settingsVi
 import { resolveMemoryStoragePath } from '@platform/defaults/workspaceStorage';
 import type { ProcessServices } from '@platform/processRuntime';
 import { StorageFs } from '@platform/rootedFs';
+import type { SettingsViewOutboundMessage } from '@shared/settingsView/settingsViewMessages';
 
 import type {
   SettingsHostBindings,
@@ -27,7 +28,11 @@ export function settingsMemoryCommands(ports: {
   // The controller answers a mutation the user declined (a cancelled
   // delete, a pin over the cap) with `null` after prompting.
   const postMemoryMutation = (
-    mutation: Effect.Effect<unknown, never, StorageFs>,
+    mutation: Effect.Effect<
+      SettingsViewOutboundMessage | null,
+      never,
+      StorageFs
+    >,
   ) =>
     Effect.flatMap(mutation, (message) =>
       message == null ? Effect.void : bindings.post(Effect.succeed(message)),

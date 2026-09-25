@@ -58,7 +58,10 @@ import {
 import { TEXRA_APPROVAL_POLICY_CONFIG_KEY } from '@shared/approvalPolicy';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import type { SettingsMessageFor } from '@shared/settingsView/settingsViewMessages';
+import type {
+  SettingsMessageFor,
+  ToolDashboardItem,
+} from '@shared/settingsView/settingsViewMessages';
 import { loadRuntimeSkillDisplay } from '@skills/runtimeSkills';
 import { getLastCheckResults } from '@tools/toolAvailability';
 import { ACCOUNT_OUTCOME } from '@ui/copy/accountAuth';
@@ -156,8 +159,7 @@ export class SettingsViewMessageHandler {
               ),
             catch: ensureError,
           }),
-        // An untitled buffer holds the text, so Ctrl+S prompts for a new
-        // location instead of writing back over the source.
+        // An untitled buffer, so Ctrl+S never writes back over the source.
         showReadOnlyYaml: (_fileName, text) =>
           showDocument(() =>
             vscode.workspace.openTextDocument({
@@ -217,8 +219,7 @@ export class SettingsViewMessageHandler {
           chooseTeamAvailabilityViaDialog(prompt, { modal: true }),
         revealRun: revealProgressRun,
         runLabel: getProgressRunLabel,
-        // The status-bar tooltip paints the approval policy outside this
-        // view's round-trip, so it follows the policy on its own signal.
+        // The status-bar tooltip follows the approval policy on its signal.
         stateSettingApplied: (key) => {
           if (key === GlobalStateKey.INLINE_CRITICISM_ENABLED) {
             return syncInlineCriticism();
@@ -448,8 +449,7 @@ export class SettingsViewMessageHandler {
         );
       }
       if (Exit.isSuccess(result)) {
-        // Two different programs: the notice is a host dialog, the preference
-        // is a state write. The boundary composes whichever it chose.
+        // A host dialog or a state write; the boundary composes the choice.
         const settle: Effect.Effect<unknown, Error> =
           !route || route.access === 'unavailable'
             ? showLoggedInfoMessage(
@@ -510,7 +510,7 @@ export class SettingsViewMessageHandler {
   // Tools page
   // ============================================================
 
-  private postToolDashboard(items: unknown[]) {
+  private postToolDashboard(items: ToolDashboardItem[]) {
     return this.withActiveWebview((webview) =>
       postToWebview(webview, {
         command: SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD,

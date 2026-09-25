@@ -172,10 +172,12 @@ export function noticesFor(
 
 /**
  * The run's folded rows with its notices inserted after the last row
- * whose seq is at or below their `afterSeq`, in notice order; a notice
- * takes that row's settlement key so the pane's settlement ordering keeps it
- * in place. The merged `settledRows` is the folded prefix plus every notice
- * anchored inside it (a notice is immutable the moment it is written).
+ * whose seq is at or below their `afterSeq`, in notice order. A notice's
+ * settlement key is its `afterSeq`: the pane re-sorts by that key with a
+ * local-after-folded tiebreak, so the key alone keeps the notice after the
+ * row it follows. A notice written before the run's first row keys at 0 and
+ * sorts ahead of it. The merged `settledRows` is the folded prefix plus every
+ * notice anchored inside it (a notice is immutable the moment it is written).
  */
 export function mergeLocalNotices(
   run: RunView | undefined,
@@ -195,13 +197,11 @@ export function mergeLocalNotices(
   };
   for (const notice of runNotices.toSorted((a, b) => a.afterSeq - b.afterSeq)) {
     flushThrough(notice.afterSeq);
-    const previous = out.at(-1);
-    const seq = previous?.settlementSeqNo ?? previous?.seqNo;
-    out.push(
-      seq === undefined
-        ? notice.row
-        : { ...notice.row, seqNo: seq, settlementSeqNo: seq },
-    );
+    out.push({
+      ...notice.row,
+      seqNo: notice.afterSeq,
+      settlementSeqNo: notice.afterSeq,
+    });
   }
   for (; next < rows.length; next += 1) out.push(rows[next]!);
   return {

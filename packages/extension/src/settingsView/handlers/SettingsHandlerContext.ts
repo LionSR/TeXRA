@@ -2,6 +2,7 @@ import { Cause, Effect, Exit } from 'effect';
 
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import type { Log } from '@logger/logUtils';
+import type { SettingsViewOutboundMessage } from '@shared/settingsView/settingsViewMessages';
 import { ensureError } from '@utils/errors/errorMessage';
 import type { Webview } from 'vscode';
 
@@ -18,12 +19,13 @@ export interface SettingsHandlerContext {
  * The one foreign edge under this view's transport: VS Code's own
  * `postMessage`, lifted once for every outbound settings message. A panel
  * disposed mid-post rejects it, and that reaches the program as a failure
- * instead of an unhandled rejection. Only the goal list lifts `postMessage`
- * itself, because it reads the delivered flag this discards.
+ * instead of an unhandled rejection. The message is typed as the union the
+ * webview validates, not `unknown`, so a builder's Effect passed without
+ * `yield*` is a compile error rather than a serialized Effect it drops.
  */
 export function postToWebview(
   webview: Webview,
-  message: unknown,
+  message: SettingsViewOutboundMessage,
 ): Effect.Effect<void, Error> {
   return Effect.tryPromise({
     try: async () => {
