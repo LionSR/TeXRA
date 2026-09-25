@@ -1,7 +1,7 @@
 import { writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
-import { Deferred, Effect, Fiber, Layer, Scope, Stream } from 'effect';
+import { Effect, Fiber, Layer, Scope, Stream } from 'effect';
 
 /**
  * Production-shaped regression for #9531. Agent registration, launch, child
@@ -78,6 +78,7 @@ import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import {
   nativeToolTestLayer,
   emptyPinnedComposition,
+  testModelCell,
 } from '@test/support/nativeToolTestLayer';
 import {
   createTempDirPlatform,
@@ -551,6 +552,7 @@ async function launchWaitingChild(options: {
         agent: 'chat',
         model: PARENT_MODEL,
       }),
+      model: testModelCell(PARENT_MODEL),
       logger: noopTrace,
       toolPolicy: {
         approvalPromptsUnavailable: false,

@@ -21,7 +21,6 @@ import {
   advanceStaticTranscriptState,
   buildStaticTranscriptItems,
   buildStaticTranscriptState,
-  DEFAULT_STATIC_TRANSCRIPT_RING_BUDGETS,
   sessionHeaderIdentityLine,
   trimStaticTranscriptItems,
   type StaticTranscriptItem,
@@ -29,6 +28,7 @@ import {
 } from '@cli/chat/tui/panes/staticTranscriptRing';
 import { staticScrollbackTarget } from '@cli/chat/tui/appLayout';
 import { staticTranscriptRepaintEpoch } from '@cli/chat/tui/state/staticTranscriptRepaint';
+import { mergeLocalNotices } from '@cli/chat/tui/state/transcript';
 import {
   createTuiViewportController,
   type TuiRepaintOptions,
@@ -40,12 +40,11 @@ import {
 } from '@cli/chat/tui/panes/transcriptViewport';
 import { transcriptToLines } from '@cli/chat/tui/state/transcriptLines';
 import { CLI_LOCAL_RUN_ID } from '@cli/chat/tui/state/cliState';
+import type { RunView } from '@shared/session/sessionView';
 import {
-  RUN_OUTCOME,
   RUN_PHASE,
   TOOL_CALL_STATUS,
   type NormalizedToolUse,
-  type RunOutcome,
   type RunPhase,
   type RunId,
   type WorkflowCallProgress,
@@ -436,7 +435,7 @@ describe('CLI conversation transcript', () => {
       { width: 40 },
     );
 
-    expect(layout.lines[0]?.startsWith('  ☑ ')).toBe(true);
+    expect(layout.lines[0]?.startsWith('  ✓ ')).toBe(true);
     expect(layout.lines.slice(1).every((line) => line.startsWith('    '))).toBe(
       true,
     );
@@ -980,6 +979,35 @@ describe('CLI conversation transcript', () => {
     expect(result.appended.map((item) => item.id)).toEqual(['u-new', 'a-new']);
     expect(result.cursor.scannedIndex).toBe(source.length);
     expect(inspectedPrefixIndexes).toEqual([prefix.length - 1]);
+  });
+
+  it('keeps a slash command typed before the first message above it', () => {
+    // `/model` before the first message: its notices are anchored at 0, the
+    // run's first folded row is the message at seq 1.
+    const message = { ...textRowFixture('u1', 'user', 'Say OK.'), seqNo: 1 };
+    const reply = settled({
+      ...textRowFixture('a1', 'assistant', 'OK'),
+      seqNo: 3,
+    });
+    const notice = (id: string, kind: 'user' | 'assistant', text: string) => ({
+      runId: ROOT_RUN,
+      afterSeq: 0,
+      row: { ...textRowFixture(id, kind, text), origin: 'local' as const },
+    });
+    const merged = mergeLocalNotices(
+      { transcript: { rows: [message, reply], settledRows: 2 } } as RunView,
+      [
+        notice('n1', 'user', '/model gemini38f'),
+        notice('n2', 'assistant', 'Root model set to gemini38f.'),
+      ],
+    );
+    expect(
+      orderedStaticTranscriptEntries(
+        merged.rows,
+        merged.settledRows,
+        RUN_PHASE.RUNNING,
+      ).map((row) => row.id),
+    ).toEqual(['n1', 'n2', 'u1', 'a1']);
   });
 
   it('appends an incremental suffix in the same settlement order a repaint uses', () => {

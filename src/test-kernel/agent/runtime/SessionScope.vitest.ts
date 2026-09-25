@@ -5,7 +5,7 @@ import { describe, expect } from 'vitest';
 import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import { TraceEmitter } from '@agent/trace';
 import { AgentResume } from '@platform/interfaces';
-import { MESSAGE_TYPES, type RunId } from '@shared/schemas';
+import { MESSAGE_TYPES } from '@shared/schemas';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { testRunHandle } from '@test/support/runHandleFixtures';
 import {
@@ -66,7 +66,7 @@ describe('session-owned transcripts and follow-up queues', () => {
       // The `waiting` step parks the run and the loop commits the closure
       // facts in that batch (`loop/toolUse.ts`), so the partial text becomes
       // the row's final text instead of streaming forever.
-      session.publish(yield* session.streamClosureFacts(runId));
+      session.publish(session.streamClosureFacts(runId));
       yield* session.settlePublications();
       const { rows } = yield* readRunTranscript(session, runId);
       expect(

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, vi } from 'vitest';
 
 import * as NodeFileSystem from '@effect/platform-node/NodeFileSystem';
 import { it as effectIt } from '@effect/vitest';
@@ -10,7 +10,6 @@ import { processOwnerId } from '@platform/defaults/nodeProcesses';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
 import { UpdateCheckRecords } from '@shared/session/updateCheckRecords';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
-import { isNewerSemverVersion } from '@utils/system/semverUpdateCheck';
 import { runDailyUpdateCheck } from '@utils/system/updateCheck';
 
 describe('runDailyUpdateCheck', () => {

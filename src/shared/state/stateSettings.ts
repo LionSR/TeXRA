@@ -73,7 +73,7 @@ const DEFAULT_GIT_WORKTREE_SUPPORT = false;
  * Keep file-oriented tools inside the active working directory unless the
  * user explicitly grants them access to arbitrary filesystem paths.
  */
-export const DEFAULT_TOOL_PATH_PROTECTION_ENABLED = true;
+const DEFAULT_TOOL_PATH_PROTECTION_ENABLED = true;
 
 /**
  * Host-neutral catalog for every TeXRA setting a host can store, honor, or render.

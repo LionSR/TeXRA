@@ -51,6 +51,7 @@ import {
   type Slot,
   type TranscriptContext,
 } from './transcriptState';
+import { phaseMoveOf } from './runRows';
 import type { TranscriptView } from './sessionView';
 
 function foldTaskGroup(
@@ -78,7 +79,7 @@ function foldTaskGroup(
 // arrive out of order, so nothing here compensates for a race; the shape is
 // the card's definition.
 function record(d: Draft, event: TranscriptEvent): void {
-  const { ix, ctx } = d;
+  const { ix } = d;
   switch (event.type) {
     case 'log':
     case 'usage':
@@ -299,26 +300,8 @@ function closeText(
   write(d, slot);
 }
 
-/** The lifecycle rows move the transcript boundary: a parked or ended run
- *  closes every open stream and fails every open card. */
-function boundaryPhase(event: SessionEvent): RunPhase | undefined {
-  switch (event.type) {
-    case 'run.activate':
-      return RUN_PHASE.RUNNING;
-    case 'flow.step':
-      if (event.payload.step === 'halted') return undefined;
-      return event.payload.step === 'waiting'
-        ? RUN_PHASE.WAITING
-        : RUN_PHASE.RUNNING;
-    case 'child.park':
-      return event.phase === 'parked' ? RUN_PHASE.WAITING : RUN_PHASE.RUNNING;
-    case 'run.end':
-      return event.outcome;
-    default:
-      return undefined;
-  }
-}
-
+/** A phase move ({@link phaseMoveOf}) moves the transcript boundary: a
+ *  parked or ended run closes every open stream and fails every open card. */
 function moveBoundary(d: Draft, phase: RunPhase): void {
   const { ix } = d;
   if (phase === RUN_PHASE.RUNNING) {
@@ -365,8 +348,8 @@ export function foldTranscriptEvent(
     written: [],
     touched: false,
   };
-  const phase = boundaryPhase(event);
-  if (phase !== undefined) moveBoundary(d, phase);
+  const phase = phaseMoveOf(event);
+  if (phase !== null) moveBoundary(d, phase);
   else if (isTranscriptEvent(event)) {
     record(d, event);
     // A transcript event writes at most one slot; its position is the row's

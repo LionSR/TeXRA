@@ -206,10 +206,7 @@ function visibleSelectRange({
   return { start, end: start + visibleCount };
 }
 
-export function selectItemRenderKey<T>(
-  item: SelectItem<T>,
-  index: number,
-): string {
+function selectItemRenderKey<T>(item: SelectItem<T>, index: number): string {
   return `${index}:${item.label}`;
 }
 

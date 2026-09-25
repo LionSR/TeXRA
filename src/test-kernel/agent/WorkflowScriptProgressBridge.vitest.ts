@@ -373,56 +373,14 @@ return await agent('Rewrite', {
             media: [],
           },
         });
-        // The never-issued label ends as not-reached and stays a bare label.
-        const unreached = workflowCallEvent(events, 'Never issued', 'skipped');
-        expect(unreached?.call).toMatchObject({ reason: 'not-reached' });
-        expect(unreached?.call).not.toHaveProperty('kind');
+        // Nothing sweeps the never-issued label into a settled card.
+        expect(
+          workflowCallEvent(events, 'Never issued', 'skipped'),
+        ).toBeUndefined();
       }),
   );
 
-  it.live('marks declared tasks not reached by the script as skipped', () =>
-    Effect.gen(function* () {
-      const { trace, events } = recordingTrace();
-      const { activities, onActivity } = collectActivities();
-      yield* runScript(
-        trace,
-        'not-reached-plan',
-        `export const meta = {
-  name: 'conditional-plan',
-  description: 'declares all possible work',
-  phases: [{ title: 'Research' }],
-  tasks: [
-    { id: 'used', label: 'Used task', phase: 'Research' },
-    { id: 'unused', label: 'Unused task', phase: 'Research' },
-  ],
-}
-phase('Research')
-return await agent('Run one', { id: 'used' })`,
-        { onActivity },
-      );
-
-      const unusedPlanned = workflowCallEvent(
-        events,
-        'Unused task',
-        'declared',
-      );
-      expect(workflowCallEvent(events, 'Used task', 'completed')).toBeDefined();
-      expect(workflowCallEvent(events, 'Unused task', 'skipped')).toMatchObject(
-        {
-          logId: unusedPlanned?.logId,
-          stageId: unusedPlanned?.stageId,
-          call: {
-            reason: 'not-reached',
-          },
-        },
-      );
-      expect(activities).toContain(
-        'Skipped: Unused task — The workflow ended before this call was reached.',
-      );
-    }),
-  );
-
-  it.live('opens and closes a declared phase the run never reached', () =>
+  it.live('never opens a declared phase the run never reached', () =>
     Effect.gen(function* () {
       const { trace, events } = recordingTrace();
       yield* runScript(
@@ -441,25 +399,16 @@ phase('Research')
 return await agent('Run one', { id: 'used' })`,
       );
 
-      // The skipped card still belongs to its own phase group, so the sweep has
-      // to open that stage even though the script never entered it.
-      const writeId = stageId(events, 'Write');
-      expect(workflowCallEvent(events, 'Later task', 'skipped')).toMatchObject({
-        stageId: writeId,
-        call: { reason: 'not-reached' },
-      });
-      expect(events).toContainEqual(
-        expect.objectContaining({
-          type: 'stage.start',
-          id: writeId,
-          kind: 'phase',
-        }),
-      );
-      expect(events).toContainEqual({
-        type: 'stage.end',
-        id: writeId,
-        status: RUN_OUTCOME.COMPLETED,
-      });
+      // The plan marker is what lists the phase; no stage and no card claim
+      // it was reached.
+      expect(stageId(events, 'Research')).toBeDefined();
+      expect(() => stageId(events, 'Write')).toThrow('Missing stage: Write');
+      expect(
+        events.some(
+          (event) =>
+            event.type === 'workflow.call' && event.call.label === 'Later task',
+        ),
+      ).toBe(false);
     }),
   );
 
@@ -827,7 +776,7 @@ return await agent('Draft')`,
         expect([...logIds][0]).toMatch(/^workflow-task-.+-call-0$/);
         expect(activities).toContainEqual(
           expect.stringMatching(
-            /^Finished: Draft · Document · deepseekT · .+ · \$0\.020$/,
+            /^Finished: Draft · Edits files · deepseekT · .+ · \$0\.020$/,
           ),
         );
       }),
@@ -908,7 +857,7 @@ return await agent('Late skip')`,
       expect(activities).toContain('Running: Late skip');
       expect(activities).toContainEqual(
         expect.stringMatching(
-          /^Skipped: Late skip · Document · kimiK2 · .+ · \$0\.040$/,
+          /^Skipped: Late skip · Edits files · kimiK2 · .+ · \$0\.040$/,
         ),
       );
     }),
@@ -1063,7 +1012,7 @@ return await agent('Abort', { phase: 'Run' })`,
         });
         expect(activities).toContainEqual(
           expect.stringMatching(
-            /^Failed: Abort · Document · abort-model · .+ · \$0\.060 — fatal runner error$/,
+            /^Failed: Abort · Edits files · abort-model · .+ · \$0\.060 — fatal runner error$/,
           ),
         );
       }),
@@ -1119,7 +1068,7 @@ return 'guest success'`,
       });
       expect(activities).toContain('Running: Orphaned');
       expect(activities).toContain(
-        'Failed: Orphaned · Document · $0.030 — The workflow ended before this call completed.',
+        'Failed: Orphaned · Edits files · $0.030 — The workflow ended before this call completed.',
       );
     }),
   );

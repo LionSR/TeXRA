@@ -10,7 +10,6 @@ import { beforeAll, beforeEach, describe, expect, vi } from 'vitest';
 import {
   computeAgentOptionsData,
   getAgent,
-  getVisibleAgent,
   getVisibleAgents,
   invalidateRemoteAgentsAfterSignOut,
   loadAgents,

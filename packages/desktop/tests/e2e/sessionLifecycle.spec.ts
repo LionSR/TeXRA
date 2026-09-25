@@ -1,5 +1,4 @@
 import { hostname } from 'node:os';
-import { join } from 'node:path';
 import { Effect, Layer } from 'effect';
 
 import { expect, test } from '@playwright/test';
