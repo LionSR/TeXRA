@@ -196,15 +196,16 @@ export function createDesktopShellIpc(
   actions: DesktopShellActions,
 ): DesktopMessageHandler {
   return {
-    handleMessage(message: DesktopCommandMessage): boolean {
+    handleMessage(message: DesktopCommandMessage) {
       const id = DESKTOP_SHELL_IPC_COMMANDS.find(
         (candidate) => candidate === message.command,
       );
-      if (id == null) return false;
-      // Every registry handler runs its action synchronously and returns
-      // `true`; `boolean | Promise<boolean>` is the shared dispatcher
-      // signature, so narrow it here rather than widening this contract.
-      return dispatchDesktopCommand(id, actions) === true;
+      if (id == null) return undefined;
+      // Every registry handler runs its action synchronously; an action that
+      // forks host work reports its own failure.
+      return Effect.sync(() => {
+        void dispatchDesktopCommand(id, actions);
+      });
     },
   };
 }
