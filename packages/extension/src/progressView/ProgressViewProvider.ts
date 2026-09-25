@@ -530,7 +530,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     );
   }
 
-  /** A run loaded an agent from the custom directory. */
+  /** A launch could not find its agent. */
   public showAgentConfigBanner(
     agentName: string,
     sessionType: SessionType,
@@ -736,9 +736,11 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   }
 
   /** Select a stream this window just launched (the launch's
-   *  `onRunResolved` callback): the launching surface selects it. */
+   *  `onRunResolved` callback): the launching surface selects it, and a
+   *  resolved agent retires the missing-agent warning. */
   public presentLaunchedRun(runId: RunId): void {
     this.surfaceAction({ kind: 'select', runId });
+    this.runtime.runFork(this.snapshot.clearAgentConfigBanner);
   }
 
   public revealRun(

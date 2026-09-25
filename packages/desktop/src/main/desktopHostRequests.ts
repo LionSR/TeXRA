@@ -615,12 +615,12 @@ export function createDesktopHostRequests(
       ),
     // Only the "ask the user for a key" step is host-specific: on the
     // desktop that means opening the Models tab rather than a modal prompt.
-    setApiKey: () =>
-      Effect.sync(() =>
-        postDesktopSettingsView(options.postToRenderer, 'models/keys'),
-      ),
-    openApiKeyGuide: () =>
+    setApiKey: Effect.sync(() =>
+      postDesktopSettingsView(options.postToRenderer, 'models/keys'),
+    ),
+    openApiKeyGuide: Effect.suspend(() =>
       options.openExternalUrl('https://texra.ai/guide/configuration.html'),
+    ),
     openAgentSettings: (sessionType) =>
       Effect.sync(() =>
         postDesktopSettingsView(
