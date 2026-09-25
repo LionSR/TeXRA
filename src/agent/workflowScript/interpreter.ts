@@ -51,8 +51,6 @@ interface WorkflowInterpreterHost<R> {
    *  fault; a step still running then is preempted after it records it. */
   readonly timeoutMs: number;
   readonly onTimeout: () => void;
-  /** The session's child-run budget; also the cap on one all()'s items. */
-  readonly concurrency: number;
   /** One journaled agent() call, under the retry() frames that enclose it. */
   readonly agent: (
     prompt: string,
@@ -98,7 +96,11 @@ export function interpretWorkflow<R>(
           // context a caller has for a sandboxed error.
           const frames = (step.stack ?? '')
             .split('\n')
-            .filter((line) => line.trim().startsWith('at '))
+            .filter(
+              (line) =>
+                line.trim().startsWith('at ') &&
+                !/\(native\)|workflow-protocol\.js/.test(line),
+            )
             .slice(0, 3);
           const fault = new Error([step.message, ...frames].join('\n'));
           fault.name = step.name;
@@ -136,17 +138,12 @@ export function interpretWorkflow<R>(
         return host.agent(operation.prompt, operation.options, retries);
       case 'All':
         // Fail-fast: the first failure interrupts the siblings still running.
-        // The item cap is this all()'s own bound; the permits inside agent()
-        // are the session's, shared by every branch.
+        // Two bounds: the script's own `concurrency` caps this all()'s items,
+        // and the session's permits inside agent() cap every branch's calls.
         return Effect.forEach(
           operation.items,
           (item) => runOperation(realm, item, retries),
-          {
-            concurrency: Math.min(
-              operation.concurrency ?? host.concurrency,
-              host.concurrency,
-            ),
-          },
+          { concurrency: operation.concurrency ?? 'unbounded' },
         );
       case 'Attempt':
         return runOperation(realm, operation.body, retries).pipe(

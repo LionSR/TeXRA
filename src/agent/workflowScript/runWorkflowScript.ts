@@ -817,7 +817,6 @@ export function runWorkflowScript<R = never>(
         filename,
         timeoutMs,
         onTimeout: () => recordFault(timedOut),
-        concurrency,
         agent: agentPrimitive,
       });
 

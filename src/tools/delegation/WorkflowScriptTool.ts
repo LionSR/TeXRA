@@ -652,17 +652,18 @@ export const WorkflowScriptTool = defineTool({
   // roster is what the description advertises.
   availabilityCategory: 'workflow',
   slow: true,
-  description: `Run a deterministic JavaScript workflow that coordinates workflow agents and tool-use agents in parallel. Workflow agent calls (with inputFiles) resolve to a result envelope { category: 'workflow', outcome, outputs, diffs, compileFailures, cost } listing the files they produced, never prose. Tool-use agent calls (with agentName, model, schema) resolve to a structured JSON result via agent().structured: use these for analysis, code edits, test runs, and any task that benefits from a focused interactive agent rather than a whole-document rewriter. Use \`delegate_multi_agents\` only when the complete fan-out, pipeline, and join structure is known before run and should resume safely after interruption. Keep using \`delegate_agent\` one call at a time when a later decision depends on reviewing an earlier result.
+  description: `Run a deterministic JavaScript workflow that coordinates workflow agents and tool-use agents in parallel. Workflow agent calls (with inputFiles) resolve to a result envelope { category: 'workflow', outcome, outputs, diffs, compileFailures, cost } listing the files they produced, never prose. Tool-use agent calls (with agentName, model, schema) resolve to a structured JSON result via (yield* agent(...)).structured: use these for analysis, code edits, test runs, and any task that benefits from a focused interactive agent rather than a whole-document rewriter. Use \`delegate_multi_agents\` only when the complete fan-out, pipeline, and join structure is known before run and should resume safely after interruption. Keep using \`delegate_agent\` one call at a time when a later decision depends on reviewing an earlier result.
 
 Script input: every source submission is saved immediately as a unique, non-overwriting draft under .texra/workflow-scripts/. Every result returns that editable path; on an error, edit the file and retry with scriptPath instead of rewriting the source.
 
 Script rules:
-- Meta: start with an export const meta object containing name and description. No imports or require: only the injected primitives exist: agent, phase, log, parallel, args, and files. Metadata and agent() options reject unknown fields, so typos fail at the saved script instead of being ignored. meta.phases accepts title strings such as ['Draft', 'Merge'] or objects such as [{ title: 'Draft' }].
+- Meta: start with an export const meta object containing name and description. No imports or require: only the injected primitives exist: agent, all, forEach, attempt, retry, timeout, phase, log, args, and files. Metadata and agent() options reject unknown fields, so typos fail at the saved script instead of being ignored. meta.phases accepts title strings such as ['Draft', 'Merge'] or objects such as [{ title: 'Draft' }].
 - Tasks: when the calls are known in advance, declare meta.tasks as { id, label, phase? } records so progress shows the pending plan before run. A task phase must name a title in meta.phases. Every agent() call must then reference one declared task with { id }; omit label and phase from the call because meta.tasks owns them (exact matching duplicates are accepted, but conflicts fail). Omit meta.tasks when the call set is data-dependent.
 - Files: the tool's files field binds workspace files to the whole run as files.inputFiles (editable), files.contextFiles (read-only documents), and files.mediaFiles (read-only visual or audio inputs). A workflow agent() call may use inputFiles, contextFiles, and mediaFiles; inputFiles is required unless the agent declares default outputs. Paths may name workspace files, launch files, or a previous call's outputs. Structured (tool-use) agent() calls do not accept file options.
 - Calls: every call may use agentName (another visible workflow or tool-use agent; defaults to this tool's agent field) and model (an available model short name for this call); omit model to follow ordinary delegation policy. A call without meta.tasks may also use id, label, and phase. Its logical identity is the explicit id when present, otherwise its call ordinal. Logical ids must be unique. Canonical labels prefer an explicit label, then a meaningful file and agent, then agent role and ordinal.
-- Awaiting: agent() and parallel() return Promises: await them. Use ordinary JavaScript loops and awaited calls for sequential stages.
-- Failures: a failed agent call, including a workflow agent that produces no output files, resolves to null. An interactive skip resolves to the truthy '__WORKFLOW_SKIPPED__' sentinel; exclude both non-results before synthesis. JavaScript errors in parallel() thunks fail the workflow and preserve the editable script path rather than being silently converted to null.
+- Generators: the script body is a generator. agent(), all(), attempt(), retry() and timeout() build operations that run nothing until you write yield* before them: const r = yield* agent(...). Never await: await is a syntax error. Use ordinary JavaScript loops over yield* agent(...) for sequential stages.
+- Fan-out: yield* all([agent(...), agent(...)], { concurrency }) runs its items concurrently and returns their results in order; forEach(items, (item, index) => agent(...)) is all(items.map(fn)). A branch with several steps is a generator function: all(items.map((item) => function* () { const a = yield* agent(...); return yield* agent(...) })). Pass the function, not a call of it.
+- Failures: a failed agent call, including a workflow agent that produces no output files, throws an error named AgentFailed into the script; a call the user skips throws Skipped. all() is fail-fast: the first failure stops the other items and fails the all(). Wrap each item in attempt() to tolerate failures: attempt(op) never fails and returns { _tag: 'Success', value } or { _tag: 'Failure', error: { name, message } }. try/catch also works. retry(op, { times }) re-runs a failed call or branch (default once, at most 10; calls the branch already completed replay without running again); timeout(op, ms) fails it with TimedOut. JavaScript errors in the script fail the whole workflow and preserve the editable script path.
 
 Structured output: agent(prompt, { agentName, model, schema }) runs a tool-use agent that finishes by calling submit_output with a value matching the JSON Schema. Structured calls do not accept file options and must name the tool-use agent explicitly; model remains optional. The call resolves to an envelope whose .structured is the validated object rather than edited files.
 
@@ -680,17 +681,17 @@ export const meta = {
   ],
 }
 phase('Fix')
-const results = await parallel(files.inputFiles.slice(0, 2).map((file, index) => () =>
-  agent('Fix spelling errors only.', {
+const results = yield* all(files.inputFiles.slice(0, 2).map((file, index) =>
+  attempt(agent('Fix spelling errors only.', {
     id: index === 0 ? 'first' : 'second',
     inputFiles: [file],
-  })
+  }))
 ))
-const correctedFiles = results
-  .filter((result) => result != null && result !== '__WORKFLOW_SKIPPED__')
-  .flatMap((result) => result.outputs.map((output) => output.absolutePath))
+const passed = results.filter((result) => result._tag === 'Success').map((result) => result.value)
+// inputFiles takes path strings: map each output record to its absolutePath.
+const correctedFiles = passed.flatMap((result) => result.outputs.map((output) => output.absolutePath))
 phase('Merge')
-return await agent('Merge the corrected drafts.', {
+return yield* agent('Merge the corrected drafts.', {
   id: 'merge',
   inputFiles: correctedFiles,
 })

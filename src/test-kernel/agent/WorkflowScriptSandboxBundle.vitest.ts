@@ -60,20 +60,23 @@ describe('workflow sandbox host bundles', () => {
 function smokeEntrySource(): string {
   return `
 import { Effect } from 'effect';
-import { runScriptInSandbox } from ${JSON.stringify(sandboxPath)};
+import { openWorkflowRealm } from ${JSON.stringify(sandboxPath)};
 
 async function main() {
-  const result = await Effect.runPromise(runScriptInSandbox(
-    'return 42',
-    {
-      asyncFns: {},
-      syncFns: {},
-      argsJson: undefined,
-      filesJson: '{"inputFiles":[],"contextFiles":[],"mediaFiles":[]}',
-      realmPrelude: '',
-    },
-    { filename: 'bundle-smoke.workflow.js', timeoutMs: 1_000 },
-  ));
+  const reply = await Effect.runPromise(Effect.scoped(Effect.gen(function* () {
+    const realm = yield* openWorkflowRealm(
+      'return 42',
+      {
+        syncFns: {},
+        argsJson: undefined,
+        filesJson: '{"inputFiles":[],"contextFiles":[],"mediaFiles":[]}',
+      },
+      { filename: 'bundle-smoke.workflow.js', shouldInterrupt: () => false },
+    );
+    const generator = yield* realm.start(realm.main);
+    return yield* realm.resume(generator, { kind: 'next', value: undefined });
+  })));
+  const result = reply.kind === 'done' ? reply.value : reply;
   console.log(result);
 }
 

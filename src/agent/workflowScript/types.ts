@@ -111,7 +111,14 @@ const AGENT_FILE_OPTIONS_ERROR =
 const AgentCallFileListSchema = z
   .array(
     z
-      .string({ error: AGENT_FILE_OPTIONS_ERROR })
+      .string({
+        // The usual slip is an output record where its path belongs; saying
+        // what arrived keeps a repair from filtering the list down to nothing.
+        error: (issue) =>
+          typeof issue.input === 'object' && issue.input !== null
+            ? `${AGENT_FILE_OPTIONS_ERROR} Received an object; pass output.absolutePath, e.g. result.outputs.map((output) => output.absolutePath).`
+            : AGENT_FILE_OPTIONS_ERROR,
+      })
       .trim()
       .min(1, AGENT_FILE_OPTIONS_ERROR),
     { error: AGENT_FILE_OPTIONS_ERROR },

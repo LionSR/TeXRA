@@ -90,7 +90,7 @@ const WorkflowOperationSchema: z.ZodType<WorkflowOperation> = z.lazy(() =>
           (prompt) => prompt.trim().length > 0,
           'agent(prompt, options?) requires a non-empty string prompt.',
         ),
-      options: z.unknown(),
+      options: z.unknown().optional(),
     }),
     z.object({
       _tag: z.literal('All'),
@@ -130,7 +130,7 @@ const WorkflowOperationSchema: z.ZodType<WorkflowOperation> = z.lazy(() =>
 const RealmReplySchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('started'), generator: z.int().nonnegative() }),
   z.object({ kind: z.literal('op'), op: WorkflowOperationSchema }),
-  z.object({ kind: z.literal('done'), value: z.unknown() }),
+  z.object({ kind: z.literal('done'), value: z.unknown().optional() }),
   z.object({
     kind: z.literal('threw'),
     name: z.string(),
@@ -314,6 +314,10 @@ const PROTOCOL_PRELUDE = `
 
   const OP = Symbol('workflow.operation');
   const GeneratorFunction = getPrototypeOf(function* () {});
+  const isStartedGenerator = (value) =>
+    value !== null &&
+    typeof value === 'object' &&
+    getPrototypeOf(getPrototypeOf(value)) === GeneratorFunction.prototype;
   const isBranch = (value) =>
     typeof value === 'function' && getPrototypeOf(value) === GeneratorFunction;
   const isOperation = (value) =>
@@ -331,6 +335,11 @@ const PROTOCOL_PRELUDE = `
   };
   const body = (value, where) => {
     if (isOperation(value) || isBranch(value)) return value;
+    if (isStartedGenerator(value)) {
+      throw new TypeError(
+        where + ' is a started generator; pass the generator function itself (fn, not fn()).',
+      );
+    }
     throw new TypeError(
       where + ' expects an operation such as agent(...), or a generator function (function* () { ... }).',
     );
@@ -389,7 +398,7 @@ const PROTOCOL_PRELUDE = `
       return stringifyJson(reply);
     } catch (err) {
       throw new TypeError(
-        'Workflow values must be JSON-serializable: ' + toRealmError(err).message,
+        'Workflow value is not JSON-serializable: ' + toRealmError(err).message,
       );
     }
   };
@@ -597,9 +606,8 @@ export function openWorkflowRealm(
           generator,
           input.kind === 'throw'
             ? JSON.stringify({ name: input.name, message: input.message })
-            : input.value === undefined
-              ? ''
-              : JSON.stringify(input.value),
+            : // An undefined value crosses as '' and resumes as undefined.
+              (JSON.stringify(input.value) ?? ''),
         ).pipe(
           Effect.flatMap((reply) =>
             reply.kind === 'started'

@@ -34,6 +34,9 @@ interface ExportedMetaDeclaration {
  */
 const BODY_PREFIX = 'function* workflow() {';
 
+const META_POSITION_ERROR =
+  'Workflow script must begin with `export const meta = { name, description, ... }` (only whitespace/comments may precede it).';
+
 const MODULE_LOADING_ERROR =
   'Workflow scripts cannot import modules; use only the injected primitives (agent, all, forEach, attempt, retry, timeout, log, phase, args, files).';
 
@@ -67,6 +70,9 @@ function parseProgram(source: string): {
     const { pos, loc } = error as { pos?: number; loc?: Position };
     if (pos !== undefined && wrapped.startsWith('import', pos)) {
       throw new Error(MODULE_LOADING_ERROR);
+    }
+    if (pos !== undefined && wrapped.startsWith('export', pos)) {
+      throw new Error(META_POSITION_ERROR);
     }
     const where =
       loc === undefined
@@ -153,11 +159,7 @@ export function parseWorkflowScript(source: string): ParsedWorkflowScript {
   }
 
   const metaDeclaration = exportedMetaDeclaration(program, exportRange);
-  if (!metaDeclaration) {
-    throw new Error(
-      'Workflow script must begin with `export const meta = { name, description, ... }` (only whitespace/comments may precede it).',
-    );
-  }
+  if (!metaDeclaration) throw new Error(META_POSITION_ERROR);
 
   const literal = source.slice(
     metaDeclaration.literalStart,

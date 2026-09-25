@@ -12,13 +12,11 @@ import type {
   WorkflowScriptRunResult,
 } from '@agent/workflowScript/types';
 import { runWorkflowScript } from '@agent/workflowScript/runWorkflowScript';
-import { WORKFLOW_SKIPPED_RESULT } from '@agent/workflowScript/types';
 import {
-  runScriptInSandbox,
+  openWorkflowRealm,
   type SandboxHostBridge,
 } from '@agent/workflowScript/sandbox';
 import type { RunId, WorkflowCallProgress } from '@shared/schemas';
-import { WORKFLOW_CALL_UNFINISHED_NOTE } from '@ui/copy/workflowCall';
 
 const META = `export const meta = {
   name: 'test-flow',
@@ -121,11 +119,9 @@ function sandboxBridge(
   overrides: Partial<SandboxHostBridge> = {},
 ): SandboxHostBridge {
   return {
-    asyncFns: {},
     syncFns: {},
     argsJson: undefined,
     filesJson: EMPTY_FILES_JSON,
-    realmPrelude: '',
     ...overrides,
   };
 }
@@ -244,10 +240,13 @@ return null`),
     expect(body).toContain('/require\\s*\\(.*[{}]/');
   });
 
-  it('keeps top-level return and await valid after AST parsing', () => {
+  it('parses the body as a generator and points an await at yield*', () => {
     expect(() =>
       parseWorkflowScript(`${META}return yield* agent('x')`),
     ).not.toThrow();
+    expect(() => parseWorkflowScript(`${META}return await agent('x')`)).toThrow(
+      /generators: write `yield\* agent\(\.\.\.\)`/,
+    );
   });
 
   it('rejects meta whose accessors would hang host-side validation', () => {
@@ -1337,7 +1336,7 @@ return null`,
 }
 const early = agent('early', { label: 'Early', phase: '  Work  ' })
 phase('  Work  ')
-await early
+yield* early
 return yield* agent('active', { label: 'Active' })`,
           runAgent: collectingRunner(invocations),
           onEvent: recorded.onEvent,
@@ -1361,11 +1360,22 @@ return yield* agent('active', { label: 'Active' })`,
     Effect.gen(function* () {
       const cases: ReadonlyArray<readonly [string, RegExp]> = [
         [`return yield* agent('')`, /non-empty string prompt/],
-        [`return yield* all('nope')`, /array of zero-arg functions/],
+        [`return yield* all('nope')`, /all\(items\) expects an array/],
         [
           `return yield* all([agent('x'), 42])`,
-          /parallel\(\): item 1 is not a function/,
+          /all\(\) item 1 expects an operation/,
         ],
+        [`yield 42`, /yield\* expects an operation/],
+        [
+          `return yield* all([(function* () {})()])`,
+          /item 0 is a started generator; pass the generator function itself/,
+        ],
+        [
+          `return yield* agent('x', { inputFiles: [{ absolutePath: 'a.tex' }] })`,
+          /Received an object; pass output\.absolutePath/,
+        ],
+        [`return yield* all([], { concurrency: 0 })`, /"concurrency" must be/],
+        [`return yield* timeout(agent('x'), 'soon')`, /positive integer ms/],
         [`return yield* agent('x', [])`, /must be a plain object/],
         [
           `return yield* agent('x', { inputFiles: [''] })`,
@@ -1518,20 +1528,15 @@ return yield* agent('structured', {
       }),
   );
 
-  it.effect(
-    'does not leak a host Function via a callback passed to parallel()',
-    () =>
-      Effect.gen(function* () {
-        // parallel runs realm-side, so the thunk a script hands it is only ever
-        // invoked by sandbox code: its `this`/args and any
-        // .constructor it can reach are realm-local and codegen-gated. A host
-        // callback would carry the ungated host Function constructor.
-        const run = yield* runScript(`
+  it.effect('keeps a branch generator realm-local and codegen-gated', () =>
+    Effect.gen(function* () {
+      // A branch runs only inside the realm: the host steps it by id and
+      // never calls it, so any .constructor it can reach is the sandbox's
+      // gated one rather than the host Function.
+      const run = yield* runScript(`
 const results = yield* all([
-  () => {
+  function* () {
     try {
-      // If parallel() were host-side, the thunk's own constructor chain
-      // would reach the host Function; realm-side it hits the gated one.
       const F = (() => {}).constructor
       return F('return typeof process')()
     } catch (error) {
@@ -1540,9 +1545,8 @@ const results = yield* all([
   },
 ])
 return results[0]`);
-        expect(typeof run.result).toBe('string');
-        expect(run.result).toMatch(/^blocked:/);
-      }),
+      expect(run.result).toMatch(/^blocked:/);
+    }),
   );
 
   it('parses meta strings containing astral Unicode without shifting offsets', () => {
@@ -1556,31 +1560,6 @@ return results[0]`);
     expect(meta.name).toBe('emoji-flow');
     expect(meta.description).toBe('progress 😀 report 𝕏 done');
   });
-
-  it.effect(
-    'keeps resolve callbacks realm-local for a malicious thenable',
-    () =>
-      Effect.gen(function* () {
-        // parallel() awaits thunk results realm-side, so a hand-rolled thenable
-        // receives a realm-created resolve callback — its .constructor is the
-        // sandbox's codegen-gated Function, so the escape attempt throws and
-        // the thenable can only resolve with data.
-        const run = yield* runScript(`
-const results = yield* all([
-  () => ({
-    then(resolve) {
-      try {
-        resolve('leaked:' + resolve.constructor('return typeof process')())
-      } catch (error) {
-        resolve('blocked:' + (error && error.name))
-      }
-    },
-  }),
-])
-return results[0]`);
-        expect(run.result).toMatch(/^blocked:/);
-      }),
-  );
 
   it.live(
     'reports an unserializable return value as an error, not a timeout',
@@ -1597,81 +1576,26 @@ return results[0]`);
 
   it.live('carries guest stack frames on script errors', () =>
     Effect.gen(function* () {
-      // The classic un-awaited fan-out mistake: destructuring the Promise that
-      // parallel() returns. The bare QuickJS message ("value is not iterable")
-      // is useless without the frame locating it inside the script.
+      // The classic mistake: using an operation without yield*. The bare
+      // QuickJS message is useless without the frame locating it.
       yield* expectEffect(
         runScript(
           `
-const [a, b] = parallel([agent('x'), agent('y')])
-return a`,
+const summary = agent('x')
+return summary.response.length`,
           { timeoutMs: 5_000 },
         ),
-      ).rejects.toThrow(
-        /is not iterable[\s\S]*at .*test-flow\.workflow\.js:\d+/,
-      );
-    }),
-  );
-
-  it.effect('cannot forge a result by overriding Promise.prototype.then', () =>
-    Effect.gen(function* () {
-      // then/catch/finally are locked non-writable before the body runs, so a
-      // script that tries to reassign then (to invoke the kickoff's delivery
-      // callback with a forged value) gets a real result — the reassignment
-      // throws under strict mode, or is simply ignored — not a forged success.
-      const run = yield* runScript(`
-try {
-  Promise.prototype.then = function () { return this }
-} catch (error) {
-  // strict-mode assignment to a non-writable property throws; swallow it
-}
-return 'real-result'`);
-      expect(run.result).toBe('real-result');
-    }),
-  );
-
-  it.effect('does not expose the result delivery channel to scripts', () =>
-    Effect.gen(function* () {
-      // The kickoff captures and deletes __wfDeliver/__wfBody before the body
-      // runs, so a script cannot forge an early result through them.
-      const run = yield* runScript(`
-return [typeof globalThis.__wfDeliver, typeof globalThis.__wfBody]`);
-      expect(run.result).toEqual(['undefined', 'undefined']);
+      ).rejects.toThrow(/length[\s\S]*at .*test-flow\.workflow\.js:\d+/);
     }),
   );
 
   it.effect(
-    'keeps a delivered result when a later guest microtask throws',
+    'does not expose the host bridge or the step machine to scripts',
     () =>
       Effect.gen(function* () {
         const run = yield* runScript(`
-Promise.resolve().then(() => {
-  Promise.resolve().then(() => { throw new Error('late rejection') })
-})
-return 'delivered'`);
-
-        expect(run.result).toBe('delivered');
-      }),
-  );
-
-  it.live(
-    'does not time out a delivered result while preempting leftover work',
-    () =>
-      Effect.gen(function* () {
-        const result = yield* runScriptInSandbox(
-          `
-Promise.resolve().then(() => {
-  Promise.resolve().then(() => { while (true) {} })
-})
-return 'delivered'`,
-          sandboxBridge(),
-          {
-            filename: 'delivered-before-deadline.workflow.js',
-            timeoutMs: 40,
-          },
-        );
-
-        expect(result).toBe('delivered');
+return [typeof globalThis.__wfHostSync, typeof globalThis.__wfBridgeConfig, typeof step]`);
+        expect(run.result).toEqual(['undefined', 'undefined', 'undefined']);
       }),
   );
 
@@ -1695,7 +1619,7 @@ return 'delivered'`,
 phase('Settled')
 yield* agent('settles normally', { id: 'settled' })
 phase('A')
-agent('ignores cancellation', { id: 'live' })
+yield* attempt(timeout(agent('ignores cancellation', { id: 'live' }), 5))
 phase('B')
 return 'done'`,
           runAgent: (invocation) =>
@@ -1708,24 +1632,20 @@ return 'done'`,
         expect(run.result).toBe('done');
         expect(recorded.calls()).toMatchObject([
           { id: 'settled', status: 'completed' },
-          {
-            id: 'live',
-            status: 'failed',
-            error: WORKFLOW_CALL_UNFINISHED_NOTE,
-          },
+          { id: 'live', status: 'cancelled' },
           { id: 'unreached', status: 'skipped', reason: 'not-reached' },
           { id: 'bypassed', status: 'skipped', reason: 'not-reached' },
         ]);
         const closes = recorded.events.filter(
           (event) => event.type === 'phase.close',
         );
-        // Settled closed when the script left it; A, whose own call the sweep
-        // failed, reads failed; B was entered and issued nothing before the
+        // Settled closed when the script left it; A, whose own call its
+        // timeout() cancelled, reads cancelled; B was entered and issued nothing before the
         // run ended, so the run's own outcome is its outcome; C was never
         // entered and closes with the run for the not-reached card it owns.
         expect(closes).toEqual([
           { type: 'phase.close', title: 'Settled', outcome: 'completed' },
-          { type: 'phase.close', title: 'A', outcome: 'failed' },
+          { type: 'phase.close', title: 'A', outcome: 'cancelled' },
           { type: 'phase.close', title: 'B', outcome: 'completed' },
           { type: 'phase.close', title: 'C', outcome: 'completed' },
         ]);
@@ -1794,12 +1714,12 @@ return 'reassigned'`),
       }),
   );
 
-  it.effect('does not let parallel() swallow the agent-call cap', () =>
+  it.effect('does not let attempt() swallow the agent-call cap', () =>
     Effect.gen(function* () {
       yield* expectEffect(
         runScript(
           `
-return yield* all([1, 2, 3, 4, 5].map((n) => agent('call-' + n)))`,
+return yield* all([1, 2, 3, 4, 5].map((n) => attempt(agent('call-' + n))))`,
           { maxAgentCalls: 3 },
         ),
       ).rejects.toThrow(/agent-call cap/);
@@ -1807,16 +1727,25 @@ return yield* all([1, 2, 3, 4, 5].map((n) => agent('call-' + n)))`,
   );
 
   it.effect(
-    'lets parallel() surface script bugs to the editable-file retry path',
+    'fails the run on a script bug inside a branch, even under attempt()',
     () =>
       Effect.gen(function* () {
+        const runner = vi.fn(echoRunner);
         yield* expectEffect(
-          runScript(`
-return yield* all([
-  agent('ok'),
-  () => { throw new Error('script bug here') },
-])`),
-        ).rejects.toThrow('script bug here');
+          runScript(
+            `
+return yield* retry(attempt(function* () {
+  yield* agent('ok')
+  throw new RangeError('script bug here')
+}))`,
+            { runAgent: runner },
+          ),
+        ).rejects.toMatchObject({
+          name: 'RangeError',
+          message: expect.stringContaining('script bug here'),
+        });
+        // A script fault is not an operation failure: retry() re-runs nothing.
+        expect(runner).toHaveBeenCalledTimes(1);
       }),
   );
 
@@ -1902,10 +1831,10 @@ return yield* agent('one')`,
   // Live: the sandbox deadline is raw performance.now plus setTimeout, and the
   // assertion is a wall-clock delta.
   it.live.each([
-    { reachedVia: 'an agent await', body: `yield* agent('one')` },
+    { reachedVia: 'an agent() result', body: `yield* agent('one')` },
     {
-      reachedVia: 'the guest microtask queue',
-      body: `await Promise.resolve()`,
+      reachedVia: 'a branch',
+      body: `yield* all([function* () { while (true) {} }])`,
     },
   ])('preempts a CPU loop reached through $reachedVia', ({ body }) =>
     Effect.gen(function* () {
@@ -1920,52 +1849,6 @@ while (true) {}`,
       ).rejects.toThrow(/timed out/);
       expect(Date.now() - startedAt).toBeLessThan(1_000);
     }),
-  );
-
-  it.live(
-    'ignores a host promise that settles after its runtime is disposed',
-    () =>
-      Effect.gen(function* () {
-        const hostResult = yield* Deferred.make<string>();
-
-        yield* expectEffect(
-          runScriptInSandbox(
-            `yield* agent('slow'); return 'unreachable'`,
-            sandboxBridge({
-              asyncFns: { agent: () => Deferred.await(hostResult) },
-            }),
-            {
-              filename: 'late-host-promise.workflow.js',
-              timeoutMs: 30,
-            },
-          ),
-        ).rejects.toThrow(/timed out/);
-
-        yield* Deferred.succeed(hostResult, '"late"');
-        yield* sleep(0);
-
-        const nextRun = yield* runScript(`return 7`);
-        expect(nextRun.result).toBe(7);
-      }),
-  );
-
-  it.live(
-    'surfaces malformed host result JSON instead of substituting a value',
-    () =>
-      Effect.gen(function* () {
-        yield* expectEffect(
-          runScriptInSandbox(
-            `return yield* agent('malformed')`,
-            sandboxBridge({
-              asyncFns: { agent: () => Effect.succeed('{') },
-            }),
-            {
-              filename: 'malformed-host-result.workflow.js',
-              timeoutMs: 1_000,
-            },
-          ),
-        ).rejects.toThrow(/expecting property name|JSON|unexpected end/i);
-      }),
   );
 
   it.effect(
@@ -2010,15 +1893,17 @@ while (true) {}`,
   it.live('rejects malformed args JSON while installing the bridge', () =>
     Effect.gen(function* () {
       yield* expectEffect(
-        runScriptInSandbox(`return args`, sandboxBridge({ argsJson: '{' }), {
-          filename: 'malformed-args.workflow.js',
-          timeoutMs: 1_000,
-        }),
+        Effect.scoped(
+          openWorkflowRealm(`return args`, sandboxBridge({ argsJson: '{' }), {
+            filename: 'malformed-args.workflow.js',
+            shouldInterrupt: () => false,
+          }),
+        ),
       ).rejects.toThrow(/expecting property name|JSON|unexpected end/i);
     }),
   );
 
-  it.live('aborts parallel siblings when one continuation runs forever', () =>
+  it.live('aborts all() siblings when one branch runs forever', () =>
     Effect.gen(function* () {
       const runner = () => Effect.never;
 
@@ -2027,7 +1912,7 @@ while (true) {}`,
           `
 return yield* all([
   agent('waiting-sibling'),
-  function* () { await Promise.resolve(); while (true) {} },
+  function* () { while (true) {} },
 ])`,
           { runAgent: runner, timeoutMs: 40 },
         ),
@@ -2085,23 +1970,20 @@ return yield* all([1, 2, 3, 4, 5].map((n) => agent('call-' + n)))`,
     }),
   );
 
-  it.effect(
-    'blocks caller-chain escapes from sloppy-mode thunks (strict scripts)',
-    () =>
-      Effect.gen(function* () {
-        // Thunks run realm-side and sandbox bodies are forced into strict mode,
-        // so arguments.callee.caller is unavailable even without this guard —
-        // this covers non-strict callables a script might still construct.
-        const run = yield* runScript(`
-return yield* all([function () {
+  it.effect('blocks caller-chain escapes from branches (strict scripts)', () =>
+    Effect.gen(function* () {
+      // Branches run realm-side and sandbox bodies are forced into strict
+      // mode, so arguments.callee.caller is unavailable to them.
+      const run = yield* runScript(`
+return yield* all([function* () {
   try {
     return arguments.callee.caller.constructor('return typeof process')()
   } catch {
     return 'blocked'
   }
 }])`);
-        expect(run.result).toEqual(['blocked']);
-      }),
+      expect(run.result).toEqual(['blocked']);
+    }),
   );
 
   it.effect('stops the workflow when a runner surfaces the run abort', () =>
@@ -2236,7 +2118,7 @@ return yield* all([agent('running'), agent('queued')])`,
   );
 
   it.effect(
-    'skip(childRunId) skips only that call: SKIPPED result, no journal, siblings finish',
+    'skip(childRunId) skips only that call: a Skipped failure, no journal, siblings finish',
     () =>
       Effect.gen(function* () {
         const started = new Set<number>();
@@ -2260,11 +2142,13 @@ return yield* all([agent('running'), agent('queued')])`,
 
         const recorded = recordCalls();
         const runFiber = yield* runWorkflowScript({
-          script: `${META}return yield* all([
-  agent('a', { id: 'a' }),
-  agent('b', { id: 'b' }),
-  agent('c', { id: 'c' }),
-])`,
+          script: `${META}
+const results = yield* all([
+  attempt(agent('a', { id: 'a' })),
+  attempt(agent('b', { id: 'b' })),
+  attempt(agent('c', { id: 'c' })),
+])
+return results.map((r) => (r._tag === 'Success' ? r.value : r.error.name))`,
           runAgent: runner,
           concurrency: 3,
           onControl: (handle) => {
@@ -2283,7 +2167,7 @@ return yield* all([agent('running'), agent('queued')])`,
         const run = yield* Fiber.join(runFiber);
         const result = run.result as string[];
         expect(result[0]).toBe('done:0');
-        expect(result[1]).toBe(WORKFLOW_SKIPPED_RESULT);
+        expect(result[1]).toBe('Skipped');
         expect(result[2]).toBe('done:2');
         // Skipped call is NOT journaled (resume re-runs it); siblings are.
         expect(run.journal.map((entry) => entry.index).toSorted()).toEqual([
@@ -2322,14 +2206,19 @@ return yield* all([agent('running'), agent('queued')])`,
           }).pipe(Effect.andThen(Effect.never)),
         );
         const run = yield* runWorkflowScript({
-          script: `${META}return yield* agent('skip immediately')`,
+          script: `${META}
+try {
+  return yield* agent('skip immediately')
+} catch (error) {
+  return error.name
+}`,
           runAgent: runner,
           onControl: (handle) => {
             control = handle;
           },
         });
 
-        expect(run.result).toBe(WORKFLOW_SKIPPED_RESULT);
+        expect(run.result).toBe('Skipped');
         expect(run.journal).toEqual([]);
         expect(runner).toHaveBeenCalledTimes(1);
       }),
@@ -2732,5 +2621,179 @@ return yield* agent('secret full instruction', {
           runScript(`return new Intl.DateTimeFormat().format()`),
         ).rejects.toThrow();
       }),
+  );
+});
+
+describe('workflow operations', () => {
+  /** A runner that sleeps `delay-<ms>` prompts, fails `fail` prompts and
+   *  `flaky` ones on first try, and records concurrency and interruptions. */
+  function trackingRunner() {
+    const stats = {
+      peak: 0,
+      calls: [] as string[],
+      interrupted: [] as string[],
+    };
+    let inFlight = 0;
+    const runAgent = ({ prompt }: WorkflowAgentInvocation) =>
+      Effect.gen(function* () {
+        stats.calls.push(prompt);
+        inFlight += 1;
+        stats.peak = Math.max(stats.peak, inFlight);
+        const delay = /delay-(\d+)/.exec(prompt);
+        if (delay) yield* sleep(Number(delay[1]));
+        const tries = stats.calls.filter((call) => call === prompt).length;
+        if (
+          prompt.startsWith('fail') ||
+          (prompt.startsWith('flaky') && tries < 2)
+        )
+          return yield* Effect.fail(new Error(`failed: ${prompt}`));
+        return `result:${prompt}`;
+      }).pipe(
+        Effect.onInterrupt(() =>
+          Effect.sync(() => void stats.interrupted.push(prompt)),
+        ),
+        Effect.ensuring(Effect.sync(() => void (inFlight -= 1))),
+      );
+    return { stats, runAgent };
+  }
+
+  it.effect('builds operations lazily: an unyielded agent() runs nothing', () =>
+    Effect.gen(function* () {
+      const { stats, runAgent } = trackingRunner();
+      const run = yield* runScript(
+        `const ops = ['a', 'b'].map((x) => agent(x))\nreturn ops.length`,
+        { runAgent },
+      );
+      expect(run.result).toBe(2);
+      expect(stats.calls).toEqual([]);
+    }),
+  );
+
+  it.live(
+    'all() fails fast: the first failure interrupts and cancels running siblings',
+    () =>
+      Effect.gen(function* () {
+        const { stats, runAgent } = trackingRunner();
+        const recorded = recordCalls();
+        const run = yield* runScript(
+          `
+try {
+  yield* all([agent('slow delay-2000'), agent('fail delay-10')])
+} catch (error) {
+  return error.name
+}`,
+          { runAgent, onEvent: recorded.onEvent },
+        );
+        expect(run.result).toBe('AgentFailed');
+        expect(stats.interrupted).toEqual(['slow delay-2000']);
+        expect(recorded.calls()).toMatchObject([
+          { label: 'slow delay-2000', status: 'cancelled' },
+          { label: 'fail delay-10', status: 'failed' },
+        ]);
+      }),
+  );
+
+  it.live(
+    'keeps nested fan-out under the session budget, and a budget of 1 completes',
+    () =>
+      Effect.gen(function* () {
+        const body = `
+return yield* forEach(['a', 'b'], (group) => function* () {
+  return yield* all([1, 2, 3, 4].map((n) => agent(group + n + ' delay-10')))
+})`;
+        const wide = trackingRunner();
+        const run = yield* runScript(body, {
+          runAgent: wide.runAgent,
+          concurrency: 3,
+        });
+        expect(run.result).toHaveLength(2);
+        expect(wide.stats.peak).toBe(3);
+        const tight = trackingRunner();
+        yield* runScript(body, { runAgent: tight.runAgent, concurrency: 1 });
+        expect(tight.stats.peak).toBe(1);
+        // all()'s own cap bounds its items below the session budget.
+        const capped = trackingRunner();
+        yield* runScript(
+          `return yield* all([1, 2, 3, 4].map((n) => agent('c' + n + ' delay-10')), { concurrency: 2 })`,
+          { runAgent: capped.runAgent, concurrency: 4 },
+        );
+        expect(capped.stats.peak).toBe(2);
+      }),
+  );
+
+  it.live('timeout() interrupts the call and throws TimedOut', () =>
+    Effect.gen(function* () {
+      const { stats, runAgent } = trackingRunner();
+      const run = yield* runScript(
+        `return (yield* attempt(timeout(agent('stuck delay-5000'), 30))).error.name`,
+        { runAgent },
+      );
+      expect(run.result).toBe('TimedOut');
+      expect(stats.interrupted).toEqual(['stuck delay-5000']);
+    }),
+  );
+
+  it.effect('retry() re-runs a failed call up to its limit', () =>
+    Effect.gen(function* () {
+      const { stats, runAgent } = trackingRunner();
+      const run = yield* runScript(
+        `return yield* retry(agent('flaky'), { times: 2 })`,
+        { runAgent },
+      );
+      expect(run.result).toBe('result:flaky');
+      expect(stats.calls).toEqual(['flaky', 'flaky']);
+    }),
+  );
+
+  it.effect(
+    'retry() of a branch restarts it, replaying calls it already completed',
+    () =>
+      Effect.gen(function* () {
+        const { stats, runAgent } = trackingRunner();
+        const recorded = recordCalls();
+        const run = yield* runScript(
+          `
+return yield* retry(function* () {
+  const draft = yield* agent('draft')
+  const check = yield* agent('flaky check')
+  return draft + ' / ' + check
+})`,
+          { runAgent, onEvent: recorded.onEvent },
+        );
+        expect(run.result).toBe('result:draft / result:flaky check');
+        // The completed draft replays from this run's journal: not re-billed.
+        expect(stats.calls).toEqual(['draft', 'flaky check', 'flaky check']);
+        expect(run.journal).toHaveLength(2);
+        expect(recorded.calls()).toMatchObject([
+          { id: 'call-0', status: 'completed' },
+          { id: 'call-1', status: 'completed', attemptNumber: 2 },
+        ]);
+        // Outside one retry(), the same call twice is still a duplicate.
+        yield* expectEffect(
+          runScript(
+            `return yield* retry(function* () { yield* agent('same'); yield* agent('same') })`,
+            { runAgent },
+          ),
+        ).rejects.toThrow(/require distinct non-empty "id" options/);
+      }),
+  );
+
+  it.live('runs multi-step branches concurrently, one fiber each', () =>
+    Effect.gen(function* () {
+      const { stats, runAgent } = trackingRunner();
+      const run = yield* runScript(
+        `
+return yield* forEach(['intro', 'results'], (section) => function* () {
+  const draft = yield* agent('draft ' + section + ' delay-20')
+  return yield* agent('polish ' + draft + ' delay-20')
+})`,
+        { runAgent, concurrency: 4 },
+      );
+      expect(run.result).toEqual([
+        'result:polish result:draft intro delay-20 delay-20',
+        'result:polish result:draft results delay-20 delay-20',
+      ]);
+      expect(stats.peak).toBe(2);
+    }),
   );
 });

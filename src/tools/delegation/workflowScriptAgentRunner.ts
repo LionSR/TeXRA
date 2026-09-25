@@ -67,7 +67,7 @@ function workflowScriptModelSelection(
   }).pipe(
     Effect.mapError((error) => {
       // A declared model is workflow configuration, so its rejection must not
-      // disappear as a nullable call inside parallel(). When the
+      // become a call failure a script's attempt() absorbs. When the
       // script omits the field, preserve the established delegation failure
       // semantics; per-call model routing must not broaden that behavior.
       if (requestedModel === undefined) return ensureError(error);
@@ -260,7 +260,7 @@ function livenessClause(liveness: RunLiveness): string {
 
 /**
  * A storage fault while inspecting a child is not this call's own failure: the
- * engine turns a failed call into a `null` the script can swallow, so an
+ * engine turns a failed call into a failure the script can catch, so an
  * unreadable child aggregate has to abort the run rather than read as a child
  * that answered nothing.
  */
@@ -627,7 +627,7 @@ const recoverOrLaunchWorkflowChild = Effect.fn('recoverOrLaunchWorkflowChild')(
         // it — a stop that reached the run reports CANCELLED over the same
         // lost drain — which is the verdict the in-band caller reaches on the
         // same marker, and the outer boundary turns it into the abort that
-        // keeps it out of the engine's nullable call result.
+        // keeps it out of the call failures a script can catch.
         return yield* Effect.fail(
           new SubagentDurabilityError(
             `Workflow child ${runId} failed to commit its final artifacts.`,
