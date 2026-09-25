@@ -19,6 +19,9 @@ recommended groups at the bottom are a good starting point.
   paths sorted by modification time.
 - `grep` — search file contents with regex. Supports content,
   files-with-matches, and count output modes.
+- `open_pdf` — open a PDF file in the host PDF viewer. Accepts
+  workspace-relative paths, working-directory-relative paths, and absolute
+  run-storage paths.
 
 ## Web & search
 
@@ -91,10 +94,40 @@ recommended groups at the bottom are a good starting point.
 - `executions` — view execution history and manage running executions.
 - `accept_run_files` — accept output files from a completed execution.
 
+## Sandboxed coding agents
+
+- `codex` — spin off a sandboxed OpenAI Codex coding agent in its own sandbox
+  (separate CLI process). Async and multi-turn like `delegate_agent`;
+  requires the Codex CLI and `codex login` (or `OPENAI_API_KEY`).
+- `claude_code` — spin off a sandboxed Claude Code agent via the Claude Agent
+  SDK, with independent file editing, search, and shell access. Async and
+  multi-turn like `delegate_agent`; requires the Claude Code CLI and an
+  Anthropic API key or OAuth session. `codex` and `claude_code` are both
+  independent sandboxed coders distinct from the in-process `delegate_agent`
+  specialists — for parallel or isolated edits, run them against a git
+  worktree.
+
 ## Lean 4
 
 - `lean_diagnostics`, `lean_file`, `lean_project`, `lean_inspect`,
   `lean_loogle` — Lean 4 proof assistant integration.
+
+## GitHub
+
+- `github_subscription` — subscribe to GitHub activity (PR/issue comments,
+  reviews, inline review comments, failed CI checks, check annotations,
+  merge-conflict transitions) for the current run; follow-ups arrive as
+  `<github-webhook-activity>` messages.
+
+## Code review (VS Code only)
+
+- `inline_comment` — leave resolvable inline comment threads in the editor
+  via VS Code's native Comments UI (gutter bubbles + Comments panel). Not
+  available on the CLI or desktop hosts.
+- `report_review_issue` — report one finding from an agent review of the
+  current change set; appears in the Agent Review panel and as an editor
+  diagnostic. Only accepted while an agent review session is collecting
+  issues.
 
 ## Utility
 
@@ -102,6 +135,12 @@ recommended groups at the bottom are a good starting point.
 - `todo_write` — track progress on complex tasks with structured checklists.
 - `plan` — record structured plans.
 - `diagnostics` — retrieve linter diagnostics for source files.
+- `ask_user_question` — ask the user one to three short clarification
+  questions and wait for their answers, when continuing without their
+  preference would be guesswork.
+- `inquiry` — dispatch a question to an external AI model via the user as a
+  human-in-the-loop bridge; the run continues (even after a restart, even
+  hours later) once the user pastes the answer back.
 
 ## Recommended tool groups by use case
 
