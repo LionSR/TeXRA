@@ -76,6 +76,7 @@ import { GlobalStateKey } from '@shared/state/stateKeys';
 import type {
   DerivedSettingsSnapshot,
   SettingsMessageFor,
+  SettingsViewOutboundMessage,
 } from '@shared/settingsView/settingsViewMessages';
 import { SettingsViewInboundMessageSchema } from '@shared/settingsView/settingsViewMessages';
 
@@ -442,7 +443,7 @@ export class SettingsViewMessageHandler {
    * payload without a guard of their own.
    */
   private postMessageToActiveWebview(
-    message: unknown,
+    message: SettingsViewOutboundMessage | null | undefined,
   ): Effect.Effect<void, Error> {
     return message == null
       ? Effect.void
@@ -586,10 +587,11 @@ export class SettingsViewMessageHandler {
     webview: vscode.Webview,
     snapshot: DerivedSettingsSnapshot,
   ) {
-    return postToWebview(
-      webview,
-      buildSettingsSnapshotMessage(snapshot, this.session.roots, 'vscode'),
-    );
+    return buildSettingsSnapshotMessage(
+      snapshot,
+      this.session.roots,
+      'vscode',
+    ).pipe(Effect.flatMap((message) => postToWebview(webview, message)));
   }
 
   private rebroadcastSnapshot(snapshot: DerivedSettingsSnapshot) {

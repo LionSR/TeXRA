@@ -157,7 +157,7 @@ export class AgentHandlers {
       yield* loadAgents();
       yield* postToWebview(
         webview,
-        buildAgentSelectionMessage({
+        yield* buildAgentSelectionMessage({
           buildSelectionItems: () =>
             this.catalogController.buildSelectionItems(),
           getCustomAgentScanIssues,
@@ -329,15 +329,12 @@ export class AgentHandlers {
   // ── Agent team handlers ──
 
   sendAgentModePresets(webview: vscode.Webview) {
-    return postToWebview(
-      webview,
-      buildAgentModePresetsMessage({
-        getCustomPresets: () => this.catalogController.getCustomPresets(),
-        getOrchestratorAgentNames: () =>
-          this.catalogController.getOrchestratorAgentNames(),
-        getActiveTeamId: () => this.roster.getActiveTeamId(),
-      }),
-    );
+    return buildAgentModePresetsMessage({
+      getCustomPresets: () => this.catalogController.getCustomPresets(),
+      getOrchestratorAgentNames: () =>
+        this.catalogController.getOrchestratorAgentNames(),
+      getActiveTeamId: () => this.roster.getActiveTeamId(),
+    }).pipe(Effect.flatMap((message) => postToWebview(webview, message)));
   }
 
   handleApplyAgentModePreset(
