@@ -381,7 +381,7 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
 - **Settings has a gear in the TeXRA panel header**, next to New task, in
   every state and in the editor tab; the hover-only gear in the view's title
   bar is gone. Editor tabs read "TeXRA Sessions" and "TeXRA Settings", a
-  session row says "2 tasks · 1 running" and "Needs approval" instead of
+  session row says "2 background tasks · 1 running" and "Needs approval" instead of
   bare number badges, and the run header's chip reads "3 tool calls"
   rather than "t1, 3 tool calls".
 - **The TeXRA panel is calmer.** A run shows one header row with one Stop

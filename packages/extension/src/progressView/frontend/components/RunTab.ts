@@ -73,9 +73,9 @@ function buildTooltip(run: RunView): string {
     .join('\n');
 }
 
-/** A collapsed parent's descendants in words: "2 tasks · 1 running". */
+/** A collapsed parent's descendants in words: "2 background tasks · 1 running". */
 function rollupLabel(run: RunView): string {
-  const total = formatResultCount(run.rollup.total, 'task');
+  const total = formatResultCount(run.rollup.total, BACKGROUND_TASK.countNoun);
   return run.rollup.running > 0
     ? `${total} · ${run.rollup.running} running`
     : total;
