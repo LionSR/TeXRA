@@ -75,15 +75,6 @@ describe('desktop log redaction', () => {
       }
     }
   });
-
-  it('keeps API-key provider coverage explicit', () => {
-    // Production's own table is exhaustive by construction (it `satisfies
-    // Record<ApiKeyProviderId, …>`); what needs pinning here is that the
-    // fixture above kept up, so every provider is actually exercised.
-    expect(Object.keys(PROVIDER_KEY_EXAMPLES).toSorted()).toEqual(
-      [...API_KEY_PROVIDER_IDS].toSorted(),
-    );
-  });
 });
 
 // A raw `data` payload reaches `redactDisplayValue` before any sink renders

@@ -5,6 +5,7 @@ import '@fontsource-variable/geist';
 import '@fontsource-variable/jetbrains-mono';
 import '../src/renderer/styles.css';
 import '../src/renderer/themeTokens.css';
+import '../src/renderer/designTokens';
 import '../src/renderer/desktopShell.css';
 import '@ui/wa';
 import '@awesome.me/webawesome/dist/components/button/button.js';

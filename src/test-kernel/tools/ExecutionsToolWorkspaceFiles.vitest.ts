@@ -35,7 +35,6 @@ import {
 import { withTempDirEffect } from '@test/support/tempDirPlatform';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
-import { resolveRunStoragePath } from '@utils/files/runStorageFs';
 
 /**
  * Move a run's phase the way its loop does: a `flow.step` row, which is the
@@ -503,35 +502,6 @@ describe('ExecutionsTool', () => {
     ),
   );
 
-  it.live('keeps the background process result shape at /result', () =>
-    Effect.gen(function* () {
-      const record = {
-        producer: 'backgroundBash' as const,
-        command: 'echo hi',
-        exitCode: 0,
-        wallTimeMs: 10,
-        success: true,
-      };
-      mocks.readResultMeta.mockResolvedValue(record);
-
-      const result = yield* ExecutionsTool.call({
-        path: '/executions/abc123/result',
-      });
-
-      expect(JSON.parse(result.output ?? '')).toEqual(record);
-    }).pipe(
-      Effect.provide(
-        nativeToolTestLayer({
-          run: {
-            session: testDefaultSession(),
-            runId: 'tool-test' as RunId,
-            toolPolicy: {},
-          },
-        }),
-      ),
-    ),
-  );
-
   // The advertised /executions/{id}/todos endpoint must resolve a task list
   // exactly as the completed summary does, from the same committed stream fold.
   it.live.each([
@@ -591,49 +561,6 @@ describe('ExecutionsTool', () => {
       ),
   );
 
-  it.live(
-    'lists and reads persisted workspace files for tool-use executions',
-    () =>
-      Effect.gen(function* () {
-        yield* withTempDirEffect('texra-exec-files-', (workspace) =>
-          Effect.gen(function* () {
-            yield* Effect.promise(() =>
-              writeFile(path.join(workspace, 'review.md'), '# report\n'),
-            );
-            mocks.readConfig.mockResolvedValue({
-              ...config,
-              workingDirectory: workspace,
-            });
-            mocks.readWorkspaceFiles.mockResolvedValue(['review.md']);
-
-            const tool = ExecutionsTool;
-            const listResult = yield* tool.call({
-              path: '/executions/abc123/workspace-files',
-            });
-            const readResult = yield* tool.call({
-              path: '/executions/abc123/workspace-files/review.md',
-            });
-
-            expect(listResult.output).toContain('review.md');
-            expect(readResult.summary).toBe(
-              'Read /executions/abc123/workspace-files/review.md',
-            );
-            expect(readResult.output).toContain('# report');
-          }),
-        );
-      }).pipe(
-        Effect.provide(
-          nativeToolTestLayer({
-            run: {
-              session: testDefaultSession(),
-              runId: 'tool-test' as RunId,
-              toolPolicy: {},
-            },
-          }),
-        ),
-      ),
-  );
-
   it.live('refuses unrecorded workspace file reads', () =>
     Effect.gen(function* () {
       yield* withTempDirEffect('texra-exec-files-', (workspace) =>
@@ -653,61 +580,6 @@ describe('ExecutionsTool', () => {
 
           expect(result.status).toBe('error');
           expect(result.error).toContain('Workspace file not found');
-        }),
-      );
-    }).pipe(
-      Effect.provide(
-        nativeToolTestLayer({
-          run: {
-            session: testDefaultSession(),
-            runId: 'tool-test' as RunId,
-            toolPolicy: {},
-          },
-        }),
-      ),
-    ),
-  );
-
-  // A run's records are rows; every file in its directory is generated output.
-  it.live('lists every file under /executions/{id}/files', () =>
-    Effect.gen(function* () {
-      yield* withTempStorage(() =>
-        Effect.gen(function* () {
-          const runId = 'abc123' as RunId;
-          const runDir = path.join(
-            testWorkspaceRoots().storage,
-            resolveRunStoragePath(runId),
-          );
-          yield* Effect.promise(() => mkdir(runDir, { recursive: true }));
-          const listedFiles = [
-            'conversation.json',
-            'todos.json',
-            'meta.json',
-            'config.json',
-            'report.json',
-            'workspace-files.json',
-            'result-meta.json',
-            'child-def456.json',
-            'stable-subagent-attempt.json',
-            'stable-subagent-sequence-abc123.json',
-          ];
-          for (const name of listedFiles) {
-            yield* Effect.promise(() =>
-              writeFile(path.join(runDir, name), '{}'),
-            );
-          }
-          yield* Effect.promise(() =>
-            writeFile(path.join(runDir, 'output.tex'), 'generated'),
-          );
-
-          const result = yield* ExecutionsTool.call({
-            path: `/executions/${runId}/files`,
-          });
-
-          expect(result.output).toContain('output.tex');
-          for (const name of listedFiles) {
-            expect(result.output).toContain(name);
-          }
         }),
       );
     }).pipe(

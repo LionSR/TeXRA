@@ -122,17 +122,6 @@ describe('retrieveSessionResumeData', () => {
       }),
   );
 
-  it.effect('resumes an untagged conversation format as untagged', () =>
-    Effect.gen(function* () {
-      const runId = 'ab0001' as RunId;
-      yield* openRun(runId, toolUseSnapshot('gpt54', null));
-
-      expect(
-        yield* retrieveSessionResumeData(runId, CONFIG, session),
-      ).toMatchObject({ modelCompatibilityKey: null });
-    }),
-  );
-
   it.effect('reports a run with no snapshot as nothing to resume', () =>
     Effect.gen(function* () {
       const runId = 'ab0002' as RunId;

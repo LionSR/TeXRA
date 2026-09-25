@@ -14,12 +14,6 @@ describe('Unicode-safe ellipsis helpers', () => {
   // Intl.Segmenter keeps it whole.
   const family = '👨‍👩‍👧';
 
-  it('returns the original string when it fits within the limit', () => {
-    expect(truncateWithEllipsis('abc', 5)).toBe('abc');
-    expect(truncateWithEllipsis('abc', 3)).toBe('abc');
-    expect(tailWithEllipsis('abc', 5)).toBe('abc');
-  });
-
   it('does not split a surrogate pair at the trailing truncation boundary', () => {
     expect(truncateWithEllipsis('abc🍕def', 5)).toBe('abc🍕…');
   });

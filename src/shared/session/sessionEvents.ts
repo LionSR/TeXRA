@@ -25,6 +25,7 @@ import type {
   DatabaseReadFailed,
   DatabaseWriteFailed,
 } from './database';
+import type { QueuedFollowUp } from './runRows';
 
 /** One piece of work a run's rows left open (`SessionEvents.openWork`). */
 export type OpenWork =
@@ -118,6 +119,24 @@ export class SessionEvents extends Context.Service<
      *  closes. Read on the publisher fiber (inside a job) or after a
      *  settle, it counts every commit before. */
     readonly openWork: (aggregateId: AggregateId) => readonly OpenWork[];
+    /** The follow-ups queued on one aggregate that no `followup.consumed`
+     *  has taken, in commit order: what a run's consumer delivers. Kept as
+     *  this publisher commits, and seeded from the rows by
+     *  {@link hydrateFollowUps} where a claim moves here, so rows an earlier
+     *  owner committed are in it once this process holds the run. */
+    readonly pendingFollowUps: (
+      aggregateId: AggregateId,
+    ) => readonly QueuedFollowUp[];
+    /** Seed a run's `pendingFollowUps` from its committed rows, when the
+     *  claim just moved here (`claimMoved`) or this publisher has not seeded
+     *  it yet: `rows` when the caller just read them, else a read of its
+     *  own. Commits tracked while the read ran merge with it: a row the read
+     *  holds keeps its place, and a later one follows it. */
+    readonly hydrateFollowUps: (
+      aggregateId: AggregateId,
+      claimMoved: boolean,
+      rows?: readonly SessionEvent[],
+    ) => Effect.Effect<void, DatabaseReadFailed>;
     /** The cold listing hydrate (C8): the latest row per aggregate and type
      *  for the listing fact types plus the outstanding approvals, in commit
      *  order; never a transcript row; completes. */
@@ -152,5 +171,10 @@ export type SessionEventsShape = Context.Service.Shape<typeof SessionEvents>;
  *  past its bookkeeping). */
 export type SessionEventReads = Pick<
   SessionEventsShape,
-  'listing' | 'all' | 'aggregate'
+  | 'listing'
+  | 'all'
+  | 'aggregate'
+  | 'openWork'
+  | 'pendingFollowUps'
+  | 'hydrateFollowUps'
 >;

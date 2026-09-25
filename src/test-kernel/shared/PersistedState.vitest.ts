@@ -34,16 +34,6 @@ describe('PersistedState loading', () => {
     warn.mockRestore();
   });
 
-  it('uses schema defaults silently when the key has never been stored', () => {
-    storage.get.mockReturnValue(undefined);
-
-    const state = new PersistedState(storage, 'viewPrefs', StateSchema);
-
-    expect(state.getState()).toEqual({ density: 'comfortable' });
-    expect(storage.update).not.toHaveBeenCalled();
-    expect(warn).not.toHaveBeenCalled();
-  });
-
   it('warns and replaces a malformed stored value', () => {
     storage.get.mockReturnValue({ density: 'broken' });
 

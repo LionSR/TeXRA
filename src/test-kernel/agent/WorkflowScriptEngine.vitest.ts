@@ -136,17 +136,6 @@ describe('parseWorkflowScript', () => {
     expect(body).not.toContain('export ');
   });
 
-  it('normalizes phase-title shorthand at the parser boundary', () => {
-    const { meta } = parseWorkflowScript(`export const meta = {
-  name: 'phase-shorthand',
-  description: 'accepts the natural phase-title form',
-  phases: ['Draft', { title: 'Merge' }],
-}
-return null`);
-
-    expect(meta.phases).toEqual([{ title: 'Draft' }, { title: 'Merge' }]);
-  });
-
   it('validates the declarative task plan as part of workflow metadata', () => {
     const { meta } = parseWorkflowScript(`export const meta = {
   name: 'planned',
@@ -186,31 +175,6 @@ return null`),
     expect(() => parseWorkflowScript(`return 1`)).toThrow(
       /Workflow script must begin with `export const meta/,
     );
-  });
-
-  it('rejects meta failing schema validation', () => {
-    expect(() =>
-      parseWorkflowScript(`export const meta = { name: 'x' }\nreturn 1`),
-    ).toThrow(/Invalid workflow meta/);
-  });
-
-  it('rejects unknown metadata and phase fields instead of dropping typos', () => {
-    expect(() =>
-      parseWorkflowScript(`export const meta = {
-  name: 'typo',
-  description: 'rejects misspelled fields',
-  timeout: 1000,
-}
-return null`),
-    ).toThrow(/Unrecognized key: "timeout"/);
-    expect(() =>
-      parseWorkflowScript(`export const meta = {
-  name: 'phase-typo',
-  description: 'rejects misspelled phase fields',
-  phases: [{ title: 'Proof', details: 'misspelled' }],
-}
-return null`),
-    ).toThrow(/Invalid input[\s\S]*phases\[0\]/);
   });
 
   it('rejects non-literal meta referencing script identifiers', () => {

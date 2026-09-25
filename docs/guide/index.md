@@ -13,7 +13,7 @@ serve as supporting capabilities within your research project.
 
 <GuideIntroHero />
 
-<p class="hero-caption">A single task, split across three specialists in the Progress view. Select a delegation to see what it produced.</p>
+<p class="hero-caption">A single task, split across three specialists in the Sessions view. Select a delegation to see what it produced.</p>
 
 ## Get started
 
@@ -66,11 +66,11 @@ in real tools, each producing verifiable output.
 
 The VS Code extension and the `texra` CLI share the same underlying
 agents, credentials, and execution history. A run launched in the CLI
-surfaces live in the extension's Progress view, and vice versa.
+surfaces live in the extension's Sessions view, and vice versa.
 
 <RunParityHero />
 
-<p class="hero-caption">One run, two surfaces: the same execution id lands in the terminal's output and the extension's Progress view.</p>
+<p class="hero-caption">One run, two surfaces: the same execution id lands in the terminal's output and the extension's Sessions view.</p>
 
 ```mermaid
 graph TB
@@ -146,7 +146,7 @@ never leave your machine except to the provider endpoint.
 and GitHub Copilot in VS Code). Requests still go straight from your
 machine to that provider: ChatGPT and Grok via OAuth sign-in, Kimi Code
 and the GLM Coding Plan via a plan-specific key. In the VS Code extension
-the **Dashboard → Models → Subscriptions** tab can also route models through a
+the **Settings → Models → Subscriptions** tab can also route models through a
 GitHub Copilot subscription, with no provider API key needed. Connect one
 from that tab, or with `texra auth chatgpt login` / `/login` in the CLI.
 

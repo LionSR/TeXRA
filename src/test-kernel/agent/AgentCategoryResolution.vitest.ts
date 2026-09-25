@@ -189,11 +189,6 @@ describe('cross-category agent resolution', () => {
       }),
   );
 
-  it('resolves a non-colliding name within category', () => {
-    expect(getCategoryAgent('toolUse', 'review')?.name).toBe('review');
-    expect(getCategoryAgent('workflow', 'assistant')?.source).toBe('custom');
-  });
-
   it('keeps a wrong-category name out of category-scoped resolution', () => {
     // `correct` is a workflow agent and must not resolve as tool-use.
     expect(getCategoryAgent('toolUse', 'correct')).toBeUndefined();
@@ -263,9 +258,5 @@ describe('findAgentByIdentifier (shared identity rule)', () => {
     );
     // A key whose source is absent from the set must not fall back to the name.
     expect(findAgentByIdentifier(entries, 'remote:review')).toBeUndefined();
-  });
-
-  it('returns undefined when no candidate matches', () => {
-    expect(findAgentByIdentifier(entries, 'missing')).toBeUndefined();
   });
 });

@@ -24,7 +24,6 @@ import {
   roundOutputsToOutputSummaries,
 } from '@shared/schemas';
 import { RunLedger } from '@shared/session/runLedger';
-import type { RunState } from '@shared/session/runStateFold';
 import type { CompositionKey } from '@tools/compositions';
 import { ensureError } from '@utils/errors/errorMessage';
 import { ensureRunDirUnder } from '@utils/files/runStorageFs';
@@ -76,12 +75,12 @@ export class ResumeSessionUnavailableError extends Error {
 type ToolUseLaunchVariant =
   | {
       readonly kind: 'fresh';
-      readonly onIdle?: (state: RunState) => void;
+      readonly onIdle?: () => void;
     }
   | {
       readonly kind: 'resume';
       readonly resume: ToolUseResumeData;
-      readonly onIdle?: (state: RunState) => void;
+      readonly onIdle?: () => void;
       /** Queried once the resumed flow is attached and interruptible. */
       readonly isCancellationRequested?: () => boolean;
       readonly onCancellationAtFlowAttachment?: () => void;
@@ -101,7 +100,7 @@ type ToolUseLaunchVariant =
 function runLayerFor(
   ctx: AgentLaunchContext,
   shared: SubagentRunOptions,
-  onIdle: ((state: RunState) => void) | undefined,
+  onIdle: (() => void) | undefined,
 ) {
   const runSession = ctx.session;
   return modelInvokerLayer().pipe(
@@ -364,7 +363,7 @@ export interface ExecuteAgentOptions extends SubagentRunOptions {
    */
   onRunResolved?: (runId: RunId, trace: AgentTrace) => void;
   /** Fires at every cycle boundary — see `AgentRun.callbacks.onIdle`. */
-  onIdle?: (state: RunState) => void;
+  onIdle?: () => void;
   /** Stop a tool-use run after one model/tool cycle instead of waiting for follow-up input. */
   stopAfterCycle?: boolean;
   /** Resume using this persisted provider-message format instead of today's default route. */
@@ -521,7 +520,7 @@ export type ResumeTurnIdentity = Pick<
 
 export interface ResumeToolUseFromResumeDataOptions extends SubagentRunOptions {
   /** A resumed cycle is idle after its child delivery, while its run stays live. */
-  readonly onIdle?: (state: RunState) => void;
+  readonly onIdle?: () => void;
   /** Query caller-owned cancellation once the resumed flow is interruptible. */
   readonly isCancellationRequested?: () => boolean;
   /** Observe cancellation accepted at the live-flow attachment boundary. */

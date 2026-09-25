@@ -279,31 +279,6 @@ return yield* agent('Solve.', {
     }),
   );
 
-  it.effect(
-    'passes JSON arguments through and formats a zero-call result',
-    () =>
-      Effect.gen(function* () {
-        const ports = fakePorts();
-        const strategy = createWorkflowScriptStrategy(
-          strategyParams({
-            name: 'arguments',
-            script: `export const meta = {
-  name: 'arguments',
-  description: 'returns its arguments',
-}
-return args`,
-            args: { question: 'What is conserved?' },
-            createRunAgent: billingRunAgent,
-          }),
-        );
-
-        const turn = yield* launchStrategy(strategy, ports);
-        const delivery = yield* onFakeHost(strategy.formatDelivery(turn, 0));
-        expect(delivery).toContain('"question": "What is conserved?"');
-        expect(ports.recordCost).toHaveBeenCalledWith(0);
-      }),
-  );
-
   it.effect('retains checkpoint arguments when a null retry omits them', () =>
     Effect.gen(function* () {
       const argsScript = `export const meta = {

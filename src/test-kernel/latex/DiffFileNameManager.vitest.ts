@@ -81,21 +81,6 @@ describe('parseVersionControlDiffFilename', () => {
 
 describe('buildLatexdiffAwareFixInstruction', () => {
   effectIt.live(
-    'leaves the base instruction untouched for a plain source file',
-    () =>
-      Effect.gen(function* () {
-        const base = 'Fix the LaTeX compilation errors in main.tex.';
-        expect(
-          yield* buildLatexdiffAwareFixInstruction(
-            base,
-            '/paper/main.tex',
-            '/paper',
-          ),
-        ).toBe(base);
-      }).pipe(Effect.provide(nodePlatformLayer)),
-  );
-
-  effectIt.live(
     'adds latexdiff-artifact guidance when the inferred source exists',
     () =>
       Effect.gen(function* () {

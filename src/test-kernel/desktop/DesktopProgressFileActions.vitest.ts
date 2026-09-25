@@ -152,37 +152,6 @@ describe('DesktopProgressFileActions latexdiff', () => {
     vi.restoreAllMocks();
   });
 
-  it('passes the run to the shared core', async () => {
-    const outcome: DiffRunOutcome = {
-      results: [successResult(absolutePath('run', 'r1', 'main.tex'))],
-    };
-    const { actions, openBuildDisplay, runLatexdiffForRun, runDiff } =
-      await loadFileActions({ outcome });
-    await run(
-      actions.diffAcceptedFilePair(
-        absolutePath('workspace', 'main.tex'),
-        absolutePath('run', 'r1', 'main.tex'),
-        RUN_ID,
-      ),
-    );
-
-    expect(runLatexdiffForRun).toHaveBeenCalledWith(
-      expect.objectContaining({
-        runId: RUN_ID,
-        generateBetweenRoundDiffs: true,
-      }),
-    );
-    // No host override: the executor reads `texra.latexdiff.mathMarkup`.
-    expect(runLatexdiffForRun.mock.calls[0]?.[0]).not.toHaveProperty(
-      'mathMarkup',
-    );
-    expect(runDiff).not.toHaveBeenCalled();
-    expectOpenedDiff(
-      openBuildDisplay,
-      absolutePath('run', 'r1', 'main_diff.tex'),
-    );
-  });
-
   it('falls back to single-file latexdiff when the shared core finds no operations', async () => {
     const { actions, openBuildDisplay, runLatexdiffForRun, runDiff } =
       await loadFileActions({

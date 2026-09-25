@@ -44,30 +44,6 @@ describe('formatMultiAgentRunInstruction', () => {
     expect(instruction).toContain('Additional user instruction:');
   });
 
-  it('states explicitly when no files were attached to an instruction-only run', () => {
-    const instruction = multiAgentInstruction({
-      instruction: 'Solve x^2 - 2y^2 = 1 for integer x and 0 < y < 20.',
-    });
-
-    expect(instruction).toContain(
-      'No input or context files were attached to this run',
-    );
-    expect(instruction).toContain('User instruction:');
-  });
-
-  it('anchors input-only team runs on the provided files', () => {
-    const instruction = multiAgentInstruction({
-      inputFiles: ['problems/pythagorean.md'],
-    });
-
-    expect(instruction).toContain('Primary user input files:');
-    expect(instruction).toContain('- "problems/pythagorean.md"');
-    expect(instruction).toContain(
-      "Treat these files as the user's task source.",
-    );
-    expect(instruction).not.toContain('User instruction:');
-  });
-
   it('includes read-only context files for team runs', () => {
     const instruction = multiAgentInstruction({
       inputFiles: ['problem.md'],

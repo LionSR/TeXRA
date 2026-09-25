@@ -106,7 +106,8 @@ export const runTabStyles = css`
     font-weight: var(--font-weight-semibold);
   }
 
-  /* Canonical states use only the glyph; defensive unknown states retain text.
+  /* Canonical states use only the glyph, except a pending approval, which
+     also says "Needs approval".
      Selection overrides both below so row hierarchy remains stronger than
      lifecycle. */
   .tab-status {
@@ -204,19 +205,14 @@ export const runTabStyles = css`
     --run-status-rail-color: currentColor;
   }
 
-  /* Rollup pill on a collapsed parent: how many descendants it hides, and
-     how many of them are running. */
+  /* A collapsed parent's descendants, in words: how many it hides and how
+     many of them are running. */
   .tab-rollup {
-    display: inline-flex;
-    align-items: center;
-    gap: 2px;
     flex-shrink: 0;
-  }
-
-  .tab-rollup wa-badge::part(base) {
-    font-size: 10px;
-    line-height: 1;
-    padding: 1px 5px;
+    margin-inline-end: var(--wa-space-2xs);
+    color: var(--color-text-muted);
+    font-size: var(--font-size-xs);
+    white-space: nowrap;
   }
 
   /* The fold's banner copy: the unreadable detail or the interrupted notice. */

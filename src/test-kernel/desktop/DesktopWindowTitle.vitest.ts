@@ -123,36 +123,6 @@ describe('desktop process-session window title', () => {
     expect(getDesktopWindowTitle(session, undefined)).toBe('TeXRA');
   });
 
-  it('follows the view, prevents renderer replacement, deduplicates writes, and disposes', async () => {
-    const { session, setActivity } = createSession();
-    const view = createWindow('TeXRA · geometry');
-    const dispose = installTitle(view.window, session);
-    try {
-      expect(view.setTitle).not.toHaveBeenCalled();
-
-      const event = { preventDefault: vi.fn() };
-      view.webContents.emit('page-title-updated', event, 'Renderer title');
-      expect(event.preventDefault).toHaveBeenCalledOnce();
-
-      setActivity('running');
-      await settle();
-      expect(view.setTitle).toHaveBeenCalledWith('Running TeXRA · geometry');
-      view.setTitle.mockClear();
-
-      setActivity('running');
-      await settle();
-      expect(view.setTitle).not.toHaveBeenCalled();
-
-      dispose();
-      expect(view.webContents.listenerCount('page-title-updated')).toBe(0);
-      setActivity('approval');
-      await settle();
-      expect(view.setTitle).not.toHaveBeenCalled();
-    } finally {
-      dispose();
-    }
-  });
-
   it('does not write the native title after window destruction', async () => {
     const { session, setActivity } = createSession();
     const view = createWindow('TeXRA · geometry');

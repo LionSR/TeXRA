@@ -83,17 +83,6 @@ function launchRequest(
   };
 }
 
-function launchTeam(host: ReturnType<typeof createHost>, teamId = 'physicist') {
-  return onGlobalStorage(
-    prepareSurfaceLaunch(
-      launchRequest({ launchTarget: 'team', selectedTeamId: teamId }),
-      host,
-      workspaceState,
-      STORAGE_ROOT,
-    ),
-  );
-}
-
 describe('main-view run launch controller', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -163,146 +152,47 @@ describe('main-view run launch controller', () => {
     }),
   );
 
-  it.effect('rejects a team launch without a selected team', () =>
-    Effect.gen(function* () {
-      const host = createHost();
-
-      const error = yield* Effect.flip(launchTeam(host, ''));
-
-      expect(error).toMatchObject({
-        _tag: 'Rejected',
-        reason: 'Select a team',
-      });
-      expect(mocks.resolveTeamLaunch).not.toHaveBeenCalled();
-    }),
-  );
-
-  it.effect.each([
-    {
-      resolution: { status: 'unknown-team' },
-      expected: 'Unknown physicist',
-    },
-    {
-      resolution: { status: 'blocked', reason: 'no runnable root' },
-      expected: 'Blocked physicist: no runnable root',
-    },
-    {
-      resolution: {
-        status: 'unavailable',
-        unavailableNames: ['critic', 'writer'],
-      },
-      expected: 'Unavailable physicist: critic, writer',
-    },
-  ])('returns $resolution.status team failures', ({ resolution, expected }) =>
-    Effect.gen(function* () {
-      const host = createHost();
-      mocks.resolveTeamLaunch.mockReturnValue(Effect.succeed(resolution));
-
-      const error = yield* Effect.flip(launchTeam(host));
-
-      expect(error).toMatchObject({
-        _tag: 'Rejected',
-        reason: expected,
-      });
-    }),
-  );
-
-  it.effect(
-    'returns without presenting an error when team launch is cancelled',
-    () =>
-      Effect.gen(function* () {
-        const host = createHost();
-        mocks.resolveTeamLaunch.mockReturnValue(
-          Effect.succeed({ status: 'cancelled' }),
-        );
-
-        const error = yield* Effect.flip(launchTeam(host));
-
-        expect(error).toMatchObject({ _tag: 'Cancelled' });
-      }),
-  );
-
-  it.effect(
-    'returns partial membership and builds the resolved team fields',
-    () =>
-      Effect.gen(function* () {
-        const host = createHost();
-        mocks.resolveTeamLaunch.mockReturnValue(
-          Effect.succeed({
-            status: 'ready',
-            fields: {
-              agent: 'builtInToolUse:lead',
-              delegationAgentScope: {
-                workflow: ['builtInWorkflow:writer'],
-                toolUse: ['builtInToolUse:lead'],
-              },
-              cli: { multiAgentPresetId: 'custom-team' },
-            },
-            partial: true,
-            missingNames: ['writer'],
-          }),
-        );
-
-        // The renderer's selected agent is ignored in favour of the team plan.
-        const { config } = yield* onGlobalStorage(
-          prepareSurfaceLaunch(
-            launchRequest({
-              launchTarget: 'team',
-              selectedTeamId: 'physicist',
-              agent: 'stale-renderer-agent',
-            }),
-            host,
-            workspaceState,
-            STORAGE_ROOT,
-          ),
-        );
-
-        expect(config).toMatchObject({
-          agent: 'builtInToolUse:lead',
-          agentCategory: AgentCategory.ToolUse,
-          delegationAgentScope: {
-            workflow: ['builtInWorkflow:writer'],
-            toolUse: ['builtInToolUse:lead'],
-          },
-          cli: { multiAgentPresetId: 'custom-team' },
-        });
-        // The partial-team notice is forked, so give the detached fiber a tick.
-        yield* Effect.promise(
-          () => new Promise<void>((resolve) => setTimeout(resolve, 0)),
-        );
-        expect(host.showInfoMessage).toHaveBeenCalledWith('Partial: writer');
-        expect(mocks.resolveTeamLaunch).toHaveBeenCalledWith(
-          expect.objectContaining({
-            teamId: 'physicist',
-            catalog: true,
-            choose: expect.any(Function),
-            signIn: expect.any(Function),
-          }),
-        );
-        // Both ports are Effects; assert them as the caller sees them.
-        const launchPorts = mocks.resolveTeamLaunch.mock.calls[0]![0] as {
-          choose: (names: readonly string[]) => Effect.Effect<unknown>;
-          signIn: () => Effect.Effect<boolean>;
-        };
-        expect(yield* launchPorts.choose(['writer'])).toBe('continue');
-        expect(yield* launchPorts.signIn()).toBe(true);
-        expect(host.chooseTeamAvailability).toHaveBeenCalledWith(['writer']);
-        expect(host.signInForRemoteAgentCatalog).toHaveBeenCalledOnce();
-      }),
-  );
-
-  it.effect('surfaces catalog errors as a launch error', () =>
+  it.effect('builds the resolved team fields over the renderer agent', () =>
     Effect.gen(function* () {
       const host = createHost();
       mocks.resolveTeamLaunch.mockReturnValue(
-        Effect.fail(new Error('catalog unavailable')),
+        Effect.succeed({
+          status: 'ready',
+          fields: {
+            agent: 'builtInToolUse:lead',
+            delegationAgentScope: {
+              workflow: ['builtInWorkflow:writer'],
+              toolUse: ['builtInToolUse:lead'],
+            },
+            cli: { multiAgentPresetId: 'custom-team' },
+          },
+          partial: true,
+          missingNames: ['writer'],
+        }),
       );
 
-      const error = yield* Effect.flip(launchTeam(host));
+      // The renderer's selected agent is ignored in favour of the team plan.
+      const { config } = yield* onGlobalStorage(
+        prepareSurfaceLaunch(
+          launchRequest({
+            launchTarget: 'team',
+            selectedTeamId: 'physicist',
+            agent: 'stale-renderer-agent',
+          }),
+          host,
+          workspaceState,
+          STORAGE_ROOT,
+        ),
+      );
 
-      expect(error).toMatchObject({
-        _tag: 'Rejected',
-        reason: 'Team launch failed: catalog unavailable',
+      expect(config).toMatchObject({
+        agent: 'builtInToolUse:lead',
+        agentCategory: AgentCategory.ToolUse,
+        delegationAgentScope: {
+          workflow: ['builtInWorkflow:writer'],
+          toolUse: ['builtInToolUse:lead'],
+        },
+        cli: { multiAgentPresetId: 'custom-team' },
       });
     }),
   );

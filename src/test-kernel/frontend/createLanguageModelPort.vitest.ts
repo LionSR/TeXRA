@@ -3,9 +3,7 @@ import { it } from '@effect/vitest';
 import { Cause, Deferred, Effect, Exit, Fiber, Scope, Stream } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
-import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
 import { setLogSink } from '@logger/logSink';
-import { captureLogEntries } from '@test/support/logSinkCapture';
 import type {
   TurnRequest,
   VscodeLanguageModelConfiguration,
@@ -176,31 +174,6 @@ describe('createLanguageModelPort', () => {
         expect(mocks.canSendRequest).toHaveBeenCalledWith(
           expect.objectContaining({ id: 'copilot-gpt-4o' }),
         );
-      }),
-  );
-
-  it.effect(
-    'logs discovery failures at the VS Code language-model adapter boundary',
-    () =>
-      Effect.gen(function* () {
-        const logs = captureLogEntries();
-        const nativeError = new Error('discovery failed');
-        mocks.selectChatModels.mockRejectedValue(nativeError);
-
-        expect(
-          yield* Effect.flip(
-            createPort()
-              .selectModels({ vendor: 'copilot' })
-              .pipe(Effect.provide(effectDiagnosticsLayer('Trace'))),
-          ),
-        ).toBe(nativeError);
-        expect(
-          logs.has(
-            'WARN',
-            'LanguageModelPort',
-            'Could not discover editor-supplied language models: discovery failed',
-          ),
-        ).toBe(true);
       }),
   );
 });

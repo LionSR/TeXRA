@@ -117,8 +117,9 @@ const PATH_PREFIXES = [
   'prompts/',
 ];
 
-// Generated or installed at build time, so absent in a clean checkout.
-const BUILD_OUTPUT = /(^|\/)(dist|out|releases|node_modules)(\/|$)/;
+// Generated or installed at build or test time, so absent in a clean checkout.
+const BUILD_OUTPUT =
+  /(^|\/)(dist|out|releases|node_modules|test-results)(\/|$)/;
 
 // The run vocabulary, declared once as Zod and spliced into the trace union.
 // Guidance names these rows constantly ("a `tool.result` before the loop

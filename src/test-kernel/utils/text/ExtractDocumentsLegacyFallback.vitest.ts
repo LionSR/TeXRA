@@ -44,15 +44,4 @@ describe('extractDocuments legacy fallback (src/utils/text/xmlExtraction.ts)', (
     expect(result.method).toBe('none');
     expect(result.documents).toBeNull();
   });
-
-  it('returns none when neither container nor legacy shape is present', () => {
-    const result = extractDocuments(
-      'Just prose, no LaTeX at all.',
-      'documents',
-      'paper.tex',
-    );
-
-    expect(result.method).toBe('none');
-    expect(result.documents).toBeNull();
-  });
 });

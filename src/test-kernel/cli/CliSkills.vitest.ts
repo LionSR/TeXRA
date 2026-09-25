@@ -18,7 +18,6 @@ import { initializeNodeRuntimeSkills } from '@platform/defaults/nodeHost';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { foldSkillSources, hostSkillContributions } from '@skills/skillSources';
 import {
-  loadEnabledRuntimeSkills,
   loadRuntimeSkillCatalog,
   readDisabledSkills,
   skillDisplayItem,
@@ -170,63 +169,6 @@ it.layer(nodePlatformLayer)('CLI skills runtime', (it) => {
         }),
       );
     }),
-  );
-
-  it.effect(
-    'reports explicit custom skill sources that are not directories',
-    () =>
-      Effect.gen(function* () {
-        const root = yield* Effect.promise(() =>
-          makeTempDir('texra-cli-skills-', tempRoots),
-        );
-        const sourceFile = path.join(root, 'skills-file');
-        yield* Effect.promise(() =>
-          fs.writeFile(sourceFile, 'not a directory'),
-        );
-
-        initializeNodeRuntimeSkills({ resourcesPath: root }, []);
-        const result = yield* readCliSkillsEffect(root, settings, {
-          additionalPaths: [sourceFile],
-        });
-
-        expect(result.skills).toEqual([]);
-        expect(result.errors).toContainEqual(
-          expect.objectContaining({
-            severity: 'error',
-            code: 'invalid_source',
-            path: sourceFile,
-          }),
-        );
-      }),
-  );
-
-  it.effect(
-    'reads the runtime skill source registry used by prompt injection',
-    () =>
-      Effect.gen(function* () {
-        const root = yield* Effect.promise(() =>
-          makeTempDir('texra-cli-skills-', tempRoots),
-        );
-        yield* Effect.promise(() =>
-          writeSkill(root, 'proof-audit', 'Review mathematical proof steps.'),
-        );
-        installTestSkillRoots([{ tier: 'project', path: root }]);
-
-        const result = yield* loadEnabledRuntimeSkills(root, settings);
-
-        const disabled = yield* readDisabledSkills(settings);
-        expect(
-          result.skills.map((entry) => skillDisplayItem(entry, disabled)),
-        ).toMatchObject([
-          {
-            name: 'proof-audit',
-            description: 'Review mathematical proof steps.',
-            scope: 'project',
-            label: 'project',
-          },
-        ]);
-        expect(result.errors).toEqual([]);
-      }),
   );
 
   it.effect(

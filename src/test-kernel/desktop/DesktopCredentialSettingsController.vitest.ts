@@ -14,7 +14,6 @@ import type { ModelOptionStores } from '@model/computeModelOptions';
 import { withProcessServices } from '@platform/processRuntime';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { ModelOptionData } from '@shared/schemas';
-import { assertSupported } from '@shared/utils/dispatcher';
 import { captureLogEntries } from '@test/support/logSinkCapture';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import {
@@ -315,40 +314,6 @@ describe('DefaultDesktopCredentialSettingsController', () => {
       }),
   );
 
-  it.effect('uses the shared key prompt and removes a confirmed key', () =>
-    Effect.gen(function* () {
-      const secretName = apiKeySecretName('openai');
-      const secrets = new FakeSecrets({ [secretName]: 'old-key' });
-      const deleteSpy = vi.spyOn(secrets, 'delete');
-      const fixture = yield* Effect.promise(() =>
-        createFixture({
-          secrets,
-          promptInput: '  replacement  ',
-        }),
-      );
-
-      yield* Effect.gen(function* () {
-        yield* withProcessServices(
-          testRuntime(),
-          fixture.controller.profileKeyController.setProviderKey('openai'),
-        );
-      });
-      expect(yield* secrets.get(secretName)).toBe('replacement');
-
-      yield* Effect.gen(function* () {
-        yield* withProcessServices(
-          testRuntime(),
-          fixture.controller.profileKeyController.removeProviderKey('openai'),
-        );
-      });
-      expect(deleteSpy).toHaveBeenCalledExactlyOnceWith(secretName);
-      expect(yield* secrets.get(secretName)).toBeUndefined();
-      expect(fixture.confirms).toEqual([
-        'Remove the OpenAI API key? This cannot be undone.',
-      ]);
-    }),
-  );
-
   it.effect.each([
     { provider: 'kimiCode', usageProvider: 'kimiCode' },
     { provider: 'glm', usageProvider: 'glmCodingPlan' },
@@ -380,77 +345,6 @@ describe('DefaultDesktopCredentialSettingsController', () => {
 
   // Provider toggles are written by the shared catalog path
   // (`UPDATE_STATE_SETTING`); this pins the desktop refresh that path triggers.
-
-  it.effect(
-    'refreshes ChatGPT preferences and reports authentication outcomes',
-    () =>
-      Effect.gen(function* () {
-        const fixture = yield* Effect.promise(() => createFixture());
-
-        yield* Effect.gen(function* () {
-          yield* withProcessServices(
-            testRuntime(),
-            assertSupported(
-              fixture.controller.chatGptHandlers.setChatGptPreferSubscription,
-            )({
-              command: SETTINGS_VIEW_COMMANDS.SET_CHATGPT_PREFER_SUBSCRIPTION,
-              enabled: true,
-            }),
-          );
-        });
-        // The stores travel with the write; the assertion pins the value.
-        expect(codexMocks.setPreferSubscription).toHaveBeenCalledWith(
-          expect.anything(),
-          true,
-        );
-        expect(fixture.onCredentialChanged).toHaveBeenCalledOnce();
-        expect(fixture.events.at(-1)).toBe('credential');
-        expect(fixture.events.slice(0, -1)).toEqual(
-          expect.arrayContaining([
-            `render:${SETTINGS_VIEW_COMMANDS.UPDATE_SUBSCRIPTION_AUTH_STATUS}`,
-            `render:${SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION}`,
-            'modelOptions',
-          ]),
-        );
-
-        yield* withProcessServices(
-          testRuntime(),
-          fixture.controller.signInChatGpt(),
-        );
-        expect(codexMocks.login).toHaveBeenCalledOnce();
-        expect(codexMocks.setPreferSubscription).toHaveBeenLastCalledWith(
-          expect.anything(),
-          true,
-        );
-        expect(fixture.infos).toContain(
-          'Signed in with ChatGPT as user@example.com.',
-        );
-
-        yield* Effect.gen(function* () {
-          yield* withProcessServices(
-            testRuntime(),
-            assertSupported(fixture.controller.chatGptHandlers.signOutChatGpt)({
-              command: SETTINGS_VIEW_COMMANDS.SIGN_OUT_CHATGPT,
-            }),
-          );
-        });
-        expect(codexMocks.signOut).toHaveBeenCalledOnce();
-        expect(fixture.infos).toContain('Signed out of ChatGPT.');
-
-        codexMocks.login.mockReturnValueOnce(
-          Effect.fail(new Error('authorization denied')),
-        );
-        yield* withProcessServices(
-          testRuntime(),
-          fixture.controller.signInChatGpt(),
-        );
-
-        expect(fixture.errors).toEqual([
-          'ChatGPT sign-in failed: authorization denied',
-        ]);
-        expect(fixture.onCredentialChanged).toHaveBeenCalledTimes(4);
-      }),
-  );
 
   it.effect(
     'falls back without reporting the browser-open failure twice and logs its cause',

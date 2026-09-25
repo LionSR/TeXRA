@@ -1,9 +1,10 @@
 # Pending follow-ups read from the run's rows
 
 Date: 2026-09-26
-Status: proposed. Needs one ruling (section 4) before it can land.
+Status: implemented (ruling 4(b) taken: `RunState.followUps` removed).
 Baseline: `main` at `904d2f55`. Parent survey:
-[SSOT ownership survey](./2026-09-23-ssot-ownership-survey.md), section 4.
+[SSOT ownership survey](../../proposed/simplification/2026-09-23-ssot-ownership-survey.md),
+section 4.
 
 ## 1. Finding
 
@@ -143,3 +144,23 @@ value that is stale after its first batch.
   test the change earns.
 - A restart case: rows queued by an earlier process are delivered after the
   claim hydrates the set.
+
+## 6. Landed
+
+- `SessionEvents` keeps each run's pending follow-ups
+  (`pendingFollowUps`), folded by `applyRunRow` as it commits.
+  `hydrateFollowUps` seeds it from the rows where a claim moves here (or the
+  first time this publisher sees the run): `RunLedger.acquire` passes the
+  rows it already read, the graph's `acquireClaims` reads them. A read that
+  raced a commit merges with what was tracked, so the set holds commit order.
+- `RunInput` is a wake latch plus the synthetic slot; a take reads
+  `pendingFollowUps` less the entry's `deferred` ids. `held`, `seen`, `seed`,
+  `QueueEntry.held`, the `attachInput` replay, `FollowUps.seed`, the
+  agent-CLI child's setup fold and the unused `hasQueued(lease)` are gone.
+- `RunState` is `RunPosition` plus the loop's own fields; a follow-up row
+  only opens an otherwise empty run. `RunRows` keeps `followUps` for
+  `sessionFold` and the admission's replay check. `onIdle` takes no state:
+  its one consumer reads `pendingFollowUps`.
+- One behavior note: a deferred row keeps its commit position, so once its
+  producer re-submits it, it is delivered ahead of rows committed after it.
+  The old queue appended it at re-submit time.

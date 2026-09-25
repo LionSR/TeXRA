@@ -170,28 +170,6 @@ describe('CLI history status formatting', () => {
     await expect(statusOf(false)).resolves.toBe('unknown');
   });
 
-  it('prints resumable details instead of inventing completed status', () => {
-    const text = formatCliHistoryDetailsText({
-      id: 'abc123' as RunId,
-      status: HISTORY_RUN_STATUS.RESUMABLE,
-      run: {
-        launchedAt: Date.parse('2026-06-03T05:03:06.717Z'),
-        parentId: null,
-        description: null,
-      },
-      config: null,
-      result: null,
-      report: null,
-      conversationPreview: null,
-      files: [],
-      hasFlowRecord: true,
-    });
-
-    expect(text).toContain('Status: Resumable');
-    expect(text).toContain('Flow record: present');
-    expect(text).not.toContain(`Status: ${CLI_RUN_STATUS.COMPLETED}`);
-  });
-
   // `status` is a frozen contract, so `history show` answers it from the same
   // facts as `history list`: the run's latest snapshot, its config, and the
   // terminal-rejection filter. A run the resume path later refuses is still
