@@ -170,7 +170,10 @@ describe('tool-use tool resolution', () => {
       }).pipe(
         Effect.scoped,
         Effect.provide(LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT)),
-        Effect.provide(toolRegistryLayer),
+        Effect.provide(
+          toolRegistryLayer.pipe(Layer.provide(nodePlatformLayer)),
+        ),
+        Effect.provide(nodeSpawnerLayer),
       ),
   );
 
