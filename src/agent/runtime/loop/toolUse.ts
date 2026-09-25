@@ -631,12 +631,10 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
 
   // ------------------------------------------------------------- the loop
   const enter = Effect.gen(function* () {
+    // The follow-ups the rows still queue (input admitted while no consumer
+    // held this run, or a batch a crash left unconsumed, C3) are the
+    // publisher's, seeded where `loadRun`'s claim moved here.
     const entry = yield* loadRun(runId, 'toolUse', start.resume);
-    // The follow-ups the rows still queue: input admitted while no consumer
-    // held this run, or a batch a crash left unconsumed (C3). An unopened
-    // aggregate (`phase` null) still carries those rows; seed them before
-    // the opening batch so a restart delivers the SQLite copy.
-    followUps.seed(entry.loaded);
     const opened =
       entry._tag === 'fresh'
         ? yield* openFresh(entry.opening)
@@ -668,7 +666,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
             if (afterError && !isChild()) yield* pauseActiveGoal();
             // Every park is idle, a failed turn's included: a resume
             // acknowledges at the first one.
-            run.callbacks.onIdle?.(state);
+            run.callbacks.onIdle?.();
             if (run.toolPolicy.stopAfterCycle) {
               return finish(
                 state,

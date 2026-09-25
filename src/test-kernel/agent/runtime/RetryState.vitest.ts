@@ -334,8 +334,6 @@ const freshState = (): RunState => ({
   pendingResponse: null,
   pendingIntents: {},
   requests: {},
-  followUps: [],
-  followUpIds: new Set(),
   usage: EMPTY_RUN_USAGE_TOTALS,
   flow: null,
   roundOutputs: [],
