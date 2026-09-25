@@ -90,7 +90,7 @@ export type WorkflowCallIdentity = z.infer<typeof WorkflowCallIdentitySchema>;
 
 /**
  * The declared shape of a workflow script — `meta.phases` in order and
- * `meta.tasks` — as both the approval proposal and the plan marker carry it.
+ * `meta.tasks` — as both the approval proposal and `workflow.plan` carry it.
  * A phase's position is its index in the array.
  */
 export const WorkflowDeclaredPlanSchema = z.strictObject({
@@ -98,20 +98,6 @@ export const WorkflowDeclaredPlanSchema = z.strictObject({
   tasks: z.array(WorkflowCallIdentitySchema),
 });
 export type WorkflowDeclaredPlan = z.infer<typeof WorkflowDeclaredPlanSchema>;
-
-/**
- * The declared plan of one workflow-script attempt — every `meta.phases`
- * entry and every `meta.tasks` entry, in script order — recorded once on the
- * transcript when the attempt's run state is constructed. Phases and
- * calls the run has reached are projected as stages and cards; this marker is
- * what lets a host list the ones it has not reached yet without opening their
- * stage (a `stage.start` prints the phase divider into scrollback).
- */
-export const WorkflowPlanMarkerSchema = WorkflowDeclaredPlanSchema.extend({
-  kind: z.literal('workflowPlan'),
-  attemptId: z.string().min(1),
-});
-export type WorkflowPlanMarker = z.infer<typeof WorkflowPlanMarkerSchema>;
 
 const WorkflowCallTerminalMetadataSchema = z.strictObject({
   durationMs: z.number().nonnegative().optional(),
@@ -254,7 +240,7 @@ export function interruptedWorkflowCall(
 }
 
 export const WORKFLOW_TASK_STATUS_LABEL = {
-  declared: 'Declared',
+  declared: 'Not started',
   queued: 'Queued',
   running: 'Running',
   completed: 'Finished',

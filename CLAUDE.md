@@ -53,15 +53,14 @@ Things the tree won't tell you:
   (no NEW distinct `@agent/*` deep-import specifier from a host, type-only
   included), `host-agent-mock`,
   `architecture-edges`, and `effect-migration` (per-file allowlists of
-  shrink-only counts: `new AbortController(`,
-  superseded package imports, `Effect.run*` boundary calls, raw catches in
-  `effect`-importing files; it admits a new `Effect.run*`
+  shrink-only counts: `new AbortController(` and `Effect.run*` boundary
+  calls; a category that reaches zero retires with its counting code, except
+  the `Effect.run*` check, which stays at zero; it admits a new `Effect.run*`
   file only under `packages/{extension,desktop,cli,agent}/src/` (webview
   frontends excluded) or a named webview runtime entry in the script's
   `BOUNDARY_RUNTIME_ENTRIES`, and ESLint's
   `no-warning-comments` fails on any `@adapter-until` marker, since the owner
-  ruled there are no temporary adapters), and `store-public-surface` (the
-  frozen public method set of the run log store). Two more budget the code
+  ruled there are no temporary adapters). Two more budget the code
   itself rather than an import edge — `file-size-baseline` (a per-file line
   budget over 500 lines) and `refuted-candidates` (the costed-and-refused
   refactors, with their ruling anchors); AGENTS.md "Directory organization"

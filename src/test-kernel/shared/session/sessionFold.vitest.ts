@@ -268,10 +268,10 @@ describe('sessionFold', () => {
     expect(root.transcript.rows).toStrictEqual([
       {
         id: 'phase-Map',
-        seqNo: 2,
+        seqNo: 1,
         timestamp: T.root + 1,
         level: 'info',
-        settlementSeqNo: 2,
+        settlementSeqNo: 1,
         verbose: false,
         messageType: MESSAGE_TYPES.DEFAULT,
         kind: 'phase',
@@ -282,10 +282,10 @@ describe('sessionFold', () => {
       },
       {
         id: 'call-1',
-        seqNo: 3,
+        seqNo: 2,
         timestamp: T.root + 2,
         level: 'info',
-        settlementSeqNo: 3,
+        settlementSeqNo: 2,
         verbose: false,
         groupId: 'phase-Map',
         messageType: MESSAGE_TYPES.WORKFLOW_TASK,
@@ -1696,6 +1696,45 @@ describe('foldRunState', () => {
         // D12: no snapshot payload carries usage; it is derived from the rows.
         expect(flow?.state).not.toHaveProperty('runStateSnapshot');
         expect(state?.snapshotCommit).toBe(2);
+      },
+    ],
+    [
+      'a length continuation in a non-final reflection round: the next round opens at continuation 0',
+      () => {
+        const step = (
+          name: string,
+          round: number,
+          continuationIndex: number,
+        ) => ({
+          type: 'flow.step',
+          payload: {
+            family: 'reflection',
+            step: name,
+            round,
+            continuationIndex,
+          },
+        });
+        const rows = [
+          message({
+            kind: 'append',
+            messages: [USER('draft the introduction')],
+            sourceResponse: null,
+          }),
+          reflectionSnapshot,
+          step('round.begin', 0, 0),
+          step('round.end', 0, 1),
+          step('round.begin', 1, 0),
+          step('round.end', 1, 1),
+        ].map((draft, index) => ledgerRow(index + 1, draft));
+        const state = stateOf(foldRunState(null, rows));
+        expect(state?.round).toBe(1);
+        expect(state?.continuationIndex).toBe(1);
+        // Within one round the index still never goes back.
+        expect(
+          reasonOf(
+            foldRunState(state, [ledgerRow(7, step('round.end', 1, 0))]),
+          ),
+        ).toBe('out-of-order');
       },
     ],
     [

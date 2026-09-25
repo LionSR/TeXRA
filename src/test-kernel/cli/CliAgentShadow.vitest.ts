@@ -3,7 +3,7 @@ import { writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
 // Third-party imports
-import { Deferred, Effect, Fiber } from 'effect';
+import { Deferred, Effect, Fiber, Layer } from 'effect';
 import { it as effectIt } from '@effect/vitest';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
@@ -37,6 +37,7 @@ import {
   installPlatform,
 } from '@test/support/setupPlatform';
 import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
+import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import type { RootedFileSystem } from '@utils/files/rootedFileSystem';
 
 // The root-agent selection writes a local notice, whose sink reads the bound
@@ -110,7 +111,7 @@ describe('CLI agent validation with a shadowed name', () => {
           Effect.provideService(AgentDirectories, fakeHostAgentDirectories),
           Effect.provideService(AppState, new FakeStateStore()),
         ),
-        nodePlatformLayer,
+        Layer.merge(nodePlatformLayer, testHttpClientLayer),
       ),
     );
   });
@@ -300,7 +301,7 @@ describe('CLI agent validation with a shadowed name', () => {
             }),
           update: stores.globalState.update.bind(stores.globalState),
         };
-        const session = new TuiSession();
+        const session = new TuiSession(() => undefined);
         patchSessionMeta({ agent: 'launched-agent', teamName: 'Physicist' });
         const context = {
           stores: { ...stores, globalState: delayedState },

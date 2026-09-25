@@ -1,10 +1,8 @@
 // Standard library imports
-import { existsSync } from 'node:fs';
-import { cp } from 'node:fs/promises';
 import * as path from 'node:path';
 
 // Third-party imports
-import { Cause, Effect } from 'effect';
+import { Cause, Effect, FileSystem, type PlatformError } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports - fs
@@ -37,6 +35,7 @@ export async function createSampleProjectWithoutWorkspace(
   runtime: ProcessRuntime,
 ): Promise<void> {
   const create = Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
     const parentPath = yield* selectFolder({
       openLabel: 'Create sample project here',
       title: 'Choose where to create the TeXRA sample project',
@@ -46,18 +45,12 @@ export async function createSampleProjectWithoutWorkspace(
     }
 
     const dest = path.join(parentPath, 'texra-sample');
-    if (existsSync(dest)) {
+    if (yield* fs.exists(dest)) {
       void vscode.window.showInformationMessage(
         'A texra-sample folder already exists there — opening it.',
       );
     } else {
-      yield* Effect.tryPromise({
-        try: () =>
-          cp(path.join(extensionPath, 'resources', 'examples'), dest, {
-            recursive: true,
-          }),
-        catch: ensureError,
-      });
+      yield* fs.copy(path.join(extensionPath, 'resources', 'examples'), dest);
     }
     yield* Effect.tryPromise({
       try: async () => {
@@ -71,7 +64,13 @@ export async function createSampleProjectWithoutWorkspace(
     });
   });
 
-  await runtime.runPromise(create.pipe(Effect.catch(reportFailure)));
+  await runtime.runPromise(
+    create.pipe(
+      Effect.catch((error: PlatformError.PlatformError | Error) =>
+        reportFailure(error),
+      ),
+    ),
+  );
 }
 
 /**
@@ -86,6 +85,7 @@ export function createSampleProject(
   session: SessionHandle,
 ): Effect.Effect<void, never, ProcessServices | WorkspaceFs> {
   return Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
     const workspaceFs = yield* WorkspaceFs;
     if (!workspaceFs.root) {
       yield* Effect.forkDetach(
@@ -109,13 +109,7 @@ export function createSampleProject(
     const destPath = yield* workspaceFs.resolve(destFolder);
 
     yield* workspaceFs.makeDirectory(destFolder, { recursive: true });
-    yield* Effect.promise(() =>
-      cp(sourcePath, destPath, {
-        recursive: true,
-        force: true,
-        errorOnExist: false,
-      }),
-    );
+    yield* fs.copy(sourcePath, destPath, { overwrite: true });
 
     void vscode.window.showInformationMessage('Created TeXRA sample project.');
 

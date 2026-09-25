@@ -14,8 +14,8 @@ import { validateAgentYamlContent } from '@agent/runtime/agentLoad';
 import { renderAgentTemplateString } from '@agent/templates/agentTemplateRenderer';
 import { withLogChannel } from '@logger/effectLog';
 import type { ModelOptionStores } from '@model/computeModelOptions';
-import type { AgentDirectories, AppState } from '@platform/interfaces';
 import type { LanguageModel } from '@platform/languageModel';
+import type { AgentCatalogServices } from '@platform/processRuntime';
 import type { GlobalStorageFs } from '@platform/rootedFs';
 import type { AgentCategory } from '@shared/schemas';
 import { TOOL_JSON_SCHEMA_OPTIONS } from '@shared/tools/toolJsonSchema';
@@ -217,11 +217,7 @@ export interface AgentCreatorUI {
   ): Effect.Effect<
     void,
     AgentCreatorUiFailed,
-    | GlobalStorageFs
-    | FileSystem.FileSystem
-    | AgentDirectories
-    | AppState
-    | LanguageModel
+    AgentCatalogServices | LanguageModel
   >;
   openCreatedFile(filePath: string): Effect.Effect<void, AgentCreatorUiFailed>;
   renderTemplate(template: string, vars: Record<string, unknown>): string;
@@ -411,16 +407,7 @@ export const runAgentCreator = Effect.fn('runAgentCreator')(function* (
   category: AgentCategory,
   ui: AgentCreatorUI,
   stores: ModelOptionStores,
-): Effect.fn.Return<
-  void,
-  Error,
-  | FileSystem.FileSystem
-  | GlobalStorageFs
-  | LanguageModel
-  | HttpClient.HttpClient
-  | AgentDirectories
-  | AppState
-> {
+): Effect.fn.Return<void, Error, AgentCatalogServices | LanguageModel> {
   const categoryLabel = category === 'toolUse' ? 'Tool Use' : 'Workflow';
   const agentName = yield* ui.promptAgentName(categoryLabel);
   if (!agentName) return;

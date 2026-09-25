@@ -3,12 +3,14 @@ import { installedProcessRuntime } from '@agent/runtime';
 import { setLogSink } from '@logger/logSink';
 import { Lifecycle } from '@platform/interfaces';
 import { withProcessServices } from '@platform/processRuntime';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError } from '@utils/errors/errorMessage';
 
 import { runCli } from '../commands/root';
 import { formatCrashReportLine, readCliBugsUrl } from '../runtime/cliContext';
+import { disposeCliProcessRuntime } from '../runtime/cliProcessRuntime';
 import { CliExitCode } from '../runtime/exitCodes';
 import {
+  cliErrorMessage,
   flushNdjsonStdout,
   installCliPipeErrorHandlers,
   prePlatformDiagnosticSink,
@@ -27,11 +29,15 @@ import {
 // sink for it, and `initCliPlatform` swaps in the platform's as before.
 setLogSink(prePlatformDiagnosticSink, { trusted: true });
 
-// The process entry: one run, with the process lifecycle's shutdown drain
-// and the final NDJSON flush as its finalizers, in that order — the drain is
-// a program now, so this entry is where it is run. The lifecycle is the
-// installed runtime's own `Lifecycle`, read before the drain runs: its last
-// step disposes that runtime.
+// The process entry: one run, with the process lifecycle's shutdown drain,
+// the process runtime's disposal and the final NDJSON flush as its
+// finalizers, in that order — the drain is a program now, so this entry is
+// where it is run. The lifecycle is the installed runtime's own `Lifecycle`,
+// read before the drain runs. A platform's shutdown disposes the runtime as
+// its last step; a command that refused its arguments before bringing a
+// platform up registered no such step, and its runtime's global-root change
+// poll would hold the event loop open forever, so the entry disposes whatever
+// runtime is still installed (a no-op after a platform shutdown).
 await Effect.runPromise(
   Effect.tryPromise({
     try: async () => {
@@ -43,7 +49,7 @@ await Effect.runPromise(
   }).pipe(
     Effect.catch((error: unknown) =>
       Effect.promise(async () => {
-        writeTextStderr(`TeXRA CLI failed: ${toErrorMessage(error)}`);
+        writeTextStderr(`TeXRA CLI failed: ${cliErrorMessage(error)}`);
         // Usage errors are handled inside runCli (exit 2) and classified run
         // failures are consumed into an exit code at executeCliRequest (never
         // rethrown past it — see runtime/executeCli.ts), so this arm only
@@ -64,7 +70,10 @@ await Effect.runPromise(
               (lifecycle) => lifecycle.runShutdown,
             )
           : Effect.void;
-      }).pipe(Effect.ensuring(flushNdjsonStdout())),
+      }).pipe(
+        Effect.ensuring(disposeCliProcessRuntime),
+        Effect.ensuring(flushNdjsonStdout()),
+      ),
     ),
   ),
 );

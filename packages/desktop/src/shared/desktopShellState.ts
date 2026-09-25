@@ -29,6 +29,13 @@ interface WorkbenchKindMeta {
  * fails the exhaustive `switch` in `workbenchController`).
  */
 export const WORKBENCH_KIND_META = {
+  /** The project's file tree; opening a file opens an Editor tab. */
+  files: {
+    defaultPlacement: 'right',
+    icon: 'folder-tree',
+    label: 'Files',
+    singleton: true,
+  },
   editor: {
     defaultPlacement: 'right',
     icon: 'file-code',
@@ -104,10 +111,12 @@ export const DesktopShellStateSchema = z.object({
   bottomPanelHeight: z.number(),
   sidebarCollapsed: z.boolean(),
   sidebarWidth: z.number(),
-  filesExpanded: z.boolean(),
   workbenchWidth: z.number(),
   workbenchTabs: z.array(WorkbenchTabSchema),
   nextTerminalSerial: z.int().positive(),
+  /** Per top-level run, its `lastTimestamp` when the user last had it on
+   *  screen: what the rail's `unseenRuns` compares a finished run against. */
+  seen: z.record(z.string(), z.number()).prefault({}),
 });
 
 export type DesktopShellState = z.infer<typeof DesktopShellStateSchema>;
@@ -125,10 +134,10 @@ export function initialDesktopShellState(): DesktopShellState {
     bottomPanelHeight: 300,
     sidebarCollapsed: false,
     sidebarWidth: 288,
-    filesExpanded: true,
     workbenchWidth: 640,
     workbenchTabs: [],
     nextTerminalSerial: 1,
+    seen: {},
   };
 }
 
@@ -401,10 +410,6 @@ export function setWorkbenchTabDirty(
 
 export function toggleSidebar(state: DesktopShellState): DesktopShellState {
   return { ...state, sidebarCollapsed: !state.sidebarCollapsed };
-}
-
-export function toggleFiles(state: DesktopShellState): DesktopShellState {
-  return { ...state, filesExpanded: !state.filesExpanded };
 }
 
 // Shared by the dimension setters below: every stored size is a rounded,

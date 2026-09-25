@@ -121,8 +121,8 @@ export const MODEL_AVAILABILITY_STATUS = {
     available: false,
     requiresKey: false,
   },
-  // Only the OpenRouter route produces this kind (`computeModelOptions`
-  // resolves it from `isOpenRouterRoutingUnsupported`), so the one label the
+  // Only the OpenRouter route produces this kind (`computeModelOptions` maps
+  // the decided `openrouter-unsupported` route to it), so the one label the
   // kind carries names that route.
   'provider-unavailable': {
     label: 'Unavailable through OpenRouter',
@@ -219,10 +219,6 @@ export type TeamOptionData = z.infer<typeof TeamOptionDataSchema>;
 // Banner Data Schemas
 // ============================================================
 
-export const ApiKeyBannerDataSchema = z.object({
-  provider: z.string().nullish(),
-});
-
 export const AgentConfigBannerDataSchema = z.object({
   agentName: z.string().nullish(),
   /** The category the named agent was launched as: what the banner's
@@ -241,6 +237,8 @@ const MissingToolSchema = z.object({
   id: z.string(),
   label: z.string(),
   interchangeable: z.boolean(),
+  /** What TeXRA can't do without it, completing "TeXRA can't …". */
+  usedFor: z.string(),
 });
 export type MissingTool = z.infer<typeof MissingToolSchema>;
 

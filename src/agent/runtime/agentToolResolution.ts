@@ -81,6 +81,8 @@ interface ResolveAgentToolsInput {
   logger: { warn: (msg: string) => void };
   /** When true, approval-gated tools are filtered out before model invocation. */
   approvalPromptsUnavailable?: boolean;
+  /** Told the names {@link approvalPromptsUnavailable} withheld, once. */
+  onApprovalPolicyDenial?: (withheldTools?: readonly string[]) => void;
   /**
    * The product host this process is; tools excluded from it are dropped.
    * `undefined` (no composition root named one) drops every host-bound tool.
@@ -186,6 +188,7 @@ export const resolveAgentTools = Effect.fn('resolveAgentTools')(function* ({
   tools,
   logger,
   approvalPromptsUnavailable = false,
+  onApprovalPolicyDenial,
   host,
   runTools = [],
   injectTools,
@@ -263,10 +266,12 @@ export const resolveAgentTools = Effect.fn('resolveAgentTools')(function* ({
         ]
       : []),
   ];
+  /** Tools the approval gate withheld, reported once below. */
+  const withheldForApproval = new Set<string>();
   const passesRuntimeGates = (name: string): boolean => {
     const tool = enabled.get(name) ?? table.get(name);
     const excluded = tool?.unavailableHosts ?? [];
-    return gates.every((gate) => {
+    for (const gate of gates) {
       if (excluded.length > 0 && gate.host === undefined) {
         logger.warn(
           `Tool "${name}" is not offered: it depends on the product host, and this process named none.`,
@@ -274,8 +279,15 @@ export const resolveAgentTools = Effect.fn('resolveAgentTools')(function* ({
         return false;
       }
       if (gate.host !== undefined && excluded.includes(gate.host)) return false;
-      return !gate.approvalPromptsUnavailable || !tool?.requiresApproval;
-    });
+    }
+    if (
+      tool?.requiresApproval &&
+      gates.some((gate) => gate.approvalPromptsUnavailable)
+    ) {
+      withheldForApproval.add(name);
+      return false;
+    }
+    return true;
   };
 
   // A declared MCP name reaches its server's plugin: `mcp__<server>__*` is
@@ -341,6 +353,27 @@ export const resolveAgentTools = Effect.fn('resolveAgentTools')(function* ({
     } else {
       logger.warn(`Injected tool not found in registry: ${name}`);
     }
+  }
+
+  // Withholding changes what the run can do, so it is never silent: the
+  // model would otherwise spend its rounds looking for an edit tool it was
+  // never offered. A delegated child reports through its parent's callback,
+  // so it names only the tools its parent's resolution did not already
+  // withhold: those its own declarations or injections add.
+  const parentWithheld = inherited?.composition.approvalPromptsUnavailable
+    ? new Set([
+        ...inherited.composition.tools,
+        ...inherited.composition.injected,
+      ])
+    : new Set<string>();
+  const withheld = [...withheldForApproval].filter(
+    (name) => !parentWithheld.has(name),
+  );
+  if (withheld.length > 0) {
+    logger.warn(
+      `Not offering ${withheld.join(', ')}: these tools need approval, and this run can neither show an approval prompt nor auto-approve under its approval policy. Use the yolo approval policy to allow them.`,
+    );
+    onApprovalPolicyDenial?.(withheld);
   }
 
   const availableModelNames = yield* availableDelegationModelNamesForTools(

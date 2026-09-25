@@ -1,20 +1,17 @@
 /**
- * Mocked execa-result normalization for states that are impractical to produce
- * at small scale, especially `failed: true` + `isMaxBuffer: true` + exit 0.
- * Kept separate from LeanTools.vitest.ts because this file's hoisted module
- * mock would contaminate that suite's real Node subprocess integration tests.
+ * `lake` result mapping for states that are impractical to produce with a
+ * real subprocess, on the scripted spawner. Kept separate from
+ * LeanTools.vitest.ts, whose mutex cases run real Node subprocesses.
  */
 
 // Third-party imports
 import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { beforeEach, describe, expect, vi } from 'vitest';
-
-const mocks = vi.hoisted(() => ({ execa: vi.fn() }));
-
-vi.mock('execa', () => ({ execa: mocks.execa }));
+import * as PlatformError from 'effect/PlatformError';
+import { describe, expect } from 'vitest';
 
 // Local imports
+import { scriptedSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { runLakeCommand } from '@tools/lean/direct/lakeCommands';
 
 describe('runLakeCommand output failures', () => {
@@ -24,54 +21,83 @@ describe('runLakeCommand output failures', () => {
     args: ['build'],
   };
 
-  beforeEach(() => {
-    mocks.execa.mockReset();
-  });
-
   it.effect(
     'keeps stderr empty for ordinary nonzero exits with stdout only',
     () =>
       Effect.gen(function* () {
-        mocks.execa.mockResolvedValue({
-          failed: true,
-          isMaxBuffer: false,
-          timedOut: false,
+        const spawner = scriptedSpawnerLayer(() => ({
           exitCode: 7,
-          stdout: 'build failed in target A',
-          stderr: '',
-          shortMessage: 'Command failed with exit code 7',
-        });
+          stdout: 'build failed in target A\n',
+        }));
 
-        const result = yield* runLakeCommand(LAKE_BUILD);
+        const result = yield* runLakeCommand(LAKE_BUILD).pipe(
+          Effect.provide(spawner.layer),
+        );
 
         expect(result).toEqual({
           exitCode: 7,
           stdout: 'build failed in target A',
           stderr: '',
+        });
+        expect(spawner.calls[0]).toMatchObject({
+          command: 'lake',
+          args: ['build'],
+          options: { cwd: '/workspace', detached: false },
         });
       }),
   );
 
-  it.effect(
-    'does not report maxBuffer overflow with partial stdout as success',
-    () =>
-      Effect.gen(function* () {
-        mocks.execa.mockResolvedValue({
-          failed: true,
-          isMaxBuffer: true,
-          exitCode: 0,
-          stdout: 'partial build output',
-          stderr: '',
-          shortMessage: 'Command failed: stdout maxBuffer exceeded',
-        });
+  it.effect('names the exit code when a failing lake prints nothing', () =>
+    Effect.gen(function* () {
+      const spawner = scriptedSpawnerLayer(() => ({ exitCode: 3 }));
 
-        const result = yield* runLakeCommand(LAKE_BUILD);
+      const result = yield* runLakeCommand(LAKE_BUILD).pipe(
+        Effect.provide(spawner.layer),
+      );
 
-        expect(result).toEqual({
-          exitCode: -1,
-          stdout: 'partial build output',
-          stderr: 'Command failed: stdout maxBuffer exceeded',
-        });
-      }),
+      expect(result).toEqual({
+        exitCode: 3,
+        stdout: '',
+        stderr: 'lake exited with code 3: lake build',
+      });
+    }),
+  );
+
+  it.effect('reports a lake killed by a signal as exit -1', () =>
+    Effect.gen(function* () {
+      const spawner = scriptedSpawnerLayer(() => ({
+        exitCode: PlatformError.systemError({
+          _tag: 'Unknown',
+          module: 'ChildProcess',
+          method: 'exitCode',
+        }),
+      }));
+
+      const result = yield* runLakeCommand(LAKE_BUILD).pipe(
+        Effect.provide(spawner.layer),
+      );
+
+      expect(result.exitCode).toBe(-1);
+      expect(result.stderr).toMatch(/^Command was killed: /);
+    }),
+  );
+
+  it.effect('reports a lake that cannot start as exit -1', () =>
+    Effect.gen(function* () {
+      const spawner = scriptedSpawnerLayer(() =>
+        PlatformError.systemError({
+          _tag: 'NotFound',
+          module: 'ChildProcess',
+          method: 'spawn',
+        }),
+      );
+
+      const result = yield* runLakeCommand(LAKE_BUILD).pipe(
+        Effect.provide(spawner.layer),
+      );
+
+      expect(result.exitCode).toBe(-1);
+      expect(result.stderr).toBe('Command could not start: NotFound');
+    }),
   );
 });

@@ -1,5 +1,5 @@
 // Local imports - run requests
-import { Effect, FileSystem } from 'effect';
+import { Effect } from 'effect';
 import {
   validateRunRequest,
   type ValidatedRunRequest,
@@ -26,13 +26,8 @@ import { createTeamCatalogPorts } from '@controllers/mainView/teamCatalogPorts';
 // Local imports - shared types and errors
 import type { MessageHost } from '@hosts/uiHosts';
 import { withLogChannel } from '@logger/effectLog';
-import type {
-  AgentDirectories,
-  AppState,
-  StateReadFailed,
-  StateStore,
-} from '@platform/interfaces';
-import type { GlobalStorageFs } from '@platform/rootedFs';
+import type { StateReadFailed, StateStore } from '@platform/interfaces';
+import type { AgentCatalogServices } from '@platform/processRuntime';
 import {
   AgentCategory,
   DEFAULT_TOOL_CONFIG,
@@ -141,7 +136,7 @@ export function prepareSurfaceLaunch(
 ): Effect.Effect<
   ValidatedRunRequest,
   Rejected | Cancelled | StateReadFailed,
-  GlobalStorageFs | FileSystem.FileSystem | AgentDirectories | AppState
+  AgentCatalogServices
 > {
   return Effect.gen(function* () {
     let preparation: LaunchPreparation;

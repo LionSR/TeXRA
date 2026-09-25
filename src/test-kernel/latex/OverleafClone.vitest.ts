@@ -8,6 +8,8 @@ import {
 } from '@latex/overleafClone';
 import type { OverleafRemote } from '@latex/overleafProject';
 
+import { scriptedSpawnerLayer } from '@test/support/childProcessTestLayer';
+
 const REMOTE: OverleafRemote = {
   host: 'git.overleaf.com',
   path: '/0123456789abcdef01234567',
@@ -25,7 +27,6 @@ function createPorts(
     storeToken: vi.fn(() => Effect.void),
     promptToken: vi.fn(() => Effect.succeed<string | null>(null)),
     showInvalidToken: vi.fn(() => Effect.void),
-    isGitAvailable: vi.fn(() => Effect.succeed(true)),
     showGitMissing: vi.fn(() => Effect.void),
     listWorkspaceEntries: vi.fn(() => Effect.succeed<Iterable<string>>([])),
     showWorkspaceUnreadable: vi.fn(() => Effect.void),
@@ -39,8 +40,12 @@ function createPorts(
   };
 }
 
-function clone(ports: OverleafCloneWorkflowPorts) {
-  return cloneOverleafProject(REMOTE, '/workspace', ports);
+/** `git --version` answers with `gitExit`; the clone itself is a port. */
+function clone(ports: OverleafCloneWorkflowPorts, gitExit = 0) {
+  const spawner = scriptedSpawnerLayer(() => ({ exitCode: gitExit }));
+  return cloneOverleafProject(REMOTE, '/workspace', ports).pipe(
+    Effect.provide(spawner.layer),
+  );
 }
 
 describe('cloneOverleafProject', () => {
@@ -145,12 +150,11 @@ describe('cloneOverleafProject', () => {
           getStoredToken: vi.fn(() =>
             Effect.succeed<string | undefined>(undefined),
           ),
-          isGitAvailable: vi.fn(() => Effect.succeed(false)),
           promptToken: vi.fn(() =>
             Effect.succeed<string | null>('olp_prompted'),
           ),
         });
-        expect(yield* clone(gitMissingPorts)).toEqual({
+        expect(yield* clone(gitMissingPorts, 127)).toEqual({
           status: 'gitMissing',
         });
         expect(gitMissingPorts.promptToken).not.toHaveBeenCalled();

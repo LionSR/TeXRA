@@ -165,6 +165,21 @@ export const IMAGE_LATEX_TOOLS: readonly ImageLatexTool[] = LATEX_TOOLS.filter(
 ).map((tool) => tool.name);
 
 /**
+ * What the dependency banner says TeXRA cannot do without each tool it
+ * probes, completing "TeXRA can't …". Keyed by the catalog, so a new core
+ * or image tool fails the type check until it says what it is for.
+ */
+export const DEPENDENCY_USE: Readonly<
+  Record<CoreEntry['name'] | ImageLatexTool, string>
+> = {
+  latexindent: 'format .tex files',
+  perl: 'run latexindent',
+  gs: 'turn PDF figures into images',
+  gm: 'turn PDF figures into images',
+  magick: 'turn PDF figures into images',
+};
+
+/**
  * How user-facing output names the image capability when neither candidate is
  * installed: one entry, not two, because either tool satisfies it.
  */

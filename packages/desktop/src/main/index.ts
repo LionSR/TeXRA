@@ -1,6 +1,4 @@
-import { existsSync } from 'node:fs';
-import { rm, writeFile } from 'node:fs/promises';
-import { dirname, join, resolve as resolvePath } from 'node:path';
+import { join, resolve as resolvePath } from 'node:path';
 import { Scope } from 'effect';
 import {
   app,
@@ -13,7 +11,7 @@ import {
   shell,
 } from 'electron';
 
-import { Cause, Data, Effect, Exit, SubscriptionRef } from 'effect';
+import { Cause, Data, Effect, Exit, Stream, SubscriptionRef } from 'effect';
 import { z } from 'zod';
 import { presentAgentFailure } from '@agent/runtime';
 import {
@@ -37,7 +35,6 @@ import {
 import type { PendingOAuthStore } from '@controllers/auth/pendingOAuthStore';
 import { TranscriptExportFailed } from '@controllers/progressView/transcriptExportFailure';
 import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
-import { SubscriptionUsageService } from '@controllers/modelAccess/subscriptionUsage/SubscriptionUsageService';
 import {
   SessionBridge,
   type AttachedPort,
@@ -70,6 +67,7 @@ import type { PlatformSecrets } from '@platform/secrets';
 import {
   INSTRUCTION_ACTION,
   RunIdSchema,
+  type RunId,
   type AgentCategory,
   type AgentSource,
   type InstructionAction,
@@ -82,14 +80,26 @@ import { refreshToolAvailability } from '@tools/toolAvailability';
 import { killActiveRecording } from '@tools/media/audio';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { readRecentCommits } from '@utils/git/repositoryOverview';
-import { findToolInCommonPaths } from '@utils/system/platformPaths';
+import { findToolInCommonPaths } from '@utils/system/binaryResolver';
 import {
   checkToolInstalled,
   detectPackageManager,
 } from '@utils/system/toolUtils';
-import { openDesktopProjectRecords } from './desktopProjectRecords.js';
+import {
+  DesktopProjectRecords,
+  openDesktopProjectRecords,
+} from './desktopProjectRecords.js';
 import { DesktopProcessResumeOwner } from './desktopAgentResume.js';
-import { createDesktopDiffHost } from './desktopDiffHost.js';
+import { createDesktopDialogs } from './desktopDialogs.js';
+import {
+  DesktopAttentionPort,
+  electronAttentionPort,
+  followDesktopAttention,
+} from './desktopAttention.js';
+import {
+  createDesktopDiffHost,
+  removeExternalDiffPatchDirs,
+} from './desktopDiffHost.js';
 import { createDesktopFileSelection } from './desktopFileSelection.js';
 import { createDesktopHostRequests } from './desktopHostRequests.js';
 import { createDesktopAgentRun } from './desktopAgentRun.js';
@@ -101,10 +111,12 @@ import {
   type DesktopMessageHandler,
 } from './desktopIpcTypes.js';
 import {
+  DesktopProjects,
   openDesktopProjectRegistry,
   readRememberedDesktopProjects,
   type DesktopProject,
   type DesktopProjectRegistry,
+  type DesktopProjectsState,
 } from './desktopProjects.js';
 import { createDesktopPreviewHost } from './desktopPreviewHost.js';
 import { createDesktopBrowserViews } from './desktopBrowserViews.js';
@@ -174,7 +186,6 @@ import type { DesktopSetupAuth } from './desktopSetupAuth.js';
 import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';
 
 const moduleDirname = import.meta.dirname;
-const desktopMainDir = findDesktopMainDir(moduleDirname);
 /**
  * Maximum number of commits the renderer displays in the launcher banner.
  * Mirrors the extension's `texra.git.numberOfCommitsToShow` default (20). The
@@ -187,38 +198,6 @@ let reopenMainWindow: (() => void) | undefined;
  *  this; createWindow assigns it when onboarding IPC exists. */
 const afterLaunchFunnelRefresh: { current?: Effect.Effect<void> } = {};
 let continueQuitAfterWindowClose: (() => void) | undefined;
-// Temp directories holding the `.diff` patch files written by the
-// external-editor fallback of every window's diff host. The OS editor may
-// still be reading a patch when its window closes, and on macOS the app
-// outlives its windows, so the process owns these directories and removes them
-// once from the quit lifecycle rather than at window close.
-const externalDiffPatchDirs = new Set<string>();
-
-// Removes every recorded patch directory, reporting each failure instead of
-// swallowing it: a directory that survives is left for OS temp cleanup, and
-// quit must not stall on it.
-const removeExternalDiffPatchDirs: Effect.Effect<void> = Effect.suspend(() => {
-  const tempDirs = [...externalDiffPatchDirs];
-  externalDiffPatchDirs.clear();
-  return Effect.forEach(
-    tempDirs,
-    (tempDir) =>
-      Effect.tryPromise({
-        try: () => rm(tempDir, { recursive: true, force: true }),
-        catch: ensureError,
-      }).pipe(
-        Effect.catch((reason: unknown) =>
-          Effect.sync(() => {
-            console.warn(
-              `[desktop] Failed to remove the temporary diff directory ${tempDir}; it is left for OS temp cleanup: ${toErrorMessage(reason)}`,
-            );
-          }),
-        ),
-      ),
-    { concurrency: 'unbounded', discard: true },
-  );
-});
-
 // Playwright tests need a deterministic Electron profile so app-scoped stores
 // survive across launches. Normal desktop launches keep Electron's default
 // userData path.
@@ -226,6 +205,9 @@ const e2eUserDataPath = process.env.TEXRA_DESKTOP_E2E_USER_DATA_PATH;
 if (e2eUserDataPath) {
   app.setPath('userData', resolvePath(e2eUserDataPath));
 }
+
+/** Show a run of a project in the window; the window assigns it. */
+const revealProjectRun: { current?: (key: string, runId: RunId) => void } = {};
 
 function focusOrReopenMainWindow(): void {
   if (!mainWindow) {
@@ -244,23 +226,6 @@ const protocolLifecycle = installDesktopProtocolCallbackLifecycle({
   devAppArg: process.argv[1] ? resolvePath(process.argv[1]) : undefined,
   focusMainWindow: focusOrReopenMainWindow,
 });
-
-function findDesktopMainDir(startDir: string): string {
-  let currentDir = startDir;
-  for (let depth = 0; depth < 3; depth += 1) {
-    if (
-      existsSync(join(currentDir, '../preload/index.cjs')) &&
-      existsSync(join(currentDir, '../renderer/index.html'))
-    ) {
-      return currentDir;
-    }
-
-    const parentDir = dirname(currentDir);
-    if (parentDir === currentDir) break;
-    currentDir = parentDir;
-  }
-  return startDir;
-}
 
 // The packaged renderer uses Lit style attributes and bundled font data URLs
 // (codicons/KaTeX). Keep script run locked to app files while allowing
@@ -320,6 +285,8 @@ function createWindow(options: {
   agentDirectories: AgentDirectoriesPort;
   /** See ElectronPlatformInitResult.resourcesPath. */
   resourcesPath: string;
+  /** See ElectronPlatformInitResult.mainDir. */
+  mainDir: string;
   /**
    * The process runtime the composition root built. Every Effect this window
    * runs settles on it, and every handler and service below is handed it.
@@ -366,7 +333,7 @@ function createWindow(options: {
     // contrasting flash behind the frameless window.
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#212121' : '#f7f7f7',
     webPreferences: {
-      preload: join(desktopMainDir, '../preload/index.cjs'),
+      preload: join(options.mainDir, '../preload/index.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
@@ -428,24 +395,20 @@ function createWindow(options: {
     readonly message: string;
     readonly cause: unknown;
   }> {}
-  const showMessageBoxOfType =
-    (
-      member: NotificationFailed['member'],
-      type: 'error' | 'info' | 'warning',
-    ) =>
-    (message: string): Effect.Effect<void, NotificationFailed> =>
-      Effect.tryPromise({
-        try: async () => {
-          await dialog.showMessageBox(window, { type, message });
-        },
-        catch: (cause) =>
-          new NotificationFailed({
-            member,
-            message: toErrorMessage(cause),
-            cause,
-          }),
-      });
-  const showErrorMessage = showMessageBoxOfType('showErrorMessage', 'error');
+  const {
+    showErrorMessage,
+    showInfoMessage,
+    showWarningMessage,
+    confirmDialog,
+    presentTeamAvailabilityPrompt,
+    showErrorDialog,
+    showInstructionDialog,
+    pickTranscriptExportFormat,
+  } = createDesktopDialogs(window, {
+    openGuide: (docsCommand) =>
+      openExternalInBackground(`https://texra.ai/guide/${docsCommand}`),
+    dispatchInstructionAction: (action) => dispatchInstructionAction(action),
+  });
   const reportAsyncError = (error: unknown) => {
     console.error('Desktop asynchronous operation failed:', error);
     runtime.runFork(
@@ -484,68 +447,6 @@ function createWindow(options: {
   installDesktopNavigationPolicy(window.webContents, {
     onAsyncError: reportAsyncError,
   });
-  const showInfoMessage = showMessageBoxOfType('showInfoMessage', 'info');
-  const showWarningMessage = showMessageBoxOfType(
-    'showWarningMessage',
-    'warning',
-  );
-  // Shared shape for the "confirm this action" dialog: a warning with a
-  // confirm button (defaulted, id 0) and a 'Cancel' button (id 1), collapsed
-  // to a boolean. Used by confirmAcceptFile, the agent-settings confirm
-  // prompt, the credential-settings confirm prompt, and settingsUi.confirmAction.
-  const confirmDialog = (options: {
-    message: string;
-    title?: string;
-    detail?: string;
-    confirmLabel?: string;
-  }): Effect.Effect<boolean, PromptFailed> =>
-    Effect.tryPromise({
-      try: () =>
-        dialog.showMessageBox(window, {
-          type: 'warning',
-          title: options.title,
-          message: options.message,
-          detail: options.detail,
-          buttons: [options.confirmLabel ?? 'OK', 'Cancel'],
-          defaultId: 0,
-          cancelId: 1,
-        }),
-      catch: (cause) =>
-        new PromptFailed({
-          reason: 'presentation-failed',
-          member: 'confirm',
-          message: `The confirmation dialog could not be shown: ${toErrorMessage(cause)}`,
-          cause,
-        }),
-    }).pipe(Effect.map((result) => result.response === 0));
-  /**
-   * Sole owner of the native unavailable-member prompt. Both the main-view
-   * launch path and settings path route here so wording and button labels
-   * cannot drift. The Electron dialog is the team-availability `choose`
-   * port's own foreign edge, so it is wrapped here once and raises the
-   * port's `TeamCatalogPortFailed`.
-   */
-  const presentTeamAvailabilityPrompt = (
-    prompt: TeamAvailabilityPrompt,
-  ): Effect.Effect<'sign-in' | 'continue' | 'cancel', TeamCatalogPortFailed> =>
-    Effect.tryPromise({
-      try: async () => {
-        const { response } = await dialog.showMessageBox(window, {
-          type: prompt.severity,
-          message: prompt.message,
-          buttons: prompt.actions.map((action) => action.label),
-          defaultId: 0,
-          cancelId: 2,
-        });
-        return prompt.actions[response]?.choice ?? 'cancel';
-      },
-      catch: (cause) =>
-        new TeamCatalogPortFailed({
-          member: 'choose',
-          message: `The host could not ask about the unavailable members: ${toErrorMessage(cause)}`,
-          cause,
-        }),
-    });
   // Lightweight update check: at most once/day, notifies at most once per
   // release via a native dialog linking to the GitHub release page. Not a full
   // updater: no download, no install, no feed files. Disable with
@@ -578,6 +479,7 @@ function createWindow(options: {
   );
   const previewOptions = {
     shell,
+    runtime,
     // The in-app PDF overlay is preferred when the renderer is available.
     postToRenderer: postToRendererIfAlive,
   };
@@ -592,14 +494,6 @@ function createWindow(options: {
    *  program, so its `AgentDirectoriesFailed` travels with the caller that
    *  asked for it instead of being lifted back out of a settled promise. */
   const getCustomAgentDirectory = () => options.agentDirectories.custom();
-  // Button labels for the instruction dialog below. Desktop has one settings
-  // home (Settings tab), so SET_API_KEY opens it directly rather than the
-  // extension's separate "enter a key" quick pick.
-  const INSTRUCTION_ACTION_BUTTON_LABELS: Record<InstructionAction, string> = {
-    [INSTRUCTION_ACTION.SET_API_KEY]: 'Set API Key',
-    [INSTRUCTION_ACTION.OPEN_CONFIGURATION_GUIDE]: 'Configuration Guide',
-    [INSTRUCTION_ACTION.OPEN_MODELS_DOC]: 'Model Documentation',
-  };
   /**
    * The shell-facing `openExternal` worded for the {@link ExternalOpener}
    * port: the member is already a program, so this only names the failure.
@@ -652,7 +546,7 @@ function createWindow(options: {
   const dispatchInstructionAction = (action: InstructionAction): void => {
     switch (action) {
       case INSTRUCTION_ACTION.SET_API_KEY:
-        postDesktopSettingsView(postToRendererIfAlive, 'models');
+        postDesktopSettingsView(postToRendererIfAlive, 'models/keys');
         return;
       case INSTRUCTION_ACTION.OPEN_CONFIGURATION_GUIDE:
         openExternalInBackground('https://texra.ai/guide/configuration.html');
@@ -662,89 +556,11 @@ function createWindow(options: {
         return;
     }
   };
-  /**
-   * A failure is an 'error' dialog; a refusal that names a docs page
-   * (`docsCommand`, e.g. a launch without an input file) adds a guide button
-   * so the desktop dialog keeps the link the extension's request-error
-   * callout renders. The URL path is host-originated, never network data.
-   */
-  const showErrorDialog = (
-    message: string,
-    docsCommand?: string,
-  ): Effect.Effect<void, NotificationFailed> => {
-    if (!docsCommand) return showErrorMessage(message);
-    return Effect.tryPromise({
-      try: () =>
-        dialog.showMessageBox(window, {
-          type: 'error',
-          message,
-          buttons: ['Read the guide', 'OK'],
-          defaultId: 1,
-          cancelId: 1,
-        }),
-      catch: (cause) =>
-        new NotificationFailed({
-          member: 'showErrorMessage',
-          message: `A desktop error dialog could not be shown: ${toErrorMessage(cause)}`,
-          cause,
-        }),
-    }).pipe(
-      Effect.map(({ response }) => {
-        if (response === 0) {
-          openExternalInBackground(`https://texra.ai/guide/${docsCommand}`);
-        }
-      }),
-    );
-  };
-  /**
-   * Instructions (e.g. a missing API key) are actionable guidance, not
-   * failures, so this stays an 'info' dialog — but each action token now
-   * renders as a real button instead of degrading to trailing hint text with
-   * nothing to click. `showSuppress` still has no affordance to attach to: a
-   * native dialog has no persistent "never remind again" control.
-   */
-  const showInstructionDialog = (
-    message: string,
-    actions: readonly InstructionAction[] | undefined,
-  ): Effect.Effect<void, NotificationFailed> => {
-    const tokens = actions ?? [];
-    const buttons = [
-      ...tokens.map((token) => INSTRUCTION_ACTION_BUTTON_LABELS[token]),
-      'Dismiss',
-    ];
-    const dismissId = buttons.length - 1;
-    return Effect.tryPromise({
-      try: () =>
-        dialog.showMessageBox(window, {
-          type: 'info',
-          message,
-          buttons,
-          defaultId: dismissId,
-          cancelId: dismissId,
-        }),
-      catch: (cause) =>
-        new NotificationFailed({
-          member: 'showInfoMessage',
-          message: `The instruction dialog could not be shown: ${toErrorMessage(cause)}`,
-          cause,
-        }),
-    }).pipe(
-      Effect.map(({ response }) => {
-        const action = tokens[response];
-        if (action) dispatchInstructionAction(action);
-      }),
-    );
-  };
   let teamSignInPending = false;
-  /** Every surface an account change touches, as one program: the open
-   *  papers' auth snapshots, the settings view, then the onboarding funnel. */
+  /** Every surface an account change touches, as one program: the agent
+   *  catalog, the settings view, then the onboarding funnel. */
   const refreshDesktopAuthSurfaces = () =>
     Effect.gen(function* () {
-      yield* Effect.forEach(
-        [...projectBindings.values()],
-        (binding) => binding.snapshot.refreshAuth,
-        { concurrency: 'unbounded', discard: true },
-      );
       // Sign-in: a signed-out load already stamped the catalog as including
       // remote, so only a forced refetch picks up the new account's agents.
       // Sign-out also lands here, after the coordinator dropped the remote
@@ -853,6 +669,26 @@ function createWindow(options: {
     );
   };
 
+  revealProjectRun.current = (key, runId) => {
+    const project =
+      key === options.projects.fallback().key
+        ? options.projects.fallback()
+        : projectByKey(key);
+    if (!project) return;
+    runtime.runFork(
+      options.projects.activate(project.root).pipe(
+        Effect.andThen(
+          Effect.sync(() =>
+            projectBindings
+              .get(key)
+              ?.bridge.surfaceAction({ kind: 'select', runId }),
+          ),
+        ),
+        Effect.catch((error) => Effect.sync(() => reportAsyncError(error))),
+      ),
+    );
+  };
+
   /** The renderer reports dirtiness for the addressed project, including a
    *  hidden one. Only explicit closure releases its resources. */
   const closeProject = (key: string, hasUnsavedChanges: boolean) => {
@@ -869,6 +705,14 @@ function createWindow(options: {
     );
   };
 
+  /** Open a folder as a project and show it. */
+  const openProjectAt = Effect.fn('desktop.openProjectAt')(function* (
+    path: string,
+  ) {
+    const project = yield* options.projects.open(path);
+    if (project.root !== undefined && project !== activeProject())
+      yield* options.projects.activate(project.root);
+  });
   const openWorkspaceFolder = Effect.fn('desktop.openWorkspaceFolder')(
     function* () {
       const result = yield* Effect.tryPromise({
@@ -882,18 +726,13 @@ function createWindow(options: {
       });
       const selectedPath = result.canceled ? undefined : result.filePaths[0];
       if (!selectedPath) return;
-      const project = yield* options.projects.open(selectedPath);
-      if (project.root !== undefined && project !== activeProject())
-        yield* options.projects.activate(project.root);
+      yield* openProjectAt(selectedPath);
     },
   );
   attachRendererConsoleLog(window.webContents);
   const desktopDiffHost = createDesktopDiffHost({
     runtime,
     openPath: previewHost.openPath,
-    recordPatchDir: (tempDir) => {
-      externalDiffPatchDirs.add(tempDir);
-    },
     // Prefer the in-app overlay (<texra-diff-view> inside a wa-dialog).
     // Returning `false` when the IPC bridge is not yet wired (startup race)
     // or the BrowserWindow has been destroyed falls the host back to the
@@ -921,57 +760,35 @@ function createWindow(options: {
   const requestDiffHost = createDesktopDiffHost({
     runtime,
     openPath: requestPreviewHost.openPath,
-    recordPatchDir: (tempDir) => {
-      externalDiffPatchDirs.add(tempDir);
-    },
     postToRenderer: postToRendererIfAlive,
   });
-  const agentRunHost: Omit<
-    DesktopAgentRunHost,
-    'openBuildDisplay' | 'openDiff'
-  > = {
+  /** The dialogs of one project's runs, each naming that project. */
+  const agentRunHostFor = (
+    project: string,
+  ): Omit<DesktopAgentRunHost, 'openBuildDisplay' | 'openDiff'> => ({
     openPath: previewHost.openPath,
     confirmAcceptFile: (message) =>
-      confirmDialog({ message, confirmLabel: 'Replace file' }),
+      confirmDialog({ message, confirmLabel: 'Replace file', project }),
     chooseTeamAvailability: (unavailableNames) =>
-      presentTeamAvailabilityPrompt(teamAvailabilityPrompt(unavailableNames)),
+      presentTeamAvailabilityPrompt(
+        teamAvailabilityPrompt(unavailableNames),
+        project,
+      ),
     signInForRemoteAgentCatalog,
     // Presentation failures are reported, never raised: a run must not
     // fail because a dialog could not be shown. The caller still awaits the
     // dialog, as it did before.
-    showInfoMessage: (message) => awaitOrReport(showInfoMessage(message)),
-    showWarningMessage,
-    showErrorMessage: (message) => awaitOrReport(showErrorMessage(message)),
+    showInfoMessage: (message) =>
+      awaitOrReport(showInfoMessage(message, project)),
+    showWarningMessage: (message) => showWarningMessage(message, project),
+    showErrorMessage: (message) =>
+      awaitOrReport(showErrorMessage(message, project)),
     showErrorDialog: (message, docsCommand) =>
-      awaitOrReport(showErrorDialog(message, docsCommand)),
+      awaitOrReport(showErrorDialog(message, docsCommand, project)),
     showInstructionDialog: (message, actions) =>
-      awaitOrReport(showInstructionDialog(message, actions)),
-    pickTranscriptExportFormat: () =>
-      Effect.tryPromise({
-        try: async () => {
-          const { TRANSCRIPT_EXPORT_FORMAT_CHOICES } =
-            await import('@controllers/progressView/exportTranscript');
-          const { response } = await dialog.showMessageBox(window, {
-            type: 'question',
-            message: 'Export transcript',
-            detail: 'Choose a format',
-            buttons: [
-              ...TRANSCRIPT_EXPORT_FORMAT_CHOICES.map((choice) => choice.label),
-              'Cancel',
-            ],
-            defaultId: 0,
-            cancelId: TRANSCRIPT_EXPORT_FORMAT_CHOICES.length,
-          });
-          return TRANSCRIPT_EXPORT_FORMAT_CHOICES[response]?.format;
-        },
-        catch: (cause) =>
-          new TranscriptExportFailed({
-            step: 'pickFormat',
-            message: toErrorMessage(cause),
-            cause,
-          }),
-      }),
-  };
+      awaitOrReport(showInstructionDialog(message, actions, project)),
+    pickTranscriptExportFormat: () => pickTranscriptExportFormat(project),
+  });
   const openFileDialog = async (dialogOptions: {
     title: string;
     defaultPath?: string;
@@ -1016,6 +833,9 @@ function createWindow(options: {
   const projectBindings = new Map<string, ProjectBinding>();
   const bindProject = (project: DesktopProject): ProjectBinding => {
     const { workspace, browserViews } = createProjectWorkspace(project);
+    const agentRunHost = agentRunHostFor(
+      projectDisplayOf(project.key, project.root).name,
+    );
     const files = createDesktopFileSelection({
       workspacePath: project.root,
       showOpenFileDialog: openFileDialog,
@@ -1085,7 +905,11 @@ function createWindow(options: {
       session: project.session,
       showAgentConfigBanner: ({ agentName, category }) =>
         snapshot.showAgentConfigBanner(agentName, category),
-      onLaunched: (runId) => bridge.surfaceAction({ kind: 'select', runId }),
+      // A resolved agent also retires the missing-agent warning.
+      onLaunched: (runId) => {
+        bridge.surfaceAction({ kind: 'select', runId });
+        runtime.runFork(snapshot.clearAgentConfigBanner);
+      },
       // Recompute the onboarding funnel when a launch settles so a first
       // successful run leaves the setup card without a restart. The settled
       // launch includes AgentRunLifecycle's firstRunDone write.
@@ -1112,7 +936,6 @@ function createWindow(options: {
       resourcesPath: options.resourcesPath,
       postToRenderer: postToRendererIfAlive,
       postSurfaceAction: (action) => bridge.surfaceAction(action),
-      signIn,
       getCustomAgentDirectory,
       showFirstRunWalkthrough: () => shellActions.showFirstRunWalkthrough(),
       onboarding: requireOnboardingIpc(),
@@ -1196,10 +1019,6 @@ function createWindow(options: {
       (binding) => binding.snapshot.refreshCatalogs,
       { concurrency: 'unbounded', discard: true },
     );
-  const subscriptionUsage = new SubscriptionUsageService({
-    secrets: options.secrets,
-    stores: activeProject().session.roots,
-  });
   const settingsUi: DesktopSettingsUiHost = {
     showInfoMessage,
     showErrorMessage,
@@ -1238,9 +1057,15 @@ function createWindow(options: {
     return settingsIpc;
   };
   const postProjects = () => {
+    const { projects, activeKey } = SubscriptionRef.getUnsafe(
+      options.projects.state,
+    );
     postToRendererIfAlive({
       command: DESKTOP_PROJECT_COMMANDS.PROJECTS,
-      ...options.projects.summary(),
+      projects: projects.flatMap(({ key, root }) =>
+        root === undefined ? [] : [{ key, root }],
+      ),
+      activeKey,
     });
   };
   /**
@@ -1367,7 +1192,6 @@ function createWindow(options: {
           signIn,
           signOut: () => desktopAuth.signOut(),
         },
-        subscriptionUsage,
         onCredentialChanged: () =>
           onboardingIpcRef.current?.refreshOnboardingFunnel() ?? Effect.void,
         onModelOptionsChanged: refreshCatalogs,
@@ -1443,17 +1267,54 @@ function createWindow(options: {
       ),
     );
   };
-  windowResources.add(
-    options.projects.onChange(() => {
-      syncProjectBindings();
-      if (activeProject() !== attachedProject) {
-        for (const binding of projectBindings.values())
-          binding.browserViews.hideAll();
-      }
-      attachActiveProject();
-      postProjects();
-    }),
-  );
+  /**
+   * Follow the registry: bind a project that opened, release one that
+   * closed, and move the window's project-bound surfaces (settings, title)
+   * and the onboarding funnel, whose credential check reads the shown
+   * project's config, to the project it now shows.
+   */
+  let menuRecent: readonly string[] | undefined;
+  const installMenu = (recent: readonly string[]) => {
+    if (recent === menuRecent) return;
+    menuRecent = recent;
+    Menu.setApplicationMenu(
+      Menu.buildFromTemplate(
+        buildDesktopMenuTemplate(shellActions, {
+          roots: recent,
+          open: (root) =>
+            runtime.runFork(
+              openProjectAt(root).pipe(
+                Effect.catch((error) =>
+                  Effect.sync(() => reportAsyncError(error)),
+                ),
+              ),
+            ),
+          clear: () =>
+            runtime.runFork(
+              options.projects
+                .clearRecent()
+                .pipe(
+                  Effect.catch((error) =>
+                    Effect.sync(() => reportAsyncError(error)),
+                  ),
+                ),
+            ),
+        }),
+      ),
+    );
+  };
+  const followProjects = (state: DesktopProjectsState) => {
+    syncProjectBindings();
+    installMenu(state.recent);
+    const switched = state.activeKey !== attachedProject?.key;
+    if (switched) {
+      for (const binding of projectBindings.values())
+        binding.browserViews.hideAll();
+    }
+    attachActiveProject();
+    postProjects();
+    if (switched) runtime.runFork(refreshFunnelAfterLaunch);
+  };
   const onboardingIpc = createDesktopOnboardingIpc(
     { postToRenderer: postToRendererIfAlive },
     {
@@ -1537,8 +1398,6 @@ function createWindow(options: {
       // card's program runs, not when the port is built.
       signInWithChatGpt: () =>
         Effect.suspend(() => requireSettingsIpc().signInChatGpt()),
-      onAsyncError: reportAsyncError,
-      runtime,
     },
   );
   onboardingIpcRef.current = onboardingIpc;
@@ -1637,9 +1496,7 @@ function createWindow(options: {
             height: Math.round(bounds.height * zoom),
           };
         },
-        runtime,
         getWorkspacePath: () => project.root,
-        onAsyncError: reportAsyncError,
       },
     );
     return { workspace, browserViews };
@@ -1649,13 +1506,14 @@ function createWindow(options: {
       message: Parameters<DesktopMessageHandler['handleMessage']>[0],
     ) {
       const parsed = DesktopWorkspaceInboundMessageSchema.safeParse(message);
-      if (!parsed.success) return false;
+      if (!parsed.success) return undefined;
       const binding = projectBindings.get(parsed.data.session);
       if (!binding) {
-        console.warn(
-          `Dropped a workspace request for closed project ${parsed.data.session}`,
+        return Effect.sync(() =>
+          console.warn(
+            `Dropped a workspace request for closed project ${parsed.data.session}`,
+          ),
         );
-        return true;
       }
       // Hidden projects retain their resources, but cannot cover the visible project
       // with a late browser-bounds notification.
@@ -1663,9 +1521,8 @@ function createWindow(options: {
         parsed.data.command === DESKTOP_WORKSPACE_COMMANDS.BROWSER_BOUNDS &&
         binding.project !== activeProject()
       )
-        return true;
-      binding.workspace.handleMessage(message);
-      return true;
+        return Effect.void;
+      return binding.workspace.handleMessage(message);
     },
     disposeRendererResources() {
       // Navigation destroys the document, including its request correlations
@@ -1696,17 +1553,9 @@ function createWindow(options: {
     {
       readLog: () =>
         readDesktopLogSnapshot({ workspacePath: activeProject().root }),
-      copyLog: async (text) => clipboard.writeText(text),
-      exportLog: async (text) => {
-        const result = await dialog.showSaveDialog(window, {
-          title: 'Export TeXRA Desktop Log',
-          defaultPath: 'texra-desktop-log.txt',
-          filters: [{ name: 'Text Logs', extensions: ['txt', 'log'] }],
-        });
-        if (result.canceled || !result.filePath) return;
-        await writeFile(result.filePath, text, 'utf8');
-      },
-      onAsyncError: reportAsyncError,
+      copyLog: (text) => clipboard.writeText(text),
+      showSaveDialog: (dialogOptions) =>
+        dialog.showSaveDialog(window, dialogOptions),
     },
   );
   // One handler per inbound command namespace: the message's `command` names
@@ -1716,7 +1565,7 @@ function createWindow(options: {
     prompt: promptController,
     settings: {
       handleMessage: (message) =>
-        settingsIpcRef.current?.handleMessage(message) ?? false,
+        settingsIpcRef.current?.handleMessage(message),
     },
     onboarding: onboardingIpc,
     projects: createDesktopProjectsIpc({
@@ -1734,7 +1583,19 @@ function createWindow(options: {
         const route = desktopInboundRoute(message.command);
         // A command no surface owns is renderer drift, not a session
         // message: session frames are keyed by `kind`, never `command`.
-        if (route) desktopRoutes[route].handleMessage(message);
+        const program = route && desktopRoutes[route].handleMessage(message);
+        // The one run site for every namespace's program, and its one report:
+        // a failure or defect reaches the window's async-error reporter.
+        if (program)
+          runtime.runFork(
+            program.pipe(
+              Effect.catchCause((cause) =>
+                Cause.hasInterruptsOnly(cause)
+                  ? Effect.void
+                  : Effect.sync(() => reportAsyncError(Cause.squash(cause))),
+              ),
+            ),
+          );
         return;
       }
       // A session message names its project: that project's port answers it.
@@ -1757,9 +1618,26 @@ function createWindow(options: {
   ipcRef.current = { postToRenderer: hostBridge.postToRenderer };
   syncProjectBindings();
   attachActiveProject();
-  Menu.setApplicationMenu(
-    Menu.buildFromTemplate(buildDesktopMenuTemplate(shellActions)),
+  // Subscribed last: the first change it sees may bind a project, which
+  // needs every window surface above. Its first element is the state just
+  // attached, so it changes nothing.
+  const followScope = Scope.makeUnsafe();
+  windowResources.add(() => {
+    runtime.runFork(Scope.close(followScope, Exit.void));
+  });
+  runtime.runFork(
+    Stream.runForEach(
+      SubscriptionRef.changes(options.projects.state),
+      (state) =>
+        Effect.try({
+          try: () => followProjects(state),
+          catch: ensureError,
+        }).pipe(
+          Effect.catch((error) => Effect.sync(() => reportAsyncError(error))),
+        ),
+    ).pipe(Effect.forkIn(followScope)),
   );
+  installMenu(SubscriptionRef.getUnsafe(options.projects.state).recent);
   window.once('closed', () => {
     const continueQuit = continueQuitAfterWindowClose;
     continueQuitAfterWindowClose = undefined;
@@ -1779,7 +1657,11 @@ function createWindow(options: {
         Menu.setApplicationMenu(Menu.buildFromTemplate([{ role: 'appMenu' }]));
       }
     }
-    continueQuit?.();
+    // Resume the quit once Electron has finished closing this window. A quit
+    // requested from inside `closed` lands before the window leaves the
+    // window list, so Electron abandons it and emits `window-all-closed`
+    // instead of `will-quit`, which on macOS leaves the process running.
+    if (continueQuit) setImmediate(continueQuit);
   });
   let windowPresented = false;
   const presentWindow = (): void => {
@@ -1802,7 +1684,7 @@ function createWindow(options: {
     return;
   }
 
-  void window.loadFile(join(desktopMainDir, '../renderer/index.html'));
+  void window.loadFile(join(options.mainDir, '../renderer/index.html'));
 }
 
 if (protocolLifecycle.ownsSingleInstanceLock) {
@@ -1833,7 +1715,7 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
       // The shutdown handlers, the startup program, and every surface they
       // wire run on the process runtime the platform builds.
       const { lifecycle, runtime, processScope, initialize } =
-        yield* initializeElectronPlatform(desktopMainDir, processResumeOwner);
+        yield* initializeElectronPlatform(moduleDirname, processResumeOwner);
       registerRuntimeShutdownHandlers(lifecycle, {
         beforeAgentShutdown: [Effect.sync(() => processResumeOwner.disable())],
         afterAgentShutdown: [killActiveRecording()],
@@ -1845,7 +1727,9 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
         ),
         // The external-editor patch directories recorded by every window's
         // diff host are removed here, once, while the process is still alive.
-        afterFlushArtifacts: [removeExternalDiffPatchDirs],
+        afterFlushArtifacts: [
+          withProcessServices(runtime, removeExternalDiffPatchDirs),
+        ],
         afterRunSettlement: [
           // Every project's session, most recently opened first, settled
           // before the runtime they run on goes (or, before the registry
@@ -1865,30 +1749,26 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
       yield* withProcessServices(
         runtime,
         Effect.gen(function* () {
-          const warn = (message: string) =>
-            console.warn(`[desktop] ${message}`);
           const platformInit = yield* initialize;
           const projectRecords = yield* openDesktopProjectRecords;
+          // Reopen every folder left open last time and show the one shown
+          // last. A folder that is gone or no longer opens is reported once the
+          // window exists; the others open regardless. Read before the
+          // registry opens, so the recent list it starts from is pruned too.
+          const remembered = yield* readRememberedDesktopProjects().pipe(
+            Effect.provideService(DesktopProjectRecords, projectRecords),
+          );
           const registry = yield* openDesktopProjectRegistry({
             dataRoot: platformInit.dataRoot,
             processRoots: platformInit.processRoots,
             processScope,
             globalConfigStore: platformInit.globalConfigStore,
-            records: projectRecords,
-            warn,
             stores: {
               ...platformInit.processRoots,
               secrets: platformInit.secrets,
             },
-          });
+          }).pipe(Effect.provideService(DesktopProjectRecords, projectRecords));
           projects = registry;
-          // Reopen every folder left open last time and show the one shown
-          // last. A folder that is gone or no longer opens is reported once the
-          // window exists; the others open regardless.
-          const remembered = yield* readRememberedDesktopProjects(
-            projectRecords,
-            warn,
-          );
           const unopenedProjects = remembered.missing.map(
             (root) => `${root} (no such folder; forgotten)`,
           );
@@ -1932,6 +1812,7 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
                 secrets: platformInit.secrets,
                 agentDirectories: platformInit.agentDirectories,
                 resourcesPath: platformInit.resourcesPath,
+                mainDir: platformInit.mainDir,
                 runtime,
                 setupAuth: platformInit.setupAuth,
               });
@@ -1941,6 +1822,28 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
                 reopenMainWindow?.();
             });
           });
+          // For the process lifetime: the fallback project's scope is the
+          // last the shutdown releases.
+          yield* followDesktopAttention.pipe(
+            Effect.provideService(DesktopProjects, registry),
+            Effect.provideService(
+              DesktopAttentionPort,
+              electronAttentionPort({
+                window: () => mainWindow,
+                reveal: (key, runId) => {
+                  focusOrReopenMainWindow();
+                  revealProjectRun.current?.(key, runId);
+                },
+              }),
+            ),
+            Effect.catchCause((cause) =>
+              Effect.logWarning(
+                'The dock badge and notifications stopped following the projects',
+                cause,
+              ),
+            ),
+            Effect.forkIn(processScope),
+          );
           if (unopenedProjects.length > 0) {
             // Detached: startup does not wait on the user dismissing it.
             yield* Effect.tryPromise({

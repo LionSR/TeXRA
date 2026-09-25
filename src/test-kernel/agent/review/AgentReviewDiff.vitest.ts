@@ -21,6 +21,7 @@ import {
   withTempDir,
   withTempDirEffect,
 } from '@test/support/tempDirPlatform';
+import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { executeCommand } from '@utils/system/execUtils';
 
 setupPlatform({ workspacePath: process.cwd() });
@@ -42,7 +43,9 @@ describe('collectReviewDiff (real git repository)', () => {
 
   async function git(...args: string[]): Promise<string> {
     const result = await Effect.runPromise(
-      executeCommand(['git', ...args], { cwd: repo, settings: undefined }),
+      executeCommand(['git', ...args], { cwd: repo, settings: undefined }).pipe(
+        Effect.provide(nodeSpawnerLayer),
+      ),
     );
     expect(result.success, `git ${args.join(' ')}: ${result.stderr}`).toBe(
       true,

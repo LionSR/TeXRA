@@ -4,7 +4,7 @@ import * as path from 'node:path';
 
 import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { afterEach, describe, expect, vi } from 'vitest';
+import { afterEach, expect, vi } from 'vitest';
 
 import {
   installPlugins,
@@ -24,9 +24,11 @@ import {
   readDisabledSkills,
   skillDisplayItem,
 } from '@skills/runtimeSkills';
+import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { installTestSkillRoots } from '@test/support/skillFixtures';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
+import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { TOOL_PLUGINS } from '@tools/plugins';
 
@@ -61,7 +63,7 @@ afterEach(() => {
   commandMocks.initCliPlatform.mockReset();
 });
 
-describe('CLI skills runtime', () => {
+it.layer(nodePlatformLayer)('CLI skills runtime', (it) => {
   it('deduplicates repeated source paths while preserving required custom roots, and rejects a repeated contribution id', () => {
     const projectSkillsPath = path.resolve(
       path.sep,
@@ -413,6 +415,6 @@ describe('CLI skills runtime', () => {
         yield* Effect.promise(() =>
           fs.access(path.join(plugin, 'skills', 'load-paper', 'SKILL.md')),
         );
-      }),
+      }).pipe(Effect.provide(nodeSpawnerLayer)),
   );
 });

@@ -4,24 +4,25 @@ import { Effect } from 'effect';
  * owner of endpoint precedence. The package binds a model to a stated
  * deployment endpoint (it never falls back to an SDK default), so the
  * providers the handler left to their SDKs are named here. Precedence: a
- * per-model base URL, then OpenRouter, then a per-provider dashboard
- * endpoint, then the provider plugin's default (`baseUrl` in
- * `@shared/constants/modelProviderPlugins`), picked by region when it has
- * two. GLM takes its Coding Plan path when that plan serves the request,
- * which is the one place `usageRoute` is set.
+ * per-model base URL, then the route's own (Kimi Code, OpenRouter), then a
+ * per-provider dashboard endpoint, then the provider plugin's default
+ * (`baseUrl` in `@shared/constants/modelProviderPlugins`), picked by region
+ * when it has two. GLM takes its Coding Plan path when the route decided the
+ * plan pays (`@model/modelRoute`).
  */
-import { ModelProvider, type ModelConfig } from 'llm-zoo';
 
 import type { StateReadFailed } from '@platform/interfaces';
+import { KIMI_CODE_BASE_URL } from '@shared/constants/providers';
 import { findModelProviderPlugin } from '@shared/constants/modelProviderPlugins';
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import type { DeclinableUsageRoute, UsageRoute } from '@shared/schemas';
 import {
-  getGLMCodingPlan,
   getProviderEndpoint,
   useChinaRegion,
 } from '@utils/config/providerConfig';
 import { tryParseUrl } from '@utils/core';
+import type { ModelConfig } from 'llm-zoo';
+
+import type { ModelRoute } from './modelRoute';
 
 const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1';
 
@@ -41,46 +42,30 @@ const GLM_CODING_PLAN_BASE_URLS = {
   international: 'https://api.z.ai/api/coding/paas/v4',
 } as const;
 
-interface RouteEndpoint {
-  readonly baseUrl: string;
-  readonly usageRoute?: UsageRoute;
-}
-
 export function resolveRouteEndpoint(
   stores: SettingsStores,
   config: Pick<ModelConfig, 'name' | 'provider' | 'baseUrl'>,
-  useOpenRouter: boolean,
-  declinedRoutes?: readonly DeclinableUsageRoute[],
-): Effect.Effect<RouteEndpoint, StateReadFailed> {
+  route: Extract<ModelRoute, { kind: 'openrouter' | 'api-key' }>,
+): Effect.Effect<string, StateReadFailed> {
   return Effect.gen(function* () {
-    if (config.baseUrl) return { baseUrl: config.baseUrl };
-    if (useOpenRouter) return { baseUrl: OPENROUTER_BASE_URL };
+    if (config.baseUrl) return config.baseUrl;
+    if (route.kind === 'openrouter') return OPENROUTER_BASE_URL;
+    if (route.usageRoute === 'kimi-code-subscription')
+      return KIMI_CODE_BASE_URL;
     const customUrl = yield* getProviderEndpoint(stores, config.provider);
-    if (customUrl) {
-      return { baseUrl: `https://${normalizeProviderEndpoint(customUrl)}` };
-    }
+    if (customUrl) return `https://${normalizeProviderEndpoint(customUrl)}`;
     const baseUrl = findModelProviderPlugin(config.provider)?.baseUrl;
     if (baseUrl == null) {
       throw new Error(
         `Model ${config.name} has no HTTP endpoint for provider ${config.provider}.`,
       );
     }
-    if (typeof baseUrl === 'string') return { baseUrl };
+    if (typeof baseUrl === 'string') return baseUrl;
     const region = (yield* useChinaRegion(stores, config.provider))
       ? 'china'
       : 'international';
-    // A run that declined the plan takes the standard API even while the
-    // user's preference is on.
-    if (
-      config.provider === ModelProvider.GLM &&
-      (yield* getGLMCodingPlan(stores)) &&
-      !declinedRoutes?.includes('glm-coding-plan-subscription')
-    ) {
-      return {
-        baseUrl: GLM_CODING_PLAN_BASE_URLS[region],
-        usageRoute: 'glm-coding-plan-subscription',
-      };
-    }
-    return { baseUrl: baseUrl[region] };
+    return route.usageRoute === 'glm-coding-plan-subscription'
+      ? GLM_CODING_PLAN_BASE_URLS[region]
+      : baseUrl[region];
   });
 }

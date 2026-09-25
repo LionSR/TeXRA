@@ -95,6 +95,7 @@ import {
   nodePlatformLayer,
   unusedGlobalStorageFs,
 } from '@test/support/fsTestUtils';
+import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
 import { DelegateAgentTool } from '@tools/delegation/DelegationTools';
 import { executeSubagent } from '@tools/delegation/subagentRun';
@@ -287,7 +288,6 @@ function scriptedBoundModel(
       config.fullName,
       config.name,
     ]),
-    routedOnKimiCode: false,
     backgroundCapable: false,
   };
 }
@@ -586,6 +586,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         Layer.mergeAll(
           unusedGlobalStorageFs(),
           nodePlatformLayer,
+          testHttpClientLayer,
           AgentDirectories.layer(fakeHostAgentDirectories),
           AppState.layer(new FakeStateStore()),
         ),

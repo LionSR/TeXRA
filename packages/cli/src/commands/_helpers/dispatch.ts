@@ -5,7 +5,7 @@
  */
 import { type ArgDef, renderUsage } from 'citty';
 import stripAnsi from 'strip-ansi';
-import { writeRawStderr, writeRawStdout } from '@cli/runtime/logSinks';
+import { writeRawStdout } from '@cli/runtime/logSinks';
 import { readCliAmbientState } from '@cli/runtime/cliContext';
 import {
   commandArgs,
@@ -626,7 +626,6 @@ async function renderUsageWithSections(
   cmd: AnyCommand,
   parent?: AnyCommand,
   context?: UsageRenderContext,
-  stream: 'stdout' | 'stderr' = 'stdout',
 ): Promise<string> {
   const usage = await renderUsage(
     cmd,
@@ -636,29 +635,26 @@ async function renderUsageWithSections(
   const usageWithSections = sections?.length
     ? `${usage}\n${sections.map(formatUsageSection).join('\n\n')}`
     : usage;
-  return usageColorEnabled(stream) === false
+  return usageColorEnabled('stdout') === false
     ? stripAnsi(usageWithSections)
     : usageWithSections;
 }
 
 /**
- * Render usage text to STDERR (the diagnostic stream) instead of citty's
- * `showUsage`, which prints to STDOUT via `consola.log`. Usage shown because of
- * a usage error must not pollute STDOUT — otherwise `--output-format json|ndjson`
- * stops being machine-parseable (`texra run ... --output-format json | jq`).
- *
- * `renderUsage` is citty's string-returning primitive (it does not write
- * anywhere), so we own the destination. Explicit `--help` keeps using
- * `showUsage` (STDOUT) per Unix convention.
+ * What a citty argument error (missing required argument, invalid enum value)
+ * prints on stderr: the error, then where the usage lives — the same shape as
+ * {@link formatUnknownCliFlag}. The full help screen used to follow instead
+ * and pushed the one line that says what went wrong off the screen. citty
+ * colors its own message regardless of the stream, so stderr's color decision
+ * (`--no-color`, `NO_COLOR`, `FORCE_COLOR`, TTY) is applied here.
  */
-export async function showUsageStderr(
-  cmd: AnyCommand,
-  parent?: AnyCommand,
-  context?: UsageRenderContext,
-): Promise<void> {
-  writeRawStderr(
-    `${await renderUsageWithSections(cmd, parent, context, 'stderr')}\n`,
-  );
+export function formatCliArgumentError(
+  message: string,
+  resolved: Pick<ResolvedCliCommand, 'commandPath'>,
+): string {
+  const text =
+    usageColorEnabled('stderr') === false ? stripAnsi(message) : message;
+  return `${text}\nRun \`${resolved.commandPath.join(' ')} --help\` for usage.`;
 }
 
 export async function showUsage(

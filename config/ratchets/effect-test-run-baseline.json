@@ -10,7 +10,7 @@
       "reason": "The Effect run belongs to the module under test: the body builds an esbuild bundle and imports it, so `bundledEffect` is that bundle's own Effect instance, which the test's tester cannot run; JsonStore is also on the 1.0 retirement boundary."
     },
     "src/test-kernel/platform/processRuntime.vitest.ts": {
-      "count": 4,
+      "count": 3,
       "reason": "These are runs of the subject: the suite tests the process runtime's own fork-failure reporting, so `runtime.runFork` is the asserted behaviour and not the test executing its program; the bodies are already it.live + Effect.gen."
     }
   }

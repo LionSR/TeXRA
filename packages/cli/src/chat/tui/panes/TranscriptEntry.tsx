@@ -7,7 +7,6 @@ import { memo } from 'react';
 import { Box, Text } from 'ink';
 import { COLOR_ERROR, COLOR_HINT } from '@cli/tui/ui/colors';
 import { fillRows } from '@cli/runtime/terminalText';
-import type { RunLabels } from '@shared/tools/executionsDisplay';
 import type { TranscriptRow } from '@ui/transcript';
 
 // Local imports - CLI TUI rendering
@@ -105,8 +104,6 @@ export const TranscriptEntry = memo(function TranscriptEntry({
   previousEntry,
   width,
   colorEnabled,
-  fillWidth,
-  subagentRunLabels,
 }: {
   readonly entry: TranscriptRow;
   /** The row printed directly above this one, so its bottom separator can
@@ -114,17 +111,9 @@ export const TranscriptEntry = memo(function TranscriptEntry({
   readonly previousEntry?: TranscriptRow;
   readonly width?: number;
   readonly colorEnabled?: boolean;
-  readonly fillWidth?: boolean;
-  readonly subagentRunLabels?: RunLabels;
 }): React.JSX.Element {
   if (entry.kind === 'tool') {
-    return (
-      <ToolUseRow
-        subagentRunLabels={subagentRunLabels}
-        toolRow={entry}
-        width={width}
-      />
-    );
+    return <ToolUseRow toolRow={entry} width={width} />;
   }
 
   const layout = transcriptEntryLayout(entry, {
@@ -135,19 +124,6 @@ export const TranscriptEntry = memo(function TranscriptEntry({
   });
 
   switch (entry.kind) {
-    case 'phase':
-      // A bold, colored divider that separates a workflow-script run's phases
-      // from the per-agent rows beneath. Stateless props-in → JSX-out.
-      return (
-        <Box
-          marginBottom={layout.marginBottomRows}
-          marginTop={layout.marginTopRows}
-        >
-          <Text bold color={colorEnabled !== false ? COLOR_HINT : undefined}>
-            {layout.lines.join('\n')}
-          </Text>
-        </Box>
-      );
     case 'assistant':
     case 'log':
       return (
@@ -159,7 +135,6 @@ export const TranscriptEntry = memo(function TranscriptEntry({
             content={transcriptRowHeadline(entry)}
             width={layout.columns}
             colorEnabled={colorEnabled}
-            fillWidth={fillWidth}
           />
         </Box>
       );
@@ -168,7 +143,6 @@ export const TranscriptEntry = memo(function TranscriptEntry({
         <PlainEntryRows
           colorEnabled={colorEnabled}
           entry={entry}
-          fillWidth={fillWidth}
           layout={layout}
         />
       );
@@ -179,24 +153,15 @@ export const LiveTranscriptEntry = memo(function LiveTranscriptEntry({
   colorEnabled,
   entry,
   maxRows,
-  subagentRunLabels,
   width,
 }: {
   readonly colorEnabled?: boolean;
   readonly entry: TranscriptRow;
   readonly maxRows?: number;
-  readonly subagentRunLabels?: RunLabels;
   readonly width?: number;
 }): React.JSX.Element {
   if (entry.kind === 'tool') {
-    return (
-      <ToolUseRow
-        maxRows={maxRows}
-        subagentRunLabels={subagentRunLabels}
-        toolRow={entry}
-        width={width}
-      />
-    );
+    return <ToolUseRow maxRows={maxRows} toolRow={entry} width={width} />;
   }
 
   // Paint every live row from the same layout the viewport measures. A

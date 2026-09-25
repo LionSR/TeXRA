@@ -85,6 +85,7 @@ import {
   setupPlatform,
 } from '@test/support/setupPlatform';
 import { FakeStateStore, fakePath } from '@test/support/FakePlatform';
+import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { generateRunId, isObject } from '@utils/core';
 import { createRunStorageLocation } from '@utils/files/fileLocation';
 import { RunFileService } from '@utils/files/runStorage';
@@ -274,7 +275,6 @@ function testBoundModel(): BoundModel {
     supportsForcedToolChoice: true,
     wireRouteKey: 'test-route',
     modelRetryRouteKey: 'test-route/test-model',
-    routedOnKimiCode: false,
     backgroundCapable: false,
   };
 }
@@ -489,6 +489,7 @@ function loopProgram(init: LoopInit, requests: InvokeRequest[]) {
           LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT),
         ),
         Layer.provideMerge(testHttpClientLayer),
+        Layer.provideMerge(nodeSpawnerLayer),
       ),
     ),
   );

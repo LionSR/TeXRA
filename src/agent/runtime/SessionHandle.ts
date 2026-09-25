@@ -82,10 +82,7 @@ import {
   isRunningStreamingTextEntry,
   nonterminalWorkflowCall,
 } from '@shared/session/traceEntries';
-import type {
-  StreamLogStore,
-  StreamLogStoreMode,
-} from '@transcript/StreamLogStore';
+import { readRunEntries } from '@transcript/runEntries';
 import { aggregateError, throwAggregated } from '@utils/core';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import {
@@ -183,7 +180,11 @@ export type SessionHandleInit = Partial<
    */
   readonly roots: WorkspaceRoots;
   readonly interactions?: HostInteractions;
-  readonly transcriptMode?: StreamLogStoreMode;
+  /** An ephemeral session opens a throwaway database instead of the
+   *  project's. */
+  readonly transcriptMode?:
+    | { readonly kind: 'persistent' }
+    | { readonly kind: 'ephemeral'; readonly reason: string };
 };
 
 export class SessionHandle {
@@ -256,8 +257,6 @@ export class SessionHandle {
    * qualification and disposal guard applied.
    */
   readonly subscriptions: SessionGraph['subscriptions'];
-  /** Session-owned transcript store for run traces launched in this session. */
-  readonly transcripts: StreamLogStore;
   /**
    * The workspace this session works on: the four per-workspace host roots.
    * Every run, tool call and host command this session serves takes them from
@@ -312,13 +311,12 @@ export class SessionHandle {
    */
   constructor(
     init: SessionHandleInit &
-      Pick<SessionHandle, 'transcripts' | 'modelRetries'> & {
+      Pick<SessionHandle, 'modelRetries'> & {
         readonly graph: (session: SessionHandle) => SessionGraph;
       },
   ) {
     // Forced dependency order, every cross-reference explicit — never let a
     // member fall back to a neighboring module singleton (silent-state-split).
-    this.transcripts = init.transcripts;
     this.roots = init.roots;
     // Built before the graph: the session's approvals are built over it, and
     // announce every effective bypass change through it.
@@ -509,7 +507,7 @@ export class SessionHandle {
     id: AggregateId,
   ): Effect.Effect<
     Effect.Effect<void, DatabaseWriteFailed>,
-    DatabaseReadFailed | DatabaseWriteFailed
+    DatabaseNotOwner | DatabaseReadFailed | DatabaseWriteFailed
   > {
     return this.graph.acquireClaims(id);
   }
@@ -639,23 +637,27 @@ export class SessionHandle {
   /**
    * The final-text facts that close every streaming row still open for
    * `runId`: the loop commits them in the batch that parks the run (its
-   * `waiting` step), so a parked transcript never shows a permanently
-   * streaming block.
+   * `waiting` step), so a parked transcript never streams. Read from the
+   * run's committed rows, not the view: the view folds a run's transcript
+   * only while some port subscribes it, and a run parks whether or not one
+   * does.
    */
   streamClosureFacts(
     runId: RunId,
-  ): Extract<RunLedgerDraft, { type: 'stream.end' }>[] {
-    const closure: Extract<RunLedgerDraft, { type: 'stream.end' }>[] = [];
-    for (const entry of this.transcripts.get(runId)?.toJSON() ?? []) {
-      if (!isRunningStreamingTextEntry(entry)) continue;
-      closure.push({
-        type: 'stream.end',
-        aggregateId: qualifyAggregateId('run', runId),
-        id: entry.id,
-        finalText: this.graph.readText(runId, entry.id) ?? entry.text,
-      });
-    }
-    return closure;
+  ): Effect.Effect<
+    Extract<RunLedgerDraft, { type: 'stream.end' }>[],
+    DatabaseReadFailed
+  > {
+    return readRunEntries(this, runId).pipe(
+      Effect.map((entries) =>
+        entries.filter(isRunningStreamingTextEntry).map((entry) => ({
+          type: 'stream.end' as const,
+          aggregateId: qualifyAggregateId('run', runId),
+          id: entry.id,
+          finalText: this.graph.readText(runId, entry.id) ?? entry.text,
+        })),
+      ),
+    );
   }
 
   /**
@@ -956,6 +958,20 @@ export class SessionHandle {
     return this.graph.aggregateRows(id);
   }
 
+  /** The run aggregate's committed rows; empty when the run never existed
+   *  or is tombstoned. */
+  readRunEvents(
+    runId: RunId,
+  ): Effect.Effect<readonly SessionEvent[], DatabaseReadFailed> {
+    return this.graph
+      .aggregateRows(qualifyAggregateId('run', runId))
+      .pipe(
+        Effect.map((events) =>
+          events.at(-1)?.type === 'run.removed' ? [] : events,
+        ),
+      );
+  }
+
   readRecordListing(): Effect.Effect<
     readonly SessionEvent[],
     DatabaseReadFailed
@@ -1091,11 +1107,6 @@ export class SessionHandle {
         ),
       ),
     );
-  }
-
-  /** Apply a durable fact delivered by the root's ordered table tail. */
-  receiveCommittedEvent(event: SessionEvent): Effect.Effect<void> {
-    return Effect.sync(() => this.transcripts.acceptCommitted(event));
   }
 
   /**
@@ -1285,11 +1296,10 @@ export const settleLiveSessionRuns: Effect.Effect<void> = Effect.gen(
         if (!(yield* session.ownsRun(runId))) return;
         const tracked = session.runs.getHandle(runId) !== undefined;
         // Read the committed transcript once after queued publications settle.
-        // Host exit needs no presentation residency or mutable writer handle.
         const transcript = yield* Effect.exit(
           Effect.gen(function* () {
             yield* session.settlePublications();
-            return tracked ? yield* session.transcripts.readEntries(runId) : [];
+            return tracked ? yield* readRunEntries(session, runId) : [];
           }),
         );
         // The run's closure facts, queued and settled under the same lease

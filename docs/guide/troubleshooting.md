@@ -152,7 +152,7 @@ Opening VS Code from a configured terminal provides the most reliable environmen
 **Solutions**:
 
 1. **Verify API keys**:
-   - VS Code extension: open the **Dashboard → Models** tab and re-enter the key for the affected provider
+   - VS Code extension: open **Dashboard → Models → API keys** and re-enter the key for the affected provider
    - CLI: set the provider's API-key environment variable (or connect a provider subscription with `texra auth chatgpt login`)
 
 2. **Check API key validity**:
@@ -175,7 +175,7 @@ Opening VS Code from a configured terminal provides the most reliable environmen
 
 1. **OpenRouter configuration**:
    - Verify your OpenRouter API key is set correctly
-   - Check that "Use OpenRouter for all models" is enabled in the Dashboard → Models page → OpenRouter row
+   - Check that "Use OpenRouter for all models" is enabled in Dashboard → Models → API keys → OpenRouter row
 
 2. **Model availability**:
    - Make sure the requested model is available via OpenRouter

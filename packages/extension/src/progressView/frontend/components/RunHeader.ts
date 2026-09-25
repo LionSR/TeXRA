@@ -1,9 +1,13 @@
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
-import { customElement, property } from 'lit/decorators.js';
+import { customElement, property, state } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { repeat } from 'lit/directives/repeat.js';
 
+import {
+  APPROVAL_BYPASS_KINDS,
+  type ApprovalBypassKind,
+} from '@shared/approvalBypassKind';
 import type { ConversationProgress, GoalState, RunId } from '@shared/schemas';
 import { isPlainAgentIdentity, RUN_PHASE, RUN_SUBSTATE } from '@shared/schemas';
 import type { SessionView, RunView } from '@shared/session/sessionView';
@@ -16,46 +20,52 @@ import {
 import { formatWorkflowRunContext } from '@ui/copy/workflowRunContext';
 import { designTokens, commonViewStyles } from '@ui/styles';
 import { statusIndicatorStyles } from '@ui/styles/statusIndicatorStyles';
-import { renderIconActionButtonParts } from '@ui/wa/actionButtons';
+import { renderIconActionButton } from '@ui/wa/actionButtons';
+import type { TeXRAIconName } from '@ui/wa/iconNames';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import '@progressView/frontend/components/ToolTimer';
+import '@awesome.me/webawesome/dist/components/button/button.js';
+import '@awesome.me/webawesome/dist/components/callout/callout.js';
+import '@awesome.me/webawesome/dist/components/divider/divider.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
-import '@awesome.me/webawesome/dist/components/button-group/button-group.js';
 import '@awesome.me/webawesome/dist/components/badge/badge.js';
 import '@awesome.me/webawesome/dist/components/dropdown/dropdown.js';
 import '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
 
 import {
   ELEMENT_IDS,
-  NEUTRAL_TOOLBAR,
-  TOOLBAR_BUTTONS,
-  type ProgressToolbarButton,
+  NEUTRAL_RUN_ACTIONS,
+  RUN_MENU_ACTIONS,
+  type RunMenuAction,
 } from '../constants';
-import { toolbarToggleStyles } from '../styles/toolbarToggleStyles';
 import {
   renderProgressBadgeContent,
   getProgressBadgeTitle,
 } from '../formatters/progressBadgeFormatter';
 
-const ACTIVE_STATE_BUTTONS = [
+/** A window-level item the shell appends to the run's menu: pop out,
+ *  LaTeXDiffs, figures. */
+export interface HeaderMenuItem {
+  readonly value: string;
+  readonly icon: TeXRAIconName;
+  readonly label: string;
+  readonly activate: () => void;
+}
+
+const ACTIVE_STATE_ACTIONS = [
   ELEMENT_IDS.STOP_STREAM_BTN,
-  ELEMENT_IDS.TOOL_EDIT_TOGGLE_BTN,
-  ELEMENT_IDS.BASH_TOGGLE_BTN,
-  ELEMENT_IDS.AUTO_TASK_TOGGLE_BTN,
   ELEMENT_IDS.COMPACT_RESPONSE_BTN,
-  ELEMENT_IDS.RESTORE_STATE_BTN,
   ELEMENT_IDS.OPEN_RUN_STORAGE_BTN,
   ELEMENT_IDS.EXPORT_TRANSCRIPT_BTN,
   ELEMENT_IDS.COPY_RUN_CONTEXT_BTN,
 ];
 
-const TERMINAL_STATE_BUTTONS = [
+const TERMINAL_STATE_ACTIONS = [
   ELEMENT_IDS.RUN_NEW_BTN,
   ELEMENT_IDS.RESUME_BTN,
   ELEMENT_IDS.PACK_STREAM_BTN,
   ELEMENT_IDS.CLEAN_STREAM_BTN,
-  ELEMENT_IDS.RESTORE_STATE_BTN,
   ELEMENT_IDS.DIFF_STREAM_BTN,
   ELEMENT_IDS.OPEN_RUN_STORAGE_BTN,
   ELEMENT_IDS.EXPORT_TRANSCRIPT_BTN,
@@ -63,23 +73,23 @@ const TERMINAL_STATE_BUTTONS = [
 ];
 
 /** A run this process cannot act on: read and export only. */
-const READ_ONLY_BUTTONS = new Set<string>([
+const READ_ONLY_ACTIONS = new Set<string>([
   ELEMENT_IDS.OPEN_RUN_STORAGE_BTN,
   ELEMENT_IDS.EXPORT_TRANSCRIPT_BTN,
   ELEMENT_IDS.COPY_RUN_CONTEXT_BTN,
 ]);
 
-const NOT_YET_RUN_BUTTONS = new Set<string>([
+const NOT_YET_RUN_ACTIONS = new Set<string>([
   ELEMENT_IDS.RESUME_BTN,
   ELEMENT_IDS.COPY_RUN_CONTEXT_BTN,
 ]);
 
 /** Interrupted rows get the terminal set whatever their display key. */
-const INTERRUPTED_BUTTONS: ReadonlySet<string> = new Set(
-  TERMINAL_STATE_BUTTONS,
+const INTERRUPTED_ACTIONS: ReadonlySet<string> = new Set(
+  TERMINAL_STATE_ACTIONS,
 );
 
-const ENABLED_BUTTONS_BY_DISPLAY_KEY: Record<
+const ENABLED_ACTIONS_BY_DISPLAY_KEY: Record<
   RunStatusDisplayKey,
   Set<string>
 > = {
@@ -87,22 +97,32 @@ const ENABLED_BUTTONS_BY_DISPLAY_KEY: Record<
     ELEMENT_IDS.STOP_STREAM_BTN,
     ELEMENT_IDS.CLEAN_STREAM_BTN,
   ]),
-  [RUN_PHASE.RUNNING]: new Set(ACTIVE_STATE_BUTTONS),
-  [RUN_PHASE.FAILED]: new Set(TERMINAL_STATE_BUTTONS),
-  [RUN_PHASE.COMPLETED]: new Set(TERMINAL_STATE_BUTTONS),
-  [RUN_PHASE.CANCELLED]: new Set(TERMINAL_STATE_BUTTONS),
+  [RUN_PHASE.RUNNING]: new Set(ACTIVE_STATE_ACTIONS),
+  [RUN_PHASE.FAILED]: new Set(TERMINAL_STATE_ACTIONS),
+  [RUN_PHASE.COMPLETED]: new Set(TERMINAL_STATE_ACTIONS),
+  [RUN_PHASE.CANCELLED]: new Set(TERMINAL_STATE_ACTIONS),
   ready: new Set(
-    TERMINAL_STATE_BUTTONS.filter((id) => !NOT_YET_RUN_BUTTONS.has(id)),
+    TERMINAL_STATE_ACTIONS.filter((id) => !NOT_YET_RUN_ACTIONS.has(id)),
   ),
-  [RUN_PHASE.WAITING]: new Set(ACTIVE_STATE_BUTTONS),
-  [RUN_SUBSTATE.RESUMING]: new Set(ACTIVE_STATE_BUTTONS),
+  [RUN_PHASE.WAITING]: new Set(ACTIVE_STATE_ACTIONS),
+  [RUN_SUBSTATE.RESUMING]: new Set(ACTIVE_STATE_ACTIONS),
 };
 
-const NATIVE_AGENT_ONLY_BUTTONS = new Set([
+const NATIVE_AGENT_ONLY_ACTIONS = new Set([
   ELEMENT_IDS.RESUME_BTN,
   ELEMENT_IDS.RUN_NEW_BTN,
-  ELEMENT_IDS.RESTORE_STATE_BTN,
 ]);
+
+/** The menu value of the delete item, which asks before it acts. */
+const DELETE_SESSION = 'deleteSession';
+
+/** What an active run grant approves, as the approval card names it
+ *  ("Approve all edits in this run"). Agent work covers the other two. */
+const BYPASS_NOUN: Record<ApprovalBypassKind, string> = {
+  superYolo: 'agent work',
+  toolEdit: 'edits',
+  bash: 'commands',
+};
 
 /** The status dot's hue per tone (G4: the fold spells the tone). */
 const TONE_INDICATOR_CLASS: Record<RunView['tone'], string> = {
@@ -113,23 +133,29 @@ const TONE_INDICATOR_CLASS: Record<RunView['tone'], string> = {
   neutral: 'is-ready',
 };
 
-/** Which toolbar buttons a run's state licenses. */
-function enabledToolbarButtons(
+/** Which run actions a run's state licenses. */
+function enabledRunActions(
   run: RunView,
   displayKey: RunStatusDisplayKey,
 ): ReadonlySet<string> | undefined {
-  if (run.readOnly) return READ_ONLY_BUTTONS;
-  if (run.group === 'interrupted') return INTERRUPTED_BUTTONS;
-  return ENABLED_BUTTONS_BY_DISPLAY_KEY[displayKey];
+  if (run.readOnly) return READ_ONLY_ACTIONS;
+  if (run.group === 'interrupted') return INTERRUPTED_ACTIONS;
+  return ENABLED_ACTIONS_BY_DISPLAY_KEY[displayKey];
 }
 
+/**
+ * `<run-header>`: the one header row of a selected run (PRD 12.1). The
+ * shell slots its own controls around it (the Sessions button at `start`,
+ * New task at `end`), so a run never shows two rows of chrome: path and
+ * title, status, time, an active run grant, Stop, and one menu holding the
+ * run's actions, the shell's window items, and last, Delete session.
+ */
 @customElement('run-header')
 export class RunHeader extends LitElement {
   static override styles = [
     designTokens,
     commonViewStyles,
     statusIndicatorStyles,
-    toolbarToggleStyles,
     css`
       :host {
         display: block;
@@ -140,8 +166,6 @@ export class RunHeader extends LitElement {
       }
 
       .log-header {
-        padding: var(--wa-space-2xs) var(--wa-space-m);
-        font-size: var(--font-size-sm);
         display: flex;
         align-items: center;
         gap: var(--wa-space-xs);
@@ -149,27 +173,13 @@ export class RunHeader extends LitElement {
         box-sizing: border-box;
         min-width: 0;
         max-width: 100%;
+        font-size: var(--font-size-sm);
         color: var(--color-text-secondary);
-        border-bottom: var(--border-thin) solid var(--color-border);
-        background: color-mix(
-          in srgb,
-          var(--wa-color-surface-default) 94%,
-          transparent
-        );
-      }
-
-      .header-left {
-        display: flex;
-        align-items: center;
-        gap: var(--wa-space-xs);
-        flex: 1;
-        min-width: 0;
-        max-width: 100%;
       }
 
       #activeRunName {
         flex: 1;
-        min-width: 8ch;
+        min-width: 6ch;
         margin: 0;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -181,92 +191,21 @@ export class RunHeader extends LitElement {
         letter-spacing: -0.012em;
       }
 
-      .status-label {
-        flex: 0 0 auto;
-        color: var(--color-text-secondary);
-        font-size: var(--font-size-sm);
-        white-space: nowrap;
-      }
-
+      .status-label,
       tool-timer {
         flex: 0 0 auto;
         white-space: nowrap;
       }
 
-      .header-actions {
-        display: flex;
-        justify-content: flex-end;
-        flex: 0 0 auto;
-        min-width: 0;
-        max-width: 100%;
-        margin-inline-start: auto;
-        overflow-x: auto;
-        overscroll-behavior-inline: contain;
-        scrollbar-width: thin;
-      }
-
-      .header-actions wa-button-group {
-        max-width: 100%;
-        padding: 2px;
-        border: var(--border-thin) solid var(--wa-color-surface-border);
-        border-radius: var(--wa-border-radius-pill, 999px);
-        background: var(--wa-color-neutral-fill-quiet);
-      }
-
-      /* Geometry comes from the shared icon-button skin via size="m"; the
-         circular radius is the one local departure, so the toolbar reads as a
-         segmented pill rather than a row of squares. */
-      .header-actions .action-icon-button::part(base) {
-        border-radius: var(--wa-border-radius-circle, 50%);
-      }
-
-      /* Narrow, the whole toolbar folds behind one trailing icon (see the
-         container query); wide, the toolbar is what the row shows. */
-      .header-overflow {
-        display: none;
-      }
-
-      .header-overflow-status {
-        padding: var(--wa-space-2xs) var(--wa-space-s) var(--wa-space-3xs);
-        font-size: var(--font-size-xs);
-        color: var(--color-text-secondary);
-        white-space: nowrap;
-      }
-
-      /* Status indicator overrides - base styles from statusIndicatorStyles.
-         The hover label is a native <wa-tooltip> anchored to this dot via
-         its "for" attribute. */
       .status-indicator {
+        flex: 0 0 auto;
         width: 7px;
         height: 7px;
         margin: 0 var(--wa-space-3xs);
       }
 
-      /* Note: .is-ready and other status states from statusIndicatorStyles */
-
-      .toolbar-button--hidden {
-        display: none;
-      }
-
-      /* Button type styles */
       .stop-button {
-        margin-inline-end: var(--wa-space-3xs);
         color: var(--color-error);
-      }
-
-      .pack-button {
-        margin-inline-start: var(--wa-space-3xs);
-      }
-
-      .run-button {
-        margin-inline-start: var(--wa-space-3xs);
-        color: var(--color-success);
-      }
-
-      /* Native wa-badge (brand=active / warning=paused, quiet 'filled'
-         appearance), compacted to the prior chip padding. */
-      .goal-chip {
-        flex-shrink: 0;
       }
 
       .goal-chip::part(base) {
@@ -279,11 +218,36 @@ export class RunHeader extends LitElement {
         font-size: var(--font-size-xs);
       }
 
-      /* The ancestors path, root first, capped at 40 percent of the header
-         (PRD 12.1). Segments are laid out in reverse DOM order so that when
-         the path cannot fit, the root end is what the overflow clips: the
-         nearest ancestor always survives (per-segment eviction). The title
-         beside it takes the remaining width. */
+      /* An active run grant reads as a warning, as the CLI's badge does. */
+      .goal-chip,
+      .bypass-chip {
+        flex-shrink: 0;
+      }
+      .bypass-chip::part(base) {
+        color: var(--color-warning);
+        border-color: color-mix(in srgb, var(--color-warning) 40%, transparent);
+        background: color-mix(in srgb, var(--color-warning) 12%, transparent);
+      }
+
+      .menu-status {
+        padding: var(--wa-space-2xs) var(--wa-space-s) var(--wa-space-3xs);
+        font-size: var(--font-size-xs);
+        color: var(--color-text-secondary);
+        white-space: nowrap;
+      }
+
+      .delete-confirm {
+        margin: var(--wa-space-2xs) 0;
+      }
+      .delete-confirm-actions {
+        display: flex;
+        gap: var(--wa-space-2xs);
+        margin-top: var(--wa-space-2xs);
+      }
+
+      /* The ancestors path, root first, capped at 40% of the row; laid out
+         in reverse DOM order so an overflow clips the root end and the
+         nearest ancestor survives. */
       .ancestors {
         display: flex;
         flex-direction: row-reverse;
@@ -339,34 +303,33 @@ export class RunHeader extends LitElement {
         font-variant-numeric: tabular-nums;
       }
 
-      :dir(rtl) .parent-link wa-icon {
-        transform: scaleX(-1);
+      .bypass-chip-short {
+        display: none;
       }
 
-      /* Below the wide width the eight-button toolbar cannot share the row
-         with the path and the title, so it folds behind one trailing icon
-         with the tool-calls count and the status label. */
-      @container (max-width: 880px) {
+      /* A narrow row keeps the title: the status word and the tool-call
+         count move into the menu's status line, the chip to one word. */
+      @container (max-width: 640px) {
         .status-label,
         wa-tag.progress-badge,
-        .header-actions wa-button-group {
+        .bypass-chip-label {
           display: none;
         }
-
-        .log-header {
-          padding-inline: var(--wa-space-xs);
-        }
-
-        .header-overflow {
-          display: inline-flex;
+        .bypass-chip-short {
+          display: inline;
         }
       }
     `,
   ];
 
   @property({ attribute: false }) run: RunView | null = null;
-  /** For the per-run policy snapshot behind the bypass toggles. */
+  /** For the per-run policy snapshot behind the grant chip. */
   @property({ attribute: false }) view: SessionView | null = null;
+  /** The shell's window items, after the run's actions in its menu. */
+  @property({ attribute: false }) menuItems: readonly HeaderMenuItem[] = [];
+
+  /** The delete item was chosen; the row asks before it acts. */
+  @state() private confirmingDelete: RunId | null = null;
 
   private readonly copyRunContext = new CopyButtonController(this, {
     successTitle: 'Copied!',
@@ -387,73 +350,23 @@ export class RunHeader extends LitElement {
     });
   }
 
-  /** The arm each toolbar button dispatches. */
-  private dispatchToolbar(button: ProgressToolbarButton, run: RunView) {
+  /** Send what a run action names (see `RunMenuAction.arm`). */
+  private dispatchAction(action: RunMenuAction, run: RunView): void {
     const runId = run.id;
-    if (button.bypassKind !== undefined) {
-      const enabled = !this.bypassActive(run, button.bypassKind);
+    if (action.arm === 'copyRunContext') {
+      void this.copyRunContext.copy(this.runContextText(run));
+    } else if (action.arm === 'run.compact') {
       this.dispatchEvent(
-        SessionUiEvents.runtime({
-          kind: 'policy.set',
-          change: {
-            field: 'bypass',
-            runId,
-            bypass: button.bypassKind,
-            enabled,
-          },
-        }),
+        SessionUiEvents.runtime({ kind: 'run.compact', runId }),
       );
-      return;
-    }
-    switch (button.id) {
-      case ELEMENT_IDS.STOP_STREAM_BTN:
-        this.dispatchEvent(
-          SessionUiEvents.runtime({ kind: 'run.stop', runId }),
-        );
-        return;
-      case ELEMENT_IDS.COMPACT_RESPONSE_BTN:
-        this.dispatchEvent(
-          SessionUiEvents.runtime({ kind: 'run.compact', runId }),
-        );
-        return;
-      case ELEMENT_IDS.RESUME_BTN:
-        this.dispatchEvent(SessionUiEvents.host({ kind: 'resume', runId }));
-        return;
-      case ELEMENT_IDS.RUN_NEW_BTN:
-        this.dispatchEvent(SessionUiEvents.host({ kind: 'runNew', runId }));
-        return;
-      case ELEMENT_IDS.RESTORE_STATE_BTN:
-        this.dispatchEvent(
-          SessionUiEvents.host({ kind: 'restoreIntoLauncher', runId }),
-        );
-        return;
-      case ELEMENT_IDS.OPEN_RUN_STORAGE_BTN:
-        this.dispatchEvent(
-          SessionUiEvents.host({ kind: 'openRunStorage', runId }),
-        );
-        return;
-      case ELEMENT_IDS.EXPORT_TRANSCRIPT_BTN:
-        this.dispatchEvent(
-          SessionUiEvents.host({ kind: 'exportTranscript', runId }),
-        );
-        return;
-      case ELEMENT_IDS.DIFF_STREAM_BTN:
-        this.dispatchEvent(SessionUiEvents.host({ kind: 'latexdiff', runId }));
-        return;
-      case ELEMENT_IDS.CLEAN_STREAM_BTN:
-        this.dispatchEvent(SessionUiEvents.host({ kind: 'clean', runId }));
-        return;
-      case ELEMENT_IDS.PACK_STREAM_BTN:
-        this.dispatchEvent(SessionUiEvents.host({ kind: 'pack', runId }));
-        return;
+    } else {
+      this.dispatchEvent(SessionUiEvents.host({ kind: action.arm, runId }));
     }
   }
 
-  private bypassActive(
-    run: RunView,
-    kind: NonNullable<ProgressToolbarButton['bypassKind']>,
-  ): boolean {
-    return this.view?.policy.get(run.id)?.bypasses[kind] === true;
+  private activeBypasses(run: RunView): ApprovalBypassKind[] {
+    const bypasses = this.view?.policy.get(run.id)?.bypasses;
+    return APPROVAL_BYPASS_KINDS.filter((kind) => bypasses?.[kind] === true);
   }
 
   override render(): TemplateResult | typeof nothing {
@@ -466,74 +379,8 @@ export class RunHeader extends LitElement {
     const statusLabel = run.statusLabel;
     const goal: GoalState =
       run.category === 'toolUse' ? run.goal : { active: false };
-    const identity = run.identity;
-    // An agent run takes its category's chrome; a process or a workflow
-    // container takes the neutral one.
-    const toolbarButtons =
-      identity.kind === 'agent'
-        ? TOOLBAR_BUTTONS[run.category]
-        : NEUTRAL_TOOLBAR;
-    // Resume, Run new, and Restore reach the host's `nativeAgentRun` gate,
-    // which admits a plain agent identity and nothing else.
-    const isNativeAgentRun = isPlainAgentIdentity(identity);
-    const enabledButtons = enabledToolbarButtons(run, displayKey);
-    const runContext = this.runContextText(run);
-    const toolbarButtonViews = toolbarButtons.map((btn) => {
-      const bypassKind = btn.bypassKind;
-      const hidden = NATIVE_AGENT_ONLY_BUTTONS.has(btn.id) && !isNativeAgentRun;
-      const isCopyRunContext = btn.localAction === 'copyRunContext';
-      const disabled =
-        hidden ||
-        !enabledButtons?.has(btn.id) ||
-        (isCopyRunContext && runContext === '');
-      const isActive =
-        bypassKind !== undefined && this.bypassActive(run, bypassKind);
-      const copied = isCopyRunContext && this.copyRunContext.state.copied;
-      const restingTooltip =
-        isActive && btn.titleActive ? btn.titleActive : btn.title;
-      const tooltipText = copied
-        ? this.copyRunContext.state.title
-        : restingTooltip;
-      const className = [
-        btn.className,
-        hidden ? 'toolbar-button--hidden' : undefined,
-        isActive ? 'is-active' : undefined,
-      ]
-        .filter(Boolean)
-        .join(' ');
-      const activate = (): void => {
-        if (disabled) return;
-        if (isCopyRunContext) {
-          void this.copyRunContext.copy(runContext);
-          return;
-        }
-        this.dispatchToolbar(btn, run);
-      };
-      const { button, tooltip } = renderIconActionButtonParts({
-        id: btn.id,
-        icon: copied ? 'check' : btn.icon,
-        label: btn.label ?? btn.title,
-        tooltip: tooltipText,
-        className,
-        size: 'm',
-        disabled,
-        pressed: bypassKind === undefined ? undefined : isActive,
-        ariaHidden: hidden,
-        onClick: activate,
-      });
-      // The same action as one menu row, for the folded toolbar.
-      const item = html`<wa-dropdown-item
-        value=${btn.id}
-        type=${bypassKind === undefined ? 'normal' : 'checkbox'}
-        ?checked=${isActive}
-        ?disabled=${disabled}
-        >${waIcon(copied ? 'check' : btn.icon, { slot: 'icon' })}${
-          btn.label ?? restingTooltip
-        }</wa-dropdown-item
-      >`;
-      return { id: btn.id, hidden, button, tooltip, item, activate };
-    });
-    const shownButtons = toolbarButtonViews.filter((view) => !view.hidden);
+    const enabled = enabledRunActions(run, displayKey);
+    const canStop = enabled?.has(ELEMENT_IDS.STOP_STREAM_BTN) === true;
     const progressTitle = getProgressBadgeTitle(
       run.conversationProgress,
       run.flow,
@@ -541,79 +388,211 @@ export class RunHeader extends LitElement {
 
     return html`
       <div class="log-header">
-        <div class="header-left">
-          ${this.renderAncestors(run)}
-          <h1 id=${ELEMENT_IDS.ACTIVE_RUN_NAME} data-run=${run.id}>
-            ${run.label}
-          </h1>
-          <wa-tooltip for=${ELEMENT_IDS.ACTIVE_RUN_NAME}
-            >${run.description ?? run.label} · ${run.id}</wa-tooltip
-          >
-          <span
-            id=${ELEMENT_IDS.STATUS_INDICATOR}
-            role="img"
-            aria-label=${statusLabel}
-            class=${classMap({
-              'status-indicator': true,
-              [TONE_INDICATOR_CLASS[run.tone]]: true,
-            })}
-          ></span>
-          <wa-tooltip for=${ELEMENT_IDS.STATUS_INDICATOR}>
-            ${run.statusDetail ?? statusLabel}
-          </wa-tooltip>
-          <span class="status-label" aria-hidden="true">${statusLabel}</span>
-          ${this.renderRunElapsed(run)} ${this.renderGoalChip(goal)}
-          ${this.renderProgressBadge(run.conversationProgress, run.flow)}
-        </div>
-        <div class="header-actions">
-          <wa-button-group label="Run actions">
-            ${repeat(
-              toolbarButtonViews,
-              (view) => view.id,
-              (view) => view.button,
-            )}
-          </wa-button-group>
-          ${repeat(
-            shownButtons,
-            (view) => view.id,
-            (view) => view.tooltip,
-          )}
-          <wa-dropdown
-            class="header-overflow"
-            placement="bottom-end"
-            @wa-select=${(event: Event) => {
-              const value = (
-                event as CustomEvent<{ item?: { value?: unknown } }>
-              ).detail?.item?.value;
-              shownButtons.find((view) => view.id === value)?.activate();
-            }}
-          >
-            <wa-button
-              slot="trigger"
-              id=${ELEMENT_IDS.HEADER_MORE_BTN}
-              class="action-icon-button"
-              appearance="plain"
-              variant="neutral"
-              size="s"
-              type="button"
-              aria-label="Run actions"
-              >${waIcon('ellipsis')}</wa-button
-            >
-            <div class="header-overflow-status">
-              ${statusLabel}${progressTitle ? ` · ${progressTitle}` : ''}
-            </div>
-            ${repeat(
-              shownButtons,
-              (view) => view.id,
-              (view) => view.item,
-            )}
-          </wa-dropdown>
-          <wa-tooltip for=${ELEMENT_IDS.HEADER_MORE_BTN}
-            >Run actions</wa-tooltip
-          >
-        </div>
+        <slot name="start"></slot>
+        ${this.renderAncestors(run)}
+        <h1 id=${ELEMENT_IDS.ACTIVE_RUN_NAME} data-run=${run.id}>
+          ${run.label}
+        </h1>
+        <wa-tooltip for=${ELEMENT_IDS.ACTIVE_RUN_NAME}
+          >${run.description ?? run.label} · ${run.id}</wa-tooltip
+        >
+        <span
+          id=${ELEMENT_IDS.STATUS_INDICATOR}
+          role="img"
+          aria-label=${statusLabel}
+          class=${classMap({
+            'status-indicator': true,
+            [TONE_INDICATOR_CLASS[run.tone]]: true,
+          })}
+        ></span>
+        <wa-tooltip for=${ELEMENT_IDS.STATUS_INDICATOR}>
+          ${run.statusDetail ?? statusLabel}
+        </wa-tooltip>
+        <span class="status-label" aria-hidden="true">${statusLabel}</span>
+        ${this.renderRunElapsed(run)} ${this.renderGoalChip(goal)}
+        ${this.renderProgressBadge(run.conversationProgress, run.flow)}
+        ${this.renderBypassChip(run)}
+        ${
+          canStop
+            ? renderIconActionButton({
+                id: ELEMENT_IDS.STOP_STREAM_BTN,
+                icon: 'circle-stop',
+                label: 'Stop',
+                tooltip: 'Stop',
+                className: 'stop-button',
+                onClick: () =>
+                  this.dispatchEvent(
+                    SessionUiEvents.runtime({
+                      kind: 'run.stop',
+                      runId: run.id,
+                    }),
+                  ),
+              })
+            : nothing
+        }
+        <slot name="end"></slot>
+        ${this.renderMenu(run, enabled, statusLabel, progressTitle)}
       </div>
+      ${this.confirmingDelete === run.id ? this.renderDeleteConfirm(run) : nothing}
     `;
+  }
+
+  private renderMenu(
+    run: RunView,
+    enabled: ReadonlySet<string> | undefined,
+    statusLabel: string,
+    progressTitle: string | undefined,
+  ): TemplateResult {
+    // An agent run takes its category's actions; a process or a workflow
+    // container takes the neutral ones. Resume and Run again reach the
+    // host's `nativeAgentRun` gate, which admits a plain agent identity and
+    // nothing else. Edit as new task lives in the conversation's ended line.
+    const actions = (
+      run.identity.kind === 'agent'
+        ? RUN_MENU_ACTIONS[run.category]
+        : NEUTRAL_RUN_ACTIONS
+    ).filter(
+      (action) =>
+        !NATIVE_AGENT_ONLY_ACTIONS.has(action.id) ||
+        isPlainAgentIdentity(run.identity),
+    );
+    const runContext = this.runContextText(run);
+    const copied = this.copyRunContext.state.copied;
+    // A run still going is stopped first; deleting it is never offered.
+    const canDelete = run.group !== 'running' && run.group !== 'waiting';
+    return html`
+      <wa-dropdown
+        placement="bottom-end"
+        @wa-select=${(event: Event) => {
+          const value = (event as CustomEvent<{ item?: { value?: unknown } }>)
+            .detail?.item?.value;
+          if (value === DELETE_SESSION) {
+            this.confirmingDelete = run.id;
+            return;
+          }
+          const action = actions.find((candidate) => candidate.id === value);
+          if (action) this.dispatchAction(action, run);
+          else this.menuItems.find((item) => item.value === value)?.activate();
+        }}
+      >
+        <wa-button
+          slot="trigger"
+          id=${ELEMENT_IDS.HEADER_MORE_BTN}
+          class="action-icon-button"
+          appearance="plain"
+          variant="neutral"
+          size="s"
+          type="button"
+          aria-label="More"
+          >${waIcon('ellipsis')}</wa-button
+        >
+        <div class="menu-status">
+          ${statusLabel}${progressTitle ? ` · ${progressTitle}` : ''}
+        </div>
+        ${repeat(
+          actions,
+          (action) => action.id,
+          (action) => {
+            const isCopy = action.arm === 'copyRunContext';
+            return html`<wa-dropdown-item
+              value=${action.id}
+              ?disabled=${
+                !enabled?.has(action.id) || (isCopy && runContext === '')
+              }
+              >${waIcon(isCopy && copied ? 'check' : action.icon, {
+                slot: 'icon',
+              })}${action.label}</wa-dropdown-item
+            >`;
+          },
+        )}
+        ${repeat(
+          this.menuItems,
+          (item) => item.value,
+          (item) =>
+            html`<wa-dropdown-item value=${item.value}
+              >${waIcon(item.icon, { slot: 'icon' })}${item.label}</wa-dropdown-item
+            >`,
+        )}
+        ${
+          canDelete
+            ? html`<wa-divider></wa-divider
+                ><wa-dropdown-item value=${DELETE_SESSION} variant="danger"
+                  >${waIcon('trash', { slot: 'icon' })}Delete
+                  session…</wa-dropdown-item
+                >`
+            : nothing
+        }
+      </wa-dropdown>
+      <wa-tooltip for=${ELEMENT_IDS.HEADER_MORE_BTN}>More</wa-tooltip>
+    `;
+  }
+
+  private renderDeleteConfirm(run: RunView): TemplateResult {
+    const cancel = (): void => {
+      this.confirmingDelete = null;
+    };
+    return html`<wa-callout
+      class="delete-confirm"
+      variant="danger"
+      size="small"
+      role="alertdialog"
+      aria-label="Delete session"
+    >
+      ${waIcon('trash', { slot: 'icon' })} Delete “${run.label}”? Its
+      conversation and run folder are removed for good.
+      <div class="delete-confirm-actions">
+        <wa-button
+          id="confirmDeleteSession"
+          variant="danger"
+          size="s"
+          @click=${() => {
+            this.confirmingDelete = null;
+            this.dispatchEvent(
+              SessionUiEvents.runtime({ kind: 'run.delete', runId: run.id }),
+            );
+          }}
+          >Delete</wa-button
+        >
+        <wa-button appearance="plain" size="s" @click=${cancel}
+          >Cancel</wa-button
+        >
+      </div>
+    </wa-callout>`;
+  }
+
+  /** A run grant is shown here, never granted; a click revokes it. */
+  private renderBypassChip(run: RunView): TemplateResult | typeof nothing {
+    const active = this.activeBypasses(run);
+    if (active.length === 0) return nothing;
+    const nouns = active.includes('superYolo')
+      ? BYPASS_NOUN.superYolo
+      : active.map((kind) => BYPASS_NOUN[kind]).join(' and ');
+    const revoke = (): void => {
+      for (const bypass of active) {
+        this.dispatchEvent(
+          SessionUiEvents.runtime({
+            kind: 'policy.set',
+            change: { field: 'bypass', runId: run.id, bypass, enabled: false },
+          }),
+        );
+      }
+    };
+    return html`<wa-button
+        id=${ELEMENT_IDS.BYPASS_CHIP}
+        class="bypass-chip"
+        appearance="outlined"
+        size="s"
+        pill
+        aria-label=${`Auto-approving ${nouns}. Ask again`}
+        @click=${revoke}
+        >${waIcon('check-double', { slot: 'start' })}<span
+          class="bypass-chip-label"
+          >Auto-approving ${nouns}</span
+        ><span class="bypass-chip-short">Auto</span></wa-button
+      >
+      <wa-tooltip for=${ELEMENT_IDS.BYPASS_CHIP}
+        >Approve all ${nouns} in this run is on. Click to ask again.</wa-tooltip
+      >`;
   }
 
   private renderGoalChip(goal: GoalState): TemplateResult | typeof nothing {

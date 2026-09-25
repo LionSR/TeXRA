@@ -3,6 +3,7 @@ import { Effect } from 'effect';
 import { describe, expect } from 'vitest';
 
 import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
+import { TraceEmitter } from '@agent/trace';
 import { AgentResume } from '@platform/interfaces';
 import { MESSAGE_TYPES, type RunId } from '@shared/schemas';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
@@ -11,7 +12,7 @@ import {
   createTestSession,
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
-import { createRunTrace } from '@transcript';
+import { readRunEntries } from '@transcript/runEntries';
 import { generateRunId } from '@utils/core';
 
 describe('session-owned transcripts and follow-up queues', () => {
@@ -28,28 +29,19 @@ describe('session-owned transcripts and follow-up queues', () => {
 
         publishTestRunStart(launching, runId);
         yield* launching.settlePublications();
-        const lease = yield* launching.transcripts.acquireRunResidency(runId);
-        const handle = createRunTrace(lease);
-        const detach = launching.attachRunTrace(handle.trace, runId);
-        yield* Effect.addFinalizer(() =>
-          Effect.sync(() => {
-            detach();
-            handle.dispose();
-          }),
-        );
-        const output = handle.trace.openRun(MESSAGE_TYPES.MODEL_RESPONSE);
+        const trace = new TraceEmitter();
+        const detach = launching.attachRunTrace(trace, runId);
+        yield* Effect.addFinalizer(() => Effect.sync(detach));
+        const output = trace.openRun(MESSAGE_TYPES.MODEL_RESPONSE);
         output.append('owned by launching session');
         output.finalize();
         yield* launching.settlePublications();
 
         expect(
-          launching.transcripts
-            .get(runId)
-            ?.toJSON()
-            .map((entry) => entry.text),
+          (yield* readRunEntries(launching, runId)).map((entry) => entry.text),
         ).toEqual(['owned by launching session']);
-        expect(sibling.transcripts.get(runId)).toBeUndefined();
-        expect(testDefaultSession().transcripts.get(runId)).toBeUndefined();
+        expect(yield* readRunEntries(sibling, runId)).toEqual([]);
+        expect(yield* readRunEntries(testDefaultSession(), runId)).toEqual([]);
       }),
   );
 
@@ -60,24 +52,18 @@ describe('session-owned transcripts and follow-up queues', () => {
       const runId = generateRunId();
       publishTestRunStart(session, runId);
       yield* session.settlePublications();
-      const lease = yield* session.transcripts.acquireRunResidency(runId);
-      const handle = createRunTrace(lease);
-      const detach = session.attachRunTrace(handle.trace, runId);
-      yield* Effect.addFinalizer(() =>
-        Effect.sync(() => {
-          detach();
-          handle.dispose();
-        }),
-      );
-      const output = handle.trace.openRun(MESSAGE_TYPES.MODEL_RESPONSE);
+      const trace = new TraceEmitter();
+      const detach = session.attachRunTrace(trace, runId);
+      yield* Effect.addFinalizer(() => Effect.sync(detach));
+      const output = trace.openRun(MESSAGE_TYPES.MODEL_RESPONSE);
       output.append('partial text');
       yield* session.settlePublications();
       // The `waiting` step parks the run and the loop commits the closure
       // facts in that batch (`loop/toolUse.ts`), so the partial text becomes
       // the row's final text instead of streaming forever.
-      session.publish(session.streamClosureFacts(runId));
+      session.publish(yield* session.streamClosureFacts(runId));
       yield* session.settlePublications();
-      const entries = yield* session.transcripts.readEntries(runId);
+      const entries = yield* readRunEntries(session, runId);
       expect(
         entries
           .filter((entry) => entry.messageType === MESSAGE_TYPES.MODEL_RESPONSE)

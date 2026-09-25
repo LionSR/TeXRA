@@ -4,7 +4,11 @@ import { Cause, Clock, Effect, Stream } from 'effect';
 import { z } from 'zod';
 
 // Local imports - canonical model contract
-import { admittedFingerprint, prefixFingerprint } from './prefixFingerprint.js';
+import {
+  admittedFingerprint,
+  canChain,
+  prefixFingerprint,
+} from './prefixFingerprint.js';
 import {
   BackgroundEventSchema,
   BackgroundSubmissionSchema,
@@ -25,7 +29,6 @@ import { JsonObjectSchema, sameModelOrigin } from './protocol.js';
 import {
   ModelError,
   RemoteOperationSchema,
-  admittedInputsChain,
   authOrRejectionKind,
   boundOperation,
   cancellationStatus,
@@ -256,16 +259,16 @@ const lowerMessages = Effect.fn('llm.google.lowerMessages')(function* (
             break;
           }
           case 'reasoning':
+            // Omit another model's thoughts, as the Anthropic and Chat codecs do.
+            if (!sameModelOrigin(message.origin, origin)) break;
             if (
-              !sameModelOrigin(message.origin, origin) ||
               part.content !== undefined ||
               (part.evidence !== null &&
                 part.evidence.kind !== 'google-interactions-thought-signature')
             ) {
               return yield* new ModelError({
                 kind: 'unsupported',
-                message:
-                  'Google reasoning requires its original binding and supported thought evidence.',
+                message: 'Google reasoning needs supported thought evidence.',
               });
             }
             steps.push({
@@ -1156,11 +1159,7 @@ export function googleInteractionsModel(
           });
         }
         const turn = parsedTurn.data;
-        const chains = yield* admittedInputsChain(
-          GOOGLE_PREFIX_DOMAIN,
-          turn,
-          operation,
-        );
+        const chain = yield* canChain(GOOGLE_PREFIX_DOMAIN, turn, operation);
         const parsedPolicy = ObservationPolicySchema.safeParse(policy);
         if (!parsedPolicy.success)
           return yield* new ModelError({
@@ -1217,7 +1216,7 @@ export function googleInteractionsModel(
                 ...interaction,
                 model: returnedModel,
               });
-              const continuation = chains
+              const continuation = chain
                 ? yield* googleContinuation(turn, result, origin)
                 : undefined;
               return BackgroundEventSchema.parse({

@@ -28,7 +28,6 @@ import {
 } from '@ui/markdown/createMarkdownRenderer';
 import { clamp } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { normalizeKnownHtmlForCliMarkdown } from './htmlMarkdownNormalize';
 
 /** SGR open/close codes wrapped through String.fromCharCode so the ESC byte
  *  is never a literal in source (pre-commit hooks have been known to mangle
@@ -521,18 +520,15 @@ interface RenderAnsiMarkdownOptions {
 /**
  * Render markdown to an ANSI-coloured string suitable for an Ink `<Text>`.
  * Uses a per-host LRU cache so streaming deltas don't re-render the entire
- * message body each frame.
+ * message body each frame. Transcript text arrives already HTML-normalized
+ * (`transcriptRowHeadline`); this renderer does not normalize again.
  */
 export function renderAnsiMarkdown(
   content: string,
   options: RenderAnsiMarkdownOptions = {},
 ): string {
   const processor = processorFor(options.width, options.colorEnabled ?? true);
-  return wrapAnsiToWidth(
-    processor(normalizeKnownHtmlForCliMarkdown(content)),
-    options.width,
-    true,
-  ).trimEnd();
+  return wrapAnsiToWidth(processor(content), options.width, true).trimEnd();
 }
 
 /** Test seam: drop the cached processors so tests can re-init cleanly. */

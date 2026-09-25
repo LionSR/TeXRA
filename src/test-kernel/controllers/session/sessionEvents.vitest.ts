@@ -12,7 +12,6 @@
  * `waiting`; the same log with the owner gone folds to `interrupted`.
  */
 // Node imports
-import * as childProcess from 'node:child_process';
 import {
   chmodSync,
   existsSync,
@@ -106,21 +105,22 @@ import type { RunLedgerDraft } from '@shared/session/runStateFold';
 import { ProcessIdentity, SessionEvents } from '@shared/session/sessionEvents';
 import { DownMessageSchema } from '@shared/session/sessionFrames';
 import type { SessionView } from '@shared/session/sessionView';
+import { nodePlatformLayer } from '@test/support/fsTestUtils';
+import {
+  nodeSpawnerLayer,
+  scriptedSpawnerLayer,
+} from '@test/support/childProcessTestLayer';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { testRunHandle } from '@test/support/runHandleFixtures';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import { identityReads } from '@test/support/sessionGraphTestSetup';
 import type { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
-import { StreamLogStore } from '@transcript/StreamLogStore';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 vi.mock('node:os', async (importOriginal) => ({
   ...(await importOriginal<typeof os>()),
   platform: vi.fn(() => process.platform),
 }));
-vi.mock('node:child_process', async (importOriginal) => {
-  const actual = await importOriginal<typeof childProcess>();
-  return { ...actual, execFileSync: vi.fn(actual.execFileSync) };
-});
 /** Builds of the process runtime's Lean layer, which every root shares. */
 const leanBuilds = vi.hoisted(() => ({
   count: 0,
@@ -224,6 +224,7 @@ const graph = (history: readonly SessionEventDraft[]) => {
     ),
     Layer.provide(Layer.succeed(WorkspaceRoots)(roots)),
     Layer.provide(ProcessIdentity.layer(SELF)),
+    Layer.provide(nodePlatformLayer),
   );
 };
 
@@ -731,7 +732,11 @@ describe('Sessions owner', () => {
             Layer.provide(
               globalDatabaseLayer(
                 createFakeWorkspaceRoots().globalStorage,
-              ).pipe(Layer.provide(ProcessIdentity.layer(SELF)), Layer.orDie),
+              ).pipe(
+                Layer.provide(ProcessIdentity.layer(SELF)),
+                Layer.provide(nodePlatformLayer),
+                Layer.orDie,
+              ),
             ),
           ),
         ),
@@ -925,7 +930,6 @@ describe('Sessions owner', () => {
           );
           for (const event of committed) {
             const foreign = { ...event, ownerId: OTHER };
-            yield* session.receiveCommittedEvent(foreign);
             yield* session.receiveFoldedEvent(foreign);
           }
           expect(handleStatus).toHaveBeenCalledTimes(2);
@@ -979,62 +983,6 @@ describe('Sessions owner', () => {
           // does not fail a run whose remaining facts are whole.
           yield* session.settlePublications(RUN);
         } finally {
-          yield* session.dispose();
-        }
-      }),
-  );
-
-  // #12017's ownership fence: a committed row another process authored is
-  // accepted like any other, and only its local side effects are fenced.
-  // (That the fold itself keeps a foreign-owned run is stated over the
-  // recorded log in the fold suite.)
-  it.live(
-    "accepts another process's committed facts without firing local side effects",
-    () =>
-      Effect.gen(function* () {
-        const session = yield* open('/workspace/owner/foreign-fold');
-        const onResult = vi.fn((_event: ResultEvent) => Effect.void);
-        const detachResult = session.onResult(onResult);
-        const foreign = RunIdSchema.parse('cd34ef');
-        const aggregateId = qualifyAggregateId('run', foreign);
-        try {
-          yield* session.receiveCommittedEvent({
-            type: 'run.start',
-            aggregateId,
-            identity: { kind: 'agent', agent: 'chat' },
-            userFollowUpSupport: 'unsupported',
-            category: AgentCategory.ToolUse,
-            isRemote: false,
-            parent: null,
-            ownerId: OTHER,
-            at: 0,
-            seq: 1,
-            commit: 1,
-          });
-          yield* session.receiveCommittedEvent({
-            type: 'run.description',
-            aggregateId,
-            description: 'a run in another process',
-            ownerId: OTHER,
-            at: 0,
-            seq: 2,
-            commit: 2,
-          });
-          yield* session.receiveCommittedEvent({
-            type: 'run.end',
-            aggregateId,
-            outcome: 'completed',
-            output: emptyRunEndOutput(AgentCategory.ToolUse),
-            ownerId: OTHER,
-            at: 0,
-            seq: 3,
-            commit: 3,
-          });
-          // Host presentation of a terminal result stays with the process
-          // that authored it.
-          expect(onResult).not.toHaveBeenCalled();
-        } finally {
-          detachResult();
           yield* session.dispose();
         }
       }),
@@ -1178,10 +1126,16 @@ describe('the C1 event table and the C6 publisher', () => {
     for (const root of roots) rmSync(root, { recursive: true, force: true });
   });
 
-  const substrate = (storage: string, owner = SELF) =>
+  const substrate = (
+    storage: string,
+    owner = SELF,
+    spawner: Layer.Layer<ChildProcessSpawner> = nodeSpawnerLayer,
+  ) =>
     databaseLayer('persistent').pipe(
       Layer.provide(Layer.succeed(WorkspaceRoots)({ storage })),
       Layer.provide(ProcessIdentity.layer(owner)),
+      Layer.provide(spawner),
+      Layer.provide(nodePlatformLayer),
       Layer.fresh,
     );
 
@@ -1203,24 +1157,20 @@ describe('the C1 event table and the C6 publisher', () => {
     const storage = workspace();
     const resolved = realpathSync.native(storage);
     const system = vi.mocked(os.platform).mockReturnValue('darwin');
-    const mount = vi
-      .mocked(childProcess.execFileSync)
-      .mockReturnValue(`server:/paper on ${resolved} (nfs, nodev)\n`);
+    const mount = scriptedSpawnerLayer(() => ({
+      stdout: `server:/paper on ${resolved} (nfs, nodev)\n`,
+    }));
     return Effect.gen(function* () {
       const failure = yield* Effect.flip(
-        Database.pipe(Effect.provide(substrate(storage))),
+        Database.pipe(Effect.provide(substrate(storage, SELF, mount.layer))),
       );
       expect(failure._tag).toBe('DatabaseOpenFailed');
       expect(String(failure.cause)).toContain('verified local filesystem');
       expect(existsSync(join(storage, 'texra.db'))).toBe(false);
-    }).pipe(
-      Effect.ensuring(
-        Effect.sync(() => {
-          mount.mockRestore();
-          system.mockRestore();
-        }),
-      ),
-    );
+      expect(mount.calls.map((command) => command.command)).toEqual([
+        '/sbin/mount',
+      ]);
+    }).pipe(Effect.ensuring(Effect.sync(() => system.mockRestore())));
   });
 
   it.effect('clears a store written under another event format at open', () => {
@@ -2127,7 +2077,9 @@ describe('the C1 event table and the C6 publisher', () => {
         expect(yield* first.aggregateState([unrelated.aggregateId])).toEqual(
           [],
         );
-      }).pipe(Effect.provide(substrate(storage)));
+      }).pipe(
+        Effect.provide(Layer.merge(substrate(storage), nodePlatformLayer)),
+      );
     },
   );
 
@@ -2270,6 +2222,7 @@ describe('RunLedger', () => {
         ),
       ),
       Layer.provide(ProcessIdentity.layer(SELF)),
+      Layer.provide(nodePlatformLayer),
     );
   const AGGREGATE = qualifyAggregateId('run', RUN);
   const SECRET = 'sk-abcdefghijklmnopqrstuvwxyz0123';

@@ -193,6 +193,7 @@ async function loadSupabaseAuth() {
         Layer.provideMerge(
           globalDatabaseLayer(globalStorage).pipe(
             Layer.provide(ProcessIdentity.layer(processOwnerId(undefined))),
+            Layer.provide(nodePlatformLayer),
             Layer.orDie,
           ),
         ),
@@ -200,7 +201,7 @@ async function loadSupabaseAuth() {
       // The process services this suite's runtime carries: the auth run edge
       // reads none of them, so a member call is a test error the mock raises
       // rather than an answer from a store nothing here opened.
-      Layer.mock(Secrets, { getEnv: unreadProcessService }),
+      Layer.mock(Secrets, { get: unreadProcessService }),
       Layer.mock(AppState, { update: unreadProcessService }),
       // The account plane the module under test serves is its own module
       // state; this one only satisfies the process-runtime type.
@@ -318,6 +319,7 @@ describe('CLI Supabase auth', () => {
       yield* signOutCliSupabase().pipe(
         Effect.provide(globalStorageFsTestLayer(globalStorage)),
         Effect.provide(nodePlatformLayer),
+        Effect.provide(testHttpClientLayer),
         Effect.provideService(AgentDirectories, bundledAgentDirectories()),
         Effect.provideService(AppState, new FakeStateStore()),
       );
@@ -376,6 +378,7 @@ describe('CLI Supabase auth', () => {
         yield* signOutCliSupabase().pipe(
           Effect.provide(globalStorageFsTestLayer(globalStorage)),
           Effect.provide(nodePlatformLayer),
+          Effect.provide(testHttpClientLayer),
           Effect.provideService(AgentDirectories, rebuildDies),
           Effect.provideService(AppState, new FakeStateStore()),
           Effect.withLogger(capture),

@@ -150,24 +150,6 @@ describe('run registration and finalization', () => {
   );
 
   it.effect(
-    'releases fresh birth claims when the committed publication consumer fails',
-    () =>
-      Effect.gen(function* () {
-        vi.spyOn(session, 'receiveCommittedEvent').mockReturnValue(
-          Effect.die(new Error('consumer failed')),
-        );
-        const born = yield* Effect.flip(register());
-        expect(born).toBeInstanceOf(Error);
-        expect(yield* getRunRecords(session, runId).exists()).toBe(true);
-        const refused = yield* Effect.flip(
-          getRunRecords(session, runId).writeReport('unowned'),
-        );
-        expect(refused).toBeInstanceOf(Error);
-        expect(yield* session.ownsRun(runId)).toBe(false);
-      }),
-  );
-
-  it.effect(
     'reports a terminal status write that failed, and persists nothing',
     () =>
       Effect.gen(function* () {

@@ -21,6 +21,7 @@ import { ensureError } from '@utils/errors/errorMessage';
 import { readNormalizedFile } from '@utils/files/fsDurability';
 
 import { normalizeAgentSettingTools } from './agentSettingTools';
+import type { HttpClient } from 'effect/unstable/http';
 
 const CHANNEL = 'agentLoad';
 
@@ -90,7 +91,11 @@ export const loadAgentSettingAndPrompts = Effect.fn(
 )(function* (
   entry: AgentEntry,
   seen: ReadonlySet<string> = new Set(),
-): Effect.fn.Return<[AgentSetting, AgentPrompt], Error, FileSystem.FileSystem> {
+): Effect.fn.Return<
+  [AgentSetting, AgentPrompt],
+  Error,
+  FileSystem.FileSystem | HttpClient.HttpClient
+> {
   // Handle remote agents
   if (entry.source === 'remote') {
     const remoteConfig = yield* loadRemoteAgent(entry.name);

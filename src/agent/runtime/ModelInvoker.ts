@@ -145,7 +145,6 @@ export interface InvokeRequest {
   /** The tools this turn advertises; a reflection turn advertises none. */
   readonly tools: TurnRequest['tools'];
   readonly toolChoice: TurnRequest['toolChoice'];
-  readonly stopSequences?: TurnRequest['stopSequences'];
   /** The turn's round ordinal, for debug file naming. */
   readonly round: number;
   /** The debug file base name of the family issuing the turn. */
@@ -309,9 +308,6 @@ export const modelInvokerLayer = (): Layer.Layer<
         ...(request.tools !== undefined ? { tools: request.tools } : {}),
         ...(request.toolChoice !== undefined
           ? { toolChoice: request.toolChoice }
-          : {}),
-        ...(request.stopSequences !== undefined
-          ? { stopSequences: request.stopSequences }
           : {}),
         ...(state.continuation !== null &&
         state.continuation.origin.protocol === bound.origin.protocol &&

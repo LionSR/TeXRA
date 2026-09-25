@@ -75,9 +75,9 @@ class AgentCliCallFailed extends Data.TaggedError('AgentCliCallFailed')<{
  * chain's error channel — the shared dispatch/launch steps and each provider
  * tool's own setup (SDK import, binary lookup, thread creation).
  */
-export const agentCliCall = <A, E>(
-  call: Effect.Effect<A, E>,
-): Effect.Effect<A, AgentCliCallFailed> =>
+export const agentCliCall = <A, E, R>(
+  call: Effect.Effect<A, E, R>,
+): Effect.Effect<A, AgentCliCallFailed, R> =>
   Effect.mapError(call, (cause) => new AgentCliCallFailed({ cause }));
 
 /** The failures the agent-CLI dispatch/launch chain can raise. */

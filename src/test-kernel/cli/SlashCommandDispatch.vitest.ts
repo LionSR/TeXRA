@@ -39,7 +39,6 @@ import { transcriptRowHeadline } from '@cli/chat/tui/panes/transcriptEntries';
 import { notices, noticesFor } from '@cli/chat/tui/state/transcript';
 import {
   CLI_LOCAL_RUN_ID,
-  activeRunId,
   closeForegroundReader,
   closeInfoPane,
   foregroundReader,
@@ -47,11 +46,14 @@ import {
   patchSessionMeta,
   resetCliState,
   transientNotice,
+  selectedRunId,
+  focusRun,
 } from '@cli/chat/tui/state/cliState';
 import { activeForm } from '@cli/chat/tui/state/formSlot';
 import * as apiStatus from '@cli/runtime/apiStatus';
 import * as subscriptionLogin from '@cli/runtime/subscriptionLogin';
 import type { CliContext } from '@cli/runtime/cliContext';
+import type { CliLogoutTarget } from '@cli/runtime/loginOptions';
 import * as modelAccessSelection from '@cli/runtime/modelAccessSelection';
 import * as cliProviderKeys from '@cli/chat/tui/hosts/cliProviderKeys';
 import * as supabaseAuth from '@cli/runtime/supabaseAuth';
@@ -95,7 +97,16 @@ function ensureRun(
   over: Partial<Omit<RunView, 'category'>> = {},
 ): void {
   const current = seeded.get(id);
-  seeded.set(id, makeRunView({ ...(current ?? {}), ...over, id }) as RunView);
+  // Held by this terminal, so a focused seed is inside the chat's scope.
+  seeded.set(
+    id,
+    makeRunView({
+      ownedHere: true,
+      ...(current ?? {}),
+      ...over,
+      id,
+    }) as RunView,
+  );
   syncSeededView();
 }
 beforeAll(bindTestSessionView);
@@ -122,7 +133,7 @@ function seedWorkPlan(
 ): void {
   ensureRun(runId);
   seeded.set(runId, {
-    ...makeRunView({ id: runId }),
+    ...makeRunView({ id: runId, ownedHere: true }),
     plan,
     todos: [...todos],
   } as RunView);
@@ -163,7 +174,7 @@ const services = {
 };
 
 function createSession(): TuiSession {
-  return new TuiSession();
+  return new TuiSession(() => undefined);
 }
 
 function mockModelAccessOverview(): void {
@@ -219,7 +230,6 @@ function createContext(
     setApprovalPolicy: (policy) => {
       approvalPolicy = policy;
     },
-    canSelectModel: () => true,
     resetSession: vi.fn(),
     resumeRun: (_id: RunId) => Effect.void,
     ...overrides,
@@ -270,7 +280,7 @@ function dispatchSlash(
 }
 
 /** The account form's sign-out action, as `/login` runs it. */
-function logout(target: string): Effect.Effect<void, unknown> {
+function logout(target: CliLogoutTarget): Effect.Effect<void, unknown> {
   return withProcessServices(
     services.runtime,
     logoutFromChat(target, services.stores, services.secrets),
@@ -353,7 +363,7 @@ describe('handleTuiSlashCommand', () => {
 
       const runId = 'plan-reader' as RunId;
       ensureRun(runId);
-      activeRunId.set(runId);
+      focusRun(runId);
       yield* dispatchSlash('/plan', context);
       expect(transientNotice.get()?.text).toBe(
         'The focused session has no work plan.',
@@ -369,7 +379,7 @@ describe('handleTuiSlashCommand', () => {
       yield* dispatchSlash('/plan', context);
       expect(foregroundReader.get()).toEqual({ kind: 'workPlan', runId });
 
-      activeRunId.set('another-stream' as RunId);
+      focusRun('another-stream' as RunId);
       expect(foregroundReader.get()).toEqual({ kind: 'workPlan', runId });
       expect(localEntries()).toEqual([]);
       closeForegroundReader();
@@ -876,7 +886,7 @@ describe('handleTuiSlashCommand', () => {
         // interrupt is deliberately NOT raised — the teardown owns that policy.
         expect(session.stopRequested).toBe(true);
         expect(requestInputExit).toHaveBeenCalledOnce();
-        expect(activeRunId.get()).toBeUndefined();
+        expect(selectedRunId.get()).toBeUndefined();
       }),
   );
 
@@ -886,10 +896,10 @@ describe('handleTuiSlashCommand', () => {
       Effect.gen(function* () {
         registerBuiltinSlashCommands({ ...services });
         const session = createSession();
-        const runId = 'stream-1' as RunId;
+        const runId = '5e0001' as RunId;
         session.runId = runId;
         session.runId = 'exec-1' as RunId;
-        activeRunId.set(runId);
+        focusRun(runId);
         ensureRun(runId, { status: RUN_PHASE.WAITING });
 
         const handled = yield* dispatchSlash(
@@ -910,9 +920,9 @@ describe('handleTuiSlashCommand', () => {
       Effect.gen(function* () {
         registerBuiltinSlashCommands({ ...services });
         const session = createSession();
-        const rootRunId = 'stream-root' as RunId;
+        const rootRunId = '5e0000' as RunId;
         const childRunId = 'stream-child' as RunId;
-        activeRunId.set(rootRunId);
+        focusRun(rootRunId);
         ensureRun(rootRunId, { status: RUN_PHASE.WAITING });
         ensureRun(childRunId, { status: RUN_PHASE.RUNNING });
         seedChildRoster(rootRunId, [
@@ -938,15 +948,15 @@ describe('handleTuiSlashCommand', () => {
       Effect.gen(function* () {
         registerBuiltinSlashCommands({ ...services });
         const session = createSession();
-        const rootRunId = 'stream-root' as RunId;
-        const parentRunId = 'stream-parent' as RunId;
+        const rootRunId = '5e0000' as RunId;
+        const parentRunId = '5e0a01' as RunId;
         const rootSiblingIds = [
           'stream-root-sibling-1',
           'stream-root-sibling-2',
         ] as RunId[];
         const runningChildId = 'stream-child-running' as RunId;
         const waitingChildId = 'stream-child-waiting' as RunId;
-        activeRunId.set(parentRunId);
+        focusRun(parentRunId);
         for (const runId of rootSiblingIds) {
           ensureRun(runId, { status: RUN_PHASE.RUNNING });
         }
@@ -989,9 +999,9 @@ describe('handleTuiSlashCommand', () => {
       Effect.gen(function* () {
         registerBuiltinSlashCommands({ ...services });
         const session = createSession();
-        const rootRunId = 'stream-root' as RunId;
+        const rootRunId = '5e0000' as RunId;
         const childRunIds = ['stream-child-1', 'stream-child-2'] as RunId[];
-        activeRunId.set(rootRunId);
+        focusRun(rootRunId);
         ensureRun(rootRunId, { status: RUN_PHASE.WAITING });
         for (const [index, childRunId] of childRunIds.entries()) {
           ensureRun(childRunId, {
@@ -1023,10 +1033,10 @@ describe('handleTuiSlashCommand', () => {
       Effect.gen(function* () {
         registerBuiltinSlashCommands({ ...services });
         const session = createSession();
-        const rootRunId = 'stream-root' as RunId;
-        const focusedChildId = 'stream-focused-child' as RunId;
+        const rootRunId = '5e0000' as RunId;
+        const focusedChildId = '5ef0c5' as RunId;
         const siblingChildId = 'stream-sibling-child' as RunId;
-        activeRunId.set(focusedChildId);
+        focusRun(focusedChildId);
         for (const runId of [focusedChildId, siblingChildId]) {
           ensureRun(runId, { status: RUN_PHASE.RUNNING });
         }
@@ -1056,8 +1066,8 @@ describe('handleTuiSlashCommand', () => {
         registerBuiltinSlashCommands({ ...services });
         const overview = vi.spyOn(apiStatus, 'loadCliModelAccessOverview');
         const session = createSession();
-        const runId = 'stream-access' as RunId;
-        activeRunId.set(runId);
+        const runId = '5eacce' as RunId;
+        focusRun(runId);
         patchSessionMeta({ model: 'gpt55' });
         // The access route comes off the fold's cumulative usage for the stream.
         ensureRun(runId, {

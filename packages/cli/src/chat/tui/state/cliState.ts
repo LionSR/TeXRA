@@ -15,11 +15,15 @@ import {
   type AgentSource,
   type RunId,
 } from '@shared/schemas';
+import { descendantRuns, type RunView } from '@shared/session/sessionView';
 import {
-  descendantRuns,
-  type RunView,
-  type SessionView,
-} from '@shared/session/sessionView';
+  applySurfaceAction,
+  emptySurface,
+  pruneSurface,
+  type SelectionRule,
+  type Surface,
+  type SurfaceAction,
+} from '@shared/session/surface';
 import { RUN_GROUP_LABELS } from '@shared/runs/runStatusDisplay';
 import { compareByNewestCreationTime } from '@shared/runs/runOrdering';
 import type { WorkflowRowGroup } from '@shared/runs/workflowRunModel';
@@ -31,18 +35,9 @@ import type { PastedImageEntry } from '../input/draftAttachments';
 // ---------------------------------------------------------------------------
 
 // Data model for the CLI TUI's signal-backed state. Mirrors the webview's
-// `progressState` shape — same primitives (`@lit-labs/signals`), same shape
-// (one record per run + an `activeRunId`) so future feature parity is a
-// port, not a rewrite.
+// interaction record: the selection and expansion live in the shared
+// `Surface`, dispatched through `applySurfaceAction`.
 
-/**
- * One transcript-projection candidate: a rendered row plus the ordering key
- * that places it in the final merged transcript order (log rows by seqNo,
- * compaction rows by start position, CLI-synthetic rows by their insertion
- * anchor). `rank` preserves the relative order of equal keys across the three
- * sources. `rendered` is replaced in place when the source row changes or the
- * settled-prefix promotion reaches it; the item object itself is stable.
- */
 export interface SessionMeta {
   readonly agent: string;
   /** The source of the entry `agent` resolved to, pinned on every root run. */
@@ -90,10 +85,8 @@ function defaultSessionMeta(): SessionMeta {
 // focusSlice
 // ---------------------------------------------------------------------------
 
-// Which run is focused / rooted, and whether starting a new root run is
-// currently available. Focus moves only through `focusRun`;
-// run-lifecycle side effects that touch these signals alongside others
-// (e.g. `removeRun`) live in the `removeRun` section below.
+// Which run is focused and which one the session is rooted at. Focus moves
+// only through `focusRun`.
 
 /**
  * Where notices land before the root run exists. A reserved 8-hex id: real
@@ -102,44 +95,50 @@ function defaultSessionMeta(): SessionMeta {
  */
 export const CLI_LOCAL_RUN_ID = RunIdSchema.parse('c1110ca1');
 
-/** The Surface's selection as written by `focusRun`; renders read
- *  `selectedRunId`, which resolves it against the view. */
-export const activeRunId = signal<RunId | undefined>(undefined);
+/** The chat's interaction record: the shared `Surface`, written only through
+ *  `actOnSurface`, the vocabulary the webview and desktop dispatch too. */
+const surfaceChoice = signal<Surface>(emptySurface('cli'));
 
-/**
- * Keep transcript focus on this conversation and runs this terminal owns.
- * Before launch, the local conversation remains visible without adopting
- * an older project run.
- */
-export const selectedRunId: Signal.Computed<RunId | undefined> = computed(
-  () => {
-    const selected = activeRunId.get();
-    if (selected === CLI_LOCAL_RUN_ID) return selected;
-    const included = currentSessionRunIds(sessionView().get());
-    if (selected !== undefined && included.has(selected)) return selected;
-    const root = rootRunId.get();
-    return root !== undefined && included.has(root) ? root : undefined;
-  },
-);
-
-/**
- * Move transcript/status focus onto a run. Sole focus writer: a run
- * identity tombstoned by `removeRun`, or retired by `resetCliState`, is
- * never focused, so a fact that arrives after the row is gone cannot pull the
- * view onto a run that no longer exists. `onlyIfUnset` is for the facts
- * that adopt focus only while nothing holds it (the first log sync, the first
- * local transcript row).
- */
-export function focusRun(
-  runId: RunId,
-  options: { readonly onlyIfUnset?: boolean } = {},
-): void {
-  if (options.onlyIfUnset && activeRunId.get() !== undefined) return;
-  activeRunId.set(runId);
+export function actOnSurface(action: SurfaceAction): void {
+  surfaceChoice.set(applySurfaceAction(surfaceChoice.get(), action));
 }
 
-/** Expansion is a Surface choice; the fold's forceExpanded takes precedence. */
-export const expandedRuns = signal<ReadonlyMap<RunId, boolean>>(new Map());
+/** The chat's selection rule, its tree scope: this conversation and the runs
+ *  this terminal owns. The pre-run placeholder stays; anything else outside
+ *  the scope, or nothing, lands on the root. */
+function chatSelection(): SelectionRule {
+  const included = sessionRunIds.get();
+  const root = rootRunId.get();
+  const fallback = root !== undefined && included.has(root) ? root : null;
+  return (selected) =>
+    selected === CLI_LOCAL_RUN_ID ||
+    (selected !== null && included.has(selected))
+      ? selected
+      : fallback;
+}
+
+/** The record the TUI renders, pruned once; no reader resolves it again. */
+const surface: Signal.Computed<Surface> = computed(() => {
+  const view = sessionView().get();
+  return pruneSurface(surfaceChoice.get(), view, chatSelection());
+});
+
+/** The Surface's selection in the TUI's `undefined`-for-none spelling. */
+export const selectedRunId: Signal.Computed<RunId | undefined> = computed(
+  () => surface.get().selected ?? undefined,
+);
+
+/** The one writer of `select`. `when` adopts a selection only from a prior
+ *  choice: `unset` (nothing holds it) or `local` (the pre-run placeholder). */
+export function focusRun(
+  runId: RunId | null,
+  options: { readonly when?: 'unset' | 'local' } = {},
+): void {
+  const chosen = surfaceChoice.get().selected;
+  if (options.when === 'unset' && chosen !== null) return;
+  if (options.when === 'local' && chosen !== CLI_LOCAL_RUN_ID) return;
+  actOnSurface({ kind: 'select', runId });
+}
 
 export type SessionListRow =
   | {
@@ -156,8 +155,8 @@ export type SessionListRow =
 /** The visible tree, including section headings, shared by the list and its shortcuts. */
 export const sessionListRows = computed<readonly SessionListRow[]>(() => {
   const view = sessionView().get();
-  const included = currentSessionRunIds(view);
-  const expanded = expandedRuns.get();
+  const included = sessionRunIds.get();
+  const { expanded } = surface.get();
   const rows: SessionListRow[] = [];
   const groups: Record<RunView['group'], RunView[]> = {
     running: [],
@@ -165,12 +164,24 @@ export const sessionListRows = computed<readonly SessionListRow[]>(() => {
     interrupted: [],
     recent: [],
   };
-  for (const run of view.runs.values()) {
-    if (
+  // Top-level runs come in the fold's order. A child this terminal owns
+  // under a parent outside the scope (detached from an earlier turn) is a
+  // root here but not in `view.order`: only these sort, after the fold's.
+  const tops = view.order.flatMap((id) => view.runs.get(id) ?? []);
+  const detached = [...view.runs.values()].filter(
+    (run) =>
+      run.parentId !== null &&
       included.has(run.id) &&
-      (run.parentId === null || !included.has(run.parentId))
-    )
-      groups[run.group].push(run);
+      !included.has(run.parentId),
+  );
+  detached.sort((a, b) =>
+    compareByNewestCreationTime(
+      { name: a.id, creationTimestamp: a.createdAt },
+      { name: b.id, creationTimestamp: b.createdAt },
+    ),
+  );
+  for (const run of [...tops, ...detached]) {
+    if (included.has(run.id)) groups[run.group].push(run);
   }
   const append = (run: RunView, depth: number): void => {
     const open =
@@ -185,12 +196,6 @@ export const sessionListRows = computed<readonly SessionListRow[]>(() => {
     }
   };
   for (const runs of Object.values(groups)) {
-    runs.sort((a, b) =>
-      compareByNewestCreationTime(
-        { name: a.id, creationTimestamp: a.createdAt },
-        { name: b.id, creationTimestamp: b.createdAt },
-      ),
-    );
     const first = runs.at(0);
     if (!first) continue;
     rows.push({ kind: 'group', label: RUN_GROUP_LABELS[first.group] });
@@ -209,26 +214,20 @@ export const sessionListRunIds = computed(() =>
 /** The top-level run the current session rooted at. */
 export const rootRunId = signal<RunId | undefined>(undefined);
 
+/** The root run and every run under it. */
+export const rootRunIds = computed(() =>
+  descendantRuns(sessionView().get(), rootRunId.get(), { includeRoot: true }),
+);
+
 /** The current conversation and all runs this terminal still owns,
  *  including children detached from an earlier turn. */
-export function currentSessionRunIds(view: SessionView): ReadonlySet<RunId> {
-  const included = new Set(
-    descendantRuns(view, rootRunId.get(), { includeRoot: true }),
-  );
-  for (const run of view.runs.values()) {
+export const sessionRunIds = computed((): ReadonlySet<RunId> => {
+  const included = new Set(rootRunIds.get());
+  for (const run of sessionView().get().runs.values()) {
     if (run.ownedHere) included.add(run.id);
   }
   return included;
-}
-/** Whether the root session holds an unfinished run claim (run promise
- *  pending). Published only by `TuiSession`, so renders read the session
- *  run-state reactively instead of calling impure session closures that
- *  memoized renders would cache stale (#8273). */
-export const rootRunPending = signal<boolean>(false);
-/** Run-control mirror of `TuiSession.runId` — cleared while a new run is
- *  pending, unlike `rootRunId`, which stays put as the transcript anchor
- *  across pending windows. Published only by `TuiSession`. */
-export const claimedRunId = signal<RunId | undefined>(undefined);
+});
 
 // ---------------------------------------------------------------------------
 // foregroundOverlaySlice
@@ -264,13 +263,16 @@ export function closeInfoPane(): void {
   INFO_PANE_QUEUE.set(INFO_PANE_QUEUE.get().slice(1));
 }
 
-/** Passive reader target. Holding the captured run id rather than a text
- * snapshot keeps each reader live even if transcript focus moves elsewhere. */
+/** A `/plan` reader still loading. The target object is the invocation's
+ *  identity: only the request that opened it may resolve or close it. */
 interface WorkPlanReaderRequest {
-  readonly revision: number;
+  readonly kind: 'workPlan';
   readonly runId: RunId;
+  readonly loading: true;
 }
 
+/** Passive reader target. Holding the captured run id rather than a text
+ * snapshot keeps each reader live even if transcript focus moves elsewhere. */
 type ForegroundReaderTarget =
   | { readonly kind: 'transcript'; readonly runId: RunId }
   | { readonly kind: 'workflow'; readonly runId: RunId }
@@ -279,15 +281,9 @@ type ForegroundReaderTarget =
       readonly runId: RunId;
       readonly loading?: false;
     }
-  | {
-      readonly kind: 'workPlan';
-      readonly runId: RunId;
-      readonly loading: true;
-      readonly requestRevision: number;
-    };
+  | WorkPlanReaderRequest;
 
 const FOREGROUND_READER = signal<ForegroundReaderTarget | undefined>(undefined);
-let WORK_PLAN_REQUEST_REVISION = 0;
 /** The open reader, resolved against the view like the selection: a reader
  *  whose run has left the view is closed. */
 export const foregroundReader: Signal.Computed<
@@ -357,37 +353,17 @@ export function updateWorkflowPopupView(
 export function beginWorkPlanReaderRequest(
   runId: RunId,
 ): WorkPlanReaderRequest {
-  const request = { runId, revision: ++WORK_PLAN_REQUEST_REVISION };
-  FOREGROUND_READER.set({
-    kind: 'workPlan',
-    runId,
-    loading: true,
-    requestRevision: request.revision,
-  });
+  const request = { kind: 'workPlan', runId, loading: true } as const;
+  FOREGROUND_READER.set(request);
   return request;
-}
-
-function workPlanReaderRequestIsCurrent(
-  request: WorkPlanReaderRequest,
-): boolean {
-  const target = FOREGROUND_READER.get();
-  return (
-    target?.kind === 'workPlan' &&
-    target.loading === true &&
-    target.runId === request.runId &&
-    target.requestRevision === request.revision
-  );
 }
 
 /** Resolve the loading reader without allowing an older request to replace it. */
 export function finishWorkPlanReaderRequest(
   request: WorkPlanReaderRequest,
 ): boolean {
-  if (!workPlanReaderRequestIsCurrent(request)) return false;
-  FOREGROUND_READER.set({
-    kind: 'workPlan',
-    runId: request.runId,
-  });
+  if (FOREGROUND_READER.get() !== request) return false;
+  FOREGROUND_READER.set({ kind: 'workPlan', runId: request.runId });
   return true;
 }
 
@@ -402,7 +378,7 @@ export function cancelPendingWorkPlanReaderRequest(): void {
 export function cancelWorkPlanReaderRequest(
   request: WorkPlanReaderRequest,
 ): boolean {
-  if (!workPlanReaderRequestIsCurrent(request)) return false;
+  if (FOREGROUND_READER.get() !== request) return false;
   FOREGROUND_READER.set(undefined);
   return true;
 }
@@ -452,16 +428,11 @@ export const inputBarContentRows = signal<number>(1);
 
 /** Regenerable status-bar text with explicit behavior for exit confirmation. */
 export type TransientNotice =
-  | {
-      readonly kind: 'message';
-      readonly text: string;
-      readonly expiresAt: number;
-    }
+  | { readonly kind: 'message'; readonly text: string }
   | {
       readonly kind: 'exit';
       readonly text: string;
       readonly resumeId?: string;
-      readonly expiresAt: number;
     };
 
 type TransientNoticeOptions =
@@ -493,17 +464,11 @@ export function setTransientNotice(
   options: TransientNoticeOptions = {},
 ): void {
   const ttlMs = options.ttlMs ?? DEFAULT_TRANSIENT_NOTICE_TTL_MS;
-  const expiresAt = Date.now() + ttlMs;
   const singleLineText = text.replaceAll(/[ \t]*\r?\n[ \t]*/g, ' · ').trim();
   const notice: TransientNotice =
     options.kind === 'exit'
-      ? {
-          kind: 'exit',
-          text: singleLineText,
-          expiresAt,
-          resumeId: options.resumeId,
-        }
-      : { kind: 'message', text: singleLineText, expiresAt };
+      ? { kind: 'exit', text: singleLineText, resumeId: options.resumeId }
+      : { kind: 'message', text: singleLineText };
   if (transientNoticeTimer) clearTimeout(transientNoticeTimer);
   transientNotice.set(notice);
   if (!Number.isFinite(ttlMs)) {
@@ -530,8 +495,9 @@ export function clearTransientNotice(): void {
 // codexPreferenceSlice
 // ---------------------------------------------------------------------------
 
-// Bumped whenever an in-process subscription preference changes (ChatGPT/Grok)
-// so the status bar re-reads it immediately instead of waiting for its periodic
+// Bumped whenever an in-process write changes model access (a subscription
+// preference, a stored key, an access setting) so the status bar re-reads it
+// immediately instead of waiting for its periodic
 // poll. External changes (extension/desktop/config edits) are still picked up by
 // that poll.
 
@@ -570,11 +536,8 @@ export function resetCliState(
   nextSessionMeta: SessionMeta = defaultSessionMeta(),
 ): void {
   sessionMeta.set(nextSessionMeta);
-  activeRunId.set(undefined);
+  surfaceChoice.set(emptySurface('cli'));
   rootRunId.set(undefined);
-  expandedRuns.set(new Map());
-  rootRunPending.set(false);
-  claimedRunId.set(undefined);
   goalAutoApproveAll.set(false);
   INFO_PANE_QUEUE.set([]);
   FOREGROUND_READER.set(undefined);

@@ -1,37 +1,25 @@
-import { css, html, nothing, type TemplateResult } from 'lit';
+import { html, nothing, type TemplateResult } from 'lit';
 import { customElement } from 'lit/decorators.js';
 
-import { acceptsFollowUp } from '@shared/session/surface';
+import { acceptsFollowUp } from '@shared/session/sessionView';
 import { BaseRunContent } from './BaseRunContent';
 import { conversationContentStyles } from './ConversationContent.styles';
-import './RunHeader';
 import './TodoList';
 import './PlanView';
 import './BackgroundTasksPanel';
-import './SessionBanners';
 import './SessionComposer';
-
-const RUN_ENDED_MESSAGE = 'This run has ended.';
 
 @customElement('tool-use-run-content')
 export class ToolUseRunContent extends BaseRunContent {
-  static override styles = [
-    conversationContentStyles,
-    css`
-      .conversation-composer-banner--empty {
-        padding: 0;
-      }
-    `,
-  ];
+  static override styles = conversationContentStyles;
 
   override render(): TemplateResult | typeof nothing {
     const run = this.run;
     if (!run || run.category !== 'toolUse') return nothing;
     // The follow-up line shows while the run can still take one, which is
     // the same rule Send and the run accelerator take (`acceptsFollowUp`).
-    const showComposer = acceptsFollowUp(run);
+    const showComposer = acceptsFollowUp(run, { terminalBacked: true });
     return html`
-      <run-header .run=${run} .view=${this.view}></run-header>
       <div class="conversation-content">
         ${this.renderApprovalDock()}
         <div class="conversation-column conversation-prelude">
@@ -58,21 +46,6 @@ export class ToolUseRunContent extends BaseRunContent {
       </div>
       <div class="conversation-composer-dock">
         <div class="conversation-column">
-          <session-banners
-            .banners=${this.host.banners}
-            .sessionType=${run.category}
-          ></session-banners>
-          <div
-            class=${
-              showComposer
-                ? 'conversation-composer-banner conversation-composer-banner--empty'
-                : 'conversation-composer-banner'
-            }
-            role="status"
-            aria-atomic="true"
-          >
-            ${showComposer ? nothing : (run.statusDetail ?? RUN_ENDED_MESSAGE)}
-          </div>
           ${
             showComposer
               ? html`<session-composer
@@ -81,7 +54,7 @@ export class ToolUseRunContent extends BaseRunContent {
                   .run=${run}
                   .host=${this.host}
                 ></session-composer>`
-              : nothing
+              : this.renderEndedLine(run)
           }
         </div>
       </div>

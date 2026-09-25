@@ -37,20 +37,22 @@ import {
 } from '@cli/runtime/terminalRequirements';
 import { tuiOutputStreamForColor } from '@cli/tui/noColorOutput';
 import {
+  acquireTuiTerminal,
   clearTerminalScrollback,
-  installTerminalRestoreOnExit,
 } from '@cli/tui/terminalCleanup';
 import { DisposableStore } from '@platform/disposable';
 import {
   formatTexraApprovalPolicy,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
-import type { RunId, RunPhase } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import { AgentCategory, RUN_PHASE } from '@shared/schemas';
 import { subscribeToSignalChanges } from '@shared/signals';
-import { descendantRuns } from '@shared/session/sessionView';
 import { getFirstRunDone } from '@shared/state/onboardingState';
-import { isActivePhase, isInFlightPhase } from '@shared/runs/runStatus';
+import {
+  isActivePhase,
+  isTranscriptSettlementPhase,
+} from '@shared/runs/runStatus';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
@@ -75,11 +77,10 @@ import { announceForegroundApprovals } from './state/subscribeApprovals';
 import { subscribeCliCredentialChanges } from './hosts/cliProviderKeys';
 import { createTuiViewportController } from './render/tuiViewportController';
 import {
-  activeRunId as activeRunIdSignal,
+  selectedRunId as selectedRunIdSignal,
   resetCliState,
   patchSessionMeta,
   sessionViewFailure as sessionViewFailureSignal,
-  rootRunId as rootRunIdSignal,
   sessionMeta as sessionMetaSignal,
 } from './state/cliState';
 import {
@@ -91,17 +92,10 @@ import {
 } from './state/sessionView';
 import { notifyStaticTranscriptErased } from './state/staticTranscriptRepaint';
 import { discoverTerminalCapabilities } from './state/terminalCapabilities';
-import {
-  appendLocalAssistantTranscript,
-  describeRequestError,
-} from './state/transcript';
+import { appendLocalAssistantTranscript } from './state/transcript';
 import { installTerminalTitleUpdates } from './terminalTitle';
 import {
-  chatTuiCanInterruptActiveRun,
-  chatTuiCanSelectModel,
   chatTuiCanStartRootRun,
-  chatTuiCanStopVisibleRun,
-  chatTuiIsResumableIdleOnExit,
   chatTuiRunPending,
   TuiSession,
 } from './state/sessionRunState';
@@ -312,7 +306,6 @@ export async function runChat(
     requestInputExit: exitController.requestInputExit,
     getApprovalPolicy,
     setApprovalPolicy,
-    canSelectModel: canSelectCurrentModel,
     resetSession: resetSessionForClear,
     resumeRun: chatController.resume,
   });
@@ -328,17 +321,15 @@ export async function runChat(
   });
 
   const disposables = new DisposableStore();
-  // Crash safety stays armed until graceful teardown has restored the terminal;
-  // it outlives session subscriptions so a later teardown failure cannot leave
-  // the user's shell in raw/kitty/mouse mode with a hidden cursor.
-  const disposeTerminalRestoreOnExit = installTerminalRestoreOnExit();
   // The one session state the TUI renders (PRD 10.1): the session's fold
   // bridged into a signal, with every stream's transcript tier subscribed
   // for this surface. The TUI shows the whole session, so its subscription
   // set is the view's stream set. Bound before anything reads the view:
   // the terminal title below derives its attention state from it on
   // install.
-  const session = new TuiSession();
+  const session = new TuiSession((runId) =>
+    runtimeSession.runs.getToolUseFlowContext(runId),
+  );
   // A dead fold (`viewChanges` failing) is the end of this session: the
   // composer closes on the reason, Ctrl-C still exits, and the exit is a
   // failure on every exit path, since they all read `session.runExitCode`.
@@ -353,8 +344,12 @@ export async function runChat(
   });
   // Cosmetic, but "texra-local" or a bare shell prompt in every tab makes a
   // multi-session workflow hard to navigate: show project and attention state.
-  const terminalTitleUpdates = installTerminalTitleUpdates(context.cwd);
-  disposables.add(terminalTitleUpdates.dispose);
+  // The terminal outlives session subscriptions: only the exit controller
+  // releases it, and its `exit` hook covers every other death.
+  const terminal = acquireTuiTerminal({
+    kittyKeyboard: terminalCaps.kittyKeyboard,
+    title: installTerminalTitleUpdates(context.cwd),
+  });
   disposables.add(announceForegroundApprovals());
   disposables.add(subscribeCliCredentialChanges(runtime));
   let subscribedRuns = '';
@@ -375,47 +370,17 @@ export async function runChat(
   );
   syncTranscriptSubscriptions();
 
-  const rootRunStatus = (): RunPhase | undefined =>
-    runPhaseOf(runViewOf(currentView(), session.runId));
-  const hasActiveToolUseFlow = (): boolean =>
-    Boolean(
-      session.runId && runtimeSession.runs.getToolUseFlowContext(session.runId),
-    );
-  const canSelectCurrentModel = (): boolean =>
-    chatTuiCanSelectModel({
-      canStartRootRun: chatTuiCanStartRootRun(session),
-      runId: session.runId,
-      status: rootRunStatus(),
-      hasActiveToolUseFlow: hasActiveToolUseFlow(),
-    });
   const getModelSwitchDisabledReason = (
     candidateModel: string,
   ): Effect.Effect<string | undefined, Error> => {
-    if (chatTuiCanStartRootRun(session) || !canSelectCurrentModel()) {
+    if (chatTuiCanStartRootRun(session) || !session.canSelectModel()) {
       return Effect.succeed(undefined);
     }
-    const activeFlow = session.runId
-      ? runtimeSession.runs.getToolUseFlowContext(session.runId)
-      : undefined;
     return (
-      activeFlow?.modelSwitchDisabledReason(candidateModel) ??
+      session.activeToolUseFlow()?.modelSwitchDisabledReason(candidateModel) ??
       Effect.succeed(undefined)
     );
   };
-  const canInterruptActiveRun = (): boolean =>
-    chatTuiCanInterruptActiveRun(session);
-  const canStopActiveRun = (): boolean =>
-    chatTuiCanStopVisibleRun({
-      runPending: chatTuiRunPending(session),
-      runId: session.runId,
-      status: rootRunStatus(),
-    });
-  const isResumableIdle = (): boolean =>
-    chatTuiIsResumableIdleOnExit({
-      canInterruptActiveRun: canInterruptActiveRun(),
-      canStopActiveRun: canStopActiveRun(),
-      hasActiveToolUseFlow: hasActiveToolUseFlow(),
-    });
   // Chat-session controller: owns run start/resume/stop orchestration.
   // The Ink layer never directly mutates session run-state fields, every
   // state transition flows through one of the controller's narrow commands.
@@ -437,7 +402,7 @@ export async function runChat(
   disposables.add(setCliAgentResumeHandler(chatController.tryResumeRun));
 
   const resetSessionForClear = (): void => {
-    const currentRunId = session.runId ?? activeRunIdSignal.get();
+    const currentRunId = session.runId ?? selectedRunIdSignal.get();
     const activeStatus = runPhaseOf(runViewOf(currentView(), currentRunId));
     const isRunPending = chatTuiRunPending(session);
 
@@ -457,14 +422,6 @@ export async function runChat(
     chatController.clearInterruptedRecovery();
     chatController.clearPendingSkills();
     session.clearRunState();
-    // Release this conversation's resident transcripts when their remaining
-    // readers and writers leave. Clearing the terminal does not delete history.
-    const store = runtimeSession.transcripts;
-    for (const runId of descendantRuns(currentView(), rootRunIdSignal.get(), {
-      includeRoot: true,
-    })) {
-      store.requestEviction(runId);
-    }
     resetCliState(meta);
     clearTerminalScrollback();
     // The erase above happened outside Ink, so everything the static
@@ -492,7 +449,7 @@ export async function runChat(
         `Approval mode: ${formatTexraApprovalPolicy(policy)}`,
       );
     },
-    canSelectModel: canSelectCurrentModel,
+    canSelectModel: () => session.canSelectModel(),
     getModelSwitchDisabledReason,
     onModelSelect: (nextModel) =>
       applyCliModelSelection(nextModel, slashCommandContext()),
@@ -536,22 +493,6 @@ export async function runChat(
       onStaticTranscriptChange={viewportController.repaintTranscript}
       onCtrlC={() => exitController.handleSigint()}
       onSuspend={() => exitController.handleSigtstp()}
-      onKillRun={(runId) => {
-        runtime.runFork(
-          runtimeSession.requests
-            .request({ kind: 'run.stop', runId })
-            .pipe(
-              Effect.catch((error) =>
-                Effect.sync(() =>
-                  appendLocalAssistantTranscript(describeRequestError(error)),
-                ),
-              ),
-            ),
-        );
-      }}
-      onWorkflowControl={(runId, action) => {
-        runtimeSession.workflowControls.control(runId, action);
-      }}
       history={inputHistory}
     />,
     {
@@ -588,16 +529,12 @@ export async function runChat(
     commandName: context.commandName,
     cwd: context.cwd,
     disposables,
-    disposeTerminalRestoreOnExit,
+    terminal,
     runtime,
     followUpsIdle: followUpQueue.idle,
     getApprovalPolicy,
     flushArtifacts: runtimeSession.settlePublications(),
     repaintAfterTerminalResume: viewportController.repaintAfterTerminalResume,
-    suspendTerminalTitle: terminalTitleUpdates.suspend,
-    resumeTerminalTitle: terminalTitleUpdates.resume,
-    canStopActiveRun,
-    isResumableIdle,
     interruptActive: () => chatController.stop(),
   });
   // Transfer signal ownership from the platform handler and arm this session's
@@ -615,15 +552,21 @@ export async function runChat(
     runtime.runFork(chatController.resume(initialResume.id));
   }
 
-  // Auto-prompt when the active stream goes WAITING so the UI clearly
-  // signals "your turn," alongside the StatusBar pill.
-  let rootPhase = rootRunStatus();
+  // The one "agent finished" notification: the claimed run's turn settles,
+  // at WAITING ("your turn", alongside the StatusBar pill) or at its outcome.
+  // A run that ends after waiting was already announced, and a stop the user
+  // asked for is not news.
+  let rootPhase = session.status();
   disposables.add(
     subscribeToSignalChanges([sessionView()], () => {
-      const phase = rootRunStatus();
-      if (phase === rootPhase) return;
-      rootPhase = phase;
-      if (phase === RUN_PHASE.WAITING && !session.stopRequested) {
+      const previous = rootPhase;
+      rootPhase = session.status();
+      if (
+        rootPhase !== previous &&
+        previous !== RUN_PHASE.WAITING &&
+        isTranscriptSettlementPhase(rootPhase) &&
+        !session.stopRequested
+      ) {
         notify('agentFinished');
       }
     }),

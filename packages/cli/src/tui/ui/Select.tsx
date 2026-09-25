@@ -64,6 +64,7 @@ interface SelectProps<T> {
   readonly selectedValues?: ReadonlySet<T>;
   /** Required in `'multi'` mode: called with the row's value on Space/hotkey. */
   readonly onToggle?: (value: T) => void;
+  /** Paints the row after Select's own focus-pointer gutter cell. */
   readonly renderItem?: (
     item: SelectItem<T>,
     state: {
@@ -425,15 +426,22 @@ export function Select<T>(props: SelectProps<T>): React.JSX.Element {
             }}
           >
             {props.renderItem ? (
-              props.renderItem(item, {
-                active,
-                focused,
-                hiddenItemCount: hiddenBefore + hiddenAfter,
-                index: i,
-                ...(showInlineOverflow
-                  ? { overflowText: inlineOverflowText }
-                  : {}),
-              })
+              <>
+                <Box flexShrink={0}>
+                  <Text aria-hidden color={focusColor}>
+                    {pointer}
+                  </Text>
+                </Box>
+                {props.renderItem(item, {
+                  active,
+                  focused,
+                  hiddenItemCount: hiddenBefore + hiddenAfter,
+                  index: i,
+                  ...(showInlineOverflow
+                    ? { overflowText: inlineOverflowText }
+                    : {}),
+                })}
+              </>
             ) : (
               <>
                 {/* Pointer/tick glyphs are decorative for screen readers — the

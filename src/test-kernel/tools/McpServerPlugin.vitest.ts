@@ -5,7 +5,16 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 
 import { it } from '@effect/vitest';
-import { Deferred, Duration, Effect, Exit, Fiber, Layer, Scope } from 'effect';
+import {
+  Deferred,
+  Duration,
+  Effect,
+  Exit,
+  Fiber,
+  FileSystem,
+  Layer,
+  Scope,
+} from 'effect';
 import { describe, expect } from 'vitest';
 
 import { resolveAgentTools } from '@agent/runtime/agentToolResolution';
@@ -15,6 +24,7 @@ import {
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
 } from '@platform/languageModel';
 import type { RunId } from '@shared/schemas';
+import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { hostStores } from '@test/support/setupPlatform';
@@ -68,6 +78,17 @@ const isAlive = (pid: number): boolean => {
   }
 };
 
+/** The tool table over the MCP config in `dir`, read through the node FileSystem. */
+const mcpToolTableLayer = (dir: string) =>
+  Layer.unwrap(
+    FileSystem.FileSystem.useSync((fs) =>
+      toolTableLayer(
+        toolTable({}),
+        mcpPluginLoader(fs, path.join(dir, 'mcp.json')),
+      ),
+    ),
+  ).pipe(Layer.provide(nodePlatformLayer));
+
 describe('MCP server plugins', () => {
   // it.live: a real child process answers over stdio, and the approval's
   // `request.opened` row is delivered by a consumer on the process runtime.
@@ -104,10 +125,7 @@ describe('MCP server plugins', () => {
 
         const services = yield* Layer.build(
           Layer.mergeAll(
-            toolTableLayer(
-              toolTable({}),
-              mcpPluginLoader(path.join(dir, 'mcp.json')),
-            ),
+            mcpToolTableLayer(dir),
             LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT),
           ),
         );
@@ -230,10 +248,7 @@ describe('MCP server plugins', () => {
         }).pipe(
           Effect.provide(
             Layer.mergeAll(
-              toolTableLayer(
-                toolTable({}),
-                mcpPluginLoader(path.join(dir, 'mcp.json')),
-              ),
+              mcpToolTableLayer(dir),
               LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT),
             ),
           ),

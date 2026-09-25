@@ -89,6 +89,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { checkCoreDependencies } from '@utils/system/checkCoreDependencies';
 
 import { createExtensionHostRequests } from './extensionHostRequests';
+import { RequestAttention } from './requestAttention';
 
 const RECENT_COMMIT_LIMIT = 20;
 
@@ -136,6 +137,14 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   private sidebarPort: Port | undefined;
   /** The popped-out tab and its port, attached and released together. */
   private editor: { panel: vscode.WebviewPanel; port: Port } | undefined;
+  private readonly attention = new RequestAttention({
+    sidebar: () => this.sidebarView,
+    panel: () => this.editor?.panel,
+    isViewVisible: () => this.isViewVisible(),
+    showInSidebar: () => this.showInSidebar(),
+    showSessions: (runId) =>
+      this.surfaceAction({ kind: 'showSessions', runId }),
+  });
 
   /**
    * This host's half of the shared funnel loop (PRD: agent-native
@@ -313,9 +322,10 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
         ),
       ),
     );
+    const attention = this.runtime.runFork(this.attention.follow(session));
     this.disposables.push({
       dispose: () => {
-        this.runtime.runFork(Fiber.interrupt(sessionEvents));
+        this.runtime.runFork(Fiber.interruptAll([sessionEvents, attention]));
       },
     });
 
@@ -482,7 +492,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       if (isAgentCatalogAuthRefreshDeferred()) {
         runAfterAgentCatalogAuthRefresh(this.runtime, [
           this.snapshot.refreshCatalogs,
-          this.snapshot.refreshAuth,
           this.refreshOnboardingFunnel(),
         ]);
         return;
@@ -501,7 +510,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
         ProcessServices
       >([
         this.snapshot.refreshCatalogs,
-        this.snapshot.refreshAuth,
         this.snapshot.refreshHostBanners,
         this.refreshOnboardingFunnel(),
       ]);
@@ -532,7 +540,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     );
   }
 
-  /** A run loaded an agent from the custom directory. */
+  /** A launch could not find its agent. */
   public showAgentConfigBanner(
     agentName: string,
     sessionType: SessionType,
@@ -562,6 +570,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     };
     this.closeSidebarPort();
     this.sidebarView = webviewView;
+    this.attention.paint(webviewView);
     // The slot is VS Code's own synchronous entry: it hands back a resolved
     // view, so the attachment settles here.
     this.sidebarPort = this.runtime.runSync(
@@ -738,9 +747,11 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   }
 
   /** Select a stream this window just launched (the launch's
-   *  `onRunResolved` callback): the launching surface selects it. */
+   *  `onRunResolved` callback): the launching surface selects it, and a
+   *  resolved agent retires the missing-agent warning. */
   public presentLaunchedRun(runId: RunId): void {
     this.surfaceAction({ kind: 'select', runId });
+    this.runtime.runFork(this.snapshot.clearAgentConfigBanner);
   }
 
   public revealRun(

@@ -74,8 +74,6 @@ import {
   readModelAvailabilityInputs,
 } from '@model/computeModelOptions';
 import type {
-  AgentDirectories,
-  AppState,
   StateStore,
   StateReadFailed,
   StateWriteFailed,
@@ -83,15 +81,11 @@ import type {
 import type { LanguageModel } from '@platform/languageModel';
 import {
   withProcessServices,
+  type AgentCatalogServices,
   type ProcessRuntime,
   type ProcessServices,
 } from '@platform/processRuntime';
-import {
-  withSessionFs,
-  WorkspaceFs,
-  type GlobalStorageFs,
-  type StorageFs,
-} from '@platform/rootedFs';
+import { withSessionFs, WorkspaceFs, type StorageFs } from '@platform/rootedFs';
 import type { PlatformSecrets } from '@platform/secrets';
 import { presentLaunchedProgressRun } from '@progressView/progressNavigation';
 import latexPreamble from '@resources/templates/chatExport.tex';
@@ -117,7 +111,6 @@ import {
   setOnboardingDeclined,
 } from '@shared/state/onboardingState';
 
-import { getProviderKeyUrl } from '@utils/config/providerConfig';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { pathToLocationIn } from '@utils/files/fileLocation';
 import {
@@ -424,7 +417,7 @@ export function createExtensionHostRequests(
   ): Effect.Effect<
     void,
     HostCallFailed | RequestRefusal | StateReadFailed,
-    GlobalStorageFs | FileSystem.FileSystem | AgentDirectories | AppState
+    AgentCatalogServices
   > {
     return Effect.gen(function* () {
       const { launch: form } = request;
@@ -612,7 +605,6 @@ export function createExtensionHostRequests(
         Effect.mapError((cause) => hostFailure('refreshApiKeyStatus', cause)),
       ),
       snapshot.refreshCatalogs,
-      snapshot.refreshAuth,
       refreshOnboardingFunnel,
     ],
     { concurrency: 'unbounded', discard: true },
@@ -649,7 +641,6 @@ export function createExtensionHostRequests(
       commandVerb('texra.merge', baseFile, editedFile),
     latexdiffFiles: (baseFile, editedFile) =>
       commandVerb('texra.latexdiff', undefined, baseFile, editedFile),
-    openDashboard: commandVerb('texra.showDashboard'),
     openSettings: (section, sessionType) => {
       if (section === 'agents')
         return commandVerb(
@@ -660,26 +651,20 @@ export function createExtensionHostRequests(
         section === 'models' ? 'texra.showModels' : 'texra.showMultiAgent',
       );
     },
-    setApiKey: (provider) =>
-      Effect.gen(function* () {
-        yield* commandVerb('texra.setApiKey', provider);
-        // SecretManager has no key-changed event, so the set-key flow's
-        // completion is the explicit refresh point for the funnel.
-        yield* refreshOnboardingFunnel;
-      }),
-    openApiKeyGuide: (provider) =>
-      Effect.gen(function* () {
-        const url = provider
-          ? yield* getProviderKeyUrl(session.roots, provider)
-          : undefined;
-        yield* fromHost('env.openExternal', () =>
-          vscode.env.openExternal(
-            vscode.Uri.parse(
-              url || 'https://texra.ai/guide/installation#setting-up-api-keys',
-            ),
+    // SecretManager has no key-changed event, so the set-key flow's
+    // completion is the explicit refresh point for the funnel.
+    setApiKey: commandVerb('texra.setApiKey').pipe(
+      Effect.andThen(refreshOnboardingFunnel),
+    ),
+    openApiKeyGuide: Effect.asVoid(
+      fromHost('env.openExternal', () =>
+        vscode.env.openExternal(
+          vscode.Uri.parse(
+            'https://texra.ai/guide/installation#setting-up-api-keys',
           ),
-        );
-      }),
+        ),
+      ),
+    ),
     openAgentSettings: (sessionType) =>
       commandVerb(
         'texra.showAgents',
@@ -714,12 +699,6 @@ export function createExtensionHostRequests(
         const [command, ...args] = docsCommand.split(',');
         yield* runCommand(command, ...args);
       }),
-    signIn: Effect.gen(function* () {
-      const authenticated = yield* fromHost(AUTH_COMMANDS.SIGN_IN, () =>
-        vscode.commands.executeCommand<boolean>(AUTH_COMMANDS.SIGN_IN),
-      );
-      if (authenticated) yield* refreshAfterCredentialChange;
-    }),
     gettingStarted: (action) =>
       Effect.gen(function* () {
         yield* commandVerb(GETTING_STARTED_COMMANDS[action]);

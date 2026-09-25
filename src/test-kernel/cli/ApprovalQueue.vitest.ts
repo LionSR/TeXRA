@@ -5,10 +5,11 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import {
-  approvalPayloadRunId,
   attentionRequests,
   currentApproval,
+  forgetSettledRequests,
   promoteApprovalsForRun,
+  stagePresentation,
   type ApprovalPayload,
 } from '@cli/chat/tui/state/approvalQueue';
 import {
@@ -91,21 +92,21 @@ describe('CLI approval surface', () => {
     );
     seedView(view);
     expect(currentApproval.get()?.payload).toEqual(local);
-    expect(attentionRequests(view).map((request) => request.runId)).toEqual([
+    expect(attentionRequests.get().map((request) => request.runId)).toEqual([
       RUN_A,
     ]);
     expect(sessionListRunIds.get()).toEqual([ROOT]);
 
     rootRunId.set(RUN_B);
     expect(currentApproval.get()?.payload).toEqual(foreign);
-    expect(attentionRequests(view).map((request) => request.runId)).toEqual([
+    expect(attentionRequests.get().map((request) => request.runId)).toEqual([
       RUN_B,
     ]);
     expect(sessionListRunIds.get()).toEqual([RUN_B]);
 
     rootRunId.set(undefined);
     expect(currentApproval.get()).toBeUndefined();
-    expect(attentionRequests(view)).toEqual([]);
+    expect(attentionRequests.get()).toEqual([]);
     expect(sessionListRunIds.get()).toEqual([]);
 
     // A detached child still owned by this terminal keeps its approval
@@ -116,9 +117,9 @@ describe('CLI approval surface', () => {
     );
     seedView(detachedView);
     expect(currentApproval.get()?.payload).toEqual(local);
-    expect(
-      attentionRequests(detachedView).map((request) => request.runId),
-    ).toEqual([RUN_A]);
+    expect(attentionRequests.get().map((request) => request.runId)).toEqual([
+      RUN_A,
+    ]);
     expect(sessionListRunIds.get()).toEqual([RUN_A]);
   });
 
@@ -129,7 +130,7 @@ describe('CLI approval surface', () => {
     seedView(view);
 
     expect(currentApproval.get()?.payload).toEqual(first);
-    expect(attentionRequests(view).map((r) => r.kind)).toEqual([
+    expect(attentionRequests.get().map((r) => r.kind)).toEqual([
       'bash',
       'userQuestion',
     ]);
@@ -158,7 +159,7 @@ describe('CLI approval surface', () => {
 
     promoteApprovalsForRun(RUN_B);
     expect(currentApproval.get()?.payload).toEqual(b1);
-    expect(attentionRequests(view).map((r) => r.requestId)).toEqual([
+    expect(attentionRequests.get().map((r) => r.requestId)).toEqual([
       'bash-b-1',
       'bash-b-2',
       'bash-run-a',
@@ -196,9 +197,23 @@ describe('CLI approval surface', () => {
     expect(currentApproval.get()?.payload).toEqual(bash);
   });
 
-  it('extracts run ids from every approval payload used by the TUI', () => {
-    expect(approvalPayloadRunId(bashPayload(RUN_A))).toBe('run-a');
-    expect(approvalPayloadRunId(questionPayload(RUN_B))).toBe('run-b');
-    expect(approvalPayloadRunId(bashPayload(''))).toBeUndefined();
+  it('keeps the modal on screen when an older request becomes presentable after a settle', () => {
+    const retry = {
+      kind: 'retry',
+      data: { requestId: 'retry-1', allowBypass: false, runId: RUN_A },
+      tui: {},
+    } as unknown as ApprovalPayload;
+    const a = bashPayload(RUN_A);
+    const b = bashPayload(RUN_B);
+    seedView(viewOfRequests(retry, a, b));
+    expect(currentApproval.get()?.payload).toEqual(a);
+
+    seedView(viewOfRequests(retry, b));
+    forgetSettledRequests(new Set(['retry-1', b.data.requestId]));
+    expect(currentApproval.get()?.payload).toEqual(b);
+
+    // The retry's key lookup lands: it joins behind the modal being answered.
+    stagePresentation(retry);
+    expect(currentApproval.get()?.payload).toEqual(b);
   });
 });

@@ -1,6 +1,5 @@
 // Pure viewport math for bounded pending transcript panes.
 
-import type { RunLabels } from '@shared/tools/executionsDisplay';
 import type { TranscriptRow } from '@ui/transcript';
 import {
   transcriptEntryLayout,
@@ -16,11 +15,10 @@ const FAILED_ENTRY_ESTIMATE_ROWS = 1;
 export function estimateLiveTranscriptEntryRows(
   entry: TranscriptRow,
   width?: number,
-  runLabels?: RunLabels,
 ): number {
   try {
     return transcriptEntryLayoutRows(
-      transcriptEntryLayout(entry, { runLabels, mode: 'live', width }),
+      transcriptEntryLayout(entry, { mode: 'live', width }),
     );
   } catch {
     // The entry itself renders through the same live layout inside its
@@ -42,7 +40,6 @@ export function selectTranscriptEntriesForViewport(
   entries: readonly TranscriptRow[],
   maxRows: number,
   width?: number,
-  runLabels?: RunLabels,
 ): TranscriptEntrySelection {
   if (!Number.isFinite(maxRows) || maxRows <= 0) {
     return { entries: [], rowLimits: new Map(), usedRows: 0 };
@@ -54,7 +51,7 @@ export function selectTranscriptEntriesForViewport(
   for (let index = entries.length - 1; index >= 0; index -= 1) {
     const entry = entries[index];
     if (!isRenderableTranscriptEntry(entry)) continue;
-    const entryRows = estimateLiveTranscriptEntryRows(entry, width, runLabels);
+    const entryRows = estimateLiveTranscriptEntryRows(entry, width);
     if (usedRows + entryRows > maxRows) {
       if (selected.length === 0) {
         selected.unshift(entry);

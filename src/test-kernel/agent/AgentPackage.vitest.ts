@@ -169,10 +169,6 @@ vi.mock('@controllers/session/sessionLayer', async () => {
   };
 });
 
-vi.mock('@transcript/StreamLogStore', () => ({
-  StreamLogStore: {},
-}));
-
 // Local imports - package API under test
 import { SHUTDOWN_PHASE_DEADLINE_MS } from '@platform/defaults/lifecycleHost';
 import type { ProcessRuntime } from '@platform/processRuntime';

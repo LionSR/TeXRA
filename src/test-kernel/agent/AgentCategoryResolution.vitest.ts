@@ -3,7 +3,7 @@ import { writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, Layer } from 'effect';
 import { it } from '@effect/vitest';
 import { afterAll, beforeAll, describe, expect } from 'vitest';
 
@@ -29,6 +29,7 @@ import {
   installPlatform,
 } from '@test/support/setupPlatform';
 import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
+import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import type { RootedFileSystem } from '@utils/files/rootedFileSystem';
 
 /** Resolve exactly as launch does: through the single launch resolver, by the
@@ -107,7 +108,7 @@ describe('cross-category agent resolution', () => {
           Effect.provideService(AgentDirectories, fakeHostAgentDirectories),
           Effect.provideService(AppState, new FakeStateStore()),
         ),
-        nodePlatformLayer,
+        Layer.merge(nodePlatformLayer, testHttpClientLayer),
       ),
     );
   });

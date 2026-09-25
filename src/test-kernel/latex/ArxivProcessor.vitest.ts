@@ -1,6 +1,7 @@
 // Node imports
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
+import { gzipSync } from 'node:zlib';
 
 // Third-party imports
 import * as NodePath from '@effect/platform-node/NodePath';
@@ -15,6 +16,7 @@ import {
   Layer,
   Path,
 } from 'effect';
+import { FetchHttpClient, type HttpClient } from 'effect/unstable/http';
 import { afterEach, describe, expect, vi } from 'vitest';
 
 // Local imports
@@ -29,40 +31,27 @@ import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 const tempDirs = useTempDirs();
 const SOURCE_URL = 'https://arxiv.org/src/2404.12175';
 
-/**
- * The download's body writer is opened with node's `createWriteStream` — the
- * bare factory the facade static it replaced also called — so this suite hooks
- * that one export to observe the writer the interruption path must close.
- * Every other `node:fs` member passes through untouched.
- */
-const fsHooks = vi.hoisted(() => ({
-  onWriteStream: undefined as
-    ((stream: NodeJS.WritableStream) => void) | undefined,
-}));
+/** The node platform plus the fetch-backed HTTP client each test's
+ *  {@link onFetch} seam feeds. */
+const httpPlatformLayer = Layer.merge(nodePlatformLayer, FetchHttpClient.layer);
 
-vi.mock('node:fs', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('node:fs')>();
-  return {
-    ...actual,
-    createWriteStream: (
-      ...args: Parameters<typeof actual.createWriteStream>
-    ) => {
-      const stream = actual.createWriteStream(...args);
-      fsHooks.onWriteStream?.(stream);
-      return stream;
-    },
-  };
-});
+/** Answer the download's requests from `fetchMock`. */
+const onFetch =
+  (fetchMock: typeof fetch) =>
+  <A, E, R>(self: Effect.Effect<A, E, R>): Effect.Effect<A, E, R> =>
+    Effect.provideService(self, FetchHttpClient.Fetch, fetchMock);
 
 /**
- * The context filesystem, with every `remove` recorded before it runs: the
- * partial-download delete is one of the three events the interruption order
- * assertion pins, and it now runs through the injected `FileSystem` service
- * rather than a facade static.
+ * The context filesystem, with every `remove` recorded before it runs and
+ * every `open` observed: the partial-download delete and the writer close are
+ * two of the three events the interruption order assertion pins. `started`
+ * completes once the first chunk is written, so an interrupt lands after the
+ * body reader exists.
  */
 function recordingFsLayer(
   events: string[],
-): Layer.Layer<FileSystem.FileSystem | Path.Path> {
+  started: Deferred.Deferred<void>,
+): Layer.Layer<FileSystem.FileSystem | Path.Path | HttpClient.HttpClient> {
   const hooked = Layer.effect(
     FileSystem.FileSystem,
     Effect.map(FileSystem.FileSystem, (fs): FileSystem.FileSystem => ({
@@ -71,15 +60,35 @@ function recordingFsLayer(
         events.push('partial-deleted');
         return fs.remove(target, options);
       },
+      open: (target, options) =>
+        Effect.gen(function* () {
+          // Registered before the open, so this finalizer runs after the
+          // handle's own close (scope finalizers run last-in, first-out):
+          // 'writer-closed' marks the moment the handle is closed.
+          yield* Effect.addFinalizer(() =>
+            Effect.sync(() => events.push('writer-closed')),
+          );
+          const file = yield* fs.open(target, options);
+          // The node handle is a class instance: delegate through its
+          // prototype chain and override only `writeAll`.
+          const observed: FileSystem.File = Object.assign(Object.create(file), {
+            writeAll: (buffer: Uint8Array) =>
+              file
+                .writeAll(buffer)
+                .pipe(
+                  Effect.andThen(Deferred.done(started, Exit.void)),
+                  Effect.asVoid,
+                ),
+          });
+          return observed;
+        }),
     })),
   ).pipe(Layer.provide(nodePlatformLayer));
-  return Layer.merge(hooked, NodePath.layer);
+  return Layer.mergeAll(hooked, NodePath.layer, FetchHttpClient.layer);
 }
 
 afterEach(async () => {
   setLogSink(null);
-  fsHooks.onWriteStream = undefined;
-  vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
 
@@ -127,19 +136,17 @@ describe('arXiv processor logger channel', () => {
           ? new Response(null, { status: 429 })
           : sourceResponse();
       });
-      vi.stubGlobal('fetch', fetchMock);
-
       const downloadedPath = yield* ArxivProcessor.downloadFile(
         SOURCE_URL,
         destBasePath,
         5000,
-      );
+      ).pipe(onFetch(fetchMock));
 
       expect(downloadedPath).toBe(destBasePath);
       expect(
         logs.has('DEBUG', 'arxivProcessor', 'Download attempt failed'),
       ).toBe(true);
-    }).pipe(withDiagnostics, Effect.provide(nodePlatformLayer)),
+    }).pipe(withDiagnostics, Effect.provide(httpPlatformLayer)),
   );
 });
 
@@ -172,7 +179,41 @@ describe('arXiv source download filenames', () => {
           autoIndent: false,
         });
         expect(result).toEqual({ path: sourceDirectory, alreadyExisted: true });
-      }).pipe(Effect.provide(nodePlatformLayer)),
+      }).pipe(Effect.provide(httpPlatformLayer)),
+  );
+
+  it.live(
+    'streams a gzip-only source through gunzip into main.tex and drops the archive',
+    () =>
+      Effect.gen(function* () {
+        const workspaceRoot = yield* Effect.promise(() =>
+          makeTempDir('texra-arxiv-gzip-', tempDirs),
+        );
+        const tex = '\\documentclass{article}\n'.repeat(4096);
+        const fetchMock = vi.fn(
+          async () =>
+            new Response(gzipSync(tex), {
+              headers: {
+                'content-disposition': 'attachment; filename="source.gz"',
+              },
+            }),
+        );
+        const result = yield* ArxivProcessor.downloadSource('2404.12175', {
+          workspaceRoot,
+          formatter: null,
+          autoIndent: false,
+        }).pipe(onFetch(fetchMock));
+        const paperDir = path.join(workspaceRoot, 'References/2404.12175');
+        expect(result).toEqual({ path: paperDir, alreadyExisted: false });
+        expect(yield* Effect.promise(() => fs.readdir(paperDir))).toStrictEqual(
+          ['main.tex'],
+        );
+        expect(
+          yield* Effect.promise(() =>
+            fs.readFile(path.join(paperDir, 'main.tex'), 'utf8'),
+          ),
+        ).toBe(tex);
+      }).pipe(Effect.provide(httpPlatformLayer)),
   );
 
   it.live(
@@ -182,40 +223,37 @@ describe('arXiv source download filenames', () => {
         const destBasePath = yield* tempSourceBase;
         const started = yield* Deferred.make<void>();
         const events: string[] = [];
-        fsHooks.onWriteStream = (writer) => {
-          writer.once('close', () => events.push('writer-closed'));
-          writer.once('open', () => Deferred.doneUnsafe(started, Exit.void));
-        };
         let body: ReadableStreamDefaultController<Uint8Array> | undefined;
-        vi.stubGlobal(
-          'fetch',
-          vi.fn(
-            async () =>
-              new Response(
-                new ReadableStream<Uint8Array>({
-                  start(controller) {
-                    body = controller;
-                    controller.enqueue(
-                      new TextEncoder().encode('partial source'),
-                    );
-                  },
-                  cancel() {
-                    events.push('body-cancelled');
-                  },
-                }),
-                {
-                  headers: {
-                    'content-disposition': 'attachment; filename="source"',
-                  },
+        const fetchMock = vi.fn(
+          async () =>
+            new Response(
+              new ReadableStream<Uint8Array>({
+                start(controller) {
+                  body = controller;
+                  controller.enqueue(
+                    new TextEncoder().encode('partial source'),
+                  );
                 },
-              ),
-          ),
+                cancel() {
+                  events.push('body-cancelled');
+                },
+              }),
+              {
+                headers: {
+                  'content-disposition': 'attachment; filename="source"',
+                },
+              },
+            ),
         );
 
         const fiber = yield* ArxivProcessor.downloadFile(
           SOURCE_URL,
           destBasePath,
-        ).pipe(Effect.provide(recordingFsLayer(events)), Effect.forkChild);
+        ).pipe(
+          onFetch(fetchMock),
+          Effect.provide(recordingFsLayer(events, started)),
+          Effect.forkChild,
+        );
         yield* Deferred.await(started);
         yield* Fiber.interrupt(fiber);
         const exit = yield* Fiber.await(fiber);
@@ -247,13 +285,11 @@ describe('arXiv source download filenames', () => {
       Effect.gen(function* () {
         const destBasePath = yield* tempSourceBase;
         const fetchMock = vi.fn(async () => sourceResponse());
-        vi.stubGlobal('fetch', fetchMock);
-
         const downloadedPath = yield* ArxivProcessor.downloadFile(
           SOURCE_URL,
           destBasePath,
           5000,
-        );
+        ).pipe(onFetch(fetchMock));
 
         expect(downloadedPath).toBe(destBasePath);
         const contents = yield* Effect.promise(() =>
@@ -267,7 +303,7 @@ describe('arXiv source download filenames', () => {
           }),
         );
         expect(accessError).toBeInstanceOf(Error);
-      }).pipe(Effect.provide(nodePlatformLayer)),
+      }).pipe(Effect.provide(httpPlatformLayer)),
   );
 });
 
@@ -284,30 +320,28 @@ describe('arXiv source download retry classification', () => {
           ? new Response(null, { status: 429 })
           : sourceResponse();
       });
-      vi.stubGlobal('fetch', fetchMock);
-
       const downloadedPath = yield* ArxivProcessor.downloadFile(
         SOURCE_URL,
         destBasePath,
         5000,
-      );
+      ).pipe(onFetch(fetchMock));
 
       expect(attempt).toBe(2);
       expect(downloadedPath).toBe(destBasePath);
-    }).pipe(Effect.provide(nodePlatformLayer)),
+    }).pipe(Effect.provide(httpPlatformLayer)),
   );
 
   it.effect('does not retry a permanent 400 response', () =>
     Effect.gen(function* () {
       const destBasePath = yield* tempSourceBase;
       const fetchMock = vi.fn(async () => new Response(null, { status: 400 }));
-      vi.stubGlobal('fetch', fetchMock);
-
       const error = yield* Effect.flip(
-        ArxivProcessor.downloadFile(SOURCE_URL, destBasePath, 5000),
+        ArxivProcessor.downloadFile(SOURCE_URL, destBasePath, 5000).pipe(
+          onFetch(fetchMock),
+        ),
       );
       expect(error.message).toContain('HTTP 400');
       expect(fetchMock).toHaveBeenCalledTimes(1);
-    }).pipe(Effect.provide(nodePlatformLayer)),
+    }).pipe(Effect.provide(httpPlatformLayer)),
   );
 });

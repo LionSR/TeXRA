@@ -2,10 +2,7 @@ import { Deferred, Effect } from 'effect';
 import { MODEL_CONFIGS, type ModelConfig } from 'llm-zoo';
 
 import type { ApiProvider } from '@model/apiProviders';
-import {
-  resolveDirectModelApiKeyProvider,
-  shouldRouteModelThroughOpenRouter,
-} from '@model/openRouterRouting';
+import { decideModelRoute, OWN_KEY_ROUTE_FACTS } from '@model/modelRoute';
 import { zeroCostAccessOverrides } from '@model/subscriptionAccessOverrides';
 import {
   LanguageModel,
@@ -276,8 +273,13 @@ export function getRuntimeModelDirectFallback(
 ): RuntimeModelDirectFallback | undefined {
   const config = MODEL_CONFIGS[model];
   if (!config) return undefined;
-  const provider = shouldRouteModelThroughOpenRouter(config, useOpenRouter)
-    ? 'openRouter'
-    : resolveDirectModelApiKeyProvider(config);
-  return provider ? { model, provider } : undefined;
+  // The replacement run declines every subscription route and Copilot.
+  const route = decideModelRoute(config, {
+    ...OWN_KEY_ROUTE_FACTS,
+    useOpenRouter,
+  });
+  if (route.kind === 'openrouter') return { model, provider: 'openRouter' };
+  return route.kind === 'api-key'
+    ? { model, provider: route.provider }
+    : undefined;
 }

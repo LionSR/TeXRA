@@ -48,22 +48,21 @@ import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { pathToLocationIn } from '@utils/files/fileLocation';
 import { entryExists } from '@utils/files/fsEntryExists';
 import { checkToolInstalled } from '@utils/system/toolUtils';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 type LatexdiffTool = 'latexdiff' | 'latexdiff-vc';
 
 /**
  * Run a latexdiff command body, skipping it when the tool is missing and
- * reporting any failure under `errorMessage`. Every command in this file goes
- * through here, and this is the file's one terminal boundary: `catchCause`
- * answers a typed failure and a defect alike, and `Cause.squash` hands
- * `showLoggedErrorMessage` the value either produced. An interrupt is
- * neither: a shutdown mid-run is re-raised, not shown as a failure (#12841).
+ * reporting any failure under `errorMessage`: every command in this file goes
+ * through this one terminal boundary. `catchCause` answers a typed failure and
+ * a defect alike through `Cause.squash`; an interrupt is re-raised (#12841).
  */
 const withLatexdiffTool = <E, R>(
   tool: LatexdiffTool,
   errorMessage: string,
   action: Effect.Effect<void, E, R>,
-): Effect.Effect<void, never, R> =>
+): Effect.Effect<void, never, R | ChildProcessSpawner> =>
   Effect.gen(function* () {
     const installed = yield* checkToolInstalled(tool);
     if (!installed) {
@@ -272,7 +271,11 @@ const runDiffAndOpen = Effect.fnUntraced(function* (
   toolLabel: string,
   runDiff: (
     mathMarkup: LatexdiffMathMarkupValue,
-  ) => Effect.Effect<LaTeXdiffResult, never, FileSystem.FileSystem>,
+  ) => Effect.Effect<
+    LaTeXdiffResult,
+    never,
+    FileSystem.FileSystem | ChildProcessSpawner
+  >,
 ) {
   const mathMarkup = yield* promptForLatexdiffMathMarkup(session);
   if (!mathMarkup) return;

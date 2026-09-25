@@ -1,10 +1,10 @@
-import { useState } from 'react';
+import { useContext } from 'react';
 import { Box, Text, useWindowSize } from 'ink';
 
 import { COLOR_INFO } from '@cli/tui/ui/colors';
 import {
   clampModalWidth,
-  CONFIRM_CARD_HORIZONTAL_DECORATION,
+  confirmCardContentWidth,
   isCompactRows,
 } from '@cli/tui/ui/theme';
 import { fillRows, truncateToWidth } from '@cli/runtime/terminalText';
@@ -12,8 +12,7 @@ import type { PlanApprovalPermission } from '@shared/schemas';
 import type { SurfaceDecision } from '@shared/session/approvalDecision';
 import { PLAN_GOAL_COPY } from '@ui/copy/delegationApproval';
 
-import { ConfirmCard, CONFIRM_CARD_FEEDBACK_PLACEHOLDER } from './ConfirmCard';
-import { confirmCardFeedbackRows } from './confirmCardRowsBudget';
+import { ConfirmCard, ConfirmCardFeedback } from './ConfirmCard';
 import {
   ScrollableModalText,
   scrollableModalTextRowsBudget,
@@ -100,46 +99,20 @@ export function isPlanApprovalGoalActionVisible({
 
 export function PlanApproval(props: PlanApprovalProps): React.JSX.Element {
   const { columns } = useWindowSize();
-  const [feedbackMode, setFeedbackMode] = useState(false);
-  const [feedbackValue, setFeedbackValue] = useState('');
   const { autoApproveAll, availableRows, onDecide, payload } = props;
-  const { goalEnabled, plan } = payload;
-  const compact = isCompactPlanApprovalRows(availableRows, goalEnabled);
-  const contentWidth = clampModalWidth(
-    compact ? columns : columns - CONFIRM_CARD_HORIZONTAL_DECORATION,
-  );
+  const compact = isCompactPlanApprovalRows(availableRows, payload.goalEnabled);
   const compactBodyRows = compact
     ? planApprovalCompactBodyRowsBudget({
         availableRows,
         columns,
-        goalEnabled,
+        goalEnabled: payload.goalEnabled,
       })
     : undefined;
   const goalActionVisible = isPlanApprovalGoalActionVisible({
     compact,
-    goalEnabled,
+    goalEnabled: payload.goalEnabled,
     visibleBodyRows: compactBodyRows ?? 0,
   });
-  const goalNoticeVisible = goalActionVisible && !feedbackMode;
-  // The notice is pinned outside the scroll region in both layouts so the
-  // `r run as goal` action can never outlive its scope notice; in the
-  // compact card it costs one body row.
-  const maxBodyRows = compact
-    ? Math.max(1, (compactBodyRows ?? 1) - (goalNoticeVisible ? 1 : 0))
-    : scrollableModalTextRowsBudget({
-        availableRows,
-        columns,
-        extraFixedRows:
-          (goalNoticeVisible ? PLAN_APPROVAL_GOAL_NOTICE_ROWS : 0) +
-          (feedbackMode
-            ? confirmCardFeedbackRows({
-                columns,
-                placeholder: CONFIRM_CARD_FEEDBACK_PLACEHOLDER,
-                value: feedbackValue,
-              })
-            : 0),
-        title: PLAN_APPROVAL_TITLE,
-      });
 
   return (
     <ConfirmCard
@@ -152,8 +125,7 @@ export function PlanApproval(props: PlanApprovalProps): React.JSX.Element {
         goalActionVisible
           ? [
               {
-                key: PLAN_APPROVAL_GOAL_ACTION.key,
-                label: PLAN_APPROVAL_GOAL_ACTION.action,
+                ...PLAN_APPROVAL_GOAL_ACTION,
                 decision: {
                   action: 'approve_and_goal',
                   autoApproveAll: autoApproveAll ? true : null,
@@ -162,11 +134,57 @@ export function PlanApproval(props: PlanApprovalProps): React.JSX.Element {
             ]
           : []
       }
-      feedbackPlaceholder={CONFIRM_CARD_FEEDBACK_PLACEHOLDER}
-      onFeedbackModeChange={setFeedbackMode}
-      onFeedbackValueChange={setFeedbackValue}
       onDecide={onDecide}
     >
+      <PlanApprovalBody
+        autoApproveAll={autoApproveAll}
+        availableRows={availableRows}
+        compact={compact}
+        compactBodyRows={compactBodyRows}
+        goalActionVisible={goalActionVisible}
+        objective={payload.plan.objective}
+      />
+    </ConfirmCard>
+  );
+}
+
+function PlanApprovalBody({
+  autoApproveAll,
+  availableRows,
+  compact,
+  compactBodyRows,
+  goalActionVisible,
+  objective,
+}: {
+  readonly autoApproveAll: boolean;
+  readonly availableRows?: number;
+  readonly compact: boolean;
+  readonly compactBodyRows: number | undefined;
+  readonly goalActionVisible: boolean;
+  readonly objective: string;
+}): React.JSX.Element {
+  const { columns } = useWindowSize();
+  const feedback = useContext(ConfirmCardFeedback);
+  const contentWidth = compact
+    ? clampModalWidth(columns)
+    : confirmCardContentWidth(columns);
+  const goalNoticeVisible = goalActionVisible && !feedback.mode;
+  // The notice is pinned outside the scroll region in both layouts so the
+  // `r run as goal` action can never outlive its scope notice; in the
+  // compact card it costs one body row.
+  const maxBodyRows = compact
+    ? Math.max(1, (compactBodyRows ?? 1) - (goalNoticeVisible ? 1 : 0))
+    : scrollableModalTextRowsBudget({
+        availableRows,
+        columns,
+        extraFixedRows:
+          (goalNoticeVisible ? PLAN_APPROVAL_GOAL_NOTICE_ROWS : 0) +
+          feedback.rows,
+        title: PLAN_APPROVAL_TITLE,
+      });
+
+  return (
+    <>
       {compact && goalNoticeVisible && (
         <Text>{planApprovalGoalNoticeLine(contentWidth, autoApproveAll)}</Text>
       )}
@@ -174,10 +192,9 @@ export function PlanApproval(props: PlanApprovalProps): React.JSX.Element {
         hiddenNoun={PLAN_APPROVAL_HIDDEN_NOUN}
         marginWhenSpacious={!compact}
         maxRows={maxBodyRows}
-        scrollActive={!feedbackMode}
         scrollHint="scroll plan"
         showScrollHints={!compact}
-        text={plan.objective}
+        text={objective}
         trimWrappedLeadingWhitespace
         width={contentWidth}
       />
@@ -189,6 +206,6 @@ export function PlanApproval(props: PlanApprovalProps): React.JSX.Element {
           </Text>
         </Box>
       )}
-    </ConfirmCard>
+    </>
   );
 }

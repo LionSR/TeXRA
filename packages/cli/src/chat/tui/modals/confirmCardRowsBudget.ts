@@ -1,8 +1,8 @@
 import {
-  clampModalWidth,
+  confirmCardContentWidth,
   CONFIRM_CARD_HORIZONTAL_DECORATION,
 } from '@cli/tui/ui/theme';
-import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
+import { wrappedRowCount } from '@cli/tui/ansiWrap';
 import { clamp } from '@utils/core';
 import { confirmCardPulsedTitle } from './ConfirmCardState';
 
@@ -24,11 +24,9 @@ export function confirmCardFeedbackRows({
   readonly value: string;
 }): number {
   const text = value.length > 0 ? value : placeholder;
-  const width = Math.max(
-    1,
-    columns - CONFIRM_CARD_HORIZONTAL_DECORATION - FEEDBACK_PREFIX_COLUMNS,
-  );
-  return FEEDBACK_MARGIN_ROWS + wrapAnsiToWidth(text, width).split('\n').length;
+  const width =
+    columns - CONFIRM_CARD_HORIZONTAL_DECORATION - FEEDBACK_PREFIX_COLUMNS;
+  return FEEDBACK_MARGIN_ROWS + wrappedRowCount(text, width);
 }
 
 /**
@@ -47,7 +45,6 @@ export function confirmCardContentRowsBudget({
   availableRows,
   columns,
   title,
-  minContentWidth,
   defaultRows,
   compactMaxRows,
   spaciousFixedRows,
@@ -58,7 +55,6 @@ export function confirmCardContentRowsBudget({
   readonly availableRows?: number;
   readonly columns: number;
   readonly title: string;
-  readonly minContentWidth: number;
   /** Budget used when `availableRows` is undefined. */
   readonly defaultRows: number;
   /** Content rows shown in the compact layout (and spacious cutoff). */
@@ -72,15 +68,11 @@ export function confirmCardContentRowsBudget({
 }): number {
   if (availableRows === undefined) return defaultRows;
 
-  const titleWidth = clampModalWidth(
-    columns - CONFIRM_CARD_HORIZONTAL_DECORATION,
-    minContentWidth,
-  );
-  const titleRows = wrapAnsiToWidth(
-    confirmCardPulsedTitle(0, title),
-    titleWidth,
-  ).split('\n').length;
-  const fixedRows = titleRows + extraFixedRows;
+  const fixedRows =
+    wrappedRowCount(
+      confirmCardPulsedTitle(0, title),
+      confirmCardContentWidth(columns),
+    ) + extraFixedRows;
 
   const spaciousRows = availableRows - spaciousFixedRows - fixedRows;
   if (spaciousRows > compactMaxRows) {

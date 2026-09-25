@@ -1,4 +1,5 @@
 import { defineCommand, type ArgsDef, type CommandDef } from 'citty';
+import { Cause, Exit, type Effect } from 'effect';
 
 import {
   installCliProcessRuntime,
@@ -10,14 +11,12 @@ import {
 } from '@cli/runtime/logSinks';
 import type { ParsedGlobalArgs } from '@cli/runtime/globalArgs';
 import type { CliContext } from '@cli/runtime/cliContext';
+import { CliExitCode } from '@cli/runtime/exitCodes';
 import { setLogSink, silentLogSink } from '@logger/logSink';
 import type { ProcessServices } from '@platform/processRuntime';
 
 import { contextFromArgs } from './context';
 import { setExitCode } from './exitCode';
-// Type-only: this file's one `catch` is the command boundary below, and a
-// value import of `effect` would make it a raw catch in an effect importer.
-import type { Effect } from 'effect';
 
 // citty hands `run` a context whose `args` is keyed by the command's `ArgsDef`.
 // We mirror that shape so handlers keep full literal-typed access to `ctx.args`
@@ -38,14 +37,12 @@ interface DefineCliCommandOptions<A extends ArgsDef, E> {
    * reduces to "do the work, return a code".
    *
    * It is called to BUILD that program, before the runtime is installed. A
-   * command that refuses its arguments must therefore refuse HERE, in the
-   * builder, by throwing `CliUsageError` (`texra clone`'s project parse,
-   * `texra history`'s id and limit parses, `texra config edit`'s terminal
-   * check, `texra login`'s transport check) — not by returning a program that
-   * settles on an exit code. A returned program is run, and running one
-   * installs a process runtime that only the platform shutdown disposes; a
-   * command that refuses before it brings a platform up would leave the
-   * global root's handle holding the event loop open past its own exit.
+   * command that can refuse its arguments without the runtime refuses HERE,
+   * in the builder, by throwing `CliUsageError` (`texra clone`'s project
+   * parse, `texra history`'s id and limit parses, `texra config edit`'s
+   * terminal check, `texra login`'s transport check), so the refusal opens
+   * nothing under the storage root. A usage error the program raises instead
+   * still exits 2: the process entry disposes whatever runtime is installed.
    */
   readonly run: (
     context: CliContext,
@@ -71,7 +68,7 @@ interface DefineCliCommandOptions<A extends ArgsDef, E> {
    * rather than as a TeXRA crash.
    *
    * It speaks for the work only. A `CliUsageError` the builder above throws
-   * is raised before this catch exists, so a command can both refuse its
+   * is raised before this report exists, so a command can both refuse its
    * arguments as a usage error and report a failed run with its own code.
    */
   readonly catchExitCode?: number | ((error: unknown) => number);
@@ -106,52 +103,58 @@ export function defineCliCommand<const A extends ArgsDef, E>(
         ctx.rawArgs,
       );
       const runCtx = ctx as CliCommandRunContext<A>;
-      // Built above the catch below, not inside it: a `CliUsageError` the
+      // Built before the run below, not inside it: a `CliUsageError` the
       // builder throws is the command refusing its arguments, which `runCli`
       // reports as a usage error, and `catchExitCode` speaks only for the
       // work. Building it here keeps that true for a command that does both.
       const program = options.run(context, runCtx);
-      const exitCode = async (): Promise<number> => {
-        // The sink that covers the runtime build below, chosen now that the
-        // context has answered `--quiet`. `installCliProcessRuntime` logs
-        // while its layers build (`UsageLogService started …`), and for a
-        // command that brings a platform up `initCliPlatform`'s own
-        // `setLogSink` runs one step later — inside the program this builds
-        // the runtime for. `bin/texra.ts` already put those lines on stderr;
-        // this is where `--quiet` can still silence them, and for the two
-        // platform-less entries it is the one sink they ever get.
-        setLogSink(
-          context.quietLogs ? silentLogSink : prePlatformDiagnosticSink,
-          { trusted: true },
-        );
-        const runtime = await installCliProcessRuntime(
-          context.storageRoot,
-          options.install === 'noPlatform'
-            ? {
-                ...NO_PLATFORM_INSTALL,
-                minimumLogLevel: context.minimumLogLevel,
-              }
-            : {
-                resourcesPath: context.resourcesPath,
-                minimumLogLevel: context.minimumLogLevel,
-              },
-        );
-        return runtime.runPromise(program);
-      };
-      if (options.catchExitCode === undefined) {
-        setExitCode(await exitCode());
+      // The sink that covers the runtime build below, chosen now that the
+      // context has answered `--quiet`. `installCliProcessRuntime` logs
+      // while its layers build (`UsageLogService started …`), and for a
+      // command that brings a platform up `initCliPlatform`'s own
+      // `setLogSink` runs one step later — inside the program this builds
+      // the runtime for. `bin/texra.ts` already put those lines on stderr;
+      // this is where `--quiet` can still silence them, and for the two
+      // platform-less entries it is the one sink they ever get.
+      setLogSink(
+        context.quietLogs ? silentLogSink : prePlatformDiagnosticSink,
+        { trusted: true },
+      );
+      // The command runs on the process runtime from plain async code, never
+      // from inside a default-runtime fiber: started from one, a headless
+      // run's Ctrl-C shutdown drain never settled. A failed install folds
+      // into the same exit as a failed program, so both reach one report.
+      const exit = await installCliProcessRuntime(
+        context.storageRoot,
+        options.install === 'noPlatform'
+          ? { ...NO_PLATFORM_INSTALL, minimumLogLevel: context.minimumLogLevel }
+          : {
+              resourcesPath: context.resourcesPath,
+              minimumLogLevel: context.minimumLogLevel,
+            },
+      ).then(
+        (runtime) => runtime.runPromiseExit(program),
+        (error: unknown) => Exit.fail(error),
+      );
+      if (Exit.isSuccess(exit)) {
+        setExitCode(exit.value);
         return;
       }
-      try {
-        setExitCode(await exitCode());
-      } catch (error) {
-        if (typeof options.catchExitCode === 'function') {
-          setExitCode(options.catchExitCode(error));
-          return;
-        }
-        writeErrorStderr(error);
-        setExitCode(options.catchExitCode);
+      // Ctrl-C or SIGTERM: the platform's shutdown interrupted the command,
+      // and its signal handler ends the process with the signal's code. That
+      // is a cancel, not a crash for `bin/texra.ts` to report as a bug.
+      if (Cause.hasInterruptsOnly(exit.cause)) {
+        setExitCode(CliExitCode.Interrupted);
+        return;
       }
+      const error = Cause.squash(exit.cause);
+      if (options.catchExitCode === undefined) throw error;
+      if (typeof options.catchExitCode === 'function') {
+        setExitCode(options.catchExitCode(error));
+        return;
+      }
+      writeErrorStderr(error);
+      setExitCode(options.catchExitCode);
     },
   });
 }

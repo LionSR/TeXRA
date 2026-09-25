@@ -5,7 +5,6 @@
 // an outcome or a request error; an arm the desktop does not perform is
 // `Rejected` with its reason, never dropped.
 
-import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { Cause, Effect, Exit, FileSystem, SubscriptionRef } from 'effect';
@@ -69,6 +68,7 @@ import {
   type WorkspaceFs,
 } from '@platform/rootedFs';
 import type { PlatformSecrets } from '@platform/secrets';
+import latexPreamble from '@resources/templates/chatExport.tex';
 import {
   cloneRoundIndexed,
   type FileOpResult,
@@ -128,9 +128,6 @@ interface DesktopHostRequestsOptions {
   postToRenderer(message: unknown): boolean | void;
   /** A host-initiated change to the surface (PRD 8.5). */
   postSurfaceAction(action: SurfaceActionMessage['action']): void;
-  /** Start the browser sign-in. The failure is the sign-in's own; the arm
-   *  below names it for the request dialog. */
-  signIn(): Effect.Effect<void, Error>;
   getCustomAgentDirectory(): Effect.Effect<
     string,
     AgentDirectoriesFailed,
@@ -207,7 +204,7 @@ export function createDesktopHostRequests(
       // The controller re-reads the secret store after this returns.
       promptForApiKey: () =>
         Effect.gen(function* () {
-          postDesktopSettingsView(options.postToRenderer, 'models');
+          postDesktopSettingsView(options.postToRenderer, 'models/keys');
           yield* host.showInfoMessage(
             'Add a provider API key in Models, then use "Retry" on the request.',
           );
@@ -487,14 +484,7 @@ export function createDesktopHostRequests(
         try: async () => {
           const { ChatExportController: Controller } =
             await import('@controllers/progressView/ChatExportController');
-          const latexPreamble = await readFile(
-            path.join(options.resourcesPath, 'templates', 'chatExport.tex'),
-            'utf8',
-          );
-          return new Controller({
-            session,
-            latexPreamble,
-          });
+          return new Controller({ session, latexPreamble });
         },
         catch: (cause) =>
           new TranscriptExportFailed({
@@ -609,28 +599,35 @@ export function createDesktopHostRequests(
       fileActions.runMergeFile(baseFile, editedFile),
     latexdiffFiles: (baseFile, editedFile) =>
       runLatexdiffFile(baseFile, editedFile),
-    openDashboard: Effect.sync(() =>
-      postDesktopSettingsView(options.postToRenderer),
-    ),
     openSettings: (section, sessionType) =>
       Effect.sync(() =>
         postDesktopSettingsView(
           options.postToRenderer,
-          section === 'teams' ? 'agents' : section,
+          (
+            {
+              agents: 'agents/library',
+              teams: 'agents/teams',
+              models: 'models/models',
+            } as const
+          )[section],
           sessionType === 'toolUse' ? 'toolUse' : undefined,
         ),
       ),
     // Only the "ask the user for a key" step is host-specific: on the
     // desktop that means opening the Models tab rather than a modal prompt.
-    setApiKey: () =>
-      Effect.sync(() =>
-        postDesktopSettingsView(options.postToRenderer, 'models'),
-      ),
-    openApiKeyGuide: () =>
+    setApiKey: Effect.sync(() =>
+      postDesktopSettingsView(options.postToRenderer, 'models/keys'),
+    ),
+    openApiKeyGuide: Effect.suspend(() =>
       options.openExternalUrl('https://texra.ai/guide/configuration.html'),
+    ),
     openAgentSettings: (sessionType) =>
       Effect.sync(() =>
-        postDesktopSettingsView(options.postToRenderer, 'agents', sessionType),
+        postDesktopSettingsView(
+          options.postToRenderer,
+          'agents/library',
+          sessionType,
+        ),
       ),
     openCustomAgentDirectory: Effect.gen(function* () {
       const directory = yield* options.getCustomAgentDirectory();
@@ -642,13 +639,8 @@ export function createDesktopHostRequests(
     recheckDependencies: Effect.suspend(() => options.recheckTools()),
     openInstallGuide: () =>
       Effect.sync(() =>
-        postDesktopSettingsView(options.postToRenderer, 'tools'),
+        postDesktopSettingsView(options.postToRenderer, 'tools/tools'),
       ),
-    signIn: Effect.suspend(() =>
-      options
-        .signIn()
-        .pipe(Effect.mapError((cause) => hostFailure('signIn', cause))),
-    ),
     gettingStarted: (action) =>
       action === 'openWalkthrough'
         ? Effect.sync(() => options.showFirstRunWalkthrough())

@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Deferred, Effect, Fiber, FileSystem, Layer } from 'effect';
+import { Deferred, Effect, Fiber, Layer } from 'effect';
 import { beforeAll, beforeEach, describe, expect, vi } from 'vitest';
 
 // Local imports
@@ -27,7 +27,8 @@ import {
   AppState,
   type AgentDirectoriesPort,
 } from '@platform/interfaces';
-import type { GlobalStorageFs } from '@platform/rootedFs';
+import type { AgentCatalogServices } from '@platform/processRuntime';
+import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import { FakeStateStore } from '@test/support/FakePlatform';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { createDeferred } from '@test/support/asyncTestUtils';
@@ -46,17 +47,14 @@ import type * as vscode from 'vscode';
  * reads the view the readers name in their requirements.
  */
 function onGlobalStorage<A, E>(
-  program: Effect.Effect<
-    A,
-    E,
-    GlobalStorageFs | FileSystem.FileSystem | AgentDirectories | AppState
-  >,
+  program: Effect.Effect<A, E, AgentCatalogServices>,
 ): Effect.Effect<A, E> {
   return Effect.provide(
     program,
     Layer.mergeAll(
       unusedGlobalStorageFs(),
       nodePlatformLayer,
+      testHttpClientLayer,
       AgentDirectories.layer(mutableAgentDirectories),
       AppState.layer(new FakeStateStore()),
     ),

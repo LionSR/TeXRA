@@ -6,29 +6,31 @@ import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { afterEach, describe, expect } from 'vitest';
 
-import { TraceEmitter } from '@agent/trace';
 import {
   ACTIVE_SKILLS_SNAPSHOT_MAX_SKILLS,
-  MESSAGE_TYPES,
-  type RunId,
+  ActiveSkillsSnapshotSchema,
 } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import { StreamLog } from '@shared/session/traceEntries';
 import {
   formatRuntimeSkillActivation,
   loadRuntimeSkillCatalog as loadRuntimeSkillCatalogEffect,
 } from '@skills/runtimeSkills';
+import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { installTestSkillRoots, writeSkill } from '@test/support/skillFixtures';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
-import { attachTestTranscriptFold } from '@test/support/sessionTestUtils';
 
 const tempRoots = useTempDirs();
 
 const loadRuntimeSkillCatalog = (
   ...args: Parameters<typeof loadRuntimeSkillCatalogEffect>
-) => Effect.runPromise(loadRuntimeSkillCatalogEffect(...args));
+) =>
+  Effect.runPromise(
+    loadRuntimeSkillCatalogEffect(...args).pipe(
+      Effect.provide(nodePlatformLayer),
+    ),
+  );
 
 async function createTempRoot(): Promise<string> {
   return makeTempDir('texra-runtime-skills-', tempRoots);
@@ -184,7 +186,7 @@ describe('runtime skills', () => {
       );
 
       expect(result.skills.map((skill) => skill.name)).toStrictEqual(expected);
-    }),
+    }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
   it('bounds the accepted set once before prompt and snapshot projection', async () => {
@@ -215,20 +217,8 @@ describe('runtime skills', () => {
     expect(snapshotNames.at(-1)).toBe('skill-199');
     expect(result.catalog).not.toContain('skill-200');
 
-    const trace = new TraceEmitter();
-    const store = new StreamLog();
-    const runId = 'bounded-skills' as RunId;
-
-    attachTestTranscriptFold(trace, runId, store);
-
-    expect(() =>
-      trace.emit({ type: 'skills.snapshot', skills: result.skills }),
-    ).not.toThrow();
     expect(
-      store
-        .toJSON()
-        .find((entry) => entry.messageType === MESSAGE_TYPES.ACTIVE_SKILLS)
-        ?.data,
+      ActiveSkillsSnapshotSchema.parse({ skills: result.skills }),
     ).toStrictEqual({ skills: result.skills });
   });
 });

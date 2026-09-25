@@ -25,9 +25,14 @@ import {
   type RunId,
 } from '@shared/schemas';
 import { DEFAULT_AGENT_MODEL } from '@shared/constants/providers';
+import {
+  acceptsFollowUp,
+  type FollowUpHost,
+  type SessionView,
+  type RunView,
+} from './sessionView';
 import type { HostSnapshot } from './hostSnapshot';
 import type { RequestErrorWire } from './sessionFrames';
-import type { SessionView, RunView } from './sessionView';
 
 /**
  * The new-task composer's selections, separate from host-derived state.
@@ -107,8 +112,9 @@ export interface Surface {
   /** The last failed request from this surface. Never persisted. */
   readonly requestError: SurfaceRefusal | null;
   /**
-   * A preference, not a pointer: read it through `resolveSelected`. `null`
-   * is the New-task state and resolves to itself.
+   * The shown run, decided once: `pruneSurface` applies the surface's
+   * `SelectionRule`, so every reader takes the field as is. `null` is the
+   * New-task state on a project surface; a chat's rule maps it to its root.
    */
   readonly selected: RunId | null;
   readonly drafts: ReadonlyMap<RunId, Draft>;
@@ -129,7 +135,7 @@ export interface Surface {
   readonly groups: ReadonlyMap<RunId, ReadonlyMap<string, boolean>>;
   /** Never persisted. */
   readonly focusedRow: string | null;
-  /** Run-board tab strip; resolved at read like `selected`. */
+  /** Run-board tab strip; resolved at read through `resolvePhase`. */
   readonly phase: ReadonlyMap<RunId, string>;
   readonly drawerOpen: boolean;
   readonly toolsSheetOpen: boolean;
@@ -264,24 +270,44 @@ const PER_STREAM_MAPS = Object.keys(
 ) as readonly RunKeyedMapField[];
 
 /**
+ * Where a selection lands against the view, applied by `pruneSurface`. The
+ * default browses the whole project: a run that left the view moves to the
+ * first top-level run, else `null`; an explicit `null` (New task) stays.
+ */
+export type SelectionRule = (selected: RunId | null) => RunId | null;
+
+function projectSelection(view: SessionView): SelectionRule {
+  return (selected) =>
+    selected === null || view.runs.has(selected)
+      ? selected
+      : (view.order.at(0) ?? null);
+}
+
+/**
  * Every per-stream map drops its entry when that stream leaves the view
  * (PRD 9): an id is never reused, so the entry can never become valid
  * again, and without the prune the maps and the persisted form grow without
- * bound and keep a deleted conversation's draft. Returns the same record
- * when nothing left.
+ * bound. The selection is decided here once, by `select` (a chat passes its
+ * tree scope). Returns the same record when nothing moved.
  */
-export function pruneSurface(surface: Surface, view: SessionView): Surface {
+export function pruneSurface(
+  surface: Surface,
+  view: SessionView,
+  select: SelectionRule = projectSelection(view),
+): Surface {
   // `retain` only ever drops entries, never changes a value, so each pruned
   // map keeps its field's element type; the maps are read through the common
   // read-only supertype and the once-narrowed patch is cast back at the end.
   const patch: Partial<
     Record<(typeof PER_STREAM_MAPS)[number], ReadonlyMap<RunId, unknown>>
-  > = {};
+  > & { selected?: RunId | null } = {};
   for (const key of PER_STREAM_MAPS) {
     const current: ReadonlyMap<RunId, unknown> = surface[key];
     const next = retain(current, view);
     if (next !== current) patch[key] = next;
   }
+  const selected = select(surface.selected);
+  if (selected !== surface.selected) patch.selected = selected;
   if (Object.keys(patch).length === 0) return surface;
   return { ...surface, ...patch } as Surface;
 }
@@ -319,36 +345,6 @@ export function reconcileLaunch(surface: Surface, host: HostSnapshot): Surface {
 }
 
 /**
- * The PRD 9 selection rule: `selected` if the view still has that run,
- * else the first top-level run, else `null`. The fallback applies only to
- * a non-null id that has disappeared; an explicit `null` resolves to
- * itself. This surface browses the whole project; a chat's selection is
- * confined to its own run tree instead.
- */
-export function resolveSelected(
-  view: SessionView,
-  surface: Surface,
-): RunId | null {
-  const selected = surface.selected;
-  if (selected === null) return null;
-  if (view.runs.has(selected)) return selected;
-  return view.order.at(0) ?? null;
-}
-
-/**
- * Whether a stream takes a follow-up at all: what decides the composer is
- * shown for it, and therefore what a host action aimed at it may assume. A
- * run that declares no follow-up support and one this process may not act
- * on take none; otherwise a run still going or waiting takes one, as does a
- * conversation that has not started (`ready` with nothing written yet).
- */
-export function acceptsFollowUp(run: RunView): boolean {
-  if (run.followUpSupport === 'unsupported' || run.readOnly) return false;
-  if (run.group === 'running' || run.group === 'waiting') return true;
-  return run.status === 'ready' && run.lastTimestamp === null;
-}
-
-/**
  * Whether a follow-up can be sent to a stream: the one rule the composer's
  * Send button and the host's submit accelerator (Cmd+Alt+E) both read, so
  * the surface a user sees and the keystroke that bypasses it cannot
@@ -357,8 +353,12 @@ export function acceptsFollowUp(run: RunView): boolean {
  * draft sends nothing, and a pasted image the host has not stored yet is
  * not ready to name.
  */
-export function canSendFollowUp(run: RunView, draft: Draft): boolean {
-  if (!acceptsFollowUp(run)) return false;
+export function canSendFollowUp(
+  run: RunView,
+  draft: Draft,
+  host: FollowUpHost,
+): boolean {
+  if (!acceptsFollowUp(run, host)) return false;
   if (draft.images.some((image) => image.path === null)) return false;
   return draft.text.trim() !== '' || draft.images.length > 0;
 }

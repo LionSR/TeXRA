@@ -23,12 +23,17 @@ import type {
 } from '@tools/approval/latexPreview';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 import { toolEditApprovalRequest } from '../agent/progressTestUtils';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 const RUN = RunIdSchema.parse('ab12cd');
 
 /** The controller's verbs are Effects; this is the host wiring point's run. */
 function run<A, E>(
-  program: Effect.Effect<A, E, FileSystem.FileSystem | Path.Path>,
+  program: Effect.Effect<
+    A,
+    E,
+    FileSystem.FileSystem | Path.Path | ChildProcessSpawner
+  >,
 ): Promise<A> {
   return testRuntime().runPromise(program);
 }
@@ -125,7 +130,6 @@ function createTestHost() {
         Deferred.doneUnsafe(contextReady, Effect.void);
         return Deferred.await(staging).pipe(Effect.as(preview));
       },
-      revealApprovalSurface: () => Effect.void,
       openBuildDisplay: (() => Effect.void) as BuildDisplayFn,
       reportError: vi.fn(),
       decide: vi.fn(() => {

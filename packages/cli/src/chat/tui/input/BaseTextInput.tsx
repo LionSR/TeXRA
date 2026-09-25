@@ -19,18 +19,20 @@ import {
 import { isTuiColorEnabled } from '@cli/tui/noColorOutput';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import {
-  applyTerminalInputChunk,
   clampCursor,
   insertText,
   maskDisplayValue,
   verticalCursorMove,
   type CursorEdit,
   type TextEdit,
-  type TextInputChunkEdit,
 } from './textInputEditing';
 import { textInputDisplayWindow } from './textInputDisplay';
-import { matchTextInputBinding } from './textInputBindings';
-import { ImagePasteQueue, type ImagePasteAttempt } from './imagePasteQueue';
+import {
+  applyTerminalInputChunk,
+  matchTextInputBinding,
+  type TextInputChunkEdit,
+} from './textInputBindings';
+import { ImagePasteQueue } from './imagePasteQueue';
 import { useActiveDraft } from './activeDraft';
 
 const IMAGE_PASTE_TIMEOUT_MS = 15_000;
@@ -66,9 +68,7 @@ interface BaseTextInputProps {
     /** The probe as a program: it yields the chip text to insert (e.g.
      *  `[Image #1]`), or null when there is no image on the clipboard. This
      *  input owns the one run, under the timeout below. */
-    readonly probe: (
-      attempt: ImagePasteAttempt,
-    ) => Effect.Effect<string | null, Error, ProcessServices>;
+    readonly probe: () => Effect.Effect<string | null, Error, ProcessServices>;
     readonly runtime: ProcessRuntime;
     readonly onError?: (error: unknown) => void;
   };
@@ -91,6 +91,9 @@ interface BaseTextInputProps {
    *  accept) is received at the start of an input chunk — the chunk's remaining
    *  input is then routed through `applyTerminalInputChunk`. */
   readonly escapeEdit?: CursorEdit;
+  /** Esc pressed while this input owns the keyboard (after `escapeEdit`):
+   *  the owner backs out, so no sibling handler has to catch Esc. */
+  readonly onEscape?: () => void;
   /** Render the value as bullets (secret entry, e.g. an API key). Display-only:
    *  the captured value, edits, and paste are unaffected. */
   readonly masked?: boolean;
@@ -172,6 +175,18 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
     return next;
   }, [props.readLatestValue]);
 
+  // Adopt an edit as the latest state without emitting it; the input chunk
+  // applied on top of it is what commitInputChunkEdit emits.
+  const adoptEdit = useCallback((edit: TextEdit): TextEdit => {
+    const next = {
+      value: edit.value,
+      cursor: clampCursor(edit.cursor, edit.value.length),
+    };
+    latestStateRef.current = next;
+    lastEmittedValueRef.current = next.value;
+    return next;
+  }, []);
+
   const prepareInputChunkState = useCallback(
     (input: string): TextEdit => {
       const latest = syncLatestExternalValue();
@@ -180,16 +195,9 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
         latest.value,
         latest.cursor,
       );
-      if (prepared === undefined) return latest;
-      const next = {
-        value: prepared.value,
-        cursor: clampCursor(prepared.cursor, prepared.value.length),
-      };
-      latestStateRef.current = next;
-      lastEmittedValueRef.current = next.value;
-      return next;
+      return prepared === undefined ? latest : adoptEdit(prepared);
     },
-    [props.prepareInputChunk, syncLatestExternalValue],
+    [adoptEdit, props.prepareInputChunk, syncLatestExternalValue],
   );
 
   const insertIntoLatestDraft = useCallback(
@@ -257,6 +265,7 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
         if (props.escapeEdit) {
           applyLatestEdit(props.escapeEdit);
         }
+        props.onEscape?.();
         return;
       }
       if (imagePasteQueue.hasDeferredAction) {
@@ -309,43 +318,38 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
         // Insert the chip at whatever the caret is when the probe settles
         // (read from a ref, not a keypress-time snapshot) so typing during
         // the probe isn't clobbered. The probe runs on the process runtime
-        // with an Effect timeout; `matchCause` settles every outcome, so the
-        // tracked promise never rejects. Runtime disposal interrupts the
-        // fiber — not a paste failure to report.
-        const attempt = imagePasteQueue.beginAttempt();
-        const paste = imagePaste.runtime.runPromise(
-          Effect.suspend(() => imagePaste.probe(attempt)).pipe(
-            Effect.timeout(IMAGE_PASTE_TIMEOUT_MS),
-            Effect.matchCause({
-              onFailure: (cause) => {
-                if (Cause.hasInterrupts(cause) || !attempt.isCurrent()) return;
-                const error = Cause.squash(cause);
-                imagePaste.onError?.(
-                  Cause.isTimeoutError(error)
-                    ? new Error('Image paste timed out.')
-                    : error,
-                );
-              },
-              onSuccess: (chip) => {
-                if (!chip || !attempt.isCurrent()) return;
-                insertIntoLatestDraft(chip);
-              },
-            }),
+        // with an Effect timeout; `matchCause` settles every outcome. A draft
+        // discard or runtime disposal interrupts the fiber, which is not a
+        // paste failure to report.
+        imagePasteQueue.add(
+          imagePaste.runtime.runFork(
+            Effect.suspend(imagePaste.probe).pipe(
+              Effect.timeout(IMAGE_PASTE_TIMEOUT_MS),
+              Effect.matchCause({
+                onFailure: (cause) => {
+                  if (Cause.hasInterrupts(cause)) return;
+                  const error = Cause.squash(cause);
+                  imagePaste.onError?.(
+                    Cause.isTimeoutError(error)
+                      ? new Error('Image paste timed out.')
+                      : error,
+                  );
+                },
+                onSuccess: (chip) => {
+                  if (chip) insertIntoLatestDraft(chip);
+                },
+              }),
+            ),
           ),
         );
-        imagePasteQueue.track(paste);
         return;
       }
       if (input.startsWith(ESC_SLASH_PREFIX) && !key.meta && props.escapeEdit) {
         imagePasteQueue.cancelDeferredAction();
         const latest = syncLatestExternalValue();
-        const escaped = props.escapeEdit(latest.value, latest.cursor);
-        const escapedState = {
-          value: escaped.value,
-          cursor: clampCursor(escaped.cursor, escaped.value.length),
-        };
-        latestStateRef.current = escapedState;
-        lastEmittedValueRef.current = escapedState.value;
+        const escapedState = adoptEdit(
+          props.escapeEdit(latest.value, latest.cursor),
+        );
         commitInputChunkEdit(
           applyTerminalInputChunk(
             escapedState.value,

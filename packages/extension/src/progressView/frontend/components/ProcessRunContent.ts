@@ -6,8 +6,6 @@ import { customElement } from 'lit/decorators.js';
 import { BaseRunContent } from './BaseRunContent';
 import { conversationContentStyles } from './ConversationContent.styles';
 
-import './RunHeader';
-
 @customElement('process-run-content')
 export class ProcessRunContent extends BaseRunContent {
   static override styles = [
@@ -79,7 +77,6 @@ export class ProcessRunContent extends BaseRunContent {
     const command = (run.command ?? run.description ?? '').trim();
 
     return html`
-      <run-header .run=${run} .view=${this.view}></run-header>
       <div class="conversation-content">
         ${
           command

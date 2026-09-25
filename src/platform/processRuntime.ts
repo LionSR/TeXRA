@@ -35,6 +35,7 @@ import type { SetupPlatform } from '@tools/setup/platform';
 import type { Compositions } from '@tools/compositions';
 import type { ToolRegistry } from '@tools/toolTable';
 import type { HttpClient } from 'effect/unstable/http';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 import type {
   AgentDirectories,
@@ -51,9 +52,10 @@ import type { Secrets } from './secrets';
  * cohort-A tags beside the records, the account plane, the resume port, the
  * language-model bridge, the Lean port and the HTTP client, merged once in
  * `installProcessRuntime`'s `services` layer, plus the standard library's
- * `FileSystem` and `Path`, which the same install provides from
- * `@effect/platform-node` so a program that reads or resolves a file takes
- * them from context instead of building a Node layer of its own, and
+ * `FileSystem`, `Path` and `ChildProcessSpawner`, which the same install
+ * provides from `@effect/platform-node` so a program that reads a file or
+ * starts a child process takes them from context instead of building a Node
+ * layer of its own, and
  * `GlobalStorageFs`, the cross-workspace storage view every session of the
  * process shares, `GlobalDatabase`, that same root's one database handle,
  * which the records above and the CLI's input history read through,
@@ -68,6 +70,7 @@ export type ProcessServices =
   | ProcessIdentity
   | FileSystem.FileSystem
   | Path.Path
+  | ChildProcessSpawner
   | GlobalStorageFs
   | GlobalDatabase
   | ProjectDatabases
@@ -88,6 +91,19 @@ export type ProcessServices =
   | SupabaseAuth
   | ToolRegistry
   | Compositions;
+
+/**
+ * The services an agent catalog load reads: the global and filesystem views
+ * the local agent directories are scanned through, the app state the
+ * disabled-plugin switch is read from, and the HTTP client the remote catalog
+ * is listed with.
+ */
+export type AgentCatalogServices =
+  | GlobalStorageFs
+  | FileSystem.FileSystem
+  | AgentDirectories
+  | AppState
+  | HttpClient.HttpClient;
 
 export type ProcessRuntime = ManagedRuntime.ManagedRuntime<
   ProcessServices,
@@ -114,10 +130,30 @@ export function withProcessServices<A, E>(
 }
 
 /**
+ * An exit the fiber's interruption produced. Interrupting a consumer of a
+ * PubSub-backed stream (`SubscriptionRef.changes`, `Stream.fromPubSub`) adds
+ * Effect's end-of-stream `Done` failure beside the interrupt: the channel
+ * ends its subscription on interrupt by signalling `Done`. That is the stream
+ * closing, not a failure, so an interrupt accompanied only by `Done` counts
+ * as an interruption too.
+ */
+function isInterruption(cause: Cause.Cause<unknown>): boolean {
+  return (
+    cause.reasons.some(Cause.isInterruptReason) &&
+    cause.reasons.every(
+      (reason) =>
+        Cause.isInterruptReason(reason) ||
+        (Cause.isFailReason(reason) && Cause.isDone(reason.error)),
+    )
+  );
+}
+
+/**
  * A runtime whose `runFork` reports a fiber's failure or defect on exit
  * (#12613). `Fiber.addObserver` fires on every exit, including fibers a
  * caller later `Fiber.join`s, so a joined failure is logged here and still
- * delivered to the joiner. A success or an interrupts-only exit stays silent.
+ * delivered to the joiner. A success stays silent, as does an exit made of
+ * interrupts alone or of interrupts beside Effect's end-of-stream `Done`.
  * `runPromise` and `runSync` hand their exits to the caller already.
  */
 export function withForkFailureReporting<R, ER>(
@@ -129,7 +165,7 @@ export function withForkFailureReporting<R, ER>(
     fiberId: number,
     exit: Exit.Exit<unknown, unknown>,
   ): void => {
-    if (Exit.isSuccess(exit) || Cause.hasInterruptsOnly(exit.cause)) return;
+    if (Exit.isSuccess(exit) || isInterruption(exit.cause)) return;
     runtime.runFork(
       Effect.logError('Unhandled failure in forked fiber', exit.cause).pipe(
         Effect.annotateLogs({ forkedFiber: fiberId }),

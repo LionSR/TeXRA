@@ -13,7 +13,6 @@
  * borrows, `close` settles and releases, and the runtime's disposal releases
  * whatever is still open.
  */
-import { NodeFileSystem, NodePath } from '@effect/platform-node';
 import {
   Context,
   Deferred,
@@ -81,12 +80,15 @@ import { LanguageModel, type LanguageModelPort } from '@platform/languageModel';
 import { globalStorageFsLayer } from '@platform/rootedFs';
 import { Secrets, type PlatformSecrets } from '@platform/secrets';
 import { SHUTDOWN_PHASE_DEADLINE_MS } from '@platform/defaults/lifecycleHost';
-import { processOwnerId } from '@platform/defaults/nodeProcesses';
+import {
+  processOwnerId,
+  type ProcessProbe,
+} from '@platform/defaults/nodeProcesses';
+import { nodePlatformServices } from '@platform/defaults/nodePlatform';
 import { RunLedger } from '@shared/session/runLedger';
 import {
   aggregateId as qualifyAggregateId,
   aggregateTarget,
-  DEBUG_MODE_KEY,
   isDisplaySessionEvent,
   ownerIdentity,
   TOOL_CALL_STATUS,
@@ -118,8 +120,7 @@ import { directLeanLanguageServices } from '@tools/lean/direct/directLspAdapter'
 import type { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import { SetupPlatform, type SetupPlatformShape } from '@tools/setup/platform';
 import { toolRegistryLayer } from '@tools/registry';
-import { StreamLogStore } from '@transcript/StreamLogStore';
-import { readConfigSettingFrom } from '@utils/config/platformSettings';
+import { processEnvConfigLayer } from '@utils/system/envFlags';
 import { inquiryRecordsLayer } from './inquiryRecords';
 import { updateCheckRecordsLayer } from './updateCheckRecords';
 import { databaseLayer } from './Database';
@@ -136,6 +137,7 @@ import {
 import { SessionViewService } from './SessionView';
 import { sessionInputsLayer } from './sessionInputs';
 import { WorkspaceRoots } from './WorkspaceRoots';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 const CHANNEL = 'sessionLayer';
 
@@ -515,11 +517,6 @@ const sessionHandleLayer = (
       );
       // Capture the startup cohort before callers can publish new launches.
       const initialListing = yield* eventLog.readListing();
-      const transcripts = StreamLogStore.open(
-        eventLog,
-        key.open.transcriptMode,
-        readConfigSettingFrom<boolean>(key.open.roots.config, DEBUG_MODE_KEY),
-      );
       // The gate's probe fibers and waiting calls end with this scope, after
       // the handle below has unwound its runs.
       const modelRetries = yield* ModelRetryGate.make;
@@ -527,7 +524,6 @@ const sessionHandleLayer = (
         Effect.gen(function* () {
           const handle = new SessionHandle({
             ...key.open,
-            transcripts,
             graph,
             modelRetries,
           });
@@ -566,19 +562,18 @@ const sessionHandleLayer = (
       yield* SubscriptionRef.set(delivered, anchor);
       yield* reads.all(anchor, delivered).pipe(
         Stream.runForEach((event) =>
-          session.receiveCommittedEvent(event).pipe(
-            Effect.andThen(() => {
-              const target = aggregateTarget(event.aggregateId);
-              // The local half of a committed removal. The run's goal needs
-              // nothing: `run.removed` drops the run from the view, and its
-              // `goalStateChanged` row goes with it.
-              return event.type === 'run.removed' && target.kind === 'run'
-                ? Effect.sync(() => {
-                    session.runs.detachChildren(target.id);
-                    releaseRunResources(target.id, session);
-                  })
-                : Effect.void;
-            }),
+          Effect.suspend(() => {
+            const target = aggregateTarget(event.aggregateId);
+            // The local half of a committed removal. The run's goal needs
+            // nothing: `run.removed` drops the run from the view, and its
+            // `goalStateChanged` row goes with it.
+            return event.type === 'run.removed' && target.kind === 'run'
+              ? Effect.sync(() => {
+                  session.runs.detachChildren(target.id);
+                  releaseRunResources(target.id, session);
+                })
+              : Effect.void;
+          }).pipe(
             Effect.andThen(() => {
               // A row that closes live text drops the held chunks: a
               // stream's final text or a card's terminal result drop their
@@ -666,7 +661,7 @@ const sessionGraphLayer = (key: SessionKey) => {
   const database: Layer.Layer<
     Database,
     DatabaseOpenFailed,
-    ProjectDatabases | ProcessIdentity | WorkspaceRoots
+    ProjectDatabases | ProcessIdentity | WorkspaceRoots | ProcessProbe
   > =
     key.open.transcriptMode?.kind === 'ephemeral'
       ? databaseLayer('ephemeral')
@@ -918,23 +913,20 @@ const closeSession = (root: string) =>
  * install it with the session family it serves: called by a composition root
  * exactly once at startup, which calls
  * {@link disposeProcessRuntime} on its shutdown path after the last session
- * has released its graph. The identity is a program for the process start:
- * already-resolved on a host that read it before installing, still a pending
- * read for a process whose composition root is its first run (the package). It
- * is one of the process services below, so it is read once for the process
- * rather than again per session entry. The owner it installs answers in
- * Effect, on the opener's own fiber; its one synchronous face, `current`,
- * reads the held map and runs nothing.
+ * has released its graph. Every root passes the process-start read as a
+ * program over this runtime's spawner, read once per process as one of the
+ * process services below. The owner it installs answers in Effect, on the
+ * opener's own fiber; its one synchronous face, `current`, reads the held
+ * map and runs nothing.
  *
  * Host values and resource-owning layers are composed here once. Secrets and
  * identity resolve at bootstrap; AppState is acquired in the process scope,
  * and the agent-directory layer captures it before serving any reads. Hosts
  * with externally owned stores supply them through AppState.layer. A CLI
  * entry without application state supplies a refusing store and database.
-
  */
 interface ProcessRuntimeOptions {
-  readonly processStart: Effect.Effect<string | undefined>;
+  readonly processStart: Effect.Effect<string | undefined, never, ProcessProbe>;
   readonly globalStorage: string;
   readonly secrets: PlatformSecrets;
   /**
@@ -968,7 +960,7 @@ interface ProcessRuntimeOptions {
   readonly appState: Layer.Layer<
     AppState,
     DatabaseOpenFailed,
-    GlobalDatabase | ProcessIdentity
+    GlobalDatabase | ProcessIdentity | ProcessProbe
   >;
   /**
    * The root's account plane, served as `SupabaseAuth`. Every shipped host
@@ -1005,7 +997,7 @@ interface ProcessRuntimeOptions {
   readonly lean?: Layer.Layer<
     LeanLanguageServices,
     never,
-    FileSystem.FileSystem | Path.Path | AppState
+    FileSystem.FileSystem | Path.Path | ChildProcessSpawner | AppState
   >;
   /**
    * The host's usage layer owns its version-stamped sender and final drain.
@@ -1030,7 +1022,7 @@ interface ProcessRuntimeOptions {
   readonly globalDatabase: Layer.Layer<
     GlobalDatabase,
     DatabaseOpenFailed,
-    ProcessIdentity
+    ProcessIdentity | ProcessProbe
   >;
   /**
    * The runtime's emission threshold for Effect diagnostics, from facts the
@@ -1064,8 +1056,7 @@ export function installProcessRuntime({
   globalDatabase: globalDatabaseOption,
   minimumLogLevel,
 }: ProcessRuntimeOptions): ProcessRuntime {
-  // Non-failing: `nodeProcesses.selfIdentity()` reads an unreadable identity
-  // as undefined; a root that already read one passes `Effect.succeed(...)`.
+  // Non-failing: `selfIdentity()` reads an unreadable identity as undefined.
   const identity = Layer.effect(
     ProcessIdentity,
     Effect.map(processStart, (start) => ({ ownerId: processOwnerId(start) })),
@@ -1134,12 +1125,10 @@ export function installProcessRuntime({
           Layer.mergeAll(
             effectDiagnosticsLayer(minimumLogLevel),
             FetchHttpClient.layer,
-            // The standard library's filesystem and path services, once per
-            // process: every root reaches this install, so a consumer (the
-            // Lean layer included) takes `FileSystem`/`Path` from context and
-            // builds no layer of its own.
-            NodeFileSystem.layer,
-            NodePath.layer,
+            // Filesystem, path, spawner and env ConfigProvider, once per
+            // process: no consumer builds its own.
+            nodePlatformServices,
+            processEnvConfigLayer,
           ),
         ),
       ),

@@ -46,6 +46,7 @@ import { nullishWithDefault } from './core/inputSchema';
 import { requireToolRun } from './core/toolRun';
 import { childRunDescription, createChildRun } from './delegation/childRun';
 import { startDetachedChildRunLoop } from './delegation/detachedChildRun';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 const BACKGROUND_OUTPUT_TAIL_CHARS = 12_000;
 /**
@@ -233,7 +234,7 @@ function createBackgroundBashStrategy(params: {
    */
   settings: SettingsStores;
   logger: AgentTrace;
-}): ChildRunStrategy<ExecResult> {
+}): ChildRunStrategy<ExecResult, ChildProcessSpawner> {
   const { runId, command, logger } = params;
   // Whitespace normalization is off here: a background log is delivered
   // verbatim, and its head/tail budgets are its own (see the constants above)
@@ -279,10 +280,9 @@ function createBackgroundBashStrategy(params: {
 
   return {
     stageLabel: 'Background command',
-    // A background shell is the one child type that owns a live OS process and
-    // whose tab is ephemeral, and the one whose result survives its own kill.
+    // A background shell is the one child type that owns a live OS process,
+    // and the one whose result survives its own kill.
     ownsBackgroundProcess: true,
-    autoCloseChildRun: true,
     deliverAfterInterrupt: true,
 
     launch: (_ports, signal) =>
@@ -398,7 +398,7 @@ const executeForeground = Effect.fn('BashTool.executeForeground')(function* (
   timeoutMs: number,
   toolCall: import('@agent/runtime/ToolCall').ToolCallShape,
   cwd?: string,
-): Effect.fn.Return<ToolResult, Error, Scope.Scope> {
+): Effect.fn.Return<ToolResult, Error, Scope.Scope | ChildProcessSpawner> {
   const stdout = createBoundedOutputCapture(
     FOREGROUND_OUTPUT_HEAD_CHARS,
     FOREGROUND_OUTPUT_TAIL_CHARS,

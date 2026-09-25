@@ -56,17 +56,17 @@ import {
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 const CHANNEL = 'ToolEditApproval';
 
 /**
- * The services the programs this controller composes take from the runtime a
- * host runs them on: the LaTeX preview programs read and write the temp files
- * they stage, and the host build they call compiles against the session's
- * roots. Every method here carries them, so a host provides them once, at its
- * run.
+ * Runtime services this controller's programs take: preview programs stage
+ * temp files and the host build spawns the compiler. Every method carries
+ * them, so a host provides them once, at its run.
  */
-type PreviewServices = FileSystem.FileSystem | Path.Path;
+type PreviewServices = FileSystem.FileSystem | Path.Path | ChildProcessSpawner;
+type PreviewCall<A> = Effect.Effect<A, HostRequestFailure, PreviewServices>;
 
 /** The host view of one staged request, live until the request is decided. */
 export interface ToolEditPreview {
@@ -78,15 +78,15 @@ export interface ToolEditPreview {
    * the view is on screen; a host whose view failure must fail the request
    * fails instead.
    */
-  present(): Effect.Effect<void, HostRequestFailure>;
+  present(): PreviewCall<void>;
   /** Re-open the diff view after the user dismissed it. */
-  showDiff(): Effect.Effect<void, HostRequestFailure>;
+  showDiff(): PreviewCall<void>;
   /** Open the proposed copy in the host's plain file viewer. */
-  openProposed(): Effect.Effect<void, HostRequestFailure>;
+  openProposed(): PreviewCall<void>;
   /** Proposed content including edits the user made in the host's view. */
-  readProposedContent(): Effect.Effect<string, HostRequestFailure>;
+  readProposedContent(): PreviewCall<string>;
   /** Close the view and remove everything staged for this request. */
-  dispose(): Effect.Effect<void, HostRequestFailure>;
+  dispose(): PreviewCall<void>;
 }
 
 export interface ToolEditPreviewContext {
@@ -101,15 +101,7 @@ export interface ToolEditApprovalHost {
   stagePreview(
     request: ToolEditApprovalRequest,
     context: ToolEditPreviewContext,
-  ): Effect.Effect<ToolEditPreview, HostRequestFailure>;
-  /**
-   * Reopen the host surface containing the pending request's controls, for a
-   * host that has one to reopen: the VS Code progress view is a panel the
-   * user can have closed, while the desktop prompt shows in whichever view is
-   * open. Optional rather than a no-op on the hosts that reveal nothing,
-   * which is what the rest of this repo's host ports do (`HostInteractions`).
-   */
-  revealApprovalSurface?(): Effect.Effect<void, HostRequestFailure>;
+  ): PreviewCall<ToolEditPreview>;
   /**
    * The host's build display: the program the LaTeX preview programs yield,
    * forked below so a release still holds a handle on it once a preview
@@ -410,25 +402,7 @@ export class ToolEditApprovalController {
           };
           this.requests.set(requestId, staged);
 
-          return staged.preview.present().pipe(
-            Effect.andThen(
-              Effect.suspend(() =>
-                staged.isSettled()
-                  ? Effect.void
-                  : this.detach(
-                      // Admitted whether or not this host reveals
-                      // anything, so a release landing in that window joins
-                      // it either way.
-                      this.admit(
-                        staged,
-                        () =>
-                          this.options.host.revealApprovalSurface?.() ??
-                          Effect.void,
-                      ),
-                    ),
-              ),
-            ),
-          );
+          return staged.preview.present();
         }),
       );
   }

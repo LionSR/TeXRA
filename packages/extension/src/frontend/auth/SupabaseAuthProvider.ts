@@ -1,4 +1,4 @@
-import { Deferred, Effect, Exit, FileSystem } from 'effect';
+import { Deferred, Effect, Exit } from 'effect';
 import * as vscode from 'vscode';
 
 import { invalidateRemoteAgentsAfterSignOut } from '@agent/index';
@@ -29,12 +29,12 @@ import {
   type SignInCallbackOutcome,
 } from '@controllers/auth/supabaseSignIn';
 import { withLogChannel } from '@logger/effectLog';
-import type { AgentDirectories, AppState } from '@platform/interfaces';
-import type { ProcessRuntime } from '@platform/processRuntime';
-import type { GlobalStorageFs } from '@platform/rootedFs';
+import type {
+  AgentCatalogServices,
+  ProcessRuntime,
+} from '@platform/processRuntime';
 import type { PlatformSecrets, SecretsFailed } from '@platform/secrets';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import type { HttpClient } from 'effect/unstable/http';
 import type { SupabaseUriHandler } from './UriHandler';
 
 const CHANNEL = 'SupabaseAuthProvider';
@@ -214,11 +214,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
   private loadUsableSessions(): Effect.Effect<
     vscode.AuthenticationSession[],
     AuthPortError,
-    | GlobalStorageFs
-    | HttpClient.HttpClient
-    | FileSystem.FileSystem
-    | AgentDirectories
-    | AppState
+    AgentCatalogServices
   > {
     return Effect.gen({ self: this }, function* () {
       const session = yield* this.sessionCoordinator.loadSession();
@@ -245,7 +241,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
   ): Effect.Effect<
     vscode.AuthenticationSession[],
     AuthPortError,
-    GlobalStorageFs | FileSystem.FileSystem | AgentDirectories | AppState
+    AgentCatalogServices
   > {
     return Effect.gen({ self: this }, function* () {
       if (Date.now() >= session.expiresAt) {
@@ -281,11 +277,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
   private handleInvalidSession(
     session: SupabaseSession,
     reason: 'expired' | 'invalid',
-  ): Effect.Effect<
-    void,
-    AuthPortError,
-    GlobalStorageFs | FileSystem.FileSystem | AgentDirectories | AppState
-  > {
+  ): Effect.Effect<void, AuthPortError, AgentCatalogServices> {
     return Effect.gen({ self: this }, function* () {
       // The rejected credential is already unusable. Do not call the client's
       // global signOut here: an OAuth callback may have installed a replacement
@@ -440,7 +432,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
   clearStoredSession(): Effect.Effect<
     boolean,
     AuthPortError,
-    GlobalStorageFs | FileSystem.FileSystem | AgentDirectories | AppState
+    AgentCatalogServices
   > {
     return Effect.gen({ self: this }, function* () {
       const session = yield* this.sessionCoordinator.loadSession();
@@ -462,7 +454,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
   removeStoredSession(): Effect.Effect<
     boolean,
     AuthPortError | SecretsFailed,
-    GlobalStorageFs | FileSystem.FileSystem | AgentDirectories | AppState
+    AgentCatalogServices
   > {
     const cancelPending = this.signIn.cancel();
     return Effect.gen({ self: this }, function* () {
@@ -476,11 +468,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
 
   private clearLocalSession(
     sessionId: string,
-  ): Effect.Effect<
-    void,
-    AuthPortError,
-    GlobalStorageFs | FileSystem.FileSystem | AgentDirectories | AppState
-  > {
+  ): Effect.Effect<void, AuthPortError, AgentCatalogServices> {
     return Effect.gen({ self: this }, function* () {
       yield* this.sessionCoordinator.clearSession();
       yield* this.afterLocalSessionCleared(sessionId);
@@ -489,11 +477,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
 
   private clearLocalSessionIfCurrent(
     session: SupabaseSession,
-  ): Effect.Effect<
-    boolean,
-    AuthPortError,
-    GlobalStorageFs | FileSystem.FileSystem | AgentDirectories | AppState
-  > {
+  ): Effect.Effect<boolean, AuthPortError, AgentCatalogServices> {
     return Effect.gen({ self: this }, function* () {
       const cleared =
         yield* this.sessionCoordinator.clearSessionIfCurrent(session);
@@ -505,11 +489,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
 
   private afterLocalSessionCleared(
     sessionId: string,
-  ): Effect.Effect<
-    void,
-    never,
-    GlobalStorageFs | FileSystem.FileSystem | AgentDirectories | AppState
-  > {
+  ): Effect.Effect<void, never, AgentCatalogServices> {
     return invalidateRemoteAgentsAfterSignOut().pipe(
       Effect.andThen(
         Effect.sync(() => {

@@ -1,30 +1,28 @@
 /**
  * The persistence substrate
- * (`.agents/docs/archived/architecture/2026-09-03-persistence-substrate-decision.md`): the C1
- * schema, the connection that owns it, and the C6 write path. One database
- * per session root, parameterized by `WorkspaceRoots` (section 7) and never a
- * process singleton; Effect code reads its root from `Context`, because the
- * scheduler interleaves fibers and no ambient frame survives that.
+ * (`.agents/docs/archived/architecture/2026-09-03-persistence-substrate-decision.md`):
+ * the C1 schema, the connection that owns it, and the C6 write path. One
+ * database per session root, parameterized by `WorkspaceRoots` (section 7),
+ * never a process singleton; Effect code reads its root from `Context`.
  *
- * Persistent sessions open one file; explicitly ephemeral sessions use the
- * same schema and transaction implementation in SQLite memory. A failed file
- * open is an error and never selects the ephemeral mode.
+ * Persistent sessions open one file; explicitly ephemeral sessions run the same
+ * schema and transactions in SQLite memory. A failed file open is an error and
+ * never selects the ephemeral mode.
  *
  * Before its write transaction, this layer validates, redacts, and serializes
- * the complete batch (C3, C6). It also owns the envelope C1 gives its
- * own columns: the writer
- * (C5, from `ProcessIdentity`), the publish clock, and the `seq` and
- * `commit` ordinals, none of which a caller can supply.
+ * the complete batch (C3, C6). It also owns the envelope C1 gives its own
+ * columns: the writer (C5, from `ProcessIdentity`), the publish clock, and the
+ * `seq` and `commit` ordinals, none of which a caller can supply.
  *
- * The official Node SQLite driver owns the scoped connection.
- * Effect SQL owns statement run, connection reservation and transactions;
- * this layer owns the C1 schema, claims, validation and committed wake levels.
+ * The official Node SQLite driver owns the scoped connection. Effect SQL owns
+ * statement run, connection reservation and transactions; this layer owns the
+ * C1 schema, claims, validation and committed wake levels.
  */
-import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import * as SqliteClient from '@effect/sql-sqlite-node/SqliteClient';
 import * as SqlClient from 'effect/unstable/sql/SqlClient';
 import * as Reactivity from 'effect/unstable/reactivity/Reactivity';
+import { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 import {
   Cause,
   Clock,
@@ -32,6 +30,7 @@ import {
   Scope,
   Effect,
   Exit,
+  FileSystem,
   Layer,
   Result,
   Stream,
@@ -42,6 +41,7 @@ import { proveOwnerLiveness } from '@agent/storage/leaseOwnerLiveness';
 import { parseJsonWith } from '@common/parsing/safeParseJson';
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
 import { withLogChannel } from '@logger/effectLog';
+import type { ProcessProbe } from '@platform/defaults/nodeProcesses';
 import {
   AggregateIdSchema,
   RunIdSchema,
@@ -88,17 +88,15 @@ const CHANNEL = 'sessionDatabase';
 /**
  * Event history and bounded current application records.
  *
- * `commit` is a SQLite keyword, so the column is quoted at every site; the
- * stage 0 spike measured `CREATE TABLE t (commit INTEGER ...)` failing with a
- * syntax error on every host floor. The event vocabulary keeps the name
- * unquoted, and every query below aliases the snake-case columns onto it.
+ * `commit` is a SQLite keyword, so the column is quoted at every site (an
+ * unquoted `commit INTEGER` is a syntax error on every host floor). Every
+ * query below aliases the snake-case columns onto the unquoted vocabulary.
  *
  * `event_sequence` is declared first because `event` references it, and the
  * dependency edge (an inquiry thread under the run that asked it, a workflow
  * checkpoint under the run that invoked it) is self-referential, so both
- * cascades exist the moment the schema does. One
- * run owns one row here: one sequence counter and one ownership claim (one
- * run model, section 3.1). `STRICT` makes a wrong-typed value an error at
+ * cascades exist the moment the schema does. One run owns one row here: one
+ * sequence counter and one ownership claim (one run model, section 3.1). `STRICT` makes a wrong-typed value an error at
  * insert instead of a surprise at read: on persisted data, a silent coercion
  * is the same defect as a `.catch()` default.
  *
@@ -253,27 +251,32 @@ export const databaseLayer = (
 ): Layer.Layer<
   Database,
   DatabaseOpenFailed,
-  WorkspaceRoots | ProcessIdentity
+  WorkspaceRoots | ProcessIdentity | ProcessProbe
 > =>
   Layer.effect(
     Database,
     Effect.gen(function* () {
       const roots = yield* WorkspaceRoots;
       const identity = yield* ProcessIdentity;
+      const fs = yield* FileSystem.FileSystem;
+      const spawner = yield* ChildProcessSpawner;
+      const liveness = (owner: string) =>
+        proveOwnerLiveness(ownerIdentity(owner)).pipe(
+          Effect.provideService(FileSystem.FileSystem, fs),
+          Effect.provideService(ChildProcessSpawner, spawner),
+        );
       const path =
         mode === 'persistent'
           ? join(roots.storage, SESSION_DATABASE_FILE)
           : ':memory:';
       const openFailed = (cause: unknown): DatabaseOpenFailed =>
         new DatabaseOpenFailed({ path, cause });
-      const filename = yield* Effect.try({
-        try: () => {
-          if (mode === 'ephemeral') return ':memory:';
-          mkdirSync(roots.storage, { recursive: true });
-          return localDatabasePath(roots.storage, SESSION_DATABASE_FILE);
-        },
-        catch: openFailed,
-      });
+      const filename =
+        mode === 'ephemeral'
+          ? ':memory:'
+          : yield* localDatabasePath(roots.storage, SESSION_DATABASE_FILE).pipe(
+              Effect.mapError(openFailed),
+            );
       const sql = yield* SqliteClient.make({
         filename,
         disableWAL: mode === 'ephemeral',
@@ -551,6 +554,24 @@ export const databaseLayer = (
             ),
           );
         });
+      /** C5: a row whose claim moved or closed refused this writer. Read it
+       *  in the refusing transaction so the typed refusal names the holder. */
+      const refuseWriter = (id: AggregateId, absent: string) =>
+        Effect.gen(function* () {
+          const held = (yield* readState([id]))[0];
+          if (held === undefined) throw new Error(`${absent}: ${id}`);
+          const { ownerId, closed } = held;
+          return yield* new DatabaseNotOwner({
+            aggregateId: id,
+            ownerId,
+            closed,
+          });
+        });
+      /** The refusal leaves typed (D6 b); the transaction wrapper carried it
+       *  as the write failure's cause. */
+      const typedRefusal = Effect.mapError((failure: DatabaseWriteFailed) =>
+        failure.cause instanceof DatabaseNotOwner ? failure.cause : failure,
+      );
       /** Claim every observed row in the caller's transaction, refusing the
        *  first whose claim moved since it was read. */
       const claimObserved = (rows: readonly AggregateState[], moved: string) =>
@@ -562,7 +583,7 @@ export const databaseLayer = (
               row.ownerId,
             ]);
             if (claimed.length !== 1) {
-              throw new Error(`${moved}: ${row.aggregateId}`);
+              return yield* refuseWriter(row.aggregateId, moved);
             }
           }
         });
@@ -579,7 +600,7 @@ export const databaseLayer = (
             ),
           );
           for (const owner of owners) {
-            const verdict = yield* proveOwnerLiveness(ownerIdentity(owner));
+            const verdict = yield* liveness(owner);
             if (
               verdict !== 'dead' &&
               !(mode === 'single' && verdict === 'unprovable')
@@ -631,20 +652,10 @@ export const databaseLayer = (
               identity.ownerId,
             ]))?.seq;
             if (typeof seq !== 'number') {
-              // C5: the sequence row exists and refused this writer, because
-              // its claim moved or it closed. Read that row in the refusing
-              // transaction so the typed refusal names the holder.
-              const held = (yield* readState([draft.aggregateId]))[0];
-              if (held === undefined) {
-                throw new Error(
-                  `Sequence refused for an absent aggregate: ${draft.aggregateId}`,
-                );
-              }
-              return yield* new DatabaseNotOwner({
-                aggregateId: draft.aggregateId,
-                ownerId: held.ownerId,
-                closed: held.closed,
-              });
+              return yield* refuseWriter(
+                draft.aggregateId,
+                'Sequence refused for an absent aggregate',
+              );
             }
             const target = aggregateTarget(draft.aggregateId);
             // The seq-1 rule (decision 9): a run aggregate begins with exactly
@@ -947,7 +958,7 @@ export const databaseLayer = (
               return { ownerId: owner, liveness: 'self' as const };
             return {
               ownerId: owner,
-              liveness: yield* proveOwnerLiveness(ownerIdentity(owner)),
+              liveness: yield* liveness(owner),
             };
           }),
         readInputBatch: (ids, fromCommit, checkedIds = ids) =>
@@ -1001,7 +1012,7 @@ export const databaseLayer = (
                   .filter((row) => row.ownerId !== identity.ownerId)
                   .map((row) => row.aggregateId);
               }),
-            );
+            ).pipe(typedRefusal);
           }),
         removeRun: (id, mode, expectedStartCommit) =>
           Effect.gen(function* () {
@@ -1092,7 +1103,7 @@ export const databaseLayer = (
             );
             const owner = observed.owner;
             if (owner !== null && owner !== identity.ownerId) {
-              const verdict = yield* proveOwnerLiveness(ownerIdentity(owner));
+              const verdict = yield* liveness(owner);
               if (verdict !== 'dead') {
                 return yield* Effect.fail(
                   writeFailed(
@@ -1178,8 +1189,6 @@ export const databaseLayer = (
               catch: writeFailed,
             });
             const at = yield* Clock.currentTimeMillis;
-            // The ownership refusal leaves typed (D6 b); the transaction
-            // wrapper carried it as the write failure's cause.
             // A write from a process whose build no longer matches the store's
             // stamp (another build cleared and re-stamped it under this one)
             // fails here instead of appending rows of a vocabulary the store
@@ -1188,33 +1197,27 @@ export const databaseLayer = (
               assertStoreFormat(sql, path).pipe(
                 Effect.andThen(appendPrepared(prepared, at)),
               ),
-            ).pipe(
-              Effect.mapError((failure) =>
-                failure.cause instanceof DatabaseNotOwner
-                  ? failure.cause
-                  : failure,
-              ),
-            );
+            ).pipe(typedRefusal);
           }),
       };
     }),
   ).pipe(Layer.provide(Reactivity.layer));
 
 /**
- * The process's handle on the global storage root: the same connection, the
- * same schema and the one `data_version` poll every application record of
- * that root reads and writes through, built once with the runtime the entry
- * hands it to and closed when that runtime is disposed. The root is a value
- * here because the entry knows it before the runtime exists; the per-session
- * `Database` takes its root from `WorkspaceRoots` instead.
- *
- * Building this creates the directory, the SQLite file and the poll fiber, so
- * an entry that must create none of the three passes a refusing layer in its
- * place rather than this one (`installProcessRuntime`'s `globalDatabase`).
+ * The process's handle on the global storage root: one connection, schema and
+ * `data_version` poll for every application record of that root, built with
+ * the runtime the entry hands it to and closed with it. The root is a value
+ * because the entry knows it before the runtime exists. Building it creates the
+ * directory, the SQLite file and the poll fiber, so an entry that must create
+ * none passes a refusing layer instead (`installProcessRuntime`'s option).
  */
 export const globalDatabaseLayer = (
   storage: string,
-): Layer.Layer<GlobalDatabase, DatabaseOpenFailed, ProcessIdentity> =>
+): Layer.Layer<
+  GlobalDatabase,
+  DatabaseOpenFailed,
+  ProcessIdentity | ProcessProbe
+> =>
   Layer.effect(GlobalDatabase, Database).pipe(
     Layer.provide(
       databaseLayer('persistent').pipe(
@@ -1292,18 +1295,16 @@ function payloadOf(draft: {
  * The official driver sets `PRAGMA busy_timeout` before enabling WAL; this
  * function verifies the resulting journal mode. That order is load-bearing
  * because `PRAGMA journal_mode = WAL` itself takes an exclusive lock: the
- * stage 0 spike killed a writer outright
- * with `SQLITE_BUSY_RECOVERY` when a second process opened the same database
- * while the timeout was still unset, and setting it first removed the failure
- * entirely. With the timeout set, a second writer blocks and then commits;
- * with it at zero, the spike measured 26% to 55% of concurrent appends lost
- * to `SQLITE_BUSY`, so this is a correctness setting and not tuning.
+ * stage 0 spike killed a writer outright with `SQLITE_BUSY_RECOVERY` when a
+ * second process opened the same database while the timeout was unset, and
+ * setting it first removed the failure. With the timeout set, a second writer
+ * blocks and then commits; at zero, the spike lost 26% to 55% of concurrent
+ * appends to `SQLITE_BUSY`, so this is a correctness setting, not tuning.
  *
- * `synchronous = NORMAL` is the WAL-safe setting: the spike measured
- * `FULL` at 1.4x to 1.8x the median cost and far worse tails, and measured
- * `kill -9` mid-transaction leaving zero uncommitted rows and a clean
- * `integrity_check` at `NORMAL`, which is exactly the C4 guarantee that a
- * crash loses the in-flight message and nothing else.
+ * `synchronous = NORMAL` is the WAL-safe setting: the spike measured `FULL`
+ * at 1.4x to 1.8x the median cost with far worse tails, and `kill -9`
+ * mid-transaction left zero uncommitted rows and a clean `integrity_check` at
+ * `NORMAL`: the C4 guarantee that a crash loses only the in-flight message.
  *
  * Read cursors use sqlite_sequence's committed high-water mark. Wake levels
  * are separate counters, since a claim-only change must wake readers even
@@ -1322,15 +1323,11 @@ const configure = Effect.fnUntraced(function* (
     mode === 'persistent' ? 'wal' : 'memory',
   );
   yield* verifyPragma(sql, 'foreign_keys', 1);
-  // A store holds one vocabulary, stamped in SQLite's own slot for it. One
-  // written under another version is unsupported state: there are no legacy
-  // readers, so its tables are dropped here, at the boundary that owns the
-  // file, before this build's schema touches them, and a row of another
-  // vocabulary never reaches a fold. The stamp is read before the tables are
-  // created, so a layout this schema cannot extend is dropped rather than
-  // failing the open; and the reset runs under the write lock, re-reading
-  // the stamp inside it, so two processes opening the same store clear it
-  // once. The stamp is written last, inside the same transaction.
+  // A store holds one vocabulary, stamped in SQLite's own slot. One written
+  // under another version is unsupported (no legacy readers): its tables go
+  // here, before this build's schema touches them, and the stamp is read
+  // before the tables exist, so an unextendable layout is dropped rather than
+  // failing the open. resetStore owns the write lock and the stamp write.
   const cleared =
     (yield* pragmaValue(sql, 'user_version')) === SESSION_EVENT_FORMAT
       ? null

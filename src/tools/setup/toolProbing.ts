@@ -9,9 +9,10 @@ import {
   PROBED_LATEX_TOOLS,
 } from '@shared/constants/latexToolchain';
 import { checkToolInstalled } from '@utils/system/toolUtils';
-import { findToolInCommonPaths } from '@utils/system/platformPaths';
+import { findToolInCommonPaths } from '@utils/system/binaryResolver';
 
 import { getSetupAuthStatus, type SetupPlatformShape } from './platform';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 /** Installation status of one probed tool, with its path when discoverable. */
 interface ToolStatus {
@@ -30,14 +31,14 @@ const IMAGE_TOOL_NAMES: ReadonlySet<string> = new Set(IMAGE_LATEX_TOOLS);
  */
 export const locateTool = Effect.fn('locateTool')(function* (
   name: string,
-): Effect.fn.Return<ToolStatus> {
+): Effect.fn.Return<ToolStatus, never, ChildProcessSpawner> {
   // With `showError` false the probe reports a missing tool as `false` and
   // has no failure of its own, so the read carries no error channel.
   // Interruption reaches the spawned `<tool> --version`, so interrupting a
   // probe kills the processes — several at once, since the core tools are
   // probed concurrently — instead of leaving them to run out their timeout.
   const knownInstalled = yield* checkToolInstalled(name, false);
-  const resolvedPath = findToolInCommonPaths(name);
+  const resolvedPath = yield* findToolInCommonPaths(name);
   return {
     name,
     installed: knownInstalled || resolvedPath !== null,

@@ -30,9 +30,9 @@
  * itself, so a second caller joins the first rather than racing it to build
  * a second runtime, and it is cleared once that install settles.
  *
- * The process identity is read before installing, so the map's entries
- * never wait on it and `initCliPlatform`'s open of the default session is
- * the first thing built on the runtime.
+ * The process identity is read as the runtime's own layer, over the
+ * spawner that runtime serves, and `initCliPlatform`'s open of the default
+ * session is the first thing built on it.
  *
  * AppState is built from the runtime's GlobalDatabase layer, sharing its
  * scoped connection. Platform-less entries provide refusing services instead.
@@ -62,7 +62,6 @@ import {
   withProcessServices,
   type ProcessRuntime,
 } from '@platform/processRuntime';
-import { nodeFileServices } from '@platform/defaults/jsonStore';
 import { DEFAULT_NODE_STORAGE_ROOT } from '@platform/defaults/nodeStorage';
 import { nodeProcesses } from '@platform/defaults/nodeProcesses';
 import { resolveGlobalStoragePath } from '@platform/defaults/workspaceStorage';
@@ -207,21 +206,12 @@ export function installCliProcessRuntime(
   }
   if (pending) return pending;
   pending = (async () => {
-    // Resolve process identity before installing. The runtime owns database
-    // acquisition and the AppState layer built from its global handle.
-    const { processStart, globalStoragePath } = await Effect.runPromise(
-      Effect.gen(function* () {
-        const processStart = yield* nodeProcesses.selfIdentity();
-        // The global root resolves here, at install, with the pure
-        // calculator: the directory is the state store's and the global
-        // database's to create when they open below, and clone — whose
-        // storage root may be read-only, and which runs no records
-        // operation — must not create it at all.
-        const globalStoragePath = resolveGlobalStoragePath(
-          storageRoot ?? DEFAULT_NODE_STORAGE_ROOT,
-        );
-        return { processStart, globalStoragePath };
-      }).pipe(Effect.provide(nodeFileServices)),
+    // The global root resolves here, at install, with the pure calculator:
+    // the directory is the state store's and the global database's to create
+    // when they open below, and clone — whose storage root may be read-only,
+    // and which runs no records operation — must not create it at all.
+    const globalStoragePath = resolveGlobalStoragePath(
+      storageRoot ?? DEFAULT_NODE_STORAGE_ROOT,
     );
     const version = await readCliVersion();
     const secrets = getCliSecrets(storageRoot);
@@ -246,7 +236,7 @@ export function installCliProcessRuntime(
       customDirectoryStore: { get: () => Effect.succeed(undefined) },
     });
     const runtime: ProcessRuntime = installProcessRuntime({
-      processStart: Effect.succeed(processStart),
+      processStart: nodeProcesses.selfIdentity(),
       globalStorage: globalStoragePath,
       secrets,
       appState: options?.appState

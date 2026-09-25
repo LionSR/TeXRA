@@ -4,13 +4,14 @@ import { readFileSync } from 'node:fs';
 // Third-party imports
 import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
+import { afterEach, describe, expect, vi } from 'vitest';
 
 // Local imports - platform
 import type { ElectronSecrets as ElectronSecretsInstance } from '@desktop/main/platform/electronSecrets';
 import type { JsonStore } from '@platform/defaults/jsonStore';
 
 // Local imports - test support
+import { withEnv } from '@test/support/testEnv';
 import { repoPath } from './desktopTestPaths.ts';
 import { loadSourceModule } from './loadSourceModule.ts';
 
@@ -92,10 +93,6 @@ function loadRendererMain(): string {
 }
 
 describe('ElectronSecrets keychain-denial bootstrap recovery', () => {
-  beforeEach(() => {
-    delete process.env.SOME_TEST_KEY;
-  });
-
   afterEach(resetKeychainState);
 
   it.effect(
@@ -122,7 +119,7 @@ describe('ElectronSecrets keychain-denial bootstrap recovery', () => {
         expect(decryptSpy).toHaveBeenCalledOnce();
         expect(warnings).toHaveLength(1);
         expect(warnings[0]).toContain('keychain');
-      }),
+      }).pipe(withEnv({})),
   );
 
   it.effect(
@@ -144,38 +141,33 @@ describe('ElectronSecrets keychain-denial bootstrap recovery', () => {
 
         expect(warnings).toHaveLength(1);
         expect(decryptSpy).toHaveBeenCalledOnce();
-      }),
+      }).pipe(withEnv({})),
   );
 });
 
 describe('TEXRA_DISABLE_KEYCHAIN env var (Playwright e2e shim)', () => {
-  beforeEach(() => {
-    delete process.env.TEXRA_DISABLE_KEYCHAIN;
-  });
+  afterEach(resetKeychainState);
 
-  afterEach(async () => {
-    delete process.env.TEXRA_DISABLE_KEYCHAIN;
-    await resetKeychainState();
-  });
+  it.effect(
+    'reports unavailable storage mode without touching safeStorage',
+    () =>
+      Effect.gen(function* () {
+        const isAvailableSpy = vi.spyOn(
+          yield* Effect.promise(safeStorageStub),
+          'isEncryptionAvailable',
+        );
 
-  it('reports unavailable storage mode without touching safeStorage', async () => {
-    process.env.TEXRA_DISABLE_KEYCHAIN = '1';
-    const isAvailableSpy = vi.spyOn(
-      await safeStorageStub(),
-      'isEncryptionAvailable',
-    );
+        const mod = yield* Effect.promise(loadElectronSecrets);
 
-    const mod = await loadElectronSecrets();
-
-    expect(mod.getSecretStorageMode()).toBe('unavailable');
-    expect(isAvailableSpy).not.toHaveBeenCalled();
-  });
+        expect(yield* mod.getSecretStorageMode()).toBe('unavailable');
+        expect(isAvailableSpy).not.toHaveBeenCalled();
+      }).pipe(withEnv({ TEXRA_DISABLE_KEYCHAIN: '1' })),
+  );
 
   it.effect(
     'ElectronSecrets.get() returns undefined without calling safeStorage',
     () =>
       Effect.gen(function* () {
-        process.env.TEXRA_DISABLE_KEYCHAIN = '1';
         const decryptSpy = vi.spyOn(
           yield* Effect.promise(safeStorageStub),
           'decryptString',
@@ -186,27 +178,24 @@ describe('TEXRA_DISABLE_KEYCHAIN env var (Playwright e2e shim)', () => {
 
         expect(yield* secrets.get('any.key')).toBeUndefined();
         expect(decryptSpy).not.toHaveBeenCalled();
-      }),
+      }).pipe(withEnv({ TEXRA_DISABLE_KEYCHAIN: '1' })),
   );
 
   it.effect(
     'ElectronSecrets.get() still honors process.env overrides above the env-disabled shim',
     () =>
       Effect.gen(function* () {
-        process.env.TEXRA_DISABLE_KEYCHAIN = '1';
-        process.env.SOME_TEST_KEY = 'from-env';
-
         const { ElectronSecrets } = yield* Effect.promise(loadElectronSecrets);
         const secrets = new ElectronSecrets(emptyRecordStore());
 
         expect(yield* secrets.get('SOME_TEST_KEY')).toBe('from-env');
-        delete process.env.SOME_TEST_KEY;
-      }),
+      }).pipe(
+        withEnv({ TEXRA_DISABLE_KEYCHAIN: '1', SOME_TEST_KEY: 'from-env' }),
+      ),
   );
 
   it.effect('ElectronSecrets.set() silently no-ops instead of throwing', () =>
     Effect.gen(function* () {
-      process.env.TEXRA_DISABLE_KEYCHAIN = '1';
       const encryptSpy = vi.spyOn(
         yield* Effect.promise(safeStorageStub),
         'encryptString',
@@ -230,12 +219,13 @@ describe('TEXRA_DISABLE_KEYCHAIN env var (Playwright e2e shim)', () => {
       expect(yield* secrets.set('a', 'b')).toBeUndefined();
       expect(writes).toEqual([]);
       expect(encryptSpy).not.toHaveBeenCalled();
-    }),
+    }).pipe(withEnv({ TEXRA_DISABLE_KEYCHAIN: '1' })),
   );
 
-  it('accepts the literal string "true" in addition to "1"', async () => {
-    process.env.TEXRA_DISABLE_KEYCHAIN = 'true';
-    const mod = await loadElectronSecrets();
-    expect(mod.getSecretStorageMode()).toBe('unavailable');
-  });
+  it.effect('accepts the literal string "true" in addition to "1"', () =>
+    Effect.gen(function* () {
+      const mod = yield* Effect.promise(loadElectronSecrets);
+      expect(yield* mod.getSecretStorageMode()).toBe('unavailable');
+    }).pipe(withEnv({ TEXRA_DISABLE_KEYCHAIN: 'true' })),
+  );
 });

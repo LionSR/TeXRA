@@ -4,11 +4,15 @@
 // -Drawer, -Wide, -Tools, -Proposal, -Inline).
 import { html, type TemplateResult } from 'lit';
 
+import type { MissingTool } from '@shared/schemas';
 import {
   emptyHostSnapshot,
   type HostSnapshot,
 } from '@shared/session/hostSnapshot';
-import type { SessionView } from '@shared/session/sessionView';
+import {
+  emptySessionView,
+  type SessionView,
+} from '@shared/session/sessionView';
 import {
   applySurfaceAction,
   emptySurface,
@@ -16,9 +20,13 @@ import {
   type SurfaceAction,
 } from '@shared/session/surface';
 import {
+  buildScenario,
   CHILD,
   fanOutView,
+  foldAll,
   GRANDCHILD,
+  local,
+  OWNER,
   PROCESS,
   ROOT,
   withInterruptedChild,
@@ -128,6 +136,59 @@ function sidebar(
   </div>`;
 }
 
+/** A first open: no sessions yet, the host's notices as the funnel and
+ *  the folder leave them. */
+const LATEXINDENT: MissingTool = {
+  id: 'latexindent',
+  label: 'latexindent',
+  interchangeable: false,
+  usedFor: 'format .tex files',
+};
+const IMAGE_TOOLS: MissingTool[] = ['GraphicsMagick', 'ImageMagick'].map(
+  (label) => ({
+    id: label === 'GraphicsMagick' ? 'gm' : 'magick',
+    label,
+    interchangeable: true,
+    usedFor: 'turn PDF figures into images',
+  }),
+);
+
+function firstRun(
+  onboarding: HostSnapshot['onboarding'],
+  missingTools: MissingTool[] = [LATEXINDENT],
+): TemplateResult {
+  const view = emptySessionView(PROJECT.key);
+  const base = host();
+  return sidebar(view, surface(view, { kind: 'selectNew' }), {
+    ...base,
+    onboarding,
+    banners: {
+      ...base.banners,
+      dependency: {
+        visible: true,
+        missingTools,
+      },
+      gettingStarted: true,
+    },
+  });
+}
+
+/** The desktop app's center column: the same element, its own chrome
+ *  (rail, header) drawn by the desktop shell around it. */
+function desktopColumn(
+  view: SessionView,
+  surfaceRecord: Surface,
+): TemplateResult {
+  return html`<div class="h-ext h-ext-wide" id="frame">
+    <progress-app
+      .view=${view}
+      .surface=${surfaceRecord}
+      .host=${host()}
+      placement="desktop"
+    ></progress-app>
+  </div>`;
+}
+
 function editorTab(view: SessionView, surfaceRecord: Surface): TemplateResult {
   return html`<div class="h-ext h-ext-wide" id="frame">
     <div class="h-vscode-strip">
@@ -150,8 +211,28 @@ export const extensionScenes: Record<string, () => TemplateResult> = {
     const view = fanOutView();
     return sidebar(view, surface(view, { kind: 'selectNew' }));
   },
-  // Real-ExtensionSession: inside the child, with the ancestor path and the
-  // goes-to line.
+  // First open with a key: the setup funnel, no .tex yet, a missing tool.
+  'ext-first-run': () => firstRun('setup'),
+  // Setup done, still no .tex in the folder: the project starter.
+  'ext-no-tex': () => firstRun('done', [LATEXINDENT, ...IMAGE_TOOLS]),
+  // First open without a credential: the welcome card.
+  'ext-no-credential': () => firstRun('needs-credential'),
+  // The desktop placement of the same shell, inside a run.
+  'desktop-placement': () => {
+    const view = fanOutView();
+    return desktopColumn(view, surface(view, { kind: 'select', runId: CHILD }));
+  },
+  // A run grant in force: the header's read-only chip.
+  'ext-auto-approve': () => {
+    const view = fanOutView();
+    view.policy.set(CHILD, {
+      policy: 'ask',
+      bypasses: { toolEdit: true, bash: true, superYolo: false },
+    });
+    return sidebar(view, surface(view, { kind: 'select', runId: CHILD }));
+  },
+  // Real-ExtensionSession: inside the child, with the ancestor path (its
+  // workflow parent takes no replies, so no goes-to line).
   'ext-session': () => {
     const view = fanOutView();
     return sidebar(view, surface(view, { kind: 'select', runId: CHILD }));
@@ -196,6 +277,22 @@ export const extensionScenes: Record<string, () => TemplateResult> = {
         { kind: 'drawer', open: true },
       ),
     );
+  },
+  // Coming back to a finished session: the child has completed, so where
+  // its composer stood the dock says so and offers the way forward.
+  'ext-finished': () => {
+    const view = foldAll([...buildScenario().events, local({ self: [OWNER] })]);
+    return sidebar(view, surface(view, { kind: 'select', runId: CHILD }));
+  },
+  // The same, on the finished workflow root: the board, then the dock.
+  'ext-finished-workflow': () => {
+    const view = foldAll([...buildScenario().events, local({ self: [OWNER] })]);
+    return sidebar(view, surface(view, { kind: 'select', runId: ROOT }));
+  },
+  // An interrupted child with the drawer shut: the dock's Resume.
+  'ext-interrupted-run': () => {
+    const view = withInterruptedChild();
+    return sidebar(view, surface(view, { kind: 'select', runId: CHILD }));
   },
   // Real-ExtensionDrawer: the Sessions drawer over the same conversation.
   'ext-drawer': () => {

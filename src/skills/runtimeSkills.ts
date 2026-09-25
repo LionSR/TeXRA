@@ -1,3 +1,5 @@
+import { realpathSync } from 'node:fs';
+
 import { Effect } from 'effect';
 
 import {
@@ -11,6 +13,9 @@ import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { readSettingFrom } from '@utils/config/platformSettings';
+import { isPathWithin } from '@utils/core/pathCore';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { registerExternalRoot } from '@utils/files/externalRoots';
 import { safeHomedir } from '@utils/system/platformPaths';
 
 import {
@@ -194,14 +199,55 @@ export function filterDiscoveredSkills(
   };
 }
 
-/** Discover only skills that may be injected or explicitly activated. */
+/**
+ * Discover only skills that may be injected or explicitly activated.
+ *
+ * The catalog and an activation both point the model at a skill's `SKILL.md`
+ * and its directory, so each enabled skill outside the workspace is
+ * registered as a read-only external root: `read_file` can read the skill
+ * and its resources, and no tool can write them. A skill inside the
+ * workspace is already readable and stays writable like any project file.
+ */
 export function loadEnabledRuntimeSkills(
   workspaceRoot: string | undefined,
   stores: SettingsStores,
 ) {
   return Effect.gen(function* () {
     const result = yield* discoverRuntimeSkills(workspaceRoot, stores);
-    return filterDiscoveredSkills(result, yield* readDisabledSkills(stores));
+    const enabled = filterDiscoveredSkills(
+      result,
+      yield* readDisabledSkills(stores),
+    );
+    for (const { skill } of enabled.skills) {
+      // Hosts hand the workspace root over already canonical, and a
+      // discovered skill directory exists, so its realpath is its physical
+      // place. Registration fails closed on a path it cannot verify; that
+      // skill then stays unreadable to tools, worth a warning, not a run.
+      yield* Effect.try({
+        try: () => {
+          const directory = realpathSync(skill.baseDir);
+          if (
+            workspaceRoot !== undefined &&
+            isPathWithin(workspaceRoot, directory)
+          ) {
+            return;
+          }
+          registerExternalRoot(directory, {
+            kind: 'skill',
+            writable: false,
+            label: `Skill ${skill.name}`,
+          });
+        },
+        catch: ensureError,
+      }).pipe(
+        Effect.catch((error) =>
+          Effect.logWarning(
+            `Skill ${skill.name} is not readable by tools: ${toErrorMessage(error)}`,
+          ),
+        ),
+      );
+    }
+    return enabled;
   });
 }
 

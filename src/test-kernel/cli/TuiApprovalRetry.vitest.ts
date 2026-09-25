@@ -476,22 +476,23 @@ describe('TUI request decisions', () => {
   );
 
   it.effect(
-    'sets the run command bypass when goal auto-approval is enabled and cleared',
+    'sets the run command bypass for a goal and revokes only what the goal granted',
     () =>
       Effect.gen(function* () {
         tui();
         const runId = runIdFor('goal-bypass');
         yield* ensureRun(runId);
 
+        const { approvals } = testDefaultSession();
         setGoalSessionAutoApproval(testDefaultSession(), runId, 'commands');
-        expect(
-          testDefaultSession().approvals.bash.bypass.isBypassed(runId),
-        ).toBe(true);
+        expect(approvals.bash.bypass.isBypassed(runId)).toBe(true);
+        // The user answers an edit prompt with "approve for this session"
+        // while the goal runs; ending the goal must not revoke that grant.
+        approvals.toolEdit.bypass.setBypass(runId, true);
 
         setGoalSessionAutoApproval(testDefaultSession(), runId, false);
-        expect(
-          testDefaultSession().approvals.bash.bypass.isBypassed(runId),
-        ).toBe(false);
+        expect(approvals.bash.bypass.isBypassed(runId)).toBe(false);
+        expect(approvals.toolEdit.bypass.isBypassed(runId)).toBe(true);
       }),
   );
 

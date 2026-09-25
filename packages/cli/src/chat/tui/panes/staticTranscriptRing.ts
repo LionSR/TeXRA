@@ -6,7 +6,6 @@
 
 import type { RunPhase } from '@shared/schemas';
 import { getModelLabel } from '@shared/model/modelLabel';
-import type { RunLabels } from '@shared/tools/executionsDisplay';
 import type { TranscriptRow } from '@ui/transcript';
 
 import {
@@ -38,13 +37,10 @@ export interface StaticTranscriptState {
   readonly ownerKey: string;
   readonly items: readonly StaticTranscriptItem[];
   /** Cumulative row/byte estimates for `items`, maintained incrementally. */
-  readonly rowCount: number;
-  readonly byteCount: number;
+  readonly totals: StaticTranscriptTotals;
   readonly scan: StaticTranscriptScanCursor;
-  /** The layout width `rowCount`/`byteCount` were measured under. */
+  /** The layout width `totals` were measured under. */
   readonly layoutWidth: number | undefined;
-  /** The run labels `rowCount`/`byteCount` were measured under. */
-  readonly runLabels: RunLabels | undefined;
   /** Incremented whenever items change non-append-only (trim, header insert,
    *  hard reset, fold rebuild) so the `<Static>` identity remounts and
    *  `onRenderKeyChange` repaints the bounded tail with replace semantics. */
@@ -76,6 +72,19 @@ export const DEFAULT_STATIC_TRANSCRIPT_RING_BUDGETS: StaticTranscriptRingBudgets
 interface StaticTranscriptTotals {
   readonly rows: number;
   readonly bytes: number;
+}
+
+const EMPTY_TOTALS: StaticTranscriptTotals = Object.freeze({
+  rows: 0,
+  bytes: 0,
+});
+
+/** A retained ring tail with its totals, and whether building it dropped
+ *  anything. */
+interface RingTail {
+  readonly items: readonly StaticTranscriptItem[];
+  readonly totals: StaticTranscriptTotals;
+  readonly trimmed: boolean;
 }
 
 /** The header facts of a child run scrollback, read from the fold. */
@@ -156,7 +165,6 @@ interface StaticTranscriptItemMetrics {
 function staticTranscriptItemMetrics(
   item: StaticTranscriptItem,
   width?: number,
-  runLabels?: RunLabels,
 ): StaticTranscriptItemMetrics {
   if (item.kind === 'header') {
     return {
@@ -175,7 +183,6 @@ function staticTranscriptItemMetrics(
   }
 
   const layout = transcriptEntryLayout(item.entry, {
-    runLabels,
     mode: 'scrollback-budget',
     previousEntry: undefined,
     width,
@@ -228,7 +235,7 @@ class StaticTranscriptTotalsAccumulator {
   private rowTotal: number;
   private byteTotal: number;
 
-  constructor(initial: StaticTranscriptTotals = { rows: 0, bytes: 0 }) {
+  constructor(initial: StaticTranscriptTotals = EMPTY_TOTALS) {
     this.rowTotal = initial.rows;
     this.byteTotal = initial.bytes;
   }
@@ -294,12 +301,11 @@ class StaticTranscriptTotalsAccumulator {
 function staticTranscriptItemsTotals(
   items: readonly StaticTranscriptItem[],
   width?: number,
-  runLabels?: RunLabels,
 ): StaticTranscriptTotals {
   const totals = new StaticTranscriptTotalsAccumulator();
   let aboveMarginBottomRows = 0;
   for (const item of items) {
-    const metrics = staticTranscriptItemMetrics(item, width, runLabels);
+    const metrics = staticTranscriptItemMetrics(item, width);
     totals.insert(aboveMarginBottomRows, metrics, undefined);
     aboveMarginBottomRows = metrics.marginBottomRows;
   }
@@ -315,15 +321,10 @@ export function trimStaticTranscriptItems(
   items: readonly StaticTranscriptItem[],
   options: {
     readonly budgets?: StaticTranscriptRingBudgets;
-    readonly runLabels?: RunLabels;
     readonly totals: StaticTranscriptTotals;
     readonly width?: number;
   },
-): {
-  readonly items: readonly StaticTranscriptItem[];
-  readonly totals: StaticTranscriptTotals;
-  readonly trimmed: boolean;
-} {
+): RingTail {
   const budgets = options.budgets ?? DEFAULT_STATIC_TRANSCRIPT_RING_BUDGETS;
   if (
     options.totals.rows <= budgets.rowHighWater &&
@@ -336,7 +337,7 @@ export function trimStaticTranscriptItems(
   const totals = new StaticTranscriptTotalsAccumulator(options.totals);
   const headerCount = nextItems[0]?.kind === 'header' ? 1 : 0;
   const metricsOf = (item: StaticTranscriptItem): StaticTranscriptItemMetrics =>
-    staticTranscriptItemMetrics(item, options.width, options.runLabels);
+    staticTranscriptItemMetrics(item, options.width);
   // Only the oldest non-header item is ever dropped, so the item above the
   // trim point stays the header (or nothing) for every pass.
   const aboveMarginBottomRows = itemMarginBottomRows(
@@ -377,25 +378,16 @@ function retainedStaticTranscriptTail(
   items: readonly StaticTranscriptItem[],
   options: {
     readonly budgets?: StaticTranscriptRingBudgets;
-    readonly runLabels?: RunLabels;
     readonly width?: number;
   },
-): {
-  readonly items: readonly StaticTranscriptItem[];
-  readonly totals: StaticTranscriptTotals;
-  readonly trimmed: boolean;
-} {
+): RingTail {
   if (items.length === 0) {
-    return { items, totals: { rows: 0, bytes: 0 }, trimmed: false };
+    return { items, totals: EMPTY_TOTALS, trimmed: false };
   }
   const budgets = options.budgets ?? DEFAULT_STATIC_TRANSCRIPT_RING_BUDGETS;
   const headerCount = items[0]?.kind === 'header' ? 1 : 0;
   if (items.length <= headerCount) {
-    const totals = staticTranscriptItemsTotals(
-      items,
-      options.width,
-      options.runLabels,
-    );
+    const totals = staticTranscriptItemsTotals(items, options.width);
     return { items, totals, trimmed: false };
   }
 
@@ -403,7 +395,7 @@ function retainedStaticTranscriptTail(
   // a seam from the neighbour's bottom margin alone, so growing the tail never
   // triggers a second layout pass for an item that is already measured.
   const metricsOf = (item: StaticTranscriptItem): StaticTranscriptItemMetrics =>
-    staticTranscriptItemMetrics(item, options.width, options.runLabels);
+    staticTranscriptItemMetrics(item, options.width);
 
   const headerItem = headerCount > 0 ? items[0] : undefined;
   const headerMarginBottomRows = itemMarginBottomRows(headerItem);
@@ -415,7 +407,7 @@ function retainedStaticTranscriptTail(
   let start = items.length - 1;
   const newest = items[start];
   if (newest === undefined) {
-    return { items, totals: { rows: 0, bytes: 0 }, trimmed: false };
+    return { items, totals: EMPTY_TOTALS, trimmed: false };
   }
   let firstMetrics = metricsOf(newest);
   totals.insert(headerMarginBottomRows, firstMetrics, undefined);
@@ -444,7 +436,6 @@ function retainedStaticTranscriptTail(
       : items.slice(start);
   const retained = trimStaticTranscriptItems(candidateItems, {
     budgets,
-    runLabels: options.runLabels,
     totals: totals.totals,
     width: options.width,
   });
@@ -453,23 +444,6 @@ function retainedStaticTranscriptTail(
     totals: retained.totals,
     trimmed: candidateItems.length < items.length || retained.trimmed,
   };
-}
-
-/** The run-label map is a `computed()` signal that can return a fresh
- *  `Map` for unrelated child-roster churn (elapsed timers, active/inactive
- *  flips). Only a content change affects transcript layout, so compare the
- *  label projection semantically instead of by reference. */
-function runLabelsEqual(
-  left: RunLabels | undefined,
-  right: RunLabels | undefined,
-): boolean {
-  if (left === right) return true;
-  if (left === undefined || right === undefined) return false;
-  if (left.size !== right.size) return false;
-  for (const [key, value] of left) {
-    if (right.get(key) !== value) return false;
-  }
-  return true;
 }
 
 /** Rendering-relevant item equality: entries compare by reference (they are
@@ -505,34 +479,27 @@ function staticTranscriptItemsEquivalent(
 }
 
 function ensureStaticSessionHeader({
-  byteCount,
-  runLabels,
   items,
   maxRows,
   meta,
-  rowCount,
   source,
+  totals: current,
   width,
 }: {
-  readonly byteCount: number;
-  readonly runLabels?: RunLabels;
   readonly items: readonly StaticTranscriptItem[];
   readonly maxRows?: number;
   readonly meta: SessionMeta;
-  readonly rowCount: number;
   readonly source: StaticScrollbackSource;
+  readonly totals: StaticTranscriptTotals;
   readonly width?: number;
 }): {
   readonly items: readonly StaticTranscriptItem[];
-  readonly rowCount: number;
-  readonly byteCount: number;
+  readonly totals: StaticTranscriptTotals;
   readonly inserted: boolean;
 } {
-  if (items[0]?.id === SESSION_HEADER_ID) {
-    return { items, rowCount, byteCount, inserted: false };
-  }
-  if (source.waitingForChildIdentity) {
-    return { items, rowCount, byteCount, inserted: false };
+  const unchanged = { items, totals: current, inserted: false };
+  if (items[0]?.id === SESSION_HEADER_ID || source.waitingForChildIdentity) {
+    return unchanged;
   }
   const compact = maxRows !== undefined && maxRows < FULL_SESSION_HEADER_ROWS;
   const header: StaticTranscriptItem = {
@@ -543,69 +510,48 @@ function ensureStaticSessionHeader({
     meta,
   };
   const firstItem = items[0];
-  const totals = new StaticTranscriptTotalsAccumulator({
-    rows: rowCount,
-    bytes: byteCount,
-  });
+  const totals = new StaticTranscriptTotalsAccumulator(current);
   // The header goes in at the very top, so nothing sits above it.
   totals.insert(
     0,
-    staticTranscriptItemMetrics(header, width, runLabels),
+    staticTranscriptItemMetrics(header, width),
     firstItem === undefined
       ? undefined
-      : staticTranscriptItemMetrics(firstItem, width, runLabels),
+      : staticTranscriptItemMetrics(firstItem, width),
   );
   const fitsBudget = maxRows === undefined || totals.rows <= maxRows;
-  if (!fitsBudget) {
-    return { items, rowCount, byteCount, inserted: false };
-  }
+  if (!fitsBudget) return unchanged;
 
-  return {
-    items: [header, ...items],
-    rowCount: totals.rows,
-    byteCount: totals.bytes,
-    inserted: true,
-  };
+  return { items: [header, ...items], totals: totals.totals, inserted: true };
 }
 
 interface BuildStaticTranscriptItemsOptions {
   readonly source: StaticScrollbackSource;
-  readonly runLabels?: RunLabels;
   readonly meta: SessionMeta;
   readonly maxRows?: number;
   readonly width?: number;
   readonly ringBudgets?: StaticTranscriptRingBudgets;
 }
 
-interface StaticTranscriptBuildResult {
-  readonly items: readonly StaticTranscriptItem[];
-  readonly rowCount: number;
-  readonly byteCount: number;
-  readonly trimmed: boolean;
-}
-
 export function buildStaticTranscriptItems(
   options: BuildStaticTranscriptItemsOptions,
-): StaticTranscriptBuildResult {
+): RingTail {
   const {
     source,
-    runLabels,
     meta,
     maxRows,
     width,
     ringBudgets = DEFAULT_STATIC_TRANSCRIPT_RING_BUDGETS,
   } = options;
   if (source.waitingForChildIdentity) {
-    return { items: [], rowCount: 0, byteCount: 0, trimmed: false };
+    return { items: [], totals: EMPTY_TOTALS, trimmed: false };
   }
   const header = ensureStaticSessionHeader({
-    byteCount: 0,
-    runLabels,
     items: [],
     maxRows,
     meta,
-    rowCount: 0,
     source,
+    totals: EMPTY_TOTALS,
     width,
   });
   const items: StaticTranscriptItem[] = [...header.items];
@@ -617,17 +563,10 @@ export function buildStaticTranscriptItems(
     items.push({ id: entry.id, kind: 'entry', entry });
   }
 
-  const retained = retainedStaticTranscriptTail(items, {
+  return retainedStaticTranscriptTail(items, {
     budgets: ringBudgets,
-    runLabels,
     width,
   });
-  return {
-    items: retained.items,
-    rowCount: retained.totals.rows,
-    byteCount: retained.totals.bytes,
-    trimmed: retained.trimmed,
-  };
 }
 
 function scanStaticTranscriptFromStart(
@@ -645,7 +584,6 @@ function scanStaticTranscriptFromStart(
 }
 
 export function buildStaticTranscriptState({
-  runLabels,
   eraseRequest,
   maxRows,
   meta,
@@ -655,7 +593,6 @@ export function buildStaticTranscriptState({
   source,
   width,
 }: {
-  readonly runLabels?: RunLabels;
   readonly maxRows?: number;
   readonly meta: SessionMeta;
   readonly ownerKey: string;
@@ -667,7 +604,6 @@ export function buildStaticTranscriptState({
 }): StaticTranscriptState {
   const built = buildStaticTranscriptItems({
     source,
-    runLabels,
     meta,
     maxRows,
     ringBudgets,
@@ -688,11 +624,9 @@ export function buildStaticTranscriptState({
   return {
     ownerKey,
     items: built.items,
-    rowCount: built.rowCount,
-    byteCount: built.byteCount,
+    totals: built.totals,
     scan,
     layoutWidth: width,
-    runLabels,
     repaintEpoch,
     eraseRequest: eraseRequest ?? 0,
   };
@@ -701,7 +635,6 @@ export function buildStaticTranscriptState({
 export function advanceStaticTranscriptState(
   current: StaticTranscriptState,
   {
-    runLabels,
     eraseRequest = current.eraseRequest,
     maxRows,
     meta,
@@ -710,7 +643,6 @@ export function advanceStaticTranscriptState(
     source,
     width,
   }: {
-    readonly runLabels?: RunLabels;
     readonly eraseRequest?: number;
     readonly maxRows?: number;
     readonly meta: SessionMeta;
@@ -727,7 +659,6 @@ export function advanceStaticTranscriptState(
   const rebuildState = (repaintEpoch: number): StaticTranscriptState =>
     buildStaticTranscriptState({
       eraseRequest,
-      runLabels,
       maxRows,
       meta,
       ownerKey,
@@ -749,13 +680,12 @@ export function advanceStaticTranscriptState(
     // while the replace-semantics repaint cannot fire yet (the first effect
     // cascade still runs inside Ink's initial render(), before the instance
     // is available to the viewport controller), doubling the header. Only
-    // render inputs are compared: `rowCount`/`byteCount` are deterministic
+    // render inputs are compared: `totals` are deterministic
     // functions of those fields, and a stale `scan` cursor is recovered by
     // `incrementalStaticTranscriptEntries` on the next non-empty advance.
     if (
       rebuilt.ownerKey === current.ownerKey &&
       rebuilt.layoutWidth === current.layoutWidth &&
-      runLabelsEqual(rebuilt.runLabels, current.runLabels) &&
       staticTranscriptItemsEquivalent(rebuilt.items, current.items)
     ) {
       return current;
@@ -774,29 +704,23 @@ export function advanceStaticTranscriptState(
     return current;
   }
 
-  // A label-content change (a child's human label arriving after its
-  // executions row printed) rewrites rows already in scrollback, so it repaints
-  // from a known origin; a bare width change is repainted by Ink's resize path.
-  const labelsChanged = !runLabelsEqual(runLabels, current.runLabels);
-  const layoutChanged = width !== current.layoutWidth || labelsChanged;
+  // A bare width change is repainted by Ink's resize path.
+  const layoutChanged = width !== current.layoutWidth;
   let nextItems = current.items;
-  let nextRowCount = current.rowCount;
-  let nextByteCount = current.byteCount;
+  let nextTotals = current.totals;
   let nextRepaintEpoch = current.repaintEpoch;
   let changed = layoutChanged;
 
   if (layoutChanged) {
-    const recomputed = staticTranscriptItemsTotals(nextItems, width, runLabels);
+    const recomputed = staticTranscriptItemsTotals(nextItems, width);
     const trimmed = trimStaticTranscriptItems(nextItems, {
       budgets: ringBudgets,
-      runLabels,
       totals: recomputed,
       width,
     });
     nextItems = trimmed.items;
-    nextRowCount = trimmed.totals.rows;
-    nextByteCount = trimmed.totals.bytes;
-    if (trimmed.trimmed || labelsChanged) {
+    nextTotals = trimmed.totals;
+    if (trimmed.trimmed) {
       nextRepaintEpoch += 1;
     }
   }
@@ -812,49 +736,40 @@ export function advanceStaticTranscriptState(
   }
 
   const header = ensureStaticSessionHeader({
-    byteCount: nextByteCount,
-    runLabels,
     items: nextItems,
     maxRows,
     meta,
-    rowCount: nextRowCount,
     source,
+    totals: nextTotals,
     width,
   });
   if (header.inserted) {
     nextItems = header.items;
-    nextRowCount = header.rowCount;
-    nextByteCount = header.byteCount;
+    nextTotals = header.totals;
     nextRepaintEpoch += 1;
     changed = true;
   }
 
-  const totals = new StaticTranscriptTotalsAccumulator({
-    rows: nextRowCount,
-    bytes: nextByteCount,
-  });
+  const totals = new StaticTranscriptTotalsAccumulator(nextTotals);
   let aboveMarginBottomRows = itemMarginBottomRows(nextItems.at(-1));
   for (const entry of plan.appended) {
     const item: StaticTranscriptItem = { id: entry.id, kind: 'entry', entry };
-    const metrics = staticTranscriptItemMetrics(item, width, runLabels);
+    const metrics = staticTranscriptItemMetrics(item, width);
     totals.insert(aboveMarginBottomRows, metrics, undefined);
     aboveMarginBottomRows = metrics.marginBottomRows;
     nextItems = [...nextItems, item];
     changed = true;
   }
-  nextRowCount = totals.rows;
-  nextByteCount = totals.bytes;
+  nextTotals = totals.totals;
 
   const trimmed = trimStaticTranscriptItems(nextItems, {
     budgets: ringBudgets,
-    runLabels,
-    totals: { rows: nextRowCount, bytes: nextByteCount },
+    totals: nextTotals,
     width,
   });
   if (trimmed.trimmed) {
     nextItems = trimmed.items;
-    nextRowCount = trimmed.totals.rows;
-    nextByteCount = trimmed.totals.bytes;
+    nextTotals = trimmed.totals;
     nextRepaintEpoch += 1;
     changed = true;
   }
@@ -870,11 +785,9 @@ export function advanceStaticTranscriptState(
   return {
     ownerKey,
     items: nextItems,
-    rowCount: nextRowCount,
-    byteCount: nextByteCount,
+    totals: nextTotals,
     scan: cursor,
     layoutWidth: width,
-    runLabels,
     repaintEpoch: nextRepaintEpoch,
     eraseRequest,
   };

@@ -3,7 +3,7 @@ import { writeFileSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 import { it } from '@effect/vitest';
-import { Effect, FileSystem, Layer } from 'effect';
+import { Effect, Layer } from 'effect';
 import {
   afterAll,
   beforeAll,
@@ -25,7 +25,7 @@ import {
   AppState,
   type AgentDirectoriesPort,
 } from '@platform/interfaces';
-import type { GlobalStorageFs } from '@platform/rootedFs';
+import type { AgentCatalogServices } from '@platform/processRuntime';
 import { AgentCategory } from '@shared/schemas';
 import { FakeStateStore } from '@test/support/FakePlatform';
 import {
@@ -36,6 +36,7 @@ import {
   nodePlatformLayer,
   unusedGlobalStorageFs,
 } from '@test/support/fsTestUtils';
+import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
 
 /**
@@ -44,17 +45,14 @@ import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
  * only satisfies the requirement the catalog readers name.
  */
 function onGlobalStorage<A, E>(
-  program: Effect.Effect<
-    A,
-    E,
-    GlobalStorageFs | FileSystem.FileSystem | AgentDirectories | AppState
-  >,
+  program: Effect.Effect<A, E, AgentCatalogServices>,
 ): Effect.Effect<A, E> {
   return Effect.provide(
     program,
     Layer.mergeAll(
       unusedGlobalStorageFs(),
       nodePlatformLayer,
+      testHttpClientLayer,
       AgentDirectories.layer(fakeHostAgentDirectories),
       AppState.layer(new FakeStateStore()),
     ),
@@ -148,7 +146,9 @@ describe('loadAgentSettingAndPrompts', () => {
 
   /** The loader on the process filesystem it reads its definitions through. */
   const loadDefinition = (entry: AgentEntry) =>
-    loadAgentSettingAndPrompts(entry).pipe(Effect.provide(nodePlatformLayer));
+    loadAgentSettingAndPrompts(entry).pipe(
+      Effect.provide(Layer.merge(nodePlatformLayer, testHttpClientLayer)),
+    );
 
   beforeAll(async () => {
     definitionDir = await makeTempDir('texra-agent-load-', tempDirs);

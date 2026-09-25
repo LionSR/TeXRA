@@ -4,13 +4,14 @@
 // callers own their chrome arithmetic via scrollableModalTextRowsBudget (or
 // their own budget for non-bordered layouts) and pass the result as maxRows.
 
-import { useMemo } from 'react';
+import { useContext, useMemo } from 'react';
 import { Box, Text } from 'ink';
 
 import { clampModalWidth, MIN_MODAL_CONTENT_WIDTH } from '@cli/tui/ui/theme';
 import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
-import { KeyHints } from '@cli/tui/ui/KeyHints';
+import { KeyHints, scrollKeyHints, type KeyHint } from '@cli/tui/ui/KeyHints';
 import { fillRows } from '@cli/runtime/terminalText';
+import { ConfirmCardFeedback } from './ConfirmCard';
 import { confirmCardContentRowsBudget } from './confirmCardRowsBudget';
 import {
   boundedScrollableLines,
@@ -44,7 +45,6 @@ export function scrollableModalTextRowsBudget({
     availableRows,
     columns,
     title,
-    minContentWidth: MIN_MODAL_CONTENT_WIDTH,
     defaultRows: DEFAULT_MODAL_TEXT_ROWS,
     compactMaxRows: COMPACT_SCROLLABLE_CONTENT_ROWS,
     spaciousFixedRows: SPACIOUS_FIXED_ROWS_EXCLUDING_TITLE,
@@ -104,6 +104,9 @@ export function modalTextDisplayLines({
 interface ScrollableModalTextProps {
   readonly continuationPrefix?: string;
   readonly firstLinePrefix?: string;
+  /** Paint a reader's footer below the body: the scroll keys while there is
+   *  anything to scroll, then these. Replaces the scroll-only hint row. */
+  readonly footerHints?: readonly KeyHint[];
   /** Qualifies single-row overflow markers (e.g. `prompt rows`). */
   readonly hiddenNoun?: string;
   /** Rows granted to the text body — see scrollableModalTextRowsBudget. */
@@ -112,8 +115,6 @@ interface ScrollableModalTextProps {
   readonly minContentWidth?: number;
   /** Suppress the spacious blank margin (e.g. a metadata row sits above). */
   readonly marginWhenSpacious?: boolean;
-  /** Release ↑/↓ while another surface owns them (feedback input). */
-  readonly scrollActive?: boolean;
   /** Forwarded to {@link modalTextDisplayLines}: `text` is already wrapped to
    *  `width`, so skip the internal wrap pass. */
   readonly preWrapped?: boolean;
@@ -142,13 +143,13 @@ export function ScrollableModalText(
   const {
     continuationPrefix,
     firstLinePrefix,
+    footerHints,
     hiddenNoun,
     marginWhenSpacious,
     maxRows,
     minContentWidth,
     preWrapped,
     resetKey,
-    scrollActive,
     scrollHint,
     showScrollHints,
     startAtEnd,
@@ -181,8 +182,10 @@ export function ScrollableModalText(
     maxDisplayLines: maxRows,
     totalLines: lines.length,
   });
+  // Release ↑/↓ while the enclosing card's feedback input owns them.
+  const scrollActive = !useContext(ConfirmCardFeedback).mode;
   const { scrollOffset, scrollable } = useScrollableOffset({
-    active: scrollActive !== false,
+    active: scrollActive,
     initialOffset: startAtEnd ? maxScrollOffset : 0,
     maxScrollOffset,
     resetKey: resetKey ?? text,
@@ -214,18 +217,32 @@ export function ScrollableModalText(
           </Text>
         ))}
       </Box>
-      {scrollable &&
-        maxRows > 1 &&
-        scrollActive !== false &&
-        showScrollHints !== false && (
+      {footerHints ? (
+        <Box marginTop={1}>
           <KeyHints
             confirmCancel={false}
             hints={[
-              { key: '↑/↓', action: scrollHint },
-              { key: 'PgUp/PgDn', action: 'page' },
+              ...(scrollable ? scrollKeyHints(scrollHint) : []),
+              ...footerHints,
             ]}
+            wrap
           />
-        )}
+        </Box>
+      ) : (
+        scrollable &&
+        maxRows > 1 &&
+        scrollActive &&
+        showScrollHints !== false && <ScrollHints action={scrollHint} />
+      )}
     </>
   );
+}
+
+/** The ↑/↓ + PgUp/PgDn strip under a scrollable modal body. */
+export function ScrollHints({
+  action,
+}: {
+  readonly action: string;
+}): React.JSX.Element {
+  return <KeyHints confirmCancel={false} hints={scrollKeyHints(action)} />;
 }

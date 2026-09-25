@@ -50,7 +50,6 @@ const SHARED_HOST_REQUEST_KINDS = [
   'latexdiff',
   'latexdiffs',
   'onboarding',
-  'openDashboard',
   'openFile',
   'openInstallGuide',
   'openLabel',
@@ -68,7 +67,6 @@ const SHARED_HOST_REQUEST_KINDS = [
   'runCompileFixer',
   'runNew',
   'savePastedImage',
-  'signIn',
   'toolEdit',
   'useOwnApiKey',
 ] as const satisfies readonly HostRequest['kind'][];
@@ -146,15 +144,14 @@ export interface SharedHostRequestBindings {
   ): HostVerb<void>;
   mergeFiles(baseFile: string, editedFile: string): HostVerb<void>;
   latexdiffFiles(baseFile: string, editedFile: string): HostVerb<void>;
-  readonly openDashboard: HostVerb<void>;
   openSettings(
     section: OpenSettingsRequest['section'],
     sessionType: OpenSettingsRequest['sessionType'],
   ): HostVerb<void>;
   /** Ask for a provider API key: a prompt on one host, the Models tab on the
    *  other. The caller re-reads the secret store after this returns. */
-  setApiKey(provider: string | undefined): HostVerb<void>;
-  openApiKeyGuide(provider: string | undefined): HostVerb<void>;
+  readonly setApiKey: HostVerb<void>;
+  readonly openApiKeyGuide: HostVerb<void>;
   /** The agent settings, for the sub-tab a session type names or for none. */
   openAgentSettings(
     sessionType: AgentConfigBannerRequest['sessionType'] | undefined,
@@ -163,7 +160,6 @@ export interface SharedHostRequestBindings {
   readonly openAgentDocs: HostVerb<void>;
   readonly recheckDependencies: HostVerb<void>;
   openInstallGuide(tool: string): HostVerb<void>;
-  readonly signIn: HostVerb<void>;
   gettingStarted(action: GettingStartedRequest['action']): HostVerb<void>;
   /** The onboarding card's five verbs; its sixth, "set an API key", is
    *  {@link SharedHostRequestBindings.setApiKey}, the same verb the banner
@@ -348,16 +344,11 @@ export function handleSharedHostRequest(
       case 'latexdiffs':
         yield* latexdiffs(request);
         return done;
-      case 'openDashboard':
-        yield* host.openDashboard;
-        return done;
       case 'openSettings':
         yield* host.openSettings(request.section, request.sessionType);
         return done;
       case 'apiKeyBanner':
-        yield* request.action === 'set'
-          ? host.setApiKey(request.provider ?? undefined)
-          : host.openApiKeyGuide(request.provider ?? undefined);
+        yield* request.action === 'set' ? host.setApiKey : host.openApiKeyGuide;
         return done;
       case 'agentConfigBanner':
         switch (request.action) {
@@ -382,9 +373,6 @@ export function handleSharedHostRequest(
       case 'openInstallGuide':
         yield* host.openInstallGuide(request.tool);
         return done;
-      case 'signIn':
-        yield* host.signIn;
-        return done;
       case 'gettingStarted':
         yield* host.gettingStarted(request.action);
         return done;
@@ -394,7 +382,7 @@ export function handleSharedHostRequest(
             yield* host.onboarding.signInChatGpt;
             return done;
           case 'setApiKey':
-            yield* host.setApiKey(undefined);
+            yield* host.setApiKey;
             return done;
           case 'skip':
             yield* host.onboarding.skip;

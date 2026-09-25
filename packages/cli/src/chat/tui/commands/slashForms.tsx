@@ -2,11 +2,12 @@ import { Box, Text, useInput, useWindowSize } from 'ink';
 import { useLayoutEffect } from 'react';
 
 import { isEscapeInput } from '@cli/tui/inputKeys';
+import { borderedPanelChromeRows } from '@cli/tui/ui/BorderedPanel';
 import { KeyHints } from '@cli/tui/ui/KeyHints';
 import { LoadingIndicator } from '@cli/tui/ui/LoadingIndicator';
 import { COLOR_ERROR } from '@cli/tui/ui/colors';
-import { textDisplayWidth } from '@cli/runtime/terminalText';
-import { FormFrame, formFrameWidth } from '../forms/_shared/FormFrame';
+import { wrappedRowCount } from '@cli/tui/ansiWrap';
+import { FormFrame, formFrameContentWidth } from '../forms/_shared/FormFrame';
 import { formProgress, type FormProgress } from '../state/cliState';
 import { takeActiveForm } from '../state/formSlot';
 import { appendLocalUserTranscript } from '../state/transcript';
@@ -42,21 +43,24 @@ function FormBusyFrame(props: {
   if (progress.status === 'succeeded') titleSuffix = ' · complete';
   if (progress.status === 'failed') titleSuffix = ' · error';
   const title = `${progress.title}${titleSuffix}`;
-  const innerWidth = Math.max(1, formFrameWidth(columns) - 4);
+  const innerWidth = formFrameContentWidth(columns);
+  const hints = [
+    settled
+      ? { key: 'any key', action: 'close' }
+      : { key: 'Esc', action: 'cancel' },
+  ];
+  // Count rows the way Ink word-wraps them; character-wrap math undercounts
+  // and can leave a copyable message on screen that does not fit.
   const wrappedRows = (text: string): number =>
-    text.split('\n').reduce((rows, line) => {
-      const width = textDisplayWidth(line.replaceAll('\t', '    '));
-      return rows + Math.max(1, Math.ceil(width / innerWidth));
-    }, 0);
-  // Border rows plus the title, message, copyable block, and key hints.
+    wrappedRowCount(text.replaceAll('\t', '    '), innerWidth);
+  // The border and key hints, plus the title, message, and copyable block.
   const requiredRows = (copyableMessage: string): number =>
-    3 +
+    borderedPanelChromeRows(hints, innerWidth) +
     wrappedRows(title) +
     wrappedRows(progress.message ?? 'working...') +
     (copyableMessage === progress.message
       ? 0
-      : 1 + wrappedRows(copyableMessage)) +
-    wrappedRows(settled ? 'any key close' : 'Esc cancel');
+      : 1 + wrappedRows(copyableMessage));
   // Once archived, the message has been written to scrollback and is no
   // longer "live" for display/sizing purposes, even though the raw value is
   // kept on `progress.copyableMessage` for archiveCopyable's own use.
@@ -93,14 +97,7 @@ function FormBusyFrame(props: {
           </Box>
         )}
       <Box marginTop={1}>
-        <KeyHints
-          hints={[
-            settled
-              ? { key: 'any key', action: 'close' }
-              : { key: 'Esc', action: 'cancel' },
-          ]}
-          confirmCancel={false}
-        />
+        <KeyHints hints={hints} confirmCancel={false} />
       </Box>
     </FormFrame>
   );

@@ -1,48 +1,46 @@
-// Shared data-load lifecycle for `/`-form list forms. Each form fetched its
-// list in a cancellable `useEffect`, tracked `loading` / `error`, and let `Esc`
-// close the panel while it had nothing actionable to show. That triad was
-// copied verbatim across every list form; it lives here once.
+// Shared async lifecycle for `/` forms: the one write runner, the sequenced
+// read every status view and list form holds, and the list-form layer that
+// lets `Esc` close the panel while it has nothing actionable to show.
 
 import { useInput } from 'ink';
 import { Cause, Effect } from 'effect';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
   isEscapeInput,
   isPlainReturnInput,
   type ReturnKeyInput,
 } from '@cli/tui/inputKeys';
-import { useCancellableEffect } from '@cli/tui/useCancellableEffect';
 import { setTransientNotice } from '@cli/chat/tui/state/cliState';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-interface AsyncListFormState<T> {
+interface AsyncResource<T, R = ProcessServices> {
   readonly data: T | undefined;
+  readonly setData: (update: (current: T | undefined) => T | undefined) => void;
+  /** True while a read is in flight, the first one included. */
   readonly loading: boolean;
   readonly error: string | undefined;
+  /** The read as a program: `reload` runs it, and a write that must be seen
+   *  afterwards sequences it after itself in one run. Only the latest read
+   *  lands, and none lands after unmount. */
+  readonly refresh: () => Effect.Effect<void, never, R>;
+  /** Re-run the read, keeping the current data on screen until it returns. */
+  readonly reload: () => void;
+  /** Surface a failure that is not a read failure (e.g. a mutation write)
+   *  through the same error state and `onError` hook. */
+  readonly reportError: (error: unknown) => void;
+}
+
+interface AsyncListFormState<T> extends AsyncResource<T> {
   /**
    * First non-navigation key pressed while the async list was loading. Forms
    * can apply it once their actionable items are mounted, then clear it.
    */
   readonly pendingInput: string | undefined;
   readonly clearPendingInput: () => void;
-  /**
-   * Re-run the loader and replace the loaded data, keeping the current data
-   * on screen until the next result arrives. Used by forms that must re-fetch
-   * after a mutation (e.g. a roster write). Clears the error on success and
-   * reports failures through {@link error} plus the options' {@link
-   * UseAsyncListFormOptions.onError}.
-   */
-  readonly reload: () => void;
-  /**
-   * Surface a failure that is not a load failure (e.g. a mutation write)
-   * through the same error channel and {@link UseAsyncListFormOptions.onError}
-   * used by load failures.
-   */
-  readonly reportError: (error: unknown) => void;
-  /** Run a write, then {@link reload}; a failed write becomes a transient
-   *  notice and leaves the loaded data as it is. */
+  /** Run a write, then {@link AsyncResource.reload}; a failed write becomes a
+   *  transient notice and leaves the loaded data as it is. */
   readonly update: (write: Effect.Effect<void, Error, ProcessServices>) => void;
 }
 
@@ -110,29 +108,117 @@ export function shouldBufferAsyncListFormInput(args: {
 }
 
 /**
- * Run the form's loader on mount, expose `loading` / `error` / `data`, and wire
- * `Esc` to close while the panel is loading, errored, or empty. Matches the
- * hand-rolled effect each form previously carried, including the
- * cancellation guard that drops a resolved promise after unmount.
+ * Settle a form's write program on the surface's runtime. Every form write runs
+ * through here as a `runFork`, not a fire-and-forget `runPromise`: shutdown
+ * interrupts a write still in flight, and the process runtime's fork reporting
+ * keeps that interrupts-only exit silent where a dropped promise would reject
+ * unhandled. `Effect.suspend` builds the program inside the fiber, so a
+ * synchronous throw lands in `onError` with a failed write.
+ */
+export function runFormWrite<A>(
+  runtime: ProcessRuntime,
+  write: () => Effect.Effect<A, Error, ProcessServices>,
+  handlers: {
+    readonly onSuccess?: (value: A) => void;
+    /** Receives the squashed cause, the value a rejection would carry. */
+    readonly onError: (error: unknown) => void;
+  },
+): void {
+  runtime.runFork(
+    Effect.suspend(write).pipe(
+      Effect.matchCause({
+        onSuccess: (value) => handlers.onSuccess?.(value),
+        onFailure: (cause) => handlers.onError(Cause.squash(cause)),
+      }),
+    ),
+  );
+}
+
+/**
+ * Read `load` once on mount and hold its latest result, loading flag, and
+ * error. Reads are sequenced: a stale read, or one that resolves after
+ * unmount, never lands.
+ */
+export function useAsyncResource<T, R extends ProcessServices>(options: {
+  readonly load: () => Effect.Effect<T, Error, R>;
+  readonly runtime: ProcessRuntime;
+  /** Invoked alongside the error state whenever a read or a reported error
+   *  fails, so the host can log/notify outside the form frame. */
+  readonly onError?: (error: unknown) => void;
+}): AsyncResource<T, R> {
+  const [data, setData] = useState<T | undefined>(undefined);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | undefined>(undefined);
+  const latest = useRef(options);
+  latest.current = options;
+  const sequence = useRef(0);
+  const mounted = useRef(false);
+
+  const reportError = useCallback((err: unknown) => {
+    setError(toErrorMessage(err));
+    latest.current.onError?.(err);
+  }, []);
+
+  // `suspend` claims the sequence number when the read starts, not when its
+  // program is built: a write that composes this after itself must not
+  // reserve the slot before that write lands.
+  const refresh = useCallback(
+    (): Effect.Effect<void, never, R> =>
+      Effect.suspend(() => {
+        if (!mounted.current) return Effect.void;
+        const request = ++sequence.current;
+        const current = (): boolean =>
+          mounted.current && request === sequence.current;
+        setLoading(true);
+        setError(undefined);
+        return latest.current.load().pipe(
+          Effect.matchCause({
+            onSuccess: (result) => {
+              if (!current()) return;
+              setData(result);
+              setLoading(false);
+            },
+            onFailure: (cause) => {
+              if (!current()) return;
+              reportError(Cause.squash(cause));
+              setLoading(false);
+            },
+          }),
+        );
+      }),
+    [reportError],
+  );
+
+  const { runtime } = options;
+  const reload = useCallback(() => {
+    runtime.runFork(refresh());
+  }, [runtime, refresh]);
+
+  useEffect(() => {
+    mounted.current = true;
+    reload();
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+
+  return { data, setData, loading, error, refresh, reload, reportError };
+}
+
+/**
+ * {@link useAsyncResource} for a `/`-form list: `loading` covers only the
+ * first read, and `Esc` closes the panel while it is loading, errored, or
+ * empty. Status views that must not close their parent use the resource hook
+ * directly.
  */
 export function useAsyncListForm<T>(
   options: UseAsyncListFormOptions<T>,
 ): AsyncListFormState<T> {
-  const [data, setData] = useState<T | undefined>(undefined);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | undefined>(undefined);
+  const resource = useAsyncResource(options);
+  const { data, error } = resource;
+  const loading = resource.loading && data === undefined;
   const [pendingInput, setPendingInput] = useState<string | undefined>();
   const clearPendingInput = useCallback(() => setPendingInput(undefined), []);
-
-  const { load, runtime, onError } = options;
-
-  const reportError = useCallback(
-    (err: unknown) => {
-      setError(toErrorMessage(err));
-      onError?.(err);
-    },
-    [onError],
-  );
 
   const empty =
     data !== undefined && options.isEmpty ? options.isEmpty(data) : false;
@@ -156,65 +242,17 @@ export function useAsyncListForm<T>(
     }
   });
 
-  // The load as a program that settles into the form state and recovers from
-  // its whole cause: the mount runs it, `reload` re-runs it, and `update`
-  // sequences it after a write in the same run. Every run is a `runFork`, not
-  // a fire-and-forget `runPromise`: shutdown interrupts a load or write still
-  // in flight, and the process runtime's fork reporting keeps that
-  // interrupts-only exit silent where a dropped promise would reject unhandled.
-  const settleLoad = useCallback(
-    (isCancelled: () => boolean) =>
-      Effect.suspend(() => {
-        setError(undefined);
-        return load();
-      }).pipe(
-        Effect.matchCause({
-          onSuccess: (result) => {
-            if (isCancelled()) return;
-            setData(result);
-            setLoading(false);
-          },
-          onFailure: (cause) => {
-            if (isCancelled()) return;
-            reportError(Cause.squash(cause));
-            setLoading(false);
-          },
-        }),
-      ),
-    [load, reportError],
-  );
-
-  const reload = useCallback(() => {
-    runtime.runFork(settleLoad(() => false));
-  }, [runtime, settleLoad]);
-
-  const update = (write: Effect.Effect<void, Error, ProcessServices>): void => {
-    runtime.runFork(
-      write.pipe(
-        Effect.matchCauseEffect({
-          onSuccess: () => settleLoad(() => false),
-          onFailure: (cause) =>
-            Effect.sync(() =>
-              setTransientNotice(toErrorMessage(Cause.squash(cause))),
-            ),
-        }),
-      ),
-    );
-  };
-
-  // Load once on mount, matching the original per-form `useEffect(..., [])`.
-  useCancellableEffect((isCancelled) => {
-    runtime.runFork(settleLoad(isCancelled));
-  }, []);
+  const update = (write: Effect.Effect<void, Error, ProcessServices>): void =>
+    runFormWrite(options.runtime, () => write, {
+      onSuccess: resource.reload,
+      onError: (err) => setTransientNotice(toErrorMessage(err)),
+    });
 
   return {
-    data,
+    ...resource,
     loading,
-    error,
     pendingInput,
     clearPendingInput,
-    reload,
-    reportError,
     update,
   };
 }
