@@ -22,11 +22,7 @@ import { onAbort } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { inheritedEnv } from '@utils/system/envFlags';
 import { getGitAuthorEnv } from '@utils/system/gitAuthorEnv';
-import {
-  IS_WINDOWS,
-  reportExtraDirWarnings,
-  withExtendedPath,
-} from '@utils/system/platformPaths';
+import { IS_WINDOWS, withExtendedPath } from '@utils/system/platformPaths';
 import { toWindowsCommand } from '@utils/system/windowsCommandLine';
 import type {
   ChildProcessHandle,
@@ -470,7 +466,6 @@ export const executeCommand = Effect.fn('executeCommand')(function* (
     return resultFromProcessOutput('', message, 127);
   }
   const env = commandEnv(cwd, authorEnv.success, options.env);
-  yield* reportExtraDirWarnings;
   if (!options.quiet) {
     yield* Effect.logDebug(`Running command: ${displayCommand(command)}`).pipe(
       withLogChannel(channel),

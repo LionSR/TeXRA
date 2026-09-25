@@ -4,13 +4,12 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect } from 'effect';
 import { globSync } from 'glob';
 import { LRUCache } from 'lru-cache';
 import which from 'which';
 
 // Local imports
-import { withLogChannel } from '@logger/effectLog';
+import { LOG_CHANNEL, writeLogEntry } from '@logger/logSink';
 import { normalizeFilePath, unique } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -38,23 +37,22 @@ const TEX_TOOLS = ['latexdiff', 'latexindent', 'latexmk'] as const;
 let cachedExtraDirs: string[] | null = null;
 
 /**
- * What building {@link getExtraDirs} skipped, held until an Effect caller
- * reports it: the directories are computed on the synchronous PATH path of
- * every spawn, which has no fiber to log from. {@link reportExtraDirWarnings}
- * drains it.
+ * Name a directory {@link getExtraDirs} had to skip. The directories are
+ * computed once, synchronously, by whichever PATH consumer runs first (often
+ * extension activation), with no fiber to log from, so this writes the sink
+ * directly at computation time.
  */
-const unreportedWarnings: string[] = [];
-
-/**
- * Log, once, each directory {@link getExtraDirs} had to skip. Run by the
- * Effect programs that consume the extended PATH (the command spawn and the
- * tool lookup), so the first of them to run after the computation reports it.
- */
-export const reportExtraDirWarnings: Effect.Effect<void> = Effect.suspend(() =>
-  Effect.forEach(unreportedWarnings.splice(0), (m) => Effect.logWarning(m), {
-    discard: true,
-  }),
-).pipe(withLogChannel('platformPaths'));
+function warnSkippedDir(message: string): void {
+  writeLogEntry({
+    level: 'WARN',
+    fiberId: '',
+    timestamp: new Date().toISOString(),
+    message,
+    cause: undefined,
+    annotations: { [LOG_CHANNEL]: 'platformPaths' },
+    spans: {},
+  });
+}
 
 const DEFAULT_MSYS_ROOTS = ['C:\\msys64', 'C:\\msys32'];
 const MSYS_SUBDIRS = ['usr\\bin', 'mingw64\\bin', 'mingw32\\bin'];
@@ -81,27 +79,23 @@ export function safeHomedir(): string | null {
  * of *every* subprocess TeXRA spawns. A throw there is not a loud failure for
  * one directory, it is every command in the session failing with
  * `Path must be absolute`, which reads to the user as the tool being missing.
- * So a relative value is skipped and recorded for
- * {@link reportExtraDirWarnings}, never thrown.
+ * So a relative value is skipped and reported, never thrown.
  */
 function absoluteEnvRoot(value: string, variable: string): string | null {
   if (path.isAbsolute(value)) return value;
-  unreportedWarnings.push(
+  warnSkippedDir(
     `Ignoring ${variable}=${value}: it must be an absolute path to be searched for tools.`,
   );
   return null;
 }
 
 /** Glob matches sorted in descending order. A failed glob drops a whole tool
- *  directory from PATH, so it is recorded for {@link reportExtraDirWarnings}
- *  rather than silently empty. */
+ *  directory from PATH, so it is named rather than silently empty. */
 function globDescending(pattern: string): string[] {
   try {
     return globSync(pattern).sort().reverse();
   } catch (err) {
-    unreportedWarnings.push(
-      `Glob failed for ${pattern}: ${toErrorMessage(err)}`,
-    );
+    warnSkippedDir(`Glob failed for ${pattern}: ${toErrorMessage(err)}`);
     return [];
   }
 }
