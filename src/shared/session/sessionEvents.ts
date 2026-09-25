@@ -131,12 +131,14 @@ export class SessionEvents extends Context.Service<
      *  claim just moved here (`claimMoved`) or this publisher has not seeded
      *  it yet: `rows` when the caller just read them, else a read of its
      *  own. Commits tracked while the read ran merge with it: a row the read
-     *  holds keeps its place, and a later one follows it. */
+     *  holds keeps its place, and a later one follows it. A failed read of
+     *  its own is logged and leaves the run unseeded for the next hydrate,
+     *  so the claim a caller just took is never stranded by it. */
     readonly hydrateFollowUps: (
       aggregateId: AggregateId,
       claimMoved: boolean,
       rows?: readonly SessionEvent[],
-    ) => Effect.Effect<void, DatabaseReadFailed>;
+    ) => Effect.Effect<void>;
     /** The cold listing hydrate (C8): the latest row per aggregate and type
      *  for the listing fact types plus the outstanding approvals, in commit
      *  order; never a transcript row; completes. */

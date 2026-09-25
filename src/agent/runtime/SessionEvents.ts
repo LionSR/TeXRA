@@ -14,6 +14,7 @@ import {
   Fiber,
   Layer,
   Queue,
+  Result,
   Ref,
   Stream,
   SubscriptionRef,
@@ -361,11 +362,23 @@ export const sessionEventsLayer = Layer.effect(
         Effect.gen(function* () {
           if (aggregateTarget(aggregateId).kind !== 'run') return;
           if (!claimMoved && hydrated.has(aggregateId)) return;
-          const read = foldRunRows(
-            (rows ?? (yield* log.readAggregate(aggregateId, 1))).filter(
-              isFollowUpRow,
-            ),
-          );
+          let committed = rows;
+          if (committed === undefined) {
+            const own = yield* Effect.result(log.readAggregate(aggregateId, 1));
+            // Best-effort: failing here would strand the claim just taken on
+            // the seed's behalf. The run stays unseeded, so the next hydrate
+            // reads again, and the failure says so.
+            if (Result.isFailure(own)) {
+              return yield* Effect.logWarning(
+                'Pending follow-ups were not seeded: the run could not be read',
+              ).pipe(
+                Effect.annotateLogs({ data: own.failure }),
+                withLogChannel(CHANNEL),
+              );
+            }
+            committed = own.success;
+          }
+          const read = foldRunRows(committed.filter(isFollowUpRow));
           const live = followUps.get(aggregateId) ?? freshRunRows();
           const livePending = new Set(live.followUps.map((f) => f.followUpId));
           // A row the read holds keeps its place unless this publisher

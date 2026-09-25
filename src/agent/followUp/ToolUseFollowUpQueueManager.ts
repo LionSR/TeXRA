@@ -354,12 +354,11 @@ export class ToolUseFollowUpQueue {
   }
 
   /**
-   * Release the entry `lease` owns, if it still does. Its input ends either
-   * way: queued rows stay on the run for the next consumer. `recoverable`
-   * keeps the entry for a successor claim; `terminal` forgets it. While an admission for the run is running, the release is
-   * applied when that admission settles; a recovery lease that exits
-   * without its run launching releases the claim an admission took for it,
-   * and keeps the run owned until that release has run.
+   * Release the entry `lease` owns, if it still does; its input ends either
+   * way and queued rows stay for the next consumer. `recoverable` keeps the
+   * entry for a successor claim, `terminal` forgets it. During an admission
+   * the release waits for it to settle; a recovery lease exiting unlaunched
+   * releases its admission's claim, keeping the run owned until that runs.
    */
   release(
     lease: FollowUpConsumerLease,
