@@ -488,7 +488,6 @@ export async function runChat(
       onSubmit={(line, mediaFiles, images) => {
         runtime.runFork(chatController.submit(line, mediaFiles, images));
       }}
-      colorEnabled={stdoutColorEnabled}
       commandName={context.commandName}
       onStaticTranscriptChange={viewportController.repaintTranscript}
       onCtrlC={() => exitController.handleSigint()}
