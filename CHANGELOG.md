@@ -65,8 +65,9 @@ All notable changes to this project will be documented in this file.
 ### Features
 
 - **Enable or disable an installed plugin** — `texra plugin disable <name>`
-  hides a plugin's skills without uninstalling it, `texra plugin enable
-<name>` brings them back, and `texra plugin list` marks a disabled plugin.
+  hides a plugin's skills without uninstalling it, and
+  `texra plugin enable <name>` brings them back. `texra plugin list` marks a
+  disabled plugin.
 
 - **Install Claude Code and Codex plugins for their skills** — `texra plugin
 install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and

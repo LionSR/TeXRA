@@ -79,18 +79,6 @@ function serializeWorkspaceWrite<A, E>(
   return write.pipe(withPerKeyLane(workspaceWriteLanes, store));
 }
 
-interface AgentRosterSnapshot {
-  readonly selection: AgentRosterSelection;
-  readonly effectiveSelection: Exclude<
-    AgentRosterSelection,
-    { readonly kind: 'inherit' }
-  >;
-  readonly defaultTeamId?: string;
-  /** Persisted team identity that could not be resolved; effective roster is all. */
-  readonly missingTeamId?: string;
-  readonly unresolvedNames: string[];
-}
-
 /**
  * Read the canonical workspace selection. The reader is deliberately pure. It
  * used to repair the stored value in place, but the read-modify-write

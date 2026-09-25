@@ -5,7 +5,7 @@ import { describe, expect } from 'vitest';
 import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import { TraceEmitter } from '@agent/trace';
 import { AgentResume } from '@platform/interfaces';
-import { MESSAGE_TYPES, type RunId } from '@shared/schemas';
+import { MESSAGE_TYPES } from '@shared/schemas';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { testRunHandle } from '@test/support/runHandleFixtures';
 import {

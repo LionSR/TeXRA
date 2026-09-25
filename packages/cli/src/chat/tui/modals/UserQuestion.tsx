@@ -100,13 +100,11 @@ function userQuestionChoiceHints({
   ];
 }
 
-export function isCompactUserQuestionRows(
-  availableRows: number | undefined,
-): boolean {
+function isCompactUserQuestionRows(availableRows: number | undefined): boolean {
   return isCompactRows(availableRows, COMPACT_USER_QUESTION_MAX_ROWS);
 }
 
-export function userQuestionChoiceRowsBudget({
+function userQuestionChoiceRowsBudget({
   availableRows,
   optionCount,
 }: {
@@ -126,7 +124,7 @@ export function userQuestionChoiceRowsBudget({
   return Math.min(optionCount, maxRows);
 }
 
-export function userQuestionFreeTextOptionRowsBudget({
+function userQuestionFreeTextOptionRowsBudget({
   availableRows,
   optionCount,
 }: {
@@ -142,11 +140,11 @@ export function userQuestionFreeTextOptionRowsBudget({
   );
 }
 
-export function userQuestionFreeTextControlRows(optionRows: number): number {
+function userQuestionFreeTextControlRows(optionRows: number): number {
   return optionRows + 1 + (optionRows > 0 ? 1 : 0);
 }
 
-export function userQuestionPromptRowsBudget({
+function userQuestionPromptRowsBudget({
   availableRows,
   controlRows,
 }: {

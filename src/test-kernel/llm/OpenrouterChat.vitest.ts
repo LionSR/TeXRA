@@ -9,7 +9,6 @@ import {
   ModelError,
   type Model,
   type OpenRouterConfiguration,
-  type TurnEvent,
   type TurnRequest,
 } from '@texra-ai/llm/turn';
 import { openrouterChatModel } from '@texra-ai/llm/openrouter-chat';
