@@ -268,15 +268,13 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
             missingTools: [...missingTools],
           })),
         ),
-      // A synchronous port callback: the entry runs on the view's runtime.
-      onError: (error) => {
+      onError: (error) =>
         this.runtime.runFork(
           Effect.logError('Host snapshot refresh failed').pipe(
             Effect.annotateLogs({ data: error }),
             withLogChannel(CHANNEL),
           ),
-        );
-      },
+        ),
       publish: (snapshot) =>
         this.bridge.setHost(snapshot).pipe(
           Effect.andThen(
@@ -595,7 +593,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     view: vscode.WebviewView | vscode.WebviewPanel,
   ): Effect.Effect<Port, SurfacePlacementFailed, FileSystem.FileSystem> {
     return Effect.gen({ self: this }, function* () {
-      // The post settles off any fiber; its outcome logs on the runtime.
       const warn = (text: string) =>
         this.runtime.runFork(
           Effect.logWarning(text).pipe(withLogChannel(CHANNEL)),

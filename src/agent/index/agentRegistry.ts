@@ -159,7 +159,6 @@ function queueLoad(
           }),
       ),
     );
-
     const toolUseRoots = yield* enabledToolUseRoots(toolUseDir);
     const [customScan, builtInScan, toolUseScan, remoteEntries] =
       yield* Effect.all(

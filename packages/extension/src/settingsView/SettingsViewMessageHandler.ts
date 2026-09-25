@@ -70,10 +70,7 @@ import {
 import type { SubscriptionUsageProvider } from '@shared/schemas';
 import type { SettingsViewSnapshot } from '@shared/state/stateSettings';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import type {
-  DerivedSettingsSnapshot,
-  SettingsMessageFor,
-} from '@shared/settingsView/settingsViewMessages';
+import type { DerivedSettingsSnapshot } from '@shared/settingsView/settingsViewMessages';
 import { SettingsViewInboundMessageSchema } from '@shared/settingsView/settingsViewMessages';
 
 import {
@@ -371,29 +368,24 @@ export class SettingsViewMessageHandler {
             ),
           ),
         ),
-      runToolCommand: (message) => this.handleRunToolCommand(message),
+      runToolCommand: (data) => {
+        const action = planToolTerminalAction({
+          toolId: data.toolId,
+          commandKind: data.kind,
+        });
+        if (action.kind === 'none') {
+          return Effect.logDebug('No command for tool').pipe(
+            Effect.annotateLogs({ data: { ...data, reason: action.reason } }),
+          );
+        }
+        return Effect.sync(() => {
+          const terminal = vscode.window.createTerminal({ name: action.name });
+          terminal.show();
+          terminal.sendText(action.command);
+        });
+      },
       ...this.latexHandlers.handlers,
     };
-  }
-
-  private handleRunToolCommand(
-    data: SettingsMessageFor<typeof SETTINGS_VIEW_COMMANDS.RUN_TOOL_COMMAND>,
-  ): Effect.Effect<void> {
-    const action = planToolTerminalAction({
-      toolId: data.toolId,
-      commandKind: data.kind,
-    });
-    if (action.kind === 'none') {
-      return Effect.logDebug('No command for tool').pipe(
-        Effect.annotateLogs({ data: { ...data, reason: action.reason } }),
-        withLogChannel(this.channel),
-      );
-    }
-    return Effect.sync(() => {
-      const terminal = vscode.window.createTerminal({ name: action.name });
-      terminal.show();
-      terminal.sendText(action.command);
-    });
   }
 
   // ============================================================
@@ -452,19 +444,16 @@ export class SettingsViewMessageHandler {
   ): Promise<void> {
     this.activeView = webviewView;
     const parsed = SettingsViewInboundMessageSchema.safeParse(message);
-    if (!parsed.success) {
-      return this.runtime.runPromise(
-        Effect.logDebug('Message validation failed').pipe(
+    const program = parsed.success
+      ? withSessionFs(
+          this.session.roots,
+          settingsViewProgram(parsed.data, this.handlerRegistry),
+        )
+      : Effect.logDebug('Message validation failed').pipe(
           Effect.annotateLogs({ data: parsed.error }),
-          withLogChannel(this.channel),
-        ),
-      );
-    }
+        );
     return this.runtime.runPromise(
-      withSessionFs(
-        this.session.roots,
-        settingsViewProgram(parsed.data, this.handlerRegistry),
-      ).pipe(
+      program.pipe(
         Effect.catchCause((cause) =>
           Effect.gen({ self: this }, function* () {
             if (Cause.hasInterruptsOnly(cause)) return;
@@ -473,14 +462,12 @@ export class SettingsViewMessageHandler {
               if (error instanceof UnsupportedCommandError) {
                 yield* vscodeUi.showInfoMessage(error.reason);
               } else {
-                yield* Effect.logError('Error handling message').pipe(
-                  Effect.annotateLogs({ data: error }),
-                );
+                yield* Effect.logError('Error handling message');
                 yield* vscodeUi.showErrorMessage(
                   `TeXRA could not handle a ${this.viewName} message. See the TeXRA output for details.`,
                 );
               }
-            });
+            }).pipe(Effect.annotateLogs({ data: error }));
             const reported = yield* Effect.exit(report);
             if (
               Exit.isFailure(reported) &&
@@ -492,9 +479,10 @@ export class SettingsViewMessageHandler {
                 Effect.annotateLogs({ data: Cause.squash(reported.cause) }),
               );
             }
-          }).pipe(withLogChannel(this.channel)),
+          }),
         ),
         Effect.asVoid,
+        withLogChannel(this.channel),
       ),
     );
   }
