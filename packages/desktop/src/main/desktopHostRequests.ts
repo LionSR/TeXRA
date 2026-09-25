@@ -69,11 +69,7 @@ import {
 } from '@platform/rootedFs';
 import type { PlatformSecrets } from '@platform/secrets';
 import latexPreamble from '@resources/templates/chatExport.tex';
-import {
-  cloneRoundIndexed,
-  type FileOpResult,
-  type RunId,
-} from '@shared/schemas';
+import { type FileOpResult, type RunId } from '@shared/schemas';
 import type { HostRequest } from '@shared/session/hostRequest';
 import {
   Cancelled,
@@ -98,10 +94,7 @@ import {
   postDesktopSettingsView,
   vsCodeOnlyGettingStartedMessage,
 } from '../shared/desktopCommandSurface.js';
-import {
-  DesktopProgressFileActions,
-  type DesktopLatexdiffWorkspaceScan,
-} from './desktopProgressFileActions.js';
+import { DesktopProgressFileActions } from './desktopProgressFileActions.js';
 import {
   OnboardingCallFailed,
   type DesktopOnboardingIpc,
@@ -296,56 +289,14 @@ export function createDesktopHostRequests(
     editedFile: string,
     runId?: RunId,
   ): Effect.Effect<void, HostCallFailed | RequestRefusal> =>
-    Effect.gen(function* () {
-      const context =
-        runId === undefined
-          ? undefined
-          : yield* getLatexdiffRunContext(runId, editedFile);
-      if (!context) {
-        yield* fileActions.runLatexdiffFile(baseFile, editedFile);
-        return;
-      }
-      yield* fileActions.diffAcceptedFilePair(baseFile, editedFile, context);
-    }).pipe(
+    (runId === undefined
+      ? fileActions.runLatexdiffFile(baseFile, editedFile)
+      : fileActions.diffAcceptedFilePair(baseFile, editedFile, runId)
+    ).pipe(
       Effect.mapError((cause) =>
         hostFailure('fileActions.runLatexdiffFile', cause),
       ),
     );
-
-  /**
-   * The run context a diff of an accepted file pair reads its per-round
-   * outputs from: the run the sheet was opened on. Frozen here, not read
-   * later: `getOutputFiles` reads the view's current level (#11402), and
-   * this context crosses several awaits before anything enumerates it.
-   */
-  function getLatexdiffRunContext(runId: RunId, editedFile: string) {
-    return Effect.gen(function* () {
-      const config = yield* runActions.readConfig(runId);
-      const outputsByRound = cloneRoundIndexed(
-        runOutputs.getOutputFiles(runId),
-      );
-      const workspaceScan: DesktopLatexdiffWorkspaceScan | undefined = config
-        ? {
-            agent: config.agent,
-            model: config.model,
-            inputFile: config.inputFiles.at(0) ?? editedFile,
-            // The run's output files, so multi-document runs resolved via the
-            // run-dir or workspace scan diff every output.
-            ...(config.outputFiles?.length
-              ? { outputFiles: config.outputFiles }
-              : {}),
-          }
-        : undefined;
-      if (Object.keys(outputsByRound).length === 0 && !workspaceScan) {
-        return undefined;
-      }
-      return {
-        outputsByRound,
-        runId,
-        ...(workspaceScan && { workspaceScan }),
-      };
-    });
-  }
 
   const workflowFileActions = new ProgressWorkflowFileActionsController({
     state: runOutputs,
@@ -374,32 +325,13 @@ export function createDesktopHostRequests(
   });
 
   const runWorkflowDiff = (request: WorkflowDiffRequest) =>
-    Effect.gen(function* () {
-      const { agent, model, inputFile } = request;
-      if (!agent || !model || !inputFile) {
-        return yield* Effect.fail(
-          new Rejected({
-            reason: 'Missing required configuration parameters for the diff.',
-          }),
-        );
-      }
-      yield* fileActions
-        .diffStreamToolbarAction({
-          outputsByRound: request.outputsByRound ?? {},
-          runId: request.runId,
-          workspaceScan: {
-            agent,
-            model,
-            inputFile,
-            outputFiles: request.outputFiles,
-          },
-        })
-        .pipe(
-          Effect.mapError((cause) =>
-            hostFailure('fileActions.diffStreamToolbarAction', cause),
-          ),
-        );
-    });
+    fileActions
+      .diffStreamToolbarAction(request.runId)
+      .pipe(
+        Effect.mapError((cause) =>
+          hostFailure('fileActions.diffStreamToolbarAction', cause),
+        ),
+      );
 
   const reportFileOperationResult = (
     operation: WorkflowFileOperation,

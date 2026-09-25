@@ -29,9 +29,7 @@ export type RoundIndexed<T> = { [round: number]: T[] };
  * Store accessors hand this back instead of a defensive copy. Every reader
  * only enumerates, filters, or forwards these records, so the copy bought
  * nothing at runtime while allocating a fresh object and a fresh array per
- * round on every call — on each render pass, for every host. The write path
- * still snapshots with {@link cloneRoundIndexed}, where the isolation is real:
- * writes are queued, so the record must be frozen at call time.
+ * round on every call — on each render pass, for every host.
  */
 export type ReadonlyRoundIndexed<T> = {
   readonly [round: number]: readonly T[];
@@ -91,25 +89,6 @@ export function roundIndexedEntries<T>(
   return Object.entries(rounds)
     .map(([round, items]): [number, readonly T[]] => [Number(round), items])
     .sort((a, b) => a[0] - b[0]);
-}
-
-/**
- * Deep-enough copy: a fresh record with a fresh array per round, so a caller
- * that mutates the returned value — including pushing into one of its
- * per-round arrays — can never corrupt an internal accumulator that still
- * holds the original arrays by reference. Item objects themselves are not
- * cloned; they are treated as immutable value objects, same as every other
- * schema-derived type in this codebase.
- */
-export function cloneRoundIndexed<T>(
-  rounds: ReadonlyRoundIndexed<T> | undefined,
-): RoundIndexed<T> {
-  const clone: RoundIndexed<T> = {};
-  if (!rounds) return clone;
-  for (const [round, items] of Object.entries(rounds)) {
-    clone[Number(round)] = [...items];
-  }
-  return clone;
 }
 
 /**
