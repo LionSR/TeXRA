@@ -151,7 +151,8 @@ export class RequestPanels extends LitElement {
     const card = [
       ...this.renderRoot.querySelectorAll<BaseRequestPanel>(`[${CARD_MARKER}]`),
     ].find((element) => element.permission === firstNew);
-    if (!card) return;
+    // A card this window cannot answer has nothing to put focus on.
+    if (!card || card.answerability !== 'answerable') return;
     // The card was just connected in this render pass; its first Lit update
     // is a microtask that cannot run until this `updated()` returns.
     void card.updateComplete.then(() => {
