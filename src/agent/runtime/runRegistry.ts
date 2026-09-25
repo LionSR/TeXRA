@@ -37,7 +37,7 @@ import type {
 } from './runRegistryTypes';
 
 /**
- * Session-owned registry of active runs and their change waiters. One
+ * Session-owned registry of active runs. One
  * instance belongs to each session, built by the session layer in that
  * session's scope and provided as {@link Runs}.
  */
@@ -65,21 +65,15 @@ export class RunRegistry {
   }
 
   /**
-   * One phase-moving row this process committed (`run.activate`, the `waiting`
-   * step and the step that leaves it, `run.end`), from the session's
-   * fold-gated tail in commit order: notify the waiters on this run, which
-   * read the new phase from the view here — why the caller delivers the row
-   * only once the view has folded it.
-   *
-   * A `run.end` folded to `cancelled` also closes the admission window its
-   * stop left, so this interrupts the children admitted in it: the stop's
-   * in-flight token lifts when its settlement does, before this fold
-   * ({@link RunStopper.sweepChildrenOfFoldedStop}).
+   * One `run.end` this process committed, from the session's fold-gated tail
+   * once the view has folded it: a run that ended `cancelled` closes the
+   * admission window its stop left, so this interrupts the children admitted
+   * in it — the stop's in-flight token lifts when its settlement does, before
+   * this fold ({@link RunStopper.sweepChildrenOfFoldedStop}).
    */
-  handleStatus(runId: RunId): void {
+  sweepChildrenOfFoldedStop(runId: RunId): void {
     if (this.disposed) return;
     this.stopper.sweepChildrenOfFoldedStop(runId);
-    if (this.roster.handle(runId)) this.roster.notifyWaiters(runId);
   }
 
   dispose(): void {
@@ -195,13 +189,11 @@ export class RunRegistry {
     if (handle.parent !== null)
       this.assertAdmitsChild(handle.parent, handle.runId);
     this.roster.setHandle(handle);
-    this.roster.notifyWaiters(handle.runId);
   }
 
   /**
    * Refuse every run registered from here on: the session is closing
-   * (`Sessions.close`). The runs already tracked keep their handles, waiters
-   * and status until they settle, and a native child loop keeps its activation
+   * (`Sessions.close`). The runs already tracked keep their handles and status until they settle, and a native child loop keeps its activation
    * until its final delivery, which is what the close waits for
    * ({@link getActiveIds}); only new admissions are turned away.
    */
@@ -247,7 +239,7 @@ export class RunRegistry {
     return this.stopper.throughDetach(runId);
   }
 
-  /** Remove a run handle and notify waiters. */
+  /** Remove a run handle. */
   untrack(runId: RunId): void {
     this.roster.deleteHandle(runId);
   }
@@ -404,12 +396,6 @@ export class RunRegistry {
     for (const handle of this.roster.allHandles()) {
       handle.backgroundProcess?.kill();
     }
-  }
-
-  /** Wait for any of the given runs to change — `RunRoster.waitForAnyChange`
-   *  holds the wake set — and succeed with the run id that changed first. */
-  waitForAnyChange(runIds: readonly RunId[]): Effect.Effect<RunId> {
-    return this.roster.waitForAnyChange(runIds);
   }
 
   /** Resolve once every run this registry holds has left it: the drain a
