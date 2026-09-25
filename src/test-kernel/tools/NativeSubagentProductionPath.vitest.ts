@@ -572,7 +572,6 @@ async function launchWaitingChild(options: {
         memories: [],
         workingDirectory: process.cwd(),
       },
-      CHILD_AGENT,
       PARENT_RUN_ID,
     ).pipe(Effect.provideService(Runs, session.runs)),
   );
