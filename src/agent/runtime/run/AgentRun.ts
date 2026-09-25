@@ -46,7 +46,6 @@ import type {
 import { buildTerminalTool } from '@tools/structuredOutput';
 import type { ToolRegistry } from '@tools/toolTable';
 import { processToolHost } from '@utils/config/platformSettings';
-import { ensureError } from '@utils/errors/errorMessage';
 import { RunFileService } from '@utils/files/runStorage';
 
 import { bindModel, type BoundModel } from './modelBinding';
@@ -87,8 +86,6 @@ interface RunCallbacks {
   readonly onProgress?: (update: SubagentProgressUpdate) => void;
   /** Current folded state at an idle turn boundary, after child delivery. */
   readonly onIdle?: (state: RunState) => void;
-  /** Fires once the run's model changed and the cell holds the new binding. */
-  readonly onModelChanged: (model: string) => void;
 }
 
 export interface AgentRunShape {

@@ -1,8 +1,8 @@
 /**
  * Capture the diagnostic entries a subsystem writes.
  *
- * Both producers — `Effect.log*` through the logger layer and the
- * channel-keyed writers in `@logger/logUtils` — end at the one host sink, so a
+ * Every producer — `Effect.log*` through the logger layer and the direct
+ * `writeLogEntry` publication points — ends at the one host sink, so a
  * suite asserts on the entries that reach it rather than on whichever producer
  * the code under test happens to use. Install with `captureLogEntries()` and
  * restore with `setLogSink(null)` in `afterEach`.

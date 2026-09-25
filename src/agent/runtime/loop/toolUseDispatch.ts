@@ -41,8 +41,7 @@ import {
   type ToolResultPayload,
 } from '@shared/schemas';
 import { JsonValueSchema } from '@shared/schemas';
-import { RunLedgerRefused } from '@shared/session/runLedger';
-import { DatabaseWriteFailed } from '@shared/session/database';
+import { findStorageRefusal } from '@shared/session/runLedger';
 import {
   type RunLedgerDraft,
   type RunState,
@@ -474,13 +473,8 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
           ),
         );
       } else {
-        const failure = Cause.squash(invoked.cause);
-        if (
-          failure instanceof DatabaseWriteFailed ||
-          failure instanceof RunLedgerRefused
-        ) {
-          return yield* Effect.fail(failure);
-        }
+        const refused = findStorageRefusal(invoked.cause);
+        if (refused) return yield* Effect.fail(refused);
         const { message, diagnostics } = normalizeToolCallError(
           fact.toolName,
           Cause.squash(invoked.cause),

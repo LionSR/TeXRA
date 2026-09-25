@@ -106,19 +106,6 @@ vi.mock('@logger/logSink', () => ({
   writeLogEntry: vi.fn(),
 }));
 
-vi.mock('@logger/logUtils', () => ({
-  createLog: vi.fn(() => ({
-    debug: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-  })),
-  debug: vi.fn(),
-  error: vi.fn(),
-  info: vi.fn(),
-  warn: vi.fn(),
-}));
-
 // initCliPlatform delegates shared Node-host construction and runtime wiring to
 // nodeHost; stub it so the test exercises only the CLI-specific wiring and
 // feature registration does not run twice across cases.

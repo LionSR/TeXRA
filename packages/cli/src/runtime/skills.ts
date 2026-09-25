@@ -6,7 +6,6 @@ import type { SettingsStores } from '@shared/config/settingsAccess';
 import { AGENT_SKILLS_CONFIG_KEY } from '@shared/schemas';
 import {
   discoverSkillSources,
-  type DiscoverSkillSourcesResult,
   type SkillLoadIssue,
   type SourcedSkill,
 } from '@skills/loadSkills';

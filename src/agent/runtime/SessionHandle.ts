@@ -66,7 +66,6 @@ import {
   type AggregateClaim,
   type DatabaseReadFailed,
   type DatabaseWriteFailed,
-  type SessionOpenError,
 } from '@shared/session/database';
 import { fold } from '@shared/session/sessionFold';
 import {
@@ -75,6 +74,7 @@ import {
   type SessionView,
 } from '@shared/session/sessionView';
 import type { RunLedgerDraft } from '@shared/session/runStateFold';
+import { foldRunRows } from '@shared/session/runRows';
 import type { Append, SessionEventReads } from '@shared/session/sessionEvents';
 import { openWork } from '@shared/session/transcriptReads';
 import { readRunTranscript } from '@transcript/runTranscript';
@@ -632,29 +632,21 @@ export class SessionHandle {
   /**
    * The final-text facts that close every streaming row still open for
    * `runId`: the loop commits them in the batch that parks the run (its
-   * `waiting` step), so a parked transcript never streams. Read from the
-   * run's committed rows, not the view: the view folds a run's transcript
-   * only while some port subscribes it, and a run parks whether or not one
-   * does.
+   * `waiting` step), so a parked transcript never streams. The open ids are
+   * the publisher's, kept as it commits, not the view's: the view folds a
+   * run's transcript only while some port subscribes it, and a run parks
+   * whether or not one does. Read after this run's publications settled, or
+   * inside a publisher job, so every `stream.start` before it is counted.
    */
   streamClosureFacts(
     runId: RunId,
-  ): Effect.Effect<
-    Extract<RunLedgerDraft, { type: 'stream.end' }>[],
-    DatabaseReadFailed
-  > {
-    return readRunTranscript(this, runId).pipe(
-      Effect.map((transcript) =>
-        openWork(transcript)
-          .filter((work) => work.kind === 'stream')
-          .map((work) => ({
-            type: 'stream.end' as const,
-            aggregateId: qualifyAggregateId('run', runId),
-            id: work.id,
-            finalText: this.graph.readText(runId, work.id) ?? work.text,
-          })),
-      ),
-    );
+  ): Extract<RunLedgerDraft, { type: 'stream.end' }>[] {
+    return this.graph.openStreams(runId).map((id) => ({
+      type: 'stream.end' as const,
+      aggregateId: qualifyAggregateId('run', runId),
+      id,
+      finalText: this.graph.readText(runId, id),
+    }));
   }
 
   /**
@@ -815,18 +807,10 @@ export class SessionHandle {
   > {
     const aggregateId = qualifyAggregateId('run', runId);
     return Effect.gen({ self: this }, function* () {
-      let open = false;
-      for (const row of yield* this.graph.aggregateRows(aggregateId)) {
-        if (row.type === 'request.opened' && row.requestId === requestId) {
-          open = true;
-        } else if (
-          row.type === 'request.decided' &&
-          row.requestId === requestId
-        ) {
-          open = false;
-        }
-      }
-      if (!open) return false;
+      const { requests } = foldRunRows(
+        yield* this.graph.aggregateRows(aggregateId),
+      );
+      if (requests[requestId]?.resolved !== false) return false;
       yield* append([
         { type: 'request.decided', aggregateId, requestId, decision },
       ]);

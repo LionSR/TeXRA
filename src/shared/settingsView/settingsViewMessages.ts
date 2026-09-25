@@ -227,9 +227,6 @@ const UpdateAgentSelectionMessageSchema = z.object({
   agents: z.record(AgentCategorySchema, z.array(AgentSelectionItemSchema)),
   customAgentIssues: z.array(AgentScanIssueSchema).prefault([]),
 });
-export type UpdateAgentSelectionMessage = z.infer<
-  typeof UpdateAgentSelectionMessageSchema
->;
 
 // ============================================================
 // Model selection data schema
@@ -346,9 +343,6 @@ const UpdateAgentModePresetsMessageSchema = z.object({
    */
   activePresetId: z.string().nullable().prefault(null),
 });
-export type UpdateAgentModePresetsMessage = z.infer<
-  typeof UpdateAgentModePresetsMessageSchema
->;
 
 // ============================================================
 // Tool dashboard data schemas
@@ -574,7 +568,7 @@ const SettingsViewOutboundMessageSchema = z.discriminatedUnion('command', [
   UpdateProfileMessageSchema,
 ]);
 
-type SettingsViewOutboundMessage = z.infer<
+export type SettingsViewOutboundMessage = z.infer<
   typeof SettingsViewOutboundMessageSchema
 >;
 

@@ -20,7 +20,6 @@ import {
 
 import { emitAppSignal } from '@eventBus/AppSignals';
 import { withLogChannel } from '@logger/effectLog';
-import { createLog, type Log } from '@logger/logUtils';
 
 import {
   SHUTDOWN_PHASE,
@@ -128,8 +127,13 @@ export abstract class PollingSourceBase<
 > {
   /** Puts an Effect's log entries on this source's channel, `config.name`. */
   protected readonly inLogChannel: ReturnType<typeof withLogChannel>;
-  /** The same channel for the fiberless listener bookkeeping below. */
-  private readonly syncLog: Log;
+  /**
+   * What the fiberless listener bookkeeping below (a Disposable's `dispose`,
+   * the keys-changed fan-out) has to report, logged in order by the next
+   * program this source runs: a register, a poll round, the poll loop's end,
+   * or the shutdown hook.
+   */
+  private readonly notes: Effect.Effect<void>[] = [];
   private readonly subscriptions = new Map<K, S>();
   private readonly keysChangedListeners = new Set<
     (keys: readonly K[]) => void
@@ -143,7 +147,6 @@ export abstract class PollingSourceBase<
 
   constructor(protected readonly config: PollingSourceConfig) {
     this.inLogChannel = withLogChannel(config.name);
-    this.syncLog = createLog(config.name);
   }
 
   /**
@@ -176,6 +179,12 @@ export abstract class PollingSourceBase<
     return (
       data.length === 0 ? entry : Effect.annotateLogs(entry, { data: data[0] })
     ).pipe(this.inLogChannel);
+  }
+
+  private logNotes(): Effect.Effect<void> {
+    return Effect.suspend(() =>
+      Effect.all(this.notes.splice(0), { discard: true }),
+    );
   }
 
   /** Subclass: format a halted-subscription error event for the listener. */
@@ -257,7 +266,8 @@ export abstract class PollingSourceBase<
           const logSubscribed = created
             ? Effect.logInfo(`Subscribed to ${key}`).pipe(this.inLogChannel)
             : Effect.void;
-          return logSubscribed.pipe(
+          return this.logNotes().pipe(
+            Effect.andThen(logSubscribed),
             Effect.andThen(this.ensurePolling(lifecycle)),
             Effect.as(disposable),
           );
@@ -394,7 +404,9 @@ export abstract class PollingSourceBase<
     state.listeners.delete(onEvent);
     if (state.listeners.size === 0) {
       this.subscriptions.delete(key);
-      this.syncLog.info(`Unsubscribed from ${key}`);
+      this.notes.push(
+        Effect.logInfo(`Unsubscribed from ${key}`).pipe(this.inLogChannel),
+      );
       this.notifyKeysChanged();
     }
     if (this.subscriptions.size === 0) this.stopPolling();
@@ -412,9 +424,9 @@ export abstract class PollingSourceBase<
         catch: ensureError,
       });
       if (Result.isFailure(notified)) {
-        this.syncLog.warn('Keys-changed listener threw', {
-          data: notified.failure,
-        });
+        this.notes.push(
+          this.logWarning('Keys-changed listener threw', notified.failure),
+        );
       }
     }
   }
@@ -436,9 +448,10 @@ export abstract class PollingSourceBase<
         return yield* Effect.forkIn(
           Effect.raceFirst(this.pollLoopProgram(), Deferred.await(stop)).pipe(
             Effect.ensuring(
-              Effect.sync(() => {
+              Effect.suspend(() => {
                 // A stopped loop may finish after a new subscription has started.
                 if (this.pollLoopStop === stop) this.pollLoopStop = undefined;
+                return this.logNotes();
               }),
             ),
           ),
@@ -525,6 +538,7 @@ export abstract class PollingSourceBase<
   private readonly runRound = Effect.fn('PollingSourceBase.runRound')(
     function* (this: PollingSourceBase<K, S>) {
       const exit = yield* Effect.exit(this.pollRound());
+      yield* this.logNotes();
       if (Exit.isSuccess(exit)) return;
       if (Cause.hasInterrupts(exit.cause)) return yield* Effect.interrupt;
       yield* this.logWarning(
@@ -548,6 +562,7 @@ export abstract class PollingSourceBase<
       SHUTDOWN_PHASE.ON,
       Effect.gen({ self: this }, function* () {
         if (this.lifetime === lifetime) this.disposeAll();
+        yield* this.logNotes();
         yield* Scope.close(lifetime.pollScope, Exit.void);
         yield* FiberSet.awaitEmpty(lifetime.deliveries);
       }).pipe(

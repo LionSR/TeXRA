@@ -90,8 +90,6 @@ interface FinalizeRunTerminalParams {
    * precedence resolves a different outcome than `outcome`.
    */
   readonly error?: ResultEvent['error'];
-  /** Run usage totals riding the `run.end` row, when known. */
-  readonly usage?: ResultEvent['usage'];
   /**
    * What the flow produced; absent when the run ended before it did, and
    * absent by rule on the child-run path (`finalizeChildRun`): a child's
@@ -229,21 +227,19 @@ const finalizeRunTerminalBody = Effect.fn('finalizeRunTerminal.body')(
     const output = params.output ?? emptyRunEndOutput(handle.category);
     // Write the terminal row BEFORE untrack so the registry's terminal listener
     // event never precedes it. The row carries the classified error `kind`
-    // (when any), the run usage totals (present once a round recorded usage,
-    // including on failures), and the flow's output.
+    // (when any) and the flow's output; `finalizeRun` adds the usage totals
+    // from the run's ledger, their one authority.
     const event: ResultEvent = {
       type: 'run.end',
       outcome,
       runId: handle.runId,
       ...(error ? { error } : {}),
-      ...(params.usage ? { usage: params.usage } : {}),
       output,
     };
     const finalization = yield* finalizeRun(session, {
       runId: handle.runId,
       outcome,
       error,
-      usage: params.usage,
       output,
     });
     if (!finalization.ok) {
@@ -382,7 +378,6 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
       finalizeRunTerminal({
         session,
         handle,
-        usage: ctx.usageMonitor.lastTotals(),
         stage: ctx.parentStage,
         ...arm,
       });
@@ -398,7 +393,7 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
       // A throw in this fallible prologue must not strand the tracked handle
       // without its terminal: it falls back to an unexpected failure.
       const prologue = yield* Effect.exit(
-        Effect.sync(() => {
+        Effect.gen(function* () {
           const kind = classifyAgentError(err);
           // toRetryErrorInfo strips rawErrorBody, which the `run.end` error
           // type omits and a bare object spread would smuggle past the check.
@@ -409,7 +404,7 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
           // Root failures are logged here; a subagent's is delivered to its
           // orchestrator, so a second wrapper error would blame the parent.
           if (kind !== 'abort' && !handle.isChild) {
-            logSdkError(ctx.logger, errorMsg, err, {
+            yield* logSdkError(ctx.logger, errorMsg, err, {
               operation: `execute ${agentIdentifier}`,
             });
           }

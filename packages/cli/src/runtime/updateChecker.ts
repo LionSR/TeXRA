@@ -93,7 +93,7 @@ function currentModulePath(): string {
   );
 }
 
-export function buildUpdateCommand(method: InstallMethod): {
+function buildUpdateCommand(method: InstallMethod): {
   command: string;
   args: readonly string[];
 } {

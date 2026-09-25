@@ -2,6 +2,17 @@ import { AgentCategory } from '../schemas/agent';
 
 export const DELEGATE_MULTI_AGENTS_TOOL_NAME = 'delegate_multi_agents' as const;
 
+/** The first line of a detached `delegate_multi_agents` launch's output. The
+ *  lines after it instruct the invoking model, so the transcript row that
+ *  recognizes this line shows its header alone (`isWorkflowLaunchOutput`). */
+export function formatWorkflowLaunchLead(name: string, runId: string): string {
+  return `Workflow script '${name}' launched as run ${runId}.`;
+}
+
+export function isWorkflowLaunchOutput(output: string): boolean {
+  return /^Workflow script '.*' launched as run \S+\./.test(output);
+}
+
 const CANONICAL_DELEGATION_TOOL_NAMES = [
   'delegate_workflow',
   DELEGATE_MULTI_AGENTS_TOOL_NAME,

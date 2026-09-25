@@ -18,7 +18,6 @@ import {
   type SubscriptionRef,
 } from 'effect';
 import type { ProcessRuntime } from '@platform/processRuntime';
-import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type {
   AggregateId,
   CommitOrdinal,
@@ -111,6 +110,8 @@ export interface SessionGraph {
     text: string,
   ) => Effect.Effect<void>;
   readonly readText: (runId: RunId, id: string) => string | undefined;
+  /** The run's streams the publisher holds open (`SessionEvents.openStreams`). */
+  readonly openStreams: (runId: RunId) => readonly string[];
   /** The one session state every renderer reads: the fold fiber's level. */
   readonly view: SubscriptionRef.SubscriptionRef<SessionView>;
   /** `view` as a level stream (PRD 7.2): ends as the fold does, with its

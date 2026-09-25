@@ -111,11 +111,6 @@ interface TestFlowContext {
   interrupt(): void;
 }
 
-/** The callbacks the lane wires into the run's `AgentRun` layer. */
-interface CapturedRunCallbacks {
-  onModelChanged: (model: string) => void;
-}
-
 /** Empty totals: this suite never bills a turn. */
 const NO_USAGE = {
   firstInputTokens: 0,
@@ -425,37 +420,5 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
           value.errors[1].cause === teardownFailure,
       );
     }),
-  );
-
-  it.effect(
-    'mirrors a mid-run model switch onto the persisted config only',
-    () =>
-      Effect.gen(function* () {
-        const runId = 'e9421d0de1' as RunId;
-        const ctx = buildResumeContext(runId);
-        mocks.buildAgentLaunchContext.mockResolvedValueOnce(ctx);
-        mocks.runToolUse.mockImplementationOnce(() =>
-          Effect.sync(() => {
-            const callbacks = mocks.agentRunLayer.mock.calls[0]?.[1]
-              .callbacks as CapturedRunCallbacks;
-            callbacks.onModelChanged('next-model');
-            return {
-              outcome: RUN_OUTCOME.COMPLETED,
-              response: '',
-              files: [],
-              usage: NO_USAGE,
-              structured: undefined,
-            };
-          }),
-        );
-
-        yield* resumeToolUseFromResumeData(createToolUseResumeData({ runId }));
-
-        // The cell is the live model: usage accounting and the prompt-side MODEL
-        // variable read it directly, so the only remaining mirror is the
-        // persisted AgentConfig schema field; the seeded transient stays as-is.
-        expect(ctx.config.model).toBe('next-model');
-        expect(ctx.userVarChannels.MODEL).toBe('test-model');
-      }),
   );
 });

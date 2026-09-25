@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  formatMultiAgentRunInstruction,
-  formatToolUseAgentRunInstruction,
-} from '@cli/commands/_helpers/runInstructions';
+import { formatMultiAgentRunInstruction } from '@cli/commands/_helpers/runInstructions';
 
 const workingDirectory = '/tmp/texra-workspace';
 
