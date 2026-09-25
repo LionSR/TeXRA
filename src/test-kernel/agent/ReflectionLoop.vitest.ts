@@ -469,7 +469,7 @@ function agentRunTestLayer(init: LoopInit) {
           },
           { agentName: 'correct', agentCategory: AgentCategory.Workflow },
         ),
-        callbacks: { onModelChanged: vi.fn() },
+        callbacks: {},
       } satisfies AgentRunShape;
     }),
   );
