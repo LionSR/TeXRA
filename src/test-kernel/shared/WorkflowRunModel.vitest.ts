@@ -6,25 +6,24 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  MESSAGE_TYPES,
-  STREAM_LOG_ENTRY_TYPES,
   RUN_PHASE,
   type RunLifecycleStatus,
-  type StreamLogEntry,
   type RunId,
   type TaskGroup,
   type WorkflowCallProgress,
-  type WorkflowPlanMarker,
+  type WorkflowDeclaredPlan,
 } from '@shared/schemas';
 import {
   formatWorkflowCallLiveParts,
-  workflowMarkerOf,
   workflowPhaseRows,
   workflowRunModel,
   type ChildRunProgress,
   type WorkflowRunModel,
 } from '@shared/runs/workflowRunModel';
 import type { WorkflowTaskRow } from '@ui/transcript';
+
+/** A declared plan and the attempt that declared it. */
+type AttemptPlan = WorkflowDeclaredPlan & { readonly attemptId: string };
 
 interface TaskSpec {
   readonly id: string;
@@ -76,7 +75,7 @@ function modelOf(
   phases: readonly string[],
   tasks: readonly TaskSpec[],
   options: {
-    plan?: WorkflowPlanMarker;
+    plan?: AttemptPlan;
     runPhase?: RunLifecycleStatus;
     runDurablyFinal?: boolean;
     childProgress?: ReadonlyMap<RunId, ChildRunProgress>;
@@ -93,6 +92,7 @@ function modelOf(
           : task,
       ),
     ),
+    workflowAttemptId: options.plan?.attemptId,
     plan: options.plan,
     runPhase: options.runPhase,
     runDurablyFinal: options.runDurablyFinal === true,
@@ -180,7 +180,8 @@ describe('workflow run model', () => {
       // A tree renderer can present root rows before child rows. seqNo remains
       // the transcript authority regardless of that input arrangement.
       rows: [resumedUngrouped, resumedPhase, old],
-      plan: { kind: 'workflowPlan', attemptId: 'a2', phases: [], tasks: [] },
+      workflowAttemptId: 'a2',
+      plan: { phases: [], tasks: [] },
       runPhase: undefined,
       runDurablyFinal: false,
       childProgress: new Map(),
@@ -264,7 +265,8 @@ describe('workflow run model', () => {
     const model = workflowRunModel({
       taskGroups: [stale, current],
       rows: [staleUntaggedCard],
-      plan: { kind: 'workflowPlan', attemptId: 'a2', phases: [], tasks: [] },
+      workflowAttemptId: 'a2',
+      plan: { phases: [], tasks: [] },
       runPhase: undefined,
       runDurablyFinal: false,
       childProgress: new Map(),
@@ -290,7 +292,6 @@ describe('workflow run model', () => {
       ],
       {
         plan: {
-          kind: 'workflowPlan',
           attemptId: 'attempt-1',
           phases: [{ title: 'Derive' }],
           tasks: [{ id: 'later', label: 'Later on', phase: 'Derive' }],
@@ -360,8 +361,7 @@ describe('workflow run model', () => {
   });
 
   it('lists declared phases and tasks the run has not reached, never a card twice', () => {
-    const plan: WorkflowPlanMarker = {
-      kind: 'workflowPlan',
+    const plan: AttemptPlan = {
       attemptId: 'attempt-1',
       phases: [{ title: 'Map' }, { title: 'Reduce' }, { title: 'Publish' }],
       tasks: [
@@ -448,35 +448,5 @@ describe('workflow run model', () => {
     expect(model.phases.map((phase) => phase.heading.phaseLabel)).toStrictEqual(
       ['Unphased'],
     );
-  });
-
-  it('reads the attempt and plan markers off INTERNAL entries', () => {
-    const entry = (data: unknown): StreamLogEntry =>
-      ({
-        id: 'm',
-        type: STREAM_LOG_ENTRY_TYPES.LOG,
-        level: 'info',
-        timestamp: 0,
-        messageType: MESSAGE_TYPES.INTERNAL,
-        data,
-        verbose: false,
-      }) as StreamLogEntry;
-    const plan = {
-      kind: 'workflowPlan',
-      attemptId: 'a',
-      phases: [{ title: 'Map' }],
-      tasks: [],
-    };
-    expect(workflowMarkerOf(entry(plan))).toStrictEqual({
-      kind: 'plan',
-      attemptId: 'a',
-      plan,
-    });
-    expect(
-      workflowMarkerOf(
-        entry({ kind: 'workflowPlan', attemptId: 'new', phases: 'broken' }),
-      ),
-    ).toMatchObject({ kind: 'malformedPlan', attemptId: 'new' });
-    expect(workflowMarkerOf(entry({ kind: 'somethingElse' }))).toBeUndefined();
   });
 });

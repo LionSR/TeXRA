@@ -65,7 +65,7 @@ const TranscriptViewSchema = z.object({
   /** `projectTranscriptRow` over every entry plus the compaction rows, in
    *  wire append order. */
   rows: z.array(z.custom<TranscriptRow>()),
-  /** `upsertTaskGroupFromStreamLog` over the group entries. */
+  /** `taskGroupOnStage` over the stage events. */
   taskGroups: z.array(TaskGroupSchema),
   /** The contiguous leading prefix of rows whose finalizing event has
    *  folded: what an append-only scrollback may print. */

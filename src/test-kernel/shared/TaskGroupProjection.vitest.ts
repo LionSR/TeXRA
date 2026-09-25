@@ -1,70 +1,66 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  LOG_LEVELS,
-  MESSAGE_TYPES,
   RUN_OUTCOME,
-  STREAM_LOG_ENTRY_TYPES,
-  StreamLogEntrySchema,
   RUN_PHASE,
-  type StreamLogEntry,
+  type TaskGroup,
+  type TranscriptEvent,
 } from '@shared/schemas';
 import {
   taskGroupDisplayStatus,
-  upsertTaskGroupFromStreamLog,
+  taskGroupOnStage,
 } from '@shared/runs/taskGroupProjection';
-import { projectTaskGroupsFromStreamLog } from '@test/support/transcriptRowFixtures';
 
-interface GroupEntryOverrides {
-  readonly groupId?: string;
-  readonly text?: string;
-  readonly data?: unknown;
+type StageEvent = Extract<
+  TranscriptEvent,
+  { readonly type: 'stage.start' | 'stage.end' }
+>;
+
+/** Replay stage events at their clocks the way the session fold does: each
+ *  writes over the group it names. */
+function project(
+  events: readonly (readonly [StageEvent, number])[],
+  attemptId?: string,
+): TaskGroup[] {
+  const groups: TaskGroup[] = [];
+  for (const [event, at] of events) {
+    const index = groups.findIndex((group) => group.id === event.id);
+    const group = taskGroupOnStage(groups[index], event, at, attemptId);
+    if (!group) continue;
+    if (index === -1) groups.push(group);
+    else groups[index] = group;
+  }
+  return groups;
 }
 
-function entry(
-  id: string,
-  type:
-    | typeof STREAM_LOG_ENTRY_TYPES.GROUP_START
-    | typeof STREAM_LOG_ENTRY_TYPES.GROUP_END,
-  overrides: GroupEntryOverrides = {},
-): StreamLogEntry {
-  return StreamLogEntrySchema.parse({
-    seqNo: type === STREAM_LOG_ENTRY_TYPES.GROUP_START ? 1 : 2,
-    id,
-    type,
-    level: LOG_LEVELS.INFO,
-    timestamp: type === STREAM_LOG_ENTRY_TYPES.GROUP_START ? 100 : 200,
-    messageType: MESSAGE_TYPES.DEFAULT,
-    ...overrides,
-  });
-}
-
-describe('task-group StreamLog projection', () => {
+describe('task-group projection from stage events', () => {
   it('projects group metadata and completes groups in source order', () => {
-    const taskGroups = projectTaskGroupsFromStreamLog([
-      entry('run-1', STREAM_LOG_ENTRY_TYPES.GROUP_START, {
-        text: 'Run: auditor',
-        data: { status: RUN_PHASE.RUNNING, kind: 'run' },
-      }),
-      entry('round-1', STREAM_LOG_ENTRY_TYPES.GROUP_START, {
-        groupId: 'run-1',
-        text: 'Round 1',
-        data: {
-          status: RUN_PHASE.RUNNING,
+    const taskGroups = project([
+      [
+        {
+          type: 'stage.start',
+          id: 'run-1',
+          label: 'Run: auditor',
+          kind: 'run',
+        },
+        100,
+      ],
+      [
+        {
+          type: 'stage.start',
+          id: 'round-1',
+          label: 'Round 1',
+          parentId: 'run-1',
           kind: 'round',
           index: 1,
           total: 2,
         },
-      }),
-      entry('round-1', STREAM_LOG_ENTRY_TYPES.GROUP_END, {
-        groupId: 'run-1',
-        text: 'Round 1',
-        data: {
-          status: RUN_OUTCOME.COMPLETED,
-          kind: 'round',
-          endTime: 180,
-        },
-      }),
+        100,
+      ],
+      [
+        { type: 'stage.end', id: 'round-1', status: RUN_OUTCOME.COMPLETED },
+        180,
+      ],
     ]);
 
     expect(taskGroups).toEqual([
@@ -89,36 +85,46 @@ describe('task-group StreamLog projection', () => {
     ]);
   });
 
-  it('repairs a stale index before incrementally updating an existing group', () => {
-    const taskGroups = projectTaskGroupsFromStreamLog([
-      entry('run-1', STREAM_LOG_ENTRY_TYPES.GROUP_START, {
-        text: 'Run: auditor',
-        data: { status: RUN_PHASE.RUNNING },
-      }),
-    ]);
-    const staleIndex = new Map([['run-1', 4]]);
-
+  it('tags a workflow phase with the declared attempt and writes nothing for an unopened end', () => {
     expect(
-      upsertTaskGroupFromStreamLog(
-        taskGroups,
-        staleIndex,
-        entry('run-1', STREAM_LOG_ENTRY_TYPES.GROUP_END, {
-          data: { status: RUN_OUTCOME.FAILED, endTime: 250 },
-        }),
+      project(
+        [
+          [{ type: 'stage.start', id: 'p', label: 'Map', kind: 'phase' }, 1],
+          [{ type: 'stage.start', id: 'r', label: 'r0', kind: 'round' }, 2],
+          [{ type: 'stage.end', id: 'never', status: RUN_OUTCOME.FAILED }, 3],
+        ],
+        'attempt-2',
       ),
-    ).toBe(true);
-    expect(staleIndex.get('run-1')).toBe(0);
-    expect(taskGroups).toHaveLength(1);
-    expect(taskGroups[0]?.status).toBe(RUN_OUTCOME.FAILED);
-    expect(taskGroups[0]?.endTime).toBe(250);
+    ).toStrictEqual([
+      {
+        id: 'p',
+        name: 'Map',
+        startTime: 1,
+        status: RUN_PHASE.RUNNING,
+        kind: 'phase',
+        attemptId: 'attempt-2',
+      },
+      {
+        id: 'r',
+        name: 'r0',
+        startTime: 2,
+        status: RUN_PHASE.RUNNING,
+        kind: 'round',
+      },
+    ]);
   });
 
   it("paints a group the run never closed as the run's own durable outcome", () => {
-    const [group] = projectTaskGroupsFromStreamLog([
-      entry('run-1', STREAM_LOG_ENTRY_TYPES.GROUP_START, {
-        text: 'Run: auditor',
-        data: { status: RUN_PHASE.RUNNING, kind: 'run' },
-      }),
+    const [group] = project([
+      [
+        {
+          type: 'stage.start',
+          id: 'run-1',
+          label: 'Run: auditor',
+          kind: 'run',
+        },
+        100,
+      ],
     ]);
 
     // A run nothing can still settle: no producer is left to write GROUP_END,
@@ -132,21 +138,5 @@ describe('task-group StreamLog projection', () => {
     // Anything else — still running, unwinding from a stop, owned by another
     // process — leaves the transcript's own status standing.
     expect(taskGroupDisplayStatus(group!, undefined)).toBe(RUN_PHASE.RUNNING);
-  });
-
-  it('ignores ordinary log rows', () => {
-    const taskGroups = projectTaskGroupsFromStreamLog([
-      {
-        seqNo: 1,
-        id: 'message-1',
-        type: STREAM_LOG_ENTRY_TYPES.LOG,
-        level: LOG_LEVELS.INFO,
-        timestamp: 100,
-        text: 'ordinary message',
-        messageType: MESSAGE_TYPES.DEFAULT,
-      },
-    ]);
-
-    expect(taskGroups).toEqual([]);
   });
 });

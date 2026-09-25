@@ -5,37 +5,25 @@
 // `projectTranscriptRow` hands the painter. Suites that hand-build rows
 // (ToolRenderers, ConversationTranscript, SubagentListDisplay,
 // StaticBandResize, TuiStateAndFocus) construct them here so the payload and
-// its model can never drift apart in a fixture. The task-group replay below
-// has the same shape as one projection: entries folded through the production
-// reducer.
+// its model can never drift apart in a fixture.
 
 import {
   orderedStaticTranscriptEntries,
   pendingTranscriptEntries,
 } from '@cli/chat/tui/panes/transcriptEntries';
 import {
-  MESSAGE_TYPES,
-  STREAM_LOG_ENTRY_TYPES,
-  RUN_PHASE,
   TOOL_CALL_STATUS,
-  type FileListEntry,
   type NormalizedToolUse,
-  type StreamLogEntry,
   type RunPhase,
-  type TaskGroup,
 } from '@shared/schemas';
-import { upsertTaskGroupFromStreamLog } from '@shared/runs/taskGroupProjection';
 import type { CompactionActivityStatus } from '@shared/runs/compactionActivityProjection';
 import { COMPACTION_ACTIVITY_LABEL } from '@shared/runs/compactionActivityProjection';
 import { toolRowModel } from '@ui/transcript/toolRowModel';
 import {
-  projectTranscriptRow,
   transcriptText,
   type ToolRow,
   type TranscriptRow,
   type CompactionActivityRow,
-  type FileListRow,
-  type PhaseRow,
 } from '@ui/transcript';
 
 /** A normalized tool-use payload with every field a caller did not name
@@ -143,18 +131,6 @@ export function compactionRowFixture(
       ...(status !== 'running' ? { finishedAt: 200 } : {}),
     },
   };
-}
-
-/** Test-local full replay through the production reducer (the resync path). */
-export function projectTaskGroupsFromStreamLog(
-  entries: Iterable<StreamLogEntry>,
-): TaskGroup[] {
-  const taskGroups: TaskGroup[] = [];
-  const taskGroupIndex = new Map<string, number>();
-  for (const entry of entries) {
-    upsertTaskGroupFromStreamLog(taskGroups, taskGroupIndex, entry);
-  }
-  return taskGroups;
 }
 
 /** The CLI's two panes' rows for one slice: the settled `<Static>` prefix and
