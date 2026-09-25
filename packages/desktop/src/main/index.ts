@@ -886,7 +886,10 @@ function createWindow(options: {
       },
       session: project.session,
       showAgentConfigBanner: ({ agentName, category }) =>
-        snapshot.showAgentConfigBanner(agentName, category),
+        withProcessServices(
+          runtime,
+          snapshot.showAgentConfigBanner(agentName, category),
+        ),
       // A resolved agent also retires the missing-agent warning.
       onLaunched: (runId) => {
         bridge.surfaceAction({ kind: 'select', runId });
@@ -1717,15 +1720,13 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
         afterFlushArtifacts: [
           withProcessServices(runtime, removeExternalDiffPatchDirs),
         ],
-        afterRunSettlement: [
-          // Every project's session, most recently opened first, settled
-          // before the runtime they run on goes (or, before the registry
-          // opened, the fallback project's scope it would own).
-          Effect.suspend(
-            () => projects?.dispose() ?? Scope.close(processScope, Exit.void),
-          ),
-          disposeProcessRuntime(runtime),
-        ],
+        // Every project's session, most recently opened first, released
+        // before the runtime they run on goes (or, before the registry
+        // opened, the fallback project's scope it would own).
+        releaseSessions: Effect.suspend(
+          () => projects?.dispose() ?? Scope.close(processScope, Exit.void),
+        ),
+        disposeRuntime: disposeProcessRuntime(runtime),
       });
 
       // Until the initial window is fully wired, any startup failure (platform

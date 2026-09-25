@@ -257,14 +257,18 @@ export const finalizeRun = Effect.fn('finalizeRun')(function* (
 ): Effect.fn.Return<FinalizeRunResult> {
   const { runId, outcome, keepExistingOutcome } = input;
   const status = yield* Effect.exit(
-    Effect.flatMap(session.streamClosureFacts(runId), (closure) =>
-      session.updateRecordFacts(runId, (rows) => {
+    session.updateRecordFacts(runId, (rows) =>
+      Effect.gen(function* () {
         const target = aggregateId('run', runId);
         const start = rows.find(
           (row): row is Extract<SessionEvent, { type: 'run.start' }> =>
             row.type === 'run.start' && row.aggregateId === target,
         );
-        if (!start) throw new Error(`Run start not found for ${runId}`);
+        if (!start) {
+          return yield* Effect.fail(
+            new Error(`Run start not found for ${runId}`),
+          );
+        }
         // "Already ended" is a fact about the run's current lifecycle, not about
         // the aggregate (`runEndFromEvents` states the rule, and every reader
         // shares it): a resumed run has to end again even when it ends the same
@@ -274,6 +278,9 @@ export const finalizeRun = Effect.fn('finalizeRun')(function* (
         const persisted =
           keepExistingOutcome === true && ended !== undefined ? ended : outcome;
         if (ended === persisted) return { events: [], value: persisted };
+        // Only a write reads the transcript, inside the same job: the
+        // already-ended no-op stays a records-only read.
+        const closure = yield* session.streamClosureFacts(runId);
         return {
           events: [
             ...closure,

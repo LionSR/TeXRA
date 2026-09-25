@@ -84,6 +84,7 @@ const lookupDoi = Effect.fn('CrossrefSearchTool.lookupDoi')(function* (
   const response = yield* rateLimitedApiCall(
     'crossref',
     CROSSREF_CONSTANTS.RATE_LIMIT_DELAY_MS,
+    CROSSREF_CONSTANTS.TIMEOUT_MS,
     'Crossref lookup failed',
     () => CrossrefClient.work(trimmedDoi),
   );
@@ -137,6 +138,7 @@ const searchWorks = Effect.fn('CrossrefSearchTool.searchWorks')(function* (
   const response = yield* rateLimitedApiCall(
     'crossref',
     CROSSREF_CONSTANTS.RATE_LIMIT_DELAY_MS,
+    CROSSREF_CONSTANTS.TIMEOUT_MS,
     'Crossref search failed',
     () => CrossrefClient.works(options),
   );

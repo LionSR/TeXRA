@@ -12,7 +12,8 @@
  * card's inline settings rows, the agent creator's tool groups, availability
  * probes, the first-install toggle seed, switched-off plugins, a run's
  * injected tools (`@tools/composition`), install/auth actions, `texra tools`
- * guides, and the bundled skills and agents the bootstrap installs (ungated).
+ * guides, and the bundled skills and agents the bootstrap installs, which a
+ * switched-off plugin withholds with its tools.
  *
  * Rules: an id is persisted (the disabled-tools key), so it never changes and
  * is never reused; every tool belongs to exactly one plugin (checked below

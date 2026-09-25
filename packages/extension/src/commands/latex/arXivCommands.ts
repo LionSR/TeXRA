@@ -1,7 +1,7 @@
 // Third-party imports
 import * as path from 'node:path';
 
-import { Cause, Effect } from 'effect';
+import { Cause, Effect, Option } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
@@ -89,38 +89,45 @@ export function downloadArXivSource(
         cancellable: true,
       },
       (progress, token) =>
-        Effect.gen(function* () {
-          // The token does not stop the download; a cancel request is only
-          // logged, on a fiber that ends with this body.
-          yield* Effect.forkScoped(
-            Effect.callback<void>((resume) => {
-              const listener = token.onCancellationRequested(() =>
-                resume(Effect.void),
-              );
-              return Effect.sync(() => listener.dispose());
-            }).pipe(
-              Effect.andThen(Effect.logInfo('User cancelled the download')),
-              withLogChannel(CHANNEL),
-            ),
-          );
-
-          const downloadResult = yield* ArxivProcessor.downloadSource(arxivId, {
-            progressCallback: (message, increment) =>
-              progress.report({ message, increment }),
-            workspaceRoot: session.roots.workspace ?? '',
-            formatter: autoIndent
-              ? yield* resolveLatexFormatter(session.roots)
-              : null,
-            autoIndent,
-            destination,
-          });
-          return downloadResult.path;
-        }).pipe(Effect.scoped),
+        Effect.raceFirst(
+          Effect.gen(function* () {
+            const downloadResult = yield* ArxivProcessor.downloadSource(
+              arxivId,
+              {
+                progressCallback: (message, increment) =>
+                  progress.report({ message, increment }),
+                workspaceRoot: session.roots.workspace ?? '',
+                formatter: autoIndent
+                  ? yield* resolveLatexFormatter(session.roots)
+                  : null,
+                autoIndent,
+                destination,
+              },
+            );
+            return Option.some(downloadResult.path);
+          }),
+          // Cancel interrupts the download, whose finalizers remove the
+          // staging directory, and ends the command quietly.
+          Effect.callback<void>((resume) => {
+            const listener = token.onCancellationRequested(() =>
+              resume(Effect.void),
+            );
+            return Effect.sync(() => listener.dispose());
+          }).pipe(
+            Effect.andThen(Effect.logInfo('User cancelled the download')),
+            withLogChannel(CHANNEL),
+            Effect.as(Option.none<string>()),
+          ),
+        ),
     );
+
+    if (Option.isNone(extractedPath)) {
+      return;
+    }
 
     const result = yield* Effect.promise(() =>
       vscode.window.showInformationMessage(
-        `arXiv source downloaded to ${path.basename(extractedPath)}${
+        `arXiv source downloaded to ${path.basename(extractedPath.value)}${
           autoIndent ? ' with LaTeX files indented' : ''
         }`,
         'Open Folder',
@@ -130,7 +137,7 @@ export function downloadArXivSource(
     if (result === 'Open Folder') {
       void vscode.commands.executeCommand(
         'revealFileInOS',
-        vscode.Uri.file(extractedPath),
+        vscode.Uri.file(extractedPath.value),
       );
     }
   }).pipe(

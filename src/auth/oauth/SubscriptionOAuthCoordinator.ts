@@ -13,11 +13,12 @@
  * caller sees the same error vocabulary the retired Promise methods threw.
  */
 // Third-party imports
-import { Deferred, Effect, Result } from 'effect';
+import { Effect, Result } from 'effect';
 
 // Local imports
 import { safeParseJson } from '@common/parsing/safeParseJson';
 import { withLogChannel } from '@logger/effectLog';
+import { SharedAttempt } from '@utils/core/sharedAttempt';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { AuthPortError, SerializedWrites } from '../authProgram';
@@ -156,7 +157,7 @@ export class SubscriptionOAuthCoordinator<S extends SubscriptionSession> {
   private readonly client: SubscriptionOAuthClient;
   private readonly now: () => number;
   private readonly errorType: ProviderAuthErrorCtor;
-  private refreshInFlight: Deferred.Deferred<S, MachineFailure> | null = null;
+  private readonly refreshes = new SharedAttempt<S, MachineFailure>();
   private readonly sessionMutations = new SerializedWrites();
   private sessionGeneration = 0;
 
@@ -286,7 +287,7 @@ export class SubscriptionOAuthCoordinator<S extends SubscriptionSession> {
   /** Passed to `SerializedWrites.run` so it shares the queueing segment. */
   private readonly supersedeInFlightRefresh = (): void => {
     this.sessionGeneration += 1;
-    this.refreshInFlight = null;
+    this.refreshes.clear();
   };
 
   /**
@@ -376,31 +377,16 @@ export class SubscriptionOAuthCoordinator<S extends SubscriptionSession> {
   });
 
   /**
-   * Single-flight refresh: concurrent callers share the in-flight result. The
-   * check and the claim share one synchronous segment — no `yield*` between
-   * them, since the runtime may yield the fiber at any op boundary — so a
-   * second caller can never mint a second refresh.
+   * Single-flight refresh: concurrent callers share one attempt, which runs
+   * detached ({@link SharedAttempt}), so an interrupted caller abandons only
+   * its own wait and a rotated refresh token is still stored.
    */
-  private readonly refresh = Effect.fn('SubscriptionOAuthCoordinator.refresh')(
-    function* (
-      this: SubscriptionOAuthCoordinator<S>,
-      previous: S,
-      generation: number,
-    ) {
-      const existing = this.refreshInFlight;
-      if (existing) return yield* Deferred.await(existing);
-      const inFlight = Deferred.makeUnsafe<S, MachineFailure>();
-      this.refreshInFlight = inFlight;
-      return yield* this.performRefresh(previous, generation).pipe(
-        Effect.onExit((exit) =>
-          Effect.sync(() => {
-            Deferred.doneUnsafe(inFlight, exit);
-            if (this.refreshInFlight === inFlight) this.refreshInFlight = null;
-          }),
-        ),
-      );
-    },
-  );
+  private refresh(
+    previous: S,
+    generation: number,
+  ): Effect.Effect<S, MachineFailure, HttpClient.HttpClient> {
+    return this.refreshes.run(() => this.performRefresh(previous, generation));
+  }
 
   private readonly performRefresh = Effect.fn(
     'SubscriptionOAuthCoordinator.performRefresh',
