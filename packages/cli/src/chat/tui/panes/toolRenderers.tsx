@@ -44,9 +44,7 @@ import {
   type InlinePatchGroup,
   wrappedDiffDisplayLines,
 } from '../render/DiffView';
-import {
-  elidedTextLines,
-} from '../render/transcriptRowLines';
+import { elidedTextLines } from '../render/transcriptRowLines';
 
 /** Combined left padding of the two nested boxes wrapping the patch diff. */
 export const PATCH_PREVIEW_INDENT = 4;
@@ -338,12 +336,17 @@ function buildStyledLines(
   const sectionRows = model.sections.flatMap((section) =>
     isHeaderRedundantSection(section, headerPreview)
       ? []
-      : cornerRows(sectionLines(section, elide)),
+      : // Section values are producer text too (paths, ids, checklist
+        // items); a CR in one opens a row rather than moving the cursor.
+        cornerRows(
+          sectionLines(section, elide).flatMap((line) =>
+            safeTerminalText(line).split('\n'),
+          ),
+        ),
   );
 
-  const outputText = transcriptText(toolUse.outputText);
-  const outputRows = model.showOutput
-    ? cornerRows(elidedLines(outputText, elide))
+  const outputRows = model.output
+    ? cornerRows(elidedLines(model.output, elide))
     : [];
   const exitCode = model.isError ? model.exitCode : undefined;
   const errorRows = cornerRows(toolErrorLines(model, elide), COLOR_ERROR);
@@ -371,7 +374,10 @@ function buildStyledLines(
     toolUse.outputText
   ) {
     compactOutput.push(row([{ text: 'Full output:' }]));
-    for (const line of elidedTextLines(outputText, false)) {
+    for (const line of elidedTextLines(
+      transcriptText(toolUse.outputText),
+      false,
+    )) {
       compactOutput.push(row([{ text: line }]));
     }
   }
