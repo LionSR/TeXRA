@@ -172,9 +172,10 @@ export function createTuiHostInteractions(
     const offer = permission.credentialSwitch;
     // The Copilot route is the editor's; no run on this host binds it.
     if (offer == null || offer.kind === 'copilot-fallback') {
-      logWarning(
-        'cli.tui',
-        `Retry ${requestId} offers no move onto a provider key: no credential switch was made.`,
+      stores.runtime.runFork(
+        Effect.logWarning(
+          `Retry ${requestId} offers no move onto a provider key: no credential switch was made.`,
+        ).pipe(withLogChannel('cli.tui')),
       );
       return;
     }
