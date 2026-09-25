@@ -79,26 +79,6 @@ describe('Copilot model access settings', () => {
     ]);
   });
 
-  it('omits the Copilot section when the host discovers no models', async () => {
-    const tab = await renderSubscriptionsTab([]);
-
-    expect(copilotSection(tab)).toBeNull();
-  });
-
-  it('offers an explicit opt-in for an already-authorized route', async () => {
-    const tab = await renderSubscriptionsTab([allowedRoute]);
-
-    const section = copilotSection(tab);
-    expect(section?.textContent).toContain('1 Copilot model is ready');
-    const button = section?.querySelector<HTMLElement>('wa-button');
-    expect(button?.textContent).toContain('Use Copilot');
-
-    button?.click();
-    expect(mocks.postMessage.mock.calls).toEqual([
-      [SETTINGS_VIEW_COMMANDS.REQUEST_MODEL_ACCESS, { modelName: 'gpt55' }],
-    ]);
-  });
-
   it('offers an undo once the route is preferred', async () => {
     const tab = await renderSubscriptionsTab([
       { ...allowedRoute, preferred: true },

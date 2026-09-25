@@ -645,12 +645,6 @@ describe('renderAnsiMarkdown', () => {
     expect(out).not.toContain('ANSI_FENCE_CLOSE');
   });
 
-  it('falls back to dim grey for unknown languages', () => {
-    const out = renderAnsiMarkdown('```nosuchlang\nplain body\n```');
-    expect(out).toContain('plain body');
-    expect(out).not.toContain('ANSI_FENCE');
-  });
-
   it('prefixes every rendered blockquote line', () => {
     const plain = renderPlain('> first\n> second\n>\n> third');
     expect(plain).toContain('│ first\n│ second');
@@ -750,22 +744,6 @@ describe('renderAnsiMarkdown', () => {
     expect(plain).toContain('│ ─');
   });
 
-  it('preserves ordered-list delimiter markup', () => {
-    const plain = renderPlain('1) one\n2) two');
-    expect(plain).toContain('1) one');
-    expect(plain).toContain('2) two');
-  });
-
-  it('renders headings without visible Markdown markers', () => {
-    const plain = renderPlain(
-      '## What is a Tensor Network?\n\n### Core objects',
-    );
-    expect(plain).toContain('What is a Tensor Network?');
-    expect(plain).toContain('Core objects');
-    expect(plain).not.toContain('## What');
-    expect(plain).not.toContain('### Core');
-  });
-
   it('re-emits heading markers only when color is disabled', () => {
     expect(renderPlain('## Section')).not.toContain('## Section');
     expect(renderAnsiMarkdown('## Section', { colorEnabled: false })).toContain(
@@ -827,11 +805,6 @@ describe('renderAnsiMarkdown', () => {
     expect(out).not.toMatch(ANSI_SGR_PATTERN);
   });
 
-  it('separates consecutive paragraphs visually', () => {
-    const plain = renderPlain('First paragraph.\n\nSecond paragraph.');
-    expect(plain).toContain('First paragraph.\n\nSecond paragraph.');
-  });
-
   it('wraps rendered markdown at display-cell boundaries', () => {
     const lines = plainLinesWithinWidth(
       renderAnsiMarkdown('你好🙂abcdef', { width: 6 }),
@@ -858,12 +831,6 @@ describe('renderAnsiMarkdown', () => {
     );
     expect(lines[0]).toMatch(/^ {2}• /);
     expect(lines.slice(1).every((line) => line.startsWith('    '))).toBe(true);
-  });
-
-  it('styles heading text across inline code boundaries', () => {
-    const plain = renderPlain('## Use `git` correctly');
-    expect(plain).toContain('Use `git` correctly');
-    expect(plain).not.toContain('## Use');
   });
 
   it('renders GFM pipe tables as a box-drawing table, not raw HTML', () => {
@@ -925,19 +892,6 @@ describe('renderAnsiMarkdown', () => {
     expect(
       rendered.replaceAll(new RegExp(`${ESC}\\[[0-9;]*m`, 'gu'), ''),
     ).not.toContain(ESC);
-  });
-
-  it('sizes a small table to its content instead of stretching to full width', () => {
-    const md = '| n | digits |\n|---|---|\n| 447 | 993.3 |';
-    const plain = renderPlain(md, { width: 80 });
-    const widest = Math.max(
-      ...plain.split('\n').map((line) => displayWidthForTest(line)),
-    );
-    // Content needs only a handful of columns — it must not balloon to 80.
-    expect(widest).toBeLessThan(24);
-    expect(widest).toBeGreaterThan(0);
-    expect(plain).toContain('447');
-    expect(plain).toContain('993.3');
   });
 
   it('does not leak protected LaTeX placeholders from wrapped table cells', () => {

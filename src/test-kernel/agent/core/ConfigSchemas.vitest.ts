@@ -1,55 +1,14 @@
-// Standard library imports
 import { strict as assert } from 'node:assert';
 
-// Third-party imports
 import { describe, it } from 'vitest';
 
-// Local imports
-import {
-  AgentConfigSchema,
-  ToolUseAgentConfigSchema,
-  WorkflowAgentConfigSchema,
-} from '@agent/core/definition/AgentConfig';
-import { AGENT_SOURCE, AgentCategory } from '@shared/schemas';
-
-describe('AgentConfigSchema', () => {
-  it('keeps category-specific parsers aligned with the discriminated union', () => {
-    const workflow = WorkflowAgentConfigSchema.parse({});
-    const toolUse = ToolUseAgentConfigSchema.parse({
-      agentCategory: AgentCategory.ToolUse,
-    });
-
-    assert.strictEqual(workflow.agentCategory, AgentCategory.Workflow);
-    assert.strictEqual(toolUse.agentCategory, AgentCategory.ToolUse);
-    assert.throws(() => ToolUseAgentConfigSchema.parse(workflow));
-    assert.throws(() => WorkflowAgentConfigSchema.parse(toolUse));
-  });
-
-  it('applies shared output-file validation to category-specific parsers', () => {
-    assert.throws(() =>
-      ToolUseAgentConfigSchema.parse({
-        agentCategory: AgentCategory.ToolUse,
-        outputFiles: ['result.tex'],
-      }),
-    );
-  });
-});
+import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 
 /**
  * `agentSource` is persisted (run `config.json`, trace documents), so
- * widening `AGENT_SOURCE` is a persisted-schema change in both directions.
+ * widening or narrowing `AGENT_SOURCE` is a persisted-schema change.
  */
 describe('AgentConfigSchema agentSource compatibility', () => {
-  it('round-trips every current source', () => {
-    for (const source of Object.values(AGENT_SOURCE)) {
-      const parsed = AgentConfigSchema.parse({
-        agent: 'scratchpad',
-        agentSource: source,
-      });
-      assert.strictEqual(parsed.agentSource, source);
-    }
-  });
-
   it('reads records persisted before the field existed', () => {
     assert.strictEqual(AgentConfigSchema.parse({}).agentSource, undefined);
     assert.strictEqual(

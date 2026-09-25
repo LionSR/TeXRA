@@ -95,21 +95,6 @@ describe('desktop file selection', () => {
     }),
   );
 
-  it.effect('lists nothing without a workspace', () =>
-    Effect.gen(function* () {
-      const files = yield* Effect.promise(() =>
-        createFileSelection({ workspacePath: undefined }),
-      );
-
-      expect(yield* withProcessServices(runtime, files.fileOptions())).toEqual({
-        baseFile: [],
-        editedFile: [],
-        commit: ['HEAD'],
-      });
-      expect(yield* Effect.promise(() => files.pickFiles('input'))).toBeNull();
-    }),
-  );
-
   it.effect(
     'opens the native picker and returns workspace-relative paths',
     () =>

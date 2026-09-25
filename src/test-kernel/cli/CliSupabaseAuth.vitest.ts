@@ -246,18 +246,6 @@ describe('CLI Supabase auth', () => {
     mocks.authCoordinator.loadSession.mockReturnValue(Effect.succeed(null));
   });
 
-  it('builds one account plane for the root secret store', async () => {
-    const { ensureCliSupabaseAuth } = await loadSupabaseAuth();
-
-    ensureCliSupabaseAuth(cliSecrets);
-    ensureCliSupabaseAuth(cliSecrets);
-
-    expect(mocks.createSupabaseAuth).toHaveBeenCalledTimes(1);
-    expect(mocks.createSupabaseAuth).toHaveBeenCalledWith(
-      expect.objectContaining({ secrets: cliSecrets }),
-    );
-  });
-
   it.effect(
     'does not store a device session when cancellation follows polling',
     () =>

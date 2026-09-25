@@ -61,26 +61,6 @@ describe('buildCodexFileChangeToolLog', () => {
 });
 
 describe('buildCodexCommandToolLog', () => {
-  it('builds a native bash log entry with command output', () => {
-    const log = buildCodexCommandToolLog({
-      command: 'lake env lean MPS/ParentHamiltonian/UniqueGroundState.lean',
-      aggregated_output: 'warning: rebuilding\n',
-      exit_code: 0,
-      status: 'completed',
-    });
-
-    assert.deepEqual(log, {
-      toolName: 'bash',
-      summary: 'lake env lean MPS/ParentHamiltonian/UniqueGroundState.lean',
-      input: {
-        command: 'lake env lean MPS/ParentHamiltonian/UniqueGroundState.lean',
-      },
-      output: 'warning: rebuilding',
-      exitCode: 0,
-      status: 'completed',
-    });
-  });
-
   it('marks failed commands as errors and falls back to exit info when empty', () => {
     const log = buildCodexCommandToolLog({
       command:

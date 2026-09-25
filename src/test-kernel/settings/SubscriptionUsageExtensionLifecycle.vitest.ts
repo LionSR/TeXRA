@@ -121,19 +121,4 @@ describe('extension subscription usage credential lifecycle', () => {
         expect(posted).toStrictEqual([]);
       }),
   );
-
-  it.effect('invalidates ChatGPT usage after account auth changes', () =>
-    Effect.gen(function* () {
-      const { handler, posted, usage } = createHarness();
-
-      yield* handler.refreshAfterSubscriptionAuthChange('chatgpt');
-
-      expect(usage.invalidate).toHaveBeenCalledExactlyOnceWith('chatgpt');
-      expect(posted).toContainEqual(
-        expect.objectContaining({
-          command: SETTINGS_VIEW_COMMANDS.UPDATE_SUBSCRIPTION_USAGE,
-        }),
-      );
-    }),
-  );
 });

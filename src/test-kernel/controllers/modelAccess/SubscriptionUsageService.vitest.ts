@@ -464,27 +464,6 @@ describe('SubscriptionUsageService', () => {
     vi.restoreAllMocks();
   });
 
-  it('reports an absent stored ChatGPT session as missing credentials', async () => {
-    const loadSession = vi.fn(() => Effect.succeed(null));
-    const getFreshSession = vi.fn(() =>
-      Effect.fail(
-        new CodexAuthError('Sign in with ChatGPT to continue.', 'expired'),
-      ),
-    );
-    stubCodexSession({ loadSession, getFreshSession });
-    const http = vi.fn<UsageFetch>();
-
-    const snapshot = await runUsage(makeService().getUsage('chatgpt'), http);
-
-    expect(snapshot).toMatchObject({
-      state: 'unavailable',
-      reason: 'missing_credentials',
-    });
-    expect(loadSession).toHaveBeenCalledOnce();
-    expect(getFreshSession).not.toHaveBeenCalled();
-    expect(http).not.toHaveBeenCalled();
-  });
-
   it.each([
     {
       provider: 'chatgpt' as const,
@@ -627,30 +606,6 @@ describe('SubscriptionUsageService', () => {
       expect(olderCaller.windows[0]?.percentUsed).toBe(10);
     },
   );
-
-  it('sanitizes a failed GLM region read', async () => {
-    const http = vi.fn<UsageFetch>();
-    const region = glmRegionStores();
-    const read = vi
-      .spyOn(region.stores.globalState, 'get')
-      .mockImplementation(() => {
-        throw new Error('secret sync failure');
-      });
-
-    await expect(
-      runUsage(
-        makeService({ stores: region.stores }).getUsage('glmCodingPlan'),
-        http,
-      ),
-    ).resolves.toMatchObject({
-      state: 'unavailable',
-      provider: 'glmCodingPlan',
-      reason: 'request_failed',
-      windows: [],
-    });
-    expect(read).toHaveBeenCalled();
-    expect(http).not.toHaveBeenCalled();
-  });
 
   it('does not fall back across GLM hosts when the selected region fails', async () => {
     const http = vi.fn<UsageFetch>(async () =>

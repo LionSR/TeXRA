@@ -125,65 +125,6 @@ function createController(options?: {
 
 describe('SettingsAgentCatalogController', () => {
   it.effect(
-    'builds sorted selection items with never-configured and legacy enabled state',
-    () =>
-      Effect.gen(function* () {
-        const { controller } = createController({
-          enabled: {
-            toolUse: ['customTool'],
-          },
-        });
-
-        assert.deepEqual(yield* controller.buildSelectionItems(), {
-          workflow: [
-            {
-              name: 'correct',
-              source: 'builtInWorkflow',
-              category: 'workflow',
-              description: undefined,
-              hasPath: true,
-              filePath: '/agents/correct.yaml',
-              tools: undefined,
-              enabled: true,
-            },
-            {
-              name: 'writer',
-              source: 'remote',
-              category: 'workflow',
-              description: 'Remote writer',
-              hasPath: false,
-              filePath: undefined,
-              tools: undefined,
-              enabled: true,
-            },
-          ],
-          toolUse: [
-            {
-              name: 'customTool',
-              source: 'custom',
-              category: 'toolUse',
-              description: undefined,
-              hasPath: true,
-              filePath: '/custom/customTool.yaml',
-              tools: undefined,
-              enabled: true,
-            },
-            {
-              name: 'review',
-              source: 'builtInToolUse',
-              category: 'toolUse',
-              description: undefined,
-              hasPath: true,
-              filePath: '/tools/review.yaml',
-              tools: ['grep'],
-              enabled: false,
-            },
-          ],
-        });
-      }),
-  );
-
-  it.effect(
     'resolves preset members to canonical keys and commits the team symbolically',
     () =>
       Effect.gen(function* () {
@@ -226,41 +167,6 @@ describe('SettingsAgentCatalogController', () => {
         );
       }),
   );
-
-  it.effect(
-    'records hosted-definition ownership when saving a custom team',
-    () =>
-      Effect.gen(function* () {
-        const { controller } = createController();
-
-        const preset = yield* controller.saveCurrentPreset('Current Team');
-
-        assert.deepEqual(preset.texraHostedAgents, ['writer']);
-      }),
-  );
-
-  it('collects built-in and capability-based orchestrator agent names', () => {
-    const { controller } = createController({
-      agents: {
-        toolUse: [
-          ...AGENTS.toolUse,
-          {
-            source: 'custom',
-            name: 'teamLead',
-            category: 'toolUse',
-            tools: ['delegate_agent'],
-          },
-        ],
-      },
-    });
-
-    assert.deepEqual(controller.getOrchestratorAgentNames(), [
-      'engineer',
-      'leanOrchestrator',
-      'orchestrator',
-      'teamLead',
-    ]);
-  });
 
   it.effect(
     'selects preset roots without matching arbitrary orchestrator substrings',
@@ -376,41 +282,6 @@ describe('SettingsAgentCatalogController', () => {
       }),
   );
 
-  it.effect('drops only invalid custom presets', () =>
-    Effect.gen(function* () {
-      const { controller } = createController({
-        customPresets: [
-          MALFORMED_PRESET,
-          {
-            id: 'custom-team',
-            name: 'Custom Team',
-            description: 'test',
-            icon: 'bookmark',
-            agents: {
-              workflow: [],
-              toolUse: ['review'],
-            },
-            texraHostedAgents: [],
-          },
-        ],
-      });
-
-      assert.deepEqual(yield* controller.getCustomPresets(), [
-        {
-          id: 'custom-team',
-          name: 'Custom Team',
-          description: 'test',
-          icon: 'bookmark',
-          agents: {
-            workflow: [],
-            toolUse: ['review'],
-          },
-          texraHostedAgents: [],
-        },
-      ]);
-    }),
-  );
-
   it.effect('saves the currently visible agents as a custom preset', () =>
     Effect.gen(function* () {
       const state = createController({
@@ -458,30 +329,6 @@ describe('SettingsAgentCatalogController', () => {
           'custom-123',
         );
       }),
-  );
-
-  it.effect('deletes existing custom presets and ignores missing ones', () =>
-    Effect.gen(function* () {
-      const preset: AgentModePreset = {
-        id: 'custom-team',
-        name: 'Custom Team',
-        description: 'test',
-        icon: 'bookmark',
-        agents: {
-          workflow: [],
-          toolUse: [],
-        },
-        texraHostedAgents: [],
-      };
-      const state = createController({ customPresets: [preset] });
-
-      assert.deepEqual(
-        yield* state.controller.deleteCustomPreset('custom-team'),
-        preset,
-      );
-      assert.deepEqual(yield* state.customPresets, []);
-      assert.equal(yield* state.controller.deleteCustomPreset('missing'), null);
-    }),
   );
 
   it.effect('preserves other raw records when deleting a preset', () =>

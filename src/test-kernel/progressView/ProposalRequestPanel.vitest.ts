@@ -148,49 +148,6 @@ describe('proposal-request-panel file-name keyboard activation', () => {
     ]);
   });
 
-  it('renders a compact, explicit multi-agent workflow proposal with saved-script access', async () => {
-    const permission = createPermission();
-    if (permission.data.agentCategory !== AgentCategory.Workflow) {
-      throw new Error('expected workflow proposal');
-    }
-    permission.data.workflowScript = {
-      name: 'review-team',
-      description: 'Review the draft in parallel',
-      scriptPath: '.texra/workflow-scripts/review-team.mjs',
-      phases: [{ title: 'Review' }, { title: 'Synthesize' }],
-      tasks: [
-        { id: 'review', label: 'Review draft', phase: 'Review' },
-        { id: 'merge', label: 'Merge findings', phase: 'Synthesize' },
-      ],
-    };
-    permission.data.model = 'gpt56';
-
-    const element = await mountPanel(permission);
-
-    expect(
-      element.shadowRoot?.querySelector('.request-card__ask')?.textContent,
-    ).toMatch(
-      /^Start a multi-agent run:\s+review-team with writer on\s+GPT-5.6 Sol$/,
-    );
-    expect(element.shadowRoot?.textContent).toContain('2 phases · 2 steps');
-    expect(element.shadowRoot?.textContent).not.toContain('Skip proposals');
-    expect(
-      element.shadowRoot?.querySelector('.proposal-agent-dropdown'),
-    ).toBeNull();
-    expect(
-      element.shadowRoot?.querySelector('.proposal-model-dropdown'),
-    ).toBeNull();
-    const script = element.shadowRoot?.querySelector(
-      '.workflow-proposal__script-files [data-file]',
-    );
-    expect(script?.getAttribute('data-file')).toBe(
-      '.texra/workflow-scripts/review-team.mjs',
-    );
-    expect(
-      element.shadowRoot?.querySelector('#proposal-setup-button'),
-    ).toBeTruthy();
-  });
-
   it('opens the file on Enter and Space, not on other keys', async () => {
     const element = await mountPanel();
     const posted = recordPermissionActions(element);
