@@ -28,7 +28,7 @@ import {
 
 import { type CliContext } from '../cliContext';
 
-import { warnApprovalDenied } from './approvalPrompts';
+import { policyDenialOf, warnApprovalDenied } from './approvalPrompts';
 
 function canPresent(context: CliContext): boolean {
   return context.mode === 'interactive';
@@ -63,14 +63,19 @@ export function cliToolUseApprovalOptions(
   runId?: RunId,
 ): {
   readonly approvalPromptsUnavailable: boolean;
-  readonly onApprovalPolicyDenial: () => void;
+  readonly onApprovalPolicyDenial: (withheldTools?: readonly string[]) => void;
 } {
   return {
     approvalPromptsUnavailable: isTexraApprovalDenied(
       executableDecision(context, session.approvalPolicy),
     ),
-    onApprovalPolicyDenial: () =>
-      warnApprovalDenied(session, context, 'Tool or edit approval', runId),
+    onApprovalPolicyDenial: (withheldTools) =>
+      warnApprovalDenied(
+        session,
+        context,
+        policyDenialOf(withheldTools),
+        runId,
+      ),
   };
 }
 
@@ -84,7 +89,7 @@ export function settleExecutable(
   const decision = executableDecision(context, session.approvalPolicy);
   if (decision === 'allow') return { action: 'approve' };
   if (decision === 'present') return undefined;
-  warnApprovalDenied(session, context, 'Approval policy', runId);
+  warnApprovalDenied(session, context, { kind: 'executable' }, runId);
   return { action: 'deny', reason: texraApprovalDenialMessage(decision) };
 }
 
@@ -107,13 +112,13 @@ export function settleRetry(
     isCredentialFailure: isCredentialRetryFailure(payload),
   });
   if (retryDecision === 'present') return undefined;
-  if (retryDecision.deny !== 'yolo-retry') {
+  // Under yolo the TUI shows the failed run itself; a headless run would
+  // otherwise end on the model error with no word that no retry was tried.
+  if (retryDecision.deny !== 'yolo-retry' || context.mode === 'headless') {
     warnApprovalDenied(
       session,
       context,
-      retryDecision.deny === 'credential'
-        ? 'Credential-exhausted retry'
-        : 'Approval policy',
+      { kind: 'retry', deny: retryDecision.deny },
       payload.runId,
     );
   }
@@ -138,7 +143,7 @@ export function settleHumanInputDenial(
   });
   if (decision === 'present') return undefined;
   if (decision.deny !== 'yolo-no-human') {
-    warnApprovalDenied(session, context, 'Human-input request', runId);
+    warnApprovalDenied(session, context, { kind: 'humanInput' }, runId);
   }
   return {
     reason: texraHumanInputDenialMessage(decision.deny),

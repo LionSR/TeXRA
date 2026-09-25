@@ -10,6 +10,7 @@ import {
   formatCliSkillIssue,
   formatCliSkillList,
   readCliSkills,
+  readCliSkillsOffNotice,
 } from '../runtime/skills';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
@@ -50,6 +51,11 @@ function listSkills(
       for (const issue of result.errors) {
         writeTextStderr(formatCliSkillIssue(issue));
       }
+      const offNotice = yield* readCliSkillsOffNotice(
+        roots,
+        '`texra config edit`',
+      );
+      if (offNotice !== undefined) writeTextStderr(offNotice);
     }
 
     // Emit the bare-array JSON / per-line NDJSON shape every other

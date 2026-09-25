@@ -98,6 +98,21 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
 
 ### Bug Fixes
 
+- **File tools no longer follow a symlink out of the workspace.** A symlink
+  inside the workspace (for example `up -> ..`) let `write_file`, `edit_file`
+  and `read_file` reach files outside it, and the approval prompt showed the
+  in-workspace path rather than the real target. Paths are now checked where
+  they physically land; one that leaves the workspace through a symlink is
+  refused like any outside path, and the error names the real target.
+- **Skills outside the workspace are readable.** With skills enabled, the
+  agent was told to read each skill's `SKILL.md` but could not open bundled,
+  home-directory, plugin or `--source` skills ("Path must stay within the
+  working directory"). Enabled skills outside the workspace are now readable,
+  and read-only, in every host. `texra skills list` and `/skills` also say
+  when skills are turned off.
+- **Clearer tool and error cards.** An edit refused because the file was not
+  read first is no longer labeled like a read, and error details no longer
+  list the internal `userRetryable` flag or an empty provider body.
 - **Workflow agents no longer fail when an intermediate round hits the
   output length limit.** A multi-round (reflection) agent whose response in
   any round but the last was cut off and continued stopped at the next round

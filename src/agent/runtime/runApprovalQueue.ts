@@ -42,14 +42,18 @@ import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
  */
 interface RunApprovalBypass {
   isBypassed(runId: RunId): boolean;
+  /** The run's own explicit value, or `undefined` when it defers to its
+   *  ancestor chain. */
+  ownBypass(runId: RunId): boolean | undefined;
   /**
-   * Set bypass for a run. Publishes the run's new `approval.policy` snapshot
-   * unless `silent`, which is pre-activation setup for a run no surface
-   * shows yet.
+   * Set bypass for a run; `undefined` drops the run's own value so it defers
+   * to its ancestor chain again. Publishes the run's new `approval.policy`
+   * snapshot unless `silent`, which is pre-activation setup for a run no
+   * surface shows yet.
    */
   setBypass(
     runId: RunId,
-    enabled: boolean,
+    enabled: boolean | undefined,
     options?: { silent?: boolean },
   ): void;
   clearAll(): void;
@@ -89,8 +93,10 @@ function createRunApprovalBypass(
     enabled,
     options,
   ) => {
+    const write = () =>
+      enabled === undefined ? byRun.delete(runId) : byRun.set(runId, enabled);
     if (options?.silent) {
-      byRun.set(runId, enabled);
+      write();
       return;
     }
 
@@ -98,7 +104,7 @@ function createRunApprovalBypass(
     const previousDescendantStates = new Map(
       descendants.map((descendant) => [descendant, resolve(descendant)]),
     );
-    byRun.set(runId, enabled);
+    write();
     onEffectiveChange(runId);
     for (const descendant of descendants) {
       if (previousDescendantStates.get(descendant) !== resolve(descendant)) {
@@ -109,6 +115,7 @@ function createRunApprovalBypass(
 
   return {
     isBypassed: resolve,
+    ownBypass: (runId) => byRun.get(runId),
     setBypass,
     clearForRun(runId) {
       byRun.delete(runId);
