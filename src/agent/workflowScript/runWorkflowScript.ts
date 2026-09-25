@@ -28,10 +28,9 @@ import { truncatedHexId } from '@utils/core/idHash';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 import { parseWorkflowScript } from './parseScript';
-import { runScriptInSandbox } from './sandbox';
+import { interpretWorkflow, OpFailure, type RetryFrame } from './interpreter';
 import { WorkflowRunState } from './workflowRunState';
 import {
-  WORKFLOW_SKIPPED_RESULT,
   WorkflowAgentCallOptionsSchema,
   WorkflowScriptPhaseTitleSchema,
   type WorkflowAgentCallOptions,
@@ -73,7 +72,6 @@ function journalKey(
 const DEFAULT_CONCURRENCY = 4;
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000;
 const DEFAULT_MAX_AGENT_CALLS = 200;
-const MAX_FANOUT = 512;
 const LABEL_EXCERPT_LENGTH = 80;
 
 /** The two statuses a failed attempt can terminalize a call with. */
@@ -104,60 +102,14 @@ interface InFlightAgentCall {
 }
 
 /**
- * The fan-out primitive, defined INSIDE the sandbox realm (trusted prelude,
- * compiled by the host, run before the script body). They must not live
- * host-side: parallel consumes script-created arrays and thunks, and any host
- * code that calls a method on a
- * sandbox array (`thunks.map(hostCb)`) or awaits a sandbox thenable hands
- * the script a host-realm function whose .constructor is the host's
- * ungated Function constructor. Realm-side, every callback and resolve
- * function a script can capture is realm-local and codegen-gated.
- *
- * agent() and log() are the bridged globals installed before this prelude
- * runs; concurrency, journaling, and the call cap all stay host-side in
- * agentPrimitive.
- */
-const ORCHESTRATION_PRELUDE = `
-'use strict';
-(() => {
-  const MAX_FANOUT = ${MAX_FANOUT};
-  const define = (name, value) =>
-    Object.defineProperty(globalThis, name, {
-      value,
-      writable: false,
-      configurable: false,
-    });
-  define('parallel', async function parallel(thunks) {
-    if (!Array.isArray(thunks)) {
-      throw new Error(
-        'parallel(thunks) requires an array of zero-arg functions.',
-      );
-    }
-    if (thunks.length > MAX_FANOUT) {
-      throw new Error('parallel() accepts at most ' + MAX_FANOUT + ' items.');
-    }
-    return Promise.all(
-      thunks.map((thunk, i) => {
-        if (typeof thunk !== 'function') {
-          throw new Error('parallel(): item ' + i + ' is not a function.');
-        }
-        return thunk();
-      }),
-    );
-  });
-})();
-`;
-
-/**
  * Thrown when the whole run must stop, and the reason every run-level abort
- * carries. The realm-side agent() primitive recognizes it by name and rethrows
- * instead of converting it to null; parallel() then propagates that rejected
- * call through Promise.all.
+ * carries. It never enters the script: the host abandons the script rather
+ * than resuming it, so neither `try/catch` nor `attempt()` can observe it.
  *
  * The first fault a run records is the run's outcome; every later abort is a
- * consequence of it and keeps the first. The error crosses the sandbox realm
- * boundary as a realm-local copy carrying just name and message, so anything
- * classifying an error that may have crossed uses the name (isWorkflowAbort).
+ * consequence of it and keeps the first. A runner may mint one by name
+ * rather than by class, so anything classifying a runner failure uses the
+ * name (isWorkflowAbort).
  */
 export class WorkflowRunAbortError extends Error {
   constructor(message: string, options?: ErrorOptions) {
@@ -167,8 +119,8 @@ export class WorkflowRunAbortError extends Error {
 }
 
 function isWorkflowAbort(error: unknown): boolean {
-  // Name check, not instanceof: abort errors re-enter host code as
-  // realm-local Error copies whose prototype chain is the sandbox's.
+  // Name check, not instanceof: a runner can surface an abort it did not
+  // construct from this class.
   return (
     typeof error === 'object' &&
     error !== null &&
@@ -189,17 +141,16 @@ function asWorkflowAbort(error: unknown): WorkflowRunAbortError {
 }
 
 /**
- * Runs a workflow script: deterministic JS orchestration over host-executed
- * agents. The script's control flow (loops, fan-out, joins, reduction) runs
- * as plain code with zero model round-trips between steps; every agent()
- * call is bounded by one shared Effect semaphore and journaled for
- * resume (same prompt/run options → cached result, at any position).
+ * Runs a workflow script: a generator whose yielded operations the
+ * interpreter runs, with zero model round-trips between steps. Every agent()
+ * call is bounded by one shared semaphore and journaled for resume (same
+ * prompt/run options → cached result, at any position).
  *
- * Cancellation is interruption. Every agent() call is a fiber the sandbox
- * owns, so when the sandbox ends (result, timeout, or interrupted by the
- * first run-level fault or by the caller) its in-flight calls are interrupted
- * and awaited, an admitted journal commit reaching its durability point
- * first, before the terminal sweep settles the cards.
+ * Cancellation is interruption: when the interpreter ends (result, or
+ * interrupted by the first run-level fault, the timeout among them, or by
+ * the caller) its in-flight calls are interrupted and awaited, an admitted
+ * journal commit reaching its durability point first, before the terminal
+ * sweep settles the cards.
  */
 export function runWorkflowScript<R = never>(
   options: WorkflowScriptRunOptions<R>,
@@ -265,6 +216,10 @@ export function runWorkflowScript<R = never>(
       let liveCallCounter = 0;
       let callCounter = 0;
       const issuedCallKeys = new Set<string>();
+      // What a retry() re-issue reuses: the card its key settles, and the
+      // entry this run consumed for it, which replays instead of re-running.
+      const issuedProgressIds = new Map<string, string>();
+      const consumedEntries = new Map<string, WorkflowJournalEntry>();
       const plannedPhases = meta.phases ?? [];
       const hasTaskPlan = meta.tasks !== undefined;
       const plannedTasks = meta.tasks ?? [];
@@ -328,19 +283,12 @@ export function runWorkflowScript<R = never>(
         );
 
       const agentPrimitive = (
-        prompt: unknown,
-        rawOptions?: unknown,
-      ): Effect.Effect<string | undefined, Error, R> =>
+        prompt: string,
+        rawOptions: unknown,
+        retries: readonly RetryFrame[],
+      ): Effect.Effect<unknown, Error, R> =>
         Effect.gen(function* () {
           yield* checkRun;
-          if (!isNonEmptyString(prompt)) {
-            return yield* Effect.fail(
-              new Error(
-                'agent(prompt, options?) requires a non-empty string prompt.',
-              ),
-            );
-          }
-
           const parsedOptions = WorkflowAgentCallOptionsSchema.safeParse(
             rawOptions ?? {},
           );
@@ -454,12 +402,32 @@ export function runWorkflowScript<R = never>(
             ? yield* readDependencyFingerprint()
             : undefined;
           let key = journalKey(prompt, callOptions, dependencyFingerprint);
+          // A retry() re-attempt issuing a key an earlier attempt issued is the
+          // same call again: it keeps its card, and replays if it completed.
+          const reissued =
+            issuedCallKeys.has(key) &&
+            retries.some(
+              (frame) => frame.earlier.has(key) && !frame.current.has(key),
+            );
+          for (const frame of retries) frame.current.add(key);
           const progressId =
-            plannedTask?.id ?? callOptions.id ?? `call-${index}`;
+            (reissued ? issuedProgressIds.get(key) : undefined) ??
+            plannedTask?.id ??
+            callOptions.id ??
+            `call-${index}`;
+          const completed = reissued ? consumedEntries.get(key) : undefined;
           const prior = priorEntries.get(key);
 
           yield* Effect.try({
             try: () => {
+              if (reissued) {
+                if (completed === undefined) {
+                  workflowRunState.queueCall(progressId, {
+                    model: callOptions.model,
+                  });
+                }
+                return;
+              }
               if (
                 callOptions.phase !== undefined &&
                 workflowRunState.currentPhaseIndex === -1
@@ -492,7 +460,7 @@ export function runWorkflowScript<R = never>(
             catch: ensureError,
           }).pipe(Effect.catch(contractFault));
 
-          if (issuedCallKeys.has(key)) {
+          if (!reissued && issuedCallKeys.has(key)) {
             return yield* failRun(
               new WorkflowRunAbortError(
                 'Repeated agent() calls with the same prompt and run options require distinct non-empty "id" options for restart-safe identity.',
@@ -500,6 +468,7 @@ export function runWorkflowScript<R = never>(
             );
           }
           issuedCallKeys.add(key);
+          issuedProgressIds.set(key, progressId);
 
           const refreshDependencyIdentity = (): Effect.Effect<
             void,
@@ -528,6 +497,8 @@ export function runWorkflowScript<R = never>(
                   }
                   issuedCallKeys.delete(key);
                   issuedCallKeys.add(refreshedKey);
+                  issuedProgressIds.set(refreshedKey, progressId);
+                  for (const frame of retries) frame.current.add(refreshedKey);
                   dependencyFingerprint = refreshedFingerprint;
                   key = refreshedKey;
                 });
@@ -545,13 +516,13 @@ export function runWorkflowScript<R = never>(
           };
 
           /** The journaled form of a runner result and what the script sees
-           *  of it. A result that cannot cross the bridge fails the call with
-           *  its real cause, then the run. */
+           *  of it. A result that cannot cross into the realm fails the call
+           *  with its real cause, then the run. */
           const journalValue = (
             value: unknown,
             valueLabel: string,
           ): Effect.Effect<
-            { payload: string | undefined; normalizedResult: unknown },
+            { scriptValue: unknown; normalizedResult: unknown },
             WorkflowRunAbortError
           > =>
             Effect.try({
@@ -561,14 +532,20 @@ export function runWorkflowScript<R = never>(
                   journalPayload === undefined
                     ? undefined
                     : JSON.parse(journalPayload);
-                const payload =
-                  toScriptValue === undefined
-                    ? journalPayload
-                    : serializeBridgeValue(
-                        toScriptValue(normalizedResult),
-                        valueLabel,
-                      );
-                return { payload, normalizedResult };
+                if (toScriptValue === undefined) {
+                  return { scriptValue: normalizedResult, normalizedResult };
+                }
+                const scriptPayload = serializeBridgeValue(
+                  toScriptValue(normalizedResult),
+                  valueLabel,
+                );
+                return {
+                  scriptValue:
+                    scriptPayload === undefined
+                      ? undefined
+                      : JSON.parse(scriptPayload),
+                  normalizedResult,
+                };
               },
               catch: asWorkflowAbort,
             }).pipe(
@@ -578,8 +555,15 @@ export function runWorkflowScript<R = never>(
               Effect.catch(failRun),
             );
 
+          // Consumed earlier in this run: its card and accounting are settled.
+          if (completed) {
+            return (yield* journalValue(
+              completed.result,
+              'Cached agent() result',
+            )).scriptValue;
+          }
           if (prior) {
-            const { payload, normalizedResult } = yield* journalValue(
+            const { scriptValue, normalizedResult } = yield* journalValue(
               prior.result,
               'Cached agent() result',
             );
@@ -589,11 +573,12 @@ export function runWorkflowScript<R = never>(
               result: normalizedResult,
             };
             journal.set(index, entry);
+            consumedEntries.set(key, entry);
             workflowRunState.settleCall(progressId, {
               status: WORKFLOW_CALL_STATUS.CACHED,
             });
             if (onJournalEntryConsumed) yield* onJournalEntryConsumed(entry);
-            return payload;
+            return scriptValue;
           }
 
           // One attempt. Its scope is closed only after the journal write
@@ -715,7 +700,10 @@ export function runWorkflowScript<R = never>(
                   workflowRunState.settleCall(progressId, {
                     status: WORKFLOW_CALL_STATUS.SKIPPED,
                   });
-                  return JSON.stringify(WORKFLOW_SKIPPED_RESULT);
+                  return yield* new OpFailure({
+                    name: 'Skipped',
+                    message: `The user skipped agent() call "${label}".`,
+                  });
                 }
 
                 const attemptExit = yield* Fiber.await(runnerFiber);
@@ -730,10 +718,13 @@ export function runWorkflowScript<R = never>(
                   // Let the writer observe this failed call while its stage is
                   // still active before guest code can launch the next call.
                   yield* Effect.yieldNow;
-                  return 'null';
+                  return yield* new OpFailure({
+                    name: 'AgentFailed',
+                    message: toErrorMessage(error),
+                  });
                 }
 
-                const { payload, normalizedResult } = yield* journalValue(
+                const { scriptValue, normalizedResult } = yield* journalValue(
                   attemptExit.value,
                   'agent() result',
                 );
@@ -746,6 +737,7 @@ export function runWorkflowScript<R = never>(
                     Effect.catch(failRun),
                     Effect.andThen(
                       Effect.suspend(() => {
+                        consumedEntries.set(key, entry);
                         workflowRunState.settleCall(progressId, {
                           status: WORKFLOW_CALL_STATUS.COMPLETED,
                         });
@@ -754,19 +746,27 @@ export function runWorkflowScript<R = never>(
                     ),
                   ),
                 );
-                return payload;
+                return scriptValue;
               }).pipe(Effect.onInterrupt(() => Fiber.interrupt(runnerFiber)));
             }),
           );
-          const runCall: Effect.Effect<string | undefined, Error, R> =
-            Effect.suspend(() =>
-              attempt.pipe(
-                Effect.flatMap((outcome) =>
-                  outcome === RETRY_ATTEMPT ? runCall : Effect.succeed(outcome),
-                ),
+          const runCall: Effect.Effect<unknown, Error, R> = Effect.suspend(() =>
+            attempt.pipe(
+              Effect.flatMap((outcome) =>
+                outcome === RETRY_ATTEMPT ? runCall : Effect.succeed(outcome),
               ),
-            );
-          return yield* runCall;
+            ),
+          );
+          // An operation that interrupts a call (a fail-fast all() sibling, a
+          // timeout()) settles its card here; a run that is ending leaves the
+          // card to the terminal sweep, which knows the run's reason.
+          return yield* runCall.pipe(
+            Effect.onInterrupt(() =>
+              Deferred.isDoneUnsafe(fatalFault)
+                ? Effect.void
+                : Effect.sync(() => workflowRunState.cancelCall(progressId)),
+            ),
+          );
         });
 
       const argsJson = yield* Effect.try({
@@ -779,18 +779,16 @@ export function runWorkflowScript<R = never>(
       });
       const filesJson = stableStringify(files);
 
-      const sandbox = runScriptInSandbox(
+      const filename = `${meta.name}.workflow.js`;
+      const timedOut = new WorkflowRunAbortError(
+        `Workflow script ${filename} timed out after ${timeoutMs}ms`,
+      );
+      const sandbox = interpretWorkflow({
         body,
-        {
-          asyncFns: {
-            agent: (args) => agentPrimitive(args[0], args[1]),
-          },
+        bridge: {
           syncFns: {
             log: (args) => {
-              onEvent?.({
-                type: 'log',
-                message: String(args[0]),
-              });
+              onEvent?.({ type: 'log', message: String(args[0]) });
               return undefined;
             },
             phase: (args) => {
@@ -808,17 +806,16 @@ export function runWorkflowScript<R = never>(
           },
           argsJson,
           filesJson,
-          realmPrelude: ORCHESTRATION_PRELUDE,
         },
-        {
-          timeoutMs,
-          filename: `${meta.name}.workflow.js`,
-        },
-      );
+        filename,
+        timeoutMs,
+        onTimeout: () => recordFault(timedOut),
+        agent: agentPrimitive,
+      });
 
-      // The race awaits the loser's interruption, and the sandbox awaits its
-      // agent() fibers as it closes, so past this point no call is running
-      // and the first fault, if any, is final.
+      // The race awaits the loser's interruption, and the interpreter awaits
+      // its agent() fibers before the realm closes, so past this point no
+      // call is running and the first fault, if any, is final.
       const sandboxExit = yield* Effect.exit(
         Effect.raceFirst(sandbox, Deferred.await(fatalFault)),
       );

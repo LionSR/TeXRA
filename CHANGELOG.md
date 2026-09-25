@@ -67,6 +67,17 @@ All notable changes to this project will be documented in this file.
   dashboard switch and are withheld only when `lean4` is added to the
   setting. A plugin whose dependency is merely missing keeps its skills and
   agents listed, so the setup guidance they carry stays reachable.
+- **Multi-agent workflow scripts are written in a new form** — a lead's
+  script now writes `yield* agent(...)` and `yield* all([...])` instead of
+  `await agent(...)` and `parallel(...)`, and can use `attempt()`, `retry()`
+  and `timeout()` around any call. A failed call no longer comes back as an
+  empty result: inside `all()` it stops the other tasks and fails the step,
+  unless the script wraps each task in `attempt()` to keep the ones that
+  succeeded. A retried step reuses the calls it already finished instead of
+  paying for them again. Scripts saved under `.texra/workflow-scripts/` in the
+  old form stop with a message saying how to rewrite them; calls they already
+  completed are reused once the lead reruns the rewritten script under the
+  same name.
 
 ### Features
 
