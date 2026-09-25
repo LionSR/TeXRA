@@ -24,7 +24,7 @@ The lead still plans in conversation with you first. It reads the project, propo
 
 1. **A proposal you approve.** Before anything runs, the lead's script is shown as a card headed **Start a multi-agent run:** and the script's name, with its phases, the steps each phase names, the default agent and model, and the files available to the script. The defaults are just that — each call may name its own agent and model. The card also warns that agents may run in parallel, which can cost more than a single run. **Approve** (`y`) runs it; the ▾ next to it offers **Approve all agent work in this run** (`a`), which also stops asking about later tasks, file edits, and commands in the run. **Reject** (`n`) declines in one click, and **Add a note…** lets you tell the lead what to change. The script itself is saved under `.texra/workflow-scripts/` in your workspace, so you can open it.
 2. **Phases and per-call progress.** The run opens as its own stream. Calls are grouped under the phases the script declared. A declared item appears as a quiet **Not started** row once its phase opens, until the script issues it; from then on the row is a real call and shows what it is — **Document** (a workflow agent editing files) or **Structured** (a tool-use agent returning validated data), the agent and model it runs, and the files it was handed — along with its status: Queued (waiting for a concurrency slot), Running, Finished, Saved result (replayed from an earlier attempt), Skipped, Cancelled, or Failed. Rows running at the same time are the run's real concurrency; sharing a phase does not by itself mean calls run together or depend on each other. When a call finishes, its row adds the elapsed time and what it cost.
-3. **Skip or retry a running call.** In the CLI, focus a running task in the subagent panel and press `s` to skip it or `r` to retry it; `k` kills it. A skipped call is excluded from the synthesis step by the script.
+3. **Skip or retry a running call.** In the CLI, focus a running task in the subagent panel and press `s` to skip it or `r` to retry it; `k` kills it. A skipped call fails with `Skipped`: a script that wraps its calls in `attempt()` leaves it out of the synthesis step, and one that does not stops.
 4. **A summary when it finishes.** The lead receives the script's return value, the run log, and a one-line summary: phases run, tasks succeeded out of total, total cost, duration, and every file the run produced with its diff counts. Workflow-agent outputs land in run storage like any other delegated run; the lead reviews them and uses `accept_run_files` to bring them into the workspace.
 
 <CliMultiAgentHero />
@@ -49,42 +49,53 @@ export const meta = {
   ],
 };
 phase('Fix');
-const results = await parallel(
-  files.inputFiles.slice(0, 2).map(
-    (file, index) => () =>
-      agent('Fix spelling errors only.', {
-        id: index === 0 ? 'first' : 'second',
-        inputFiles: [file],
-      }),
-  ),
-);
+const results =
+  yield *
+  all(
+    files.inputFiles.slice(0, 2).map((file, index) =>
+      attempt(
+        agent('Fix spelling errors only.', {
+          id: index === 0 ? 'first' : 'second',
+          inputFiles: [file],
+        }),
+      ),
+    ),
+  );
 const correctedFiles = results
-  .filter((result) => result != null && result !== '__WORKFLOW_SKIPPED__')
-  .flatMap((result) => result.outputs.map((output) => output.absolutePath));
+  .filter((result) => result._tag === 'Success')
+  .flatMap((result) =>
+    result.value.outputs.map((output) => output.absolutePath),
+  );
 phase('Merge');
-return await agent('Merge the corrected drafts.', {
-  id: 'merge',
-  inputFiles: correctedFiles,
-});
+return (
+  yield *
+  agent('Merge the corrected drafts.', {
+    id: 'merge',
+    inputFiles: correctedFiles,
+  })
+);
 ```
 
-A few things to notice. The `meta` block is the plan: because `tasks` is declared, the proposal and the progress view can show all three tasks before any of them run. `parallel()` runs the two fixes concurrently and waits for both. A failed call resolves to `null` and a call you skipped resolves to `'__WORKFLOW_SKIPPED__'`, so the script filters both out before the merge. Each workflow-agent call resolves to a result that lists the files it produced, and those files can be handed straight to the next call.
+A few things to notice. The `meta` block is the plan: because `tasks` is declared, the proposal and the progress view can show all three tasks before any of them run. The script is a generator: `agent()` and `all()` describe work, and `yield*` runs it and hands back the result. `all()` runs the two fixes concurrently and waits for both. On its own, `all()` stops at the first failure; wrapping each fix in `attempt()` lets the script keep the fixes that succeeded, so a failed or skipped fix is left out of the merge rather than stopping the run. Each workflow-agent call resolves to a result that lists the files it produced, and their paths (`output.absolutePath`) can be handed straight to the next call.
 
 ## The script API
 
 Scripts run in a sandbox with no imports and no access to the filesystem, network, or clock. Only these primitives exist:
 
-| Primitive                 | What it does                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| :------------------------ | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `export const meta`       | Required first statement. `name` and `description` are required. `phases` lists phase titles, `tasks` is the optional declared plan (`{ id, label, phase? }`), and `timeoutMs` sets the whole-run wall clock (1 second to 60 minutes; default 10 minutes).                                                                                                                                                                       |
-| `agent(prompt, options?)` | Runs one specialist and returns a promise. A workflow-agent call takes `inputFiles` (editable), `contextFiles`, and `mediaFiles` (read-only) and resolves to a result listing its output files, diffs, and cost. A call with `schema` (a JSON Schema object) runs a tool-use agent named by `agentName` and resolves to a result whose `.structured` field is the validated object. `model` picks a specific model for the call. |
-| `parallel(thunks)`        | Runs an array of zero-argument functions concurrently and waits for all of them. Failed calls resolve to `null`; a thrown script error fails the whole run.                                                                                                                                                                                                                                                                      |
-| `phase(title)`            | Marks the start of a phase for progress display. Titles must be declared in `meta.phases`.                                                                                                                                                                                                                                                                                                                                       |
-| `log(message)`            | Writes a line to the run log that the lead receives with the result.                                                                                                                                                                                                                                                                                                                                                             |
-| `args`                    | The JSON value the lead passed when launching the script, for data-dependent task sets.                                                                                                                                                                                                                                                                                                                                          |
-| `files`                   | The files bound to the run, as `files.inputFiles`, `files.contextFiles`, and `files.mediaFiles`.                                                                                                                                                                                                                                                                                                                                 |
+| Primitive                 | What it does                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| :------------------------ | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `export const meta`       | Required first statement. `name` and `description` are required. `phases` lists phase titles, `tasks` is the optional declared plan (`{ id, label, phase? }`), and `timeoutMs` sets the whole-run wall clock (1 second to 60 minutes; default 10 minutes).                                                                                                                                                                                                               |
+| `agent(prompt, options?)` | Describes one specialist call; `yield* agent(...)` runs it and returns its result. A workflow-agent call takes `inputFiles` (editable), `contextFiles`, and `mediaFiles` (read-only) and resolves to a result listing its output files, diffs, and cost. A call with `schema` (a JSON Schema object) runs a tool-use agent named by `agentName` and resolves to a result whose `.structured` field is the validated object. `model` picks a specific model for the call. |
+| `all(items, options?)`    | Runs a list of calls concurrently and returns their results in order. The first failure stops the rest and fails the `all()`. `{ concurrency }` caps how many items run at once. An item with several steps is a generator function, `function* () { ... }`. `forEach(items, fn)` is shorthand for `all(items.map(fn))`.                                                                                                                                                 |
+| `attempt(call)`           | Never fails: returns `{ _tag: 'Success', value }` or `{ _tag: 'Failure', error: { name, message } }`. Use it to keep going past a failed or skipped call.                                                                                                                                                                                                                                                                                                                |
+| `retry(call, { times })`  | Runs a failed call, or a multi-step branch, again (once by default, at most 10 times). Calls the branch already completed are reused, not run and billed again. A call you skipped is not retried.                                                                                                                                                                                                                                                                       |
+| `timeout(call, ms)`       | Stops the call if it runs longer than `ms` milliseconds and fails it with `TimedOut`.                                                                                                                                                                                                                                                                                                                                                                                    |
+| `phase(title)`            | Marks the start of a phase for progress display. Titles must be declared in `meta.phases`.                                                                                                                                                                                                                                                                                                                                                                               |
+| `log(message)`            | Writes a line to the run log that the lead receives with the result.                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `args`                    | The JSON value the lead passed when launching the script, for data-dependent task sets.                                                                                                                                                                                                                                                                                                                                                                                  |
+| `files`                   | The files bound to the run, as `files.inputFiles`, `files.contextFiles`, and `files.mediaFiles`.                                                                                                                                                                                                                                                                                                                                                                         |
 
-Ordinary JavaScript handles the rest: a `for` loop with awaited calls is a pipeline, and array methods such as `.filter()` and `.map()` are how results fan back in. Up to four agent calls run at once across the whole script, a single run makes at most 200 live calls, and `Date.now()` and `Math.random()` are unavailable so that a rerun replays the same call sequence.
+A failed call throws an error named `AgentFailed` into the script, a skipped call throws `Skipped`, and a timed-out one throws `TimedOut`; `try`/`catch` works as usual. Other errors in the script itself fail the whole run. Ordinary JavaScript handles the rest: a `for` loop over `yield* agent(...)` is a pipeline, and array methods such as `.filter()` and `.map()` are how results fan back in. Up to four agent calls run at once across the whole script, a single run makes at most 200 live calls, and `Date.now()` and `Math.random()` are unavailable so that a rerun replays the same call sequence.
 
 ## Checkpoints and resume
 
@@ -114,7 +125,9 @@ In the CLI, a workflow run resumes headless: `texra resume <id>` continues a sto
 
 **"Workflow agent ... edits files: pass options.inputFiles".** A workflow-agent call was made without input files. Workflow agents rewrite documents, so each call needs `inputFiles`, or a previous call's outputs, unless the agent declares default output files. Analysis that returns a value rather than a file belongs in a tool-use call with `schema`.
 
-**A task shows Failed while the rest continue.** That is the intended behavior: a failed `agent()` call resolves to `null` and the script carries on with the calls that succeeded. Open the task's stream to read why it failed. Failed calls are not journaled, so a rerun retries them.
+**A task shows Failed and the tasks beside it show Cancelled.** Inside `all()`, the first failure stops the other tasks and fails the whole step, and if nothing catches it the run fails too. When some tasks may fail and the rest should continue, the script should wrap each one in `attempt()`, as in the example above; ask the lead to do that and rerun with the same `meta.name`, and the tasks that already finished are reused. Open the failed task's stream to read why it failed. Failed calls are not journaled, so a rerun retries them.
+
+**"Workflow scripts are generators".** A saved script from an earlier TeXRA version uses `await agent(...)` and `parallel()`. Scripts now write `yield* agent(...)` and `yield* all([...])`. Ask the lead to rewrite the script; calls that completed under the old script are still reused when their prompt and options are unchanged.
 
 ## Next steps
 

@@ -1,7 +1,7 @@
 # Workflow generator protocol: prototype and tests
 
 This probe supports the
-[workflow generator protocol proposal](../../proposed/architecture/2026-09-25-workflow-script-generator-protocol.md).
+[workflow generator protocol proposal](../../implemented/architecture/2026-09-25-workflow-script-generator-protocol.md).
 It is a standalone prototype, deliberately outside the product: nothing in
 `src/` or `packages/` imports it, and none of the repository's lint,
 typecheck, knip or test tiers scan this directory.

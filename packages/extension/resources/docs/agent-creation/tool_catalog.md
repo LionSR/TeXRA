@@ -70,8 +70,12 @@ recommended groups at the bottom are a good starting point.
   either mode. The selected workspace files are fixed for the run and available
   through the immutable `files.inputFiles`, `files.contextFiles`, and
   `files.mediaFiles` arrays. The script begins with an exported `meta` object
-  containing `name` and `description`, and can use `agent`, `phase`, `log`,
-  `parallel` plus ordinary JavaScript control flow. Workflow-agent calls accept the same
+  containing `name` and `description`. The body is a generator: `agent`,
+  `all`, `forEach`, `attempt`, `retry`, and `timeout` build operations that
+  run when the script writes `yield*` before them (`await` is a syntax error),
+  and `phase`, `log`, and ordinary JavaScript control flow do the rest. A
+  failed call throws `AgentFailed` (a skipped one `Skipped`), `all` fails fast,
+  and `attempt` turns a failure into a value. Workflow-agent calls accept the same
   three file roles. Any call may declare an available model short name with
   `model`; omitted models follow ordinary delegation policy.
   `agent(prompt, { agentName, model, schema })` instead runs a named tool-use
