@@ -1,4 +1,4 @@
-import { Deferred, Effect, Exit } from 'effect';
+import { Effect, Exit } from 'effect';
 import { HttpClientError } from 'effect/unstable/http';
 import { LRUCache } from 'lru-cache';
 
@@ -16,6 +16,7 @@ import type {
 } from '@shared/schemas';
 import { SUBSCRIPTION_USAGE_PROVIDERS } from '@shared/schemas';
 import { useChinaRegion } from '@utils/config/providerConfig';
+import { SharedAttempt } from '@utils/core/sharedAttempt';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { fetchChatGptUsage } from './codexUsageAdapter';
@@ -98,7 +99,7 @@ export class SubscriptionUsageService {
   private readonly cache: LRUCache<string, SubscriptionUsageSnapshot>;
   private readonly pending = new Map<
     string,
-    Deferred.Deferred<SubscriptionUsageSnapshot>
+    SharedAttempt<SubscriptionUsageSnapshot, never>
   >();
 
   constructor(init: SubscriptionUsageServiceInit) {
@@ -249,12 +250,8 @@ export class SubscriptionUsageService {
 
   /**
    * One probe per cache key at a time, served from the TTL cache while it is
-   * warm. The probe runs on a detached fiber and every caller waits on the
-   * same `Deferred`, so one caller's cancellation cancels only its own wait —
-   * what the shared promise this replaced did by construction. The claim and
-   * the fork run under one uninterruptible mask: an interrupt landing between
-   * registering the deferred and starting the fiber that settles it would
-   * leave every later caller waiting on an entry nothing completes.
+   * warm. Callers of one key share a {@link SharedAttempt}, so one caller's
+   * cancellation cancels only its own wait.
    *
    * Return-path choice (D16, define-out-of-existence §1e): when invalidate()
    * races an in-flight probe, the identity check below keeps the stale result
@@ -267,39 +264,31 @@ export class SubscriptionUsageService {
     options: { readonly forceRefresh?: boolean },
   ): Effect.Effect<SubscriptionUsageSnapshot, never, HttpClient.HttpClient> {
     const key = `${provider}:${variant ?? 'default'}`;
-    return Effect.uninterruptibleMask((restore) =>
-      Effect.suspend(() => {
-        if (options.forceRefresh) {
-          this.cache.delete(key);
-          this.pending.delete(key);
-        }
-        const cached = this.cache.get(key);
-        if (cached !== undefined) return Effect.succeed(cached);
-        const inFlight = this.pending.get(key);
-        if (inFlight !== undefined) return restore(Deferred.await(inFlight));
-
-        const request = Deferred.makeUnsafe<SubscriptionUsageSnapshot>();
-        this.pending.set(key, request);
-        return Effect.flatMap(
-          Effect.forkDetach(
-            this.fetchUsage(provider, variant).pipe(
-              Effect.onExit((exit) =>
-                Effect.sync(() => {
-                  if (this.pending.get(key) === request) {
-                    this.pending.delete(key);
-                    if (Exit.isSuccess(exit)) {
-                      this.cache.set(key, exit.value);
-                    }
-                  }
-                  Deferred.doneUnsafe(request, exit);
-                }),
-              ),
-            ),
+    return Effect.suspend(() => {
+      if (options.forceRefresh) {
+        this.cache.delete(key);
+        this.pending.delete(key);
+      }
+      const cached = this.cache.get(key);
+      if (cached !== undefined) return Effect.succeed(cached);
+      let attempt = this.pending.get(key);
+      if (attempt === undefined) {
+        attempt = new SharedAttempt();
+        this.pending.set(key, attempt);
+      }
+      const request = attempt;
+      return request.run(() =>
+        this.fetchUsage(provider, variant).pipe(
+          Effect.onExit((exit) =>
+            Effect.sync(() => {
+              if (this.pending.get(key) !== request) return;
+              this.pending.delete(key);
+              if (Exit.isSuccess(exit)) this.cache.set(key, exit.value);
+            }),
           ),
-          () => restore(Deferred.await(request)),
-        );
-      }),
-    );
+        ),
+      );
+    });
   }
 
   private unavailable(

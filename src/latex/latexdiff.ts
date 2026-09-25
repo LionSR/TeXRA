@@ -4,6 +4,7 @@ import { Effect, FileSystem, PlatformError } from 'effect';
 
 import { formatError } from '@common/errors';
 import { withLogChannel } from '@logger/effectLog';
+import { redactSecrets } from '@logger/redaction';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { LatexdiffMathMarkupValue } from '@shared/constants/latexConfig';
 import type { FileLocation } from '@shared/schemas';
@@ -73,13 +74,18 @@ export class LaTeXdiffService {
    * Turn a diff failure into the service's own result value. Every public
    * entry point ends here, so a caller never has to distinguish "latexdiff
    * refused" from "the run threw".
+   *
+   * It is also where subprocess text (latexdiff's stderr, which can echo an
+   * environment assignment or a source line) enters the result, whose
+   * `message` a run writes verbatim into its transcript's `latexdiff` row.
+   * Secrets are scrubbed here, once, so none is ever written there.
    */
   private failure(
     context: string,
   ): (err: unknown) => Effect.Effect<LaTeXdiffResult> {
     return (err) =>
       Effect.suspend(() => {
-        const message = formatError(context, err);
+        const message = redactSecrets(formatError(context, err));
         return Effect.logError(message).pipe(Effect.as(failed(message)));
       });
   }

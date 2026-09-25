@@ -36,19 +36,6 @@ vi.mock('@cli/tui/terminalCleanup', () => ({
   supportsTerminalJobControl: () => false,
 }));
 
-vi.mock('@logger/logUtils', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@logger/logUtils')>();
-  return {
-    ...actual,
-    createLog: () => ({
-      debug: vi.fn(),
-      info: vi.fn(),
-      warn: vi.fn(),
-      error: vi.fn(),
-    }),
-  };
-});
-
 describe('chat TUI session exit controller', () => {
   beforeAll(bindTestSessionView);
   beforeEach(() => {

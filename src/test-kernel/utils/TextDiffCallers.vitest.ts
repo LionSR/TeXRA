@@ -8,15 +8,7 @@ import { Effect, FileSystem } from 'effect';
 import { describe, expect } from 'vitest';
 
 // Local imports
-import { computeOutputDiffStats } from '@agent/output/diffComputation';
-import { assignByContentSimilarity } from '@agent/output/extraction/contentSimilarity';
-import { createOutputState, ensureRoundData } from '@agent/output/outputState';
-import type { RoundFileMapping } from '@agent/output/types';
-import {
-  fileLocationDisplayPath,
-  RUN_OUTCOME,
-  type RunId,
-} from '@shared/schemas';
+import { type RunId } from '@shared/schemas';
 import { installPlatform } from '@test/support/setupPlatform';
 import { fakePath } from '@test/support/FakePlatform';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
@@ -28,7 +20,6 @@ import {
   firstChangedLine,
   writeApprovedContent,
 } from '@tools/approval/toolEditApproval';
-import { createExternalLocation } from '@utils/files/fileLocation';
 import { runDirUnder } from '@utils/files/runStorageFs';
 import { unifiedDiffText } from '@utils/text/unifiedDiff';
 
@@ -121,7 +112,7 @@ describe('shared text-diff caller fixtures', () => {
             'alpha\ninsert\nbeta\nomega\n',
           ),
         ).toBe(1);
-        const patch = unifiedDiffText(original, final);
+        const patch = unifiedDiffText(original, final).text;
         expect(patch).toContain('-beta');
         expect(patch).toContain('+BETA');
 

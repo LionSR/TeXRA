@@ -21,8 +21,6 @@ import {
 } from '@cli/chat/tui/state/approvalQueue';
 import { takeActiveForm } from '@cli/chat/tui/state/formSlot';
 import { TuiSession } from '@cli/chat/tui/state/sessionRunState';
-import { POINTER } from '@cli/tui/ui/glyphs';
-import type { InputHistory } from '@cli/chat/tui/history/inputHistory';
 import {
   selectedRunId,
   closeForegroundReader,
@@ -312,15 +310,6 @@ async function renderDebugApp(
 
 function currentFrame(stdout: InkRenderHandles['stdout']): string {
   return stripAnsi(stdout.writes.findLast((write) => write.length > 0) ?? '');
-}
-
-function fakeHistory(entries: readonly string[]): InputHistory {
-  return {
-    push: () => Effect.void,
-    reverseFind: () => undefined,
-    at: (index) => entries[index],
-    length: () => entries.length,
-  };
 }
 
 beforeAll(bindTestSessionView);

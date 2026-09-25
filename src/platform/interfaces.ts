@@ -134,9 +134,16 @@ export class AppState extends Context.Service<AppState, StateStore>()(
 // Lifecycle
 // ---------------------------------------------------------------------------
 
+/**
+ * The drain's three phases, in order, each with its own deadline budget.
+ * `RELEASE` follows every `ON` handler, whenever it was registered: it is
+ * where the process's sessions and then its runtime are released, so no
+ * handler can run on a runtime already gone.
+ */
 export const SHUTDOWN_PHASE = {
   BEFORE: 'beforeShutdown',
   ON: 'onShutdown',
+  RELEASE: 'releaseProcess',
 } as const;
 
 export type ShutdownPhase =
@@ -160,7 +167,7 @@ export interface LifecycleHost {
    */
   onShutdown(phase: ShutdownPhase, handler: ShutdownHandler): Disposable;
   /**
-   * Drain both phases, once: concurrent callers join the drain in flight
+   * Drain the phases, once: concurrent callers join the drain in flight
    * rather than starting a second one.
    */
   readonly runShutdown: Effect.Effect<void>;
@@ -201,7 +208,7 @@ export class Lifecycle extends Context.Service<Lifecycle, LifecycleHost>()(
  * custom directory is not an absolute path, its parent is gone, it cannot be
  * created, or the platform refused the filesystem call behind either.
  *
- * {@link AgentDirectoriesPort}'s three readers raise it as the failure of the
+ * {@link AgentDirectoriesPort}'s readers raise it as the failure of the
  * read itself, for the same reason {@link StateWriteFailed} exists: the reads
  * travel with the agent-catalog load beside them, so a caller inside a program
  * composes the read rather than adopting a rejection it cannot type.
@@ -216,10 +223,11 @@ export class AgentDirectoriesFailed extends Data.TaggedError(
 }> {}
 
 /**
- * Host-provided agent directory paths. All three are `Effect`s (not Promises)
- * so the one reader that can fault — `custom`, which creates the directory it
- * resolves — carries its failure into the catalog load that asked for it
- * instead of rejecting an await that cannot name it.
+ * Host-provided agent directory paths. All are `Effect`s (not Promises)
+ * so the readers that can fault — `custom`, which creates the directory it
+ * resolves, and `customConfigured`, which validates the setting — carry their
+ * failure into the program that asked instead of rejecting an await that
+ * cannot name it.
  *
  * `custom` takes the process's {@link GlobalStorageFs} and the process
  * `FileSystem` from context: the default custom-agents directory lives under
@@ -232,6 +240,13 @@ export interface AgentDirectoriesPort {
     string,
     AgentDirectoriesFailed,
     GlobalStorageFs | FileSystem.FileSystem
+  >;
+  /** Whether `custom` resolves to a directory the user configured, rather
+   *  than falling back to the default one under global storage. */
+  customConfigured(): Effect.Effect<
+    boolean,
+    AgentDirectoriesFailed,
+    FileSystem.FileSystem
   >;
   builtIn(): Effect.Effect<string, AgentDirectoriesFailed>;
   builtInToolUse(): Effect.Effect<string, AgentDirectoriesFailed>;

@@ -6,43 +6,25 @@ import { strict as assert } from 'node:assert';
 // Third-party imports
 import { it } from '@effect/vitest';
 import { Effect, Exit } from 'effect';
-import { describe, vi } from 'vitest';
+import { describe } from 'vitest';
 
 // Local imports
-import * as logger from '@logger/logUtils';
-import { TEXRA_APPROVAL_POLICY_CONFIG_KEY } from '@shared/approvalPolicy';
+import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
+import { setLogSink } from '@logger/logSink';
 import {
-  AGENT_SKILLS_CONFIG_KEY,
-  CLAUDE_AGENT_DEFAULT_EFFORT,
-  CLAUDE_AGENT_DEFAULT_MODEL,
-  CLAUDE_AGENT_DEFAULT_PERMISSION_MODE,
-  CODEX_APPROVAL_POLICY_DEFAULT,
-  CODEX_REASONING_EFFORT_DEFAULT,
-  CODEX_SANDBOX_MODE_DEFAULT,
-  CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
-  CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
   MODEL_COMPACTION_THRESHOLD_SETTING,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
 } from '@shared/schemas';
 import {
   ALL_SETTINGS,
   CLI_CONFIG_SLOT_KEYS,
-  CLI_STATE_SETTINGS,
-  DEFAULT_GIT_AUTHOR_EMAIL,
-  DEFAULT_GIT_AUTHOR_NAME,
-  DEFAULT_TOOL_PATH_PROTECTION_ENABLED,
   STATE_SETTINGS,
-  settingEnumChoices,
   settingEnumOptions,
-  modelsTabSettings,
   settingByKey,
   settingsViewSettingByKey,
   settingsViewSnapshotEntries,
 } from '@shared/state/stateSettings';
-import {
-  dispatchSettingsViewOutbound,
-  REASONING_LEVEL_OPTIONS,
-} from '@shared/settingsView/settingsViewMessages';
+import { dispatchSettingsViewOutbound } from '@shared/settingsView/settingsViewMessages';
 import type {
   SettingHost,
   SettingStore,
@@ -51,13 +33,8 @@ import type {
 import type { DerivedSettingsSnapshot } from '@shared/settingsView/settingsViewMessages';
 import { buildSettingsSnapshotMessage } from '@shared/settingsView/handlers/settingsSnapshot';
 import {
-  DEFAULT_HELPER_MODEL,
-  PROVIDER_ENDPOINT_STATE_ENTRIES,
-} from '@shared/constants/providers';
-import {
   readSetting,
   resetSetting,
-  settingDefault,
   writeSetting,
 } from '@shared/config/settingsAccess';
 import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latexConfig';
@@ -67,6 +44,7 @@ import {
   FakeStateStore,
 } from '@test/support/FakePlatform';
 import { REPO_ROOT } from '@test/support/repoScan';
+import { captureLogEntries } from '@test/support/logSinkCapture';
 import { installPlatform } from '@test/support/setupPlatform';
 import {
   isStored,
@@ -83,71 +61,11 @@ const VALID_STORES: ReadonlySet<SettingStore> = new Set<SettingStore>([
 
 const SETTING_HOSTS: readonly SettingHost[] = ['vscode', 'cli', 'desktop'];
 
-const CLI_RUNTIME_COMMAND_PATTERN = /^texra\s+(?:chat|run|multi-agent run)\b/;
-
 function entryByKey(key: string): StateSettingEntry {
   const entry = settingByKey(key);
   assert.ok(entry, `missing catalog entry ${key}`);
   return entry;
 }
-
-const CLASS_D_KEY_PATTERN = /migrated|version|onboarding|history|cache/i;
-const PROVIDER_ENDPOINT_DEFAULTS = Object.fromEntries(
-  PROVIDER_ENDPOINT_STATE_ENTRIES.map(({ endpointKey }) => [endpointKey, '']),
-);
-
-/** Expected default-when-absent for each catalog key, from the real getters. */
-const EXPECTED_DEFAULTS: Record<string, unknown> = {
-  [WorkspaceStateKey.GIT_MARK_COMMITS]: true,
-  [WorkspaceStateKey.GIT_AUTHOR_NAME]: DEFAULT_GIT_AUTHOR_NAME,
-  [WorkspaceStateKey.GIT_AUTHOR_EMAIL]: DEFAULT_GIT_AUTHOR_EMAIL,
-  [WorkspaceStateKey.GIT_WORKTREE_SUPPORT]: false,
-  [GlobalStateKey.ALLOW_ORCHESTRATOR_KILL]: true,
-  [GlobalStateKey.DETACH_SUBAGENTS_ON_STOP]: false,
-  [GlobalStateKey.MEMORY_ENABLED]: true,
-  [WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED]:
-    DEFAULT_TOOL_PATH_PROTECTION_ENABLED,
-  [WorkspaceStateKey.CODEX_SANDBOX_MODE]: CODEX_SANDBOX_MODE_DEFAULT,
-  [WorkspaceStateKey.CODEX_REASONING_EFFORT]: CODEX_REASONING_EFFORT_DEFAULT,
-  [WorkspaceStateKey.CODEX_APPROVAL_POLICY]: CODEX_APPROVAL_POLICY_DEFAULT,
-  [WorkspaceStateKey.CLAUDE_AGENT_MODEL]: CLAUDE_AGENT_DEFAULT_MODEL,
-  [WorkspaceStateKey.CLAUDE_AGENT_PERMISSION_MODE]:
-    CLAUDE_AGENT_DEFAULT_PERMISSION_MODE,
-  [WorkspaceStateKey.CLAUDE_AGENT_EFFORT]: CLAUDE_AGENT_DEFAULT_EFFORT,
-  [WorkspaceStateKey.WORKFLOW_AUTO_COMPILE]:
-    LATEX_CONFIG_DEFAULTS.workflowAutoCompile,
-  [WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS]:
-    LATEX_CONFIG_DEFAULTS.workflowAutoCompileTimeoutMs,
-  [WorkspaceStateKey.WORKFLOW_AUTO_OPEN_PDF]:
-    LATEX_CONFIG_DEFAULTS.workflowAutoOpenPdf,
-  [WorkspaceStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE]:
-    LATEX_CONFIG_DEFAULTS.workflowRejectOnCompileFailure,
-  [WorkspaceStateKey.LATEXDIFF_BETWEEN_ROUNDS]:
-    LATEX_CONFIG_DEFAULTS.latexdiffBetweenRounds,
-  [WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS]:
-    LATEX_CONFIG_DEFAULTS.latexdiffTimeoutMs,
-  [WorkspaceStateKey.LATEXDIFF_MATH_MARKUP]:
-    LATEX_CONFIG_DEFAULTS.latexdiffMathMarkup,
-  [WorkspaceStateKey.LATEXDIFF_CHANGES_ONLY]:
-    LATEX_CONFIG_DEFAULTS.latexdiffChangesOnly,
-  [WorkspaceStateKey.LATEX_FORMATTER]: LATEX_CONFIG_DEFAULTS.latexFormatter,
-  [GlobalStateKey.WEBSOCKET_OPENAI]: false,
-  ...PROVIDER_ENDPOINT_DEFAULTS,
-  [GlobalStateKey.HELPER_MODEL]: DEFAULT_HELPER_MODEL,
-  [GlobalStateKey.PREFER_SHORT_MODEL_NAMES]: false,
-  [GlobalStateKey.USE_OPENROUTER]: false,
-  [GlobalStateKey.KIMI_CODE_PREFER]: false,
-  // Region defaults: the provider plugins' `region.default`, which the
-  // `regionSet()` getter reads through `readSettingFrom`.
-  [GlobalStateKey.MOONSHOT_USE_CHINA]: true,
-  [GlobalStateKey.DASHSCOPE_USE_CHINA]: false,
-  [GlobalStateKey.MINIMAX_USE_CHINA]: false,
-  [GlobalStateKey.GLM_USE_CHINA]: true,
-  [GlobalStateKey.GLM_CODING_PLAN]: false,
-  [GlobalStateKey.DISABLED_TOOLS]: [],
-  [WorkspaceStateKey.DISABLED_SKILLS]: [],
-  [WorkspaceStateKey.DISABLED_SKILL_SOURCES]: [],
-};
 
 /** Every canonical `texra.*` key in the state-backed catalog. */
 const STATE_SETTING_KEYS: readonly string[] = STATE_SETTINGS.map(
@@ -337,7 +255,7 @@ describe('catalog-derived settings snapshots', () => {
     'builds the LaTeX message from validated catalog values and defaults',
     () =>
       Effect.gen(function* () {
-        const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+        const logs = captureLogEntries();
         const { stores, workspaceState } = makeFakeSettingsStores();
         yield* workspaceState.update(
           WorkspaceStateKey.WORKFLOW_AUTO_COMPILE,
@@ -372,11 +290,11 @@ describe('catalog-derived settings snapshots', () => {
             message.values[WorkspaceStateKey.LATEX_FORMATTER],
             'tex-fmt',
           );
-          assert.equal(warn.mock.calls.length, 1);
+          assert.equal(logs.at('WARN', 'settingsAccess').length, 1);
         } finally {
-          warn.mockRestore();
+          setLogSink(null);
         }
-      }),
+      }).pipe(Effect.provide(effectDiagnosticsLayer('Trace'))),
   );
 });
 
@@ -552,7 +470,7 @@ describe('settingsAccess', () => {
     'resolves reliability rows on the merged scope, bounded by their schema',
     () =>
       Effect.gen(function* () {
-        const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+        const logs = captureLogEntries();
         const reliabilityRows = [
           {
             setting: MODEL_COMPACTION_THRESHOLD_SETTING,
@@ -591,9 +509,9 @@ describe('settingsAccess', () => {
             }
           }
         } finally {
-          warn.mockRestore();
+          setLogSink(null);
         }
-      }),
+      }).pipe(Effect.provide(effectDiagnosticsLayer('Trace'))),
   );
 
   // #12710: the five Models-tab provider toggles declare `configTarget:
@@ -635,7 +553,7 @@ describe('settingsAccess', () => {
     'falls back to the default for a stored value that no longer validates',
     () =>
       Effect.gen(function* () {
-        const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+        const logs = captureLogEntries();
         const { stores, workspaceState } = makeFakeSettingsStores();
         const entry = entryByKey(WorkspaceStateKey.LATEX_FORMATTER);
         yield* workspaceState.update(entry.key, 'stale-bogus-value');
@@ -644,17 +562,17 @@ describe('settingsAccess', () => {
             yield* readSetting(entry, stores, 'vscode'),
             LATEX_CONFIG_DEFAULTS.latexFormatter,
           );
-          assert.equal(warn.mock.calls.length, 1);
-          assert.equal(warn.mock.calls[0]?.[0], 'settingsAccess');
+          const warnings = logs.at('WARN', 'settingsAccess');
+          assert.equal(warnings.length, 1);
           assert.ok(
-            String(warn.mock.calls[0]?.[1]).startsWith(
+            String(warnings[0]?.message).startsWith(
               `Ignoring invalid persisted value for setting "${entry.key}"`,
             ),
           );
         } finally {
-          warn.mockRestore();
+          setLogSink(null);
         }
-      }),
+      }).pipe(Effect.provide(effectDiagnosticsLayer('Trace'))),
   );
 
   // #11797: the kill gate's permissive default answers only for an absent

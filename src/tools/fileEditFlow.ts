@@ -18,6 +18,7 @@ import {
   writeApprovedContent,
   type AcceptedToolEditApprovalResult,
 } from '@tools/approval/toolEditApproval';
+import { entryExists } from '@utils/files/fsEntryExists';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
 import { ensureError } from '@utils/errors/errorMessage';
 
@@ -140,18 +141,9 @@ export const resolveWritableTarget = Effect.fn('resolveWritableTarget')(
       catch: ensureError,
     });
 
-    // Shared read-before-edit gate, then the current content. The gate asks
-    // whether the path names a filesystem entry at all, so it must answer
-    // true for a dangling symlink: `fs.exists` stats through the link and
-    // reports one as missing, so the readLink fallback supplies the lstat
-    // half that gates it.
+    // Shared read-before-edit gate (lstat semantics), then the current content.
     const fs = yield* FileSystem.FileSystem;
-    const exists =
-      (yield* fs.exists(absolutePath)) ||
-      (yield* fs.readLink(absolutePath).pipe(
-        Effect.as(true),
-        Effect.catch(() => Effect.succeed(false)),
-      ));
+    const exists = yield* entryExists(fs, absolutePath);
     const blocked = yield* requireFileReadForEdit(
       path,
       exists,
@@ -289,7 +281,7 @@ export const applyApprovedFileEdit = Effect.fn('applyApprovedFileEdit')(
       approval.appliedContent,
     );
     const presentation = present({ approval, ...written });
-    const output = appendApprovalDiffNote(
+    const output = yield* appendApprovalDiffNote(
       presentation.output,
       displayPath,
       proposedContent,

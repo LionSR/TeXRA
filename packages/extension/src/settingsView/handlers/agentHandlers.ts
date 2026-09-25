@@ -33,7 +33,7 @@ import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { chooseTeamAvailabilityViaDialog } from '@frontend/ui/dialogs';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
-import { NotificationFailed } from '@hosts/uiHosts';
+import { withLogChannel } from '@logger/effectLog';
 import type { ProcessServices } from '@platform/processRuntime';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
@@ -46,7 +46,7 @@ import {
 } from '@shared/settingsView/handlers/agentSelectionHandlers';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { allSettledVoid } from '@utils/core/allSettledVoid';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError } from '@utils/errors/errorMessage';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
 
 import {
@@ -157,7 +157,7 @@ export class AgentHandlers {
       yield* loadAgents();
       yield* postToWebview(
         webview,
-        buildAgentSelectionMessage({
+        yield* buildAgentSelectionMessage({
           buildSelectionItems: () =>
             this.catalogController.buildSelectionItems(),
           getCustomAgentScanIssues,
@@ -329,15 +329,12 @@ export class AgentHandlers {
   // ── Agent team handlers ──
 
   sendAgentModePresets(webview: vscode.Webview) {
-    return postToWebview(
-      webview,
-      buildAgentModePresetsMessage({
-        getCustomPresets: () => this.catalogController.getCustomPresets(),
-        getOrchestratorAgentNames: () =>
-          this.catalogController.getOrchestratorAgentNames(),
-        getActiveTeamId: () => this.roster.getActiveTeamId(),
-      }),
-    );
+    return buildAgentModePresetsMessage({
+      getCustomPresets: () => this.catalogController.getCustomPresets(),
+      getOrchestratorAgentNames: () =>
+        this.catalogController.getOrchestratorAgentNames(),
+      getActiveTeamId: () => this.roster.getActiveTeamId(),
+    }).pipe(Effect.flatMap((message) => postToWebview(webview, message)));
   }
 
   handleApplyAgentModePreset(
@@ -446,10 +443,9 @@ export class AgentHandlers {
     return Effect.forkDetach(
       vscodeUi.showInfoMessage(message).pipe(
         Effect.catchTag('NotificationFailed', (failure) =>
-          Effect.sync(() => {
-            this.ctx.log.warn(`${scope} notice failed: ${failure.message}`);
-          }),
+          Effect.logWarning(`${scope} notice failed: ${failure.message}`),
         ),
+        withLogChannel(this.ctx.channel),
       ),
     ).pipe(Effect.asVoid);
   }

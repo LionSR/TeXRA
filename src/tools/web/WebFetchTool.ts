@@ -5,7 +5,7 @@ import ky from 'ky';
 import { z } from 'zod';
 
 // Local imports - core
-import { ToolError, ToolResult } from '@shared/schemas';
+import { ToolError } from '@shared/schemas';
 import { retryTransientFetch, toFetchToolError } from '@tools/timeouts';
 import { defineTool } from '@tools/core/define';
 import { executed } from '@tools/core/result';

@@ -5,7 +5,6 @@ import {
   APIUserAbortError as AnthropicAPIUserAbortError,
   AuthenticationError as AnthropicAuthenticationError,
 } from '@anthropic-ai/sdk';
-import { ApiError as GoogleApiError } from '@google/genai';
 import {
   APIConnectionError as OpenAIAPIConnectionError,
   APIConnectionTimeoutError as OpenAIAPIConnectionTimeoutError,
@@ -13,7 +12,6 @@ import {
   APIUserAbortError as OpenAIAPIUserAbortError,
   AuthenticationError as OpenAIAuthenticationError,
   BadRequestError as OpenAIBadRequestError,
-  NotFoundError as OpenAINotFoundError,
   RateLimitError as OpenAIRateLimitError,
 } from 'openai';
 import { describe, expect, it } from 'vitest';
@@ -28,7 +26,6 @@ import {
   isContextWindowError,
   isUserAbort,
 } from '@common/errors/sdkError/errorPatterns';
-import { detectStatusText } from '@common/errors/sdkError/errorInspection';
 import {
   buildErrorLogData,
   formatProviderHttpError,
@@ -36,11 +33,7 @@ import {
   isProviderErrorAutoRetryable,
   normalizeProviderError,
 } from '@common/errors/sdkError/providerErrorFormat';
-import {
-  ProviderErrorPartialSchema,
-  RetryErrorInfoSchema,
-  toRetryErrorInfo,
-} from '@shared/schemas';
+import { RetryErrorInfoSchema, toRetryErrorInfo } from '@shared/schemas';
 import type { ProviderError, RetryErrorInfo } from '@shared/schemas';
 
 class APIError extends Error {}

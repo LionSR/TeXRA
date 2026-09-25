@@ -21,7 +21,8 @@ import {
   LanguageModel,
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
 } from '@platform/languageModel';
-import { AgentDirectories } from '@platform/interfaces';
+import { AgentDirectories, AppState } from '@platform/interfaces';
+import { FakeStateStore } from '@test/support/FakePlatform';
 import { fakeStores } from '@test/support/FakePlatform';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import {
@@ -88,6 +89,7 @@ const createAgent = (ui: AgentCreatorUI): Effect.Effect<void, unknown> =>
         unusedGlobalStorageFs(),
         LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT),
         AgentDirectories.layer(fakeHostAgentDirectories),
+        AppState.layer(new FakeStateStore()),
       ),
     ),
   );

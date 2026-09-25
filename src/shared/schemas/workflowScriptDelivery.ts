@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { LineCountSchema } from './lineChanges';
+import { WorkflowTallySchema } from './workflowCallProgress';
 
 const WorkflowScriptDeliveryFileSchema = z.strictObject({
   path: z.string(),
@@ -13,8 +14,7 @@ export const WorkflowScriptDeliverySummarySchema = z.strictObject({
   name: z.string(),
   outcome: z.enum(['completed', 'failed']),
   phaseCount: z.int().nonnegative(),
-  taskDone: z.int().nonnegative(),
-  taskTotal: z.int().nonnegative(),
+  tally: WorkflowTallySchema,
   costUsd: z.number().nonnegative(),
   durationMs: z.int().nonnegative(),
   files: z.array(WorkflowScriptDeliveryFileSchema),
