@@ -158,7 +158,7 @@ const readCommandStdout: CommandRunner = (command, args, timeoutMs, cwd) =>
  * malformed formula entry degrades to `null` (skipped) rather than failing the
  * whole parse, so one odd entry cannot hide an available upgrade. The per-entry
  * recovery is a `safeParse` fold inside `transform`, not a `.catch`, so this
- * file stays at zero raw catches (catch:effect-importer ratchet row).
+ * `effect`-importing file keeps no raw catch.
  */
 const HomebrewFormulaEntrySchema = z.object({
   name: z.string(),
