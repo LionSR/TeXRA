@@ -14,9 +14,15 @@ import { openRealm, type Realm, ScriptFault } from './realm';
  * whose `name` is this tag, so `try/catch` and `attempt()` both see it.
  */
 export class OpFailure extends Data.TaggedError('OpFailure')<{
-  readonly name: 'AgentFailed' | 'TimedOut' | 'Skipped' | (string & {});
+  readonly name: OpFailureName;
   readonly message: string;
 }> {}
+
+/** The operation failures of §2.4; nothing else is catchable by `attempt()`. */
+const OP_FAILURE_NAMES = ['AgentFailed', 'TimedOut', 'Skipped'] as const;
+type OpFailureName = (typeof OP_FAILURE_NAMES)[number];
+const isOpFailureName = (name: string): name is OpFailureName =>
+  (OP_FAILURE_NAMES as readonly string[]).includes(name);
 
 export interface AgentCall {
   readonly prompt: string;
@@ -67,12 +73,15 @@ const makeInterpreter = <R>(
           case 'done':
             return reply.value;
           case 'threw':
-            // An uncaught throw fails this branch the way a failed operation
-            // would; the parent's yield* sees the same name.
-            return yield* new OpFailure({
-              name: reply.name,
-              message: reply.message,
-            });
+            // A failed operation the branch did not catch propagates as the
+            // same failure, so the parent's yield* sees the same name. Any
+            // other throw (a TypeError, a script's own Error) is a script
+            // defect: it ends the run, and attempt()/retry() never see it.
+            return yield* isOpFailureName(reply.name)
+              ? new OpFailure({ name: reply.name, message: reply.message })
+              : new ScriptFault({
+                  message: `${reply.name}: ${reply.message}`,
+                });
           case 'op': {
             const exit: Exit.Exit<unknown, ScriptOutcome> = yield* Effect.exit(
               runNode(reply.op),
