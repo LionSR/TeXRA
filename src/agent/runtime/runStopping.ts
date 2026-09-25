@@ -322,10 +322,11 @@ export class RunStopper {
     }
     // A child run is its loop, not only the turn this handle runs:
     // stopping it ends the loop too, so the interrupted turn is not delivered
-    // to the parent as a completed one.
+    // to the parent as a completed one. A detached child is still a loop: its
+    // process turn is reached through the loop's signal alone.
     const activation = this.roster.activation(handle.runId);
     let activationInterrupted = false;
-    if (activation && activation.parent.current !== null) {
+    if (activation) {
       const key = `activation:${activation.runId}`;
       if (!visited.has(key)) {
         visited.add(key);
@@ -333,21 +334,30 @@ export class RunStopper {
         activationInterrupted = true;
       }
     }
-    const interrupted = handle.interrupt();
-    // The loop's own interrupt already carried the stop into the turn: the
-    // native-subagent strategy links the loop signal to this handle, so
-    // aborting the loop spends the handle's interrupt target before we reach
-    // it. The delivered stop is the admission, exactly as the handle-less
+    // The run's stop is its fiber's interruption. The fiber exists from the instant the run is admitted
+    // (`RunRoster.launch` forks inside the lane claim), so a launch has no
+    // pre-fiber window a stop could miss, and a handle whose fiber is not
+    // registered yet is one the roster's lane has not admitted — the
+    // activation arm above or the handle-less `kill` branch is its stop. A
+    // child loop's activation already carried the stop into its turns above,
+    // so it spends the fiber target before we reach it.
+    // The delivered stop is the admission, exactly as the handle-less
     // branch of `kill` reports an activation-only stop.
-    return interrupted || activationInterrupted;
+    return (
+      activationInterrupted ||
+      (activation === undefined && this.roster.interrupt(handle.runId))
+    );
   }
 
-  /** Interrupt the child driver of a run no live handle holds, reporting
-   *  whether there was one to reach. */
+  /** Stop a run no live handle holds, reporting whether there was one to
+   *  reach: its child driver, or — for a run between admission and its
+   *  lifecycle's handle (the lineage reads, the definition load) — the fiber
+   *  that admitted it. */
   private interruptActivation(runId: RunId): boolean {
     const activation = this.roster.activation(runId);
-    activation?.interrupt();
-    return activation !== undefined;
+    if (activation === undefined) return this.roster.interrupt(runId);
+    activation.interrupt();
+    return true;
   }
 
   /**

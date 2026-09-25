@@ -64,8 +64,8 @@ const SessionKeySchema = z.string().min(1);
  * element types are stated rather than re-declared here.
  */
 const TranscriptViewSchema = z.object({
-  /** `projectTranscriptRow` over every entry plus the compaction rows, in
-   *  wire append order. */
+  /** The transcript fold's rows (`transcriptFold.ts`) plus the compaction
+   *  rows, in first-appearance order. */
   rows: z.array(z.custom<TranscriptRow>()),
   /** `taskGroupOnStage` over the stage events. */
   taskGroups: z.array(TaskGroupSchema),

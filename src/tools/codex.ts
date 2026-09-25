@@ -61,8 +61,7 @@ import { buildAgentWorkspaceOptions } from './agentWorkspaceOptions';
 import {
   codexSandboxMode,
   getCodexConfig,
-  importCodexClass,
-  findCodexBinaryPath,
+  openCodexClient,
 } from './codexImport';
 import { type ChildRun } from './delegation/childRun';
 import { codexThreadsFor } from './agentCliSessionStores';
@@ -422,9 +421,7 @@ const createCodexThread = Effect.fn('codex.createCodexThread')(function* (
   roots: WorkspaceRoots,
   workingDir?: string,
 ) {
-  const CodexClass = yield* importCodexClass();
-  const codexPath = yield* findCodexBinaryPath();
-  const codex = new CodexClass({ codexPathOverride: codexPath });
+  const { codex, codexPath } = yield* openCodexClient();
   const config = yield* getCodexConfig;
   // Resumed threads keep their stored workspace unless explicitly overridden.
   const workspace =

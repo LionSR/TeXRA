@@ -56,7 +56,7 @@ export {
 
 // Layer 3: Depends on layer 2
 export * from './log';
-export * from './streamLogEntry';
+export * from './logPayload';
 export * from './taskGroup';
 export * from './todo';
 export * from './todoDisplay';

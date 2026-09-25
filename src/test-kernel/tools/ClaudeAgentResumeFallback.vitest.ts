@@ -39,11 +39,18 @@ vi.mock('@agent/followUp/ToolUseFollowUp', () => ({
 // The session-keyed registry resolves live handles through its session's
 // RunRegistry. Tests stage a handle here for the lookups they exercise;
 // unset slots miss, like an untracked run.
-const sessionHandles: { byRunId?: unknown } = {};
+const sessionHandles: { byRunId?: unknown; interruptActive?: () => void } = {};
 const testSession = {
   followUps: { acquire: () => ({ enqueue: vi.fn() }) },
   runs: {
     getHandle: () => sessionHandles.byRunId,
+    // A stop by run id reaches whatever the case staged as the run's live
+    // target; an unstaged run has none.
+    interruptActive: () => {
+      if (sessionHandles.interruptActive === undefined) return false;
+      sessionHandles.interruptActive();
+      return true;
+    },
   },
 } as unknown as SessionHandle;
 const ClaudeAgentSessions = claudeAgentSessionsFor(testSession.runs);
@@ -453,13 +460,13 @@ describe('claude_agent tool launch and resume fallback', () => {
           prompt: 'start a long initial turn',
         });
 
-        sessionHandles.byRunId = { interrupt };
+        sessionHandles.interruptActive = interrupt;
         captured.strategy?.onLoopStart?.(testSession);
         ClaudeAgentSessions.interruptAll();
 
         expect(interrupt).toHaveBeenCalledOnce();
         captured.strategy?.releaseSessionOwnership?.();
-        delete sessionHandles.byRunId;
+        delete sessionHandles.interruptActive;
       }).pipe(
         Effect.provide(
           nativeToolTestLayer({

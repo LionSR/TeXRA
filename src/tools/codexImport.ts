@@ -13,7 +13,10 @@
  *    priority order), then return the path for `codexPathOverride`. Results
  *    are cached for the session.
  *
- * 3. `getCodexConfig()` — the same lazy access for `codexConfig`, which the
+ * 3. `openCodexClient()` — a client over that binary, with the environment
+ *    the CLI may see.
+ *
+ * 4. `getCodexConfig()` — the same lazy access for `codexConfig`, which the
  *    tool-registration path must not pull in eagerly, plus the one reading of
  *    the call's effective sandbox mode.
  */
@@ -23,19 +26,18 @@ import * as path from 'node:path';
 
 import { Effect } from 'effect';
 
-import { isModuleNotFoundError } from '@common/errors';
 import type { StateReadFailed } from '@platform/interfaces';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { CodexSandboxMode } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import { readSettingFrom } from '@utils/config/platformSettings';
-import { ensureError } from '@utils/errors/errorMessage';
+import { inheritedEnv } from '@utils/system/envFlags';
+import { readSettingUnlessOverridden } from '@utils/config/platformSettings';
 import { IS_WINDOWS } from '@utils/system/platformPaths';
 
 import {
   createCachedBinaryResolver,
+  importForeignSdk,
   resolvePackageDir,
-  resolveSdkExport,
 } from './support/externalBinaryUtils';
 
 // The native `Codex` class value; `typeof` gives its construct signature
@@ -43,6 +45,20 @@ import {
 type CodexConstructor = typeof import('@openai/codex-sdk').Codex;
 type SandboxMode = import('@openai/codex-sdk').SandboxMode;
 type PlatformInfo = { pkg: string; triple: string };
+
+/**
+ * Every `CodexSandboxMode` catalog value must be one the SDK's `SandboxMode`
+ * union accepts, so a persisted value the SDK doesn't support fails to
+ * compile here. `codexSandboxMode` below reads through the shared
+ * override-or-setting helper typed to the SDK's own `SandboxMode`, not this
+ * narrower catalog type, so this stand-alone assert is what used to live in
+ * that read's declared return type (mirrors `_EffortLevelsAligned` in
+ * `claudeAgentShared.ts`).
+ */
+type _AssertExtends<T extends true> = T;
+type _CodexSandboxModeAligned = _AssertExtends<
+  CodexSandboxMode extends SandboxMode ? true : false
+>;
 
 // ---------------------------------------------------------------------------
 // SDK import
@@ -54,34 +70,19 @@ type PlatformInfo = { pkg: string; triple: string };
  * The SDK is ESM-only, but esbuild converts it to CJS at build time (it must
  * NOT be listed in esbuild's `external` array). The dynamic import() here is
  * converted to require() by esbuild, so it works in VS Code's extension host.
- * That import is this module's one foreign edge and is wrapped exactly once,
- * here; a missing package is re-stated as install guidance with the original
- * attached as `cause`, so callers classify it off the cause chain rather than
- * the message text.
+ * That import is this module's one foreign edge, kept inline as a literal for
+ * esbuild's benefit; {@link importForeignSdk} wraps everything downstream of
+ * it (the shape shared with `importClaudeAgentSdk`).
  */
 export function importCodexClass(): Effect.Effect<CodexConstructor, Error> {
-  return Effect.tryPromise({
-    try: (): Promise<Record<string, unknown>> => import('@openai/codex-sdk'),
-    catch: (err) =>
-      isModuleNotFoundError(err)
-        ? new Error(
-            '@openai/codex-sdk package not found. Install with: npm install -g @openai/codex',
-            { cause: err },
-          )
-        : ensureError(err),
-  }).pipe(
-    Effect.flatMap((mod) =>
-      Effect.try({
-        try: () =>
-          resolveSdkExport<CodexConstructor>(mod, {
-            exportName: 'Codex',
-            specifier: '@openai/codex-sdk',
-            errorLabel: 'Codex class',
-          }),
-        catch: ensureError,
-      }),
-    ),
-  );
+  return importForeignSdk<CodexConstructor>({
+    load: (): Promise<Record<string, unknown>> => import('@openai/codex-sdk'),
+    notFoundMessage:
+      '@openai/codex-sdk package not found. Install with: npm install -g @openai/codex',
+    exportName: 'Codex',
+    specifier: '@openai/codex-sdk',
+    errorLabel: 'Codex class',
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -178,6 +179,23 @@ export const findCodexBinaryPath = createCachedBinaryResolver(() => {
   };
 });
 
+/**
+ * A Codex client over the native binary, and the binary's path. The CLI gets
+ * an explicit environment: the SDK would otherwise hand it all of
+ * `process.env`, other providers' keys included, and what its commands print
+ * comes back as a tool result. OPENAI_API_KEY stays: it is one of the CLI's
+ * own sign-in routes.
+ */
+export const openCodexClient = Effect.fn('codex.openClient')(function* () {
+  const CodexClass = yield* importCodexClass();
+  const codexPath = yield* findCodexBinaryPath();
+  const codex = new CodexClass({
+    codexPathOverride: codexPath,
+    env: inheritedEnv('openai'),
+  });
+  return { codex, codexPath };
+});
+
 /** Lazy accessor for codexConfig.ts exports (loaded once, cached). */
 let configModule: typeof import('./codexConfig.js') | null = null;
 export const getCodexConfig = Effect.promise(
@@ -187,17 +205,15 @@ export const getCodexConfig = Effect.promise(
 /**
  * The sandbox mode a codex call runs under: its own override, else the
  * user-configured default. The approval prompt the loop opens and the launch
- * that follows it read the same one from here. The SDK-typed return is the
- * alignment guard between the persisted schema values and the Codex sandbox
- * union: a schema value the SDK doesn't accept fails to compile here.
+ * that follows it read the same one from here. The schema↔SDK alignment
+ * guard lives in {@link _CodexSandboxModeAligned} above, not in this read.
  */
 export const codexSandboxMode = (
   input: { readonly sandbox_mode?: SandboxMode | null },
   stores: SettingsStores,
 ): Effect.Effect<SandboxMode, StateReadFailed> =>
-  input.sandbox_mode == null
-    ? readSettingFrom<CodexSandboxMode>(
-        stores,
-        WorkspaceStateKey.CODEX_SANDBOX_MODE,
-      )
-    : Effect.succeed(input.sandbox_mode);
+  readSettingUnlessOverridden(
+    input.sandbox_mode,
+    stores,
+    WorkspaceStateKey.CODEX_SANDBOX_MODE,
+  );

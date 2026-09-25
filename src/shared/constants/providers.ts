@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import {
   MODEL_PROVIDER_PLUGINS,
+  findModelProviderPlugin,
   type ApiKeyProviderId,
 } from '@shared/constants/modelProviderPlugins';
 
@@ -94,6 +95,23 @@ export const API_KEY_PROVIDER_IDS: readonly ApiKeyProviderId[] = Object.freeze(
   MODEL_PROVIDER_PLUGINS.flatMap((plugin) =>
     plugin.apiKey ? [plugin.id as ApiKeyProviderId] : [],
   ),
+);
+
+/** Environment variable for a provider's API key. */
+export function apiKeyEnvName(provider: ApiKeyProviderId): string {
+  return (
+    findModelProviderPlugin(provider)?.apiKeyEnvName ??
+    `${provider.toUpperCase()}_API_KEY`
+  );
+}
+
+/**
+ * Every environment variable TeXRA reads as a provider API key, derived from
+ * the provider manifest, so a provider added there is covered here. A child
+ * process TeXRA spawns does not inherit them (see `inheritedEnv`).
+ */
+export const API_KEY_ENV_NAMES: readonly string[] = Object.freeze(
+  API_KEY_PROVIDER_IDS.map(apiKeyEnvName),
 );
 
 // ============================================================================

@@ -1,24 +1,24 @@
 /**
- * What this process holds for a run, in one entry per run.
- *
- * One roster per session is the single in-process authority for "is a
- * generation of this run live here" ({@link RunRoster.isLive}, the one
- * admission): the tracked handle, the native child loop's activation, the
- * the run's serial lifecycle lane and
- * the generations holding it are fields of one entry, so admission, stop and
- * deletion all answer from the same record. The registry (`runRegistry.ts`)
- * owns the session-facing surface, the stopper (`runStopping.ts`) what a stop
- * does with these records.
- *
- * Serialization itself is `withPerKeyLane` (`@utils/core/perKeyQueue`): a
- * `Deferred` hand-off chain rather than a queue, which gives FIFO admission
- * for free and keeps the wait interruptible — a caller interrupted while
- * queued hands its successor the wait for whoever holds the lane, rather than
- * leaving a task behind in a queue nobody can reach. The lane lives on the
- * entry, so the helper's map is this roster's own.
+ * What this process holds for a run, in one entry per run: the fiber running
+ * it, the tracked handle, the native child loop's activation and the run's
+ * serial lane. One roster per session is the single in-process authority for
+ * "is a generation of this run live here" ({@link RunRoster.isLive}), so
+ * admission, stop and deletion answer from one record. The registry
+ * (`runRegistry.ts`) owns the session-facing surface, the stopper
+ * (`runStopping.ts`) what a stop does with these records. Serialization is
+ * `withPerKeyLane`: FIFO admission with an interruptible wait, its lane kept
+ * on the entry.
  */
 
-import { Data, Deferred, Effect, PubSub, type Scope } from 'effect';
+import {
+  Data,
+  Deferred,
+  Effect,
+  Fiber,
+  Latch,
+  PubSub,
+  type Scope,
+} from 'effect';
 
 import type { SessionApprovals } from '@agent/runtime/runApprovalQueue';
 import type { RunId } from '@shared/schemas';
@@ -37,37 +37,31 @@ export class RunLive extends Data.TaggedError('RunLive')<{
   }
 }
 
+type AnyFiber = Fiber.Fiber<unknown, unknown>;
 /** Everything this process holds for one run. The entry exists exactly while
  *  one of its fields does, which is what makes it the liveness authority. */
 interface RunEntry {
+  /** The fiber running this run here — its liveness, stop target and terminal
+   *  owner — written by that fiber's first step, erased by its own exit. */
+  fiber?: AnyFiber;
+  hold?: AnyFiber;
   handle?: RunHandle;
   activation?: ChildRunActivation;
   /** The run's hand-off chain while a fiber holds or waits on it. */
   lane?: PerKeyLane;
-  /** Generations of this run holding or waiting on that lane; an inactive-run
+  /** Fibers of this run holding or waiting on that lane; an inactive-run
    *  step takes the lane without being one ({@link RunRoster.isLive}). */
   launches: number;
-  /** The completion of every generation of this run a caller is holding
-   *  against local ownership — a set rather than one chained value, because
-   *  they end in no fixed order. */
-  readonly generations: Set<Deferred.Deferred<void>>;
 }
 
 export class RunRoster {
   private readonly entries = new Map<RunId, RunEntry>();
-  /** Every change a waiter can wake on, as the id of the run that changed —
-   *  see {@link waitForAnyChange} for the full wake set. A waiter is not a
-   *  record of a live run (`executions wait` waits on runs this process may
-   *  never hold), so changes are published apart from the entries and never
-   *  create one. Opened by the first waiter: a change published before any
-   *  subscription had no reader either way. Unbounded, so a publish from the
-   *  synchronous paths below never blocks or drops. */
+  /** Every change a waiter can wake on ({@link waitForAnyChange}), apart from
+   *  the entries; opened by the first waiter, unbounded so publish never blocks. */
   private changes: PubSub.PubSub<RunId> | undefined;
-  /** The stops begun for each run ({@link beginStop}), one token apiece: the
-   *  run admits no new child until every one has settled ({@link throughStop})
-   *  or a new generation takes the lane. Two overlapping stops of one parent
-   *  each hold the gate they opened, so the first to settle cannot admit a
-   *  child the second's snapshot has already left behind. */
+  /** The stops begun for each run ({@link beginStop}), one token apiece, so
+   *  of two overlapping stops the first to settle cannot admit a child the
+   *  second's snapshot already left behind. */
   private readonly stopping = new Map<RunId, Set<symbol>>();
   /** Steps admitted but not yet started, across every run: session disposal
    *  fails all of them at once, so they need no per-run keying. */
@@ -87,24 +81,55 @@ export class RunRoster {
     },
   };
 
-  constructor(private readonly approvals: SessionApprovals) {}
+  constructor(
+    private readonly approvals: SessionApprovals,
+    /** Admit one run's DB claim, for a hold that fences the claim together
+     *  with the in-process owner ({@link holdInactive}). */
+    private readonly claimRun?: (
+      runId: RunId,
+    ) => Effect.Effect<Effect.Effect<void, Error>, Error>,
+  ) {}
 
   private entryFor(runId: RunId): RunEntry {
     const existing = this.entries.get(runId);
     if (existing) return existing;
-    const entry: RunEntry = { generations: new Set(), launches: 0 };
+    const entry: RunEntry = { launches: 0 };
     this.entries.set(runId, entry);
     return entry;
   }
 
   /** Drop an entry that records nothing: the run is not here any more. */
   private prune(runId: RunId, entry: RunEntry): void {
-    if (entry.handle ?? entry.activation ?? entry.lane) return;
-    if (entry.launches > 0 || entry.generations.size > 0) return;
+    if (entry.fiber ?? entry.handle ?? entry.activation ?? entry.lane) return;
+    if (entry.hold !== undefined || entry.launches > 0) return;
     if (this.entries.get(runId) === entry) {
       this.entries.delete(runId);
       this.notifyWaiters(runId);
     }
+  }
+
+  // ------------------------------------------------------------------ fiber
+
+  /** Register a fiber in `slot` on its entry; its own exit erases it. */
+  private setFiber(runId: RunId, fiber: AnyFiber, slot: 'fiber' | 'hold') {
+    const entry = this.entryFor(runId);
+    entry[slot] = fiber;
+    fiber.addObserver(() => {
+      if (entry[slot] === fiber) {
+        entry[slot] = undefined;
+        this.prune(runId, entry);
+        this.notifyWaiters(runId);
+      }
+    });
+  }
+
+  /** The run's stop, by run id: interrupt the fiber the entry names. Sync,
+   *  and answered straight away: the entry has a fiber or it does not. */
+  interrupt(runId: RunId): boolean {
+    const fiber = this.entries.get(runId)?.fiber;
+    if (fiber === undefined) return false;
+    fiber.interruptUnsafe();
+    return true;
   }
 
   // ---------------------------------------------------------------- handles
@@ -231,8 +256,7 @@ export class RunRoster {
   }
 
   /** Runs with a live interrupt target: tracked handles and native child
-   *  activations. A lane still releasing resources can outlive both; the
-   *  drain waits for its entry without trying to stop it again. */
+   *  activations. A lane still releasing outlives both; the drain waits on it. */
   activeIds(): RunId[] {
     const ids: RunId[] = [];
     for (const [runId, entry] of this.entries)
@@ -243,32 +267,25 @@ export class RunRoster {
 
   // ---------------------------------------------------------------- liveness
 
-  /** Whether this process holds a live generation of the run. */
+  /** Whether this process holds a live generation of the run: its fiber, an
+   *  admitted launch, or a live tool-use flow on its handle. */
   isLive(runId: RunId): boolean {
     const entry = this.entries.get(runId);
     if (entry === undefined) return false;
-    if (entry.generations.size > 0 || entry.launches > 0) return true;
+    if (entry.fiber ?? entry.hold ?? entry.launches > 0) return true;
     return entry.handle?.getToolUseFlow() !== undefined;
   }
 
-  /** Run `operation` on `runId`'s lane: claim the lane synchronously, wait for
-   *  the predecessor and then for the live generations, and hold the lane
-   *  until `operation` settles — including the finalizers it registered, since
-   *  `withPerKeyLane` releases the lane only once the whole effect leaves.
+  /** Run `operation` on `runId`'s lane: claim the lane synchronously, fork
+   *  the operation registered on the entry from its first step, and hold
+   *  the lane until that fiber settles, finalizers included.
    *
-   *  The claim is conditional and `withPerKeyLane` runs the condition: {@link
-   *  isLive} reads the entry in the same synchronous step as the tail swap, so
-   *  no generation can take the run between the two, and refusing leaves the
-   *  lane as it was found. This is the one admission, so no caller asks it
-   *  beforehand. `refuseWhenLive` marks the caller an inactive-run step rather
-   *  than a generation: it widens the refusal to the retained owners and to
-   *  whoever else holds the lane, and keeps the step out of {@link isLive}, so
-   *  the run's next generation queues behind it.
-   *
-   *  A step is refusable from admission until it starts, and {@link waiting}
-   *  holds its refusal for exactly that window. The race is therefore around
-   *  the lane, not inside it: a step still waiting for its predecessor is
-   *  refused where it stands, and hands the lane on when interrupted. */
+   *  The claim is conditional: {@link isLive} reads the entry in the same
+   *  synchronous step as the tail swap, so this is the one admission.
+   *  `refuseWhenLive` marks an inactive-run step rather than a generation: it
+   *  also refuses on retained owners and lane holders, and stays out of
+   *  {@link isLive}. A step waiting for its predecessor is refusable where it
+   *  stands ({@link waiting}) and hands the lane on when interrupted. */
   launch<A, E, R>(
     runId: RunId,
     operation: Effect.Effect<A, E, R>,
@@ -301,19 +318,24 @@ export class RunRoster {
         this.prune(runId, entry);
       };
       const step = Effect.gen({ self: this }, function* () {
-        // Read the gate after the predecessor left: a generation it started
-        // is exactly what this step must not overlap. One snapshot, as the
-        // predecessor's own wait took one — a generation opened after this
-        // read belongs to the step that opened it, not to this one.
-        const generations = this.entries.get(runId)?.generations;
-        if (generations !== undefined && generations.size > 0) {
-          yield* Effect.all(
-            [...generations].map((generation) => Deferred.await(generation)),
-            { concurrency: 'unbounded', discard: true },
-          );
-        }
         this.waiting.delete(refusal);
-        return yield* operation;
+        // The fiber registers itself as its first step (the forking fiber
+        // may yield first), so a stop by run id reaches it from the first
+        // instant; one only scheduled would skip its finalizers on a
+        // pre-start interrupt. An inactive-run step is not a generation.
+        const fiber = yield* Effect.forkChild(
+          refuseWhenLive
+            ? operation
+            : Effect.withFiber((self) => {
+                this.setFiber(runId, self, 'fiber');
+                return operation;
+              }),
+          { startImmediately: true },
+        );
+        // An interrupted join interrupts the fiber and awaits its cleanup.
+        return yield* Fiber.join(fiber).pipe(
+          Effect.onInterrupt(() => Fiber.interrupt(fiber)),
+        );
       });
       return Effect.raceFirst(
         Deferred.await(refusal),
@@ -323,39 +345,48 @@ export class RunRoster {
   }
 
   /** Hold `runId` against local ownership for the caller's scope, refusing
-   *  when a generation, a step on its lane, or a retained handle owns it here
-   *  — an inactive-run step's refusal ({@link launch}), for a decision whose
-   *  validity has to outlive the step that took it. The hold is a generation
-   *  like any other: {@link isLive} reports it, so a resume refuses on it, a
-   *  launch of the same run waits for it, and a competing step is refused. */
-  holdInactive(runId: RunId): Effect.Effect<void, RunLive, Scope.Scope> {
+   *  as an inactive-run step does ({@link launch}). The hold is an idle fiber
+   *  on the entry, which {@link isLive} reports and no stop reaches, carrying
+   *  the run's DB claim in its own scope: one construct fences both. */
+  holdInactive(
+    runId: RunId,
+  ): Effect.Effect<void, RunLive | Error, Scope.Scope> {
+    const claim = this.claimRun ?? (() => Effect.succeed(Effect.void));
     return Effect.asVoid(
       Effect.acquireRelease(
-        // The test and the registration are one synchronous step, as the
-        // conditional lane claim is: nothing can take the run in between.
-        Effect.suspend(() =>
-          this.isLive(runId) ||
-          this.isRetained(runId) ||
-          this.isLaneOccupied(runId)
-            ? Effect.fail(new RunLive({ runId }))
-            : Effect.sync(() => this.openGeneration(runId)),
-        ),
-        (close) => Effect.sync(close),
+        Effect.gen({ self: this }, function* () {
+          const ready = Deferred.makeUnsafe<void, Error>();
+          const latch = yield* Latch.make(false);
+          const hold = Effect.scoped(
+            Effect.gen(function* () {
+              yield* Effect.acquireRelease(claim(runId), Effect.orDie);
+              yield* Deferred.succeed(ready, undefined);
+              yield* Latch.await(latch);
+            }),
+          ).pipe(Effect.catch((error) => Deferred.fail(ready, error)));
+          // Registered as its first step, synchronous with the test, as in
+          // `launch`: a launch during the claim below already sees the hold.
+          const fiber = yield* Effect.forkChild(
+            Effect.withFiber((self) => {
+              if (
+                this.isLive(runId) ||
+                this.isRetained(runId) ||
+                this.isLaneOccupied(runId)
+              )
+                return Deferred.fail(ready, new RunLive({ runId }));
+              this.setFiber(runId, self, 'hold');
+              return hold;
+            }),
+            { startImmediately: true },
+          );
+          yield* Deferred.await(ready);
+          return { latch, fiber };
+        }),
+        // The join awaits the claim release before the caller's scope closes.
+        ({ latch, fiber }) =>
+          Latch.open(latch).pipe(Effect.andThen(Fiber.join(fiber))),
       ),
     );
-  }
-
-  /** Register a live generation of `runId` and hand back its close: synchronous
-   *  with the call, idempotent against a disposal that dropped the entry. */
-  private openGeneration(runId: RunId): () => void {
-    const completion = Deferred.makeUnsafe<void>();
-    const entry = this.entryFor(runId);
-    entry.generations.add(completion);
-    return () => {
-      Deferred.doneUnsafe(completion, Effect.void);
-      entry.generations.delete(completion);
-      this.prune(runId, entry);
-    };
   }
 
   // --------------------------------------------------------------- waiters
@@ -366,22 +397,10 @@ export class RunRoster {
 
   /**
    * Wait for any of `runIds` to change and succeed with the first that did.
-   *
-   * The full wake set, which is what an `executions wait` observes:
-   *
-   * - a status transition on this run;
-   * - a `track`, including a *replacement* handle for the same id (a resumed
-   *   generation taking over from its predecessor) — a `track` that skipped
-   *   this would strand a waiter across a resume;
-   * - an `untrack`, including for an id that holds no handle;
-   * - a `kill`, unconditionally, even when no live interrupt target was
-   *   reached;
-   * - session disposal, for every run still tracked at teardown.
-   *
-   * A caller that wants a bounded wait races or times out this effect instead
-   * of passing a deadline in: the subscription lives in this effect's scope,
-   * so interrupting the waiting fiber unsubscribes, and an abandoned wait
-   * leaves nothing registered.
+   * The wake set: a status transition; a `track` (a replacement handle
+   * included, so a waiter is not stranded across a resume); an `untrack`,
+   * even of an id holding no handle; every `kill`; and session disposal. A
+   * bounded wait races this effect: the subscription lives in its scope.
    */
   waitForAnyChange(runIds: readonly RunId[]): Effect.Effect<RunId> {
     return Effect.scoped(
@@ -400,17 +419,20 @@ export class RunRoster {
     );
   }
 
-  /** Resolve once every owner has left: handles, child activations, lanes and
-   *  scoped holds. Terminal handle removal can precede a lane's final writes.
-   *  Interrupting the waiting fiber — what a close budget does — ends the
-   *  subscription with it. The re-check arm is load-bearing: `raceAllFirst`
-   *  starts its arms in order, so the wait subscribes first and the re-check
-   *  then sees a last run that left between the read above and that
-   *  subscription, rather than waiting out the close budget for a notification
-   *  that can no longer come. */
+  /** Resolve once every owner has left: each entry's fiber or hold by
+   *  `Fiber.await`, then handles, activations and lanes through the hub. The
+   *  re-check arm is load-bearing: `raceAllFirst` starts its arms in order,
+   *  so a last run leaving before the subscription is still seen. */
   awaitDrained(): Effect.Effect<void> {
     return Effect.gen({ self: this }, function* () {
       for (;;) {
+        const head = this.entries.values().next();
+        if (head.done) return;
+        const fiber = head.value.fiber ?? head.value.hold;
+        if (fiber !== undefined) {
+          yield* Fiber.await(fiber);
+          continue;
+        }
         const active = [...this.entries.keys()];
         if (active.length === 0) return;
         yield* Effect.raceAllFirst([
@@ -425,18 +447,11 @@ export class RunRoster {
 
   // ------------------------------------------------------------------ gates
 
-  /** Mark a run's stop as begun, synchronously, before the stop reads which
-   *  children it has to detach. A detaching stop snapshots the parent's
-   *  children, commits their `run.detach` batch, severs them locally, and only
-   *  then interrupts the parent — deliberately without cascading. A child
-   *  admitted while that commit is in flight would be in neither the durable
-   *  nor the local sever, and would still resolve the just-stopped parent as
-   *  its delivery target. The mark closes that window at its start: from here
-   *  until the stop settles, no new child is admitted under it ({@link
-   *  admitsChild}), and a cascading stop takes the same mark. The mark is the
-   *  stop's, so {@link throughStop} owns its whole life: a multi-turn parent
-   *  tracking its next turn's handle mid-detach is not the stop ending, and a
-   *  run whose next generation takes the lane has left it. */
+  /** Mark a run's stop as begun, synchronously, before it reads which
+   *  children to detach: a child admitted while the stop's `run.detach`
+   *  commits would be in neither the durable nor the local sever. Until the
+   *  stop settles ({@link throughStop}) no child is admitted under it
+   *  ({@link admitsChild}). */
   beginStop(runId: RunId): symbol {
     const token = Symbol('run-stop');
     const tokens = this.stopping.get(runId) ?? new Set<symbol>();
@@ -446,10 +461,7 @@ export class RunRoster {
   }
 
   /** End this stop's admission gate when its settlement does, succeeded or
-   *  failed: a refused `run.detach` commit never reaches the interrupt, so the
-   *  parent generation it marked still runs and still owns the children it
-   *  launches next. The gate lifts when the last stop lets go, since an
-   *  overlapping stop is still committing over an older snapshot. */
+   *  failed; the gate lifts when the last overlapping stop lets go. */
   throughStop(
     runId: RunId,
     token: symbol,

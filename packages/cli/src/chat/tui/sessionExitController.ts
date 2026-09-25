@@ -81,7 +81,7 @@ interface SessionExitControllerContext {
   readonly followUpsIdle: Effect.Effect<void>;
   /** Reads the live approval policy for the resume hint. */
   readonly getApprovalPolicy: () => TexraApprovalPolicy;
-  /** Materialize buffered trace chunks + drain debounced StreamLog writes. */
+  /** Materialize buffered trace chunks and drain queued publications. */
   readonly flushArtifacts: Effect.Effect<void, Error>;
   /** Repaint the TUI from a known origin after a `fg`/SIGCONT resume. */
   readonly repaintAfterTerminalResume: () => void;

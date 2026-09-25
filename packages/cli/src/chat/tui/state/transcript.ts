@@ -11,7 +11,6 @@ import { signal } from '@lit-labs/signals';
 import { Cause, Effect } from 'effect';
 
 import { withLogChannel } from '@logger/effectLog';
-import { redactSecrets } from '@logger/redaction';
 import type { RunId } from '@shared/schemas';
 import type { RunView } from '@shared/session/sessionView';
 import type { RequestError } from '@shared/session/requestErrors';
@@ -57,15 +56,14 @@ export function appendLocalUserTranscript(text: string): void {
   appendLocalTranscriptEntry('user', text);
 }
 
-/** The one non-event row producer, so it redacts here, as
- *  `redactTraceDraft` does for every committed event: no painter redacts. */
+/** The one non-event row producer. */
 function localTranscriptRow(
   kind: 'assistant' | 'error' | 'user',
   id: string,
   text: string,
 ): TranscriptRow {
   const base = { id, origin: 'local', timestamp: Date.now() } as const;
-  const body = transcriptText(redactSecrets(text));
+  const body = transcriptText(text);
   if (kind === 'error') {
     return {
       ...base,
