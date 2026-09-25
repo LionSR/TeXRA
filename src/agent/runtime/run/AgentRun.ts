@@ -86,8 +86,6 @@ interface RunCallbacks {
   readonly onProgress?: (update: SubagentProgressUpdate) => void;
   /** Current folded state at an idle turn boundary, after child delivery. */
   readonly onIdle?: (state: RunState) => void;
-  /** Fires once the run's model changed and the cell holds the new binding. */
-  readonly onModelChanged: (model: string) => void;
 }
 
 export interface AgentRunShape {

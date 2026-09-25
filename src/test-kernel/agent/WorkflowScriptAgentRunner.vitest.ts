@@ -25,7 +25,10 @@ import {
   DatabaseClaimRefused,
   DatabaseWriteFailed,
 } from '@shared/session/database';
-import { emptyPinnedComposition } from '@test/support/nativeToolTestLayer';
+import {
+  emptyPinnedComposition,
+  testModelCell,
+} from '@test/support/nativeToolTestLayer';
 import { noopTrace } from '@test/support/noopTrace';
 import { createFakeWorkspaceRoots, fakePath } from '@test/support/FakePlatform';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
@@ -292,6 +295,7 @@ function parentContext(): DelegationParent {
         agent: 'chat',
         model: PARENT_MODEL,
       }),
+      model: testModelCell(PARENT_MODEL),
       logger: noopTrace,
       delegationAgentScope: {
         workflow: ['builtInWorkflow:correct'],
