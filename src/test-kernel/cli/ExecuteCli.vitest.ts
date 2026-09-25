@@ -12,6 +12,7 @@ import type { executeCliRequest } from '@cli/runtime/executeCli';
 import { AgentError } from '@common/errors';
 import { RUN_OUTCOME } from '@shared/schemas';
 import type { AggregateId, FlowSnapshotPayload, RunId } from '@shared/schemas';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import {
@@ -1518,6 +1519,19 @@ describe('executeCliConfig', () => {
     'derives the internal CLI result and exit code for tool-use configs',
     () =>
       Effect.gen(function* () {
+        const commit = 'a'.repeat(40);
+        yield* testDefaultSession().roots.globalState.update(
+          GlobalStateKey.INSTALLED_PLUGINS,
+          [
+            {
+              name: 'notes',
+              source: 'https://github.com/example/notes.git',
+              commit,
+              path: '/home/me/.texra/plugins/notes',
+              skills: ['/home/me/.texra/plugins/notes/skills'],
+            },
+          ],
+        );
         const result = yield* runCompletedToolUseConfig('completed');
 
         expect(result).toMatchObject({
@@ -1530,10 +1544,20 @@ describe('executeCliConfig', () => {
           },
         });
         if (result.ok) {
+          // The result names each installed plugin by where it came from and
+          // its pinned commit, never by the local checkout it was read from.
+          expect(result.result.plugins).toEqual([
+            {
+              name: 'notes',
+              source: 'https://github.com/example/notes.git',
+              commit,
+            },
+          ]);
           expect(Object.keys(result.result)).toEqual([
             'outcome',
             'output',
             'runId',
+            'plugins',
             'workingDirectory',
           ]);
         }

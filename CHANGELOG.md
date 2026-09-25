@@ -64,6 +64,12 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
+- **`texra run` results record what the run ran with** — the JSON and NDJSON
+  result carries `compositionHash`, the hash of the tool composition the run
+  pinned, and `plugins`, the enabled plugins installed when it started or
+  resumed, with the commit each fetched plugin is pinned to. A script that
+  compares runs can tell whether two of them had the same tools and plugin
+  skills.
 - **Enable or disable an installed plugin** — `texra plugin disable <name>`
   hides a plugin's skills without uninstalling it, `texra plugin enable
 <name>` brings them back, and `texra plugin list` marks a disabled plugin.

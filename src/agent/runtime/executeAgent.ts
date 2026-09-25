@@ -50,7 +50,7 @@ import {
 } from './SessionResumeRetrieval';
 import { followUpsLayer } from './FollowUps';
 import { modelInvokerLayer } from './ModelInvoker';
-import { agentRunLayer } from './run/AgentRun';
+import { agentRunLayer, withCompositionHash } from './run/AgentRun';
 import { runReflection } from './loop/reflection';
 import { runToolUse } from './loop/toolUse';
 import { Runs } from './runRegistry';
@@ -149,7 +149,6 @@ function launchToolUseRun(
   shared: SubagentRunOptions,
   variant: ToolUseLaunchVariant,
 ): Effect.Effect<AgentFlowResult, Error, AgentRunServices> {
-  const { runId } = ctx;
   const toResult = (
     result: Effect.Success<ReturnType<typeof runToolUse>>,
   ): AgentFlowResult => ({
@@ -162,14 +161,14 @@ function launchToolUseRun(
         ? { structured: result.structured }
         : {}),
     },
-    runId,
+    runId: ctx.runId,
     usage: result.usage,
     ...(result.error ? { error: result.error } : {}),
     ...(ctx.attachedMemoryMisses.length
       ? { memoryMisses: ctx.attachedMemoryMisses }
       : {}),
   });
-  const program = runToolUse({
+  return runToolUse({
     ...(shared.turns
       ? {
           turns: {
@@ -191,6 +190,8 @@ function launchToolUseRun(
       detach: (flowContext) => handle.detachToolUseFlow(flowContext),
     },
   }).pipe(
+    Effect.map(toResult),
+    withCompositionHash,
     Effect.provide(
       // The follow-up lease is the tool-use loop's alone; its finalizer is
       // what releases it.
@@ -198,9 +199,7 @@ function launchToolUseRun(
         Layer.provideMerge(runLayerFor(ctx, shared, variant.onIdle)),
       ),
     ),
-    Effect.map(toResult),
   );
-  return program;
 }
 
 /**
@@ -212,8 +211,8 @@ function launchReflectionRun(
   ctx: AgentLaunchContext,
   options: ExecuteAgentOptions,
 ): Effect.Effect<AgentFlowResult, Error, AgentRunServices> {
-  const { runId } = ctx;
   const program = runReflection({ resume: options.resumed === true }).pipe(
+    withCompositionHash,
     Effect.provide(runLayerFor(ctx, options, undefined)),
     Effect.flatMap((result) =>
       Effect.gen(function* () {
@@ -227,12 +226,13 @@ function launchReflectionRun(
             ),
             diffs: [],
           },
-          runId,
+          runId: ctx.runId,
           usage: result.usage,
           ...(result.error ? { error: result.error } : {}),
           ...(ctx.attachedMemoryMisses?.length
             ? { memoryMisses: ctx.attachedMemoryMisses }
             : {}),
+          compositionHash: result.compositionHash,
         };
         if (flowResult.error || !options.openWorkflowOutput) return flowResult;
         const outputOutcome = yield* options.openWorkflowOutput(
