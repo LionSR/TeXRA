@@ -15,6 +15,7 @@ import {
 } from '@shared/schemas';
 import { runOutcomeToCliRunStatus } from '@shared/runs/runStatus';
 import { parseWorkflowOutputRoundDir } from '@shared/constants/workflowOutput';
+import { withWorkflowDiffs } from '@tools/delegation/subagentResults';
 import { getSafeDocumentRelativePath } from '@utils/files/outputFileUtils';
 import { runDirUnder } from '@utils/files/runStorageFs';
 // toPosixPath also trims and resolves `.`/`..` segments beyond a bare slash
@@ -42,6 +43,16 @@ type OutputFlag = '--output' | '--output-dir';
 const notADirectory = (error: PlatformError.PlatformError): boolean =>
   error.reason._tag === 'BadResource' &&
   isNotADirectoryError(error.reason.cause);
+
+/** The user named a path this process may not create or read through. */
+function permissionUsageError(
+  target: string,
+  flagLabel: OutputFlag,
+): CliUsageError {
+  return new CliUsageError(
+    `${flagLabel} is not writable (permission denied): ${target}`,
+  );
+}
 
 function parentFileUsageError(
   target: string,
@@ -77,6 +88,9 @@ const probeOutputPath = Effect.fn('probeOutputPath')(function* (
       if (notADirectory(error)) {
         return Effect.fail(parentFileUsageError(target, flagLabel));
       }
+      if (error.reason._tag === 'PermissionDenied') {
+        return Effect.fail(permissionUsageError(target, flagLabel));
+      }
       if (error.reason._tag !== 'NotFound') return Effect.fail(error);
       const requiredDirectory =
         flagLabel === '--output-dir' ? target : pathService.dirname(target);
@@ -84,6 +98,9 @@ const probeOutputPath = Effect.fn('probeOutputPath')(function* (
         Effect.mapError((cause) => {
           if (notADirectory(cause) || cause.reason._tag === 'AlreadyExists') {
             return parentFileUsageError(target, flagLabel);
+          }
+          if (cause.reason._tag === 'PermissionDenied') {
+            return permissionUsageError(target, flagLabel);
           }
           if (cause.reason._tag !== 'NotFound') return cause;
           return new CliUsageError(
@@ -266,6 +283,13 @@ export function resolveWorkflowOutput(
     const runDirectory = runDirUnder(options.storageRoot, result.runId);
     const baseResult = {
       ...result,
+      // The flow reports no diffs: computing them is the delivery's, and this
+      // is the CLI's, so its result carries the diffs a subagent's record does.
+      output: yield* withWorkflowDiffs(
+        options.storageRoot,
+        result.runId,
+        result.output,
+      ),
       workingDirectory: context.cwd,
       runDirectory,
     };
