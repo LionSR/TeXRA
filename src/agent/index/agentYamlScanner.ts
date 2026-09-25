@@ -54,7 +54,7 @@ interface ParsedAgentYaml {
  * Extract tool names from declared tool configs. An entry is a registry name,
  * or — for definitions registered as values — a whole tool definition.
  */
-export function extractToolNames(
+function extractToolNames(
   rawTools: unknown[] | undefined,
 ): string[] | undefined {
   return rawTools?.flatMap((t) => {

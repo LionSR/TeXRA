@@ -9,8 +9,6 @@ import {
   AgentSettingSchema,
   AgentDefinitionSchema,
 } from '@agent/core/definition/AgentDataclass';
-import { updateAgentMeta } from '@agent/index/agentRegistry';
-import { extractToolNames } from '@agent/index/agentYamlScanner';
 import { normalizeAgentSettingTools } from '@agent/runtime/agentSettingTools';
 import { SupabaseAuth } from '@auth/SupabaseAuth';
 import { parseYamlWith } from '@common/parsing/safeParseYaml';
@@ -63,8 +61,6 @@ export const loadRemoteAgent = Effect.fn('RemoteAgentLoader.loadRemoteAgent')(
       const validated = parsedYaml.success;
 
       const settings: AgentSettingInput = validated.settings;
-      const toolNames = extractToolNames(settings.tools);
-      const defaultOutputFiles = settings.defaultOutputFiles;
 
       // The stricter setting/prompt schemas throw: keep that on the typed
       // channel, where the tapError below logs it, as the old try/catch did —
@@ -81,14 +77,6 @@ export const loadRemoteAgent = Effect.fn('RemoteAgentLoader.loadRemoteAgent')(
           prompts: AgentPromptSchema.parse(validated.prompts),
         }),
         catch: ensureError,
-      });
-
-      updateAgentMeta(`remote:${agentName}`, {
-        description: validated.description,
-        tools: toolNames?.length ? toolNames : undefined,
-        defaultOutputFiles: defaultOutputFiles?.length
-          ? defaultOutputFiles
-          : undefined,
       });
 
       yield* Effect.logInfo(
