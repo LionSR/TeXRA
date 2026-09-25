@@ -384,7 +384,6 @@ function installSession(overrides: Record<string, unknown> = {}): void {
     },
     approvals: { registerRunParent: vi.fn() },
     runs,
-    transcripts: { ensureLoaded: vi.fn(() => Effect.void) },
     // The parent edge the resume path reads cold, off the same seeded view
     // the TUI renders.
     readView: () => Effect.succeed(currentView()),
@@ -1122,13 +1121,7 @@ describe('createChatSessionController', () => {
     // rehydration window, resume() must notice `session.stopRequested` and bail
     // out instead of silently starting the resumed run once the
     // awaits finish.
-    const ensureLoaded = createDeferred<void>();
-    installSession({
-      transcripts: {
-        ensureLoaded: () => Effect.promise(() => ensureLoaded.promise),
-      },
-    });
-
+    const rehydrated = createDeferred<void>();
     const session = makeSession({
       interruptedRunId: 'e11111' as RunId,
       runCompleted: true,
@@ -1137,6 +1130,7 @@ describe('createChatSessionController', () => {
       (_id: RunId, options: ResumeRunOptions) =>
         Effect.gen(function* () {
           if (options.onResumeResolved) yield* options.onResumeResolved();
+          yield* Effect.promise(() => rehydrated.promise);
           return options.isCancellationRequested?.()
             ? { failed: 'not_resumable' as const }
             : STARTED;
@@ -1147,8 +1141,8 @@ describe('createChatSessionController', () => {
     holdRun('aaaaaa' as RunId);
     const resumed = runResume(ctrl, 'aaaaaa' as RunId);
     // resume() has claimed the slot synchronously; once the durable record
-    // resolves it suspends inside session.transcripts.ensureLoaded()
-    // with session.runId already set to the resumed run.
+    // resolves it suspends inside the resume, after adoption, with
+    // session.runId already set to the resumed run.
     expect(session.runSettled).toBeDefined();
     await vi.waitFor(() => expect(session.runId).toBe('aaaaaa'));
     // #8273 regression: the controller must publish the run facts so status
@@ -1165,7 +1159,7 @@ describe('createChatSessionController', () => {
     ctrl.stop();
     expect(session.stopRequested).toBe(true);
 
-    ensureLoaded.resolve();
+    rehydrated.resolve();
     await resumed;
     await awaitRunSettled(session);
 

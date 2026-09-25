@@ -119,8 +119,6 @@ interface ChildRunPort {
     error?: unknown;
     /** Session stage closed with the derived outcome (the loop's stage). */
     stage?: Pick<StageHandle, 'end'>;
-    /** Drop the child's tab once finalized (ephemeral process children). */
-    autoClose?: boolean;
   }): Effect.Effect<void, Error, Runs>;
 }
 
@@ -146,14 +144,6 @@ export interface ChildRunStrategy<TTurn, R = never> {
    * recovery; see `RunInterruptHandler.ownsBackgroundProcess`.
    */
   readonly ownsBackgroundProcess?: boolean;
-
-  /**
-   * Drop the child's run tab when the run finalizes. For a child whose tab
-   * is ephemeral by construction (a background shell), the tab exists only
-   * while the process does; every other child type keeps its tab for reading
-   * back.
-   */
-  readonly autoCloseChildRun?: boolean;
 
   /**
    * Deliver a settled turn to the parent even when the loop was interrupted.
@@ -1330,9 +1320,6 @@ export function startChildRunLoop<TTurn, R = never>(
               outcome,
               error: lastTurnErr,
               stage: sessionStage,
-              ...(strategy.autoCloseChildRun === true && {
-                autoClose: true,
-              }),
             });
           } else {
             // Startup may fail before the engine owns terminal finalization.

@@ -781,7 +781,6 @@ export function createChatSessionController(
           // only decides which stream it marks recoverable.
           if (session.stopRequested) interruptActiveRun();
 
-          yield* runtimeSession.transcripts.ensureLoaded(id);
           // The transcript and the work plan are the fold's: the TUI
           // subscribes the run's aggregate and renders `transcript.rows`, and
           // an open `/plan` reader reads the same `RunView`.

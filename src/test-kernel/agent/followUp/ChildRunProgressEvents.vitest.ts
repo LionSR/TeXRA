@@ -133,7 +133,6 @@ describe('child run progress events', () => {
 
         yield* childRun.finalize({
           outcome: RUN_OUTCOME.COMPLETED,
-          autoClose: true,
         });
 
         expect(
@@ -412,34 +411,6 @@ describe('child run progress events', () => {
         ]);
 
         yield* childRun.finalize({ outcome: RUN_OUTCOME.COMPLETED });
-      }),
-  );
-
-  it.effect(
-    'retains completed command history after automatic presentation release',
-    () =>
-      Effect.gen(function* () {
-        const recorded = recordSessionEvents(testDefaultSession());
-
-        const childRun = yield* Effect.promise(() => startBashChild(runId));
-        childRun.logger.info('retained command output');
-
-        yield* childRun.finalize({
-          outcome: RUN_OUTCOME.COMPLETED,
-          autoClose: true,
-        });
-
-        expect(
-          eventsOfType(
-            yield* Effect.promise(() => recorded.read()),
-            'run.removed',
-          ),
-        ).toEqual([]);
-        const entries =
-          yield* testDefaultSession().transcripts.readEntries(runId);
-        expect(
-          entries.some((entry) => entry.text === 'retained command output'),
-        ).toBe(true);
       }),
   );
 
