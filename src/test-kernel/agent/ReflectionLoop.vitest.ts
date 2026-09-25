@@ -215,10 +215,6 @@ vi.mock('@agent/output/outputValidation', () => ({
   checkExpectedOutputs: vi.fn(() => Effect.succeed({ missing: [] })),
 }));
 
-vi.mock('@agent/output/snapshotResolution', () => ({
-  resolveBaseFilesForDiff: vi.fn(() => Effect.succeed([])),
-}));
-
 vi.mock('@agent/prompt/PromptBuilder', () => ({
   getSystemPromptWithRules: vi.fn(() => Effect.succeed('system')),
   PromptBuilder: class {

@@ -5,9 +5,14 @@ import {
   type CodingPlanSubscriptionId,
 } from '@shared/codingPlanSubscriptions';
 import {
+  SUBSCRIPTION_AUTH_PROVIDERS,
+  type SubscriptionAuthStatus,
+} from '@shared/settingsView/settingsViewMessages';
+import {
   CHATGPT_AUTH,
   GROK_AUTH,
   RESEARCHER_ACCESS_AUTH,
+  SUBSCRIPTION_AUTH_COPY,
 } from '@ui/copy/accountAuth';
 import { OWN_API_KEYS } from '@ui/copy/modelAccess';
 import { RESEARCHER_ACCESS } from '@ui/copy/onboarding';
@@ -17,33 +22,27 @@ import { RESEARCHER_ACCESS } from '@ui/copy/onboarding';
 export const CLI_ACCOUNT_ACCESS_DESCRIPTION =
   'Sign in or out, set subscription preferences, and how the rest is paid for.';
 
-type CliSubscriptionPreferenceState = 'off' | 'on';
 type CliSubscriptionProvider =
-  'chatgpt' | 'grok' | CodingPlanSubscription['cliProvider'];
+  SubscriptionAuthStatus['provider'] | CodingPlanSubscription['cliProvider'];
 
 interface CliCodingPlanStatus {
   readonly preferred: boolean;
   readonly keySet: boolean;
 }
 
-interface CliSubscriptionPreferences {
-  readonly chatGpt: CliSubscriptionPreferenceState;
-  readonly grok: CliSubscriptionPreferenceState;
-}
-
 export type CliModelAccessSelection = {
   readonly kind: 'subscription-preference';
   readonly provider: CliSubscriptionProvider;
-  readonly state: CliSubscriptionPreferenceState;
+  /** The preference state the selection turns on or off. */
+  readonly state: 'off' | 'on';
 };
 
 export interface CliModelAccessStatus {
-  /** Independent provider preferences; either, both, or neither may be on. */
-  readonly preferences: CliSubscriptionPreferences;
-  readonly chatGptSignedIn: boolean;
-  readonly chatGptAccountLabel?: string;
-  readonly grokSignedIn: boolean;
-  readonly grokAccountLabel?: string;
+  /** Each OAuth subscription's session and independent preference: the
+   *  shape every settings view reads, keyed by its provider. */
+  readonly subscriptions: Readonly<
+    Record<SubscriptionAuthStatus['provider'], SubscriptionAuthStatus>
+  >;
   readonly codingPlans: Readonly<
     Record<CodingPlanSubscriptionId, CliCodingPlanStatus>
   >;
@@ -111,37 +110,23 @@ export function formatCliModelAccessRouteInline(
     : label.charAt(0).toLowerCase() + label.slice(1);
 }
 
-function formatCliSubscriptionPreference(
-  state: CliSubscriptionPreferenceState,
-  signedIn: boolean,
-  accountLabel: string | undefined,
+/** The account a subscription session is signed in as, when it names one. */
+export function subscriptionAccountLabel(
+  status: SubscriptionAuthStatus,
+): string | undefined {
+  return status.email ?? status.accountId ?? undefined;
+}
+
+/** Format one subscription preference independently of its session. */
+export function formatCliSubscriptionPreference(
+  status: SubscriptionAuthStatus,
 ): string {
-  const account = accountLabel ?? 'your account';
-  if (state === 'on' && signedIn) return `On · ${account}`;
-  if (signedIn) return `Off · ${account}`;
-  return state === 'on'
+  const account = subscriptionAccountLabel(status) ?? 'your account';
+  if (status.preferSubscription && status.signedIn) return `On · ${account}`;
+  if (status.signedIn) return `Off · ${account}`;
+  return status.preferSubscription
     ? 'On · sign in required'
     : 'Off · sign in required to enable';
-}
-
-/** Format the ChatGPT preference independently of credential availability. */
-export function formatCliChatGptPreference(
-  status: CliModelAccessStatus,
-): string {
-  return formatCliSubscriptionPreference(
-    status.preferences.chatGpt,
-    status.chatGptSignedIn,
-    status.chatGptAccountLabel,
-  );
-}
-
-/** Format the Grok preference independently of credential availability. */
-export function formatCliGrokPreference(status: CliModelAccessStatus): string {
-  return formatCliSubscriptionPreference(
-    status.preferences.grok,
-    status.grokSignedIn,
-    status.grokAccountLabel,
-  );
 }
 
 function formatCliKeyedSubscriptionPreference(
@@ -172,26 +157,6 @@ export function formatCliCodingPlanPreference(
   return formatCliKeyedSubscriptionPreference(state.preferred, state.keySet);
 }
 
-const oauthSubscriptionAccessItems = [
-  {
-    provider: 'chatgpt',
-    preference: 'chatGpt',
-    label: CHATGPT_AUTH.preferLabel,
-    formatDescription: formatCliChatGptPreference,
-  },
-  {
-    provider: 'grok',
-    preference: 'grok',
-    label: GROK_AUTH.preferLabel,
-    formatDescription: formatCliGrokPreference,
-  },
-] as const satisfies ReadonlyArray<{
-  readonly provider: 'chatgpt' | 'grok';
-  readonly preference: 'chatGpt' | 'grok';
-  readonly label: string;
-  readonly formatDescription: (status: CliModelAccessStatus) => string;
-}>;
-
 /** Build the canonical choices shown by every model-access picker. */
 export function buildCliModelAccessItems(
   input: CliModelAccessItemsInput,
@@ -204,22 +169,21 @@ export function buildCliModelAccessItems(
         ? 'Loading current preference'
         : 'Current preference unavailable';
   }
-  const oauthPreferenceItems = oauthSubscriptionAccessItems.map(
-    ({ formatDescription, label, preference, provider }) => {
-      const state: CliSubscriptionPreferenceState =
-        status?.preferences[preference] === 'on' ? 'off' : 'on';
-      return {
-        value: {
-          kind: 'subscription-preference' as const,
-          provider,
-          state,
-        },
-        label,
-        description: status ? formatDescription(status) : pendingDescription,
-        ...(status === undefined ? { disabled: true } : {}),
-      };
-    },
-  ) satisfies CliModelAccessItem[];
+  const oauthPreferenceItems = SUBSCRIPTION_AUTH_PROVIDERS.map((provider) => {
+    const subscription = status?.subscriptions[provider];
+    return {
+      value: {
+        kind: 'subscription-preference' as const,
+        provider,
+        state: subscription?.preferSubscription ? 'off' : 'on',
+      },
+      label: SUBSCRIPTION_AUTH_COPY[provider].preferLabel,
+      description: subscription
+        ? formatCliSubscriptionPreference(subscription)
+        : pendingDescription,
+      ...(status === undefined ? { disabled: true } : {}),
+    };
+  }) satisfies CliModelAccessItem[];
   const codingPlanItems = CODING_PLAN_SUBSCRIPTIONS.map((plan) => {
     const planStatus = status ? cliCodingPlanStatus(status, plan) : undefined;
     return {
@@ -242,7 +206,7 @@ export function buildCliModelAccessItems(
 }
 
 export interface CliAccountAccessRow {
-  readonly provider: 'chatgpt' | 'grok' | 'texra';
+  readonly provider: SubscriptionAuthStatus['provider'] | 'texra';
   readonly operation: 'sign-in' | 'sign-out';
   readonly label: string;
   readonly description: string;
@@ -262,35 +226,25 @@ export function buildCliAccountAccessRows(
   status: CliModelAccessStatus,
 ): readonly CliAccountAccessRow[] {
   const rows: CliAccountAccessRow[] = [];
-  if (status.chatGptSignedIn) {
-    rows.push({
-      provider: 'chatgpt',
-      operation: 'sign-out',
-      label: CHATGPT_AUTH.signOutLabel,
-      description: status.chatGptAccountLabel ?? CHATGPT_AUTH.subscriptionLabel,
-    });
-  } else if (status.preferences.chatGpt === 'on') {
-    rows.push({
-      provider: 'chatgpt',
-      operation: 'sign-in',
-      label: CHATGPT_AUTH.signInLabel,
-      description: 'Use a ChatGPT subscription',
-    });
-  }
-  if (status.grokSignedIn) {
-    rows.push({
-      provider: 'grok',
-      operation: 'sign-out',
-      label: GROK_AUTH.signOutLabel,
-      description: status.grokAccountLabel ?? GROK_AUTH.subscriptionLabel,
-    });
-  } else if (status.preferences.grok === 'on') {
-    rows.push({
-      provider: 'grok',
-      operation: 'sign-in',
-      label: GROK_AUTH.signInLabel,
-      description: 'Use a Grok / SuperGrok subscription',
-    });
+  for (const provider of SUBSCRIPTION_AUTH_PROVIDERS) {
+    const subscription = status.subscriptions[provider];
+    const copy = SUBSCRIPTION_AUTH_COPY[provider];
+    if (subscription.signedIn) {
+      rows.push({
+        provider,
+        operation: 'sign-out',
+        label: copy.signOutLabel,
+        description:
+          subscriptionAccountLabel(subscription) ?? copy.subscriptionLabel,
+      });
+    } else if (subscription.preferSubscription) {
+      rows.push({
+        provider,
+        operation: 'sign-in',
+        label: copy.signInLabel,
+        description: copy.signInDescription,
+      });
+    }
   }
   if (status.texraSignedIn === true) {
     rows.push({

@@ -48,6 +48,7 @@ import type {
   ClaudeAgentPermissionMode,
   RunId,
   TokenUsageStats,
+  ToolError,
   ToolResult,
   ToolUseLog,
 } from '@shared/schemas';
@@ -77,12 +78,9 @@ import { type ChildRun } from './delegation/childRun';
 import { claudeAgentSessionsFor } from './agentCliSessionStores';
 import {
   agentCliApprovalCommand,
-  agentCliCall,
-  type AgentCliToolFailure,
   buildAgentCliLaunch,
   dispatchAgentCliTool,
   launchAgentCliSession,
-  reraiseAgentCliCallFailure,
 } from './agentCliShared';
 import { formatDelivery } from './delegation/deliveryEnvelope';
 import {
@@ -511,7 +509,7 @@ function buildClaudeAgentLaunch(params: {
 
 function executeClaudeAgentTool(input: ClaudeAgentInput) {
   return Effect.gen(function* () {
-    return yield* reraiseAgentCliCallFailure(run(input, yield* ToolCall));
+    return yield* run(input, yield* ToolCall);
   });
 }
 
@@ -520,7 +518,7 @@ const run = Effect.fn('ClaudeAgentTool.run')(function* (
   toolCall: ToolCallShape,
 ): Effect.fn.Return<
   ToolResult,
-  AgentCliToolFailure,
+  ToolError,
   Secrets | ToolCall | Runs | AgentResume | ChildProcessSpawner
 > {
   const { roots } = toolCall;
@@ -598,7 +596,7 @@ const launchClaudeAgentSession = Effect.fn(
   session: SessionHandle,
 ): Effect.fn.Return<
   ToolResult,
-  AgentCliToolFailure,
+  ToolError,
   Secrets | ToolCall | Runs | AgentResume | ChildProcessSpawner
 > {
   const config = yield* getClaudeAgentConfig;
@@ -612,8 +610,8 @@ const launchClaudeAgentSession = Effect.fn(
   // The env block reads only the process environment and the `Secrets`
   // service, neither of which is workspace-scoped.
   const env = yield* config.buildClaudeAgentEnv();
-  const pathToClaudeCodeExecutable = yield* agentCliCall(
-    findClaudeBinaryPath(),
+  const pathToClaudeCodeExecutable = yield* findClaudeBinaryPath().pipe(
+    Effect.orDie,
   );
   // Synthetic run metadata for the child run: the Claude Code CLI runs outside
   // the normal run loop, so the tool-use category and a stable model label are

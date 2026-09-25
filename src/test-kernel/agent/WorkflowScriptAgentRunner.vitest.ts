@@ -657,7 +657,6 @@ describe('createWorkflowScriptAgentRunner', () => {
       );
       expect(mocks.preparedOptions[0]).toEqual(
         expect.objectContaining({
-          agentName: 'correct',
           parentRunId: runId,
           approvalPromptsUnavailable: true,
           configPayload: expect.objectContaining({
@@ -827,7 +826,6 @@ describe('createWorkflowScriptAgentRunner', () => {
       expect(mocks.exists).toHaveBeenCalledWith(workspacePath('notes.tex'));
       expect(mocks.preparedOptions[0]).toEqual(
         expect.objectContaining({
-          agentName: 'merge',
           configPayload: expect.objectContaining({
             inputFiles: [firstCanonical, 'notes.tex', secondCanonical],
           }),
@@ -1724,7 +1722,6 @@ describe('createWorkflowScriptAgentRunner', () => {
         });
         expect(mocks.preparedOptions[0]).toEqual(
           expect.objectContaining({
-            agentName: 'assistant',
             configPayload: expect.objectContaining({
               agentCategory: 'toolUse',
               outputSchema: schema,

@@ -415,12 +415,6 @@ const CORE_SETTING_ROWS: Record<
     honoredBy: everyHost('src/agent/runtime/childRunBudget.ts'),
     surfaces: { settingsView: 'multi-agent', cliConfig: true },
   },
-  'goal.enabled': {
-    schema: z.boolean().prefault(true),
-    description:
-      'Enable Goal, a per-stream autonomous-continuation mode for tool-use agents. When on, an active Goal lets the agent keep working across turns toward a stated objective until it calls plan(command="complete"). On by default; set to false to require manual continuation.',
-    honoredBy: everyHost('src/tools/goal/goalFeatureFlag.ts'),
-  },
   // The provider toggles below are `configTarget: 'global'`:
   // they describe how you talk to a provider, not a property of one project,
   // and that is the scope they were written at before the catalog collapse

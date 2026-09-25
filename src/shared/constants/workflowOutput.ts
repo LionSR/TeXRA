@@ -19,10 +19,18 @@ export const WORKFLOW_OUTPUT_BASENAME = 'output';
 /** The fixed extension for raw workflow round output. */
 export const WORKFLOW_RAW_OUTPUT_EXT = 'xml';
 
-/** Parse a directory name of the form `r{round}` into its round index. */
-export function parseWorkflowOutputRoundDir(dirName: string): number | null {
-  const match = /^r(\d+)$/.exec(dirName);
-  return match ? Number(match[1]) : null;
+/**
+ * Drop the leading `r{round}/` directory of a runDir-relative path; with
+ * `round`, only that round's. Any other path comes back unchanged.
+ */
+export function stripWorkflowRoundDir(
+  relativePath: string,
+  round?: number,
+): string {
+  const match = /^r(\d+)[/\\]/.exec(relativePath);
+  return match && (round === undefined || Number(match[1]) === round)
+    ? relativePath.slice(match[0].length)
+    : relativePath;
 }
 
 /** The runDir-relative `r{round}` directory segment for a workflow round. */

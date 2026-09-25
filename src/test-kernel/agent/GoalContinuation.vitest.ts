@@ -6,10 +6,7 @@ import { afterEach, beforeEach, describe, expect } from 'vitest';
 
 import { maybeBuildGoalContinuation } from '@agent/goal/maybeBuildGoalContinuation';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { GOAL_FEATURE_FLAG_KEY } from '@shared/schemas';
-import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
-import { FakeConfigProvider } from '@test/support/FakePlatform';
 import {
   createTestSession,
   publishTestRunStart,
@@ -19,17 +16,11 @@ import { generateRunId } from '@utils/core';
 
 const RUN_ID = generateRunId();
 
-async function installPlatformWithConfig(
-  config: Record<string, unknown>,
-): Promise<void> {
-  await installFakePlatform({ config });
-}
-
 describe('maybeBuildGoalContinuation', () => {
   let session: SessionHandle;
 
   beforeEach(async () => {
-    await installPlatformWithConfig({ [GOAL_FEATURE_FLAG_KEY]: true });
+    await installFakePlatform();
     session = createTestSession();
     publishTestRunStart(session, RUN_ID);
   });
@@ -50,21 +41,6 @@ describe('maybeBuildGoalContinuation', () => {
         yield* startGoal(session, RUN_ID, objective);
         const out = yield* maybeBuildGoalContinuation(session, RUN_ID);
         expect(out).toContain(objective);
-      }),
-  );
-
-  it.effect(
-    'returns null when the feature flag is off (with an active goal present)',
-    () =>
-      Effect.gen(function* () {
-        yield* startGoal(session, RUN_ID, 'objective');
-        // Flip just the flag — the goal row is untouched, so the test does not
-        // pass trivially.
-        (testWorkspaceRoots().config as FakeConfigProvider).set(
-          GOAL_FEATURE_FLAG_KEY,
-          false,
-        );
-        expect(yield* maybeBuildGoalContinuation(session, RUN_ID)).toBeNull();
       }),
   );
 

@@ -13,7 +13,6 @@
 // Node imports
 // Third-party imports
 import {
-  Data,
   Deferred,
   Duration,
   Effect,
@@ -91,26 +90,8 @@ import {
   type ExecutionsToolInput,
 } from './executions/toolInput';
 import { turnAttributionNote } from './executions/turnAttribution';
-import {
-  listenForFollowUp,
-  shouldSkipWait,
-} from './executions/waitCoordination';
+import { shouldSkipWait } from './executions/waitCoordination';
 import { workflowBoardView } from './executions/workflowSummaryView';
-
-/**
- * One of the still-Promise collaborators this tool reads — run
- * storage, the transcript store, the two filesystems — rejected. Nothing
- * here recovers from it: `execute` re-raises `cause`, so the tool runner
- * surfaces the same error instance the collaborator raised.
- */
-class ExecutionsReadFailed extends Data.TaggedError('ExecutionsReadFailed')<{
-  readonly cause: unknown;
-}> {}
-
-/** Re-tag any collaborator rejection as {@link ExecutionsReadFailed}. */
-const readFailed = Effect.mapError(
-  (cause: unknown) => new ExecutionsReadFailed({ cause }),
-);
 
 interface RunToolContext {
   readonly session: SessionHandle;
@@ -141,14 +122,19 @@ const awaitStatusChange = Effect.fn('ExecutionsTool.awaitStatusChange')(
       runIds.map((id) => view.runs.get(id)?.status ?? '').join(',');
     const started = phases(SubscriptionRef.getUnsafe(context.session.view));
     const followUp = yield* Deferred.make<void>();
-    yield* Effect.acquireRelease(
-      Effect.sync(() =>
-        listenForFollowUp(context.session, context.runId, () => {
-          Deferred.doneUnsafe(followUp, Effect.void);
-        }),
-      ),
-      (stop) => Effect.sync(stop),
-    );
+    // The session's follow-up queue is the one in-process channel a sent
+    // follow-up fires (`notifyFollowUpSent`); no plane row carries it.
+    const { runId } = context;
+    if (runId) {
+      yield* Effect.acquireRelease(
+        Effect.sync(() =>
+          context.session.followUps.onSent((sentRunId) => {
+            if (sentRunId === runId) Deferred.doneUnsafe(followUp, Effect.void);
+          }),
+        ),
+        (stop) => Effect.sync(stop),
+      );
+    }
     const statusChange = context.session.viewChanges.pipe(
       Stream.filter((view) => phases(view) !== started),
       Stream.runHead,
@@ -185,8 +171,9 @@ function formatSizedEntryLines(entries: readonly SizedEntry[]): string[] {
 }
 
 /**
- * Every line of logic below is one Effect program. Fatal storage and
- * filesystem failures remain failures for the invocation boundary.
+ * Every line of logic below is one Effect program. A storage or filesystem
+ * read failure dies at its read site (`Effect.orDie`): nothing here recovers
+ * from one, and the tool runner surfaces the collaborator's own error.
  */
 const executeExecutionsTool = Effect.fn('ExecutionsTool.call')(function* (
   input: ExecutionsToolInput,
@@ -196,9 +183,7 @@ const executeExecutionsTool = Effect.fn('ExecutionsTool.call')(function* (
     session: run.session,
     runId: run.runId,
   };
-  return yield* runExecutions(context, input).pipe(
-    Effect.catchTag('ExecutionsReadFailed', (error) => Effect.die(error.cause)),
-  );
+  return yield* runExecutions(context, input);
 });
 
 const runExecutions = Effect.fn('ExecutionsTool.run')(function* (
@@ -206,7 +191,7 @@ const runExecutions = Effect.fn('ExecutionsTool.run')(function* (
   input: ExecutionsToolInput,
 ): Effect.fn.Return<
   ToolResult,
-  Error | ExecutionsReadFailed,
+  Error,
   Runs | FileSystem.FileSystem | StorageFs
 > {
   const segments = getPathSegments(input.path);
@@ -640,7 +625,7 @@ const showConversation = Effect.fn('ExecutionsTool.showConversation')(
     const conversationResult = yield* readCompletedRunConversation(
       runId,
       context.session,
-    ).pipe(readFailed);
+    ).pipe(Effect.orDie);
     const { conversation, source } = conversationResult;
 
     if (!conversation) {
@@ -711,7 +696,7 @@ const showOutput = Effect.fn('ExecutionsTool.showOutput')(function* (
   // The row above already proved the run is in the session's view; its
   // output is read from the run's own committed rows.
   const { lines, chars } = projectProcessOutput(
-    yield* context.session.readRunEvents(runId).pipe(readFailed),
+    yield* context.session.readRunEvents(runId).pipe(Effect.orDie),
   );
   // The row above was read before the transcript, and a command that
   // finished during that read must not be judged against it: the view is
@@ -779,7 +764,7 @@ const listFiles = Effect.fn('ExecutionsTool.listFiles')(function* (
   runId: RunId,
 ) {
   const files = yield* listRunGeneratedFiles(runId, context.session).pipe(
-    readFailed,
+    Effect.orDie,
   );
   if (files.length === 0) {
     return executed('No files generated for this run.');
@@ -804,7 +789,7 @@ const readFile = Effect.fn('ExecutionsTool.readFile')(function* (
     context.session.roots.storage,
     runId,
     filePath,
-  ).pipe(readFailed);
+  ).pipe(Effect.orDie);
   if (!fullPath) {
     return yield* Effect.fail(new ToolError(`File not found: ${displayPath}`));
   }
@@ -824,7 +809,7 @@ const listWorkspaceFiles = Effect.fn('ExecutionsTool.listWorkspaceFiles')(
       { concurrency: 2 },
     );
     const entries = yield* listRunWorkspaceFiles(record, paths).pipe(
-      readFailed,
+      Effect.orDie,
     );
 
     if (entries.length === 0) {
@@ -937,7 +922,7 @@ const readFileContent = Effect.fn('ExecutionsTool.readFileContent')(function* (
     viewRange: [number, number] | undefined;
   },
 ) {
-  const stats = yield* fs.stat(fullPath).pipe(readFailed);
+  const stats = yield* fs.stat(fullPath).pipe(Effect.orDie);
   // A symlink to a directory counts, which is what the bitmask probe this
   // replaced answered for: the standard `stat` follows the link.
   if (stats.type === 'Directory') {
@@ -948,7 +933,7 @@ const readFileContent = Effect.fn('ExecutionsTool.readFileContent')(function* (
     );
   }
 
-  const content = yield* readNormalizedFile(fs, fullPath).pipe(readFailed);
+  const content = yield* readNormalizedFile(fs, fullPath).pipe(Effect.orDie);
   return formatFileView({
     path: resultPath,
     lines: splitContentLines(content),

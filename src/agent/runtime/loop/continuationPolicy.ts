@@ -8,16 +8,21 @@
  * the loop's, since the loop owns the queue, and the loop tells the policy
  * whether a turn could be taken at all so an unusable one is never built.
  *
- * The run resolves its policy once, when the loop is set up. Goal mode is the
- * one policy today.
+ * A policy is a plugin's contribution: the run resolves it once, when the
+ * loop is set up, from the plugins its pinned composition holds, so a
+ * switched-off plugin and a delegated child's narrowing apply to it as they
+ * do to tools. With no continuation plugin on, the run parks. Goal mode is
+ * the one policy today.
  */
 import { Effect } from 'effect';
 
 import { maybeBuildGoalContinuation } from '@agent/goal/maybeBuildGoalContinuation';
 import type { RunId } from '@shared/schemas';
 import type { RunState } from '@shared/session/runStateFold';
+import type { ToolPluginEntry } from '@tools/plugins';
 import { goalOf, pauseGoal, setGoalSessionAutoApproval } from '@tools/goal';
 
+import type { AgentRunShape } from '../run/AgentRun';
 import type { SessionHandle } from '../SessionHandle';
 
 interface ContinuationPolicy {
@@ -37,7 +42,7 @@ interface ContinuationPolicy {
  * the user. Goal state and its approval grants stay in `@tools/goal`; only the
  * decision lives here.
  */
-export const goalContinuation = (
+const goalContinuation = (
   session: SessionHandle,
   runId: RunId,
 ): ContinuationPolicy => ({
@@ -57,3 +62,30 @@ export const goalContinuation = (
     return text === null ? null : { turn: text };
   }),
 });
+
+/**
+ * The continuation policy of each plugin that contributes one, keyed by
+ * plugin id: exactly the plugins whose manifest entry declares
+ * `continuation`.
+ */
+const PLUGIN_CONTINUATIONS = {
+  goal: goalContinuation,
+} as const satisfies {
+  readonly [
+    Id in Extract<ToolPluginEntry, { readonly continuation: true }>['id']
+  ]: (session: SessionHandle, runId: RunId) => ContinuationPolicy;
+};
+
+/** The run's policy: that of the first continuation plugin its pinned
+ *  composition holds, or null when none is on. */
+export function continuationFor(
+  run: Pick<AgentRunShape, 'composition' | 'session' | 'runId'>,
+): ContinuationPolicy | null {
+  const id = run.composition.key.composition.plugins.find(
+    (plugin): plugin is keyof typeof PLUGIN_CONTINUATIONS =>
+      Object.hasOwn(PLUGIN_CONTINUATIONS, plugin),
+  );
+  return id === undefined
+    ? null
+    : PLUGIN_CONTINUATIONS[id](run.session, run.runId);
+}

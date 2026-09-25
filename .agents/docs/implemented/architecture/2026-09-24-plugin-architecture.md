@@ -197,6 +197,17 @@ unregister, no plugin state, no event channel) now covers:
   scan pools them with the core directory. They are the same YAML in the same
   persisted source, so agent keys do not change and no agent source is added.
 
+- **Continuation at idle.** `ToolPlugin.continuation: true` declares that a
+  plugin decides what a parked tool-use run does next; `PLUGIN_CONTINUATIONS`
+  in `src/agent/runtime/loop/continuationPolicy.ts` holds its policy, and a
+  `satisfies` check keeps the table and the manifest flags in step. The run
+  resolves its policy once, from its pinned composition's plugins, so a
+  switched-off plugin and a child's narrowing apply to it as they do to
+  tools; with none on, the run parks. The `goal` plugin (the `plan` tool) is
+  the one contributor, and its switch replaced the `texra.goal.enabled`
+  setting. The loop still owns the queue, the child check and
+  `stopAfterCycle`; the policy only answers "another turn, or park?".
+
 ## What is deliberately core
 
 These are not plugin surfaces, and a proposal to open one needs its own owner
