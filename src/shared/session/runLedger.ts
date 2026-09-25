@@ -13,10 +13,10 @@
  * no `messages()` (the folded state holds them), no snapshot writer helper
  * (a snapshot is a row like any other), no subscribe surface.
  */
-import { Context, Data, type Effect } from 'effect';
+import { Cause, Context, Data, type Effect } from 'effect';
 
 import type { RunId, SessionEvent } from '@shared/schemas';
-import type { DatabaseReadFailed, DatabaseWriteFailed } from './database';
+import { type DatabaseReadFailed, DatabaseWriteFailed } from './database';
 import type {
   RunLedgerDraft,
   RunLedgerInconsistent,
@@ -61,6 +61,26 @@ export class RunLedgerRefused extends Data.TaggedError('RunLedgerRefused')<{
   override get message(): string {
     return `The run ledger refused a write (${this.reason}): ${this.detail}`;
   }
+}
+
+/**
+ * The store's refusal anywhere in `cause`, failure or defect. A refused write
+ * ends the run whatever failed beside it, so a caller that turns the rest of
+ * a cause into a result must look past the first reason `Cause.squash` picks.
+ */
+export function findStorageRefusal(
+  cause: Cause.Cause<unknown>,
+): DatabaseWriteFailed | RunLedgerRefused | undefined {
+  for (const reason of cause.reasons) {
+    if (Cause.isInterruptReason(reason)) continue;
+    const error = Cause.isFailReason(reason) ? reason.error : reason.defect;
+    if (
+      error instanceof DatabaseWriteFailed ||
+      error instanceof RunLedgerRefused
+    )
+      return error;
+  }
+  return undefined;
 }
 
 export class RunLedger extends Context.Service<

@@ -11,7 +11,7 @@ import {
   createAgentResponseTextConnector,
   initializeDefaultSession,
   teardownDefaultSession,
-  type SessionHandle,
+  tryDefaultSession,
 } from '@agent/runtime';
 import { callPort } from '@auth/authProgram';
 import { AUTH_COMMANDS, AUTH_PROVIDER_ID } from '@auth/constants';
@@ -78,12 +78,11 @@ import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
 import { withLogChannel } from '@logger/effectLog';
 import { setLogSink } from '@logger/logSink';
 import { AppState, AgentDirectories } from '@platform/interfaces';
-import type {
-  AgentResumePort,
-  LifecycleHost,
-  ToolMissingHandler,
-} from '@platform/interfaces';
-import type { ProcessRuntime } from '@platform/processRuntime';
+import type { AgentResumePort, ToolMissingHandler } from '@platform/interfaces';
+import {
+  withProcessServices,
+  type ProcessRuntime,
+} from '@platform/processRuntime';
 import {
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
   type LanguageModelPort,
@@ -148,44 +147,30 @@ class WorkspaceEnvFileUnreadable extends Data.TaggedError(
 )<{ readonly cause: unknown }> {}
 
 let statusBarItem: vscode.StatusBarItem | undefined;
-// Re-instantiated on every activate(): the drain trips an internal
-// idempotency flag, so a stale module-level instance would silently swallow
-// handlers registered by a second activate() in the same process.
-let lifecycleHost: LifecycleHost | undefined;
 // VS Code invokes activation and deactivation separately. Only this entry
-// reads back their shared runtime and project scope; consumers receive values.
-let processRuntime: ProcessRuntime | undefined;
-let projectScope: Scope.Closeable | undefined;
-let extensionShutdownPromise: Promise<void> | undefined;
+// reads back the scope the activation program ran in: its finalizer is the
+// process's shutdown drain, so closing it is deactivation.
+let activationScope: Scope.Closeable | undefined;
 
 /**
  * The process runtime and the process roots, wired once for
  * both activation paths: the credential-only path without a folder and the
  * workspace path, which adds the ports only a folder can answer.
  *
- * Registered surfaces receive the ports and roots this entry owns.
+ * Registered surfaces receive the ports and roots this entry owns. The
+ * process's shutdown drain is a finalizer of the activation scope, added the
+ * moment the runtime it releases exists.
  */
-async function initVscodePlatform(
+const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
   context: vscode.ExtensionContext,
-  lifecycle: LifecycleHost,
   workspaceRoot: string | undefined,
-  /** The session a resume request targets, read at request time: the
-   *  platform must exist before `initializeDefaultSession` can run, so the
-   *  session cannot be a value here. */
-  getSession: () => SessionHandle,
   extras: {
     /** The editor's tool-missing UI, served as `ToolMissingReporter` below. */
     readonly toolMissingHandler?: ToolMissingHandler;
     /** The editor's LM bridge, served as `LanguageModel` below. */
     readonly languageModel?: LanguageModelPort;
   } = {},
-): Promise<{
-  secrets: PlatformSecrets;
-  runtime: ProcessRuntime;
-  auth: SupabaseAuthShape;
-  authReadiness: AuthReadinessGate;
-  roots: WorkspaceRoots;
-}> {
+) {
   // `~/.texra` is one history across CLI/desktop/extension (#8622). The
   // process runtime precedes the config stores below, which open on it.
   const storage = resolveWorkspaceStoragePath(
@@ -201,30 +186,43 @@ async function initVscodePlatform(
     ),
   );
   const authReadiness: AuthReadinessGate = { uriHandlerInstalled: false };
+  // Built on every activate(): the drain trips an internal idempotency flag,
+  // so a lifecycle kept from an earlier activate() in the same process would
+  // silently swallow the handlers this one registers.
+  const lifecycle = createLifecycleHost();
   // A construction failure degrades to the unavailable plane instead of
   // failing activation: registration below records and reports the error, and
   // every probe answers signed-out.
   // The account plane resolves before the runtime that serves it; the
   // process identity is the runtime's own layer, built by its first run.
-  const auth = await Effect.runPromise(
-    createSupabaseAuth({
-      secrets,
-      whenReady: () =>
-        Effect.suspend(() =>
-          authReadiness.uriHandlerInstalled
-            ? Effect.void
-            : Effect.fail(new Error(AUTH_URI_HANDLER_NOT_INITIALIZED)),
-        ),
-    }).pipe(
-      Effect.catch((error) => Effect.succeed(unavailableSupabaseAuth(error))),
-    ),
+  const auth = yield* createSupabaseAuth({
+    secrets,
+    whenReady: () =>
+      Effect.suspend(() =>
+        authReadiness.uriHandlerInstalled
+          ? Effect.void
+          : Effect.fail(new Error(AUTH_URI_HANDLER_NOT_INITIALIZED)),
+      ),
+  }).pipe(
+    Effect.catch((error) => Effect.succeed(unavailableSupabaseAuth(error))),
   );
   // The resume port closes over the runtime installed just below: a resume
   // attempt runs on it, and the port is only invoked after activation has
-  // returned. It is served as the runtime's `AgentResume` service.
+  // returned. It is served as the runtime's `AgentResume` service. The
+  // session it resumes into is the workspace path's default session; the
+  // credential-only path never initializes one, and a resume request cannot
+  // arrive there because every run belongs to one.
   const agentResume: AgentResumePort = {
-    tryResumeRun: (runId, recovery) =>
-      tryResumeFromResumeData(runId, runtime, getSession(), recovery),
+    tryResumeRun: (runId, recovery) => {
+      const session = tryDefaultSession();
+      return session
+        ? tryResumeFromResumeData(runId, runtime, session, recovery)
+        : Effect.die(
+            new Error(
+              'The credential-only activation has no session to resume into.',
+            ),
+          );
+    },
   };
   // Usage logging is a runtime service, not an authentication-provider
   // capability: it runs even when Supabase sign-in is not configured, as it
@@ -274,15 +272,50 @@ async function initVscodePlatform(
     // The Output channel owns filtering, so emit every level.
     minimumLogLevel: 'Trace',
   });
-  processRuntime = runtime;
-  const scope = Scope.makeUnsafe();
-  projectScope = scope;
-  const { globalState, workspaceState } = await runtime.runPromise(
+  const projectScope = yield* Scope.make();
+  // `disposeStatusListener` and `statusBarItem` are owned solely by
+  // `context.subscriptions` (see the push near the end of activation),
+  // matching the setup pill. Registering them here too would
+  // double-dispose. The session is initialized on the workspace path only;
+  // the credential-only path has none to flush or release.
+  registerRuntimeShutdownHandlers(lifecycle, {
+    afterAgentShutdown: [killActiveRecording()],
+    flushArtifacts: Effect.suspend(
+      () => tryDefaultSession()?.settlePublications() ?? Effect.void,
+    ),
+    afterRunSettlement: [Effect.sync(() => disposeDiffRefresh())],
+    releaseSessions: teardownDefaultSession().pipe(
+      Effect.ensuring(Scope.close(projectScope, Exit.void)),
+    ),
+    disposeRuntime: disposeProcessRuntime(runtime),
+  });
+  yield* Effect.addFinalizer(() => lifecycle.runShutdown);
+  return yield* withProcessServices(
+    runtime,
     Effect.gen(function* () {
       const globalState = yield* AppState;
-      const projectState = yield* openProjectStateStore(storage);
-      return {
-        globalState,
+      const projectState = yield* openProjectStateStore(storage).pipe(
+        Scope.provide(projectScope),
+      );
+      // VS Code restarts the extension host when the first workspace folder
+      // changes, so the configuration stores stay pinned for this process.
+      const config = new JsonConfigProvider(
+        yield* openTexraConfigStores(
+          DEFAULT_NODE_STORAGE_ROOT,
+          workspaceRoot,
+          (message) =>
+            runtime.runFork(
+              Effect.logWarning(message).pipe(
+                withLogChannel(EXTENSION_CHANNEL),
+              ),
+            ),
+        ),
+      );
+      const roots = createNodeWorkspaceRoots({
+        workspacePath: workspaceRoot,
+        storage,
+        globalStorage,
+        config,
         workspaceState: workspaceRoot
           ? yield* openWorktreeStateStore(
               projectState,
@@ -290,85 +323,35 @@ async function initVscodePlatform(
               workspaceRoot,
             )
           : projectState,
-      };
-    }).pipe(Scope.provide(scope)),
-  );
-  // VS Code restarts the extension host when the first workspace folder
-  // changes, so the configuration stores stay pinned for this process.
-  const config = new JsonConfigProvider(
-    await runtime.runPromise(
-      openTexraConfigStores(
-        DEFAULT_NODE_STORAGE_ROOT,
-        workspaceRoot,
-        (message) =>
-          runtime.runFork(
-            Effect.logWarning(message).pipe(withLogChannel(EXTENSION_CHANNEL)),
-          ),
-      ),
-    ),
-  );
-  const roots = createNodeWorkspaceRoots({
-    workspacePath: workspaceRoot,
-    storage,
-    globalStorage,
-    config,
-    workspaceState,
-    globalState,
-  });
-  // Everything this process installs once after its roots exist, in the
-  // order the shared bootstrap owns for all three hosts.
-  await runtime.runPromise(
-    bootstrapHost({
-      host: 'vscode',
-      roots,
-      secrets,
-      skills: { resourcesPath: path.join(context.extensionPath, 'resources') },
+        globalState,
+      });
+      // Everything this process installs once after its roots exist, in the
+      // order the shared bootstrap owns for all three hosts.
+      yield* bootstrapHost({
+        host: 'vscode',
+        roots,
+        secrets,
+        skills: {
+          resourcesPath: path.join(context.extensionPath, 'resources'),
+        },
+      });
+      // After the runtime, which the manager settles its watcher rebuilds on.
+      agentDirectories.initialize(
+        globalState,
+        path.join(context.extensionPath, 'resources'),
+        runtime,
+      );
+      yield* registerSupabaseAuth(
+        context,
+        secrets,
+        runtime,
+        auth,
+        authReadiness,
+      );
+      return { secrets, runtime, roots };
     }),
   );
-  return { secrets, runtime, auth, authReadiness, roots };
-}
-
-function shutdownExtension(): Promise<void> {
-  if (extensionShutdownPromise) return extensionShutdownPromise;
-
-  const host = lifecycleHost;
-  const runtime = processRuntime;
-  const scope = projectScope;
-  // `deactivate` is this host's R1 entry: one run for the drain and the
-  // teardown that follows it however it ends. Not on the process runtime —
-  // this is the path that disposes it.
-  const shutdownPromise = Effect.runPromise(
-    (host?.runShutdown ?? Effect.void).pipe(
-      Effect.ensuring(
-        Effect.suspend(() => {
-          if (lifecycleHost === host) lifecycleHost = undefined;
-          // Activation can fail before installing a runtime or a session.
-          if (!runtime) return Effect.void;
-          return teardownDefaultSession().pipe(
-            Effect.ensuring(
-              scope ? Scope.close(scope, Exit.void) : Effect.void,
-            ),
-            Effect.ensuring(disposeProcessRuntime(runtime)),
-            Effect.ensuring(
-              Effect.sync(() => {
-                if (processRuntime === runtime) processRuntime = undefined;
-                if (projectScope === scope) projectScope = undefined;
-              }),
-            ),
-          );
-        }),
-      ),
-    ),
-  );
-  extensionShutdownPromise = shutdownPromise;
-  const clearShutdownPromise = () => {
-    if (extensionShutdownPromise === shutdownPromise) {
-      extensionShutdownPromise = undefined;
-    }
-  };
-  void shutdownPromise.then(clearShutdownPromise, clearShutdownPromise);
-  return shutdownPromise;
-}
+});
 
 /**
  * Workspace-bound commands the getting-started walkthrough exposes as buttons.
@@ -438,148 +421,109 @@ function registerSupabaseAuth(
   runtime: ProcessRuntime,
   auth: SupabaseAuthShape,
   authReadiness: AuthReadinessGate,
-): void {
-  runtime.runSync(
-    Effect.try({
-      try: () => {
-        setRuntimeExtensionId(context.extension.id);
-        const authProvider = new SupabaseAuthProvider(
-          {
-            showError: (msg) => void vscode.window.showErrorMessage(msg),
-            showInfo: (msg) => void vscode.window.showInformationMessage(msg),
-            showSignInPrompt: (reason) =>
-              callPort(async () => {
-                const action = await vscode.window.showWarningMessage(
-                  reason === 'expired'
-                    ? 'Your TeXRA session has expired. Please sign in again to access AI models and remote agents.'
-                    : 'Your TeXRA session is no longer valid. Please sign in again to access AI models and remote agents.',
-                  'Sign In',
-                );
-                if (action !== 'Sign In') return;
-                await vscode.commands.executeCommand('texra.auth.signIn');
-              }),
-          },
-          secrets,
-          runtime,
-          auth,
-        );
-        context.subscriptions.push(
-          vscode.authentication.registerAuthenticationProvider(
-            AUTH_PROVIDER_ID,
-            'TeXRA Account',
-            authProvider,
-            { supportsMultipleAccounts: false },
-          ),
-        );
+) {
+  return Effect.try({
+    try: () => {
+      setRuntimeExtensionId(context.extension.id);
+      const authProvider = new SupabaseAuthProvider(
+        {
+          showError: (msg) => void vscode.window.showErrorMessage(msg),
+          showInfo: (msg) => void vscode.window.showInformationMessage(msg),
+          showSignInPrompt: (reason) =>
+            callPort(async () => {
+              const action = await vscode.window.showWarningMessage(
+                reason === 'expired'
+                  ? 'Your TeXRA session has expired. Please sign in again to access AI models and remote agents.'
+                  : 'Your TeXRA session is no longer valid. Please sign in again to access AI models and remote agents.',
+                'Sign In',
+              );
+              if (action !== 'Sign In') return;
+              await vscode.commands.executeCommand('texra.auth.signIn');
+            }),
+        },
+        secrets,
+        runtime,
+        auth,
+      );
+      context.subscriptions.push(
+        vscode.authentication.registerAuthenticationProvider(
+          AUTH_PROVIDER_ID,
+          'TeXRA Account',
+          authProvider,
+          { supportsMultipleAccounts: false },
+        ),
+      );
 
-        const uriHandler = new SupabaseUriHandler();
-        context.subscriptions.push(
-          vscode.window.registerUriHandler(uriHandler),
-        );
-        authProvider.setUriHandler(uriHandler);
-        // The account plane's readiness probe gates on this: the URI handler
-        // is what an OAuth callback arrives at, so sign-in is not "ready"
-        // before it is installed.
-        authReadiness.uriHandlerInstalled = true;
-      },
-      catch: (cause) => new SupabaseAuthRegistrationFailed({ cause }),
-    }).pipe(
-      Effect.andThen(
-        Effect.logInfo('Supabase authentication provider registered'),
-      ),
-      Effect.catchTag('SupabaseAuthRegistrationFailed', ({ cause }) => {
-        auth.setInitError(ensureError(cause));
-        return Effect.logError(
-          `Failed to initialize Supabase authentication: ${toErrorMessage(cause)}`,
-        );
-      }),
-      withLogChannel(EXTENSION_CHANNEL),
+      const uriHandler = new SupabaseUriHandler();
+      context.subscriptions.push(vscode.window.registerUriHandler(uriHandler));
+      authProvider.setUriHandler(uriHandler);
+      // The account plane's readiness probe gates on this: the URI handler
+      // is what an OAuth callback arrives at, so sign-in is not "ready"
+      // before it is installed.
+      authReadiness.uriHandlerInstalled = true;
+    },
+    catch: (cause) => new SupabaseAuthRegistrationFailed({ cause }),
+  }).pipe(
+    Effect.andThen(
+      Effect.logInfo('Supabase authentication provider registered'),
     ),
+    Effect.catchTag('SupabaseAuthRegistrationFailed', ({ cause }) => {
+      auth.setInitError(ensureError(cause));
+      return Effect.logError(
+        `Failed to initialize Supabase authentication: ${toErrorMessage(cause)}`,
+      );
+    }),
+    withLogChannel(EXTENSION_CHANNEL),
   );
 }
 
 export async function activate(context: vscode.ExtensionContext) {
-  // No runtime exists yet here: `activateExtension` is the call that installs
-  // one, and the cleanup below is what disposes it, so this fold runs on the
-  // context-free runner (the program needs no services). `onError` runs the
-  // cleanup on a failed activation only, and re-fails with the same cause.
+  // This host's R1 entry: one program from `activate` to the last
+  // registration, on the context-free runner because it is what installs the
+  // process runtime. A failed activation closes its scope, which runs the
+  // same shutdown drain deactivation does, and re-fails with the same cause.
+  const scope = Scope.makeUnsafe();
+  activationScope = scope;
   const activation = await Effect.runPromiseExit(
-    Effect.promise(() => activateExtension(context)).pipe(
+    activateExtension(context).pipe(
+      Scope.provide(scope),
       Effect.onError(() =>
-        lifecycleHost === undefined
-          ? Effect.void
-          : Effect.promise(() => shutdownExtension()).pipe(
-              Effect.catchCause((cause) =>
-                Effect.logError(
-                  'Extension cleanup after failed activation failed',
-                ).pipe(
-                  Effect.annotateLogs({ data: Cause.squash(cause) }),
-                  withLogChannel(EXTENSION_CHANNEL),
-                  // No runtime exists to hold the diagnostics layer yet, so
-                  // the entry needs it provided to reach the host's sink.
-                  Effect.provide(effectDiagnosticsLayer('Trace')),
-                ),
-              ),
+        Scope.close(scope, Exit.void).pipe(
+          Effect.catchCause((cause) =>
+            Effect.logError(
+              'Extension cleanup after failed activation failed',
+            ).pipe(
+              Effect.annotateLogs({ data: Cause.squash(cause) }),
+              withLogChannel(EXTENSION_CHANNEL),
+              // The runtime that held the diagnostics layer is gone, so the
+              // entry needs it provided to reach the host's sink.
+              Effect.provide(effectDiagnosticsLayer('Trace')),
             ),
+          ),
+        ),
       ),
     ),
   );
-  // The squashed cause is the activation's own thrown value, so the failure
-  // VS Code reports keeps the original error and its stack.
+  // The squashed cause is the activation's own failure, so the error VS Code
+  // reports keeps the original error and its stack.
   if (Exit.isFailure(activation)) throw Cause.squash(activation.cause);
 }
 
-async function activateExtension(context: vscode.ExtensionContext) {
+const activateExtension = Effect.fn('activateExtension')(function* (
+  context: vscode.ExtensionContext,
+) {
   installUnhandledRejectionSurface(context.subscriptions);
-  const workspaceFolders = vscode.workspace.workspaceFolders;
-  const hasSingleWorkspace = workspaceFolders?.length === 1;
-
-  const lifecycle = createLifecycleHost();
-  lifecycleHost = lifecycle;
-
-  /**
-   * The wiring both activation shapes settle once their platform exists, in
-   * the order they settle it. One owner, so the credential-only path and the
-   * workspace-backed path cannot drift apart.
-   */
-  const wirePostPlatform = (
-    secrets: PlatformSecrets,
-    runtime: ProcessRuntime,
-    auth: SupabaseAuthShape,
-    authReadiness: AuthReadinessGate,
-    roots: WorkspaceRoots,
-  ): void => {
-    // After the platform above, which built the runtime the manager settles
-    // its watcher rebuilds on.
-    agentDirectories.initialize(
-      roots.globalState,
-      path.join(context.extensionPath, 'resources'),
-      runtime,
-    );
-    registerSupabaseAuth(context, secrets, runtime, auth, authReadiness);
-  };
-
-  if (!hasSingleWorkspace) {
+  if (vscode.workspace.workspaceFolders?.length !== 1) {
     registerWelcomeView(context);
     // Credential-only platform. Every sign-in path stores into SecretStorage
     // (the `Secrets` service) and the global `~/.texra` config — none of it
     // needs a folder — so the walkthrough's credential buttons work before
     // one is open. Agents still require the workspace-backed platform below;
     // opening a folder reloads the window into that path (welcomeView.ts).
-    const { secrets, runtime, auth, authReadiness, roots } =
-      await initVscodePlatform(
-        context,
-        lifecycle,
-        undefined,
-        // The credential-only path never initializes a session; a resume
-        // request cannot arrive here because every run belongs to one.
-        () => {
-          throw new Error(
-            'The credential-only activation has no session to resume into.',
-          );
-        },
-      );
-    wirePostPlatform(secrets, runtime, auth, authReadiness, roots);
+    const { secrets, runtime, roots } = yield* initVscodePlatform(
+      context,
+      undefined,
+    );
     // The full command surface (including the workspace-backed
     // `texra.createSampleProject`) is only registered on the single-folder
     // path below, so the welcome view registers its own standalone variant:
@@ -616,19 +560,17 @@ async function activateExtension(context: vscode.ExtensionContext) {
   if (!rawWorkspacePath) return;
   const workspaceRoot = canonicalizeWorkspacePath(rawWorkspacePath);
 
-  Effect.runSync(
-    Effect.try({
-      try: () => process.loadEnvFile(path.join(workspaceRoot, '.env')),
-      catch: (cause) => new WorkspaceEnvFileUnreadable({ cause }),
-    }).pipe(
-      // A workspace without a .env is the normal case; any other failure
-      // (EACCES, ERR_INVALID_ARG_TYPE) stays loud instead of silently dropping
-      // it: `runSync` throws the squashed defect, which is that same error.
-      Effect.catchTag('WorkspaceEnvFileUnreadable', (failure) =>
-        isFileNotFoundError(failure.cause)
-          ? Effect.void
-          : Effect.die(failure.cause),
-      ),
+  yield* Effect.try({
+    try: () => process.loadEnvFile(path.join(workspaceRoot, '.env')),
+    catch: (cause) => new WorkspaceEnvFileUnreadable({ cause }),
+  }).pipe(
+    // A workspace without a .env is the normal case; any other failure
+    // (EACCES, ERR_INVALID_ARG_TYPE) stays loud instead of silently dropping
+    // it: activation fails with that same error.
+    Effect.catchTag('WorkspaceEnvFileUnreadable', (failure) =>
+      isFileNotFoundError(failure.cause)
+        ? Effect.void
+        : Effect.die(failure.cause),
     ),
   );
   setLogSink(createVsCodeLogSink());
@@ -636,22 +578,31 @@ async function activateExtension(context: vscode.ExtensionContext) {
   // not leave a disposed host surface installed.
   context.subscriptions.push({ dispose: () => setLogSink(null) });
   const languageModel = createLanguageModelPort(context);
-  const { secrets, runtime, auth, authReadiness, roots } =
-    await initVscodePlatform(
-      context,
-      lifecycle,
-      workspaceRoot,
-      // `runtimeSession` is created below; resume requests only arrive after
-      // activation has composed it.
-      () => runtimeSession,
-      {
-        languageModel,
-        toolMissingHandler: vscodeToolMissingReporter,
-      },
-    );
+  const { secrets, runtime, roots } = yield* initVscodePlatform(
+    context,
+    workspaceRoot,
+    { languageModel, toolMissingHandler: vscodeToolMissingReporter },
+  );
+  // The host entry holds the process runtime in a local and threads it to the
+  // surfaces registered below, so code under `activate` settles its Effects on
+  // the runtime it was handed instead of reading the global back.
+  yield* withProcessServices(
+    runtime,
+    activateWorkspace(context, languageModel, secrets, runtime, roots),
+  );
+});
+
+/** The workspace path's activation, over the process runtime it just built. */
+const activateWorkspace = Effect.fn('activateWorkspace')(function* (
+  context: vscode.ExtensionContext,
+  languageModel: LanguageModelPort,
+  secrets: PlatformSecrets,
+  runtime: ProcessRuntime,
+  roots: WorkspaceRoots,
+) {
   const { globalState } = roots;
-  wirePostPlatform(secrets, runtime, auth, authReadiness, roots);
-  // That registration precedes the fire-and-forget remote agent refresh below,
+  // The account provider the platform registered precedes the
+  // fire-and-forget remote agent refresh below,
   // which reads the account plane's access token: with the provider in place
   // the refresh fetches the real catalog instead of short-circuiting on a null
   // token, so activation now performs that one background fetch.
@@ -660,67 +611,49 @@ async function activateExtension(context: vscode.ExtensionContext) {
       emitAppSignal('languageModelsChanged', undefined),
     ),
   );
-  // The host entry holds the process runtime in a local and threads it to the
-  // surfaces registered below, so code under `activate` settles its Effects on
-  // the runtime it was handed instead of reading the global back.
-  const runtimeSession = await runtime.runPromise(
-    initializeDefaultSession({
-      roots,
-      responseTextProcessing: createTexraResponseTextProcessing(
-        createAgentResponseTextConnector({ ...roots, secrets }, languageModel),
-      ),
-    }),
-  );
+  const runtimeSession = yield* initializeDefaultSession({
+    roots,
+    responseTextProcessing: createTexraResponseTextProcessing(
+      createAgentResponseTextConnector({ ...roots, secrets }, languageModel),
+    ),
+  });
   if (runtimeSession.storeCleared) {
     void vscode.window.showWarningMessage(
       sessionStoreClearedMessage(runtimeSession.storeCleared),
     );
   }
-  // `disposeStatusListener` and `statusBarItem` are owned solely by
-  // `context.subscriptions` (see the push near the end of `activate`), matching
-  // the setup pill. Registering them here too would double-dispose.
-  registerRuntimeShutdownHandlers(lifecycle, {
-    afterAgentShutdown: [killActiveRecording()],
-    flushArtifacts: runtimeSession.settlePublications(),
-    afterRunSettlement: [Effect.sync(() => disposeDiffRefresh())],
-  });
   runtimeSession.setApprovalPolicy(
-    await runtime.runPromise(
-      readSettingFrom<TexraApprovalPolicy>(
-        runtimeSession.roots,
-        TEXRA_APPROVAL_POLICY_CONFIG_KEY,
-      ),
+    yield* readSettingFrom<TexraApprovalPolicy>(
+      runtimeSession.roots,
+      TEXRA_APPROVAL_POLICY_CONFIG_KEY,
     ),
   );
   // The run-storage directory of the session just initialized, through that
   // session's own storage view rather than a static that re-reads the root.
-  await runtime.runPromise(
-    withSessionFs(
-      runtimeSession.roots,
-      Effect.flatMap(Effect.service(StorageFs), (storageFs) =>
-        storageFs.makeDirectory(WORKSPACE_STORAGE_LAYOUT.runs, {
-          recursive: true,
-        }),
-      ),
+  yield* withSessionFs(
+    runtimeSession.roots,
+    Effect.flatMap(Effect.service(StorageFs), (storageFs) =>
+      storageFs.makeDirectory(WORKSPACE_STORAGE_LAYOUT.runs, {
+        recursive: true,
+      }),
     ),
   );
   FileLister.initialize(context, runtimeSession);
 
   // Order matters: registerAgentDirectoryRoots exposes the packaged built-in
   // directories, and loadAgents scans them.
-  await runtime.runPromise(registerAgentDirectoryRoots(context));
-  const agentIndexLoaded = await runtime.runPromise(
-    loadAgents({ includeRemote: false }).pipe(
-      Effect.as(true),
-      Effect.catchCause((cause) =>
-        Effect.logError(
-          `Failed to initialize agent index: ${toErrorMessage(Cause.squash(cause))}`,
-        ).pipe(withLogChannel(EXTENSION_CHANNEL), Effect.as(false)),
-      ),
+  yield* registerAgentDirectoryRoots(context);
+  const agentIndexLoaded = yield* loadAgents({ includeRemote: false }).pipe(
+    Effect.as(true),
+    Effect.catchCause((cause) =>
+      Effect.logError(
+        `Failed to initialize agent index: ${toErrorMessage(Cause.squash(cause))}`,
+      ).pipe(withLogChannel(EXTENSION_CHANNEL), Effect.as(false)),
     ),
   );
   if (agentIndexLoaded) {
-    runtime.runFork(
+    // Process-lifetime: activation does not wait on the remote catalog.
+    yield* Effect.forkDetach(
       loadAgents().pipe(
         Effect.catchCause((cause) =>
           Effect.logWarning(
@@ -754,12 +687,10 @@ async function activateExtension(context: vscode.ExtensionContext) {
     runtimeSession,
     (banner) => (banner.visible ? setupPill.show() : setupPill.hide()),
   );
-  await runtime.runPromise(
-    Effect.andThen(
-      progressViewProvider.initialize(),
-      Effect.logInfo('TeXRA extension activated'),
-    ).pipe(withLogChannel(EXTENSION_CHANNEL)),
-  );
+  yield* Effect.andThen(
+    progressViewProvider.initialize(),
+    Effect.logInfo('TeXRA extension activated'),
+  ).pipe(withLogChannel(EXTENSION_CHANNEL));
 
   // Deferred off the activation tick: extendEnvPath() inside performs
   // synchronous glob probes of TeX install directories, which would
@@ -825,13 +756,8 @@ async function activateExtension(context: vscode.ExtensionContext) {
     },
   );
   context.subscriptions.push(gitHubAuthListener);
-  await runtime.runPromise(
-    registerInlineCriticism(context, runtime, runtimeSession, roots).pipe(
-      Effect.andThen(
-        registerLanguageModelTools(context, runtime, runtimeSession),
-      ),
-    ),
-  );
+  yield* registerInlineCriticism(context, runtime, runtimeSession, roots);
+  yield* registerLanguageModelTools(context, runtime, runtimeSession);
   registerInlineComments(context);
 
   statusBarItem = vscode.window.createStatusBarItem(
@@ -941,14 +867,18 @@ async function activateExtension(context: vscode.ExtensionContext) {
   // after ALL `registerCommand` calls in this function (including the late one
   // for `texra.refreshApiKeyStatus`), otherwise palette entries can fire before
   // their handlers exist and produce "command not found" errors.
-  await vscode.commands.executeCommand('setContext', 'texra.activated', true);
+  yield* Effect.tryPromise({
+    try: () =>
+      vscode.commands.executeCommand('setContext', 'texra.activated', true),
+    catch: ensureError,
+  });
 
   const welcomeKey = 'texra.welcomeShown';
-  if (!(await runtime.runPromise(globalState.get<boolean>(welcomeKey)))) {
+  if (!(yield* globalState.get<boolean>(welcomeKey))) {
     // Land first-run users on the welcome card in the TeXRA panel: the one
     // onboarding surface that opens by itself. It links the walkthrough.
     // A failure leaves the flag unset, so the welcome shows again next time.
-    runtime.runFork(
+    yield* Effect.forkDetach(
       fromHost('texra.showMainView', () =>
         vscode.commands.executeCommand('texra.showMainView'),
       ).pipe(
@@ -960,8 +890,10 @@ async function activateExtension(context: vscode.ExtensionContext) {
       ),
     );
   }
-}
+});
 
 export async function deactivate() {
-  await shutdownExtension();
+  if (activationScope) {
+    await Effect.runPromise(Scope.close(activationScope, Exit.void));
+  }
 }

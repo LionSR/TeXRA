@@ -116,6 +116,10 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
 
 ### Bug Fixes
 
+- **Usage recorded just before quitting is no longer lost** — on the desktop
+  app and the CLI, a quit while live runs took more than a few seconds to
+  stop could cut off sending the last usage records. Every host now sends
+  them as the final shutdown step, after runs and sessions have closed.
 - **Workflow agent calls no longer fail after they finish.** In a workflow
   script, an `agent()` call could fail with "All fibers interrupted without
   error" just after it succeeded. In a `parallel()` group that ended the
