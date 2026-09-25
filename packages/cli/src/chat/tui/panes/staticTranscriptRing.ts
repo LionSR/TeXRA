@@ -387,10 +387,7 @@ function retainedStaticTranscriptTail(
   const budgets = options.budgets ?? DEFAULT_STATIC_TRANSCRIPT_RING_BUDGETS;
   const headerCount = items[0]?.kind === 'header' ? 1 : 0;
   if (items.length <= headerCount) {
-    const totals = staticTranscriptItemsTotals(
-      items,
-      options.width,
-    );
+    const totals = staticTranscriptItemsTotals(items, options.width);
     return { items, totals, trimmed: false };
   }
 
