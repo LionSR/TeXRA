@@ -9,7 +9,6 @@ import { MODEL_CONFIGS, ModelProvider } from 'llm-zoo';
 import { JsonConfigProvider } from '@platform/defaults/jsonConfigProvider';
 import { nodeFileServices, type JsonStore } from '@platform/defaults/jsonStore';
 import {
-  DEFAULT_NODE_STORAGE_ROOT,
   TEXRA_CONFIG_FILE_NAME,
   workspaceTexraConfigPath,
 } from '@platform/defaults/nodeStorage';
@@ -261,7 +260,7 @@ function configFileWarnings(
  */
 export function loadCliStartupConfig(
   cwd: string,
-  storageRoot: string = DEFAULT_NODE_STORAGE_ROOT,
+  storageRoot: string,
 ): Effect.Effect<CliStartupConfig, Error> {
   return Effect.provide(
     Effect.gen(function* () {

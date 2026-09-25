@@ -212,11 +212,9 @@ describe('CLI secrets', () => {
 
     await withSecretsRoot(async ({ root, storageRoot }) => {
       const first = getCliSecrets(storageRoot);
-      const second = getCliSecrets();
-      const third = getCliSecrets(path.join(root, 'other-storage'));
+      const second = getCliSecrets(path.join(root, 'other-storage'));
 
       expect(second).toBe(first);
-      expect(third).toBe(first);
     });
   });
 });

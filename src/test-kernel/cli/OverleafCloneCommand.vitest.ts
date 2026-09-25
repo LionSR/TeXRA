@@ -17,6 +17,7 @@ import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { scriptedSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { makeMachineGitEnv } from '@utils/system/gitEnv';
 import type * as ChildProcess from 'effect/unstable/process/ChildProcess';
+import { DEFAULT_NODE_STORAGE_ROOT } from '@platform/defaults/nodeStorage';
 
 const mocks = vi.hoisted(() => ({
   deleteSecret: vi.fn(),
@@ -194,10 +195,13 @@ describe('CLI Overleaf clone command', () => {
     expect(result.exitCode).toBe(CliExitCode.Success);
     // The platform-less handoff itself: clone opens no global state store and
     // no global-root handle, so it holds the event loop open past nothing.
-    expect(mocks.installCliProcessRuntime).toHaveBeenCalledWith(undefined, {
-      ...NO_PLATFORM_INSTALL,
-      minimumLogLevel: 'Info',
-    });
+    expect(mocks.installCliProcessRuntime).toHaveBeenCalledWith(
+      DEFAULT_NODE_STORAGE_ROOT,
+      {
+        ...NO_PLATFORM_INSTALL,
+        minimumLogLevel: 'Info',
+      },
+    );
     expect(mocks.getSecret).toHaveBeenCalledWith('overleaf.gitToken');
     expectClonedInto(workspacePath);
     expect(JSON.parse(stdout)).toEqual({

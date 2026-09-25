@@ -12,7 +12,6 @@ import {
   type SecretsOperation,
 } from '@platform/secrets';
 import { JsonStore, nodeFileServices } from '@platform/defaults/jsonStore';
-import { DEFAULT_NODE_STORAGE_ROOT } from '@platform/defaults/nodeStorage';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   type PerKeyLane,
@@ -53,7 +52,7 @@ const mutationLanes: PerKeyLanes<string> = new Map<string, PerKeyLane>();
  * holds no runtime and outlives any of them.
  */
 export class CliSecrets implements PlatformSecrets {
-  constructor(private readonly filePath = cliSecretsPath()) {}
+  constructor(private readonly filePath: string) {}
 
   get(key: string) {
     return Effect.map(this.openStore(), (store) => {
@@ -135,9 +134,7 @@ export class CliSecrets implements PlatformSecrets {
   }
 }
 
-export function cliSecretsPath(
-  storageRoot = DEFAULT_NODE_STORAGE_ROOT,
-): string {
+export function cliSecretsPath(storageRoot: string): string {
   return path.join(storageRoot, 'secrets.json');
 }
 
@@ -145,12 +142,12 @@ let cliSecrets: CliSecrets | undefined;
 
 /**
  * The one secret store of this process, over the storage root the first
- * caller names: a later caller that names another root, or none, gets that
+ * caller names: a later caller that names another root gets that
  * same store rather than a second view over a different file. Nothing here
  * is bound to a process runtime, so a runtime that replaced a disposed one
  * (an init retried after its failure disposed the first) keeps this store.
  */
-export function getCliSecrets(storageRoot?: string): CliSecrets {
+export function getCliSecrets(storageRoot: string): CliSecrets {
   cliSecrets ??= new CliSecrets(cliSecretsPath(storageRoot));
   return cliSecrets;
 }

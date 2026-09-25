@@ -15,6 +15,7 @@ import { createDeferred } from '@test/support/asyncTestUtils';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 import { parseGitHubSlug } from '@tools/github/githubSlug';
+import { DEFAULT_NODE_STORAGE_ROOT } from '@platform/defaults/nodeStorage';
 
 const browserMocks = vi.hoisted(() => ({
   tryOpenBrowser: vi.fn(),
@@ -105,7 +106,7 @@ describe('install-github-action command', () => {
     // The platform-less handoff itself: the entry opens no global state store
     // and no global-root handle for a command that disposes neither.
     expect(browserMocks.installCliProcessRuntime).toHaveBeenCalledWith(
-      undefined,
+      DEFAULT_NODE_STORAGE_ROOT,
       { ...NO_PLATFORM_INSTALL, minimumLogLevel: 'Info' },
     );
     expect(git(repo, 'show', '--name-only', '--format=', 'HEAD')).toBe(
