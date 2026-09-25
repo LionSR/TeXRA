@@ -126,7 +126,7 @@ let authProbes: boolean[] = [];
 
 const { runMultiAgentPreset: nativeRun } =
   await import('@cli/commands/multiAgent');
-const { loadCliMultiAgentPresetPlanSet, loadCliMultiAgentRunPlan } =
+const { loadCliMultiAgentRunPlan } =
   await import('@cli/runtime/multiAgentRunPlan');
 
 type MultiAgentRunInit = Parameters<typeof nativeRun>[1];

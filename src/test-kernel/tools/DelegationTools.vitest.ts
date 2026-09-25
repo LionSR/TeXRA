@@ -26,12 +26,7 @@ import { testRunHandle } from '@test/support/runHandleFixtures';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { DelegateAgentTool } from '@tools/delegation/DelegationTools';
-import {
-  rejectOversizedBibAttachments,
-  WorkflowAgentInputSchema,
-  withToolUseSubagentHandoffInstruction,
-  workingDirectoryField,
-} from '@tools/delegation/inputFields';
+import { rejectOversizedBibAttachments } from '@tools/delegation/inputFields';
 
 describe('DelegationTools', () => {
   // The bib-size probe reads the real filesystem, so the cases build a real

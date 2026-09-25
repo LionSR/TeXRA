@@ -29,7 +29,6 @@ import { listenForFollowUp } from '@tools/executions/waitCoordination';
 import {
   createRecordingHost,
   recordFollowUpsSent,
-  recordSessionEvents,
   seedActiveRun,
   seedTerminalRun,
 } from '../progressTestUtils';

@@ -13,7 +13,7 @@ import {
 } from '@shared/schemas';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import { assertSupported, isUnsupported } from '@shared/utils/dispatcher';
+import { assertSupported } from '@shared/utils/dispatcher';
 import {
   initTestProcessRuntime,
   testRuntime,

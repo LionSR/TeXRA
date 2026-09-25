@@ -17,8 +17,6 @@ import {
   hasUsageNoColorFlag,
   detectUnknownCliCommand,
   detectUnknownCliFlag,
-  formatUnknownCliCommand,
-  formatUnknownCliFlag,
 } from '@cli/commands/_helpers/dispatch';
 import { CliUsageError, formatCrashReportLine } from '@cli/runtime/cliContext';
 import {
@@ -27,8 +25,6 @@ import {
 } from '@cli/commands/_helpers/fetchSilencer';
 import {
   collectStringFlagValues,
-  GLOBAL_BOOL_FLAGS,
-  GLOBAL_VALUE_FLAGS,
   optionalStringFlagValue,
   rejectHeadlessOnlyFlags,
 } from '@cli/commands/_helpers/globalArgs';
