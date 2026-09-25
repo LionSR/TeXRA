@@ -20,7 +20,7 @@ About 500 lines in three files, with 18 behavioral tests:
 ## Pins
 
 Taken on `main` at `b4569d4c` (2026-09-25), Node.js v22.22.2, with the
-repository's locked dependencies: `effect` 4.0.0-rc.116,
+repository's locked dependencies: `effect` 4.0.0-rc.117,
 `quickjs-emscripten-core` and `@jitl/quickjs-wasmfile-release-sync` 0.32.0,
 `zod` 4.4.3, `vitest` 5.0.1.
 
