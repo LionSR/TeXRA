@@ -198,7 +198,7 @@ export function readCliEntrypointPath(): string {
   return process.argv[1] ?? '';
 }
 
-export function resolveCliCommandName(entrypointPath: string): string {
+function resolveCliCommandName(entrypointPath: string): string {
   return path.basename(entrypointPath).toLowerCase() === 'texra-local'
     ? 'texra-local'
     : 'texra';

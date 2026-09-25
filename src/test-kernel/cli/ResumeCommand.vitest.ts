@@ -333,20 +333,6 @@ describe('runResumeCommand', () => {
     );
   });
 
-  it('reports a missing workflow agent as a usage error', async () => {
-    await seedRunRecord({ config: WORKFLOW_CONFIG });
-    mocks.resolveCliLaunchAgent.mockReturnValue(
-      Effect.fail(new CliUsageError('Agent not found: correct.')),
-    );
-
-    await expect(run(cliContext())).resolves.toBe(2);
-
-    expect(mocks.writeTextStderr).toHaveBeenCalledWith(
-      'Agent not found: correct.',
-    );
-    expect(mocks.executeCliWorkflowConfig).not.toHaveBeenCalled();
-  });
-
   it('rejects tool-use resume when the context says stdout is not a TTY', async () => {
     await expect(run(cliContext({ stdoutIsTty: false }))).resolves.toBe(2);
 

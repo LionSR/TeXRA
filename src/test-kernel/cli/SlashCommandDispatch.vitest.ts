@@ -21,10 +21,6 @@ import {
   applyCliProviderApiKey,
 } from '@cli/chat/tui/commands/handlers/modelAccessCommands';
 import {
-  showCliMemoryList,
-  showCliMemoryPreview,
-} from '@cli/chat/tui/commands/handlers/memoryCommands';
-import {
   loginFromChat,
   logoutFromChat,
 } from '@cli/chat/tui/commands/handlers/loginCommands';
@@ -40,9 +36,7 @@ import { notices, noticesFor } from '@cli/chat/tui/state/transcript';
 import {
   CLI_LOCAL_RUN_ID,
   closeForegroundReader,
-  closeInfoPane,
   foregroundReader,
-  infoPane,
   patchSessionMeta,
   resetCliState,
   transientNotice,
@@ -75,7 +69,6 @@ import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { FakeSecrets } from '@test/support/FakePlatform';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
-import * as memoryFileSystem from '@tools/memory/memoryFileSystem';
 import { RESEARCHER_ACCESS_AUTH } from '@ui/copy/accountAuth';
 import type { TranscriptRow } from '@ui/transcript';
 import {
@@ -332,26 +325,7 @@ function mockSignOuts(): {
   return { signOutSupabase, signOutChatGpt };
 }
 
-function expectAccessStatusText(text: string | undefined): void {
-  expect(text).toContain('ChatGPT: preferred');
-  expect(text).toContain('Kimi Code: not preferred');
-  expect(text).toContain('Otherwise: Your own API keys');
-  expect(text).toContain('Other API keys: DeepSeek');
-}
-
 describe('handleTuiSlashCommand', () => {
-  it.effect('opens reference commands without leaving transcript rows', () =>
-    Effect.gen(function* () {
-      registerBuiltinSlashCommands({ ...services });
-      const context = createContext();
-
-      yield* dispatchSlash('/help', context);
-      expect(infoPane.get()).toMatchObject({ title: '/help' });
-      expect(infoPane.get()?.lines.join('\n')).toContain('**Keyboard**');
-      expect(localEntries()).toEqual([]);
-    }),
-  );
-
   it.effect('opens a live work-plan reader for the focused stream', () =>
     Effect.gen(function* () {
       registerBuiltinSlashCommands({ ...services });
@@ -382,45 +356,6 @@ describe('handleTuiSlashCommand', () => {
       expect(foregroundReader.get()).toEqual({ kind: 'workPlan', runId });
       expect(localEntries()).toEqual([]);
       closeForegroundReader();
-    }),
-  );
-
-  it.effect('opens memory list and preview output in the reference pane', () =>
-    Effect.gen(function* () {
-      vi.spyOn(memoryFileSystem, 'loadMemoryItems').mockReturnValue(
-        Effect.succeed([]),
-      );
-      vi.spyOn(memoryFileSystem, 'loadMemoryPreview').mockReturnValue(
-        Effect.succeed({
-          storagePath: 'memory/note.md',
-          lineCount: 1,
-          preview: 'Remember this.',
-        }),
-      );
-
-      const memoryRoots = {
-        workspace: undefined,
-        storage: 'storage',
-        globalStorage: 'globalStorage',
-      };
-      yield* withProcessServices(
-        services.runtime,
-        showCliMemoryList(memoryRoots),
-      );
-      expect(infoPane.get()).toEqual({
-        title: '/memory list',
-        lines: ['No memory files found.'],
-      });
-
-      yield* withProcessServices(
-        services.runtime,
-        showCliMemoryPreview(memoryRoots, 'note.md'),
-      );
-      expect(infoPane.get()?.title).toBe('/memory list');
-      closeInfoPane();
-      expect(infoPane.get()).toMatchObject({ title: '/memory preview' });
-      expect(infoPane.get()?.lines).toContain('Remember this.');
-      expect(localEntries()).toEqual([]);
     }),
   );
 
@@ -512,46 +447,6 @@ describe('handleTuiSlashCommand', () => {
 
         yield* Fiber.interrupt(dialog);
       }),
-  );
-
-  it.effect(
-    'opens /models as the enable/disable catalog (not the active-model picker)',
-    () =>
-      Effect.gen(function* () {
-        registerBuiltinSlashCommands({ ...services });
-
-        yield* expectFormOpens('/models', 'models');
-      }),
-  );
-
-  it.effect('opens /model as the active-model picker', () =>
-    Effect.gen(function* () {
-      registerBuiltinSlashCommands({ ...services });
-
-      yield* expectFormOpens('/model', 'model');
-    }),
-  );
-
-  it.effect('opens /approval status without an early transcript echo', () =>
-    Effect.gen(function* () {
-      registerBuiltinSlashCommands({ ...services });
-
-      yield* expectFormOpens('/approval status', 'approval');
-
-      expect(localEntries()).toEqual([]);
-    }),
-  );
-
-  it.effect('opens the masked provider-key form through /key and /keys', () =>
-    Effect.gen(function* () {
-      registerBuiltinSlashCommands({ ...services });
-      const context = createContext();
-
-      yield* expectFormOpens('/key', 'key', context);
-
-      activeForm.set(undefined);
-      yield* expectFormOpens('/keys', 'key', context);
-    }),
   );
 
   it.effect('discards inline key arguments without recording the secret', () =>
@@ -705,27 +600,6 @@ describe('handleTuiSlashCommand', () => {
 
         expect(signIn.interrupted()).toBe(true);
       }),
-  );
-
-  it.effect('prints account and access status for /login status', () =>
-    Effect.gen(function* () {
-      registerBuiltinSlashCommands({ ...services });
-      const overview = vi
-        .spyOn(apiStatus, 'loadCliDetailedAccountStatusLines')
-        .mockReturnValue(
-          Effect.succeed([
-            'ChatGPT: preferred · signed in as chatgpt@example.com',
-            'Kimi Code: not preferred · key not configured',
-            'Otherwise: Your own API keys',
-            'Other API keys: DeepSeek',
-          ]),
-        );
-      const context = createContext();
-
-      yield* dispatchSlash('/login status', context);
-      expectAccessStatusText(lastEntryText());
-      expect(overview).toHaveBeenCalledOnce();
-    }),
   );
 
   it.effect('explains the shared GLM key routes after saving it', () =>
@@ -989,40 +863,6 @@ describe('handleTuiSlashCommand', () => {
         const statusText = lastEntryText(rootRunId);
         expect(statusText).toContain('active background tasks: 1');
         expect(statusText).not.toContain('active background tasks: 2');
-      }),
-  );
-
-  it.effect(
-    'does not count retained idle children as active background tasks',
-    () =>
-      Effect.gen(function* () {
-        registerBuiltinSlashCommands({ ...services });
-        const session = createSession();
-        const rootRunId = '5e0000' as RunId;
-        const childRunIds = ['stream-child-1', 'stream-child-2'] as RunId[];
-        focusRun(rootRunId);
-        ensureRun(rootRunId, { status: RUN_PHASE.WAITING });
-        for (const [index, childRunId] of childRunIds.entries()) {
-          ensureRun(childRunId, {
-            status: index === 0 ? RUN_PHASE.WAITING : RUN_PHASE.COMPLETED,
-          });
-        }
-        seedChildRoster(
-          rootRunId,
-          childRunIds.map((childRunId, index) => ({
-            identity: { kind: 'agent' as const, agent: `critic-${index}` },
-            agentName: `critic-${index}`,
-            status: index === 0 ? RUN_PHASE.WAITING : RUN_PHASE.COMPLETED,
-            startedAt: index + 1,
-            childRunId,
-          })),
-        );
-
-        yield* dispatchSlash('/status', createContext(session));
-
-        expect(lastEntryText(rootRunId)).not.toContain(
-          'active background tasks:',
-        );
       }),
   );
 

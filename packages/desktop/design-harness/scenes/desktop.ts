@@ -194,7 +194,6 @@ const conversationPane = (
       ${
         options.chip === false ? nothing : subagentsButtonTemplate(active, noop)
       }
-      <span class="shell-header-spacer"></span>
       ${iconBtn('circle-stop', 'Stop')}${iconBtn('window-maximize', 'Layout')}${iconBtn('ellipsis', 'More')}
     </header>
     <div class="shell-conversation-body">

@@ -17,7 +17,6 @@ import type { SessionView } from '@shared/session/sessionView';
 import type { Shell } from '@shared/session/shell';
 import type { Surface } from '@shared/session/surface';
 import { unseenRuns } from '@shared/session/unseenRuns';
-import { SessionUiEvents } from '@shared/session/uiEvents';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
 import type { TeXRAIconName } from '@ui/wa/iconNames';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
@@ -293,34 +292,6 @@ export function subagentsButtonTemplate(
         >${root.rollup.total}</span
       >
     </wa-button>
-  `;
-}
-
-/**
- * The dock under the composer: the project-level shortcut a running
- * conversation reaches for, dispatched as the surface arm it is. The
- * latexdiff chip opens the Tools sheet on the launcher's base file and
- * commit; the desktop host performs its commit verbs (desktopHostRequests).
- */
-export function conversationDockTemplate(): TemplateResult {
-  return html`
-    <div
-      class="shell-conversation-dock"
-      role="group"
-      aria-label="Project actions"
-    >
-      <wa-button
-        type="button"
-        appearance="outlined"
-        size="s"
-        @click=${(event: Event) =>
-          event.target?.dispatchEvent(
-            SessionUiEvents.surface({ kind: 'toolsSheet', open: true }),
-          )}
-      >
-        ${waIcon('code-compare', { slot: 'start' })} latexdiff vs last commit
-      </wa-button>
-    </div>
   `;
 }
 

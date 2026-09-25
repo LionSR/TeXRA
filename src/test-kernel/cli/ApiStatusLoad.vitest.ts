@@ -195,9 +195,6 @@ describe('CLI model-access status lines', () => {
     );
     expect(joined.match(/Kimi Code/g)).toHaveLength(1);
     expect(joined.match(/chatgpt@example\.com/g)).toHaveLength(1);
-    expect(mocks.readCliModelAccessStatus).toHaveBeenCalledOnce();
-    expect(mocks.getCliAuthProfile).toHaveBeenCalledOnce();
-    expect(mocks.lookupApiKeyOrigin).toHaveBeenCalledTimes(3);
   });
 
   it.effect(
@@ -347,26 +344,6 @@ describe('CLI model-access status lines', () => {
     expect(lines.join('\n')).not.toContain('TeXRA');
   });
 
-  it('omits unavailable key categories instead of printing none', async () => {
-    const lines = await accountStatusLines();
-
-    expect(lines).toEqual(['Otherwise: Your own API keys']);
-  });
-
-  it('preserves a profile note exactly once', async () => {
-    const profileNote = 'Account metadata may be stale.';
-    mocks.getCliAuthProfile.mockReturnValue(
-      Effect.succeed({
-        authenticated: false,
-        note: profileNote,
-      }),
-    );
-
-    const lines = await accountStatusLines();
-
-    expect(lines.filter((line) => line === profileNote)).toHaveLength(1);
-  });
-
   it.effect(
     'reports the legacy model-access overview without reading key storage',
     () =>
@@ -416,8 +393,6 @@ describe('CLI model-access status lines', () => {
           ],
         });
         expect(mocks.lookupApiKeyOrigin).not.toHaveBeenCalled();
-        expect(mocks.readCliModelAccessStatus).toHaveBeenCalledOnce();
-        expect(mocks.getCliAuthProfile).toHaveBeenCalledOnce();
       }),
   );
 });

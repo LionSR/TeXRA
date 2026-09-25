@@ -522,10 +522,10 @@ keys were ignored.
 
 Two more switches live in the environment:
 
-| Variable                              | Effect                                                                                                           |
-| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `TEXRA_NO_TELEMETRY` / `DO_NOT_TRACK` | Turn off usage logging for rounds billed to your own API key ([Usage logging](./configuration.md#usage-logging)) |
-| `TEXRA_NO_UPDATE_CHECK`               | Skip the daily check for a newer `texra` release (environment-only)                                              |
+| Variable                              | Effect                                                                     |
+| ------------------------------------- | -------------------------------------------------------------------------- |
+| `TEXRA_NO_TELEMETRY` / `DO_NOT_TRACK` | Turn off usage logging ([Usage logging](./configuration.md#usage-logging)) |
+| `TEXRA_NO_UPDATE_CHECK`               | Skip the daily check for a newer `texra` release (environment-only)        |
 
 Usage logging can also be turned off in the workspace file with
 `"texra.telemetry.enabled": false` in `.texra/config.json` (`texra doctor`

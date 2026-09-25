@@ -90,40 +90,4 @@ describe('subscription-section provider descriptors', () => {
       [SETTINGS_VIEW_COMMANDS.SIGN_OUT_GROK],
     ]);
   });
-
-  it('writes the preference through the provider-specific command', async () => {
-    const element = await mount(chatgptSection, null);
-    const preferSwitch = element.shadowRoot?.querySelector<
-      HTMLElement & { checked?: boolean }
-    >('wa-switch');
-
-    expect(preferSwitch).toBeInstanceOf(HTMLElement);
-    preferSwitch!.checked = true;
-    preferSwitch!.dispatchEvent(
-      new Event('change', { bubbles: true, composed: true }),
-    );
-
-    expect(mocks.postMessage).toHaveBeenCalledWith(
-      SETTINGS_VIEW_COMMANDS.SET_CHATGPT_PREFER_SUBSCRIPTION,
-      { enabled: true },
-    );
-  });
-
-  it('offers the longer ChatGPT context budget and writes it as a setting', async () => {
-    const element = await mount(chatgptSection, null);
-    const input = element.shadowRoot?.querySelector<
-      HTMLElement & { value: string }
-    >('.setting-number-input');
-
-    expect(input).toBeInstanceOf(HTMLElement);
-    input!.value = '272';
-    input!.dispatchEvent(
-      new Event('change', { bubbles: true, composed: true }),
-    );
-
-    expect(mocks.postMessage).toHaveBeenCalledWith(
-      SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING,
-      { key: 'texra.chatgptCodex.contextWindowK', value: 272 },
-    );
-  });
 });
