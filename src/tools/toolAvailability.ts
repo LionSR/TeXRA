@@ -20,7 +20,7 @@
  */
 
 // Third-party imports
-import { Deferred, Effect } from 'effect';
+import { Effect } from 'effect';
 
 // Local imports
 import { emitAppSignal } from '@eventBus/AppSignals';
@@ -34,6 +34,7 @@ import type {
   ToolProbeInputs,
   ToolProbeServices,
 } from '@tools/toolProbes';
+import { SharedAttempt } from '@utils/core/sharedAttempt';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'toolAvailability';
@@ -106,8 +107,10 @@ export const seedDisabledToolDefaults = Effect.fn('seedDisabledToolDefaults')(
  */
 class ToolAvailabilityCache {
   private lastResults: ExternalToolCheckResult[] | null = null;
-  private inflightProbe: Deferred.Deferred<ExternalToolCheckResult[]> | null =
-    null;
+  private readonly probes = new SharedAttempt<
+    ExternalToolCheckResult[],
+    never
+  >();
   private pendingRerun = false;
 
   /**
@@ -118,21 +121,8 @@ class ToolAvailabilityCache {
     inputs: ToolProbeInputs,
   ): Effect.Effect<ExternalToolCheckResult[], never, ToolProbeServices> {
     return Effect.suspend(() => {
-      if (this.inflightProbe) {
-        this.pendingRerun = true;
-        return Deferred.await(this.inflightProbe);
-      }
-      // The deferred is claimed here, synchronously, before the first
-      // suspension point: a caller that arrives while this probe runs must
-      // find the slot taken and join it rather than start a second probe.
-      const deferred = Deferred.makeUnsafe<ExternalToolCheckResult[]>();
-      this.inflightProbe = deferred;
-      return this.probeUntilSettled(inputs).pipe(
-        Effect.onExit((exit) => {
-          this.inflightProbe = null;
-          return Deferred.done(deferred, exit);
-        }),
-      );
+      if (this.probes.inFlight) this.pendingRerun = true;
+      return this.probes.run(() => this.probeUntilSettled(inputs));
     });
   }
 

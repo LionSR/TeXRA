@@ -1,6 +1,7 @@
-import { Clock, Deferred, Effect } from 'effect';
+import { Clock, Effect } from 'effect';
 
 import { withLogChannel } from '@logger/effectLog';
+import { SharedAttempt } from '@utils/core/sharedAttempt';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   parseAuthCallbackCode,
@@ -52,8 +53,10 @@ export interface SupabaseSessionCoordinatorOptions {
  * error (`unwrapAuthPortCause`, `settleFailure`).
  */
 export class SupabaseSessionCoordinator {
-  private refreshInFlight: Deferred.Deferred<SupabaseSession | null> | null =
-    null;
+  private readonly refreshes = new SharedAttempt<
+    SupabaseSession | null,
+    never
+  >();
   private sessionMutationVersion = 0;
   private lastRefreshFailure: SessionRefreshFailure | null = null;
   // Serialized writes, same mechanism as SubscriptionOAuthCoordinator's
@@ -251,12 +254,11 @@ export class SupabaseSessionCoordinator {
   });
 
   /**
-   * Single-flight refresh: concurrent callers share the in-flight result. The
-   * check and the claim share one synchronous segment — no `yield*` between
-   * them, since the runtime may yield the fiber at any op boundary — so a
-   * second caller can never mint a second refresh. A port rejection anywhere
-   * in the attempt is a transient failure, logged here where its disposition
-   * is decided.
+   * Single-flight refresh: concurrent callers share one attempt, which runs
+   * detached ({@link SharedAttempt}), so an interrupted caller abandons only
+   * its own wait and a rotated refresh token is still stored. A port
+   * rejection anywhere in the attempt is a transient failure, logged here
+   * where its disposition is decided.
    */
   readonly refreshSession = Effect.fn(
     'SupabaseSessionCoordinator.refreshSession',
@@ -265,25 +267,17 @@ export class SupabaseSessionCoordinator {
     session: SupabaseSession,
     expectedVersion: number = this.sessionMutationVersion,
   ) {
-    const existing = this.refreshInFlight;
-    if (existing) return yield* Deferred.await(existing);
-    const inFlight = Deferred.makeUnsafe<SupabaseSession | null>();
-    this.refreshInFlight = inFlight;
-    this.lastRefreshFailure = null;
-    return yield* this.performRefresh(session, expectedVersion).pipe(
-      Effect.catchTag('AuthPortError', (error) => {
-        this.lastRefreshFailure = 'transient';
-        return Effect.logError(
-          `Error refreshing session: ${toErrorMessage(error.cause)}`,
-        ).pipe(withLogChannel(CHANNEL), Effect.as(null));
-      }),
-      Effect.onExit((exit) =>
-        Effect.sync(() => {
-          Deferred.doneUnsafe(inFlight, exit);
-          if (this.refreshInFlight === inFlight) this.refreshInFlight = null;
+    return yield* this.refreshes.run(() => {
+      this.lastRefreshFailure = null;
+      return this.performRefresh(session, expectedVersion).pipe(
+        Effect.catchTag('AuthPortError', (error) => {
+          this.lastRefreshFailure = 'transient';
+          return Effect.logError(
+            `Error refreshing session: ${toErrorMessage(error.cause)}`,
+          ).pipe(withLogChannel(CHANNEL), Effect.as(null));
         }),
-      ),
-    );
+      );
+    });
   });
 
   private readonly performRefresh = Effect.fn(
