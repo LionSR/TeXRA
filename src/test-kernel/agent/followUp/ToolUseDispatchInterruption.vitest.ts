@@ -41,7 +41,6 @@ import {
   type UserQuestionPermission,
 } from '@shared/schemas';
 import { RunLedger } from '@shared/session/runLedger';
-import type { RunState } from '@shared/session/runStateFold';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import {
   nativeToolTestLayer,
@@ -264,7 +263,7 @@ function agentRunTestLayer(init: HarnessInit) {
           },
           { agentName: 'chat', agentCategory: AgentCategory.ToolUse },
         ),
-        callbacks: { onModelChanged: vi.fn() },
+        callbacks: {},
       } satisfies AgentRunShape;
     }),
   );

@@ -1,10 +1,9 @@
 import * as fs from 'node:fs/promises';
-import * as os from 'node:os';
 import * as path from 'node:path';
 
 import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { afterEach, expect, vi } from 'vitest';
+import { afterEach, expect } from 'vitest';
 
 import {
   installPlugins,
@@ -27,7 +26,6 @@ import {
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { installTestSkillRoots } from '@test/support/skillFixtures';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
-import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { TOOL_PLUGINS } from '@tools/plugins';
@@ -36,15 +34,6 @@ const tempRoots = useTempDirs();
 
 /** The listing's own setting slots, carried as data by the caller. */
 const settings = makeFakeSettingsStores().stores;
-const commandMocks = vi.hoisted(() => ({ initCliPlatform: vi.fn() }));
-
-vi.mock('@cli/runtime/initPlatform', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@cli/runtime/initPlatform')>()),
-  initCliPlatform: commandMocks.initCliPlatform,
-}));
-
-const { runCli } = await import('@cli/commands/root');
-
 async function writeSkill(
   root: string,
   dirName: string,
@@ -60,7 +49,6 @@ async function writeSkill(
 
 afterEach(() => {
   installTestSkillRoots([]);
-  commandMocks.initCliPlatform.mockReset();
 });
 
 it.layer(nodePlatformLayer)('CLI skills runtime', (it) => {

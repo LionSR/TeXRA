@@ -1,22 +1,11 @@
 import * as path from 'node:path';
 
-import {
-  Data,
-  Duration,
-  Effect,
-  Fiber,
-  Option,
-  Result,
-  type Scope,
-  Stream,
-} from 'effect';
+import { Data, Duration, Effect, Fiber, Option, Result, Stream } from 'effect';
 import * as ChildProcess from 'effect/unstable/process/ChildProcess';
 import { quote as shellQuote } from 'shell-quote';
 
 import { withLogChannel } from '@logger/effectLog';
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import type { ApiKeyProviderId } from '@shared/constants/modelProviderPlugins';
-import { API_KEY_ENV_NAMES, apiKeyEnvName } from '@shared/constants/providers';
 import type { ExecResult } from '@shared/schemas';
 import { onAbort } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';

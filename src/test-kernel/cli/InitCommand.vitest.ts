@@ -40,7 +40,6 @@ vi.mock('@cli/runtime/modelAccess', async (importOriginal) => {
 });
 
 import { runCli } from '@cli/commands/root';
-import { initCommand } from '@cli/commands/init';
 import {
   initWizardDefaultAgentIndex,
   initWizardModelSelectItems,

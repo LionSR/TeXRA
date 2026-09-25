@@ -3,8 +3,6 @@ import { Effect } from 'effect';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import { DEFAULT_TOOL_CONFIG } from '@shared/schemas';
 import type { RunId } from '@shared/schemas';
 import { emptySessionView } from '@shared/session/sessionView';
 
@@ -47,21 +45,6 @@ const session = {
 
 const loadChatExportInput = (id: RunId) =>
   Effect.runPromise(loadChatExportInputEffect(id, session));
-
-const config = {
-  agent: 'correct',
-  model: 'deepseekT',
-  instruction: 'Polish the introduction.',
-  agentCategory: 'workflow',
-  inputFiles: ['chapters/intro.tex'],
-  outputFiles: ['chapters/intro.tex'],
-  contextFiles: [],
-  mediaFiles: [],
-  editedFile: null,
-  editedFiles: [],
-  memories: [],
-  toolConfig: DEFAULT_TOOL_CONFIG,
-} as AgentConfig;
 
 describe('loadChatExportInput (shared CLI/extension chat-export loader)', () => {
   beforeEach(() => {

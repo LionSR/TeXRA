@@ -3,7 +3,6 @@
 
 import { describe, expect, it } from 'vitest';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import { planSummaryLine } from '@shared/schemas';
 import { dispatchSettingsViewOutbound } from '@shared/settingsView/settingsViewMessages';
 
 describe('settings view tool install actions', () => {

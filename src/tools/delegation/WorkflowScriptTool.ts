@@ -3,7 +3,14 @@ import * as nodePath from 'node:path';
 
 // Third-party imports
 import { z } from 'zod';
-import { Cause, Effect, Exit, Fiber, FileSystem } from 'effect';
+import {
+  Cause,
+  Effect,
+  Exit,
+  Fiber,
+  FileSystem,
+  SynchronizedRef,
+} from 'effect';
 
 // Local imports
 import { getRunRecords } from '@agent/storage';
@@ -340,11 +347,11 @@ function executeWorkflowScriptTool(
       if (totalCost !== undefined) recordSubagentCost?.(totalCost);
     };
 
-    // The parent's model at the instant of dispatch. `run.config.model` is
-    // the live cell a parent model switch mutates, and a detached workflow
+    // The parent's model at the instant of dispatch. `run.model` is the
+    // live cell a parent model switch sets, and a detached workflow
     // resolves its `agent()` calls on a forked fiber after this call has
     // settled, so the value is read once, here, and threaded through.
-    const parentModel = parent.run.config.model;
+    const parentModel = (yield* SynchronizedRef.get(parent.run.model)).modelId;
 
     // Same availability gate as delegate_agent/delegate_workflow: a run model
     // the active credentials cannot serve fails here, with the available list,

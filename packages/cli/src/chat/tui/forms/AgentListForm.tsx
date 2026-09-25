@@ -44,7 +44,7 @@ interface AgentGroups {
 type AgentIdentity = Pick<AgentOptionData, 'label' | 'value'>;
 type AgentDelegationFlag = Pick<AgentOptionData, 'isOrchestrator'>;
 
-export function agentPickerPrimarySectionTitle(
+function agentPickerPrimarySectionTitle(
   agents: readonly AgentDelegationFlag[],
 ): string {
   const hasDelegatingAgents = agents.some(
