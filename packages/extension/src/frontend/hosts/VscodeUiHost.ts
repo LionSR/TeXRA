@@ -137,7 +137,11 @@ class VscodeUiHost implements MessageHost, PromptHost {
         return true;
       };
       void Promise.resolve(
-        vscode.window.showInputBox(options, tokens.token),
+        // A secret pasted from another window must not dismiss the box.
+        vscode.window.showInputBox(
+          { ...options, ignoreFocusOut: true },
+          tokens.token,
+        ),
       ).then(
         (value) => {
           dispose();
