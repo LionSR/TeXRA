@@ -38,6 +38,7 @@ import type {
 import type { SessionView } from '@shared/session/sessionView';
 import type { RunLedger } from '@shared/session/runLedger';
 import type {
+  OpenWork,
   SessionEventReads,
   SessionEventsShape,
 } from '@shared/session/sessionEvents';
@@ -110,8 +111,8 @@ export interface SessionGraph {
     text: string,
   ) => Effect.Effect<void>;
   readonly readText: (runId: RunId, id: string) => string | undefined;
-  /** The run's streams the publisher holds open (`SessionEvents.openStreams`). */
-  readonly openStreams: (runId: RunId) => readonly string[];
+  /** What the publisher holds open on the run (`SessionEvents.openWork`). */
+  readonly openWork: (runId: RunId) => readonly OpenWork[];
   /** The one session state every renderer reads: the fold fiber's level. */
   readonly view: SubscriptionRef.SubscriptionRef<SessionView>;
   /** `view` as a level stream (PRD 7.2): ends as the fold does, with its

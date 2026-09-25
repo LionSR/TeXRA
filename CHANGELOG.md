@@ -320,6 +320,10 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
 
 #### Breaking Changes
 
+- **Removed: the Agent Review panel in Source Control** — the Find Issues
+  section, its commands, the `changeReviewer` agent and the "Automatically
+  review your changes after each commit" setting are gone. To review a
+  change, ask the `codeReviewer` agent in the TeXRA panel.
 - **"Clean All LLM Output Files (Workspace-wide)" is removed** — it is gone
   from the command palette, the Progress toolbar and the getting-started
   walkthrough. Clean in the Progress toolbar now clears the selected run's

@@ -333,10 +333,8 @@ describe('knownKeys derivation', () => {
     ).map((entry) => entry.key);
     assert.deepEqual(
       configKeys.filter((key) => KNOWN_TEXRA_KEYS.has(key)).toSorted(),
-      configKeys
-        .filter((key) => key !== 'texra.agentReview.runOnCommit')
-        .toSorted(),
-      'only texra.agentReview.runOnCommit is extension-only',
+      configKeys.toSorted(),
+      'every config-file key has a CLI reader',
     );
   });
 });

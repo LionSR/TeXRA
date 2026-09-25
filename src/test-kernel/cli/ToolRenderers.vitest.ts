@@ -178,9 +178,9 @@ describe('CLI tool display lines', () => {
     expect(editLines).toContain('+We use a ViT.');
 
     // A header painted cut to its width is not the whole output.
-    const summary = `Reported issue #1: ${'long title '.repeat(20)}`;
+    const summary = `Loogle matches: ${'long title '.repeat(20)}`;
     const report = toolUse(
-      'report_review_issue',
+      'lean_loogle',
       {},
       { headerSummary: summary, outputText: summary },
     );

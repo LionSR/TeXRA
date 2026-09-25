@@ -51,6 +51,7 @@ import {
   writeTextStderr,
 } from './logSinks';
 import { CliExitCode } from './exitCodes';
+import { deferInterrupt, terminalForegroundHeld } from './foregroundCommand';
 import type { CliContext } from './cliContext';
 
 type CliShutdownSignal = 'SIGINT' | 'SIGTERM';
@@ -162,6 +163,14 @@ export function installCliShutdownSignalHandlers(
 
   const install = (signal: CliShutdownSignal, exitCode: number) => {
     const handler = async () => {
+      // A foreground child (a pager, an installer) owns Ctrl-C while it
+      // runs; `runForegroundCommand` re-raises the interrupt if the child
+      // died of it. Re-arm so the next SIGINT reaches this handler again.
+      if (signal === 'SIGINT' && terminalForegroundHeld()) {
+        deferInterrupt();
+        process.once(signal, handler);
+        return;
+      }
       await runCliPlatformShutdownSequence(lifecycle);
       process.exit(exitCode);
     };
