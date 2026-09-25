@@ -30,7 +30,7 @@ function maxOffsetReservingOneRow(
   return Math.max(0, totalLines - Math.max(1, maxDisplayLines - 1));
 }
 
-export function maxScrollableRowOffset({
+function maxScrollableRowOffset({
   maxDisplayLines,
   totalLines,
 }: {

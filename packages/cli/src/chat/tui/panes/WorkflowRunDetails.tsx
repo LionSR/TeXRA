@@ -7,21 +7,8 @@
 import { Box, Text } from 'ink';
 
 import { safeTerminalText } from '@cli/runtime/terminalText';
-import {
-  COLOR_BORDER,
-  COLOR_ERROR,
-  COLOR_HINT,
-  COLOR_SUCCESS,
-  COLOR_WARNING,
-} from '@cli/tui/ui/colors';
-import {
-  CROSS,
-  SKIP_CIRCLE,
-  STATUS_DOT,
-  TICK,
-  TODO_PENDING,
-  WARNING,
-} from '@cli/tui/ui/glyphs';
+import { COLOR_BORDER, COLOR_ERROR, COLOR_WARNING } from '@cli/tui/ui/colors';
+import { CROSS, TODO_PENDING, WARNING } from '@cli/tui/ui/glyphs';
 import {
   RUN_PHASE,
   fileLocationDisplayPath,
@@ -43,13 +30,13 @@ import { taskGroupDisplayStatus } from '@shared/runs/taskGroupProjection';
 import { filterNotNullish } from '@utils/core';
 import { formatCompactDuration } from '@utils/text/stringUtils';
 
-type WorkflowRunDetailTone =
-  'neutral' | 'hint' | 'muted' | 'success' | 'warning' | 'error';
+import { COMPACTION_ACTIVITY_STATUS_STYLE } from './transcriptEntryLayout';
 
 interface WorkflowRunDetailLine {
   readonly key: string;
   readonly text: string;
-  readonly tone: WorkflowRunDetailTone;
+  /** Undefined paints in the terminal's default foreground. */
+  readonly color: string | undefined;
   readonly role: 'lifecycle' | 'outputHeading' | 'output' | 'alert';
 }
 
@@ -72,31 +59,12 @@ interface WorkflowRunDetailGroup {
   readonly planned: boolean;
 }
 
-const TASK_GROUP_APPEARANCE = {
-  [RUN_PHASE.RUNNING]: { marker: STATUS_DOT, tone: 'hint' },
-  [RUN_PHASE.COMPLETED]: { marker: TICK, tone: 'success' },
-  [RUN_PHASE.CANCELLED]: { marker: SKIP_CIRCLE, tone: 'muted' },
-  [RUN_PHASE.FAILED]: { marker: CROSS, tone: 'error' },
-} as const satisfies Record<
-  TaskGroupStatus,
-  { readonly marker: string; readonly tone: WorkflowRunDetailTone }
->;
-
-const LINE_COLORS = {
-  neutral: undefined,
-  hint: COLOR_HINT,
-  muted: COLOR_BORDER,
-  success: COLOR_SUCCESS,
-  warning: COLOR_WARNING,
-  error: COLOR_ERROR,
-} as const satisfies Record<WorkflowRunDetailTone, string | undefined>;
-
 function taskGroupLine(
   group: TaskGroup,
   label: string,
   status: TaskGroupStatus,
 ): WorkflowRunDetailLine {
-  const appearance = TASK_GROUP_APPEARANCE[status];
+  const appearance = COMPACTION_ACTIVITY_STATUS_STYLE[status];
   const duration =
     group.endTime !== undefined
       ? ` · ${formatCompactDuration(group.endTime - group.startTime)}`
@@ -107,7 +75,7 @@ function taskGroupLine(
     // vocabulary — the same one the progress view's group icon announces,
     // never the workflow-call vocabulary that happens to share key names.
     text: `${appearance.marker} ${safeTerminalText(label)} ${formatRunStatusLabel(status)}${duration}`,
-    tone: appearance.tone,
+    color: appearance.color,
     role: 'lifecycle',
   };
 }
@@ -199,7 +167,7 @@ function workflowRunDetailGroups(
       lines.push({
         key: `round:${round}`,
         text: `${TODO_PENDING} ${label}`,
-        tone: 'muted',
+        color: COLOR_BORDER,
         role: 'lifecycle',
       });
     }
@@ -209,7 +177,7 @@ function workflowRunDetailGroups(
       lines.push({
         key: `outputs:${round}`,
         text: `  Generated files`,
-        tone: 'muted',
+        color: COLOR_BORDER,
         role: 'outputHeading',
       });
       for (const [index, file] of outputs.entries()) {
@@ -224,7 +192,7 @@ function workflowRunDetailGroups(
               ? fileLocationDisplayPath(file.location)
               : outputDisplayName(file),
           )}${diff}`,
-          tone: 'neutral',
+          color: undefined,
           role: 'output',
         });
       }
@@ -235,7 +203,7 @@ function workflowRunDetailGroups(
       lines.push({
         key: `missing:${round}:${path}:${index}`,
         text: `  ${WARNING} ${formatRoundStageLabel({ index: round })} · Missing expected output: ${safeTerminalText(path)}`,
-        tone: 'warning',
+        color: COLOR_WARNING,
         role: 'alert',
       });
     }
@@ -245,7 +213,7 @@ function workflowRunDetailGroups(
       lines.push({
         key: `compile:${round}:${failure.log.absolutePath}:${index}`,
         text: `  ${CROSS} ${formatRoundStageLabel({ index: round })} · Compile check failed: ${safeTerminalText(failure.displayName)} · ${safeTerminalText(failure.logRelativePath)}`,
-        tone: 'error',
+        color: COLOR_ERROR,
         role: 'alert',
       });
     }
@@ -307,10 +275,10 @@ export function selectWorkflowRunDetailLines(
 
   // First preserve actionable errors, then warnings, together with their
   // round whenever capacity permits.
-  for (const tone of ['error', 'warning'] as const) {
+  for (const color of [COLOR_ERROR, COLOR_WARNING]) {
     for (const group of rankedGroups) {
       for (const [index, line] of group.lines.entries()) {
-        if (line.role === 'alert' && line.tone === tone) {
+        if (line.role === 'alert' && line.color === color) {
           addWithLifecycle(group, index);
         }
       }
@@ -365,7 +333,7 @@ export function WorkflowRunDetails({
     <>
       {lines.map((line) => (
         <Box key={line.key} height={1} overflowY="hidden" width={width}>
-          <Text color={LINE_COLORS[line.tone]} wrap="truncate-end">
+          <Text color={line.color} wrap="truncate-end">
             {line.text}
           </Text>
         </Box>

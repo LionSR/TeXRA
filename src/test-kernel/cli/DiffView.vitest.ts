@@ -6,7 +6,6 @@ import {
   scrollBoundedDiffDisplayLines,
   wrappedDiffDisplayLines,
 } from '@cli/chat/tui/render/DiffView';
-import { maxScrollableRowOffset } from '@cli/chat/tui/render/scrollBounds';
 import { fillRows } from '@cli/runtime/terminalText';
 import { buildDiffHunks } from '@utils/text/unifiedDiff';
 
