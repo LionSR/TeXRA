@@ -15,10 +15,7 @@ import {
 } from '@common/errors/agentErrorClassification';
 import { prepareSurfaceLaunch } from '@controllers/mainView/backend/MainViewRunLaunchController';
 import type { ChatExportController } from '@controllers/progressView/ChatExportController';
-import {
-  ChatExportInputUnreadable,
-  exportRunTranscript,
-} from '@controllers/progressView/exportTranscript';
+import { exportRunTranscript } from '@controllers/progressView/exportTranscript';
 import { TranscriptExportFailed } from '@controllers/progressView/transcriptExportFailure';
 import { ApiKeyPromptFailed } from '@controllers/progressView/ProgressApiKeyRetryController';
 import { ProgressWorkflowFileActionsController } from '@controllers/progressView/ProgressWorkflowFileActionsController';
@@ -29,8 +26,6 @@ import {
 } from '@controllers/session/hostCallFailure';
 import {
   createHostRunActions,
-  RunConfigUnreadable,
-  RunLaunchFailed,
   type WorkflowDiffRequest,
   type WorkflowFileOperationRequest,
 } from '@controllers/session/hostRunActions';
@@ -95,10 +90,7 @@ import {
   vsCodeOnlyGettingStartedMessage,
 } from '../shared/desktopCommandSurface.js';
 import { DesktopProgressFileActions } from './desktopProgressFileActions.js';
-import {
-  OnboardingCallFailed,
-  type DesktopOnboardingIpc,
-} from './desktopOnboardingIpc.js';
+import type { DesktopOnboardingIpc } from './desktopOnboardingIpc.js';
 import type { PreviewUnavailable } from './desktopPreviewHost.js';
 import type { DesktopAgentRun } from './desktopAgentRun.js';
 import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';
@@ -181,7 +173,7 @@ export function createDesktopHostRequests(
   const runActions = runtime.runSync(
     createHostRunActions({
       session,
-      runAgentRequest: run.runAgentRequest,
+      runValidated: run.runValidated,
       loadModelOptions: () =>
         withProcessServices(
           runtime,
@@ -675,10 +667,9 @@ export function createDesktopHostRequests(
   }
 
   /**
-   * The bridge's host-request port: the dispatch program plus the one dialog
-   * a failed request presents before it is answered. The cause is squashed to
-   * word the dialog and re-raised unchanged, so the bridge's
-   * refusal-versus-defect fold sees what the failing arm produced.
+   * The bridge's host-request port. A failure is answered as it is: the
+   * surface shows a refusal with its guide link, and a launch that fails has
+   * already been presented by the launch itself.
    */
   function handleHostRequest(
     request: HostRequest,
@@ -686,46 +677,7 @@ export function createDesktopHostRequests(
   ): Effect.Effect<HostOutcome, HostRequestFailure, ProcessServices> {
     // Over this paper's rooted filesystems: an arm that writes under the
     // session's storage takes the view the layer above built from its roots.
-    return Effect.provide(dispatch(request, port), sessionFiles).pipe(
-      Effect.catchCause((cause) => {
-        const error = Cause.squash(cause);
-        if (error instanceof Cancelled) return Effect.failCause(cause);
-        // Request-scoped operations do not present. Every rejection, including
-        // a capability refusal, reaches this one dialog before the response.
-        // A lifted member is presented as what it rejected with: the tag names
-        // the member, the classification reads the cause it carried, so the
-        // dialog words the launcher's or the record read's own error exactly
-        // as it did when that value reached here bare.
-        const primaryError = primaryAgentError(
-          error instanceof HostCallFailed ||
-            error instanceof OnboardingCallFailed ||
-            error instanceof RunLaunchFailed ||
-            error instanceof RunConfigUnreadable ||
-            error instanceof TranscriptExportFailed ||
-            error instanceof ChatExportInputUnreadable
-            ? error.cause
-            : error,
-        );
-        const refusal =
-          primaryError instanceof Rejected ||
-          primaryError instanceof Unavailable
-            ? primaryError
-            : undefined;
-        return presentAgentFailure(
-          session.interactions,
-          {
-            kind: classifyAgentError(primaryError),
-            message: refusal?.reason ?? toErrorMessage(primaryError),
-            // A refused request's guide link (e.g. the launch's
-            // file-management page) must survive into the host-owned
-            // dialog (#11959).
-            ...(refusal instanceof Rejected &&
-              refusal.docsCommand && { docsCommand: refusal.docsCommand }),
-          },
-          { replayWhenAttached: true },
-        ).pipe(Effect.andThen(Effect.failCause(cause)));
-      }),
-    );
+    return Effect.provide(dispatch(request, port), sessionFiles);
   }
 
   return {

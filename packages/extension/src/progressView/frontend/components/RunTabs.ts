@@ -8,6 +8,7 @@ import { when } from 'lit/directives/when.js';
 import type { RunId } from '@shared/schemas';
 import type { SessionView, RunView } from '@shared/session/sessionView';
 import type { Surface } from '@shared/session/surface';
+import { unseenRuns } from '@shared/session/unseenRuns';
 import { SessionUiEvents } from '@shared/session/uiEvents';
 import {
   RUN_GROUP_LABELS,
@@ -65,9 +66,9 @@ export class RunTabs extends LitElement {
     `,
   ];
 
-  /** Runs that finished since the user last had them on screen: the
-   *  desktop rail's own record, marked on their rows. */
-  @property({ attribute: false }) unseen: ReadonlySet<RunId> = new Set();
+  /** Runs that finished since the surface last showed them, read once per
+   *  render and marked on their rows. */
+  private unseen: ReadonlySet<RunId> = new Set();
   @property({ attribute: false }) view: SessionView | null = null;
   @property({ attribute: false }) surface: Surface | null = null;
   /** Only top-level rows, no tree: the Active-now strip and the desktop
@@ -154,6 +155,7 @@ export class RunTabs extends LitElement {
     const view = this.view;
     const surface = this.surface;
     const selected = surface?.selected ?? null;
+    this.unseen = view && surface ? unseenRuns(surface, view) : new Set();
     const needle = (surface?.search ?? '').trim().toLowerCase();
     const rootRun = this.root === null ? undefined : this.runOfEvent(this.root);
     const top = (rootRun ? [rootRun.id] : (view?.order ?? []))
