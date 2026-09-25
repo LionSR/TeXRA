@@ -46,7 +46,7 @@ function maxScrollableRowOffset({
   return maxOffsetReservingOneRow(maxDisplayLines, totalLines);
 }
 
-export function scrollBoundedRows<T>({
+function scrollBoundedRows<T>({
   maxDisplayLines,
   rows,
   scrollOffset = 0,
