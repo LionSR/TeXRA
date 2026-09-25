@@ -98,6 +98,10 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
 
 ### Bug Fixes
 
+- **Stopping a run or subagent as it starts now takes effect.** A stop
+  issued in the instant a run or in-band subagent was starting could miss it,
+  and a caller waiting on that subagent could hang. A stop now interrupts the
+  run itself, from its first step.
 - **File tools no longer follow a symlink out of the workspace.** A symlink
   inside the workspace (for example `up -> ..`) let `write_file`, `edit_file`
   and `read_file` reach files outside it, and the approval prompt showed the
