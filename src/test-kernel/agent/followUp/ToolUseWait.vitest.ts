@@ -126,6 +126,7 @@ function testBoundModel(supportsVision: boolean): BoundModel {
     compatibilityKey: 'DeepSeek',
     model: unusedModel,
     origin: ORIGIN,
+    route: { kind: 'api-key', provider: 'deepseek', usageRoute: 'api-key' },
     usageRoute: 'api-key',
     contextWindow: 200_000,
     supportsVision,

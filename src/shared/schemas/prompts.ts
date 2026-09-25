@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { API_KEY_PROVIDER_IDS } from '../constants/providers';
 import { AgentCategory } from './agent';
 import { ProviderErrorPartialSchema } from './errors';
 import { RunSelectionSchema, RunIdSchema } from './identifiers';
@@ -14,7 +15,9 @@ import {
   BaseProposalFieldsSchema,
   WorkflowSpecificFieldsSchema,
 } from './proposalFields';
+import { DeclinableUsageRouteSchema } from './usage';
 import { WorkflowDeclaredPlanSchema } from './workflowCallProgress';
+import type { ApiKeyProviderId } from '../constants/modelProviderPlugins';
 
 /** Common permission request fields */
 const PermissionBaseSchema = z.strictObject({
@@ -39,6 +42,39 @@ export const BashPermissionSchema = PermissionBaseSchema.extend({
 });
 export type BashPermission = z.infer<typeof BashPermissionSchema>;
 
+const ApiKeyProviderIdSchema = z.enum(
+  API_KEY_PROVIDER_IDS as readonly [ApiKeyProviderId, ...ApiKeyProviderId[]],
+);
+
+/**
+ * The move onto the user's own credential a failed model request offers,
+ * decided once by the retry owner (`ModelInvoker`) from the recorded failure
+ * and the route the failed model was bound on. Hosts render it; none of them
+ * re-derives it from the error.
+ */
+export const CredentialSwitchSchema = z.discriminatedUnion('kind', [
+  /** A subscription or coding-plan quota ran out: the run declines `route`
+   *  and retries on the model's own `provider` key. `automatic` records that
+   *  the invoker took the switch itself (a coding plan whose fallback key is
+   *  already stored), so no one was asked. */
+  z.strictObject({
+    kind: z.literal('decline-route'),
+    route: DeclinableUsageRouteSchema,
+    provider: ApiKeyProviderIdSchema,
+    automatic: z.boolean(),
+  }),
+  /** The account behind the stored `provider` key is out of credit, so only
+   *  a changed key can succeed. */
+  z.strictObject({
+    kind: z.literal('new-key'),
+    provider: ApiKeyProviderIdSchema,
+  }),
+  /** The Copilot quota ran out: a replacement run on the matching direct
+   *  model, whose provider is resolved when that run launches. */
+  z.strictObject({ kind: z.literal('copilot-fallback') }),
+]);
+export type CredentialSwitch = z.infer<typeof CredentialSwitchSchema>;
+
 export const RetryPermissionSchema = z.strictObject({
   requestId: z.string(),
   runId: RunIdSchema,
@@ -46,6 +82,8 @@ export const RetryPermissionSchema = z.strictObject({
   model: z.string().optional(),
   errorMessage: z.string().optional(),
   errorDetails: ProviderErrorPartialSchema.optional(),
+  /** Null or absent when the failure offers no credential move. */
+  credentialSwitch: CredentialSwitchSchema.nullish(),
 });
 export type RetryPermission = z.infer<typeof RetryPermissionSchema>;
 
