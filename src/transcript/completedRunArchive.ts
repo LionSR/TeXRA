@@ -6,17 +6,14 @@ import { formatToolResultAsText } from '@agent/runtime/run/toolResultText';
 import { stringifyConversationValue } from '@agent/storage/conversationFormat';
 
 import {
-  MESSAGE_TYPES,
-  STREAM_LOG_ENTRY_TYPES,
   TOOL_CALL_STATUS,
   ToolResultSchema,
   type RunId,
-  type StreamLogEntry,
-  type StreamLogEntryOf,
   type ToolUseLog,
 } from '@shared/schemas';
+import type { TranscriptView } from '@shared/session/sessionView';
 import { assertNever, isObject } from '@utils/core';
-import { readRunEntries } from './runEntries';
+import { readRunTranscript } from './runTranscript';
 
 // ============================================================================
 // Conversation
@@ -59,98 +56,71 @@ function toolResultText(tool: ToolUseLog): string | undefined {
 }
 
 /**
- * `userMessage` rows may carry an attachment-kind list (#7508): media that
- * was sent to the model but only ever lived in the provider message. Each
- * kind becomes an attachment part (no bytes) after the text.
+ * Map one transcript row to conversation nodes. Exhaustive over the row
+ * kinds: the transcript is the single completed-run record, so every kind
+ * must carry an explicit map-or-skip decision here; adding a new kind without
+ * deciding fails to compile (`assertNever`), instead of silently dropping
+ * conversation content.
  */
-function userMessageNodes(
-  entry: StreamLogEntryOf<typeof MESSAGE_TYPES.USER_MESSAGE>,
+function conversationNodesForRow(
+  row: TranscriptView['rows'][number],
 ): ExportNode[] {
-  if (!entry.text) return [];
-  return [
-    {
-      kind: 'user-message',
-      parts: [
-        { type: 'text', text: entry.text },
-        ...(entry.data?.attachments ?? []).map((attachmentType) => ({
-          type: 'attachment' as const,
-          attachmentType,
-        })),
-      ],
-    },
-  ];
-}
-
-function toolUseNodes(
-  entry: StreamLogEntryOf<typeof MESSAGE_TYPES.TOOL_USE>,
-): ExportNode[] {
-  const tool = entry.data;
-  const nodes: ExportNode[] = [
-    {
-      kind: 'tool-call',
-      name: tool.toolName ?? 'unknown',
-      input: tool.input ?? {},
-    },
-  ];
-  const text = toolResultText(tool);
-  if (text !== undefined) nodes.push({ kind: 'tool-result', text });
-  return nodes;
-}
-
-function webSearchNodes(
-  entry: StreamLogEntryOf<typeof MESSAGE_TYPES.WEB_SEARCH>,
-): ExportNode[] {
-  const { query } = entry.data;
-  return query ? [{ kind: 'web-search', query }] : [];
-}
-
-/**
- * Map one transcript row to conversation nodes. Exhaustive over the
- * {@link MessageType} union: the transcript is the single completed-run
- * record, so every entry kind must carry an explicit map-or-skip decision
- * here; adding a new `MessageType` without deciding fails to compile
- * (`assertNever`), instead of silently dropping conversation content.
- */
-function conversationNodesForEntry(entry: StreamLogEntry): ExportNode[] {
-  const { messageType } = entry;
-  switch (messageType) {
+  switch (row.kind) {
     // ── Conversation content ────────────────────────────────────────────
-    case MESSAGE_TYPES.USER_MESSAGE:
-      return userMessageNodes(entry);
-    case MESSAGE_TYPES.MODEL_RESPONSE:
-      return entry.text?.trim()
-        ? [{ kind: 'assistant-text', text: entry.text }]
+    // A user row may carry an attachment-kind list (#7508): media that was
+    // sent to the model but only ever lived in the provider message. Each
+    // kind becomes an attachment part (no bytes) after the text.
+    case 'user':
+      return row.text.full
+        ? [
+            {
+              kind: 'user-message',
+              parts: [
+                { type: 'text', text: row.text.full },
+                ...(row.attachments ?? []).map((attachmentType) => ({
+                  type: 'attachment' as const,
+                  attachmentType,
+                })),
+              ],
+            },
+          ]
         : [];
-    case MESSAGE_TYPES.THINKING:
-      return entry.text?.trim() ? [{ kind: 'thinking', text: entry.text }] : [];
-    case MESSAGE_TYPES.TOOL_USE:
-      return toolUseNodes(entry);
-    case MESSAGE_TYPES.WEB_SEARCH:
-      return webSearchNodes(entry);
+    case 'assistant':
+      return [{ kind: 'assistant-text', text: row.text.full }];
+    case 'thinking':
+      return [{ kind: 'thinking', text: row.text.full }];
+    case 'tool': {
+      const text = toolResultText(row.log);
+      return [
+        {
+          kind: 'tool-call',
+          name: row.log.toolName ?? 'unknown',
+          input: row.log.input ?? {},
+        },
+        ...(text !== undefined ? [{ kind: 'tool-result' as const, text }] : []),
+      ];
+    }
+    case 'webSearch':
+      return row.query ? [{ kind: 'web-search', query: row.query }] : [];
     // ── Deliberately skipped: not conversation content ──────────────────
-    // scratchpad is a derived view carved from the modelResponse raw text
-    // (already mapped above); the rest are run diagnostics/status rows, not
-    // conversation content.
-    case MESSAGE_TYPES.SCRATCHPAD:
-    case MESSAGE_TYPES.FILE_LIST:
-    case MESSAGE_TYPES.MISSING_OUTPUTS:
-    case MESSAGE_TYPES.LATEXDIFF:
-    case MESSAGE_TYPES.STATISTICS:
-    case MESSAGE_TYPES.PROGRESS_STATUS:
-    case MESSAGE_TYPES.CONTEXT_COMPACTION_ACTIVITY:
-    case MESSAGE_TYPES.ERROR:
-    case MESSAGE_TYPES.INTERNAL:
-    case MESSAGE_TYPES.CONTEXT_MANAGEMENT:
-    case MESSAGE_TYPES.CONTEXT_STATE:
-    case MESSAGE_TYPES.ACTIVE_SKILLS:
-    case MESSAGE_TYPES.WORKFLOW_TASK:
-    case MESSAGE_TYPES.DEFAULT:
+    // scratchpad is a derived view carved from the model response's raw
+    // text (already mapped above); the rest are run diagnostics and status
+    // rows, not conversation content.
+    case 'scratchpad':
+    case 'error':
+    case 'fileList':
+    case 'missingOutputs':
+    case 'latexdiff':
+    case 'statistics':
+    case 'contextManagement':
+    case 'progressStatus':
+    case 'workflowTask':
+    case 'compactionActivity':
+    case 'phase':
+    case 'log':
       return [];
     default:
-      return assertNever(
-        messageType,
-        `Unmapped stream-log messageType: ${String(messageType)}`,
-      );
+      return assertNever(row, 'Unmapped transcript row kind');
   }
 }
 
@@ -165,11 +135,8 @@ export const readCompletedRunConversation = Effect.fn(
   runId: RunId,
   session: SessionHandle,
 ): Effect.fn.Return<CompletedRunConversationReadResult, Error> {
-  const conversation = (yield* readRunEntries(session, runId)).flatMap(
-    (entry) =>
-      entry.type === STREAM_LOG_ENTRY_TYPES.LOG
-        ? conversationNodesForEntry(entry)
-        : [],
+  const conversation = (yield* readRunTranscript(session, runId)).rows.flatMap(
+    conversationNodesForRow,
   );
   return conversation.length > 0
     ? { conversation, source: 'streamLog' }

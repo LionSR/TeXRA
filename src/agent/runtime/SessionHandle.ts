@@ -76,12 +76,8 @@ import {
 } from '@shared/session/sessionView';
 import type { RunLedgerDraft } from '@shared/session/runStateFold';
 import type { Append, SessionEventReads } from '@shared/session/sessionEvents';
-import {
-  isRunningGroupEntry,
-  isRunningStreamingTextEntry,
-  nonterminalWorkflowCall,
-} from '@shared/session/traceEntries';
-import { readRunEntries } from '@transcript/runEntries';
+import { openWork } from '@shared/session/transcriptReads';
+import { readRunTranscript } from '@transcript/runTranscript';
 import { aggregateError, throwAggregated } from '@utils/core';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import {
@@ -647,14 +643,16 @@ export class SessionHandle {
     Extract<RunLedgerDraft, { type: 'stream.end' }>[],
     DatabaseReadFailed
   > {
-    return readRunEntries(this, runId).pipe(
-      Effect.map((entries) =>
-        entries.filter(isRunningStreamingTextEntry).map((entry) => ({
-          type: 'stream.end' as const,
-          aggregateId: qualifyAggregateId('run', runId),
-          id: entry.id,
-          finalText: this.graph.readText(runId, entry.id) ?? entry.text,
-        })),
+    return readRunTranscript(this, runId).pipe(
+      Effect.map((transcript) =>
+        openWork(transcript)
+          .filter((work) => work.kind === 'stream')
+          .map((work) => ({
+            type: 'stream.end' as const,
+            aggregateId: qualifyAggregateId('run', runId),
+            id: work.id,
+            finalText: this.graph.readText(runId, work.id) ?? work.text,
+          })),
       ),
     );
   }
@@ -1298,7 +1296,9 @@ export const settleLiveSessionRuns: Effect.Effect<void> = Effect.gen(
         const transcript = yield* Effect.exit(
           Effect.gen(function* () {
             yield* session.settlePublications();
-            return tracked ? yield* readRunEntries(session, runId) : [];
+            return tracked
+              ? openWork(yield* readRunTranscript(session, runId))
+              : [];
           }),
         );
         // The run's closure facts, queued and settled under the same lease
@@ -1323,27 +1323,25 @@ export const settleLiveSessionRuns: Effect.Effect<void> = Effect.gen(
             // These are ordinary canonical facts. The lease owner settles their
             // publication before unlinking the claim, so replay sees the same
             // closure as the resident transcript.
-            for (const entry of transcript.value) {
-              if (isRunningGroupEntry(entry)) {
+            for (const work of transcript.value) {
+              if (work.kind === 'stage') {
                 session.publishRunEvent(runId, {
                   type: 'stage.end',
-                  id: entry.id,
+                  id: work.id,
                   status: outcome,
                 });
-              } else if (isRunningStreamingTextEntry(entry)) {
+              } else if (work.kind === 'stream') {
                 session.publishRunEvent(runId, {
                   type: 'stream.end',
-                  id: entry.id,
+                  id: work.id,
                 });
               } else {
-                const call = nonterminalWorkflowCall(entry);
-                if (call)
-                  session.publishRunEvent(runId, {
-                    type: 'workflow.call',
-                    logId: entry.id,
-                    stageId: entry.groupId,
-                    call: interruptedWorkflowCall(call),
-                  });
+                session.publishRunEvent(runId, {
+                  type: 'workflow.call',
+                  logId: work.id,
+                  stageId: work.stageId,
+                  call: interruptedWorkflowCall(work.call),
+                });
               }
             }
             const settled = yield* Effect.exit(

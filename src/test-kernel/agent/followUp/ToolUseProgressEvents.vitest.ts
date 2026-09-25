@@ -34,14 +34,12 @@ import type { RunCell } from '@agent/runtime/loop/runProgram';
 import {
   AgentCategory,
   RUN_OUTCOME,
-  STREAM_LOG_ENTRY_TYPES,
   type JsonValue,
   type RetryErrorInfo,
   type RunId,
 } from '@shared/schemas';
 import { RunLedger } from '@shared/session/runLedger';
 import type { RunState } from '@shared/session/runStateFold';
-import { StreamLog } from '@shared/session/traceEntries';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import {
   nativeToolTestLayer,
@@ -53,7 +51,6 @@ import {
   attachTestTranscriptFold,
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
-import { isObject } from '@utils/core';
 import { generateRunId, generateShortId } from '@utils/core';
 import { RunFileService } from '@utils/files/runStorage';
 
@@ -673,8 +670,7 @@ describe('tool-use session-stage outcome persistence (#8023)', () => {
       const session = quietSession();
       const logger = new TraceEmitter();
       const runId = startedRun(session);
-      const store = new StreamLog();
-      const recorder = attachTestTranscriptFold(logger, runId, store);
+      const recorder = attachTestTranscriptFold(logger, runId);
 
       try {
         const { result } = yield* runScript({
@@ -685,26 +681,17 @@ describe('tool-use session-stage outcome persistence (#8023)', () => {
         });
 
         expect(result.outcome).toBe(scenario.expectedOutcome);
-        const sessionStages = store
-          .toJSON()
-          .flatMap((entry) =>
-            entry.type === STREAM_LOG_ENTRY_TYPES.GROUP_END &&
-            isObject(entry.data) &&
-            entry.data.kind === 'session'
-              ? [{ label: entry.text, status: entry.data.status }]
-              : [],
-          );
+        const groups = recorder.transcript().taskGroups;
+        const sessionStages = groups.flatMap((group) =>
+          group.kind === 'session' && group.endTime !== undefined
+            ? [{ label: group.name, status: group.status }]
+            : [],
+        );
         expect(sessionStages).toEqual([
           { label: 'Tool-use turn', status: scenario.expectedOutcome },
         ]);
         // The turn is the only structural stage: rounds are row facts.
-        expect(
-          store
-            .toJSON()
-            .some(
-              (entry) => isObject(entry.data) && entry.data.kind === 'round',
-            ),
-        ).toBe(false);
+        expect(groups.some((group) => group.kind === 'round')).toBe(false);
       } finally {
         recorder.unsubscribe();
       }
