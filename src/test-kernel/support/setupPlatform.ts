@@ -253,7 +253,6 @@ export const fakeSetupPlatform: SetupPlatformShape = {
  */
 export const fakeHostSecrets: PlatformSecrets = {
   get: (key) => installedHost().secrets.get(key),
-  getStored: (key) => installedHost().secrets.getStored(key),
   set: (key, value) => installedHost().secrets.set(key, value),
   delete: (key) => installedHost().secrets.delete(key),
   listStoredKeys: () => installedHost().secrets.listStoredKeys(),

@@ -2,8 +2,9 @@
  * Platform-agnostic secrets provider.
  *
  * Abstracts API key storage/retrieval. VS Code uses context.secrets, the
- * CLI a config file, Electron `safeStorage`; each `get` layers the process
- * environment (read through the ambient ConfigProvider) over its store.
+ * CLI a config file, Electron `safeStorage`. The store answers only what it
+ * holds; a credential that may also come from the environment is read through
+ * {@link resolveCredential}, the one secret-then-env ladder.
  */
 import { Context, Data, Effect, Layer } from 'effect';
 import { envVar } from '@utils/system/envFlags';
@@ -20,7 +21,7 @@ import { envVar } from '@utils/system/envFlags';
  *   Only {@link PlatformSecrets.set} raises it.
  * - `decrypt-failed` — a stored value exists but the OS refused to decrypt it
  *   (a denied keychain prompt, a rotated key, a corrupt entry). It is raised
- *   and recovered inside the desktop store's `getStored`
+ *   and recovered inside the desktop store's `get`
  *   (`ElectronSecrets.decryptStored`), which answers "no saved secret" after
  *   logging the cause and warning the user once. That recovery is the
  *   documented rule, not a swallow: every reader of a credential wants the
@@ -35,8 +36,7 @@ type SecretsFailureReason =
   'enumeration-unsupported' | 'store-unavailable' | 'decrypt-failed' | 'io';
 
 /** Which member of the port failed. */
-export type SecretsOperation =
-  'get' | 'getStored' | 'set' | 'delete' | 'listStoredKeys';
+export type SecretsOperation = 'get' | 'set' | 'delete' | 'listStoredKeys';
 
 /**
  * The one failure of the Effect-typed members of {@link PlatformSecrets}.
@@ -73,20 +73,12 @@ export class SecretsFailed extends Data.TaggedError('SecretsFailed')<{
  * was cancelled during it, so the step would be skipped over a credential
  * that is now on disk. The host stores therefore own the post-commit facts
  * themselves, in an `Effect.ensuring` finalizer that runs on every exit: they
- * drop the API-key lookup cache (`invalidateApiKeyCache`) and publish the
- * `credentialChanged` app signal (the VS Code store publishes it from
- * `SecretStorage.onDidChange` instead). A writer does neither by hand.
+ * publish the `credentialChanged` app signal (the VS Code store publishes it
+ * from `SecretStorage.onDidChange` instead). A writer does not by hand.
  */
 export interface PlatformSecrets {
-  /** Get a raw secret by key name. */
+  /** The persisted secret under a key name, or `undefined`. */
   get(key: string): Effect.Effect<string | undefined, SecretsFailed>;
-
-  /**
-   * Get a persisted secret without applying environment-variable overrides.
-   * This lets credential-management code distinguish a stored key from an
-   * equally named key supplied by the process environment.
-   */
-  getStored(key: string): Effect.Effect<string | undefined, SecretsFailed>;
 
   /** Store a secret. The commit region is uninterruptible (see above). */
   set(key: string, value: string): Effect.Effect<void, SecretsFailed>;
@@ -101,39 +93,36 @@ export interface PlatformSecrets {
   listStoredKeys(): Effect.Effect<readonly string[], SecretsFailed>;
 }
 
+/** Where a resolved credential came from. */
+export type CredentialOrigin = 'secret' | 'env' | 'none';
+
 /**
- * Default {@link PlatformSecrets.get} body: an environment-variable override,
- * else the persisted value. The override comes from the ambient Effect
- * `ConfigProvider` (`envVar`), the live process environment in production;
- * tests replace it through a provider record rather than mutating
- * `process.env`. An empty variable reads as unset, so it does not mask a
- * stored value. Every host's `get()` is a one-line `secretsGet(this, key)`. A
- * store read that fails here fails as `get`: the operation names the member
- * the caller invoked, not the one this body delegated to.
+ * The one credential ladder: the persisted secret under `storageKey`, else the
+ * first of `envNames` set in the environment, in order. Both are trimmed and a
+ * blank value reads as unset, so an empty variable does not mask anything.
+ * The environment comes from the ambient Effect `ConfigProvider` (`envVar`),
+ * the live process environment in production; tests replace it through a
+ * provider record rather than mutating `process.env`. API keys and the GitHub
+ * token both read through here, so the value and the origin a status surface
+ * reports can never disagree.
  */
-export function secretsGet(
-  secrets: Pick<PlatformSecrets, 'getStored'>,
-  key: string,
-): Effect.Effect<string | undefined, SecretsFailed> {
-  return Effect.flatMap(envVar(key), (envValue) =>
-    envValue !== undefined
-      ? Effect.succeed(envValue)
-      : // `operation` names the member the caller invoked, so the store read
-        // this body delegates to is reported as the `get` it serves.
-        // Everything the store knows about the failure — reason, key, cause,
-        // message — is the store's and travels unchanged.
-        Effect.mapError(
-          secrets.getStored(key),
-          (failure) =>
-            new SecretsFailed({
-              reason: failure.reason,
-              operation: 'get',
-              message: failure.message,
-              key: failure.key,
-              cause: failure.cause,
-            }),
-        ),
-  );
+export function resolveCredential(
+  secrets: PlatformSecrets,
+  storageKey: string,
+  envNames: readonly string[],
+): Effect.Effect<
+  { readonly value: string | undefined; readonly origin: CredentialOrigin },
+  SecretsFailed
+> {
+  return Effect.gen(function* () {
+    const stored = (yield* secrets.get(storageKey))?.trim();
+    if (stored) return { value: stored, origin: 'secret' as const };
+    for (const name of envNames) {
+      const fromEnv = (yield* envVar(name))?.trim();
+      if (fromEnv) return { value: fromEnv, origin: 'env' as const };
+    }
+    return { value: undefined, origin: 'none' as const };
+  });
 }
 
 /**

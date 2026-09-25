@@ -1,11 +1,12 @@
 # Host-layer collapse: two UIs, one controller layer, three transports
 
 Date: 2026-09-20
-Status: proposed
+Status: implemented — steps 1–7 landed in #12903, #12922, #12839, #12910, #13057, #12938 and #12935, with a `ConfigProvider` swap refused as EFF-ADOPT-config-provider; the remaining shutdown order (#13179) and desktop handlers-as-programs (#13168) are open PRs, not open design.
+Archived: 2026-09-25
 Baseline: `main` at `3378a967`. Parent survey:
-[post-refactor architecture survey](../architecture/2026-09-20-post-refactor-architecture-survey.md).
+[post-refactor architecture survey](../../proposed/architecture/2026-09-20-post-refactor-architecture-survey.md).
 Continues the 2026-09-09
-[host-shared controllers](../architecture/2026-09-09-host-shared-controllers-on-effect.md)
+[host-shared controllers](../../proposed/architecture/2026-09-09-host-shared-controllers-on-effect.md)
 note, of whose 19 steps 3 have landed; this note re-costs the open ones and
 adds the two it excluded (auth and the settings registries).
 

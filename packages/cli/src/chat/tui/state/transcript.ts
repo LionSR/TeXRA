@@ -11,8 +11,8 @@ import { signal } from '@lit-labs/signals';
 import { Cause, Effect } from 'effect';
 
 import { withLogChannel } from '@logger/effectLog';
-import { redactSecrets } from '@logger/redaction';
 import type { RunId } from '@shared/schemas';
+import type { RunView } from '@shared/session/sessionView';
 import type { RequestError } from '@shared/session/requestErrors';
 import { transcriptText, type TranscriptRow } from '@ui/transcript';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -56,15 +56,14 @@ export function appendLocalUserTranscript(text: string): void {
   appendLocalTranscriptEntry('user', text);
 }
 
-/** The one non-event row producer, so it redacts here, as
- *  `redactTraceDraft` does for every committed event: no painter redacts. */
+/** The one non-event row producer. */
 function localTranscriptRow(
   kind: 'assistant' | 'error' | 'user',
   id: string,
   text: string,
 ): TranscriptRow {
   const base = { id, origin: 'local', timestamp: Date.now() } as const;
-  const body = transcriptText(redactSecrets(text));
+  const body = transcriptText(text);
   if (kind === 'error') {
     return {
       ...base,
@@ -179,10 +178,11 @@ export function noticesFor(
  * anchored inside it (a notice is immutable the moment it is written).
  */
 export function mergeLocalNotices(
-  rows: readonly TranscriptRow[],
-  settledRows: number,
+  run: RunView | undefined,
   runNotices: readonly LocalNotice[],
 ): { readonly rows: readonly TranscriptRow[]; readonly settledRows: number } {
+  const rows = run?.transcript.rows ?? [];
+  const settledRows = run?.transcript.settledRows ?? 0;
   if (runNotices.length === 0) return { rows, settledRows };
   const settledSeq = settledRows === 0 ? 0 : rowSeq(rows[settledRows - 1]);
   const out: TranscriptRow[] = [];

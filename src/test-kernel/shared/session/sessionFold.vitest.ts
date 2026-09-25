@@ -26,13 +26,11 @@ import {
   type FoldInput,
   type OutputFileInfo,
   type SessionEvent,
-  type SessionEventDraft,
   type RunId,
 } from '@shared/schemas';
 
 import { foldRunState, unboundRequests } from '@shared/session/runStateFold';
 import { fold } from '@shared/session/sessionFold';
-import { redactTraceDraft } from '@shared/session/traceRedaction';
 import {
   emptySessionView,
   type SessionView,
@@ -268,10 +266,10 @@ describe('sessionFold', () => {
     expect(root.transcript.rows).toStrictEqual([
       {
         id: 'phase-Map',
-        seqNo: 2,
+        seqNo: 1,
         timestamp: T.root + 1,
         level: 'info',
-        settlementSeqNo: 2,
+        settlementSeqNo: 1,
         verbose: false,
         messageType: MESSAGE_TYPES.DEFAULT,
         kind: 'phase',
@@ -282,10 +280,10 @@ describe('sessionFold', () => {
       },
       {
         id: 'call-1',
-        seqNo: 3,
+        seqNo: 2,
         timestamp: T.root + 2,
         level: 'info',
-        settlementSeqNo: 3,
+        settlementSeqNo: 2,
         verbose: false,
         groupId: 'phase-Map',
         messageType: MESSAGE_TYPES.WORKFLOW_TASK,
@@ -1923,17 +1921,6 @@ describe('foldRunState', () => {
     for (const row of TURN_ROWS) {
       expect(isDisplaySessionEvent(row)).toBe(row.type === 'flow.step');
     }
-    // `redactTraceDraft` is applied to every draft before storage; a ledger
-    // row passes through its `default` arm untouched.
-    const {
-      seq: _seq,
-      commit: _commit,
-      ownerId: _owner,
-      at: _at,
-      ...draft
-    } = TURN_ROWS[4];
-    const ledgerDraft: SessionEventDraft = draft;
-    expect(redactTraceDraft(ledgerDraft)).toBe(ledgerDraft);
     // D7: the day a codec version 2 exists, persisted origins must accept a
     // union of version literals while execution admits only the current one.
     expect(ModelOriginSchema.safeParse(ORIGIN).success).toBe(true);

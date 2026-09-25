@@ -741,7 +741,6 @@ body[data-desktop-platform='darwin']
 }
 
 /* The desktop's controls slotted into the conversation's header row. */
-
 .shell-header-start,
 .shell-header-end {
   display: inline-flex;

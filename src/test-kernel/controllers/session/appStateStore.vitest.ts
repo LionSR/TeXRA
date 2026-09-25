@@ -12,14 +12,14 @@ import { processOwnerId } from '@platform/defaults/nodeProcesses';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
 
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
-import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
+import { nodePlatformLayer } from '@test/support/fsTestUtils';
 
 describe('application state on SQLite', () => {
   const tempDirs = useTempDirs();
   const openStore = (storage: string) =>
     openAppStateStore(storage).pipe(
       Effect.provide(ProcessIdentity.layer(processOwnerId('app-state-test'))),
-      Effect.provide(nodeSpawnerLayer),
+      Effect.provide(nodePlatformLayer),
     );
 
   it.live('reads back the latest value of each key after reopening', () =>

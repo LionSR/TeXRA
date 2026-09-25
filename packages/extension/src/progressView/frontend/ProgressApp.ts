@@ -293,7 +293,8 @@ export class ProgressApp extends LitElement {
               : html`${sessions.button}${sessions.tooltip}
                   <span class="shell-title header-main-title">New task</span>
                   <span class="spacer"></span>
-                  ${newTask.button}${newTask.tooltip} ${this.renderOverflow()}`
+                  ${onDesktop ? nothing : [newTask.button, newTask.tooltip]}
+                  ${this.renderOverflow()}`
           }
           <slot name="header-end"></slot>
         </div>

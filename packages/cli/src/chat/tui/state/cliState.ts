@@ -15,11 +15,7 @@ import {
   type AgentSource,
   type RunId,
 } from '@shared/schemas';
-import {
-  descendantRuns,
-  type RunView,
-  type SessionView,
-} from '@shared/session/sessionView';
+import { descendantRuns, type RunView } from '@shared/session/sessionView';
 import {
   applySurfaceAction,
   emptySurface,
@@ -89,7 +85,8 @@ function defaultSessionMeta(): SessionMeta {
 // focusSlice
 // ---------------------------------------------------------------------------
 
-// Which run is focused / rooted. Focus moves only through `focusRun`.
+// Which run is focused and which one the session is rooted at. Focus moves
+// only through `focusRun`.
 
 /**
  * Where notices land before the root run exists. A reserved 8-hex id: real
@@ -109,8 +106,8 @@ export function actOnSurface(action: SurfaceAction): void {
 /** The chat's selection rule, its tree scope: this conversation and the runs
  *  this terminal owns. The pre-run placeholder stays; anything else outside
  *  the scope, or nothing, lands on the root. */
-function chatSelection(view: SessionView): SelectionRule {
-  const included = currentSessionRunIds(view);
+function chatSelection(): SelectionRule {
+  const included = sessionRunIds.get();
   const root = rootRunId.get();
   const fallback = root !== undefined && included.has(root) ? root : null;
   return (selected) =>
@@ -123,7 +120,7 @@ function chatSelection(view: SessionView): SelectionRule {
 /** The record the TUI renders, pruned once; no reader resolves it again. */
 const surface: Signal.Computed<Surface> = computed(() => {
   const view = sessionView().get();
-  return pruneSurface(surfaceChoice.get(), view, chatSelection(view));
+  return pruneSurface(surfaceChoice.get(), view, chatSelection());
 });
 
 /** The Surface's selection in the TUI's `undefined`-for-none spelling. */
@@ -158,7 +155,7 @@ export type SessionListRow =
 /** The visible tree, including section headings, shared by the list and its shortcuts. */
 export const sessionListRows = computed<readonly SessionListRow[]>(() => {
   const view = sessionView().get();
-  const included = currentSessionRunIds(view);
+  const included = sessionRunIds.get();
   const { expanded } = surface.get();
   const rows: SessionListRow[] = [];
   const groups: Record<RunView['group'], RunView[]> = {
@@ -217,26 +214,20 @@ export const sessionListRunIds = computed(() =>
 /** The top-level run the current session rooted at. */
 export const rootRunId = signal<RunId | undefined>(undefined);
 
+/** The root run and every run under it. */
+export const rootRunIds = computed(() =>
+  descendantRuns(sessionView().get(), rootRunId.get(), { includeRoot: true }),
+);
+
 /** The current conversation and all runs this terminal still owns,
  *  including children detached from an earlier turn. */
-export function currentSessionRunIds(view: SessionView): ReadonlySet<RunId> {
-  const included = new Set(
-    descendantRuns(view, rootRunId.get(), { includeRoot: true }),
-  );
-  for (const run of view.runs.values()) {
+export const sessionRunIds = computed((): ReadonlySet<RunId> => {
+  const included = new Set(rootRunIds.get());
+  for (const run of sessionView().get().runs.values()) {
     if (run.ownedHere) included.add(run.id);
   }
   return included;
-}
-/** Whether the root session holds an unfinished run claim (run promise
- *  pending). Published only by `TuiSession`, so renders read the session
- *  run-state reactively instead of calling impure session closures that
- *  memoized renders would cache stale (#8273). */
-export const rootRunPending = signal<boolean>(false);
-/** Run-control mirror of `TuiSession.runId` — cleared while a new run is
- *  pending, unlike `rootRunId`, which stays put as the transcript anchor
- *  across pending windows. Published only by `TuiSession`. */
-export const claimedRunId = signal<RunId | undefined>(undefined);
+});
 
 // ---------------------------------------------------------------------------
 // foregroundOverlaySlice
@@ -272,13 +263,16 @@ export function closeInfoPane(): void {
   INFO_PANE_QUEUE.set(INFO_PANE_QUEUE.get().slice(1));
 }
 
-/** Passive reader target. Holding the captured run id rather than a text
- * snapshot keeps each reader live even if transcript focus moves elsewhere. */
+/** A `/plan` reader still loading. The target object is the invocation's
+ *  identity: only the request that opened it may resolve or close it. */
 interface WorkPlanReaderRequest {
-  readonly revision: number;
+  readonly kind: 'workPlan';
   readonly runId: RunId;
+  readonly loading: true;
 }
 
+/** Passive reader target. Holding the captured run id rather than a text
+ * snapshot keeps each reader live even if transcript focus moves elsewhere. */
 type ForegroundReaderTarget =
   | { readonly kind: 'transcript'; readonly runId: RunId }
   | { readonly kind: 'workflow'; readonly runId: RunId }
@@ -287,15 +281,9 @@ type ForegroundReaderTarget =
       readonly runId: RunId;
       readonly loading?: false;
     }
-  | {
-      readonly kind: 'workPlan';
-      readonly runId: RunId;
-      readonly loading: true;
-      readonly requestRevision: number;
-    };
+  | WorkPlanReaderRequest;
 
 const FOREGROUND_READER = signal<ForegroundReaderTarget | undefined>(undefined);
-let WORK_PLAN_REQUEST_REVISION = 0;
 /** The open reader, resolved against the view like the selection: a reader
  *  whose run has left the view is closed. */
 export const foregroundReader: Signal.Computed<
@@ -365,37 +353,17 @@ export function updateWorkflowPopupView(
 export function beginWorkPlanReaderRequest(
   runId: RunId,
 ): WorkPlanReaderRequest {
-  const request = { runId, revision: ++WORK_PLAN_REQUEST_REVISION };
-  FOREGROUND_READER.set({
-    kind: 'workPlan',
-    runId,
-    loading: true,
-    requestRevision: request.revision,
-  });
+  const request = { kind: 'workPlan', runId, loading: true } as const;
+  FOREGROUND_READER.set(request);
   return request;
-}
-
-function workPlanReaderRequestIsCurrent(
-  request: WorkPlanReaderRequest,
-): boolean {
-  const target = FOREGROUND_READER.get();
-  return (
-    target?.kind === 'workPlan' &&
-    target.loading === true &&
-    target.runId === request.runId &&
-    target.requestRevision === request.revision
-  );
 }
 
 /** Resolve the loading reader without allowing an older request to replace it. */
 export function finishWorkPlanReaderRequest(
   request: WorkPlanReaderRequest,
 ): boolean {
-  if (!workPlanReaderRequestIsCurrent(request)) return false;
-  FOREGROUND_READER.set({
-    kind: 'workPlan',
-    runId: request.runId,
-  });
+  if (FOREGROUND_READER.get() !== request) return false;
+  FOREGROUND_READER.set({ kind: 'workPlan', runId: request.runId });
   return true;
 }
 
@@ -410,7 +378,7 @@ export function cancelPendingWorkPlanReaderRequest(): void {
 export function cancelWorkPlanReaderRequest(
   request: WorkPlanReaderRequest,
 ): boolean {
-  if (!workPlanReaderRequestIsCurrent(request)) return false;
+  if (FOREGROUND_READER.get() !== request) return false;
   FOREGROUND_READER.set(undefined);
   return true;
 }
@@ -460,16 +428,11 @@ export const inputBarContentRows = signal<number>(1);
 
 /** Regenerable status-bar text with explicit behavior for exit confirmation. */
 export type TransientNotice =
-  | {
-      readonly kind: 'message';
-      readonly text: string;
-      readonly expiresAt: number;
-    }
+  | { readonly kind: 'message'; readonly text: string }
   | {
       readonly kind: 'exit';
       readonly text: string;
       readonly resumeId?: string;
-      readonly expiresAt: number;
     };
 
 type TransientNoticeOptions =
@@ -501,17 +464,11 @@ export function setTransientNotice(
   options: TransientNoticeOptions = {},
 ): void {
   const ttlMs = options.ttlMs ?? DEFAULT_TRANSIENT_NOTICE_TTL_MS;
-  const expiresAt = Date.now() + ttlMs;
   const singleLineText = text.replaceAll(/[ \t]*\r?\n[ \t]*/g, ' · ').trim();
   const notice: TransientNotice =
     options.kind === 'exit'
-      ? {
-          kind: 'exit',
-          text: singleLineText,
-          expiresAt,
-          resumeId: options.resumeId,
-        }
-      : { kind: 'message', text: singleLineText, expiresAt };
+      ? { kind: 'exit', text: singleLineText, resumeId: options.resumeId }
+      : { kind: 'message', text: singleLineText };
   if (transientNoticeTimer) clearTimeout(transientNoticeTimer);
   transientNotice.set(notice);
   if (!Number.isFinite(ttlMs)) {
@@ -538,8 +495,9 @@ export function clearTransientNotice(): void {
 // codexPreferenceSlice
 // ---------------------------------------------------------------------------
 
-// Bumped whenever an in-process subscription preference changes (ChatGPT/Grok)
-// so the status bar re-reads it immediately instead of waiting for its periodic
+// Bumped whenever an in-process write changes model access (a subscription
+// preference, a stored key, an access setting) so the status bar re-reads it
+// immediately instead of waiting for its periodic
 // poll. External changes (extension/desktop/config edits) are still picked up by
 // that poll.
 
@@ -580,8 +538,6 @@ export function resetCliState(
   sessionMeta.set(nextSessionMeta);
   surfaceChoice.set(emptySurface('cli'));
   rootRunId.set(undefined);
-  rootRunPending.set(false);
-  claimedRunId.set(undefined);
   goalAutoApproveAll.set(false);
   INFO_PANE_QUEUE.set([]);
   FOREGROUND_READER.set(undefined);

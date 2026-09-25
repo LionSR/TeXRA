@@ -2,10 +2,11 @@
 //
 // `@ui/transcript` carries every text untruncated plus the measurements
 // needed to elide it; this module is where the terminal spends its own budget
-// — a head/tail line slice with a `+N lines` marker, and a terminal-safe pass
+// — a head/tail line slice with a `N lines hidden` marker, and a terminal-safe pass
 // over text a producer wrote. Nothing here truncates the model.
 
 import { safeTerminalText } from '@cli/runtime/terminalText';
+import { hiddenRowsText } from '@cli/tui/overflowText';
 import { CROSS, TICK, TOOL_OUTPUT_CORNER } from '@cli/tui/ui/glyphs';
 import {
   elideText,
@@ -18,7 +19,7 @@ import { formatBytes } from '@utils/text/stringUtils';
 
 // A body block can be arbitrarily large (a 50 KB tool dump, a long error
 // payload). Finalized scrollback and the live region show a head+tail slice
-// with a `… +N lines` marker; the untruncated text stays on the row and is
+// with a `… N lines hidden` marker; the untruncated text stays on the row and is
 // printed in full by the ctrl+t reader. Tune head/tail here.
 const ROW_BODY_HEAD_LINES = 6;
 const ROW_BODY_TAIL_LINES = 3;
@@ -57,7 +58,7 @@ export function elidedTextLines(
     ? [...head, ...tail]
     : [
         ...head,
-        `… +${hiddenLines} lines (Ctrl-T to view full output)`,
+        `${hiddenRowsText(hiddenLines, 'lines')} (Ctrl-T to view full output)`,
         ...tail,
       ];
 }
@@ -135,8 +136,7 @@ export function transcriptRowBodyLines(
     }
   })();
   // One place for the terminal's defensive pass over producer text: control
-  // sequences a terminal would execute. Redaction is not a painter's job; the
-  // recorder (`redactTraceDraft`) already redacted every committed row.
+  // sequences a terminal would execute.
   // Elided texts arrive sanitized; the list kinds carry producer text too
   // (paths, messages), so every line takes the (idempotent) pass here.
   return lines.length === 0

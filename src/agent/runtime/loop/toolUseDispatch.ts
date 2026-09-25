@@ -334,6 +334,25 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
       input,
       ...(fact.stageId !== null ? { stageId: fact.stageId } : {}),
     });
+  /** The card rows a settlement commits: a slow tool's card is open already
+   *  and only closes, a fast tool's opens and closes in the same batch. */
+  const settledCards = (
+    fact: DispatchFacts,
+    input: unknown,
+    status: ToolCallStatus,
+    result: unknown,
+  ): RunLedgerDraft[] => [
+    ...(run.tools.get(fact.toolName)?.slow === true
+      ? []
+      : [cardStart(fact, input)]),
+    displayRow(runId, {
+      type: 'tool.end',
+      logId: fact.logId,
+      status,
+      result,
+      ...(fact.stageId !== null ? { stageId: fact.stageId } : {}),
+    }),
+  ];
   /** The card rows an admitted attempt opens: a slow tool's, before it runs. */
   const admittedCards = (
     fact: DispatchFacts,
@@ -546,16 +565,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     // in this same batch under the id its dispatch facts carry. Publishing a
     // terminal card outside the batch would tell the transcript the call
     // completed while recovery still sees an unsettled call.
-    const cards: RunLedgerDraft[] = [
-      ...(cardOpen ? [] : [cardStart(fact, parsedInput)]),
-      displayRow(runId, {
-        type: 'tool.end',
-        logId: fact.logId,
-        status,
-        result: toolUseLog,
-        ...(stageId !== undefined ? { stageId } : {}),
-      }),
-    ];
+    const cards = settledCards(fact, parsedInput, status, toolUseLog);
     yield* settle(
       fact,
       attempt,
@@ -595,18 +605,20 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     let current = yield* cell.current;
     const question = `The tool "${fact.toolName}" may have run before the run was interrupted, and no result was recorded. Run it again, or skip it?`;
     const rerunOption = 'Run again';
-    // Only a person decides this barrier: the answer's chosen option, or a
+    // A person decides this barrier: the answer's chosen option, or a
     // `skip` (the host's own word for a person declining to answer), both
-    // land as the request's `request.decided` (R5). A refusal with any
-    // other provenance (a cancellation, a policy denial) was written by a
-    // cleanup, not by a person, so it decides nothing and the barrier is
-    // asked again.
+    // land as the request's `request.decided` (R5). A `deny` is a policy or
+    // headless host with nobody to ask (yolo, never): it denies again on
+    // every resume, so it is a skip, which never re-runs the call blindly.
+    // A `cancel` was written by a cleanup (the run stopped, the session
+    // closed), so it decides nothing and the barrier is asked again.
     const decided = (decision: RequestDecision): 'rerun' | 'skip' | null => {
       if (decision.action === 'submit') {
         return decision.answers[question] === rerunOption ? 'rerun' : 'skip';
       }
-      if (decision.action === 'skip') return 'skip';
-      return null;
+      return decision.action === 'skip' || decision.action === 'deny'
+        ? 'skip'
+        : null;
     };
     const bound = current.requests[intent.approvalRequestId ?? ''];
     if (bound !== undefined && bound.resolved && bound.decision !== null) {
@@ -655,8 +667,8 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
           type: 'request.opened',
           aggregateId,
           requestId,
-          // The one redaction door every durable request payload passes,
-          // whether the session opens the request or the loop commits it.
+          // The one door every durable request payload passes, whether the
+          // session opens the request or the loop commits it.
           payload: redactedForFact({ kind: 'userQuestion', data: request }),
           thread: null,
         },
@@ -669,9 +681,9 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
       current = yield* cell.current;
     }
     // The decision is the `request.decided` row the decide command lands on
-    // the tail. A plane that closes first, and every refusal a person did not
-    // make, leave the `tool.intent` bound and the request open, and the
-    // dispatch interrupts so the next resume asks the same question again.
+    // the tail. A plane that closes first, and a cleanup's `cancel`, leave
+    // the `tool.intent` bound and the request open, and the dispatch
+    // interrupts so the next resume asks the same question again.
     // Writing `skip` for a cancellation would tell the model a person skipped
     // the call.
     const row = yield* run.session
@@ -748,11 +760,17 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     if (intent !== undefined) {
       const decision = yield* decideOutcomeUnknown(fact, call, intent);
       if (decision === 'skip') {
+        // The skip closes the card the interrupted attempt opened.
+        const input = parseCallArguments(call, logger);
         yield* settle(
           fact,
           intent.attempt,
           syntheticSettlement(SKIPPED_OUTCOME_UNKNOWN),
-          [],
+          settledCards(fact, input, 'failed', {
+            toolName: fact.toolName,
+            input,
+            output: { error: SKIPPED_OUTCOME_UNKNOWN },
+          }),
         );
         return;
       }

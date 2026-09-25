@@ -4,7 +4,7 @@ import { Box, Text, useWindowSize } from 'ink';
 import { COLOR_INFO } from '@cli/tui/ui/colors';
 import {
   clampModalWidth,
-  CONFIRM_CARD_HORIZONTAL_DECORATION,
+  confirmCardContentWidth,
   isCompactRows,
 } from '@cli/tui/ui/theme';
 import { fillRows, truncateToWidth } from '@cli/runtime/terminalText';
@@ -165,9 +165,9 @@ function PlanApprovalBody({
 }): React.JSX.Element {
   const { columns } = useWindowSize();
   const feedback = useContext(ConfirmCardFeedback);
-  const contentWidth = clampModalWidth(
-    compact ? columns : columns - CONFIRM_CARD_HORIZONTAL_DECORATION,
-  );
+  const contentWidth = compact
+    ? clampModalWidth(columns)
+    : confirmCardContentWidth(columns);
   const goalNoticeVisible = goalActionVisible && !feedback.mode;
   // The notice is pinned outside the scroll region in both layouts so the
   // `r run as goal` action can never outlive its scope notice; in the

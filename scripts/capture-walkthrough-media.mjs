@@ -186,7 +186,7 @@ const webviewViews = [
       styleUri: fileUri('packages/extension/dist/settingsView/index.css'),
     },
     messages: [
-      { command: 'setTab', tab: 'models' },
+      { command: 'setTab', tab: 'models/keys' },
       {
         command: 'updateProfile',
         authenticated: false,

@@ -19,6 +19,8 @@ export const requireFileReadForEdit = Effect.fn(
   path: string,
   exists: boolean,
   errorMessage?: string,
+  /** How the card names the file; the tracker keys on `path`. */
+  displayPath: string = path,
 ): Effect.fn.Return<ToolResult | null, never, ToolCall> {
   const call = yield* ToolCall;
   if (!exists || call.tracker?.hasRead(path)) {
@@ -28,7 +30,8 @@ export const requireFileReadForEdit = Effect.fn(
     errorMessage ??
       'Edits to existing files require a prior read in this session. Please call read_file first.',
     {
-      summary: `Read ${path} before editing`,
+      // Not "Read …": the card would read as a read_file call.
+      summary: `Not edited: ${displayPath} was not read first`,
       diagnostics: { reason: 'unread-file', path },
     },
   );

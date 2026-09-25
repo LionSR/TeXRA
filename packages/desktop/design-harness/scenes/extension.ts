@@ -20,9 +20,13 @@ import {
   type SurfaceAction,
 } from '@shared/session/surface';
 import {
+  buildScenario,
   CHILD,
   fanOutView,
+  foldAll,
   GRANDCHILD,
+  local,
+  OWNER,
   PROCESS,
   ROOT,
   withInterruptedChild,
@@ -227,8 +231,8 @@ export const extensionScenes: Record<string, () => TemplateResult> = {
     });
     return sidebar(view, surface(view, { kind: 'select', runId: CHILD }));
   },
-  // Real-ExtensionSession: inside the child, with the ancestor path and the
-  // goes-to line.
+  // Real-ExtensionSession: inside the child, with the ancestor path (its
+  // workflow parent takes no replies, so no goes-to line).
   'ext-session': () => {
     const view = fanOutView();
     return sidebar(view, surface(view, { kind: 'select', runId: CHILD }));
@@ -273,6 +277,22 @@ export const extensionScenes: Record<string, () => TemplateResult> = {
         { kind: 'drawer', open: true },
       ),
     );
+  },
+  // Coming back to a finished session: the child has completed, so where
+  // its composer stood the dock says so and offers the way forward.
+  'ext-finished': () => {
+    const view = foldAll([...buildScenario().events, local({ self: [OWNER] })]);
+    return sidebar(view, surface(view, { kind: 'select', runId: CHILD }));
+  },
+  // The same, on the finished workflow root: the board, then the dock.
+  'ext-finished-workflow': () => {
+    const view = foldAll([...buildScenario().events, local({ self: [OWNER] })]);
+    return sidebar(view, surface(view, { kind: 'select', runId: ROOT }));
+  },
+  // An interrupted child with the drawer shut: the dock's Resume.
+  'ext-interrupted-run': () => {
+    const view = withInterruptedChild();
+    return sidebar(view, surface(view, { kind: 'select', runId: CHILD }));
   },
   // Real-ExtensionDrawer: the Sessions drawer over the same conversation.
   'ext-drawer': () => {

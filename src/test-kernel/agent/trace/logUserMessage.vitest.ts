@@ -1,12 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { logUserMessage, type AgentTrace } from '@agent/trace';
-import {
-  MESSAGE_TYPES,
-  type RunId,
-  type StreamLogEntry,
-} from '@shared/schemas';
-import { StreamLog } from '@shared/session/traceEntries';
+import type { RunId } from '@shared/schemas';
 import { createTestRunTrace } from '@test/support/sessionTestUtils';
 
 // #7508: the userMessage row's attachment-kind/count payload — logUserMessage
@@ -15,14 +10,10 @@ import { createTestRunTrace } from '@test/support/sessionTestUtils';
 describe('logUserMessage', () => {
   let logger: AgentTrace;
   let disposeTrace: () => void;
-  let store: StreamLog;
+  let runTrace: ReturnType<typeof createTestRunTrace>;
 
   beforeEach(() => {
-    store = new StreamLog();
-    const runTrace = createTestRunTrace(
-      'TestUserMessageLogger' as RunId,
-      store,
-    );
+    runTrace = createTestRunTrace('TestUserMessageLogger' as RunId);
     logger = runTrace.trace;
     disposeTrace = runTrace.dispose;
   });
@@ -31,26 +22,24 @@ describe('logUserMessage', () => {
     disposeTrace();
   });
 
-  function capturedEntries(): StreamLogEntry[] {
-    return store.toJSON();
-  }
-
   it('logs a plain userMessage row with no data when there are no attachments', () => {
     logUserMessage(logger, 'Fix the lemma.');
 
-    const entries = capturedEntries();
-    expect(entries).toHaveLength(1);
-    expect(entries[0].messageType).toBe(MESSAGE_TYPES.USER_MESSAGE);
-    expect(entries[0].text).toBe('Fix the lemma.');
-    expect(entries[0].data).toBeUndefined();
+    const rows = runTrace.rows();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ kind: 'user' });
+    expect(rows[0].kind === 'user' && rows[0].text.full).toBe('Fix the lemma.');
+    expect(rows[0]).not.toHaveProperty('attachments');
   });
 
   it('records attachment kinds (not bytes) on the row data', () => {
     logUserMessage(logger, 'See the attached figure.', ['image', 'document']);
 
-    const entries = capturedEntries();
-    expect(entries).toHaveLength(1);
-    expect(entries[0].messageType).toBe(MESSAGE_TYPES.USER_MESSAGE);
-    expect(entries[0].data).toEqual({ attachments: ['image', 'document'] });
+    const rows = runTrace.rows();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      kind: 'user',
+      attachments: ['image', 'document'],
+    });
   });
 });

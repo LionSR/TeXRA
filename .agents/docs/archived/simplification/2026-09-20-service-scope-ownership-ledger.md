@@ -1,10 +1,11 @@
 # Service scopes and ownership: the investigation ledger
 
 Date: 2026-09-20
-Status: proposed; R5 amended 2026-09-22
+Status: implemented — every candidate landed in #13064, #13066, #13068, #13076, #13089 and #13181 (P6 assessed: the `runtimeModelRegistry` catalogue moves under open PR #13137, `runtimeSkills` and `shortcutPreferences` stay as they are), and the §3.4 `recordSubagentCost` latch was already fixed by #12899.
+Archived: 2026-09-25
 Baseline: `main` at `3378a967`, re-verified at `e33e64f9` on the survey branch.
 Origin: a `find-simplification` pass over the service-injection map recorded in
-[the post-refactor survey](../architecture/2026-09-20-post-refactor-architecture-survey.md).
+[the post-refactor survey](../../proposed/architecture/2026-09-20-post-refactor-architecture-survey.md).
 Three investigators, one per scope (session, run and call, process and module
 globals), each holding the standing rules (AGENTS.md "Code quality rules",
 checklist §13 to §15, the "no new carriers" constraint of the
@@ -69,7 +70,7 @@ as the one composition):
 - `GlobalStorageFs` ← `globalStorageFsLayer(globalStorage)`.
 - **`GlobalDatabase` (new)** ← `databaseLayer('persistent')` at the global
   root, beside `GlobalStorageFs`; replaces `withScopedDatabase`. Design in
-  [its own note](./2026-09-20-global-database-process-service.md).
+  [its own note](../../archived/simplification/2026-09-20-global-database-process-service.md).
 - `ProcessIdentity` ← `Layer.effect` over `processStart`, provided **outside**
   `Layer.fresh` so it builds once.
 - `Secrets`, `AppState` (required, not optional), `SupabaseAuth`,
@@ -164,12 +165,14 @@ Do not re-propose these as specified.
 | `EditorModel` as a dead tag                                                 | Not dead: read through `Effect.serviceOption` at `modelBinding.ts:888`, bound at `:1050`, supplied by the extension (`extension.ts:265-268`). Zero requirers is not zero consumers.                                                                                                                                                                                                                                                                 |
 | `ExternalRoots` as a standalone service                                     | One writer (`packages/extension/src/frontend/setup.ts`), four VS Code-free readers, keyed by kind not by session; a process-wide allowlist with a sound freeze rule. Correct shape is a process service, but that is +4 signatures for 0 deletions today. Recorded as a hazard on #12071: the desktop and SDK share one allowlist across roots the day either registers.                                                                            |
 
-### 3.4 Suspected defect, unconfirmed
+### 3.4 Suspected defect, resolved by #12899
 
-`hooks.recordSubagentCost` has no `accepting` latch, unlike `onToolOutput`
-(`toolUseDispatch.ts:437` versus `:465`), so a post-settlement call silently
-increments a dead local. Not confirmed by execution. Filed with the R-lane
-comment on #12882 as a candidate regression test, not as a change.
+`hooks.recordSubagentCost` had no `accepting` latch, unlike `onToolOutput`,
+so a post-settlement call could silently increment a dead local. #12899
+(`0c8f7fb0`) closed it: the `billing` latch in
+`src/agent/runtime/loop/toolUseDispatch.ts` stops accepting cost once the
+call settles, and `src/test-kernel/agent/ToolUseDispatchParallel.vitest.ts`
+pins it.
 
 ## 4. Consolidation
 

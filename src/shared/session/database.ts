@@ -247,12 +247,14 @@ export class Database extends Context.Service<
     readonly claimOwner: (
       id: AggregateId,
     ) => Effect.Effect<AggregateClaim, DatabaseReadFailed>;
-    /** Atomically acquire existing, open aggregates after proving prior owners dead. */
+    /** Atomically acquire existing, open aggregates after proving prior
+     *  owners dead. A claim another process takes between that proof and
+     *  the acquiring transaction refuses as `DatabaseNotOwner`. */
     readonly acquireClaims: (
       ids: readonly AggregateId[],
     ) => Effect.Effect<
       readonly AggregateId[],
-      DatabaseReadFailed | DatabaseWriteFailed
+      DatabaseNotOwner | DatabaseReadFailed | DatabaseWriteFailed
     >;
     /** C9: recheck the owning tree, acquire its claims, append the tombstone
      *  and close all dependents in one transaction after liveness proofs.

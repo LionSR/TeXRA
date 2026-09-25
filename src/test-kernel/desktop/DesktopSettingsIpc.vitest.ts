@@ -141,7 +141,18 @@ function createSettingsFixture(overrides: SettingsFixtureOverrides = {}) {
       ui: createStubDesktopSettingsUiHost(ui),
       session,
       postToRenderer,
-    }).pipe(Scope.provide(scope)),
+    }).pipe(
+      // Runs an owned command's program the way the window's router does.
+      Effect.map((ipc) => ({
+        ...ipc,
+        handleMessage(message: Parameters<typeof ipc.handleMessage>[0]) {
+          const program = ipc.handleMessage(message);
+          if (program) testRuntime().runFork(program);
+          return program !== undefined;
+        },
+      })),
+      Scope.provide(scope),
+    ),
   );
   return { globalState, session, settings, workspaceState };
 }

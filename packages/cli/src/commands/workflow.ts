@@ -406,7 +406,7 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
           }
           yield* getRunRecords(session, result.runId).writeResultMeta({
             producer: 'cliWorkflow',
-            output: result.output,
+            output: workflowResult?.output ?? result.output,
             ...(workflowResult?.copiedOutput !== undefined && {
               copiedOutput: workflowResult.copiedOutput,
             }),

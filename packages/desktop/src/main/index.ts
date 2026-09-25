@@ -73,13 +73,11 @@ import {
   type InstructionAction,
 } from '@shared/schemas';
 import { normalizePlatform } from '@shared/constants/latexToolchain';
-import { projectDisplayOf } from '@shared/session/hostSnapshot';
 import { Cancelled, Rejected } from '@shared/session/requestErrors';
 import { registerRuntimeShutdownHandlers } from '@tools/agentCliSessionStores';
 import { refreshToolAvailability } from '@tools/toolAvailability';
 import { killActiveRecording } from '@tools/media/audio';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
-import { readRecentCommits } from '@utils/git/repositoryOverview';
 import { findToolInCommonPaths } from '@utils/system/binaryResolver';
 import {
   checkToolInstalled,
@@ -186,12 +184,6 @@ import type { DesktopSetupAuth } from './desktopSetupAuth.js';
 import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';
 
 const moduleDirname = import.meta.dirname;
-/**
- * Maximum number of commits the renderer displays in the launcher banner.
- * Mirrors the extension's `texra.git.numberOfCommitsToShow` default (20). The
- * desktop has no per-user override.
- */
-const DESKTOP_RECENT_COMMIT_LIMIT = 20;
 let mainWindow: BrowserWindow | null = null;
 let reopenMainWindow: (() => void) | undefined;
 /** Window-owned post-launch funnel refresh. The process resume owner reads
@@ -301,7 +293,7 @@ function createWindow(options: {
   const initialProject = activeProject();
   const initialWindowTitle = getDesktopWindowTitle(
     initialProject.session,
-    initialProject.root,
+    initialProject.root && initialProject.display.name,
   );
   const window = new BrowserWindow({
     // The task canvas remains useful with a project sidebar and an optional
@@ -546,7 +538,7 @@ function createWindow(options: {
   const dispatchInstructionAction = (action: InstructionAction): void => {
     switch (action) {
       case INSTRUCTION_ACTION.SET_API_KEY:
-        postDesktopSettingsView(postToRendererIfAlive, 'models');
+        postDesktopSettingsView(postToRendererIfAlive, 'models/keys');
         return;
       case INSTRUCTION_ACTION.OPEN_CONFIGURATION_GUIDE:
         openExternalInBackground('https://texra.ai/guide/configuration.html');
@@ -805,14 +797,6 @@ function createWindow(options: {
     });
     return result.canceled ? undefined : result.filePaths;
   };
-  const recentCommitsOf = (project: DesktopProject) =>
-    project.root
-      ? readRecentCommits(project.root, DESKTOP_RECENT_COMMIT_LIMIT, {
-          // This project's own slots: the read runs for the paper it belongs to.
-          settings: project.roots,
-          onError: reportBackgroundError,
-        })
-      : Effect.succeed({ commits: [] as string[], isGitRepo: false });
   /**
    * One binding per open project for this window (PRD 8.1, 12.2): the
    * session bridge the renderer subscribes to, the project's `host` snapshot,
@@ -833,9 +817,7 @@ function createWindow(options: {
   const projectBindings = new Map<string, ProjectBinding>();
   const bindProject = (project: DesktopProject): ProjectBinding => {
     const { workspace, browserViews } = createProjectWorkspace(project);
-    const agentRunHost = agentRunHostFor(
-      projectDisplayOf(project.key, project.root).name,
-    );
+    const agentRunHost = agentRunHostFor(project.display.name);
     const files = createDesktopFileSelection({
       workspacePath: project.root,
       showOpenFileDialog: openFileDialog,
@@ -865,7 +847,8 @@ function createWindow(options: {
       ),
     );
     const snapshot = createHostSnapshotSource({
-      project: projectDisplayOf(project.key, project.root),
+      project: project.display,
+      root: project.root,
       stores: project.session.roots,
       secrets: options.secrets,
       fileOptions: () =>
@@ -879,7 +862,6 @@ function createWindow(options: {
               }),
           ),
         ),
-      readRecentCommits: () => recentCommitsOf(project),
       onError: reportBackgroundError,
       publish: (next) => bridge.setHost(next),
     });
@@ -905,7 +887,11 @@ function createWindow(options: {
       session: project.session,
       showAgentConfigBanner: ({ agentName, category }) =>
         snapshot.showAgentConfigBanner(agentName, category),
-      onLaunched: (runId) => bridge.surfaceAction({ kind: 'select', runId }),
+      // A resolved agent also retires the missing-agent warning.
+      onLaunched: (runId) => {
+        bridge.surfaceAction({ kind: 'select', runId });
+        runtime.runFork(snapshot.clearAgentConfigBanner);
+      },
       // Recompute the onboarding funnel when a launch settles so a first
       // successful run leaves the setup card without a restart. The settled
       // launch includes AgentRunLifecycle's firstRunDone write.
@@ -915,7 +901,6 @@ function createWindow(options: {
       runtime,
       session: project.session,
       secrets: options.secrets,
-      globalState: options.globalState,
       draftRequests: hostDraftRequests,
       host: {
         ...agentRunHost,
@@ -1058,8 +1043,8 @@ function createWindow(options: {
     );
     postToRendererIfAlive({
       command: DESKTOP_PROJECT_COMMANDS.PROJECTS,
-      projects: projects.flatMap(({ key, root }) =>
-        root === undefined ? [] : [{ key, root }],
+      open: projects.flatMap(({ key, root }) =>
+        root === undefined ? [] : [key],
       ),
       activeKey,
     });
@@ -1255,7 +1240,7 @@ function createWindow(options: {
           installDesktopWindowTitle(
             window,
             project.session,
-            project.root,
+            project.root && project.display.name,
             () => projectScope === owner,
           ),
         ),
@@ -1394,8 +1379,6 @@ function createWindow(options: {
       // card's program runs, not when the port is built.
       signInWithChatGpt: () =>
         Effect.suspend(() => requireSettingsIpc().signInChatGpt()),
-      onAsyncError: reportAsyncError,
-      runtime,
     },
   );
   onboardingIpcRef.current = onboardingIpc;
@@ -1435,6 +1418,12 @@ function createWindow(options: {
       openWorkspaceFolder,
       signIn,
       showInfoMessage,
+      showLauncher: () => {
+        if (!attachedProject) return;
+        projectBindings
+          .get(attachedProject.key)
+          ?.bridge.surfaceAction({ kind: 'selectNew' });
+      },
       onAsyncError: reportAsyncError,
       runtime,
     },
@@ -1494,9 +1483,7 @@ function createWindow(options: {
             height: Math.round(bounds.height * zoom),
           };
         },
-        runtime,
         getWorkspacePath: () => project.root,
-        onAsyncError: reportAsyncError,
       },
     );
     return { workspace, browserViews };
@@ -1506,13 +1493,14 @@ function createWindow(options: {
       message: Parameters<DesktopMessageHandler['handleMessage']>[0],
     ) {
       const parsed = DesktopWorkspaceInboundMessageSchema.safeParse(message);
-      if (!parsed.success) return false;
+      if (!parsed.success) return undefined;
       const binding = projectBindings.get(parsed.data.session);
       if (!binding) {
-        console.warn(
-          `Dropped a workspace request for closed project ${parsed.data.session}`,
+        return Effect.sync(() =>
+          console.warn(
+            `Dropped a workspace request for closed project ${parsed.data.session}`,
+          ),
         );
-        return true;
       }
       // Hidden projects retain their resources, but cannot cover the visible project
       // with a late browser-bounds notification.
@@ -1520,9 +1508,8 @@ function createWindow(options: {
         parsed.data.command === DESKTOP_WORKSPACE_COMMANDS.BROWSER_BOUNDS &&
         binding.project !== activeProject()
       )
-        return true;
-      binding.workspace.handleMessage(message);
-      return true;
+        return Effect.void;
+      return binding.workspace.handleMessage(message);
     },
     disposeRendererResources() {
       // Navigation destroys the document, including its request correlations
@@ -1556,8 +1543,6 @@ function createWindow(options: {
       copyLog: (text) => clipboard.writeText(text),
       showSaveDialog: (dialogOptions) =>
         dialog.showSaveDialog(window, dialogOptions),
-      onAsyncError: reportAsyncError,
-      runtime,
     },
   );
   // One handler per inbound command namespace: the message's `command` names
@@ -1567,7 +1552,7 @@ function createWindow(options: {
     prompt: promptController,
     settings: {
       handleMessage: (message) =>
-        settingsIpcRef.current?.handleMessage(message) ?? false,
+        settingsIpcRef.current?.handleMessage(message),
     },
     onboarding: onboardingIpc,
     projects: createDesktopProjectsIpc({
@@ -1585,7 +1570,19 @@ function createWindow(options: {
         const route = desktopInboundRoute(message.command);
         // A command no surface owns is renderer drift, not a session
         // message: session frames are keyed by `kind`, never `command`.
-        if (route) desktopRoutes[route].handleMessage(message);
+        const program = route && desktopRoutes[route].handleMessage(message);
+        // The one run site for every namespace's program, and its one report:
+        // a failure or defect reaches the window's async-error reporter.
+        if (program)
+          runtime.runFork(
+            program.pipe(
+              Effect.catchCause((cause) =>
+                Cause.hasInterruptsOnly(cause)
+                  ? Effect.void
+                  : Effect.sync(() => reportAsyncError(Cause.squash(cause))),
+              ),
+            ),
+          );
         return;
       }
       // A session message names its project: that project's port answers it.

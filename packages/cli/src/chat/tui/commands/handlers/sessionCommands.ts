@@ -26,7 +26,7 @@ import {
   appendLocalRequestRefusal,
 } from '@cli/chat/tui/state/transcript';
 import { readProspectiveUsageRoute } from '@model/computeModelOptions';
-import { AgentCategory, MESSAGE_TYPES, type RunId } from '@shared/schemas';
+import { AgentCategory, type RunId } from '@shared/schemas';
 
 import { formatSlashCommandHelp } from '../helpText';
 import { listSlashCommands } from '../slashRegistry';
@@ -63,16 +63,21 @@ export function showCliWorkPlan(session: SessionHandle): void {
   }
 }
 
-function activeSkillNamesFor(
-  session: SessionHandle,
-  runId: RunId | undefined,
-): readonly string[] {
-  if (runId === undefined) return [];
-  const entries = session.transcripts.get(runId)?.toJSON() ?? [];
-  const latest = entries.findLast(
-    (entry) => entry.messageType === MESSAGE_TYPES.ACTIVE_SKILLS,
-  );
-  return latest?.data.skills.map((skill) => skill.name) ?? [];
+/** The skills the run's newest `skills.snapshot` row names. Read from the
+ *  run's committed rows: the snapshot is no listing row, so the view holds it
+ *  only for a run whose transcript tier some port subscribes. */
+function activeSkillNamesFor(session: SessionHandle, runId: RunId | undefined) {
+  if (runId === undefined) return Effect.succeed([]);
+  return session
+    .readRunEvents(runId)
+    .pipe(
+      Effect.map(
+        (events) =>
+          events
+            .findLast((event) => event.type === 'skills.snapshot')
+            ?.skills.map((skill) => skill.name) ?? [],
+      ),
+    );
 }
 
 export const showCliSessionStatus = Effect.fn('showCliSessionStatus')(
@@ -89,6 +94,10 @@ export const showCliSessionStatus = Effect.fn('showCliSessionStatus')(
         : run;
     const activeChildSessions = runningChildCount(view, countedParent);
     const model = run?.model ?? (meta.model || context.initialModel);
+    const activeSkills = yield* activeSkillNamesFor(
+      context.runtimeSession,
+      activeRunId,
+    );
     const prospectiveRoute = yield* readProspectiveUsageRoute(
       { ...context.stores, secrets: context.secrets },
       model,
@@ -111,7 +120,7 @@ export const showCliSessionStatus = Effect.fn('showCliSessionStatus')(
           run?.category === AgentCategory.ToolUse && run.goal.active
             ? run.goal
             : undefined,
-        activeSkills: activeSkillNamesFor(context.runtimeSession, activeRunId),
+        activeSkills,
         sessionId: run ? context.session.runId : undefined,
         commandName: context.cliContext.commandName,
         cwd: context.cliContext.cwd,

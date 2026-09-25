@@ -896,7 +896,7 @@ describe('handleTuiSlashCommand', () => {
       Effect.gen(function* () {
         registerBuiltinSlashCommands({ ...services });
         const session = createSession();
-        const runId = 'stream-1' as RunId;
+        const runId = '5e0001' as RunId;
         session.runId = runId;
         session.runId = 'exec-1' as RunId;
         focusRun(runId);
@@ -920,7 +920,7 @@ describe('handleTuiSlashCommand', () => {
       Effect.gen(function* () {
         registerBuiltinSlashCommands({ ...services });
         const session = createSession();
-        const rootRunId = 'stream-root' as RunId;
+        const rootRunId = '5e0000' as RunId;
         const childRunId = 'stream-child' as RunId;
         focusRun(rootRunId);
         ensureRun(rootRunId, { status: RUN_PHASE.WAITING });
@@ -948,8 +948,8 @@ describe('handleTuiSlashCommand', () => {
       Effect.gen(function* () {
         registerBuiltinSlashCommands({ ...services });
         const session = createSession();
-        const rootRunId = 'stream-root' as RunId;
-        const parentRunId = 'stream-parent' as RunId;
+        const rootRunId = '5e0000' as RunId;
+        const parentRunId = '5e0a01' as RunId;
         const rootSiblingIds = [
           'stream-root-sibling-1',
           'stream-root-sibling-2',
@@ -999,7 +999,7 @@ describe('handleTuiSlashCommand', () => {
       Effect.gen(function* () {
         registerBuiltinSlashCommands({ ...services });
         const session = createSession();
-        const rootRunId = 'stream-root' as RunId;
+        const rootRunId = '5e0000' as RunId;
         const childRunIds = ['stream-child-1', 'stream-child-2'] as RunId[];
         focusRun(rootRunId);
         ensureRun(rootRunId, { status: RUN_PHASE.WAITING });
@@ -1033,8 +1033,8 @@ describe('handleTuiSlashCommand', () => {
       Effect.gen(function* () {
         registerBuiltinSlashCommands({ ...services });
         const session = createSession();
-        const rootRunId = 'stream-root' as RunId;
-        const focusedChildId = 'stream-focused-child' as RunId;
+        const rootRunId = '5e0000' as RunId;
+        const focusedChildId = '5ef0c5' as RunId;
         const siblingChildId = 'stream-sibling-child' as RunId;
         focusRun(focusedChildId);
         for (const runId of [focusedChildId, siblingChildId]) {
@@ -1066,7 +1066,7 @@ describe('handleTuiSlashCommand', () => {
         registerBuiltinSlashCommands({ ...services });
         const overview = vi.spyOn(apiStatus, 'loadCliModelAccessOverview');
         const session = createSession();
-        const runId = 'stream-access' as RunId;
+        const runId = '5eacce' as RunId;
         focusRun(runId);
         patchSessionMeta({ model: 'gpt55' });
         // The access route comes off the fold's cumulative usage for the stream.

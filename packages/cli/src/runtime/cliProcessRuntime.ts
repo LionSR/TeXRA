@@ -62,7 +62,6 @@ import {
   withProcessServices,
   type ProcessRuntime,
 } from '@platform/processRuntime';
-import { DEFAULT_NODE_STORAGE_ROOT } from '@platform/defaults/nodeStorage';
 import { nodeProcesses } from '@platform/defaults/nodeProcesses';
 import { resolveGlobalStoragePath } from '@platform/defaults/workspaceStorage';
 import { GlobalDatabase } from '@shared/session/database';
@@ -194,7 +193,7 @@ export const NO_PLATFORM_INSTALL: CliProcessRuntimeInstall = Object.freeze({
  * loudly, and a CLI process runs exactly one command.
  */
 export function installCliProcessRuntime(
-  storageRoot?: string,
+  storageRoot: string,
   options?: CliProcessRuntimeInstall,
 ): Promise<ProcessRuntime> {
   const current = installedProcessRuntime();
@@ -210,9 +209,7 @@ export function installCliProcessRuntime(
     // the directory is the state store's and the global database's to create
     // when they open below, and clone — whose storage root may be read-only,
     // and which runs no records operation — must not create it at all.
-    const globalStoragePath = resolveGlobalStoragePath(
-      storageRoot ?? DEFAULT_NODE_STORAGE_ROOT,
-    );
+    const globalStoragePath = resolveGlobalStoragePath(storageRoot);
     const version = await readCliVersion();
     const secrets = getCliSecrets(storageRoot);
     // The account plane is built beside the runtime that serves it.

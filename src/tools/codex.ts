@@ -38,6 +38,7 @@ import type {
   CodexApprovalPolicy,
   RunId,
   TodoItem,
+  TokenUsageStats,
   ToolResult,
   ToolUseLog,
   ToolCallStatus,
@@ -61,8 +62,7 @@ import { buildAgentWorkspaceOptions } from './agentWorkspaceOptions';
 import {
   codexSandboxMode,
   getCodexConfig,
-  importCodexClass,
-  findCodexBinaryPath,
+  openCodexClient,
 } from './codexImport';
 import { type ChildRun } from './delegation/childRun';
 import { codexThreadsFor } from './agentCliSessionStores';
@@ -75,7 +75,7 @@ import {
   launchAgentCliSession,
   reraiseAgentCliCallFailure,
 } from './agentCliShared';
-import { formatDelivery, toDeliveryUsage } from './delegation/deliveryEnvelope';
+import { formatDelivery } from './delegation/deliveryEnvelope';
 import {
   CODEX_AGENT_NAME,
   buildCodexCommandToolLog,
@@ -236,6 +236,18 @@ function publishCodexItemProgress(params: {
 // Streaming helpers
 // ============================================================================
 
+/** A Codex turn's spend in the one usage shape. The SDK reports no cost. */
+function codexTurnUsage({ usage }: RunResult): TokenUsageStats | null {
+  if (!usage) return null;
+  const cacheRead = usage.cached_input_tokens;
+  return {
+    inputTokens: usage.input_tokens,
+    outputTokens: usage.output_tokens,
+    cost: 0,
+    ...(cacheRead > 0 && { cacheReadInputTokens: cacheRead }),
+  };
+}
+
 /** Run a single streamed turn, logging events to the child stream. The
  * `@openai/codex-sdk` stream is this module's foreign edge, so the async drain
  * below is the one place it is wrapped. */
@@ -379,18 +391,7 @@ function buildCodexLaunch(params: {
     runProviderTurn: (prompt, _ports, signal) =>
       runStreamedTurn(thread, prompt, logger, signal),
     resolveSessionIds: () => [fallbackThreadId, thread.id],
-    getUsage: (turn) => turn.usage,
-    buildUsageStats: (turn) =>
-      turn.usage
-        ? {
-            inputTokens: turn.usage.input_tokens,
-            outputTokens: turn.usage.output_tokens,
-            cost: 0,
-            ...(turn.usage.cached_input_tokens > 0 && {
-              cacheReadInputTokens: turn.usage.cached_input_tokens,
-            }),
-          }
-        : undefined,
+    getUsage: codexTurnUsage,
     formatDelivery: (turn, wallTimeMs, lastPrompt) =>
       formatDelivery({
         tag: DELIVERY_TAG.codexResult,
@@ -399,7 +400,7 @@ function buildCodexLaunch(params: {
         attributes: [{ name: 'thread-id', value: thread.id || null }],
         wallTime: formatWallTimeSeconds(wallTimeMs),
         response: turn.finalResponse,
-        usage: toDeliveryUsage(turn.usage),
+        usage: codexTurnUsage(turn),
       }),
     formatError: (_turn, err, lastPrompt) =>
       formatDelivery({
@@ -422,9 +423,7 @@ const createCodexThread = Effect.fn('codex.createCodexThread')(function* (
   roots: WorkspaceRoots,
   workingDir?: string,
 ) {
-  const CodexClass = yield* importCodexClass();
-  const codexPath = yield* findCodexBinaryPath();
-  const codex = new CodexClass({ codexPathOverride: codexPath });
+  const { codex, codexPath } = yield* openCodexClient();
   const config = yield* getCodexConfig;
   // Resumed threads keep their stored workspace unless explicitly overridden.
   const workspace =

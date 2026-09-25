@@ -1,24 +1,28 @@
 /**
- * The one projection from a stream-log entry to a transcript row.
+ * The transcript row builders: what each thing a run says looks like as the
+ * row every host paints. The transcript fold (`@shared/session/transcriptFold`)
+ * decides which builder an event reaches and supplies the row envelope; these
+ * turn typed, already-decoded values into rows and never parse.
  *
- * Membership is a single allowlist: every message type either produces a row
- * or is explicitly decided against here, and the switch is exhaustive over
- * `MessageType`, so adding one fails to compile rather than silently missing
- * from a host. Row density — one-liner or expanded card — is a paint-time
- * choice; it is never expressed by withholding a row.
+ * Membership for a decoded `log` payload is a single allowlist: every message
+ * type either produces a row or is explicitly decided against in
+ * {@link logPayloadRow}, and the switch is exhaustive over its payloads, so
+ * adding one fails to compile rather than silently missing from a host. Row
+ * density (one-liner or expanded card) is a paint-time choice; it is never
+ * expressed by withholding a row.
  */
 import {
   MESSAGE_TYPES,
-  STREAM_LOG_ENTRY_TYPES,
   WORKFLOW_TASK_STATUS_LABEL,
-  parseDiffResultEntries,
   type ErrorLogData,
   type ExtendedTokenUsageStats,
   type FileListEntry,
-  type StreamLogEntry,
+  type LogPayload,
+  type ToolUseLog,
+  type WorkflowCallProgress,
 } from '@shared/schemas';
 import { getModelLabel } from '@shared/model/modelLabel';
-import { normalizeToolUseForRender } from '@shared/toolUse';
+import { normalizeToolUse } from '@shared/toolUse';
 import {
   hasIncompleteEmbeddedSubagentFollowup,
   summarizeFollowupMessage,
@@ -29,86 +33,62 @@ import {
   formatWorkflowPhaseHeading,
   workflowCallDetail,
 } from '@ui/copy/workflowCall';
-import { assertNever, isObject } from '@utils/core';
+import { assertNever } from '@utils/core';
 import {
   formatCompactTokenCount,
   formatCostUsd,
 } from '@utils/text/stringUtils';
 
 import { toolRowModel, type ToolRowModelContext } from './toolRowModel';
-import {
-  stringifyPayload,
-  transcriptText,
-  type TranscriptText,
-} from './transcriptText';
+import { stringifyPayload, transcriptText } from './transcriptText';
 import type {
   ErrorRow,
   ErrorRowDetail,
   LoadedMediaRef,
   LogRow,
+  PhaseRow,
   StatItem,
   StreamingTextRow,
+  ToolRow,
   TranscriptRow,
   TranscriptRowBase,
+  WorkflowTaskRow,
 } from './transcriptRow';
 
-interface TranscriptRowContext {
-  /** The row previously projected for this slot. Consulted for exactly one
-   *  thing: a phase's `GROUP_END` carries no index/total, so the counts the
-   *  `GROUP_START` established are inherited rather than dropped. */
-  readonly previousRow?: TranscriptRow;
-  /** The host paints this stream's task-group surface, so run/round/session
-   *  lifecycle headings belong there and not in the transcript. True on every
-   *  stream in the progress view; the CLI clears it only for a full-log child
-   *  that is not a workflow run (a detached process, an external-CLI session),
-   *  which has no task-group renderer and whose verbatim log is the point of
-   *  opening it. Phase headers are unaffected — they stay transcript rows
-   *  everywhere. */
-  readonly projectLifecycleToTaskGroups?: boolean;
-  /** The session's runs by id, for the `executions` tool header. */
-  readonly runLabels?: ToolRowModelContext['runLabels'];
+// ---------------------------------------------------------------------------
+// Text rows
+// ---------------------------------------------------------------------------
+
+/** A plain log row, or no row when the text is blank. */
+export function plainLogRow(
+  base: TranscriptRowBase,
+  text: string,
+): LogRow | undefined {
+  const measured = transcriptText(text);
+  if (!measured.oneLine.trim()) return undefined;
+  return { ...base, kind: 'log', text: measured };
 }
 
-// ---------------------------------------------------------------------------
-// Envelope
-// ---------------------------------------------------------------------------
-
-function rowBase(entry: StreamLogEntry): TranscriptRowBase {
+/** Model text, thinking, or scratchpad; no row while the text is blank. */
+export function streamingTextRow(
+  base: TranscriptRowBase,
+  kind: StreamingTextRow['kind'],
+  text: string,
+  streaming: boolean,
+): StreamingTextRow | undefined {
+  const measured = transcriptText(text);
+  if (!measured.oneLine.trim()) return undefined;
   return {
-    id: entry.id,
-    seqNo: entry.seqNo,
-    timestamp: entry.timestamp,
-    level: entry.level,
-    ...(entry.settlementSeqNo !== undefined
-      ? { settlementSeqNo: entry.settlementSeqNo }
+    ...base,
+    kind,
+    text: measured,
+    streaming,
+    ...(kind === 'assistant' &&
+    hasIncompleteEmbeddedSubagentFollowup(measured.full)
+      ? { pendingEmbeddedFollowup: true }
       : {}),
-    ...(entry.verbose !== undefined ? { verbose: entry.verbose } : {}),
-    ...(entry.groupId !== undefined ? { groupId: entry.groupId } : {}),
-    ...(entry.messageType ? { messageType: entry.messageType } : {}),
   };
 }
-
-function entryText(entry: StreamLogEntry): TranscriptText {
-  return transcriptText(entry.text ?? '');
-}
-
-/** A plain log row, or no row when the entry has no visible text. */
-function projectLogRow(entry: StreamLogEntry): LogRow | undefined {
-  const text = entryText(entry);
-  if (!text.oneLine.trim()) return undefined;
-  return { ...rowBase(entry), kind: 'log', text };
-}
-
-function isStreamingPayload(data: unknown): boolean {
-  return isObject(data) && data.status === 'running';
-}
-
-/** The three message types whose payload is streaming markdown text. */
-const STREAMING_TEXT_ROW_KIND = {
-  [MESSAGE_TYPES.MODEL_RESPONSE]: 'assistant',
-  [MESSAGE_TYPES.THINKING]: 'thinking',
-  [MESSAGE_TYPES.SCRATCHPAD]: 'scratchpad',
-} as const satisfies Record<string, StreamingTextRow['kind']>;
 
 // ---------------------------------------------------------------------------
 // Error
@@ -121,7 +101,9 @@ const STREAMING_TEXT_ROW_KIND = {
  *
  * `partialText` is deliberately absent: it is a retry surface's material,
  * not a transcript row's. `RetryRequestPanel` reads it from the approval
- * request's own payload, never from a projected row.
+ * request's own payload, never from a projected row. So is `userRetryable`:
+ * the runtime's retry routing flag, which the row's own retry affordance
+ * already expresses to a reader.
  */
 const ERROR_DETAIL_FIELDS = [
   'message',
@@ -130,11 +112,9 @@ const ERROR_DETAIL_FIELDS = [
   'provider',
   'statusCode',
   'statusText',
-  'userRetryable',
   'classification',
   'requestId',
   'rawMessage',
-  'rawErrorBody',
 ] as const satisfies readonly (keyof ErrorLogData)[];
 
 function errorDetails(
@@ -145,28 +125,25 @@ function errorDetails(
   return ERROR_DETAIL_FIELDS.flatMap((key) => {
     const value = data[key];
     // The message is the summary on most failures; repeating it under the
-    // summary says nothing.
+    // summary says nothing. Neither does an empty provider body.
     if (value == null || (key === 'message' && value === summary)) return [];
-    return [
-      {
-        key,
-        value:
-          typeof value === 'object'
-            ? JSON.stringify(value, null, 2)
-            : String(value),
-      },
-    ];
+    const text =
+      typeof value === 'object'
+        ? JSON.stringify(value, null, 2)
+        : String(value);
+    if (text.trim() === '' || text === '{}') return [];
+    return [{ key, value: text }];
   });
 }
 
-function projectErrorRow(
-  entry: StreamLogEntry & { messageType: typeof MESSAGE_TYPES.ERROR },
+function errorRow(
+  base: TranscriptRowBase,
+  summary: string,
+  data: ErrorLogData | undefined,
 ): ErrorRow {
-  const data = entry.data;
-  const summary = entry.text ?? '';
   const details = errorDetails(data, summary);
   return {
-    ...rowBase(entry),
+    ...base,
     kind: 'error',
     summary: transcriptText(summary),
     details,
@@ -247,134 +224,132 @@ const TOKENS_FREED_ACTIONS = new Set(['clear_tool_uses', 'clear_thinking']);
 const MAX_TOKENS_REDUCED_DISPLAY_THRESHOLD = 32_768;
 
 // ---------------------------------------------------------------------------
-// Phase / group rows
+// Phase, tool, and workflow-call rows
 // ---------------------------------------------------------------------------
 
-/**
- * A phase header — the rows a workflow script emits per `phase()`, recorded
- * as `GROUP_START` and upserted in place to `GROUP_END`. Detected by `kind`,
- * not by entry type, so the header keeps its identity after the phase closes.
- */
-function phaseGroupData(
-  entry: StreamLogEntry,
-): { index?: number; total?: number } | undefined {
-  if (
-    entry.type !== STREAM_LOG_ENTRY_TYPES.GROUP_START &&
-    entry.type !== STREAM_LOG_ENTRY_TYPES.GROUP_END
-  ) {
-    return undefined;
-  }
-  const { kind, index, total } = entry.data;
-  if (kind !== 'phase') return undefined;
+/** A workflow phase header, the row a script writes per `phase()`; no row
+ *  when the label is blank. */
+export function phaseRow(
+  base: TranscriptRowBase,
+  phaseLabel: string,
+  phaseIndex: number | undefined,
+  phaseTotal: number | undefined,
+): PhaseRow | undefined {
+  if (phaseLabel.trim().length === 0) return undefined;
   return {
-    ...(index !== undefined ? { index } : {}),
-    ...(total !== undefined ? { total } : {}),
+    ...base,
+    kind: 'phase',
+    heading: formatWorkflowPhaseHeading({
+      phaseLabel,
+      ...(phaseIndex !== undefined ? { phaseIndex } : {}),
+      ...(phaseTotal !== undefined ? { phaseTotal } : {}),
+    }),
+    phaseLabel,
+    ...(phaseIndex !== undefined ? { phaseIndex } : {}),
+    ...(phaseTotal !== undefined ? { phaseTotal } : {}),
+  };
+}
+
+/** A tool card from its decoded payload; `output` is the live text a running
+ *  card printed, which paints in place of the durable output. */
+export function toolRow(
+  base: TranscriptRowBase,
+  log: ToolUseLog,
+  output: string | undefined,
+  runLabels: ToolRowModelContext['runLabels'],
+): ToolRow {
+  const shown = output === undefined ? log : { ...log, output };
+  const toolUse = normalizeToolUse(shown);
+  return {
+    ...base,
+    kind: 'tool',
+    toolUse,
+    model: toolRowModel(toolUse, {
+      ...(runLabels ? { runLabels } : {}),
+      parsedOutput: shown.output,
+    }),
+    log,
+  };
+}
+
+export function workflowTaskRow(
+  base: TranscriptRowBase,
+  progress: WorkflowCallProgress,
+): WorkflowTaskRow {
+  const call =
+    progress.model === undefined
+      ? progress
+      : { ...progress, model: getModelLabel(progress.model) };
+  const detail = workflowCallDetail(call);
+  return {
+    ...base,
+    kind: 'workflowTask',
+    call,
+    line: formatWorkflowCallLine(call),
+    statusLabel: WORKFLOW_TASK_STATUS_LABEL[call.status],
+    metadataParts: formatWorkflowCallMetadataParts(call),
+    ...(detail ? { detail } : {}),
   };
 }
 
 // ---------------------------------------------------------------------------
-// Projection
+// Log payload rows
 // ---------------------------------------------------------------------------
 
-export function projectTranscriptRow(
-  entry: StreamLogEntry,
-  ctx: TranscriptRowContext = {},
+/** The decoded `log` payloads the fold routes here: every one but the
+ *  streaming text, tool, and workflow-call payloads, which it keeps open. */
+export type LogRowPayload = Exclude<
+  LogPayload,
+  {
+    messageType:
+      | typeof MESSAGE_TYPES.MODEL_RESPONSE
+      | typeof MESSAGE_TYPES.THINKING
+      | typeof MESSAGE_TYPES.SCRATCHPAD
+      | typeof MESSAGE_TYPES.TOOL_USE
+      | typeof MESSAGE_TYPES.WORKFLOW_TASK;
+  }
+>;
+
+export function logPayloadRow(
+  base: TranscriptRowBase,
+  text: string,
+  payload: LogRowPayload,
 ): TranscriptRow | undefined {
-  const phase = phaseGroupData(entry);
-  if (phase) {
-    const phaseLabel = entry.text ?? '';
-    if (phaseLabel.trim().length === 0) return undefined;
-    // A closing phase row carries no counts of its own; inherit the ones the
-    // opening row established so `(2/3)` does not vanish when a phase ends.
-    const previous =
-      ctx.previousRow?.kind === 'phase' ? ctx.previousRow : undefined;
-    const phaseIndex = phase.index ?? previous?.phaseIndex;
-    const phaseTotal = phase.total ?? previous?.phaseTotal;
-    return {
-      ...rowBase(entry),
-      kind: 'phase',
-      heading: formatWorkflowPhaseHeading({
-        phaseLabel,
-        ...(phaseIndex !== undefined ? { phaseIndex } : {}),
-        ...(phaseTotal !== undefined ? { phaseTotal } : {}),
-      }),
-      phaseLabel,
-      ...(phaseIndex !== undefined ? { phaseIndex } : {}),
-      ...(phaseTotal !== undefined ? { phaseTotal } : {}),
-    };
-  }
-
-  if (entry.type !== STREAM_LOG_ENTRY_TYPES.LOG) {
-    if (ctx.projectLifecycleToTaskGroups) return undefined;
-    return projectLogRow(entry);
-  }
-
-  const messageType = entry.messageType;
-
-  switch (messageType) {
-    case MESSAGE_TYPES.MODEL_RESPONSE:
-    case MESSAGE_TYPES.THINKING:
-    case MESSAGE_TYPES.SCRATCHPAD: {
-      const text = entryText(entry);
-      if (!text.oneLine.trim()) return undefined;
-      const kind = STREAMING_TEXT_ROW_KIND[messageType];
-      return {
-        ...rowBase(entry),
-        kind,
-        text,
-        streaming: isStreamingPayload(entry.data),
-        ...(kind === 'assistant' &&
-        hasIncompleteEmbeddedSubagentFollowup(text.full)
-          ? { pendingEmbeddedFollowup: true }
-          : {}),
-      };
-    }
-
+  switch (payload.messageType) {
     case MESSAGE_TYPES.USER_MESSAGE: {
-      const text = entryText(entry);
+      const measured = transcriptText(text);
       return {
-        ...rowBase(entry),
+        ...base,
         kind: 'user',
-        text,
-        summary: transcriptText(summarizeFollowupMessage(text.full)),
-        ...(entry.data?.workflowSummary
-          ? { workflowSummary: entry.data.workflowSummary }
+        text: measured,
+        summary: transcriptText(summarizeFollowupMessage(measured.full)),
+        ...(payload.data?.workflowSummary
+          ? { workflowSummary: payload.data.workflowSummary }
+          : {}),
+        ...(payload.data?.attachments
+          ? { attachments: payload.data.attachments }
           : {}),
       };
     }
 
     case MESSAGE_TYPES.ERROR:
-      return projectErrorRow(entry);
-
-    case MESSAGE_TYPES.TOOL_USE: {
-      // A malformed payload becomes a visible failed tool row rather than
-      // vanishing: the shared normalizer owns that policy for both hosts.
-      const toolUse = normalizeToolUseForRender(entry.data);
-      return {
-        ...rowBase(entry),
-        kind: 'tool',
-        toolUse,
-        model: toolRowModel(toolUse, {
-          ...(ctx.runLabels ? { runLabels: ctx.runLabels } : {}),
-          parsedOutput: entry.data.output,
-        }),
-      };
-    }
+      return errorRow(base, text, payload.data);
 
     case MESSAGE_TYPES.WEB_SEARCH: {
-      const { query } = entry.data;
+      const { query } = payload.data;
       return {
-        ...rowBase(entry),
+        ...base,
         kind: 'webSearch',
         label: `Web Search${query ? `: "${query}"` : ''}`,
+        ...(query !== undefined ? { query } : {}),
       };
     }
 
     case MESSAGE_TYPES.FILE_LIST: {
-      const files = entry.data;
+      const files = payload.data;
       if (files.length === 0) return undefined;
       return {
-        ...rowBase(entry),
+        ...base,
         kind: 'fileList',
         files,
         summary: fileListSummary(files),
@@ -383,10 +358,10 @@ export function projectTranscriptRow(
     }
 
     case MESSAGE_TYPES.MISSING_OUTPUTS: {
-      const { missing, xmlFile } = entry.data;
+      const { missing, xmlFile } = payload.data;
       if (missing.length === 0 && !xmlFile) return undefined;
       return {
-        ...rowBase(entry),
+        ...base,
         kind: 'missingOutputs',
         missing,
         xmlFile,
@@ -395,11 +370,11 @@ export function projectTranscriptRow(
     }
 
     case MESSAGE_TYPES.LATEXDIFF: {
-      const entries = parseDiffResultEntries(entry.data);
+      const entries = payload.data;
       if (entries.length === 0) return undefined;
       const runId = entries.find((item) => item.runId)?.runId;
       return {
-        ...rowBase(entry),
+        ...base,
         kind: 'latexdiff',
         entries,
         ...(runId ? { runId } : {}),
@@ -407,18 +382,13 @@ export function projectTranscriptRow(
     }
 
     case MESSAGE_TYPES.STATISTICS: {
-      const items = statisticsItems(entry.data);
+      const items = statisticsItems(payload.data);
       if (items.length === 0) return undefined;
-      return {
-        ...rowBase(entry),
-        kind: 'statistics',
-        label: 'Statistics',
-        items,
-      };
+      return { ...base, kind: 'statistics', label: 'Statistics', items };
     }
 
     case MESSAGE_TYPES.CONTEXT_MANAGEMENT: {
-      const data = entry.data;
+      const data = payload.data;
       // A client compaction is one row, its activity, which carries these
       // figures (`compactionActivityRow`); a second row would repeat it.
       if (data.action === 'compaction') return undefined;
@@ -463,7 +433,7 @@ export function projectTranscriptRow(
         items.push({ key: 'details', label: 'Details', value: data.details });
       }
       return {
-        ...rowBase(entry),
+        ...base,
         kind: 'contextManagement',
         data,
         label: CONTEXT_MANAGEMENT_LABEL[data.action] ?? 'Context management',
@@ -473,44 +443,26 @@ export function projectTranscriptRow(
     }
 
     case MESSAGE_TYPES.PROGRESS_STATUS: {
-      const detail = stringifyPayload(entry.data).text;
+      const detail = stringifyPayload(payload.data).text;
       return {
-        ...rowBase(entry),
+        ...base,
         kind: 'progressStatus',
-        summary: transcriptText((entry.text ?? '').trim() || 'Status update'),
+        summary: transcriptText(text.trim() || 'Status update'),
         ...(detail.full ? { detail } : {}),
       };
     }
 
-    case MESSAGE_TYPES.WORKFLOW_TASK: {
-      const call =
-        entry.data.model === undefined
-          ? entry.data
-          : { ...entry.data, model: getModelLabel(entry.data.model) };
-      const detail = workflowCallDetail(call);
-      return {
-        ...rowBase(entry),
-        kind: 'workflowTask',
-        call,
-        line: formatWorkflowCallLine(call),
-        statusLabel: WORKFLOW_TASK_STATUS_LABEL[call.status],
-        metadataParts: formatWorkflowCallMetadataParts(call),
-        ...(detail ? { detail } : {}),
-      };
-    }
-
     case MESSAGE_TYPES.DEFAULT:
-      return projectLogRow(entry);
+      return plainLogRow(base, text);
 
     // ── No row ──────────────────────────────────────────────────────────
     // A compaction lifecycle row is not a row of its own: the correlated
-    // block a stream projects from several of them is, via
+    // block the fold projects from several of them is, via
     // `compactionActivityRow`. `activeSkills` is a per-run snapshot read on
     // demand from the log (the CLI's `/status`), not a transcript row, and
-    // `internal` is a durable marker (the workflow plan) that
-    // nothing renders. Context utilization is a status surface on both hosts —
-    // the CLI reads it off `RunView.context` and the webview
-    // off the raw entry in `logSlice` — so it has no transcript row either.
+    // `internal` is a durable marker nothing renders. Context utilization is
+    // a status surface on both hosts, read off `RunView.context`, so it has
+    // no transcript row either.
     case MESSAGE_TYPES.CONTEXT_COMPACTION_ACTIVITY:
     case MESSAGE_TYPES.ACTIVE_SKILLS:
     case MESSAGE_TYPES.CONTEXT_STATE:
@@ -519,8 +471,8 @@ export function projectTranscriptRow(
 
     default:
       return assertNever(
-        messageType,
-        `Unprojected stream-log messageType: ${String(messageType)}`,
+        payload,
+        `Unprojected log messageType: ${String((payload as LogPayload).messageType)}`,
       );
   }
 }

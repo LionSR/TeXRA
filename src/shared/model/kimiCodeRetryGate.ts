@@ -3,7 +3,7 @@
  *
  * The pure field-level predicates below are the single source for Kimi Code
  * eligibility/exclusivity. Host-side route resolution
- * (`@model/kimiCodeSubscriptionRouting`) imports them, so routing decisions
+ * (`@model/modelRoute`) imports them, so routing decisions
  * and webview retry panels can never drift. This module is deliberately free
  * of platform/secret-store imports.
  */

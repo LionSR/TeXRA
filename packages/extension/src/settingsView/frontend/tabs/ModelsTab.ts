@@ -1,6 +1,7 @@
 /**
  * The Models page: connect a model (API keys, then subscriptions), then choose
- * which models appear.
+ * which models appear. Shows one section at a time; the subscriptions section
+ * is the `subscriptions` slot the settings app composes in.
  */
 
 import { LitElement, html, css, type TemplateResult } from 'lit';
@@ -11,6 +12,7 @@ import type { SubscriptionUsageSnapshots } from '@shared/schemas';
 import type {
   ModelSelectionItem,
   ProviderKeyStatus,
+  SettingsSectionName,
 } from '@shared/settingsView/settingsViewMessages';
 import { commonViewStyles, designTokens } from '@ui/styles';
 
@@ -32,6 +34,8 @@ export class ModelsTab extends LitElement {
     `,
   ];
 
+  @property({ attribute: false }) section: SettingsSectionName<'models'> =
+    'keys';
   @property({ attribute: false }) providerKeyStatuses: ProviderKeyStatus[] = [];
   @property({ attribute: false }) modelSelectionItems: ModelSelectionItem[] =
     [];
@@ -40,20 +44,29 @@ export class ModelsTab extends LitElement {
   @property({ attribute: false }) usage: SubscriptionUsageSnapshots | null =
     null;
 
-  override render(): TemplateResult {
-    return html`
-      <div class="models-container tab-content-container">
-        <provider-key-list
+  private renderSection(): TemplateResult {
+    switch (this.section) {
+      case 'keys':
+        return html`<provider-key-list
           .providerKeyStatuses=${this.providerKeyStatuses}
           .usage=${this.usage}
-        ></provider-key-list>
-        <slot name="subscriptions"></slot>
-        <model-selection-list
+        ></provider-key-list>`;
+      case 'subscriptions':
+        return html`<slot name="subscriptions"></slot>`;
+      case 'models':
+        return html`<model-selection-list
           .models=${this.modelSelectionItems}
           .helperModel=${this.helperModel}
           .providerKeyStatuses=${this.providerKeyStatuses}
           .preferShortModelNames=${this.preferShortModelNames}
-        ></model-selection-list>
+        ></model-selection-list>`;
+    }
+  }
+
+  override render(): TemplateResult {
+    return html`
+      <div class="models-container tab-content-container">
+        ${this.renderSection()}
       </div>
     `;
   }

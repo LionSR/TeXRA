@@ -40,7 +40,6 @@ import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManage
 import { finalizeRun } from '@agent/storage/runLifecycle';
 import type { ResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { withLogChannel } from '@logger/effectLog';
-import { redactSecrets } from '@logger/redaction';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
   TEXRA_APPROVAL_POLICY_DEFAULT,
@@ -77,15 +76,8 @@ import {
 } from '@shared/session/sessionView';
 import type { RunLedgerDraft } from '@shared/session/runStateFold';
 import type { Append, SessionEventReads } from '@shared/session/sessionEvents';
-import {
-  isRunningGroupEntry,
-  isRunningStreamingTextEntry,
-  nonterminalWorkflowCall,
-} from '@shared/session/traceEntries';
-import type {
-  StreamLogStore,
-  StreamLogStoreMode,
-} from '@transcript/StreamLogStore';
+import { openWork } from '@shared/session/transcriptReads';
+import { readRunTranscript } from '@transcript/runTranscript';
 import { aggregateError, throwAggregated } from '@utils/core';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import {
@@ -183,7 +175,11 @@ export type SessionHandleInit = Partial<
    */
   readonly roots: WorkspaceRoots;
   readonly interactions?: HostInteractions;
-  readonly transcriptMode?: StreamLogStoreMode;
+  /** An ephemeral session opens a throwaway database instead of the
+   *  project's. */
+  readonly transcriptMode?:
+    | { readonly kind: 'persistent' }
+    | { readonly kind: 'ephemeral'; readonly reason: string };
 };
 
 export class SessionHandle {
@@ -209,11 +205,11 @@ export class SessionHandle {
   readonly storeCleared: SessionGraph['storeCleared'];
   /**
    * The session's `Runs` service, as the session layer built it in the
-   * session's scope (`SessionGraph.runs`): registration, lookup, change
-   * listeners, and subagent lineage. The record carries it for a host that
+   * session's scope (`SessionGraph.runs`): registration, lookup and
+   * subagent lineage. The record carries it for a host that
    * holds the session; Effect code below a launch takes it from context,
    * where the run and request entries provide this same value.
-   * Hears every phase-moving row this process committed
+   * Hears every `run.end` this process committed
    * ({@link receiveFoldedEvent}), in commit order and only once the view has
    * folded it; the phase itself is the fold's (`RunView.status`), never a
    * second map here.
@@ -256,8 +252,6 @@ export class SessionHandle {
    * qualification and disposal guard applied.
    */
   readonly subscriptions: SessionGraph['subscriptions'];
-  /** Session-owned transcript store for run traces launched in this session. */
-  readonly transcripts: StreamLogStore;
   /**
    * The workspace this session works on: the four per-workspace host roots.
    * Every run, tool call and host command this session serves takes them from
@@ -312,13 +306,12 @@ export class SessionHandle {
    */
   constructor(
     init: SessionHandleInit &
-      Pick<SessionHandle, 'transcripts' | 'modelRetries'> & {
+      Pick<SessionHandle, 'modelRetries'> & {
         readonly graph: (session: SessionHandle) => SessionGraph;
       },
   ) {
     // Forced dependency order, every cross-reference explicit — never let a
     // member fall back to a neighboring module singleton (silent-state-split).
-    this.transcripts = init.transcripts;
     this.roots = init.roots;
     // Built before the graph: the session's approvals are built over it, and
     // announce every effective bypass change through it.
@@ -509,7 +502,7 @@ export class SessionHandle {
     id: AggregateId,
   ): Effect.Effect<
     Effect.Effect<void, DatabaseWriteFailed>,
-    DatabaseReadFailed | DatabaseWriteFailed
+    DatabaseNotOwner | DatabaseReadFailed | DatabaseWriteFailed
   > {
     return this.graph.acquireClaims(id);
   }
@@ -584,7 +577,7 @@ export class SessionHandle {
   publishRunEvent(runId: RunId, event: AgentEvent): void {
     if (this.disposed) return;
     if (event.type === 'stream.chunk') {
-      const text = redactSecrets(event.text);
+      const { text } = event;
       this.detachPublication(runId, () =>
         this.graph.publishText(runId, event.id, text),
       );
@@ -639,23 +632,29 @@ export class SessionHandle {
   /**
    * The final-text facts that close every streaming row still open for
    * `runId`: the loop commits them in the batch that parks the run (its
-   * `waiting` step), so a parked transcript never shows a permanently
-   * streaming block.
+   * `waiting` step), so a parked transcript never streams. Read from the
+   * run's committed rows, not the view: the view folds a run's transcript
+   * only while some port subscribes it, and a run parks whether or not one
+   * does.
    */
   streamClosureFacts(
     runId: RunId,
-  ): Extract<RunLedgerDraft, { type: 'stream.end' }>[] {
-    const closure: Extract<RunLedgerDraft, { type: 'stream.end' }>[] = [];
-    for (const entry of this.transcripts.get(runId)?.toJSON() ?? []) {
-      if (!isRunningStreamingTextEntry(entry)) continue;
-      closure.push({
-        type: 'stream.end',
-        aggregateId: qualifyAggregateId('run', runId),
-        id: entry.id,
-        finalText: this.graph.readText(runId, entry.id) ?? entry.text,
-      });
-    }
-    return closure;
+  ): Effect.Effect<
+    Extract<RunLedgerDraft, { type: 'stream.end' }>[],
+    DatabaseReadFailed
+  > {
+    return readRunTranscript(this, runId).pipe(
+      Effect.map((transcript) =>
+        openWork(transcript)
+          .filter((work) => work.kind === 'stream')
+          .map((work) => ({
+            type: 'stream.end' as const,
+            aggregateId: qualifyAggregateId('run', runId),
+            id: work.id,
+            finalText: this.graph.readText(runId, work.id) ?? work.text,
+          })),
+      ),
+    );
   }
 
   /**
@@ -956,6 +955,20 @@ export class SessionHandle {
     return this.graph.aggregateRows(id);
   }
 
+  /** The run aggregate's committed rows; empty when the run never existed
+   *  or is tombstoned. */
+  readRunEvents(
+    runId: RunId,
+  ): Effect.Effect<readonly SessionEvent[], DatabaseReadFailed> {
+    return this.graph
+      .aggregateRows(qualifyAggregateId('run', runId))
+      .pipe(
+        Effect.map((events) =>
+          events.at(-1)?.type === 'run.removed' ? [] : events,
+        ),
+      );
+  }
+
   readRecordListing(): Effect.Effect<
     readonly SessionEvent[],
     DatabaseReadFailed
@@ -1093,51 +1106,35 @@ export class SessionHandle {
     );
   }
 
-  /** Apply a durable fact delivered by the root's ordered table tail. */
-  receiveCommittedEvent(event: SessionEvent): Effect.Effect<void> {
-    return Effect.sync(() => this.transcripts.acceptCommitted(event));
-  }
-
   /**
-   * One row of the fold-gated tail ({@link folded}, PRD 7.2): the registry's
-   * phase notification and the result listeners, which is why neither is on
-   * the raw tail above. A woken waiter, a refreshed child roster, and a
-   * result listener all read the run's view synchronously, so a notification
-   * ahead of the fold would hand them the state the row just replaced.
+   * One row of the fold-gated tail ({@link folded}, PRD 7.2): the result
+   * listeners and the registry's folded-stop child sweep, which is why
+   * neither is on the raw tail above. Both read the run's view
+   * synchronously, so a notification ahead of the fold would hand them the
+   * state the row just replaced.
    */
   receiveFoldedEvent(event: SessionEvent): Effect.Effect<void> {
     return Effect.gen({ self: this }, function* () {
-      // Runtime waiters and host notifications belong to the authoring process.
+      // The sweep and host notifications belong to the authoring process.
       const { self } = yield* SubscriptionRef.get(this.graph.local);
       if (event.ownerId == null || !self.includes(event.ownerId)) return;
       const target = aggregateTarget(event.aggregateId);
-      if (target.kind !== 'run') return;
-      if (event.type === 'run.end') {
-        // A throwing listener is logged and never stops the ones after it.
-        yield* Effect.forEach(
-          [...this.resultListeners],
-          (listener) =>
-            Effect.suspend(() => listener({ ...event, runId: target.id })).pipe(
-              Effect.catchCause((cause) =>
-                Effect.logWarning('Session result listener threw').pipe(
-                  Effect.annotateLogs({ data: Cause.squash(cause) }),
-                  withLogChannel(CHANNEL),
-                ),
+      if (target.kind !== 'run' || event.type !== 'run.end') return;
+      // A throwing listener is logged and never stops the ones after it.
+      yield* Effect.forEach(
+        [...this.resultListeners],
+        (listener) =>
+          Effect.suspend(() => listener({ ...event, runId: target.id })).pipe(
+            Effect.catchCause((cause) =>
+              Effect.logWarning('Session result listener threw').pipe(
+                Effect.annotateLogs({ data: Cause.squash(cause) }),
+                withLogChannel(CHANNEL),
               ),
             ),
-          { discard: true },
-        );
-      }
-      // Every row that moves a run's phase (3.3): activation, park, wake, end.
-      const phaseMoved =
-        event.type === 'run.activate' ||
-        event.type === 'run.end' ||
-        event.type === 'child.park' ||
-        (event.type === 'flow.step' &&
-          (event.payload.step === 'waiting' ||
-            event.payload.step === 'turn.begin'));
-      if (!phaseMoved) return;
-      this.runs.handleStatus(target.id);
+          ),
+        { discard: true },
+      );
+      this.runs.sweepChildrenOfFoldedStop(target.id);
     });
   }
 
@@ -1285,11 +1282,12 @@ export const settleLiveSessionRuns: Effect.Effect<void> = Effect.gen(
         if (!(yield* session.ownsRun(runId))) return;
         const tracked = session.runs.getHandle(runId) !== undefined;
         // Read the committed transcript once after queued publications settle.
-        // Host exit needs no presentation residency or mutable writer handle.
         const transcript = yield* Effect.exit(
           Effect.gen(function* () {
             yield* session.settlePublications();
-            return tracked ? yield* session.transcripts.readEntries(runId) : [];
+            return tracked
+              ? openWork(yield* readRunTranscript(session, runId))
+              : [];
           }),
         );
         // The run's closure facts, queued and settled under the same lease
@@ -1314,27 +1312,25 @@ export const settleLiveSessionRuns: Effect.Effect<void> = Effect.gen(
             // These are ordinary canonical facts. The lease owner settles their
             // publication before unlinking the claim, so replay sees the same
             // closure as the resident transcript.
-            for (const entry of transcript.value) {
-              if (isRunningGroupEntry(entry)) {
+            for (const work of transcript.value) {
+              if (work.kind === 'stage') {
                 session.publishRunEvent(runId, {
                   type: 'stage.end',
-                  id: entry.id,
+                  id: work.id,
                   status: outcome,
                 });
-              } else if (isRunningStreamingTextEntry(entry)) {
+              } else if (work.kind === 'stream') {
                 session.publishRunEvent(runId, {
                   type: 'stream.end',
-                  id: entry.id,
+                  id: work.id,
                 });
               } else {
-                const call = nonterminalWorkflowCall(entry);
-                if (call)
-                  session.publishRunEvent(runId, {
-                    type: 'workflow.call',
-                    logId: entry.id,
-                    stageId: entry.groupId,
-                    call: interruptedWorkflowCall(call),
-                  });
+                session.publishRunEvent(runId, {
+                  type: 'workflow.call',
+                  logId: work.id,
+                  stageId: work.stageId,
+                  call: interruptedWorkflowCall(work.call),
+                });
               }
             }
             const settled = yield* Effect.exit(

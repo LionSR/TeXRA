@@ -4,14 +4,18 @@
  * Shared between SecretManager (VS Code), modelRoutes (agent runtime),
  * and computeModelOptions (model). Platform-agnostic.
  */
-import { Data, Deferred, Effect, Redacted } from 'effect';
-import { LRUCache } from 'lru-cache';
+import { Data, Effect, Redacted } from 'effect';
 
-import type { PlatformSecrets, SecretsFailed } from '@platform/secrets';
-import { findModelProviderPlugin } from '@shared/constants/modelProviderPlugins';
-import { API_KEY_PROVIDER_IDS } from '@shared/constants/providers';
-import { envVar } from '@utils/system/envFlags';
-import { isNonEmptyString } from '@utils/text/stringUtils';
+import {
+  type CredentialOrigin,
+  type PlatformSecrets,
+  resolveCredential,
+  type SecretsFailed,
+} from '@platform/secrets';
+import {
+  API_KEY_PROVIDER_IDS,
+  apiKeyEnvName,
+} from '@shared/constants/providers';
 
 export const API_PROVIDERS = API_KEY_PROVIDER_IDS;
 
@@ -38,46 +42,21 @@ export function apiProviderOfSecretName(key: string): ApiProvider | undefined {
   return isApiProvider(provider) ? provider : undefined;
 }
 
-/** Environment variable name for a provider's API key. */
-export function apiKeyEnvName(provider: ApiProvider): string {
-  return (
-    findModelProviderPlugin(provider)?.apiKeyEnvName ??
-    `${provider.toUpperCase()}_API_KEY`
-  );
-}
-
 /** Where a resolved API key came from. */
-export type ApiKeyOrigin = 'secret' | 'env' | 'none';
+export type ApiKeyOrigin = CredentialOrigin;
 
 /** UI-safe provider key status derived from a resolved API key origin. */
 export type ApiKeyStatus = 'set' | 'env' | 'not-set';
 
 interface ResolvedApiKey {
   /**
-   * Held as `Redacted` from the store outward, so the short-lived cache below
-   * and every caller carry a value that renders as `<redacted:provider>` if it
-   * ever reaches a log, a trace, or `JSON.stringify`. Only the call that hands
-   * the credential to a provider client unwraps it.
+   * Held as `Redacted` from the store outward, so every caller carries a value
+   * that renders as `<redacted:provider>` if it ever reaches a log, a trace,
+   * or `JSON.stringify`. Only the call that hands the credential to a
+   * provider client unwraps it.
    */
   value: Redacted.Redacted<string> | undefined;
   origin: ApiKeyOrigin;
-}
-
-// Short-lived per-store caches deduplicate concurrent secret scans without
-// sharing credentials between independently supplied stores. Invalidation drops
-// every store's cache; already-running reads retain only the retired cache.
-const LOOKUP_CACHE_TTL_MS = 5_000;
-interface ApiKeyLookupCache {
-  readonly resolved: LRUCache<ApiProvider, ResolvedApiKey>;
-  readonly pending: Map<
-    ApiProvider,
-    Deferred.Deferred<ResolvedApiKey, SecretsFailed>
-  >;
-}
-let lookupCaches = new WeakMap<PlatformSecrets, ApiKeyLookupCache>();
-
-export function invalidateApiKeyCache(): void {
-  lookupCaches = new WeakMap();
 }
 
 /**
@@ -92,108 +71,32 @@ export function exposeApiKey(key: Redacted.Redacted<string>): string {
   return Redacted.value(key);
 }
 
-/** Trim a raw key and seal it under a label naming only its provider. */
-function redactedKey(
-  raw: string,
-  provider: ApiProvider,
-): Redacted.Redacted<string> {
-  return Redacted.make(raw.trim(), { label: provider });
-}
-
-/** Read the key straight from secret storage then the environment, no caching. */
-function resolveApiKeyUncached(
-  secrets: PlatformSecrets,
-  provider: ApiProvider,
-): Effect.Effect<ResolvedApiKey, SecretsFailed> {
-  return Effect.flatMap(
-    secrets.get(apiKeySecretName(provider)),
-    (stored): Effect.Effect<ResolvedApiKey> =>
-      isNonEmptyString(stored)
-        ? Effect.succeed({
-            value: redactedKey(stored, provider),
-            origin: 'secret',
-          })
-        : Effect.map(envVar(apiKeyEnvName(provider)), (envValue) =>
-            isNonEmptyString(envValue)
-              ? { value: redactedKey(envValue, provider), origin: 'env' }
-              : { value: undefined, origin: 'none' },
-          ),
-  );
-}
-
-/** The cache for one credential store, created on first use. */
-function lookupCacheFor(secrets: PlatformSecrets): ApiKeyLookupCache {
-  let cache = lookupCaches.get(secrets);
-  if (!cache) {
-    cache = {
-      resolved: new LRUCache({
-        max: API_PROVIDERS.length,
-        ttl: LOOKUP_CACHE_TTL_MS,
-      }),
-      pending: new Map(),
-    };
-    lookupCaches.set(secrets, cache);
-  }
-  return cache;
-}
-
 /**
- * Cached secret → env lookup, scoped to the supplied credential store, with
- * the two properties the suite pins: one store read per provider per store,
- * and a rejected read memoized nowhere, so the next caller retries instead of
- * replaying a failure. Invalidation replaces the store map, so a read already
- * in flight can only populate its retired cache and cannot restore a deleted
- * key in subsequent lookups.
- *
- * The read runs on a detached fiber and every caller waits on the same
- * `Deferred`, so one caller's cancellation cancels only its own wait — what
- * the shared promise this replaced did by construction. The claim and the
- * fork run under one uninterruptible mask: an interrupt landing between
- * registering the deferred and starting the fiber that settles it would
- * otherwise leave every later caller waiting on an entry nothing completes.
- * Only the waits themselves are interruptible.
+ * Read the provider's key through the one credential ladder: the secret store
+ * (the authority; no copy of it is cached here), then the provider's
+ * conventional environment variable.
  */
 function resolveApiKey(
   secrets: PlatformSecrets,
   provider: ApiProvider,
 ): Effect.Effect<ResolvedApiKey, SecretsFailed> {
-  return Effect.uninterruptibleMask((restore) =>
-    Effect.suspend(() => {
-      const cache = lookupCacheFor(secrets);
-      const cached = cache.resolved.get(provider);
-      if (cached !== undefined) return Effect.succeed(cached);
-      const inFlight = cache.pending.get(provider);
-      if (inFlight !== undefined) return restore(Deferred.await(inFlight));
-
-      const request = Deferred.makeUnsafe<ResolvedApiKey, SecretsFailed>();
-      cache.pending.set(provider, request);
-      return Effect.flatMap(
-        Effect.forkDetach(
-          resolveApiKeyUncached(secrets, provider).pipe(
-            Effect.tap((resolved) =>
-              Effect.sync(() => {
-                cache.resolved.set(provider, resolved);
-              }),
-            ),
-            Effect.onExit((exit) =>
-              Effect.sync(() => {
-                if (cache.pending.get(provider) === request) {
-                  cache.pending.delete(provider);
-                }
-                Deferred.doneUnsafe(request, exit);
-              }),
-            ),
-          ),
-        ),
-        () => restore(Deferred.await(request)),
-      );
+  return Effect.map(
+    resolveCredential(secrets, apiKeySecretName(provider), [
+      apiKeyEnvName(provider),
+    ]),
+    ({ value, origin }) => ({
+      value:
+        value === undefined
+          ? undefined
+          : Redacted.make(value, { label: provider }),
+      origin,
     }),
   );
 }
 
 /**
- * API key lookup trio. All three share the same TTL-cached
- * {@link resolveApiKey} pass over secret storage → env var:
+ * API key lookup trio. All three share the same {@link resolveApiKey} pass
+ * over secret storage then the env var:
  *
  * - {@link lookupApiKey} — value, or `undefined` if absent (most callers)
  * - {@link lookupApiKeyOrigin} — origin tag for UI status reporting
@@ -232,9 +135,7 @@ const STATUS_BY_ORIGIN: Record<ApiKeyOrigin, ApiKeyStatus> = {
   none: 'not-set',
 };
 
-/**
- * Resolve key statuses for providers from the canonical API-key origin cache.
- */
+/** Resolve key statuses for providers from their resolved key origins. */
 export function loadApiKeyStatusMap<const Provider extends ApiProvider>(
   secrets: PlatformSecrets,
   providers: readonly Provider[],
@@ -298,10 +199,8 @@ export function getApiKey(
 
 /**
  * Check whether a usable API key is resolved for a provider (secret storage,
- * then environment, both already trimmed and blank-filtered by
- * {@link resolveApiKeyUncached}). This is the existence check every host
- * shares; a call site that must bypass the process-wide provider cache reads
- * {@link lookupApiKeyUncached} instead.
+ * then environment, both trimmed and blank-filtered by `resolveCredential`).
+ * This is the existence check every host shares.
  */
 export function hasUsableApiKey(
   secrets: PlatformSecrets,
@@ -310,20 +209,5 @@ export function hasUsableApiKey(
   return Effect.map(
     resolveApiKey(secrets, provider),
     (resolved) => resolved.value !== undefined,
-  );
-}
-
-/**
- * Read the key without the process-wide cache. Change detection needs this:
- * the cached lookup's TTL would hand back the previous key for seconds after
- * the user set a new one.
- */
-export function lookupApiKeyUncached(
-  secrets: PlatformSecrets,
-  provider: ApiProvider,
-): Effect.Effect<Redacted.Redacted<string> | undefined, SecretsFailed> {
-  return Effect.map(
-    resolveApiKeyUncached(secrets, provider),
-    (resolved) => resolved.value,
   );
 }

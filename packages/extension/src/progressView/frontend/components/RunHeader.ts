@@ -56,7 +56,6 @@ export interface HeaderMenuItem {
 const ACTIVE_STATE_ACTIONS = [
   ELEMENT_IDS.STOP_STREAM_BTN,
   ELEMENT_IDS.COMPACT_RESPONSE_BTN,
-  ELEMENT_IDS.RESTORE_STATE_BTN,
   ELEMENT_IDS.OPEN_RUN_STORAGE_BTN,
   ELEMENT_IDS.EXPORT_TRANSCRIPT_BTN,
   ELEMENT_IDS.COPY_RUN_CONTEXT_BTN,
@@ -67,7 +66,6 @@ const TERMINAL_STATE_ACTIONS = [
   ELEMENT_IDS.RESUME_BTN,
   ELEMENT_IDS.PACK_STREAM_BTN,
   ELEMENT_IDS.CLEAN_STREAM_BTN,
-  ELEMENT_IDS.RESTORE_STATE_BTN,
   ELEMENT_IDS.DIFF_STREAM_BTN,
   ELEMENT_IDS.OPEN_RUN_STORAGE_BTN,
   ELEMENT_IDS.EXPORT_TRANSCRIPT_BTN,
@@ -113,7 +111,6 @@ const ENABLED_ACTIONS_BY_DISPLAY_KEY: Record<
 const NATIVE_AGENT_ONLY_ACTIONS = new Set([
   ELEMENT_IDS.RESUME_BTN,
   ELEMENT_IDS.RUN_NEW_BTN,
-  ELEMENT_IDS.RESTORE_STATE_BTN,
 ]);
 
 /** The menu value of the delete item, which asks before it acts. */
@@ -394,10 +391,10 @@ export class RunHeader extends LitElement {
         <slot name="start"></slot>
         ${this.renderAncestors(run)}
         <h1 id=${ELEMENT_IDS.ACTIVE_RUN_NAME} data-run=${run.id}>
-          ${run.label}
+          ${run.description || run.label}
         </h1>
         <wa-tooltip for=${ELEMENT_IDS.ACTIVE_RUN_NAME}
-          >${run.description ?? run.label} · ${run.id}</wa-tooltip
+          >${run.label} · ${run.id}</wa-tooltip
         >
         <span
           id=${ELEMENT_IDS.STATUS_INDICATOR}
@@ -447,9 +444,9 @@ export class RunHeader extends LitElement {
     progressTitle: string | undefined,
   ): TemplateResult {
     // An agent run takes its category's actions; a process or a workflow
-    // container takes the neutral ones. Resume, Run again, and Edit as new
-    // task reach the host's `nativeAgentRun` gate, which admits a plain
-    // agent identity and nothing else.
+    // container takes the neutral ones. Resume and Run again reach the
+    // host's `nativeAgentRun` gate, which admits a plain agent identity and
+    // nothing else. Edit as new task lives in the conversation's ended line.
     const actions = (
       run.identity.kind === 'agent'
         ? RUN_MENU_ACTIONS[run.category]
