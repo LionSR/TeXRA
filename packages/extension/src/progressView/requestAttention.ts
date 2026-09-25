@@ -1,19 +1,19 @@
 /**
  * The one attention rule for a pending request in this window, whatever its
  * kind (tool edit, command, proposal, plan, question, inquiry, retry): the
- * sidebar view's badge counts the requests waiting on the user, and one that
- * arrives while no surface shows reveals its run without taking focus. The
- * card stays the one place to answer; nothing here decides a request.
+ * sidebar view's badge counts the requests waiting on the user, and a new
+ * one brings its run on screen without taking focus. The card stays the one
+ * place to answer; nothing here decides a request.
  */
-import type * as vscode from 'vscode';
 import { Effect, Stream } from 'effect';
 
 import type { SessionHandle } from '@agent/runtime';
 import { withLogChannel } from '@logger/effectLog';
 import { requestParksItsCaller, type RunId } from '@shared/schemas';
 import type { SessionView } from '@shared/session/sessionView';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { formatResultCount } from '@utils/text/stringUtils';
+import type * as vscode from 'vscode';
 
 /** What the provider lends: its two surfaces, read at use, and its moves. */
 interface AttentionSurface {
@@ -26,7 +26,9 @@ interface AttentionSurface {
 }
 
 /** A parked caller is answerable only while this window holds its run
- *  (`SessionRequests.decide`); an inquiry, at any time. */
+ *  (`SessionRequests.decide`); an inquiry, at any time. A `readOnly` run is
+ *  out either way: its card's actions no-op in this window
+ *  (`BaseRequestPanel`), so there is nothing here to answer with. */
 function answerableHere(view: SessionView): SessionView['requests'] {
   return view.requests.filter((request) => {
     const run = view.runs.get(request.runId);
@@ -55,9 +57,7 @@ export class RequestAttention {
       const arrived = known && open.find((r) => !known?.has(key(r)));
       known = new Set(open.map(key));
       this.setCount(open.length);
-      return arrived && !this.surface.isViewVisible()
-        ? this.revealWithoutFocus(arrived.runId)
-        : Effect.void;
+      return arrived ? this.bringForward(arrived.runId) : Effect.void;
     });
   }
 
@@ -74,19 +74,26 @@ export class RequestAttention {
     if (sidebar) this.paint(sidebar);
   }
 
-  /** Keyboard focus stays where the user is typing: a focused card's
-   *  single-key answers must not catch keystrokes meant for the editor. */
-  private revealWithoutFocus(runId: RunId): Effect.Effect<void> {
+  /** Reveal a hidden surface, keyboard focus left where the user is typing:
+   *  a focused card's single-key answers must not catch keystrokes meant for
+   *  the editor. Host calls that throw fail here, so the warning covers them
+   *  and the {@link follow} fiber survives to keep the badge current. */
+  private bringForward(runId: RunId): Effect.Effect<void> {
     const { surface } = this;
+    const host = (call: () => void) =>
+      Effect.try({ try: call, catch: ensureError });
     return Effect.gen(function* () {
-      const panel = surface.panel();
-      const sidebar = surface.sidebar();
-      if (panel) panel.reveal(undefined, true);
-      else if (sidebar) sidebar.show(true);
-      else yield* surface.showInSidebar();
-      // A surface on the New-task state opens this run; one showing a
-      // session keeps it, and its run tabs mark the one waiting.
-      surface.showSessions(runId);
+      if (!surface.isViewVisible()) {
+        const panel = surface.panel();
+        const sidebar = surface.sidebar();
+        if (panel) yield* host(() => panel.reveal(undefined, true));
+        else if (sidebar) yield* host(() => sidebar.show(true));
+        else yield* surface.showInSidebar();
+      }
+      // A surface on the New-task state opens this run, visible or just
+      // revealed; one showing a session keeps it, and its run tabs mark the
+      // one waiting.
+      yield* host(() => surface.showSessions(runId));
     }).pipe(
       Effect.catch((failure) =>
         Effect.logWarning(
