@@ -64,35 +64,36 @@ describe('withForkFailureReporting', () => {
     }),
   );
 
-  it.live('stays silent for a success and an interrupts-only exit', () =>
+  it.live('stays silent for a success and an interrupted exit', () =>
     Effect.gen(function* () {
       const capture = captureLogEntries();
       const runtime = yield* makeReportingRuntime();
+      const level = yield* SubscriptionRef.make(0);
+      // A consumer of a PubSub-backed stream, interrupted while it waits:
+      // Effect ends its subscription with `Done` beside the interrupt.
+      const interruptedStreamConsumer = Effect.withFiber((self) =>
+        Effect.forkDetach(
+          Effect.sleep(20).pipe(Effect.andThen(Fiber.interrupt(self))),
+        ).pipe(
+          Effect.andThen(
+            Stream.runForEach(
+              SubscriptionRef.changes(level),
+              () => Effect.void,
+            ),
+          ),
+        ),
+      );
 
-      runtime.runFork(Effect.void);
-      runtime.runFork(Effect.interrupt);
-      yield* Effect.sleep(50);
+      for (const program of [
+        Effect.void,
+        Effect.interrupt,
+        interruptedStreamConsumer,
+      ]) {
+        runtime.runFork(program);
+      }
+      yield* Effect.sleep(80);
 
       expect(capture.entries()).toHaveLength(0);
     }),
-  );
-
-  it.live(
-    'stays silent when an interrupted stream consumer ends with Done',
-    () =>
-      Effect.gen(function* () {
-        const capture = captureLogEntries();
-        const runtime = yield* makeReportingRuntime();
-        const level = yield* SubscriptionRef.make(0);
-
-        const consumer = runtime.runFork(
-          Stream.runForEach(SubscriptionRef.changes(level), () => Effect.void),
-        );
-        yield* Effect.sleep(20);
-        yield* Fiber.interrupt(consumer);
-        yield* Effect.sleep(50);
-
-        expect(capture.at('ERROR')).toHaveLength(0);
-      }),
   );
 });
