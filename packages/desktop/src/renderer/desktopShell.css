@@ -988,13 +988,13 @@ body[data-desktop-platform='darwin']
   border-right: 1px solid var(--wa-color-surface-border);
 }
 
-.shell-files .desktop-editor-tree-row::part(item) {
+:is(.shell-files, .shell-editor-tree) .desktop-editor-tree-row::part(item) {
   min-height: 26px;
   padding: 0 4px;
   border-radius: 6px;
 }
 
-.shell-files .desktop-editor-tree-empty {
+:is(.shell-files, .shell-editor-tree) .desktop-editor-tree-empty {
   padding: 8px;
   color: var(--wa-color-text-quiet);
   font-size: var(--font-size-sm);
