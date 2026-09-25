@@ -1,6 +1,7 @@
 import { Effect } from 'effect';
 
 // Local imports
+import { refresh as refreshAgentCatalog } from '@agent/index';
 import {
   buildToolDashboardItems,
   isToolPluginVisible,
@@ -78,7 +79,11 @@ export function setCliToolEnabled(
 ) {
   const def = findCliToolDef(id);
   if (!def?.toggleable) return Effect.succeed(false);
-  return Effect.as(setToolEnabled(id, enabled, state), true);
+  // A plugin's bundled agents follow its switch.
+  return setToolEnabled(id, enabled, state).pipe(
+    Effect.andThen(refreshAgentCatalog()),
+    Effect.as(true),
+  );
 }
 
 /**

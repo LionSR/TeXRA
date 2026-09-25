@@ -24,6 +24,7 @@ import { setLogSink } from '@logger/logSink';
 import {
   AgentDirectories,
   AgentDirectoriesFailed,
+  AppState,
   type AgentDirectoriesPort,
 } from '@platform/interfaces';
 import type { AgentCatalogServices } from '@platform/processRuntime';
@@ -55,6 +56,7 @@ function onGlobalStorage<A, E>(
       nodePlatformLayer,
       testHttpClientLayer,
       AgentDirectories.layer(mutableAgentDirectories),
+      AppState.layer(new FakeStateStore()),
     ),
   );
 }
@@ -97,6 +99,7 @@ function testAgentDirectories(
 ): AgentDirectoriesPort {
   return {
     custom: () => Effect.sync(() => ''),
+    customConfigured: () => Effect.succeed(false),
     builtIn: () => Effect.sync(() => BUILTIN_AGENTS_DIR),
     builtInToolUse: () => Effect.sync(() => BUILTIN_TOOL_USE_AGENTS_DIR),
     ...overrides,
@@ -107,6 +110,7 @@ let activeAgentDirectories: AgentDirectoriesPort = testAgentDirectories();
 
 const mutableAgentDirectories: AgentDirectoriesPort = {
   custom: () => activeAgentDirectories.custom(),
+  customConfigured: () => activeAgentDirectories.customConfigured(),
   builtIn: () => activeAgentDirectories.builtIn(),
   builtInToolUse: () => activeAgentDirectories.builtInToolUse(),
 };

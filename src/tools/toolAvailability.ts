@@ -20,7 +20,7 @@
  */
 
 // Third-party imports
-import { Deferred, Effect } from 'effect';
+import { Cause, Duration, Effect } from 'effect';
 
 // Local imports
 import { emitAppSignal } from '@eventBus/AppSignals';
@@ -34,9 +34,19 @@ import type {
   ToolProbeInputs,
   ToolProbeServices,
 } from '@tools/toolProbes';
+import { SharedAttempt } from '@utils/core/sharedAttempt';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'toolAvailability';
+
+/**
+ * Deadline on one group's probe and check. The probe runs detached from its
+ * callers ({@link SharedAttempt}), so no caller's interrupt can end a stalled
+ * child-process lookup or SDK import: without this bound one hung group would
+ * hold the shared slot, and every caller joining it, indefinitely. A group
+ * that misses it reports `unknown`, like any other probe failure.
+ */
+const GROUP_PROBE_TIMEOUT_MS = 20_000;
 
 // ============================================================
 // Result type
@@ -106,8 +116,10 @@ export const seedDisabledToolDefaults = Effect.fn('seedDisabledToolDefaults')(
  */
 class ToolAvailabilityCache {
   private lastResults: ExternalToolCheckResult[] | null = null;
-  private inflightProbe: Deferred.Deferred<ExternalToolCheckResult[]> | null =
-    null;
+  private readonly probes = new SharedAttempt<
+    ExternalToolCheckResult[],
+    never
+  >();
   private pendingRerun = false;
 
   /**
@@ -118,21 +130,8 @@ class ToolAvailabilityCache {
     inputs: ToolProbeInputs,
   ): Effect.Effect<ExternalToolCheckResult[], never, ToolProbeServices> {
     return Effect.suspend(() => {
-      if (this.inflightProbe) {
-        this.pendingRerun = true;
-        return Deferred.await(this.inflightProbe);
-      }
-      // The deferred is claimed here, synchronously, before the first
-      // suspension point: a caller that arrives while this probe runs must
-      // find the slot taken and join it rather than start a second probe.
-      const deferred = Deferred.makeUnsafe<ExternalToolCheckResult[]>();
-      this.inflightProbe = deferred;
-      return this.probeUntilSettled(inputs).pipe(
-        Effect.onExit((exit) => {
-          this.inflightProbe = null;
-          return Deferred.done(deferred, exit);
-        }),
-      );
+      if (this.probes.inFlight) this.pendingRerun = true;
+      return this.probes.run(() => this.probeUntilSettled(inputs));
     });
   }
 
@@ -224,6 +223,15 @@ const probeToolGroup = Effect.fn('probeToolGroup')(function* (
     const available = yield* check(probeResult);
     return { failure: undefined, probeResult, available };
   }).pipe(
+    Effect.timeoutOrElse({
+      duration: Duration.millis(GROUP_PROBE_TIMEOUT_MS),
+      orElse: () =>
+        Effect.fail(
+          new Cause.TimeoutError(
+            `timed out after ${GROUP_PROBE_TIMEOUT_MS / 1000}s`,
+          ),
+        ),
+    }),
     Effect.catch((error) =>
       Effect.logWarning(`Availability probe failed for ${name}`).pipe(
         Effect.annotateLogs({ data: error }),
