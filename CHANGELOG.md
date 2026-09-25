@@ -87,6 +87,10 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
 
 ### Bug Fixes
 
+- **A run another TeXRA window takes over at the same moment is reported as
+  running elsewhere.** When two windows or processes resume or relaunch the
+  same run at once, the one that loses now says the run is held elsewhere,
+  instead of failing with a generic database write error.
 - **The desktop app shuts down cleanly when startup fails early.** If
   startup failed before the project list opened (for example, when the
   project records could not be read), shutdown reported two errors and left a
