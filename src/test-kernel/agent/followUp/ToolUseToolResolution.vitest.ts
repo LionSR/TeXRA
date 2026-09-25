@@ -29,7 +29,7 @@ describe('tool-use tool resolution', () => {
     names: readonly string[],
     options: {
       approvalPromptsUnavailable: boolean;
-      host?: 'cli' | 'desktop' | 'extension' | undefined;
+      host?: 'cli' | 'desktop' | 'vscode' | undefined;
       injectTools?: boolean;
     },
   ) {
@@ -39,7 +39,7 @@ describe('tool-use tool resolution', () => {
       injectTools: false,
       stores: hostStores(),
       workspaceRoot: undefined,
-      host: 'extension',
+      host: 'vscode',
       ...options,
     }).pipe(
       Effect.map(({ definitions }) => definitions.map((tool) => tool.name)),
@@ -150,7 +150,7 @@ describe('tool-use tool resolution', () => {
             injectTools: false,
             stores: hostStores(),
             workspaceRoot: undefined,
-            host: 'extension',
+            host: 'vscode',
             approvalPromptsUnavailable,
             inherited,
           });
@@ -209,7 +209,7 @@ describe('tool-use tool resolution', () => {
             injectTools: false,
             stores,
             workspaceRoot: undefined,
-            host: 'extension',
+            host: 'vscode',
             inherited,
           }).pipe(
             Effect.provide(
