@@ -7,7 +7,6 @@ import {
   planApprovalGoalNoticeLine,
 } from '@cli/chat/tui/modals/PlanApproval';
 import { textDisplayWidth } from '@cli/runtime/terminalText';
-import { PLAN_GOAL_COPY } from '@ui/copy/delegationApproval';
 
 function compactBudget(
   availableRows: number,

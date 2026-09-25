@@ -1,10 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Effect } from 'effect';
 
-import {
-  buildHeadlessRunContext,
-  selectCliRunModel,
-} from '@cli/runtime/runModel';
+import { selectCliRunModel } from '@cli/runtime/runModel';
 import { CLI_CHEAP_START_MODEL } from '@cli/runtime/cliConfig';
 import { CliUsageError, type CliContext } from '@cli/runtime/cliContext';
 import { selectCliRunnableModel } from '@cli/runtime/modelAccess';

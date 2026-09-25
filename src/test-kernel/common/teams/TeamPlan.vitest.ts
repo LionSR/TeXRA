@@ -6,7 +6,6 @@ import {
   canLaunchTeam,
   loadTeamOptions,
   planTeamRun,
-  refreshRemoteCatalogForGaps,
   resolveTeamLaunch,
   teamAvailability,
   teamLaunchBlockReason,

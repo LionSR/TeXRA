@@ -113,7 +113,7 @@ import {
 } from './transcriptState';
 
 import { emptySessionView, isLiveRun } from './sessionView';
-import type { SessionView, RunView, TranscriptView } from './sessionView';
+import type { SessionView, RunView } from './sessionView';
 
 type RunStartEvent = Extract<DisplaySessionEvent, { type: 'run.start' }>;
 

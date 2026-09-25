@@ -4,15 +4,13 @@ import { Deferred, Effect, Fiber } from 'effect';
 import { describe, expect, vi } from 'vitest';
 
 // Local imports
-import { getRunRecords } from '@agent/storage';
 import type { AgentTrace } from '@agent/trace';
 import { finalizeRun } from '@agent/storage/runLifecycle';
 import type {
   RunHandle,
   LiveToolUseFlowContext,
 } from '@agent/runtime/RunHandle';
-import { finalizeRunTerminal } from '@agent/runtime/AgentRunLifecycle';
-import { RunRegistry, Runs } from '@agent/runtime/runRegistry';
+import { RunRegistry } from '@agent/runtime/runRegistry';
 import { RunLive, RunRoster } from '@agent/runtime/runRoster';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { createSessionApprovals } from '@agent/runtime/runApprovalQueue';
@@ -36,7 +34,6 @@ import {
 } from '@test/support/runHandleFixtures';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { generateRunId } from '@utils/core';
-import { ensureError } from '@utils/errors/errorMessage';
 
 // Local file imports
 import { eventsOfType } from '../progressTestUtils';
@@ -68,13 +65,6 @@ vi.mock('@agent/storage', async (importOriginal) => {
 });
 
 setupPlatform({ workspacePath: '/workspace' });
-
-/** What a tool-use run that produced no output ends with on its `run.end`. */
-const EMPTY_TOOL_USE_OUTPUT = {
-  category: 'toolUse',
-  response: '',
-  files: [],
-} as const;
 
 type HandleOverrides = {
   agentName?: string;
@@ -375,7 +365,7 @@ describe('runRegistry', () => {
     // or the fallback could spuriously tear down a handle mid-completion, in
     // the narrow window between its own interrupt unregister and its own
     // untrack.
-    const { phases, registry } = createRegistry();
+    const { registry } = createRegistry();
     const parentRunId = generateRunId();
     const runId = generateRunId();
 
@@ -959,7 +949,7 @@ describe('runRegistry', () => {
   });
 
   it('detaches children of an ownerless run and cancels it', () => {
-    const { events, phases, registry } = createRegistry();
+    const { events, registry } = createRegistry();
     const recorded = recordSessionEvents(events);
     const parentRunId = generateRunId();
     const childRunId = generateRunId();

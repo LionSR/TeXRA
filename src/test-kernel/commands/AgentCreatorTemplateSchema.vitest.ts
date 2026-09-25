@@ -1,8 +1,3 @@
-// Node imports
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
-
 // Third-party imports
 import { describe, expect, it } from 'vitest';
 import * as yaml from 'yaml';
@@ -12,11 +7,6 @@ import { buildCreatorConfig } from '@agent/implementations/agentCreator/agentCre
 // Public loader-boundary contract for the bundled agent-creator templates (#8187):
 // malformed prompt blocks must fail loudly at load instead of silently
 // stripping misspelled keys or handing empty prompts to the helper model.
-const TEMPLATES_DIR = resolve(
-  fileURLToPath(new URL('.', import.meta.url)),
-  '../../..',
-  'packages/extension/resources/templates',
-);
 
 const VALID = {
   name: 'example',

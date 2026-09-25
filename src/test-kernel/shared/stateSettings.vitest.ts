@@ -10,39 +10,20 @@ import { describe, vi } from 'vitest';
 
 // Local imports
 import * as logger from '@logger/logUtils';
-import { TEXRA_APPROVAL_POLICY_CONFIG_KEY } from '@shared/approvalPolicy';
 import {
-  AGENT_SKILLS_CONFIG_KEY,
-  CLAUDE_AGENT_DEFAULT_EFFORT,
-  CLAUDE_AGENT_DEFAULT_MODEL,
-  CLAUDE_AGENT_DEFAULT_PERMISSION_MODE,
-  CODEX_APPROVAL_POLICY_DEFAULT,
-  CODEX_REASONING_EFFORT_DEFAULT,
-  CODEX_SANDBOX_MODE_DEFAULT,
-  CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
-  CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
   MODEL_COMPACTION_THRESHOLD_SETTING,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
 } from '@shared/schemas';
 import {
   ALL_SETTINGS,
   CLI_CONFIG_SLOT_KEYS,
-  CLI_STATE_SETTINGS,
-  DEFAULT_GIT_AUTHOR_EMAIL,
-  DEFAULT_GIT_AUTHOR_NAME,
-  DEFAULT_TOOL_PATH_PROTECTION_ENABLED,
   STATE_SETTINGS,
-  settingEnumChoices,
   settingEnumOptions,
-  modelsTabSettings,
   settingByKey,
   settingsViewSettingByKey,
   settingsViewSnapshotEntries,
 } from '@shared/state/stateSettings';
-import {
-  dispatchSettingsViewOutbound,
-  REASONING_LEVEL_OPTIONS,
-} from '@shared/settingsView/settingsViewMessages';
+import { dispatchSettingsViewOutbound } from '@shared/settingsView/settingsViewMessages';
 import type {
   SettingHost,
   SettingStore,
@@ -51,13 +32,8 @@ import type {
 import type { DerivedSettingsSnapshot } from '@shared/settingsView/settingsViewMessages';
 import { buildSettingsSnapshotMessage } from '@shared/settingsView/handlers/settingsSnapshot';
 import {
-  DEFAULT_HELPER_MODEL,
-  PROVIDER_ENDPOINT_STATE_ENTRIES,
-} from '@shared/constants/providers';
-import {
   readSetting,
   resetSetting,
-  settingDefault,
   writeSetting,
 } from '@shared/config/settingsAccess';
 import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latexConfig';
@@ -83,71 +59,11 @@ const VALID_STORES: ReadonlySet<SettingStore> = new Set<SettingStore>([
 
 const SETTING_HOSTS: readonly SettingHost[] = ['vscode', 'cli', 'desktop'];
 
-const CLI_RUNTIME_COMMAND_PATTERN = /^texra\s+(?:chat|run|multi-agent run)\b/;
-
 function entryByKey(key: string): StateSettingEntry {
   const entry = settingByKey(key);
   assert.ok(entry, `missing catalog entry ${key}`);
   return entry;
 }
-
-const CLASS_D_KEY_PATTERN = /migrated|version|onboarding|history|cache/i;
-const PROVIDER_ENDPOINT_DEFAULTS = Object.fromEntries(
-  PROVIDER_ENDPOINT_STATE_ENTRIES.map(({ endpointKey }) => [endpointKey, '']),
-);
-
-/** Expected default-when-absent for each catalog key, from the real getters. */
-const EXPECTED_DEFAULTS: Record<string, unknown> = {
-  [WorkspaceStateKey.GIT_MARK_COMMITS]: true,
-  [WorkspaceStateKey.GIT_AUTHOR_NAME]: DEFAULT_GIT_AUTHOR_NAME,
-  [WorkspaceStateKey.GIT_AUTHOR_EMAIL]: DEFAULT_GIT_AUTHOR_EMAIL,
-  [WorkspaceStateKey.GIT_WORKTREE_SUPPORT]: false,
-  [GlobalStateKey.ALLOW_ORCHESTRATOR_KILL]: true,
-  [GlobalStateKey.DETACH_SUBAGENTS_ON_STOP]: false,
-  [GlobalStateKey.MEMORY_ENABLED]: true,
-  [WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED]:
-    DEFAULT_TOOL_PATH_PROTECTION_ENABLED,
-  [WorkspaceStateKey.CODEX_SANDBOX_MODE]: CODEX_SANDBOX_MODE_DEFAULT,
-  [WorkspaceStateKey.CODEX_REASONING_EFFORT]: CODEX_REASONING_EFFORT_DEFAULT,
-  [WorkspaceStateKey.CODEX_APPROVAL_POLICY]: CODEX_APPROVAL_POLICY_DEFAULT,
-  [WorkspaceStateKey.CLAUDE_AGENT_MODEL]: CLAUDE_AGENT_DEFAULT_MODEL,
-  [WorkspaceStateKey.CLAUDE_AGENT_PERMISSION_MODE]:
-    CLAUDE_AGENT_DEFAULT_PERMISSION_MODE,
-  [WorkspaceStateKey.CLAUDE_AGENT_EFFORT]: CLAUDE_AGENT_DEFAULT_EFFORT,
-  [WorkspaceStateKey.WORKFLOW_AUTO_COMPILE]:
-    LATEX_CONFIG_DEFAULTS.workflowAutoCompile,
-  [WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS]:
-    LATEX_CONFIG_DEFAULTS.workflowAutoCompileTimeoutMs,
-  [WorkspaceStateKey.WORKFLOW_AUTO_OPEN_PDF]:
-    LATEX_CONFIG_DEFAULTS.workflowAutoOpenPdf,
-  [WorkspaceStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE]:
-    LATEX_CONFIG_DEFAULTS.workflowRejectOnCompileFailure,
-  [WorkspaceStateKey.LATEXDIFF_BETWEEN_ROUNDS]:
-    LATEX_CONFIG_DEFAULTS.latexdiffBetweenRounds,
-  [WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS]:
-    LATEX_CONFIG_DEFAULTS.latexdiffTimeoutMs,
-  [WorkspaceStateKey.LATEXDIFF_MATH_MARKUP]:
-    LATEX_CONFIG_DEFAULTS.latexdiffMathMarkup,
-  [WorkspaceStateKey.LATEXDIFF_CHANGES_ONLY]:
-    LATEX_CONFIG_DEFAULTS.latexdiffChangesOnly,
-  [WorkspaceStateKey.LATEX_FORMATTER]: LATEX_CONFIG_DEFAULTS.latexFormatter,
-  [GlobalStateKey.WEBSOCKET_OPENAI]: false,
-  ...PROVIDER_ENDPOINT_DEFAULTS,
-  [GlobalStateKey.HELPER_MODEL]: DEFAULT_HELPER_MODEL,
-  [GlobalStateKey.PREFER_SHORT_MODEL_NAMES]: false,
-  [GlobalStateKey.USE_OPENROUTER]: false,
-  [GlobalStateKey.KIMI_CODE_PREFER]: false,
-  // Region defaults: the provider plugins' `region.default`, which the
-  // `regionSet()` getter reads through `readSettingFrom`.
-  [GlobalStateKey.MOONSHOT_USE_CHINA]: true,
-  [GlobalStateKey.DASHSCOPE_USE_CHINA]: false,
-  [GlobalStateKey.MINIMAX_USE_CHINA]: false,
-  [GlobalStateKey.GLM_USE_CHINA]: true,
-  [GlobalStateKey.GLM_CODING_PLAN]: false,
-  [GlobalStateKey.DISABLED_TOOLS]: [],
-  [WorkspaceStateKey.DISABLED_SKILLS]: [],
-  [WorkspaceStateKey.DISABLED_SKILL_SOURCES]: [],
-};
 
 /** Every canonical `texra.*` key in the state-backed catalog. */
 const STATE_SETTING_KEYS: readonly string[] = STATE_SETTINGS.map(

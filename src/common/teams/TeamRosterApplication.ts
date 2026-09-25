@@ -10,7 +10,6 @@ import type {
 } from '@common/teams/TeamRoster';
 import type { SignInFailed } from '@common/errors/signInFailed';
 import type { AgentModePreset } from '@shared/schemas';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 
 interface ResolvedTeam {
   readonly ok: true;

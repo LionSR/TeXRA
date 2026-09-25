@@ -47,8 +47,27 @@ All notable changes to this project will be documented in this file.
   Code Output channel's own level filter, and the desktop log file, which
   keeps debug entries. The CLI gains a `--verbose` flag for additional debug
   diagnostics; `--quiet` suppresses diagnostics.
+- **A subagent can only narrow its parent's tools** — a delegated agent that
+  declares an MCP server its parent's run did not load is no longer launched
+  with that server's tools quietly missing: the delegation call fails with a
+  message naming the tools and the server, before the subagent starts.
+  Declare the server on the parent agent to hand it down. A subagent also
+  never gets a tool its parent was withheld because approval prompts were
+  unavailable or the host cannot run it.
+- **Switching off a tool plugin hides all of it** — a plugin listed in
+  `texra.tools.disabled` (the Tools dashboard switch, `texra tools disable`)
+  now withholds its bundled skills and bundled agents as well as its tools.
+  Today that covers the Lean 4 plugin's skills and agents, which have no
+  dashboard switch and are withheld only when `lean4` is added to the
+  setting. A plugin whose dependency is merely missing keeps its skills and
+  agents listed, so the setup guidance they carry stays reachable.
 
 ### Features
+
+- **Enable or disable an installed plugin** — `texra plugin disable <name>`
+  hides a plugin's skills without uninstalling it, and
+  `texra plugin enable <name>` brings them back. `texra plugin list` marks a
+  disabled plugin.
 
 - **Install Claude Code and Codex plugins for their skills** — `texra plugin
 install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
@@ -98,6 +117,10 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
 
 ### Bug Fixes
 
+- **Usage recorded just before quitting is no longer lost** — on the desktop
+  app and the CLI, a quit while live runs took more than a few seconds to
+  stop could cut off sending the last usage records. Every host now sends
+  them as the final shutdown step, after runs and sessions have closed.
 - **Workflow agent calls no longer fail after they finish.** In a workflow
   script, an `agent()` call could fail with "All fibers interrupted without
   error" just after it succeeded. In a `parallel()` group that ended the

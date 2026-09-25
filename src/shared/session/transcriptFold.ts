@@ -78,7 +78,7 @@ function foldTaskGroup(
 // arrive out of order, so nothing here compensates for a race; the shape is
 // the card's definition.
 function record(d: Draft, event: TranscriptEvent): void {
-  const { ix, ctx } = d;
+  const { ix } = d;
   switch (event.type) {
     case 'log':
     case 'usage':

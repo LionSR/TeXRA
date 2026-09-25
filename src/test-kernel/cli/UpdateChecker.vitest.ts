@@ -4,7 +4,6 @@ import { FetchHttpClient } from 'effect/unstable/http';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
-  buildUpdateCommand,
   detectInstallMethod,
   fetchLatestCliVersion,
   fetchLatestHomebrewFormulaVersion,

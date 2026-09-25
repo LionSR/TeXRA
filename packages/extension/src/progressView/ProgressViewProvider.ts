@@ -174,7 +174,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
 
   constructor(
     private readonly context: vscode.ExtensionContext,
-    private readonly globalState: StateStore,
+    globalState: StateStore,
     private readonly secrets: PlatformSecrets,
     /** Process runtime shared with every extension surface. */
     private readonly runtime: ProcessRuntime,
@@ -544,7 +544,10 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     agentName: string,
     sessionType: SessionType,
   ): Effect.Effect<void> {
-    return this.snapshot.showAgentConfigBanner(agentName, sessionType);
+    return withProcessServices(
+      this.runtime,
+      this.snapshot.showAgentConfigBanner(agentName, sessionType),
+    );
   }
 
   /** Recompute the user-scoped funnel; the shared refresher owns the loop. */

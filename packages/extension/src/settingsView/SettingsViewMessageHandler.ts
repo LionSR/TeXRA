@@ -11,6 +11,7 @@ import { Cause, Effect, Exit, Fiber } from 'effect';
 import { ModelError } from '@texra-ai/llm/turn';
 
 import type { SessionHandle } from '@agent/runtime';
+import { refresh as refreshAgentCatalog } from '@agent/index';
 import { AUTH_COMMANDS } from '@auth/constants';
 import { supabaseAuthenticated } from '@auth/SupabaseAuth';
 import type { SubscriptionProviderId } from '@controllers/modelAccess/subscriptionProviders';
@@ -176,8 +177,7 @@ export class SettingsViewMessageHandler {
               selectedToolUseAgent,
             })
             .pipe(Effect.asVoid),
-        // The launcher's API-key banner reads the same credential probe from
-        // the host snapshot.
+        // The launcher's API-key banner reads this probe from the snapshot.
         refreshCredentialStatus: Effect.suspend(() =>
           Effect.all(
             [
@@ -229,10 +229,9 @@ export class SettingsViewMessageHandler {
           );
         },
         postHostStartup: Effect.gen({ self: this }, function* () {
-          // The dashboard probes the network (Zotero and others), so it
-          // builds on a detached fiber rather than holding the first render.
-          // The view shows a spinner until data arrives, so a failed build
-          // still posts an empty dashboard to end it.
+          // The dashboard probes the network (Zotero, …) on a detached fiber
+          // off the first render; a failed build still posts an empty one to
+          // end the view's spinner.
           yield* Effect.forkDetach(
             this.sendToolDashboardData().pipe(
               Effect.catch((error) =>
@@ -320,6 +319,8 @@ export class SettingsViewMessageHandler {
         this.latexHandlers.installExtension(message.extensionId),
       toggleTool: (message) =>
         setToolEnabled(message.toolId, message.enabled, this.globalState).pipe(
+          // A plugin's bundled agents follow its switch.
+          Effect.andThen(refreshAgentCatalog()),
           Effect.andThen(this.sendToolDashboardData({ skipChecks: true })),
         ),
       runToolCommand: (message) =>
@@ -354,9 +355,8 @@ export class SettingsViewMessageHandler {
   }
 
   /**
-   * Run a program with the active view's webview, if available. The view is
-   * read when the program runs, not when it is built: a panel disposed
-   * between a mutation and its refresh leaves nothing to post to.
+   * Run a program with the active webview, read when the program runs (not
+   * when built): a panel disposed before its refresh leaves nothing to post.
    */
   private withActiveWebview<E, R>(
     fn: (webview: vscode.Webview) => Effect.Effect<void, E, R>,

@@ -37,7 +37,7 @@ import type { SessionOpenError } from '@shared/session/database';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { registerRuntimeShutdownHandlers } from '@tools/agentCliSessionStores';
 import { sessionStoreClearedMessage } from '@ui/copy/sessionStore';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError } from '@utils/errors/errorMessage';
 
 // Local file imports
 import {
@@ -376,11 +376,10 @@ export function initCliPlatform(
               const session = tryDefaultSession();
               return session ? session.settlePublications() : Effect.void;
             }),
-            afterRunSettlement: [
-              closeProject,
-              flushNdjsonStdout(),
-              disposeCliProcessRuntime,
-            ],
+            releaseSessions: closeProject.pipe(
+              Effect.ensuring(flushNdjsonStdout()),
+            ),
+            disposeRuntime: disposeCliProcessRuntime,
           });
 
           installedRoots = roots;

@@ -64,12 +64,14 @@ import {
   type RequestDecision,
   type RetryErrorInfo,
 } from '@shared/schemas';
-import { DatabaseWriteFailed } from '@shared/session/database';
-import { RunLedgerRefused } from '@shared/session/runLedger';
+import type { DatabaseWriteFailed } from '@shared/session/database';
+import {
+  findStorageRefusal,
+  type RunLedgerRefused,
+} from '@shared/session/runLedger';
 import type { RunState } from '@shared/session/runStateFold';
 import { generateShortId } from '@utils/core';
 import { readSettingFrom } from '@utils/config/platformSettings';
-import { ensureError } from '@utils/errors/errorMessage';
 
 import { AgentRun } from './run/AgentRun';
 import { estimateInputTokensOrNull } from './run/estimateInputTokens';
@@ -447,13 +449,9 @@ export const modelInvokerLayer = (): Layer.Layer<
           trace.output.finalize();
           if (Cause.hasInterrupts(streamed.cause))
             return yield* Effect.interrupt;
+          const refused = findStorageRefusal(streamed.cause);
+          if (refused) return yield* Effect.fail(refused);
           const cause = Cause.squash(streamed.cause);
-          if (
-            cause instanceof RunLedgerRefused ||
-            cause instanceof DatabaseWriteFailed
-          ) {
-            return yield* Effect.fail(cause);
-          }
           logRetryLifecycle(operationId, 'attempt_failed', bound, {
             attempt: invocation.attempt,
           });

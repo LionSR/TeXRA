@@ -7,9 +7,6 @@ import {
   decideRetryApproval,
   decideTexraApproval,
   parseTexraApprovalPolicy,
-  texraApprovalDenialMessage,
-  texraHumanInputDenialMessage,
-  texraRetryDenialMessage,
 } from '@shared/approvalPolicy';
 
 describe('TeXRA approval policy', () => {

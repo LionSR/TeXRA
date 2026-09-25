@@ -40,7 +40,7 @@ export interface TeamRosterResolution {
 }
 
 /** Outcome of matching a preset id against the catalog's known presets. */
-export type TeamRosterPresetResolution =
+type TeamRosterPresetResolution =
   | {
       readonly ok: true;
       readonly preset: AgentModePreset;

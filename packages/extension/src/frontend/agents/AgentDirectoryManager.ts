@@ -116,6 +116,14 @@ class AgentDirectoryManager {
     return Effect.suspend(() => this.getHost().directories.custom());
   }
 
+  customConfigured(): Effect.Effect<
+    boolean,
+    AgentDirectoriesFailed,
+    FileSystem.FileSystem
+  > {
+    return Effect.suspend(() => this.getHost().directories.customConfigured());
+  }
+
   /**
    * Watch every local agent directory and call `onChange` whenever anything
    * under one changes. One subscriber at a time — re-subscribing replaces the

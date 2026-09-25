@@ -34,6 +34,7 @@ import {
   ProgressApiKeyRetryController,
 } from '@controllers/progressView/ProgressApiKeyRetryController';
 import { warn as logWarning } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import {
   API_PROVIDERS,
   type ApiProvider,
@@ -227,10 +228,9 @@ export function createTuiHostInteractions(
         // after this attachment leaves must not answer for its next owner.
         if (disposed || pendingRetry(requestId) === undefined) return;
         const reason = failure ?? missingApiKeyRetryMessage(provider);
-        logWarning(
-          'cli.tui',
+        yield* Effect.logWarning(
           `The retry could not switch to your own API key: ${reason}`,
-        );
+        ).pipe(withLogChannel('cli.tui'));
         landRequestDecision(
           stores.session,
           stores.runtime,
@@ -280,27 +280,31 @@ export function createTuiHostInteractions(
         // from being staged: a request whose modal never appears waits on
         // nobody. The keychain read folds to the card copy either way.
         const tui = provider
-          ? yield* Effect.match(hasUsableApiKey(stores.secrets, provider), {
-              onSuccess: (personalApiKeyAvailable) => ({
-                personalApiKeyAvailable,
-                missingPersonalApiKeyMessage:
-                  missingApiKeyRetryMessage(provider),
-              }),
-              onFailure: (error) => {
+          ? yield* Effect.matchEffect(
+              hasUsableApiKey(stores.secrets, provider),
+              {
+                onSuccess: (personalApiKeyAvailable) =>
+                  Effect.succeed({
+                    personalApiKeyAvailable,
+                    missingPersonalApiKeyMessage:
+                      missingApiKeyRetryMessage(provider),
+                  }),
                 // A keychain failure must not permit a credential switch nobody asked for.
-                logWarning(
-                  'cli.tui',
-                  `Keychain lookup for ${provider} failed: ${toErrorMessage(error)}`,
-                );
-                return {
-                  personalApiKeyAvailable: false,
-                  missingPersonalApiKeyMessage: missingApiKeyRetryMessage(
-                    provider,
-                    'unavailable',
+                onFailure: (error) =>
+                  Effect.logWarning(
+                    `Keychain lookup for ${provider} failed: ${toErrorMessage(error)}`,
+                  ).pipe(
+                    withLogChannel('cli.tui'),
+                    Effect.as({
+                      personalApiKeyAvailable: false,
+                      missingPersonalApiKeyMessage: missingApiKeyRetryMessage(
+                        provider,
+                        'unavailable',
+                      ),
+                    }),
                   ),
-                };
               },
-            })
+            )
           : {
               personalApiKeyAvailable: false,
               missingPersonalApiKeyMessage: missingApiKeyRetryMessage(provider),
