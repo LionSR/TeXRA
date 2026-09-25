@@ -1779,7 +1779,11 @@ function createWindow(options: {
         Menu.setApplicationMenu(Menu.buildFromTemplate([{ role: 'appMenu' }]));
       }
     }
-    continueQuit?.();
+    // Resume the quit once Electron has finished closing this window. A quit
+    // requested from inside `closed` lands before the window leaves the
+    // window list, so Electron abandons it and emits `window-all-closed`
+    // instead of `will-quit`, which on macOS leaves the process running.
+    if (continueQuit) setImmediate(continueQuit);
   });
   let windowPresented = false;
   const presentWindow = (): void => {

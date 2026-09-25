@@ -95,16 +95,21 @@ test('logs workbench renders the desktop log viewer', async () => {
         command: 'desktop:setLog',
         log: {
           path: '/tmp/texra-desktop.log',
-          text: '2026-07-26T12:00:00.000Z [info] Geometry check',
+          text: JSON.stringify({
+            level: 'INFO',
+            timestamp: '2026-07-26T12:00:00.000Z',
+            message: 'Geometry check',
+          }),
           truncated: false,
         },
       },
       '*',
     );
   });
-  const infoSurface = launched.page.locator(
-    '.desktop-log-entry[data-level="info"] .desktop-log-entry-level-icon',
-  );
+  const infoSurface = launched.page
+    .locator('.desktop-log-entry[data-level="info"]')
+    .filter({ hasText: 'Geometry check' })
+    .locator('.desktop-log-entry-level-icon');
   await expect(infoSurface).toBeVisible();
   const iconOffset = await infoSurface.evaluate((surface) => {
     const icon = surface.querySelector<HTMLElement>('wa-icon');
@@ -188,8 +193,9 @@ test('desktop:showDiff opens the in-app Review workbench', async () => {
   };
 
   await launched.page.evaluate((message) => {
-    const session =
-      document.querySelector<HTMLElement>('progress-app')?.dataset.session;
+    const session = document.querySelector<HTMLElement>(
+      '.shell-launcher-surface',
+    )?.dataset.session;
     window.postMessage({ ...message, session }, '*');
   }, payload);
 
@@ -237,8 +243,8 @@ test('desktop:showDiff opens the in-app Review workbench', async () => {
       {
         command: 'desktop:closeDiff',
         previewId: 'a-superseded-preview',
-        session:
-          document.querySelector<HTMLElement>('progress-app')?.dataset.session,
+        session: document.querySelector<HTMLElement>('.shell-launcher-surface')
+          ?.dataset.session,
       },
       '*',
     );
@@ -254,8 +260,8 @@ test('desktop:showDiff opens the in-app Review workbench', async () => {
       {
         command: 'desktop:closeDiff',
         previewId: 'trajectory-review',
-        session:
-          document.querySelector<HTMLElement>('progress-app')?.dataset.session,
+        session: document.querySelector<HTMLElement>('.shell-launcher-surface')
+          ?.dataset.session,
       },
       '*',
     );
@@ -270,7 +276,7 @@ test('desktop:showPdf opens and closes an in-app PDF workbench', async () => {
   const { page } = launched;
   const pdfPath = '/tmp/texra-trajectory/output.pdf';
   const session = await page
-    .locator('progress-app')
+    .locator('.shell-launcher-surface')
     .getAttribute('data-session');
   const pdfTab = page.locator('.shell-workbench-tab[data-kind="pdf"]');
   const frame = page.locator('iframe.shell-workbench-pdf-frame');
@@ -315,9 +321,8 @@ test('desktop:showPdf opens and closes an in-app PDF workbench', async () => {
   await expect(pdfTab).toHaveCount(1);
   await expect(frame).toHaveAttribute('src', `file://${pdfPath}`);
 
-  await page.evaluate((session) => {
-    window.postMessage({ command: 'desktop:closePdf', session }, '*');
-  }, session);
+  // A PDF is a workbench tab, closed from its own tab like any other.
+  await pdfTab.locator('.shell-workbench-tab-close').click();
   await expect(pdfTab).toHaveCount(0);
   await expect(frame).toHaveCount(0);
 });

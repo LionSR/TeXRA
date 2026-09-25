@@ -10,7 +10,7 @@ export function buildDesktopSmokeEnvironment(
 
 export type DatabaseFixture = Pick<
   typeof import('@controllers/session/Database'),
-  'databaseLayer'
+  'databaseLayer' | 'globalDatabaseLayer'
 > &
   Pick<typeof import('@controllers/session/WorkspaceRoots'), 'WorkspaceRoots'> &
   Pick<typeof import('@shared/session/database'), 'Database'> &
@@ -18,7 +18,7 @@ export type DatabaseFixture = Pick<
   Pick<typeof import('@shared/schemas'), 'aggregateId'> &
   Pick<
     typeof import('@platform/defaults/workspaceStorage'),
-    'resolveWorkspaceStoragePath'
+    'resolveGlobalStoragePath' | 'resolveWorkspaceStoragePath'
   > &
   Pick<
     typeof import('@desktop/main/desktopProjectRecords'),
