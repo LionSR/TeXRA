@@ -11,7 +11,7 @@ import { clampModalWidth, MIN_MODAL_CONTENT_WIDTH } from '@cli/tui/ui/theme';
 import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
 import { KeyHints } from '@cli/tui/ui/KeyHints';
 import { fillRows } from '@cli/runtime/terminalText';
-import { ConfirmCardFeedbackMode } from './ConfirmCard';
+import { ConfirmCardFeedback } from './ConfirmCard';
 import { confirmCardContentRowsBudget } from './confirmCardRowsBudget';
 import {
   boundedScrollableLines,
@@ -179,7 +179,7 @@ export function ScrollableModalText(
     totalLines: lines.length,
   });
   // Release ↑/↓ while the enclosing card's feedback input owns them.
-  const scrollActive = !useContext(ConfirmCardFeedbackMode);
+  const scrollActive = !useContext(ConfirmCardFeedback).mode;
   const { scrollOffset, scrollable } = useScrollableOffset({
     active: scrollActive,
     initialOffset: startAtEnd ? maxScrollOffset : 0,
