@@ -106,7 +106,6 @@
     "@effect/platform-node": "catalog:",
     "@effect/sql-sqlite-node": "catalog:",
     "@fortawesome/free-solid-svg-icons": "^7.3.1",
-    "@google/genai": "catalog:",
     "@jamesgopsill/crossref-client": "catalog:",
     "@jitl/quickjs-wasmfile-release-sync": "catalog:",
     "@lit-labs/signals": "^0.3.0",
