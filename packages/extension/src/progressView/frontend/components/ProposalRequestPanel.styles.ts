@@ -70,6 +70,10 @@ export const proposalRequestPanelStyles: CSSResult = css`
   }
 
   .proposal-card__defaults {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
     padding: ${sp.small} ${sp.medium} 0;
     color: var(--color-text-secondary);
     font-size: var(--font-size-sm);

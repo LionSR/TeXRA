@@ -108,6 +108,8 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
   and a failed run's card reports what it did instead of `0/0 calls`. The
   result card's tick is shown only when every call succeeded, and it lists
   the workspace files a run changed rather than their run-storage copies.
+  Session history saved by an earlier build is cleared the first time this
+  build opens a workspace, because the stored result card changed shape.
 - **Workflow phases the script never reached stay unopened.** A planned
   call the run never issued reads as "Not run" under a hollow phase, instead
   of opening that phase and marking the call skipped.

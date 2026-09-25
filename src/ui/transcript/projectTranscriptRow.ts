@@ -10,7 +10,7 @@
 import {
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
-  WORKFLOW_TASK_STATUS_LABEL,
+  workflowCallStatusLabel,
   parseDiffResultEntries,
   type ErrorLogData,
   type ExtendedTokenUsageStats,
@@ -493,7 +493,7 @@ export function projectTranscriptRow(
         kind: 'workflowTask',
         call,
         line: formatWorkflowCallLine(call),
-        statusLabel: WORKFLOW_TASK_STATUS_LABEL[call.status],
+        statusLabel: workflowCallStatusLabel(call),
         metadataParts: formatWorkflowCallMetadataParts(call),
         ...(detail ? { detail } : {}),
       };

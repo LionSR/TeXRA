@@ -585,10 +585,10 @@ export type DisplaySessionEvent = z.infer<typeof DisplaySessionEventSchema>;
  * database holds. TeXRA keeps no compatibility with earlier persisted data
  * (AGENTS.md "Compatibility and format retirement"), so `Database` clears a
  * store stamped with any other version at open and stamps this one. Bump it
- * with any change to the stored shape of `SessionEventSchema`, which
- * `sessionEventFormat.vitest.ts` pins.
+ * with any change to the stored shape of `SessionEventSchema` (pinned by
+ * `sessionEventFormat.vitest.ts`) or of a payload read out of untyped `data`.
  */
-export const SESSION_EVENT_FORMAT = 14;
+export const SESSION_EVENT_FORMAT = 15;
 
 export const SessionEventSchema = z.discriminatedUnion('type', [
   ...DisplaySessionEventSchema.options,
