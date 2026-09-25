@@ -94,16 +94,18 @@ recommended groups at the bottom are a good starting point.
 - `executions` — view execution history and manage running executions.
 - `accept_run_files` — accept output files from a completed execution.
 
-## Sandboxed coding agents
+## External coding agents
 
-- `codex` — spin off a sandboxed OpenAI Codex coding agent in its own sandbox
-  (separate CLI process). Async and multi-turn like `delegate_agent`;
-  requires the Codex CLI and `codex login` (or `OPENAI_API_KEY`).
-- `claude_code` — spin off a sandboxed Claude Code agent via the Claude Agent
-  SDK, with independent file editing, search, and shell access. Async and
+- `codex` — spin off an OpenAI Codex coding agent in its own sandbox
+  (separate CLI process, `sandbox_mode`-controlled). Async and multi-turn
+  like `delegate_agent`; requires the Codex CLI and `codex login` (or
+  `OPENAI_API_KEY`).
+- `claude_code` — spin off a separate Claude Code agent via the Claude Agent
+  SDK, with independent file editing, search, and shell access in its own
+  workspace (permission-mode controlled, not sandboxed). Async and
   multi-turn like `delegate_agent`; requires the Claude Code CLI and an
   Anthropic API key or OAuth session. `codex` and `claude_code` are both
-  independent sandboxed coders distinct from the in-process `delegate_agent`
+  independent external coders distinct from the in-process `delegate_agent`
   specialists — for parallel or isolated edits, run them against a git
   worktree.
 
