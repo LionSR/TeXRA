@@ -83,7 +83,7 @@ describe('setup credential reporting', () => {
         yield* Effect.tryPromise(() =>
           installPlatform(
             {
-              secretsEnv: { [apiKeyEnvName('deepseek')]: 'private-test-value' },
+              env: { [apiKeyEnvName('deepseek')]: 'private-test-value' },
             },
             { setup: createFakeSetupPlatform() },
           ),

@@ -2,7 +2,7 @@
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { build } from 'esbuild';
-import { Effect } from 'effect';
+import { Effect, Layer } from 'effect';
 
 const PASSTHROUGH_ENV_NAMES = new Set([
   'COLORTERM',
@@ -82,14 +82,15 @@ export async function loadDatabaseFixture(userDataPath) {
   await build({
     stdin: {
       contents: `
-        export { databaseLayer } from '@controllers/session/Database';
+        export { databaseLayer, globalDatabaseLayer } from '@controllers/session/Database';
         export { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
         export { Database } from '@shared/session/database';
         export { ProcessIdentity } from '@shared/session/sessionEvents';
         export { aggregateId } from '@shared/schemas';
-        export { resolveWorkspaceStoragePath } from '@platform/defaults/workspaceStorage';
+        export { resolveGlobalStoragePath, resolveWorkspaceStoragePath } from '@platform/defaults/workspaceStorage';
         export { openDesktopProjectRecords } from '@desktop/main/desktopProjectRecords';
         export { nodeProcesses, processOwnerId } from '@platform/defaults/nodeProcesses';
+        export { nodePlatformServices } from '@platform/defaults/nodePlatform';
       `,
       loader: 'ts',
       resolveDir: root,
@@ -107,21 +108,30 @@ export async function loadDatabaseFixture(userDataPath) {
   return import(pathToFileURL(bundle).href);
 }
 
-/** Seed the profile through the same scoped project-record owner as the application. */
+/**
+ * Seed the profile through the same project-record owner as the application,
+ * on a handle over the profile's global root: under the e2e user-data
+ * override that root is the profile itself, as the app resolves it.
+ */
 export async function rememberOpenProject(userDataPath, workspacePath) {
   const fixture = await loadDatabaseFixture(userDataPath);
-  const owner = fixture.processOwnerId(
-    await fixture.nodeProcesses.selfIdentity(),
-  );
+  // The identity read and the database open spawn through the Node spawner
+  // the application's runtime serves.
   await Effect.runPromise(
-    Effect.scoped(
-      Effect.gen(function* () {
-        const records = yield* fixture.openDesktopProjectRecords(
-          userDataPath,
-          owner,
-        );
+    Effect.gen(function* () {
+      const owner = fixture.processOwnerId(
+        yield* fixture.nodeProcesses.selfIdentity(),
+      );
+      yield* Effect.gen(function* () {
+        const records = yield* fixture.openDesktopProjectRecords;
         yield* records.activate(workspacePath);
-      }),
-    ),
+      }).pipe(
+        Effect.provide(
+          fixture
+            .globalDatabaseLayer(fixture.resolveGlobalStoragePath(userDataPath))
+            .pipe(Layer.provide(fixture.ProcessIdentity.layer(owner))),
+        ),
+      );
+    }).pipe(Effect.provide(fixture.nodePlatformServices)),
   );
 }

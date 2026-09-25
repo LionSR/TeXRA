@@ -7,15 +7,18 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { it } from '@effect/vitest';
-import { Effect, Fiber } from 'effect';
+import { Effect, Fiber, FileSystem } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 import { withProcessServices } from '@platform/processRuntime';
+import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { testRuntime } from '@test/support/testProcessRuntime';
+import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { findToolPlugin } from '@tools/plugins';
 import { resolveWorkspaceRoot } from '@tools/lean/direct/leanServerPool';
 import { createLeanServerRoster } from '@tools/lean/leanServerRegistry';
 import { extractHoverText } from '@tools/lean/leanTypes';
 import { runLakeCommand } from '@tools/lean/direct/lakeCommands';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 // ---------------------------------------------------------------------------
 // LeanHoverTypes
@@ -59,8 +62,10 @@ describe('extractHoverText', () => {
 describe('resolveWorkspaceRoot', () => {
   let scratch: string;
 
-  const resolve = (filePath: string): Effect.Effect<string | null> =>
-    resolveWorkspaceRoot(filePath);
+  const resolve = (filePath: string) =>
+    FileSystem.FileSystem.use((fs) => resolveWorkspaceRoot(fs, filePath)).pipe(
+      Effect.provide(nodePlatformLayer),
+    );
 
   beforeEach(() => {
     scratch = mkdtempSync(path.join(tmpdir(), 'texra-lean-root-'));
@@ -217,6 +222,12 @@ async function waitForFile(filePath: string): Promise<void> {
 }
 
 describe('runLakeCommand mutex', () => {
+  /** A live case whose `lake` (the Node binary) runs on the real spawner. */
+  const live = <A, E>(
+    name: string,
+    body: () => Effect.Effect<A, E, ChildProcessSpawner>,
+  ) => it.live(name, () => body().pipe(Effect.provide(nodeSpawnerLayer)));
+
   let workspaceA: string;
   let workspaceB: string;
 
@@ -230,7 +241,7 @@ describe('runLakeCommand mutex', () => {
     rmSync(workspaceB, { recursive: true, force: true });
   });
 
-  it.live(
+  live(
     'keeps the current 4,194,304-character tail cap and truncation marker',
     () =>
       Effect.gen(function* () {
@@ -253,7 +264,7 @@ describe('runLakeCommand mutex', () => {
       }),
   );
 
-  it.live('preserves non-zero exit diagnostics', () =>
+  live('preserves non-zero exit diagnostics', () =>
     Effect.gen(function* () {
       const result = yield* runLakeCommand({
         workspaceRoot: workspaceA,
@@ -272,7 +283,7 @@ describe('runLakeCommand mutex', () => {
     }),
   );
 
-  it.live('preserves timeout diagnostics', () =>
+  live('preserves timeout diagnostics', () =>
     Effect.gen(function* () {
       const result = yield* runLakeCommand({
         workspaceRoot: workspaceA,
@@ -286,7 +297,7 @@ describe('runLakeCommand mutex', () => {
     }),
   );
 
-  it.live(
+  live(
     'serializes calls against the same workspace when `serialize: true`',
     () =>
       Effect.gen(function* () {
@@ -387,6 +398,6 @@ describe('runLakeCommand mutex', () => {
       for (const result of results) {
         expect(result.exitCode).toBe(0);
       }
-    }),
+    }).pipe(Effect.provide(nodeSpawnerLayer)),
   );
 });

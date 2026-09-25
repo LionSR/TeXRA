@@ -1,9 +1,14 @@
 /** Resolve the SQLite path only after establishing local filesystem storage. */
 // Native filesystem and mount information
-import { execFileSync } from 'node:child_process';
-import { lstatSync, realpathSync, statfsSync } from 'node:fs';
+import { lstatSync, mkdirSync, realpathSync, statfsSync } from 'node:fs';
 import { platform } from 'node:os';
 import { join } from 'node:path';
+
+import { Effect } from 'effect';
+import * as ChildProcess from 'effect/unstable/process/ChildProcess';
+import { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
+import { ensureError } from '@utils/errors/errorMessage';
+import type { PlatformError } from 'effect/PlatformError';
 
 /** Local Linux filesystem types from include/uapi/linux/magic.h. Network,
  * clustered and unclassified FUSE filesystems are deliberately absent. */
@@ -26,9 +31,10 @@ const LOCAL_LINUX_FILESYSTEMS = new Set([
   0x5346544e, // NTFS
 ]);
 
-/** macOS exposes MNT_LOCAL in mount output, but Node's statfs omits flags. */
-function isLocalMacDirectory(directory: string): boolean {
-  const mounts = execFileSync('/sbin/mount', { encoding: 'utf8' })
+/** Whether the mount table `mountOutput` (`/sbin/mount`'s) marks the
+ * longest mount containing `directory` as local. */
+function isLocalInMountTable(directory: string, mountOutput: string): boolean {
+  const mounts = mountOutput
     .trimEnd()
     .split('\n')
     .flatMap((line) => {
@@ -45,40 +51,85 @@ function isLocalMacDirectory(directory: string): boolean {
   return mounts[0]?.local === true;
 }
 
+/** macOS exposes MNT_LOCAL in mount output, but Node's statfs omits flags.
+ * `string` does not read the exit code; an empty table is the failure. */
+const isLocalMacDirectory = Effect.fnUntraced(function* (directory: string) {
+  const spawner = yield* ChildProcessSpawner;
+  const output = yield* spawner.string(
+    ChildProcess.make('/sbin/mount', [], {
+      stdin: 'ignore',
+      stderr: 'ignore',
+      detached: false,
+      forceKillAfter: '5 seconds',
+    }),
+  );
+  if (output.trim() === '') {
+    return yield* Effect.fail(
+      new Error('Cannot read the filesystem mount table.'),
+    );
+  }
+  return yield* Effect.try({
+    try: () => isLocalInMountTable(directory, output),
+    catch: ensureError,
+  });
+});
+
+/** Whether the filesystem holding `resolved` is verified local. */
+function isLocalDirectory(
+  resolved: string,
+): Effect.Effect<boolean, Error | PlatformError, ChildProcessSpawner> {
+  switch (platform()) {
+    case 'darwin':
+      return isLocalMacDirectory(resolved);
+    case 'linux':
+      return Effect.try({
+        try: () => LOCAL_LINUX_FILESYSTEMS.has(statfsSync(resolved).type),
+        catch: ensureError,
+      });
+    case 'win32':
+      return Effect.succeed(/^[a-z]:\\/i.test(resolved));
+    default:
+      return Effect.succeed(false);
+  }
+}
+
 /**
+ * Create `directory` and answer the database path inside it.
+ *
  * C1: reject remote or unclassified storage before SQLite opens. The native
  * Windows realpath uses GetFinalPathNameByHandleW, resolving junctions and
  * mapped shares to their final DOS or UNC path. A UNC result is not local.
  * https://docs.libuv.org/en/v1.x/fs.html#c.uv_fs_realpath
  */
-export function localDatabasePath(directory: string, fileName: string): string {
-  const resolved = realpathSync.native(directory);
-  let local: boolean;
-  switch (platform()) {
-    case 'darwin':
-      local = isLocalMacDirectory(resolved);
-      break;
-    case 'linux':
-      local = LOCAL_LINUX_FILESYSTEMS.has(statfsSync(resolved).type);
-      break;
-    case 'win32':
-      local = /^[a-z]:\\/i.test(resolved);
-      break;
-    default:
-      local = false;
-  }
-  if (!local) {
-    throw new Error(
-      `Session storage must be on a verified local filesystem: ${resolved}`,
+export const localDatabasePath = Effect.fn('localDatabasePath')(function* (
+  directory: string,
+  fileName: string,
+): Effect.fn.Return<string, Error | PlatformError, ChildProcessSpawner> {
+  const resolved = yield* Effect.try({
+    try: () => {
+      mkdirSync(directory, { recursive: true });
+      return realpathSync.native(directory);
+    },
+    catch: ensureError,
+  });
+  if (!(yield* isLocalDirectory(resolved))) {
+    return yield* Effect.fail(
+      new Error(
+        `Session storage must be on a verified local filesystem: ${resolved}`,
+      ),
     );
   }
   const database = join(resolved, fileName);
   for (const file of [database, `${database}-wal`, `${database}-shm`]) {
-    if (lstatSync(file, { throwIfNoEntry: false })?.isSymbolicLink()) {
-      throw new Error(
-        `A session database file cannot be a symbolic link: ${file}`,
+    const link = yield* Effect.try({
+      try: () => lstatSync(file, { throwIfNoEntry: false })?.isSymbolicLink(),
+      catch: ensureError,
+    });
+    if (link) {
+      return yield* Effect.fail(
+        new Error(`A session database file cannot be a symbolic link: ${file}`),
       );
     }
   }
   return database;
-}
+});

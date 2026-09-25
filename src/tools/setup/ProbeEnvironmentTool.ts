@@ -48,7 +48,7 @@ const probe = Effect.fn('ProbeEnvironmentTool.execute')(function* () {
   const homedir = safeHomedir() ?? '<unresolved>';
   const extendedPath = extendEnvPath();
   const pm = detectPackageManager();
-  const hostInfo = nodeHostEnvironment.hostInfo();
+  const hostInfo = yield* nodeHostEnvironment.hostInfo();
   const [
     core,
     optionalTools,

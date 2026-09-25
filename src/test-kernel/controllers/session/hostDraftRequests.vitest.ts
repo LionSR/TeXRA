@@ -17,6 +17,7 @@ import { Secrets } from '@platform/secrets';
 import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
+import { scriptedSpawnerLayer } from '@test/support/childProcessTestLayer';
 import type { RootedFileSystem } from '@utils/files/rootedFileSystem';
 
 // The recorder module answers in Effects, so every double returns one: a
@@ -50,6 +51,8 @@ const processStores = Layer.mergeAll(
   // real signature's `LanguageModel` requirement.
   LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT),
   testHttpClientLayer,
+  // The recorder is mocked, so nothing is spawned.
+  scriptedSpawnerLayer(() => ({})).layer,
 );
 
 /** The same pair with no saved OpenAI key, so the take's credential read
@@ -61,6 +64,7 @@ const storesWithoutCredential = Layer.mergeAll(
   Layer.succeed(StorageFs)({} as RootedFileSystem),
   LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT),
   testHttpClientLayer,
+  scriptedSpawnerLayer(() => ({})).layer,
 );
 
 it.effect(

@@ -3,16 +3,21 @@
 // shows before any folder is open. Opening a second folder no longer relaunches
 // the process; the window switches which project it shows.
 
-import { stat } from 'node:fs/promises';
-
-import { Data, Effect, Exit, Scope, type FileSystem, type Path } from 'effect';
+import {
+  Data,
+  Effect,
+  Exit,
+  FileSystem,
+  Scope,
+  type Path,
+  type PlatformError,
+} from 'effect';
 
 import {
   createAgentResponseTextConnector,
   openSessionEffect,
   type SessionHandle,
 } from '@agent/runtime';
-import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
 import { openProjectStateStore } from '@controllers/session/appStateStore';
 import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import type { ModelOptionStores } from '@model/computeModelOptions';
@@ -21,6 +26,7 @@ import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { ConfigStore } from '@platform/defaults/jsonConfigProvider';
 import { createNodeWorkspaceRoots } from '@platform/defaults/nodeHost';
 import { openTexraWorkspaceConfigStore } from '@platform/defaults/nodeStores';
+import { openWorktreeStateStore } from '@platform/defaults/worktreeStateStore';
 import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
 import {
   resolveGlobalStoragePath,
@@ -34,6 +40,8 @@ import type { ProjectDatabases } from '@shared/session/database';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { readSettingFrom } from '@utils/config/platformSettings';
+import { absentReason } from '@utils/files/fsEntryExists';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 import type { DesktopProjectRecords } from './desktopProjectRecords.js';
 
 import type { DesktopProjectsMessage } from '../shared/desktopProjectMessages.js';
@@ -85,7 +93,7 @@ export interface DesktopProjectRegistry {
   ): Effect.Effect<
     DesktopProject,
     Error,
-    FileSystem.FileSystem | Path.Path | ProjectDatabases
+    FileSystem.FileSystem | Path.Path | ProjectDatabases | ChildProcessSpawner
   >;
   /** Open projects in the order they were opened; the no-workspace session is not one. */
   list(): readonly DesktopProject[];
@@ -128,30 +136,29 @@ export interface RememberedDesktopProjects {
 export function readRememberedDesktopProjects(
   records: DesktopProjectRecords,
   warn: (message: string) => void,
-): Effect.Effect<RememberedDesktopProjects, Error> {
+): Effect.Effect<RememberedDesktopProjects, Error, FileSystem.FileSystem> {
   return Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
     const stored = yield* records.read;
     const roots: string[] = [];
     const missing: string[] = [];
     for (const candidate of stored) {
       const root = canonicalizeWorkspacePath(candidate);
       if (roots.includes(root) || missing.includes(root)) continue;
-      const stats = yield* Effect.tryPromise({
-        try: () => stat(root),
-        catch: ensureError,
-      }).pipe(
-        Effect.catch((error) =>
+      const isProject = yield* fs.stat(root).pipe(
+        Effect.map((info) => info.type === 'Directory'),
+        Effect.catch((error: PlatformError.PlatformError) =>
           Effect.sync(() => {
-            if (!isFileNotFoundError(error) && !isNotADirectoryError(error)) {
+            if (!absentReason(error)) {
               warn(
-                `Cannot read the remembered project ${root}; forgetting it: ${toErrorMessage(error)}`,
+                `Cannot read the remembered project ${root}; forgetting it: ${toErrorMessage(error.reason.cause ?? error)}`,
               );
             }
-            return undefined;
+            return false;
           }),
         ),
       );
-      (stats?.isDirectory() ? roots : missing).push(root);
+      (isProject ? roots : missing).push(root);
     }
     yield* records.replace(roots);
     return { roots, missing };
@@ -282,7 +289,15 @@ export function openDesktopProjectRegistry(
           return yield* Effect.gen(function* () {
             const [workspaceState, workspaceConfig] = yield* Effect.all(
               [
-                openProjectStateStore(storage),
+                openProjectStateStore(storage).pipe(
+                  Effect.flatMap((projectState) =>
+                    openWorktreeStateStore(
+                      projectState,
+                      options.stores.globalState,
+                      root,
+                    ),
+                  ),
+                ),
                 openTexraWorkspaceConfigStore(storage, root, options.warn),
               ],
               { concurrency: 'unbounded' },

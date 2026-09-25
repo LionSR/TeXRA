@@ -12,12 +12,11 @@ const mocks = vi.hoisted(() => ({
   installCliProcessRuntime: vi.fn(),
   readCliToolGuide: vi.fn(),
   setCliToolEnabled: vi.fn(),
-  execa: vi.fn(),
+  runForegroundCommand: vi.fn(),
 }));
 
-vi.mock('execa', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('execa')>()),
-  execa: mocks.execa,
+vi.mock('@cli/runtime/foregroundCommand', () => ({
+  runForegroundCommand: mocks.runForegroundCommand,
 }));
 
 vi.mock('@cli/runtime/initPlatform', () => ({
@@ -69,7 +68,7 @@ describe('CLI tools command', () => {
       command: 'echo install',
     });
     mocks.setCliToolEnabled.mockReset().mockReturnValue(Effect.succeed(true));
-    mocks.execa.mockReset();
+    mocks.runForegroundCommand.mockReset().mockReturnValue(Effect.succeed(0));
     stdoutSpy = spyOnStreamWrite(process.stdout, (chunk) => {
       stdout += chunk;
     });
@@ -163,7 +162,7 @@ describe('CLI tools command', () => {
 
     expect(result.exitCode).toBe(0);
     expect(stderr).toBe('');
-    expect(mocks.execa).not.toHaveBeenCalled();
+    expect(mocks.runForegroundCommand).not.toHaveBeenCalled();
     expect(JSON.parse(stdout)).toEqual({
       id: 'codex',
       operation: 'install',
@@ -184,7 +183,7 @@ describe('CLI tools command', () => {
     expect(result.exitCode).toBe(2);
     expect(stdout).toBe('');
     expect(stderr).toContain('Cannot combine --output-format json|ndjson');
-    expect(mocks.execa).not.toHaveBeenCalled();
+    expect(mocks.runForegroundCommand).not.toHaveBeenCalled();
   });
 
   it('reports missing install commands before structured --run conflicts', async () => {
@@ -205,7 +204,7 @@ describe('CLI tools command', () => {
     expect(stderr).toContain(
       'No install command is registered for github-pr-subscription.',
     );
-    expect(mocks.execa).not.toHaveBeenCalled();
+    expect(mocks.runForegroundCommand).not.toHaveBeenCalled();
   });
 
   it('rejects POSIX guide commands with shell operators instead of dropping them', async () => {
@@ -218,7 +217,7 @@ describe('CLI tools command', () => {
 
     expect(result.exitCode).toBe(1);
     expect(stdout).toBe('Install help\n');
-    expect(mocks.execa).not.toHaveBeenCalled();
+    expect(mocks.runForegroundCommand).not.toHaveBeenCalled();
   });
 
   it('emits structured auth guides without launching the external login', async () => {
@@ -236,7 +235,7 @@ describe('CLI tools command', () => {
 
     expect(result.exitCode).toBe(0);
     expect(stderr).toBe('');
-    expect(mocks.execa).not.toHaveBeenCalled();
+    expect(mocks.runForegroundCommand).not.toHaveBeenCalled();
     expect(JSON.parse(stdout)).toMatchObject({
       kind: 'tool-guide',
       guide: {

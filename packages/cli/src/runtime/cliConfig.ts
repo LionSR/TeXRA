@@ -110,8 +110,7 @@ export interface CliStartupConfig {
    * The one provider of this process: `buildCliContext` resolves the startup
    * rows through it and `initCliPlatform` installs this same instance as the
    * workspace roots' config, so a value `texra config` writes is the value the
-   * next run reads — including when the project file cannot be written and
-   * both ends fall back to the internal workspace store.
+   * next run reads.
    */
   readonly config: ConfigProvider;
   readonly warnings: readonly string[];

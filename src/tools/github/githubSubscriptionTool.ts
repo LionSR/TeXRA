@@ -50,6 +50,7 @@ import { GitHubSubscriptions } from './subscriptionBindings';
 import { SharedIssuePollingSource } from './IssuePollingSource';
 import { SharedPRPollingSource } from './PRPollingSource';
 import { parseGitHubSlug } from './githubSlug';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 import type { GhIssue } from './prTypes';
 
 /**
@@ -395,7 +396,7 @@ const gitInDir = (
   args: string[],
   cwd: string,
   settings: SettingsStores,
-): Effect.Effect<string, ToolError> =>
+): Effect.Effect<string, ToolError, ChildProcessSpawner> =>
   Effect.flatMap(
     // `executeCommand` never fails — a failed `git` is a result with
     // `success: false`, which the flatMap below turns into the tool's own
@@ -447,7 +448,7 @@ export function parseOriginHeadDefaultBranch(ref: string): string | undefined {
 const getLocalDefaultBranchHint = (
   cwd: string,
   settings: SettingsStores,
-): Effect.Effect<string | undefined> =>
+): Effect.Effect<string | undefined, never, ChildProcessSpawner> =>
   gitInDir(
     ['symbolic-ref', '--short', 'refs/remotes/origin/HEAD'],
     cwd,
@@ -487,7 +488,7 @@ const getFindCurrentFallbackInfo = (
 ): Effect.Effect<
   { defaultBranch?: string; suggestions: string },
   never,
-  Secrets
+  Secrets | ChildProcessSpawner
 > =>
   Effect.zip(
     getDefaultBranch(owner, repo).pipe(

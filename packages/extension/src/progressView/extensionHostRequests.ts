@@ -74,7 +74,6 @@ import {
   readModelAvailabilityInputs,
 } from '@model/computeModelOptions';
 import type {
-  AgentDirectories,
   StateStore,
   StateReadFailed,
   StateWriteFailed,
@@ -82,15 +81,11 @@ import type {
 import type { LanguageModel } from '@platform/languageModel';
 import {
   withProcessServices,
+  type AgentCatalogServices,
   type ProcessRuntime,
   type ProcessServices,
 } from '@platform/processRuntime';
-import {
-  withSessionFs,
-  WorkspaceFs,
-  type GlobalStorageFs,
-  type StorageFs,
-} from '@platform/rootedFs';
+import { withSessionFs, WorkspaceFs, type StorageFs } from '@platform/rootedFs';
 import type { PlatformSecrets } from '@platform/secrets';
 import { presentLaunchedProgressRun } from '@progressView/progressNavigation';
 import latexPreamble from '@resources/templates/chatExport.tex';
@@ -423,7 +418,7 @@ export function createExtensionHostRequests(
   ): Effect.Effect<
     void,
     HostCallFailed | RequestRefusal | StateReadFailed,
-    GlobalStorageFs | FileSystem.FileSystem | AgentDirectories
+    AgentCatalogServices
   > {
     return Effect.gen(function* () {
       const { launch: form } = request;

@@ -29,6 +29,7 @@ import {
 } from '@utils/files/fileLocation';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { isStrictlyWithin } from '@utils/core/pathCore';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 const CHANNEL = 'latexPreview';
 
@@ -86,7 +87,7 @@ const DIFF_SUFFIX = '_diff';
  * runtime a host runs them on: the temp files this module stages, and the
  * workspace-rooted compile a build display runs behind them.
  */
-type PreviewServices = FileSystem.FileSystem | Path.Path;
+type PreviewServices = FileSystem.FileSystem | Path.Path | ChildProcessSpawner;
 
 /** Delete a file or directory; a real failure is logged, not raised. */
 const silentDelete = (

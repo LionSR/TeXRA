@@ -1,21 +1,22 @@
 import { createReadStream, createWriteStream } from 'node:fs';
 import * as path from 'node:path';
-import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { createGunzip } from 'node:zlib';
 
 import { parse as parseContentDisposition } from 'content-disposition';
 import {
   Cause,
-  Clock,
   Data,
   Duration,
   Effect,
   FileSystem,
+  Option,
   Path,
   PlatformError,
   Schedule,
+  Stream,
 } from 'effect';
+import { Headers, HttpClient } from 'effect/unstable/http';
 import { StatusCodes } from 'http-status-codes';
 import * as tar from 'tar';
 
@@ -31,7 +32,6 @@ import { hasExtension } from '@utils/core/pathCore';
 import { normaliseArxivIdentifier } from './arxivIdentifier';
 import { indentLatexFilesInDirectory } from './formatter/indentDirectory';
 import type { LatexFormatter } from './formatter/texFormatter';
-import type { ReadableStream as NodeWebReadableStream } from 'node:stream/web';
 
 interface ExtractResult {
   success: boolean;
@@ -73,6 +73,9 @@ class ArxivSourceTransientError extends Data.TaggedError(
 /** The typed failures of an arXiv source download. */
 export type ArxivSourceError =
   ArxivSourcePermanentError | ArxivSourceTransientError;
+
+/** What one download attempt reads: the file it writes and the client. */
+type DownloadServices = FileSystem.FileSystem | HttpClient.HttpClient;
 
 /**
  * Classify a step outside the download attempt as a permanent failure: only
@@ -275,7 +278,7 @@ class ArxivSourceProcessor {
     url: string,
     destBasePath: string,
     timeout = 30000,
-  ): Effect.Effect<string, ArxivSourceError, FileSystem.FileSystem> {
+  ): Effect.Effect<string, ArxivSourceError, DownloadServices> {
     return this.downloadFileOnce(url, destBasePath, timeout).pipe(
       // Retry the whole ordinary failure, never a mixed cleanup cause. Effect's
       // typed-error retry otherwise selects one failure and drops its siblings.
@@ -317,27 +320,26 @@ class ArxivSourceProcessor {
     url: string,
     destBasePath: string,
     timeout: number,
-  ): Effect.Effect<string, ArxivSourceError, FileSystem.FileSystem> {
+  ): Effect.Effect<string, ArxivSourceError, DownloadServices> {
     let destPath = destBasePath;
-    return Effect.gen(function* () {
-      const deadline = (yield* Clock.currentTimeMillis) + timeout;
-      const downloadError = (cause: unknown): ArxivSourceTransientError => {
-        const timedOut = Cause.isTimeoutError(cause);
-        return new ArxivSourceTransientError({
+    // The request, the deadline and the file writes all fail as `Error`s.
+    const downloadError = (cause: Error) => {
+      const timedOut = Cause.isTimeoutError(cause);
+      return Effect.fail(
+        new ArxivSourceTransientError({
           message: timedOut
             ? `Download timed out after ${timeout} ms`
-            : toErrorMessage(cause),
+            : cause.message,
           cause: timedOut ? undefined : cause,
-        });
-      };
-      // The fiber's own signal aborts the in-flight fetch when the attempt is
-      // interrupted — by the per-attempt deadline or by the
-      // caller — covering connection establishment and body streaming.
-      const response = yield* joinedStream(
-        (signal) => fetch(url, { signal }),
-        (cause) => Effect.fail(downloadError(cause)),
-        timeout,
+        }),
       );
+    };
+    return Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const client = yield* HttpClient.HttpClient;
+      // The request scope aborts the request however the attempt ends,
+      // covering connection establishment and body streaming.
+      const response = yield* HttpClient.withScope(client).get(url);
 
       if (response.status === StatusCodes.NOT_FOUND) {
         return yield* Effect.fail(
@@ -360,11 +362,12 @@ class ArxivSourceProcessor {
       // Uses content-disposition package for full RFC 6266 / RFC 5987 compliance,
       // which handles both `filename=` and `filename*=UTF-8''...` (percent-encoded
       // Unicode names that the old regex silently dropped).
-      const disposition = response.headers.get('content-disposition');
+      const disposition = Headers.get(response.headers, 'content-disposition');
       let filename: string | undefined;
-      if (disposition) {
+      if (Option.isSome(disposition)) {
         filename = yield* Effect.try({
-          try: () => parseContentDisposition(disposition).parameters.filename,
+          try: () =>
+            parseContentDisposition(disposition.value).parameters.filename,
           catch: ensureError,
         }).pipe(
           Effect.catch((error) =>
@@ -374,7 +377,7 @@ class ArxivSourceProcessor {
             ).pipe(
               Effect.annotateLogs({
                 data: {
-                  header: disposition,
+                  header: disposition.value,
                   error: toErrorMessage(error),
                 },
               }),
@@ -390,7 +393,10 @@ class ArxivSourceProcessor {
           path.basename(filename),
         );
       } else {
-        const contentType = response.headers.get('content-type') ?? '';
+        const contentType = Option.getOrElse(
+          Headers.get(response.headers, 'content-type'),
+          () => '',
+        );
         if (contentType.includes('pdf')) {
           // No LaTeX source available: a permanent failure, not retried.
           return yield* Effect.fail(
@@ -402,30 +408,24 @@ class ArxivSourceProcessor {
         destPath = destBasePath + getExtensionFromContentType(contentType);
       }
 
-      if (!response.body) {
-        return yield* Effect.fail(
-          new ArxivSourceTransientError({
-            message: 'Response has no body',
-            cause: undefined,
-          }),
-        );
-      }
-
-      yield* joinedStream(
-        (signal) =>
-          pipeline(
-            // response.body is a web ReadableStream; Readable.fromWeb bridges to Node runs.
-            Readable.fromWeb(response.body as NodeWebReadableStream),
-            createWriteStream(destPath),
-            { signal },
-          ),
-        (cause) => Effect.fail(downloadError(cause)),
-        Math.max(0, deadline - (yield* Clock.currentTimeMillis)),
+      const file = yield* fs.open(destPath, { flag: 'w' });
+      yield* Stream.runForEach(response.stream, (chunk) =>
+        file.writeAll(chunk),
       );
       return destPath;
     }).pipe(
-      // Failure and interruption both clean up, after the body writer settles,
-      // so neither cleanup nor a retry can race its remaining writes.
+      // One deadline spans the headers and the body. Closing the scope closes
+      // the file handle, then aborts the request.
+      Effect.scoped,
+      Effect.timeout(Duration.millis(timeout)),
+      Effect.catchTags({
+        HttpClientError: downloadError,
+        TimeoutError: downloadError,
+        PlatformError: downloadError,
+      }),
+      // Failure and interruption both clean up after the scope closed the
+      // file handle, so neither cleanup nor a retry can race its writes (and
+      // Windows does not refuse to unlink an open file).
       Effect.onError(() =>
         this.cleanUpBestEffort(destPath, 'partial download'),
       ),

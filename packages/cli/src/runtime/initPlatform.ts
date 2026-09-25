@@ -303,8 +303,7 @@ export function initCliPlatform(
           const cliSecrets = getCliSecrets(context.storageRoot);
           // One process, one project: the process roots are the `--cwd` workspace,
           // over the config provider the startup read already opened — the project
-          // `.texra/config.json` (or the internal workspace store, when that file
-          // cannot be read or its directory written) layered over the user-level
+          // `.texra/config.json` layered over the user-level
           // `~/.texra/v1/global-storage/config.json`. One provider per process is
           // what keeps a value `texra config` writes readable at the next startup.
           const roots = createNodeWorkspaceRoots({

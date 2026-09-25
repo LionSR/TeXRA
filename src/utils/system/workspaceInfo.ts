@@ -11,6 +11,7 @@ import type { SettingsStores } from '@shared/config/settingsAccess';
 import { listExternalRoots } from '@utils/files/externalRoots';
 import { isoDateOnly } from '@utils/text/stringUtils';
 import { executeCommand } from '@utils/system/execUtils';
+import { envVar } from './envFlags';
 import { IS_WINDOWS } from './platformPaths';
 import { isWSL } from './wslDetect';
 
@@ -23,18 +24,17 @@ interface GitInfo {
 }
 
 /** Detect the user's default shell basename (e.g., "bash", "zsh", "PowerShell"). */
-function detectShell(): string | undefined {
-  if (IS_WINDOWS) {
-    const comspec = process.env.ComSpec;
-    if (!comspec) return undefined;
-    const name = path.basename(comspec).toLowerCase();
+const detectShell: Effect.Effect<string | undefined> = Effect.map(
+  envVar(IS_WINDOWS ? 'ComSpec' : 'SHELL'),
+  (shell) => {
+    if (!shell) return undefined;
+    if (!IS_WINDOWS) return path.basename(shell);
+    const name = path.basename(shell).toLowerCase();
     if (name === 'powershell.exe' || name === 'pwsh.exe') return 'PowerShell';
     if (name === 'cmd.exe') return 'cmd';
     return name.replace(/\.exe$/, '');
-  }
-  const shell = process.env.SHELL;
-  return shell ? path.basename(shell) : undefined;
-}
+  },
+);
 
 /** Get a human-readable platform name. */
 function getPlatformLabel(): string {
@@ -114,7 +114,7 @@ export const buildWorkspaceInfoBlock = Effect.fn(function* (
   settings: SettingsStores | undefined,
 ) {
   const platform = getPlatformLabel();
-  const shell = detectShell();
+  const shell = yield* detectShell;
   const date = isoDateOnly();
   const git = wsPath ? yield* getGitInfo(wsPath, settings) : null;
 

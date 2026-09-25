@@ -1,10 +1,10 @@
 /** Agent Registry - Flat agent metadata cache with source-priority lookup. */
 
-import { Cause, Data, Effect, FileSystem } from 'effect';
+import { Cause, Data, Effect } from 'effect';
 import { AgentRosterController } from '@agent/roster/AgentRosterController';
 import { withLogChannel } from '@logger/effectLog';
 import { AgentDirectories, type StateReadFailed } from '@platform/interfaces';
-import type { GlobalStorageFs } from '@platform/rootedFs';
+import type { AgentCatalogServices } from '@platform/processRuntime';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type {
   AgentCategory as AgentCategoryType,
@@ -115,7 +115,7 @@ export function loadAgents(
 ): Effect.Effect<
   void,
   AgentCatalogLoadError | StateReadFailed,
-  GlobalStorageFs | FileSystem.FileSystem | AgentDirectories
+  AgentCatalogServices
 > {
   const includeRemote = options.includeRemote ?? true;
   return onCatalogLoadLane(
@@ -138,7 +138,7 @@ function queueLoad(
 ): Effect.Effect<
   void,
   AgentCatalogLoadError | StateReadFailed,
-  GlobalStorageFs | FileSystem.FileSystem | AgentDirectories
+  AgentCatalogServices
 > {
   return Effect.gen(function* () {
     if (loadEpoch !== epoch) return;
@@ -272,7 +272,7 @@ export function refresh(
 ): Effect.Effect<
   void,
   AgentCatalogLoadError | StateReadFailed,
-  GlobalStorageFs | FileSystem.FileSystem | AgentDirectories
+  AgentCatalogServices
 > {
   return Effect.suspend(() => {
     // A local rescan is weaker than the loads queued before it, so it takes
@@ -295,7 +295,7 @@ function removeRemoteEntries(): void {
 export function invalidateRemoteAgentsAfterSignOut(): Effect.Effect<
   void,
   never,
-  GlobalStorageFs | FileSystem.FileSystem | AgentDirectories
+  AgentCatalogServices
 > {
   return Effect.suspend(() => {
     removeRemoteEntries();
@@ -543,7 +543,7 @@ export function computeAgentOptionsData(
 ): Effect.Effect<
   AgentOptionsDataPayload,
   AgentCatalogLoadError | StateReadFailed,
-  GlobalStorageFs | FileSystem.FileSystem | AgentDirectories
+  AgentCatalogServices
 > {
   return Effect.gen(function* () {
     yield* loadAgents();

@@ -3,20 +3,27 @@
 // Local imports - shared schemas and utilities
 import { type RunId } from '@shared/schemas';
 import type { SessionView } from '@shared/session/sessionView';
-import { assertNever } from '@utils/core';
 
 // Local imports - TUI state
-
-import {
-  approvalPayloadRunId,
-  type PendingApproval,
-  type PendingApprovalKind,
+import type {
+  PendingApproval,
+  PendingApprovalKind,
 } from './state/approvalQueue';
 
-const FORM_FOREGROUND_MAX_ROWS = 18;
+export const FORM_FOREGROUND_MAX_ROWS = 18;
 // Match form sizing for approval modals that already budget or scroll their
 // content. Natural-height approvals stay uncapped until they grow row budgets.
-const APPROVAL_FOREGROUND_MAX_ROWS = 18;
+export const APPROVAL_FOREGROUND_MAX_ROWS: Record<
+  PendingApprovalKind,
+  number | undefined
+> = {
+  bash: FORM_FOREGROUND_MAX_ROWS,
+  toolEdit: FORM_FOREGROUND_MAX_ROWS,
+  proposal: FORM_FOREGROUND_MAX_ROWS,
+  planApproval: undefined,
+  retry: undefined,
+  userQuestion: undefined,
+};
 
 // A bare Esc and the second key of an `Esc 1..9` chord are two
 // separate keystrokes on terminals without true Meta-key detection (macOS
@@ -27,46 +34,20 @@ const APPROVAL_FOREGROUND_MAX_ROWS = 18;
 // commit to interrupting.
 export const ESC_META_CHORD_INTERRUPT_DELAY_MS = 500;
 
-export interface EscapeInterruptState {
-  /** The committed render's focus-shortcut gate: no foreground surface, child
-   *  list, reverse search, or slash palette owns the keyboard. Bare Escape's
-   *  deferred chord timer reads it through a ref so it sees that render. */
-  readonly shortcutsActive: boolean;
-}
-
-export interface AppCtrlCState {
-  readonly discardDraft: () => boolean;
-  readonly onCtrlC: () => void;
-}
-
-/** Apply the root TUI's complete Ctrl+C policy from the latest composer state:
- *  the first Ctrl+C discards a draft, and anything past that is the host's
- *  SIGINT policy. */
-export function triggerAppCtrlC(state: AppCtrlCState): void {
-  if (state.discardDraft()) return;
-  state.onCtrlC();
-}
-
-export type ForegroundSurfaceKind =
-  | 'form'
-  | 'infoPane'
-  | 'approval'
-  | 'transcriptReader'
-  | 'workPlanReader'
-  | 'workflowPopup';
+export type ForegroundSurfaceKind = 'form' | 'infoPane' | 'approval' | 'reader';
 
 export function foregroundSurfaceKind({
   activeFormOpen,
   formBusy,
   infoPaneOpen,
   pendingApproval,
-  readerKind,
+  readerOpen,
 }: {
   readonly activeFormOpen: boolean;
   readonly formBusy: boolean;
   readonly infoPaneOpen: boolean;
   readonly pendingApproval: boolean;
-  readonly readerKind: 'transcript' | 'workPlan' | 'workflow' | undefined;
+  readonly readerOpen: boolean;
 }): ForegroundSurfaceKind | undefined {
   if (pendingApproval && formBusy) return 'approval';
   if (activeFormOpen) return 'form';
@@ -74,10 +55,7 @@ export function foregroundSurfaceKind({
   if (infoPaneOpen) return 'infoPane';
   // Lowest precedence: the reader is a passive view, so anything that needs an
   // answer from the user takes the foreground away from it.
-  if (readerKind === 'workPlan') return 'workPlanReader';
-  if (readerKind === 'transcript') return 'transcriptReader';
-  if (readerKind === 'workflow') return 'workflowPopup';
-  return undefined;
+  return readerOpen ? 'reader' : undefined;
 }
 
 /**
@@ -99,53 +77,11 @@ export function approvalVisibleForSelection({
   readonly view: SessionView;
 }): boolean {
   if (!pending) return false;
-  const runId = approvalPayloadRunId(pending.payload);
+  // A stream-less request carries an empty run id.
+  const runId = pending.payload.data.runId || undefined;
   if (runId === undefined || runId === selectedRunId) return true;
   const asking = view.runs.get(runId);
   return (
     asking?.ancestors.some((ancestor) => ancestor.id === selectedRunId) ?? false
   );
-}
-
-function approvalForegroundMaxRows(
-  approvalKind: PendingApprovalKind | undefined,
-): number | undefined {
-  if (approvalKind === undefined) return undefined;
-
-  switch (approvalKind) {
-    case 'bash':
-    case 'toolEdit':
-    case 'proposal':
-      return APPROVAL_FOREGROUND_MAX_ROWS;
-    case 'planApproval':
-    case 'retry':
-    case 'userQuestion':
-      return undefined;
-    default:
-      return assertNever(approvalKind, 'Unhandled approval payload kind');
-  }
-}
-
-export function foregroundMaxRowsForKind({
-  approvalKind,
-  kind,
-}: {
-  readonly approvalKind?: PendingApprovalKind;
-  readonly kind: ForegroundSurfaceKind | undefined;
-}): number | undefined {
-  switch (kind) {
-    case 'form':
-      return FORM_FOREGROUND_MAX_ROWS;
-    // The reader is the whole point of the keystroke: like the info pane, it
-    // takes every row the layout can spare rather than a modal-sized window.
-    case 'infoPane':
-    case 'transcriptReader':
-    case 'workPlanReader':
-    case 'workflowPopup':
-      return undefined;
-    case 'approval':
-      return approvalForegroundMaxRows(approvalKind);
-    case undefined:
-      return undefined;
-  }
 }

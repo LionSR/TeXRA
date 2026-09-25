@@ -116,6 +116,7 @@ import {
   compactionActivityRow,
   isSettledRow,
   projectTranscriptRow,
+  rowHeadline,
   type TranscriptRow,
   type TranscriptRowKind,
 } from '@ui/transcript';
@@ -1113,40 +1114,6 @@ function withSettledTranscript(run: RunView, finishedAt: number): RunView {
 // ---------------------------------------------------------------------------
 // Transcript-derived run facts (G4: derived in the fold, never by a host)
 // ---------------------------------------------------------------------------
-
-/** The headline a status line shows for a row: its own text, untrimmed and
- *  unsanitized; a host sanitizes for its surface at paint. */
-function rowHeadline(row: TranscriptRow): string {
-  switch (row.kind) {
-    case 'assistant':
-    case 'log':
-      return row.text.full;
-    case 'user':
-    case 'error':
-    case 'progressStatus':
-      return row.summary.full;
-    case 'workflowTask':
-      return row.line;
-    case 'phase':
-      return row.heading;
-    case 'thinking':
-      return 'Thinking';
-    case 'scratchpad':
-      return 'Scratchpad';
-    case 'webSearch':
-    case 'statistics':
-    case 'contextManagement':
-    case 'compactionActivity':
-      return row.label;
-    case 'fileList':
-    case 'missingOutputs':
-      return row.summary;
-    case 'latexdiff':
-      return `Latexdiff results (${row.entries.length})`;
-    case 'tool':
-      return '';
-  }
-}
 
 function nonEmpty(text: string | undefined): string | undefined {
   return text !== undefined && text.trim().length > 0 ? text : undefined;

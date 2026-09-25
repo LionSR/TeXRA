@@ -14,11 +14,8 @@ consequences worth knowing before you touch a file here:
 
 - **Nothing in this directory runs a fiber.** A caller runs the program at
   its own boundary: a tool's `execute()`, a VS Code command, a desktop
-  request handler, or a CLI command. The exceptions are named debt, not a
-  pattern to copy — `MediaExtractionNode`, `TeXCountNode` and
-  `LatexDiffManager` each keep one `runPromise` against the Promise-shaped
-  reflection flow, and `config/ratchets/effect-migration-baseline.json`
-  names the lane that deletes them.
+  request handler, or a CLI command. The `Effect.run*` row of
+  `scripts/check-effect-migration-ratchet.mjs` fails a run added here.
 - **Cancellation is interruption, not a threaded `AbortSignal`.** `texcount`
   and the latexdiff executors spawn their subprocess inside
   `Effect.tryPromise`, whose thunk receives the signal that aborts when the

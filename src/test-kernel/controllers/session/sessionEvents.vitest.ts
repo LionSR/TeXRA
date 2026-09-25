@@ -12,7 +12,6 @@
  * `waiting`; the same log with the owner gone folds to `interrupted`.
  */
 // Node imports
-import * as childProcess from 'node:child_process';
 import {
   chmodSync,
   existsSync,
@@ -106,21 +105,23 @@ import type { RunLedgerDraft } from '@shared/session/runStateFold';
 import { ProcessIdentity, SessionEvents } from '@shared/session/sessionEvents';
 import { DownMessageSchema } from '@shared/session/sessionFrames';
 import type { SessionView } from '@shared/session/sessionView';
+import { nodePlatformLayer } from '@test/support/fsTestUtils';
+import {
+  nodeSpawnerLayer,
+  scriptedSpawnerLayer,
+} from '@test/support/childProcessTestLayer';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { testRunHandle } from '@test/support/runHandleFixtures';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import { identityReads } from '@test/support/sessionGraphTestSetup';
 import type { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import { StreamLogStore } from '@transcript/StreamLogStore';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 vi.mock('node:os', async (importOriginal) => ({
   ...(await importOriginal<typeof os>()),
   platform: vi.fn(() => process.platform),
 }));
-vi.mock('node:child_process', async (importOriginal) => {
-  const actual = await importOriginal<typeof childProcess>();
-  return { ...actual, execFileSync: vi.fn(actual.execFileSync) };
-});
 /** Builds of the process runtime's Lean layer, which every root shares. */
 const leanBuilds = vi.hoisted(() => ({
   count: 0,
@@ -224,6 +225,7 @@ const graph = (history: readonly SessionEventDraft[]) => {
     ),
     Layer.provide(Layer.succeed(WorkspaceRoots)(roots)),
     Layer.provide(ProcessIdentity.layer(SELF)),
+    Layer.provide(nodeSpawnerLayer),
   );
 };
 
@@ -731,7 +733,11 @@ describe('Sessions owner', () => {
             Layer.provide(
               globalDatabaseLayer(
                 createFakeWorkspaceRoots().globalStorage,
-              ).pipe(Layer.provide(ProcessIdentity.layer(SELF)), Layer.orDie),
+              ).pipe(
+                Layer.provide(ProcessIdentity.layer(SELF)),
+                Layer.provide(nodeSpawnerLayer),
+                Layer.orDie,
+              ),
             ),
           ),
         ),
@@ -1178,10 +1184,15 @@ describe('the C1 event table and the C6 publisher', () => {
     for (const root of roots) rmSync(root, { recursive: true, force: true });
   });
 
-  const substrate = (storage: string, owner = SELF) =>
+  const substrate = (
+    storage: string,
+    owner = SELF,
+    spawner: Layer.Layer<ChildProcessSpawner> = nodeSpawnerLayer,
+  ) =>
     databaseLayer('persistent').pipe(
       Layer.provide(Layer.succeed(WorkspaceRoots)({ storage })),
       Layer.provide(ProcessIdentity.layer(owner)),
+      Layer.provide(spawner),
       Layer.fresh,
     );
 
@@ -1203,24 +1214,20 @@ describe('the C1 event table and the C6 publisher', () => {
     const storage = workspace();
     const resolved = realpathSync.native(storage);
     const system = vi.mocked(os.platform).mockReturnValue('darwin');
-    const mount = vi
-      .mocked(childProcess.execFileSync)
-      .mockReturnValue(`server:/paper on ${resolved} (nfs, nodev)\n`);
+    const mount = scriptedSpawnerLayer(() => ({
+      stdout: `server:/paper on ${resolved} (nfs, nodev)\n`,
+    }));
     return Effect.gen(function* () {
       const failure = yield* Effect.flip(
-        Database.pipe(Effect.provide(substrate(storage))),
+        Database.pipe(Effect.provide(substrate(storage, SELF, mount.layer))),
       );
       expect(failure._tag).toBe('DatabaseOpenFailed');
       expect(String(failure.cause)).toContain('verified local filesystem');
       expect(existsSync(join(storage, 'texra.db'))).toBe(false);
-    }).pipe(
-      Effect.ensuring(
-        Effect.sync(() => {
-          mount.mockRestore();
-          system.mockRestore();
-        }),
-      ),
-    );
+      expect(mount.calls.map((command) => command.command)).toEqual([
+        '/sbin/mount',
+      ]);
+    }).pipe(Effect.ensuring(Effect.sync(() => system.mockRestore())));
   });
 
   it.effect('clears a store written under another event format at open', () => {
@@ -2127,7 +2134,9 @@ describe('the C1 event table and the C6 publisher', () => {
         expect(yield* first.aggregateState([unrelated.aggregateId])).toEqual(
           [],
         );
-      }).pipe(Effect.provide(substrate(storage)));
+      }).pipe(
+        Effect.provide(Layer.merge(substrate(storage), nodePlatformLayer)),
+      );
     },
   );
 
@@ -2270,6 +2279,7 @@ describe('RunLedger', () => {
         ),
       ),
       Layer.provide(ProcessIdentity.layer(SELF)),
+      Layer.provide(nodeSpawnerLayer),
     );
   const AGGREGATE = qualifyAggregateId('run', RUN);
   const SECRET = 'sk-abcdefghijklmnopqrstuvwxyz0123';

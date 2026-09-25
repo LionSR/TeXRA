@@ -30,6 +30,7 @@
 import { createHash } from 'node:crypto';
 
 import { Context, Effect, Equal, Hash, Layer, LayerMap, Scope } from 'effect';
+import { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 import stableStringify from 'safe-stable-stringify';
 
 import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
@@ -116,11 +117,13 @@ export class Compositions extends Context.Service<
 /** The process's compositions, over its `ToolRegistry` table. */
 const compositionsLayer = (
   loader: PluginLoader,
-): Layer.Layer<Compositions, never, ToolRegistry> =>
+): Layer.Layer<Compositions, never, ToolRegistry | ChildProcessSpawner> =>
   Layer.effect(
     Compositions,
     Effect.gen(function* () {
       const table = yield* ToolRegistry;
+      // A plugin's resources start child processes on the process spawner.
+      const spawner = yield* ChildProcessSpawner;
       // The resources of every spec and revision a load has read, for the
       // life of the process: a pin builds from here, and a child joining its
       // parent's key finds the spec its parent loaded.
@@ -140,7 +143,13 @@ const compositionsLayer = (
                 );
                 loadedEntries.set(id, {
                   key,
-                  layer: Layer.effect(key)(plugin.acquire),
+                  layer: Layer.effect(key)(
+                    Effect.provideService(
+                      plugin.acquire,
+                      ChildProcessSpawner,
+                      spawner,
+                    ),
+                  ),
                 });
               }
             }),
@@ -222,7 +231,7 @@ const noLoadedPlugins: PluginLoader = () =>
 export const toolTableLayer = (
   table: ToolTable,
   loader: PluginLoader = noLoadedPlugins,
-): Layer.Layer<Compositions | ToolRegistry> =>
+): Layer.Layer<Compositions | ToolRegistry, never, ChildProcessSpawner> =>
   compositionsLayer(loader).pipe(
     Layer.provideMerge(Layer.succeed(ToolRegistry)(table)),
   );

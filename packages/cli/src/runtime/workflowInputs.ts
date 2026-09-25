@@ -1,13 +1,12 @@
-import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 
 import { glob, hasMagic } from 'glob';
-import { Effect, Scope } from 'effect';
+import { Effect, FileSystem, Scope } from 'effect';
 
 import { CliUsageError } from '@cli/runtime/cliContext';
-import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
 import { unique } from '@utils/core';
 import { ensureError } from '@utils/errors/errorMessage';
+import { absentReason } from '@utils/files/fsEntryExists';
 // toPosixPath also trims and resolves `.`/`..` segments beyond a bare slash
 // swap; safe at the call site below since the input is always a relative
 // path from path.relative behind an isStrictlyWithin check.
@@ -102,7 +101,8 @@ const materializeStdinWorkflowInput = Effect.fn(
 )(function* (
   readStdinText: () => Promise<string>,
   tempDir: string,
-): Effect.fn.Return<string, Error, Scope.Scope> {
+): Effect.fn.Return<string, Error, Scope.Scope | FileSystem.FileSystem> {
+  const fs = yield* FileSystem.FileSystem;
   // No resource exists while stdin is pending. Interruption cannot leave a
   // Promise continuation that creates a directory after shutdown.
   const text = yield* Effect.tryPromise({
@@ -115,24 +115,21 @@ const materializeStdinWorkflowInput = Effect.fn(
         'stdin: no data on stdin. Pipe content in and pass `-` to one file-taking flag.',
       ),
     );
+  // Not makeTempDirectoryScoped: its release omits `force` and dies on a
+  // directory that is already gone.
   const inputDir = yield* Effect.acquireRelease(
-    Effect.tryPromise({
-      try: () =>
-        fs.mkdtemp(path.join(tempDir, `${STDIN_TEMP_PREFIX}${process.pid}-`)),
-      catch: ensureError,
+    fs.makeTempDirectory({
+      directory: tempDir,
+      prefix: `${STDIN_TEMP_PREFIX}${process.pid}-`,
     }),
     (directory) =>
-      Effect.tryPromise({
-        try: () => fs.rm(directory, { recursive: true, force: true }),
-        catch: ensureError,
-      }).pipe(Effect.orDie),
+      fs.remove(directory, { recursive: true, force: true }).pipe(Effect.orDie),
   );
   const inputFile = path.join(inputDir, STDIN_WORKFLOW_INPUT_BASENAME);
   // Finish this finite local write before the scope removes its directory.
-  yield* Effect.tryPromise({
-    try: () => fs.writeFile(inputFile, text, { encoding: 'utf8', flag: 'wx' }),
-    catch: ensureError,
-  }).pipe(Effect.uninterruptible);
+  yield* fs
+    .writeFileString(inputFile, text, { flag: 'wx' })
+    .pipe(Effect.uninterruptible);
   return inputFile;
 });
 
@@ -150,7 +147,7 @@ const expandWorkflowInputSpec = Effect.fn('expandWorkflowInputSpec')(function* (
   cwd: string,
   flagLabel: string,
   options: WorkflowInputExpansionOptions,
-): Effect.fn.Return<string[], Error> {
+): Effect.fn.Return<string[], Error, FileSystem.FileSystem> {
   const trimmed = inputSpec.trim();
   if (!trimmed) return [];
 
@@ -162,16 +159,10 @@ const expandWorkflowInputSpec = Effect.fn('expandWorkflowInputSpec')(function* (
   const absolutePath = resolveAgainstCwd(trimmed, cwd);
   // Prefer an exact existing path even when its valid filename contains glob
   // syntax. Windows glob mode deliberately has no backslash escape channel.
-  const stats = yield* Effect.tryPromise({
-    try: () => fs.stat(absolutePath),
-    catch: ensureError,
-  }).pipe(
-    Effect.catch((error) =>
-      isFileNotFoundError(error) || isNotADirectoryError(error)
-        ? Effect.succeed(null)
-        : Effect.fail(error),
-    ),
-  );
+  const fs = yield* FileSystem.FileSystem;
+  const stats = yield* fs
+    .stat(absolutePath)
+    .pipe(Effect.catchIf(absentReason, () => Effect.succeed(null)));
 
   const globOptions = workflowInputGlobOptions(process.platform);
   if (!stats && hasMagic(trimmed, globOptions)) {
@@ -194,7 +185,7 @@ const expandWorkflowInputSpec = Effect.fn('expandWorkflowInputSpec')(function* (
     return yield* normalizeMatches(matches);
   }
 
-  if (stats?.isDirectory()) {
+  if (stats?.type === 'Directory') {
     // Validate the directory itself before globbing its contents.
     yield* normalizeCliInputPathForRun(trimmed, cwd, flagLabel, options);
     const matches = yield* Effect.tryPromise({
@@ -231,7 +222,11 @@ const prepareWorkflowInputExpansion = Effect.fn(
   cwd: string,
   flagLabel: string,
   options: WorkflowInputExpansionOptions,
-): Effect.fn.Return<PreparedWorkflowInputExpansion, Error> {
+): Effect.fn.Return<
+  PreparedWorkflowInputExpansion,
+  Error,
+  FileSystem.FileSystem
+> {
   const entries: WorkflowInputExpansionEntry[] = [];
   let readStdinText: (() => Promise<string>) | undefined;
   for (const spec of inputSpecs) {
@@ -259,7 +254,7 @@ const finishWorkflowInputExpansion = Effect.fn('finishWorkflowInputExpansion')(
   ): Effect.fn.Return<
     { readonly files: string[]; readonly stdinPath?: string },
     Error,
-    Scope.Scope
+    Scope.Scope | FileSystem.FileSystem
   > {
     const expanded: string[] = [];
     const stdinPath = prepared.readStdinText
@@ -311,7 +306,11 @@ export const expandRunInputs = Effect.fn('expandRunInputs')(function* (
     readonly requireWorkspaceFiles?: boolean;
     readonly readStdinText?: () => Promise<string>;
   } = {},
-): Effect.fn.Return<ExpandedRunInputs, Error, Scope.Scope> {
+): Effect.fn.Return<
+  ExpandedRunInputs,
+  Error,
+  Scope.Scope | FileSystem.FileSystem
+> {
   if (
     inputSpecs.some(isStdinWorkflowInputSpec) &&
     contextSpecs.some(isStdinWorkflowInputSpec)
@@ -372,7 +371,7 @@ export function withExpandedRunInputs<T, E, R = never>(
     readonly requireWorkspaceFiles?: boolean;
   },
   run: (inputs: ExpandedRunInputs) => Effect.Effect<T, E, R>,
-): Effect.Effect<T, E | Error, R> {
+): Effect.Effect<T, E | Error, R | FileSystem.FileSystem> {
   return Effect.scoped(
     Effect.gen(function* () {
       const inputs = yield* expandRunInputs(

@@ -5,6 +5,7 @@ import { defineCommand } from 'citty';
 import { Effect } from 'effect';
 
 import { DEFAULT_NODE_STORAGE_ROOT } from '@platform/defaults/nodeStorage';
+import { withProcessServices } from '@platform/processRuntime';
 
 import { CliUsageError, type CliContext } from '../runtime/cliContext';
 import { CliExitCode } from '../runtime/exitCodes';
@@ -28,6 +29,7 @@ import { defineCliCommand } from './_helpers/defineCliCommand';
 import { withUsageSections } from './_helpers/dispatch';
 import { GLOBAL_ARGS, collectStringFlagValues } from './_helpers/globalArgs';
 import { emitCliResult } from './_helpers/output';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 const GITHUB_SHORTHAND =
   /^(?:https?:\/\/)?github\.com\/([\w.-]+)\/([\w.-]+?)(?:\.git)?(?:@([^@\s]+))?$/;
@@ -89,20 +91,26 @@ function pluginExitCode(error: unknown): number {
     : CliExitCode.AgentError;
 }
 
-/** Open the platform for its setting slots, then run one plugin operation. */
+/**
+ * Open the platform for its setting slots, then run one plugin operation on
+ * the runtime it installed, whose spawner git runs on.
+ */
 function withPluginEnv<A, E>(
   context: CliContext,
-  operation: (env: PluginEnv) => Effect.Effect<A, E>,
+  operation: (env: PluginEnv) => Effect.Effect<A, E, ChildProcessSpawner>,
 ) {
   return Effect.gen(function* () {
     const services = yield* initCliPlatform({ ...context, quietLogs: true });
-    return yield* operation({
-      stores: services.roots,
-      pluginsDir: path.join(
-        context.storageRoot ?? DEFAULT_NODE_STORAGE_ROOT,
-        'plugins',
-      ),
-    });
+    return yield* withProcessServices(
+      services.runtime,
+      operation({
+        stores: services.roots,
+        pluginsDir: path.join(
+          context.storageRoot ?? DEFAULT_NODE_STORAGE_ROOT,
+          'plugins',
+        ),
+      }),
+    );
   });
 }
 

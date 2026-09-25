@@ -1,5 +1,5 @@
 // Third-party imports
-import { Layer } from 'effect';
+import { FileSystem, Layer } from 'effect';
 
 // Local imports
 import type { ToolHost } from '@agent/core/tools/ToolTypes';
@@ -227,11 +227,13 @@ export const TOOL_TABLE = toolTable(PLUGIN_TOOLS, PLUGIN_LAYERS);
 /**
  * The process's `ToolRegistry` and the `Compositions` built over it and the
  * MCP servers of the user's `~/.texra/mcp.json`, which
- * `installProcessRuntime` provides.
+ * `installProcessRuntime` provides. The layer takes the process
+ * `FileSystem` that `installProcessRuntime` serves, to read that file.
  */
-export const toolRegistryLayer = toolTableLayer(
-  TOOL_TABLE,
-  mcpPluginLoader(USER_MCP_CONFIG_PATH),
+export const toolRegistryLayer = Layer.unwrap(
+  FileSystem.FileSystem.useSync((fs) =>
+    toolTableLayer(TOOL_TABLE, mcpPluginLoader(fs, USER_MCP_CONFIG_PATH)),
+  ),
 );
 
 /** Whether a registered tool declares itself unavailable on a product host. */
