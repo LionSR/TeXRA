@@ -18,6 +18,7 @@ import {
   modelOptionsFrom,
   readModelAvailabilityInputs,
 } from '@model/computeModelOptions';
+import { AgentDirectories } from '@platform/interfaces';
 import type { LanguageModel } from '@platform/languageModel';
 import type { AgentCatalogServices } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
@@ -121,11 +122,12 @@ export interface HostSnapshotSource {
   /** The one recorder per process started or stopped. */
   setRecording(recording: HostSnapshot['recording']): Effect.Effect<void>;
   /** A launch could not find its agent, under the category it was launched
-   *  as: the banner's actions edit that catalog. */
+   *  as: the banner's actions edit that catalog, and open the custom agent
+   *  directory only when the user configured one. */
   showAgentConfigBanner(
     agentName: string,
     sessionType: SessionType,
-  ): Effect.Effect<void>;
+  ): Effect.Effect<void, never, AgentDirectories | FileSystem.FileSystem>;
   /** A launch resolved its agent and started a run, so the missing-agent
    *  warning no longer describes the launcher. */
   readonly clearAgentConfigBanner: Effect.Effect<void>;
@@ -280,14 +282,22 @@ export function createHostSnapshotSource(
         recording = next;
       }).pipe(Effect.andThen(publish)),
     showAgentConfigBanner: (agentName, sessionType) =>
-      Effect.sync(() => {
-        agentConfig = {
-          visible: true,
-          agentName,
-          sessionType,
-          customDirSet: true,
-        };
-      }).pipe(Effect.andThen(publish)),
+      Effect.gen(function* () {
+        // An unreadable setting is reported and the banner offers the agent
+        // settings, which always open, instead of a directory it cannot name.
+        const customDirSet = yield* Effect.flatMap(AgentDirectories, (dirs) =>
+          dirs.customConfigured(),
+        ).pipe(
+          Effect.catch((cause) =>
+            Effect.sync(() => {
+              options.onError(cause);
+              return false;
+            }),
+          ),
+        );
+        agentConfig = { visible: true, agentName, sessionType, customDirSet };
+        yield* publish;
+      }),
     clearAgentConfigBanner: Effect.suspend(() => {
       if (!agentConfig.visible) return Effect.void;
       agentConfig = { visible: false };

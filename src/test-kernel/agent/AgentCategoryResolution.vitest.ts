@@ -80,6 +80,7 @@ describe('cross-category agent resolution', () => {
       {
         agentDirectories: {
           custom: () => Effect.sync(() => customDir),
+          customConfigured: () => Effect.succeed(false),
           builtIn: () =>
             Effect.sync(() =>
               resolve(REPO_ROOT, 'packages/extension/resources/agents'),

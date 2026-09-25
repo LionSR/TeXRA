@@ -97,6 +97,7 @@ function testAgentDirectories(
 ): AgentDirectoriesPort {
   return {
     custom: () => Effect.sync(() => ''),
+    customConfigured: () => Effect.succeed(false),
     builtIn: () => Effect.sync(() => BUILTIN_AGENTS_DIR),
     builtInToolUse: () => Effect.sync(() => BUILTIN_TOOL_USE_AGENTS_DIR),
     ...overrides,
@@ -107,6 +108,7 @@ let activeAgentDirectories: AgentDirectoriesPort = testAgentDirectories();
 
 const mutableAgentDirectories: AgentDirectoriesPort = {
   custom: () => activeAgentDirectories.custom(),
+  customConfigured: () => activeAgentDirectories.customConfigured(),
   builtIn: () => activeAgentDirectories.builtIn(),
   builtInToolUse: () => activeAgentDirectories.builtInToolUse(),
 };

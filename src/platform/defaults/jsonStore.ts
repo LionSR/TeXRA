@@ -210,15 +210,21 @@ export class JsonStore {
   }
 
   /**
-   * Commit one mutation: take the file's lane in {@link writeLanes}, apply
-   * the mutation to this instance's record, and flush it. Lanes are claimed
+   * Commit one mutation: take the file's lane in {@link writeLanes}, flush
+   * it, and only once the flush has succeeded apply it to this instance's
+   * record — a failed flush (e.g. a store opened over an unreadable file via
+   * {@link JsonStoreOptions.onUnreadable}) leaves `get` serving what it
+   * served before, never a value that did not reach disk. Because the lane
+   * serializes every commit on the file, no later `set` can apply between
+   * this one's flush and its in-memory apply, so there is nothing to roll
+   * back and no ordering to reconcile. Lanes are claimed
    * in the effect's first synchronous step, so commits run in `set()` order
    * rather than racing on `mkdir`/read/`write-file-atomic` timing; a failed
    * flush doesn't stop the lane from running subsequent commits.
    *
    * Waiting for the lane is interruptible, the commit behind it is not — and
-   * the in-memory mutation is part of that commit, not of the wait. A writer
-   * cancelled while queued leaves the record and the file exactly as it found
+   * the in-memory mutation is the tail of that commit, not part of the wait.
+   * A writer cancelled while queued leaves the record and the file exactly as it found
    * them; one that has entered the lane runs its read-modify-write to
    * completion rather than leaving the file holding a record it read before
    * another writer's mutation, or leaving this instance serving a value that
@@ -237,13 +243,8 @@ export class JsonStore {
       this.filePath,
     )(
       Effect.uninterruptible(
-        Effect.suspend(() => {
-          if (value === undefined) {
-            delete this.data[key];
-          } else {
-            this.data[key] = value;
-          }
-          return Effect.provide(
+        Effect.suspend(() =>
+          Effect.provide(
             flush(
               this.filePath,
               this.options.mode,
@@ -252,8 +253,18 @@ export class JsonStore {
               this.snapshot(),
             ),
             nodeFileServices,
-          );
-        }),
+          ),
+        ).pipe(
+          Effect.tap(() =>
+            Effect.sync(() => {
+              if (value === undefined) {
+                delete this.data[key];
+              } else {
+                this.data[key] = value;
+              }
+            }),
+          ),
+        ),
       ),
     );
   }

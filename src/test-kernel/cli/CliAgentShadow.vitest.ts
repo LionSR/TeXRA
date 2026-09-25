@@ -83,6 +83,7 @@ describe('CLI agent validation with a shadowed name', () => {
       {
         agentDirectories: {
           custom: () => Effect.sync(() => customDir),
+          customConfigured: () => Effect.succeed(false),
           builtIn: () =>
             Effect.sync(() =>
               resolve(REPO_ROOT, 'packages/extension/resources/agents'),
