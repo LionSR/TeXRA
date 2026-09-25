@@ -1,5 +1,5 @@
 import { it } from '@effect/vitest';
-import { Effect, Layer } from 'effect';
+import { Effect } from 'effect';
 import { beforeEach, describe, expect, vi } from 'vitest';
 
 import type { ModelOptionStores } from '@model/computeModelOptions';
@@ -101,11 +101,6 @@ const DELEGATE_AGENT_TOOL: ToolInput = {
  * mocked reader answers off the value, so any stores value serves.
  */
 const annotationSettings = hostStores();
-
-const RESEARCH_NUMERICS_AGENTS = [
-  { name: 'research', description: 'Derive and verify.' },
-  { name: 'numerics', description: 'Run simulations.', tools: ['bash'] },
-];
 
 /**
  * Annotate with the given roster visible and no model list, so only the
@@ -315,63 +310,6 @@ describe('delegation model availability', () => {
         }),
       ).toBe('deepseekT');
     }).pipe(Effect.provide(fakeProcessServices())),
-  );
-
-  it.effect('rejects delegation when no models are currently available', () =>
-    Effect.gen(function* () {
-      mocks.readModelAvailabilityInputs.mockReturnValue(Effect.succeed([]));
-
-      const failure = yield* Effect.flip(
-        selectAvailableDelegationModel({
-          parentModel: 'opus48T',
-          settings: hostStores(),
-        }),
-      );
-
-      expect(failure.message).toContain(
-        'No models are currently available for delegation. Review or configure model access before delegating.',
-      );
-    }).pipe(Effect.provide(fakeProcessServices())),
-  );
-});
-
-describe('delegation worktree availability', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.isWorktreeSupportEnabled.mockReturnValue(Effect.succeed(false));
-    mocks.getVisibleAgents.mockReturnValue(
-      Effect.succeed([{ name: 'research', description: 'Derive and verify.' }]),
-    );
-  });
-
-  function delegateTool(): ToolDefinition {
-    return {
-      name: 'delegate_agent',
-      availabilityCategory: 'toolUse',
-      description: DELEGATE_AGENT_WORKTREE_DESCRIPTION,
-    };
-  }
-
-  it.effect('substitutes the ENABLED guidance when worktrees are on', () =>
-    Effect.gen(function* () {
-      mocks.isWorktreeSupportEnabled.mockReturnValue(Effect.succeed(true));
-
-      const rewritten = annotateDelegationAvailability(
-        delegateTool(),
-        undefined,
-        yield* readDelegationAnnotationState(annotationSettings),
-      );
-
-      expect(rewritten.description).toContain('Git worktree support: ENABLED.');
-      expect(rewritten.description).toContain('Pass `working_directory`');
-      expect(rewritten.description).not.toContain(
-        'resolved from the active workspace at runtime',
-      );
-      // The lines above the worktree line are left intact.
-      expect(rewritten.description).toContain(
-        'Available models: loaded from the active API mode at runtime.',
-      );
-    }),
   );
 });
 

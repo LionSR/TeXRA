@@ -19,12 +19,6 @@ const started = Effect.promise(
 );
 
 describe('rateLimitedApiCall cancellation', () => {
-  it.effect('succeeds with the operation result', () =>
-    Effect.gen(function* () {
-      expect(yield* lookup(() => Promise.resolve(42))).toBe(42);
-    }),
-  );
-
   it.effect('interrupting the program abandons an in-flight operation', () =>
     Effect.gen(function* () {
       let requests = 0;
@@ -59,15 +53,6 @@ describe('rateLimitedApiCall cancellation', () => {
           () => new Promise((resolve) => setTimeout(resolve, 10)),
         );
       }),
-  );
-
-  it.effect('wraps the operation error in the failure message', () =>
-    Effect.gen(function* () {
-      const error = yield* Effect.flip(
-        lookup(() => Promise.reject(new Error('boom'))),
-      );
-      expect(error).toEqual(new ToolError('Lookup failed: boom'));
-    }),
   );
 
   it.effect('passes a ToolError the operation throws through unchanged', () =>

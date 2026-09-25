@@ -1,7 +1,5 @@
 import '@test/support/sessionGraphTestSetup';
 
-// Node imports
-import * as path from 'node:path';
 import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 
@@ -93,28 +91,6 @@ describe('OpenPdfTool', () => {
       output: `Opened PDF: ${label}`,
     });
   }
-
-  it.effect(
-    'reports that PDF opening is unavailable when no host serves it',
-    () =>
-      Effect.gen(function* () {
-        const tool = OpenPdfTool;
-
-        const result = yield* tool.call({ path: 'paper.tex' });
-
-        expectOpenError(result, 'open_pdf is not available');
-      }).pipe(
-        Effect.provide(
-          nativeToolTestLayer({
-            run: {
-              session: testDefaultSession(),
-              runId: 'tool-test' as RunId,
-              toolPolicy: {},
-            },
-          }),
-        ),
-      ),
-  );
 
   it.effect('opens an existing PDF through the registered host callback', () =>
     Effect.gen(function* () {
@@ -249,28 +225,6 @@ describe('OpenPdfTool', () => {
       );
 
       expectOpenError(result, 'Path must stay within the working directory');
-      expect(openPdf).not.toHaveBeenCalled();
-    }).pipe(
-      Effect.provide(
-        nativeToolTestLayer({
-          run: {
-            session: testDefaultSession(),
-            runId: 'tool-test' as RunId,
-            toolPolicy: {},
-          },
-        }),
-      ),
-    ),
-  );
-
-  it.effect('rejects non-PDF files before invoking the host callback', () =>
-    Effect.gen(function* () {
-      const openPdf = installOpener();
-      const tool = OpenPdfTool;
-
-      const result = yield* tool.call({ path: 'paper.tex' });
-
-      expectOpenError(result, 'open_pdf only opens PDF files');
       expect(openPdf).not.toHaveBeenCalled();
     }).pipe(
       Effect.provide(

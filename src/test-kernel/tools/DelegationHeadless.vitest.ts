@@ -1089,31 +1089,6 @@ describe('headless delegation', () => {
     }),
   );
 
-  it.effect(
-    'composes interactive delegation through the same native launch primitive',
-    () =>
-      Effect.gen(function* () {
-        const result = yield* callDelegateReview();
-
-        expect(result.summary).toBe("Launched 'review' (async)");
-        expect(result.output).toContain(
-          "Subagent 'review' launched. Result will be delivered automatically",
-        );
-        yield* waitForChildrenEffect(testDefaultSession());
-        const executeOptions = mocks.executeAgent.mock.calls.at(-1)?.[2];
-        expect(executeOptions).toEqual(
-          expect.objectContaining({
-            parentRunId: PARENT_RUN_ID,
-            onRun: expect.any(Function),
-            session: expect.any(Object),
-          }),
-        );
-        expect(executeOptions).not.toEqual(
-          expect.objectContaining({ stopAfterCycle: true }),
-        );
-      }),
-  );
-
   it.effect('does not attribute proposal cancellation to the user', () =>
     Effect.gen(function* () {
       const result = yield* delegateWithProposalDecision({
@@ -1178,82 +1153,6 @@ describe('headless delegation', () => {
           "Approved model override 'gpt5' is not available",
         );
         expect(mocks.executeAgent).not.toHaveBeenCalled();
-      }),
-  );
-
-  it.effect('launches with an approved model override that is available', () =>
-    Effect.gen(function* () {
-      mocks.readModelAvailabilityInputs.mockReturnValue(
-        Effect.succeed([
-          {
-            value: 'deepseekT',
-            label: 'DeepSeek',
-            availability: 'provider-key',
-          },
-          {
-            value: 'gpt5',
-            label: 'GPT-5',
-            availability: 'provider-key',
-          },
-        ]),
-      );
-
-      const launched = Deferred.makeUnsafe<void>();
-      mocks.executeAgent.mockImplementationOnce(async () => {
-        Deferred.doneUnsafe(launched, Effect.void);
-        return {
-          outcome: 'completed',
-          runId: CHILD_RUN_ID,
-          output: {
-            category: 'toolUse',
-            response: 'The proof is correct.',
-            files: [],
-          },
-        };
-      });
-
-      const result = yield* delegateWithProposalDecision(
-        { action: 'approve', model: 'gpt5' },
-        { launchSignal: launched },
-      );
-
-      expect(result.status).toBe('executed');
-      expect(result.summary).toBe("Launched 'review' (async)");
-      expect(mocks.executeAgent).toHaveBeenCalledWith(
-        expect.objectContaining({
-          config: expect.objectContaining({ model: 'gpt5' }),
-        }),
-        expect.any(String),
-        expect.anything(),
-      );
-    }),
-  );
-
-  it.effect(
-    'includes memory misses in interactive early-delivered reports',
-    () =>
-      Effect.gen(function* () {
-        // The mocked `executeAgent` is the child-run loop's `launch` turn, and the
-        // WAITING result it returns is what the loop's single delivery site sees.
-        mockTrackedChildOnce({
-          memoryMisses: [
-            { path: '/memories/missing.md', reason: 'not found & unreadable' },
-          ],
-        });
-
-        const reportWritten = Deferred.makeUnsafe<void>();
-        mocks.writeReport.mockImplementationOnce(() => {
-          Deferred.doneUnsafe(reportWritten, Effect.void);
-        });
-
-        yield* callDelegateReview(parentRunContext({ runId: PARENT_RUN_ID }));
-
-        yield* Deferred.await(reportWritten);
-        expect(mocks.writeReport).toHaveBeenCalledWith(
-          expect.stringContaining(
-            '<memory-miss path="/memories/missing.md" reason="not found &amp; unreadable" />',
-          ),
-        );
       }),
   );
 

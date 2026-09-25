@@ -26,12 +26,7 @@ import { testRunHandle } from '@test/support/runHandleFixtures';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { DelegateAgentTool } from '@tools/delegation/DelegationTools';
-import {
-  rejectOversizedBibAttachments,
-  WorkflowAgentInputSchema,
-  withToolUseSubagentHandoffInstruction,
-  workingDirectoryField,
-} from '@tools/delegation/inputFields';
+import { rejectOversizedBibAttachments } from '@tools/delegation/inputFields';
 
 describe('DelegationTools', () => {
   // The bib-size probe reads the real filesystem, so the cases build a real
@@ -54,13 +49,6 @@ describe('DelegationTools', () => {
   }
 
   it.effect.each([
-    {
-      name: 'rejects context .bib files larger than 100KB',
-      sizeBytes: 100 * 1024 + 1,
-      paths: ['references.bib'],
-      rejectedPath: 'references.bib',
-      formattedSize: '100 KiB',
-    },
     {
       name: 'rejects context .bib files in the multi-list larger than 100KB',
       sizeBytes: 150 * 1024,

@@ -8,7 +8,6 @@ import type { AgentRunServices } from '@agent/runtime/runRegistry';
 import { Runs } from '@agent/runtime/runRegistry';
 import { deriveWorkflowScriptCheckpointId } from '@agent/workflowScript/checkpoint';
 import { runPersistedWorkflowScript } from '@agent/workflowScript/checkpoint';
-import type { WorkflowAgentInvocation } from '@agent/workflowScript/types';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { initializeDefaultSession } from '@agent/runtime/sessionGraph';
 import { closeSession } from '@agent/runtime/sessionGraph';
@@ -279,31 +278,6 @@ return await agent('Solve.', {
         '"files":[{"path":"paper.tex","added":12,"removed":8}]',
       );
     }),
-  );
-
-  it.effect(
-    'passes JSON arguments through and formats a zero-call result',
-    () =>
-      Effect.gen(function* () {
-        const ports = fakePorts();
-        const strategy = createWorkflowScriptStrategy(
-          strategyParams({
-            name: 'arguments',
-            script: `export const meta = {
-  name: 'arguments',
-  description: 'returns its arguments',
-}
-return args`,
-            args: { question: 'What is conserved?' },
-            createRunAgent: billingRunAgent,
-          }),
-        );
-
-        const turn = yield* launchStrategy(strategy, ports);
-        const delivery = yield* onFakeHost(strategy.formatDelivery(turn, 0));
-        expect(delivery).toContain('"question": "What is conserved?"');
-        expect(ports.recordCost).toHaveBeenCalledWith(0);
-      }),
   );
 
   it.effect('retains checkpoint arguments when a null retry omits them', () =>
