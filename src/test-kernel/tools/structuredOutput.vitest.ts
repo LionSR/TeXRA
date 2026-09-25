@@ -208,9 +208,9 @@ describe('report_review_issue', () => {
       const sink = vi.fn<NonNullable<HostInteractions['reportReviewIssue']>>(
         () => ({ accepted: true }),
       );
-      const detach = Effect.runSync(
-        testDefaultSession().interactions.use({ reportReviewIssue: sink }),
-      );
+      const detach = yield* testDefaultSession().interactions.use({
+        reportReviewIssue: sink,
+      });
       yield* Effect.addFinalizer(() => Effect.sync(detach));
       const report = {
         file: 'src/x.ts',
