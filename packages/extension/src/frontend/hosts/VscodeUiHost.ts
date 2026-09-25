@@ -136,9 +136,10 @@ class VscodeUiHost implements MessageHost, PromptHost {
         tokens.dispose();
         return true;
       };
-      void Promise.resolve(
-        vscode.window.showInputBox(options, tokens.token),
-      ).then(
+      // A secret is pasted from elsewhere (a browser, a password manager), so
+      // leaving the window must not close the box and drop the entry.
+      const box = { ...options, ignoreFocusOut: options.password === true };
+      void Promise.resolve(vscode.window.showInputBox(box, tokens.token)).then(
         (value) => {
           dispose();
           resume(Effect.succeed(value));
