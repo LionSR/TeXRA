@@ -12,7 +12,8 @@ import {
   createTestSession,
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
-import { readRunEntries } from '@transcript/runEntries';
+import { readRunTranscript } from '@transcript/runTranscript';
+import type { TranscriptRow } from '@ui/transcript';
 import { generateRunId } from '@utils/core';
 
 describe('session-owned transcripts and follow-up queues', () => {
@@ -37,11 +38,15 @@ describe('session-owned transcripts and follow-up queues', () => {
         output.finalize();
         yield* launching.settlePublications();
 
+        const rowText = (row: TranscriptRow) =>
+          row.kind === 'assistant' ? row.text.full : row.kind;
         expect(
-          (yield* readRunEntries(launching, runId)).map((entry) => entry.text),
+          (yield* readRunTranscript(launching, runId)).rows.map(rowText),
         ).toEqual(['owned by launching session']);
-        expect(yield* readRunEntries(sibling, runId)).toEqual([]);
-        expect(yield* readRunEntries(testDefaultSession(), runId)).toEqual([]);
+        expect((yield* readRunTranscript(sibling, runId)).rows).toEqual([]);
+        expect(
+          (yield* readRunTranscript(testDefaultSession(), runId)).rows,
+        ).toEqual([]);
       }),
   );
 
@@ -63,11 +68,11 @@ describe('session-owned transcripts and follow-up queues', () => {
       // the row's final text instead of streaming forever.
       session.publish(yield* session.streamClosureFacts(runId));
       yield* session.settlePublications();
-      const entries = yield* readRunEntries(session, runId);
+      const { rows } = yield* readRunTranscript(session, runId);
       expect(
-        entries
-          .filter((entry) => entry.messageType === MESSAGE_TYPES.MODEL_RESPONSE)
-          .map((entry) => entry.text),
+        rows.flatMap((row) =>
+          row.kind === 'assistant' ? [row.text.full] : [],
+        ),
       ).toEqual(['partial text']);
     }),
   );

@@ -8,7 +8,6 @@ import { CliSecrets } from '@cli/runtime/cliSecrets';
 import { onAppSignal } from '@eventBus/AppSignals';
 
 import {
-  apiKeyEnvName,
   apiKeySecretName,
   configuredApiKeyProviders,
   getApiKey,
@@ -19,6 +18,7 @@ import {
   lookupApiKeyUncached,
 } from '@model/apiProviders';
 import { SecretsFailed, type PlatformSecrets } from '@platform/secrets';
+import { apiKeyEnvName } from '@shared/constants/providers';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { installPlatform } from '@test/support/setupPlatform';

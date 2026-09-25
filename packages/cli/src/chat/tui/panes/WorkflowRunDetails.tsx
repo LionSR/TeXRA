@@ -1,6 +1,6 @@
 // Focused, read-only workflow run details.
 //
-// Task-group lifecycle comes from the StreamLog; generated files and warnings
+// Task-group lifecycle comes from the transcript fold; generated files and warnings
 // come from the canonical round-indexed artifact facts. This component only
 // joins and renders those facts—it does not infer or mutate workflow state.
 

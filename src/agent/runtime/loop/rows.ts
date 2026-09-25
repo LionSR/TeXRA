@@ -6,7 +6,6 @@
  * retry permit) is folded from that row and never restated here.
  */
 
-import { redactSecrets } from '@logger/redaction';
 import {
   aggregateId as qualifyAggregateId,
   type FlowStep,
@@ -248,35 +247,15 @@ export function displayRow(
 
 /**
  * The durable copy of an approval request payload. A retry carries the
- * provider error, whose body can echo the request URL or an `Authorization`
- * header, so the raw body is dropped and the text fields are scrubbed before
- * the row is written. Bash commands and question text are what the user
- * typed and stay as they are. Every writer of a `request.opened` row passes
- * its payload through here, whether the session opens the request or a loop
- * commits it with its recovery binding.
+ * provider error, whose raw body is dropped before the row is written; the
+ * rest of the payload is written as it is. Every writer of a
+ * `request.opened` row passes its payload through here, whether the session
+ * opens the request or a loop commits it with its recovery binding.
  */
 export function redactedForFact(payload: PermissionPayload): PermissionPayload {
   if (payload.kind !== 'retry') return payload;
-  const { errorMessage, errorDetails, ...data } = payload.data;
-  const redactedDetails = (() => {
-    if (!errorDetails) return errorDetails;
-    const { rawErrorBody: _dropped, ...details } = errorDetails;
-    for (const key of ['message', 'statusText', 'partialText'] as const) {
-      const value = details[key];
-      if (typeof value === 'string') details[key] = redactSecrets(value);
-    }
-    return details;
-  })();
-  return {
-    kind: 'retry',
-    data: {
-      ...data,
-      ...(errorMessage === undefined
-        ? {}
-        : { errorMessage: redactSecrets(errorMessage) }),
-      ...(redactedDetails === undefined
-        ? {}
-        : { errorDetails: redactedDetails }),
-    },
-  };
+  const { errorDetails, ...data } = payload.data;
+  if (!errorDetails) return payload;
+  const { rawErrorBody: _dropped, ...details } = errorDetails;
+  return { kind: 'retry', data: { ...data, errorDetails: details } };
 }

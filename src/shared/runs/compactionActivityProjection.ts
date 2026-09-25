@@ -80,7 +80,7 @@ function applyFreed(
   payload: unknown,
 ): readonly number[] {
   // A payload its schema rejects moves nothing here; the transcript fold
-  // writes it as an error row (`traceFold`).
+  // writes it as an error row (`transcriptLogRows.ts`).
   const parsed = ContextManagementDataSchema.safeParse(payload);
   if (!parsed.success || parsed.data.action !== 'compaction') return [];
   const index = projection.blocks.findLastIndex(

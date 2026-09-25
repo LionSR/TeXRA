@@ -8,8 +8,10 @@ import { Data, Deferred, Effect, Redacted } from 'effect';
 import { LRUCache } from 'lru-cache';
 
 import type { PlatformSecrets, SecretsFailed } from '@platform/secrets';
-import { findModelProviderPlugin } from '@shared/constants/modelProviderPlugins';
-import { API_KEY_PROVIDER_IDS } from '@shared/constants/providers';
+import {
+  API_KEY_PROVIDER_IDS,
+  apiKeyEnvName,
+} from '@shared/constants/providers';
 import { envVar } from '@utils/system/envFlags';
 import { isNonEmptyString } from '@utils/text/stringUtils';
 
@@ -36,14 +38,6 @@ export function apiKeySecretName(provider: ApiProvider): string {
 export function apiProviderOfSecretName(key: string): ApiProvider | undefined {
   const provider = key.startsWith('apiKey.') ? key.slice('apiKey.'.length) : '';
   return isApiProvider(provider) ? provider : undefined;
-}
-
-/** Environment variable name for a provider's API key. */
-export function apiKeyEnvName(provider: ApiProvider): string {
-  return (
-    findModelProviderPlugin(provider)?.apiKeyEnvName ??
-    `${provider.toUpperCase()}_API_KEY`
-  );
 }
 
 /** Where a resolved API key came from. */

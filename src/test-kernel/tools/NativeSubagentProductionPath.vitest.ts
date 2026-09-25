@@ -43,7 +43,6 @@ import { readChildTurnState } from '@agent/storage/runRecords';
 import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { FileInteractionState } from '@agent/core/state/AgentWorkspaceState';
-import { RunHandle } from '@agent/runtime/RunHandle';
 import type { BoundModel } from '@agent/runtime/run/modelBinding';
 import type { Message } from '@agent/runtime/loop/rows';
 import { executeAgent } from '@agent/runtime/executeAgent';
@@ -389,8 +388,7 @@ function childRunId(resultOutput: string | undefined): RunId {
 
 function interruptActiveRuns(session: SessionHandle): void {
   for (const runId of session.runs.getActiveIds()) {
-    const handle = session.runs.getHandle(runId);
-    if (handle instanceof RunHandle) handle.interrupt();
+    session.runs.interrupt(runId);
   }
 }
 
@@ -518,13 +516,18 @@ async function launchWaitingChild(options: {
       parentRunId: OUTER_RUN_ID,
     }),
   );
+  // Admitted on the run's lane like every production launch, so the run's
+  // fiber is its stop target by run id.
   parentFiber = testRuntime().runFork(
-    prepareAgentDefinition({ config: parentConfig, session }).pipe(
-      Effect.flatMap((definition) =>
-        executeAgent(definition, PARENT_RUN_ID, {
-          session,
-          parentRunId: OUTER_RUN_ID,
-        }),
+    session.runs.launchRun(
+      PARENT_RUN_ID,
+      prepareAgentDefinition({ config: parentConfig, session }).pipe(
+        Effect.flatMap((definition) =>
+          executeAgent(definition, PARENT_RUN_ID, {
+            session,
+            parentRunId: OUTER_RUN_ID,
+          }),
+        ),
       ),
     ),
   );
@@ -974,8 +977,17 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         yield* waitForParentTurns(1);
 
         // The loop minted a stable logical identity for turn 1's delivery.
-        const turnState = yield* readChildTurnState(session, runId);
-        expect(turnState.active).toBeNull();
+        // The parent is admitted before the turn's settled row commits, so
+        // the parent's turn can land first.
+        const turnState = yield* Effect.promise(() =>
+          vi.waitFor(async () => {
+            const state = await Effect.runPromise(
+              readChildTurnState(session, runId),
+            );
+            expect(state.active).toBeNull();
+            return state;
+          }),
+        );
         const completed = turnState.lastCompleted;
         expect(completed).not.toBeNull();
         // The delivery id the loop derives from that turn's identity.
@@ -1047,9 +1059,16 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         yield* Effect.promise(() => waitForPersistedResult(runId, 'Result A.'));
         yield* waitForParentTurns(1);
 
-        const completed1 = (yield* readChildTurnState(session, runId))
-          .lastCompleted;
-        expect(completed1).not.toBeNull();
+        // Settled after the parent's admission, so polled like the above.
+        const completed1 = yield* Effect.promise(() =>
+          vi.waitFor(async () => {
+            const { lastCompleted } = await Effect.runPromise(
+              readChildTurnState(session, runId),
+            );
+            expect(lastCompleted).not.toBeNull();
+            return lastCompleted;
+          }),
+        );
 
         // Accept a follow-up: the loop runs turn 2, which hangs mid-model-call.
         yield* Effect.promise(() =>

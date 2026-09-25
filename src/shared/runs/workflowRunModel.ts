@@ -134,9 +134,9 @@ interface MutablePhase {
 
 /**
  * Cards in deterministic transcript order, even when a caller collected a
- * group tree pre-order. Every `workflowTask` row carries a wire sequence —
- * `StreamLogEntrySchema` requires `seqNo`, and the one live producer of
- * seqNo-less rows (the CLI local-notice path) cannot emit this kind — so the
+ * group tree pre-order. Every `workflowTask` row carries a sequence (the
+ * transcript fold stamps each row's first appearance, and the one producer of
+ * seqNo-less rows, the CLI local-notice path, cannot emit this kind), so the
  * ordering is causal, with timestamp only as a tie-break.
  */
 function workflowCardsInTranscriptOrder(

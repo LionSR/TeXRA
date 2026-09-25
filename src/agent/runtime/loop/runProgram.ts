@@ -215,7 +215,7 @@ export type RunExit = {
 /**
  * The one verdict: the body's own value when it returned. Any interrupt in
  * a failure cause is a stop, even when a finalizer then failed
- * (`Interrupt` + `Die`): `runUntilStopped` already reports that run
+ * (`Interrupt` + `Die`): the run lifecycle already reports that run
  * `CANCELLED`, so the halt row agrees.
  */
 const runVerdict = (exit: Exit.Exit<RunExit, Error>): RunOutcome | null =>

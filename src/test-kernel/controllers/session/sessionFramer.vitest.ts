@@ -36,7 +36,6 @@ import {
   FoldEventSchema,
   MESSAGE_TYPES,
   RUN_PHASE,
-  STREAM_LOG_ENTRY_TYPES,
   type RunId,
   type SessionEventDraft,
 } from '@shared/schemas';

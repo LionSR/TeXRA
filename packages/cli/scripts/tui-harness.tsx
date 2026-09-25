@@ -43,11 +43,12 @@ import {
   MESSAGE_TYPES,
   RUN_OUTCOME,
   RUN_PHASE,
-  STREAM_LOG_ENTRY_TYPES,
   TODO_STATUS,
   TOOL_CALL_STATUS,
   USER_FOLLOW_UP_SUPPORT,
   RunIdSchema,
+  type LogLevel,
+  type MessageType,
   type NormalizedToolUse,
   type PermissionPayload,
   type PlanApprovalPermission,
@@ -66,7 +67,6 @@ import {
   isTerminalOutcomePhase,
 } from '@shared/runs/runStatus';
 import { acceptsFollowUp, descendantRuns } from '@shared/session/sessionView';
-import type { StreamLogAppendInput } from '@shared/session/traceEntries';
 import {
   buildScenario,
   foldAll,
@@ -605,15 +605,21 @@ function removeRun(runId: RunId): void {
   harnessRuns.delete(runId);
 }
 
-/**
- * Publish complete fixture rows on the event plane. Every fixture builder
- * below emits a `LOG` entry, so each maps onto one `log` trace row; the
- * transcript fold mints the row's id and timestamp from the published fact.
- */
-function seedRows(
-  runId: RunId,
-  entries: readonly StreamLogAppendInput[],
-): void {
+/** One fixture row: published as one `log` trace row, whose id and clock
+ *  the transcript fold mints from the published fact. */
+interface HarnessLogRow {
+  readonly id: string;
+  readonly level: LogLevel;
+  readonly timestamp: number;
+  readonly messageType: MessageType;
+  readonly text?: string;
+  readonly data?: unknown;
+  readonly groupId?: string;
+  readonly verbose?: boolean;
+}
+
+/** Publish complete fixture rows on the event plane. */
+function seedRows(runId: RunId, entries: readonly HarnessLogRow[]): void {
   seedRun(runId);
   publish(
     ...entries.map((entry) => ({
@@ -635,7 +641,7 @@ function harnessTextRow(
   kind: 'assistant' | 'error' | 'user',
   text: string,
   seqNo: number,
-): StreamLogAppendInput {
+): HarnessLogRow {
   const messageType = {
     user: MESSAGE_TYPES.USER_MESSAGE,
     error: MESSAGE_TYPES.ERROR,
@@ -643,7 +649,6 @@ function harnessTextRow(
   }[kind];
   return {
     id,
-    type: STREAM_LOG_ENTRY_TYPES.LOG,
     level: kind === 'error' ? LOG_LEVELS.ERROR : LOG_LEVELS.INFO,
     timestamp: seqNo,
     messageType,
@@ -651,8 +656,8 @@ function harnessTextRow(
   };
 }
 
-function makeEntries(count: number): StreamLogAppendInput[] {
-  const entries: StreamLogAppendInput[] = [];
+function makeEntries(count: number): HarnessLogRow[] {
+  const entries: HarnessLogRow[] = [];
   for (let i = 1; i <= count; i += 1) {
     const kind = i % 3 === 0 ? 'assistant' : 'user';
     const text =
@@ -686,10 +691,9 @@ function harnessToolEntry(
   id: string,
   toolUse: NormalizedToolUse,
   seqNo = 2,
-): StreamLogAppendInput {
+): HarnessLogRow {
   return {
     id,
-    type: STREAM_LOG_ENTRY_TYPES.LOG,
     level: LOG_LEVELS.INFO,
     timestamp: seqNo,
     messageType: MESSAGE_TYPES.TOOL_USE,
@@ -703,7 +707,7 @@ function harnessToolEntry(
   };
 }
 
-function makeLongToolOutputEntries(): StreamLogAppendInput[] {
+function makeLongToolOutputEntries(): HarnessLogRow[] {
   return [
     harnessTextRow(
       'long-tool-user',
@@ -715,7 +719,7 @@ function makeLongToolOutputEntries(): StreamLogAppendInput[] {
   ];
 }
 
-function makeAssistantToolPreambleEntries(): StreamLogAppendInput[] {
+function makeAssistantToolPreambleEntries(): HarnessLogRow[] {
   return [
     harnessTextRow('preamble-user', 'user', 'what is this repo about', 1),
     harnessTextRow(
@@ -742,11 +746,10 @@ function makeAssistantToolPreambleEntries(): StreamLogAppendInput[] {
 }
 
 function seedLiveToolOnlyTranscript(): void {
-  const entries: StreamLogAppendInput[] = [];
+  const entries: HarnessLogRow[] = [];
   const timestamp = Date.now();
   entries.push({
     id: 'live-tool-user',
-    type: STREAM_LOG_ENTRY_TYPES.LOG,
     level: LOG_LEVELS.INFO,
     timestamp,
     messageType: MESSAGE_TYPES.USER_MESSAGE,
@@ -754,7 +757,6 @@ function seedLiveToolOnlyTranscript(): void {
   });
   entries.push({
     id: 'live-tool-empty-assistant',
-    type: STREAM_LOG_ENTRY_TYPES.LOG,
     level: LOG_LEVELS.INFO,
     timestamp: timestamp + 1,
     messageType: MESSAGE_TYPES.MODEL_RESPONSE,
@@ -772,7 +774,6 @@ function seedLiveToolOnlyTranscript(): void {
     .entries()) {
     entries.push({
       id: `live-tool-${toolName}-${index}`,
-      type: STREAM_LOG_ENTRY_TYPES.LOG,
       level: LOG_LEVELS.INFO,
       timestamp: timestamp + 2 + index,
       messageType: MESSAGE_TYPES.TOOL_USE,
@@ -788,7 +789,7 @@ function seedLiveToolOnlyTranscript(): void {
   seedRows(HARNESS_RUN_ID, entries);
 }
 
-function makeRejectedBashToolEntries(): StreamLogAppendInput[] {
+function makeRejectedBashToolEntries(): HarnessLogRow[] {
   const command = "printf 'approval-reject-live\\n'";
   const message = `User rejected command: ${command}`;
   return [
@@ -812,7 +813,7 @@ function makeRejectedBashToolEntries(): StreamLogAppendInput[] {
 }
 
 function seedSubagentFollowupTranscript(): void {
-  const entries: StreamLogAppendInput[] = [];
+  const entries: HarnessLogRow[] = [];
   const timestamp = Date.now();
   const followups = [
     '<subagent-progress id="child-a" agent="strategy" type="overview" tool-calls="3" files-changed="none" />',
@@ -831,7 +832,6 @@ function seedSubagentFollowupTranscript(): void {
   for (const [index, text] of followups.entries()) {
     entries.push({
       id: `harness-subagent-followup-${index}`,
-      type: STREAM_LOG_ENTRY_TYPES.LOG,
       level: LOG_LEVELS.INFO,
       timestamp: timestamp + index,
       messageType: MESSAGE_TYPES.USER_MESSAGE,
@@ -841,10 +841,7 @@ function seedSubagentFollowupTranscript(): void {
   seedRows(HARNESS_RUN_ID, entries);
 }
 
-function makeChildEntries(
-  agent: string,
-  action: string,
-): StreamLogAppendInput[] {
+function makeChildEntries(agent: string, action: string): HarnessLogRow[] {
   const assistantText =
     SHOW_LONG_CHILD_OUTPUT && agent === 'strategy'
       ? Array.from(
@@ -1111,7 +1108,7 @@ function harnessInitialRunStatus(): RunPhase | undefined {
   return undefined;
 }
 
-function harnessInitialEntries(): StreamLogAppendInput[] {
+function harnessInitialEntries(): HarnessLogRow[] {
   if (SHOW_REJECTED_BASH_TOOL) return makeRejectedBashToolEntries();
   if (SHOW_LONG_TOOL_OUTPUT) return makeLongToolOutputEntries();
   if (SHOW_ASSISTANT_TOOL_PREAMBLE) return makeAssistantToolPreambleEntries();

@@ -1,7 +1,7 @@
 # Run-program and dispatch dedup: one mechanism, three copied skins
 
 Date: 2026-09-20
-Status: proposed
+Status: proposed — step 4 only. Steps 1–3, 5 and 6 are on main (#12995, #13017, #13029, #12936, #12894, #13027, #12912); step 4, deleting `bindAbortSignals` in `nativeSubagentStrategy.ts`, waits on the turn becoming one interruptible fiber (#13117).
 Baseline: `main` at `3378a967`. Parent survey:
 [post-refactor architecture survey](../architecture/2026-09-20-post-refactor-architecture-survey.md).
 
@@ -82,7 +82,7 @@ duplicated is scaffolding, not architecture.
    newest round when a session is reopened, which is why today's
    `addOutputFiles` row already carries its whole map. The alternative is
    the discriminator-aware grouping the
-   [schema-collapse note](./2026-09-20-tools-and-schema-surface-collapse.md)
+   [schema-collapse note](../../archived/simplification/2026-09-20-tools-and-schema-surface-collapse.md)
    specifies for `run.fact`, applied to a round key; take it only if the map
    grows past what one row should carry. Move the pipeline to
    `src/agent/output/` and delete the `implementations/flows/` segments.
