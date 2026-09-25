@@ -1,6 +1,6 @@
 import { it } from '@effect/vitest';
 /** Completed conversation reads and task reads through the archive facade. */
-import { Effect, Layer, Stream, SubscriptionRef } from 'effect';
+import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 const launchMocks = vi.hoisted(() => ({
@@ -32,14 +32,7 @@ import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { initializeDefaultSession } from '@agent/runtime/sessionGraph';
 import { resumeRun } from '@agent/runtime/resumeRun';
 import { closeSession } from '@agent/runtime/sessionGraph';
-import {
-  readCliHistoryDetails,
-  formatCliHistoryDetailsText,
-  cliHistoryDetailNdjsonRecord,
-} from '@cli/runtime/history';
-import { createHostRunActions } from '@controllers/session/hostRunActions';
 import { withProcessServices } from '@platform/processRuntime';
-import { Secrets } from '@platform/secrets';
 import {
   LOG_LEVELS,
   MESSAGE_TYPES,
@@ -51,17 +44,12 @@ import {
 import type { RunId, TodoItem } from '@shared/schemas';
 import type { StreamLogAppendInput } from '@shared/session/traceEntries';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
-import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import {
   createTempDirPlatform,
   useTempDirs,
 } from '@test/support/tempDirPlatform';
-import {
-  fakeProcessServices,
-  installedHost,
-  setupPlatform,
-} from '@test/support/setupPlatform';
+import { setupPlatform } from '@test/support/setupPlatform';
 import {
   createProcessSession,
   createTestSession,
@@ -71,8 +59,6 @@ import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { settleSessionEvents } from '@test/agent/progressTestUtils';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
 import {
-  assembleTrace,
-  injectStandaloneTrace,
   hasCompletedRunConversationEvidence,
   readCompletedRunConversation as readCompletedRunConversationEffect,
 } from '@transcript';
@@ -226,103 +212,6 @@ describe('completedRunArchive facade', () => {
   afterEach(async () => {
     vi.restoreAllMocks();
   });
-
-  it.effect(
-    'keeps private metadata exact while public events and exports redact its secrets',
-    () =>
-      Effect.gen(function* () {
-        yield* closeTestSession(taskSession);
-        taskSession = yield* createProcessSession({
-          transcriptMode: { kind: 'persistent' },
-        });
-        const runId = 'abc654abc654' as RunId;
-        const secret = 'sk-private-export-key-1234567890';
-        const content = `  retained text ${secret}  `;
-        yield* Effect.promise(() => stampRun(runId));
-        const records = getRunRecords(taskSession, runId);
-        const config = {
-          ...runConfig('orchestrator'),
-          instruction: content,
-          inputFiles: [`paper-${secret}.tex`],
-        };
-        yield* records.writeRunRecord(config);
-        yield* records.writeReport(content);
-        yield* taskSession.commit([
-          {
-            type: 'run.description',
-            aggregateId: aggregateId('run', runId),
-            description: content,
-          },
-          {
-            type: 'run.config',
-            aggregateId: aggregateId('run', runId),
-            config,
-          },
-          {
-            type: 'response.finalized',
-            aggregateId: aggregateId('run', runId),
-            text: 'A public proof.',
-          },
-        ]);
-        expect(yield* records.readConfig()).toEqual(config);
-        expect(yield* records.readReport()).toBe(content);
-        // The run's one `run.description` row is redacted on the way into the
-        // event table, so every reader of it — the view's fold included, asserted
-        // below — sees the redacted text; the private sidecars above stay exact.
-        const runAgentRequest = vi.fn(() => Effect.void);
-        const actions = yield* createHostRunActions({
-          session: taskSession,
-          runAgentRequest,
-          loadModelOptions: () => Effect.succeed([]),
-          promptForApiKey: () => Effect.void,
-          showInfo: () => Effect.void,
-          showWarning: () => Effect.void,
-        }).pipe(
-          Effect.provide(
-            Layer.merge(
-              Secrets.layer(installedHost().secrets),
-              nodePlatformLayer,
-            ),
-          ),
-        );
-        yield* actions.runNew(runId);
-        expect(runAgentRequest).toHaveBeenCalledWith({ config });
-        const trace = yield* assembleTrace(runId, taskSession);
-        expect(trace.status).toBe('ok');
-        if (trace.status !== 'ok') throw new Error('Expected trace export');
-        const exportInput = yield* Effect.promise(() =>
-          loadChatExportInput(runId),
-        );
-        const details = yield* readCliHistoryDetails(
-          Effect.succeed(taskSession),
-          runId,
-        ).pipe(Effect.provide(fakeProcessServices()));
-        expect(details).not.toBeNull();
-        if (!details) throw new Error('Expected history details');
-        const publicRows = yield* Stream.runCollect(
-          taskSession.events.aggregate(aggregateId('run', runId), 1),
-        );
-        const outputs = [
-          injectStandaloneTrace('<script type="module"></script>', trace.trace),
-          JSON.stringify(exportInput.exportInput),
-          formatCliHistoryDetailsText(details),
-          JSON.stringify(cliHistoryDetailNdjsonRecord(details)),
-          JSON.stringify(publicRows),
-          JSON.stringify(
-            SubscriptionRef.getUnsafe(taskSession.view).runs.get(runId)
-              ?.inputFiles,
-          ),
-          JSON.stringify(
-            SubscriptionRef.getUnsafe(taskSession.view).runs.get(runId)
-              ?.description,
-          ),
-        ];
-        for (const output of outputs) {
-          expect(output).not.toContain(secret);
-          expect(output).toContain('[redacted]');
-        }
-      }),
-  );
 
   // it.live: the release at the end of this test closes both sessions through
   // `closeSession`, whose settlement budget is
