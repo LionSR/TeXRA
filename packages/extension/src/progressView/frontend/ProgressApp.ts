@@ -262,22 +262,22 @@ export class ProgressApp extends LitElement {
       slot: 'end',
       onClick: this.selectNew,
     });
-    // One 38px row. Docked wide (the editor tab past 720px), the row is a
-    // 300px + 1fr grid: the dock cell carries the project name and New task,
-    // the reading cell the run's header; the sidebar and the narrow tab
-    // show the sessions button and the title in one cell.
+    const settings = renderIconActionButtonParts({
+      id: 'shell-settings',
+      icon: 'gear',
+      label: 'Settings',
+      tooltip: 'Settings',
+      slot: 'end',
+      onClick: () =>
+        this.dispatchEvent(SessionUiEvents.host({ kind: 'openSettings' })),
+    });
+    // New task and Settings end the row in every layout (the desktop rail
+    // has both). Docked wide, a 300px + 1fr grid: the dock names the project.
+    const end = onDesktop ? [] : [newTask, settings];
     return html`
       <header class="shell-header">
         <div class="header-dock">
           <span class="shell-title">${host.project.name}</span>
-          <span class="spacer"></span>
-          ${renderIconActionButton({
-            id: 'dock-new-task',
-            icon: 'plus',
-            label: 'New task',
-            tooltip: 'New task',
-            onClick: this.selectNew,
-          })}
         </div>
         <div class="header-main">
           <slot name="header-start"></slot>
@@ -288,12 +288,12 @@ export class ProgressApp extends LitElement {
                     .run=${run}
                     .view=${view}
                     .menuItems=${this.windowItems()}
-                    >${onDesktop ? nothing : [sessions.button, newTask.button]}</run-header
-                  >${onDesktop ? nothing : [sessions.tooltip, newTask.tooltip]}`
+                    >${onDesktop ? nothing : sessions.button}${end.map((b) => b.button)}</run-header
+                  >${onDesktop ? nothing : sessions.tooltip}${end.map((b) => b.tooltip)}`
               : html`${sessions.button}${sessions.tooltip}
                   <span class="shell-title header-main-title">New task</span>
                   <span class="spacer"></span>
-                  ${onDesktop ? nothing : [newTask.button, newTask.tooltip]}
+                  ${end.map((b) => [b.button, b.tooltip])}
                   ${this.renderOverflow()}`
           }
           <slot name="header-end"></slot>

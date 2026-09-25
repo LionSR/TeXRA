@@ -339,7 +339,7 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
   button does it), Indent All LaTeX Files, Import or Create LaTeX Project,
   and Sign In with Grok Subscription (Settings has it). **TeXRA: Sign In** is
   now **Sign In to TeXRA Account (Remote Agents)**, since model access never
-  needed it. The panel's title bar shows only the Settings gear; it no longer
+  needed it. The panel's title bar no longer
   swaps in workspace-wide Indent and Clean buttons over a conversation.
   **Delete All build/ Folders in Workspace** (formerly Clean All Build Files)
   now lists the folders and asks before deleting them, then says what it
@@ -378,6 +378,12 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
 
 #### Changes
 
+- **Settings has a gear in the TeXRA panel header**, next to New task, in
+  every state and in the editor tab; the hover-only gear in the view's title
+  bar is gone. Editor tabs read "TeXRA Sessions" and "TeXRA Settings", a
+  session row says "2 tasks · 1 running" and "Needs approval" instead of
+  bare number badges, and the run header's chip reads "3 tool calls"
+  rather than "t1, 3 tool calls".
 - **The TeXRA panel is calmer.** A run shows one header row with one Stop
   and one ⋯ menu instead of two stacked headers. A new project shows one
   card at a time (setup, then "No LaTeX files yet") and at most one warning
@@ -386,8 +392,8 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
   TeXRA can't do without it. The run header's AUTO-EDIT, AUTO-BASH and AUTO-TASK
   toggles are replaced by an "Auto-approving …" chip that appears only while
   a grant from an approval card is on; click it to go back to asking. Open
-  dashboard and Attach TeX Count left the ⋯ menu (the gear and the Input
-  file menu have them). The desktop app no longer draws a second header,
+  dashboard and Attach TeX Count left the ⋯ menu (the header's Settings
+  gear and the Input file menu have them). The desktop app no longer draws a second header,
   Sessions button and New task inside its own window.
 - **Deleting a session asks first.** The × on a Sessions row, which deleted
   the conversation in one click, is gone. Delete now lives at the end of

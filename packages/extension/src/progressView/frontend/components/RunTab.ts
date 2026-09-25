@@ -18,7 +18,6 @@ import { focusRingStyles } from '@ui/styles/controlStyles';
 import { AGENT_DECORATORS, getAgentCategoryDecorator } from '@ui/wa/icons';
 
 // Side-effect imports - register WA components
-import '@awesome.me/webawesome/dist/components/badge/badge.js';
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/relative-time/relative-time.js';
@@ -51,7 +50,8 @@ function buildTooltip(run: RunView): string {
     : undefined;
   const mainLine = [
     run.label,
-    `Status: ${run.approval === 'none' ? run.statusLabel : 'Approval required'}`,
+    `Status: ${run.approval === 'none' ? run.statusLabel : 'Needs approval'}`,
+    run.rollup.total > 0 && rollupLabel(run),
     modelDisplay && `Model: ${modelDisplay}`,
     worktreeDisplay,
   ]
@@ -71,6 +71,14 @@ function buildTooltip(run: RunView): string {
   ]
     .filter(Boolean)
     .join('\n');
+}
+
+/** A collapsed parent's descendants in words: "2 tasks · 1 running". */
+function rollupLabel(run: RunView): string {
+  const total = formatResultCount(run.rollup.total, 'task');
+  return run.rollup.running > 0
+    ? `${total} · ${run.rollup.running} running`
+    : total;
 }
 
 function runDecorator(run: RunView) {
@@ -111,7 +119,7 @@ export class RunTab extends LitElement {
       ? 'triangle-exclamation'
       : TONE_ICONS[run.tone];
     const accessibleStatusLabel = pendingApproval
-      ? 'Approval required'
+      ? 'Needs approval'
       : run.statusLabel;
     const runTitle = run.description || run.label;
     const childCountLabel = formatResultCount(
@@ -186,17 +194,7 @@ export class RunTab extends LitElement {
               >
               ${
                 showRollup
-                  ? html`<span class="tab-rollup" aria-label=${childCountLabel}
-                      ><wa-badge variant="neutral" appearance="outlined" pill
-                        >${run.rollup.total}</wa-badge
-                      >${
-                        run.rollup.running > 0
-                          ? html`<wa-badge variant="success" pill
-                              >${run.rollup.running}</wa-badge
-                            >`
-                          : nothing
-                      }</span
-                    >`
+                  ? html`<span class="tab-rollup">${rollupLabel(run)}</span>`
                   : nothing
               }
               <span
@@ -205,7 +203,11 @@ export class RunTab extends LitElement {
                 role="img"
                 aria-label=${accessibleStatusLabel}
               >
-                ${waIcon(statusGlyph, { className: 'tab-status-icon' })}
+                ${waIcon(statusGlyph, { className: 'tab-status-icon' })}${
+                  pendingApproval
+                    ? html`<span class="tab-status-label">Needs approval</span>`
+                    : nothing
+                }
               </span>
             </div>
             <div id="run-tab-meta" class="tab-meta">
