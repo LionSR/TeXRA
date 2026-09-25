@@ -5,22 +5,41 @@ import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { afterEach, describe, expect, vi } from 'vitest';
 
+import { createHostSnapshotSource } from '@controllers/session/hostSnapshotSource';
+import { HostDraftRequests } from '@controllers/session/hostDraftRequests';
+import { createDesktopHostRequests } from '@desktop/main/desktopHostRequests';
+import { createDesktopFileSelection } from '@desktop/main/desktopFileSelection';
 import { withProcessServices } from '@platform/processRuntime';
 import type { RunId } from '@shared/schemas';
 import type { HostRequest } from '@shared/session/hostRequest';
+import { Rejected } from '@shared/session/requestErrors';
 import { testRuntime } from '@test/support/testProcessRuntime';
-import { createModuleMocks } from '@test/support/moduleMocks';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import {
   makeTempDir as makeSharedTempDir,
   useTempDirs,
 } from '@test/support/tempDirPlatform';
+import { createFakeHost, installFakeHost } from '@test/support/setupPlatform';
+import { createTestSession } from '@test/support/sessionTestUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { createExternalLocation } from '@utils/files/fileLocation';
 import { createStubDesktopAgentRunHost } from './desktopAgentRunTestHarness.ts';
 
-const mocks = createModuleMocks();
+// The LaTeX engine and toolchain probe, mocked once for the file. Each test
+// sets their behaviour through `loadDesktopPreviewHost`; the module graph is
+// imported once, since re-importing it per test is what timed the suite out
+// under load.
+const latex = vi.hoisted(() => ({
+  compileLatex2Pdf: vi.fn(),
+  hasLatexCompiler: vi.fn(),
+}));
+vi.mock('@latex/texTools', () => ({
+  compileLatex2Pdf: latex.compileLatex2Pdf,
+}));
+vi.mock('@latex/latexToolchain', () => ({
+  hasLatexCompiler: latex.hasLatexCompiler,
+}));
 
 type FakeCompile = (location: { absolutePath: string }) => Effect.Effect<{
   ok: boolean;
@@ -50,11 +69,8 @@ async function loadDesktopPreviewHost(
     Effect.succeed(true),
   ),
 ): Promise<typeof import('@desktop/main/desktopPreviewHost')> {
-  vi.resetModules();
-  mocks.doMock('@latex/texTools', () => ({ compileLatex2Pdf }));
-  mocks.doMock('@latex/latexToolchain', () => ({
-    hasLatexCompiler: checkToolInstalled,
-  }));
+  latex.compileLatex2Pdf.mockReset().mockImplementation(compileLatex2Pdf);
+  latex.hasLatexCompiler.mockReset().mockImplementation(checkToolInstalled);
   return import('@desktop/main/desktopPreviewHost');
 }
 
@@ -105,37 +121,14 @@ describe('desktop preview host', () => {
         const { createDesktopPreviewHost } = yield* Effect.promise(() =>
           loadDesktopPreviewHost(),
         );
-        const { createDesktopHostRequests } = yield* Effect.promise(
-          () => import('@desktop/main/desktopHostRequests'),
-        );
-        const { createFakeHost, installFakeHost } = yield* Effect.promise(
-          () => import('@test/support/setupPlatform'),
-        );
         const fakeHost = createFakeHost();
         yield* Effect.promise(() => installFakeHost(fakeHost));
         const secrets = fakeHost.secrets;
-        const { createTestSession } = yield* Effect.promise(
-          () => import('@test/support/sessionTestUtils'),
-        );
-        const { createHostSnapshotSource } = yield* Effect.promise(
-          () => import('@controllers/session/hostSnapshotSource'),
-        );
         const session = createTestSession();
         const present = vi.fn<(...args: unknown[]) => void>(() => {});
         const detachPresentation = yield* session.interactions.use({
           emit: present,
         });
-        const { createDesktopFileSelection } = yield* Effect.promise(
-          () => import('@desktop/main/desktopFileSelection'),
-        );
-        const { HostDraftRequests } = yield* Effect.promise(
-          () => import('@controllers/session/hostDraftRequests'),
-        );
-        // After `vi.resetModules`, the refusal class the handler compares
-        // against is this graph's instance, not the statically imported one.
-        const { Rejected } = yield* Effect.promise(
-          () => import('@shared/session/requestErrors'),
-        );
         const showErrorMessage = vi.fn<
           (message: string) => Effect.Effect<void>
         >(() => Effect.void);

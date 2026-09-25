@@ -17,7 +17,6 @@ import type {
   CodexSession,
   CodexTokenResponse,
 } from '@auth/codex/codexSessionTypes';
-import { codexAccountLabel } from '@auth/codex/codexSessionTypes';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import type { HttpClient } from 'effect/unstable/http';
 
@@ -151,6 +150,24 @@ const forkNow = <A>(
   program: Effect.Effect<A, unknown, HttpClient.HttpClient>,
 ) => Effect.forkChild(withHttp(program), { startImmediately: true });
 
+/**
+ * A refresh grant that parks until the test settles `pending`.
+ * `refreshStarted` completes once the grant has been called. The coordinator
+ * runs the refresh on a detached fiber, which the scheduler starts on a later
+ * `setImmediate`, so no fixed wait on the test's side is ordered before it.
+ */
+function parkedRefresh() {
+  const pending = Deferred.makeUnsafe<CodexTokenResponse, CodexAuthError>();
+  const started = Deferred.makeUnsafe<void>();
+  const refreshTokens = vi.fn(() =>
+    Effect.andThen(
+      Deferred.succeed(started, undefined),
+      Deferred.await(pending),
+    ),
+  );
+  return { pending, refreshTokens, refreshStarted: Deferred.await(started) };
+}
+
 /** The typed failure of a fiber the test started with {@link forkNow}. */
 const joinFailure = <A>(fiber: Fiber.Fiber<A, unknown>) =>
   Effect.flip(Fiber.join(fiber));
@@ -201,14 +218,13 @@ describe('CodexSessionCoordinator', () => {
   it.effect('single-flights concurrent refreshes', () =>
     Effect.gen(function* () {
       const storage = memoryStorage(expiredSession());
-      const pending = Deferred.makeUnsafe<CodexTokenResponse, CodexAuthError>();
-      const refreshTokens = vi.fn(() => Deferred.await(pending));
+      const { pending, refreshTokens, refreshStarted } = parkedRefresh();
       const coordinator = makeCoordinator(storage, { refreshTokens });
 
       const a = yield* forkNow(coordinator.getFreshAccessToken());
       const b = yield* forkNow(coordinator.getFreshAccessToken());
-      // Let both callers reach the shared refresh before it resolves.
-      yield* Effect.promise(() => delay(0));
+      // Both callers reached the shared refresh synchronously when forked.
+      yield* refreshStarted;
       expect(refreshTokens).toHaveBeenCalledOnce();
 
       Deferred.doneUnsafe(pending, Effect.succeed(tokenResponse()));
@@ -223,12 +239,11 @@ describe('CodexSessionCoordinator', () => {
   it.effect('does not restore a session when sign-out races with refresh', () =>
     Effect.gen(function* () {
       const storage = memoryStorage(expiredSession());
-      const pending = Deferred.makeUnsafe<CodexTokenResponse, CodexAuthError>();
-      const refreshTokens = vi.fn(() => Deferred.await(pending));
+      const { pending, refreshTokens, refreshStarted } = parkedRefresh();
       const coordinator = makeCoordinator(storage, { refreshTokens });
 
       const token = yield* forkNow(coordinator.getFreshAccessToken());
-      yield* Effect.promise(() => delay(0));
+      yield* refreshStarted;
       expect(refreshTokens).toHaveBeenCalledOnce();
 
       yield* coordinator.signOut();
@@ -432,11 +447,7 @@ describe('CodexSessionCoordinator', () => {
     () =>
       Effect.gen(function* () {
         const storage = memoryStorage(expiredSession());
-        const pending = Deferred.makeUnsafe<
-          CodexTokenResponse,
-          CodexAuthError
-        >();
-        const refreshTokens = vi.fn(() => Deferred.await(pending));
+        const { pending, refreshTokens, refreshStarted } = parkedRefresh();
         const exchangeAuthorizationCode = vi.fn(() =>
           Effect.succeed(newLoginTokenResponse()),
         );
@@ -446,7 +457,7 @@ describe('CodexSessionCoordinator', () => {
         });
 
         const token = yield* forkNow(coordinator.getFreshAccessToken());
-        yield* Effect.promise(() => delay(0));
+        yield* refreshStarted;
         expect(refreshTokens).toHaveBeenCalledOnce();
 
         yield* loginWithCode(coordinator);
@@ -470,11 +481,7 @@ describe('CodexSessionCoordinator', () => {
     () =>
       Effect.gen(function* () {
         const storage = memoryStorage(expiredSession());
-        const pending = Deferred.makeUnsafe<
-          CodexTokenResponse,
-          CodexAuthError
-        >();
-        const refreshTokens = vi.fn(() => Deferred.await(pending));
+        const { pending, refreshTokens, refreshStarted } = parkedRefresh();
         const exchangeAuthorizationCode = vi.fn(() =>
           Effect.succeed(newLoginTokenResponse()),
         );
@@ -484,7 +491,7 @@ describe('CodexSessionCoordinator', () => {
         });
 
         const token = yield* forkNow(coordinator.getFreshAccessToken());
-        yield* Effect.promise(() => delay(0));
+        yield* refreshStarted;
         expect(refreshTokens).toHaveBeenCalledOnce();
 
         yield* loginWithCode(coordinator);
@@ -505,11 +512,7 @@ describe('CodexSessionCoordinator', () => {
         // concurrent store that failed after supersede, or rewrote the same
         // blob) must not hand back the stale token as if refresh completed.
         const storage = memoryStorage(expiredSession());
-        const pending = Deferred.makeUnsafe<
-          CodexTokenResponse,
-          CodexAuthError
-        >();
-        const refreshTokens = vi.fn(() => Deferred.await(pending));
+        const { pending, refreshTokens, refreshStarted } = parkedRefresh();
         const exchangeAuthorizationCode = vi.fn(() =>
           Effect.succeed(
             tokenResponse({
@@ -526,7 +529,7 @@ describe('CodexSessionCoordinator', () => {
         });
 
         const token = yield* forkNow(coordinator.getFreshAccessToken());
-        yield* Effect.promise(() => delay(0));
+        yield* refreshStarted;
         expect(refreshTokens).toHaveBeenCalledOnce();
 
         yield* loginWithCode(coordinator);

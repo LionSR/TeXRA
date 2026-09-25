@@ -3,10 +3,8 @@
  *
  * This class owns the inbound registry, the memory/profile/model/tool commands,
  * and the refresh fan-out after a mutation. Tab-shaped groups are delegated to
- * focused handler classes in `./handlers/`: `AgentHandlers`,
- * `LatexSettingsHandlers`, `MemoryHandlers`,
- * `GitHubSubscriptionHandlers`, and `SubscriptionHandlers` (one instance per
- * subscription provider).
+ * `./handlers/`: `AgentHandlers`, `LatexSettingsHandlers`, `MemoryHandlers`,
+ * `GitHubSubscriptionHandlers` and `SubscriptionHandlers` (one per provider).
  */
 import * as vscode from 'vscode';
 import { Cause, Effect, Exit, Fiber } from 'effect';
@@ -43,7 +41,6 @@ import {
 } from '@frontend/ui/errorHandlingUtils';
 import { subscribeAppSignal } from '@frontend/events/appSignalSubscriptions';
 import { withLogChannel } from '@logger/effectLog';
-import { createLog, type Log } from '@logger/logUtils';
 import {
   modelOptionsFrom,
   readModelAvailabilityInputs,
@@ -73,7 +70,7 @@ import type { SettingsViewSnapshot } from '@shared/state/stateSettings';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import type {
   DerivedSettingsSnapshot,
-  SettingsMessageFor,
+  SettingsViewOutboundMessage,
 } from '@shared/settingsView/settingsViewMessages';
 import { SettingsViewInboundMessageSchema } from '@shared/settingsView/settingsViewMessages';
 
@@ -105,7 +102,6 @@ type SettingsWebview = vscode.WebviewView | vscode.WebviewPanel;
 export class SettingsViewMessageHandler {
   private readonly viewName = 'SettingsView';
   private readonly channel = `${this.viewName}MessageHandler`;
-  private readonly log: Log = createLog(this.channel);
 
   /** Active webview reference, tracked on every dispatch. */
   private activeView: SettingsWebview | undefined;
@@ -186,7 +182,7 @@ export class SettingsViewMessageHandler {
       session.roots,
       () => this.progressView.refreshCatalogs(),
     );
-    this.latexHandlers = new LatexSettingsHandlers(ctx);
+    this.latexHandlers = new LatexSettingsHandlers(ctx, runtime);
     this.memoryHandlers = new MemoryHandlers(
       ctx,
       this.memoryController,
@@ -225,12 +221,10 @@ export class SettingsViewMessageHandler {
           ),
         );
       }),
-      // `apply_team` writes the roster straight from the setup agent, so the
-      // open view is showing agents and a team it just replaced. The catalog
-      // is already fresh: a team change moves no agent files, and the
-      // agent-creator reloads before it emits. Without that flag this listener
-      // would rescan the YAML and re-fetch the remote catalog on every roster
-      // write.
+      // `apply_team` writes the roster from the setup agent, so the open view
+      // shows a team it just replaced. The catalog is already fresh (a team
+      // change moves no agent files; the agent-creator reloads before it
+      // emits), so the flag skips a YAML rescan and remote re-fetch per write.
       subscribeAppSignal(this.runtime, 'agentRosterChanged', () => {
         this.runtime.runFork(this.refreshAfterAgentMutation(undefined, true));
       }),
@@ -253,10 +247,9 @@ export class SettingsViewMessageHandler {
   }
 
   /**
-   * Sign in to a subscription provider from outside the settings webview.
-   * Routes to the same handler the Settings → Models sign-in button runs, so
-   * the command palette gets the status round-trip and credential refresh
-   * tail instead of a bespoke sign-in that leaves both stale.
+   * Sign in to a subscription provider from outside the settings webview,
+   * through the Settings → Models button's handler, so the command palette
+   * gets the same status round-trip and credential refresh tail.
    */
   public signInSubscription(providerId: SubscriptionProviderId) {
     const handlers = { chatgpt: this.chatgptHandlers, grok: this.grokHandlers };
@@ -373,30 +366,24 @@ export class SettingsViewMessageHandler {
             ),
           ),
         ),
-      runToolCommand: (message) =>
-        Effect.sync(() => this.handleRunToolCommand(message)),
+      runToolCommand: (data) => {
+        const action = planToolTerminalAction({
+          toolId: data.toolId,
+          commandKind: data.kind,
+        });
+        if (action.kind === 'none') {
+          return Effect.logDebug('No command for tool').pipe(
+            Effect.annotateLogs({ data: { ...data, reason: action.reason } }),
+          );
+        }
+        return Effect.sync(() => {
+          const terminal = vscode.window.createTerminal({ name: action.name });
+          terminal.show();
+          terminal.sendText(action.command);
+        });
+      },
       ...this.latexHandlers.handlers,
     };
-  }
-
-  private handleRunToolCommand(
-    data: SettingsMessageFor<typeof SETTINGS_VIEW_COMMANDS.RUN_TOOL_COMMAND>,
-  ): void {
-    const action = planToolTerminalAction({
-      toolId: data.toolId,
-      commandKind: data.kind,
-    });
-    if (action.kind === 'none') {
-      this.log.debug('No command for tool', {
-        data: { ...data, reason: action.reason },
-      });
-      return;
-    }
-    const terminal = vscode.window.createTerminal({
-      name: action.name,
-    });
-    terminal.show();
-    terminal.sendText(action.command);
   }
 
   // ============================================================
@@ -414,7 +401,6 @@ export class SettingsViewMessageHandler {
   private handlerContext(): SettingsHandlerContext {
     return {
       channel: this.channel,
-      log: this.log,
       extensionContext: this.context,
       withActiveWebview: (fn) => this.withActiveWebview(fn),
       postMessageToActiveWebview: (message) =>
@@ -423,9 +409,8 @@ export class SettingsViewMessageHandler {
   }
 
   /**
-   * Run a program with the active view's webview, if available. The view is
-   * read when the program runs, not when it is built: a panel disposed
-   * between a mutation and its refresh leaves nothing to post to.
+   * Run a program with the active webview, read when the program runs (not
+   * when built): a panel disposed before its refresh leaves nothing to post.
    */
   private withActiveWebview<E, R>(
     fn: (webview: vscode.Webview) => Effect.Effect<void, E, R>,
@@ -436,13 +421,10 @@ export class SettingsViewMessageHandler {
     });
   }
 
-  /**
-   * Post a message to the active view's webview. A `null` or `undefined`
-   * message posts nothing, so callers can forward an optional response
-   * payload without a guard of their own.
-   */
+  /** Post to the active view's webview. A `null` or `undefined` message posts
+   * nothing, so callers forward an optional response payload unguarded. */
   private postMessageToActiveWebview(
-    message: unknown,
+    message: SettingsViewOutboundMessage | null | undefined,
   ): Effect.Effect<void, Error> {
     return message == null
       ? Effect.void
@@ -456,15 +438,16 @@ export class SettingsViewMessageHandler {
   ): Promise<void> {
     this.activeView = webviewView;
     const parsed = SettingsViewInboundMessageSchema.safeParse(message);
-    if (!parsed.success) {
-      this.log.debug('Message validation failed', { data: parsed.error });
-      return Promise.resolve();
-    }
+    const program = parsed.success
+      ? withSessionFs(
+          this.session.roots,
+          settingsViewProgram(parsed.data, this.handlerRegistry),
+        )
+      : Effect.logDebug('Message validation failed').pipe(
+          Effect.annotateLogs({ data: parsed.error }),
+        );
     return this.runtime.runPromise(
-      withSessionFs(
-        this.session.roots,
-        settingsViewProgram(parsed.data, this.handlerRegistry),
-      ).pipe(
+      program.pipe(
         Effect.catchCause((cause) =>
           Effect.gen({ self: this }, function* () {
             if (Cause.hasInterruptsOnly(cause)) return;
@@ -473,15 +456,12 @@ export class SettingsViewMessageHandler {
               if (error instanceof UnsupportedCommandError) {
                 yield* vscodeUi.showInfoMessage(error.reason);
               } else {
-                yield* Effect.logError('Error handling message').pipe(
-                  withLogChannel(this.channel),
-                  Effect.annotateLogs({ data: error }),
-                );
+                yield* Effect.logError('Error handling message');
                 yield* vscodeUi.showErrorMessage(
                   `TeXRA could not handle a ${this.viewName} message. See the TeXRA output for details.`,
                 );
               }
-            });
+            }).pipe(Effect.annotateLogs({ data: error }));
             const reported = yield* Effect.exit(report);
             if (
               Exit.isFailure(reported) &&
@@ -490,13 +470,13 @@ export class SettingsViewMessageHandler {
               yield* Effect.logError(
                 'Failed to report settings message error',
               ).pipe(
-                withLogChannel(this.channel),
                 Effect.annotateLogs({ data: Cause.squash(reported.cause) }),
               );
             }
           }),
         ),
         Effect.asVoid,
+        withLogChannel(this.channel),
       ),
     );
   }
@@ -509,11 +489,10 @@ export class SettingsViewMessageHandler {
     webview: vscode.Webview,
   ): Effect.Effect<void, Error, ProcessServices> {
     return Effect.gen({ self: this }, function* () {
-      // Tool dashboard involves network I/O (Zotero probe, etc.) — fire on a
-      // detached fiber so it doesn't block the initial render. The frontend
-      // shows a loading spinner until data arrives, so a failed build still
-      // posts an empty dashboard to end it, and nothing joins this fiber, so
-      // each failure is logged on it.
+      // The tool dashboard does network I/O (Zotero probe, …), so it runs on
+      // a detached fiber off the initial render. The frontend spins until data
+      // arrives, so a failed build still posts an empty dashboard to end it;
+      // nothing joins this fiber, so each failure is logged on it.
       yield* Effect.forkDetach(
         this.sendToolDashboardData(webview).pipe(
           Effect.catch((error) =>
@@ -592,10 +571,11 @@ export class SettingsViewMessageHandler {
     webview: vscode.Webview,
     snapshot: DerivedSettingsSnapshot,
   ) {
-    return postToWebview(
-      webview,
-      buildSettingsSnapshotMessage(snapshot, this.session.roots, 'vscode'),
-    );
+    return buildSettingsSnapshotMessage(
+      snapshot,
+      this.session.roots,
+      'vscode',
+    ).pipe(Effect.flatMap((message) => postToWebview(webview, message)));
   }
 
   private rebroadcastSnapshot(snapshot: DerivedSettingsSnapshot) {
@@ -707,13 +687,11 @@ export class SettingsViewMessageHandler {
   // ============================================================
 
   /**
-   * The shared refresh tail for a credential change (API key or subscription
-   * auth): drop the cached usage, refresh status and catalogs, and push
-   * fresh profile/model/usage data to the active webview. Model selection
-   * availability depends on key state, so status and onboarding refresh finish
-   * before any model/profile data is sent. `refreshProfileData` selects which
-   * profile surface to push (profile+model for key changes, model-only for
-   * subscription changes).
+   * The shared refresh tail for a credential change (API key or subscription):
+   * drop cached usage, refresh status and catalogs, then push profile/model/
+   * usage data. Status and onboarding finish first, since model availability
+   * depends on key state. `refreshProfileData` picks profile+model (key
+   * change) or model-only (subscription change).
    */
   private refreshCredentialDependentSurfaces(options: {
     usageProvider?: SubscriptionUsageProvider;

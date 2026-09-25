@@ -117,7 +117,7 @@ function approvalDenialMessage(
  * Match settleApprovals: TUI `/approval` updates SessionHandle only, so the
  * frozen CliContext.approvalPolicy can be stale — the warning names the live
  * policy read off the threaded `session`. Operator-facing warnings go
- * to stderr (not `@logger/logUtils`).
+ * to stderr (not the diagnostic log).
  */
 export function warnApprovalDenied(
   session: SessionHandle,

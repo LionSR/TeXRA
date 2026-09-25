@@ -9,7 +9,6 @@ import { findTeamPreset, type TeamPreset } from '@common/teams/TeamPresets';
 import {
   resolveTeamRoster,
   type TeamRosterCatalog,
-  type TeamRosterPresetResolution,
 } from '@common/teams/TeamRoster';
 import type { StateStore } from '@platform/interfaces';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
@@ -23,7 +22,6 @@ import {
   type AgentCategory,
   type AgentModePreset,
   type AgentSource,
-  type ByCategory,
 } from '@shared/schemas';
 import { type AgentSelectionItem } from '@shared/settingsView/settingsViewMessages';
 import { BUILTIN_TEAM_ROOT_AGENT_NAMES } from '@shared/constants/agents';

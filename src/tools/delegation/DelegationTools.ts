@@ -9,7 +9,7 @@
  */
 
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, SynchronizedRef } from 'effect';
 import { z } from 'zod';
 
 // Local imports
@@ -127,7 +127,7 @@ function executeWorkflowAgentTool(
 
     const model = yield* selectAvailableDelegationModel({
       requestedModel: input.model,
-      parentModel: call.run.config.model,
+      parentModel: (yield* SynchronizedRef.get(call.run.model)).modelId,
       settings: call.roots,
     });
 
@@ -271,7 +271,7 @@ function executeDelegateAgentTool(
 
     const model = yield* selectAvailableDelegationModel({
       requestedModel: input.model,
-      parentModel: call.run.config.model,
+      parentModel: (yield* SynchronizedRef.get(call.run.model)).modelId,
       settings: call.roots,
     });
     const rootUserInstruction = call.userInstruction;

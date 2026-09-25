@@ -1,10 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { pickDefaultToolUseAgent } from '@cli/runtime/defaultAgents';
-import {
-  implicitDefaultToolUseAgents,
-  isImplicitDefaultEligible,
-} from '@shared/constants/agents';
+import { implicitDefaultToolUseAgents } from '@shared/constants/agents';
 
 describe('CLI implicit default agent policy', () => {
   it('filters implicit default candidates without mutating explicit options', () => {

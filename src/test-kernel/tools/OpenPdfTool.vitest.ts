@@ -1,7 +1,6 @@
 import '@test/support/sessionGraphTestSetup';
 
 // Node imports
-import * as path from 'node:path';
 import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 

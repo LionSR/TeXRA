@@ -20,13 +20,13 @@ import {
   Stream,
 } from 'effect';
 import * as ChildProcess from 'effect/unstable/process/ChildProcess';
-import { describe, expect, expectTypeOf } from 'vitest';
+import { describe, expect } from 'vitest';
 
 // Local imports
 import { nodePlatformServices } from '@platform/defaults/nodePlatform';
 import type { ExecResult } from '@shared/schemas';
 import { waitForCondition } from '@test/support/asyncTestUtils';
-import { createFakeHost, setupPlatform } from '@test/support/setupPlatform';
+import { setupPlatform } from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { executeCommand } from '@utils/system/execUtils';

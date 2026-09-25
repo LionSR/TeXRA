@@ -1,10 +1,6 @@
 /**
- * Channel-annotated diagnostics for code that can yield an Effect.
- *
- * `@logger/logUtils` is the same thing for the Promise-shaped subsystems that
- * cannot; both write one structured entry to the single host sink in
- * `@logger/logSink`, so a subsystem converting to Effect keeps its channel and
- * its payload without a host learning a second entry shape. A converted file
+ * Channel-annotated diagnostics. Every producer writes one structured entry to
+ * the single host sink in `@logger/logSink`; code that can yield an Effect
  * calls `Effect.log*` and names its channel once for the whole program rather
  * than threading a channel string through every helper, and attaches a payload
  * raw with `Effect.annotateLogs(self, { data })` — the write path in
