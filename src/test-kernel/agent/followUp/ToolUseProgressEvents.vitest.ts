@@ -337,7 +337,6 @@ function agentRunTestLayer(init: LoopInit) {
           { agentName: 'chat', agentCategory: AgentCategory.ToolUse },
         ),
         callbacks: { onModelChanged: vi.fn() },
-        interrupt: vi.fn(),
       } satisfies AgentRunShape;
     }),
   );

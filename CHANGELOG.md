@@ -98,6 +98,10 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
 
 ### Bug Fixes
 
+- **Stopping a run or subagent as it starts now takes effect.** A stop
+  issued in the instant a run or in-band subagent was starting could miss it,
+  and a caller waiting on that subagent could hang. A stop now interrupts the
+  run itself, from its first step.
 - **A run another TeXRA window takes over at the same moment is reported as
   running elsewhere.** When two windows or processes resume or relaunch the
   same run at once, the one that loses now says the run is held elsewhere,

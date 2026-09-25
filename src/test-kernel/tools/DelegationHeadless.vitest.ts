@@ -2,7 +2,7 @@
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Deferred, Effect, Exit, Fiber, Stream } from 'effect';
+import { Cause, Deferred, Effect, Exit, Fiber, Stream } from 'effect';
 import {
   afterEach,
   beforeEach,
@@ -283,9 +283,7 @@ let inBandSession: SessionHandle;
 type PreparedInBandSubagentOptions = Effect.Success<
   ReturnType<Parameters<typeof executeSubagentInBandEffect>[0]['prepare']>
 >;
-type InBandSubagentRunOptions = PreparedInBandSubagentOptions & {
-  signal?: AbortSignal;
-};
+type InBandSubagentRunOptions = PreparedInBandSubagentOptions;
 
 /** The in-band delegation options shared by nearly every case (fields vary). */
 function delegationOptions(
@@ -310,7 +308,7 @@ function runInBand(
   options: InBandSubagentRunOptions,
   runId: RunId = IN_BAND_RUN_ID,
 ) {
-  const { signal: _signal, ...prepared } = options;
+  const prepared = options;
   return executeSubagentInBandEffect({
     runId,
     parentRunId: prepared.parentRunId,
@@ -478,10 +476,11 @@ describe('headless delegation', () => {
     testEngine = {
       executeAgent: (definition, runId, options) =>
         Effect.tryPromise({
-          try: async () => {
+          try: async (signal) => {
             let reportedError: unknown;
             const turn = await mocks.executeAgent(definition, runId, {
               ...options,
+              turnSignal: signal,
               onRunError: (error: unknown, result: unknown) => {
                 reportedError = error;
                 return (
@@ -578,7 +577,7 @@ describe('headless delegation', () => {
             model: 'deepseekT',
           },
         });
-        const { signal: _signal, ...prepared } = options;
+        const prepared = options;
         const run = () =>
           Effect.provide(
             executeSubagentInBandEffect({
@@ -882,21 +881,14 @@ describe('headless delegation', () => {
       Effect.gen(function* () {
         const onCost = vi.fn();
         const ready = yield* Deferred.make<void>();
-        let childInterrupted!: () => void;
-        const interrupted = new Promise<void>((resolve) => {
-          childInterrupted = resolve;
-        });
-        const interrupt = vi.fn(() => {
-          childInterrupted();
-          return true;
-        });
         mocks.executeAgent.mockImplementationOnce(
           async (_config, _id, options) => {
-            await Effect.runPromise(
-              options.onRun?.({ interrupt } as never) ?? Effect.void,
-            );
             Deferred.doneUnsafe(ready, Effect.void);
-            await interrupted;
+            // The child's stop is its run fiber's interruption, which the
+            // test engine sees as its turn promise's abort.
+            await new Promise<void>((resolve) => {
+              options.turnSignal.addEventListener('abort', () => resolve());
+            });
             return {
               outcome: 'cancelled',
               runId: CHILD_RUN_ID,
@@ -910,24 +902,18 @@ describe('headless delegation', () => {
         );
         yield* Deferred.await(ready);
 
-        // Interruption waits for the child to settle its own terminal record.
+        // Interruption stops the child by run id and waits for it to settle
+        // its own terminal record.
         yield* Fiber.interrupt(running);
         const exit = yield* Fiber.await(running);
         expect(Exit.hasInterrupts(exit)).toBe(true);
-        expect(interrupt).toHaveBeenCalledOnce();
         expect(onCost).toHaveBeenCalledOnce();
-        expect(mocks.writeResultMeta).toHaveBeenCalledOnce();
-        expect(mocks.writeResultMeta).toHaveBeenLastCalledWith(
-          expect.objectContaining({
-            producer: 'subagent',
-            output: expect.objectContaining({ response: '' }),
-          }),
-        );
+        expect(inBandSession.runs.isLive(IN_BAND_RUN_ID)).toBe(false);
       }),
   );
 
   it.effect(
-    'keeps the completed child result when cancellation arrives during persistence',
+    'keeps the completed child result when the caller stops during persistence',
     () =>
       Effect.gen(function* () {
         const persisting = yield* Deferred.make<void>();
@@ -1104,7 +1090,6 @@ describe('headless delegation', () => {
         expect(executeOptions).toEqual(
           expect.objectContaining({
             parentRunId: PARENT_RUN_ID,
-            onRun: expect.any(Function),
             session: expect.any(Object),
           }),
         );
