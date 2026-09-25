@@ -365,12 +365,13 @@ in [opencode](https://github.com/sst/opencode/blob/dev/AGENTS.md)):
 
 - **Test the real implementation; avoid mocks.** Run the production code
   against real resources: a temp directory, a real git repo, a real SQLite
-  file, a real child process. Fake only at the process edge — the provider's
-  HTTP endpoint (a scripted local server replaying recorded responses), never
-  a repository module. Never patch `globalThis`. When a test must stub a
-  service, stub only the methods it needs with `Layer.mock`: any other method
-  throws, so an unexpected dependency fails loudly rather than returning a
-  quiet placeholder.
+  file, a real child process. Fake only at an edge — the provider's HTTP
+  endpoint (a scripted local server replaying recorded responses), or a host
+  port through its shared fake (see "Test fixtures and fakes") — never a
+  repository module (see "Test tiers"). Never patch `globalThis`. When a test
+  must stub a service, stub only the methods it needs with `Layer.mock`: any
+  other method throws, so an unexpected dependency fails loudly rather than
+  returning a quiet placeholder.
 - **Do not duplicate logic into tests.** An expected value that the test
   computes by re-running the algorithm passes whenever the code is wrong in
   the same way. Write the expected output down as a literal, or check a
@@ -379,8 +380,10 @@ in [opencode](https://github.com/sst/opencode/blob/dev/AGENTS.md)):
   waits "long enough" for a forked fiber, a process, or a render is a flake on
   a slow CI host. Wait on the state the next step needs: a `Deferred`, a
   session status, an event on the trace, a file appearing, a Playwright
-  web-first assertion. A sleep is acceptable only where time is the thing
-  under test (debounce, throttle, mtime resolution).
+  web-first assertion. A real sleep is acceptable only where wall-clock time
+  is the thing under test (mtime resolution, a real subprocess timeout); an
+  Effect program's delays, retries, and debounces run on the test clock
+  instead (see "Test fixtures and fakes").
 - **E2E hygiene.** Drive the app through user-visible roles, labels, and text,
   with isolated, deterministic data per test. Register an event or network wait
   before the action that triggers it. Retry idempotent readiness checks, never
