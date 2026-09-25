@@ -783,30 +783,10 @@ wa-input.desktop-command-palette-input::part(input) {
    This is part of the task canvas, not a modal: the rest of the shell stays
    visible and usable while a user chooses a starter team. */
 
-.desktop-startup-panel {
-  box-sizing: border-box;
-  display: grid;
-  place-items: center;
-  width: 100%;
-  min-height: 100%;
-  padding: clamp(var(--wa-space-m), 5vh, var(--wa-space-2xl))
-    clamp(var(--wa-space-s), 4vw, var(--wa-space-xl));
-  overflow: auto;
-  background: var(--wa-color-surface-default);
-}
-
-wa-card.desktop-onboarding {
+wa-dialog.desktop-onboarding {
+  --width: min(640px, 92vw);
   --spacing: var(--wa-space-l);
-  width: min(720px, 100%);
   color: var(--wa-color-text-normal);
-}
-
-wa-card.desktop-onboarding::part(body) {
-  background: var(--wa-color-surface-lowered);
-}
-
-wa-card.desktop-onboarding::part(footer) {
-  background: var(--wa-color-surface-lowered);
 }
 
 .desktop-onboarding-header {

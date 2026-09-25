@@ -100,8 +100,8 @@ export class ProgressApp extends LitElement {
   /** The window's own items: pop the view out or back, the LaTeXDiffs
    *  sheet, figure extraction. The New-task header shows them in its menu;
    *  a run's header appends them to the run's. The desktop has neither an
-   *  editor to pop out into nor a figure extractor, and its LaTeXDiffs
-   *  chip sits under the composer, so it is given none. */
+   *  editor to pop out into nor a figure extractor, and a LaTeX diff is
+   *  asked for in the conversation there, so it is given none. */
   private windowItems(): HeaderMenuItem[] {
     if (this.placement === 'desktop') return [];
     const inEditor = this.placement === 'editor';

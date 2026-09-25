@@ -62,7 +62,6 @@ import { createStartupTeamPanel } from './desktopOnboarding';
 import { installDesktopUnsavedCloseWiring } from './desktopUnsavedClose';
 import './desktopShell.css';
 import {
-  conversationDockTemplate,
   shellSidebarTemplate,
   subagentsButtonTemplate,
   type RailProject,
@@ -377,17 +376,7 @@ const promptOverlay = createDesktopPromptOverlay(appRoot, (message) =>
 );
 applyTheme();
 
-/** The task on screen, named in the conversation header: the rail
- *  already names its project. */
-function conversationTitle(project: RailProject | undefined): string {
-  if (!project) return '';
-  const { selected } = project.surface;
-  const run = selected === null ? undefined : project.view.runs.get(selected);
-  return run ? (run.description ?? run.label) : 'New task';
-}
-
 function shellConversationTemplate(): TemplateResult {
-  const startupPanelVisible = startupTeamPanel.isVisible();
   const projects = railProjects();
   const activeProject = activeRailProject(projects);
   // The sidebar is the only home for the rail's per-run pending-approval
@@ -407,11 +396,6 @@ function shellConversationTemplate(): TemplateResult {
   if (sidebarCollapsedWithPendingApproval) {
     sidebarToggleLabel = 'Show sidebar - approval pending';
   }
-  // One card at a time: with no folder open the walkthrough takes the
-  // open-folder panel's place instead of stacking on it.
-  const noWorkspaceContent = startupPanelVisible
-    ? startupTeamPanel.template()
-    : noWorkspacePlaceholder;
   const sidebarToggle = html`<span class="shell-header-button-slot">
     ${renderIconActionButton({
       id: 'shellSidebarToggle',
@@ -436,9 +420,7 @@ function shellConversationTemplate(): TemplateResult {
   // a row of its own to drag the window by.
   render(
     html`<span slot="header-start" class="shell-header-start"
-        >${sidebarToggle}<span class="shell-header-title"
-          >${conversationTitle(activeProject)}</span
-        ></span
+        >${sidebarToggle}</span
       ><span slot="header-end" class="shell-header-end"
         >${subagentsButtonTemplate(activeProject, () =>
           currentWorkbench().workbench.openKind('subagents'),
@@ -466,13 +448,16 @@ function shellConversationTemplate(): TemplateResult {
                   <section
                     class="shell-launcher-surface"
                     data-session=${activeProject ? activeProject.display.key : nothing}
-                    ?hidden=${startupPanelVisible}
                   >
-                    ${conversationView} ${conversationDockTemplate()}
+                    ${conversationView}
                   </section>
-                  ${startupTeamPanel.template()}
+                  ${
+                    // A modal over the window; with no folder open the
+                    // open-folder panel is the one card shown.
+                    startupTeamPanel.template()
+                  }
                 `
-              : noWorkspaceContent
+              : noWorkspacePlaceholder
           }
         </section>
       </div>
