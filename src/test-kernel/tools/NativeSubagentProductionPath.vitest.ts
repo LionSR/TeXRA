@@ -393,6 +393,30 @@ function interruptActiveRuns(session: SessionHandle): void {
   }
 }
 
+/**
+ * The child's last settled turn, once nothing is open. A non-finalizing turn
+ * offers its parent row live before its `child.turn` settles, so the parent
+ * can finish its turn first; neither the persisted result nor the parent's
+ * transcript says the settled row has landed.
+ */
+function waitForSettledChildTurn(
+  runId: RunId,
+): Effect.Effect<{ key: string; index: number }> {
+  return Effect.promise(() =>
+    vi.waitFor(
+      async () => {
+        const state = await Effect.runPromise(
+          readChildTurnState(session, runId),
+        );
+        expect(state.active).toBeNull();
+        expect(state.lastCompleted).not.toBeNull();
+        return state.lastCompleted!;
+      },
+      { timeout: 10_000 },
+    ),
+  );
+}
+
 function waitForParentTurns(count: number): Effect.Effect<void> {
   return Effect.promise(() =>
     vi.waitFor(
@@ -972,12 +996,9 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         yield* waitForParentTurns(1);
 
         // The loop minted a stable logical identity for turn 1's delivery.
-        const turnState = yield* readChildTurnState(session, runId);
-        expect(turnState.active).toBeNull();
-        const completed = turnState.lastCompleted;
-        expect(completed).not.toBeNull();
+        const completed = yield* waitForSettledChildTurn(runId);
         // The delivery id the loop derives from that turn's identity.
-        const deliveryId = `${runId}:${completed!.key}:${completed!.index}:delivery`;
+        const deliveryId = `${runId}:${completed.key}:${completed.index}:delivery`;
 
         // Replay the identical logical delivery 100 times through the real
         // admission path: no additional parent message, no additional wake.
@@ -1045,9 +1066,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         yield* Effect.promise(() => waitForPersistedResult(runId, 'Result A.'));
         yield* waitForParentTurns(1);
 
-        const completed1 = (yield* readChildTurnState(session, runId))
-          .lastCompleted;
-        expect(completed1).not.toBeNull();
+        const completed1 = yield* waitForSettledChildTurn(runId);
 
         // Accept a follow-up: the loop runs turn 2, which hangs mid-model-call.
         yield* Effect.promise(() =>
