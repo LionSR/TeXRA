@@ -70,6 +70,7 @@ import {
   createProcessSession,
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
+import { CompositionKey, type PinnedComposition } from '@tools/compositions';
 import { releaseRunResources } from '@tools/approval';
 import {
   clearGoal,
@@ -257,6 +258,16 @@ interface LoopInit {
   };
 }
 
+/** A run's composition with the `goal` plugin on, as a default install has
+ *  it: the plugin contributes the loop's continuation policy. */
+const goalOnComposition: PinnedComposition = {
+  ...emptyPinnedComposition,
+  key: new CompositionKey(emptyPinnedComposition.key.hash, {
+    ...emptyPinnedComposition.key.composition,
+    plugins: ['goal'],
+  }),
+};
+
 function agentRunTestLayer(init: LoopInit) {
   return Layer.effect(
     AgentRun,
@@ -298,7 +309,7 @@ function agentRunTestLayer(init: LoopInit) {
         tools: new MapToolRegistry({}),
         finalToolName: init.finalToolName ?? null,
         toolset: { offeredTools: [], toolsetHash: '0'.repeat(64) },
-        composition: emptyPinnedComposition,
+        composition: goalOnComposition,
         structured: { value: undefined },
         model,
         scope,
