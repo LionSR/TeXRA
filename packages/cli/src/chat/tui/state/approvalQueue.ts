@@ -28,7 +28,7 @@ import {
   type SurfaceDecision,
 } from '@shared/session/approvalDecision';
 import type { HostRequest } from '@shared/session/hostRequest';
-import type { SessionView } from '@shared/session/sessionView';
+import type { RunGroup, SessionView } from '@shared/session/sessionView';
 import type { RuntimeRequest } from '@shared/session/runtimeRequest';
 import { assertNever, groupBy } from '@utils/core';
 
@@ -178,6 +178,9 @@ export function pruneToLive(
   }
 }
 
+/** Run groups whose requests can still be answered here. */
+const LIVE_GROUPS: ReadonlySet<RunGroup> = new Set(['running', 'waiting']);
+
 /**
  * Every request awaiting the user, from the fold: the outstanding requests
  * in commit order, from the runs this chat owns. The promoted stream's requests lead; nothing is decided
@@ -186,15 +189,18 @@ export function pruneToLive(
  */
 export const attentionRequests = computed((): readonly AttentionRequest[] => {
   const included = sessionRunIds.get();
+  const view = sessionView().get();
   // The fold lists every kind, including an `externalInquiry` a persisted
   // session carries from another host; this surface renders none of those,
-  // so the narrowing is a filter rather than an assertion.
-  const requests = sessionView()
-    .get()
-    .requests.filter(
+  // so the narrowing is a filter rather than an assertion. Nor does it render
+  // one a stopped run left for its resume to ask again: that modal would trap
+  // the keys `/resume` needs.
+  const requests = view.requests
+    .filter(
       (request): request is PendingApprovalFact =>
         included.has(request.runId) &&
-        request.payload.kind !== 'externalInquiry',
+        request.payload.kind !== 'externalInquiry' &&
+        LIVE_GROUPS.has(view.runs.get(request.runId)?.group ?? 'recent'),
     )
     .map((pending): AttentionRequest => ({
       requestId: pending.requestId,
