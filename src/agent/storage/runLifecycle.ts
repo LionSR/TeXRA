@@ -214,8 +214,6 @@ export interface FinalizeRunInput {
   readonly keepExistingOutcome?: boolean;
   /** The classified error behind a FAILED outcome, when the run has one. */
   readonly error?: RunEnd['error'];
-  /** Usage totals at the end of the run, once a round recorded usage. */
-  readonly usage?: RunEnd['usage'];
   /**
    * What the run produced. Absent for a backstop that ends a run whose flow
    * produced nothing (host exit, a stop of a parked run, a failed launch):
@@ -265,6 +263,22 @@ export const finalizeRun = Effect.fn('finalizeRun')(function* (
   input: FinalizeRunInput,
 ): Effect.fn.Return<FinalizeRunResult> {
   const { runId, outcome, keepExistingOutcome } = input;
+  // The row's usage is the run's ledger totals, whichever path ends the run:
+  // `RunState.usage` folds from the priced `response` rows alone, so a run
+  // resumed in this process bills its earlier rounds even when it ends
+  // before a round here. Absent for a run with no ledger rows (an agent-CLI
+  // child, a launch that failed before its first batch). An unreadable
+  // ledger is logged and leaves the row without usage: it must not also
+  // cost the run its terminal fact.
+  const usage = yield* session.ledger.load(runId).pipe(
+    Effect.map((state) => state?.usage),
+    Effect.catch((cause) =>
+      Effect.logWarning('Failed to read the run usage from its ledger').pipe(
+        Effect.annotateLogs({ runId, error: toErrorMessage(cause) }),
+        Effect.as(undefined),
+      ),
+    ),
+  );
   const status = yield* Effect.exit(
     session.updateRecordFacts(runId, (rows) =>
       Effect.gen(function* () {
@@ -295,7 +309,7 @@ export const finalizeRun = Effect.fn('finalizeRun')(function* (
               aggregateId: target,
               outcome: persisted,
               ...(input.error !== undefined ? { error: input.error } : {}),
-              ...(input.usage !== undefined ? { usage: input.usage } : {}),
+              ...(usage !== undefined ? { usage } : {}),
               output: input.output ?? emptyRunEndOutput(start.category),
             },
           ],

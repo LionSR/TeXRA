@@ -56,7 +56,7 @@ type MonitorContext = ReturnType<typeof createMonitorWithEvents>;
 
 function createMonitorWithEvents() {
   const logger = new TraceEmitter();
-  const runId = 'usage-last-totals' as RunId;
+  const runId = 'usage-monitor' as RunId;
   const recorded = recordTraceEvents(logger);
   const log = vi.fn();
   const monitor = new UsageMonitor(
@@ -91,19 +91,6 @@ async function withMonitor<T>(
 }
 
 describe('UsageMonitor', () => {
-  it('is undefined before any round and caches the totals after recordUsage', async () => {
-    await withMonitor(async ({ monitor }) => {
-      expect(monitor.lastTotals()).toBeUndefined();
-
-      const state = freshUsage();
-      monitor.recordUsage(state.totals, state.latestUsage, testModelInfo);
-
-      // The cache holds the exact totals object the accumulator exposed, so a
-      // failed run's terminal `result` event can report usage from the catch arm.
-      expect(monitor.lastTotals()).toBe(state.totals);
-    });
-  });
-
   it('forwards the ChatGPT subscription route to session usage facts', async () => {
     await withMonitor(async ({ monitor, events }) => {
       const state = freshUsage();
@@ -178,7 +165,6 @@ describe('UsageMonitor', () => {
 
       expect(traceEventsOfType(events, 'usage')).toHaveLength(1);
       expect(log).toHaveBeenCalledTimes(1);
-      expect(monitor.lastTotals()).toBe(state.totals);
       expect(state.totals).toMatchObject({
         totalInputTokens: 10,
         totalOutputTokens: 2,

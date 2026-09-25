@@ -336,7 +336,6 @@ describe('runFlowWithLifecycle', () => {
               message: 'Request aborted',
               userRetryable: false,
             },
-            usage: undefined,
             output: EMPTY_TOOL_USE_OUTPUT,
           },
         );
@@ -411,7 +410,6 @@ describe('runFlowWithLifecycle', () => {
             runId,
             outcome: RUN_OUTCOME.FAILED,
             error: undefined,
-            usage: undefined,
             output: carriedResult.output,
           },
         );
@@ -442,7 +440,6 @@ describe('runFlowWithLifecycle', () => {
               message: 'Request aborted',
               userRetryable: false,
             },
-            usage: undefined,
             output: EMPTY_TOOL_USE_OUTPUT,
           },
         );
@@ -470,7 +467,6 @@ describe('runFlowWithLifecycle', () => {
             message: 'Error executing agent test-agent: model exploded',
             userRetryable: true,
           },
-          usage: undefined,
           output: EMPTY_TOOL_USE_OUTPUT,
         },
       );
