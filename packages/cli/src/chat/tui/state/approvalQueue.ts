@@ -3,7 +3,7 @@
 // Which requests are pending is a fold fact: `view.requests` holds every
 // `request.opened` no `request.decided` has answered. This module owns only
 // what the fold cannot: the presentation a host stages beside the fact (a
-// tool edit's before and after text, a retry's personal-key lookup), the
+// tool edit's before and after text, a retry the CLI policy left open), the
 // "decided here, not yet folded there" gap, and the jump-to-waiting order.
 // A decision leaves as the arms `approvalDecisionArms` names: the run's
 // `request.decide`, the `policy.set` a session bypass names, and the host
@@ -118,9 +118,9 @@ interface AttentionRequest {
 
 /**
  * What a host staged for one request beside the fact: the payload it
- * presents. A tool edit's preview arrives with the request; a retry's
- * key-availability lookup lands once it finishes, which is what keeps the
- * retry card off the screen until it can say whether `k` is offered.
+ * presents. A tool edit's preview arrives with the request; a retry is
+ * staged once the CLI policy has not settled it, carrying the offer the run
+ * already decided.
  */
 const stagedPresentations = signal<ReadonlyMap<string, ApprovalPayload>>(
   new Map(),
