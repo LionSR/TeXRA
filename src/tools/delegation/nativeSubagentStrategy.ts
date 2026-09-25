@@ -16,6 +16,7 @@ import type {
   ChildRunStrategy,
 } from '@agent/runtime/childRunLoop';
 import type { PreparedAgentDefinition } from '@agent/runtime/AgentLaunchContext';
+import { normalizeProviderError } from '@common/errors/sdkError/providerErrorFormat';
 import {
   AgentCategory,
   emptyRunEndOutput,
@@ -24,7 +25,6 @@ import {
   type UserFollowUpSupport,
 } from '@shared/schemas';
 import type { CompositionKey } from '@tools/compositions';
-import { normalizeProviderError } from '@common/errors/sdkError/providerErrorFormat';
 import { ensureError } from '@utils/errors/errorMessage';
 import {
   buildSubagentResult,
