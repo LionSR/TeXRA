@@ -980,9 +980,8 @@ export const modelInvokerLayer = (): Layer.Layer<
               aggregateId,
               requestId,
               // The row is committed here rather than at the session's door
-              // (`openRequest`), so the scrub that door applies happens here:
-              // a provider message echoing an `Authorization` header never
-              // reaches a durable row.
+              // (`openRequest`), so the door's `rawErrorBody` drop happens
+              // here too: the raw response body never reaches a durable row.
               payload: redactedForFact({ kind: 'retry', data: request }),
               thread: null,
             },
