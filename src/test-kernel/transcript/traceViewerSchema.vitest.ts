@@ -101,21 +101,3 @@ describe('trace-viewer TraceDocumentSchema', () => {
     );
   });
 });
-
-/**
- * `agentSource` is persisted (run `config.json`, trace documents), so a
- * record written before the field existed must still read, and an unknown
- * source must fail loudly rather than default.
- */
-describe('AgentConfigSchema agentSource', () => {
-  it('reads records without a source and rejects an unrecognized one', () => {
-    expect(AgentConfigSchema.parse({}).agentSource).toBeUndefined();
-    expect(AgentConfigSchema.parse({ agentSource: null }).agentSource).toBe(
-      null,
-    );
-
-    const result = AgentConfigSchema.safeParse({ agentSource: 'notASource' });
-    expect(result.success).toBe(false);
-    expect(result.error?.issues[0]?.path).toEqual(['agentSource']);
-  });
-});

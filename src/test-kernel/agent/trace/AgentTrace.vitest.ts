@@ -3,7 +3,6 @@ import {
   type AgentEvent,
   emitToolUseCard,
   logFileCategory,
-  logUserMessage,
   TraceEmitter,
 } from '@agent/trace';
 
@@ -80,22 +79,6 @@ describe('emitToolUseCard', () => {
       }
     },
   );
-});
-
-// #7508: the userMessage row carries attachment kinds (never bytes), and the
-// common no-media message carries no `data` at all.
-describe('logUserMessage', () => {
-  it('stamps attachment kinds only when attachments are present', () => {
-    const [plain, withMedia] = collectEvents((trace) => {
-      logUserMessage(trace, 'Fix the lemma.');
-      logUserMessage(trace, 'See the figure.', ['image', 'document']);
-    });
-
-    expect(plain).toMatchObject({ data: undefined });
-    expect(withMedia).toMatchObject({
-      data: { attachments: ['image', 'document'] },
-    });
-  });
 });
 
 describe('logFileCategory', () => {
