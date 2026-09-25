@@ -29,7 +29,6 @@ import { createWorkbenchController } from './workbenchController';
 
 export function createProjectWorkbench(options: {
   session: string;
-  root: string | undefined;
   surfaces: SessionSurfaces;
   settingsView: HTMLElement;
   logsPane: HTMLElement;
@@ -135,7 +134,6 @@ export function createProjectWorkbench(options: {
     settingsView: options.settingsView,
     logsPane: options.logsPane,
     getState,
-    getWorkspacePath: () => options.root,
     updateShell: updateState,
     postMessage: send,
   });

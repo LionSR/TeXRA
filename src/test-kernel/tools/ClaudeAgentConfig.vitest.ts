@@ -6,7 +6,7 @@ import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports - model
-import { apiKeySecretName, invalidateApiKeyCache } from '@model/apiProviders';
+import { apiKeySecretName } from '@model/apiProviders';
 import type { PlatformSecrets } from '@platform/secrets';
 import { scriptedSpawnerLayer } from '@test/support/childProcessTestLayer';
 import type * as ChildProcess from 'effect/unstable/process/ChildProcess';
@@ -36,7 +36,6 @@ async function loadBuildClaudeAgentEnv(): Promise<
 /** The suite's secret store as the `Secrets` service the env builder reads. */
 const fakeSecrets: PlatformSecrets = {
   get: (key) => Effect.sync(() => secretStore.get(key)),
-  getStored: (key) => Effect.sync(() => secretStore.get(key)),
   set: (key, value) =>
     Effect.sync(() => {
       secretStore.set(key, value);
@@ -94,7 +93,6 @@ describe('Claude Code CLI configuration', () => {
     keychainAccount = undefined;
     spawnCalls = [];
     vi.resetModules();
-    invalidateApiKeyCache();
     // Deterministic baseline: no OAuth credential present. Point the config dir
     // at a path that cannot contain `.credentials.json` and clear the token so
     // tests don't pick up a real `claude login` session on the host.
@@ -109,7 +107,6 @@ describe('Claude Code CLI configuration', () => {
 
   afterEach(() => {
     vi.doUnmock('node:os');
-    invalidateApiKeyCache();
     vi.unstubAllEnvs();
     for (const dir of cleanupDirs)
       rmSync(dir, { recursive: true, force: true });

@@ -32,7 +32,6 @@ interface InfoPaneProps {
   readonly title: string;
   readonly lines: readonly string[];
   readonly availableRows: number;
-  readonly colorEnabled?: boolean;
   readonly onClose: () => void;
   readonly onOverflow: (lines: readonly string[]) => void;
 }
@@ -58,11 +57,7 @@ export function InfoPane(props: InfoPaneProps): React.JSX.Element | null {
   if (!fits) return null;
   return (
     <FormFrame title={props.title}>
-      <Markdown
-        colorEnabled={props.colorEnabled}
-        content={props.lines.join('\n')}
-        width={textWidth}
-      />
+      <Markdown content={props.lines.join('\n')} width={textWidth} />
     </FormFrame>
   );
 }

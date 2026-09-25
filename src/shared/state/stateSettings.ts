@@ -622,17 +622,17 @@ const CORE_SETTING_ROWS: Record<
     ],
     honoredBy: everyHost('src/tools/approval/latexPreview.ts'),
   },
-  // Only the extension's git commands read the commit count. The setup
-  // assistant's host-neutral `update_config` writer is recorded separately so
-  // a CLI-written value is recognized without mislabeling the writer as a reader.
+  // The launcher's commit picker reads the count through the host snapshot on
+  // both GUI hosts. The setup assistant's host-neutral `update_config` writer
+  // is recorded separately so a CLI-written value is recognized without
+  // mislabeling the writer as a reader.
   'git.numberOfCommitsToShow': {
     schema: z.int().min(1).max(1000).prefault(20),
     description:
       'Number of recent commits to show in the commit selection dropdown',
     honoredBy: {
-      vscode: {
-        reader: 'packages/extension/src/commands/git/gitCommands.ts',
-      },
+      vscode: { reader: 'src/controllers/session/hostSnapshotSource.ts' },
+      desktop: { reader: 'src/controllers/session/hostSnapshotSource.ts' },
     },
     writtenBy: {
       cli: { writer: 'src/tools/setup/ConfigTools.ts' },

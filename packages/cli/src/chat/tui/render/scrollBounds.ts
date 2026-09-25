@@ -215,18 +215,14 @@ export function boundedScrollableLines<K extends string>({
     rows: lines,
     scrollOffset,
   });
-  const marker = (full: string, short: string): ScrollableDisplayLine<K> => ({
+  const marker = (text: string): ScrollableDisplayLine<K> => ({
     kind: 'overflow',
-    text: textDisplayWidth(full) <= width ? full : clipToWidth(short, width),
+    text: clipToWidth(text, width),
   });
 
   return [
-    ...(hiddenBefore > 0
-      ? [marker(previousRowsText(hiddenBefore), `… ${hiddenBefore} prev rows`)]
-      : []),
+    ...(hiddenBefore > 0 ? [marker(previousRowsText(hiddenBefore))] : []),
     ...visibleRows,
-    ...(hiddenAfter > 0
-      ? [marker(moreRowsText(hiddenAfter), `… +${hiddenAfter} rows`)]
-      : []),
+    ...(hiddenAfter > 0 ? [marker(moreRowsText(hiddenAfter))] : []),
   ];
 }

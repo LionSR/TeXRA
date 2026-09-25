@@ -232,9 +232,11 @@ const HARNESS_CWD_INPUT = process.env.HARNESS_CWD?.trim();
 // Keep platform state writes out of the repository unless a scenario opts in.
 const HARNESS_CWD =
   HARNESS_CWD_INPUT || mkdtempSync(path.join(tmpdir(), 'texra-tui-harness-'));
+const HARNESS_STORAGE_ROOT = path.join(HARNESS_CWD, '.texra-storage');
 const HARNESS_COLOR_ENABLED = process.env.HARNESS_COLOR_ENABLED !== '0';
 const HARNESS_RESOURCES_PATH = resolveCliResourcesPath();
 const HARNESS_CLI_CONTEXT: CliContext = {
+  storageRoot: HARNESS_STORAGE_ROOT,
   approvalPolicy: TEXRA_APPROVAL_POLICY_DEFAULT,
   config: new MemoryConfigProvider(),
   commandName: 'texra',
@@ -317,7 +319,6 @@ if (SHOW_PROJECT_SKILL) {
   seedHarnessProjectSkill();
 }
 
-const HARNESS_STORAGE_ROOT = path.join(HARNESS_CWD, '.texra-storage');
 const HARNESS_PLATFORM_SERVICES = await (
   await installCliProcessRuntime(HARNESS_STORAGE_ROOT, {
     minimumLogLevel: HARNESS_CLI_CONTEXT.minimumLogLevel,
@@ -1755,7 +1756,6 @@ function renderHarnessApp(): React.JSX.Element {
       runtime={harnessRuntime}
       session={session()}
       onSubmit={handleHarnessSubmit}
-      colorEnabled={HARNESS_COLOR_ENABLED}
       history={HARNESS_INPUT_HISTORY}
       onStaticTranscriptChange={viewportController.repaintTranscript}
       onCtrlC={handleHarnessCtrlC}

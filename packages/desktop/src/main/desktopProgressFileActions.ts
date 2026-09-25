@@ -23,14 +23,14 @@ import type {
   DiffProgressReporter,
   DiffRunOutcome,
 } from '@latex/latexdiff/types';
-import type { StateStore, StateReadFailed } from '@platform/interfaces';
+import type { StateReadFailed } from '@platform/interfaces';
 import {
   type ProcessRuntime,
   type ProcessServices,
   withProcessServices,
 } from '@platform/processRuntime';
 import type { LatexdiffMathMarkupValue } from '@shared/constants/latexConfig';
-import type { OutputFileInfo, ReadonlyRoundIndexed } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import type { Rejected } from '@shared/session/requestErrors';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { readSettingFrom } from '@utils/config/platformSettings';
@@ -79,9 +79,6 @@ type DesktopProgressFileActionUi = Pick<
  */
 interface DesktopProgressFileActionHost {
   readonly session: SessionHandle;
-  /** The process global state the window root holds; the merge run reads the
-   *  helper model from it. */
-  readonly globalState: StateStore;
   /** The process runtime the window root holds; the latexdiff programs and
    *  the file reads and writes below take their services from it. Nothing
    *  settles here: every member of this class is a program its caller runs. */
@@ -92,21 +89,6 @@ interface DesktopProgressFileActionHost {
     PlatformError.PlatformError,
     ProcessServices
   >;
-}
-
-export interface DesktopLatexdiffWorkspaceScan {
-  agent: string;
-  model: string;
-  inputFile: string;
-  /** Multi-document outputs to diff; defaults to `inputFile` when omitted. */
-  outputFiles?: string[];
-}
-
-/** Read only by the members below; a caller builds one structurally. */
-interface DesktopLatexdiffRunContext {
-  outputsByRound: ReadonlyRoundIndexed<OutputFileInfo>;
-  runId?: string;
-  workspaceScan?: DesktopLatexdiffWorkspaceScan;
 }
 
 export class DesktopProgressFileActions {
@@ -141,7 +123,7 @@ export class DesktopProgressFileActions {
       const validation = validateRunRequest({
         config: {
           agent: 'merge',
-          model: yield* getHelperModelName(this.host.globalState),
+          model: yield* getHelperModelName(this.host.session.roots),
           inputFiles: [baseFile],
           editedFile,
         },
@@ -177,13 +159,13 @@ export class DesktopProgressFileActions {
   diffAcceptedFilePair(
     baseFile: string,
     editedFile: string,
-    runContext: DesktopLatexdiffRunContext,
+    runId: RunId,
   ): Effect.Effect<void, Error> {
     return Effect.gen({ self: this }, function* () {
-      const outcome = yield* this.runSharedLatexdiff(runContext);
+      const outcome = yield* this.runSharedLatexdiff(runId);
       if (outcome && (yield* this.openSharedLatexdiffResults(outcome))) return;
 
-      // No round-aware diff was produced (no rounds resolved, the shared core
+      // No round-aware diff was produced (the run recorded no outputs, the shared core
       // failed, or every operation failed) — fall back to a single-file diff
       // so the user still gets a comparison.
       yield* this.runLatexdiffFile(baseFile, editedFile);
@@ -202,11 +184,9 @@ export class DesktopProgressFileActions {
    * choose a markup mode with, so every desktop diff runs with the configured
    * `texra.latexdiff.mathMarkup`.
    */
-  diffStreamToolbarAction(
-    runContext: DesktopLatexdiffRunContext,
-  ): Effect.Effect<void, Error> {
+  diffStreamToolbarAction(runId: RunId): Effect.Effect<void, Error> {
     return Effect.gen({ self: this }, function* () {
-      const outcome = yield* this.runSharedLatexdiff(runContext);
+      const outcome = yield* this.runSharedLatexdiff(runId);
       if (!outcome?.results.length) {
         yield* this.ui.showInfoMessage(NO_LATEXDIFF_OPERATIONS_MESSAGE);
         return;
@@ -270,60 +250,46 @@ export class DesktopProgressFileActions {
   }
 
   private runSharedLatexdiff(
-    runContext: DesktopLatexdiffRunContext,
+    runId: RunId,
   ): Effect.Effect<DiffRunOutcome | undefined> {
-    return Effect.suspend(() => {
-      const scan = runContext.workspaceScan;
-      const hasOutputs = Object.keys(runContext.outputsByRound).length > 0;
-      // Nothing to diff without either pre-resolved rounds or a scan identity.
-      if (!hasOutputs && !scan) return Effect.succeed(undefined);
-
-      // Delegate the resolve + dispatch policy (caller metadata → run-id scan →
-      // auto-discovery) to the single host-neutral core shared
-      // with the VS Code command and the CLI, instead of re-implementing it here.
-      // Desktop has no per-operation progress UI.
-      const progress: DiffProgressReporter = { report: () => undefined };
-      return runLatexdiffForRun({
-        agent: scan?.agent ?? '',
-        model: scan?.model ?? '',
-        inputFile: scan?.inputFile ?? '',
-        workspaceRoot: this.host.session.roots.workspace,
-        storageRoot: this.host.session.roots.storage,
-        outputFiles: scan?.outputFiles,
-        runId: runContext.runId ?? null,
-        outputsByRound: hasOutputs ? runContext.outputsByRound : null,
-        generateBetweenRoundDiffs: true,
-        runDiscovery: createLatexRunDiscovery(this.host.session),
-        latexdiff: {
-          channel: DESKTOP_LATEXDIFF_CHANNEL,
-          service: new LaTeXdiffService(
-            DESKTOP_LATEXDIFF_CHANNEL,
-            this.host.session.roots,
-          ),
-        },
-        progress,
-      }).pipe(
-        Effect.map((executed) => executed.outcome),
-        // The core can fail (e.g. no workspace path). Don't abort the whole
-        // action — answer undefined so the caller falls back to single-file —
-        // but log the cause so a systematic round-aware failure isn't silently
-        // downgraded to single-file diffs with no trace. An interrupt (the
-        // runtime disposing at shutdown) is not a diff failure to fall back
-        // from: it is not a failure of this channel, so it travels on and the
-        // request settles as interrupted instead of scheduling more diff work
-        // on a closing window.
-        Effect.catch((error) =>
-          Effect.sync(() => {
-            console.error(
-              `Round-aware LaTeX diff failed; falling back to single-file diff: ${toErrorMessage(
-                error,
-              )}`,
-            );
-            return undefined;
-          }),
+    // Delegate the read + dispatch to the single host-neutral core shared
+    // with the VS Code command, instead of re-implementing it here.
+    // Desktop has no per-operation progress UI.
+    const progress: DiffProgressReporter = { report: () => undefined };
+    return runLatexdiffForRun({
+      runId,
+      workspaceRoot: this.host.session.roots.workspace,
+      generateBetweenRoundDiffs: true,
+      runDiscovery: createLatexRunDiscovery(this.host.session),
+      latexdiff: {
+        channel: DESKTOP_LATEXDIFF_CHANNEL,
+        service: new LaTeXdiffService(
+          DESKTOP_LATEXDIFF_CHANNEL,
+          this.host.session.roots,
         ),
-      );
-    }).pipe((program) => withProcessServices(this.host.runtime, program));
+      },
+      progress,
+    }).pipe(
+      // The core can fail (e.g. no workspace path). Don't abort the whole
+      // action — answer undefined so the caller falls back to single-file —
+      // but log the cause so a systematic round-aware failure isn't silently
+      // downgraded to single-file diffs with no trace. An interrupt (the
+      // runtime disposing at shutdown) is not a diff failure to fall back
+      // from: it is not a failure of this channel, so it travels on and the
+      // request settles as interrupted instead of scheduling more diff work
+      // on a closing window.
+      Effect.catch((error) =>
+        Effect.sync(() => {
+          console.error(
+            `Round-aware LaTeX diff failed; falling back to single-file diff: ${toErrorMessage(
+              error,
+            )}`,
+          );
+          return undefined;
+        }),
+      ),
+      (program) => withProcessServices(this.host.runtime, program),
+    );
   }
 
   /**

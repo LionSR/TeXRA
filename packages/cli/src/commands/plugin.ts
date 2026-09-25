@@ -4,7 +4,6 @@ import * as path from 'node:path';
 import { defineCommand } from 'citty';
 import { Effect } from 'effect';
 
-import { DEFAULT_NODE_STORAGE_ROOT } from '@platform/defaults/nodeStorage';
 import { withProcessServices } from '@platform/processRuntime';
 
 import { CliUsageError, type CliContext } from '../runtime/cliContext';
@@ -105,10 +104,7 @@ function withPluginEnv<A, E>(
       services.runtime,
       operation({
         stores: services.roots,
-        pluginsDir: path.join(
-          context.storageRoot ?? DEFAULT_NODE_STORAGE_ROOT,
-          'plugins',
-        ),
+        pluginsDir: path.join(context.storageRoot, 'plugins'),
       }),
     );
   });

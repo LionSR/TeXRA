@@ -142,12 +142,10 @@ function entryAbove(
 }
 
 function StaticTranscriptItemContent({
-  colorEnabled,
   item,
   previousItem,
   width,
 }: {
-  readonly colorEnabled?: boolean;
   readonly item: StaticTranscriptItem;
   readonly previousItem?: StaticTranscriptItem;
   readonly width: number;
@@ -171,7 +169,6 @@ function StaticTranscriptItemContent({
             entry={item.entry}
             previousEntry={entryAbove(previousItem)}
             width={width}
-            colorEnabled={colorEnabled}
           />
         </EntryErrorBoundary>
       );
@@ -179,7 +176,6 @@ function StaticTranscriptItemContent({
 }
 
 export function StaticConversationTranscript({
-  colorEnabled,
   maxRows,
   onRenderKeyChange,
   ownerKey,
@@ -187,7 +183,6 @@ export function StaticConversationTranscript({
   scrollbackRunId,
   width,
 }: {
-  readonly colorEnabled?: boolean;
   readonly maxRows?: number;
   readonly onRenderKeyChange?: () => void;
   readonly ownerKey: string;
@@ -266,7 +261,6 @@ export function StaticConversationTranscript({
       {(item: StaticTranscriptItem, index: number) => (
         <Box key={item.id} flexDirection="column">
           <StaticTranscriptItemContent
-            colorEnabled={colorEnabled}
             item={item}
             previousItem={staticItems[index - 1]}
             width={normalizedWidth}
