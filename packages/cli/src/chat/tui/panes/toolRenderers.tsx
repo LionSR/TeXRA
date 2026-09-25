@@ -14,6 +14,7 @@
 // Local imports - shared schemas and utilities
 import { formatAgentProposalFileGroup } from '@cli/runtime/approval/approvalSummaries';
 import {
+  safeTerminalText,
   textDisplayWidth,
   truncateSummaryToWidth,
 } from '@cli/runtime/terminalText';
@@ -288,7 +289,10 @@ function patchGroupsFromSections(
     if (section.kind !== 'diff') continue;
     const hunks = buildDiffHunks(section.oldText, section.newText);
     if (hunks.length > 0) {
-      groups.push({ fileLabel: section.fileLabel ?? fileLabel, hunks });
+      groups.push({
+        fileLabel: safeTerminalText(section.fileLabel ?? fileLabel),
+        hunks,
+      });
     }
   }
   return groups.length > 0 ? groups : undefined;
