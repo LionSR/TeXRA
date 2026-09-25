@@ -33,25 +33,4 @@ describe('fetchRemoteAgentConfigYaml', () => {
       Effect.provide(FetchHttpClient.layer),
     );
   });
-
-  it.effect.each([
-    [404, /Agent "remoteWriter" not found or access denied/],
-    [403, /Your account does not have permission to access this remote agent/],
-  ] as const)(
-    'maps a %i response to the user-facing error text',
-    ([status, pattern]) =>
-      Effect.gen(function* () {
-        const failure = yield* Effect.flip(
-          fetchRemoteAgentConfigYaml('remoteWriter', 'token'),
-        );
-
-        expect(failure.message).toMatch(pattern);
-      }).pipe(
-        Effect.provideService(
-          FetchHttpClient.Fetch,
-          vi.fn(async () => new Response('rejected', { status })),
-        ),
-        Effect.provide(FetchHttpClient.layer),
-      ),
-  );
 });

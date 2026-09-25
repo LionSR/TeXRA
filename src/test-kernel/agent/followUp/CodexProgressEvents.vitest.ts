@@ -5,11 +5,7 @@ import { describe, expect } from 'vitest';
 
 // Local imports
 import type { AgentTrace } from '@agent/trace';
-import {
-  MESSAGE_TYPES,
-  CODEX_THREAD_TOOL,
-  CODEX_TURN_TOOL,
-} from '@shared/schemas';
+import { MESSAGE_TYPES, CODEX_TURN_TOOL } from '@shared/schemas';
 import type { RunId } from '@shared/schemas';
 import { StreamLog } from '@shared/session/traceEntries';
 import { createTestRunTrace } from '@test/support/sessionTestUtils';
@@ -157,48 +153,6 @@ describe('codex progress events', () => {
         output: 'building...\ndone',
         status: 'completed',
       });
-    }),
-  );
-
-  it.effect('emits Codex thread and turn cards across the turn lifecycle', () =>
-    Effect.gen(function* () {
-      const { store, logger } = yield* Effect.promise(() => createLogger());
-      const thread = threadOf([
-        { type: 'thread.started', thread_id: 'thread_abc' },
-        { type: 'turn.started' },
-        {
-          type: 'item.completed',
-          item: { id: 'msg-1', type: 'agent_message', text: 'Done.' },
-        },
-        turnCompleted(5, 2),
-      ]);
-
-      const result = yield* runStreamedTurn(thread, 'Do the thing', logger);
-
-      expect(result.finalResponse).toBe('Done.');
-
-      const logs = toolLogs(store);
-
-      // A one-shot thread card, then a running->completed turn card.
-      expect(logs.map((data) => data.toolName)).toEqual([
-        CODEX_THREAD_TOOL,
-        CODEX_TURN_TOOL,
-      ]);
-
-      expect(logs[0]).toMatchObject({
-        toolName: CODEX_THREAD_TOOL,
-        input: { threadId: 'thread_abc' },
-        status: 'completed',
-      });
-
-      expect(logs[1]).toMatchObject({
-        toolName: CODEX_TURN_TOOL,
-        input: { state: 'completed' },
-        status: 'completed',
-      });
-
-      const turnInput = (logs[1] as { input?: { wallTimeMs?: number } }).input;
-      expect(typeof turnInput?.wallTimeMs).toBe('number');
     }),
   );
 

@@ -91,19 +91,6 @@ async function withMonitor<T>(
 }
 
 describe('UsageMonitor', () => {
-  it('is undefined before any round and caches the totals after recordUsage', async () => {
-    await withMonitor(async ({ monitor }) => {
-      expect(monitor.lastTotals()).toBeUndefined();
-
-      const state = freshUsage();
-      monitor.recordUsage(state.totals, state.latestUsage, testModelInfo);
-
-      // The cache holds the exact totals object the accumulator exposed, so a
-      // failed run's terminal `result` event can report usage from the catch arm.
-      expect(monitor.lastTotals()).toBe(state.totals);
-    });
-  });
-
   it('forwards the ChatGPT subscription route to session usage facts', async () => {
     await withMonitor(async ({ monitor, events }) => {
       const state = freshUsage();

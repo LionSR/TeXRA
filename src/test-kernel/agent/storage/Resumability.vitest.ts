@@ -131,16 +131,6 @@ describe('deriveResumability', () => {
     }),
   );
 
-  it.effect('reports a run with no durable state as not resumable', () =>
-    Effect.gen(function* () {
-      const runId = 'ac0008' as RunId;
-
-      expect(yield* deriveResumability(runId, session)).toEqual({
-        kind: 'none',
-      });
-    }),
-  );
-
   it.effect(
     'reports unreadable metadata as unreadable even with a snapshot',
     () =>

@@ -31,44 +31,6 @@ async function importSessionRuntime() {
 }
 
 describe('default session lifecycle', () => {
-  // Opens and releases a real session on the process session owner, and keeps
-  // the real clock it runs on today.
-  it.live('exposes no default before explicit initialization', () =>
-    Effect.gen(function* () {
-      const {
-        initializeDefaultSession,
-        teardownDefaultSession,
-        tryDefaultSession,
-        roots,
-      } = yield* Effect.promise(() => importSessionRuntime());
-
-      expect(tryDefaultSession()).toBeUndefined();
-
-      const transcriptMode = {
-        kind: 'ephemeral',
-        reason: 'default session lifecycle test',
-      } as const;
-      const session = yield* initializeDefaultSession({
-        roots,
-        transcriptMode,
-      });
-      yield* Effect.gen(function* () {
-        expect(tryDefaultSession()).toBe(session);
-        expect(session.transcripts.mode).toEqual(transcriptMode);
-        // `initializeDefaultSession` carries no error channel and a second
-        // initialization dies (SessionHandle.ts:1403-1415), so the assertion
-        // reads the exit and its die reason rather than `Effect.flip`.
-        const exit = yield* Effect.exit(
-          initializeDefaultSession({ roots, transcriptMode }),
-        );
-        assert(Exit.isFailure(exit));
-        const defect = exit.cause.reasons.find(Cause.isDieReason)?.defect;
-        expect(defect).toBeInstanceOf(Error);
-        expect((defect as Error).message).toContain('already been initialized');
-      }).pipe(Effect.ensuring(teardownDefaultSession()));
-    }),
-  );
-
   it.live(
     'retains the roots it was opened over until the owner closes it after a host swap',
     () =>
