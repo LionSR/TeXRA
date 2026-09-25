@@ -359,6 +359,34 @@ Concretely:
   mock echoes, call-count and call-order pins, snapshot tests of copy,
   "renders without crashing", and re-assertions of a schema's defaults are
   cost with no signal.
+
+How to write the tests that do earn a place (adapted from the testing guides
+in [opencode](https://github.com/sst/opencode/blob/dev/AGENTS.md)):
+
+- **Test the real implementation; avoid mocks.** Run the production code
+  against real resources: a temp directory, a real git repo, a real SQLite
+  file, a real child process. Fake only at the process edge — the provider's
+  HTTP endpoint (a scripted local server replaying recorded responses), never
+  a repository module. Never patch `globalThis`. When a test must stub a
+  service, stub only the methods it needs with `Layer.mock`: any other method
+  throws, so an unexpected dependency fails loudly rather than returning a
+  quiet placeholder.
+- **Do not duplicate logic into tests.** An expected value that the test
+  computes by re-running the algorithm passes whenever the code is wrong in
+  the same way. Write the expected output down as a literal, or check a
+  property the code has to satisfy.
+- **Synchronize on published signals, never wall-clock.** A fixed sleep that
+  waits "long enough" for a forked fiber, a process, or a render is a flake on
+  a slow CI host. Wait on the state the next step needs: a `Deferred`, a
+  session status, an event on the trace, a file appearing, a Playwright
+  web-first assertion. A sleep is acceptable only where time is the thing
+  under test (debounce, throttle, mtime resolution).
+- **E2E hygiene.** Drive the app through user-visible roles, labels, and text,
+  with isolated, deterministic data per test. Register an event or network wait
+  before the action that triggers it. Retry idempotent readiness checks, never
+  state-changing actions. Assert exact outcomes and identities, so stale state,
+  duplicate rendering, or the wrong element cannot pass. Never use
+  `waitForTimeout`.
 - Extend the module's existing suite rather than adding a new test file. Add
   one only when the module has no existing suite (one suite per module,
   path-mirrored under `src/test-kernel/`) or for one named cross-module
