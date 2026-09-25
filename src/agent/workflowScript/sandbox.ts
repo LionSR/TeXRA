@@ -3,47 +3,39 @@ import quickJsReleaseVariant from '@jitl/quickjs-wasmfile-release-sync';
 import quickJsWasm from '@jitl/quickjs-wasmfile-release-sync/wasm';
 import {
   type QuickJSContext,
-  type QuickJSDeferredPromise,
   type QuickJSHandle,
   type VmFunctionImplementation,
   memoizePromiseFactory,
   newQuickJSWASMModuleFromVariant,
   newVariant,
 } from 'quickjs-emscripten-core';
-import { Cause, Effect, Exit, FiberSet, Latch, Result } from 'effect';
+import { Effect, Result, type Scope } from 'effect';
 import { z } from 'zod';
 
 // Local imports - utilities
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
-export interface SandboxHostBridge<R = never> {
-  /**
-   * Async primitives. Arguments and results cross as JSON text only. Each call
-   * is a sandbox-owned fiber, interrupted before its realm is disposed.
-   */
-  asyncFns: Record<
-    string,
-    (args: unknown[]) => Effect.Effect<string | undefined, Error, R>
-  >;
+export interface SandboxHostBridge {
   /** Sync primitives. Arguments cross as JSON text; results are primitives. */
   syncFns: Record<string, (args: unknown[]) => string | undefined>;
   /** JSON payload for the `args` global; undefined installs `args` as undefined. */
   argsJson: string | undefined;
   /** JSON payload for the immutable, role-separated `files` global. */
   filesJson: string;
-  /** Trusted realm-side orchestration primitives installed before the body. */
-  realmPrelude: string;
 }
 
 export interface SandboxOptions {
-  /** Wall-clock cap for the whole (async) script run. */
-  timeoutMs: number;
   filename: string;
+  /**
+   * Polled by QuickJS while guest code runs. Returning true preempts the
+   * running step with an error the script cannot catch.
+   */
+  shouldInterrupt: () => boolean;
 }
 
 const QUICKJS_MEMORY_LIMIT_BYTES = 64 * 1024 * 1024;
 const QUICKJS_STACK_LIMIT_BYTES = 1 * 1024 * 1024;
-const MAX_JOBS_PER_TURN = 100;
+const MAX_FANOUT = 512;
 
 const getQuickJsModule = memoizePromiseFactory(() =>
   newQuickJSWASMModuleFromVariant(
@@ -55,6 +47,124 @@ const getQuickJsModule = memoizePromiseFactory(() =>
     }),
   ),
 );
+
+/**
+ * One operation a script yields, as it crosses the realm boundary. A branch
+ * with several steps crosses as the id of a generator function the realm
+ * keeps in its own table; the host only ever asks the realm to step it.
+ */
+export type WorkflowOperation =
+  | { readonly _tag: 'Branch'; readonly branch: number }
+  | {
+      readonly _tag: 'Agent';
+      readonly prompt: string;
+      readonly options?: unknown;
+    }
+  | {
+      readonly _tag: 'All';
+      readonly items: readonly WorkflowOperation[];
+      readonly concurrency: number | null;
+    }
+  | { readonly _tag: 'Attempt'; readonly body: WorkflowOperation }
+  | {
+      readonly _tag: 'Retry';
+      readonly body: WorkflowOperation;
+      readonly times: number | null;
+    }
+  | {
+      readonly _tag: 'Timeout';
+      readonly body: WorkflowOperation;
+      readonly ms: number;
+    };
+
+const WorkflowOperationSchema: z.ZodType<WorkflowOperation> = z.lazy(() =>
+  z.discriminatedUnion('_tag', [
+    z.object({ _tag: z.literal('Branch'), branch: z.int().nonnegative() }),
+    z.object({
+      _tag: z.literal('Agent'),
+      prompt: z
+        .string({
+          error: 'agent(prompt, options?) requires a non-empty string prompt.',
+        })
+        .refine(
+          (prompt) => prompt.trim().length > 0,
+          'agent(prompt, options?) requires a non-empty string prompt.',
+        ),
+      options: z.unknown(),
+    }),
+    z.object({
+      _tag: z.literal('All'),
+      items: z
+        .array(WorkflowOperationSchema)
+        .max(MAX_FANOUT, `all() accepts at most ${MAX_FANOUT} items.`),
+      concurrency: z
+        .int({
+          error: 'all() option "concurrency" must be a positive integer.',
+        })
+        .positive('all() option "concurrency" must be a positive integer.')
+        .nullable(),
+    }),
+    z.object({ _tag: z.literal('Attempt'), body: WorkflowOperationSchema }),
+    z.object({
+      _tag: z.literal('Retry'),
+      body: WorkflowOperationSchema,
+      times: z
+        .int({
+          error: 'retry() option "times" must be an integer from 0 to 10.',
+        })
+        .min(0, 'retry() option "times" must be an integer from 0 to 10.')
+        .max(10, 'retry() option "times" must be an integer from 0 to 10.')
+        .nullable(),
+    }),
+    z.object({
+      _tag: z.literal('Timeout'),
+      body: WorkflowOperationSchema,
+      ms: z
+        .int({ error: 'timeout(body, ms) requires a positive integer ms.' })
+        .positive('timeout(body, ms) requires a positive integer ms.'),
+    }),
+  ]),
+);
+
+/** What one step of a generator reports back to the host. */
+const RealmReplySchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('started'), generator: z.int().nonnegative() }),
+  z.object({ kind: z.literal('op'), op: WorkflowOperationSchema }),
+  z.object({ kind: z.literal('done'), value: z.unknown() }),
+  z.object({
+    kind: z.literal('threw'),
+    name: z.string(),
+    message: z.string(),
+    stack: z.string().optional(),
+  }),
+]);
+type RealmReply = z.infer<typeof RealmReplySchema>;
+export type BranchStep = Exclude<RealmReply, { kind: 'started' }>;
+
+/** How the host resumes a generator: with a value, or a failure to throw. */
+export type BranchInput =
+  | { readonly kind: 'next'; readonly value: unknown }
+  | {
+      readonly kind: 'throw';
+      readonly name: string;
+      readonly message: string;
+    };
+
+/**
+ * A realm holding one script. Guest code runs only inside a step: a
+ * synchronous call into the realm that runs a generator to its next yield.
+ */
+export interface WorkflowRealm {
+  /** The script body's branch id. */
+  readonly main: number;
+  /** Instantiate a branch's generator; succeeds with its generator id. */
+  readonly start: (branch: number) => Effect.Effect<number, Error>;
+  /** Resume a generator to its next operation, its result, or its throw. */
+  readonly resume: (
+    generator: number,
+    input: BranchInput,
+  ) => Effect.Effect<BranchStep, Error>;
+}
 
 /**
  * Nondeterminism and dynamic-code guards. Journal replay requires stable call
@@ -145,25 +255,31 @@ const DETERMINISM_PRELUDE = `
 `;
 
 /**
- * Captures the three opaque host dispatchers, deletes their temporary globals,
- * and installs realm-local wrappers. Only names and JSON strings reach those
- * dispatchers; guest arrays, objects, functions, and promises remain in QuickJS.
- * The expression evaluates to the private realm-local result-delivery function.
+ * The script-facing vocabulary and the step machine. It captures the opaque
+ * sync dispatcher, deletes its temporary globals, and defines the operation
+ * constructors: `agent`, `all`, `forEach`, `attempt`, `retry` and `timeout`
+ * build frozen values that run nothing, and `yield*` hands one to the host.
+ *
+ * The expression evaluates to `bind(main)`, which registers the script body
+ * as branch 0 and returns `step`, the one function the host ever calls. Both
+ * stay host-side handles, never globals. The host never calls a method on a
+ * guest object and never hands the realm a host function beyond the sync
+ * dispatcher, so every callback and value a script can reach is realm-local
+ * and codegen-gated; only JSON text crosses, in both directions.
  */
-const BRIDGE_PRELUDE = `
+const PROTOCOL_PRELUDE = `
 'use strict';
 (() => {
-  const hostAsync = globalThis.__wfHostAsync;
   const hostSync = globalThis.__wfHostSync;
-  const hostDeliver = globalThis.__wfHostDeliver;
   const config = JSON.parse(globalThis.__wfBridgeConfig);
-  delete globalThis.__wfHostAsync;
   delete globalThis.__wfHostSync;
-  delete globalThis.__wfHostDeliver;
   delete globalThis.__wfBridgeConfig;
 
   const parseJson = JSON.parse;
   const stringifyJson = JSON.stringify;
+  const freeze = Object.freeze;
+  const isArray = Array.isArray;
+  const getPrototypeOf = Object.getPrototypeOf;
   const define = (name, value) =>
     Object.defineProperty(globalThis, name, {
       value,
@@ -182,21 +298,6 @@ const BRIDGE_PRELUDE = `
     return realmError;
   };
 
-  for (const name of config.asyncNames) {
-    define(name, function (...args) {
-      const pending = (async () => {
-        let payload;
-        try {
-          payload = await hostAsync(name, stringifyJson(args));
-        } catch (err) {
-          throw toRealmError(err);
-        }
-        return payload === undefined ? undefined : parseJson(payload);
-      })();
-      pending.catch(() => {});
-      return pending;
-    });
-  }
   for (const name of config.syncNames) {
     define(name, function (...args) {
       try {
@@ -208,58 +309,148 @@ const BRIDGE_PRELUDE = `
   }
   define('args', config.argsJson === undefined ? undefined : parseJson(config.argsJson));
   const files = parseJson(config.filesJson);
-  Object.values(files).forEach(Object.freeze);
-  define('files', Object.freeze(files));
+  Object.values(files).forEach(freeze);
+  define('files', freeze(files));
 
-  let delivered = false;
-  return function (value, isError) {
-    if (delivered) return;
-    delivered = true;
-    if (isError) {
-      const err = toRealmError(value);
-      const stack =
-        value && typeof value === 'object' && 'stack' in value && value.stack
-          ? String(value.stack)
-          : undefined;
-      hostDeliver(
-        undefined,
-        stringifyJson({ name: err.name, message: err.message, stack }),
-      );
-      return;
+  const OP = Symbol('workflow.operation');
+  const GeneratorFunction = getPrototypeOf(function* () {});
+  const isBranch = (value) =>
+    typeof value === 'function' && getPrototypeOf(value) === GeneratorFunction;
+  const isOperation = (value) =>
+    value !== null && typeof value === 'object' && typeof value[OP] === 'string';
+  const operation = (tag, fields) => {
+    const op = {
+      [OP]: tag,
+      ...fields,
+      // yield* op: yield the op to the host, then evaluate to its result.
+      *[Symbol.iterator]() {
+        return yield op;
+      },
+    };
+    return freeze(op);
+  };
+  const body = (value, where) => {
+    if (isOperation(value) || isBranch(value)) return value;
+    throw new TypeError(
+      where + ' expects an operation such as agent(...), or a generator function (function* () { ... }).',
+    );
+  };
+  const all = (items, options) => {
+    if (!isArray(items)) throw new TypeError('all(items) expects an array of operations.');
+    const checked = [];
+    for (let i = 0; i < items.length; i++) checked.push(body(items[i], 'all() item ' + i));
+    return operation('All', { items: freeze(checked), concurrency: options?.concurrency ?? null });
+  };
+  define('agent', (prompt, options) => operation('Agent', { prompt, options }));
+  define('all', all);
+  define('forEach', (items, fn, options) => {
+    if (!isArray(items)) throw new TypeError('forEach(items, fn) expects an array.');
+    if (typeof fn !== 'function') {
+      throw new TypeError('forEach(items, fn) expects a function that returns an operation.');
     }
-    let payload;
+    const mapped = [];
+    for (let i = 0; i < items.length; i++) mapped.push(fn(items[i], i));
+    return all(mapped, options);
+  });
+  define('attempt', (value) => operation('Attempt', { body: body(value, 'attempt()') }));
+  define('retry', (value, options) =>
+    operation('Retry', { body: body(value, 'retry()'), times: options?.times ?? null }));
+  define('timeout', (value, ms) => operation('Timeout', { body: body(value, 'timeout()'), ms }));
+
+  const branches = new Map();
+  const generators = new Map();
+  let nextBranch = 0;
+  let nextGenerator = 0;
+  const wire = (value) => {
+    if (isBranch(value)) {
+      const branch = nextBranch++;
+      branches.set(branch, value);
+      return { _tag: 'Branch', branch };
+    }
+    switch (value[OP]) {
+      case 'Agent':
+        return { _tag: 'Agent', prompt: value.prompt, options: value.options };
+      case 'All': {
+        const items = [];
+        for (let i = 0; i < value.items.length; i++) items.push(wire(value.items[i]));
+        return { _tag: 'All', items, concurrency: value.concurrency };
+      }
+      case 'Attempt':
+        return { _tag: 'Attempt', body: wire(value.body) };
+      case 'Retry':
+        return { _tag: 'Retry', body: wire(value.body), times: value.times };
+      case 'Timeout':
+        return { _tag: 'Timeout', body: wire(value.body), ms: value.ms };
+    }
+    throw new TypeError('not a workflow operation');
+  };
+  const serialize = (reply) => {
     try {
-      payload = value === undefined ? undefined : (stringifyJson(value) ?? 'null');
+      return stringifyJson(reply);
     } catch (err) {
-      const realmErr = toRealmError(err);
-      hostDeliver(
-        undefined,
-        stringifyJson({
-          name: realmErr.name,
-          message: 'Workflow result is not JSON-serializable: ' + realmErr.message,
-        }),
+      throw new TypeError(
+        'Workflow values must be JSON-serializable: ' + toRealmError(err).message,
       );
-      return;
     }
-    hostDeliver(payload, undefined);
+  };
+  const report = (result) => {
+    if (result.done) return serialize({ kind: 'done', value: result.value });
+    if (!isOperation(result.value)) {
+      throw new TypeError(
+        'yield* expects an operation such as agent(...) or all(...); write yield* before the operation.',
+      );
+    }
+    return serialize({ kind: 'op', op: wire(result.value) });
+  };
+  const threw = (err) =>
+    stringifyJson({
+      kind: 'threw',
+      name: err && typeof err === 'object' && err.name ? String(err.name) : 'Error',
+      message:
+        err && typeof err === 'object' && 'message' in err ? String(err.message) : String(err),
+      stack: err && typeof err === 'object' && err.stack ? String(err.stack) : undefined,
+    });
+
+  const step = (kind, id, payload) => {
+    try {
+      if (kind === 'start') {
+        const branch = branches.get(id);
+        if (branch === undefined) throw new Error('Unknown workflow branch ' + id + '.');
+        const generator = nextGenerator++;
+        generators.set(generator, branch());
+        return stringifyJson({ kind: 'started', generator });
+      }
+      const generator = generators.get(id);
+      if (generator === undefined) throw new Error('Unknown workflow generator ' + id + '.');
+      try {
+        let result;
+        if (kind === 'throw') {
+          const failure = parseJson(payload);
+          const error = new Error(failure.message);
+          error.name = failure.name;
+          result = generator.throw(error);
+        } else {
+          result = generator.next(payload === '' ? undefined : parseJson(payload));
+        }
+        const text = report(result);
+        if (result.done) generators.delete(id);
+        return text;
+      } catch (err) {
+        generators.delete(id);
+        throw err;
+      }
+    } catch (err) {
+      return threw(err);
+    }
+  };
+
+  return (main) => {
+    if (nextBranch !== 0 || !isBranch(main)) throw new Error('The workflow body is already bound.');
+    branches.set(nextBranch++, main);
+    return step;
   };
 })()
 `;
-
-/** What the guest body delivered: its JSON-revived value, or its error. */
-type GuestOutcome = Result.Result<unknown, Error>;
-
-/** Error shape the bridge prelude delivers for a rejected guest body. */
-const GuestErrorRecordSchema = z.object({
-  name: z.string(),
-  message: z.string(),
-  stack: z.string().optional(),
-});
-
-type SandboxSettlement =
-  | { readonly kind: 'outcome'; readonly outcome: GuestOutcome }
-  | { readonly kind: 'host-failure'; readonly error: Error }
-  | { readonly kind: 'timeout' };
 
 const loadQuickJsModule = Effect.tryPromise({
   try: () => getQuickJsModule(),
@@ -267,228 +458,167 @@ const loadQuickJsModule = Effect.tryPromise({
 });
 
 /**
- * Evaluates a workflow body in a fresh preemptible QuickJS runtime. The WASM
- * module is shared, but every script receives a new runtime and context with
- * independent interrupt, heap, stack, promise-job, and handle ownership.
+ * Opens a fresh QuickJS runtime over one workflow body. The WASM module is
+ * shared, but every script receives a new runtime and context with
+ * independent interrupt, heap, stack, and handle ownership.
  *
- * The run is one scoped Effect. The runtime, the context, the pending host
- * promises, the host-call fibers and the deadline timer belong to its scope,
- * so however the run ends (result, fault, timeout, or the caller interrupting
- * it) the host calls are interrupted first and the realm is disposed after.
- * Guest code that never yields is preempted by the QuickJS interrupt handler
- * at the deadline; an interruption lands at the pump's next yield.
+ * Every QuickJS resource belongs to the caller's scope, so however the run
+ * ends the realm is disposed after it. There are no promises in the realm
+ * and so no job queue to pump: guest code runs only inside a step, and a step
+ * that never yields is preempted by the interrupt handler.
  */
-export function runScriptInSandbox<R = never>(
+export function openWorkflowRealm(
   body: string,
-  bridge: SandboxHostBridge<R>,
+  bridge: SandboxHostBridge,
   options: SandboxOptions,
-): Effect.Effect<unknown, Error, R> {
-  return Effect.scoped(
-    Effect.gen(function* () {
-      const quickJs = yield* loadQuickJsModule;
-      const deadline = performance.now() + options.timeoutMs;
-      const wakeLatch = yield* Latch.make(false);
-      let interruptRequested = false;
-      let settlement: SandboxSettlement | undefined;
-      const settled = (): boolean => settlement !== undefined;
-      const wake = (): void => {
-        wakeLatch.openUnsafe();
-      };
-      const settle = (next: SandboxSettlement): void => {
-        settlement ??= next;
-        wake();
-      };
-      const markTimedOut = (): void => {
-        interruptRequested = true;
-        settle({ kind: 'timeout' });
-      };
-
-      const runtime = yield* Effect.acquireRelease(
-        Effect.try({
-          try: () =>
-            quickJs.newRuntime({
-              memoryLimitBytes: QUICKJS_MEMORY_LIMIT_BYTES,
-              maxStackSizeBytes: QUICKJS_STACK_LIMIT_BYTES,
-              interruptHandler: () => {
-                if (interruptRequested || performance.now() >= deadline) {
-                  markTimedOut();
-                  return true;
-                }
-                return false;
-              },
-            }),
-          catch: ensureError,
-        }),
-        (runtime) => Effect.sync(() => runtime.dispose()),
-      );
-      const context = yield* Effect.acquireRelease(
-        Effect.try({ try: () => runtime.newContext(), catch: ensureError }),
-        (context) => Effect.sync(() => context.dispose()),
-      );
-      const hostCalls = yield* FiberSet.make<void>();
-      const forkHostCall = yield* FiberSet.runtime(hostCalls)<R>();
-      const pendingHostPromises = new Set<QuickJSDeferredPromise>();
-      let active = true;
-      // Released before the host calls are interrupted: a call ending under
-      // that interrupt must not settle into a realm being torn down.
-      yield* Effect.addFinalizer(() =>
-        Effect.sync(() => {
-          active = false;
-          for (const deferred of pendingHostPromises) {
-            if (deferred.alive) deferred.dispose();
-          }
-          pendingHostPromises.clear();
-        }),
-      );
-      yield* Effect.sync(markTimedOut).pipe(
-        Effect.delay(options.timeoutMs),
-        Effect.forkScoped,
-      );
-
-      const run = Effect.gen(function* () {
-        const deliver = yield* Effect.acquireRelease(
-          Effect.try({
-            try: () => {
-              installHostBridge(context, bridge, {
-                pending: pendingHostPromises,
-                isActive: () => active,
-                fork: (call) => {
-                  forkHostCall(call);
-                },
-                fail: (error) => settle({ kind: 'host-failure', error }),
-                deliver: (outcome) => settle({ kind: 'outcome', outcome }),
-                wake,
-              });
-              return evaluate(context, BRIDGE_PRELUDE, 'workflow-bridge.js');
-            },
-            catch: ensureError,
+): Effect.Effect<WorkflowRealm, Error, Scope.Scope> {
+  return Effect.gen(function* () {
+    const quickJs = yield* loadQuickJsModule;
+    const runtime = yield* Effect.acquireRelease(
+      Effect.try({
+        try: () =>
+          quickJs.newRuntime({
+            memoryLimitBytes: QUICKJS_MEMORY_LIMIT_BYTES,
+            maxStackSizeBytes: QUICKJS_STACK_LIMIT_BYTES,
+            interruptHandler: options.shouldInterrupt,
           }),
-          (handle) => Effect.sync(() => handle.dispose()),
-        );
-        yield* Effect.try({
-          try: () => {
-            evaluateAndDispose(
-              context,
-              DETERMINISM_PRELUDE,
-              'workflow-prelude.js',
-            );
-            evaluateAndDispose(
-              context,
-              bridge.realmPrelude,
-              'workflow-orchestration.js',
-            );
-          },
-          catch: ensureError,
-        });
-        const bodyThunk = yield* Effect.acquireRelease(
-          Effect.try({
-            try: () =>
-              evaluate(
-                context,
-                `(async () => {\n'use strict';\n${body}\n})`,
-                options.filename,
-              ),
-            catch: (error) =>
-              new Error(
-                `Workflow script syntax error: ${toErrorMessage(error)}`,
-              ),
-          }),
-          (handle) => Effect.sync(() => handle.dispose()),
-        );
-        yield* Effect.try({
-          try: () => {
-            setGlobal(context, '__wfBody', bodyThunk);
-            setGlobal(context, '__wfDeliver', deliver);
-            evaluateAndDispose(
-              context,
-              `(() => {
-  const body = globalThis.__wfBody;
-  const deliver = globalThis.__wfDeliver;
-  delete globalThis.__wfBody;
-  delete globalThis.__wfDeliver;
-  body().then(
-    (value) => deliver(value, false),
-    (error) => deliver(error, true),
-  );
-})()`,
-              'workflow-kickoff.js',
-            );
-          },
-          catch: ensureError,
-        });
+        catch: ensureError,
+      }),
+      (runtime) => Effect.sync(() => runtime.dispose()),
+    );
+    const context = yield* Effect.acquireRelease(
+      Effect.try({ try: () => runtime.newContext(), catch: ensureError }),
+      (context) => Effect.sync(() => context.dispose()),
+    );
+    const disposeHandle = (handle: QuickJSHandle) =>
+      Effect.sync(() => handle.dispose());
 
-        while (!settled()) {
-          const executed = yield* Effect.try({
-            try: () => {
-              const result = runtime.executePendingJobs(MAX_JOBS_PER_TURN);
-              // Result delivery is the run's linearization point. A later
-              // guest job in the same QuickJS batch must not replace that
-              // result with its own error.
-              if (settled()) {
-                result.dispose();
-                return 0;
-              }
-              return result.unwrap();
-            },
-            catch: ensureError,
-          });
-          if (settled()) break;
-          if (executed === MAX_JOBS_PER_TURN || runtime.hasPendingJob()) {
-            // Give host calls, sibling runtimes, and the timer a turn: the
-            // scheduler dispatches through a macrotask.
-            yield* Effect.yieldNow;
-            continue;
+    const bind = yield* Effect.acquireRelease(
+      Effect.try({
+        try: () => {
+          installHostBridge(context, bridge);
+          const handle = evaluate(
+            context,
+            PROTOCOL_PRELUDE,
+            'workflow-protocol.js',
+          );
+          evaluate(
+            context,
+            DETERMINISM_PRELUDE,
+            'workflow-prelude.js',
+          ).dispose();
+          return handle;
+        },
+        catch: ensureError,
+      }),
+      disposeHandle,
+    );
+    const main = yield* Effect.acquireRelease(
+      Effect.try({
+        try: () =>
+          evaluate(
+            context,
+            `(function* () {\n'use strict';\n${body}\n})`,
+            options.filename,
+          ),
+        catch: (error) =>
+          new Error(`Workflow script syntax error: ${toErrorMessage(error)}`),
+      }),
+      disposeHandle,
+    );
+    const step = yield* Effect.acquireRelease(
+      Effect.try({
+        try: () =>
+          context.unwrapResult(
+            context.callFunction(bind, context.undefined, main),
+          ),
+        catch: ensureError,
+      }),
+      disposeHandle,
+    );
+
+    const call = (
+      kind: 'start' | 'next' | 'throw',
+      id: number,
+      payload: string,
+    ): Effect.Effect<RealmReply, Error> =>
+      Effect.try({
+        try: () => {
+          const args = [
+            context.newString(kind),
+            context.newNumber(id),
+            context.newString(payload),
+          ];
+          try {
+            const handle = context.unwrapResult(
+              context.callFunction(step, context.undefined, ...args),
+            );
+            try {
+              return JSON.parse(context.getString(handle)) as unknown;
+            } finally {
+              handle.dispose();
+            }
+          } finally {
+            for (const arg of args) arg.dispose();
           }
-          // Close, then re-check: a wake that landed since the last batch
-          // either settled the run or queued a job.
-          wakeLatch.closeUnsafe();
-          if (settled() || runtime.hasPendingJob()) continue;
-          yield* wakeLatch.await;
-        }
+        },
+        catch: (error) =>
+          new Error(`Workflow script step failed: ${toErrorMessage(error)}`),
+      }).pipe(
+        Effect.flatMap((raw) => {
+          const reply = RealmReplySchema.safeParse(raw);
+          return reply.success
+            ? Effect.succeed(reply.data)
+            : Effect.fail(
+                new Error(
+                  `Workflow script yielded an invalid operation: ${z.prettifyError(reply.error)}`,
+                ),
+              );
+        }),
+      );
 
-        switch (settlement?.kind) {
-          case 'outcome':
-            return yield* Effect.fromResult(settlement.outcome);
-          case 'host-failure':
-            return yield* Effect.fail(settlement.error);
-          case 'timeout':
-            return yield* Effect.fail(timeoutError(options));
-          case undefined:
-            return yield* Effect.fail(
-              new Error('Workflow sandbox stopped without a result.'),
-            );
-        }
-      });
-      // A step the deadline interrupted fails with QuickJS's own interrupt
-      // error; the run's outcome is the timeout.
-      return yield* run.pipe(
-        Effect.mapError((error) =>
-          settlement?.kind === 'timeout' ? timeoutError(options) : error,
+    return {
+      main: 0,
+      start: (branch) =>
+        call('start', branch, '').pipe(
+          Effect.flatMap((reply) =>
+            reply.kind === 'started'
+              ? Effect.succeed(reply.generator)
+              : Effect.fail(
+                  new Error(
+                    `Workflow branch ${branch} could not start: ${reply.kind === 'threw' ? reply.message : reply.kind}`,
+                  ),
+                ),
+          ),
         ),
-      );
-    }),
-  );
+      resume: (generator, input) =>
+        call(
+          input.kind,
+          generator,
+          input.kind === 'throw'
+            ? JSON.stringify({ name: input.name, message: input.message })
+            : input.value === undefined
+              ? ''
+              : JSON.stringify(input.value),
+        ).pipe(
+          Effect.flatMap((reply) =>
+            reply.kind === 'started'
+              ? Effect.fail(
+                  new Error(
+                    'Workflow generator replied to a resume as a start.',
+                  ),
+                )
+              : Effect.succeed(reply),
+          ),
+        ),
+    } satisfies WorkflowRealm;
+  });
 }
 
-interface HostBridgePorts<R> {
-  readonly pending: Set<QuickJSDeferredPromise>;
-  readonly isActive: () => boolean;
-  /**
-   * Start one host call as a sandbox-owned fiber. It starts synchronously,
-   * inside the guest's call, so its host-side effects keep guest order.
-   */
-  readonly fork: (call: Effect.Effect<void, never, R>) => void;
-  readonly fail: (error: Error) => void;
-  readonly deliver: (outcome: GuestOutcome) => void;
-  readonly wake: () => void;
-}
-
-function installHostBridge<R>(
+function installHostBridge(
   context: QuickJSContext,
-  bridge: SandboxHostBridge<R>,
-  ports: HostBridgePorts<R>,
+  bridge: SandboxHostBridge,
 ): void {
-  const { pending, isActive, fork, fail, deliver, wake } = ports;
   const parseArgs = (json: string): unknown[] => {
     const parsed = Result.getOrThrow(
       Result.try({
@@ -505,64 +635,6 @@ function installHostBridge<R>(
     return parsed;
   };
 
-  const settleHostPromise = (
-    deferred: QuickJSDeferredPromise,
-    exit: Exit.Exit<string | undefined, Error>,
-  ): void => {
-    pending.delete(deferred);
-    if (!isActive() || !deferred.alive) {
-      wake();
-      return;
-    }
-    const settledPromise = Result.try({
-      try: () => {
-        const handle = Exit.match(exit, {
-          onSuccess: (payload) =>
-            payload === undefined ? undefined : context.newString(payload),
-          onFailure: (cause) =>
-            context.newError(toErrorRecord(Cause.squash(cause))),
-        });
-        if (handle === undefined) return deferred.resolve();
-        try {
-          if (Exit.isSuccess(exit)) deferred.resolve(handle);
-          else deferred.reject(handle);
-        } finally {
-          handle.dispose();
-        }
-      },
-      catch: ensureError,
-    });
-    if (Result.isFailure(settledPromise)) {
-      if (deferred.alive) deferred.dispose();
-      fail(settledPromise.failure);
-    }
-    wake();
-  };
-
-  defineHostGlobal(context, '__wfHostAsync', (nameHandle, argsHandle) => {
-    const name = context.getString(nameHandle);
-    const argsJson = context.getString(argsHandle);
-    const fn = bridge.asyncFns[name];
-    if (!fn) throw new Error(`Unknown workflow async primitive: ${name}`);
-    const args = parseArgs(argsJson);
-
-    const deferred = context.newPromise();
-    pending.add(deferred);
-    fork(
-      Effect.suspend(() => fn(args)).pipe(
-        Effect.exit,
-        // Settle on a later scheduler turn, never from inside this host
-        // function: a call that finished synchronously would otherwise
-        // resolve its promise before the guest holds it.
-        Effect.tap(() => Effect.yieldNow),
-        Effect.flatMap((exit) =>
-          Effect.sync(() => settleHostPromise(deferred, exit)),
-        ),
-      ),
-    );
-    return deferred.handle;
-  });
-
   defineHostGlobal(context, '__wfHostSync', (nameHandle, argsHandle) => {
     const name = context.getString(nameHandle);
     const argsJson = context.getString(argsHandle);
@@ -572,31 +644,15 @@ function installHostBridge<R>(
     return result === undefined ? context.undefined : context.newString(result);
   });
 
-  const readOptionalString = (handle: QuickJSHandle): string | undefined =>
-    context.typeof(handle) === 'string' ? context.getString(handle) : undefined;
-
-  defineHostGlobal(context, '__wfHostDeliver', (payloadHandle, errorHandle) => {
-    deliver(
-      parseOutcome(
-        readOptionalString(payloadHandle),
-        readOptionalString(errorHandle),
-      ),
-    );
-    return context.undefined;
-  });
-
-  setGlobalAndDispose(
-    context,
-    '__wfBridgeConfig',
-    context.newString(
-      JSON.stringify({
-        asyncNames: Object.keys(bridge.asyncFns),
-        syncNames: Object.keys(bridge.syncFns),
-        argsJson: bridge.argsJson,
-        filesJson: bridge.filesJson,
-      }),
-    ),
+  const config = context.newString(
+    JSON.stringify({
+      syncNames: Object.keys(bridge.syncFns),
+      argsJson: bridge.argsJson,
+      filesJson: bridge.filesJson,
+    }),
   );
+  context.setProp(context.global, '__wfBridgeConfig', config);
+  config.dispose();
 }
 
 function defineHostGlobal(
@@ -604,7 +660,9 @@ function defineHostGlobal(
   name: string,
   fn: VmFunctionImplementation<QuickJSHandle>,
 ): void {
-  setGlobalAndDispose(context, name, context.newFunction(name, fn));
+  const handle = context.newFunction(name, fn);
+  context.setProp(context.global, name, handle);
+  handle.dispose();
 }
 
 function evaluate(
@@ -614,87 +672,5 @@ function evaluate(
 ): QuickJSHandle {
   return context.unwrapResult(
     context.evalCode(source, filename, { type: 'global', strict: true }),
-  );
-}
-
-function evaluateAndDispose(
-  context: QuickJSContext,
-  source: string,
-  filename: string,
-): void {
-  evaluate(context, source, filename).dispose();
-}
-
-function setGlobal(
-  context: QuickJSContext,
-  name: string,
-  value: QuickJSHandle,
-): void {
-  context.setProp(context.global, name, value);
-}
-
-function setGlobalAndDispose(
-  context: QuickJSContext,
-  name: string,
-  value: QuickJSHandle,
-): void {
-  setGlobal(context, name, value);
-  value.dispose();
-}
-
-function parseOutcome(payload?: string, errorJson?: string): GuestOutcome {
-  if (errorJson !== undefined) {
-    const parsed = Result.try({
-      try: () => JSON.parse(errorJson) as unknown,
-      catch: (error) =>
-        new Error(
-          `Workflow script returned malformed error JSON: ${toErrorMessage(error)}`,
-        ),
-    });
-    if (Result.isFailure(parsed)) return parsed;
-    const decoded = GuestErrorRecordSchema.safeParse(parsed.success);
-    if (!decoded.success) {
-      return Result.fail(
-        new Error(
-          'Workflow script returned an invalid error record from the sandbox.',
-        ),
-      );
-    }
-    const record = decoded.data;
-    // Guest stack frames locate the failure inside the script (the only
-    // context a caller has for a sandboxed error), so fold them into the
-    // message the tool result carries.
-    const frames = (record.stack ?? '')
-      .split('\n')
-      .filter((line) => line.trim().startsWith('at '))
-      .slice(0, 3);
-    const error = new Error(
-      frames.length > 0
-        ? `${record.message}\n${frames.join('\n')}`
-        : record.message,
-    );
-    error.name = record.name;
-    return Result.fail(error);
-  }
-  if (payload === undefined) return Result.succeed(undefined);
-  return Result.try({
-    try: () => JSON.parse(payload) as unknown,
-    catch: (error) =>
-      new Error(
-        `Workflow script returned malformed result JSON: ${toErrorMessage(error)}`,
-      ),
-  });
-}
-
-function toErrorRecord(error: unknown): { name: string; message: string } {
-  if (error instanceof Error) {
-    return { name: error.name, message: error.message };
-  }
-  return { name: 'Error', message: toErrorMessage(error) };
-}
-
-function timeoutError(options: SandboxOptions): Error {
-  return new Error(
-    `Workflow script ${options.filename} timed out after ${options.timeoutMs}ms`,
   );
 }

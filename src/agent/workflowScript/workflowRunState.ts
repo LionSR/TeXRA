@@ -284,6 +284,13 @@ export class WorkflowRunState {
     this.#closeSettledStages();
   }
 
+  /** Cancel a call an operation interrupted, unless it already settled. */
+  cancelCall(id: string): void {
+    if (this.#sealed || isTerminalWorkflowCallStatus(this.#call(id).status))
+      return;
+    this.settleCall(id, { status: WORKFLOW_CALL_STATUS.CANCELLED });
+  }
+
   /**
    * The terminal sweep: a plan label the run never issued is skipped as
    * not-reached; a call still queued or running is cancelled with the run or

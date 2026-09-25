@@ -133,7 +133,7 @@ function sandboxBridge(
 describe('parseWorkflowScript', () => {
   it('extracts and validates the meta literal', () => {
     const { meta, body } = parseWorkflowScript(
-      `${META}return await agent('x')`,
+      `${META}return yield* agent('x')`,
     );
     expect(meta.name).toBe('test-flow');
     expect(meta.phases?.[0]?.title).toBe('Work');
@@ -246,7 +246,7 @@ return null`),
 
   it('keeps top-level return and await valid after AST parsing', () => {
     expect(() =>
-      parseWorkflowScript(`${META}return await agent('x')`),
+      parseWorkflowScript(`${META}return yield* agent('x')`),
     ).not.toThrow();
   });
 
@@ -284,7 +284,7 @@ describe('runWorkflowScript', () => {
   phases: [{ title: 'Audit' }],
   tasks: [{ id: 'core', label: 'Audit core', phase: 'Audit' }],
 }
-return await agent('Inspect src', { id: 'core' })`,
+return yield* agent('Inspect src', { id: 'core' })`,
           runAgent: runner,
           onEvent: recorded.onEvent,
         });
@@ -333,7 +333,7 @@ return await agent('Inspect src', { id: 'core' })`,
     { id: 'second', label: 'Second', phase: 'Audit' },
   ],
 }
-await agent('Inspect src', { id: 'first' })
+yield* agent('Inspect src', { id: 'first' })
 throw new Error('script stops before the second task')`,
         runAgent: echoRunner,
         onEvent: recorded.onEvent,
@@ -373,24 +373,24 @@ throw new Error('script stops before the second task')`,
         }
 
         yield* expectPlanRejection(
-          `return await agent('missing id')`,
+          `return yield* agent('missing id')`,
           /must reference a task from meta\.tasks/,
         );
         yield* expectPlanRejection(
-          `return await agent('unknown', { id: 'other' })`,
+          `return yield* agent('unknown', { id: 'other' })`,
           /undeclared task id "other"/,
         );
         yield* expectPlanRejection(
-          `return await agent('conflict', {
+          `return yield* agent('conflict', {
   id: 'known',
   label: 'Conflicting label',
 })`,
           /must use the label and phase declared in meta\.tasks/,
         );
         yield* expectPlanRejection(
-          `return await parallel([
-  () => agent('first use', { id: 'known' }),
-  () => agent('second use', { id: 'known' }),
+          `return yield* all([
+  agent('first use', { id: 'known' }),
+  agent('second use', { id: 'known' }),
 ])`,
           /may be issued only once per run/i,
         );
@@ -409,7 +409,7 @@ throw new Error('script stops before the second task')`,
   phases: ['Audit'],
   tasks: [{ id: 'known', label: 'Known task', phase: 'Audit' }],
 }
-return await agent('inspect', {
+return yield* agent('inspect', {
   id: 'known',
   label: '  Known task  ',
   phase: 'Audit',
@@ -445,7 +445,7 @@ return await agent('inspect', {
       }
 
       yield* expectEffect(
-        runEmptyPlan(`return await agent('undeclared')`),
+        runEmptyPlan(`return yield* agent('undeclared')`),
       ).rejects.toThrow(/Every agent\(\) call must reference a task/);
 
       const recorded = recordCalls();
@@ -463,8 +463,8 @@ return await agent('inspect', {
       const runner = vi.fn(echoRunner);
       const run = yield* runScript(
         `
-const a = await agent('alpha')
-const b = await agent('beta:' + args.suffix)
+const a = yield* agent('alpha')
+const b = yield* agent('beta:' + args.suffix)
 return [a, b]`,
         { args: { suffix: 'S' }, runAgent: runner },
       );
@@ -516,8 +516,8 @@ return {
         const keys: string[] = [];
         const run = yield* runWorkflowScript({
           script: `${META}
-const withSchema = await agent('draft', { agentName: 'assistant', schema: args.schema })
-const plain = await agent('draft')
+const withSchema = yield* agent('draft', { agentName: 'assistant', schema: args.schema })
+const plain = yield* agent('draft')
 return { structured: withSchema.structured, plain }`,
           args: { schema },
           runAgent: (invocation) => {
@@ -556,8 +556,8 @@ return { structured: withSchema.structured, plain }`,
         const invocations: WorkflowAgentInvocation[] = [];
         const run = yield* runWorkflowScript({
           script: `${META}
-const routine = await agent('draft', { model: 'economy-model' })
-const difficult = await agent('draft', { model: 'strong-model' })
+const routine = yield* agent('draft', { model: 'economy-model' })
+const difficult = yield* agent('draft', { model: 'strong-model' })
 return [routine, difficult]`,
           runAgent: (invocation) => {
             invocations.push(invocation);
@@ -580,7 +580,7 @@ return [routine, difficult]`,
   it.effect('rejects a non-object schema option', () =>
     Effect.gen(function* () {
       yield* expectEffect(
-        runScript(`return await agent('draft', { schema: 'nope' })`),
+        runScript(`return yield* agent('draft', { schema: 'nope' })`),
       ).rejects.toThrow(/schema.*must be a plain JSON Schema object/i);
     }),
   );
@@ -588,11 +588,11 @@ return [routine, difficult]`,
   it.effect('rejects an empty or regex-bearing structured-output schema', () =>
     Effect.gen(function* () {
       yield* expectEffect(
-        runScript(`return await agent('draft', { schema: {} })`),
+        runScript(`return yield* agent('draft', { schema: {} })`),
       ).rejects.toThrow(/schema.*object-root JSON Schema/i);
       yield* expectEffect(
         runScript(
-          `return await agent('draft', { schema: { type: 'object', properties: { value: { type: 'string', pattern: '(a+)+$' } } } })`,
+          `return yield* agent('draft', { schema: { type: 'object', properties: { value: { type: 'string', pattern: '(a+)+$' } } } })`,
         ),
       ).rejects.toThrow(/cannot use pattern/i);
     }),
@@ -603,10 +603,10 @@ return [routine, difficult]`,
       const invocations: WorkflowAgentInvocation[] = [];
       yield* runWorkflowScript({
         script: `${META}
-return await parallel([
-  () => agent('same', { id: ' first ' }),
-  () => agent('different'),
-  () => agent('same', { id: 'second' }),
+return yield* all([
+  agent('same', { id: ' first ' }),
+  agent('different'),
+  agent('same', { id: 'second' }),
 ])`,
         runAgent: collectingRunner(invocations),
       });
@@ -623,23 +623,23 @@ return await parallel([
       ]);
 
       yield* expectEffect(
-        runScript(`return await parallel([
-  () => agent('first prompt', { id: 'shared-id' }),
-  () => agent('second prompt', { id: 'shared-id' }),
+        runScript(`return yield* all([
+  agent('first prompt', { id: 'shared-id' }),
+  agent('second prompt', { id: 'shared-id' }),
 ])`),
       ).rejects.toThrow(/call id "shared-id" may be issued only once/i);
 
       yield* expectEffect(
-        runScript(`return await parallel([
-  () => agent('same'),
-  () => agent('same'),
+        runScript(`return yield* all([
+  agent('same'),
+  agent('same'),
 ])`),
       ).rejects.toThrow(/require distinct non-empty "id" options/i);
 
       yield* expectEffect(
-        runScript(`return await parallel([
-  () => agent('same', { id: 'same-id' }),
-  () => agent('same', { id: ' same-id ' }),
+        runScript(`return yield* all([
+  agent('same', { id: 'same-id' }),
+  agent('same', { id: ' same-id ' }),
         ])`),
       ).rejects.toThrow(/call id "same-id" may be issued only once/i);
     }),
@@ -654,8 +654,8 @@ return await parallel([
         const invocations: WorkflowAgentInvocation[] = [];
         const run = yield* runWorkflowScript({
           script: `${META}
-const drafted = await agent('draft')
-return await agent('merge', {
+const drafted = yield* agent('draft')
+return yield* agent('merge', {
           inputFiles: drafted.outputs.map((output) => output.absolutePath),
 })`,
           runAgent: (call) =>
@@ -696,45 +696,30 @@ return await agent('merge', {
   );
 
   it.effect(
-    'parallel(): surfaces script errors instead of converting them to null',
+    'all(): a non-operation item fails the run before any sibling launches',
     () =>
       Effect.gen(function* () {
-        yield* expectEffect(
-          runScript(`
-return await parallel([
-  () => agent('ok-1'),
-  () => { throw new Error('thunk boom') },
-  () => agent('ok-2'),
-])`),
-        ).rejects.toThrow('thunk boom');
-      }),
-  );
-
-  it.effect(
-    'parallel(): keeps a thunk error before launching queued siblings',
-    () =>
-      Effect.gen(function* () {
-        // The thunk throws before any sibling launches, so this runner is never
-        // invoked; it only has to park if it ever were.
+        // An old-style thunk is not an operation, so all() refuses it while
+        // the script builds the list; the runner is never invoked.
         const runner = vi.fn(() => Effect.never);
 
         yield* expectEffect(
           runScript(
             `
-return await parallel([
-  () => agent('running'),
-  () => agent('queued'),
-  () => { throw new Error('thunk boom') },
-        ])`,
+return yield* all([
+  agent('running'),
+  agent('queued'),
+  () => agent('thunk'),
+])`,
             { runAgent: runner, concurrency: 1 },
           ),
-        ).rejects.toThrow('thunk boom');
+        ).rejects.toThrow(/all\(\) item 2 expects an operation/);
         expect(runner).not.toHaveBeenCalled();
       }),
   );
 
   it.effect(
-    'agent() resolves to null on runner failure and is not journaled',
+    'a failed agent() call throws AgentFailed into the script and is not journaled',
     () =>
       Effect.gen(function* () {
         const runner = vi.fn((invocation: WorkflowAgentInvocation) =>
@@ -743,12 +728,32 @@ return await parallel([
             : echoRunner(invocation),
         );
         const run = yield* runScript(
-          `return [await agent('boom'), await agent('fine')]`,
+          `
+const tolerated = yield* attempt(agent('boom'))
+let caught
+try {
+  yield* agent('boom', { id: 'again' })
+} catch (error) {
+  caught = error.name + ': ' + error.message
+}
+return [tolerated, caught, yield* agent('fine')]`,
           { runAgent: runner },
         );
-        expect(run.result).toEqual([null, 'result:fine']);
+        expect(run.result).toEqual([
+          {
+            _tag: 'Failure',
+            error: { name: 'AgentFailed', message: 'runner failed' },
+          },
+          'AgentFailed: runner failed',
+          'result:fine',
+        ]);
         // Only the successful call is journaled, so a resume retries the failure.
-        expect(run.journal.map((entry) => entry.index)).toEqual([1]);
+        expect(run.journal.map((entry) => entry.index)).toEqual([2]);
+
+        // Uncaught, the failure fails the run and says how to tolerate it.
+        yield* expectEffect(
+          runScript(`return yield* agent('boom')`, { runAgent: runner }),
+        ).rejects.toThrow(/Uncaught AgentFailed[\s\S]*attempt\(\)/);
       }),
   );
 
@@ -759,7 +764,7 @@ return await parallel([
         const order: string[] = [];
         const settled = new Set<string>();
         const run = yield* runWorkflowScript({
-          script: `${META}return [await agent('boom'), await agent('saved')]`,
+          script: `${META}return [(yield* attempt(agent('boom')))._tag, yield* agent('saved')]`,
           runAgent: ({ prompt }) =>
             Effect.sync(() => {
               if (prompt === 'boom') throw new Error('runner failed');
@@ -782,7 +787,7 @@ return await parallel([
           },
         });
 
-        expect(run.result).toEqual([null, 'saved result']);
+        expect(run.result).toEqual(['Failure', 'saved result']);
         expect(order).toEqual(['runner', 'checkpoint:1', 'completed:call-1']);
       }),
   );
@@ -796,7 +801,7 @@ return await parallel([
       // while the parent is still persisting the result read from it.
       const order: string[] = [];
       const run = yield* runWorkflowScript({
-        script: `${META}return await agent('fenced')`,
+        script: `${META}return yield* agent('fenced')`,
         runAgent: () =>
           Effect.gen(function* () {
             yield* Effect.addFinalizer(() =>
@@ -820,13 +825,13 @@ return await parallel([
     'observes validated cache hits and live results after durable commit',
     () =>
       Effect.gen(function* () {
-        const cached = yield* runScript(`return await agent('cached')`);
+        const cached = yield* runScript(`return yield* agent('cached')`);
         const order: string[] = [];
         const run = yield* runWorkflowScript({
           script: `${META}
-const cached = await agent('cached')
+const cached = yield* agent('cached')
 log('after cache')
-const live = await agent('live')
+const live = yield* agent('live')
 log('after live')
 return [cached, live]`,
           journal: cached.journal,
@@ -883,7 +888,7 @@ return [cached, live]`,
         const run = yield* runScript(
           `
 const items = Array.from({ length: 100 }, (_, i) => i)
-const out = await parallel(items.map((n) => () => agent('call-' + n)))
+const out = yield* all(items.map((n) => agent('call-' + n)))
 return out.length`,
           { runAgent: runner, concurrency: 4 },
         );
@@ -897,8 +902,8 @@ return out.length`,
   it.effect('replays matching journal entries and re-runs edited calls', () =>
     Effect.gen(function* () {
       const script = `${META}
-const a = await agent('stage-a')
-const b = await agent('stage-b:' + a)
+const a = yield* agent('stage-a')
+const b = yield* agent('stage-b:' + a)
 return b`;
       const first = yield* runWorkflowScript({ script, runAgent: echoRunner });
       expect(first.result).toBe('result:stage-b:result:stage-a');
@@ -917,8 +922,8 @@ return b`;
       const editedRunner = vi.fn(echoRunner);
       const edited = yield* runScript(
         `
-const a = await agent('stage-a')
-const b = await agent('stage-b-EDITED:' + a)
+const a = yield* agent('stage-a')
+const b = yield* agent('stage-b-EDITED:' + a)
 return b`,
         { runAgent: editedRunner, journal: first.journal },
       );
@@ -941,7 +946,7 @@ return b`,
   phases: [{ title: 'Draft' }],
   tasks: [{ id: 'inspect', label: 'Inspect draft', phase: 'Draft' }],
 }
-return await agent('Inspect src', { id: 'inspect' })`,
+return yield* agent('Inspect src', { id: 'inspect' })`,
           runAgent: echoRunner,
         });
         const cachedRunner = vi.fn(echoRunner);
@@ -954,7 +959,7 @@ return await agent('Inspect src', { id: 'inspect' })`,
   phases: [{ title: 'Audit' }],
   tasks: [{ id: 'inspect', label: 'Audit implementation', phase: 'Audit' }],
 }
-return await agent('Inspect src', { id: 'inspect' })`,
+return yield* agent('Inspect src', { id: 'inspect' })`,
           runAgent: cachedRunner,
           journal: first.journal,
           onEvent: recorded.onEvent,
@@ -978,7 +983,7 @@ return await agent('Inspect src', { id: 'inspect' })`,
     'invalidates cached calls when referenced file contents change',
     () =>
       Effect.gen(function* () {
-        const script = `${META}return await agent('review', {
+        const script = `${META}return yield* agent('review', {
   inputFiles: ['proof.tex'],
 })`;
         let dependencyFingerprint = 'old-proof';
@@ -1009,7 +1014,7 @@ return await agent('Inspect src', { id: 'inspect' })`,
     'replays file-backed calls only when their dependency fingerprint matches',
     () =>
       Effect.gen(function* () {
-        const script = `${META}return await agent('review', {
+        const script = `${META}return yield* agent('review', {
   inputFiles: ['proof.tex'],
 })`;
         const fingerprintAgentDependencies = () => Effect.succeed('same-proof');
@@ -1035,7 +1040,7 @@ return await agent('Inspect src', { id: 'inspect' })`,
   it.effect('requires hosts to fingerprint file-backed calls', () =>
     Effect.gen(function* () {
       yield* expectEffect(
-        runScript(`return await agent('review', {
+        runScript(`return yield* agent('review', {
   inputFiles: ['proof.tex'],
 })`),
       ).rejects.toThrow(/must fingerprint agent\(\) file dependencies/);
@@ -1046,7 +1051,7 @@ return await agent('Inspect src', { id: 'inspect' })`,
     Effect.gen(function* () {
       yield* expectEffect(
         runScript(
-          `return await agent('review', {
+          `return yield* agent('review', {
   inputFiles: ['proof.tex'],
 })`,
           {
@@ -1065,7 +1070,7 @@ return await agent('Inspect src', { id: 'inspect' })`,
 
       yield* expectEffect(
         runWorkflowScript({
-          script: `${META}return await agent('review', {
+          script: `${META}return yield* agent('review', {
   inputFiles: ['proof.tex'],
 })`,
           runAgent: runner,
@@ -1087,9 +1092,9 @@ return await agent('Inspect src', { id: 'inspect' })`,
     'uses the refreshed file identity when retrying after the concurrency queue',
     () =>
       Effect.gen(function* () {
-        const script = `${META}return await parallel([
-  () => agent('blocker', { id: 'blocker' }),
-  () => agent('review', { id: 'review', inputFiles: ['proof.tex'] }),
+        const script = `${META}return yield* all([
+  agent('blocker', { id: 'blocker' }),
+  agent('review', { id: 'review', inputFiles: ['proof.tex'] }),
 ])`;
         const firstBlocked = yield* Deferred.make<void>();
         const blockerStarted = yield* Deferred.make<void>();
@@ -1178,7 +1183,7 @@ return await agent('Inspect src', { id: 'inspect' })`,
           return 'fresh result';
         });
       const runFiber = yield* runWorkflowScript({
-        script: `${META}return await agent('review', {
+        script: `${META}return yield* agent('review', {
   inputFiles: ['proof.tex'],
 })`,
         runAgent: runner,
@@ -1204,7 +1209,7 @@ return await agent('Inspect src', { id: 'inspect' })`,
     'ends a cached call with an error when its journal value is invalid',
     () =>
       Effect.gen(function* () {
-        const script = `${META}return await agent('cached')`;
+        const script = `${META}return yield* agent('cached')`;
         const first = yield* runWorkflowScript({
           script,
           runAgent: echoRunner,
@@ -1251,7 +1256,7 @@ return await agent('Inspect src', { id: 'inspect' })`,
       yield* expectEffect(
         runScript(
           `
-for (let i = 0; i < 10; i++) await agent('call-' + i)
+for (let i = 0; i < 10; i++) yield* agent('call-' + i)
 return 'done'`,
           { maxAgentCalls: 3 },
         ),
@@ -1262,8 +1267,8 @@ return 'done'`,
   it.effect('journal replays do not consume the live agent-call cap', () =>
     Effect.gen(function* () {
       const script = `${META}
-const a = await agent('one')
-const b = await agent('two')
+const a = yield* agent('one')
+const b = yield* agent('two')
 return [a, b]`;
       const first = yield* runWorkflowScript({ script, runAgent: echoRunner });
       expect(first.journal).toHaveLength(2);
@@ -1273,9 +1278,9 @@ return [a, b]`;
       const liveRunner = vi.fn(echoRunner);
       const resumed = yield* runWorkflowScript({
         script: `${META}
-const a = await agent('one')
-const b = await agent('two')
-return await agent('three:' + a + b)`,
+const a = yield* agent('one')
+const b = yield* agent('two')
+return yield* agent('three:' + a + b)`,
         runAgent: liveRunner,
         journal: first.journal,
         maxAgentCalls: 1,
@@ -1294,7 +1299,7 @@ return await agent('three:' + a + b)`,
         yield* runWorkflowScript({
           script: `${META}
 phase('Work')
-await agent('inside', { label: 'labelled' })
+yield* agent('inside', { label: 'labelled' })
 return null`,
           runAgent: collectingRunner(invocations),
           onEvent: recorded.onEvent,
@@ -1333,7 +1338,7 @@ return null`,
 const early = agent('early', { label: 'Early', phase: '  Work  ' })
 phase('  Work  ')
 await early
-return await agent('active', { label: 'Active' })`,
+return yield* agent('active', { label: 'Active' })`,
           runAgent: collectingRunner(invocations),
           onEvent: recorded.onEvent,
         });
@@ -1355,28 +1360,28 @@ return await agent('active', { label: 'Active' })`,
   it.effect('rejects invalid primitive usage with clear errors', () =>
     Effect.gen(function* () {
       const cases: ReadonlyArray<readonly [string, RegExp]> = [
-        [`return await agent('')`, /non-empty string prompt/],
-        [`return await parallel('nope')`, /array of zero-arg functions/],
+        [`return yield* agent('')`, /non-empty string prompt/],
+        [`return yield* all('nope')`, /array of zero-arg functions/],
         [
-          `return await parallel([() => agent('x'), 42])`,
+          `return yield* all([agent('x'), 42])`,
           /parallel\(\): item 1 is not a function/,
         ],
-        [`return await agent('x', [])`, /must be a plain object/],
+        [`return yield* agent('x', [])`, /must be a plain object/],
         [
-          `return await agent('x', { inputFiles: [''] })`,
+          `return yield* agent('x', { inputFiles: [''] })`,
           /inputFiles.*arrays of non-empty strings/,
         ],
         [
-          `return await agent('x', { inputFiles: ['   '] })`,
+          `return yield* agent('x', { inputFiles: ['   '] })`,
           /inputFiles.*arrays of non-empty strings/,
         ],
         [
-          `return await agent('x', { model: '  ' })`,
+          `return yield* agent('x', { model: '  ' })`,
           /option "model" must be a non-empty string/,
         ],
         [`phase('   ')\nreturn null`, /Workflow phase title must not be blank/],
         [
-          `return await agent('work', { phase: '   ' })`,
+          `return yield* agent('work', { phase: '   ' })`,
           /option "phase" must be a non-empty string/,
         ],
       ];
@@ -1391,14 +1396,14 @@ return await agent('active', { label: 'Active' })`,
     () =>
       Effect.gen(function* () {
         yield* expectEffect(
-          runScript(`return await agent('x', {
+          runScript(`return yield* agent('x', {
   agentName: 'assistant',
   schema: { type: 'object' },
   contextFiles: ['notes.tex'],
 })`),
         ).rejects.toThrow(/structured-output calls cannot use file options/);
         yield* expectEffect(
-          runScript(`return await agent('x', {
+          runScript(`return yield* agent('x', {
   schema: { type: 'object' },
 })`),
         ).rejects.toThrow(/must name a tool-use agent/);
@@ -1410,8 +1415,8 @@ return await agent('active', { label: 'Active' })`,
     () =>
       Effect.gen(function* () {
         yield* expectEffect(
-          runScript(`return await parallel([
-  () => agent('x', { schema: { type: 'object' } }),
+          runScript(`return yield* all([
+  agent('x', { schema: { type: 'object' } }),
 ])`),
         ).rejects.toMatchObject({
           name: 'WorkflowRunAbortError',
@@ -1428,7 +1433,7 @@ return await agent('active', { label: 'Active' })`,
         const runner = collectingRunner(seen);
         yield* runScript(
           `
-return await agent('a', { agentName: 'assistant', schema: { type: 'object' } })`,
+return yield* agent('a', { agentName: 'assistant', schema: { type: 'object' } })`,
           { runAgent: runner },
         );
 
@@ -1438,7 +1443,7 @@ return await agent('a', { agentName: 'assistant', schema: { type: 'object' } })`
         });
         yield* expectEffect(
           runScript(
-            `return await agent('b', {
+            `return yield* agent('b', {
   outputSchema: { type: 'object' },
 })`,
             { runAgent: runner },
@@ -1467,9 +1472,9 @@ return await agent('a', { agentName: 'assistant', schema: { type: 'object' } })`
 
         yield* runScript(
           `
-await agent('bare')
-await agent('files', { inputFiles: ['  draft.tex  '], label: '  ' })
-return await agent('structured', {
+yield* agent('bare')
+yield* agent('files', { inputFiles: ['  draft.tex  '], label: '  ' })
+return yield* agent('structured', {
   id: '  audit  ',
   model: '  sonnet  ',
   agentName: ' assistant ',
@@ -1522,7 +1527,7 @@ return await agent('structured', {
         // .constructor it can reach are realm-local and codegen-gated. A host
         // callback would carry the ungated host Function constructor.
         const run = yield* runScript(`
-const results = await parallel([
+const results = yield* all([
   () => {
     try {
       // If parallel() were host-side, the thunk's own constructor chain
@@ -1561,7 +1566,7 @@ return results[0]`);
         // sandbox's codegen-gated Function, so the escape attempt throws and
         // the thenable can only resolve with data.
         const run = yield* runScript(`
-const results = await parallel([
+const results = yield* all([
   () => ({
     then(resolve) {
       try {
@@ -1598,7 +1603,7 @@ return results[0]`);
       yield* expectEffect(
         runScript(
           `
-const [a, b] = parallel([() => agent('x'), () => agent('y')])
+const [a, b] = parallel([agent('x'), agent('y')])
 return a`,
           { timeoutMs: 5_000 },
         ),
@@ -1688,7 +1693,7 @@ return 'delivered'`,
   ],
 }
 phase('Settled')
-await agent('settles normally', { id: 'settled' })
+yield* agent('settles normally', { id: 'settled' })
 phase('A')
 agent('ignores cancellation', { id: 'live' })
 phase('B')
@@ -1736,7 +1741,7 @@ return 'done'`,
       const runner = () => Effect.succeed({ nested: { data: 42 } });
       const run = yield* runScript(
         `
-const r = await agent('x')
+const r = yield* agent('x')
 try {
   return r.constructor.constructor('return typeof process')()
 } catch {
@@ -1794,7 +1799,7 @@ return 'reassigned'`),
       yield* expectEffect(
         runScript(
           `
-return await parallel([1, 2, 3, 4, 5].map((n) => () => agent('call-' + n)))`,
+return yield* all([1, 2, 3, 4, 5].map((n) => agent('call-' + n)))`,
           { maxAgentCalls: 3 },
         ),
       ).rejects.toThrow(/agent-call cap/);
@@ -1807,8 +1812,8 @@ return await parallel([1, 2, 3, 4, 5].map((n) => () => agent('call-' + n)))`,
       Effect.gen(function* () {
         yield* expectEffect(
           runScript(`
-return await parallel([
-  () => agent('ok'),
+return yield* all([
+  agent('ok'),
   () => { throw new Error('script bug here') },
 ])`),
         ).rejects.toThrow('script bug here');
@@ -1837,8 +1842,8 @@ return await parallel([
       yield* expectEffect(
         runScript(
           `
-await agent('one')
-return await agent('two')`,
+yield* agent('one')
+return yield* agent('two')`,
           { runAgent: runner, timeoutMs: 50 },
         ),
       ).rejects.toThrow(/timed out/);
@@ -1860,7 +1865,7 @@ return await agent('two')`,
   description: 'meta-declared wall clock',
   timeoutMs: 1000,
 }
-return await agent('one')`,
+return yield* agent('one')`,
           runAgent: () =>
             Effect.gen(function* () {
               yield* sleep(2_500);
@@ -1881,7 +1886,7 @@ return await agent('one')`,
   description: 'run option beats meta',
   timeoutMs: 3600000,
 }
-return await agent('one')`,
+return yield* agent('one')`,
           runAgent: () =>
             Effect.gen(function* () {
               yield* sleep(300);
@@ -1897,7 +1902,7 @@ return await agent('one')`,
   // Live: the sandbox deadline is raw performance.now plus setTimeout, and the
   // assertion is a wall-clock delta.
   it.live.each([
-    { reachedVia: 'an agent await', body: `await agent('one')` },
+    { reachedVia: 'an agent await', body: `yield* agent('one')` },
     {
       reachedVia: 'the guest microtask queue',
       body: `await Promise.resolve()`,
@@ -1925,7 +1930,7 @@ while (true) {}`,
 
         yield* expectEffect(
           runScriptInSandbox(
-            `await agent('slow'); return 'unreachable'`,
+            `yield* agent('slow'); return 'unreachable'`,
             sandboxBridge({
               asyncFns: { agent: () => Deferred.await(hostResult) },
             }),
@@ -1950,7 +1955,7 @@ while (true) {}`,
       Effect.gen(function* () {
         yield* expectEffect(
           runScriptInSandbox(
-            `return await agent('malformed')`,
+            `return yield* agent('malformed')`,
             sandboxBridge({
               asyncFns: { agent: () => Effect.succeed('{') },
             }),
@@ -1970,7 +1975,7 @@ while (true) {}`,
         const recorded = recordCalls();
         yield* expectEffect(
           runWorkflowScript({
-            script: `${META}return await agent('function-result')`,
+            script: `${META}return yield* agent('function-result')`,
             runAgent: (invocation) =>
               Effect.sync(() => {
                 invocation.report({ model: 'serialization-model' });
@@ -2020,9 +2025,9 @@ while (true) {}`,
       yield* expectEffect(
         runScript(
           `
-return await parallel([
-  () => agent('waiting-sibling'),
-  async () => { await Promise.resolve(); while (true) {} },
+return yield* all([
+  agent('waiting-sibling'),
+  function* () { await Promise.resolve(); while (true) {} },
 ])`,
           { runAgent: runner, timeoutMs: 40 },
         ),
@@ -2072,7 +2077,7 @@ while (true) values.push(new Uint8Array(1024 * 1024))`,
       yield* expectEffect(
         runScript(
           `
-return await parallel([1, 2, 3, 4, 5].map((n) => () => agent('call-' + n)))`,
+return yield* all([1, 2, 3, 4, 5].map((n) => agent('call-' + n)))`,
           { runAgent: runner, maxAgentCalls: 3 },
         ),
       ).rejects.toThrow(/agent-call cap/);
@@ -2088,7 +2093,7 @@ return await parallel([1, 2, 3, 4, 5].map((n) => () => agent('call-' + n)))`,
         // so arguments.callee.caller is unavailable even without this guard —
         // this covers non-strict callables a script might still construct.
         const run = yield* runScript(`
-return await parallel([function () {
+return yield* all([function () {
   try {
     return arguments.callee.caller.constructor('return typeof process')()
   } catch {
@@ -2111,7 +2116,7 @@ return await parallel([function () {
       yield* expectEffect(
         runScript(
           `
-return await parallel([() => agent('x')])`,
+return yield* all([agent('x')])`,
           { runAgent: runner, onEvent: recorded.onEvent },
         ),
       ).rejects.toThrow(/runner observed abort/);
@@ -2139,7 +2144,7 @@ return await parallel([() => agent('x')])`,
         runScript(
           `
 try {
-  await agent('x')
+  yield* agent('x')
 } catch {}
 return 'incorrect success'`,
           { runAgent: runner },
@@ -2159,7 +2164,7 @@ return 'incorrect success'`,
       surfaced.name = 'WorkflowRunAbortError';
       expect(surfaced).not.toBeInstanceOf(WorkflowRunAbortError);
 
-      const fault = yield* runScript(`return await agent('x')`, {
+      const fault = yield* runScript(`return yield* agent('x')`, {
         runAgent: () => Effect.fail(surfaced),
       }).pipe(Effect.flip);
 
@@ -2179,7 +2184,7 @@ return 'incorrect success'`,
         yield* expectEffect(
           runScript(
             `
-return await parallel([() => agent('running'), () => agent('queued')])`,
+return yield* all([agent('running'), agent('queued')])`,
             {
               concurrency: 1,
               timeoutMs: 40,
@@ -2209,7 +2214,7 @@ return await parallel([() => agent('running'), () => agent('queued')])`,
       const childStarted = yield* Deferred.make<void>();
       let childInterrupted = false;
       const runFiber = yield* runWorkflowScript({
-        script: `${META}return await agent('wait')`,
+        script: `${META}return yield* agent('wait')`,
         runAgent: () =>
           Deferred.succeed(childStarted, undefined).pipe(
             Effect.andThen(Effect.never),
@@ -2255,10 +2260,10 @@ return await parallel([() => agent('running'), () => agent('queued')])`,
 
         const recorded = recordCalls();
         const runFiber = yield* runWorkflowScript({
-          script: `${META}return await parallel([
-  () => agent('a', { id: 'a' }),
-  () => agent('b', { id: 'b' }),
-  () => agent('c', { id: 'c' }),
+          script: `${META}return yield* all([
+  agent('a', { id: 'a' }),
+  agent('b', { id: 'b' }),
+  agent('c', { id: 'c' }),
 ])`,
           runAgent: runner,
           concurrency: 3,
@@ -2317,7 +2322,7 @@ return await parallel([() => agent('running'), () => agent('queued')])`,
           }).pipe(Effect.andThen(Effect.never)),
         );
         const run = yield* runWorkflowScript({
-          script: `${META}return await agent('skip immediately')`,
+          script: `${META}return yield* agent('skip immediately')`,
           runAgent: runner,
           onControl: (handle) => {
             control = handle;
@@ -2357,7 +2362,7 @@ return await parallel([() => agent('running'), () => agent('queued')])`,
           });
 
         const runFiber = yield* runWorkflowScript({
-          script: `${META}return await agent('go')`,
+          script: `${META}return yield* agent('go')`,
           runAgent: runner,
           onSupersededAttempt: ({ childRunId }) =>
             Effect.sync(() => {
@@ -2420,7 +2425,7 @@ return await parallel([() => agent('running'), () => agent('queued')])`,
           });
 
         const runFiber = yield* runWorkflowScript({
-          script: `${META}return await agent('go')`,
+          script: `${META}return yield* agent('go')`,
           runAgent: runner,
           onControl: (handle) => {
             control = handle;
@@ -2463,7 +2468,7 @@ return await parallel([() => agent('running'), () => agent('queued')])`,
         });
 
       const runFiber = yield* runWorkflowScript({
-        script: `${META}return await agent('go')`,
+        script: `${META}return yield* agent('go')`,
         runAgent: runner,
         onControl: (handle) => {
           control = handle;
@@ -2490,7 +2495,7 @@ return await parallel([() => agent('running'), () => agent('queued')])`,
         const recorded = recordCalls();
         let exploded = false;
         const runFiber = yield* runWorkflowScript({
-          script: `${META}return await agent('go')`,
+          script: `${META}return yield* agent('go')`,
           runAgent: () => Effect.succeed('done'),
           onJournalEntry: (entry) =>
             Effect.sync(() => {
@@ -2539,7 +2544,7 @@ return await parallel([() => agent('running'), () => agent('queued')])`,
         );
       });
       const runFiber = yield* runWorkflowScript({
-        script: `${META}return await agent('retry until refused')`,
+        script: `${META}return yield* agent('retry until refused')`,
         runAgent: runner,
         maxAgentCalls: 2,
         onControl: (handle) => {
@@ -2600,9 +2605,9 @@ return await parallel([() => agent('running'), () => agent('queued')])`,
         const recorded = recordCalls();
         const runFiber = yield* runScript(
           `phase('Work')
-return await parallel([
-  () => agent('a', { id: 'a' }),
-  () => agent('b', { id: 'b' }),
+return yield* all([
+  agent('a', { id: 'a' }),
+  agent('b', { id: 'b' }),
 ])`,
           {
             runAgent: runner,
@@ -2649,7 +2654,7 @@ return await parallel([
   ],
 }
 phase('Draft')
-await agent('draft instruction', { id: 'draft' })
+yield* agent('draft instruction', { id: 'draft' })
 return 'done'`,
         runAgent: (invocation) =>
           Effect.sync(() => {
@@ -2697,7 +2702,7 @@ return 'done'`,
   name: 'labels',
   description: 'label workflow',
 }
-return await agent('secret full instruction', {
+return yield* agent('secret full instruction', {
   inputFiles: ['/private/host/path/paper.tex'],
   agentName: 'proofreader',
 })`,

@@ -297,8 +297,9 @@ export interface WorkflowAttemptFacts {
  * the parent is persisting is one another host could still invalidate.
  *
  * Cancellation is interruption: the engine interrupts the runner on a skip,
- * a retry, a run-level fault, the wall-clock timeout, or its own caller's
- * interrupt, and awaits it before the attempt's scope closes. A runner over
+ * a retry, a script's `timeout()` or a failed `all()` sibling, a run-level
+ * fault, the wall-clock timeout, or its own caller's interrupt, and awaits it
+ * before the attempt's scope closes. A runner over
  * work that cancels through an `AbortSignal` derives one from that
  * interruption at its own edge.
  */
@@ -358,14 +359,6 @@ export type WorkflowScriptEvent =
       readonly outcome: RunOutcome;
     }
   | { readonly type: 'call'; readonly call: WorkflowCallProgress };
-
-/**
- * Guest-visible result of a call cancelled via `control(childRunId,
- * 'skip')`: a first-class sentinel distinct from a failed call's `null`, so a
- * script (or host) can tell "deliberately skipped" apart from "runner failed".
- * Skipped calls are never journaled, so a later resume re-runs them.
- */
-export const WORKFLOW_SKIPPED_RESULT = '__WORKFLOW_SKIPPED__';
 
 /**
  * Per-call control handle for an in-flight run, handed to the host once via
