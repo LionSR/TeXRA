@@ -395,7 +395,6 @@ export const MANIFEST = [
     id: 'core',
     toolNames: [
       'inline_comment',
-      'report_review_issue',
       'open_pdf',
       'ask_user_question',
       'lean_loogle',
