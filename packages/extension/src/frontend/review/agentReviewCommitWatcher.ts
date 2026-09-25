@@ -9,12 +9,13 @@
  */
 
 // Third-party imports
+import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
 import type { SessionHandle } from '@agent/runtime';
 import { getGitAPI, type GitRepository } from '@frontend/git/gitExtensionTypes';
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import { readConfigSetting } from '@shared/config/settingsAccess';
 import { settingByKey } from '@shared/state/stateSettings';
@@ -24,7 +25,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { AgentReviewService } from './AgentReviewService';
 
-const log = createLog('AgentReview');
+const CHANNEL = 'AgentReview';
 const COMMIT_DEBOUNCE_MS = 1500;
 
 function watchRepository(
@@ -73,7 +74,11 @@ function watchRepository(
     // Re-check at fire time: the user may have disabled run-on-commit
     // during the debounce window, and a review costs a model session.
     if (!runOnCommit()) return;
-    log.info(`Commit detected on ${name ?? 'HEAD'}; starting agent review`);
+    runtime.runFork(
+      Effect.logInfo(
+        `Commit detected on ${name ?? 'HEAD'}; starting agent review`,
+      ).pipe(withLogChannel(CHANNEL)),
+    );
     void AgentReviewService.runReview('commit', {
       baseRef,
       baseDescription: `previous commit on ${name ?? 'HEAD'}`,
@@ -156,8 +161,10 @@ export function registerAgentReviewCommitWatcher(
       ),
     );
   })().catch((err: unknown) => {
-    log.warn(
-      `Could not watch git commits for agent review: ${toErrorMessage(err)}`,
+    runtime.runFork(
+      Effect.logWarning(
+        `Could not watch git commits for agent review: ${toErrorMessage(err)}`,
+      ).pipe(withLogChannel(CHANNEL)),
     );
   });
 }

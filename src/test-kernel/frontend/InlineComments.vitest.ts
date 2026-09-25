@@ -25,16 +25,6 @@ vi.mock('@frontend/vscode/vscodeEditor', () => ({
   lineToRange: vi.fn(() => ({ start: { line: 0 }, end: { line: 0 } })),
 }));
 
-vi.mock('@logger/logUtils', () => ({
-  info: vi.fn(),
-  createLog: vi.fn(() => ({
-    debug: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-  })),
-}));
-
 import {
   getInlineCommentProvider,
   registerInlineComments,
