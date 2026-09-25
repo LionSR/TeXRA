@@ -104,7 +104,6 @@ function testBoundModel(): BoundModel {
     supportsForcedToolChoice: true,
     wireRouteKey: 'test-route',
     modelRetryRouteKey: 'test-route/test-model',
-    routedOnKimiCode: false,
     backgroundCapable: false,
   };
 }
@@ -431,6 +430,65 @@ describe('tool dispatch interrupted mid-turn', () => {
         expect(group?.role === 'tool' ? group.results.length : 0).toBe(3);
         expect(delivered?.pendingResponse).toBeNull();
       }),
+  );
+
+  /**
+   * A policy with nobody to ask (yolo, never, a headless host) denies the
+   * barrier prompt, and would deny it again on every resume: the denial is a
+   * skip, so the resumed run completes instead of interrupting itself into a
+   * failure that no resume can get past.
+   */
+  it.effect('skips an outcome-unknown barrier the policy denies', () =>
+    Effect.gen(function* () {
+      const session = sessionWithInteractions({ emit: () => {} });
+      const runId = generateRunId();
+      publishTestRunStart(session, runId);
+      const asked = askedQuestions(session, () => ({
+        action: 'deny',
+        reason: 'No person can answer here.',
+      }));
+      const toolB = blockingTool('toolB');
+      const tools = { toolB: toolB.tool };
+      const calls = [{ id: 'call-b', name: 'toolB' }];
+
+      const fiber = yield* Effect.forkDetach(
+        runToolUse({ resume: false }).pipe(
+          Effect.provide(
+            loopLayer({
+              runId,
+              session,
+              tools,
+              turns: [toolCallTurn(calls)],
+              stopAfterCycle: true,
+            }),
+          ),
+        ),
+      );
+      yield* toolB.started;
+      yield* Fiber.interrupt(fiber);
+
+      const resumed = yield* runToolUse({ resume: true }).pipe(
+        Effect.provide(
+          loopLayer({
+            runId,
+            session,
+            tools,
+            turns: [textTurn('The call was skipped.')],
+            stopAfterCycle: true,
+          }),
+        ),
+      );
+      expect(resumed.outcome).toBe('completed');
+      expect(asked.questions).toHaveLength(1);
+      expect(toolB.call).toHaveBeenCalledTimes(1);
+      const delivered = yield* session.ledger.load(runId).pipe(Effect.orDie);
+      const group = delivered?.messages.find(
+        (message) => message.role === 'tool',
+      );
+      expect(group?.role === 'tool' ? group.results[0]?.status : null).toBe(
+        'error',
+      );
+    }),
   );
 
   /**

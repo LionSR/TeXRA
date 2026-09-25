@@ -238,7 +238,6 @@ function boundModel(
       ORIGIN.requestedModel,
       'gpt54',
     ]),
-    routedOnKimiCode: false,
     backgroundCapable: false,
     ...overrides,
   };

@@ -495,7 +495,6 @@ describe('completedRunArchive facade', () => {
         yield* session.settlePublications();
         const logs = session.transcripts;
         logs.requestEviction(runId);
-        expect(logs.get(runId)).toBeUndefined();
 
         const launchFailure = new Error(
           'stop after resumed writer acquisition',

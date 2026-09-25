@@ -5,7 +5,7 @@ import { inquiryRecordsLayer } from '@controllers/session/inquiryRecords';
 import { processOwnerId } from '@platform/defaults/nodeProcesses';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
-import { nodeSpawnerLayer } from './childProcessTestLayer';
+import { nodePlatformLayer } from './fsTestUtils';
 import { createFakeWorkspaceRoots } from './FakePlatform';
 import { fakeProcessServices } from './setupPlatform';
 
@@ -27,7 +27,7 @@ export function bareProcessRuntime(): ProcessRuntime {
         Layer.provideMerge(
           globalDatabaseLayer(globalStorage).pipe(
             Layer.provide(ProcessIdentity.layer(processOwnerId(undefined))),
-            Layer.provide(nodeSpawnerLayer),
+            Layer.provide(nodePlatformLayer),
             Layer.orDie,
           ),
         ),

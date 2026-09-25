@@ -11,20 +11,26 @@ view; TeXRA does not contribute product settings to VS Code's Settings editor.
 - **Desktop app:** open **Settings**.
 - **CLI:** run `texra config`, or enter `/config` during a chat.
 
-The Dashboard has six pages:
+The Dashboard has six pages along its top row. A page with more than one
+section shows a second row of sub-tabs, and each sub-tab shows one section.
+The page remembers the sub-tab you last opened while the Dashboard stays open.
 
-- **Models**: provider API keys (including Kimi Code and the GLM Coding Plan),
-  ChatGPT and Grok sign-in, Copilot in VS Code, and model visibility.
-- **Agents**: available agents, teams, and skills. An **Advanced** section holds
-  compaction, retries, and team coordination.
-- **Tools**: approval policy, tool availability, and integrations such as Codex,
-  Claude Code, Zotero, and GitHub activity.
-- **LaTeX**: dependencies, compile, diff, and formatting.
+- **Models**: **API keys** (including Kimi Code and the GLM Coding Plan),
+  **Subscriptions** (ChatGPT and Grok sign-in, Copilot in VS Code), and
+  **Models** (which models appear, and the helper model).
+- **Agents**: the agent **Library**, **Teams**, **Skills**, and **Advanced**
+  (compaction, retries, and team coordination).
+- **Tools**: **Approval** policy, **Tools** and their availability, and
+  **Integrations** such as Codex, Claude Code, Zotero, and GitHub activity.
+- **LaTeX**: **Dependencies**, **Compile & diff**, **Formatting**, and, in VS
+  Code, the recommended **VS Code settings**.
 - **Memory**: the notes TeXRA keeps across tasks.
-- **General**: TeXRA account sign-in, telemetry, Git commit attribution, and
-  the GitHub token.
+- **General**: **Account** (TeXRA sign-in and telemetry) and **Git** (the
+  GitHub token and Git commit attribution).
 
-The desktop app adds a **Shortcuts** page.
+The desktop app adds a **Shortcuts** page. Commands such as **TeXRA: Agent
+Team Settings** or **TeXRA: Git Settings** open their page on the matching
+sub-tab.
 
 Settings that benefit from an ordinary control appear directly in these views.
 Provider transport knobs (OpenAI background responses, parallel tool calls, the
@@ -48,9 +54,9 @@ User-wide values are stored in:
 
 Project values override user-wide values. Explicit command-line flags and
 environment variables override saved values when a command documents such an
-override. If a host cannot write the project directory, it uses an internal
-workspace store so that its settings view remains usable; that fallback is not
-shared with the other hosts.
+override. If the project directory is read-only, saving a project setting
+fails with an error; if `.texra/config.json` cannot be read (for example,
+malformed JSON), the host warns and ignores the file until it is fixed.
 
 Configuration files are ordinary JSON. Persistent application state—including
 session history, execution records, and run events—is stored separately in an

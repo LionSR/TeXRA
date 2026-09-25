@@ -6,7 +6,7 @@ import type { ProcessRuntime } from '@platform/processRuntime';
 import type { GlobalStorageFs } from '@platform/rootedFs';
 import type { ProjectDatabases } from '@shared/session/database';
 import type { AgentCategory } from '@shared/schemas';
-import type { SettingsTabPanelName } from '@shared/settingsView/settingsViewMessages';
+import type { SettingsTarget } from '@shared/settingsView/settingsViewMessages';
 import {
   DESKTOP_SHELL_COMMANDS,
   type DesktopLayoutPanel,
@@ -20,6 +20,7 @@ import {
   postDesktopSettingsView,
   type DesktopCommandActions,
 } from '../shared/desktopCommandSurface.js';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 import type {
   DesktopCommandMessage,
   DesktopMessageHandler,
@@ -59,7 +60,7 @@ interface DesktopShellActionFactoryOptions extends Pick<
   openWorkspaceFolder(): Effect.Effect<
     void,
     Error,
-    FileSystem.FileSystem | Path.Path | ProjectDatabases
+    FileSystem.FileSystem | Path.Path | ProjectDatabases | ChildProcessSpawner
   >;
   signIn(): Effect.Effect<void, Error>;
   onAsyncError: (error: unknown) => void;
@@ -95,7 +96,11 @@ export function createDesktopShellActions(
     program: Effect.Effect<
       void,
       ShellActionFailed | NotificationFailed,
-      GlobalStorageFs | FileSystem.FileSystem | Path.Path | ProjectDatabases
+      | GlobalStorageFs
+      | FileSystem.FileSystem
+      | Path.Path
+      | ProjectDatabases
+      | ChildProcessSpawner
     >,
   ): void {
     options.runtime.runFork(
@@ -114,10 +119,7 @@ export function createDesktopShellActions(
     });
   }
 
-  function showSettings(
-    tab?: SettingsTabPanelName,
-    agentSubTab?: AgentCategory,
-  ) {
+  function showSettings(tab?: SettingsTarget, agentSubTab?: AgentCategory) {
     postDesktopSettingsView(
       (message) => renderer.postToRenderer(message),
       tab,
@@ -133,7 +135,7 @@ export function createDesktopShellActions(
 
   function openAgentDirectory(customDirSet?: boolean) {
     if (customDirSet !== true) {
-      showSettings('agents');
+      showSettings('agents/library');
       return;
     }
     runShellAction(openCustomAgentDirectory);

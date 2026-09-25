@@ -1,10 +1,16 @@
-import { Deferred, Effect, Fiber, Stream, SubscriptionRef } from 'effect';
+import {
+  Deferred,
+  Effect,
+  Fiber,
+  LogLevel,
+  Stream,
+  SubscriptionRef,
+} from 'effect';
 
 import type { SessionHandle } from '@agent/runtime';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import { runIdentityName, type RunId } from '@shared/schemas';
-import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
-import type { RunView } from '@shared/session/sessionView';
+import { isLiveRun, type RunView } from '@shared/session/sessionView';
 import { writeNdjsonStdout } from './logSinks';
 
 export type CliNdjsonProgressRecordWriter = (record: CliNdjsonRecord) => void;
@@ -66,6 +72,10 @@ export const attachCliSessionProgressProjection = Effect.fn(
   session: Pick<SessionHandle, 'events' | 'now' | 'view'>,
   writeRecord: CliNdjsonProgressRecordWriter = writeNdjsonStdout,
 ) {
+  // A `debug`-level `log` row is a diagnostic, not progress: it reaches the
+  // wire only under the process's own minimum log level, which `--verbose`
+  // lowers to `Debug` — the one place the CLI decides what a debug line is.
+  const includeDebugLogs = yield* LogLevel.isEnabled('Debug');
   function emit(event: string, payload: unknown): void {
     writeRecord({
       kind: 'progress',
@@ -104,9 +114,7 @@ export const attachCliSessionProgressProjection = Effect.fn(
         const child = view.runs.get(childId);
         // A live child only: the roster reports who is still going, and a
         // child that ended carries its outcome on its own `run.end` line.
-        return child === undefined || isTerminalOutcomePhase(child.status)
-          ? []
-          : [childRow(child)];
+        return child !== undefined && isLiveRun(child) ? [childRow(child)] : [];
       });
       const wire = JSON.stringify(children);
       if (writtenRosters.get(parentRunId) === wire) continue;
@@ -143,7 +151,9 @@ export const attachCliSessionProgressProjection = Effect.fn(
         Effect.sync(() => {
           if (stopAt !== undefined && event.commit > stopAt) return;
           const { type, ...payload } = event;
-          emit(type, payload);
+          if (includeDebugLogs || type !== 'log' || event.level !== 'debug') {
+            emit(type, payload);
+          }
           passed(event.commit);
         }),
       ),

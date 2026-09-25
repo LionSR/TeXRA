@@ -11,14 +11,16 @@ import { signal } from '@lit-labs/signals';
 import { Cause, Effect } from 'effect';
 
 import { withLogChannel } from '@logger/effectLog';
+import { redactSecrets } from '@logger/redaction';
 import type { RunId } from '@shared/schemas';
+import type { RunView } from '@shared/session/sessionView';
 import type { RequestError } from '@shared/session/requestErrors';
 import { transcriptText, type TranscriptRow } from '@ui/transcript';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   CLI_LOCAL_RUN_ID,
-  activeRunId,
   focusRun,
+  selectedRunId,
   rootRunId,
   registerCliStateResetHook,
 } from './cliState';
@@ -55,13 +57,15 @@ export function appendLocalUserTranscript(text: string): void {
   appendLocalTranscriptEntry('user', text);
 }
 
+/** The one non-event row producer, so it redacts here, as
+ *  `redactTraceDraft` does for every committed event: no painter redacts. */
 function localTranscriptRow(
   kind: 'assistant' | 'error' | 'user',
   id: string,
   text: string,
 ): TranscriptRow {
   const base = { id, origin: 'local', timestamp: Date.now() } as const;
-  const body = transcriptText(text);
+  const body = transcriptText(redactSecrets(text));
   if (kind === 'error') {
     return {
       ...base,
@@ -92,7 +96,7 @@ function appendLocalTranscriptEntry(
   const normalized = text.trim();
   if (!normalized) return;
   const view = currentView();
-  const active = activeRunId.get();
+  const active = selectedRunId.get();
   const runId =
     explicitRunId ??
     resolveLocalTranscriptRunId({
@@ -101,7 +105,7 @@ function appendLocalTranscriptEntry(
       parentOf: (id) => runViewOf(view, id)?.parentId ?? undefined,
       rootRunId: rootRunId.get(),
     });
-  focusRun(runId, { onlyIfUnset: true });
+  focusRun(runId, { when: 'unset' });
   const afterSeq = rowSeq(runViewOf(view, runId)?.transcript.rows.at(-1));
   notices.set([
     ...notices.get(),
@@ -149,16 +153,14 @@ export function moveLocalTranscriptToRun(runId: RunId): void {
         : notice,
     ),
   );
-  if (activeRunId.get() === CLI_LOCAL_RUN_ID) focusRun(runId);
+  focusRun(runId, { when: 'local' });
 }
 
 export function clearLocalTranscript(): void {
   const current = notices.get();
   const kept = current.filter((notice) => notice.runId !== CLI_LOCAL_RUN_ID);
   if (kept.length !== current.length) notices.set(kept);
-  if (activeRunId.get() === CLI_LOCAL_RUN_ID) {
-    activeRunId.set(undefined);
-  }
+  focusRun(null, { when: 'local' });
 }
 
 export function noticesFor(
@@ -178,10 +180,11 @@ export function noticesFor(
  * anchored inside it (a notice is immutable the moment it is written).
  */
 export function mergeLocalNotices(
-  rows: readonly TranscriptRow[],
-  settledRows: number,
+  run: RunView | undefined,
   runNotices: readonly LocalNotice[],
 ): { readonly rows: readonly TranscriptRow[]; readonly settledRows: number } {
+  const rows = run?.transcript.rows ?? [];
+  const settledRows = run?.transcript.settledRows ?? 0;
   if (runNotices.length === 0) return { rows, settledRows };
   const settledSeq = settledRows === 0 ? 0 : rowSeq(rows[settledRows - 1]);
   const out: TranscriptRow[] = [];

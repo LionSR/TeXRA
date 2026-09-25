@@ -152,7 +152,12 @@ export const resolveWritableTarget = Effect.fn('resolveWritableTarget')(
         Effect.as(true),
         Effect.catch(() => Effect.succeed(false)),
       ));
-    const blocked = yield* requireFileReadForEdit(path, exists);
+    const blocked = yield* requireFileReadForEdit(
+      path,
+      exists,
+      undefined,
+      displayPath,
+    );
     if (blocked) {
       return { blocked };
     }

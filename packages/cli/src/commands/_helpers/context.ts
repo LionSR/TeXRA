@@ -30,8 +30,12 @@ export function contextFromArgs(
           skillSourcePaths: collectStringFlagValues(rawArgs, 'source', 's'),
         }),
       });
-      if (!context.quietLogs) {
-        for (const warning of context.configWarnings) {
+      for (const warning of context.configWarnings) {
+        // Degradation reaches stderr even under `--quiet` (#11080).
+        if (
+          !context.quietLogs ||
+          context.configDegradations.includes(warning)
+        ) {
           writeTextStderr(`WARN ${warning}`);
         }
       }

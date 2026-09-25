@@ -171,9 +171,9 @@ export class SessionComposer extends LitElement {
       }
 
       /* A plain native textarea (#11851): the card draws the one focus
-         ring, so the field carries no chrome of its own and grows with its
-         content between the two heights each state sets. */
-      textarea {
+         ring, so the field carries no chrome of its own (scoped, to out-rank
+         the shared :focus-visible ring) and grows between the two heights. */
+      .composer textarea {
         display: block;
         width: 100%;
         min-width: 0;
@@ -680,10 +680,10 @@ export class SessionComposer extends LitElement {
     ).map((followUp) => followUp.text);
     const text = this.text;
     const hasText = text.trim() !== '';
-    // A follow-up's Send and the Cmd+Alt+E accelerator read one rule
-    // (`canSendFollowUp`); the launcher has no run and no draft images,
-    // so its own Run turns on the instruction alone.
-    const canSend = run ? canSendFollowUp(run, this.draft) : hasText;
+    // Send and Cmd+Alt+E share `canSendFollowUp`; the launcher needs text.
+    const canSend = run
+      ? canSendFollowUp(run, this.draft, { terminalBacked: true })
+      : hasText;
     const sendLabel = compact ? 'Send follow-up' : 'Run';
 
     return html`

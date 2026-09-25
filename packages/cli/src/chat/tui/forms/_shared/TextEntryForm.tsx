@@ -2,7 +2,7 @@
 // and number settings, and the TUI prompt host's `input`. A masked value lives
 // in local state and is never rendered (BaseTextInput `masked`) or logged.
 
-import { Box, Text, useInput, type Key } from 'ink';
+import { Box, Text } from 'ink';
 import { useState, type ReactNode } from 'react';
 
 import { COLOR_ERROR } from '@cli/tui/ui/colors';
@@ -29,8 +29,6 @@ interface TextEntryFormProps {
   /** Whether a save is in flight (input stays mounted but a hint shows). */
   readonly saving?: boolean;
   readonly extraHints?: readonly KeyHint[];
-  /** Keys the form handles beyond Enter and Esc (e.g. Ctrl-R reset). */
-  readonly onKey?: (input: string, key: Key) => void;
   /** Returns an error message to keep the entry open with it. */
   readonly onSubmit: (value: string) => string | void;
   readonly onCancel: () => void;
@@ -40,15 +38,6 @@ export function TextEntryForm(props: TextEntryFormProps): React.JSX.Element {
   const [value, setValue] = useState(props.initialValue ?? '');
   const [submitError, setSubmitError] = useState<string>();
   const error = props.error ?? submitError;
-
-  // BaseTextInput owns Enter (onSubmit) and ignores Escape, so handle Escape
-  // here to back out. Ignore it while a save is in flight: the save closure
-  // isn't tied to this component's lifecycle, so backing out mid-save would
-  // still persist the value and exit.
-  useInput((input, key) => {
-    props.onKey?.(input, key);
-    if (key.escape && !props.saving) props.onCancel();
-  });
 
   const status = error ? (
     <Text color={COLOR_ERROR}>{`${CROSS} ${error}`}</Text>
@@ -67,6 +56,12 @@ export function TextEntryForm(props: TextEntryFormProps): React.JSX.Element {
           onChange={(next) => {
             setValue(next);
             setSubmitError(undefined);
+          }}
+          // Esc backs out, except while a save is in flight: the save closure
+          // isn't tied to this component's lifecycle, so backing out mid-save
+          // would still persist the value and exit.
+          onEscape={() => {
+            if (!props.saving) props.onCancel();
           }}
           onSubmit={(raw) => {
             const submitted = props.rawSubmit ? raw : raw.trim();

@@ -639,23 +639,27 @@ export class SessionHandle {
   /**
    * The final-text facts that close every streaming row still open for
    * `runId`: the loop commits them in the batch that parks the run (its
-   * `waiting` step), so a parked transcript never shows a permanently
-   * streaming block.
+   * `waiting` step), so a parked transcript never streams. Read from the
+   * run's committed rows, not the view: the view folds a run's transcript
+   * only while some port subscribes it, and a run parks whether or not one
+   * does.
    */
   streamClosureFacts(
     runId: RunId,
-  ): Extract<RunLedgerDraft, { type: 'stream.end' }>[] {
-    const closure: Extract<RunLedgerDraft, { type: 'stream.end' }>[] = [];
-    for (const entry of this.transcripts.get(runId)?.toJSON() ?? []) {
-      if (!isRunningStreamingTextEntry(entry)) continue;
-      closure.push({
-        type: 'stream.end',
-        aggregateId: qualifyAggregateId('run', runId),
-        id: entry.id,
-        finalText: this.graph.readText(runId, entry.id) ?? entry.text,
-      });
-    }
-    return closure;
+  ): Effect.Effect<
+    Extract<RunLedgerDraft, { type: 'stream.end' }>[],
+    DatabaseReadFailed
+  > {
+    return this.transcripts.readEntries(runId).pipe(
+      Effect.map((entries) =>
+        entries.filter(isRunningStreamingTextEntry).map((entry) => ({
+          type: 'stream.end' as const,
+          aggregateId: qualifyAggregateId('run', runId),
+          id: entry.id,
+          finalText: this.graph.readText(runId, entry.id) ?? entry.text,
+        })),
+      ),
+    );
   }
 
   /**

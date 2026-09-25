@@ -189,7 +189,7 @@ const ensureRoutingConfigured = Effect.fn('ensureRoutingConfigured')(function* (
   );
   if (choice === 'Open Models tab') {
     yield* Effect.promise(() =>
-      vscode.commands.executeCommand('texra.showModels'),
+      vscode.commands.executeCommand('texra.showDashboard', 'models/keys'),
     );
   } else if (choice === 'Add OpenRouter key') {
     yield* Effect.promise(() =>
@@ -275,7 +275,7 @@ export function launchSetupAssistant(
       );
       if (choice === 'Open Models tab') {
         yield* Effect.promise(() =>
-          vscode.commands.executeCommand('texra.showModels'),
+          vscode.commands.executeCommand('texra.showDashboard', 'models/keys'),
         );
       } else if (choice === 'Set API key') {
         yield* Effect.promise(() =>

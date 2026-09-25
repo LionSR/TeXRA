@@ -3,7 +3,7 @@
  * loaded lazily, for suites that run real processes on the harness runtime,
  * and a scripted spawner for suites that assert what would have been spawned.
  */
-import { Effect, Layer, Sink, Stream } from 'effect';
+import { Context, Effect, Layer, Sink, Stream } from 'effect';
 import {
   ChildProcessSpawner,
   ExitCode,
@@ -15,33 +15,34 @@ import type { PlatformError } from 'effect/PlatformError';
 import type * as ChildProcess from 'effect/unstable/process/ChildProcess';
 
 /**
- * The real Node spawner, built synchronously and loading
- * `node:child_process` only on the first spawn: a setup file loads before a
- * suite's `vi.mock` registrations, so an eager import would cache the real
- * module ahead of a suite that mocks it, and the harness runtime is built by
- * `runSync` callers, so the layer itself cannot be asynchronous.
+ * The production spawner (`nodePlatformServices`, the supervised Node
+ * spawner), loading `node:child_process` only on the first spawn: a setup
+ * file loads before a suite's `vi.mock` registrations, so an eager import
+ * would cache the real module ahead of a suite that mocks it, and the harness
+ * runtime is built by `runSync` callers, so the layer build itself cannot
+ * wait on the import. The first spawn builds the supervised layer once into
+ * this layer's scope, so each build of this layer installs one parent-exit
+ * listener, removed when its scope closes.
  */
-export const nodeSpawnerLayer: Layer.Layer<ChildProcessSpawner> = Layer.succeed(
+export const nodeSpawnerLayer: Layer.Layer<ChildProcessSpawner> = Layer.effect(
   ChildProcessSpawner,
 )(
-  makeSpawner((command) =>
-    Effect.promise(async () => {
-      const [spawner, fs, path] = await Promise.all([
-        import('@effect/platform-node/NodeChildProcessSpawner'),
-        import('@effect/platform-node/NodeFileSystem'),
-        import('@effect/platform-node/NodePath'),
-      ]);
-      return spawner.layer.pipe(
-        Layer.provide(Layer.mergeAll(fs.layer, path.layer)),
-      );
-    }).pipe(
-      Effect.flatMap((layer) =>
-        ChildProcessSpawner.use((real) => real.spawn(command)).pipe(
-          Effect.provide(layer),
+  Effect.gen(function* () {
+    const scope = yield* Effect.scope;
+    const real = yield* Effect.cached(
+      Effect.promise(() => import('@platform/defaults/nodePlatform')).pipe(
+        Effect.flatMap(({ nodePlatformServices }) =>
+          Layer.buildWithScope(nodePlatformServices, scope),
         ),
+        Effect.map(Context.get(ChildProcessSpawner)),
+        // A first spawn interrupted mid-build must not cache the interruption.
+        Effect.uninterruptible,
       ),
-    ),
-  ),
+    );
+    return makeSpawner((command) =>
+      real.pipe(Effect.flatMap((spawner) => spawner.spawn(command))),
+    );
+  }),
 );
 
 /** What a scripted command does: its output and exit code (a

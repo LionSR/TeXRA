@@ -16,6 +16,9 @@ import { registerCliStateResetHook } from './cliState';
  *  screen. The form's `onDone` closes the slot. Kept opaque (the form
  *  carries its own state) so the registry stays declarative. */
 interface ActiveSlashForm {
+  /** The entry's own identity, stamped when it enters the slot: App keys the
+   *  mounted form on it, so a form never inherits another form's state. */
+  readonly id: number;
   /** The slash command that mounted the form (for the header strip). */
   readonly commandName: string;
   /** Render the form body. Receives the close callback. */
@@ -32,14 +35,19 @@ export const activeForm: Signal.State<ActiveSlashForm | undefined> = signal<
 /** Forms waiting for the slot, nearest first. */
 const QUEUED_FORMS: ActiveSlashForm[] = [];
 
+type FormRequest = Omit<ActiveSlashForm, 'id'>;
+let nextFormId = 0;
+
 /**
  * Show `form` once the slot is free. What a surface that arrives unbidden
  * uses: a host dialog has no claim on a foreground the user is already
  * working in, so it waits its turn behind whatever is there.
  */
-export function openActiveForm(form: ActiveSlashForm): void {
+export function openActiveForm(request: FormRequest): ActiveSlashForm {
+  const form = { ...request, id: nextFormId++ };
   if (activeForm.get() === undefined) activeForm.set(form);
   else QUEUED_FORMS.push(form);
+  return form;
 }
 
 /**
@@ -48,10 +56,10 @@ export function openActiveForm(form: ActiveSlashForm): void {
  * foreground they asked for, and the displaced form returns when it closes
  * rather than being dropped.
  */
-export function takeActiveForm(form: ActiveSlashForm): void {
+export function takeActiveForm(request: FormRequest): void {
   const displaced = activeForm.get();
   if (displaced) QUEUED_FORMS.unshift(displaced);
-  activeForm.set(form);
+  activeForm.set({ ...request, id: nextFormId++ });
 }
 
 /**

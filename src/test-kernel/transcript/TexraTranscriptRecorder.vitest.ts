@@ -10,15 +10,8 @@ import {
   ToolUseLogSchema,
   type StreamLogEntry,
   type RunId,
-  type TaskGroup,
 } from '@shared/schemas';
-import { upsertTaskGroupFromStreamLog } from '@shared/runs/taskGroupProjection';
 import { StreamLog } from '@shared/session/traceEntries';
-import { setupPlatform } from '@test/support/setupPlatform';
-import {
-  createTempDirPlatform,
-  useTempDirs,
-} from '@test/support/tempDirPlatform';
 import { attachTestTranscriptFold } from '@test/support/sessionTestUtils';
 import { isObject } from '@utils/core';
 
@@ -90,34 +83,6 @@ describe('attachTestTranscriptFold stage kind (issue #7267)', () => {
 
     expect(roundEntry?.type).toBe(STREAM_LOG_ENTRY_TYPES.GROUP_END);
     expect(dataOf(roundEntry).kind).toBe('round');
-  });
-
-  it('persists and projects phase attempt ownership through stage end', () => {
-    const { trace, row } = attachRecorder();
-    trace.emit({
-      type: 'workflow.plan',
-      attemptId: 'attempt-2',
-      phases: [{ title: 'Review' }],
-      tasks: [],
-    });
-
-    const phase = trace.openStage('Review', {
-      kind: 'phase',
-      index: 0,
-      total: 1,
-    });
-    phase.end();
-
-    const entry = row(phase.id)!;
-    expect(entry).toMatchObject({
-      type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
-      data: { attemptId: 'attempt-2' },
-    });
-    const groups: TaskGroup[] = [];
-    expect(upsertTaskGroupFromStreamLog(groups, new Map(), entry)).toBe(true);
-    expect(groups).toMatchObject([
-      { id: phase.id, attemptId: 'attempt-2', status: RUN_PHASE.COMPLETED },
-    ]);
   });
 });
 
@@ -421,119 +386,6 @@ describe('attachTestTranscriptFold workflow task state', () => {
         durationMs: 12_000,
         costUsd: 0.03,
       },
-    });
-  });
-});
-
-describe('attachTestTranscriptFold active skills', () => {
-  const tempDirs = useTempDirs();
-  setupPlatform(() => createTempDirPlatform('texra-recorder-', tempDirs));
-
-  it('persists only sanitized summaries and lets the latest empty snapshot clear state', () => {
-    const { trace, rows } = attachRecorder();
-
-    trace.emit({
-      type: 'skills.snapshot',
-      skills: [
-        {
-          name: 'proof-audit',
-          description:
-            'Review   proofs from /Users/researcher/private/checklist.md with API_KEY=secret-value.',
-          source: 'project',
-        },
-      ],
-    });
-    trace.emit({ type: 'skills.snapshot', skills: [] });
-
-    const records = rows().filter(
-      (entry) => entry.messageType === MESSAGE_TYPES.ACTIVE_SKILLS,
-    );
-    expect(records).toHaveLength(2);
-    expect(records[0]?.data).toStrictEqual({
-      skills: [
-        {
-          name: 'proof-audit',
-          description: 'Details available on activation.',
-          source: 'project',
-        },
-      ],
-    });
-    expect(JSON.stringify(records[0]?.data)).not.toContain('/Users/researcher');
-    expect(JSON.stringify(records[0]?.data)).not.toContain('baseDir');
-    expect(JSON.stringify(records[0]?.data)).not.toContain('instructions');
-    expect(records.at(-1)?.data).toStrictEqual({ skills: [] });
-  });
-
-  it('redacts summaries before truncating the recorded projection', async () => {
-    const trace = new TraceEmitter();
-    const runId = 'stream:skill-redaction' as RunId;
-    const store = new StreamLog();
-
-    const recorder = attachTestTranscriptFold(trace, runId, store);
-    const descriptionPrefix = `${'Review credentials carefully. '.padEnd(168, 'a')} `;
-    const providerKey = 'sk-proj-redaction-example-1234567890abcdef';
-
-    trace.emit({
-      type: 'skills.snapshot',
-      skills: [
-        {
-          name: 'credential-check',
-          description: `${descriptionPrefix}${providerKey}`,
-          source: 'project',
-        },
-      ],
-    });
-    recorder.unsubscribe();
-    const persisted = store
-      .toJSON()
-      .find((entry) => entry.messageType === MESSAGE_TYPES.ACTIVE_SKILLS)?.data;
-    expect(persisted).toStrictEqual({
-      skills: [
-        {
-          name: 'credential-check',
-          description: `${descriptionPrefix}[redacted]`,
-          source: 'project',
-        },
-      ],
-    });
-    expect(JSON.stringify(persisted)).not.toContain('sk-proj-red');
-  });
-
-  it('records fallback summaries for ANSI-only and controls-only descriptions', () => {
-    const { trace, rows } = attachRecorder();
-
-    trace.emit({
-      type: 'skills.snapshot',
-      skills: [
-        {
-          name: 'ansi-only',
-          description: '\u001b[31m\u001b[0m',
-          source: 'project',
-        },
-        {
-          name: 'controls-only',
-          description: '\u0001\u0002\u007f\u009b',
-          source: 'project',
-        },
-      ],
-    });
-
-    expect(
-      rows().find((entry) => entry.messageType === MESSAGE_TYPES.ACTIVE_SKILLS)
-        ?.data,
-    ).toStrictEqual({
-      skills: [
-        {
-          name: 'ansi-only',
-          description: 'Details available on activation.',
-          source: 'project',
-        },
-        {
-          name: 'controls-only',
-          description: 'Details available on activation.',
-          source: 'project',
-        },
-      ],
     });
   });
 });

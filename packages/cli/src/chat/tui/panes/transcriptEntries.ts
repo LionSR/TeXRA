@@ -2,7 +2,6 @@ import stripAnsi from 'strip-ansi';
 
 import { ANSI_ESCAPE_START, ansiEscapeEnd } from '@cli/runtime/ansiEscapes';
 import { safeTerminalText } from '@cli/runtime/terminalText';
-import { redactSecrets } from '@logger/redaction';
 import { type RunPhase } from '@shared/schemas';
 import { isActivePhase } from '@shared/runs/runStatus';
 import {
@@ -100,15 +99,13 @@ function deriveTranscriptRowHeadline(row: TranscriptRow): string {
         trimAssistantTranscriptLead(row.text.full),
       );
     case 'log':
-      return redactSecrets(
-        safeTerminalText(
-          normalizeKnownHtmlForCliMarkdown(
-            trimAssistantTranscriptLead(row.text.full),
-          ),
+      return safeTerminalText(
+        normalizeKnownHtmlForCliMarkdown(
+          trimAssistantTranscriptLead(row.text.full),
         ),
       );
     case 'error':
-      return redactSecrets(safeTerminalText(row.summary.full));
+      return safeTerminalText(row.summary.full);
     case 'progressStatus':
       return safeTerminalText(row.summary.full);
     default:

@@ -88,7 +88,17 @@ export interface CliMemoryDetail {
 export const loadCliMemoryDetail = Effect.fn('cli.loadCliMemoryDetail')(
   function* (inputPath: string) {
     const storagePath = cliMemoryStoragePathFromInput(inputPath);
-    const preview = yield* loadMemoryPreview(storagePath);
+    const preview = yield* loadMemoryPreview(storagePath).pipe(
+      Effect.catchIf(
+        (error) => error.reason._tag === 'NotFound',
+        () =>
+          Effect.fail(
+            new Error(
+              `No stored memory at ${toDisplayPath(storagePath)}; \`memory list\` shows the stored ones.`,
+            ),
+          ),
+      ),
+    );
     return {
       path: toDisplayPath(storagePath),
       lineCount: preview.lineCount,

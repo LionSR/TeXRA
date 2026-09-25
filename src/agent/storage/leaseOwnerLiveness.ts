@@ -2,9 +2,11 @@ import * as os from 'node:os';
 import { Effect } from 'effect';
 
 import { withLogChannel } from '@logger/effectLog';
-import { nodeProcesses } from '@platform/defaults/nodeProcesses';
+import {
+  nodeProcesses,
+  type ProcessProbe,
+} from '@platform/defaults/nodeProcesses';
 import type { OwnerLiveness } from '@shared/schemas';
-import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 const CHANNEL = 'LeaseOwnerLiveness';
 
@@ -59,7 +61,7 @@ const pidProvablyDead = (pid: number): Effect.Effect<boolean> =>
  */
 export const proveOwnerLiveness = (
   owner: ClaimOwnerRecord,
-): Effect.Effect<OwnerLiveness, never, ChildProcessSpawner> =>
+): Effect.Effect<OwnerLiveness, never, ProcessProbe> =>
   Effect.gen(function* () {
     const localHostname = os.hostname();
     if (owner.hostname.toLowerCase() !== localHostname.toLowerCase()) {

@@ -143,7 +143,7 @@ describe('desktop command palette', () => {
     pressKey(paletteInput(controller.element), { key: 'Enter' });
     await flushDialogTicks();
 
-    expect(actions.showSettings).toHaveBeenCalledWith('models');
+    expect(actions.showSettings).toHaveBeenCalledWith('models/models');
     expect(controller.element.open).toBe(false);
   });
 

@@ -1,5 +1,5 @@
 import type { AgentCategory, GettingStartedAction } from '@shared/schemas';
-import type { SettingsTabPanelName } from '@shared/settingsView/settingsViewMessages';
+import type { SettingsTarget } from '@shared/settingsView/settingsViewMessages';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   toElectronAccelerator,
@@ -213,7 +213,7 @@ export interface DesktopCommandMenuEntry {
 export interface DesktopCommandActions {
   showLauncher(): void;
   openWorkbench(kind: DesktopWorkbenchKind): void;
-  showSettings(tab?: SettingsTabPanelName, agentSubTab?: AgentCategory): void;
+  showSettings(tab?: SettingsTarget, agentSubTab?: AgentCategory): void;
   openDesktopDocs(): void;
   openLogFolder(): void;
   openWorkspaceFolder(): void;
@@ -225,7 +225,7 @@ export interface DesktopCommandActions {
 
 interface DesktopSettingsTabMessage {
   command: typeof SETTINGS_VIEW_COMMANDS.SET_TAB;
-  tab: SettingsTabPanelName;
+  tab: SettingsTarget;
   agentSubTab?: AgentCategory;
 }
 
@@ -278,7 +278,7 @@ const DESKTOP_COMMAND_HANDLERS = {
     (
       Object.entries(settingsTabByCommand) as [
         SettingsTabCommandId,
-        SettingsTabPanelName,
+        SettingsTarget,
       ][]
     ).map(([id, tab]) => [id, action((a) => a.showSettings(tab))]),
   ) as Record<SettingsTabCommandId, DesktopCommandHandler>),
@@ -319,7 +319,7 @@ export function dispatchDesktopCommand(
 }
 
 export function buildDesktopSettingsTabMessage(
-  tab: SettingsTabPanelName,
+  tab: SettingsTarget,
   agentSubTab?: AgentCategory,
 ): DesktopSettingsTabMessage {
   return {
@@ -336,7 +336,7 @@ export function buildDesktopSettingsTabMessage(
  */
 export function postDesktopSettingsView(
   postToRenderer: (message: unknown) => void,
-  tab?: SettingsTabPanelName,
+  tab?: SettingsTarget,
   agentSubTab?: AgentCategory,
 ): void {
   postToRenderer({
