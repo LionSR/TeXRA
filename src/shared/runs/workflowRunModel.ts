@@ -495,9 +495,8 @@ function matchesFilter(
  * `waiting`, by row id, read off the child runs by the host that holds
  * them), then failed, then running, transcript order within, and the volume
  * collapses into counted groups that open in place: `finished` for every
- * settled card, `queued` for the ones waiting for a slot, and `planned` /
- * `not run` for the plan entries not issued. A phase of a few rows folds
- * nothing.
+ * settled card, `queued` for those awaiting a slot, `planned` / `not run`
+ * for unissued plan entries; a phase of three rows or fewer folds nothing.
  */
 export function workflowPhaseRows(
   phase: WorkflowPhaseModel,
@@ -567,7 +566,6 @@ export function workflowPhaseRows(
     WorkflowRowGroup,
     typeof quiet.queued,
   ][];
-  // A phase of three rows or fewer folds none of them.
   if (phase.tasks.length + phase.declaredTasks.length <= 3) {
     return [...attentionRows, ...groups.flatMap(([, members]) => members)];
   }
