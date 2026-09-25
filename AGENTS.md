@@ -319,15 +319,46 @@ interfaces often and on purpose. A test pinned to a seam that is about to churn
 is not safety — it is merge friction the next refactor has to pay down. The
 default for a PR is **zero new tests**; a test must earn its place — protecting
 a consequential current contract, a difficult invariant, or a reproduced
-defect — and is never proof of work or PR padding. Concretely:
+defect — and is never proof of work or PR padding.
+
+Three rules come first and override anything below that seems to allow more:
+
+1. **Never write unit tests after you write code.** A unit test written to
+   fit code that already exists asserts what the code does, not what it
+   should do. It passes on day one, catches nothing, and pins the
+   implementation for the next refactor to pay down. If the code is already
+   written, the evidence is an E2E run, not a retrofitted unit suite.
+2. **E2E tests are the preferred and default testing mechanism.** Verify a
+   complex feature by driving the real app (the Playwright suite in
+   `packages/desktop/tests/e2e/`, or the real `texra` binary for CLI
+   behavior) through the user-visible path. Every E2E test ends by producing
+   a **verifiable, repeatable artifact** — a screenshot compared against a
+   committed baseline, a saved transcript, run ledger, or output file — written
+   to a known path (`tests/e2e/test-results/`), so a reviewer can re-run the
+   test and diff the artifact rather than trusting a green checkmark.
+3. **If you must test a system in isolation, write down how it can fail
+   first, then write the code.** Before any implementation, list every way the
+   unit can fail — bad input, malformed persisted data, ordering and
+   cancellation races, partial writes, provider errors, boundary sizes — in the
+   PR body or at the top of the suite. Each isolated test encodes one entry
+   from that list; a test that maps to no listed failure mode does not get
+   written. This is the only route to a new unit test.
+
+Concretely:
 
 - A behavior-preserving refactor adds no new tests; the existing suite passing
   is the evidence.
 - A bug fix gets at most one regression test that reproduces the defect, at the
-  narrowest boundary that exhibits it.
-- A new feature gets a small number of behavioral tests at its durable
-  boundary — the wire contract, the schema, the user-visible output — not a
-  unit test for each internal layer the data passes through.
+  narrowest boundary that exhibits it — written to fail before the fix lands.
+  Prefer an E2E reproduction when the defect is reachable through the app.
+- A new feature gets E2E coverage of its user-visible path, ending in an
+  artifact. Isolated tests only under rule 3, at its durable boundary — the
+  wire contract, the schema, the parser — never a unit test for each internal
+  layer the data passes through.
+- Delete a unit test that would not catch a real bug the E2E suite misses:
+  mock echoes, call-count and call-order pins, snapshot tests of copy,
+  "renders without crashing", and re-assertions of a schema's defaults are
+  cost with no signal.
 - Extend the module's existing suite rather than adding a new test file. Add
   one only when the module has no existing suite (one suite per module,
   path-mirrored under `src/test-kernel/`) or for one named cross-module

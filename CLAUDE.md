@@ -259,7 +259,9 @@ node, a cursor, a services bag, or a second writer of the ledger.
   often by design, so every test pinned to a churning seam is merge friction,
   not safety. Default for a PR is zero new tests: a behavior-preserving
   refactor adds none, a bug fix gets at most one regression test and only if
-  it earns its place, a feature gets a few at its durable boundary. Extend
+  it earns its place, a feature gets E2E coverage ending in a verifiable
+  artifact. Never write unit tests after the code; an isolated test starts
+  from a written list of failure modes, before the implementation. Extend
   existing suites instead of adding files, and don't demand tests in review
   beyond this bar. Full rules: AGENTS.md "Testing discipline".
 - **Serialize async work through Effect** (concurrency primitives, or
