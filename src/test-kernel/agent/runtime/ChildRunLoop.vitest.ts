@@ -393,7 +393,6 @@ describe('childRunLoop E2E fixtures', () => {
         const runId = loopRunId();
         const { strategy, callCount, rejectTurn, turnStarted } =
           createFakeStrategy();
-        trackChildHandle(runId, PARENT_RUN_ID);
 
         const loop = yield* startLoop(runId, strategy);
         yield* turnStarted(1);
@@ -410,7 +409,6 @@ describe('childRunLoop E2E fixtures', () => {
 
         yield* Fiber.join(loop);
         expect(callCount()).toBe(1);
-        expect(session.runs.getHandle(runId)).toBeUndefined();
       }),
   );
 
@@ -893,7 +891,6 @@ describe('childRunLoop E2E fixtures', () => {
       Effect.gen(function* () {
         const runId = loopRunId();
         const { strategy, rejectTurn, turnStarted } = createFakeStrategy();
-        trackChildHandle(runId, PARENT_RUN_ID);
 
         const loop = yield* startLoop(runId, strategy);
 
@@ -908,7 +905,6 @@ describe('childRunLoop E2E fixtures', () => {
         const exit = yield* Fiber.await(loop);
         expect(Exit.isFailure(exit)).toBe(true);
         expect(mocks.submitFollowUp).not.toHaveBeenCalled();
-        expect(session.runs.getHandle(runId)).toBeUndefined();
       }),
   );
 
@@ -1266,7 +1262,14 @@ describe('childRunLoop E2E fixtures', () => {
         // — a resumed parent's wait would resolve immediately instead of racing
         // its own wake.
         const runId = loopRunId();
-        trackChildHandle(runId, PARENT_RUN_ID);
+        publishTestRunStart(session, runId);
+        const childRun = yield* createChildRun(session, runId, PARENT_RUN_ID, {
+          run: { kind: 'agent', agent: 'fake-cli', tool: 'codex' },
+          userFollowUpSupport: 'terminalBacked',
+          description: 'Finalize before the wake',
+          config: childRunConfig,
+        }).pipe(Effect.provideService(Runs, session.runs));
+        trackedRunIds.add(runId);
 
         const wakeReached = yield* Deferred.make<void>();
         const releaseWake = yield* Deferred.make<void>();
@@ -1284,7 +1287,7 @@ describe('childRunLoop E2E fixtures', () => {
 
         const strategy = createTerminalStrategy('Finalize-before-wake test');
 
-        const loop = yield* startLoop(runId, strategy);
+        const loop = yield* startLoop(runId, strategy, { childRun });
 
         yield* Deferred.await(wakeReached);
         expect(handleAtWakeTime).toBeUndefined();
@@ -1358,37 +1361,6 @@ describe('childRunLoop E2E fixtures', () => {
           expect.anything(),
         );
         expect(session.followUps.hasLiveOwner(runId)).toBe(false);
-      }),
-  );
-
-  it.effect(
-    'finalizes a dangling native handle with non-null error metadata after a non-throwing turn failure',
-    () =>
-      Effect.gen(function* () {
-        const runId = loopRunId();
-        const { strategy, resolveTurn } = createFakeStrategy();
-
-        const loop = yield* startLoop(runId, strategy);
-
-        expect(session.followUps.hasLiveOwner(runId)).toBe(true);
-
-        trackChildHandle(runId, PARENT_RUN_ID);
-
-        yield* resolveTurn(1, { kind: 'error-turn', value: 'oops' });
-
-        yield* Fiber.join(loop);
-        expect(session.followUps.hasLiveOwner(runId)).toBe(false);
-        expect(mocks.finalizeRun).toHaveBeenCalledWith(
-          session,
-          expect.objectContaining({
-            runId,
-            outcome: RUN_OUTCOME.FAILED,
-            error: expect.objectContaining({
-              message: expect.stringContaining('reported a failed turn'),
-            }),
-          }),
-        );
-        expect(session.runs.getHandle(runId)).toBeUndefined();
       }),
   );
 

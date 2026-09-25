@@ -209,8 +209,8 @@ const finalizeChildRun = Effect.fn('finalizeChildRun')(function* (
 
   // The failure prologue (error formatting, logging, classification) is
   // fallible. It must never prevent `finalizeRunTerminal` below from running:
-  // a throw here, past `claimTerminalFinalize`'s exactly-once guard, would
-  // otherwise strand the handle in the registry forever with no untrack.
+  // a throw here would otherwise strand the handle in the registry forever
+  // with no untrack and the run with no `run.end` row.
   let outcome: RunOutcome = options.outcome;
   let error: Parameters<typeof finalizeRunTerminal>[0]['error'];
   const prologue = yield* Effect.exit(
@@ -262,7 +262,7 @@ const finalizeChildRun = Effect.fn('finalizeChildRun')(function* (
   // persisted": a `run.end` row that never wrote is this finalize's failure,
   // so the loop's cleanup aggregation fails the loop over it rather than
   // report a child whose terminal fact is gone.
-  if (finalized?.persistFailure !== undefined) {
+  if (finalized.persistFailure !== undefined) {
     return yield* Effect.fail(
       new Error(`Child run ${handle.runId} terminal state was not persisted`, {
         cause: finalized.persistFailure,

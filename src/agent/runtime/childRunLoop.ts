@@ -6,7 +6,6 @@ import { Cause, Deferred, Effect, Exit, Fiber, Queue, Result } from 'effect';
 import { finalizeRun } from '@agent/storage';
 import type { AgentTrace, StageHandle } from '@agent/trace';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { finalizeRunTerminal } from '@agent/runtime/AgentRunLifecycle';
 import { resolveChildRunConcurrencyBudget } from '@agent/runtime/childRunBudget';
 import type { RunParent } from '@agent/runtime/RunHandle';
 import { Runs, type RunRegistry } from '@agent/runtime/runRegistry';
@@ -21,7 +20,6 @@ import {
   submitFollowUp,
 } from '@agent/followUp/ToolUseFollowUp';
 import { persistChildRunDelivery } from '@agent/storage/childRunDeliveryPersistence';
-import { classifyAgentError } from '@common/errors';
 import { isUserAbort } from '@common/errors/sdkError/errorPatterns';
 import { withLogChannel } from '@logger/effectLog';
 import { AgentResume } from '@platform/interfaces';
@@ -1289,36 +1287,21 @@ export function startChildRunLoop<TTurn, R = never>(
                     stopped: stoppedAtExit,
                     stage: sessionStage,
                   });
-                } else {
-                  // Startup may fail before the engine owns terminal finalization.
-                  const handle = runs.getHandle(runId);
-                  if (handle) {
-                    yield* finalizeRunTerminal({
-                      stopped: stoppedAtExit,
-                      session: runSession,
-                      handle,
-                      outcome,
-                      error:
-                        sawTurnFailure && lastTurnErr !== undefined
-                          ? {
-                              kind: classifyAgentError(lastTurnErr),
-                              message: toErrorMessage(lastTurnErr),
-                            }
-                          : undefined,
-                    });
-                  } else if (
-                    (stoppedAtExit || sawTurnFailure) &&
-                    (yield* runSession.ownsRun(runId))
-                  ) {
-                    // Failure or cancellation can precede the engine's first handle.
-                    const finalized = yield* finalizeRun(runSession, {
-                      runId,
-                      outcome,
-                      keepExistingOutcome: true,
-                    });
-                    if (!finalized.ok)
-                      return yield* Effect.fail(ensureError(finalized.error));
-                  }
+                } else if (
+                  (stoppedAtExit || sawTurnFailure) &&
+                  (yield* runSession.ownsRun(runId))
+                ) {
+                  // A native run's lifecycle is its one terminal writer, and
+                  // it has ended by now: the run's program returned into this
+                  // loop. A failure or stop can precede that lifecycle; one
+                  // that ran has already ended the run, which this keeps.
+                  const finalized = yield* finalizeRun(runSession, {
+                    runId,
+                    outcome,
+                    keepExistingOutcome: true,
+                  });
+                  if (!finalized.ok)
+                    return yield* Effect.fail(ensureError(finalized.error));
                 }
               }),
             );

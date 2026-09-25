@@ -726,56 +726,6 @@ function finalize(params: Parameters<typeof finalizeRunTerminal>[0]) {
 }
 
 describe('finalizeRunTerminal', () => {
-  // The exactly-once guard must be an atomic, synchronous claim — not a
-  // check-then-await on the settled flag. Two finalizers racing across the
-  // persist await (e.g. a lifecycle arm vs a concurrent finalize of the same
-  // handle) would otherwise both pass the check before the first settles and
-  // double-publish persist/emit/settle/untrack.
-  it.effect(
-    'finalizes exactly once when two callers race across the persist await',
-    () =>
-      Effect.gen(function* () {
-        const { runId, session, handle, untrackIfCurrent } = finalizeFixture();
-        // Park the first caller at its persist await so the second caller arrives
-        // while the first has not yet emitted or settled anything.
-        const parked = yield* parkNextFinalize;
-
-        const params = {
-          session,
-          handle,
-          outcome: RUN_OUTCOME.COMPLETED,
-        } as const;
-
-        const first = yield* Effect.forkChild(finalize(params), {
-          startImmediately: true,
-        });
-        const second = yield* Effect.forkChild(finalize(params), {
-          startImmediately: true,
-        });
-
-        // The winner reaches the persist first; only then is the loser's early
-        // return proof that it never waited on it.
-        yield* Deferred.await(parked.started);
-        // The loser no-ops without waiting on (or duplicating) the persist.
-        expect(yield* Fiber.join(second)).toBeUndefined();
-        expect(yield* Deferred.isDone(parked.started)).toBe(true);
-        yield* Deferred.succeed(parked.release, undefined);
-        const event = yield* Fiber.join(first);
-
-        expect(event).toMatchObject({
-          event: {
-            type: 'run.end',
-            outcome: RUN_OUTCOME.COMPLETED,
-            runId,
-          },
-        });
-        // `run.end` is not a trace arm: the storage finalizer is its one
-        // writer, so writing it once is what "exactly once" means here.
-        expect(storageMocks.finalizeRun).toHaveBeenCalledTimes(1);
-        expect(untrackIfCurrent).toHaveBeenCalledTimes(1);
-      }),
-  );
-
   it.effect('flushes display artifacts before publishing and untracking', () =>
     Effect.gen(function* () {
       const { session, handle, untrackIfCurrent, settlePublications } =
