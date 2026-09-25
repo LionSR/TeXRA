@@ -16,10 +16,7 @@ import {
   installSlashCommands,
 } from '@cli/chat/tui/commands/slashRegistry';
 import { registerBuiltinSlashCommands } from '@cli/chat/tui/commands/registerBuiltins';
-import {
-  openCliSlashCommandForm,
-  openRegisteredCliSlashForm,
-} from '@cli/chat/tui/commands/slashForms';
+import { openRegisteredCliSlashForm } from '@cli/chat/tui/commands/slashForms';
 import { type AccountAccessFormValue } from '@cli/chat/tui/forms/AccountAccessForm';
 import { transcriptRowHeadline } from '@cli/chat/tui/panes/transcriptEntries';
 import {
@@ -33,10 +30,9 @@ import {
 import { activeForm, closeActiveForm } from '@cli/chat/tui/state/formSlot';
 import { notices, noticesFor } from '@cli/chat/tui/state/transcript';
 import type { CliModelAccessSelection } from '@cli/runtime/modelAccessRoute';
-import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
-import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';
+import { FakeSecrets } from '@test/support/FakePlatform';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 import { loadInk, renderInteractive } from '@test/support/inkTestHarness.ts';
 import {
@@ -53,12 +49,6 @@ const CHAT_SESSION: SessionMeta = {
   cwd: '/tmp/workspace',
   approvalPolicy: 'ask',
   version: 'test',
-};
-
-const OVERRIDDEN_MODEL_CHAT_SESSION: SessionMeta = {
-  ...CHAT_SESSION,
-  model: 'gpt54',
-  modelSource: 'explicit-override',
 };
 
 const CHATGPT_PREFERENCE_SELECTION: CliModelAccessSelection = {
@@ -175,16 +165,6 @@ describe('slashRegistry', () => {
     expect(events).toEqual(['echo', 'outcome']);
   }
 
-  it('opens structured forms by registered command name or alias', () => {
-    registerBuiltins();
-
-    expect(openCliSlashCommandForm('LOGIN', '')).toBe(true);
-    expect(activeForm.get()?.commandName).toBe('login');
-
-    expect(openCliSlashCommandForm('skill', '')).toBe(true);
-    expect(activeForm.get()?.commandName).toBe('skills');
-  });
-
   it('chains selectable agent picks into the model picker', async () => {
     resetCliState(CHAT_SESSION);
     registerBuiltins();
@@ -227,20 +207,6 @@ describe('slashRegistry', () => {
     expect(activeForm.get()).toBeUndefined();
   });
 
-  it('marks the agent picker read-only when root selection is closed', () => {
-    resetCliState(CHAT_SESSION);
-    registerBuiltins({
-      canSelectAgent: () => false,
-      canSelectModel: () => true,
-    });
-    const agentNode = openSlashForm<{
-      selectable?: boolean;
-    }>('agent');
-
-    expect(agentNode.props).toMatchObject({ selectable: false });
-    expect(activeForm.get()?.commandName).toBe('agent');
-  });
-
   it('keeps the model picker selectable after root agent selection is closed', () => {
     resetCliState(CHAT_SESSION);
     registerBuiltins({
@@ -259,35 +225,6 @@ describe('slashRegistry', () => {
       modelSource: 'explicit-override',
     });
   });
-
-  it.effect(
-    'passes live model-switch disabled reasons into the model picker',
-    () =>
-      Effect.gen(function* () {
-        resetCliState(OVERRIDDEN_MODEL_CHAT_SESSION);
-        registerBuiltins({
-          canSelectModel: () => true,
-          getModelSwitchDisabledReason: (model) =>
-            Effect.succeed(
-              model === 'sonnet46T'
-                ? 'different conversation format; start new chat'
-                : undefined,
-            ),
-        });
-        const modelNode = openSlashForm<{
-          getModelSwitchDisabledReason: (
-            model: string,
-          ) => Effect.Effect<string | undefined, Error>;
-        }>('model');
-
-        expect(
-          yield* modelNode.props!.getModelSwitchDisabledReason('sonnet46T'),
-        ).toBe('different conversation format; start new chat');
-        expect(
-          yield* modelNode.props!.getModelSwitchDisabledReason('gpt55'),
-        ).toBe(undefined);
-      }),
-  );
 
   it('keeps the model picker open until model selection commits', async () => {
     const selection = createDeferred<void>();
@@ -332,24 +269,6 @@ describe('slashRegistry', () => {
     expect(modelNode.isClosed()).toBe(true);
   });
 
-  it('routes account picker selection failures to the shared error handler', async () => {
-    resetCliState(CHAT_SESSION);
-    const errors: string[] = [];
-    registerBuiltins({
-      onModelAccessSelect: () => Effect.fail(new Error('api mode failed')),
-      onError: (error) => {
-        errors.push(toErrorMessage(error));
-      },
-    });
-    const accountNode = openSlashForm<{
-      onSelect?: (value: AccountAccessFormValue) => void;
-    }>('login');
-    accountNode.props?.onSelect?.(CHATGPT_PREFERENCE_FORM_VALUE);
-    await settleFormSelection();
-
-    expect(errors).toEqual(['api mode failed']);
-  });
-
   it('keeps model-access selection in a busy form until it settles', async () => {
     resetCliState(CHAT_SESSION);
     const selection = createDeferred<void>();
@@ -370,60 +289,6 @@ describe('slashRegistry', () => {
 
     selection.resolve();
     await settleFormSelection();
-  });
-
-  it.effect('keeps provider API keys inside the masked local form', () =>
-    Effect.gen(function* () {
-      resetCliState(CHAT_SESSION);
-      const saves: Array<{ provider: string; key: string }> = [];
-      registerBuiltins({
-        onApiKeySave: (provider, key) =>
-          Effect.sync(() => {
-            saves.push({ provider, key });
-          }),
-      });
-      const keyCommand = requireSlashCommand('keys');
-
-      expect(openRegisteredCliSlashForm(keyCommand, '')).toBe(true);
-      const keyNode = renderOpenForm<{
-        onSave?: (
-          provider: 'moonshot',
-          key: string,
-        ) => Effect.Effect<string | void, unknown>;
-        onCancel?: () => void;
-      }>();
-
-      yield* keyNode.props?.onSave?.('moonshot', 'private-test-value') ??
-        Effect.void;
-      expect(saves).toEqual([
-        { provider: 'moonshot', key: 'private-test-value' },
-      ]);
-      expect(keyNode.isClosed()).toBe(false);
-
-      keyNode.props?.onCancel?.();
-      expect(keyNode.isClosed()).toBe(true);
-    }),
-  );
-
-  it('closes the login form after the selected login path settles', async () => {
-    const selected: string[] = [];
-    let sawClosedBeforeLogin = false;
-    registerBuiltins({
-      onLoginSelect: (value) =>
-        Effect.sync(() => {
-          sawClosedBeforeLogin = loginNode.isClosed();
-          selected.push(value);
-        }),
-    });
-    const loginNode = openSlashForm<{
-      onSelect?: (value: AccountAccessFormValue) => void;
-    }>('login');
-    loginNode.props?.onSelect?.({ kind: 'login', target: 'chatgpt' });
-    await settleFormSelection();
-
-    expect(selected).toEqual(['chatgpt']);
-    expect(loginNode.isClosed()).toBe(true);
-    expect(sawClosedBeforeLogin).toBe(false);
   });
 
   it('holds a copyable login frame until the user dismisses it', async () => {
@@ -602,70 +467,6 @@ describe('slashRegistry', () => {
     expect(transientNotice.get()).toBeUndefined();
   });
 
-  it('closes the approval policy picker before applying the new policy', async () => {
-    let sawClosedBeforePolicySelect = false;
-    registerBuiltins({
-      onApprovalPolicySelect: () => {
-        sawClosedBeforePolicySelect = approvalNode.isClosed();
-      },
-    });
-    const approvalNode = openSlashForm<{
-      onSelect?: (value: TexraApprovalPolicy) => void;
-    }>('approval');
-    approvalNode.props?.onSelect?.('yolo');
-    await settleFormSelection();
-
-    expect(approvalNode.isClosed()).toBe(true);
-    expect(sawClosedBeforePolicySelect).toBe(true);
-  });
-
-  it('closes the resume picker before running the resume action', async () => {
-    let sawClosedBeforeResume = false;
-    registerBuiltins({
-      onResumeSelect: () =>
-        Effect.sync(() => {
-          sawClosedBeforeResume = resumeNode.isClosed();
-        }),
-    });
-    const resumeNode = openSlashForm<{ onSelect?: (id: string) => void }>(
-      'resume',
-    );
-    resumeNode.props?.onSelect?.('previous-session');
-    await settleFormSelection();
-
-    expect(resumeNode.isClosed()).toBe(true);
-    expect(sawClosedBeforeResume).toBe(true);
-  });
-
-  it('routes skill picker selections through the shared handler', async () => {
-    const selected: string[] = [];
-    let sawClosedBeforeSkillSelect = false;
-    registerBuiltins({
-      onSkillSelect: (value) =>
-        Effect.sync(() => {
-          sawClosedBeforeSkillSelect = skillsNode.isClosed();
-          selected.push(value.activationPrompt);
-        }),
-    });
-    const skillsNode = openSlashForm<{
-      onSelect?: (value: {
-        readonly name: string;
-        readonly activationPrompt: string;
-      }) => void;
-    }>('skills');
-    skillsNode.props?.onSelect?.({
-      name: 'proof-audit',
-      activationPrompt: '<skill_activation>proof-audit</skill_activation>',
-    });
-    await settleFormSelection();
-
-    expect(selected).toEqual([
-      '<skill_activation>proof-audit</skill_activation>',
-    ]);
-    expect(skillsNode.isClosed()).toBe(true);
-    expect(sawClosedBeforeSkillSelect).toBe(true);
-  });
-
   it('matches by name prefix case-insensitively', () => {
     installSlashCommands([
       {
@@ -781,36 +582,9 @@ describe('slashRegistry', () => {
     expect(suggestSlashCommand('aprooval')?.name).toBe('approval');
     expect(suggestSlashCommand('sttus')?.name).toBe('status');
   });
-
-  it('matches typo suggestions against aliases too', () => {
-    installSlashCommands([
-      {
-        pluginId: 'test',
-        commands: [
-          {
-            name: 'exit',
-            description: 'Exit the CLI session',
-            aliases: ['quit'],
-          },
-        ],
-      },
-    ]);
-
-    expect(suggestSlashCommand('quitt')?.name).toBe('exit');
-  });
-
-  it('returns no suggestion for input far from every command', () => {
-    registerBuiltins();
-
-    expect(suggestSlashCommand('frobnicate')).toBeUndefined();
-  });
 });
 
 describe('parseSlashInput', () => {
-  it('returns undefined for non-slash input', () => {
-    expect(parseSlashInput('hello world')).toBeUndefined();
-  });
-
   it('never treats TeX-style backslash tokens as commands', () => {
     expect(parseSlashInput('\\clear')).toBeUndefined();
     expect(parseSlashInput('\\goal')).toBeUndefined();

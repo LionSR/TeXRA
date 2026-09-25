@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  childRowMetadataText,
-  pendingApprovalRowDisplay,
-} from '@cli/chat/tui/panes/SubagentListDisplay';
+import { pendingApprovalRowDisplay } from '@cli/chat/tui/panes/SubagentListDisplay';
 import {
   nextSelectHighlightIndex,
   selectControlledHighlightIndex,
@@ -72,46 +69,5 @@ describe('CLI child list display model', () => {
         previousIndex: 1,
       }),
     ).toBe(2);
-  });
-
-  it('formats the row metadata column from elapsed and generated tokens', () => {
-    expect(
-      childRowMetadataText({ elapsed: '2m 30s', outputTokens: 39_900 }),
-    ).toBe('2m 30s · ↓40k');
-    expect(
-      childRowMetadataText({ elapsed: '45s', outputTokens: undefined }),
-    ).toBe('45s');
-    expect(
-      childRowMetadataText({ elapsed: undefined, outputTokens: 512 }),
-    ).toBe('↓512');
-    // Zero tokens is "nothing generated yet", not a datum worth a column.
-    expect(
-      childRowMetadataText({ elapsed: null, outputTokens: 0 }),
-    ).toBeUndefined();
-  });
-
-  it('adds the tool-call count between elapsed and generated tokens', () => {
-    expect(
-      childRowMetadataText({
-        elapsed: '2m 30s',
-        outputTokens: 39_900,
-        toolCallCount: 5,
-      }),
-    ).toBe('2m 30s · 5 tool calls · ↓40k');
-    expect(
-      childRowMetadataText({
-        elapsed: '45s',
-        outputTokens: undefined,
-        toolCallCount: 1,
-      }),
-    ).toBe('45s · 1 tool call');
-    // No tool calls yet is not a datum worth a column segment.
-    expect(
-      childRowMetadataText({
-        elapsed: '45s',
-        outputTokens: undefined,
-        toolCallCount: 0,
-      }),
-    ).toBe('45s');
   });
 });

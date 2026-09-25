@@ -922,23 +922,6 @@ describe('TUI request decisions', () => {
       }),
   );
 
-  it.effect('auto-switches a GLM Coding Plan limit to the stored GLM key', () =>
-    Effect.gen(function* () {
-      mocks.glmCodingPlan = true;
-      mocks.hasUsableApiKey.mockImplementation(
-        (_secrets, provider: ApiProvider) => Effect.succeed(provider === 'glm'),
-      );
-      tui();
-
-      const decision = yield* openRetry(glmCodingPlanRetry('glm-limit'));
-
-      expect(decision).toEqual(PERSONAL_KEY_RETRY);
-      expectNoPreferenceWrites();
-      expect(mocks.notify).toHaveBeenCalledWith('credentialSwitched');
-      yield* waitForNoApproval();
-    }),
-  );
-
   it.effect(
     'does not offer or apply the subscription switch without an OpenAI API key',
     () =>

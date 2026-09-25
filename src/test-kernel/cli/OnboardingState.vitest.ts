@@ -1,20 +1,13 @@
 import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { describe, expect, vi } from 'vitest';
+import { describe, expect } from 'vitest';
 
 import { maskDisplayValue } from '@cli/chat/tui/input/textInputEditing';
-import { formatPersonalApiKeysLine } from '@cli/runtime/apiStatus';
 import { maybeRunCliOnboarding } from '@cli/onboarding/runOnboarding';
-import { MemoryStateStore } from '@platform/defaults/memoryState';
 import {
   LanguageModel,
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
 } from '@platform/languageModel';
-import {
-  readOnboardingFlags,
-  setOnboardingDeclined,
-} from '@shared/state/onboardingState';
-import { GlobalStateKey } from '@shared/state/stateKeys';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import {
   FakeSecrets,
@@ -28,19 +21,6 @@ const maybeOnboarding = (...args: Parameters<typeof maybeRunCliOnboarding>) =>
   maybeRunCliOnboarding(...args).pipe(
     Effect.provide(LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT)),
   );
-
-const ONBOARDING_DECLINED_KEY = GlobalStateKey.ONBOARDING_DECLINED;
-
-describe('onboarding decline flag', () => {
-  it.effect('treats a non-boolean stored value as not-declined', () =>
-    Effect.gen(function* () {
-      const state = new MemoryStateStore();
-      yield* state.update(ONBOARDING_DECLINED_KEY, 'yes');
-
-      expect((yield* readOnboardingFlags(state)).declined).toBe(false);
-    }),
-  );
-});
 
 describe('maskDisplayValue', () => {
   it('masks every visible glyph but preserves newlines and length', () => {

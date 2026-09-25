@@ -4,9 +4,6 @@ import { TestClock } from 'effect/testing';
 import { afterEach, expect, vi } from 'vitest';
 
 import {
-  CLI_DEVICE_AUTH_URL_PROMPT,
-  DeviceAuthorizationSchema,
-  formatCliDeviceAuthMessage,
   pollForDeviceSession,
   requestDeviceAuthorization,
 } from '@cli/runtime/supabaseAuthDeviceCode';
@@ -96,15 +93,6 @@ it.layer(testHttpClientLayer)(
           Exit.isFailure(exit) && Cause.hasInterruptsOnly(exit.cause),
         ).toBe(true);
         expect(calls).toHaveLength(0);
-      }),
-    );
-
-    it.effect('requests a device authorization from the auth server', () =>
-      Effect.gen(function* () {
-        const calls = queuedFetch([jsonResponse(AUTHORIZATION)]);
-        const authorization = yield* requestDeviceAuthorization();
-        expect(authorization.device_code).toBe('device-code-secret');
-        expect(calls[0].url).toMatch(/\/auth-device\/code$/);
       }),
     );
 

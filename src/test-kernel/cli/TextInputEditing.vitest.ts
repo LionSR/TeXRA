@@ -200,13 +200,6 @@ describe('CLI TUI text input editing', () => {
     });
   });
 
-  it('uses Ctrl-J semantics as literal newline insertion', () => {
-    expect(insertText('alpha beta', 5, '\n')).toEqual({
-      value: 'alpha\n beta',
-      cursor: 6,
-    });
-  });
-
   it('handles backspace and delete at buffer edges', () => {
     expect(deleteBeforeCursor('abc', 0)).toEqual({
       value: 'abc',

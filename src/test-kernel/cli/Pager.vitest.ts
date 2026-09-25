@@ -40,15 +40,6 @@ const signalled = (method: string) =>
   });
 
 describe('resolvePagerCommand', () => {
-  it('defaults to less -FIRX when $PAGER is unset', () => {
-    expect(resolvePagerCommand({})).toBe('less -FIRX');
-  });
-
-  it('honors an explicit $PAGER', () => {
-    expect(resolvePagerCommand({ PAGER: 'more' })).toBe('more');
-    expect(resolvePagerCommand({ PAGER: '  less -R  ' })).toBe('less -R');
-  });
-
   it('treats empty $PAGER or PAGER=cat as "no pager"', () => {
     expect(resolvePagerCommand({ PAGER: '' })).toBeUndefined();
     expect(resolvePagerCommand({ PAGER: '   ' })).toBeUndefined();

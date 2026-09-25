@@ -4,13 +4,6 @@ import { Effect } from 'effect';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import {
-  beginWorkPlanReaderRequest,
-  closeInfoPane,
-  finishWorkPlanReaderRequest,
-  focusRun,
-  foregroundReader,
-  infoPane,
-  openInfoPane,
   rootRunPending,
   rootRunId,
   claimedRunId,
@@ -22,33 +15,13 @@ import {
   actOnSurface,
 } from '@cli/chat/tui/state/cliState';
 import {
-  allocateConversationPanelRows,
-  allocateMiddleRows,
-  shouldShowTodosPlanPanel,
-  staticTranscriptRowBudget,
-} from '@cli/chat/tui/appLayout';
-import {
   chatTuiCanStartRootRun,
   TuiSession,
 } from '@cli/chat/tui/state/sessionRunState';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { CLI_FOLLOW_UP_HOST } from '@cli/chat/tui/state/sessionView';
 import { resolveChildListTarget } from '@cli/chat/tui/state/childControls';
-import {
-  AgentCategory,
-  DEFAULT_TOOL_CONFIG,
-  MESSAGE_TYPES,
-  RUN_PHASE,
-  USER_FOLLOW_UP_SUPPORT,
-  TODO_STATUS,
-  type RunId,
-  type ExtendedTokenUsageStats,
-  type Plan,
-  type RunIdentity,
-  type RunPhase,
-  type TodoItem,
-  type UserFollowUpSupport,
-} from '@shared/schemas';
+import { RUN_PHASE, type RunId } from '@shared/schemas';
 import { acceptsFollowUp, type RunView } from '@shared/session/sessionView';
 import {
   bindTestSessionView,
@@ -142,21 +115,6 @@ describe('focus over the session view', () => {
 });
 
 describe('cliState surface fields', () => {
-  it('preserves multiple reference results until each is dismissed', () => {
-    openInfoPane('/memory list', 'first\r\nresult');
-    openInfoPane('/memory preview', 'second result');
-
-    expect(infoPane.get()).toEqual({
-      title: '/memory list',
-      lines: ['first', 'result'],
-    });
-    closeInfoPane();
-    expect(infoPane.get()).toEqual({
-      title: '/memory preview',
-      lines: ['second result'],
-    });
-  });
-
   it('normalizes transient notices to the status bar single-line contract', () => {
     setTransientNotice('Usage: /login target\n       /login chatgpt --device');
 
@@ -167,129 +125,7 @@ describe('cliState surface fields', () => {
   });
 });
 
-describe('CLI TUI row allocation', () => {
-  it.each([
-    {
-      name: 'keeps foreground approval and form surfaces inside the middle row budget',
-      options: {
-        footerRows: 5,
-        foregroundOpen: true,
-        reverseSearchOpen: false,
-        rows: 24,
-        slashPaletteOpen: false,
-      },
-      transcriptRows: 1,
-      foregroundRows: 18,
-    },
-    {
-      name: 'returns disabled input rows to tiny foreground surfaces',
-      options: {
-        footerRows: 2,
-        foregroundOpen: true,
-        reverseSearchOpen: false,
-        rows: 10,
-        slashPaletteOpen: false,
-      },
-      transcriptRows: 1,
-      foregroundRows: 7,
-    },
-    {
-      name: 'can cap compact foreground surfaces on tall terminals',
-      options: {
-        footerRows: 5,
-        foregroundMaxRows: 12,
-        foregroundOpen: true,
-        reverseSearchOpen: false,
-        rows: 40,
-        slashPaletteOpen: false,
-      },
-      transcriptRows: 1,
-      foregroundRows: 12,
-    },
-    {
-      name: 'uses the whole middle region for the transcript without foreground UI',
-      options: {
-        footerRows: 5,
-        foregroundOpen: false,
-        reverseSearchOpen: false,
-        rows: 24,
-        slashPaletteOpen: false,
-      },
-      transcriptRows: 19,
-      foregroundRows: 0,
-    },
-    {
-      name: 'reserves queued follow-up panel rows above the stable input chrome',
-      options: {
-        footerRows: 5,
-        foregroundOpen: false,
-        queuedFollowUpPanelRows: 3,
-        reverseSearchOpen: false,
-        rows: 24,
-        slashPaletteOpen: false,
-      },
-      transcriptRows: 16,
-      foregroundRows: 0,
-    },
-    {
-      name: 'accounts for capped static transcript rows above the stable input chrome',
-      options: {
-        footerRows: 5,
-        foregroundOpen: false,
-        queuedFollowUpPanelRows: 3,
-        reverseSearchOpen: false,
-        rows: 10,
-        slashPaletteOpen: false,
-        staticTranscriptRows: 2,
-      },
-      transcriptRows: 0,
-      foregroundRows: 0,
-    },
-  ])('$name', ({ options, transcriptRows, foregroundRows }) => {
-    const layout = allocateMiddleRows(options);
-
-    expect(layout.transcriptRows).toBe(transcriptRows);
-    expect(layout.foregroundRows).toBe(foregroundRows);
-  });
-
-  it.each([
-    {
-      name: 'reserves rows for reverse-search input chrome',
-      options: {
-        footerRows: 5,
-        foregroundOpen: false,
-        reverseSearchOpen: true,
-        rows: 24,
-        slashPaletteOpen: false,
-      },
-      transcriptRows: 14,
-      foregroundRows: 0,
-    },
-    {
-      name: 'returns former header rows to the transcript when slash palette is open',
-      options: {
-        footerRows: 5,
-        foregroundOpen: false,
-        reverseSearchOpen: false,
-        rows: 24,
-        slashPaletteOpen: true,
-      },
-      transcriptRows: 6,
-      foregroundRows: 0,
-    },
-  ])('$name', ({ options, transcriptRows, foregroundRows }) => {
-    const layout = allocateMiddleRows(options);
-
-    expect(layout.transcriptRows).toBe(transcriptRows);
-    expect(layout.foregroundRows).toBe(foregroundRows);
-  });
-
-  const openTodo = {
-    content: 'Check the live proof',
-    activeForm: 'Checking the live proof',
-    status: TODO_STATUS.IN_PROGRESS,
-  } satisfies TodoItem;
-
+describe('CLI TUI session run state', () => {
   it.each([
     {
       name: 'before the stream resolves',

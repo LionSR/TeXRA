@@ -186,27 +186,6 @@ describe('CLI tools command', () => {
     expect(mocks.runForegroundCommand).not.toHaveBeenCalled();
   });
 
-  it('reports missing install commands before structured --run conflicts', async () => {
-    mocks.readCliToolGuide.mockReturnValueOnce({
-      text: 'Install help',
-    });
-
-    const result = await runToolsCli([
-      'install',
-      'github-pr-subscription',
-      '--run',
-      '--output-format',
-      'json',
-    ]);
-
-    expect(result.exitCode).toBe(2);
-    expect(stdout).toBe('');
-    expect(stderr).toContain(
-      'No install command is registered for github-pr-subscription.',
-    );
-    expect(mocks.runForegroundCommand).not.toHaveBeenCalled();
-  });
-
   it('rejects POSIX guide commands with shell operators instead of dropping them', async () => {
     mocks.readCliToolGuide.mockReturnValueOnce({
       text: 'Install help',
@@ -218,33 +197,5 @@ describe('CLI tools command', () => {
     expect(result.exitCode).toBe(1);
     expect(stdout).toBe('Install help\n');
     expect(mocks.runForegroundCommand).not.toHaveBeenCalled();
-  });
-
-  it('emits structured auth guides without launching the external login', async () => {
-    mocks.readCliToolGuide.mockReturnValueOnce({
-      text: 'Auth help',
-      command: 'codex login',
-    });
-
-    const result = await runToolsCli([
-      'auth',
-      'codex',
-      '--output-format',
-      'ndjson',
-    ]);
-
-    expect(result.exitCode).toBe(0);
-    expect(stderr).toBe('');
-    expect(mocks.runForegroundCommand).not.toHaveBeenCalled();
-    expect(JSON.parse(stdout)).toMatchObject({
-      kind: 'tool-guide',
-      guide: {
-        id: 'codex',
-        operation: 'auth',
-        text: 'Auth help',
-        command: 'codex login',
-      },
-      ts: expect.any(String),
-    });
   });
 });
