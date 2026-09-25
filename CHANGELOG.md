@@ -87,6 +87,10 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
 
 ### Bug Fixes
 
+- **Usage recorded just before quitting is no longer lost** — on the desktop
+  app and the CLI, a quit while live runs took more than a few seconds to
+  stop could cut off sending the last usage records. Every host now sends
+  them as the final shutdown step, after runs and sessions have closed.
 - **The desktop app shuts down cleanly when startup fails early.** If
   startup failed before the project list opened (for example, when the
   project records could not be read), shutdown reported two errors and left a
